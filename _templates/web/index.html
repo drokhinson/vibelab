@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{PROJECT_TITLE}}</title>
+
+  <!-- Pico.css — classless CSS framework (dark theme) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+  <!-- vibelab design system + project overrides -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <ul><li><strong>{{PROJECT_TITLE}}</strong></li></ul>
+    </nav>
+  </header>
+
+  <main>
+    <div id="app">
+      <div class="loading">Loading…</div>
+    </div>
+  </main>
+
+  <!-- API config (update apiBase for production) -->
+  <script src="config.js"></script>
+  <!-- App logic -->
+  <script src="app.js"></script>
+</body>
+</html>

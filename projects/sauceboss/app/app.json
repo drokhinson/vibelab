@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "SauceBoss",
+    "slug": "sauceboss",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#E85D04",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sauceboss.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E85D04"
+      },
+      "package": "com.sauceboss.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    }
+  }
+}

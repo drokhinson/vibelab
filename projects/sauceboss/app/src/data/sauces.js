@@ -1,0 +1,809 @@
+// Each sauce has:
+//   id, name, cuisine, cuisineEmoji, compatibleCarbs[], color, description
+//   ingredients: [{ name, amount, unit }]   ← full ingredient list (for filter panel)
+//   steps: [{ title, ingredients: [...] }]  ← each step becomes one pie chart
+
+export const SAUCES = [
+  // ── ASIAN ────────────────────────────────────────────────────────────────────
+  {
+    id: 'peanut-sauce',
+    name: 'Thai Peanut Sauce',
+    cuisine: 'Asian',
+    cuisineEmoji: '🌏',
+    compatibleCarbs: ['noodles', 'rice'],
+    color: '#B45309',
+    description: 'Creamy, nutty and umami-rich with lime brightness.',
+    ingredients: [
+      { name: 'peanut butter', amount: 3, unit: 'tbsp' },
+      { name: 'soy sauce',     amount: 4, unit: 'tbsp' },
+      { name: 'sesame oil',    amount: 3, unit: 'tsp' },
+      { name: 'lime juice',    amount: 1, unit: 'tbsp' },
+      { name: 'honey',         amount: 1, unit: 'tbsp' },
+      { name: 'garlic',        amount: 2, unit: 'cloves' },
+      { name: 'ginger',        amount: 1, unit: 'tsp' },
+      { name: 'sriracha',      amount: 1, unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Whisk the base',
+        ingredients: [
+          { name: 'peanut butter', amount: 3, unit: 'tbsp' },
+          { name: 'soy sauce',     amount: 4, unit: 'tbsp' },
+          { name: 'sesame oil',    amount: 3, unit: 'tsp' },
+        ],
+      },
+      {
+        title: 'Add aromatics & balance',
+        ingredients: [
+          { name: 'lime juice', amount: 1, unit: 'tbsp' },
+          { name: 'honey',      amount: 1, unit: 'tbsp' },
+          { name: 'garlic',     amount: 2, unit: 'cloves' },
+          { name: 'ginger',     amount: 1, unit: 'tsp' },
+          { name: 'sriracha',   amount: 1, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'teriyaki',
+    name: 'Teriyaki Glaze',
+    cuisine: 'Asian',
+    cuisineEmoji: '🌏',
+    compatibleCarbs: ['rice', 'noodles'],
+    color: '#3B1F0A',
+    description: 'Sweet soy glaze that caramelises beautifully on heat.',
+    ingredients: [
+      { name: 'soy sauce',  amount: 3, unit: 'tbsp' },
+      { name: 'mirin',      amount: 2, unit: 'tbsp' },
+      { name: 'sake',       amount: 2, unit: 'tbsp' },
+      { name: 'sugar',      amount: 1, unit: 'tbsp' },
+      { name: 'sesame oil', amount: 0.5, unit: 'tsp' },
+      { name: 'garlic',     amount: 1, unit: 'clove' },
+    ],
+    steps: [
+      {
+        title: 'Combine liquid base',
+        ingredients: [
+          { name: 'soy sauce', amount: 3, unit: 'tbsp' },
+          { name: 'mirin',     amount: 2, unit: 'tbsp' },
+          { name: 'sake',      amount: 2, unit: 'tbsp' },
+        ],
+      },
+      {
+        title: 'Sweeten & finish',
+        ingredients: [
+          { name: 'sugar',      amount: 1,   unit: 'tbsp' },
+          { name: 'sesame oil', amount: 0.5, unit: 'tsp' },
+          { name: 'garlic',     amount: 1,   unit: 'clove' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'gochujang-sauce',
+    name: 'Gochujang Sauce',
+    cuisine: 'Asian',
+    cuisineEmoji: '🌏',
+    compatibleCarbs: ['rice', 'noodles'],
+    color: '#DC2626',
+    description: 'Korean fermented chilli paste — spicy, sweet, and deep.',
+    ingredients: [
+      { name: 'gochujang',    amount: 2, unit: 'tbsp' },
+      { name: 'sesame oil',   amount: 1, unit: 'tbsp' },
+      { name: 'soy sauce',    amount: 1, unit: 'tbsp' },
+      { name: 'honey',        amount: 1, unit: 'tbsp' },
+      { name: 'rice vinegar', amount: 1, unit: 'tbsp' },
+      { name: 'garlic',       amount: 1, unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Mix everything',
+        ingredients: [
+          { name: 'gochujang',    amount: 2, unit: 'tbsp' },
+          { name: 'sesame oil',   amount: 1, unit: 'tbsp' },
+          { name: 'soy sauce',    amount: 1, unit: 'tbsp' },
+          { name: 'honey',        amount: 1, unit: 'tbsp' },
+          { name: 'rice vinegar', amount: 1, unit: 'tbsp' },
+          { name: 'garlic',       amount: 1, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'pad-thai-sauce',
+    name: 'Pad Thai Sauce',
+    cuisine: 'Asian',
+    cuisineEmoji: '🌏',
+    compatibleCarbs: ['noodles'],
+    color: '#92400E',
+    description: 'The tangy, sweet, salty backbone of Pad Thai.',
+    ingredients: [
+      { name: 'fish sauce',     amount: 2, unit: 'tbsp' },
+      { name: 'tamarind paste', amount: 3, unit: 'tbsp' },
+      { name: 'sugar',          amount: 2, unit: 'tbsp' },
+      { name: 'soy sauce',      amount: 1, unit: 'tbsp' },
+      { name: 'lime juice',     amount: 1, unit: 'tbsp' },
+    ],
+    steps: [
+      {
+        title: 'Combine all',
+        ingredients: [
+          { name: 'fish sauce',     amount: 2, unit: 'tbsp' },
+          { name: 'tamarind paste', amount: 3, unit: 'tbsp' },
+          { name: 'sugar',          amount: 2, unit: 'tbsp' },
+          { name: 'soy sauce',      amount: 1, unit: 'tbsp' },
+          { name: 'lime juice',     amount: 1, unit: 'tbsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'sesame-ginger',
+    name: 'Sesame Ginger Sauce',
+    cuisine: 'Asian',
+    cuisineEmoji: '🌏',
+    compatibleCarbs: ['noodles', 'rice'],
+    color: '#D97706',
+    description: 'Light, fragrant and perfect served cold or warm.',
+    ingredients: [
+      { name: 'sesame oil',   amount: 2, unit: 'tbsp' },
+      { name: 'soy sauce',    amount: 2, unit: 'tbsp' },
+      { name: 'rice vinegar', amount: 1, unit: 'tbsp' },
+      { name: 'ginger',       amount: 1, unit: 'tsp' },
+      { name: 'garlic',       amount: 1, unit: 'tsp' },
+      { name: 'honey',        amount: 1, unit: 'tbsp' },
+    ],
+    steps: [
+      {
+        title: 'Build the base',
+        ingredients: [
+          { name: 'sesame oil',   amount: 2, unit: 'tbsp' },
+          { name: 'soy sauce',    amount: 2, unit: 'tbsp' },
+          { name: 'rice vinegar', amount: 1, unit: 'tbsp' },
+        ],
+      },
+      {
+        title: 'Layer flavour',
+        ingredients: [
+          { name: 'ginger', amount: 1, unit: 'tsp' },
+          { name: 'garlic', amount: 1, unit: 'tsp' },
+          { name: 'honey',  amount: 1, unit: 'tbsp' },
+        ],
+      },
+    ],
+  },
+
+  // ── ITALIAN ──────────────────────────────────────────────────────────────────
+  {
+    id: 'marinara',
+    name: 'Classic Marinara',
+    cuisine: 'Italian',
+    cuisineEmoji: '🇮🇹',
+    compatibleCarbs: ['pasta', 'bread'],
+    color: '#DC2626',
+    description: 'Simple, fresh tomato sauce. The backbone of Italian cooking.',
+    ingredients: [
+      { name: 'olive oil',   amount: 3,   unit: 'tbsp' },
+      { name: 'garlic',      amount: 3,   unit: 'cloves' },
+      { name: 'chili flakes', amount: 0.5, unit: 'tsp' },
+      { name: 'tomato',      amount: 14,  unit: 'oz' },
+      { name: 'basil',       amount: 1,   unit: 'tbsp' },
+      { name: 'oregano',     amount: 1,   unit: 'tsp' },
+      { name: 'sugar',       amount: 0.5, unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Sauté the base',
+        ingredients: [
+          { name: 'olive oil',    amount: 3,   unit: 'tbsp' },
+          { name: 'garlic',       amount: 3,   unit: 'cloves' },
+          { name: 'chili flakes', amount: 0.5, unit: 'tsp' },
+        ],
+      },
+      {
+        title: 'Simmer to sauce',
+        ingredients: [
+          { name: 'tomato',  amount: 14,  unit: 'oz' },
+          { name: 'basil',   amount: 1,   unit: 'tbsp' },
+          { name: 'oregano', amount: 1,   unit: 'tsp' },
+          { name: 'sugar',   amount: 0.5, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'alfredo',
+    name: 'Alfredo Sauce',
+    cuisine: 'Italian',
+    cuisineEmoji: '🇮🇹',
+    compatibleCarbs: ['pasta'],
+    color: '#FBBF24',
+    description: 'Rich, creamy, indulgent — proper Roman-style.',
+    ingredients: [
+      { name: 'butter',      amount: 3,   unit: 'tbsp' },
+      { name: 'garlic',      amount: 2,   unit: 'cloves' },
+      { name: 'heavy cream', amount: 0.5, unit: 'cup' },
+      { name: 'parmesan',    amount: 0.5, unit: 'cup' },
+    ],
+    steps: [
+      {
+        title: 'Build butter base',
+        ingredients: [
+          { name: 'butter', amount: 3, unit: 'tbsp' },
+          { name: 'garlic', amount: 2, unit: 'cloves' },
+        ],
+      },
+      {
+        title: 'Cream & cheese',
+        ingredients: [
+          { name: 'heavy cream', amount: 0.5, unit: 'cup' },
+          { name: 'parmesan',    amount: 0.5, unit: 'cup' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'pesto',
+    name: 'Basil Pesto',
+    cuisine: 'Italian',
+    cuisineEmoji: '🇮🇹',
+    compatibleCarbs: ['pasta', 'bread'],
+    color: '#22C55E',
+    description: 'Fresh, vibrant, cold-blended. Do not cook.',
+    ingredients: [
+      { name: 'basil',      amount: 2,   unit: 'cup' },
+      { name: 'olive oil',  amount: 0.5, unit: 'cup' },
+      { name: 'pine nuts',  amount: 3,   unit: 'tbsp' },
+      { name: 'parmesan',   amount: 3,   unit: 'tbsp' },
+      { name: 'garlic',     amount: 2,   unit: 'cloves' },
+      { name: 'lemon juice', amount: 1,  unit: 'tbsp' },
+    ],
+    steps: [
+      {
+        title: 'Blend everything',
+        ingredients: [
+          { name: 'basil',       amount: 2,   unit: 'cup' },
+          { name: 'olive oil',   amount: 0.5, unit: 'cup' },
+          { name: 'pine nuts',   amount: 3,   unit: 'tbsp' },
+          { name: 'parmesan',    amount: 3,   unit: 'tbsp' },
+          { name: 'garlic',      amount: 2,   unit: 'cloves' },
+          { name: 'lemon juice', amount: 1,   unit: 'tbsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'arrabbiata',
+    name: 'Arrabbiata',
+    cuisine: 'Italian',
+    cuisineEmoji: '🇮🇹',
+    compatibleCarbs: ['pasta'],
+    color: '#B91C1C',
+    description: 'Angry tomato sauce — punchy chilli heat.',
+    ingredients: [
+      { name: 'olive oil',    amount: 4,   unit: 'tbsp' },
+      { name: 'garlic',       amount: 4,   unit: 'cloves' },
+      { name: 'chili flakes', amount: 2,   unit: 'tsp' },
+      { name: 'tomato',       amount: 14,  unit: 'oz' },
+      { name: 'basil',        amount: 1,   unit: 'tbsp' },
+      { name: 'sugar',        amount: 0.5, unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Fry aromatics',
+        ingredients: [
+          { name: 'olive oil',    amount: 4, unit: 'tbsp' },
+          { name: 'garlic',       amount: 4, unit: 'cloves' },
+          { name: 'chili flakes', amount: 2, unit: 'tsp' },
+        ],
+      },
+      {
+        title: 'Add tomato',
+        ingredients: [
+          { name: 'tomato', amount: 14,  unit: 'oz' },
+          { name: 'basil',  amount: 1,   unit: 'tbsp' },
+          { name: 'sugar',  amount: 0.5, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'aglio-olio',
+    name: 'Aglio e Olio',
+    cuisine: 'Italian',
+    cuisineEmoji: '🇮🇹',
+    compatibleCarbs: ['pasta'],
+    color: '#65A30D',
+    description: 'Garlic and olive oil — the ultimate pantry pasta.',
+    ingredients: [
+      { name: 'olive oil',    amount: 6, unit: 'tbsp' },
+      { name: 'garlic',       amount: 6, unit: 'cloves' },
+      { name: 'chili flakes', amount: 1, unit: 'tsp' },
+      { name: 'parsley',      amount: 2, unit: 'tbsp' },
+      { name: 'lemon juice',  amount: 1, unit: 'tbsp' },
+    ],
+    steps: [
+      {
+        title: 'Infuse garlic in oil',
+        ingredients: [
+          { name: 'olive oil',    amount: 6, unit: 'tbsp' },
+          { name: 'garlic',       amount: 6, unit: 'cloves' },
+          { name: 'chili flakes', amount: 1, unit: 'tsp' },
+        ],
+      },
+      {
+        title: 'Finish',
+        ingredients: [
+          { name: 'parsley',     amount: 2, unit: 'tbsp' },
+          { name: 'lemon juice', amount: 1, unit: 'tbsp' },
+        ],
+      },
+    ],
+  },
+
+  // ── MEXICAN ───────────────────────────────────────────────────────────────────
+  {
+    id: 'salsa-roja',
+    name: 'Salsa Roja',
+    cuisine: 'Mexican',
+    cuisineEmoji: '🇲🇽',
+    compatibleCarbs: ['rice', 'bread', 'potatoes'],
+    color: '#EA580C',
+    description: 'Roasted tomato salsa — smoky, earthy, punchy.',
+    ingredients: [
+      { name: 'tomato',       amount: 4, unit: 'piece' },
+      { name: 'garlic',       amount: 3, unit: 'cloves' },
+      { name: 'onion',        amount: 0.5, unit: 'piece' },
+      { name: 'chili flakes', amount: 1, unit: 'tsp' },
+      { name: 'lime juice',   amount: 1, unit: 'tbsp' },
+      { name: 'cilantro',     amount: 2, unit: 'tbsp' },
+      { name: 'cumin',        amount: 1, unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Roast & blend',
+        ingredients: [
+          { name: 'tomato',       amount: 4,   unit: 'piece' },
+          { name: 'garlic',       amount: 3,   unit: 'cloves' },
+          { name: 'onion',        amount: 0.5, unit: 'piece' },
+          { name: 'chili flakes', amount: 1,   unit: 'tsp' },
+        ],
+      },
+      {
+        title: 'Season',
+        ingredients: [
+          { name: 'lime juice', amount: 1, unit: 'tbsp' },
+          { name: 'cilantro',   amount: 2, unit: 'tbsp' },
+          { name: 'cumin',      amount: 1, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'chipotle-cream',
+    name: 'Chipotle Cream',
+    cuisine: 'Mexican',
+    cuisineEmoji: '🇲🇽',
+    compatibleCarbs: ['rice', 'potatoes', 'bread'],
+    color: '#A16207',
+    description: 'Smoky, creamy, with a chipotle kick.',
+    ingredients: [
+      { name: 'sour cream',   amount: 0.5, unit: 'cup' },
+      { name: 'chipotle',     amount: 2,   unit: 'tbsp' },
+      { name: 'lime juice',   amount: 1,   unit: 'tbsp' },
+      { name: 'garlic',       amount: 0.5, unit: 'tsp' },
+      { name: 'cumin',        amount: 0.5, unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Mix together',
+        ingredients: [
+          { name: 'sour cream', amount: 0.5, unit: 'cup' },
+          { name: 'chipotle',   amount: 2,   unit: 'tbsp' },
+          { name: 'lime juice', amount: 1,   unit: 'tbsp' },
+          { name: 'garlic',     amount: 0.5, unit: 'tsp' },
+          { name: 'cumin',      amount: 0.5, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'quick-mole',
+    name: 'Quick Mole',
+    cuisine: 'Mexican',
+    cuisineEmoji: '🇲🇽',
+    compatibleCarbs: ['rice'],
+    color: '#78350F',
+    description: 'Simplified mole with chocolate depth.',
+    ingredients: [
+      { name: 'chili powder',  amount: 2,   unit: 'tbsp' },
+      { name: 'cumin',         amount: 1,   unit: 'tsp' },
+      { name: 'coriander',     amount: 0.5, unit: 'tsp' },
+      { name: 'garlic',        amount: 2,   unit: 'cloves' },
+      { name: 'tomato puree',  amount: 2,   unit: 'tbsp' },
+      { name: 'water',         amount: 0.5, unit: 'cup' },
+      { name: 'sugar',         amount: 1,   unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Toast spices',
+        ingredients: [
+          { name: 'chili powder', amount: 2,   unit: 'tbsp' },
+          { name: 'cumin',        amount: 1,   unit: 'tsp' },
+          { name: 'coriander',    amount: 0.5, unit: 'tsp' },
+          { name: 'garlic',       amount: 2,   unit: 'cloves' },
+        ],
+      },
+      {
+        title: 'Add body',
+        ingredients: [
+          { name: 'tomato puree', amount: 2,   unit: 'tbsp' },
+          { name: 'water',        amount: 0.5, unit: 'cup' },
+          { name: 'sugar',        amount: 1,   unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  // ── MEDITERRANEAN ────────────────────────────────────────────────────────────
+  {
+    id: 'tzatziki',
+    name: 'Tzatziki',
+    cuisine: 'Mediterranean',
+    cuisineEmoji: '🫒',
+    compatibleCarbs: ['bread', 'potatoes'],
+    color: '#4ADE80',
+    description: 'Cool, tangy Greek yogurt sauce with cucumber and dill.',
+    ingredients: [
+      { name: 'yogurt',      amount: 1, unit: 'cup' },
+      { name: 'garlic',      amount: 2, unit: 'cloves' },
+      { name: 'lemon juice', amount: 1, unit: 'tbsp' },
+      { name: 'dill',        amount: 2, unit: 'tbsp' },
+      { name: 'olive oil',   amount: 1, unit: 'tbsp' },
+    ],
+    steps: [
+      {
+        title: 'Combine base',
+        ingredients: [
+          { name: 'yogurt',      amount: 1, unit: 'cup' },
+          { name: 'garlic',      amount: 2, unit: 'cloves' },
+          { name: 'lemon juice', amount: 1, unit: 'tbsp' },
+        ],
+      },
+      {
+        title: 'Add freshness',
+        ingredients: [
+          { name: 'dill',      amount: 2, unit: 'tbsp' },
+          { name: 'olive oil', amount: 1, unit: 'tbsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'chermoula',
+    name: 'Chermoula',
+    cuisine: 'Mediterranean',
+    cuisineEmoji: '🫒',
+    compatibleCarbs: ['couscous', 'bread'],
+    color: '#4ADE80',
+    description: 'North African herb & spice marinade sauce.',
+    ingredients: [
+      { name: 'cilantro',    amount: 0.5, unit: 'cup' },
+      { name: 'parsley',     amount: 0.5, unit: 'cup' },
+      { name: 'garlic',      amount: 4,   unit: 'cloves' },
+      { name: 'cumin',       amount: 1,   unit: 'tsp' },
+      { name: 'paprika',     amount: 1,   unit: 'tsp' },
+      { name: 'lemon juice', amount: 2,   unit: 'tbsp' },
+      { name: 'olive oil',   amount: 3,   unit: 'tbsp' },
+    ],
+    steps: [
+      {
+        title: 'Blend herbs',
+        ingredients: [
+          { name: 'cilantro', amount: 0.5, unit: 'cup' },
+          { name: 'parsley',  amount: 0.5, unit: 'cup' },
+          { name: 'garlic',   amount: 4,   unit: 'cloves' },
+        ],
+      },
+      {
+        title: 'Add spice & acid',
+        ingredients: [
+          { name: 'cumin',       amount: 1, unit: 'tsp' },
+          { name: 'paprika',     amount: 1, unit: 'tsp' },
+          { name: 'lemon juice', amount: 2, unit: 'tbsp' },
+          { name: 'olive oil',   amount: 3, unit: 'tbsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'harissa-sauce',
+    name: 'Harissa Sauce',
+    cuisine: 'Mediterranean',
+    cuisineEmoji: '🫒',
+    compatibleCarbs: ['couscous', 'potatoes', 'bread'],
+    color: '#DC2626',
+    description: 'Fiery North African chilli sauce with earthy depth.',
+    ingredients: [
+      { name: 'gochujang',   amount: 2,   unit: 'tbsp' },
+      { name: 'olive oil',   amount: 2,   unit: 'tbsp' },
+      { name: 'lemon juice', amount: 1,   unit: 'tbsp' },
+      { name: 'garlic',      amount: 1,   unit: 'clove' },
+      { name: 'cumin',       amount: 0.5, unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Mix',
+        ingredients: [
+          { name: 'gochujang',   amount: 2,   unit: 'tbsp' },
+          { name: 'olive oil',   amount: 2,   unit: 'tbsp' },
+          { name: 'lemon juice', amount: 1,   unit: 'tbsp' },
+          { name: 'garlic',      amount: 1,   unit: 'clove' },
+          { name: 'cumin',       amount: 0.5, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  // ── BBQ / AMERICAN ────────────────────────────────────────────────────────────
+  {
+    id: 'bbq-sauce',
+    name: 'Classic BBQ Sauce',
+    cuisine: 'BBQ',
+    cuisineEmoji: '🔥',
+    compatibleCarbs: ['potatoes', 'bread'],
+    color: '#B91C1C',
+    description: 'Smoky, sweet, tangy. The American classic.',
+    ingredients: [
+      { name: 'ketchup',               amount: 0.5, unit: 'cup' },
+      { name: 'brown sugar',           amount: 3,   unit: 'tbsp' },
+      { name: 'vinegar',               amount: 2,   unit: 'tbsp' },
+      { name: 'worcestershire sauce',  amount: 1,   unit: 'tbsp' },
+      { name: 'mustard',               amount: 1,   unit: 'tsp' },
+      { name: 'paprika',               amount: 1,   unit: 'tsp' },
+      { name: 'garlic',                amount: 1,   unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Combine base',
+        ingredients: [
+          { name: 'ketchup',      amount: 0.5, unit: 'cup' },
+          { name: 'brown sugar',  amount: 3,   unit: 'tbsp' },
+          { name: 'vinegar',      amount: 2,   unit: 'tbsp' },
+        ],
+      },
+      {
+        title: 'Add depth',
+        ingredients: [
+          { name: 'worcestershire sauce', amount: 1, unit: 'tbsp' },
+          { name: 'mustard',              amount: 1, unit: 'tsp' },
+          { name: 'paprika',              amount: 1, unit: 'tsp' },
+          { name: 'garlic',               amount: 1, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'honey-mustard',
+    name: 'Honey Mustard',
+    cuisine: 'BBQ',
+    cuisineEmoji: '🔥',
+    compatibleCarbs: ['potatoes', 'bread'],
+    color: '#EAB308',
+    description: 'Sweet, sharp, creamy dipping sauce.',
+    ingredients: [
+      { name: 'dijon mustard', amount: 3,    unit: 'tbsp' },
+      { name: 'honey',         amount: 2,    unit: 'tbsp' },
+      { name: 'mayo',          amount: 2,    unit: 'tbsp' },
+      { name: 'vinegar',       amount: 1,    unit: 'tsp' },
+      { name: 'garlic',        amount: 0.25, unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Whisk together',
+        ingredients: [
+          { name: 'dijon mustard', amount: 3,    unit: 'tbsp' },
+          { name: 'honey',         amount: 2,    unit: 'tbsp' },
+          { name: 'mayo',          amount: 2,    unit: 'tbsp' },
+          { name: 'vinegar',       amount: 1,    unit: 'tsp' },
+          { name: 'garlic',        amount: 0.25, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'buffalo',
+    name: 'Buffalo Sauce',
+    cuisine: 'BBQ',
+    cuisineEmoji: '🔥',
+    compatibleCarbs: ['potatoes', 'bread'],
+    color: '#EF4444',
+    description: 'Hot and buttery. Perfect for dunking.',
+    ingredients: [
+      { name: 'butter',               amount: 3,   unit: 'tbsp' },
+      { name: 'hot sauce',            amount: 3,   unit: 'tbsp' },
+      { name: 'worcestershire sauce', amount: 0.5, unit: 'tsp' },
+      { name: 'garlic',               amount: 0.5, unit: 'tsp' },
+    ],
+    steps: [
+      {
+        title: 'Melt & combine',
+        ingredients: [
+          { name: 'butter',               amount: 3,   unit: 'tbsp' },
+          { name: 'hot sauce',            amount: 3,   unit: 'tbsp' },
+          { name: 'worcestershire sauce', amount: 0.5, unit: 'tsp' },
+          { name: 'garlic',               amount: 0.5, unit: 'tsp' },
+        ],
+      },
+    ],
+  },
+
+  // ── FRENCH ────────────────────────────────────────────────────────────────────
+  {
+    id: 'beurre-blanc',
+    name: 'Beurre Blanc',
+    cuisine: 'French',
+    cuisineEmoji: '🇫🇷',
+    compatibleCarbs: ['pasta', 'potatoes'],
+    color: '#FBBF24',
+    description: 'Classic French butter emulsion — light, silky, elegant.',
+    ingredients: [
+      { name: 'white wine',  amount: 0.25, unit: 'cup' },
+      { name: 'shallot',     amount: 2,    unit: 'tbsp' },
+      { name: 'lemon juice', amount: 1,    unit: 'tbsp' },
+      { name: 'butter',      amount: 6,    unit: 'tbsp' },
+      { name: 'heavy cream', amount: 1,    unit: 'tbsp' },
+    ],
+    steps: [
+      {
+        title: 'Reduce',
+        ingredients: [
+          { name: 'white wine',  amount: 0.25, unit: 'cup' },
+          { name: 'shallot',     amount: 2,    unit: 'tbsp' },
+          { name: 'lemon juice', amount: 1,    unit: 'tbsp' },
+        ],
+      },
+      {
+        title: 'Emulsify butter',
+        ingredients: [
+          { name: 'butter',      amount: 6, unit: 'tbsp' },
+          { name: 'heavy cream', amount: 1, unit: 'tbsp' },
+        ],
+      },
+    ],
+  },
+
+  // ── INDIAN ────────────────────────────────────────────────────────────────────
+  {
+    id: 'tikka-masala',
+    name: 'Tikka Masala Sauce',
+    cuisine: 'Indian',
+    cuisineEmoji: '🇮🇳',
+    compatibleCarbs: ['rice'],
+    color: '#EA580C',
+    description: 'Creamy, aromatic tomato-based curry sauce.',
+    ingredients: [
+      { name: 'butter',       amount: 2,    unit: 'tbsp' },
+      { name: 'onion',        amount: 0.5,  unit: 'piece' },
+      { name: 'garlic',       amount: 3,    unit: 'cloves' },
+      { name: 'ginger',       amount: 1,    unit: 'tsp' },
+      { name: 'cumin',        amount: 1,    unit: 'tsp' },
+      { name: 'coriander',    amount: 1,    unit: 'tsp' },
+      { name: 'garam masala', amount: 1,    unit: 'tsp' },
+      { name: 'turmeric',     amount: 0.5,  unit: 'tsp' },
+      { name: 'paprika',      amount: 1,    unit: 'tsp' },
+      { name: 'tomato puree', amount: 1,    unit: 'cup' },
+      { name: 'heavy cream',  amount: 0.25, unit: 'cup' },
+    ],
+    steps: [
+      {
+        title: 'Sauté aromatics',
+        ingredients: [
+          { name: 'butter', amount: 2,   unit: 'tbsp' },
+          { name: 'onion',  amount: 0.5, unit: 'piece' },
+          { name: 'garlic', amount: 3,   unit: 'cloves' },
+          { name: 'ginger', amount: 1,   unit: 'tsp' },
+        ],
+      },
+      {
+        title: 'Bloom spices',
+        ingredients: [
+          { name: 'cumin',        amount: 1,   unit: 'tsp' },
+          { name: 'coriander',    amount: 1,   unit: 'tsp' },
+          { name: 'garam masala', amount: 1,   unit: 'tsp' },
+          { name: 'turmeric',     amount: 0.5, unit: 'tsp' },
+          { name: 'paprika',      amount: 1,   unit: 'tsp' },
+        ],
+      },
+      {
+        title: 'Build the sauce',
+        ingredients: [
+          { name: 'tomato puree', amount: 1,    unit: 'cup' },
+          { name: 'heavy cream',  amount: 0.25, unit: 'cup' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'saag-sauce',
+    name: 'Saag Sauce',
+    cuisine: 'Indian',
+    cuisineEmoji: '🇮🇳',
+    compatibleCarbs: ['rice'],
+    color: '#15803D',
+    description: 'Iron-rich spinach sauce with warming spices.',
+    ingredients: [
+      { name: 'butter',       amount: 2,   unit: 'tbsp' },
+      { name: 'onion',        amount: 0.5, unit: 'piece' },
+      { name: 'garlic',       amount: 3,   unit: 'cloves' },
+      { name: 'ginger',       amount: 1,   unit: 'tsp' },
+      { name: 'cumin',        amount: 1,   unit: 'tsp' },
+      { name: 'coriander',    amount: 1,   unit: 'tsp' },
+      { name: 'garam masala', amount: 0.5, unit: 'tsp' },
+      { name: 'turmeric',     amount: 0.5, unit: 'tsp' },
+      { name: 'spinach',      amount: 4,   unit: 'cup' },
+      { name: 'yogurt',       amount: 2,   unit: 'tbsp' },
+    ],
+    steps: [
+      {
+        title: 'Fry aromatics',
+        ingredients: [
+          { name: 'butter', amount: 2,   unit: 'tbsp' },
+          { name: 'onion',  amount: 0.5, unit: 'piece' },
+          { name: 'garlic', amount: 3,   unit: 'cloves' },
+          { name: 'ginger', amount: 1,   unit: 'tsp' },
+        ],
+      },
+      {
+        title: 'Toast spices',
+        ingredients: [
+          { name: 'cumin',        amount: 1,   unit: 'tsp' },
+          { name: 'coriander',    amount: 1,   unit: 'tsp' },
+          { name: 'garam masala', amount: 0.5, unit: 'tsp' },
+          { name: 'turmeric',     amount: 0.5, unit: 'tsp' },
+        ],
+      },
+      {
+        title: 'Wilt greens & finish',
+        ingredients: [
+          { name: 'spinach', amount: 4, unit: 'cup' },
+          { name: 'yogurt',  amount: 2, unit: 'tbsp' },
+        ],
+      },
+    ],
+  },
+];
+
+// Derive unique ingredients across all sauces (used for filter panel)
+export function getAllIngredients() {
+  const names = new Set();
+  SAUCES.forEach(s => s.ingredients.forEach(i => names.add(i.name)));
+  return [...names].sort();
+}
+
+// Get sauces compatible with a given carb id
+export function getSaucesForCarb(carbId) {
+  return SAUCES.filter(s => s.compatibleCarbs.includes(carbId));
+}
+
+// Get unique cuisines for a given carb id
+export function getCuisinesForCarb(carbId) {
+  const seen = new Set();
+  getSaucesForCarb(carbId).forEach(s => seen.add(s.cuisine));
+  return [...seen].sort();
+}

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vibelab</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="wordmark">⚗️ vibelab</div>
+      <p class="tagline">Ideas → prototypes → native apps</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="filters" id="filters">
+      <div class="filter-row">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="live">Live</button>
+        <button class="filter-btn" data-filter="wip">In Progress</button>
+      </div>
+    </section>
+
+    <section id="projects-grid" class="projects-grid">
+      <div class="loading">Loading projects…</div>
+    </section>
+  </main>
+
+  <footer>
+    <small>Built in vibelab. Powered by Supabase, Railway & Vercel.</small>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

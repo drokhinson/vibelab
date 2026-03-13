@@ -1,0 +1,332 @@
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #1a0a00; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+/* ── Phone Shell ── */
+#app {
+  max-width: 390px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  background: #FFF8F0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Screens ── */
+.screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+.screen.active { display: flex; }
+
+/* ── Status Bar Spacer ── */
+.status-bar { height: 44px; background: #E85D04; flex-shrink: 0; }
+
+/* ── App Header ── */
+.app-header {
+  background: #E85D04;
+  padding: 0 16px 16px;
+  flex-shrink: 0;
+}
+.app-header .logo {
+  font-size: 26px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: -0.5px;
+}
+.app-header .logo span { font-size: 22px; margin-right: 6px; }
+.app-header .subtitle {
+  font-size: 14px;
+  color: rgba(255,255,255,0.85);
+  margin-top: 2px;
+}
+
+/* ── Back Button ── */
+.back-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 15px;
+  padding: 8px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+/* ── Scroll Body ── */
+.scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  padding-bottom: 32px;
+}
+
+/* ─────────────────────────────
+   SCREEN 1 — Carb Selector
+───────────────────────────── */
+.carb-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 4px;
+}
+.carb-card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px 12px 16px;
+  text-align: center;
+  cursor: pointer;
+  border: 2.5px solid transparent;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.carb-card:active { transform: scale(0.96); }
+.carb-card:hover { border-color: #E85D04; box-shadow: 0 4px 14px rgba(232,93,4,0.2); }
+.carb-emoji { font-size: 44px; display: block; margin-bottom: 8px; }
+.carb-name { font-size: 15px; font-weight: 700; color: #1A1A2E; }
+.carb-desc { font-size: 11px; color: #6B7280; margin-top: 2px; }
+
+/* ─────────────────────────────
+   SCREEN 2 — Sauce Selector
+───────────────────────────── */
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #9CA3AF;
+  margin-bottom: 8px;
+}
+
+/* Ingredient filter */
+.filter-panel {
+  background: white;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  background: white;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+.filter-header-text { font-size: 14px; font-weight: 700; color: #1A1A2E; }
+.filter-count {
+  background: #E85D04;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+.filter-chevron { font-size: 12px; color: #9CA3AF; transition: transform 0.2s; }
+.filter-chevron.open { transform: rotate(180deg); }
+.filter-body { padding: 0 14px 12px; display: none; }
+.filter-body.open { display: block; }
+.filter-hint { font-size: 12px; color: #6B7280; margin-bottom: 8px; }
+.ingredient-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid #E5E7EB;
+  background: white;
+  color: #374151;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.chip.has { border-color: #D1FAE5; background: #F0FDF4; color: #065F46; }
+.chip.missing { border-color: #FEE2E2; background: #FEF2F2; color: #991B1B; text-decoration: line-through; opacity: 0.7; }
+
+/* Cuisine accordion */
+.cuisine-group { margin-bottom: 10px; }
+.cuisine-header {
+  background: white;
+  border-radius: 14px;
+  padding: 13px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  border: none;
+  width: 100%;
+  text-align: left;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  transition: border-radius 0.2s;
+}
+.cuisine-group.open .cuisine-header {
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.04);
+}
+.cuisine-flag { font-size: 20px; margin-right: 8px; }
+.cuisine-name { font-size: 15px; font-weight: 700; color: #1A1A2E; flex: 1; }
+.cuisine-count { font-size: 12px; color: #9CA3AF; margin-right: 8px; }
+.cuisine-chevron { font-size: 12px; color: #9CA3AF; transition: transform 0.25s; }
+.cuisine-group.open .cuisine-chevron { transform: rotate(180deg); }
+
+.sauce-list { display: none; background: white; border-radius: 0 0 14px 14px; padding: 2px 0 8px; overflow: hidden; }
+.cuisine-group.open .sauce-list { display: block; }
+
+.sauce-item {
+  display: flex;
+  align-items: center;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.sauce-item:hover { background: #FFF8F0; }
+.sauce-item.unavailable { opacity: 0.4; pointer-events: none; }
+.sauce-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+.sauce-info { flex: 1; }
+.sauce-item-name { font-size: 14px; font-weight: 600; color: #1A1A2E; }
+.sauce-item-tags { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
+.sauce-arrow { font-size: 14px; color: #D1D5DB; }
+.sauce-missing-badge {
+  font-size: 10px;
+  background: #FEE2E2;
+  color: #991B1B;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-right: 6px;
+}
+
+/* ─────────────────────────────
+   SCREEN 3 — Recipe
+───────────────────────────── */
+.recipe-header {
+  background: #E85D04;
+  padding: 0 16px 20px;
+  flex-shrink: 0;
+}
+.recipe-cuisine-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.25);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+.recipe-title { font-size: 24px; font-weight: 800; color: white; line-height: 1.2; }
+.recipe-subtitle { font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 4px; }
+
+.steps-container { padding: 16px; display: flex; flex-direction: column; gap: 20px; }
+
+.step-card {
+  background: white;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+}
+.step-number {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #E85D04;
+  margin-bottom: 4px;
+}
+.step-title { font-size: 16px; font-weight: 700; color: #1A1A2E; margin-bottom: 12px; }
+
+.pie-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.pie-chart-wrap { position: relative; }
+.pie-chart { display: block; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.12)); }
+
+.legend { width: 100%; }
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid #F3F4F6;
+}
+.legend-item:last-child { border-bottom: none; }
+.legend-swatch {
+  width: 12px; height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.legend-name { font-size: 13px; color: #374151; flex: 1; font-weight: 500; }
+.legend-amount { font-size: 12px; color: #6B7280; font-weight: 600; }
+.legend-pct {
+  font-size: 11px;
+  color: white;
+  background: #9CA3AF;
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-weight: 700;
+  min-width: 34px;
+  text-align: center;
+}
+
+/* ── Bottom Tip ── */
+.tip-card {
+  background: #FFF3CD;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 16px 32px;
+  font-size: 13px;
+  color: #78350F;
+  line-height: 1.5;
+}
+.tip-card strong { display: block; margin-bottom: 2px; }
+
+/* ── Loading & Error ── */
+.loading-screen, .error-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  gap: 16px;
+  padding: 32px;
+}
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #F3E8DF;
+  border-top-color: #E85D04;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text {
+  font-size: 14px;
+  color: #6B7280;
+  font-weight: 500;
+}
+.error-screen {
+  color: #991B1B;
+  text-align: center;
+}
+.error-screen h2 { font-size: 18px; font-weight: 700; }
+.error-screen p { font-size: 13px; color: #6B7280; max-width: 280px; }

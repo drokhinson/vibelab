@@ -1,0 +1,31 @@
+name: Deploy Shared Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - shared-backend/**
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Railway's native GitHub integration is the recommended approach:
+      # In Railway dashboard → Service → Settings → Source → set Root Directory
+      # to "shared-backend" and branch to "main". It auto-deploys on push.
+      #
+      # If you prefer Actions-driven deploys, uncomment below and set RAILWAY_TOKEN secret:
+      #
+      # - name: Install Railway CLI
+      #   run: npm install -g @railway/cli
+      #
+      # - name: Deploy to Railway
+      #   run: railway up --service vibelab-backend
+      #   env:
+      #     RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      #   working-directory: ./shared-backend
+
+      - name: Notify (Railway auto-deploys on push)
+        run: echo "Shared backend changes pushed. Railway will auto-deploy if configured."

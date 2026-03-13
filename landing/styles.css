@@ -1,0 +1,157 @@
+:root {
+  --pico-primary:          #6c63ff;
+  --pico-primary-hover:    #5a52e0;
+  --pico-primary-focus:    rgba(108, 99, 255, 0.25);
+  --pico-background-color: #0a0a12;
+  --pico-card-background-color: #13131e;
+  --pico-card-border-color: rgba(255,255,255,0.06);
+  --pico-font-family: 'Inter', -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 1rem 4rem;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.site-header {
+  padding: 3rem 0 2rem;
+  text-align: center;
+}
+
+.wordmark {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #fff;
+  margin-bottom: 0.25rem;
+}
+
+.tagline {
+  color: var(--pico-muted-color);
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* ── Filters ─────────────────────────────────────────────────────────────────── */
+.filters { margin-bottom: 1.5rem; }
+.filter-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.filter-btn {
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pico-muted-color);
+  padding: 0.3rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-btn:hover { border-color: var(--pico-primary); color: var(--pico-primary); }
+.filter-btn.active {
+  background: var(--pico-primary);
+  border-color: var(--pico-primary);
+  color: #fff;
+}
+
+/* ── Project grid ────────────────────────────────────────────────────────────── */
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+/* ── Project card ────────────────────────────────────────────────────────────── */
+.project-card {
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: 12px;
+  padding: 1.25rem;
+  transition: border-color 0.2s, transform 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.project-card:hover {
+  border-color: var(--pico-primary);
+  transform: translateY(-2px);
+}
+
+.card-icon { font-size: 2rem; line-height: 1; }
+
+.card-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #fff;
+  margin: 0;
+}
+
+.card-desc {
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+  line-height: 1.5;
+  flex: 1;
+  margin: 0;
+}
+
+.card-tags {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.tag {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(108, 99, 255, 0.12);
+  color: var(--pico-primary);
+}
+
+.card-footer {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 500;
+}
+.status-live    { background: rgba(40,167,69,0.15); color: #4caf71; }
+.status-wip     { background: rgba(255,193,7,0.12); color: #ffc107; }
+.status-prototype { background: rgba(23,162,184,0.12); color: #17b8c8; }
+.status-archived { background: rgba(108,117,125,0.12); color: #6c757d; }
+
+.card-link {
+  font-size: 0.8rem;
+  color: var(--pico-primary);
+  text-decoration: none;
+  margin-left: auto;
+}
+.card-link:hover { text-decoration: underline; }
+
+.native-badge {
+  font-size: 0.7rem;
+  color: var(--pico-muted-color);
+}
+
+/* ── Loading / empty ────────────────────────────────────────────────────────── */
+.loading, .empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 4rem 1rem;
+  color: var(--pico-muted-color);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────────── */
+footer {
+  text-align: center;
+  margin-top: 4rem;
+  color: var(--pico-muted-color);
+}

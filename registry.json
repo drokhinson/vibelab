@@ -1,0 +1,30 @@
+{
+  "projects": [
+    {
+      "id": "sauceboss",
+      "name": "SauceBoss",
+      "description": "Pick a carb, filter by ingredients, get step-by-step visual sauce recipes.",
+      "status": "wip",
+      "tags": ["food", "recipes", "react-native"],
+      "webUrl": null,
+      "backendUrl": null,
+      "hasNativeApp": true,
+      "expoSlug": "sauceboss",
+      "createdAt": "2026-03-13",
+      "icon": "🍲"
+    },
+    {
+      "id": "spotme",
+      "name": "SpotMe",
+      "description": "Work in progress.",
+      "status": "wip",
+      "tags": [],
+      "webUrl": null,
+      "backendUrl": null,
+      "hasNativeApp": false,
+      "expoSlug": null,
+      "createdAt": "2026-03-13",
+      "icon": "📍"
+    }
+  ]
+}
