@@ -28,16 +28,13 @@ $$;
 -- ── get_sauceboss_sauces_for_carb ─────────────────────────────────────────────
 -- Returns fully assembled sauce objects for a given carb.
 -- Mirrors getSaucesForCarb() in database.js — produces identical JSON shape.
+-- Uses correlated subqueries (no LATERAL join needed).
 CREATE OR REPLACE FUNCTION get_sauceboss_sauces_for_carb(p_carb_id TEXT)
 RETURNS JSON LANGUAGE plpgsql AS $$
 BEGIN
   RETURN (
-    SELECT COALESCE(json_agg(sauce_obj ORDER BY s.cuisine, s.name), '[]'::json)
-    FROM sauceboss_sauces s
-    JOIN sauceboss_sauce_carbs sc_filter ON sc_filter.sauce_id = s.id
-    WHERE sc_filter.carb_id = p_carb_id,
-    LATERAL (
-      SELECT json_build_object(
+    SELECT COALESCE(json_agg(
+      json_build_object(
         'id',            s.id,
         'name',          s.name,
         'cuisine',       s.cuisine,
@@ -50,11 +47,15 @@ BEGIN
           WHERE sc2.sauce_id = s.id
         ),
         'ingredients', (
-          -- Flat deduplicated ingredient list (first appearance across steps)
-          SELECT json_agg(DISTINCT jsonb_build_object('name', si.name, 'amount', si.amount, 'unit', si.unit))
-          FROM sauceboss_step_ingredients si
-          JOIN sauceboss_sauce_steps ss2 ON ss2.id = si.step_id
-          WHERE ss2.sauce_id = s.id
+          -- Flat deduplicated ingredient list (one entry per unique name)
+          SELECT json_agg(json_build_object('name', di.name, 'amount', di.amount, 'unit', di.unit))
+          FROM (
+            SELECT DISTINCT ON (si2.name) si2.name, si2.amount, si2.unit
+            FROM sauceboss_step_ingredients si2
+            JOIN sauceboss_sauce_steps ss2 ON ss2.id = si2.step_id
+            WHERE ss2.sauce_id = s.id
+            ORDER BY si2.name, si2.id
+          ) di
         ),
         'steps', (
           SELECT json_agg(
@@ -74,8 +75,12 @@ BEGIN
           FROM sauceboss_sauce_steps ss
           WHERE ss.sauce_id = s.id
         )
-      ) AS sauce_obj
-    ) lateral_sauce
+      )
+      ORDER BY s.cuisine, s.name
+    ), '[]'::json)
+    FROM sauceboss_sauces s
+    JOIN sauceboss_sauce_carbs sc_filter ON sc_filter.sauce_id = s.id
+    WHERE sc_filter.carb_id = p_carb_id
   );
 END;
 $$;
