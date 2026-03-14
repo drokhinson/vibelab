@@ -204,22 +204,49 @@
                 <option value="partner">Partner's (Personal)</option>
                 <option value="joint">Joint</option>
               </select>
-              <label>URL (optional)</label>
-              <input type="url" id="acct-url" placeholder="https://..." />
-              <label>Notes (optional)</label>
-              <textarea id="acct-notes" rows="2"></textarea>
-              <div id="loan-details-section" style="display:none;">
+              <div id="initial-value-section">
                 <hr />
-                <h5>Loan Details</h5>
-                <label>Original Loan Amount</label>
-                <input type="number" id="acct-loan-amount" step="0.01" />
-                <label>Interest Rate (%)</label>
-                <input type="number" id="acct-loan-rate" step="0.01" />
-                <label>Loan Term (months)</label>
-                <input type="number" id="acct-loan-term" />
-                <label>Lender Name</label>
-                <input type="text" id="acct-loan-lender" />
+                <h5>Initial Value</h5>
+                <div class="input-row">
+                  <div class="input-col">
+                    <label id="acct-value-label">Current Value</label>
+                    <input type="number" id="acct-initial-value" step="0.01" placeholder="0.00" />
+                  </div>
+                  <div class="input-col" id="acct-owed-col" style="display:none;">
+                    <label>Balance Owed</label>
+                    <input type="number" id="acct-initial-owed" step="0.01" placeholder="0.00" />
+                  </div>
+                </div>
               </div>
+              <details class="extra-details-toggle">
+                <summary>Extra Details</summary>
+                <label>URL (optional)</label>
+                <input type="url" id="acct-url" placeholder="https://..." />
+                <label>Notes (optional)</label>
+                <textarea id="acct-notes" rows="2" placeholder="Any info to help you find this account's value..."></textarea>
+                <div id="property-details-section" style="display:none;">
+                  <label>Estimated Property Value</label>
+                  <input type="number" id="acct-property-value" step="0.01" placeholder="Zillow estimate, appraisal, etc." />
+                  <label>Property Address (optional)</label>
+                  <input type="text" id="acct-property-address" placeholder="123 Main St..." />
+                </div>
+                <div id="loan-details-section" style="display:none;">
+                  <hr />
+                  <h5>Loan Details</h5>
+                  <label>Original Loan Amount</label>
+                  <input type="number" id="acct-loan-amount" step="0.01" />
+                  <label>Interest Rate (%)</label>
+                  <input type="number" id="acct-loan-rate" step="0.01" />
+                  <label>Loan Term (months)</label>
+                  <input type="number" id="acct-loan-term" />
+                  <label>Lender Name</label>
+                  <input type="text" id="acct-loan-lender" />
+                </div>
+                <div id="investment-details-section" style="display:none;">
+                  <label>Brokerage / Provider</label>
+                  <input type="text" id="acct-brokerage" placeholder="e.g. Fidelity, Schwab, Vanguard" />
+                </div>
+              </details>
               <div id="account-form-error" class="error-banner" style="display:none;"></div>
               <footer>
                 <button type="submit" id="acct-save-btn">Save</button>

@@ -645,6 +645,11 @@ function openAddAccount() {
   document.getElementById("account-form").reset();
   document.getElementById("acct-deactivate-btn").style.display = "none";
   document.getElementById("loan-details-section").style.display = "none";
+  document.getElementById("property-details-section").style.display = "none";
+  document.getElementById("investment-details-section").style.display = "none";
+  document.getElementById("acct-owed-col").style.display = "none";
+  document.getElementById("acct-value-label").textContent = "Current Value";
+  document.getElementById("initial-value-section").style.display = "block";
   document.getElementById("account-form-error").style.display = "none";
   // If partner exists, show partner option
   const ownerSelect = document.getElementById("acct-owner");
@@ -678,9 +683,18 @@ function openEditAccount(id) {
     ownerSelect.value = "partner";
   }
 
-  // Loan details
+  // Hide initial value section when editing
+  document.getElementById("initial-value-section").style.display = "none";
+
+  // Type-specific details
   const isLoan = isLoanType(acct.account_type);
+  const isProperty = isPropertyType(acct.account_type);
+  const isInvestment = isInvestmentType(acct.account_type);
   document.getElementById("loan-details-section").style.display = isLoan ? "block" : "none";
+  document.getElementById("property-details-section").style.display = isProperty ? "block" : "none";
+  document.getElementById("investment-details-section").style.display = isInvestment ? "block" : "none";
+  document.getElementById("acct-owed-col").style.display = "none";
+
   if (acct.loan_details) {
     document.getElementById("acct-loan-amount").value = acct.loan_details.original_loan_amount || "";
     document.getElementById("acct-loan-rate").value = acct.loan_details.interest_rate || "";
@@ -705,29 +719,59 @@ async function handleAccountSubmit(e) {
     ownerUserId = partner ? partner.user_id : null;
   }
 
+  // Build notes from notes field + type-specific extras
+  let notes = document.getElementById("acct-notes").value.trim() || "";
+  const acctType = document.getElementById("acct-type").value;
+
+  if (isPropertyType(acctType)) {
+    const addr = document.getElementById("acct-property-address").value.trim();
+    if (addr) notes = (notes ? notes + "\n" : "") + "Address: " + addr;
+  }
+  if (isInvestmentType(acctType)) {
+    const brokerage = document.getElementById("acct-brokerage").value.trim();
+    if (brokerage) notes = (notes ? notes + "\n" : "") + "Provider: " + brokerage;
+  }
+
   const body = {
     name: document.getElementById("acct-name").value.trim(),
-    account_type: document.getElementById("acct-type").value,
+    account_type: acctType,
     owner_user_id: ownerUserId,
     url: document.getElementById("acct-url").value.trim() || null,
-    notes: document.getElementById("acct-notes").value.trim() || null,
+    notes: notes || null,
   };
 
   // Loan details
   if (isLoanType(body.account_type)) {
-    body.loan_details = {
-      original_loan_amount: document.getElementById("acct-loan-amount").value || null,
-      interest_rate: document.getElementById("acct-loan-rate").value || null,
-      loan_term_months: document.getElementById("acct-loan-term").value || null,
-      lender_name: document.getElementById("acct-loan-lender").value || null,
-    };
+    body.original_loan_amount = parseFloat(document.getElementById("acct-loan-amount").value) || null;
+    body.interest_rate = parseFloat(document.getElementById("acct-loan-rate").value) || null;
+    body.loan_term_months = parseInt(document.getElementById("acct-loan-term").value) || null;
+    body.lender_name = document.getElementById("acct-loan-lender").value.trim() || null;
   }
+
+  // Initial value (only for new accounts)
+  const initialValue = document.getElementById("acct-initial-value").value;
+  const initialOwed = document.getElementById("acct-initial-owed").value;
 
   try {
     if (editingAccountId) {
       await apiFetch(`/accounts/${editingAccountId}`, { method: "PUT", body });
     } else {
-      await apiFetch("/accounts", { method: "POST", body });
+      const created = await apiFetch("/accounts", { method: "POST", body });
+      // If initial value provided and there's an active checkin, save it
+      if (created && created.id && (initialValue || initialOwed)) {
+        // Check for active checkin
+        const active = await apiFetch("/checkins/active").catch(() => null);
+        if (active && active.id) {
+          await apiFetch(`/checkins/${active.id}/values/${created.id}`, {
+            method: "PUT",
+            body: {
+              current_value: initialValue ? parseFloat(initialValue) : null,
+              balance_owed: initialOwed ? parseFloat(initialOwed) : null,
+              data_source: "manual",
+            },
+          }).catch(() => {});
+        }
+      }
     }
     document.getElementById("account-dialog").close();
     loadAccounts();
@@ -1094,9 +1138,30 @@ function logout() {
 }
 
 // ── Account type change handler (show/hide loan fields) ───────────────────────
+function isPropertyType(t) {
+  return ["property_personal", "property_rental"].includes(t);
+}
+
+function isInvestmentType(t) {
+  return ["401k", "investment"].includes(t);
+}
+
 function onAccountTypeChange() {
   const type = document.getElementById("acct-type").value;
-  document.getElementById("loan-details-section").style.display = isLoanType(type) ? "block" : "none";
+  const isLoan = isLoanType(type);
+  const isProperty = isPropertyType(type);
+  const isInvestment = isInvestmentType(type);
+
+  document.getElementById("loan-details-section").style.display = isLoan ? "block" : "none";
+  document.getElementById("property-details-section").style.display = isProperty ? "block" : "none";
+  document.getElementById("investment-details-section").style.display = isInvestment ? "block" : "none";
+  document.getElementById("acct-owed-col").style.display = isLoan ? "block" : "none";
+
+  // Update value label based on type
+  const valLabel = document.getElementById("acct-value-label");
+  if (isProperty) valLabel.textContent = "Estimated Value";
+  else if (isLoan) valLabel.textContent = "Asset Value (optional)";
+  else valLabel.textContent = "Current Value";
 }
 
 // ── Event Listeners ───────────────────────────────────────────────────────────

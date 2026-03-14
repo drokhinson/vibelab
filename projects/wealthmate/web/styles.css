@@ -750,6 +750,22 @@ dialog article {
   cursor: pointer;
 }
 
+.input-row {
+  display: flex;
+  gap: 0.75rem;
+}
+.input-col { flex: 1; }
+
+.extra-details-toggle {
+  margin-top: 0.5rem;
+}
+.extra-details-toggle summary {
+  cursor: pointer;
+  color: var(--pico-primary);
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
 /* ── Empty state ───────────────────────────────────────────────────────────── */
 .empty-state {
   text-align: center;
