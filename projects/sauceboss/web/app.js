@@ -1,36 +1,31 @@
 'use strict';
 
-// ─── In-memory queries (data from saucedata.js) ───────────────────────────────
-function queryCarbs() {
-  return SAUCE_DATA.carbs;
+// ─── API fetch helpers ────────────────────────────────────────────────────────
+const API = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || 'http://localhost:8000';
+
+async function fetchCarbs() {
+  const res = await fetch(`${API}/api/v1/sauceboss/carbs`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  // Map description → desc for template compatibility
+  return data.map(c => ({ ...c, desc: c.description }));
 }
 
-function querySaucesForCarb(carbId) {
-  return SAUCE_DATA.sauces
-    .filter(s => s.compatibleCarbs.includes(carbId))
-    .map(sauce => {
-      const seen = new Set();
-      const ingredientNames = new Set();
-      const ingredients = [];
-      for (const step of sauce.steps) {
-        for (const ing of step.ingredients) {
-          ingredientNames.add(ing.name);
-          if (!seen.has(ing.name)) { seen.add(ing.name); ingredients.push(ing); }
-        }
-      }
-      return { ...sauce, ingredients, ingredientNames };
-    });
+async function fetchSaucesForCarb(carbId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${carbId}/sauces`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const sauces = await res.json();
+  // Add ingredientNames Set used by filter logic
+  return sauces.map(sauce => ({
+    ...sauce,
+    ingredientNames: new Set(sauce.ingredients.map(i => i.name)),
+  }));
 }
 
-function queryAllIngredientsForCarb(carbId) {
-  const names = new Set();
-  for (const sauce of SAUCE_DATA.sauces) {
-    if (!sauce.compatibleCarbs.includes(carbId)) continue;
-    for (const step of sauce.steps) {
-      for (const ing of step.ingredients) names.add(ing.name);
-    }
-  }
-  return [...names].sort();
+async function fetchIngredientsForCarb(carbId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${carbId}/ingredients`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 // ─── Unit Conversion (everything → teaspoons for proportional display) ────────
@@ -281,16 +276,33 @@ function render() {
 function navigate(screen) { state.screen = screen; render(); }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
-function selectCarb(id) {
-  state.selectedCarb        = state.carbs.find(c => c.id === id);
-  state.saucesForCurrentCarb = querySaucesForCarb(id);
-  state.allIngredients       = queryAllIngredientsForCarb(id);
-  state.disabledIngredients  = new Set();
-  state.filterOpen           = false;
-  state.expandedCuisines     = new Set(
-    [state.saucesForCurrentCarb[0]?.cuisine].filter(Boolean)
-  );
-  navigate('sauce-selector');
+async function selectCarb(id) {
+  state.selectedCarb = state.carbs.find(c => c.id === id);
+  // Show loading immediately while fetching sauces + ingredients
+  document.getElementById('app').innerHTML = `
+    <div class="loading-screen">
+      <div class="spinner"></div>
+      <p class="loading-text">Loading sauces…</p>
+    </div>`;
+  try {
+    const [sauces, ingredients] = await Promise.all([
+      fetchSaucesForCarb(id),
+      fetchIngredientsForCarb(id),
+    ]);
+    state.saucesForCurrentCarb = sauces;
+    state.allIngredients       = ingredients;
+    state.disabledIngredients  = new Set();
+    state.filterOpen           = false;
+    state.expandedCuisines     = new Set([sauces[0]?.cuisine].filter(Boolean));
+    state.screen = 'sauce-selector';
+    render();
+  } catch (err) {
+    document.getElementById('app').innerHTML = `
+      <div style="padding:2rem;text-align:center;color:#dc2626">
+        Failed to load sauces: ${err.message}<br>
+        <button onclick="navigate('carb-selector')" style="margin-top:1rem">‹ Back</button>
+      </div>`;
+  }
 }
 function selectSauce(id) {
   state.selectedSauce = state.saucesForCurrentCarb.find(s => s.id === id);
@@ -318,8 +330,16 @@ function toggleCuisine(name) {
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  state.carbs = queryCarbs();
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    state.carbs = await fetchCarbs();
+  } catch (err) {
+    document.getElementById('app').innerHTML = `
+      <div style="padding:2rem;text-align:center;color:#dc2626">
+        Failed to load: ${err.message}
+      </div>`;
+    return;
+  }
   render();
 
   // Delegated handler for ingredient chips (avoids fragile inline onclick escaping)

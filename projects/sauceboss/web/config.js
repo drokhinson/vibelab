@@ -2,6 +2,6 @@
 // Update apiBase to the Railway backend URL once deployed.
 // In production, this file is replaced by Vercel build with the correct URL.
 window.APP_CONFIG = {
-  apiBase: "http://localhost:8000",
+  apiBase: "https://vibelab-production-2119.up.railway.app",
   project: "sauceboss"
 };

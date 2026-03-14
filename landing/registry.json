@@ -7,7 +7,7 @@
       "status": "wip",
       "tags": ["food", "recipes", "react-native"],
       "webUrl": "https://sauceboss-omega.vercel.app",
-      "backendUrl": null,
+      "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": true,
       "expoSlug": "sauceboss",
       "createdAt": "2026-03-13",
