@@ -130,6 +130,8 @@ function showView(name) {
   const loginView = document.getElementById("view-login");
   const registerView = document.getElementById("view-register");
 
+  const forgotView = document.getElementById("view-forgot-password");
+
   if (name === "login") {
     appShell.style.display = "none";
     loginView.style.display = "block";
@@ -140,11 +142,17 @@ function showView(name) {
     registerView.style.display = "block";
     return;
   }
+  if (name === "forgot-password") {
+    appShell.style.display = "none";
+    forgotView.style.display = "block";
+    return;
+  }
 
   // App views
   appShell.style.display = "block";
   loginView.style.display = "none";
   registerView.style.display = "none";
+  forgotView.style.display = "none";
 
   const el = document.getElementById(`view-${name}`);
   if (el) el.style.display = "block";
@@ -204,15 +212,20 @@ async function handleRegister(e) {
   btn.disabled = true;
 
   try {
+    const emailVal = document.getElementById("reg-email").value.trim();
     const body = {
       username: document.getElementById("reg-username").value.trim(),
       password: document.getElementById("reg-password").value,
       display_name: document.getElementById("reg-display").value.trim(),
     };
+    if (emailVal) body.email = emailVal;
     const data = await apiFetch("/auth/register", { method: "POST", body });
     setToken(data.token);
     currentUser = data.user;
     showView("dashboard");
+    if (data.recovery_code) {
+      showRecoveryCode(data.recovery_code);
+    }
   } catch (err) {
     errEl.textContent = err.message;
     errEl.style.display = "block";
@@ -1367,6 +1380,7 @@ async function deleteBill() {
 async function loadSettings() {
   document.getElementById("settings-display-name").textContent = currentUser?.display_name || "--";
   document.getElementById("settings-username").textContent = currentUser?.username || "--";
+  document.getElementById("settings-email").value = currentUser?.email || "";
 
   // Couple info
   const coupleEl = document.getElementById("settings-couple-info");
@@ -1533,6 +1547,91 @@ function onCategoryChange() {
   }
 }
 
+// ── Recovery Code ─────────────────────────────────────────────────────────────
+function showRecoveryCode(code) {
+  document.getElementById("recovery-code-value").textContent = code;
+  document.getElementById("recovery-code-dialog").showModal();
+}
+
+async function handleForgotPassword(e) {
+  e.preventDefault();
+  const btn = document.getElementById("fp-btn");
+  const errEl = document.getElementById("fp-error");
+  errEl.style.display = "none";
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+
+  try {
+    const newPass = document.getElementById("fp-new-password").value;
+    const confirmPass = document.getElementById("fp-confirm-password").value;
+    if (newPass !== confirmPass) {
+      throw new Error("Passwords do not match");
+    }
+    const body = {
+      username: document.getElementById("fp-username").value.trim(),
+      recovery_code: document.getElementById("fp-recovery-code").value.trim(),
+      new_password: newPass,
+    };
+    const res = await fetch(`${API}${BASE}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+    // Show new recovery code, then redirect to login
+    document.getElementById("forgot-password-form").reset();
+    showView("login");
+    if (data.new_recovery_code) {
+      showRecoveryCode(data.new_recovery_code);
+    }
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = "block";
+  } finally {
+    btn.removeAttribute("aria-busy");
+    btn.disabled = false;
+  }
+}
+
+async function handleGenerateRecoveryCode() {
+  const btn = document.getElementById("btn-generate-recovery");
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+
+  try {
+    const data = await apiFetch("/auth/recovery-code", { method: "POST" });
+    if (data.recovery_code) {
+      showRecoveryCode(data.recovery_code);
+    }
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.removeAttribute("aria-busy");
+    btn.disabled = false;
+  }
+}
+
+async function handleSaveEmail() {
+  const btn = document.getElementById("btn-save-email");
+  const email = document.getElementById("settings-email").value.trim();
+  if (!email) return;
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+  try {
+    await apiFetch("/auth/email", { method: "PUT", body: { email } });
+    currentUser.email = email;
+    btn.textContent = "Saved!";
+    setTimeout(() => { btn.textContent = "Save"; }, 2000);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.removeAttribute("aria-busy");
+    btn.disabled = false;
+  }
+}
+
 // ── Event Listeners ───────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   // Auth forms
@@ -1540,6 +1639,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("register-form").addEventListener("submit", handleRegister);
   document.getElementById("show-register").addEventListener("click", e => { e.preventDefault(); showView("register"); });
   document.getElementById("show-login").addEventListener("click", e => { e.preventDefault(); showView("login"); });
+  document.getElementById("show-forgot-password").addEventListener("click", e => { e.preventDefault(); showView("forgot-password"); });
+  document.getElementById("fp-back-to-login").addEventListener("click", e => { e.preventDefault(); showView("login"); });
+  document.getElementById("forgot-password-form").addEventListener("submit", handleForgotPassword);
 
   // Bottom nav
   document.querySelectorAll(".nav-item").forEach(btn => {
@@ -1595,6 +1697,17 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("email-invite-form").addEventListener("submit", handleEmailInvite);
   document.getElementById("btn-logout").addEventListener("click", logout);
   document.getElementById("btn-delete-account").addEventListener("click", deleteAccount);
+  document.getElementById("btn-generate-recovery").addEventListener("click", handleGenerateRecoveryCode);
+  document.getElementById("btn-save-email").addEventListener("click", handleSaveEmail);
+  document.getElementById("recovery-dialog-close").addEventListener("click", () => document.getElementById("recovery-code-dialog").close());
+  document.getElementById("recovery-dialog-done").addEventListener("click", () => document.getElementById("recovery-code-dialog").close());
+  document.getElementById("recovery-code-copy").addEventListener("click", () => {
+    const code = document.getElementById("recovery-code-value").textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      document.getElementById("recovery-code-copy").textContent = "Copied!";
+      setTimeout(() => { document.getElementById("recovery-code-copy").textContent = "Copy"; }, 2000);
+    });
+  });
 
   // Theme toggle
   const themeToggle = document.getElementById("theme-toggle");

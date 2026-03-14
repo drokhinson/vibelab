@@ -17,6 +17,7 @@ Supabase tables (all prefixed wealthmate_):
 """
 
 import os
+import secrets
 from datetime import datetime, date, timezone
 from typing import Optional
 
@@ -40,6 +41,7 @@ class RegisterBody(BaseModel):
     username: str
     password: str
     display_name: Optional[str] = None
+    email: Optional[str] = None
 
 class LoginBody(BaseModel):
     username: str
@@ -116,6 +118,14 @@ class UpdateRecurringExpenseBody(BaseModel):
     start_date: Optional[str] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+
+class ResetPasswordBody(BaseModel):
+    username: str
+    recovery_code: str
+    new_password: str
+
+class UpdateEmailBody(BaseModel):
+    email: str
 
 # ---------------------------------------------------------------------------
 # Auth helpers
@@ -219,11 +229,16 @@ async def register(body: RegisterBody):
         raise HTTPException(status_code=409, detail="Username already taken")
 
     password_hash = _hash_password(body.password)
+    recovery_code = secrets.token_urlsafe(16)
+    recovery_hash = _hash_password(recovery_code)
     user_data = {
         "username": body.username,
         "display_name": body.display_name or body.username,
         "password_hash": password_hash,
+        "recovery_hash": recovery_hash,
     }
+    if body.email:
+        user_data["email"] = body.email
     result = sb.table("wealthmate_users").insert(user_data).execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create user")
@@ -249,6 +264,7 @@ async def register(body: RegisterBody):
             "display_name": user["display_name"],
             "couple_id": couple_id,
         },
+        "recovery_code": recovery_code,
     }
 
 
@@ -285,12 +301,52 @@ async def login(body: LoginBody):
     }
 
 
+@router.post("/auth/reset-password")
+async def reset_password(body: ResetPasswordBody):
+    sb = get_supabase()
+    result = (
+        sb.table("wealthmate_users")
+        .select("id, recovery_hash")
+        .eq("username", body.username)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=400, detail="Invalid username or recovery code")
+    user = result.data[0]
+    if not user.get("recovery_hash"):
+        raise HTTPException(status_code=400, detail="No recovery code set for this account")
+    if not _verify_password(body.recovery_code, user["recovery_hash"]):
+        raise HTTPException(status_code=400, detail="Invalid username or recovery code")
+
+    # Update password and rotate recovery code
+    new_password_hash = _hash_password(body.new_password)
+    new_recovery_code = secrets.token_urlsafe(16)
+    new_recovery_hash = _hash_password(new_recovery_code)
+    sb.table("wealthmate_users").update({
+        "password_hash": new_password_hash,
+        "recovery_hash": new_recovery_hash,
+    }).eq("id", user["id"]).execute()
+
+    return {"message": "Password reset successful", "new_recovery_code": new_recovery_code}
+
+
+@router.post("/auth/recovery-code")
+async def generate_recovery_code(user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    recovery_code = secrets.token_urlsafe(16)
+    recovery_hash = _hash_password(recovery_code)
+    sb.table("wealthmate_users").update({
+        "recovery_hash": recovery_hash,
+    }).eq("id", user["user_id"]).execute()
+    return {"recovery_code": recovery_code}
+
+
 @router.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     sb = get_supabase()
     result = (
         sb.table("wealthmate_users")
-        .select("id, username, display_name, created_at")
+        .select("id, username, display_name, email, created_at")
         .eq("id", user["user_id"])
         .execute()
     )
@@ -299,6 +355,15 @@ async def me(user: dict = Depends(get_current_user)):
     u = result.data[0]
     u["couple_id"] = user["couple_id"]
     return u
+
+
+@router.put("/auth/email")
+async def update_email(body: UpdateEmailBody, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    sb.table("wealthmate_users").update({
+        "email": body.email,
+    }).eq("id", user["user_id"]).execute()
+    return {"message": "Email updated", "email": body.email}
 
 
 # ---------------------------------------------------------------------------

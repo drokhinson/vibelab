@@ -1078,6 +1078,53 @@ dialog article {
   border-color: rgba(0,0,0,0.1);
 }
 
+/* ── Settings email row ────────────────────────────────────────────────────── */
+.settings-email-row {
+  margin-top: 0.75rem;
+}
+.settings-email-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+.settings-email-input-row input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* ── Recovery Code ─────────────────────────────────────────────────────────── */
+.recovery-code-card {
+  text-align: center;
+  padding: 0.5rem 0;
+}
+.recovery-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  color: var(--wm-warning);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+.recovery-code-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: var(--wm-surface-dim);
+  border: 1px solid var(--wm-border-dim);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+.recovery-code-display code {
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--wm-accent-light);
+  word-break: break-all;
+}
+
 /* ── Responsive — already mobile-first at 480px ────────────────────────────── */
 @media (min-width: 481px) {
   body {
