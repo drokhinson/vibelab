@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sauceboss-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "projects/sauceboss/web", "-l", "5500", "--no-clipboard"],
+      "port": 5500
+    }
+  ]
+}

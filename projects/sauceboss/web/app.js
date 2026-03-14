@@ -90,6 +90,34 @@ function missingSauceIngredients(sauce) {
   return missing;
 }
 
+// ─── Ingredient frequency helpers ─────────────────────────────────────────────
+function getIngredientFrequencies() {
+  const freq = {};
+  for (const sauce of state.saucesForCurrentCarb) {
+    for (const name of sauce.ingredientNames) {
+      freq[name] = (freq[name] || 0) + 1;
+    }
+  }
+  return freq;
+}
+
+function partitionIngredients() {
+  const freq = getIngredientFrequencies();
+  const totalSauces = state.saucesForCurrentCarb.length;
+  const threshold = Math.max(2, Math.ceil(totalSauces * 0.3));
+  const critical = [];
+  const other = [];
+  for (const name of state.allIngredients) {
+    if ((freq[name] || 0) >= threshold) {
+      critical.push({ name, count: freq[name] });
+    } else {
+      other.push({ name, count: freq[name] || 0 });
+    }
+  }
+  critical.sort((a, b) => b.count - a.count);
+  return { critical, other };
+}
+
 // ─── Pie Chart SVG ────────────────────────────────────────────────────────────
 function polarToCartesian(cx, cy, r, deg) {
   const rad = ((deg - 90) * Math.PI) / 180;
@@ -162,17 +190,33 @@ function renderSauceSelector() {
   const cuisines = [...new Set(sauces.map(s => s.cuisine))];
   const missingCount = state.disabledIngredients.size;
 
+  const { critical, other } = partitionIngredients();
+
+  const chipHTML = (items) => items.map(({ name }) => {
+    const has = !state.disabledIngredients.has(name);
+    return `<button class="chip ${has ? 'has' : 'missing'}" data-ingredient="${name.replace(/"/g, '&quot;')}">
+      ${has ? '✓' : '✗'} ${name}
+    </button>`;
+  }).join('');
+
   const filterBody = `
     <div class="filter-body ${state.filterOpen ? 'open' : ''}">
       <p class="filter-hint">Uncheck ingredients you don't have — sauces will update.</p>
-      <div class="ingredient-chips">
-        ${ingredients.map(name => {
-          const has = !state.disabledIngredients.has(name);
-          return `<button class="chip ${has ? 'has' : 'missing'}" data-ingredient="${name.replace(/"/g, '&quot;')}">
-            ${has ? '✓' : '✗'} ${name}
-          </button>`;
-        }).join('')}
-      </div>
+      ${critical.length > 0 ? `
+        <div class="ingredient-section">
+          <p class="ingredient-section-label">
+            <span class="section-label-icon">★</span>
+            Staples <span class="section-label-detail">— unlock the most sauces</span>
+          </p>
+          <div class="ingredient-chips">${chipHTML(critical)}</div>
+        </div>
+      ` : ''}
+      ${other.length > 0 ? `
+        <div class="ingredient-section">
+          <p class="ingredient-section-label">Other ingredients</p>
+          <div class="ingredient-chips">${chipHTML(other)}</div>
+        </div>
+      ` : ''}
     </div>
   `;
 
