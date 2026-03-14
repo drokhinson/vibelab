@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 # Project routers
 from routes import sauceboss
+from routes import wealthmate
 
 load_dotenv()
 
@@ -37,4 +38,5 @@ async def health():
 # ── Project routers ────────────────────────────────────────────────────────────
 # Add a new router here when scaffolding a new project.
 app.include_router(sauceboss.router)
+app.include_router(wealthmate.router)
 # app.include_router(spotme.router)  ← uncomment when ready

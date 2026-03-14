@@ -25,6 +25,19 @@
       "expoSlug": null,
       "createdAt": "2026-03-13",
       "icon": "📍"
+    },
+    {
+      "id": "wealthmate",
+      "name": "WealthMate",
+      "description": "Couples wealth tracking — do periodic check-ins to snapshot account values and watch your net worth grow together.",
+      "status": "wip",
+      "tags": ["finance", "couples", "net-worth"],
+      "webUrl": null,
+      "backendUrl": null,
+      "hasNativeApp": false,
+      "expoSlug": null,
+      "createdAt": "2026-03-14",
+      "icon": "💰"
     }
   ]
 }
