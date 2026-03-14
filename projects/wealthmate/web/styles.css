@@ -127,6 +127,7 @@ body {
   margin-bottom: 0.5rem;
 }
 .view-header h3 { margin: 0; }
+.view-subtitle { font-size: 0.85rem; margin: -0.25rem 0 0.75rem; }
 
 /* ── Auth views ────────────────────────────────────────────────────────────── */
 .auth-container {

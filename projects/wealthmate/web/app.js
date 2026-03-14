@@ -922,7 +922,7 @@ async function loadExpenses() {
 function renderExpenseGroups() {
   const container = document.getElementById("expense-groups-list");
   if (expenseGroups.length === 0) {
-    container.innerHTML = '<div class="empty-state">No expense groups yet. Create one to track large expenses.</div>';
+    container.innerHTML = '<div class="empty-state">No groups yet. Tap "+ New Group" to track a big expense like surgery, travel, or renovations.</div>';
     return;
   }
 
