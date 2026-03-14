@@ -872,10 +872,13 @@ dialog article {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  max-width: 100%;
+  overflow: hidden;
 }
 .toggle-switch {
   position: relative;
   width: 44px;
+  min-width: 44px;
   height: 24px;
   display: inline-block;
 }
@@ -908,37 +911,60 @@ dialog article {
 
 /* ── Light mode overrides ─────────────────────────────────────────────────── */
 [data-theme="light"] {
-  --pico-background-color: #f5f7f6;
-  --pico-card-background-color: #ffffff;
-  --pico-card-border-color: rgba(16, 185, 129, 0.15);
-  --wm-surface-dim: rgba(0,0,0,0.03);
-  --wm-border-dim: rgba(0,0,0,0.08);
+  --pico-background-color: #e8ece9;
+  --pico-card-background-color: #f0f3f1;
+  --pico-card-border-color: rgba(16, 185, 129, 0.18);
+  --pico-color: #1a2e24;
+  --pico-muted-color: #5a6e64;
+  --wm-surface-dim: rgba(0,0,0,0.04);
+  --wm-border-dim: rgba(0,0,0,0.1);
 }
 [data-theme="light"] .app-header {
-  background: #ffffff;
-  border-bottom-color: rgba(0,0,0,0.08);
+  background: #dfe5e1;
+  border-bottom-color: rgba(0,0,0,0.1);
 }
 [data-theme="light"] .bottom-nav {
-  background: #ffffff;
-  border-top-color: rgba(0,0,0,0.08);
+  background: #dfe5e1;
+  border-top-color: rgba(0,0,0,0.1);
 }
 [data-theme="light"] .nw-card {
   background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
 }
 [data-theme="light"] .sub-field {
-  background: rgba(0,0,0,0.02);
-  border-color: rgba(0,0,0,0.06);
-}
-[data-theme="light"] .checkin-acct-card {
-  background: #fafafa;
+  background: rgba(0,0,0,0.03);
   border-color: rgba(0,0,0,0.08);
 }
+[data-theme="light"] .checkin-acct-card {
+  background: #f0f3f1;
+  border-color: rgba(0,0,0,0.1);
+}
 [data-theme="light"] .invite-banner {
-  background: rgba(59, 130, 246, 0.06);
+  background: rgba(59, 130, 246, 0.08);
   border-color: rgba(59, 130, 246, 0.2);
 }
 [data-theme="light"] .toggle-slider {
-  background: rgba(0,0,0,0.15);
+  background: rgba(0,0,0,0.18);
+}
+[data-theme="light"] .chart-container {
+  background: #f0f3f1;
+}
+[data-theme="light"] .history-tab {
+  color: #5a6e64;
+}
+[data-theme="light"] .couple-bar {
+  background: rgba(16, 185, 129, 0.08);
+}
+[data-theme="light"] .acct-toggle {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.1);
+}
+[data-theme="light"] .review-warning {
+  background: rgba(245, 158, 11, 0.08);
+}
+[data-theme="light"] dialog article {
+  background: #f0f3f1;
+  border-color: rgba(0,0,0,0.1);
 }
 
 /* ── Responsive — already mobile-first at 480px ────────────────────────────── */
