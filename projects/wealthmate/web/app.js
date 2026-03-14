@@ -331,6 +331,7 @@ function renderDashboardInvites(invites) {
 
 // ── Check-In Flow ─────────────────────────────────────────────────────────────
 async function startNewCheckin() {
+  checkinNewAccounts = {};
   showView("checkin");
   setCheckinStep(1);
   // Default date to today
@@ -545,6 +546,7 @@ async function saveAccountValue(accountId, source = "manual") {
 }
 
 let addAccountFromCheckin = false;
+let checkinNewAccounts = {};  // account_id -> { current_value, balance_owed }
 
 function checkinStep3AddAccount() {
   addAccountFromCheckin = true;
@@ -570,10 +572,19 @@ function renderCheckinReview() {
     let g = `<div class="review-group"><h5>${label}</h5>`;
     for (const a of accts) {
       totalAccounts++;
-      const valInput = document.getElementById(`val-${a.id}`);
-      const owedInput = document.getElementById(`owed-${a.id}`);
-      const val = valInput && valInput.value !== "" ? parseFloat(valInput.value) : null;
-      const owed = owedInput && owedInput.value !== "" ? parseFloat(owedInput.value) : null;
+      const isNew = !!checkinNewAccounts[a.id];
+      let val, owed;
+
+      if (isNew) {
+        // Use stored values from when the account was added in step 3
+        val = checkinNewAccounts[a.id].current_value;
+        owed = checkinNewAccounts[a.id].balance_owed;
+      } else {
+        const valInput = document.getElementById(`val-${a.id}`);
+        const owedInput = document.getElementById(`owed-${a.id}`);
+        val = valInput && valInput.value !== "" ? parseFloat(valInput.value) : null;
+        owed = owedInput && owedInput.value !== "" ? parseFloat(owedInput.value) : null;
+      }
       const isLoan = isLoanType(a.account_type);
 
       // An account is filled if it has a value, or for loans if it has balance_owed
@@ -584,8 +595,9 @@ function renderCheckinReview() {
       if (owed != null) { totalLiabilities += owed; }
 
       const rowClass = isFilled ? "" : "review-row-missing";
+      const newBadge = isNew ? ' <span class="badge badge-new">NEW</span>' : '';
       g += `<div class="review-row ${rowClass}">
-        <span class="review-row-name">${a.name}${!isFilled ? ' ⚠' : ''}</span>
+        <span class="review-row-name">${a.name}${newBadge}${!isFilled ? ' ⚠' : ''}</span>
         <span class="review-row-value">${val != null ? fmt(val) : "--"}${owed != null ? ` / Owed: ${fmt(owed)}` : ""}</span>
       </div>`;
     }
@@ -626,6 +638,7 @@ async function submitCheckin() {
     showLoading(false);
     activeCheckin = null;
     previousValues = {};
+    checkinNewAccounts = {};
     alert("Check-in submitted!");
     showView("dashboard");
   } catch (err) {
@@ -828,9 +841,14 @@ async function handleAccountSubmit(e) {
     document.getElementById("account-dialog").close();
     if (addAccountFromCheckin) {
       addAccountFromCheckin = false;
-      // Reload accounts for the checkin
+      // Track the new account's values for the checkin review
+      if (created && created.id) {
+        checkinNewAccounts[created.id] = {
+          current_value: initialValue ? parseFloat(initialValue) : null,
+          balance_owed: initialOwed ? parseFloat(initialOwed) : null,
+        };
+      }
       accounts = await apiFetch("/accounts");
-      alert("Account added! Go back to Step 2 to enter its value.");
     } else {
       loadAccounts();
     }
