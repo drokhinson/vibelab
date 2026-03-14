@@ -6,7 +6,7 @@
       "description": "Pick a carb, filter by ingredients, get step-by-step visual sauce recipes.",
       "status": "wip",
       "tags": ["food", "recipes", "react-native"],
-      "webUrl": null,
+      "webUrl": "https://sauceboss-omega.vercel.app",
       "backendUrl": null,
       "hasNativeApp": true,
       "expoSlug": "sauceboss",
