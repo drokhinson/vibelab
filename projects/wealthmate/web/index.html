@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WealthMate</title>
+
+  <!-- Pico.css — classless CSS framework (dark theme) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <!-- App styles -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════ AUTH VIEWS ═══════════════════════════ -->
+  <div id="view-login" class="view" style="display:none;">
+    <div class="auth-container">
+      <div class="auth-logo">
+        <span class="logo-icon">$</span>
+        <h1>WealthMate</h1>
+        <p class="muted">Track your wealth together</p>
+      </div>
+      <form id="login-form">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" placeholder="Enter username" required autocomplete="username" />
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" placeholder="Enter password" required autocomplete="current-password" />
+        <div id="login-error" class="error-banner" style="display:none;"></div>
+        <button type="submit" id="login-btn">Log In</button>
+      </form>
+      <p class="auth-switch">Don't have an account? <a href="#" id="show-register">Sign up</a></p>
+    </div>
+  </div>
+
+  <div id="view-register" class="view" style="display:none;">
+    <div class="auth-container">
+      <div class="auth-logo">
+        <span class="logo-icon">$</span>
+        <h1>WealthMate</h1>
+        <p class="muted">Create your account</p>
+      </div>
+      <form id="register-form">
+        <label for="reg-display">Display Name</label>
+        <input type="text" id="reg-display" placeholder="e.g. Adam" required />
+        <label for="reg-username">Username</label>
+        <input type="text" id="reg-username" placeholder="Choose a username" required autocomplete="username" />
+        <label for="reg-password">Password</label>
+        <input type="password" id="reg-password" placeholder="Choose a password" required autocomplete="new-password" />
+        <div id="register-error" class="error-banner" style="display:none;"></div>
+        <button type="submit" id="register-btn">Create Account</button>
+      </form>
+      <p class="auth-switch">Already have an account? <a href="#" id="show-login">Log in</a></p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ APP SHELL ═══════════════════════════ -->
+  <div id="app-shell" style="display:none;">
+
+    <!-- Top bar -->
+    <header class="app-header">
+      <div class="header-left">
+        <span class="logo-icon-sm">$</span>
+        <strong>WealthMate</strong>
+      </div>
+      <div class="header-right">
+        <span id="header-user" class="muted"></span>
+      </div>
+    </header>
+
+    <!-- Main content area -->
+    <main id="app-content">
+
+      <!-- ─── Dashboard ─── -->
+      <div id="view-dashboard" class="view" style="display:none;">
+        <div id="couple-status-bar"></div>
+        <div id="net-worth-card" class="nw-card">
+          <p class="nw-label">Net Worth</p>
+          <h2 class="nw-value" id="nw-value">--</h2>
+          <div class="nw-breakdown">
+            <span class="nw-assets">Assets: <b id="nw-assets">--</b></span>
+            <span class="nw-liabilities">Debt: <b id="nw-liabilities">--</b></span>
+          </div>
+          <p class="nw-date muted" id="nw-date"></p>
+        </div>
+        <div class="dash-actions">
+          <button id="btn-new-checkin" class="btn-primary-block">Start New Check-In</button>
+          <button id="btn-continue-checkin" class="btn-outline-block" style="display:none;">Continue Check-In</button>
+        </div>
+        <div id="dash-recent">
+          <h4>Recent Check-Ins</h4>
+          <div id="dash-recent-list" class="card-grid"></div>
+        </div>
+      </div>
+
+      <!-- ─── Check-In Wizard ─── -->
+      <div id="view-checkin" class="view" style="display:none;">
+        <div class="wizard-header">
+          <button class="btn-back" id="checkin-back">&larr;</button>
+          <h3>Wealth Check-In</h3>
+          <div class="wizard-steps" id="wizard-steps">
+            <span class="step active" data-step="1">1</span>
+            <span class="step" data-step="2">2</span>
+            <span class="step" data-step="3">3</span>
+            <span class="step" data-step="4">4</span>
+          </div>
+        </div>
+
+        <!-- Step 1: Date -->
+        <div id="checkin-step-1" class="wizard-step">
+          <h4>When is this check-in for?</h4>
+          <p class="muted">Pick the date this snapshot represents.</p>
+          <input type="date" id="checkin-date" />
+          <button id="checkin-step1-next" class="btn-primary-block">Next</button>
+        </div>
+
+        <!-- Step 2: Account values -->
+        <div id="checkin-step-2" class="wizard-step" style="display:none;">
+          <h4>Update Account Values</h4>
+          <p class="muted">Enter current values for each account. Use the hint to see last check-in.</p>
+          <div id="checkin-accounts-list"></div>
+          <button id="checkin-step2-next" class="btn-primary-block">Next</button>
+        </div>
+
+        <!-- Step 3: New accounts -->
+        <div id="checkin-step-3" class="wizard-step" style="display:none;">
+          <h4>Any new accounts to add?</h4>
+          <p class="muted">If you opened a new account since last check-in, add it now.</p>
+          <div id="checkin-new-account-form" style="display:none;">
+            <label>Account Name</label>
+            <input type="text" id="new-acct-name" placeholder="e.g. Ally Savings" />
+            <label>Type</label>
+            <select id="new-acct-type">
+              <option value="checking_personal">Checking (Personal)</option>
+              <option value="checking_joint">Checking (Joint)</option>
+              <option value="savings">Savings</option>
+              <option value="401k">401k</option>
+              <option value="investment">Investment</option>
+              <option value="property_personal">Property (Personal)</option>
+              <option value="property_rental">Property (Rental)</option>
+              <option value="car_loan">Car Loan</option>
+              <option value="mortgage">Mortgage</option>
+              <option value="other">Other</option>
+            </select>
+            <label>Owner</label>
+            <select id="new-acct-owner">
+              <option value="me">Mine</option>
+              <option value="joint">Joint</option>
+            </select>
+            <button id="new-acct-save" class="btn-primary-block">Add Account</button>
+          </div>
+          <button id="checkin-add-acct-btn" class="btn-outline-block">+ Add New Account</button>
+          <button id="checkin-step3-next" class="btn-primary-block" style="margin-top:1rem;">Skip / Next</button>
+        </div>
+
+        <!-- Step 4: Review -->
+        <div id="checkin-step-4" class="wizard-step" style="display:none;">
+          <h4>Review &amp; Submit</h4>
+          <p class="muted">Make sure everything looks right.</p>
+          <div id="checkin-review-summary"></div>
+          <div class="checkin-review-totals" id="checkin-review-totals"></div>
+          <button id="checkin-submit" class="btn-primary-block btn-success">Submit Check-In</button>
+        </div>
+      </div>
+
+      <!-- ─── Accounts ─── -->
+      <div id="view-accounts" class="view" style="display:none;">
+        <div class="view-header">
+          <h3>Accounts</h3>
+          <button id="btn-add-account" class="btn-sm">+ Add</button>
+        </div>
+        <div id="accounts-list" class="card-grid"></div>
+
+        <!-- Add/Edit account modal -->
+        <dialog id="account-dialog">
+          <article>
+            <header>
+              <button aria-label="Close" rel="prev" class="dialog-close" id="account-dialog-close"></button>
+              <h4 id="account-dialog-title">Add Account</h4>
+            </header>
+            <form id="account-form">
+              <label>Name</label>
+              <input type="text" id="acct-name" placeholder="e.g. Chase Checking" required />
+              <label>Type</label>
+              <select id="acct-type">
+                <option value="checking_personal">Checking (Personal)</option>
+                <option value="checking_joint">Checking (Joint)</option>
+                <option value="savings">Savings</option>
+                <option value="401k">401k</option>
+                <option value="investment">Investment</option>
+                <option value="property_personal">Property (Personal)</option>
+                <option value="property_rental">Property (Rental)</option>
+                <option value="car_loan">Car Loan</option>
+                <option value="mortgage">Mortgage</option>
+                <option value="other">Other</option>
+              </select>
+              <label>Owner</label>
+              <select id="acct-owner">
+                <option value="me">Mine (Personal)</option>
+                <option value="partner">Partner's (Personal)</option>
+                <option value="joint">Joint</option>
+              </select>
+              <label>URL (optional)</label>
+              <input type="url" id="acct-url" placeholder="https://..." />
+              <label>Notes (optional)</label>
+              <textarea id="acct-notes" rows="2"></textarea>
+              <div id="loan-details-section" style="display:none;">
+                <hr />
+                <h5>Loan Details</h5>
+                <label>Original Loan Amount</label>
+                <input type="number" id="acct-loan-amount" step="0.01" />
+                <label>Interest Rate (%)</label>
+                <input type="number" id="acct-loan-rate" step="0.01" />
+                <label>Loan Term (months)</label>
+                <input type="number" id="acct-loan-term" />
+                <label>Lender Name</label>
+                <input type="text" id="acct-loan-lender" />
+              </div>
+              <div id="account-form-error" class="error-banner" style="display:none;"></div>
+              <footer>
+                <button type="submit" id="acct-save-btn">Save</button>
+                <button type="button" id="acct-deactivate-btn" class="btn-danger" style="display:none;">Deactivate</button>
+              </footer>
+            </form>
+          </article>
+        </dialog>
+      </div>
+
+      <!-- ─── History ─── -->
+      <div id="view-history" class="view" style="display:none;">
+        <h3>Wealth History</h3>
+        <div class="chart-container">
+          <canvas id="nw-chart"></canvas>
+        </div>
+        <div id="history-table-container">
+          <table class="history-table" role="grid">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Net Worth</th>
+                <th>Change</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ─── Expenses ─── -->
+      <div id="view-expenses" class="view" style="display:none;">
+        <div class="view-header">
+          <h3>Expenses</h3>
+          <button id="btn-add-expense-group" class="btn-sm">+ Group</button>
+        </div>
+        <div id="expense-groups-list" class="card-grid"></div>
+
+        <!-- Expense group detail (shown inline) -->
+        <div id="expense-detail" style="display:none;">
+          <button class="btn-back" id="expense-detail-back">&larr; Back to Groups</button>
+          <h4 id="expense-detail-name"></h4>
+          <p class="muted" id="expense-detail-desc"></p>
+          <p><strong>Total: </strong><span id="expense-detail-total"></span></p>
+          <div id="expense-items-list"></div>
+          <hr />
+          <h5>Add Item</h5>
+          <form id="expense-item-form">
+            <input type="text" id="ei-desc" placeholder="Description" required />
+            <input type="number" id="ei-amount" placeholder="Amount" step="0.01" required />
+            <input type="date" id="ei-date" />
+            <button type="submit" class="btn-primary-block">Add Item</button>
+          </form>
+        </div>
+
+        <!-- Create group dialog -->
+        <dialog id="expense-group-dialog">
+          <article>
+            <header>
+              <button aria-label="Close" rel="prev" class="dialog-close" id="expense-group-dialog-close"></button>
+              <h4>New Expense Group</h4>
+            </header>
+            <form id="expense-group-form">
+              <label>Name</label>
+              <input type="text" id="eg-name" placeholder="e.g. ACL Surgery" required />
+              <label>Description (optional)</label>
+              <textarea id="eg-desc" rows="2"></textarea>
+              <div id="expense-group-error" class="error-banner" style="display:none;"></div>
+              <footer>
+                <button type="submit">Create Group</button>
+              </footer>
+            </form>
+          </article>
+        </dialog>
+      </div>
+
+      <!-- ─── Settings ─── -->
+      <div id="view-settings" class="view" style="display:none;">
+        <h3>Settings</h3>
+
+        <article class="settings-card">
+          <h5>Profile</h5>
+          <p>Display Name: <strong id="settings-display-name"></strong></p>
+          <p>Username: <strong id="settings-username"></strong></p>
+        </article>
+
+        <article class="settings-card">
+          <h5>Couple</h5>
+          <div id="settings-couple-info"></div>
+          <div id="settings-invite-section">
+            <form id="invite-form">
+              <label>Invite a partner by username</label>
+              <div class="invite-row">
+                <input type="text" id="invite-username" placeholder="Partner's username" />
+                <button type="submit">Invite</button>
+              </div>
+              <div id="invite-error" class="error-banner" style="display:none;"></div>
+              <div id="invite-success" class="success-banner" style="display:none;"></div>
+            </form>
+          </div>
+          <div id="settings-pending-invites"></div>
+        </article>
+
+        <button id="btn-logout" class="btn-danger-block">Log Out</button>
+      </div>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="nav-item active" data-view="dashboard">
+        <span class="nav-icon">&#9673;</span>
+        <span class="nav-label">Home</span>
+      </button>
+      <button class="nav-item" data-view="accounts">
+        <span class="nav-icon">&#9881;</span>
+        <span class="nav-label">Accounts</span>
+      </button>
+      <button class="nav-item" data-view="history">
+        <span class="nav-icon">&#9670;</span>
+        <span class="nav-label">History</span>
+      </button>
+      <button class="nav-item" data-view="expenses">
+        <span class="nav-icon">&#9733;</span>
+        <span class="nav-label">Expenses</span>
+      </button>
+      <button class="nav-item" data-view="settings">
+        <span class="nav-icon">&#9776;</span>
+        <span class="nav-label">Settings</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Global loading overlay -->
+  <div id="global-loading" class="global-loading" style="display:none;">
+    <div class="loading">Loading...</div>
+  </div>
+
+  <!-- API config -->
+  <script src="config.js"></script>
+  <!-- App logic -->
+  <script src="app.js"></script>
+</body>
+</html>
