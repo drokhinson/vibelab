@@ -32,8 +32,8 @@ function fmtDate(d) {
 
 function typeLabel(t) {
   const map = {
-    checking_personal: "Checking",
-    checking_joint: "Checking (Joint)",
+    checking_personal: "Bank Account",
+    checking_joint: "Bank Account",
     savings: "Savings",
     "401k": "401(k)",
     investment: "Investment",
@@ -522,20 +522,30 @@ function renderCheckinReview() {
   let html = "";
   let filledCount = 0;
 
+  let totalAccounts = 0;
+  const missingAccounts = [];
+
   const reviewGroup = (label, accts) => {
     if (accts.length === 0) return "";
     let g = `<div class="review-group"><h5>${label}</h5>`;
     for (const a of accts) {
+      totalAccounts++;
       const valInput = document.getElementById(`val-${a.id}`);
       const owedInput = document.getElementById(`owed-${a.id}`);
       const val = valInput && valInput.value !== "" ? parseFloat(valInput.value) : null;
       const owed = owedInput && owedInput.value !== "" ? parseFloat(owedInput.value) : null;
+      const isLoan = isLoanType(a.account_type);
+
+      // An account is filled if it has a value, or for loans if it has balance_owed
+      const isFilled = val != null || (isLoan && owed != null);
+      if (!isFilled) missingAccounts.push(a.name);
 
       if (val != null) { totalAssets += val; filledCount++; }
       if (owed != null) { totalLiabilities += owed; }
 
-      g += `<div class="review-row">
-        <span class="review-row-name">${a.name}</span>
+      const rowClass = isFilled ? "" : "review-row-missing";
+      g += `<div class="review-row ${rowClass}">
+        <span class="review-row-name">${a.name}${!isFilled ? ' ⚠' : ''}</span>
         <span class="review-row-value">${val != null ? fmt(val) : "--"}${owed != null ? ` / Owed: ${fmt(owed)}` : ""}</span>
       </div>`;
     }
@@ -550,11 +560,22 @@ function renderCheckinReview() {
   container.innerHTML = html;
 
   const netWorth = totalAssets - totalLiabilities;
-  totalsEl.innerHTML = `
-    <p>Assets: <strong>${fmt(totalAssets)}</strong> | Liabilities: <strong>${fmt(totalLiabilities)}</strong></p>
-    <p class="review-total-nw">${fmt(netWorth)}</p>
-    <p class="muted">${filledCount} account(s) updated</p>
-  `;
+  const submitBtn = document.getElementById("checkin-submit");
+
+  if (missingAccounts.length > 0) {
+    totalsEl.innerHTML = `
+      <div class="review-warning">You must enter a value for every account before submitting.</div>
+      <p class="muted">${missingAccounts.length} of ${totalAccounts} account(s) missing values</p>
+    `;
+    submitBtn.disabled = true;
+  } else {
+    totalsEl.innerHTML = `
+      <p>Assets: <strong>${fmt(totalAssets)}</strong> | Liabilities: <strong>${fmt(totalLiabilities)}</strong></p>
+      <p class="review-total-nw">${fmt(netWorth)}</p>
+      <p class="muted">${filledCount} account(s) updated</p>
+    `;
+    submitBtn.disabled = false;
+  }
 }
 
 async function submitCheckin() {
