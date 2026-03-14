@@ -199,13 +199,25 @@ async def register(body: RegisterBody):
         raise HTTPException(status_code=500, detail="Failed to create user")
 
     user = result.data[0]
-    token = _create_token(user["id"], user["username"])
+
+    # Auto-create a solo household so the user can start immediately
+    couple_result = sb.table("wealthmate_couples").insert({}).execute()
+    couple_id = couple_result.data[0]["id"] if couple_result.data else None
+    if couple_id:
+        sb.table("wealthmate_couple_members").insert({
+            "couple_id": couple_id,
+            "user_id": user["id"],
+            "role": "owner",
+        }).execute()
+
+    token = _create_token(user["id"], user["username"], couple_id)
     return {
         "token": token,
         "user": {
             "id": user["id"],
             "username": user["username"],
             "display_name": user["display_name"],
+            "couple_id": couple_id,
         },
     }
 
@@ -308,18 +320,17 @@ async def get_couple(user: dict = Depends(get_current_user)):
 @router.post("/couple")
 async def create_couple(user: dict = Depends(get_current_user)):
     sb = get_supabase()
-    # Check user not already in a couple
+    # Every user gets a household on registration; return existing one
     existing = _get_couple_id_for_user(user["user_id"])
     if existing:
-        raise HTTPException(status_code=400, detail="You are already part of a couple")
+        return {"couple_id": existing, "role": "owner"}
 
-    # Create couple
+    # Fallback: create one if somehow missing (e.g. legacy users)
     couple_result = sb.table("wealthmate_couples").insert({}).execute()
     if not couple_result.data:
         raise HTTPException(status_code=500, detail="Failed to create couple")
     couple_id = couple_result.data[0]["id"]
 
-    # Add caller as owner
     sb.table("wealthmate_couple_members").insert({
         "couple_id": couple_id,
         "user_id": user["user_id"],
@@ -348,10 +359,18 @@ async def send_invite(body: InviteBody, user: dict = Depends(get_current_user)):
     if not invitee.data:
         raise HTTPException(status_code=404, detail=f"User '{body.to_username}' not found")
 
-    # Check if invitee is already in a couple
-    invitee_couple = _get_couple_id_for_user(invitee.data[0]["id"])
+    # Check if invitee is already merged with someone else
+    invitee_id = invitee.data[0]["id"]
+    invitee_couple = _get_couple_id_for_user(invitee_id)
     if invitee_couple:
-        raise HTTPException(status_code=400, detail="That user is already part of a couple")
+        members = (
+            sb.table("wealthmate_couple_members")
+            .select("id")
+            .eq("couple_id", invitee_couple)
+            .execute()
+        )
+        if len(members.data or []) > 1:
+            raise HTTPException(status_code=400, detail="That user is already merged with someone else")
 
     # Check for existing pending invite
     existing = (
@@ -403,13 +422,45 @@ async def respond_to_invite(invite_id: str, body: InviteRespondBody, user: dict 
     sb.table("wealthmate_invitations").update({"status": new_status}).eq("id", invite_id).execute()
 
     if body.action == "accept":
-        # Check user not already in a couple
-        existing = _get_couple_id_for_user(user["user_id"])
-        if existing:
-            raise HTTPException(status_code=400, detail="You are already part of a couple")
-        # Add user to the couple
+        old_couple_id = _get_couple_id_for_user(user["user_id"])
+        new_couple_id = inv["couple_id"]
+
+        # Check user isn't already merged with someone else
+        if old_couple_id and old_couple_id != new_couple_id:
+            old_members = (
+                sb.table("wealthmate_couple_members")
+                .select("id")
+                .eq("couple_id", old_couple_id)
+                .execute()
+            )
+            if len(old_members.data or []) > 1:
+                raise HTTPException(status_code=400, detail="You are already merged with someone else")
+
+            # Merge: move all data from old solo household to new couple
+            # Accounts
+            sb.table("wealthmate_accounts").update(
+                {"couple_id": new_couple_id}
+            ).eq("couple_id", old_couple_id).execute()
+
+            # Check-ins
+            sb.table("wealthmate_checkins").update(
+                {"couple_id": new_couple_id}
+            ).eq("couple_id", old_couple_id).execute()
+
+            # Expense groups
+            sb.table("wealthmate_expense_groups").update(
+                {"couple_id": new_couple_id}
+            ).eq("couple_id", old_couple_id).execute()
+
+            # Remove old membership and delete old couple
+            sb.table("wealthmate_couple_members").delete().eq(
+                "couple_id", old_couple_id
+            ).eq("user_id", user["user_id"]).execute()
+            sb.table("wealthmate_couples").delete().eq("id", old_couple_id).execute()
+
+        # Add user to the inviter's couple
         sb.table("wealthmate_couple_members").insert({
-            "couple_id": inv["couple_id"],
+            "couple_id": new_couple_id,
             "user_id": user["user_id"],
             "role": "partner",
         }).execute()

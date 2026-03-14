@@ -249,25 +249,17 @@ async function loadDashboard() {
 
 function renderCoupleBar() {
   const el = document.getElementById("couple-status-bar");
-  if (!coupleInfo || !coupleInfo.couple) {
-    el.innerHTML = '<div class="couple-bar couple-bar-solo">You\'re flying solo. Invite a partner in Settings!</div>';
-    return;
-  }
-  const members = coupleInfo.members || [];
+  const members = (coupleInfo && coupleInfo.members) || [];
   const partner = members.find(m => m.user_id !== currentUser.id);
   if (partner) {
-    el.innerHTML = `<div class="couple-bar">Coupled with <strong>${partner.display_name || partner.username}</strong></div>`;
+    el.innerHTML = `<div class="couple-bar">Merged with <strong>${partner.display_name || partner.username}</strong></div>`;
   } else {
-    el.innerHTML = '<div class="couple-bar couple-bar-solo">Couple created. Invite your partner in Settings!</div>';
+    el.innerHTML = '<div class="couple-bar couple-bar-solo">Tracking solo — merge finances with a partner in Settings!</div>';
   }
 }
 
 // ── Check-In Flow ─────────────────────────────────────────────────────────────
 async function startNewCheckin() {
-  if (!coupleInfo || !coupleInfo.couple) {
-    alert("You need to create a couple first. Go to Settings and invite a partner (or create a couple).");
-    return;
-  }
   showView("checkin");
   setCheckinStep(1);
   // Default date to today
@@ -997,15 +989,15 @@ async function loadSettings() {
     coupleInfo = await apiFetch("/couple").catch(() => null);
   } catch (e) { /* ignore */ }
 
-  if (coupleInfo && coupleInfo.couple) {
+  if (coupleInfo && coupleInfo.members) {
     const members = coupleInfo.members || [];
     const partner = members.find(m => m.user_id !== currentUser.id);
     coupleEl.innerHTML = partner
-      ? `<p>Coupled with <strong>${partner.display_name || partner.username}</strong></p>`
-      : `<p>Couple created. Waiting for partner to join.</p>`;
+      ? `<p>Finances merged with <strong>${partner.display_name || partner.username}</strong></p>`
+      : `<p>Tracking solo. Invite a partner below to merge finances!</p>`;
     inviteSection.style.display = partner ? "none" : "block";
   } else {
-    coupleEl.innerHTML = "<p>Not in a couple yet.</p>";
+    coupleEl.innerHTML = "<p>Tracking solo. Invite a partner below to merge finances!</p>";
     inviteSection.style.display = "block";
   }
 
@@ -1059,11 +1051,6 @@ async function handleInvite(e) {
   if (!username) return;
 
   try {
-    // If not in a couple yet, create one first
-    if (!coupleInfo || !coupleInfo.couple) {
-      await apiFetch("/couple", { method: "POST" });
-      coupleInfo = await apiFetch("/couple");
-    }
     await apiFetch("/couple/invite", { method: "POST", body: { to_username: username } });
     sucEl.textContent = `Invitation sent to ${username}!`;
     sucEl.style.display = "block";
