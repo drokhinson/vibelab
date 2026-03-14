@@ -150,7 +150,19 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
         raise HTTPException(status_code=401, detail="Authorization header must be: Bearer <token>")
     payload = _decode_token(parts[1])
     # Refresh couple_id in case it changed since token was issued
-    payload["couple_id"] = _get_couple_id_for_user(payload["user_id"])
+    couple_id = _get_couple_id_for_user(payload["user_id"])
+    # Auto-create household if missing (handles users registered before solo-first change)
+    if not couple_id:
+        sb = get_supabase()
+        couple_result = sb.table("wealthmate_couples").insert({}).execute()
+        if couple_result.data:
+            couple_id = couple_result.data[0]["id"]
+            sb.table("wealthmate_couple_members").insert({
+                "couple_id": couple_id,
+                "user_id": payload["user_id"],
+                "role": "owner",
+            }).execute()
+    payload["couple_id"] = couple_id
     return payload
 
 
