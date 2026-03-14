@@ -578,6 +578,29 @@ body {
 }
 
 /* ── Chart ─────────────────────────────────────────────────────────────────── */
+.history-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.history-tab {
+  flex: 1;
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--pico-muted-color);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.history-tab.active {
+  background: var(--pico-primary);
+  color: #fff;
+}
+
 .chart-container {
   background: var(--pico-card-background-color);
   border: 1px solid var(--pico-card-border-color);
@@ -588,6 +611,39 @@ body {
 
 .history-table {
   font-size: 0.85rem;
+}
+
+.acct-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0;
+}
+.acct-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.acct-toggle input { display: none; }
+.acct-toggle-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.acct-toggle:has(input:not(:checked)) {
+  opacity: 0.4;
+}
+.table-divider td {
+  padding: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
 .change-positive { color: var(--wm-positive); }

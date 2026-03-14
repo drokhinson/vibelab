@@ -260,20 +260,48 @@
       <!-- ─── History ─── -->
       <div id="view-history" class="view" style="display:none;">
         <h3>Wealth History</h3>
-        <div class="chart-container">
-          <canvas id="nw-chart"></canvas>
+        <div class="history-tabs">
+          <button class="history-tab active" id="tab-overview" onclick="switchHistoryTab('overview')">Overview</button>
+          <button class="history-tab" id="tab-accounts" onclick="switchHistoryTab('accounts')">By Account</button>
         </div>
-        <div id="history-table-container">
-          <table class="history-table" role="grid">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Net Worth</th>
-                <th>Change</th>
-              </tr>
-            </thead>
-            <tbody id="history-tbody"></tbody>
-          </table>
+
+        <!-- Overview tab -->
+        <div id="history-overview">
+          <div class="chart-container">
+            <canvas id="nw-chart"></canvas>
+          </div>
+          <div id="history-table-container">
+            <table class="history-table" role="grid">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Net Worth</th>
+                  <th>Change</th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- By Account tab -->
+        <div id="history-accounts" style="display:none;">
+          <div class="chart-container">
+            <canvas id="acct-chart"></canvas>
+          </div>
+          <div id="acct-toggle-list" class="acct-toggles"></div>
+          <div id="acct-history-table-container">
+            <table class="history-table" role="grid">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th id="acct-table-name">Account</th>
+                  <th>Change</th>
+                </tr>
+              </thead>
+              <tbody id="acct-history-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
