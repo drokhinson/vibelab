@@ -284,6 +284,88 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 # ---------------------------------------------------------------------------
+# Account Deletion
+# ---------------------------------------------------------------------------
+
+@router.delete("/auth/me")
+async def delete_account(user: dict = Depends(get_current_user)):
+    """Delete the current user and all associated data."""
+    sb = get_supabase()
+    user_id = user["user_id"]
+    couple_id = user.get("couple_id")
+
+    if couple_id:
+        # Check if user is the only member of their household
+        members = (
+            sb.table("wealthmate_couple_members")
+            .select("id, user_id")
+            .eq("couple_id", couple_id)
+            .execute()
+        )
+        member_ids = [m["user_id"] for m in (members.data or [])]
+        is_solo = len(member_ids) <= 1
+
+        if is_solo:
+            # Solo household — delete everything
+            # Get checkin IDs to delete values
+            checkins = (
+                sb.table("wealthmate_checkins")
+                .select("id")
+                .eq("couple_id", couple_id)
+                .execute()
+            )
+            checkin_ids = [c["id"] for c in (checkins.data or [])]
+            if checkin_ids:
+                sb.table("wealthmate_checkin_values").delete().in_("checkin_id", checkin_ids).execute()
+
+            # Get account IDs to delete loan details
+            accts = (
+                sb.table("wealthmate_accounts")
+                .select("id")
+                .eq("couple_id", couple_id)
+                .execute()
+            )
+            acct_ids = [a["id"] for a in (accts.data or [])]
+            if acct_ids:
+                sb.table("wealthmate_account_loan_details").delete().in_("account_id", acct_ids).execute()
+
+            # Delete expense items via groups
+            groups = (
+                sb.table("wealthmate_expense_groups")
+                .select("id")
+                .eq("couple_id", couple_id)
+                .execute()
+            )
+            group_ids = [g["id"] for g in (groups.data or [])]
+            if group_ids:
+                sb.table("wealthmate_expense_items").delete().in_("group_id", group_ids).execute()
+
+            # Delete top-level couple data
+            sb.table("wealthmate_checkins").delete().eq("couple_id", couple_id).execute()
+            sb.table("wealthmate_accounts").delete().eq("couple_id", couple_id).execute()
+            sb.table("wealthmate_expense_groups").delete().eq("couple_id", couple_id).execute()
+            sb.table("wealthmate_invitations").delete().eq("couple_id", couple_id).execute()
+            sb.table("wealthmate_couple_members").delete().eq("couple_id", couple_id).execute()
+            sb.table("wealthmate_couples").delete().eq("id", couple_id).execute()
+        else:
+            # Merged household — remove user from couple, reassign their personal accounts to partner
+            sb.table("wealthmate_couple_members").delete().eq("user_id", user_id).execute()
+            # Set personal accounts owned by this user to no owner (become joint)
+            sb.table("wealthmate_accounts").update(
+                {"owner_user_id": None}
+            ).eq("couple_id", couple_id).eq("owner_user_id", user_id).execute()
+
+    # Delete invitations sent by or to this user
+    sb.table("wealthmate_invitations").delete().eq("from_user_id", user_id).execute()
+    sb.table("wealthmate_invitations").delete().eq("to_username", user["username"]).execute()
+
+    # Delete the user
+    sb.table("wealthmate_users").delete().eq("id", user_id).execute()
+
+    return {"status": "deleted"}
+
+
+# ---------------------------------------------------------------------------
 # Couple Management
 # ---------------------------------------------------------------------------
 

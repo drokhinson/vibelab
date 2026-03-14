@@ -1336,6 +1336,32 @@ function handleEmailInvite(e) {
   document.getElementById("invite-email").value = "";
 }
 
+async function deleteAccount() {
+  const confirmed = confirm(
+    "Are you sure you want to delete your account and ALL your data?\n\n" +
+    "This will permanently remove your accounts, check-ins, expense groups, and profile.\n\n" +
+    "This cannot be undone."
+  );
+  if (!confirmed) return;
+
+  const doubleConfirm = confirm("This is your last chance. Type OK to confirm you understand all data will be lost.");
+  if (!doubleConfirm) return;
+
+  try {
+    showLoading(true);
+    await apiFetch("/auth/me", { method: "DELETE" });
+    showLoading(false);
+    clearToken();
+    currentUser = null;
+    coupleInfo = null;
+    alert("Your account and all data have been deleted.");
+    showView("login");
+  } catch (err) {
+    showLoading(false);
+    alert("Error deleting account: " + err.message);
+  }
+}
+
 function logout() {
   clearToken();
   currentUser = null;
@@ -1434,6 +1460,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("invite-form").addEventListener("submit", handleInvite);
   document.getElementById("email-invite-form").addEventListener("submit", handleEmailInvite);
   document.getElementById("btn-logout").addEventListener("click", logout);
+  document.getElementById("btn-delete-account").addEventListener("click", deleteAccount);
 
   // Theme toggle
   const themeToggle = document.getElementById("theme-toggle");

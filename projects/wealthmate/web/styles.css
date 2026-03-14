@@ -709,6 +709,13 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+.settings-card-danger {
+  border-color: rgba(239, 68, 68, 0.2);
+  margin-top: 2rem;
+}
+.settings-card-danger h5 {
+  color: var(--wm-danger);
+}
 
 .invite-row {
   display: flex;
