@@ -72,7 +72,7 @@ fi
 node - <<EOF
 const fs = require('fs');
 const path = require('path');
-const registryPath = path.join('$REPO_ROOT', 'registry.json');
+const registryPath = path.join('$REPO_ROOT', 'landing', 'registry.json');
 const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
 
 const newEntry = {
