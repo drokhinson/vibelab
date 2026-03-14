@@ -243,6 +243,12 @@ async function loadDashboard() {
     // Couple status bar
     renderCoupleBar();
 
+    // Check for pending invites and show on dashboard
+    try {
+      const invites = await apiFetch("/couple/invites");
+      renderDashboardInvites(invites);
+    } catch (e) { /* ignore */ }
+
     // Net worth card
     if (wealthHistory.length > 0) {
       const latest = wealthHistory[wealthHistory.length - 1];
@@ -292,6 +298,22 @@ function renderCoupleBar() {
   } else {
     el.innerHTML = '<div class="couple-bar couple-bar-solo">Tracking solo — merge finances with a partner in Settings!</div>';
   }
+}
+
+function renderDashboardInvites(invites) {
+  const el = document.getElementById("dash-pending-invites");
+  if (!el) return;
+  const pending = (Array.isArray(invites) ? invites : []).filter(i => i.status === "pending");
+  if (pending.length === 0) { el.innerHTML = ""; return; }
+  el.innerHTML = pending.map(i => `
+    <article class="invite-banner">
+      <p><strong>${i.from_display_name || i.from_username || "Someone"}</strong> wants to merge finances with you!</p>
+      <div class="invite-actions">
+        <button onclick="respondInvite('${i.id}', 'accept')" class="btn-sm">Accept</button>
+        <button onclick="respondInvite('${i.id}', 'decline')" class="btn-sm btn-danger">Decline</button>
+      </div>
+    </article>
+  `).join("");
 }
 
 // ── Check-In Flow ─────────────────────────────────────────────────────────────
