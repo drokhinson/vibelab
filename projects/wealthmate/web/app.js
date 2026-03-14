@@ -1435,6 +1435,19 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("email-invite-form").addEventListener("submit", handleEmailInvite);
   document.getElementById("btn-logout").addEventListener("click", logout);
 
+  // Theme toggle
+  const themeToggle = document.getElementById("theme-toggle");
+  const savedTheme = localStorage.getItem("wm_theme");
+  if (savedTheme === "light") {
+    document.documentElement.setAttribute("data-theme", "light");
+    themeToggle.checked = true;
+  }
+  themeToggle.addEventListener("change", () => {
+    const theme = themeToggle.checked ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("wm_theme", theme);
+  });
+
   // Init: check if logged in
   if (isLoggedIn()) {
     showView("dashboard");

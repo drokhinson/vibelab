@@ -17,10 +17,12 @@
   --wm-positive:           #10b981;
   --wm-negative:           #ef4444;
 
-  /* Surface colors */
+  /* Surface colors (dark defaults) */
   --pico-background-color: #0a0f0d;
   --pico-card-background-color: #111a16;
   --pico-card-border-color: rgba(16, 185, 129, 0.1);
+  --wm-surface-dim: rgba(255,255,255,0.04);
+  --wm-border-dim: rgba(255,255,255,0.08);
 
   /* Typography */
   --pico-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -863,6 +865,80 @@ dialog article {
   padding: 2.5rem 1rem;
   color: var(--pico-muted-color);
   font-size: 0.9rem;
+}
+
+/* ── Theme toggle ─────────────────────────────────────────────────────────── */
+.theme-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  display: inline-block;
+}
+.toggle-switch input { display: none; }
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.15);
+  border-radius: 24px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--pico-primary);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* ── Light mode overrides ─────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --pico-background-color: #f5f7f6;
+  --pico-card-background-color: #ffffff;
+  --pico-card-border-color: rgba(16, 185, 129, 0.15);
+  --wm-surface-dim: rgba(0,0,0,0.03);
+  --wm-border-dim: rgba(0,0,0,0.08);
+}
+[data-theme="light"] .app-header {
+  background: #ffffff;
+  border-bottom-color: rgba(0,0,0,0.08);
+}
+[data-theme="light"] .bottom-nav {
+  background: #ffffff;
+  border-top-color: rgba(0,0,0,0.08);
+}
+[data-theme="light"] .nw-card {
+  background: linear-gradient(135deg, #059669, #10b981);
+}
+[data-theme="light"] .sub-field {
+  background: rgba(0,0,0,0.02);
+  border-color: rgba(0,0,0,0.06);
+}
+[data-theme="light"] .checkin-acct-card {
+  background: #fafafa;
+  border-color: rgba(0,0,0,0.08);
+}
+[data-theme="light"] .invite-banner {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+[data-theme="light"] .toggle-slider {
+  background: rgba(0,0,0,0.15);
 }
 
 /* ── Responsive — already mobile-first at 480px ────────────────────────────── */
