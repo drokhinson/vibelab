@@ -130,30 +130,7 @@
         <div id="checkin-step-3" class="wizard-step" style="display:none;">
           <h4>Any new accounts to add?</h4>
           <p class="muted">If you opened a new account since last check-in, add it now.</p>
-          <div id="checkin-new-account-form" style="display:none;">
-            <label>Account Name</label>
-            <input type="text" id="new-acct-name" placeholder="e.g. Ally Savings" />
-            <label>Type</label>
-            <select id="new-acct-type">
-              <option value="checking_personal">Bank Account (Personal)</option>
-              <option value="checking_joint">Bank Account (Joint)</option>
-              <option value="savings">Savings</option>
-              <option value="401k">401k</option>
-              <option value="investment">Investment</option>
-              <option value="property_personal">Property (Personal)</option>
-              <option value="property_rental">Property (Rental)</option>
-              <option value="car_loan">Car Loan</option>
-              <option value="mortgage">Mortgage</option>
-              <option value="other">Other</option>
-            </select>
-            <label>Owner</label>
-            <select id="new-acct-owner">
-              <option value="me">Mine</option>
-              <option value="joint">Joint</option>
-            </select>
-            <button id="new-acct-save" class="btn-primary-block">Add Account</button>
-          </div>
-          <button id="checkin-add-acct-btn" class="btn-outline-block">+ Add New Account</button>
+            <button id="checkin-add-acct-btn" class="btn-outline-block">+ Add New Account</button>
           <button id="checkin-step3-next" class="btn-primary-block" style="margin-top:1rem;">Skip / Next</button>
         </div>
 
@@ -175,7 +152,7 @@
         </div>
         <div id="accounts-list" class="card-grid"></div>
 
-        <!-- Add/Edit account modal -->
+        <!-- Add/Edit account modal (shared by Accounts page + Check-in step 3) -->
         <dialog id="account-dialog">
           <article>
             <header>
@@ -183,65 +160,87 @@
               <h4 id="account-dialog-title">Add Account</h4>
             </header>
             <form id="account-form">
-              <label>Name</label>
+              <label>Account Name</label>
               <input type="text" id="acct-name" placeholder="e.g. Chase Checking" required />
-              <label>Type</label>
-              <select id="acct-type">
-                <option value="checking_personal">Bank Account (Personal)</option>
-                <option value="checking_joint">Bank Account (Joint)</option>
-                <option value="savings">Savings</option>
-                <option value="401k">401k</option>
-                <option value="investment">Investment</option>
-                <option value="property_personal">Property (Personal)</option>
-                <option value="property_rental">Property (Rental)</option>
-                <option value="car_loan">Car Loan</option>
-                <option value="mortgage">Mortgage</option>
-                <option value="other">Other</option>
+
+              <label>Category</label>
+              <select id="acct-category">
+                <option value="bank">Bank Account</option>
+                <option value="retirement">Retirement Account</option>
+                <option value="investment">Investment Account</option>
+                <option value="property">Property</option>
+                <option value="loan">Loan</option>
+                <option value="other_asset">Other Account</option>
+                <option value="other_liability">Other Liability</option>
               </select>
+
+              <!-- Retirement sub-type -->
+              <div id="retirement-sub" class="sub-field" style="display:none;">
+                <label>Retirement Type</label>
+                <select id="acct-retirement-type">
+                  <option value="401k">401(k)</option>
+                  <option value="roth_ira">Roth IRA</option>
+                  <option value="retirement_other">Other</option>
+                </select>
+              </div>
+
+              <!-- Property sub-fields -->
+              <div id="property-sub" class="sub-field" style="display:none;">
+                <label>Property Type</label>
+                <select id="acct-property-type">
+                  <option value="property_personal">Personal Residence</option>
+                  <option value="property_rental">Rental Property</option>
+                </select>
+                <label>Estimated Value</label>
+                <input type="number" id="acct-property-value" step="0.01" placeholder="Zillow estimate, appraisal, etc." />
+                <label>Mortgage Outstanding</label>
+                <input type="number" id="acct-mortgage-owed" step="0.01" placeholder="0.00" />
+                <label>Property Address (optional)</label>
+                <input type="text" id="acct-property-address" placeholder="123 Main St..." />
+              </div>
+
+              <!-- Loan sub-fields -->
+              <div id="loan-sub" class="sub-field" style="display:none;">
+                <label>Loan Type</label>
+                <select id="acct-loan-type">
+                  <option value="car_loan">Car Loan</option>
+                  <option value="mortgage">Mortgage</option>
+                  <option value="loan">Personal / Student / Other</option>
+                </select>
+                <label>Balance Owed</label>
+                <input type="number" id="acct-loan-owed" step="0.01" placeholder="0.00" />
+                <label>Original Loan Amount (optional)</label>
+                <input type="number" id="acct-loan-amount" step="0.01" />
+                <label>Interest Rate % (optional)</label>
+                <input type="number" id="acct-loan-rate" step="0.01" />
+                <label>Loan Term in months (optional)</label>
+                <input type="number" id="acct-loan-term" />
+                <label>Lender (optional)</label>
+                <input type="text" id="acct-loan-lender" />
+              </div>
+
               <label>Owner</label>
               <select id="acct-owner">
-                <option value="me">Mine (Personal)</option>
-                <option value="partner">Partner's (Personal)</option>
-                <option value="joint">Joint</option>
+                <option value="me">Mine</option>
               </select>
+
+              <!-- Initial value (new accounts only) -->
               <div id="initial-value-section">
                 <hr />
-                <h5>Initial Value</h5>
-                <div class="input-row">
-                  <div class="input-col">
-                    <label id="acct-value-label">Current Value</label>
-                    <input type="number" id="acct-initial-value" step="0.01" placeholder="0.00" />
-                  </div>
-                  <div class="input-col" id="acct-owed-col" style="display:none;">
-                    <label>Balance Owed</label>
-                    <input type="number" id="acct-initial-owed" step="0.01" placeholder="0.00" />
-                  </div>
+                <h5 id="init-value-heading">Current Value</h5>
+                <input type="number" id="acct-initial-value" step="0.01" placeholder="0.00" />
+                <div id="init-owed-section" style="display:none;">
+                  <label>Balance Owed</label>
+                  <input type="number" id="acct-initial-owed" step="0.01" placeholder="0.00" />
                 </div>
               </div>
+
               <details class="extra-details-toggle">
                 <summary>Extra Details</summary>
                 <label>URL (optional)</label>
                 <input type="url" id="acct-url" placeholder="https://..." />
                 <label>Notes (optional)</label>
                 <textarea id="acct-notes" rows="2" placeholder="Any info to help you find this account's value..."></textarea>
-                <div id="property-details-section" style="display:none;">
-                  <label>Estimated Property Value</label>
-                  <input type="number" id="acct-property-value" step="0.01" placeholder="Zillow estimate, appraisal, etc." />
-                  <label>Property Address (optional)</label>
-                  <input type="text" id="acct-property-address" placeholder="123 Main St..." />
-                </div>
-                <div id="loan-details-section" style="display:none;">
-                  <hr />
-                  <h5>Loan Details</h5>
-                  <label>Original Loan Amount</label>
-                  <input type="number" id="acct-loan-amount" step="0.01" />
-                  <label>Interest Rate (%)</label>
-                  <input type="number" id="acct-loan-rate" step="0.01" />
-                  <label>Loan Term (months)</label>
-                  <input type="number" id="acct-loan-term" />
-                  <label>Lender Name</label>
-                  <input type="text" id="acct-loan-lender" />
-                </div>
                 <div id="investment-details-section" style="display:none;">
                   <label>Brokerage / Provider</label>
                   <input type="text" id="acct-brokerage" placeholder="e.g. Fidelity, Schwab, Vanguard" />

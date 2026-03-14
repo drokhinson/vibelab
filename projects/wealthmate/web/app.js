@@ -37,20 +37,53 @@ function typeLabel(t) {
   const map = {
     checking_personal: "Bank Account",
     checking_joint: "Bank Account",
-    savings: "Savings",
+    savings: "Bank Account",
     "401k": "401(k)",
+    roth_ira: "Roth IRA",
+    retirement_other: "Retirement",
     investment: "Investment",
     property_personal: "Property",
     property_rental: "Rental Property",
     car_loan: "Car Loan",
     mortgage: "Mortgage",
-    other: "Other",
+    loan: "Loan",
+    other: "Other Account",
+    other_liability: "Other Liability",
   };
   return map[t] || t;
 }
 
 function isLoanType(t) {
-  return ["car_loan", "mortgage"].includes(t);
+  return ["car_loan", "mortgage", "loan"].includes(t);
+}
+
+function isLiabilityType(t) {
+  return ["car_loan", "mortgage", "loan", "other_liability"].includes(t);
+}
+
+// Map UI category + sub-type to DB account_type
+function resolveAccountType(category, form) {
+  switch (category) {
+    case "bank": return "savings";
+    case "retirement": return document.getElementById("acct-retirement-type").value;
+    case "investment": return "investment";
+    case "property": return document.getElementById("acct-property-type").value;
+    case "loan": return document.getElementById("acct-loan-type").value;
+    case "other_asset": return "other";
+    case "other_liability": return "other_liability";
+    default: return "other";
+  }
+}
+
+// Map DB account_type back to UI category
+function typeToCategory(t) {
+  if (["checking_personal", "checking_joint", "savings"].includes(t)) return "bank";
+  if (["401k", "roth_ira", "retirement_other"].includes(t)) return "retirement";
+  if (t === "investment") return "investment";
+  if (["property_personal", "property_rental"].includes(t)) return "property";
+  if (["car_loan", "mortgage", "loan"].includes(t)) return "loan";
+  if (t === "other_liability") return "other_liability";
+  return "other_asset";
 }
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -476,42 +509,11 @@ async function saveAccountValue(accountId, source = "manual") {
   }
 }
 
-async function checkinStep3AddAccount() {
-  const form = document.getElementById("checkin-new-account-form");
-  const btn = document.getElementById("checkin-add-acct-btn");
-  if (form.style.display === "none") {
-    form.style.display = "block";
-    btn.style.display = "none";
-  }
-}
+let addAccountFromCheckin = false;
 
-async function saveNewAccountInCheckin() {
-  const name = document.getElementById("new-acct-name").value.trim();
-  const type = document.getElementById("new-acct-type").value;
-  const owner = document.getElementById("new-acct-owner").value;
-
-  if (!name) { alert("Please enter an account name."); return; }
-
-  try {
-    showLoading(true);
-    const body = {
-      name,
-      account_type: type,
-      owner_user_id: owner === "me" ? currentUser.id : null,
-    };
-    await apiFetch("/accounts", { method: "POST", body });
-    // Reload accounts
-    accounts = await apiFetch("/accounts");
-    showLoading(false);
-    // Reset form
-    document.getElementById("new-acct-name").value = "";
-    document.getElementById("checkin-new-account-form").style.display = "none";
-    document.getElementById("checkin-add-acct-btn").style.display = "block";
-    alert("Account added! You can enter its value when you go back to step 2 or in your next check-in.");
-  } catch (err) {
-    showLoading(false);
-    alert("Error: " + err.message);
-  }
+function checkinStep3AddAccount() {
+  addAccountFromCheckin = true;
+  openAddAccount();
 }
 
 function renderCheckinReview() {
@@ -642,26 +644,28 @@ function renderAccountsList() {
 
 let editingAccountId = null;
 
+function buildOwnerOptions() {
+  const ownerSelect = document.getElementById("acct-owner");
+  ownerSelect.innerHTML = '<option value="me">Mine</option>';
+  if (coupleInfo && coupleInfo.members) {
+    const partner = coupleInfo.members.find(m => m.user_id !== currentUser.id);
+    if (partner) {
+      const name = partner.display_name || partner.username;
+      ownerSelect.innerHTML += `<option value="partner">${name}'s</option>`;
+      ownerSelect.innerHTML += '<option value="joint">Joint</option>';
+    }
+  }
+}
+
 function openAddAccount() {
   editingAccountId = null;
   document.getElementById("account-dialog-title").textContent = "Add Account";
   document.getElementById("account-form").reset();
   document.getElementById("acct-deactivate-btn").style.display = "none";
-  document.getElementById("loan-details-section").style.display = "none";
-  document.getElementById("property-details-section").style.display = "none";
-  document.getElementById("investment-details-section").style.display = "none";
-  document.getElementById("acct-owed-col").style.display = "none";
-  document.getElementById("acct-value-label").textContent = "Current Value";
   document.getElementById("initial-value-section").style.display = "block";
   document.getElementById("account-form-error").style.display = "none";
-  // If partner exists, show partner option
-  const ownerSelect = document.getElementById("acct-owner");
-  if (coupleInfo && coupleInfo.members) {
-    const partner = coupleInfo.members.find(m => m.user_id !== currentUser.id);
-    if (partner) {
-      ownerSelect.querySelector('[value="partner"]').textContent = `${partner.display_name || partner.username}'s (Personal)`;
-    }
-  }
+  buildOwnerOptions();
+  onCategoryChange();
   document.getElementById("account-dialog").showModal();
 }
 
@@ -670,13 +674,23 @@ function openEditAccount(id) {
   if (!acct) return;
   editingAccountId = id;
   document.getElementById("account-dialog-title").textContent = "Edit Account";
+  document.getElementById("account-form").reset();
   document.getElementById("acct-name").value = acct.name;
-  document.getElementById("acct-type").value = acct.account_type;
   document.getElementById("acct-url").value = acct.url || "";
   document.getElementById("acct-notes").value = acct.notes || "";
   document.getElementById("account-form-error").style.display = "none";
 
+  // Set category and sub-type
+  const cat = typeToCategory(acct.account_type);
+  document.getElementById("acct-category").value = cat;
+  onCategoryChange();
+
+  if (cat === "retirement") document.getElementById("acct-retirement-type").value = acct.account_type;
+  if (cat === "property") document.getElementById("acct-property-type").value = acct.account_type;
+  if (cat === "loan") document.getElementById("acct-loan-type").value = acct.account_type;
+
   // Owner
+  buildOwnerOptions();
   const ownerSelect = document.getElementById("acct-owner");
   if (!acct.owner_user_id) {
     ownerSelect.value = "joint";
@@ -688,15 +702,6 @@ function openEditAccount(id) {
 
   // Hide initial value section when editing
   document.getElementById("initial-value-section").style.display = "none";
-
-  // Type-specific details
-  const isLoan = isLoanType(acct.account_type);
-  const isProperty = isPropertyType(acct.account_type);
-  const isInvestment = isInvestmentType(acct.account_type);
-  document.getElementById("loan-details-section").style.display = isLoan ? "block" : "none";
-  document.getElementById("property-details-section").style.display = isProperty ? "block" : "none";
-  document.getElementById("investment-details-section").style.display = isInvestment ? "block" : "none";
-  document.getElementById("acct-owed-col").style.display = "none";
 
   if (acct.loan_details) {
     document.getElementById("acct-loan-amount").value = acct.loan_details.original_loan_amount || "";
@@ -722,18 +727,15 @@ async function handleAccountSubmit(e) {
     ownerUserId = partner ? partner.user_id : null;
   }
 
+  const category = document.getElementById("acct-category").value;
+  const acctType = resolveAccountType(category);
+
   // Build notes from notes field + type-specific extras
   let notes = document.getElementById("acct-notes").value.trim() || "";
-  const acctType = document.getElementById("acct-type").value;
-
-  if (isPropertyType(acctType)) {
-    const addr = document.getElementById("acct-property-address").value.trim();
-    if (addr) notes = (notes ? notes + "\n" : "") + "Address: " + addr;
-  }
-  if (isInvestmentType(acctType)) {
-    const brokerage = document.getElementById("acct-brokerage").value.trim();
-    if (brokerage) notes = (notes ? notes + "\n" : "") + "Provider: " + brokerage;
-  }
+  const addr = document.getElementById("acct-property-address")?.value.trim();
+  if (addr) notes = (notes ? notes + "\n" : "") + "Address: " + addr;
+  const brokerage = document.getElementById("acct-brokerage")?.value.trim();
+  if (brokerage) notes = (notes ? notes + "\n" : "") + "Provider: " + brokerage;
 
   const body = {
     name: document.getElementById("acct-name").value.trim(),
@@ -744,16 +746,28 @@ async function handleAccountSubmit(e) {
   };
 
   // Loan details
-  if (isLoanType(body.account_type)) {
+  if (isLoanType(acctType)) {
     body.original_loan_amount = parseFloat(document.getElementById("acct-loan-amount").value) || null;
     body.interest_rate = parseFloat(document.getElementById("acct-loan-rate").value) || null;
     body.loan_term_months = parseInt(document.getElementById("acct-loan-term").value) || null;
     body.lender_name = document.getElementById("acct-loan-lender").value.trim() || null;
   }
 
-  // Initial value (only for new accounts)
-  const initialValue = document.getElementById("acct-initial-value").value;
-  const initialOwed = document.getElementById("acct-initial-owed").value;
+  // Determine initial value based on category
+  let initialValue = "";
+  let initialOwed = "";
+  if (category === "property") {
+    initialValue = document.getElementById("acct-property-value").value;
+    initialOwed = document.getElementById("acct-mortgage-owed").value;
+  } else if (category === "loan") {
+    initialOwed = document.getElementById("acct-loan-owed").value;
+  } else if (category === "other_liability") {
+    initialOwed = document.getElementById("acct-initial-value").value;
+    initialValue = "";
+  } else {
+    initialValue = document.getElementById("acct-initial-value").value;
+    initialOwed = document.getElementById("acct-initial-owed")?.value || "";
+  }
 
   try {
     if (editingAccountId) {
@@ -777,7 +791,14 @@ async function handleAccountSubmit(e) {
       }
     }
     document.getElementById("account-dialog").close();
-    loadAccounts();
+    if (addAccountFromCheckin) {
+      addAccountFromCheckin = false;
+      // Reload accounts for the checkin
+      accounts = await apiFetch("/accounts");
+      alert("Account added! Go back to Step 2 to enter its value.");
+    } else {
+      loadAccounts();
+    }
   } catch (err) {
     errEl.textContent = err.message;
     errEl.style.display = "block";
@@ -1305,30 +1326,35 @@ function logout() {
 }
 
 // ── Account type change handler (show/hide loan fields) ───────────────────────
-function isPropertyType(t) {
-  return ["property_personal", "property_rental"].includes(t);
-}
+function onCategoryChange() {
+  const cat = document.getElementById("acct-category").value;
+  // Show/hide sub-fields
+  document.getElementById("retirement-sub").style.display = cat === "retirement" ? "block" : "none";
+  document.getElementById("property-sub").style.display = cat === "property" ? "block" : "none";
+  document.getElementById("loan-sub").style.display = cat === "loan" ? "block" : "none";
+  document.getElementById("investment-details-section").style.display =
+    (cat === "investment" || cat === "retirement") ? "block" : "none";
 
-function isInvestmentType(t) {
-  return ["401k", "investment"].includes(t);
-}
+  // Initial value section adjustments
+  const heading = document.getElementById("init-value-heading");
+  const owedSection = document.getElementById("init-owed-section");
+  const initValueSection = document.getElementById("initial-value-section");
 
-function onAccountTypeChange() {
-  const type = document.getElementById("acct-type").value;
-  const isLoan = isLoanType(type);
-  const isProperty = isPropertyType(type);
-  const isInvestment = isInvestmentType(type);
-
-  document.getElementById("loan-details-section").style.display = isLoan ? "block" : "none";
-  document.getElementById("property-details-section").style.display = isProperty ? "block" : "none";
-  document.getElementById("investment-details-section").style.display = isInvestment ? "block" : "none";
-  document.getElementById("acct-owed-col").style.display = isLoan ? "block" : "none";
-
-  // Update value label based on type
-  const valLabel = document.getElementById("acct-value-label");
-  if (isProperty) valLabel.textContent = "Estimated Value";
-  else if (isLoan) valLabel.textContent = "Asset Value (optional)";
-  else valLabel.textContent = "Current Value";
+  if (cat === "property") {
+    // Property has its own value + mortgage fields, hide generic initial value
+    initValueSection.style.display = "none";
+  } else if (cat === "loan") {
+    // Loan has its own balance owed field, hide generic initial value
+    initValueSection.style.display = "none";
+  } else if (cat === "other_liability") {
+    heading.textContent = "Amount Owed";
+    owedSection.style.display = "none";
+    initValueSection.style.display = "block";
+  } else {
+    heading.textContent = "Current Value";
+    owedSection.style.display = "none";
+    initValueSection.style.display = "block";
+  }
 }
 
 // ── Event Listeners ───────────────────────────────────────────────────────────
@@ -1366,7 +1392,6 @@ document.addEventListener("DOMContentLoaded", () => {
     renderCheckinReview();
   });
   document.getElementById("checkin-add-acct-btn").addEventListener("click", checkinStep3AddAccount);
-  document.getElementById("new-acct-save").addEventListener("click", saveNewAccountInCheckin);
   document.getElementById("checkin-submit").addEventListener("click", submitCheckin);
 
   // Accounts
@@ -1374,7 +1399,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("account-form").addEventListener("submit", handleAccountSubmit);
   document.getElementById("account-dialog-close").addEventListener("click", () => document.getElementById("account-dialog").close());
   document.getElementById("acct-deactivate-btn").addEventListener("click", deactivateAccount);
-  document.getElementById("acct-type").addEventListener("change", onAccountTypeChange);
+  document.getElementById("acct-category").addEventListener("change", onCategoryChange);
 
   // Expenses
   document.getElementById("btn-add-expense-group").addEventListener("click", () => document.getElementById("expense-group-dialog").showModal());
