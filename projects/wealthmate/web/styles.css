@@ -651,7 +651,98 @@ body {
 .change-positive { color: var(--wm-positive); }
 .change-negative { color: var(--wm-negative); }
 
-/* ── Expenses ──────────────────────────────────────────────────────────────── */
+/* ── Cost Tracker tool selector ────────────────────────────────────────────── */
+.cost-tools {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.cost-tool {
+  flex: 1;
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--pico-muted-color);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cost-tool.active {
+  background: var(--pico-primary);
+  color: #fff;
+}
+
+/* ── Monthly Bills ─────────────────────────────────────────────────────────── */
+.monthly-summary-card {
+  background: linear-gradient(135deg, #111a16, #0d2818);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+.monthly-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+}
+.monthly-summary-row strong {
+  font-size: 1.25rem;
+  color: var(--wm-accent-light);
+}
+.monthly-summary-row + .monthly-summary-row {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.bill-card {
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.bill-card:hover {
+  border-color: var(--wm-accent);
+}
+.bill-card-info h5 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.bill-card-info .muted {
+  font-size: 0.75rem;
+}
+.bill-card-amount {
+  text-align: right;
+}
+.bill-card-amount .amount {
+  font-weight: 600;
+  color: var(--wm-accent-light);
+  font-size: 0.95rem;
+}
+.bill-card-amount .freq {
+  font-size: 0.7rem;
+  color: var(--pico-muted-color);
+}
+.bill-category-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--wm-accent-light);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-left: 0.35rem;
+}
+
+/* ── Expenses (Big Purchases) ─────────────────────────────────────────────── */
 .expense-group-card {
   background: var(--pico-card-background-color);
   border: 1px solid var(--pico-card-border-color);
@@ -968,6 +1059,19 @@ dialog article {
 }
 [data-theme="light"] .review-warning {
   background: rgba(245, 158, 11, 0.08);
+}
+[data-theme="light"] .cost-tools {
+  border-color: rgba(0,0,0,0.12);
+}
+[data-theme="light"] .cost-tool {
+  color: #5a6e64;
+}
+[data-theme="light"] .monthly-summary-card {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+}
+[data-theme="light"] .bill-category-badge {
+  background: rgba(16, 185, 129, 0.12);
 }
 [data-theme="light"] dialog article {
   background: #f0f3f1;

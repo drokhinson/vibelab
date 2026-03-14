@@ -38,6 +38,7 @@ shared-backend/routes/wealthmate.py  — FastAPI routes
 db/migrations/004_wealthmate_schema.sql  — table creation
 db/migrations/005_wealthmate_seed.sql    — Adam & Eve test data
 db/migrations/006_wealthmate_account_types.sql — expanded account types
+db/migrations/007_wealthmate_recurring_expenses.sql — recurring expenses table
 ```
 
 ---
@@ -154,7 +155,7 @@ One row per account per check-in. Updated incrementally until checkin is submitt
 | updated_at | timestamptz | last save time |
 
 ### `wealthmate_expense_groups`
-A named group of related large expenses (e.g. "ACL Surgery", "Spain Trip"). Displayed as "Big Costs" in the UI.
+A named group of related large expenses (e.g. "ACL Surgery", "Spain Trip"). Part of the "Cost Tracker > Big Purchases" tool.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
@@ -172,6 +173,21 @@ Individual line items within an expense group.
 | description | text NOT NULL | e.g. "ER Visit" |
 | amount | numeric NOT NULL | |
 | item_date | date nullable | |
+| created_at | timestamptz | |
+
+### `wealthmate_recurring_expenses`
+Recurring monthly bills and subscriptions. Part of the "Cost Tracker > Monthly Bills" tool.
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | gen_random_uuid() |
+| couple_id | uuid FK → wealthmate_couples | |
+| name | text NOT NULL | e.g. "Netflix", "Rent" |
+| amount | numeric NOT NULL | amount per frequency period |
+| frequency | text NOT NULL | 'weekly', 'monthly', 'quarterly', 'yearly' |
+| category | text NOT NULL | 'housing', 'subscription', 'insurance', 'utilities', 'transportation', 'food', 'other' |
+| start_date | date nullable | |
+| is_active | boolean | soft delete; default true |
+| notes | text nullable | |
 | created_at | timestamptz | |
 
 ---
@@ -210,12 +226,18 @@ All routes under `/api/v1/wealthmate/`. Auth: most endpoints require `Authorizat
 - `GET /wealth/history` — Per-checkin totals: `{checkin_date, gross_assets, total_liabilities, net_worth}`
 - `GET /wealth/accounts` — Per-account values across all submitted check-ins for account-level charts. Returns `{dates[], accounts[{id, name, account_type, values[{value, owed}]}]}`
 
-### Big Costs (Large Expenses)
+### Big Purchases (Large Expenses)
 - `GET /expenses` — List expense groups with item totals and counts
 - `POST /expenses` — Create group. Body: `{name, description}`
 - `GET /expenses/{id}` — Get group with line items and total
 - `POST /expenses/{id}/items` — Add item. Body: `{description, amount, item_date}`
 - `DELETE /expenses/{id}/items/{item_id}` — Remove line item
+
+### Monthly Bills (Recurring Expenses)
+- `GET /recurring-expenses` — List active recurring expenses with monthly/yearly totals. Returns `{items[], monthly_total, yearly_total}`
+- `POST /recurring-expenses` — Create bill. Body: `{name, amount, frequency, category, notes}`
+- `PUT /recurring-expenses/{id}` — Update bill fields
+- `DELETE /recurring-expenses/{id}` — Soft-delete (sets is_active=false)
 
 ### Health
 - `GET /health` — Returns `{"project": "wealthmate", "status": "ok"}`
@@ -264,11 +286,18 @@ index.html (login gate)
     │       ├── Toggle chips to show/hide individual accounts
     │       └── Per-account history table grouped by date
     │
-    ├── Big Costs Page (Large Expenses)
-    │   ├── Subtitle explaining purpose (medical, travel, renovations)
-    │   ├── List expense groups with totals
-    │   ├── "+ New Group" button
-    │   └── Group detail: list items, add/delete items
+    ├── Cost Tracker Page
+    │   ├── [Tool selector: Big Purchases | Monthly Bills]
+    │   ├── [Big Purchases tool]
+    │   │   ├── Subtitle explaining purpose (medical, travel, renovations)
+    │   │   ├── List expense groups with totals
+    │   │   ├── "+ New Group" button
+    │   │   └── Group detail: list items, add/delete items
+    │   └── [Monthly Bills tool]
+    │       ├── Monthly/yearly total summary card
+    │       ├── List of recurring bills with amount, frequency, category
+    │       ├── "+ Add Bill" button → opens bill dialog
+    │       └── Tap bill → edit / delete
     │
     └── Settings Page
         ├── Profile (display name, username)
@@ -295,6 +324,7 @@ index.html (login gate)
 - **Account dialog**: Same dialog used from both the Accounts page and Check-in step 3. Owner dropdown shows "Mine" when solo, adds partner name and "Joint" when merged.
 - **Dark/light mode**: Toggle in Settings > Appearance. Uses Pico.css `data-theme` attribute. Preference saved to localStorage.
 - **Dummy test accounts**: Adam (username: `adam`, password: `password`) and Eve (username: `eve`, password: `password`) are seeded as a couple with ~6 months of check-in history across 9 realistic accounts.
+- **Cost Tracker**: Two tools — "Big Purchases" (grouped one-off expenses) and "Monthly Bills" (recurring expenses with frequency-based monthly normalization). Monthly Bills calculates equivalent monthly cost for weekly/quarterly/yearly frequencies.
 
 ---
 
@@ -327,4 +357,5 @@ npx expo start
 ```
 
 ## Active Development Notes
-- 2026-03-14 — Full prototype built and deployed. Solo-first onboarding, merge finances, check-in wizard, per-account history, big costs tracker, dark/light mode.
+- 2026-03-14 — Full prototype built and deployed. Solo-first onboarding, merge finances, check-in wizard, per-account history, dark/light mode.
+- 2026-03-14 — Cost Tracker added with two tools: Big Purchases (renamed from Big Costs) and Monthly Bills (recurring expenses with frequency normalization).

@@ -1093,15 +1093,36 @@ function renderAcctTable() {
   tbody.innerHTML = html;
 }
 
-// ── Expenses Page ─────────────────────────────────────────────────────────────
+// ── Cost Tracker ──────────────────────────────────────────────────────────────
+let currentCostTool = "big-purchases";
+
+function switchCostTool(tool) {
+  currentCostTool = tool;
+  document.querySelectorAll(".cost-tool").forEach(btn => {
+    btn.classList.toggle("active", btn.id === `tool-${tool}`);
+  });
+  document.getElementById("cost-big-purchases").style.display = tool === "big-purchases" ? "block" : "none";
+  document.getElementById("cost-monthly-bills").style.display = tool === "monthly-bills" ? "block" : "none";
+
+  if (tool === "big-purchases") loadExpenseGroups();
+  if (tool === "monthly-bills") loadBills();
+}
+
+// ── Big Purchases (formerly Expenses) ─────────────────────────────────────────
 let expenseGroups = [];
 let currentExpenseGroup = null;
 
 async function loadExpenses() {
+  // Reset to current tool
+  switchCostTool(currentCostTool);
+}
+
+async function loadExpenseGroups() {
   const container = document.getElementById("expense-groups-list");
   const detail = document.getElementById("expense-detail");
   detail.style.display = "none";
   container.style.display = "block";
+  document.getElementById("big-purchases-header").style.display = "flex";
   container.innerHTML = '<div class="loading">Loading...</div>';
 
   try {
@@ -1145,7 +1166,7 @@ async function openExpenseGroup(id) {
 function renderExpenseDetail() {
   if (!currentExpenseGroup) return;
   document.getElementById("expense-groups-list").style.display = "none";
-  document.getElementById("btn-add-expense-group").style.display = "none";
+  document.getElementById("big-purchases-header").style.display = "none";
   const detail = document.getElementById("expense-detail");
   detail.style.display = "block";
 
@@ -1211,7 +1232,7 @@ function backToExpenseGroups() {
   currentExpenseGroup = null;
   document.getElementById("expense-detail").style.display = "none";
   document.getElementById("expense-groups-list").style.display = "block";
-  document.getElementById("btn-add-expense-group").style.display = "inline-block";
+  document.getElementById("big-purchases-header").style.display = "flex";
 }
 
 async function handleExpenseGroupSubmit(e) {
@@ -1228,10 +1249,117 @@ async function handleExpenseGroupSubmit(e) {
     await apiFetch("/expenses", { method: "POST", body });
     document.getElementById("expense-group-dialog").close();
     document.getElementById("expense-group-form").reset();
-    loadExpenses();
+    loadExpenseGroups();
   } catch (err) {
     errEl.textContent = err.message;
     errEl.style.display = "block";
+  }
+}
+
+// ── Monthly Bills ─────────────────────────────────────────────────────────────
+let recurringExpenses = [];
+let editingBillId = null;
+
+const FREQ_LABEL = { weekly: "Weekly", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly" };
+const CAT_LABEL = { housing: "Housing", subscription: "Subscription", insurance: "Insurance", utilities: "Utilities", transportation: "Transport", food: "Food", other: "Other" };
+
+async function loadBills() {
+  const container = document.getElementById("bills-list");
+  container.innerHTML = '<div class="loading">Loading...</div>';
+
+  try {
+    const data = await apiFetch("/recurring-expenses");
+    recurringExpenses = data.items || [];
+    document.getElementById("monthly-total").textContent = fmt(data.monthly_total);
+    document.getElementById("yearly-total").textContent = fmt(data.yearly_total);
+    renderBills();
+  } catch (err) {
+    container.innerHTML = `<div class="error-banner">${err.message}</div>`;
+  }
+}
+
+function renderBills() {
+  const container = document.getElementById("bills-list");
+  if (recurringExpenses.length === 0) {
+    container.innerHTML = '<div class="empty-state">No bills yet. Tap "+ Add Bill" to track a recurring expense.</div>';
+    return;
+  }
+
+  container.innerHTML = recurringExpenses.map(b => `
+    <div class="bill-card" onclick="openEditBill('${b.id}')">
+      <div class="bill-card-info">
+        <h5>${b.name}<span class="bill-category-badge">${CAT_LABEL[b.category] || b.category}</span></h5>
+        ${b.notes ? `<p class="muted">${b.notes}</p>` : ""}
+      </div>
+      <div class="bill-card-amount">
+        <div class="amount">${fmt(b.amount)}</div>
+        <div class="freq">${FREQ_LABEL[b.frequency] || b.frequency}</div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function openAddBill() {
+  editingBillId = null;
+  document.getElementById("bill-dialog-title").textContent = "Add Bill";
+  document.getElementById("bill-form").reset();
+  document.getElementById("bill-delete-btn").style.display = "none";
+  document.getElementById("bill-form-error").style.display = "none";
+  document.getElementById("bill-dialog").showModal();
+}
+
+function openEditBill(id) {
+  const bill = recurringExpenses.find(b => b.id === id);
+  if (!bill) return;
+  editingBillId = id;
+  document.getElementById("bill-dialog-title").textContent = "Edit Bill";
+  document.getElementById("bill-name").value = bill.name;
+  document.getElementById("bill-amount").value = bill.amount;
+  document.getElementById("bill-frequency").value = bill.frequency || "monthly";
+  document.getElementById("bill-category").value = bill.category || "other";
+  document.getElementById("bill-notes").value = bill.notes || "";
+  document.getElementById("bill-delete-btn").style.display = "inline-block";
+  document.getElementById("bill-form-error").style.display = "none";
+  document.getElementById("bill-dialog").showModal();
+}
+
+async function handleBillSubmit(e) {
+  e.preventDefault();
+  const errEl = document.getElementById("bill-form-error");
+  errEl.style.display = "none";
+
+  const body = {
+    name: document.getElementById("bill-name").value.trim(),
+    amount: parseFloat(document.getElementById("bill-amount").value),
+    frequency: document.getElementById("bill-frequency").value,
+    category: document.getElementById("bill-category").value,
+    notes: document.getElementById("bill-notes").value.trim() || null,
+  };
+  if (!body.name || isNaN(body.amount)) return;
+
+  try {
+    if (editingBillId) {
+      await apiFetch(`/recurring-expenses/${editingBillId}`, { method: "PUT", body });
+    } else {
+      await apiFetch("/recurring-expenses", { method: "POST", body });
+    }
+    document.getElementById("bill-dialog").close();
+    loadBills();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = "block";
+  }
+}
+
+async function deleteBill() {
+  if (!editingBillId) return;
+  if (!confirm("Remove this bill?")) return;
+  try {
+    await apiFetch(`/recurring-expenses/${editingBillId}`, { method: "DELETE" });
+    document.getElementById("bill-dialog").close();
+    loadBills();
+  } catch (err) {
+    alert("Error: " + err.message);
   }
 }
 
@@ -1455,6 +1583,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("expense-group-form").addEventListener("submit", handleExpenseGroupSubmit);
   document.getElementById("expense-item-form").addEventListener("submit", handleExpenseItemSubmit);
   document.getElementById("expense-detail-back").addEventListener("click", backToExpenseGroups);
+
+  // Monthly Bills
+  document.getElementById("btn-add-bill").addEventListener("click", openAddBill);
+  document.getElementById("bill-dialog-close").addEventListener("click", () => document.getElementById("bill-dialog").close());
+  document.getElementById("bill-form").addEventListener("submit", handleBillSubmit);
+  document.getElementById("bill-delete-btn").addEventListener("click", deleteBill);
 
   // Settings
   document.getElementById("invite-form").addEventListener("submit", handleInvite);

@@ -305,51 +305,130 @@
         </div>
       </div>
 
-      <!-- ─── Big Costs ─── -->
+      <!-- ─── Cost Tracker ─── -->
       <div id="view-expenses" class="view" style="display:none;">
-        <div class="view-header">
-          <h3>Big Costs</h3>
-          <button id="btn-add-expense-group" class="btn-sm">+ New Group</button>
-        </div>
-        <p class="view-subtitle muted">Track large, multi-bill expenses — medical, travel, renovations, etc.</p>
-        <div id="expense-groups-list" class="card-grid"></div>
+        <h3>Cost Tracker</h3>
 
-        <!-- Expense group detail (shown inline) -->
-        <div id="expense-detail" style="display:none;">
-          <button class="btn-back" id="expense-detail-back">&larr; Back to Groups</button>
-          <h4 id="expense-detail-name"></h4>
-          <p class="muted" id="expense-detail-desc"></p>
-          <p><strong>Total: </strong><span id="expense-detail-total"></span></p>
-          <div id="expense-items-list"></div>
-          <hr />
-          <h5>Add Item</h5>
-          <form id="expense-item-form">
-            <input type="text" id="ei-desc" placeholder="Description" required />
-            <input type="number" id="ei-amount" placeholder="Amount" step="0.01" required />
-            <input type="date" id="ei-date" />
-            <button type="submit" class="btn-primary-block">Add Item</button>
-          </form>
+        <!-- Tool selector -->
+        <div class="cost-tools">
+          <button class="cost-tool active" id="tool-big-purchases" onclick="switchCostTool('big-purchases')">Big Purchases</button>
+          <button class="cost-tool" id="tool-monthly-bills" onclick="switchCostTool('monthly-bills')">Monthly Bills</button>
         </div>
 
-        <!-- Create group dialog -->
-        <dialog id="expense-group-dialog">
-          <article>
-            <header>
-              <button aria-label="Close" rel="prev" class="dialog-close" id="expense-group-dialog-close"></button>
-              <h4>New Expense Group</h4>
-            </header>
-            <form id="expense-group-form">
-              <label>Name</label>
-              <input type="text" id="eg-name" placeholder="e.g. ACL Surgery" required />
-              <label>Description (optional)</label>
-              <textarea id="eg-desc" rows="2"></textarea>
-              <div id="expense-group-error" class="error-banner" style="display:none;"></div>
-              <footer>
-                <button type="submit">Create Group</button>
-              </footer>
+        <!-- ── Big Purchases tool ── -->
+        <div id="cost-big-purchases">
+          <div class="view-header" id="big-purchases-header">
+            <p class="view-subtitle muted" style="margin:0;">Track large, multi-bill expenses — medical, travel, renovations, etc.</p>
+            <button id="btn-add-expense-group" class="btn-sm">+ New Group</button>
+          </div>
+          <div id="expense-groups-list" class="card-grid"></div>
+
+          <!-- Expense group detail (shown inline) -->
+          <div id="expense-detail" style="display:none;">
+            <button class="btn-back" id="expense-detail-back">&larr; Back to Groups</button>
+            <h4 id="expense-detail-name"></h4>
+            <p class="muted" id="expense-detail-desc"></p>
+            <p><strong>Total: </strong><span id="expense-detail-total"></span></p>
+            <div id="expense-items-list"></div>
+            <hr />
+            <h5>Add Item</h5>
+            <form id="expense-item-form">
+              <input type="text" id="ei-desc" placeholder="Description" required />
+              <input type="number" id="ei-amount" placeholder="Amount" step="0.01" required />
+              <input type="date" id="ei-date" />
+              <button type="submit" class="btn-primary-block">Add Item</button>
             </form>
-          </article>
-        </dialog>
+          </div>
+
+          <!-- Create group dialog -->
+          <dialog id="expense-group-dialog">
+            <article>
+              <header>
+                <button aria-label="Close" rel="prev" class="dialog-close" id="expense-group-dialog-close"></button>
+                <h4>New Expense Group</h4>
+              </header>
+              <form id="expense-group-form">
+                <label>Name</label>
+                <input type="text" id="eg-name" placeholder="e.g. ACL Surgery" required />
+                <label>Description (optional)</label>
+                <textarea id="eg-desc" rows="2"></textarea>
+                <div id="expense-group-error" class="error-banner" style="display:none;"></div>
+                <footer>
+                  <button type="submit">Create Group</button>
+                </footer>
+              </form>
+            </article>
+          </dialog>
+        </div>
+
+        <!-- ── Monthly Bills tool ── -->
+        <div id="cost-monthly-bills" style="display:none;">
+          <p class="view-subtitle muted">Track recurring expenses — rent, subscriptions, insurance, etc.</p>
+
+          <!-- Monthly summary card -->
+          <div class="monthly-summary-card">
+            <div class="monthly-summary-row">
+              <span>Monthly Total</span>
+              <strong id="monthly-total">--</strong>
+            </div>
+            <div class="monthly-summary-row muted">
+              <span>Yearly Total</span>
+              <span id="yearly-total">--</span>
+            </div>
+          </div>
+
+          <div class="view-header" style="margin-top:0.75rem;">
+            <h5 style="margin:0;">Bills</h5>
+            <button id="btn-add-bill" class="btn-sm">+ Add Bill</button>
+          </div>
+          <div id="bills-list" class="card-grid"></div>
+
+          <!-- Add/Edit bill dialog -->
+          <dialog id="bill-dialog">
+            <article>
+              <header>
+                <button aria-label="Close" rel="prev" class="dialog-close" id="bill-dialog-close"></button>
+                <h4 id="bill-dialog-title">Add Bill</h4>
+              </header>
+              <form id="bill-form">
+                <label>Name</label>
+                <input type="text" id="bill-name" placeholder="e.g. Netflix, Rent, Gym" required />
+                <label>Amount</label>
+                <input type="number" id="bill-amount" step="0.01" placeholder="0.00" required />
+                <div class="input-row">
+                  <div class="input-col">
+                    <label>Frequency</label>
+                    <select id="bill-frequency">
+                      <option value="monthly">Monthly</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                  <div class="input-col">
+                    <label>Category</label>
+                    <select id="bill-category">
+                      <option value="housing">Housing</option>
+                      <option value="subscription">Subscription</option>
+                      <option value="insurance">Insurance</option>
+                      <option value="utilities">Utilities</option>
+                      <option value="transportation">Transportation</option>
+                      <option value="food">Food</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                <label>Notes (optional)</label>
+                <input type="text" id="bill-notes" placeholder="Any details..." />
+                <div id="bill-form-error" class="error-banner" style="display:none;"></div>
+                <footer>
+                  <button type="submit" id="bill-save-btn">Save</button>
+                  <button type="button" id="bill-delete-btn" class="btn-danger" style="display:none;">Delete</button>
+                </footer>
+              </form>
+            </article>
+          </dialog>
+        </div>
       </div>
 
       <!-- ─── Settings ─── -->
@@ -422,7 +501,7 @@
       </button>
       <button class="nav-item" data-view="expenses">
         <span class="nav-icon">&#9733;</span>
-        <span class="nav-label">Big Costs</span>
+        <span class="nav-label">Costs</span>
       </button>
       <button class="nav-item" data-view="settings">
         <span class="nav-icon">&#9776;</span>

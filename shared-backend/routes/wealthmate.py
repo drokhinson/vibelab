@@ -13,6 +13,7 @@ Supabase tables (all prefixed wealthmate_):
   wealthmate_checkin_values     — id, checkin_id, account_id, current_value, balance_owed, ...
   wealthmate_expense_groups     — id, couple_id, name, description
   wealthmate_expense_items      — id, group_id, description, amount, item_date
+  wealthmate_recurring_expenses — id, couple_id, name, amount, frequency, category, ...
 """
 
 import os
@@ -98,6 +99,23 @@ class AddExpenseItemBody(BaseModel):
     description: str
     amount: float
     item_date: Optional[str] = None
+
+class CreateRecurringExpenseBody(BaseModel):
+    name: str
+    amount: float
+    frequency: Optional[str] = "monthly"
+    category: Optional[str] = "other"
+    start_date: Optional[str] = None
+    notes: Optional[str] = None
+
+class UpdateRecurringExpenseBody(BaseModel):
+    name: Optional[str] = None
+    amount: Optional[float] = None
+    frequency: Optional[str] = None
+    category: Optional[str] = None
+    start_date: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
 
 # ---------------------------------------------------------------------------
 # Auth helpers
@@ -344,6 +362,7 @@ async def delete_account(user: dict = Depends(get_current_user)):
             sb.table("wealthmate_checkins").delete().eq("couple_id", couple_id).execute()
             sb.table("wealthmate_accounts").delete().eq("couple_id", couple_id).execute()
             sb.table("wealthmate_expense_groups").delete().eq("couple_id", couple_id).execute()
+            sb.table("wealthmate_recurring_expenses").delete().eq("couple_id", couple_id).execute()
             sb.table("wealthmate_invitations").delete().eq("couple_id", couple_id).execute()
             sb.table("wealthmate_couple_members").delete().eq("couple_id", couple_id).execute()
             sb.table("wealthmate_couples").delete().eq("id", couple_id).execute()
@@ -543,6 +562,11 @@ async def respond_to_invite(invite_id: str, body: InviteRespondBody, user: dict 
 
             # Expense groups
             sb.table("wealthmate_expense_groups").update(
+                {"couple_id": new_couple_id}
+            ).eq("couple_id", old_couple_id).execute()
+
+            # Recurring expenses
+            sb.table("wealthmate_recurring_expenses").update(
                 {"couple_id": new_couple_id}
             ).eq("couple_id", old_couple_id).execute()
 
@@ -1194,3 +1218,115 @@ async def delete_expense_item(group_id: str, item_id: str, user: dict = Depends(
 
     sb.table("wealthmate_expense_items").delete().eq("id", item_id).execute()
     return {"status": "deleted", "item_id": item_id}
+
+
+# ---------------------------------------------------------------------------
+# Recurring Expenses (Monthly Bills)
+# ---------------------------------------------------------------------------
+
+FREQUENCY_MONTHLY_MULTIPLIER = {
+    "weekly": 4.333,
+    "monthly": 1.0,
+    "quarterly": 1.0 / 3.0,
+    "yearly": 1.0 / 12.0,
+}
+
+@router.get("/recurring-expenses")
+async def list_recurring_expenses(user: dict = Depends(get_current_user)):
+    couple_id = _require_couple(user)
+    sb = get_supabase()
+    result = (
+        sb.table("wealthmate_recurring_expenses")
+        .select("*")
+        .eq("couple_id", couple_id)
+        .eq("is_active", True)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    items = result.data or []
+
+    # Calculate monthly equivalent for each item
+    for item in items:
+        freq = item.get("frequency", "monthly")
+        mult = FREQUENCY_MONTHLY_MULTIPLIER.get(freq, 1.0)
+        item["monthly_amount"] = round(float(item["amount"]) * mult, 2)
+
+    # Summary
+    monthly_total = sum(item["monthly_amount"] for item in items)
+    yearly_total = monthly_total * 12
+
+    return {
+        "items": items,
+        "monthly_total": round(monthly_total, 2),
+        "yearly_total": round(yearly_total, 2),
+    }
+
+
+@router.post("/recurring-expenses")
+async def create_recurring_expense(body: CreateRecurringExpenseBody, user: dict = Depends(get_current_user)):
+    couple_id = _require_couple(user)
+    sb = get_supabase()
+
+    data = {
+        "couple_id": couple_id,
+        "name": body.name,
+        "amount": body.amount,
+        "frequency": body.frequency or "monthly",
+        "category": body.category or "other",
+        "start_date": body.start_date,
+        "notes": body.notes,
+        "is_active": True,
+    }
+    result = sb.table("wealthmate_recurring_expenses").insert(data).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create recurring expense")
+    return result.data[0]
+
+
+@router.put("/recurring-expenses/{expense_id}")
+async def update_recurring_expense(expense_id: str, body: UpdateRecurringExpenseBody, user: dict = Depends(get_current_user)):
+    couple_id = _require_couple(user)
+    sb = get_supabase()
+
+    existing = (
+        sb.table("wealthmate_recurring_expenses")
+        .select("id")
+        .eq("id", expense_id)
+        .eq("couple_id", couple_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Recurring expense not found")
+
+    update_data = {}
+    for field in ["name", "amount", "frequency", "category", "start_date", "notes", "is_active"]:
+        val = getattr(body, field)
+        if val is not None:
+            update_data[field] = val
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    result = sb.table("wealthmate_recurring_expenses").update(update_data).eq("id", expense_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to update recurring expense")
+    return result.data[0]
+
+
+@router.delete("/recurring-expenses/{expense_id}")
+async def delete_recurring_expense(expense_id: str, user: dict = Depends(get_current_user)):
+    couple_id = _require_couple(user)
+    sb = get_supabase()
+
+    existing = (
+        sb.table("wealthmate_recurring_expenses")
+        .select("id")
+        .eq("id", expense_id)
+        .eq("couple_id", couple_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Recurring expense not found")
+
+    sb.table("wealthmate_recurring_expenses").update({"is_active": False}).eq("id", expense_id).execute()
+    return {"status": "deleted", "expense_id": expense_id}
