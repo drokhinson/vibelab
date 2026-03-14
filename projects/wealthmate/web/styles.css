@@ -665,6 +665,22 @@ body {
   white-space: nowrap;
 }
 
+.invite-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  color: var(--pico-muted-color);
+  font-size: 0.8rem;
+}
+.invite-divider::before,
+.invite-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+}
+
 .invite-card {
   background: rgba(16, 185, 129, 0.06);
   border: 1px solid rgba(16, 185, 129, 0.12);

@@ -338,14 +338,19 @@
           <h5>Merge Finances</h5>
           <div id="settings-couple-info"></div>
           <div id="settings-invite-section">
+            <p class="muted" style="font-size:0.85rem;">Already on WealthMate? Link by username. Otherwise, send them an email invite to sign up.</p>
             <form id="invite-form">
-              <label>Invite a partner to merge finances</label>
-              <div class="invite-row">
-                <input type="text" id="invite-username" placeholder="Partner's username" />
-                <button type="submit">Send Invite</button>
-              </div>
+              <label>Partner's username</label>
+              <input type="text" id="invite-username" placeholder="e.g. jane123" />
+              <button type="submit" class="btn-primary-block">Link by Username</button>
               <div id="invite-error" class="error-banner" style="display:none;"></div>
               <div id="invite-success" class="success-banner" style="display:none;"></div>
+            </form>
+            <div class="invite-divider"><span>or</span></div>
+            <form id="email-invite-form">
+              <label>Partner's email</label>
+              <input type="email" id="invite-email" placeholder="partner@email.com" />
+              <button type="submit" class="btn-outline-block">Send Email Invite</button>
             </form>
           </div>
           <div id="settings-pending-invites"></div>

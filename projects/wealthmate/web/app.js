@@ -1126,6 +1126,22 @@ async function handleInvite(e) {
   }
 }
 
+function handleEmailInvite(e) {
+  e.preventDefault();
+  const email = document.getElementById("invite-email").value.trim();
+  if (!email) return;
+  const appUrl = window.location.origin + window.location.pathname;
+  const displayName = currentUser?.display_name || currentUser?.username || "Your partner";
+  const subject = encodeURIComponent(`${displayName} invited you to WealthMate`);
+  const body = encodeURIComponent(
+    `Hey!\n\n${displayName} wants to merge finances with you on WealthMate — a simple app to track your wealth together.\n\n` +
+    `Sign up here: ${appUrl}\n\n` +
+    `Once you create an account, share your username with ${displayName} so they can link your accounts.`
+  );
+  window.open(`mailto:${email}?subject=${subject}&body=${body}`, "_blank");
+  document.getElementById("invite-email").value = "";
+}
+
 function logout() {
   clearToken();
   currentUser = null;
@@ -1218,6 +1234,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Settings
   document.getElementById("invite-form").addEventListener("submit", handleInvite);
+  document.getElementById("email-invite-form").addEventListener("submit", handleEmailInvite);
   document.getElementById("btn-logout").addEventListener("click", logout);
 
   // Init: check if logged in
