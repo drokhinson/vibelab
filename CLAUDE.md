@@ -14,7 +14,7 @@ Idea → STRUCTURE.md → web/ prototype → shared-backend/ API → native app
 
 Each project lives in `projects/[name]/` and has three tiers:
 - `web/` — Static HTML/CSS/JS (deployed to Vercel, no build step)
-- `shared-backend/routes/[name].py` — Python FastAPI routes (one shared Railway service)
+- `shared-backend/routes/[name]/` — Python FastAPI route package (one shared Railway service)
 - `app/` — React Native / Expo (distributed via Expo Go / EAS)
 
 ---
@@ -54,7 +54,7 @@ vibelab/
 ├── shared-backend/            ← ONE FastAPI service for ALL projects
 │   ├── main.py                ← registers all routers
 │   ├── db.py                  ← Supabase client singleton
-│   └── routes/[project].py   ← one file per project
+│   └── routes/[project]/     ← one package per project (see Modular File Structure)
 ├── db/migrations/             ← all Supabase SQL migrations (ONE shared DB)
 ├── _templates/                ← scaffold source, not deployed
 ├── .github/workflows/         ← CI/CD
@@ -80,11 +80,11 @@ vibelab/
 ### Backend (FastAPI in `shared-backend/`)
 - All routes namespaced: `/api/v1/[project]/[resource]`
 - `async def` for all route handlers.
-- One router file per project in `shared-backend/routes/[project].py`.
-- Register every new router in `shared-backend/main.py`.
+- Register every new router in `shared-backend/main.py` via `from routes import [project]`.
 - `db.py` exports `get_supabase()`. Never import `supabase` directly in route files.
 - Do not add auth unless STRUCTURE.md says it is required.
 - Always include `GET /api/v1/[project]/health` that returns `{"project": "[name]", "status": "ok"}`.
+- See **Modular File Structure** below for how to organize route files.
 
 ### Shared Auth (`shared-backend/auth.py`)
 - Generic bcrypt + JWT helpers: `hash_password`, `verify_password`, `create_token`, `decode_token`, `extract_bearer_token`.
@@ -103,6 +103,7 @@ When adding a new app or new tables to the monorepo:
 - Use `fetch()` for all data. Never inline data in JS globals.
 - Mobile-first responsive. Max width 480px for single-column apps, 900px for dashboards.
 - Loading states and error handling are required on every `fetch()`.
+- See **Modular File Structure** below for how to organize JS files.
 
 ### React Native / Expo (`projects/[name]/app/`)
 - Expo managed workflow (bare only when a native module requires it).
@@ -117,6 +118,36 @@ When adding a new app or new tables to the monorepo:
 - Examples: `[sauceboss] add carbs endpoint`, `[landing] update registry`, `[infra] add deploy workflow`
 - One logical change per commit. Do not batch unrelated projects.
 
+### Modular File Structure
+
+Keep individual files under ~300 lines. When a file grows beyond that, split it by domain. This reduces AI token usage — Claude only reads the relevant module instead of a full monolith.
+
+**Frontend (vanilla JS):** No ES modules — use `<script>` tags sharing global scope. Load order matters: state → helpers → feature modules → init.
+
+| File | Purpose |
+|------|---------|
+| `config.js` | API base URL |
+| `state.js` | All global `let` variables (shared state) |
+| `helpers.js` | Formatting, auth tokens, `apiFetch()`, `showView()`, navigation |
+| `[feature].js` | One file per view/feature (e.g. `dashboard.js`, `accounts.js`, `checkin.js`) |
+| `init.js` | `DOMContentLoaded` handler: all event listeners, startup logic. Loaded last. |
+
+Add `<script>` tags to `index.html` in the order above. All functions remain global.
+
+**Backend (FastAPI):** Convert `routes/[project].py` into a `routes/[project]/` package. `main.py` still does `from routes import [project]` — Python resolves through `__init__.py`.
+
+| File | Purpose |
+|------|---------|
+| `__init__.py` | Creates `router = APIRouter(prefix=...)`, imports all sub-modules |
+| `models.py` | Pydantic request/response models |
+| `constants.py` | Lookup tables, config values, enums |
+| `dependencies.py` | `get_current_user()`, auth helpers, shared FastAPI dependencies |
+| `[domain]_routes.py` | One file per route group (e.g. `auth_routes.py`, `account_routes.py`) |
+
+Each sub-module imports `router` from `__init__.py` via `from . import router` and decorates routes onto it.
+
+**When to split:** Start with a single file during initial prototyping. Split once any file exceeds ~300 lines or has 3+ distinct feature areas. Small apps (under 300 lines total) can stay as a single file.
+
 ---
 
 ## Common Tasks
@@ -128,7 +159,7 @@ bash scaffold.sh my-app "My App" "Description"
 ```
 
 ### Add an API endpoint to an existing project
-1. Edit `shared-backend/routes/[project].py`
+1. Edit the relevant file in `shared-backend/routes/[project]/` (e.g. `account_routes.py`)
 2. Update STRUCTURE.md → API Endpoints section
 3. Test: `uvicorn main:app --reload` in `shared-backend/`
 4. Push — Railway auto-deploys
