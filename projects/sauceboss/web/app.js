@@ -1,5 +1,38 @@
 'use strict';
 
+// ─── Flag emoji fallback ─────────────────────────────────────────────────────
+// Windows doesn't render flag emojis — detect and replace with CDN flag images.
+const FLAG_SUPPORTED = (() => {
+  try {
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx.font = '32px Arial';
+    // Measure a flag emoji vs a non-flag emoji. If they render the same width,
+    // the flag isn't supported (it's rendering as two letter characters).
+    const flagW = ctx.measureText('\u{1F1EB}\u{1F1F7}').width; // 🇫🇷
+    const charW = ctx.measureText('FR').width;
+    return flagW !== charW;
+  } catch { return true; }
+})();
+
+// Map regional indicator pairs → ISO country codes for flagcdn.com
+function flagEmojiToCode(emoji) {
+  const codePoints = [...emoji].map(c => c.codePointAt(0));
+  // Regional indicator symbols are U+1F1E6 (A) through U+1F1FF (Z)
+  if (codePoints.length === 2 && codePoints.every(cp => cp >= 0x1F1E6 && cp <= 0x1F1FF)) {
+    return String.fromCharCode(codePoints[0] - 0x1F1E6 + 65, codePoints[1] - 0x1F1E6 + 65).toLowerCase();
+  }
+  return null;
+}
+
+function renderEmoji(emoji) {
+  if (FLAG_SUPPORTED) return emoji;
+  const code = flagEmojiToCode(emoji);
+  if (code) {
+    return `<img src="https://flagcdn.com/w40/${code}.png" alt="${emoji}" class="flag-img">`;
+  }
+  return emoji; // non-flag emoji, render as-is
+}
+
 // ─── API fetch helpers ────────────────────────────────────────────────────────
 const API = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || 'http://localhost:8000';
 
@@ -36,6 +69,12 @@ async function fetchIngredientCategories() {
 
 async function fetchSubstitutions() {
   const res = await fetch(`${API}/api/v1/sauceboss/substitutions`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchPreparationsForCarb(carbId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${carbId}/preparations`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -115,6 +154,8 @@ let state = {
   unitSystem: 'imperial',       // 'imperial' | 'metric'
   ingredientCategories: {},     // name → category lookup
   substitutions: {},            // name → [{substituteName, notes}] lookup
+  preparations: [],             // loaded per carb in selectCarb()
+  selectedPrep: null,           // currently selected preparation object
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -153,13 +194,37 @@ const CATEGORY_ORDER = ['Produce', 'Dairy', 'Oils & Fats', 'Sauces & Condiments'
 
 function groupIngredientsByCategory() {
   const freq = getIngredientFrequencies();
+  const totalSauces = state.saucesForCurrentCarb.length;
+  const threshold = Math.max(2, Math.ceil(totalSauces * 0.3));
+
+  // Key ingredients appear in ≥30% of sauces for this carb
+  const keySet = new Set();
+  const keyItems = [];
+  for (const name of state.allIngredients) {
+    if ((freq[name] || 0) >= threshold) {
+      keySet.add(name);
+      keyItems.push({ name, count: freq[name] });
+    }
+  }
+  keyItems.sort((a, b) => b.count - a.count);
+
+  // Remaining ingredients grouped by category
   const groups = {};
   for (const name of state.allIngredients) {
+    if (keySet.has(name)) continue;
     const category = state.ingredientCategories[name] || 'Pantry Staples';
     if (!groups[category]) groups[category] = [];
     groups[category].push({ name, count: freq[name] || 0 });
   }
-  return CATEGORY_ORDER.filter(c => groups[c]).map(c => ({ category: c, items: groups[c] }));
+
+  const result = [];
+  if (keyItems.length > 0) {
+    result.push({ category: 'Key Ingredients', items: keyItems, isKey: true });
+  }
+  for (const c of CATEGORY_ORDER) {
+    if (groups[c]) result.push({ category: c, items: groups[c] });
+  }
+  return result;
 }
 
 // ─── Pie Chart SVG ────────────────────────────────────────────────────────────
@@ -242,6 +307,30 @@ function renderCarbSelector() {
   `;
 }
 
+function renderPrepSelector() {
+  const carb = state.selectedCarb;
+  const preps = state.preparations;
+  return `
+    <div class="status-bar"></div>
+    <div class="app-header">
+      <button class="back-btn" onclick="navigate('carb-selector')">‹ Back</button>
+      <div class="logo"><span>${carb.emoji}</span>${carb.name}</div>
+      <div class="subtitle">How are you preparing it?</div>
+    </div>
+    <div class="scroll-body">
+      <div class="carb-grid">
+        ${preps.map(p => `
+          <button class="carb-card" onclick="selectPrep('${p.id}')">
+            <span class="carb-emoji">${p.emoji || carb.emoji}</span>
+            <div class="carb-name">${p.name}</div>
+            <div class="carb-desc">${p.cookTime || ''}</div>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
 function renderSauceSelector() {
   const carb = state.selectedCarb;
   const sauces = state.saucesForCurrentCarb;
@@ -260,9 +349,12 @@ function renderSauceSelector() {
   const filterBody = `
     <div class="filter-body ${state.filterOpen ? 'open' : ''}">
       <p class="filter-hint">Uncheck ingredients you don't have — sauces will update.</p>
-      ${categoryGroups.map(({ category, items }) => `
-        <div class="ingredient-section">
-          <p class="ingredient-section-label">${category}</p>
+      ${categoryGroups.map(({ category, items, isKey }) => `
+        <div class="ingredient-section${isKey ? ' key-section' : ''}">
+          <p class="ingredient-section-label">
+            ${isKey ? '<span class="section-label-icon">★</span>' : ''}${category}
+            ${isKey ? '<span class="section-label-detail">— unlock the most sauces</span>' : ''}
+          </p>
           <div class="ingredient-chips">${chipHTML(items)}</div>
         </div>
       `).join('')}
@@ -271,7 +363,7 @@ function renderSauceSelector() {
 
   const accordionHTML = cuisines.map(cuisine => {
     const cuisineSauces = sauces.filter(s => s.cuisine === cuisine);
-    const emoji = cuisineSauces[0]?.cuisineEmoji || '🍽️';
+    const emoji = renderEmoji(cuisineSauces[0]?.cuisineEmoji || '🍽️');
     const isOpen = state.expandedCuisines.has(cuisine);
     const availCount = cuisineSauces.filter(isSauceAvailable).length;
 
@@ -307,7 +399,7 @@ function renderSauceSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('carb-selector')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('${state.preparations.length > 0 ? 'prep-selector' : 'carb-selector'}')">‹ Back</button>
       <div class="logo"><span>${carb.emoji}</span>${carb.name} Sauces</div>
       <div class="subtitle">${sauces.length} sauces · select your cuisine</div>
     </div>
@@ -359,7 +451,7 @@ function renderRecipe() {
     <div class="status-bar"></div>
     <div class="recipe-header">
       <button class="back-btn" onclick="navigate('sauce-selector')">‹ Back</button>
-      <div class="recipe-cuisine-badge">${sauce.cuisineEmoji} ${sauce.cuisine}</div>
+      <div class="recipe-cuisine-badge">${renderEmoji(sauce.cuisineEmoji)} ${sauce.cuisine}</div>
       <div class="recipe-title">${sauce.name}</div>
       <div class="recipe-subtitle">Pair with: ${sauce.compatibleCarbs.join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
     </div>
@@ -383,6 +475,17 @@ function renderRecipe() {
     </div>
     <div class="scroll-body" style="padding:0">
       ${subBannerHTML}
+      ${state.selectedPrep ? `
+      <div class="prep-card">
+        <div class="prep-card-header">
+          <span class="prep-card-emoji">${state.selectedPrep.emoji || carb.emoji}</span>
+          <div>
+            <div class="prep-card-title">${state.selectedPrep.name}</div>
+            <div class="prep-card-meta">${state.selectedPrep.cookTime || ''}${state.selectedPrep.waterRatio ? ' · ' + state.selectedPrep.waterRatio : ''}</div>
+          </div>
+        </div>
+        <p class="prep-card-instructions">${state.selectedPrep.instructions || ''}</p>
+      </div>` : ''}
       <div class="steps-container">
         ${stepsHTML}
       </div>
@@ -399,6 +502,7 @@ function render() {
   const app = document.getElementById('app');
   switch (state.screen) {
     case 'carb-selector':   app.innerHTML = renderCarbSelector(); break;
+    case 'prep-selector':   app.innerHTML = renderPrepSelector(); break;
     case 'sauce-selector':  app.innerHTML = renderSauceSelector(); break;
     case 'recipe':          app.innerHTML = renderRecipe(); break;
   }
@@ -409,31 +513,39 @@ function navigate(screen) { state.screen = screen; render(); }
 async function selectCarb(id) {
   state.selectedCarb = state.carbs.find(c => c.id === id);
   state.servings = 2; // reset to default on new carb
-  // Show loading immediately while fetching sauces + ingredients
+  state.selectedPrep = null;
+  // Show loading immediately while fetching sauces + ingredients + preparations
   document.getElementById('app').innerHTML = `
     <div class="loading-screen">
       <div class="spinner"></div>
-      <p class="loading-text">Loading sauces…</p>
+      <p class="loading-text">Loading…</p>
     </div>`;
   try {
-    const [sauces, ingredients] = await Promise.all([
+    const [sauces, ingredients, preps] = await Promise.all([
       fetchSaucesForCarb(id),
       fetchIngredientsForCarb(id),
+      fetchPreparationsForCarb(id).catch(() => []),
     ]);
     state.saucesForCurrentCarb = sauces;
     state.allIngredients       = ingredients;
+    state.preparations         = preps;
     state.disabledIngredients  = new Set();
     state.filterOpen           = false;
     state.expandedCuisines     = new Set([sauces[0]?.cuisine].filter(Boolean));
-    state.screen = 'sauce-selector';
+    // If preparations exist, show prep selector; otherwise skip to sauces
+    state.screen = preps.length > 0 ? 'prep-selector' : 'sauce-selector';
     render();
   } catch (err) {
     document.getElementById('app').innerHTML = `
       <div style="padding:2rem;text-align:center;color:#dc2626">
-        Failed to load sauces: ${err.message}<br>
+        Failed to load: ${err.message}<br>
         <button onclick="navigate('carb-selector')" style="margin-top:1rem">‹ Back</button>
       </div>`;
   }
+}
+function selectPrep(id) {
+  state.selectedPrep = state.preparations.find(p => p.id === id) || null;
+  navigate('sauce-selector');
 }
 function selectSauce(id) {
   state.selectedSauce = state.saucesForCurrentCarb.find(s => s.id === id);

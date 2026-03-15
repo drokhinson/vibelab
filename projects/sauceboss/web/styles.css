@@ -196,7 +196,8 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   border-radius: 14px 14px 0 0;
   box-shadow: 0 2px 0 rgba(0,0,0,0.04);
 }
-.cuisine-flag { font-size: 20px; margin-right: 8px; }
+.cuisine-flag { font-size: 20px; margin-right: 8px; display: flex; align-items: center; }
+.flag-img { height: 16px; width: auto; vertical-align: middle; }
 .cuisine-name { font-size: 15px; font-weight: 700; color: #1A1A2E; flex: 1; }
 .cuisine-count { font-size: 12px; color: #9CA3AF; margin-right: 8px; }
 .cuisine-chevron { font-size: 12px; color: #9CA3AF; transition: transform 0.25s; }
@@ -398,6 +399,28 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   font-weight: 700;
   min-width: 34px;
   text-align: center;
+}
+
+/* ── Prep Instructions Card (recipe page) ── */
+.prep-card {
+  background: #EFF6FF;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin: 12px 16px 0;
+}
+.prep-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.prep-card-emoji { font-size: 28px; }
+.prep-card-title { font-size: 15px; font-weight: 700; color: #1A1A2E; }
+.prep-card-meta { font-size: 12px; color: #6B7280; margin-top: 1px; }
+.prep-card-instructions {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
 }
 
 /* ── Bottom Tip ── */

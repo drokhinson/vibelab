@@ -83,3 +83,13 @@ async def list_substitutions():
     if result.data is None:
         return []
     return result.data
+
+
+@router.get("/carbs/{carb_id}/preparations")
+async def preparations_for_carb(carb_id: str):
+    """Returns preparation options for a given carb (e.g., spaghetti/penne for pasta)."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_carb_preparations", {"p_carb_id": carb_id}).execute()
+    if result.data is None:
+        return []
+    return result.data
