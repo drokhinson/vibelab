@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "projects/sauceboss/web", "-l", "5500", "--no-clipboard"],
       "port": 5500
+    },
+    {
+      "name": "admin-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "projects/admin/web", "-l", "5501", "--no-clipboard"],
+      "port": 5501
     }
   ]
 }

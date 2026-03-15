@@ -5,6 +5,13 @@
 const API = window.APP_CONFIG?.apiBase ?? "http://localhost:8000";
 const BASE = "/api/v1/wealthmate";
 
+// Analytics — fire-and-forget app open tracking
+fetch(`${API}/api/v1/analytics/track`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ app: window.APP_CONFIG?.project || 'wealthmate', event: 'app_open' })
+}).catch(() => {});
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentUser = null;   // { id, username, display_name }
 let coupleInfo = null;    // { couple, members } or null

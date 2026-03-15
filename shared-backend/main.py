@@ -12,6 +12,10 @@ from dotenv import load_dotenv
 from routes import sauceboss
 from routes import wealthmate
 
+# Infrastructure routers
+from routes import analytics
+from routes import admin
+
 load_dotenv()
 
 app = FastAPI(title="vibelab API", version="1.0.0", docs_url="/docs")
@@ -40,3 +44,7 @@ async def health():
 app.include_router(sauceboss.router)
 app.include_router(wealthmate.router)
 # app.include_router(spotme.router)  ← uncomment when ready
+
+# ── Infrastructure routers ────────────────────────────────────────────────
+app.include_router(analytics.router)
+app.include_router(admin.router)

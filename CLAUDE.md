@@ -86,6 +86,17 @@ vibelab/
 - Do not add auth unless STRUCTURE.md says it is required.
 - Always include `GET /api/v1/[project]/health` that returns `{"project": "[name]", "status": "ok"}`.
 
+### Shared Auth (`shared-backend/auth.py`)
+- Generic bcrypt + JWT helpers: `hash_password`, `verify_password`, `create_token`, `decode_token`, `extract_bearer_token`.
+- When a new app needs login/user management, import from `auth.py` instead of reimplementing.
+- Each app keeps its own `{app}_users` table following the same schema pattern as `wealthmate_users`.
+
+### Admin Dashboard Maintenance
+When adding a new app or new tables to the monorepo:
+- **Analytics:** Add the analytics tracking ping to the new app's `app.js` (fire-and-forget `fetch` to `/api/v1/analytics/track`).
+- **User management:** If the new app has user auth, add an entry to `APPS_WITH_USERS` in `shared-backend/routes/admin.py`.
+- **DB storage:** Automatically picked up — tables are grouped by prefix in the storage view.
+
 ### Web Prototypes (`projects/[name]/web/`)
 - No npm, no bundler. Vanilla HTML + Pico.css (via CDN) + vanilla JS.
 - `config.js` sets `window.APP_CONFIG = { apiBase: "..." }`. Default: `http://localhost:8000`.
@@ -153,6 +164,8 @@ All vars are in Railway (backend) and Vercel (frontend) dashboards. Never commit
 | `SUPABASE_ANON_KEY` | Vercel (per project) | Client-side access for web (respects RLS) |
 | `ALLOWED_ORIGINS` | Railway | Comma-separated CORS origins |
 | `EXPO_PUBLIC_API_URL` | `app/.env` | Railway backend URL for React Native |
+| `ADMIN_API_KEY` | Railway | Admin dashboard authentication key |
+| `WEALTHMATE_JWT_SECRET` | Railway | WealthMate JWT signing secret |
 
 ---
 

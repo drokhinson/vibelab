@@ -30,6 +30,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from db import get_supabase
+from auth import hash_password, verify_password, create_token, decode_token, extract_bearer_token
 
 router = APIRouter(prefix="/api/v1/wealthmate", tags=["wealthmate"])
 
@@ -169,31 +170,26 @@ class UpdateEmailBody(BaseModel):
     email: str
 
 # ---------------------------------------------------------------------------
-# Auth helpers
+# Auth helpers (thin wrappers around shared auth module)
 # ---------------------------------------------------------------------------
 
 def _hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return hash_password(password)
 
 
 def _verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    return verify_password(password, password_hash)
 
 
 def _create_token(user_id: str, username: str, couple_id: Optional[str] = None) -> str:
-    payload = {
-        "user_id": user_id,
-        "username": username,
-        "couple_id": couple_id,
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return create_token(
+        {"user_id": user_id, "username": username, "couple_id": couple_id},
+        JWT_SECRET, JWT_ALGORITHM,
+    )
 
 
 def _decode_token(token: str) -> dict:
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return decode_token(token, JWT_SECRET, JWT_ALGORITHM)
 
 
 def _get_couple_id_for_user(user_id: str) -> Optional[str]:

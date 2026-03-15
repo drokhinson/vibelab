@@ -36,6 +36,13 @@ function renderEmoji(emoji) {
 // ─── API fetch helpers ────────────────────────────────────────────────────────
 const API = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || 'http://localhost:8000';
 
+// Analytics — fire-and-forget app open tracking
+fetch(`${API}/api/v1/analytics/track`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ app: window.APP_CONFIG?.project || 'sauceboss', event: 'app_open' })
+}).catch(() => {});
+
 async function fetchCarbs() {
   const res = await fetch(`${API}/api/v1/sauceboss/carbs`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

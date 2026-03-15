@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vibelab Admin</title>
+
+  <!-- Pico.css — classless CSS framework (dark theme) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+  <!-- vibelab design system + project overrides -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <ul><li><strong>Vibelab Admin</strong></li></ul>
+      <ul><li><a href="#" id="logout-btn" style="display:none;">Logout</a></li></ul>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- Login Gate -->
+    <div id="view-login">
+      <article style="max-width:400px;margin:4rem auto;">
+        <h3>Admin Login</h3>
+        <form id="login-form">
+          <label for="admin-key">Admin Key</label>
+          <input type="password" id="admin-key" placeholder="Enter admin API key" required />
+          <button type="submit">Sign In</button>
+        </form>
+        <p id="login-error" class="error-text" style="display:none;"></p>
+      </article>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="view-dashboard" style="display:none;">
+
+      <!-- Section 1: App Usage -->
+      <article>
+        <header><h3>App Usage</h3></header>
+        <div id="usage-content">
+          <div class="loading">Loading usage data...</div>
+        </div>
+      </article>
+
+      <!-- Section 2: User Management -->
+      <article>
+        <header class="section-header">
+          <h3>User Management</h3>
+          <select id="user-app-select">
+            <option value="">Select app...</option>
+          </select>
+        </header>
+        <div id="users-content">
+          <p class="muted">Select an app to view users.</p>
+        </div>
+      </article>
+
+      <!-- Section 3: Database Storage -->
+      <article>
+        <header><h3>Database Storage</h3></header>
+        <div id="storage-content">
+          <div class="loading">Loading storage data...</div>
+        </div>
+      </article>
+
+    </div>
+  </main>
+
+  <!-- Reset Code Dialog -->
+  <dialog id="reset-dialog">
+    <article>
+      <header><h3>Recovery Code Generated</h3></header>
+      <p>Give this code to the user. It can only be used once.</p>
+      <pre id="reset-code-display"></pre>
+      <footer>
+        <button id="reset-dialog-close">Close</button>
+      </footer>
+    </article>
+  </dialog>
+
+  <!-- API config -->
+  <script src="config.js"></script>
+  <!-- App logic -->
+  <script src="app.js"></script>
+</body>
+</html>

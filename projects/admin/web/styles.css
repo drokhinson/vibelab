@@ -1,0 +1,166 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   vibelab design system — base styles
+   Uses Pico.css CSS custom properties. Override per-project below.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Brand accent — override per project */
+  --pico-primary:          #6c63ff;
+  --pico-primary-hover:    #5a52e0;
+  --pico-primary-focus:    rgba(108, 99, 255, 0.3);
+
+  /* Surface colors */
+  --pico-background-color: #0d0d14;
+  --pico-card-background-color: #15151f;
+  --pico-card-border-color: rgba(255, 255, 255, 0.06);
+
+  /* Typography */
+  --pico-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --pico-font-size: 16px;
+  --pico-line-height: 1.6;
+
+  /* Layout — dashboard width */
+  --app-max-width: 900px;
+  --app-padding: 1rem;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+body {
+  max-width: var(--app-max-width);
+  margin: 0 auto;
+  padding: var(--app-padding);
+  min-height: 100vh;
+}
+
+/* ── Loading & error states ─────────────────────────────────────────────────── */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: var(--pico-muted-color);
+  gap: 0.75rem;
+}
+
+.loading::before {
+  content: '';
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid var(--pico-card-border-color);
+  border-top-color: var(--pico-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-banner {
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  border-radius: var(--pico-border-radius);
+  padding: 0.75rem 1rem;
+  color: #ff6b6b;
+  font-size: 0.875rem;
+  margin: 1rem 0;
+}
+
+.error-text {
+  color: #ff6b6b;
+  font-size: 0.875rem;
+}
+
+/* ── Empty state ────────────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--pico-muted-color);
+}
+
+/* ── Utility ────────────────────────────────────────────────────────────────── */
+.muted { color: var(--pico-muted-color); font-size: 0.875rem; }
+
+/* ── Section headers with inline controls ──────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.section-header h3 {
+  margin: 0;
+  flex: 1;
+}
+
+.section-header select {
+  max-width: 200px;
+  margin: 0;
+}
+
+/* ── Tables ────────────────────────────────────────────────────────────────── */
+.table-responsive {
+  overflow-x: auto;
+}
+
+table {
+  font-size: 0.875rem;
+}
+
+/* ── Storage bars ──────────────────────────────────────────────────────────── */
+.storage-app {
+  margin-bottom: 0.5rem;
+}
+
+.storage-app summary {
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+
+.storage-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.storage-name {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.storage-size {
+  color: var(--pico-muted-color);
+  font-size: 0.875rem;
+}
+
+.storage-bar-bg {
+  height: 6px;
+  background: var(--pico-card-border-color);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.storage-bar {
+  height: 100%;
+  background: var(--pico-primary);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* ── Dialog ─────────────────────────────────────────────────────────────────── */
+#reset-dialog pre {
+  background: var(--pico-card-background-color);
+  padding: 1rem;
+  border-radius: var(--pico-border-radius);
+  font-size: 1.1rem;
+  text-align: center;
+  user-select: all;
+}
+
+/* ── Reset button ──────────────────────────────────────────────────────────── */
+.reset-btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+}
