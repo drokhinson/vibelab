@@ -28,9 +28,46 @@ async function fetchIngredientsForCarb(carbId) {
   return res.json();
 }
 
+async function fetchIngredientCategories() {
+  const res = await fetch(`${API}/api/v1/sauceboss/ingredient-categories`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchSubstitutions() {
+  const res = await fetch(`${API}/api/v1/sauceboss/substitutions`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 // ─── Unit Conversion (everything → teaspoons for proportional display) ────────
 const TO_TSP = { tsp: 1, tsps: 1, tbsp: 3, tbsps: 3, cup: 48, cups: 48, oz: 6, clove: 2, cloves: 2, g: 0.4, piece: 8, pinch: 0.3 };
 function toTsp(amount, unit) { return amount * (TO_TSP[unit] || 1); }
+
+// ─── Metric / Imperial conversion ────────────────────────────────────────────
+const VOLUME_TO_ML = { tsp: 5, tbsp: 15, cup: 240, oz: 30 };
+const WEIGHT_TO_G  = { oz: 28 };
+const COUNT_UNITS  = new Set(['clove', 'cloves', 'piece', 'pieces', 'pinch']);
+
+function convertUnit(amount, unit, system) {
+  if (system === 'imperial') return { amount, unit };
+  const lower = unit.toLowerCase();
+  if (COUNT_UNITS.has(lower)) return { amount, unit };
+  if (VOLUME_TO_ML[lower]) return { amount: amount * VOLUME_TO_ML[lower], unit: 'ml' };
+  if (WEIGHT_TO_G[lower])  return { amount: amount * WEIGHT_TO_G[lower], unit: 'g' };
+  // Already metric or unknown — pass through
+  return { amount, unit };
+}
+
+function formatAmount(num) {
+  if (num >= 10) return Math.round(num).toString();
+  const rounded = Math.round(num * 10) / 10;
+  return rounded === Math.floor(rounded) ? rounded.toFixed(0) : rounded.toFixed(1);
+}
+
+function scaleAmount(amount, servings) {
+  return amount * (servings / 2); // base recipes are for 2 people
+}
 
 // ─── Colour palette ───────────────────────────────────────────────────────────
 const PALETTE = [
@@ -73,6 +110,11 @@ let state = {
   filterOpen: false,
   expandedCuisines: new Set(),
   selectedSauce: null,
+  // New state
+  servings: 2,                  // number of people (default 2)
+  unitSystem: 'imperial',       // 'imperial' | 'metric'
+  ingredientCategories: {},     // name → category lookup
+  substitutions: {},            // name → [{substituteName, notes}] lookup
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -90,6 +132,12 @@ function missingSauceIngredients(sauce) {
   return missing;
 }
 
+function getSubstitutionText(ingredientName) {
+  const subs = state.substitutions[ingredientName];
+  if (!subs || subs.length === 0) return '';
+  return subs[0].substituteName;
+}
+
 // ─── Ingredient frequency helpers ─────────────────────────────────────────────
 function getIngredientFrequencies() {
   const freq = {};
@@ -101,21 +149,17 @@ function getIngredientFrequencies() {
   return freq;
 }
 
-function partitionIngredients() {
+const CATEGORY_ORDER = ['Produce', 'Dairy', 'Oils & Fats', 'Sauces & Condiments', 'Spices', 'Sweeteners', 'Nuts & Seeds', 'Pantry Staples'];
+
+function groupIngredientsByCategory() {
   const freq = getIngredientFrequencies();
-  const totalSauces = state.saucesForCurrentCarb.length;
-  const threshold = Math.max(2, Math.ceil(totalSauces * 0.3));
-  const critical = [];
-  const other = [];
+  const groups = {};
   for (const name of state.allIngredients) {
-    if ((freq[name] || 0) >= threshold) {
-      critical.push({ name, count: freq[name] });
-    } else {
-      other.push({ name, count: freq[name] || 0 });
-    }
+    const category = state.ingredientCategories[name] || 'Pantry Staples';
+    if (!groups[category]) groups[category] = [];
+    groups[category].push({ name, count: freq[name] || 0 });
   }
-  critical.sort((a, b) => b.count - a.count);
-  return { critical, other };
+  return CATEGORY_ORDER.filter(c => groups[c]).map(c => ({ category: c, items: groups[c] }));
 }
 
 // ─── Pie Chart SVG ────────────────────────────────────────────────────────────
@@ -152,13 +196,28 @@ function buildLegend(items) {
   return items.map((item, idx) => {
     const pct = Math.round((toTsp(item.amount, item.unit) / total) * 100);
     const color = ingColor(item.name, idx);
-    return `<div class="legend-item">
+    const converted = convertUnit(item.amount, item.unit, state.unitSystem);
+    const isDisabled = state.disabledIngredients.has(item.name);
+    const sub = isDisabled ? getSubstitutionText(item.name) : '';
+    return `<div class="legend-item${isDisabled ? ' legend-disabled' : ''}">
       <span class="legend-swatch" style="background:${color}"></span>
-      <span class="legend-name">${item.name}</span>
-      <span class="legend-amount">${item.amount} ${item.unit}</span>
+      <div class="legend-name-wrap">
+        <span class="legend-name">${item.name}</span>
+        ${sub ? `<span class="sub-hint">try ${sub}</span>` : ''}
+      </div>
+      <span class="legend-amount">${formatAmount(converted.amount)} ${converted.unit}</span>
       <span class="legend-pct">${pct}%</span>
     </div>`;
   }).join('');
+}
+
+// ─── Scale + convert items for display ───────────────────────────────────────
+function prepareItems(items) {
+  return items.map(item => {
+    const scaled = scaleAmount(item.amount, state.servings);
+    const converted = convertUnit(scaled, item.unit, state.unitSystem);
+    return { name: item.name, amount: converted.amount, unit: converted.unit };
+  });
 }
 
 // ─── Renderers ────────────────────────────────────────────────────────────────
@@ -186,11 +245,10 @@ function renderCarbSelector() {
 function renderSauceSelector() {
   const carb = state.selectedCarb;
   const sauces = state.saucesForCurrentCarb;
-  const ingredients = state.allIngredients;
   const cuisines = [...new Set(sauces.map(s => s.cuisine))];
   const missingCount = state.disabledIngredients.size;
 
-  const { critical, other } = partitionIngredients();
+  const categoryGroups = groupIngredientsByCategory();
 
   const chipHTML = (items) => items.map(({ name }) => {
     const has = !state.disabledIngredients.has(name);
@@ -202,21 +260,12 @@ function renderSauceSelector() {
   const filterBody = `
     <div class="filter-body ${state.filterOpen ? 'open' : ''}">
       <p class="filter-hint">Uncheck ingredients you don't have — sauces will update.</p>
-      ${critical.length > 0 ? `
+      ${categoryGroups.map(({ category, items }) => `
         <div class="ingredient-section">
-          <p class="ingredient-section-label">
-            <span class="section-label-icon">★</span>
-            Staples <span class="section-label-detail">— unlock the most sauces</span>
-          </p>
-          <div class="ingredient-chips">${chipHTML(critical)}</div>
+          <p class="ingredient-section-label">${category}</p>
+          <div class="ingredient-chips">${chipHTML(items)}</div>
         </div>
-      ` : ''}
-      ${other.length > 0 ? `
-        <div class="ingredient-section">
-          <p class="ingredient-section-label">Other ingredients</p>
-          <div class="ingredient-chips">${chipHTML(other)}</div>
-        </div>
-      ` : ''}
+      `).join('')}
     </div>
   `;
 
@@ -229,11 +278,15 @@ function renderSauceSelector() {
     const saucesHTML = cuisineSauces.map(sauce => {
       const available = isSauceAvailable(sauce);
       const missing = missingSauceIngredients(sauce);
+      const missingText = missing.map(m => {
+        const sub = getSubstitutionText(m);
+        return sub ? `${m} (try ${sub})` : m;
+      }).join(', ');
       return `<div class="sauce-item ${available ? '' : 'unavailable'}" onclick="selectSauce('${sauce.id}')">
         <span class="sauce-dot" style="background:${sauce.color}"></span>
         <div class="sauce-info">
           <div class="sauce-item-name">${sauce.name}</div>
-          <div class="sauce-item-tags">${sauce.compatibleCarbs.join(' · ')}${missing.length ? ' · missing: '+missing.join(', ') : ''}</div>
+          <div class="sauce-item-tags">${sauce.compatibleCarbs.join(' · ')}${missing.length ? ' · missing: '+missingText : ''}</div>
         </div>
         ${!available ? `<span class="sauce-missing-badge">-${missing.length}</span>` : ''}
         <span class="sauce-arrow">›</span>
@@ -276,14 +329,28 @@ function renderSauceSelector() {
 function renderRecipe() {
   const sauce = state.selectedSauce;
   const carb = state.selectedCarb;
+  const carbTotal = (carb.portionPerPerson || 100) * state.servings;
+  const carbUnit = carb.portionUnit || 'g';
+
+  // Build substitution banner for disabled ingredients
+  const disabledInRecipe = sauce.ingredients
+    .filter(i => state.disabledIngredients.has(i.name))
+    .map(i => ({ name: i.name, sub: getSubstitutionText(i.name) }))
+    .filter(i => i.sub);
+  const subBannerHTML = disabledInRecipe.length > 0 ? `
+    <div class="sub-banner">
+      <strong>Ingredient swaps</strong>
+      ${disabledInRecipe.map(i => `<div>${i.name} → <strong>${i.sub}</strong></div>`).join('')}
+    </div>` : '';
+
   const stepsHTML = sauce.steps.map((step, i) => {
-    const items = step.ingredients;
+    const displayItems = prepareItems(step.ingredients);
     return `<div class="step-card">
       <div class="step-number">Step ${i + 1}</div>
       <div class="step-title">${step.title}</div>
       <div class="pie-container">
-        ${buildPieChart(items, 170)}
-        <div class="legend">${buildLegend(items)}</div>
+        ${buildPieChart(displayItems, 170)}
+        <div class="legend">${buildLegend(displayItems)}</div>
       </div>
     </div>`;
   }).join('');
@@ -296,13 +363,32 @@ function renderRecipe() {
       <div class="recipe-title">${sauce.name}</div>
       <div class="recipe-subtitle">Pair with: ${sauce.compatibleCarbs.join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
     </div>
+    <div class="recipe-controls">
+      <div class="serving-row">
+        <div class="serving-info">
+          <span class="serving-carb">${formatAmount(carbTotal)}${carbUnit} ${carb.name.toLowerCase()}</span>
+          <span class="serving-for">for</span>
+          <div class="serving-stepper">
+            <button class="stepper-btn" onclick="setServings(state.servings - 1)">−</button>
+            <span class="stepper-count">${state.servings}</span>
+            <button class="stepper-btn" onclick="setServings(state.servings + 1)">+</button>
+          </div>
+          <span class="serving-for">people</span>
+        </div>
+        <div class="unit-toggle">
+          <button class="toggle-btn ${state.unitSystem === 'imperial' ? 'active' : ''}" onclick="setUnitSystem('imperial')">Imperial</button>
+          <button class="toggle-btn ${state.unitSystem === 'metric' ? 'active' : ''}" onclick="setUnitSystem('metric')">Metric</button>
+        </div>
+      </div>
+    </div>
     <div class="scroll-body" style="padding:0">
+      ${subBannerHTML}
       <div class="steps-container">
         ${stepsHTML}
       </div>
       <div class="tip-card">
         <strong>💡 How to read the chart</strong>
-        Each slice shows the relative proportion of that ingredient. Bigger slice = more of it. Perfect for scaling up or down by eye!
+        Each slice shows the relative proportion of that ingredient. Bigger slice = more of it. Adjust the people count above to scale the recipe.
       </div>
     </div>
   `;
@@ -322,6 +408,7 @@ function navigate(screen) { state.screen = screen; render(); }
 // ─── Actions ──────────────────────────────────────────────────────────────────
 async function selectCarb(id) {
   state.selectedCarb = state.carbs.find(c => c.id === id);
+  state.servings = 2; // reset to default on new carb
   // Show loading immediately while fetching sauces + ingredients
   document.getElementById('app').innerHTML = `
     <div class="loading-screen">
@@ -372,11 +459,46 @@ function toggleCuisine(name) {
   }
   render();
 }
+function setServings(n) {
+  state.servings = Math.max(1, Math.min(12, n));
+  render();
+}
+function setUnitSystem(sys) {
+  state.unitSystem = sys;
+  render();
+}
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    state.carbs = await fetchCarbs();
+    const [carbs, categoriesRaw, subsRaw] = await Promise.all([
+      fetchCarbs(),
+      fetchIngredientCategories().catch(() => []),
+      fetchSubstitutions().catch(() => []),
+    ]);
+    state.carbs = carbs;
+
+    // Build category lookup: name → category
+    state.ingredientCategories = {};
+    if (Array.isArray(categoriesRaw)) {
+      for (const c of categoriesRaw) {
+        state.ingredientCategories[c.ingredientName] = c.category;
+      }
+    }
+
+    // Build substitution lookup: name → [{substituteName, notes}]
+    state.substitutions = {};
+    if (Array.isArray(subsRaw)) {
+      for (const s of subsRaw) {
+        if (!state.substitutions[s.ingredientName]) {
+          state.substitutions[s.ingredientName] = [];
+        }
+        state.substitutions[s.ingredientName].push({
+          substituteName: s.substituteName,
+          notes: s.notes,
+        });
+      }
+    }
   } catch (err) {
     document.getElementById('app').innerHTML = `
       <div style="padding:2rem;text-align:center;color:#dc2626">

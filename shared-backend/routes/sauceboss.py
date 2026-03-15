@@ -63,3 +63,23 @@ async def ingredients_for_carb(carb_id: str):
     if result.data is None:
         return []
     return result.data
+
+
+@router.get("/ingredient-categories")
+async def list_ingredient_categories():
+    """Returns ingredient → category mappings for grouping in the filter panel."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_ingredient_categories", {}).execute()
+    if result.data is None:
+        return []
+    return result.data
+
+
+@router.get("/substitutions")
+async def list_substitutions():
+    """Returns ingredient substitution suggestions."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_substitutions", {}).execute()
+    if result.data is None:
+        return []
+    return result.data

@@ -256,6 +256,93 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 .recipe-title { font-size: 24px; font-weight: 800; color: white; line-height: 1.2; }
 .recipe-subtitle { font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 4px; }
 
+/* Recipe controls bar */
+.recipe-controls {
+  background: #FFF8F0;
+  padding: 12px 16px;
+  border-bottom: 1px solid #F3F4F6;
+  flex-shrink: 0;
+}
+.serving-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.serving-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+  flex-wrap: wrap;
+}
+.serving-carb { font-weight: 700; color: #E85D04; }
+.serving-for { color: #6B7280; }
+.serving-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.stepper-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #E85D04;
+  background: white;
+  color: #E85D04;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+.stepper-btn:active { background: #FFF3E0; }
+.stepper-count {
+  font-weight: 800;
+  font-size: 16px;
+  min-width: 20px;
+  text-align: center;
+  color: #1A1A2E;
+}
+
+/* Unit toggle */
+.unit-toggle {
+  display: flex;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #E5E7EB;
+  flex-shrink: 0;
+}
+.toggle-btn {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  background: white;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.toggle-btn.active { background: #E85D04; color: white; }
+
+/* Substitution banner */
+.sub-banner {
+  background: #FEF3CD;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: 12px 16px 0;
+  font-size: 12px;
+  color: #78350F;
+  line-height: 1.6;
+}
+.sub-banner strong { display: block; margin-bottom: 2px; font-size: 13px; }
+
 .steps-container { padding: 16px; display: flex; flex-direction: column; gap: 20px; }
 
 .step-card {
@@ -297,7 +384,10 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   border-radius: 3px;
   flex-shrink: 0;
 }
-.legend-name { font-size: 13px; color: #374151; flex: 1; font-weight: 500; }
+.legend-name-wrap { flex: 1; display: flex; flex-direction: column; }
+.legend-name { font-size: 13px; color: #374151; font-weight: 500; }
+.legend-disabled .legend-name { text-decoration: line-through; opacity: 0.6; }
+.sub-hint { font-size: 11px; color: #E85D04; font-style: italic; }
 .legend-amount { font-size: 12px; color: #6B7280; font-weight: 600; }
 .legend-pct {
   font-size: 11px;
