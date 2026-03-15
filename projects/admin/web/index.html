@@ -82,6 +82,19 @@
     </article>
   </dialog>
 
+  <!-- Delete Confirmation Dialog -->
+  <dialog id="delete-dialog">
+    <article>
+      <header><h3>Delete User</h3></header>
+      <p>Permanently delete <strong id="delete-username"></strong> and all their data from <strong id="delete-app"></strong>? This cannot be undone.</p>
+      <p id="delete-error" class="error-text" style="display:none;"></p>
+      <footer>
+        <button id="delete-cancel-btn" class="secondary">Cancel</button>
+        <button id="delete-confirm-btn" class="delete-confirm-btn">Delete</button>
+      </footer>
+    </article>
+  </dialog>
+
   <!-- API config -->
   <script src="config.js"></script>
   <!-- App logic -->

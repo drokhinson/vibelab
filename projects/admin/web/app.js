@@ -154,7 +154,10 @@ async function loadUsers(appName) {
         <td>${esc(u.display_name || "—")}</td>
         <td>${esc(u.email || "—")}</td>
         <td>${created}</td>
-        <td><button class="outline secondary reset-btn" data-uid="${esc(u.id)}" data-app="${esc(appName)}">Reset Code</button></td>
+        <td>
+          <button class="outline secondary reset-btn" data-uid="${esc(u.id)}" data-app="${esc(appName)}">Reset Code</button>
+          <button class="outline delete-btn" data-uid="${esc(u.id)}" data-app="${esc(appName)}" data-username="${esc(u.username)}">Delete</button>
+        </td>
       </tr>`;
     }
     html += "</tbody></table></div>";
@@ -163,6 +166,11 @@ async function loadUsers(appName) {
     // Attach reset button handlers
     el.querySelectorAll(".reset-btn").forEach((btn) => {
       btn.addEventListener("click", () => generateResetCode(btn.dataset.uid, btn.dataset.app, btn));
+    });
+
+    // Attach delete button handlers
+    el.querySelectorAll(".delete-btn").forEach((btn) => {
+      btn.addEventListener("click", () => confirmDeleteUser(btn.dataset.uid, btn.dataset.app, btn.dataset.username));
     });
   } catch (err) {
     el.innerHTML = `<p class="error-text">Failed to load users: ${esc(err.message)}</p>`;
@@ -188,6 +196,46 @@ async function generateResetCode(userId, appName, btn) {
 
 document.getElementById("reset-dialog-close").addEventListener("click", () => {
   document.getElementById("reset-dialog").close();
+});
+
+// --- Delete user ---
+
+let pendingDelete = null;
+
+function confirmDeleteUser(userId, appName, username) {
+  pendingDelete = { userId, appName };
+  document.getElementById("delete-username").textContent = username;
+  document.getElementById("delete-app").textContent = appName;
+  document.getElementById("delete-error").style.display = "none";
+  document.getElementById("delete-dialog").showModal();
+}
+
+document.getElementById("delete-confirm-btn").addEventListener("click", async () => {
+  if (!pendingDelete) return;
+  const btn = document.getElementById("delete-confirm-btn");
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+  document.getElementById("delete-error").style.display = "none";
+  try {
+    await apiFetch(`/api/v1/admin/users/${pendingDelete.userId}?app=${encodeURIComponent(pendingDelete.appName)}`, {
+      method: "DELETE",
+    });
+    document.getElementById("delete-dialog").close();
+    // Reload the user list
+    loadUsers(pendingDelete.appName);
+    pendingDelete = null;
+  } catch (err) {
+    document.getElementById("delete-error").textContent = "Failed to delete: " + err.message;
+    document.getElementById("delete-error").style.display = "";
+  } finally {
+    btn.removeAttribute("aria-busy");
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("delete-cancel-btn").addEventListener("click", () => {
+  pendingDelete = null;
+  document.getElementById("delete-dialog").close();
 });
 
 // --- Section 3: Database Storage ---

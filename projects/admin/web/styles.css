@@ -159,8 +159,36 @@ table {
   user-select: all;
 }
 
-/* ── Reset button ──────────────────────────────────────────────────────────── */
-.reset-btn {
+/* ── Action buttons ────────────────────────────────────────────────────────── */
+.reset-btn,
+.delete-btn {
   font-size: 0.75rem;
   padding: 0.25rem 0.75rem;
+}
+
+.delete-btn {
+  --pico-color: #ff6b6b;
+  border-color: #ff6b6b;
+}
+
+.delete-btn:hover {
+  background: #ff6b6b;
+  border-color: #ff6b6b;
+  color: #fff;
+}
+
+.delete-confirm-btn {
+  background: #dc3545;
+  border-color: #dc3545;
+}
+
+.delete-confirm-btn:hover {
+  background: #c82333;
+  border-color: #c82333;
+}
+
+#delete-dialog footer {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
