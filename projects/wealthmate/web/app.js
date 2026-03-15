@@ -30,7 +30,7 @@ function fmt(n) {
 
 function fmtDate(d) {
   if (!d) return "";
-  return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
 function typeLabel(t) {
@@ -334,8 +334,20 @@ async function startNewCheckin() {
   checkinNewAccounts = {};
   showView("checkin");
   setCheckinStep(1);
-  // Default date to today
-  document.getElementById("checkin-date").value = new Date().toISOString().split("T")[0];
+  // Default to next month after last checkin, or current month
+  if (wealthHistory.length > 0) {
+    const last = wealthHistory[wealthHistory.length - 1].checkin_date; // YYYY-MM-DD
+    const d = new Date(last + "T00:00:00");
+    d.setMonth(d.getMonth() + 1);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    document.getElementById("checkin-date").value = `${yyyy}-${mm}`;
+  } else {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    document.getElementById("checkin-date").value = `${yyyy}-${mm}`;
+  }
 }
 
 async function continueCheckin() {
@@ -375,8 +387,9 @@ function setCheckinStep(step) {
 }
 
 async function checkinStep1Next() {
-  const dateVal = document.getElementById("checkin-date").value;
-  if (!dateVal) { alert("Please pick a date."); return; }
+  const monthVal = document.getElementById("checkin-date").value;
+  if (!monthVal) { alert("Please pick a month."); return; }
+  const dateVal = monthVal + "-01";
 
   try {
     showLoading(true);
@@ -709,7 +722,9 @@ function openAddAccount() {
   editingAccountId = null;
   document.getElementById("account-dialog-title").textContent = "Add Account";
   document.getElementById("account-form").reset();
-  document.getElementById("acct-deactivate-btn").style.display = "none";
+  document.getElementById("acct-close-btn").style.display = "none";
+  document.getElementById("acct-delete-btn").style.display = "none";
+  document.getElementById("acct-save-btn").disabled = false;
   document.getElementById("initial-value-section").style.display = "block";
   document.getElementById("account-form-error").style.display = "none";
   buildOwnerOptions();
@@ -758,12 +773,16 @@ function openEditAccount(id) {
     document.getElementById("acct-loan-lender").value = acct.loan_details.lender_name || "";
   }
 
-  document.getElementById("acct-deactivate-btn").style.display = "block";
+  document.getElementById("acct-close-btn").style.display = "block";
+  document.getElementById("acct-delete-btn").style.display = "block";
+  document.getElementById("acct-save-btn").disabled = false;
   document.getElementById("account-dialog").showModal();
 }
 
 async function handleAccountSubmit(e) {
   e.preventDefault();
+  const saveBtn = document.getElementById("acct-save-btn");
+  saveBtn.disabled = true;
   const errEl = document.getElementById("account-form-error");
   errEl.style.display = "none";
 
@@ -853,16 +872,29 @@ async function handleAccountSubmit(e) {
       loadAccounts();
     }
   } catch (err) {
+    saveBtn.disabled = false;
     errEl.textContent = err.message;
     errEl.style.display = "block";
   }
 }
 
-async function deactivateAccount() {
+async function closeAccount() {
   if (!editingAccountId) return;
-  if (!confirm("Deactivate this account? It will be hidden from future check-ins.")) return;
+  if (!confirm("Close this account? It will be hidden from future check-ins but historical data will be preserved.")) return;
   try {
     await apiFetch(`/accounts/${editingAccountId}`, { method: "DELETE" });
+    document.getElementById("account-dialog").close();
+    loadAccounts();
+  } catch (err) {
+    alert("Error: " + err.message);
+  }
+}
+
+async function deleteAccountPermanently() {
+  if (!editingAccountId) return;
+  if (!confirm("Permanently delete this account and ALL its check-in data? This cannot be undone.")) return;
+  try {
+    await apiFetch(`/accounts/${editingAccountId}/permanent`, { method: "DELETE" });
     document.getElementById("account-dialog").close();
     loadAccounts();
   } catch (err) {
@@ -1542,6 +1574,9 @@ function onCategoryChange() {
   document.getElementById("loan-sub").style.display = cat === "loan" ? "block" : "none";
   document.getElementById("investment-details-section").style.display =
     (cat === "investment" || cat === "retirement") ? "block" : "none";
+  // Extra Details: show/hide category-specific optional fields
+  document.getElementById("property-address-section").style.display = cat === "property" ? "block" : "none";
+  document.getElementById("loan-extra-section").style.display = cat === "loan" ? "block" : "none";
 
   // Initial value section adjustments
   const heading = document.getElementById("init-value-heading");
@@ -1694,7 +1729,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-add-account").addEventListener("click", openAddAccount);
   document.getElementById("account-form").addEventListener("submit", handleAccountSubmit);
   document.getElementById("account-dialog-close").addEventListener("click", () => document.getElementById("account-dialog").close());
-  document.getElementById("acct-deactivate-btn").addEventListener("click", deactivateAccount);
+  document.getElementById("acct-close-btn").addEventListener("click", closeAccount);
+  document.getElementById("acct-delete-btn").addEventListener("click", deleteAccountPermanently);
   document.getElementById("acct-category").addEventListener("change", onCategoryChange);
 
   // Expenses

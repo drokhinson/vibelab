@@ -817,6 +817,30 @@ async def delete_account(account_id: str, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Account not found")
 
     sb.table("wealthmate_accounts").update({"is_active": False}).eq("id", account_id).execute()
+    return {"status": "closed", "account_id": account_id}
+
+
+@router.delete("/accounts/{account_id}/permanent")
+async def permanently_delete_account(account_id: str, user: dict = Depends(get_current_user)):
+    couple_id = _require_couple(user)
+    sb = get_supabase()
+
+    existing = (
+        sb.table("wealthmate_accounts")
+        .select("id")
+        .eq("id", account_id)
+        .eq("couple_id", couple_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    # Delete all checkin values for this account
+    sb.table("wealthmate_checkin_values").delete().eq("account_id", account_id).execute()
+    # Delete loan details if any
+    sb.table("wealthmate_account_loan_details").delete().eq("account_id", account_id).execute()
+    # Delete the account itself
+    sb.table("wealthmate_accounts").delete().eq("id", account_id).execute()
     return {"status": "deleted", "account_id": account_id}
 
 
@@ -872,6 +896,27 @@ async def get_active_checkin(user: dict = Depends(get_current_user)):
 async def start_checkin(body: StartCheckinBody, user: dict = Depends(get_current_user)):
     couple_id = _require_couple(user)
     sb = get_supabase()
+
+    # Prevent duplicate checkins for the same month
+    checkin_month = body.checkin_date[:7]  # "YYYY-MM"
+    month_start = checkin_month + "-01"
+    # Calculate last day of month
+    y, m = int(checkin_month[:4]), int(checkin_month[5:7])
+    if m == 12:
+        month_end = f"{y + 1}-01-01"
+    else:
+        month_end = f"{y}-{m + 1:02d}-01"
+    existing = (
+        sb.table("wealthmate_checkins")
+        .select("id")
+        .eq("couple_id", couple_id)
+        .eq("status", "submitted")
+        .gte("checkin_date", month_start)
+        .lt("checkin_date", month_end)
+        .execute()
+    )
+    if existing.data:
+        raise HTTPException(status_code=409, detail="A check-in already exists for this month")
 
     # Create the empty check-in
     checkin_data = {

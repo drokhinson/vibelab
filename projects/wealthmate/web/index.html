@@ -141,8 +141,8 @@
         <!-- Step 1: Date -->
         <div id="checkin-step-1" class="wizard-step">
           <h4>When is this check-in for?</h4>
-          <p class="muted">Pick the date this snapshot represents.</p>
-          <input type="date" id="checkin-date" />
+          <p class="muted">Pick the month this snapshot represents.</p>
+          <input type="month" id="checkin-date" />
           <button id="checkin-step1-next" class="btn-primary-block">Next</button>
         </div>
 
@@ -464,8 +464,6 @@
               <input type="number" id="acct-property-value" step="0.01" placeholder="Zillow estimate, appraisal, etc." />
               <label>Mortgage Outstanding</label>
               <input type="number" id="acct-mortgage-owed" step="0.01" placeholder="0.00" />
-              <label>Property Address (optional)</label>
-              <input type="text" id="acct-property-address" placeholder="123 Main St..." />
             </div>
 
             <!-- Loan sub-fields -->
@@ -478,14 +476,6 @@
               </select>
               <label>Balance Owed</label>
               <input type="number" id="acct-loan-owed" step="0.01" placeholder="0.00" />
-              <label>Original Loan Amount (optional)</label>
-              <input type="number" id="acct-loan-amount" step="0.01" />
-              <label>Interest Rate % (optional)</label>
-              <input type="number" id="acct-loan-rate" step="0.01" />
-              <label>Loan Term in months (optional)</label>
-              <input type="number" id="acct-loan-term" />
-              <label>Lender (optional)</label>
-              <input type="text" id="acct-loan-lender" />
             </div>
 
             <label>Owner</label>
@@ -504,21 +494,36 @@
               </div>
             </div>
 
-            <details class="extra-details-toggle">
+            <details class="extra-details-toggle" open>
               <summary>Extra Details</summary>
-              <label>URL (optional)</label>
-              <input type="url" id="acct-url" placeholder="https://..." />
-              <label>Notes (optional)</label>
-              <textarea id="acct-notes" rows="2" placeholder="Any info to help you find this account's value..."></textarea>
+              <div id="property-address-section" style="display:none;">
+                <label>Property Address</label>
+                <input type="text" id="acct-property-address" placeholder="123 Main St..." />
+              </div>
+              <div id="loan-extra-section" style="display:none;">
+                <label>Original Loan Amount</label>
+                <input type="number" id="acct-loan-amount" step="0.01" />
+                <label>Interest Rate %</label>
+                <input type="number" id="acct-loan-rate" step="0.01" />
+                <label>Loan Term in months</label>
+                <input type="number" id="acct-loan-term" />
+                <label>Lender</label>
+                <input type="text" id="acct-loan-lender" />
+              </div>
               <div id="investment-details-section" style="display:none;">
                 <label>Brokerage / Provider</label>
                 <input type="text" id="acct-brokerage" placeholder="e.g. Fidelity, Schwab, Vanguard" />
               </div>
+              <label>URL</label>
+              <input type="url" id="acct-url" placeholder="https://..." />
+              <label>Notes</label>
+              <textarea id="acct-notes" rows="2" placeholder="Any info to help you find this account's value..."></textarea>
             </details>
             <div id="account-form-error" class="error-banner" style="display:none;"></div>
             <footer>
               <button type="submit" id="acct-save-btn">Save</button>
-              <button type="button" id="acct-deactivate-btn" class="btn-danger" style="display:none;">Deactivate</button>
+              <button type="button" id="acct-close-btn" class="btn-outline-block" style="display:none;">Close Account</button>
+              <button type="button" id="acct-delete-btn" class="btn-danger" style="display:none;">Delete Account</button>
             </footer>
           </form>
         </article>
