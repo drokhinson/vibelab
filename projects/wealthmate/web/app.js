@@ -1600,6 +1600,110 @@ function onCategoryChange() {
   }
 }
 
+// ── Data Management (CSV export/import) ──────────────────────────────────────
+
+async function downloadCSV(endpoint, fallbackName) {
+  const token = getToken();
+  try {
+    const res = await fetch(`${API}${BASE}${endpoint}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : fallbackName;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("Download failed: " + err.message);
+  }
+}
+
+async function handleExportCSV() {
+  const btn = document.getElementById("btn-export-csv");
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+  await downloadCSV("/checkins/export", "wealthmate-export.csv");
+  btn.removeAttribute("aria-busy");
+  btn.disabled = false;
+}
+
+async function handleDownloadTemplate() {
+  const btn = document.getElementById("btn-download-template");
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+  await downloadCSV("/checkins/export/template", "wealthmate-template.csv");
+  btn.removeAttribute("aria-busy");
+  btn.disabled = false;
+}
+
+async function handleImportCSV() {
+  const fileInput = document.getElementById("csv-import-file");
+  const btn = document.getElementById("btn-import-csv");
+  const resultEl = document.getElementById("import-result");
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+  resultEl.style.display = "none";
+
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const token = getToken();
+    const res = await fetch(`${API}${BASE}/checkins/import`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const errMsg = data.detail?.errors
+        ? data.detail.errors.join("\n")
+        : (typeof data.detail === "string" ? data.detail : "Import failed");
+      resultEl.className = "error-banner";
+      resultEl.textContent = errMsg;
+      resultEl.style.display = "block";
+      resultEl.style.whiteSpace = "pre-line";
+      return;
+    }
+
+    let msg = `Imported ${data.checkins_created} check-in(s) with ${data.values_created} value(s).`;
+    if (data.accounts_created?.length) {
+      msg += `\nNew accounts created: ${data.accounts_created.join(", ")}`;
+    }
+    if (data.skipped_dates?.length) {
+      msg += `\nSkipped (already exist): ${data.skipped_dates.join(", ")}`;
+    }
+    resultEl.className = "success-banner";
+    resultEl.textContent = msg;
+    resultEl.style.display = "block";
+    resultEl.style.whiteSpace = "pre-line";
+
+    // Refresh data
+    fileInput.value = "";
+    btn.disabled = true;
+    loadDashboard();
+  } catch (err) {
+    resultEl.className = "error-banner";
+    resultEl.textContent = "Import failed: " + err.message;
+    resultEl.style.display = "block";
+  } finally {
+    btn.removeAttribute("aria-busy");
+  }
+}
+
 // ── Recovery Code ─────────────────────────────────────────────────────────────
 function showRecoveryCode(code) {
   document.getElementById("recovery-code-value").textContent = code;
@@ -1761,6 +1865,14 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("recovery-code-copy").textContent = "Copied!";
       setTimeout(() => { document.getElementById("recovery-code-copy").textContent = "Copy"; }, 2000);
     });
+  });
+
+  // Data Management
+  document.getElementById("btn-export-csv").addEventListener("click", handleExportCSV);
+  document.getElementById("btn-download-template").addEventListener("click", handleDownloadTemplate);
+  document.getElementById("btn-import-csv").addEventListener("click", handleImportCSV);
+  document.getElementById("csv-import-file").addEventListener("change", () => {
+    document.getElementById("btn-import-csv").disabled = !document.getElementById("csv-import-file").files.length;
   });
 
   // Theme toggle

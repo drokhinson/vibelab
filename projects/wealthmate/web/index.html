@@ -412,6 +412,19 @@
           <button id="btn-generate-recovery" class="btn-outline-block">Generate Recovery Code</button>
         </article>
 
+        <article class="settings-card">
+          <h5>Data Management</h5>
+          <p class="muted" style="font-size:0.85rem;">Export your check-in history as a CSV file (opens in Excel or Google Sheets), or import past data from a spreadsheet.</p>
+          <button id="btn-export-csv" class="btn-outline-block">Download Check-In History</button>
+          <button id="btn-download-template" class="btn-outline-block" style="margin-top:0.5rem;">Download Import Template</button>
+          <div style="margin-top:0.75rem;">
+            <label for="csv-import-file" class="muted" style="font-size:0.85rem;">Import from CSV</label>
+            <input type="file" id="csv-import-file" accept=".csv" style="margin-top:0.25rem;" />
+            <button id="btn-import-csv" class="btn-primary-block" style="margin-top:0.5rem;" disabled>Upload &amp; Import</button>
+          </div>
+          <div id="import-result" style="display:none; margin-top:0.75rem;"></div>
+        </article>
+
         <button id="btn-logout" class="btn-danger-block">Log Out</button>
 
         <article class="settings-card settings-card-danger">
