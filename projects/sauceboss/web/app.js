@@ -86,6 +86,40 @@ async function fetchPreparationsForCarb(carbId) {
   return res.json();
 }
 
+async function createSauce(data) {
+  const res = await fetch(`${API}/api/v1/sauceboss/sauces`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ─── Builder constants ───────────────────────────────────────────────────────
+const CUISINES = [
+  { name: 'Italian', emoji: '🇮🇹' },
+  { name: 'Asian', emoji: '🌏' },
+  { name: 'Mexican', emoji: '🇲🇽' },
+  { name: 'Mediterranean', emoji: '🫒' },
+  { name: 'BBQ', emoji: '🔥' },
+  { name: 'French', emoji: '🇫🇷' },
+  { name: 'Indian', emoji: '🇮🇳' },
+];
+const UNITS = ['tsp', 'tbsp', 'cup', 'oz', 'g', 'clove', 'cloves', 'piece', 'pinch'];
+const COLOR_SWATCHES = ['#E85D04','#DC2626','#22C55E','#3B1F0A','#FBBF24','#457B9D','#7C3AED','#EA580C','#15803D','#B91C1C'];
+
+function defaultBuilder() {
+  return {
+    name: '', cuisine: '', cuisineEmoji: '', color: '#E85D04', description: '',
+    steps: [{ title: '', ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
+    carbIds: [], saving: false, error: null,
+  };
+}
+
 // ─── Unit Conversion (everything → teaspoons for proportional display) ────────
 const TO_TSP = { tsp: 1, tsps: 1, tbsp: 3, tbsps: 3, cup: 48, cups: 48, oz: 6, clove: 2, cloves: 2, g: 0.4, piece: 8, pinch: 0.3 };
 function toTsp(amount, unit) { return amount * (TO_TSP[unit] || 1); }
@@ -163,6 +197,7 @@ let state = {
   substitutions: {},            // name → [{substituteName, notes}] lookup
   preparations: [],             // loaded per carb in selectCarb()
   selectedPrep: null,           // currently selected preparation object
+  builder: null,                // recipe builder state (set via defaultBuilder())
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -310,6 +345,7 @@ function renderCarbSelector() {
           </button>
         `).join('')}
       </div>
+      <button class="create-sauce-btn" onclick="openBuilder()">+ Create a Sauce</button>
     </div>
   `;
 }
@@ -425,6 +461,128 @@ function renderSauceSelector() {
   `;
 }
 
+// ─── Builder Screens ─────────────────────────────────────────────────────────
+function renderBuilder() {
+  const b = state.builder;
+  const esc = s => (s || '').replace(/"/g, '&quot;');
+
+  const cuisineChips = CUISINES.map(c =>
+    `<button class="cuisine-chip ${b.cuisine === c.name ? 'selected' : ''}" onclick="builderSetCuisine('${c.name}','${c.emoji}')">${renderEmoji(c.emoji)} ${c.name}</button>`
+  ).join('');
+
+  const colorDots = COLOR_SWATCHES.map(hex =>
+    `<button class="color-swatch ${b.color === hex ? 'selected' : ''}" style="background:${hex}" onclick="builderSetColor('${hex}')"></button>`
+  ).join('');
+
+  const stepsHTML = b.steps.map((step, si) => {
+    const ingsHTML = step.ingredients.map((ing, ii) =>
+      `<div class="ingredient-row">
+        <input class="builder-input ing-name" placeholder="Ingredient" value="${esc(ing.name)}" data-builder-field="ing-name" data-step="${si}" data-ing="${ii}">
+        <input class="builder-input ing-amount" type="number" step="0.1" min="0" placeholder="Qty" value="${ing.amount}" data-builder-field="ing-amount" data-step="${si}" data-ing="${ii}">
+        <select class="ing-unit" data-builder-field="ing-unit" data-step="${si}" data-ing="${ii}">
+          ${UNITS.map(u => `<option ${ing.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+        </select>
+        ${step.ingredients.length > 1 ? `<button class="remove-ing-btn" onclick="builderRemoveIngredient(${si},${ii})">✕</button>` : ''}
+      </div>`
+    ).join('');
+
+    return `<div class="builder-step-card">
+      ${b.steps.length > 1 ? `<button class="remove-step-btn" onclick="builderRemoveStep(${si})">✕</button>` : ''}
+      <div class="step-number">Step ${si + 1}</div>
+      <input class="builder-input" placeholder="Step title (e.g., Sauté the base)" value="${esc(step.title)}" data-builder-field="step-title" data-step="${si}">
+      <div class="builder-ings-list">${ingsHTML}</div>
+      <button class="add-ing-btn" onclick="builderAddIngredient(${si})">+ Ingredient</button>
+    </div>`;
+  }).join('');
+
+  const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && i.amount));
+
+  return `
+    <div class="status-bar"></div>
+    <div class="app-header">
+      <button class="back-btn" onclick="navigate('carb-selector')">‹ Back</button>
+      <div class="logo"><span>🍲</span>Create a Sauce</div>
+    </div>
+    <div class="scroll-body">
+      <div class="builder-sticky-header">
+        <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
+        <p class="builder-label">Cuisine</p>
+        <div class="cuisine-chips">${cuisineChips}</div>
+        <p class="builder-label">Color</p>
+        <div class="color-swatches">${colorDots}</div>
+      </div>
+      <p class="builder-label" style="margin-top:16px">Steps</p>
+      ${stepsHTML}
+      <button class="add-step-btn" onclick="builderAddStep()">+ Add Step</button>
+      <button class="builder-primary-btn" onclick="navigate('builder-carbs')" ${canContinue ? '' : 'disabled'}>Continue — Pair with Carbs</button>
+    </div>
+  `;
+}
+
+function renderBuilderCarbs() {
+  const b = state.builder;
+  const carbsHTML = state.carbs.map(c => {
+    const selected = b.carbIds.includes(c.id);
+    return `<button class="carb-card carb-card-check ${selected ? 'selected' : ''}" onclick="builderToggleCarb('${c.id}')">
+      ${selected ? '<span class="check-mark">✓</span>' : ''}
+      <span class="carb-emoji">${c.emoji}</span>
+      <div class="carb-name">${c.name}</div>
+    </button>`;
+  }).join('');
+
+  return `
+    <div class="status-bar"></div>
+    <div class="app-header">
+      <button class="back-btn" onclick="navigate('builder')">‹ Back</button>
+      <div class="logo"><span class="color-dot-header" style="background:${b.color}"></span>${b.name || 'New Sauce'}</div>
+      <div class="subtitle">${b.cuisine ? renderEmoji(b.cuisineEmoji) + ' ' + b.cuisine : 'Select carbs'}</div>
+    </div>
+    <div class="scroll-body">
+      <p class="section-label">Which carbs go with this sauce?</p>
+      <div class="carb-grid">${carbsHTML}</div>
+      <button class="builder-primary-btn" onclick="navigate('builder-review')" ${b.carbIds.length > 0 ? '' : 'disabled'}>Review Sauce</button>
+    </div>
+  `;
+}
+
+function renderBuilderReview() {
+  const b = state.builder;
+  const pairedCarbs = state.carbs.filter(c => b.carbIds.includes(c.id));
+  const totalIngs = b.steps.reduce((sum, s) => sum + s.ingredients.filter(i => i.name.trim()).length, 0);
+
+  const stepsPreview = b.steps.map((step, si) => `
+    <div class="review-step-card">
+      <div class="step-number">Step ${si + 1}</div>
+      <div class="step-title">${step.title || '(untitled)'}</div>
+      <div class="review-ing-list">
+        ${step.ingredients.filter(i => i.name.trim()).map(i =>
+          `<div class="review-ing-item">${i.amount} ${i.unit} ${i.name}</div>`
+        ).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="status-bar"></div>
+    <div class="app-header">
+      <button class="back-btn" onclick="navigate('builder-carbs')">‹ Back</button>
+      <div class="logo"><span class="color-dot-header" style="background:${b.color}"></span>${b.name}</div>
+      <div class="subtitle">${renderEmoji(b.cuisineEmoji)} ${b.cuisine} · ${b.steps.length} step${b.steps.length > 1 ? 's' : ''} · ${totalIngs} ingredients</div>
+    </div>
+    <div class="scroll-body">
+      <div class="review-summary">
+        <div class="review-carbs">Pairs with: ${pairedCarbs.map(c => c.emoji + ' ' + c.name).join(', ')}</div>
+      </div>
+      ${stepsPreview}
+      ${b.error ? `<div class="builder-error">${b.error}</div>` : ''}
+      <button class="builder-primary-btn" onclick="builderSave()" ${b.saving ? 'disabled' : ''}>
+        ${b.saving ? '<span class="spinner-sm"></span> Saving…' : 'Save Sauce'}
+      </button>
+      <button class="builder-secondary-btn" onclick="navigate('builder')">Edit</button>
+    </div>
+  `;
+}
+
 function renderRecipe() {
   const sauce = state.selectedSauce;
   const carb = state.selectedCarb;
@@ -512,6 +670,9 @@ function render() {
     case 'prep-selector':   app.innerHTML = renderPrepSelector(); break;
     case 'sauce-selector':  app.innerHTML = renderSauceSelector(); break;
     case 'recipe':          app.innerHTML = renderRecipe(); break;
+    case 'builder':         app.innerHTML = renderBuilder(); break;
+    case 'builder-carbs':   app.innerHTML = renderBuilderCarbs(); break;
+    case 'builder-review':  app.innerHTML = renderBuilderReview(); break;
   }
 }
 function navigate(screen) { state.screen = screen; render(); }
@@ -587,6 +748,94 @@ function setUnitSystem(sys) {
   render();
 }
 
+// ─── Builder Actions ─────────────────────────────────────────────────────────
+function openBuilder() {
+  state.builder = defaultBuilder();
+  navigate('builder');
+}
+function builderSetCuisine(name, emoji) {
+  state.builder.cuisine = name;
+  state.builder.cuisineEmoji = emoji;
+  render();
+}
+function builderSetColor(hex) {
+  state.builder.color = hex;
+  render();
+}
+function builderAddStep() {
+  state.builder.steps.push({ title: '', ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
+  render();
+}
+function builderRemoveStep(si) {
+  state.builder.steps.splice(si, 1);
+  render();
+}
+function builderAddIngredient(si) {
+  state.builder.steps[si].ingredients.push({ name: '', amount: '', unit: 'tsp' });
+  render();
+}
+function builderRemoveIngredient(si, ii) {
+  state.builder.steps[si].ingredients.splice(ii, 1);
+  render();
+}
+function builderToggleCarb(id) {
+  const idx = state.builder.carbIds.indexOf(id);
+  if (idx >= 0) state.builder.carbIds.splice(idx, 1);
+  else state.builder.carbIds.push(id);
+  render();
+}
+function builderHandleInput(el) {
+  const field = el.dataset.builderField;
+  const si = parseInt(el.dataset.step);
+  const ii = parseInt(el.dataset.ing);
+  const b = state.builder;
+  switch (field) {
+    case 'name': b.name = el.value; break;
+    case 'step-title': b.steps[si].title = el.value; break;
+    case 'ing-name': b.steps[si].ingredients[ii].name = el.value; break;
+    case 'ing-amount': b.steps[si].ingredients[ii].amount = el.value; break;
+    case 'ing-unit': b.steps[si].ingredients[ii].unit = el.value; break;
+  }
+  // Update continue button disabled state without full re-render
+  const btn = document.querySelector('.builder-primary-btn');
+  if (btn && state.screen === 'builder') {
+    const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && i.amount));
+    btn.disabled = !canContinue;
+  }
+}
+async function builderSave() {
+  const b = state.builder;
+  b.saving = true;
+  b.error = null;
+  render();
+  try {
+    const payload = {
+      name: b.name.trim(),
+      cuisine: b.cuisine,
+      cuisineEmoji: b.cuisineEmoji,
+      color: b.color,
+      description: b.description,
+      carbIds: b.carbIds,
+      steps: b.steps
+        .filter(s => s.title.trim())
+        .map(s => ({
+          title: s.title.trim(),
+          ingredients: s.ingredients
+            .filter(i => i.name.trim() && parseFloat(i.amount) > 0)
+            .map(i => ({ name: i.name.trim(), amount: parseFloat(i.amount), unit: i.unit })),
+        }))
+        .filter(s => s.ingredients.length > 0),
+    };
+    await createSauce(payload);
+    state.builder = null;
+    navigate('carb-selector');
+  } catch (err) {
+    b.saving = false;
+    b.error = err.message;
+    render();
+  }
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -628,8 +877,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   render();
 
   // Delegated handler for ingredient chips (avoids fragile inline onclick escaping)
-  document.getElementById('app').addEventListener('click', e => {
+  const appEl = document.getElementById('app');
+  appEl.addEventListener('click', e => {
     const chip = e.target.closest('.chip[data-ingredient]');
     if (chip) toggleIngredient(chip.dataset.ingredient);
+  });
+
+  // Delegated input handler for builder fields (no re-render to preserve cursor)
+  appEl.addEventListener('input', e => {
+    if (e.target.dataset.builderField) builderHandleInput(e.target);
+  });
+  appEl.addEventListener('change', e => {
+    if (e.target.dataset.builderField) builderHandleInput(e.target);
   });
 });

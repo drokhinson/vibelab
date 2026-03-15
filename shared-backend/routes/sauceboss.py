@@ -11,8 +11,34 @@ Supabase tables (all prefixed sauceboss_):
 
 Complex reads use the Supabase RPC get_sauceboss_sauces_for_carb(p_carb_id text).
 """
+import re
+import secrets
+from typing import List
+
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
 from db import get_supabase
+
+
+# ── Pydantic models for sauce creation ───────────────────────────────────────
+class IngredientInput(BaseModel):
+    name: str = Field(min_length=1)
+    amount: float = Field(gt=0)
+    unit: str = Field(min_length=1)
+
+class StepInput(BaseModel):
+    title: str = Field(min_length=1)
+    ingredients: List[IngredientInput] = Field(min_length=1)
+
+class CreateSauceRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    cuisine: str = Field(min_length=1)
+    cuisineEmoji: str = ""
+    color: str = Field(pattern=r'^#[0-9A-Fa-f]{6}$')
+    description: str = ""
+    carbIds: List[str] = Field(min_length=1)
+    steps: List[StepInput] = Field(min_length=1)
 
 router = APIRouter(prefix="/api/v1/sauceboss", tags=["sauceboss"])
 
@@ -93,3 +119,37 @@ async def preparations_for_carb(carb_id: str):
     if result.data is None:
         return []
     return result.data
+
+
+@router.post("/sauces")
+async def create_sauce(body: CreateSauceRequest):
+    """Create a user-submitted sauce with steps, ingredients, and carb pairings."""
+    slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
+    sauce_id = f"user-{slug}-{secrets.token_hex(2)}"
+
+    payload = {
+        "id": sauce_id,
+        "name": body.name,
+        "cuisine": body.cuisine,
+        "cuisineEmoji": body.cuisineEmoji,
+        "color": body.color,
+        "description": body.description,
+        "carbIds": body.carbIds,
+        "steps": [
+            {
+                "title": step.title,
+                "stepOrder": idx + 1,
+                "ingredients": [
+                    {"name": ing.name, "amount": ing.amount, "unit": ing.unit}
+                    for ing in step.ingredients
+                ],
+            }
+            for idx, step in enumerate(body.steps)
+        ],
+    }
+
+    sb = get_supabase()
+    result = sb.rpc("create_sauceboss_sauce", {"p_data": payload}).execute()
+    if result.data is None:
+        raise HTTPException(500, "Failed to create sauce")
+    return {"id": result.data, "status": "created"}

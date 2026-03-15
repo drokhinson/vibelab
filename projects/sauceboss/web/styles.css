@@ -435,6 +435,240 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 .tip-card strong { display: block; margin-bottom: 2px; }
 
+/* ─────────────────────────────
+   RECIPE BUILDER
+───────────────────────────── */
+.create-sauce-btn {
+  width: 100%;
+  padding: 14px;
+  margin-top: 16px;
+  border: 2.5px dashed #E85D04;
+  border-radius: 16px;
+  background: transparent;
+  color: #E85D04;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Sticky header inside builder */
+.builder-sticky-header {
+  position: sticky;
+  top: -1px;
+  z-index: 10;
+  background: #FFF8F0;
+  padding: 0 0 12px;
+  border-bottom: 1px solid #F3F4F6;
+  margin: 0 0 8px;
+}
+
+.builder-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #9CA3AF;
+  margin: 10px 0 4px;
+}
+
+.builder-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #E5E7EB;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+  color: #1A1A2E;
+}
+.builder-input:focus { outline: none; border-color: #E85D04; }
+.builder-name-input { font-size: 18px; font-weight: 700; padding: 12px 14px; }
+
+/* Cuisine chips */
+.cuisine-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0;
+  -webkit-overflow-scrolling: touch;
+}
+.cuisine-chips::-webkit-scrollbar { display: none; }
+.cuisine-chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 2px solid #E5E7EB;
+  background: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.cuisine-chip.selected { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
+
+/* Color swatches */
+.color-swatches { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
+.color-swatch {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.color-swatch.selected { border-color: #1A1A2E; box-shadow: 0 0 0 2px white inset; }
+
+/* Builder step cards */
+.builder-step-card {
+  background: white;
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  position: relative;
+}
+.builder-step-card .step-number { margin-bottom: 8px; }
+.builder-step-card .builder-input { margin-bottom: 10px; }
+.builder-ings-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+
+.remove-step-btn {
+  position: absolute;
+  top: 10px; right: 10px;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: #FEE2E2;
+  color: #991B1B;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Ingredient row */
+.ingredient-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.ingredient-row .ing-name { flex: 2; }
+.ingredient-row .ing-amount { flex: 0.7; text-align: right; }
+.ingredient-row .ing-unit {
+  flex: 0.8;
+  padding: 10px 4px;
+  border: 2px solid #E5E7EB;
+  border-radius: 10px;
+  font-size: 12px;
+  font-family: inherit;
+  background: white;
+}
+.ingredient-row .ing-unit:focus { outline: none; border-color: #E85D04; }
+.remove-ing-btn {
+  width: 24px; height: 24px; flex-shrink: 0;
+  border-radius: 50%; border: none;
+  background: #FEE2E2; color: #991B1B;
+  font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.add-ing-btn, .add-step-btn {
+  background: none; border: none;
+  color: #E85D04; font-size: 13px; font-weight: 700;
+  cursor: pointer; padding: 6px 0;
+}
+.add-step-btn { display: block; width: 100%; text-align: center; padding: 10px; }
+
+/* Primary / secondary buttons */
+.builder-primary-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  background: #E85D04;
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+.builder-primary-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.builder-secondary-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  border: 2px solid #E5E7EB;
+  background: white;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+/* Carb checkbox overlay */
+.carb-card-check { position: relative; }
+.carb-card-check.selected { border-color: #E85D04; background: #FFF3E0; }
+.check-mark {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #E85D04; color: white;
+  font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Color dot in header */
+.color-dot-header {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* Review screen */
+.review-summary {
+  background: white;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.review-carbs { font-size: 14px; color: #374151; font-weight: 500; }
+.review-step-card {
+  background: white;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+.review-step-card .step-number { margin-bottom: 2px; }
+.review-step-card .step-title { margin-bottom: 8px; }
+.review-ing-list { display: flex; flex-direction: column; gap: 3px; }
+.review-ing-item { font-size: 13px; color: #6B7280; padding-left: 8px; border-left: 3px solid #E85D04; }
+
+.builder-error {
+  background: #FEE2E2;
+  color: #991B1B;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.spinner-sm {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
 /* ── Loading & Error ── */
 .loading-screen, .error-screen {
   display: flex;
