@@ -12,6 +12,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "projects/admin/web", "-l", "5501", "--no-clipboard"],
       "port": 5501
+    },
+    {
+      "name": "wealthmate-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["projects/wealthmate/web/serve.js"],
+      "port": 5502
     }
   ]
 }
