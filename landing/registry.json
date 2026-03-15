@@ -45,7 +45,7 @@
       "description": "Owner dashboard for monitoring app usage, managing users, and tracking database storage.",
       "status": "wip",
       "tags": ["admin", "monitoring", "internal"],
-      "webUrl": null,
+      "webUrl": "https://vibelab-admintool.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": false,
       "expoSlug": null,
