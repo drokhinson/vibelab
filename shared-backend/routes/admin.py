@@ -97,6 +97,10 @@ APPS_WITH_USERS = {
         "identity_columns": "id, username, display_name, email, created_at",
         "delete_handler": _delete_wealthmate_user,
     },
+    "spotme": {
+        "table": "spotme_users",
+        "identity_columns": "id, username, display_name, email, created_at",
+    },
 }
 
 

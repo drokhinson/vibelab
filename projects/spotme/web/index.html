@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpotMe</title>
+
+  <!-- Pico.css -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+  <!-- App styles -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════ LOGIN ═══════════════════════════ -->
+  <div id="view-login" class="view" style="display:none;">
+    <div class="auth-container">
+      <div class="auth-logo">
+        <div class="mountain-header">
+          <svg viewBox="0 0 400 120" class="mountain-svg">
+            <polygon points="0,120 80,30 160,120" fill="#2d6a4f" opacity="0.6"/>
+            <polygon points="100,120 200,10 300,120" fill="#2d6a4f" opacity="0.8"/>
+            <polygon points="220,120 320,40 400,120" fill="#2d6a4f" opacity="0.5"/>
+            <polygon points="170,120 230,50 290,120" fill="#40916c" opacity="0.4"/>
+          </svg>
+        </div>
+        <h1>SpotMe</h1>
+        <p class="muted">Your personal hobby record</p>
+      </div>
+      <form id="login-form">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" placeholder="Enter username" required autocomplete="username" />
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" placeholder="Enter password" required autocomplete="current-password" />
+        <div id="login-error" class="error-banner" style="display:none;"></div>
+        <button type="submit" id="login-btn">Log In</button>
+      </form>
+      <p class="auth-switch">Don't have an account? <a href="#" id="show-register">Sign up</a></p>
+      <p class="auth-switch"><a href="#" id="show-forgot-password">Forgot password?</a></p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ FORGOT PASSWORD ═══════════════════════════ -->
+  <div id="view-forgot-password" class="view" style="display:none;">
+    <div class="auth-container">
+      <div class="auth-logo">
+        <h1>SpotMe</h1>
+        <p class="muted">Reset your password</p>
+      </div>
+      <form id="forgot-password-form">
+        <label for="fp-username">Username</label>
+        <input type="text" id="fp-username" placeholder="Enter your username" required autocomplete="username" />
+        <label for="fp-recovery-code">Recovery Code</label>
+        <input type="text" id="fp-recovery-code" placeholder="Enter your recovery code" required autocomplete="off" />
+        <label for="fp-new-password">New Password</label>
+        <input type="password" id="fp-new-password" placeholder="Choose a new password" required autocomplete="new-password" />
+        <label for="fp-confirm-password">Confirm New Password</label>
+        <input type="password" id="fp-confirm-password" placeholder="Confirm new password" required autocomplete="new-password" />
+        <div id="fp-error" class="error-banner" style="display:none;"></div>
+        <button type="submit" id="fp-btn">Reset Password</button>
+      </form>
+      <p class="auth-switch"><a href="#" id="fp-back-to-login">Back to login</a></p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ REGISTER ═══════════════════════════ -->
+  <div id="view-register" class="view" style="display:none;">
+    <div class="auth-container">
+      <div class="auth-logo">
+        <h1>SpotMe</h1>
+        <p class="muted">Create your account</p>
+      </div>
+      <form id="register-form">
+        <label for="reg-display">Display Name</label>
+        <input type="text" id="reg-display" placeholder="e.g. Alex" required />
+        <label for="reg-username">Username</label>
+        <input type="text" id="reg-username" placeholder="Choose a username" required autocomplete="username" />
+        <label for="reg-email">Email (for account recovery)</label>
+        <input type="email" id="reg-email" placeholder="you@email.com" autocomplete="email" />
+        <label for="reg-password">Password</label>
+        <input type="password" id="reg-password" placeholder="Choose a password" required autocomplete="new-password" />
+        <div id="register-error" class="error-banner" style="display:none;"></div>
+        <button type="submit" id="register-btn">Sign Up</button>
+      </form>
+      <p class="auth-switch">Already have an account? <a href="#" id="show-login">Log in</a></p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ APP SHELL ═══════════════════════════ -->
+  <div id="app-shell" style="display:none;">
+
+    <!-- Top bar -->
+    <header class="app-header">
+      <h1 class="app-title">SpotMe</h1>
+      <button class="icon-btn" onclick="showView('settings')" title="Settings">&#9881;</button>
+    </header>
+
+    <!-- Loading overlay -->
+    <div id="global-loading" style="display:none;"><p aria-busy="true">Loading...</p></div>
+
+    <!-- ── Profile View ─────────────────────────────────────── -->
+    <div id="view-profile" class="view" style="display:none;">
+      <div class="container" id="profile-content">
+        <p aria-busy="true">Loading profile...</p>
+      </div>
+    </div>
+
+    <!-- ── Hobbies View ─────────────────────────────────────── -->
+    <div id="view-hobbies" class="view" style="display:none;">
+      <div class="container" id="hobbies-content">
+        <p aria-busy="true">Loading hobbies...</p>
+      </div>
+    </div>
+
+    <!-- ── Settings View ────────────────────────────────────── -->
+    <div id="view-settings" class="view" style="display:none;">
+      <div class="container">
+        <h2>Settings</h2>
+        <div class="settings-section">
+          <h3>Recovery Code</h3>
+          <p class="muted">Generate a new recovery code for password reset.</p>
+          <button class="outline" id="btn-generate-recovery">Generate Recovery Code</button>
+        </div>
+        <div class="settings-section">
+          <h3>Account</h3>
+          <button class="outline" id="btn-logout">Log Out</button>
+          <button class="outline danger" id="btn-delete-account">Delete Account</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom nav -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-view="profile">
+        <span class="nav-icon">&#128100;</span>
+        <span class="nav-label">Profile</span>
+      </button>
+      <button class="nav-item" data-view="hobbies">
+        <span class="nav-icon">&#127956;</span>
+        <span class="nav-label">Hobbies</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- ═══════════════════════════ DIALOGS ═══════════════════════════ -->
+
+  <!-- Recovery Code Dialog -->
+  <dialog id="recovery-code-dialog">
+    <article>
+      <header>
+        <button id="recovery-dialog-close" aria-label="Close" rel="prev"></button>
+        <h3>Recovery Code</h3>
+      </header>
+      <p>Save this code somewhere safe. You'll need it to reset your password.</p>
+      <pre id="recovery-code-value" class="recovery-code"></pre>
+      <footer>
+        <button class="outline" id="recovery-code-copy">Copy</button>
+        <button id="recovery-dialog-done">Done</button>
+      </footer>
+    </article>
+  </dialog>
+
+  <!-- Add Hobby Dialog -->
+  <dialog id="add-hobby-dialog">
+    <article>
+      <header>
+        <button id="add-hobby-dialog-close" aria-label="Close" rel="prev"></button>
+        <h3>Add <span id="add-hobby-name"></span></h3>
+      </header>
+      <form id="add-hobby-form">
+        <input type="hidden" id="add-hobby-id" />
+        <label for="add-hobby-proficiency">Your Level</label>
+        <select id="add-hobby-proficiency" required>
+          <option value="want_to_learn">Want to Learn</option>
+          <option value="beginner" selected>Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+          <option value="expert">Expert</option>
+        </select>
+        <label for="add-hobby-notes">Notes (optional)</label>
+        <textarea id="add-hobby-notes" rows="2" placeholder="e.g. Started last summer"></textarea>
+        <div id="add-hobby-error" class="error-banner" style="display:none;"></div>
+        <button type="submit" id="add-hobby-btn">Add Hobby</button>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- Edit Hobby Dialog -->
+  <dialog id="edit-hobby-dialog">
+    <article>
+      <header>
+        <button id="edit-hobby-dialog-close" aria-label="Close" rel="prev"></button>
+        <h3>Edit Hobby</h3>
+      </header>
+      <form id="edit-hobby-form">
+        <input type="hidden" id="edit-hobby-id" />
+        <label for="edit-hobby-proficiency">Your Level</label>
+        <select id="edit-hobby-proficiency" required>
+          <option value="want_to_learn">Want to Learn</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+          <option value="expert">Expert</option>
+        </select>
+        <label for="edit-hobby-notes">Notes (optional)</label>
+        <textarea id="edit-hobby-notes" rows="2"></textarea>
+        <div id="edit-hobby-error" class="error-banner" style="display:none;"></div>
+        <button type="submit" id="edit-hobby-btn">Save Changes</button>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- Scripts (load order: config → state → helpers → features → init) -->
+  <script src="config.js"></script>
+  <script src="state.js"></script>
+  <script src="helpers.js"></script>
+  <script src="profile.js"></script>
+  <script src="hobbies.js"></script>
+  <script src="init.js"></script>
+
+</body>
+</html>

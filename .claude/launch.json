@@ -18,6 +18,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["projects/wealthmate/web/serve.js"],
       "port": 5502
+    },
+    {
+      "name": "spotme-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "projects/spotme/web", "-l", "5503", "--no-clipboard"],
+      "port": 5503
     }
   ]
 }

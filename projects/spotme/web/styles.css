@@ -1,0 +1,628 @@
+/* styles.css — SpotMe Adventure Theme */
+/* Warm tan/nature palette on Pico.css light mode */
+
+:root {
+  --sm-primary: #2d6a4f;
+  --sm-primary-hover: #40916c;
+  --sm-accent: #d4a373;
+  --sm-accent-hover: #e0b88a;
+  --sm-bg: #f5e6d3;
+  --sm-bg-card: #fff8f0;
+  --sm-bg-card-hover: #f0e0cc;
+  --sm-text: #2c2c2c;
+  --sm-muted: #7a7062;
+  --sm-danger: #c1121f;
+  --sm-danger-hover: #d4343f;
+  --sm-green: #2d6a4f;
+  --sm-radius: 12px;
+}
+
+/* Override Pico theme colors */
+[data-theme="light"] {
+  --pico-primary: var(--sm-primary);
+  --pico-primary-hover: var(--sm-primary-hover);
+  --pico-background-color: var(--sm-bg);
+  --pico-card-background-color: var(--sm-bg-card);
+  --pico-color: var(--sm-text);
+  --pico-muted-color: var(--sm-muted);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  background: var(--sm-bg);
+  color: var(--sm-text);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  /* Subtle topographic pattern */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27200%27 height=%27200%27%3E%3Cpath d=%27M0 80 Q50 60 100 80 T200 80%27 fill=%27none%27 stroke=%27%232d6a4f%27 stroke-width=%270.5%27 opacity=%270.1%27/%3E%3Cpath d=%27M0 120 Q50 100 100 120 T200 120%27 fill=%27none%27 stroke=%27%232d6a4f%27 stroke-width=%270.5%27 opacity=%270.08%27/%3E%3Cpath d=%27M0 160 Q50 140 100 160 T200 160%27 fill=%27none%27 stroke=%27%232d6a4f%27 stroke-width=%270.5%27 opacity=%270.06%27/%3E%3C/svg%3E");
+}
+
+/* ── Auth views ───────────────────────────────────────────────────────────── */
+.auth-container {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.auth-logo {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.auth-logo h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--sm-primary);
+  margin: 0.5rem 0 0.25rem;
+  letter-spacing: -0.5px;
+}
+
+.mountain-header {
+  margin: 0 auto 0.5rem;
+  max-width: 300px;
+}
+
+.mountain-svg {
+  width: 100%;
+  height: auto;
+}
+
+.muted {
+  color: var(--sm-muted);
+  font-size: 0.875rem;
+}
+
+.auth-switch {
+  text-align: center;
+  font-size: 0.875rem;
+  margin-top: 1rem;
+}
+
+.auth-switch a {
+  color: var(--sm-primary);
+  font-weight: 600;
+}
+
+.error-banner {
+  background: rgba(193, 18, 31, 0.1);
+  border: 1px solid var(--sm-danger);
+  color: var(--sm-danger);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.error-text {
+  color: var(--sm-danger);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+button, [type="submit"] {
+  border-radius: 8px;
+}
+
+button:not(.outline):not(.nav-item):not(.filter-btn):not(.icon-btn) {
+  background: var(--sm-primary);
+  border-color: var(--sm-primary);
+  color: white;
+}
+
+button:not(.outline):not(.nav-item):not(.filter-btn):not(.icon-btn):hover {
+  background: var(--sm-primary-hover);
+  border-color: var(--sm-primary-hover);
+}
+
+button.outline {
+  border-color: var(--sm-muted);
+  color: var(--sm-text);
+}
+
+button.danger, button.outline.danger {
+  border-color: var(--sm-danger);
+  color: var(--sm-danger);
+}
+
+button.danger:hover, button.outline.danger:hover {
+  background: var(--sm-danger);
+  color: white;
+}
+
+button.small {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  color: white;
+}
+
+.icon-btn:hover {
+  color: rgba(255,255,255,0.8);
+}
+
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.button-row button {
+  flex: 1;
+}
+
+/* ── App shell ────────────────────────────────────────────────────────────── */
+#app-shell {
+  padding-bottom: 70px;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--sm-primary);
+  border-bottom: 1px solid rgba(0,0,0,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.app-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: white;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.container {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+/* ── Bottom nav ───────────────────────────────────────────────────────────── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--sm-bg-card);
+  border-top: 1px solid rgba(0,0,0,0.08);
+  padding: 0.25rem 0;
+  z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.5rem 0;
+  background: none;
+  border: none;
+  color: var(--sm-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.nav-item:hover {
+  color: var(--sm-text);
+  background: none;
+}
+
+.nav-item.active {
+  color: var(--sm-primary);
+}
+
+.nav-icon {
+  font-size: 1.2rem;
+}
+
+.nav-label {
+  font-weight: 500;
+}
+
+/* ── Profile ──────────────────────────────────────────────────────────────── */
+.profile-card {
+  background: var(--sm-bg-card);
+  border-radius: var(--sm-radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.profile-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sm-primary), var(--sm-accent));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.profile-info h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.profile-info .muted {
+  margin: 0;
+}
+
+.profile-bio {
+  margin: 0.75rem 0;
+  line-height: 1.5;
+}
+
+.profile-location {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.location-icon { font-size: 1rem; }
+
+.profile-traveling {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(45, 106, 79, 0.1);
+  border-radius: 8px;
+}
+
+.travel-icon { font-size: 1rem; }
+
+.profile-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  font-size: 0.8rem;
+}
+
+.location-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.location-input-row input {
+  flex: 1;
+}
+
+.location-input-row button {
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+/* ── Badges ───────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.badge-green {
+  background: rgba(45, 106, 79, 0.15);
+  color: var(--sm-green);
+}
+
+.badge-muted {
+  background: rgba(122, 112, 98, 0.12);
+  color: var(--sm-muted);
+}
+
+.badge-accent {
+  background: rgba(212, 163, 115, 0.2);
+  color: #b5854a;
+}
+
+/* ── Hobby tags (profile view) ────────────────────────────────────────────── */
+.hobby-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--sm-bg-card-hover);
+  border-radius: 20px;
+  margin: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.hobby-icon { font-size: 1rem; }
+.hobby-name { font-weight: 500; }
+
+.hobby-peaks {
+  display: inline-flex;
+  gap: 1px;
+  margin-left: 0.25rem;
+}
+
+.peak {
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+.peak.filled {
+  color: var(--sm-accent);
+}
+
+.peak.empty {
+  color: rgba(0,0,0,0.15);
+}
+
+.peaks.want-to-learn {
+  color: var(--sm-muted);
+  font-size: 0.75rem;
+}
+
+/* ── Category filters ─────────────────────────────────────────────────────── */
+.category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+.filter-btn {
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: transparent;
+  color: var(--sm-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.filter-btn:hover {
+  border-color: var(--sm-primary);
+  color: var(--sm-text);
+  background: transparent;
+}
+
+.filter-btn.active {
+  background: var(--sm-primary);
+  border-color: var(--sm-primary);
+  color: white;
+}
+
+/* ── Hobby cards (browse view) ────────────────────────────────────────────── */
+.hobby-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.hobby-card {
+  background: var(--sm-bg-card);
+  border-radius: var(--sm-radius);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.hobby-card:hover {
+  background: var(--sm-bg-card-hover);
+}
+
+.hobby-card.my-hobby {
+  border-color: rgba(45, 106, 79, 0.3);
+}
+
+.hobby-card.added {
+  opacity: 0.6;
+}
+
+.hobby-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hobby-card-header .hobby-icon {
+  font-size: 1.25rem;
+}
+
+.hobby-card-header .hobby-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.hobby-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.proficiency-label {
+  font-size: 0.75rem;
+  color: var(--sm-muted);
+}
+
+.category-label {
+  font-size: 0.75rem;
+  color: var(--sm-muted);
+}
+
+.hobby-notes {
+  font-size: 0.8rem;
+  color: var(--sm-muted);
+  margin: 0;
+  font-style: italic;
+}
+
+.hobby-card-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.my-hobbies-section, .browse-hobbies-section {
+  margin-bottom: 2rem;
+}
+
+.my-hobbies-section h3, .browse-hobbies-section h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: var(--sm-primary);
+}
+
+#my-hobbies-summary h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: var(--sm-primary);
+}
+
+/* ── Settings ─────────────────────────────────────────────────────────────── */
+.settings-section {
+  background: var(--sm-bg-card);
+  border-radius: var(--sm-radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.settings-section h3 {
+  margin-top: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.settings-section button {
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* ── Dialogs ──────────────────────────────────────────────────────────────── */
+dialog {
+  background: var(--sm-bg-card);
+  color: var(--sm-text);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: var(--sm-radius);
+}
+
+dialog article {
+  margin: 0;
+  padding: 0;
+}
+
+dialog article header {
+  border-bottom-color: rgba(0,0,0,0.08);
+}
+
+.recovery-code {
+  background: var(--sm-bg);
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 1.1rem;
+  word-break: break-all;
+  color: var(--sm-primary);
+}
+
+/* ── Loading ──────────────────────────────────────────────────────────────── */
+#global-loading {
+  position: fixed;
+  inset: 0;
+  background: rgba(245, 230, 211, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+input, select, textarea {
+  border-radius: 8px;
+  background: white;
+  border-color: rgba(0,0,0,0.15);
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--sm-primary);
+}
+
+fieldset {
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: var(--sm-radius);
+  padding: 1rem;
+}
+
+legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--sm-primary);
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .hobby-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .hobby-card {
+    padding: 0.75rem;
+  }
+
+  .location-input-row {
+    flex-direction: column;
+  }
+
+  .category-filters {
+    gap: 0.3rem;
+  }
+
+  .filter-btn {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+  }
+}

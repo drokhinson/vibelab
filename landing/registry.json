@@ -16,9 +16,9 @@
     {
       "id": "spotme",
       "name": "SpotMe",
-      "description": "Work in progress.",
+      "description": "Your personal hobby record 2014 track hobbies, proficiency, discover nearby adventurers with shared interests.",
       "status": "wip",
-      "tags": [],
+      "tags": ["hobbies", "social", "discovery", "adventure"],
       "webUrl": null,
       "backendUrl": null,
       "hasNativeApp": false,
