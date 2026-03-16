@@ -86,6 +86,12 @@ async function fetchPreparationsForCarb(carbId) {
   return res.json();
 }
 
+async function fetchAddons() {
+  const res = await fetch(`${API}/api/v1/sauceboss/addons`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 async function createSauce(data) {
   const res = await fetch(`${API}/api/v1/sauceboss/sauces`, {
     method: 'POST',
@@ -98,6 +104,74 @@ async function createSauce(data) {
   }
   return res.json();
 }
+
+// ─── Carb cook times ─────────────────────────────────────────────────────────
+const CARB_COOK_TIMES = {
+  pasta:    { minutes: 10, label: '8-12 min' },
+  rice:     { minutes: 18, label: '15-20 min' },
+  noodles:  { minutes: 8,  label: '5-10 min' },
+  bread:    { minutes: 0,  label: 'Ready to serve' },
+  potatoes: { minutes: 25, label: '20-30 min' },
+  couscous: { minutes: 5,  label: '5 min' },
+};
+
+// ─── Sauce step times (per sauce id → array of minutes per step) ─────────────
+const SAUCE_TIMES = {
+  'peanut-sauce':    [3, 2],
+  'teriyaki':        [2, 5],
+  'gochujang-sauce': [3],
+  'pad-thai-sauce':  [3],
+  'sesame-ginger':   [2, 2],
+  'marinara':        [5, 15],
+  'alfredo':         [3, 5],
+  'pesto':           [5],
+  'arrabbiata':      [5, 15],
+  'aglio-olio':      [8, 2],
+  'salsa-roja':      [10, 3],
+  'chipotle-cream':  [3],
+  'quick-mole':      [5, 8],
+  'tzatziki':        [3, 2],
+  'chermoula':       [3, 3],
+  'harissa-sauce':   [3],
+  'bbq-sauce':       [3, 10],
+  'honey-mustard':   [3],
+  'buffalo':         [5],
+  'beurre-blanc':    [8, 5],
+  'tikka-masala':    [5, 3, 10],
+  'saag-sauce':      [5, 3, 5],
+};
+
+// ─── Protein & veggie options ────────────────────────────────────────────────
+const PROTEIN_VEGGIE_OPTIONS = {
+  proteins: [
+    { id: 'chicken', type: 'protein', name: 'Chicken Breast', emoji: '🍗',
+      desc: 'Pan-seared and sliced', estimatedTime: 18,
+      instructions: 'Season with salt and pepper. Heat oil over medium-high. Cook 6-7 min per side until 165\u00B0F. Rest 5 min, slice.' },
+    { id: 'beef', type: 'protein', name: 'Beef Strips', emoji: '🥩',
+      desc: 'Quick stir-fried strips', estimatedTime: 8,
+      instructions: 'Slice against grain into thin strips. Sear in hot oiled pan 2-3 min. Season with salt and pepper.' },
+    { id: 'tofu', type: 'protein', name: 'Crispy Tofu', emoji: '🧈',
+      desc: 'Pressed and pan-fried until golden', estimatedTime: 28,
+      instructions: 'Press firm tofu 15 min. Cube, toss with cornstarch. Pan-fry in oil, turning until golden on all sides ~10 min.' },
+    { id: 'fish', type: 'protein', name: 'White Fish Fillet', emoji: '🐟',
+      desc: 'Pan-seared with crispy skin', estimatedTime: 10,
+      instructions: 'Pat dry, season. Place skin-side down in hot oiled pan 4 min, flip, cook 2-3 min more.' },
+  ],
+  veggies: [
+    { id: 'mushrooms', type: 'veggie', name: 'Grilled Mushrooms', emoji: '🍄',
+      desc: 'Mixed mushrooms, seared until golden', estimatedTime: 8,
+      instructions: 'Slice mushrooms. Sear in hot pan with butter, don\'t crowd. Cook 5-6 min until golden. Season with salt.' },
+    { id: 'fajita-veggies', type: 'veggie', name: 'Fajita-Style Veggies', emoji: '🫑',
+      desc: 'Bell peppers and onions, charred', estimatedTime: 10,
+      instructions: 'Slice peppers and onions into strips. Cook in hot oiled pan over high heat 6-8 min until charred edges appear.' },
+    { id: 'roasted-broccoli', type: 'veggie', name: 'Roasted Broccoli', emoji: '🥦',
+      desc: 'Oven-roasted with garlic', estimatedTime: 22,
+      instructions: 'Cut into florets, toss with oil, garlic, salt. Roast at 425\u00B0F for 18-20 min until edges are crispy.' },
+    { id: 'sauteed-spinach', type: 'veggie', name: 'Sauteed Spinach', emoji: '🥬',
+      desc: 'Quick wilted with garlic', estimatedTime: 5,
+      instructions: 'Heat oil, add minced garlic for 30 sec. Add spinach, toss until wilted ~2-3 min. Season.' },
+  ],
+};
 
 // ─── Builder constants ───────────────────────────────────────────────────────
 const CUISINES = [
@@ -257,6 +331,8 @@ let state = {
   substitutions: {},            // name → [{substituteName, notes}] lookup
   preparations: [],             // loaded per carb in selectCarb()
   selectedPrep: null,           // currently selected preparation object
+  selectedProteinVeggie: null,  // currently selected protein/veggie option, or null if skipped
+  addons: null,                 // { proteins: [], veggies: [] } — loaded from API (falls back to PROTEIN_VEGGIE_OPTIONS)
   builder: null,                // recipe builder state (set via defaultBuilder())
 };
 
@@ -434,6 +510,42 @@ function renderPrepSelector() {
   `;
 }
 
+function renderProteinVeggieSelector() {
+  const carb = state.selectedCarb;
+  const backScreen = state.preparations.length > 0 ? 'prep-selector' : 'carb-selector';
+
+  const renderOptions = (items) => items.map(o => `
+    <button class="addon-option" onclick="selectProteinVeggie('${o.id}')">
+      <span class="addon-option-emoji">${o.emoji}</span>
+      <div class="addon-option-info">
+        <div class="addon-option-name">${o.name}</div>
+        <div class="addon-option-desc">${o.desc}</div>
+      </div>
+      <span class="addon-option-time">~${o.estimatedTime}m</span>
+    </button>
+  `).join('');
+
+  return `
+    <div class="status-bar"></div>
+    <div class="app-header">
+      <button class="back-btn" onclick="navigate('${backScreen}')">‹ Back</button>
+      <div class="logo"><span>${carb.emoji}</span>Add a protein or veggie?</div>
+      <div class="subtitle">Optional — pairs with your sauce</div>
+    </div>
+    <div class="scroll-body">
+      <button class="skip-btn" onclick="skipProteinVeggie()">Skip — just the sauce →</button>
+      <p class="section-label">PROTEINS</p>
+      <div class="addon-options-list">
+        ${renderOptions((state.addons || PROTEIN_VEGGIE_OPTIONS).proteins)}
+      </div>
+      <p class="section-label" style="margin-top:16px">VEGGIES</p>
+      <div class="addon-options-list">
+        ${renderOptions((state.addons || PROTEIN_VEGGIE_OPTIONS).veggies)}
+      </div>
+    </div>
+  `;
+}
+
 function renderSauceSelector() {
   const carb = state.selectedCarb;
   const sauces = state.saucesForCurrentCarb;
@@ -502,7 +614,7 @@ function renderSauceSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('${state.preparations.length > 0 ? 'prep-selector' : 'carb-selector'}')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('protein-veggie-selector')">‹ Back</button>
       <div class="logo"><span>${carb.emoji}</span>${carb.name} Sauces</div>
       <div class="subtitle">${sauces.length} sauces · select your cuisine</div>
     </div>
@@ -701,7 +813,18 @@ function renderRecipe() {
       ${disabledInRecipe.map(i => `<div>${i.name} → <strong>${i.sub}</strong></div>`).join('')}
     </div>` : '';
 
+  // Time calculations — prefer API data, fall back to hardcoded constants
+  const sauceStepTimes = sauce.steps.map((st, i) =>
+    st.estimatedTime || (SAUCE_TIMES[sauce.id] && SAUCE_TIMES[sauce.id][i]) || 5
+  );
+  const sauceTime = sauceStepTimes.reduce((s, t) => s + t, 0);
+  const carbTime = (state.selectedPrep?.cookTimeMinutes ?? carb.cookTimeMinutes) ?? CARB_COOK_TIMES[carb.id]?.minutes ?? 0;
+  const addon = state.selectedProteinVeggie;
+  const addonTime = addon?.estimatedTime || 0;
+  const totalTime = sauceTime + carbTime + addonTime;
+
   const stepsHTML = sauce.steps.map((step, i) => {
+    const stepTime = sauceStepTimes[i] || 5;
     const displayItems = prepareItems(step.ingredients);
     // If this step references a previous step, prepend its combined output as a single slice
     const refStep = step.inputFromStep ? sauce.steps[step.inputFromStep - 1] : null;
@@ -713,7 +836,10 @@ function renderRecipe() {
     }
     const refBadge = refStep ? `<div class="step-ref-badge">⤶ Uses Step ${step.inputFromStep} output</div>` : '';
     return `<div class="step-card">
-      <div class="step-number">Step ${i + 1}</div>
+      <div class="step-header-row">
+        <div class="step-number">Step ${i + 1}</div>
+        <div class="step-time">~${stepTime}m</div>
+      </div>
       <div class="step-title">${step.title}</div>
       ${refBadge}
       <div class="pie-container">
@@ -748,6 +874,12 @@ function renderRecipe() {
           <button class="toggle-btn ${state.unitSystem === 'metric' ? 'active' : ''}" onclick="setUnitSystem('metric')">Metric</button>
         </div>
       </div>
+      <div class="time-summary">
+        ${carbTime > 0 ? `<span class="time-badge">${carb.emoji} ~${carbTime}m</span>` : ''}
+        <span class="time-badge">🧂 Sauce ~${sauceTime}m</span>
+        ${addon ? `<span class="time-badge">${addon.emoji} ~${addonTime}m</span>` : ''}
+        <span class="time-total">Total ~${totalTime}m</span>
+      </div>
     </div>
     <div class="scroll-body" style="padding:0">
       ${subBannerHTML}
@@ -761,6 +893,17 @@ function renderRecipe() {
           </div>
         </div>
         <p class="prep-card-instructions">${state.selectedPrep.instructions || ''}</p>
+      </div>` : ''}
+      ${addon ? `
+      <div class="addon-card ${addon.type === 'protein' ? 'addon-protein' : 'addon-veggie'}">
+        <div class="addon-card-header">
+          <span class="addon-card-emoji">${addon.emoji}</span>
+          <div>
+            <div class="addon-card-title">${addon.name}</div>
+            <div class="addon-card-meta">~${addon.estimatedTime} min</div>
+          </div>
+        </div>
+        <p class="addon-card-instructions">${addon.instructions}</p>
       </div>` : ''}
       <div class="steps-container">
         ${stepsHTML}
@@ -779,6 +922,7 @@ function render() {
   switch (state.screen) {
     case 'carb-selector':   app.innerHTML = renderCarbSelector(); break;
     case 'prep-selector':   app.innerHTML = renderPrepSelector(); break;
+    case 'protein-veggie-selector': app.innerHTML = renderProteinVeggieSelector(); break;
     case 'sauce-selector':  app.innerHTML = renderSauceSelector(); break;
     case 'recipe':          app.innerHTML = renderRecipe(); break;
     case 'builder':         app.innerHTML = renderBuilder(); break;
@@ -793,6 +937,7 @@ async function selectCarb(id) {
   state.selectedCarb = state.carbs.find(c => c.id === id);
   state.servings = 2; // reset to default on new carb
   state.selectedPrep = null;
+  state.selectedProteinVeggie = null;
   // Show loading immediately while fetching sauces + ingredients + preparations
   document.getElementById('app').innerHTML = `
     <div class="loading-screen">
@@ -811,8 +956,8 @@ async function selectCarb(id) {
     state.disabledIngredients  = new Set();
     state.filterOpen           = false;
     state.expandedCuisines     = new Set([sauces[0]?.cuisine].filter(Boolean));
-    // If preparations exist, show prep selector; otherwise skip to sauces
-    state.screen = preps.length > 0 ? 'prep-selector' : 'sauce-selector';
+    // If preparations exist, show prep selector; otherwise go to protein/veggie selector
+    state.screen = preps.length > 0 ? 'prep-selector' : 'protein-veggie-selector';
     render();
   } catch (err) {
     document.getElementById('app').innerHTML = `
@@ -824,6 +969,16 @@ async function selectCarb(id) {
 }
 function selectPrep(id) {
   state.selectedPrep = state.preparations.find(p => p.id === id) || null;
+  navigate('protein-veggie-selector');
+}
+function selectProteinVeggie(id) {
+  const src = state.addons || PROTEIN_VEGGIE_OPTIONS;
+  const all = [...src.proteins, ...src.veggies];
+  state.selectedProteinVeggie = all.find(o => o.id === id) || null;
+  navigate('sauce-selector');
+}
+function skipProteinVeggie() {
+  state.selectedProteinVeggie = null;
   navigate('sauce-selector');
 }
 function selectSauce(id) {
@@ -1018,12 +1173,23 @@ async function builderSave() {
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const [carbs, categoriesRaw, subsRaw] = await Promise.all([
+    const [carbs, categoriesRaw, subsRaw, addonsRaw] = await Promise.all([
       fetchCarbs(),
       fetchIngredientCategories().catch(() => []),
       fetchSubstitutions().catch(() => []),
+      fetchAddons().catch(() => []),
     ]);
     state.carbs = carbs;
+
+    // Build addons lookup from API data (falls back to hardcoded constants)
+    if (Array.isArray(addonsRaw) && addonsRaw.length > 0) {
+      state.addons = {
+        proteins: addonsRaw.filter(a => a.type === 'protein'),
+        veggies: addonsRaw.filter(a => a.type === 'veggie'),
+      };
+    } else {
+      state.addons = PROTEIN_VEGGIE_OPTIONS;
+    }
 
     // Build category lookup: name → category
     state.ingredientCategories = {};

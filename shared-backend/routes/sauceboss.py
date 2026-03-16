@@ -165,6 +165,16 @@ class IngredientCategoryInput(BaseModel):
     category: str = Field(min_length=1)
 
 
+@router.get("/addons")
+async def list_addons():
+    """Returns protein and veggie addon options with instructions and timing."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_addons", {}).execute()
+    if result.data is None:
+        return []
+    return result.data
+
+
 @router.post("/ingredient-categories")
 async def upsert_ingredient_category(body: IngredientCategoryInput):
     """Add or update an ingredient's category classification."""

@@ -806,3 +806,117 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 .error-screen h2 { font-size: 18px; font-weight: 700; }
 .error-screen p { font-size: 13px; color: #6B7280; max-width: 280px; }
+
+/* ── Protein / Veggie Selector ── */
+.skip-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: transparent;
+  border: 2px dashed #D1D5DB;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6B7280;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.skip-btn:hover { border-color: #E85D04; color: #E85D04; }
+
+.addon-options-list { display: flex; flex-direction: column; gap: 10px; }
+.addon-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.addon-option:hover { border-color: #E85D04; box-shadow: 0 2px 8px rgba(232,93,4,0.1); }
+.addon-option-emoji { font-size: 32px; flex-shrink: 0; }
+.addon-option-info { flex: 1; min-width: 0; }
+.addon-option-name { font-size: 15px; font-weight: 700; color: #1A1A2E; }
+.addon-option-desc { font-size: 12px; color: #6B7280; margin-top: 2px; }
+.addon-option-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #E85D04;
+  background: #FFF7ED;
+  border-radius: 10px;
+  padding: 4px 10px;
+}
+
+/* ── Recipe: Addon Card ── */
+.addon-card {
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin: 0 16px 12px;
+}
+.addon-protein { background: #FFF7ED; }
+.addon-veggie { background: #F0FDF4; }
+.addon-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.addon-card-emoji { font-size: 28px; }
+.addon-card-title { font-size: 15px; font-weight: 700; color: #1A1A2E; }
+.addon-card-meta { font-size: 12px; color: #E85D04; font-weight: 600; margin-top: 1px; }
+.addon-card-instructions {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Recipe: Time Summary ── */
+.time-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  flex-wrap: wrap;
+}
+.time-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6B7280;
+  background: #F3F4F6;
+  border-radius: 10px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.time-total {
+  font-size: 13px;
+  font-weight: 800;
+  color: #E85D04;
+  background: #FFF7ED;
+  border-radius: 10px;
+  padding: 4px 12px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ── Recipe: Step Time Badge ── */
+.step-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.step-time {
+  font-size: 12px;
+  font-weight: 700;
+  color: #E85D04;
+  background: #FFF7ED;
+  border-radius: 8px;
+  padding: 2px 8px;
+}
