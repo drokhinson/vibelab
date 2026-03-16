@@ -115,9 +115,67 @@ const COLOR_SWATCHES = ['#E85D04','#DC2626','#22C55E','#3B1F0A','#FBBF24','#457B
 function defaultBuilder() {
   return {
     name: '', cuisine: '', cuisineEmoji: '', color: '#E85D04', description: '',
-    steps: [{ title: '', ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
+    steps: [{ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
     carbIds: [], saving: false, error: null,
+    // Autocomplete state
+    acStep: null, acIng: null, acResults: [], acSelected: -1,
+    // Category classification queue: [{step, ing, name}]
+    pendingCategories: [],
   };
+}
+
+// ─── Fuzzy matching helpers ─────────────────────────────────────────────────
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const curr = [i];
+    for (let j = 1; j <= n; j++) {
+      curr[j] = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : 1 + Math.min(prev[j - 1], prev[j], curr[j - 1]);
+    }
+    prev = curr;
+  }
+  return prev[n];
+}
+
+function fuzzyMatchIngredients(query) {
+  query = query.toLowerCase().trim();
+  if (query.length < 2) return [];
+  const known = Object.keys(state.ingredientCategories);
+  return known
+    .map(name => {
+      const lower = name.toLowerCase();
+      if (lower === query) return { name, score: 10 };       // exact
+      if (lower.startsWith(query)) return { name, score: 5 }; // prefix
+      if (lower.includes(query)) return { name, score: 3 };   // substring
+      const dist = levenshtein(query, lower);
+      if (dist <= 2) return { name, score: 2 - dist * 0.5 };  // typo
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map(m => m.name);
+}
+
+function isKnownIngredient(name) {
+  return name.trim().toLowerCase() in state.ingredientCategories
+    || Object.keys(state.ingredientCategories).some(k => k.toLowerCase() === name.trim().toLowerCase());
+}
+
+async function classifyIngredient(name, category) {
+  // Save locally
+  state.ingredientCategories[name.trim().toLowerCase()] = category;
+  // Persist to backend (fire-and-forget)
+  fetch(`${API}/api/v1/sauceboss/ingredient-categories`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ingredientName: name.trim(), category }),
+  }).catch(() => {});
 }
 
 // ─── Unit Conversion (everything → teaspoons for proportional display) ────────
@@ -176,7 +234,9 @@ const ING_COLOR = {
   'spinach':'#15803D','tomato puree':'#B91C1C','coconut milk':'#FFFBEB',
   'onion':'#DDD6FE','shallot':'#C4B5FD','water':'#BFDBFE',
 };
+const STEP_OUTPUT_COLOR = '#94A3B8'; // slate for "Step N output" slices
 function ingColor(name, idx) {
+  if (name.toLowerCase().startsWith('step ') && name.toLowerCase().includes('output')) return STEP_OUTPUT_COLOR;
   return ING_COLOR[name.toLowerCase()] || PALETTE[idx % PALETTE.length];
 }
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -475,20 +535,60 @@ function renderBuilder() {
   ).join('');
 
   const stepsHTML = b.steps.map((step, si) => {
-    const ingsHTML = step.ingredients.map((ing, ii) =>
-      `<div class="ingredient-row">
-        <input class="builder-input ing-name" placeholder="Ingredient" value="${esc(ing.name)}" data-builder-field="ing-name" data-step="${si}" data-ing="${ii}">
-        <input class="builder-input ing-amount" type="number" step="0.1" min="0" placeholder="Qty" value="${ing.amount}" data-builder-field="ing-amount" data-step="${si}" data-ing="${ii}">
-        <select class="ing-unit" data-builder-field="ing-unit" data-step="${si}" data-ing="${ii}">
-          ${UNITS.map(u => `<option ${ing.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+    // Step reference dropdown (steps after the first can reference a previous step)
+    const stepRefHTML = si > 0 ? `
+      <div class="step-ref-row">
+        <label class="step-ref-label">Uses output from:</label>
+        <select class="step-ref-select" data-builder-field="input-from-step" data-step="${si}">
+          <option value="" ${!step.inputFromStep ? 'selected' : ''}>None</option>
+          ${b.steps.slice(0, si).map((_, ri) =>
+            `<option value="${ri + 1}" ${step.inputFromStep === ri + 1 ? 'selected' : ''}>Step ${ri + 1}${b.steps[ri].title ? ' — ' + b.steps[ri].title.slice(0, 25) : ''}</option>`
+          ).join('')}
         </select>
-        ${step.ingredients.length > 1 ? `<button class="remove-ing-btn" onclick="builderRemoveIngredient(${si},${ii})">✕</button>` : ''}
-      </div>`
-    ).join('');
+      </div>` : '';
+
+    const ingsHTML = step.ingredients.map((ing, ii) => {
+      // Show autocomplete dropdown for the active ingredient input
+      const isAcActive = b.acStep === si && b.acIng === ii && b.acResults.length > 0;
+      const acDropdown = isAcActive ? `
+        <div class="ac-dropdown">
+          ${b.acResults.map((name, idx) =>
+            `<div class="ac-item ${idx === b.acSelected ? 'ac-selected' : ''}" data-ac-pick="${name.replace(/"/g, '&quot;')}" data-step="${si}" data-ing="${ii}">${name}</div>`
+          ).join('')}
+        </div>` : '';
+
+      // Category classification prompt (shown when ingredient is new and needs classification)
+      const needsCategory = ing.name.trim().length >= 2 && !isKnownIngredient(ing.name) && ing._showCategory;
+      const categoryChips = needsCategory ? `
+        <div class="category-classify">
+          <span class="category-classify-label">Classify "${ing.name.trim()}":</span>
+          <div class="category-chips">
+            ${CATEGORY_ORDER.map(cat =>
+              `<button class="category-chip" data-classify-cat="${cat}" data-step="${si}" data-ing="${ii}">${cat}</button>`
+            ).join('')}
+          </div>
+        </div>` : '';
+
+      return `<div class="ingredient-row-wrap">
+        <div class="ingredient-row">
+          <div class="ing-name-wrap">
+            <input class="builder-input ing-name" placeholder="Ingredient" value="${esc(ing.name)}" data-builder-field="ing-name" data-step="${si}" data-ing="${ii}" autocomplete="off">
+            ${acDropdown}
+          </div>
+          <input class="builder-input ing-amount" type="number" step="0.1" min="0" placeholder="Qty" value="${ing.amount}" data-builder-field="ing-amount" data-step="${si}" data-ing="${ii}">
+          <select class="ing-unit" data-builder-field="ing-unit" data-step="${si}" data-ing="${ii}">
+            ${UNITS.map(u => `<option ${ing.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+          </select>
+          ${step.ingredients.length > 1 ? `<button class="remove-ing-btn" onclick="builderRemoveIngredient(${si},${ii})">✕</button>` : ''}
+        </div>
+        ${categoryChips}
+      </div>`;
+    }).join('');
 
     return `<div class="builder-step-card">
       ${b.steps.length > 1 ? `<button class="remove-step-btn" onclick="builderRemoveStep(${si})">✕</button>` : ''}
       <div class="step-number">Step ${si + 1}</div>
+      ${stepRefHTML}
       <input class="builder-input" placeholder="Step title (e.g., Sauté the base)" value="${esc(step.title)}" data-builder-field="step-title" data-step="${si}">
       <div class="builder-ings-list">${ingsHTML}</div>
       <button class="add-ing-btn" onclick="builderAddIngredient(${si})">+ Ingredient</button>
@@ -554,6 +654,7 @@ function renderBuilderReview() {
     <div class="review-step-card">
       <div class="step-number">Step ${si + 1}</div>
       <div class="step-title">${step.title || '(untitled)'}</div>
+      ${step.inputFromStep ? `<div class="step-ref-badge">⤶ Uses Step ${step.inputFromStep} output</div>` : ''}
       <div class="review-ing-list">
         ${step.ingredients.filter(i => i.name.trim()).map(i =>
           `<div class="review-ing-item">${i.amount} ${i.unit} ${i.name}</div>`
@@ -602,9 +703,19 @@ function renderRecipe() {
 
   const stepsHTML = sauce.steps.map((step, i) => {
     const displayItems = prepareItems(step.ingredients);
+    // If this step references a previous step, prepend its combined output as a single slice
+    const refStep = step.inputFromStep ? sauce.steps[step.inputFromStep - 1] : null;
+    if (refStep) {
+      const refItems = prepareItems(refStep.ingredients);
+      const refTotal = refItems.reduce((s, it) => s + it.amount, 0);
+      const refUnit = refItems.length > 0 ? refItems[0].unit : 'tsp';
+      displayItems.unshift({ name: `Step ${step.inputFromStep} output`, amount: refTotal, unit: refUnit });
+    }
+    const refBadge = refStep ? `<div class="step-ref-badge">⤶ Uses Step ${step.inputFromStep} output</div>` : '';
     return `<div class="step-card">
       <div class="step-number">Step ${i + 1}</div>
       <div class="step-title">${step.title}</div>
+      ${refBadge}
       <div class="pie-container">
         ${buildPieChart(displayItems, 170)}
         <div class="legend">${buildLegend(displayItems)}</div>
@@ -763,11 +874,20 @@ function builderSetColor(hex) {
   render();
 }
 function builderAddStep() {
-  state.builder.steps.push({ title: '', ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
+  state.builder.steps.push({ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
   render();
 }
 function builderRemoveStep(si) {
+  const removedOrder = si + 1; // 1-based step order being removed
   state.builder.steps.splice(si, 1);
+  // Fix step references: clear if referencing removed step, decrement if referencing later step
+  for (const step of state.builder.steps) {
+    if (step.inputFromStep === removedOrder) {
+      step.inputFromStep = null;
+    } else if (step.inputFromStep > removedOrder) {
+      step.inputFromStep--;
+    }
+  }
   render();
 }
 function builderAddIngredient(si) {
@@ -792,15 +912,73 @@ function builderHandleInput(el) {
   switch (field) {
     case 'name': b.name = el.value; break;
     case 'step-title': b.steps[si].title = el.value; break;
-    case 'ing-name': b.steps[si].ingredients[ii].name = el.value; break;
+    case 'ing-name': {
+      b.steps[si].ingredients[ii].name = el.value;
+      // Autocomplete: show fuzzy matches
+      const matches = fuzzyMatchIngredients(el.value);
+      b.acStep = si;
+      b.acIng = ii;
+      b.acResults = matches;
+      b.acSelected = -1;
+      // Update dropdown in-place without re-render
+      updateAutocompleteDropdown(si, ii, matches);
+      break;
+    }
     case 'ing-amount': b.steps[si].ingredients[ii].amount = el.value; break;
     case 'ing-unit': b.steps[si].ingredients[ii].unit = el.value; break;
+    case 'input-from-step': {
+      b.steps[si].inputFromStep = el.value ? parseInt(el.value) : null;
+      break;
+    }
   }
   // Update continue button disabled state without full re-render
   const btn = document.querySelector('.builder-primary-btn');
   if (btn && state.screen === 'builder') {
     const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && i.amount));
     btn.disabled = !canContinue;
+  }
+}
+
+// Update autocomplete dropdown without full re-render (preserves input focus)
+function updateAutocompleteDropdown(si, ii, matches) {
+  // Remove any existing dropdown
+  document.querySelectorAll('.ac-dropdown').forEach(d => d.remove());
+  if (matches.length === 0) return;
+  const input = document.querySelector(`.ing-name[data-step="${si}"][data-ing="${ii}"]`);
+  if (!input) return;
+  const wrap = input.closest('.ing-name-wrap');
+  if (!wrap) return;
+  const dd = document.createElement('div');
+  dd.className = 'ac-dropdown';
+  dd.innerHTML = matches.map((name, idx) =>
+    `<div class="ac-item" data-ac-pick="${name.replace(/"/g, '&quot;')}" data-step="${si}" data-ing="${ii}">${name}</div>`
+  ).join('');
+  wrap.appendChild(dd);
+}
+
+function builderPickAutocomplete(name, si, ii) {
+  const b = state.builder;
+  b.steps[si].ingredients[ii].name = name;
+  b.acResults = [];
+  b.acStep = null;
+  b.acIng = null;
+  // Update input value in-place
+  const input = document.querySelector(`.ing-name[data-step="${si}"][data-ing="${ii}"]`);
+  if (input) input.value = name;
+  // Remove dropdown
+  document.querySelectorAll('.ac-dropdown').forEach(d => d.remove());
+}
+
+function builderClassifyIngredient(si, ii, category) {
+  const b = state.builder;
+  const ing = b.steps[si].ingredients[ii];
+  classifyIngredient(ing.name, category);
+  ing._showCategory = false;
+  // Remove the classification UI without full re-render
+  const wrap = document.querySelector(`.ingredient-row-wrap:has([data-step="${si}"][data-ing="${ii}"].ing-name)`);
+  if (wrap) {
+    const classify = wrap.querySelector('.category-classify');
+    if (classify) classify.remove();
   }
 }
 async function builderSave() {
@@ -820,6 +998,7 @@ async function builderSave() {
         .filter(s => s.title.trim())
         .map(s => ({
           title: s.title.trim(),
+          inputFromStep: s.inputFromStep || null,
           ingredients: s.ingredients
             .filter(i => i.name.trim() && parseFloat(i.amount) > 0)
             .map(i => ({ name: i.name.trim(), amount: parseFloat(i.amount), unit: i.unit })),
@@ -889,5 +1068,63 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   appEl.addEventListener('change', e => {
     if (e.target.dataset.builderField) builderHandleInput(e.target);
+  });
+
+  // Autocomplete: click to pick a suggestion
+  appEl.addEventListener('mousedown', e => {
+    const acItem = e.target.closest('.ac-item[data-ac-pick]');
+    if (acItem) {
+      e.preventDefault(); // prevent blur from firing first
+      const si = parseInt(acItem.dataset.step);
+      const ii = parseInt(acItem.dataset.ing);
+      builderPickAutocomplete(acItem.dataset.acPick, si, ii);
+    }
+  });
+
+  // Category classification: click to classify
+  appEl.addEventListener('click', e => {
+    const catChip = e.target.closest('.category-chip[data-classify-cat]');
+    if (catChip) {
+      const si = parseInt(catChip.dataset.step);
+      const ii = parseInt(catChip.dataset.ing);
+      builderClassifyIngredient(si, ii, catChip.dataset.classifyCat);
+    }
+  });
+
+  // Ingredient name blur: dismiss autocomplete & trigger category classification if unknown
+  appEl.addEventListener('focusout', e => {
+    if (e.target.dataset.builderField === 'ing-name' && state.builder) {
+      const si = parseInt(e.target.dataset.step);
+      const ii = parseInt(e.target.dataset.ing);
+      const b = state.builder;
+      // Dismiss autocomplete after a short delay (allow click to register)
+      setTimeout(() => {
+        if (b.acStep === si && b.acIng === ii) {
+          b.acResults = [];
+          b.acStep = null;
+          b.acIng = null;
+          document.querySelectorAll('.ac-dropdown').forEach(d => d.remove());
+        }
+      }, 200);
+      // Check if ingredient needs category classification
+      const ing = b.steps[si]?.ingredients[ii];
+      if (ing && ing.name.trim().length >= 2 && !isKnownIngredient(ing.name)) {
+        ing._showCategory = true;
+        // Insert category chips below this ingredient row
+        const wrap = e.target.closest('.ingredient-row-wrap');
+        if (wrap && !wrap.querySelector('.category-classify')) {
+          const div = document.createElement('div');
+          div.className = 'category-classify';
+          div.innerHTML = `
+            <span class="category-classify-label">Classify "${ing.name.trim()}":</span>
+            <div class="category-chips">
+              ${CATEGORY_ORDER.map(cat =>
+                `<button class="category-chip" data-classify-cat="${cat}" data-step="${si}" data-ing="${ii}">${cat}</button>`
+              ).join('')}
+            </div>`;
+          wrap.appendChild(div);
+        }
+      }
+    }
   });
 });

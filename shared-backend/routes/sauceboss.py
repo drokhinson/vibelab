@@ -30,6 +30,7 @@ class IngredientInput(BaseModel):
 class StepInput(BaseModel):
     title: str = Field(min_length=1)
     ingredients: List[IngredientInput] = Field(min_length=1)
+    inputFromStep: int | None = None
 
 class CreateSauceRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
@@ -139,6 +140,7 @@ async def create_sauce(body: CreateSauceRequest):
             {
                 "title": step.title,
                 "stepOrder": idx + 1,
+                "inputFromStep": step.inputFromStep,
                 "ingredients": [
                     {"name": ing.name, "amount": ing.amount, "unit": ing.unit}
                     for ing in step.ingredients
@@ -149,7 +151,26 @@ async def create_sauce(body: CreateSauceRequest):
     }
 
     sb = get_supabase()
-    result = sb.rpc("create_sauceboss_sauce", {"p_data": payload}).execute()
+    try:
+        result = sb.rpc("create_sauceboss_sauce", {"p_data": payload}).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
     if result.data is None:
-        raise HTTPException(500, "Failed to create sauce")
+        raise HTTPException(500, "Failed to create sauce — RPC returned null")
     return {"id": result.data, "status": "created"}
+
+
+class IngredientCategoryInput(BaseModel):
+    ingredientName: str = Field(min_length=1)
+    category: str = Field(min_length=1)
+
+
+@router.post("/ingredient-categories")
+async def upsert_ingredient_category(body: IngredientCategoryInput):
+    """Add or update an ingredient's category classification."""
+    sb = get_supabase()
+    result = sb.rpc("upsert_sauceboss_ingredient_category", {
+        "p_ingredient_name": body.ingredientName.strip().lower(),
+        "p_category": body.category,
+    }).execute()
+    return {"status": "ok"}
