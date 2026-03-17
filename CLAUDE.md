@@ -76,6 +76,7 @@ vibelab/
 - Run migrations in Supabase dashboard → SQL Editor → New Query → Run.
 - Use RPCs (`supabase.rpc()`) for complex multi-table reads.
 - Backend uses `SUPABASE_SERVICE_ROLE_KEY` (bypasses RLS). Never expose it to the frontend.
+- **Data belongs in the database, not in code.** Any named list, option set, lookup table, or configurable preset (e.g. skill levels, categories, status values, tags) must be stored as rows in a Supabase table with a migration, not as a Python dict/list or JS array in application code. Hard-coded constants require a deploy to change; a DB row does not. The only things that belong in `constants.py` are secrets, algorithm identifiers, and other true compile-time values.
 
 ### Backend (FastAPI in `shared-backend/`)
 - All routes namespaced: `/api/v1/[project]/[resource]`

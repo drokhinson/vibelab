@@ -53,12 +53,12 @@ function renderHobbies() {
                 <span class="hobby-name">${hobby?.name || 'Unknown'}</span>
               </div>
               <div class="hobby-card-body">
-                <div class="hobby-peaks">${proficiencyPeaks(uh.proficiency)}</div>
-                <span class="proficiency-label">${proficiencyLabel(uh.proficiency)}</span>
+                <div class="hobby-peaks">${proficiencyPeaks(uh.proficiency, uh.levels)}</div>
+                <span class="proficiency-label">${proficiencyLabel(uh.proficiency, uh.levels)}</span>
                 ${uh.notes ? `<p class="hobby-notes">${uh.notes}</p>` : ''}
               </div>
               <div class="hobby-card-actions">
-                <button class="outline small" onclick="editMyHobby('${uh.id}', '${uh.proficiency}', '${(uh.notes || '').replace(/'/g, "\\'")}')">Edit</button>
+                <button class="outline small" onclick="editMyHobby('${uh.id}', '${uh.proficiency}', '${(uh.notes || '').replace(/'/g, "\\'")}', '${hobby?.slug || ''}')">Edit</button>
                 <button class="outline small danger" onclick="removeMyHobby('${uh.id}')">Remove</button>
               </div>
             </div>
@@ -92,7 +92,7 @@ function renderHobbies() {
               <div class="hobby-card-actions">
                 ${isAdded
                   ? '<span class="badge badge-green">Added</span>'
-                  : `<button class="small" onclick="openAddHobby('${h.id}', '${h.name}')">+ Add</button>`
+                  : `<button class="small" onclick="openAddHobby('${h.id}', '${h.name}', '${h.slug}')">+ Add</button>`
                 }
               </div>
             </div>
@@ -111,10 +111,21 @@ function filterCategory(categoryId) {
 }
 
 // ── Add hobby dialog ─────────────────────────────────────────────────────────
-function openAddHobby(hobbyId, hobbyName) {
+function populateLevelSelect(selectEl, levels, selectedValue) {
+  selectEl.innerHTML = levels.map(l =>
+    `<option value="${l.value}"${l.value === selectedValue ? ' selected' : ''}>${l.label}</option>`
+  ).join('');
+}
+
+function openAddHobby(hobbyId, hobbyName, hobbySlug) {
+  const hobby = allHobbies.find(h => h.id === hobbyId);
+  const levels = (hobby && hobby.levels) || [];
   document.getElementById("add-hobby-name").textContent = hobbyName;
   document.getElementById("add-hobby-id").value = hobbyId;
-  document.getElementById("add-hobby-proficiency").value = "beginner";
+  const sel = document.getElementById("add-hobby-proficiency");
+  // Default to index 1 (first real skill level) or index 0 if only one level
+  const defaultLevel = levels.length > 1 ? levels[1].value : (levels[0] || {}).value || "beginner";
+  populateLevelSelect(sel, levels, defaultLevel);
   document.getElementById("add-hobby-notes").value = "";
   document.getElementById("add-hobby-error").style.display = "none";
   document.getElementById("add-hobby-dialog").showModal();
@@ -149,9 +160,12 @@ async function handleAddHobby(e) {
 }
 
 // ── Edit hobby dialog ────────────────────────────────────────────────────────
-function editMyHobby(userHobbyId, proficiency, notes) {
+function editMyHobby(userHobbyId, proficiency, notes, hobbySlug) {
+  const uh = myHobbies.find(h => h.id === userHobbyId);
+  const levels = (uh && uh.levels) || [];
   document.getElementById("edit-hobby-id").value = userHobbyId;
-  document.getElementById("edit-hobby-proficiency").value = proficiency;
+  const sel = document.getElementById("edit-hobby-proficiency");
+  populateLevelSelect(sel, levels, proficiency);
   document.getElementById("edit-hobby-notes").value = notes;
   document.getElementById("edit-hobby-error").style.display = "none";
   document.getElementById("edit-hobby-dialog").showModal();
