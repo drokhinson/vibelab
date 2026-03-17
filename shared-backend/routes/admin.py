@@ -91,6 +91,32 @@ async def _delete_wealthmate_user(sb, user_id: str):
 
 # Registry of apps that have user tables.
 # Update this dict when a new app adopts shared auth.
+async def _delete_daywordplay_user(sb, user_id: str):
+    """Delete a daywordplay user and cascade-remove all their data."""
+    user = sb.table("daywordplay_users").select("id, username").eq("id", user_id).execute()
+    if not user.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    username = user.data[0]["username"]
+
+    # Delete votes cast by user
+    sb.table("daywordplay_votes").delete().eq("voter_user_id", user_id).execute()
+
+    # Delete votes received on their sentences
+    sentences = sb.table("daywordplay_sentences").select("id").eq("user_id", user_id).execute()
+    sentence_ids = [s["id"] for s in (sentences.data or [])]
+    if sentence_ids:
+        sb.table("daywordplay_votes").delete().in_("sentence_id", sentence_ids).execute()
+
+    # Delete sentences, bookmarks, group memberships
+    sb.table("daywordplay_sentences").delete().eq("user_id", user_id).execute()
+    sb.table("daywordplay_bookmarks").delete().eq("user_id", user_id).execute()
+    sb.table("daywordplay_group_members").delete().eq("user_id", user_id).execute()
+
+    # Delete user
+    sb.table("daywordplay_users").delete().eq("id", user_id).execute()
+    return {"deleted": True, "user_id": user_id, "username": username}
+
+
 APPS_WITH_USERS = {
     "wealthmate": {
         "table": "wealthmate_users",
@@ -100,6 +126,11 @@ APPS_WITH_USERS = {
     "spotme": {
         "table": "spotme_users",
         "identity_columns": "id, username, display_name, email, created_at",
+    },
+    "daywordplay": {
+        "table": "daywordplay_users",
+        "identity_columns": "id, username, display_name, email, created_at",
+        "delete_handler": _delete_daywordplay_user,
     },
 }
 

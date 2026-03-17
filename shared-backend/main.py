@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from routes import sauceboss
 from routes import wealthmate
 from routes import spotme
+from routes import daywordplay
 
 # Infrastructure routers
 from routes import analytics
@@ -45,6 +46,7 @@ async def health():
 app.include_router(sauceboss.router)
 app.include_router(wealthmate.router)
 app.include_router(spotme.router)
+app.include_router(daywordplay.router)
 
 # ── Infrastructure routers ────────────────────────────────────────────────
 app.include_router(analytics.router)
