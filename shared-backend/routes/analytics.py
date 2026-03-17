@@ -4,7 +4,6 @@ POST /api/v1/analytics/track — fire-and-forget event logging (no auth)
 GET  /api/v1/analytics/summary — admin-only aggregate counts
 """
 
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -12,10 +11,9 @@ from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
 from db import get_supabase
+from auth import require_admin
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
-
-ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "dev-admin-key")
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +49,7 @@ async def track_event(body: TrackBody):
 @router.get("/summary")
 async def analytics_summary(authorization: Optional[str] = Header(None)):
     """Per-app event counts for 24h, 7d, 30d, and all-time. Admin-only."""
-    _require_admin(authorization)
+    require_admin(authorization)
 
     sb = get_supabase()
     now = datetime.now(timezone.utc)
@@ -80,15 +78,3 @@ async def analytics_summary(authorization: Optional[str] = Header(None)):
     return {"apps": apps}
 
 
-# ---------------------------------------------------------------------------
-# Admin auth helper
-# ---------------------------------------------------------------------------
-
-def _require_admin(authorization: Optional[str]):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization required")
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
-    if parts[1] != ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
