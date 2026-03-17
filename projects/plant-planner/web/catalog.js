@@ -1,23 +1,58 @@
 // catalog.js — Plant catalog sidebar rendering + drag source
 
 function renderCatalog() {
-  var filtered = plants;
-  if (catalogFilter !== "all") {
-    filtered = plants.filter(function(p) { return p.sunlight === catalogFilter; });
+  var filtered = plants.filter(function(p) {
+    var sunOk = catalogFilter === "all" || p.sunlight === catalogFilter;
+    var seasonOk = catalogFilterSeason === "all" ||
+      (p.bloom_season && p.bloom_season.indexOf(catalogFilterSeason) !== -1);
+    var catOk = catalogFilterCategory === "all" || p.category === catalogFilterCategory;
+    return sunOk && seasonOk && catOk;
+  });
+
+  // Gather unique categories for the dropdown
+  var cats = [];
+  for (var i = 0; i < plants.length; i++) {
+    if (plants[i].category && cats.indexOf(plants[i].category) === -1) {
+      cats.push(plants[i].category);
+    }
   }
+  cats.sort();
 
   var html = '<div class="catalog-header">';
   html += '<h5>Plants</h5>';
-  html += '<select id="catalog-filter" class="catalog-filter-select">';
-  html += '<option value="all"' + (catalogFilter === "all" ? " selected" : "") + '>All</option>';
-  html += '<option value="full_sun"' + (catalogFilter === "full_sun" ? " selected" : "") + '>Full Sun</option>';
-  html += '<option value="partial"' + (catalogFilter === "partial" ? " selected" : "") + '>Partial</option>';
-  html += '<option value="shade"' + (catalogFilter === "shade" ? " selected" : "") + '>Shade</option>';
-  html += '</select></div>';
+
+  // Sunlight filter
+  html += '<select id="catalog-filter-sun" class="catalog-filter-select">';
+  html += '<option value="all"' + (catalogFilter === "all" ? " selected" : "") + '>☀ All light</option>';
+  html += '<option value="full_sun"' + (catalogFilter === "full_sun" ? " selected" : "") + '>☀ Full Sun</option>';
+  html += '<option value="partial"' + (catalogFilter === "partial" ? " selected" : "") + '>⛅ Partial</option>';
+  html += '<option value="shade"' + (catalogFilter === "shade" ? " selected" : "") + '>🌙 Shade</option>';
+  html += '</select>';
+
+  // Bloom season filter
+  html += '<select id="catalog-filter-season" class="catalog-filter-select">';
+  html += '<option value="all"' + (catalogFilterSeason === "all" ? " selected" : "") + '>🌸 All seasons</option>';
+  html += '<option value="spring"' + (catalogFilterSeason === "spring" ? " selected" : "") + '>Spring</option>';
+  html += '<option value="summer"' + (catalogFilterSeason === "summer" ? " selected" : "") + '>Summer</option>';
+  html += '<option value="fall"' + (catalogFilterSeason === "fall" ? " selected" : "") + '>Fall</option>';
+  html += '<option value="winter"' + (catalogFilterSeason === "winter" ? " selected" : "") + '>Winter</option>';
+  html += '</select>';
+
+  // Category filter
+  html += '<select id="catalog-filter-cat" class="catalog-filter-select">';
+  html += '<option value="all"' + (catalogFilterCategory === "all" ? " selected" : "") + '>🌱 All types</option>';
+  for (var j = 0; j < cats.length; j++) {
+    var c = cats[j];
+    var label = c.charAt(0).toUpperCase() + c.slice(1);
+    html += '<option value="' + c + '"' + (catalogFilterCategory === c ? " selected" : "") + '>' + label + '</option>';
+  }
+  html += '</select>';
+
+  html += '</div>';
 
   html += '<div class="catalog-list">';
-  for (var i = 0; i < filtered.length; i++) {
-    var p = filtered[i];
+  for (var k = 0; k < filtered.length; k++) {
+    var p = filtered[k];
     html += '\
       <div class="catalog-tile" draggable="true" data-plant-id="' + p.id + '">\
         <span class="catalog-emoji">' + p.emoji + '</span>\
@@ -28,23 +63,41 @@ function renderCatalog() {
       </div>';
   }
   if (filtered.length === 0) {
-    html += '<div class="muted" style="padding:1rem;text-align:center">No plants match filter</div>';
+    html += '<div class="muted" style="padding:1rem;text-align:center">No plants match filters</div>';
   }
   html += '</div>';
   return html;
 }
 
 function bindCatalogEvents() {
-  var filterEl = document.getElementById("catalog-filter");
-  if (filterEl) {
-    filterEl.onchange = function(e) {
+  var sunEl = document.getElementById("catalog-filter-sun");
+  if (sunEl) {
+    sunEl.onchange = function(e) {
       catalogFilter = e.target.value;
-      var sidebar = document.getElementById("catalog-sidebar");
-      if (sidebar) sidebar.innerHTML = renderCatalog();
-      bindCatalogEvents();
-      bindCatalogDrag();
+      refreshCatalog();
     };
   }
+  var seasonEl = document.getElementById("catalog-filter-season");
+  if (seasonEl) {
+    seasonEl.onchange = function(e) {
+      catalogFilterSeason = e.target.value;
+      refreshCatalog();
+    };
+  }
+  var catEl = document.getElementById("catalog-filter-cat");
+  if (catEl) {
+    catEl.onchange = function(e) {
+      catalogFilterCategory = e.target.value;
+      refreshCatalog();
+    };
+  }
+  bindCatalogDrag();
+}
+
+function refreshCatalog() {
+  var sidebar = document.getElementById("catalog-sidebar");
+  if (sidebar) sidebar.innerHTML = renderCatalog();
+  bindCatalogEvents();
   bindCatalogDrag();
 }
 

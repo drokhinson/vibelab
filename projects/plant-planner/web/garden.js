@@ -12,6 +12,7 @@ function renderBuilder() {
   html += '<div class="builder-actions">';
   html += '<button id="toggle-view" class="outline small-btn">' + (viewMode === "top" ? "Side View" : "Top View") + '</button>';
   html += '<button id="save-garden" class="small-btn">Save</button>';
+  html += '<button id="reseed-garden" class="secondary outline small-btn">Reseed</button>';
   html += '<button id="clear-grid" class="secondary outline small-btn">Clear</button>';
   html += '</div></div>';
 
@@ -51,27 +52,68 @@ function renderTopGrid(g) {
     }
   }
   html += '</div>';
-  // Coordinates label
   html += '<div class="muted" style="text-align:center;margin-top:0.25rem;font-size:0.75rem">Each cell = 1 sq ft</div>';
   return html;
 }
 
 function renderSideView(g) {
   var maxH = 84; // max plant height for scaling
-  var html = '<div class="side-view">';
-  // Render one column per grid x, showing tallest plant in that column
-  for (var x = 0; x < g.grid_width; x++) {
-    var tallest = null;
-    for (var y = 0; y < g.grid_height; y++) {
-      var p = gridPlacements[x + "," + y];
-      if (p && (!tallest || p.height_inches > tallest.height_inches)) tallest = p;
+
+  // Compass angle buttons
+  var angles = [
+    { id: "south", label: "↑ S" },
+    { id: "north", label: "↓ N" },
+    { id: "east",  label: "→ E" },
+    { id: "west",  label: "← W" }
+  ];
+  var html = '<div class="side-compass">';
+  for (var a = 0; a < angles.length; a++) {
+    var ang = angles[a];
+    var active = sideViewAngle === ang.id ? " active" : "";
+    html += '<button class="compass-btn' + active + '" data-angle="' + ang.id + '">' + ang.label + '</button>';
+  }
+  html += '</div>';
+
+  // Build the column list based on angle
+  // Each "slice" is the profile seen from that direction
+  var slices = [];
+  if (sideViewAngle === "south" || sideViewAngle === "north") {
+    // Looking along y-axis — each column is an x position
+    var xStart = sideViewAngle === "south" ? 0 : g.grid_width - 1;
+    var xEnd   = sideViewAngle === "south" ? g.grid_width : -1;
+    var xStep  = sideViewAngle === "south" ? 1 : -1;
+    for (var x = xStart; x !== xEnd; x += xStep) {
+      var tallest = null;
+      for (var y = 0; y < g.grid_height; y++) {
+        var p = gridPlacements[x + "," + y];
+        if (p && (!tallest || p.height_inches > tallest.height_inches)) tallest = p;
+      }
+      slices.push(tallest);
     }
-    var barH = tallest ? Math.max(10, (tallest.height_inches / maxH) * 100) : 0;
+  } else {
+    // Looking along x-axis — each column is a y position
+    var yStart = sideViewAngle === "east" ? 0 : g.grid_height - 1;
+    var yEnd   = sideViewAngle === "east" ? g.grid_height : -1;
+    var yStep  = sideViewAngle === "east" ? 1 : -1;
+    for (var yi = yStart; yi !== yEnd; yi += yStep) {
+      var tallestY = null;
+      for (var xi = 0; xi < g.grid_width; xi++) {
+        var pY = gridPlacements[xi + "," + yi];
+        if (pY && (!tallestY || pY.height_inches > tallestY.height_inches)) tallestY = pY;
+      }
+      slices.push(tallestY);
+    }
+  }
+
+  html += '<div class="side-view">';
+  for (var s = 0; s < slices.length; s++) {
+    var tallestSlice = slices[s];
+    var barH = tallestSlice ? Math.max(10, (tallestSlice.height_inches / maxH) * 100) : 0;
     html += '<div class="side-col">';
-    if (tallest) {
+    if (tallestSlice) {
       html += '<div class="side-bar" style="height:' + barH + '%">';
-      html += '<span class="side-emoji">' + tallest.emoji + '</span>';
-      html += '<span class="side-label">' + tallest.height_inches + '"</span>';
+      html += '<span class="side-emoji">' + tallestSlice.emoji + '</span>';
+      html += '<span class="side-label">' + tallestSlice.height_inches + '"</span>';
       html += '</div>';
     } else {
       html += '<div class="side-empty"></div>';
@@ -79,7 +121,9 @@ function renderSideView(g) {
     html += '</div>';
   }
   html += '</div>';
-  html += '<div class="muted" style="text-align:center;margin-top:0.25rem;font-size:0.75rem">Tallest plant per column (side elevation)</div>';
+
+  var dirLabel = { south: "looking North", north: "looking South", east: "looking West", west: "looking East" };
+  html += '<div class="muted" style="text-align:center;margin-top:0.25rem;font-size:0.75rem">Elevation — ' + dirLabel[sideViewAngle] + '</div>';
   return html;
 }
 
@@ -126,6 +170,17 @@ function bindGridEvents(g) {
   });
 }
 
+function bindCompassButtons() {
+  document.querySelectorAll(".compass-btn").forEach(function(btn) {
+    btn.onclick = function() {
+      sideViewAngle = btn.dataset.angle;
+      var gridArea = document.querySelector(".grid-area");
+      if (gridArea) gridArea.innerHTML = renderSideView(currentGarden);
+      bindCompassButtons();
+    };
+  });
+}
+
 function showTooltip(el, plant) {
   var tip = document.getElementById("plant-tooltip");
   if (!tip) return;
@@ -151,11 +206,13 @@ function bindBuilderButtons() {
     renderBuilder();
   };
   document.getElementById("save-garden").onclick = saveGarden;
+  document.getElementById("reseed-garden").onclick = reseedGarden;
   document.getElementById("clear-grid").onclick = function() {
     if (!confirm("Clear all plants from this garden?")) return;
     gridPlacements = {};
     renderBuilder();
   };
+  if (viewMode === "side") bindCompassButtons();
 }
 
 async function saveGarden() {
@@ -180,6 +237,30 @@ async function saveGarden() {
     setTimeout(function() { btn.textContent = "Save"; }, 1500);
   } catch (err) {
     alert("Save failed: " + err.message);
+  } finally {
+    btn.setAttribute("aria-busy", "false");
+    btn.disabled = false;
+  }
+}
+
+async function reseedGarden() {
+  if (!confirm("Reseed for next season? This will clear all current plants and save an empty garden.")) return;
+  var btn = document.getElementById("reseed-garden");
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+  try {
+    await apiFetch("/gardens/" + currentGarden.id + "/plants", {
+      method: "PUT",
+      body: { plants: [] }
+    });
+    gridPlacements = {};
+    btn.textContent = "Reseeded!";
+    setTimeout(function() {
+      btn.textContent = "Reseed";
+      renderBuilder();
+    }, 1200);
+  } catch (err) {
+    alert("Reseed failed: " + err.message);
   } finally {
     btn.setAttribute("aria-busy", "false");
     btn.disabled = false;
