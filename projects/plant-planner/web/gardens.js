@@ -36,7 +36,7 @@ async function renderGardens() {
             </div>\
             <div class="garden-card-meta">\
               <span class="garden-chip">' + shadeIcon + ' ' + shadeLabel + '</span>\
-              <span class="garden-chip">🗓 ' + season + '</span>\
+              <span class="garden-chip">🗓 Last planted: ' + season + '</span>\
             </div>\
           </div>\
           <div class="garden-card-actions">\
