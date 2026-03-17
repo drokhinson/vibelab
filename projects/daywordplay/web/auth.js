@@ -92,6 +92,7 @@ function attachLoginListener() {
       currentUser = data.user;
       await loadInitialData();
       renderApp();
+      initShellListeners();
       initPageListeners();
     } catch (err) {
       document.getElementById('auth-form-wrap').innerHTML = renderLoginForm(err.message);
@@ -118,6 +119,7 @@ function attachRegisterListener() {
       currentUser = data.user;
       await loadInitialData();
       renderApp();
+      initShellListeners();
       initPageListeners();
     } catch (err) {
       document.getElementById('auth-form-wrap').innerHTML = renderRegisterForm(err.message);

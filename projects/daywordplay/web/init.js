@@ -81,36 +81,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  initShellListeners();
   initPageListeners();
-
-  // Set up lazy loading for views that need it
-  setupViewLoading();
 });
 
-// ── Lazy loading setup ────────────────────────────────────────────────────────
-function setupViewLoading() {
-  // When leaderboard becomes visible for the first time, load data
-  const origRenderPage = renderPageContent;
-
-  // Override renderPageContent to also init listeners and lazy-load data
-  window._lastView = currentView;
-}
-
-// ── Tab switching with data loading ──────────────────────────────────────────
-// Override updateTabBar to also load data when switching views
-const _origUpdateTabBar = updateTabBar;
-function updateTabBar() {
-  _origUpdateTabBar();
-
+// ── Shell listeners (tabs, header buttons) ───────────────────────────────────
+// Called once after renderApp() replaces the entire DOM.
+function initShellListeners() {
   document.getElementById('tab-word')?.addEventListener('click', async () => {
-    const prev = currentView;
     currentView = 'home';
     if (!todayData && activeGroupId) await loadTodayWord();
     renderPageContent();
     initPageListeners();
-    document.getElementById('tab-word')?.classList.add('active');
-    document.getElementById('tab-groups')?.classList.remove('active');
-    document.getElementById('tab-stats')?.classList.remove('active');
+    updateTabBar();
   });
 
   document.getElementById('tab-groups')?.addEventListener('click', async () => {
@@ -118,6 +101,7 @@ function updateTabBar() {
     if (!groupsSearchResults.length) await searchGroups('');
     renderPageContent();
     initPageListeners();
+    updateTabBar();
   });
 
   document.getElementById('tab-stats')?.addEventListener('click', async () => {
@@ -127,17 +111,20 @@ function updateTabBar() {
     if (activeGroupId) await loadLeaderboard();
     renderPageContent();
     initPageListeners();
+    updateTabBar();
   });
 
   document.getElementById('profile-btn')?.addEventListener('click', () => {
     currentView = 'profile';
     renderPageContent();
     initPageListeners();
+    updateTabBar();
   });
 
   document.getElementById('dict-btn-header')?.addEventListener('click', () => {
     currentView = 'dictionary';
     renderPageContent();
     initPageListeners();
+    updateTabBar();
   });
 }
