@@ -100,7 +100,7 @@ async function loadProfileHobbies() {
         <div class="hobby-tag">
           <span class="hobby-icon">${cat?.icon || '&#10024;'}</span>
           <span class="hobby-name">${hobby?.name || 'Unknown'}</span>
-          <span class="hobby-peaks">${proficiencyPeaks(uh.proficiency)}</span>
+          <span class="hobby-peaks">${proficiencyPeaks(uh.proficiency, uh.levels)}</span>
         </div>
       `;
     }).join('');

@@ -8,7 +8,7 @@ from typing import Optional
 from db import get_supabase
 from . import router
 from .dependencies import get_current_user
-from .constants import PROFICIENCY_LEVELS
+from .constants import get_levels_for_hobby
 from .models import AddHobbyBody, UpdateHobbyBody, CreateHobbyBody
 
 
@@ -30,7 +30,10 @@ async def list_hobbies(category_id: Optional[str] = Query(None)):
     if category_id:
         query = query.eq("category_id", category_id)
     result = query.order("name").execute()
-    return result.data or []
+    hobbies = result.data or []
+    for hobby in hobbies:
+        hobby["levels"] = get_levels_for_hobby(hobby.get("slug", ""))
+    return hobbies
 
 
 @router.post("/hobbies")
@@ -73,14 +76,22 @@ async def list_my_hobbies(user: dict = Depends(get_current_user)):
         .order("created_at")
         .execute()
     )
-    return result.data or []
+    rows = result.data or []
+    for row in rows:
+        slug = (row.get("spotme_hobbies") or {}).get("slug", "")
+        row["levels"] = get_levels_for_hobby(slug)
+    return rows
 
 
 @router.post("/me/hobbies")
 async def add_my_hobby(body: AddHobbyBody, user: dict = Depends(get_current_user)):
-    if body.proficiency not in PROFICIENCY_LEVELS:
-        raise HTTPException(status_code=400, detail=f"Invalid proficiency. Must be one of: {PROFICIENCY_LEVELS}")
     sb = get_supabase()
+    # Look up hobby slug to determine valid levels
+    hobby_row = sb.table("spotme_hobbies").select("slug").eq("id", body.hobby_id).execute()
+    slug = hobby_row.data[0]["slug"] if hobby_row.data else ""
+    valid_levels = [lvl["value"] for lvl in get_levels_for_hobby(slug)]
+    if body.proficiency not in valid_levels:
+        raise HTTPException(status_code=400, detail=f"Invalid proficiency. Must be one of: {valid_levels}")
 
     # Check if already added
     existing = (
@@ -118,8 +129,14 @@ async def update_my_hobby(user_hobby_id: str, body: UpdateHobbyBody, user: dict 
     sb = get_supabase()
     updates = {}
     if body.proficiency is not None:
-        if body.proficiency not in PROFICIENCY_LEVELS:
-            raise HTTPException(status_code=400, detail=f"Invalid proficiency. Must be one of: {PROFICIENCY_LEVELS}")
+        # Look up the hobby slug through the user_hobby join
+        uh_row = sb.table("spotme_user_hobbies").select("spotme_hobbies(slug)").eq("id", user_hobby_id).execute()
+        slug = ""
+        if uh_row.data and uh_row.data[0].get("spotme_hobbies"):
+            slug = uh_row.data[0]["spotme_hobbies"].get("slug", "")
+        valid_levels = [lvl["value"] for lvl in get_levels_for_hobby(slug)]
+        if body.proficiency not in valid_levels:
+            raise HTTPException(status_code=400, detail=f"Invalid proficiency. Must be one of: {valid_levels}")
         updates["proficiency"] = body.proficiency
     if body.notes is not None:
         updates["notes"] = body.notes

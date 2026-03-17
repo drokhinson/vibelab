@@ -1,28 +1,42 @@
 // helpers.js — SpotMe shared utilities
 
 // ── Proficiency helpers ──────────────────────────────────────────────────────
-const PROFICIENCY_LABELS = {
-  want_to_learn: "Want to Learn",
-  beginner: "Beginner",
-  intermediate: "Intermediate",
-  advanced: "Advanced",
-  expert: "Expert",
-};
+// levels: array of {value, label} from the API. Falls back gracefully.
 
-const PROFICIENCY_PEAKS = {
-  want_to_learn: 0,
-  beginner: 1,
-  intermediate: 2,
-  advanced: 3,
-  expert: 4,
-};
-
-function proficiencyLabel(p) {
-  return PROFICIENCY_LABELS[p] || p;
+function proficiencyLabel(p, levels) {
+  if (levels) {
+    const match = levels.find(l => l.value === p);
+    if (match) return match.label;
+  }
+  // Legacy fallback for values stored before hobby-specific levels
+  const LEGACY = {
+    want_to_learn: "Want to Learn", beginner: "Beginner",
+    intermediate: "Intermediate",  advanced: "Advanced", expert: "Expert",
+  };
+  return LEGACY[p] || p;
 }
 
-function proficiencyPeaks(p) {
-  const count = PROFICIENCY_PEAKS[p] ?? 0;
+function proficiencyPeaks(p, levels) {
+  if (levels) {
+    const idx = levels.findIndex(l => l.value === p);
+    if (idx === 0) {
+      // First level is always "want to learn"
+      return `<span class="peaks want-to-learn" title="${levels[0].label}">&#9734;</span>`;
+    }
+    if (idx > 0) {
+      const max = levels.length - 1; // exclude want_to_learn slot
+      let html = "";
+      for (let i = 1; i <= max; i++) {
+        html += i <= idx
+          ? '<span class="peak filled">&#9650;</span>'
+          : '<span class="peak empty">&#9650;</span>';
+      }
+      return html;
+    }
+  }
+  // Legacy fallback
+  const LEGACY_PEAKS = { want_to_learn: 0, beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
+  const count = LEGACY_PEAKS[p] ?? 0;
   if (count === 0) return '<span class="peaks want-to-learn" title="Want to Learn">&#9734;</span>';
   let html = "";
   for (let i = 0; i < 4; i++) {
