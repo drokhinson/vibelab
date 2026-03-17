@@ -16,7 +16,7 @@ function renderMealBuilder() {
               <div class="meal-slot-title">${meal.protein.name}</div>
               <div class="meal-slot-sub">${meal.marinade.name} marinade</div>
             </div>
-            <button class="meal-slot-clear" onclick="clearMealComponent('protein')" title="Remove">✕</button>
+            <button class="meal-slot-clear" onclick="clearMealComponent('protein')" title="Remove"><i data-lucide="x"></i></button>
           </div>
         </div>`;
     }
@@ -27,7 +27,7 @@ function renderMealBuilder() {
           <div class="meal-slot-add-label">Protein &amp; Marinade</div>
           <div class="meal-slot-add-hint">Chicken, beef, tofu, fish</div>
         </div>
-        <span class="meal-slot-plus">+</span>
+        <span class="meal-slot-plus"><i data-lucide="plus-circle"></i></span>
       </button>`;
   };
 
@@ -41,7 +41,7 @@ function renderMealBuilder() {
               <div class="meal-slot-title">${meal.carb.name}${meal.prep ? ` — ${meal.prep.name}` : ''}</div>
               <div class="meal-slot-sub">${meal.sauce.name}</div>
             </div>
-            <button class="meal-slot-clear" onclick="clearMealComponent('carb')" title="Remove">✕</button>
+            <button class="meal-slot-clear" onclick="clearMealComponent('carb')" title="Remove"><i data-lucide="x"></i></button>
           </div>
         </div>`;
     }
@@ -52,7 +52,7 @@ function renderMealBuilder() {
           <div class="meal-slot-add-label">Carb &amp; Sauce</div>
           <div class="meal-slot-add-hint">Pasta, rice, noodles, bread…</div>
         </div>
-        <span class="meal-slot-plus">+</span>
+        <span class="meal-slot-plus"><i data-lucide="plus-circle"></i></span>
       </button>`;
   };
 
@@ -66,7 +66,7 @@ function renderMealBuilder() {
               <div class="meal-slot-title">${meal.saladBase.name}</div>
               <div class="meal-slot-sub">${meal.dressing.name}</div>
             </div>
-            <button class="meal-slot-clear" onclick="clearMealComponent('salad')" title="Remove">✕</button>
+            <button class="meal-slot-clear" onclick="clearMealComponent('salad')" title="Remove"><i data-lucide="x"></i></button>
           </div>
         </div>`;
     }
@@ -77,27 +77,47 @@ function renderMealBuilder() {
           <div class="meal-slot-add-label">Salad &amp; Dressing</div>
           <div class="meal-slot-add-hint">Romaine, spinach, arugula…</div>
         </div>
-        <span class="meal-slot-plus">+</span>
+        <span class="meal-slot-plus"><i data-lucide="plus-circle"></i></span>
       </button>`;
   };
+
+  const heroSVG = !hasAny ? `
+    <div class="hero-illustration">
+      <svg width="180" height="140" viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="90" cy="130" rx="62" ry="8" fill="#1A1A2E" opacity="0.06"/>
+        <path d="M28 68 Q28 112 90 112 Q152 112 152 68 Z" fill="#FFF3E6"/>
+        <rect x="20" y="60" width="140" height="14" rx="7" fill="#E85D04"/>
+        <path d="M28 68 Q28 112 90 112 Q152 112 152 68" stroke="#C94E02" stroke-width="2" fill="none"/>
+        <ellipse cx="90" cy="96" rx="40" ry="10" fill="#E85D04" opacity="0.1"/>
+        <circle cx="70" cy="91" r="9" fill="#E85D04" opacity="0.85"/>
+        <circle cx="93" cy="84" r="7" fill="#F48C06" opacity="0.9"/>
+        <circle cx="114" cy="93" r="8" fill="#C94E02" opacity="0.85"/>
+        <circle cx="82" cy="103" r="5" fill="#FAA307" opacity="0.9"/>
+        <path d="M58 76 Q72 62 88 76 Q104 90 118 74" stroke="#E85D04" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.5"/>
+        <path d="M62 56 Q66 44 62 34 Q58 24 62 14" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M90 53 Q94 41 90 31 Q86 21 90 11" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M118 56 Q122 44 118 34 Q114 24 118 14" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      </svg>
+    </div>` : '';
 
   return `
     <div class="status-bar"></div>
     <div class="app-header">
       <div class="logo"><span>🍲</span>SauceBoss</div>
       <div class="subtitle">Build your meal</div>
-      <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager">⚙</button>
+      <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager"><i data-lucide="settings-2"></i></button>
     </div>
     <div class="scroll-body">
+      ${heroSVG}
       <p class="section-label">What are you making tonight?</p>
       <div class="meal-slots">
-        ${proteinSlot()}
-        ${carbSlot()}
-        ${saladSlot()}
+        <div style="--i:0">${proteinSlot()}</div>
+        <div style="--i:1">${carbSlot()}</div>
+        <div style="--i:2">${saladSlot()}</div>
       </div>
       ${hasAny ? `
         <button class="cook-btn" onclick="navigate('meal-recipe')">
-          Let's Cook  →
+          <i data-lucide="chef-hat"></i> Let's Cook
         </button>` : `
         <p class="meal-hint">Add at least one component to get started</p>`
       }
@@ -194,8 +214,8 @@ function renderMealRecipe() {
 
   const timingBanner = `
     <div class="meal-timing-banner">
-      <div class="meal-timing-total">⏱ Total: ~${totalTime} min active</div>
-      ${marineAhead ? `<div class="meal-timing-note">⚠ Start marinade ${marineTime}+ min before you cook</div>` : ''}
+      <div class="meal-timing-total"><i data-lucide="clock"></i> Total: ~${totalTime} min active</div>
+      ${marineAhead ? `<div class="meal-timing-note"><i data-lucide="triangle-alert"></i> Start marinade ${marineTime}+ min before you cook</div>` : ''}
     </div>`;
 
   // ── Section renderer (reuses step-card format) ────────────────────────────
@@ -218,7 +238,7 @@ function renderMealRecipe() {
         displayItems.unshift({ name: `Step ${step.inputFromStep} combined`, amount: dAmt, unit: dUnit });
       }
       const refBadge = refStep
-        ? `<div class="step-ref-badge">⤶ Combine all of Step ${step.inputFromStep} into this bowl</div>` : '';
+        ? `<div class="step-ref-badge"><i data-lucide="corner-down-right"></i> Combine all of Step ${step.inputFromStep} into this bowl</div>` : '';
 
       const pieHTML = buildPieChart(displayItems, 80);
       const legendHTML = buildLegend(displayItems);
@@ -297,7 +317,7 @@ function renderMealRecipe() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>🍲</span>Your Meal</div>
       <div class="subtitle">Full recipe</div>
     </div>

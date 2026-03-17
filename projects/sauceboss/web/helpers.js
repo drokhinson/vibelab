@@ -427,6 +427,11 @@ function render() {
     case 'settings':               app.innerHTML = renderSettings(); break;
     case 'admin':                  app.innerHTML = renderAdmin(); break;
   }
+  _initIcons();
 }
 
 function navigate(screen) { state.screen = screen; render(); }
+
+function _initIcons() {
+  if (window.lucide) requestAnimationFrame(() => lucide.createIcons());
+}

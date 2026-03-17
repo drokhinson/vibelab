@@ -5,8 +5,8 @@ function renderSettings() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('admin')">‹ Back</button>
-      <div class="logo"><span>⚙</span>Admin Login</div>
+      <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
+      <div class="logo"><span><i data-lucide="settings-2"></i></span>Admin Login</div>
       <div class="subtitle">Enter the admin password to manage sauces</div>
     </div>
     <div class="scroll-body">
@@ -47,10 +47,10 @@ function renderAdmin() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('carb-selector')">‹ Back</button>
-      <div class="logo"><span>⚙</span>Sauce Manager</div>
+      <button class="back-btn" onclick="navigate('carb-selector')"><i data-lucide="chevron-left"></i> Back</button>
+      <div class="logo"><span><i data-lucide="settings-2"></i></span>Sauce Manager</div>
       <div class="subtitle">${isAdmin ? 'Admin mode' : ''}</div>
-      ${!isAdmin ? `<button class="settings-btn" onclick="openSettings()" title="Admin login">🔑</button>` : ''}
+      ${!isAdmin ? `<button class="settings-btn" onclick="openSettings()" title="Admin login"><i data-lucide="key-round"></i></button>` : ''}
     </div>
     ${state.adminError ? `<div class="settings-error" style="margin:8px 16px">${state.adminError}</div>` : ''}
     ${tabBar}

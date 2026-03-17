@@ -4,14 +4,14 @@ function renderCarbSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>🍝</span>Pick your carb</div>
-      <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager">⚙</button>
+      <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager"><i data-lucide="settings-2"></i></button>
     </div>
     <div class="scroll-body">
       <div class="carb-grid">
-        ${state.carbs.map(c => `
-          <button class="carb-card" onclick="selectCarb('${c.id}')">
+        ${state.carbs.map((c, i) => `
+          <button class="carb-card" style="--i:${i}" onclick="selectCarb('${c.id}')">
             <span class="carb-emoji">${c.emoji}</span>
             <div class="carb-name">${c.name}</div>
             <div class="carb-desc">${c.desc}</div>
