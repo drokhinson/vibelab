@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light" data-color-scheme="sunlit">
+<html lang="en" data-theme="dark" data-color-scheme="golden">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,7 +8,7 @@
   <!-- Apply saved theme before render to prevent flash -->
   <script>
     (function() {
-      var t = localStorage.getItem("pp_theme") || "sunlit";
+      var t = localStorage.getItem("pp_theme") || "golden";
       var dark = t === "golden";
       document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
       document.documentElement.setAttribute("data-color-scheme", t);
