@@ -49,9 +49,8 @@ function renderAdmin() {
     <div class="app-header">
       <button class="back-btn" onclick="navigate('carb-selector')">‹ Back</button>
       <div class="logo"><span>⚙</span>Sauce Manager</div>
-      <div class="subtitle">
-        ${isAdmin ? 'Admin mode' : '<button class="admin-login-link" onclick="openSettings()">Admin Login</button>'}
-      </div>
+      <div class="subtitle">${isAdmin ? 'Admin mode' : ''}</div>
+      ${!isAdmin ? `<button class="settings-btn" onclick="openSettings()" title="Admin login">🔑</button>` : ''}
     </div>
     ${state.adminError ? `<div class="settings-error" style="margin:8px 16px">${state.adminError}</div>` : ''}
     ${tabBar}
@@ -96,7 +95,18 @@ function renderSaucesTab(isAdmin) {
 }
 
 function renderCarbsTab(isAdmin) {
-  const carbRows = state.carbs.map(c => `
+  const carbRows = state.carbs.map(c => {
+    const preps = (state.carbPreparations || {})[c.id] || [];
+    const prepRows = preps.map(p => `
+      <div class="admin-sauce-row" style="padding-left:32px;opacity:0.8">
+        <span class="sm-carb-emoji" style="font-size:14px">${p.emoji || '↳'}</span>
+        <div class="admin-sauce-info">
+          <div class="admin-sauce-name" style="font-size:13px">${p.name}</div>
+          <div class="admin-sauce-carbs">${p.cookTime || ''}</div>
+        </div>
+      </div>
+    `).join('');
+    return `
     <div class="admin-sauce-row">
       <span class="sm-carb-emoji">${c.emoji}</span>
       <div class="admin-sauce-info">
@@ -104,11 +114,16 @@ function renderCarbsTab(isAdmin) {
         <div class="admin-sauce-carbs">${c.cookTimeLabel || (c.cookTimeMinutes ? c.cookTimeMinutes + ' min' : '')} · ${c.sauceCount || 0} sauce${c.sauceCount !== 1 ? 's' : ''}</div>
       </div>
     </div>
-  `).join('');
+    ${prepRows}`;
+  }).join('');
+
+  const loadingNote = !state.carbPreparations
+    ? '<p style="padding:8px 16px;color:#888;font-size:13px">Loading sub-carbs…</p>'
+    : '';
 
   const addForm = isAdmin ? renderAddCarbForm() : '';
 
-  return carbRows + addForm;
+  return carbRows + loadingNote + addForm;
 }
 
 function renderAddCarbForm() {
@@ -188,6 +203,7 @@ async function openSauceManager() {
   state.sauceManagerTab = 'sauces';
   state.addCarbForm = null;
   state.addAddonForm = null;
+  state.carbPreparations = null;
   try {
     state.adminSauces = await fetchAllSauces();
   } catch (err) {
@@ -206,6 +222,19 @@ function setSauceManagerTab(tab) {
   state.sauceManagerTab = tab;
   state.addCarbForm = null;
   state.addAddonForm = null;
+  if (tab === 'carbs' && !state.carbPreparations) loadCarbPreparations();
+  render();
+}
+
+async function loadCarbPreparations() {
+  const pairs = await Promise.all(
+    state.carbs.map(c =>
+      fetchPreparationsForCarb(c.id)
+        .then(preps => [c.id, preps])
+        .catch(() => [c.id, []])
+    )
+  );
+  state.carbPreparations = Object.fromEntries(pairs);
   render();
 }
 
