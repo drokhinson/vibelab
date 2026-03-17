@@ -8,8 +8,36 @@ from typing import Optional
 from db import get_supabase
 from . import router
 from .dependencies import get_current_user
-from .constants import get_levels_for_hobby
 from .models import AddHobbyBody, UpdateHobbyBody, CreateHobbyBody
+
+
+# ---------------------------------------------------------------------------
+# Level helpers (DB-backed)
+# ---------------------------------------------------------------------------
+
+def _fetch_all_levels(sb) -> dict:
+    """Return all hobby levels from the DB grouped by hobby_id.
+
+    Keys are hobby UUID strings; key None holds the default fallback levels.
+    """
+    result = sb.table("spotme_hobby_levels") \
+        .select("hobby_id, value, label") \
+        .order("sort_order") \
+        .execute()
+    grouped: dict[Optional[str], list[dict]] = {}
+    for row in (result.data or []):
+        key = row["hobby_id"]  # str or None
+        grouped.setdefault(key, []).append({"value": row["value"], "label": row["label"]})
+    return grouped
+
+
+def _levels_for(grouped: dict, hobby_id: str) -> list[dict]:
+    """Pick hobby-specific levels, falling back to defaults (key=None)."""
+    return grouped.get(hobby_id) or grouped.get(None, [])
+
+
+def _valid_values(grouped: dict, hobby_id: str) -> list[str]:
+    return [lvl["value"] for lvl in _levels_for(grouped, hobby_id)]
 
 
 # ---------------------------------------------------------------------------
@@ -31,8 +59,10 @@ async def list_hobbies(category_id: Optional[str] = Query(None)):
         query = query.eq("category_id", category_id)
     result = query.order("name").execute()
     hobbies = result.data or []
+
+    grouped = _fetch_all_levels(sb)
     for hobby in hobbies:
-        hobby["levels"] = get_levels_for_hobby(hobby.get("slug", ""))
+        hobby["levels"] = _levels_for(grouped, hobby["id"])
     return hobbies
 
 
@@ -46,7 +76,6 @@ async def create_hobby(body: CreateHobbyBody, user: dict = Depends(get_current_u
     if existing.data:
         return existing.data[0]
 
-    # Verify category exists
     cat = sb.table("spotme_hobby_categories").select("id").eq("id", body.category_id).execute()
     if not cat.data:
         raise HTTPException(status_code=400, detail="Invalid category_id")
@@ -77,23 +106,24 @@ async def list_my_hobbies(user: dict = Depends(get_current_user)):
         .execute()
     )
     rows = result.data or []
+
+    grouped = _fetch_all_levels(sb)
     for row in rows:
-        slug = (row.get("spotme_hobbies") or {}).get("slug", "")
-        row["levels"] = get_levels_for_hobby(slug)
+        hobby_id = (row.get("spotme_hobbies") or {}).get("id", "")
+        row["levels"] = _levels_for(grouped, hobby_id)
     return rows
 
 
 @router.post("/me/hobbies")
 async def add_my_hobby(body: AddHobbyBody, user: dict = Depends(get_current_user)):
     sb = get_supabase()
-    # Look up hobby slug to determine valid levels
-    hobby_row = sb.table("spotme_hobbies").select("slug").eq("id", body.hobby_id).execute()
-    slug = hobby_row.data[0]["slug"] if hobby_row.data else ""
-    valid_levels = [lvl["value"] for lvl in get_levels_for_hobby(slug)]
-    if body.proficiency not in valid_levels:
-        raise HTTPException(status_code=400, detail=f"Invalid proficiency. Must be one of: {valid_levels}")
+    grouped = _fetch_all_levels(sb)
+    if body.proficiency not in _valid_values(grouped, body.hobby_id):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid proficiency. Must be one of: {_valid_values(grouped, body.hobby_id)}"
+        )
 
-    # Check if already added
     existing = (
         sb.table("spotme_user_hobbies")
         .select("id, is_active")
@@ -105,7 +135,6 @@ async def add_my_hobby(body: AddHobbyBody, user: dict = Depends(get_current_user
         row = existing.data[0]
         if row["is_active"]:
             raise HTTPException(status_code=409, detail="Hobby already added")
-        # Re-activate
         result = sb.table("spotme_user_hobbies").update({
             "is_active": True,
             "proficiency": body.proficiency,
@@ -129,14 +158,14 @@ async def update_my_hobby(user_hobby_id: str, body: UpdateHobbyBody, user: dict 
     sb = get_supabase()
     updates = {}
     if body.proficiency is not None:
-        # Look up the hobby slug through the user_hobby join
-        uh_row = sb.table("spotme_user_hobbies").select("spotme_hobbies(slug)").eq("id", user_hobby_id).execute()
-        slug = ""
-        if uh_row.data and uh_row.data[0].get("spotme_hobbies"):
-            slug = uh_row.data[0]["spotme_hobbies"].get("slug", "")
-        valid_levels = [lvl["value"] for lvl in get_levels_for_hobby(slug)]
-        if body.proficiency not in valid_levels:
-            raise HTTPException(status_code=400, detail=f"Invalid proficiency. Must be one of: {valid_levels}")
+        uh_row = sb.table("spotme_user_hobbies").select("hobby_id").eq("id", user_hobby_id).execute()
+        hobby_id = uh_row.data[0]["hobby_id"] if uh_row.data else ""
+        grouped = _fetch_all_levels(sb)
+        if body.proficiency not in _valid_values(grouped, hobby_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid proficiency. Must be one of: {_valid_values(grouped, hobby_id)}"
+            )
         updates["proficiency"] = body.proficiency
     if body.notes is not None:
         updates["notes"] = body.notes
