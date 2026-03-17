@@ -10,3 +10,4 @@ var gridPlacements = {}; // "x,y" → plant object
 var viewMode = "top";    // "top" | "side"
 var draggedPlant = null; // plant being dragged from catalog
 var catalogFilter = "all"; // sunlight filter: all | full_sun | partial | shade
+var currentTheme = localStorage.getItem("pp_theme") || "sunlit";

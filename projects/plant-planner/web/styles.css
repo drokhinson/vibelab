@@ -1,25 +1,77 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   vibelab design system — base styles
-   Uses Pico.css CSS custom properties. Override per-project below.
+   PlantPlanner — color themes + layout
+   Three themes selectable via data-color-scheme on <html>.
+   Pico.css light/dark is controlled via data-theme on <html>.
    ───────────────────────────────────────────────────────────────────────────── */
 
+/* ── Theme A: Sunlit Garden (default, light) ────────────────────────────────── */
+[data-color-scheme="sunlit"] {
+  --pico-primary:               #3a7d44;
+  --pico-primary-hover:         #2d6a38;
+  --pico-primary-focus:         rgba(58, 125, 68, 0.25);
+  --pico-background-color:      #f9f6f0;
+  --pico-card-background-color: #ffffff;
+  --pico-card-border-color:     rgba(0, 0, 0, 0.08);
+  --pp-accent:                  #e8c84a;
+  --pp-sky:                     #5b9bd5;
+  --pp-grid-bg:                 rgba(58, 125, 68, 0.06);
+  --pp-grid-border:             rgba(58, 125, 68, 0.18);
+  --pp-grid-hover:              rgba(58, 125, 68, 0.13);
+  --pp-grid-drag:               rgba(58, 125, 68, 0.28);
+  --pp-grid-occupied:           rgba(58, 125, 68, 0.16);
+  --pp-side-sky:                rgba(91, 155, 213, 0.08);
+  --pp-side-ground:             rgba(58, 125, 68, 0.06);
+  --pp-side-bar-top:            rgba(58, 125, 68, 0.55);
+  --pp-side-bar-bottom:         rgba(58, 125, 68, 0.2);
+}
+
+/* ── Theme B: Golden Hour (dark, warm) ──────────────────────────────────────── */
+[data-color-scheme="golden"] {
+  --pico-primary:               #5cba60;
+  --pico-primary-hover:         #4da851;
+  --pico-primary-focus:         rgba(92, 186, 96, 0.25);
+  --pico-background-color:      #0f130a;
+  --pico-card-background-color: #151f10;
+  --pico-card-border-color:     rgba(255, 255, 255, 0.06);
+  --pp-accent:                  #f0c040;
+  --pp-sky:                     #4a8fc4;
+  --pp-grid-bg:                 rgba(92, 186, 96, 0.06);
+  --pp-grid-border:             rgba(92, 186, 96, 0.15);
+  --pp-grid-hover:              rgba(92, 186, 96, 0.12);
+  --pp-grid-drag:               rgba(92, 186, 96, 0.25);
+  --pp-grid-occupied:           rgba(92, 186, 96, 0.15);
+  --pp-side-sky:                rgba(74, 143, 196, 0.06);
+  --pp-side-ground:             rgba(92, 186, 96, 0.05);
+  --pp-side-bar-top:            rgba(92, 186, 96, 0.6);
+  --pp-side-bar-bottom:         rgba(92, 186, 96, 0.2);
+}
+
+/* ── Theme C: Greenhouse (light, cool-tinted) ───────────────────────────────── */
+[data-color-scheme="greenhouse"] {
+  --pico-primary:               #2d8653;
+  --pico-primary-hover:         #247045;
+  --pico-primary-focus:         rgba(45, 134, 83, 0.22);
+  --pico-background-color:      #f0f6f4;
+  --pico-card-background-color: #ffffff;
+  --pico-card-border-color:     rgba(0, 0, 0, 0.07);
+  --pp-accent:                  #c9d84a;
+  --pp-sky:                     #3b82c4;
+  --pp-grid-bg:                 rgba(45, 134, 83, 0.06);
+  --pp-grid-border:             rgba(45, 134, 83, 0.15);
+  --pp-grid-hover:              rgba(45, 134, 83, 0.12);
+  --pp-grid-drag:               rgba(45, 134, 83, 0.25);
+  --pp-grid-occupied:           rgba(45, 134, 83, 0.15);
+  --pp-side-sky:                rgba(59, 130, 196, 0.07);
+  --pp-side-ground:             rgba(45, 134, 83, 0.05);
+  --pp-side-bar-top:            rgba(45, 134, 83, 0.55);
+  --pp-side-bar-bottom:         rgba(45, 134, 83, 0.18);
+}
+
+/* ── Shared base vars ───────────────────────────────────────────────────────── */
 :root {
-  /* Brand accent — green for garden theme */
-  --pico-primary:          #4caf50;
-  --pico-primary-hover:    #43a047;
-  --pico-primary-focus:    rgba(76, 175, 80, 0.3);
-
-  /* Surface colors */
-  --pico-background-color: #0d0d14;
-  --pico-card-background-color: #15151f;
-  --pico-card-border-color: rgba(255, 255, 255, 0.06);
-
-  /* Typography */
   --pico-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --pico-font-size: 16px;
   --pico-line-height: 1.6;
-
-  /* Layout — dashboard width */
   --app-max-width: 900px;
   --app-padding: 1rem;
 }
@@ -171,7 +223,7 @@ body {
   border: 1px solid transparent;
 }
 .catalog-tile:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--pp-grid-hover);
   border-color: var(--pico-primary-focus);
 }
 .catalog-tile:active { cursor: grabbing; }
@@ -207,8 +259,8 @@ body {
 }
 .grid-cell {
   aspect-ratio: 1;
-  background: rgba(76, 175, 80, 0.06);
-  border: 1px solid rgba(76, 175, 80, 0.15);
+  background: var(--pp-grid-bg);
+  border: 1px solid var(--pp-grid-border);
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -219,15 +271,15 @@ body {
   min-height: 0;
 }
 .grid-cell:hover {
-  background: rgba(76, 175, 80, 0.12);
-  border-color: rgba(76, 175, 80, 0.3);
+  background: var(--pp-grid-hover);
+  border-color: var(--pico-primary-focus);
 }
 .grid-cell.drag-over {
-  background: rgba(76, 175, 80, 0.25);
+  background: var(--pp-grid-drag);
   border-color: var(--pico-primary);
 }
 .grid-cell.occupied {
-  background: rgba(76, 175, 80, 0.15);
+  background: var(--pp-grid-occupied);
 }
 .cell-emoji {
   font-size: clamp(1rem, 3vw, 2rem);
@@ -242,7 +294,7 @@ body {
   height: 300px;
   border-bottom: 2px solid rgba(139, 90, 43, 0.5);
   padding: 0 0.5rem;
-  background: linear-gradient(to bottom, rgba(135, 206, 235, 0.05) 0%, rgba(76, 175, 80, 0.05) 100%);
+  background: linear-gradient(to bottom, var(--pp-side-sky) 0%, var(--pp-side-ground) 100%);
   border-radius: 4px 4px 0 0;
 }
 .side-col {
@@ -255,7 +307,7 @@ body {
 }
 .side-bar {
   width: 80%;
-  background: linear-gradient(to top, rgba(76, 175, 80, 0.6), rgba(76, 175, 80, 0.2));
+  background: linear-gradient(to top, var(--pp-side-bar-top), var(--pp-side-bar-bottom));
   border-radius: 4px 4px 0 0;
   display: flex;
   flex-direction: column;
@@ -279,7 +331,7 @@ body {
   max-width: 250px;
   z-index: 100;
   pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 /* Dialog styling */
@@ -290,8 +342,34 @@ dialog {
   width: 90%;
 }
 dialog::backdrop {
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.5);
 }
+
+/* Settings theme swatches */
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+}
+.theme-option:has(input:checked) {
+  border-color: var(--pico-primary);
+  background: var(--pico-primary-focus);
+}
+.theme-swatch {
+  width: 36px;
+  height: 24px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+.swatch-sunlit     { background: linear-gradient(135deg, #f9f6f0 50%, #3a7d44 50%); }
+.swatch-golden     { background: linear-gradient(135deg, #0f130a 50%, #f0c040 50%); }
+.swatch-greenhouse { background: linear-gradient(135deg, #f0f6f4 50%, #2d8653 50%); }
 
 /* Responsive: stack on mobile */
 @media (max-width: 600px) {
