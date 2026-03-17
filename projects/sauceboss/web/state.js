@@ -151,6 +151,7 @@ let state = {
   sauceManagerTab: 'sauces',   // 'sauces' | 'carbs' | 'addons'
   addCarbForm: null,            // null = hidden, {} = form open (admin only)
   addAddonForm: null,           // null = hidden, {} = form open (admin only)
+  carbPreparations: null,       // { [carbId]: [...preps] } loaded in carbs tab
 };
 
 function defaultBuilder() {
