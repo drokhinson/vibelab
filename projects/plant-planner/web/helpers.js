@@ -42,7 +42,7 @@ function logout() {
 function updateNav() {
   var navRight = document.getElementById("nav-right");
   if (!navRight) return;
-  var settingsItem = '<li><button class="outline small-btn" id="nav-settings" title="Settings">⚙️</button></li>';
+  var settingsItem = '<li><button class="outline small-btn" id="nav-settings" title="Settings"><i data-lucide="settings"></i></button></li>';
   if (token && currentUser) {
     navRight.innerHTML =
       '<li><a href="#" id="nav-gardens">My Gardens</a></li>' +
@@ -80,7 +80,7 @@ function showThemeSettings() {
 
   dialog.innerHTML =
     '<article>' +
-      '<header><strong>Settings</strong></header>' +
+      '<header><strong><i data-lucide="settings"></i> Settings</strong></header>' +
       '<fieldset>' +
         '<legend>Color Theme</legend>' +
         optionsHtml +
@@ -90,6 +90,7 @@ function showThemeSettings() {
 
   document.body.appendChild(dialog);
   dialog.showModal();
+  _initIcons();
 
   dialog.querySelectorAll('input[name="pp-theme"]').forEach(function(radio) {
     radio.onchange = function() { applyTheme(this.value); };
@@ -114,9 +115,14 @@ function sunlightIcon(s) {
   return "";
 }
 
+function _initIcons() {
+  if (window.lucide) requestAnimationFrame(function() { lucide.createIcons(); });
+}
+
 function render() {
   updateNav();
   if (currentView === "auth") renderAuth();
   else if (currentView === "gardens") renderGardens();
   else if (currentView === "builder") renderBuilder();
+  _initIcons();
 }

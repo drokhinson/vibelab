@@ -11,11 +11,24 @@ async function renderGardens() {
 
   var html = '<div class="gardens-view-header">';
   html += '<h3>My Gardens</h3>';
-  html += '<button id="new-garden-btn" class="outline">+ New Garden</button>';
+  html += '<button id="new-garden-btn" class="outline"><i data-lucide="plus-circle"></i> New Garden</button>';
   html += '</div>';
 
   if (gardens.length === 0) {
-    html += '<div class="empty-state"><p>No gardens yet. Create your first garden!</p></div>';
+    html += '<div class="empty-state empty-state-illustration">' +
+      '<svg width="200" height="160" viewBox="0 0 200 160" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+        '<ellipse cx="100" cy="148" rx="70" ry="8" fill="currentColor" opacity="0.06"/>' +
+        '<rect x="40" y="100" width="120" height="40" rx="6" fill="var(--pico-primary)" opacity="0.15"/>' +
+        '<rect x="45" y="95" width="110" height="10" rx="3" fill="var(--pico-primary)" opacity="0.25"/>' +
+        '<path d="M70 95 Q70 70 60 55 Q68 60 70 50 Q72 60 80 55 Q70 70 70 95Z" fill="var(--pico-primary)" opacity="0.5"/>' +
+        '<path d="M100 95 Q98 60 88 40 Q98 50 100 35 Q102 50 112 40 Q102 60 100 95Z" fill="var(--pico-primary)" opacity="0.65"/>' +
+        '<path d="M130 95 Q130 72 122 60 Q128 64 130 55 Q132 64 138 60 Q130 72 130 95Z" fill="var(--pico-primary)" opacity="0.45"/>' +
+        '<circle cx="88" cy="42" r="5" fill="var(--pp-accent)" opacity="0.8"/>' +
+        '<circle cx="112" cy="38" r="4" fill="var(--pp-accent)" opacity="0.7"/>' +
+        '<circle cx="60" cy="56" r="3.5" fill="var(--pp-accent)" opacity="0.6"/>' +
+      '</svg>' +
+      '<p>No gardens yet. Create your first garden!</p>' +
+    '</div>';
   } else {
     html += '<div class="gardens-grid">';
     for (var i = 0; i < gardens.length; i++) {
@@ -27,21 +40,21 @@ async function renderGardens() {
       var season = g.planting_season ? (g.planting_season.charAt(0).toUpperCase() + g.planting_season.slice(1)) : "Spring";
 
       html += '\
-        <article class="garden-card" data-id="' + g.id + '">\
+        <article class="garden-card" data-id="' + g.id + '" style="--i:' + i + '">\
           <div class="garden-card-body">\
             <div class="garden-card-title">' + escapeHtml(g.name) + '</div>\
             <div class="garden-card-meta">\
               <span class="garden-chip">' + typeIcon + ' ' + typeLabel + '</span>\
-              <span class="garden-chip">' + g.grid_width + '×' + g.grid_height + ' ft</span>\
+              <span class="garden-chip"><i data-lucide="grid-2x2"></i> ' + g.grid_width + '×' + g.grid_height + ' ft</span>\
             </div>\
             <div class="garden-card-meta">\
               <span class="garden-chip">' + shadeIcon + ' ' + shadeLabel + '</span>\
-              <span class="garden-chip">🗓 Last planted: ' + season + '</span>\
+              <span class="garden-chip"><i data-lucide="calendar"></i> ' + season + '</span>\
             </div>\
           </div>\
           <div class="garden-card-actions">\
-            <button class="open-garden-btn" data-id="' + g.id + '">Open</button>\
-            <button class="delete-garden-btn secondary outline" data-id="' + g.id + '">Delete</button>\
+            <button class="open-garden-btn" data-id="' + g.id + '"><i data-lucide="layout-grid"></i> Open</button>\
+            <button class="delete-garden-btn secondary outline" data-id="' + g.id + '"><i data-lucide="trash-2"></i> Delete</button>\
           </div>\
         </article>';
     }
@@ -56,6 +69,7 @@ async function renderGardens() {
   document.querySelectorAll(".delete-garden-btn").forEach(function(btn) {
     btn.onclick = function() { deleteGarden(btn.dataset.id); };
   });
+  _initIcons();
 }
 
 function showNewGardenDialog() {
@@ -106,6 +120,7 @@ function showNewGardenDialog() {
     </article>';
   document.body.appendChild(dialog);
   dialog.showModal();
+  _initIcons();
 
   document.getElementById("size-preset").onchange = function(e) {
     document.getElementById("custom-size").style.display = e.target.value === "custom" ? "block" : "none";
