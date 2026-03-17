@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,15 +23,29 @@ jobs:
           CHANGED=$(git diff --name-only HEAD~1 HEAD \
             | grep '^projects/' \
             | cut -d'/' -f2 \
-            | sort -u \
-            | jq -R . | jq -sc .)
-          echo "matrix={\"project\":$CHANGED}" >> $GITHUB_OUTPUT
-          echo "Changed projects: $CHANGED"
+            | sort -u)
+
+          if [ -z "$CHANGED" ]; then
+            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Build matrix with project name and uppercased key for secret lookup
+          # Dashes are converted to underscores (e.g. plant-planner -> PLANT_PLANNER)
+          MATRIX=$(echo "$CHANGED" | while read p; do
+            UPPER=$(echo "$p" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+            echo "{\"project\":\"$p\",\"projectKey\":\"$UPPER\"}"
+          done | jq -sc .)
+
+          echo "matrix={\"include\":$MATRIX}" >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "Changed projects: $MATRIX"
 
   deploy:
     needs: detect-changes
     runs-on: ubuntu-latest
-    if: needs.detect-changes.outputs.matrix != '{"project":[]}'
+    if: needs.detect-changes.outputs.has_changes == 'true'
     strategy:
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
     steps:
@@ -41,7 +56,6 @@ jobs:
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          # Each project needs its own secret: VERCEL_SAUCEBOSS_PROJECT_ID, etc.
-          vercel-project-id: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', upper(matrix.project))] }}
+          vercel-project-id: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', matrix.projectKey)] }}
           working-directory: ./projects/${{ matrix.project }}/web
           vercel-args: --prod
