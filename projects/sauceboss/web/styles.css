@@ -63,6 +63,41 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   padding-bottom: 32px;
 }
 
+/* ── Tab Bar ── */
+.tab-bar {
+  display: flex;
+  background: #C94E02;
+  padding: 0 8px 8px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.tab-btn {
+  flex: 1;
+  padding: 8px 4px;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  border-radius: 10px;
+  color: rgba(255,255,255,0.75);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-btn.active {
+  background: white;
+  color: #C94E02;
+}
+.tab-btn:not(.active):hover { background: rgba(255,255,255,0.25); color: white; }
+
+/* Empty state (loading placeholder) */
+.empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: #9CA3AF;
+  font-size: 14px;
+}
+
 /* ─────────────────────────────
    SCREEN 1 — Carb Selector
 ───────────────────────────── */

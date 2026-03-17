@@ -1,8 +1,41 @@
 'use strict';
 
-function renderSauceSelector() {
+// Returns header context based on the current screen path.
+function getSauceScreenContext() {
+  if (state.screen === 'dressing-selector') {
+    const base = state.selectedSaladBase;
+    return {
+      sauces: state.dressingsForCurrentBase,
+      backScreen: 'salad-base-selector',
+      emoji: base ? base.emoji : '🥗',
+      title: base ? `${base.name} Dressings` : 'Dressings',
+      compatLabel: (s) => s.compatibleBases ? s.compatibleBases.join(' · ') : '',
+    };
+  }
+  if (state.screen === 'marinade-selector') {
+    const protein = state.selectedProtein;
+    return {
+      sauces: state.marinadesForCurrentProtein,
+      backScreen: 'protein-selector',
+      emoji: protein ? protein.emoji : '🔥',
+      title: protein ? `${protein.name} Marinades` : 'Marinades',
+      compatLabel: (s) => s.compatibleProteins ? s.compatibleProteins.join(' · ') : '',
+    };
+  }
+  // Default: sauces path
   const carb = state.selectedCarb;
-  const sauces = state.saucesForCurrentCarb;
+  return {
+    sauces: state.saucesForCurrentCarb,
+    backScreen: 'protein-veggie-selector',
+    emoji: carb ? carb.emoji : '🍲',
+    title: carb ? `${carb.name} Sauces` : 'Sauces',
+    compatLabel: (s) => s.compatibleCarbs ? s.compatibleCarbs.join(' · ') : '',
+  };
+}
+
+function renderSauceSelector() {
+  const ctx = getSauceScreenContext();
+  const { sauces } = ctx;
   const cuisines = [...new Set(sauces.map(s => s.cuisine))];
   const missingCount = state.disabledIngredients.size;
   const categoryGroups = groupIngredientsByCategory();
@@ -16,12 +49,12 @@ function renderSauceSelector() {
 
   const filterBody = `
     <div class="filter-body ${state.filterOpen ? 'open' : ''}">
-      <p class="filter-hint">Uncheck ingredients you don't have — sauces will update.</p>
+      <p class="filter-hint">Uncheck ingredients you don't have — options will update.</p>
       ${categoryGroups.map(({ category, items, isKey }) => `
         <div class="ingredient-section${isKey ? ' key-section' : ''}">
           <p class="ingredient-section-label">
             ${isKey ? '<span class="section-label-icon">★</span>' : ''}${category}
-            ${isKey ? '<span class="section-label-detail">— unlock the most sauces</span>' : ''}
+            ${isKey ? '<span class="section-label-detail">— unlock the most options</span>' : ''}
           </p>
           <div class="ingredient-chips">${chipHTML(items)}</div>
         </div>
@@ -42,11 +75,12 @@ function renderSauceSelector() {
         const sub = getSubstitutionText(m);
         return sub ? `${m} (try ${sub})` : m;
       }).join(', ');
+      const compatText = ctx.compatLabel(sauce);
       return `<div class="sauce-item ${available ? '' : 'unavailable'}" onclick="selectSauce('${sauce.id}')">
         <span class="sauce-dot" style="background:${sauce.color}"></span>
         <div class="sauce-info">
           <div class="sauce-item-name">${sauce.name}</div>
-          <div class="sauce-item-tags">${sauce.compatibleCarbs.join(' · ')}${missing.length ? ' · missing: '+missingText : ''}</div>
+          <div class="sauce-item-tags">${compatText}${missing.length ? ' · missing: '+missingText : ''}</div>
         </div>
         ${!available ? `<span class="sauce-missing-badge">-${missing.length}</span>` : ''}
         <span class="sauce-arrow">›</span>
@@ -67,9 +101,9 @@ function renderSauceSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('protein-veggie-selector')">‹ Back</button>
-      <div class="logo"><span>${carb.emoji}</span>${carb.name} Sauces</div>
-      <div class="subtitle">${sauces.length} sauces · select your cuisine</div>
+      <button class="back-btn" onclick="navigate('${ctx.backScreen}')">‹ Back</button>
+      <div class="logo"><span>${ctx.emoji}</span>${ctx.title}</div>
+      <div class="subtitle">${sauces.length} options · select your style</div>
     </div>
     <div class="scroll-body">
       <p class="section-label">Ingredient filter</p>
@@ -80,14 +114,15 @@ function renderSauceSelector() {
         </button>
         ${filterBody}
       </div>
-      <p class="section-label">Pick a sauce</p>
+      <p class="section-label">Pick a recipe</p>
       ${accordionHTML}
     </div>
   `;
 }
 
 function selectSauce(id) {
-  state.selectedSauce = state.saucesForCurrentCarb.find(s => s.id === id);
+  const { sauces } = getSauceScreenContext();
+  state.selectedSauce = sauces.find(s => s.id === id);
   navigate('recipe');
 }
 
