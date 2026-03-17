@@ -42,10 +42,12 @@ function logout() {
 function updateNav() {
   var navRight = document.getElementById("nav-right");
   if (!navRight) return;
+  var settingsItem = '<li><button class="outline small-btn" id="nav-settings" title="Settings">⚙️</button></li>';
   if (token && currentUser) {
     navRight.innerHTML =
       '<li><a href="#" id="nav-gardens">My Gardens</a></li>' +
-      '<li><a href="#" id="nav-logout">Logout</a></li>';
+      '<li><a href="#" id="nav-logout">Logout</a></li>' +
+      settingsItem;
     document.getElementById("nav-gardens").onclick = function(e) {
       e.preventDefault();
       showView("gardens");
@@ -55,8 +57,47 @@ function updateNav() {
       logout();
     };
   } else {
-    navRight.innerHTML = "";
+    navRight.innerHTML = settingsItem;
   }
+  document.getElementById("nav-settings").onclick = showThemeSettings;
+}
+
+function showThemeSettings() {
+  var existing = document.getElementById("settings-dialog");
+  if (existing) { existing.showModal(); return; }
+
+  var dialog = document.createElement("dialog");
+  dialog.id = "settings-dialog";
+
+  var optionsHtml = Object.keys(THEMES).map(function(key) {
+    var t = THEMES[key];
+    return '<label class="theme-option">' +
+      '<input type="radio" name="pp-theme" value="' + key + '"' + (currentTheme === key ? " checked" : "") + '>' +
+      '<span class="theme-swatch swatch-' + key + '"></span>' +
+      '<span>' + t.label + '</span>' +
+      '</label>';
+  }).join("");
+
+  dialog.innerHTML =
+    '<article>' +
+      '<header><strong>Settings</strong></header>' +
+      '<fieldset>' +
+        '<legend>Color Theme</legend>' +
+        optionsHtml +
+      '</fieldset>' +
+      '<footer><button id="settings-close">Close</button></footer>' +
+    '</article>';
+
+  document.body.appendChild(dialog);
+  dialog.showModal();
+
+  dialog.querySelectorAll('input[name="pp-theme"]').forEach(function(radio) {
+    radio.onchange = function() { applyTheme(this.value); };
+  });
+  document.getElementById("settings-close").onclick = function() {
+    dialog.close();
+    dialog.remove();
+  };
 }
 
 function sunlightLabel(s) {

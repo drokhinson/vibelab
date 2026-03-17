@@ -1,16 +1,26 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light" data-color-scheme="sunlit">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PlantPlanner</title>
 
-  <!-- Pico.css — classless CSS framework (dark theme) -->
+  <!-- Apply saved theme before render to prevent flash -->
+  <script>
+    (function() {
+      var t = localStorage.getItem("pp_theme") || "sunlit";
+      var dark = t === "golden";
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+      document.documentElement.setAttribute("data-color-scheme", t);
+    })();
+  </script>
+
+  <!-- Pico.css — classless CSS framework -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
-  <!-- vibelab design system + project overrides -->
+  <!-- PlantPlanner styles -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -27,9 +37,10 @@
     </div>
   </main>
 
-  <!-- Scripts: config → state → helpers → features → init -->
+  <!-- Scripts: config → state → theme → helpers → features → init -->
   <script src="config.js"></script>
   <script src="state.js"></script>
+  <script src="theme.js"></script>
   <script src="helpers.js"></script>
   <script src="auth.js"></script>
   <script src="gardens.js"></script>
