@@ -1331,3 +1331,96 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   color: #92400E;
   margin-bottom: 2px;
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   VISUAL POLISH — Motion, Icons, Illustrations
+   ───────────────────────────────────────────────────────────────── */
+
+/* ── Font ── */
+body, button, input, select, textarea {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Entrance animations ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Stagger card grids */
+.carb-grid .carb-card {
+  animation: fadeUp 220ms ease both;
+  animation-delay: calc(var(--i, 0) * 50ms);
+}
+.addon-options-list .addon-option {
+  animation: fadeUp 220ms ease both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+.steps-container .step-card {
+  animation: fadeUp 220ms ease both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+.meal-slots > * {
+  animation: fadeUp 220ms ease both;
+  animation-delay: calc(var(--i, 0) * 80ms);
+}
+
+/* ── Enhanced hover lift ── */
+.carb-card:hover { transform: translateY(-3px); }
+.addon-option { transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; }
+.addon-option:hover { transform: translateY(-2px); }
+
+/* ── Lucide icon sizing ── */
+[data-lucide] {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  stroke-width: 2px;
+}
+.back-btn [data-lucide]           { width: 18px; height: 18px; }
+.settings-btn [data-lucide]       { width: 20px; height: 20px; }
+.meal-slot-clear [data-lucide]    { width: 15px; height: 15px; }
+.meal-slot-plus [data-lucide]     { width: 22px; height: 22px; }
+.cuisine-chevron [data-lucide],
+.filter-chevron [data-lucide]     { width: 14px; height: 14px; transition: transform 0.25s; }
+.cuisine-group.open .cuisine-chevron [data-lucide],
+.filter-chevron.open [data-lucide] { transform: rotate(180deg); }
+.sauce-arrow [data-lucide]        { width: 16px; height: 16px; }
+.chip [data-lucide]               { width: 11px; height: 11px; }
+.section-label-icon [data-lucide] { width: 13px; height: 13px; color: #F59E0B; }
+.step-ref-badge [data-lucide]     { width: 14px; height: 14px; vertical-align: -2px; }
+.tip-card [data-lucide]           { width: 16px; height: 16px; color: #E85D04; }
+.meal-timing-banner [data-lucide] { width: 15px; height: 15px; vertical-align: -2px; }
+
+/* ── Hero illustration container ── */
+.hero-illustration {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 20px;
+  animation: fadeIn 500ms ease both;
+}
+
+/* ── Empty state with illustration ── */
+.empty-state-illustrated {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 36px 20px;
+  animation: fadeIn 300ms ease both;
+}
+.empty-state-illustrated svg { margin-bottom: 14px; opacity: 0.9; }
+.empty-state-illustrated .empty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1A1A2E;
+  margin-bottom: 4px;
+}
+.empty-state-illustrated .empty-desc {
+  font-size: 13px;
+  color: #9CA3AF;
+}

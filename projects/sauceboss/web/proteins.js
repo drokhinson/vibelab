@@ -4,15 +4,15 @@ function renderProteinSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>🔥</span>What are you marinating?</div>
     </div>
     <div class="scroll-body">
       ${state.proteins.length === 0
         ? '<div class="empty-state">Loading proteins…</div>'
         : `<div class="carb-grid">
-            ${state.proteins.map(p => `
-              <button class="carb-card" onclick="selectProtein('${p.id}')">
+            ${state.proteins.map((p, i) => `
+              <button class="carb-card" style="--i:${i}" onclick="selectProtein('${p.id}')">
                 <span class="carb-emoji">${p.emoji}</span>
                 <div class="carb-name">${p.name}</div>
                 <div class="carb-desc">${p.desc || ''}</div>

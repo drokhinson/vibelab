@@ -48,10 +48,10 @@ function renderRecipe() {
     }
 
     const refBadge = refStep
-      ? `<div class="step-ref-badge">⤶ Combine all of Step ${step.inputFromStep} into this bowl</div>`
+      ? `<div class="step-ref-badge"><i data-lucide="corner-down-right"></i> Combine all of Step ${step.inputFromStep} into this bowl</div>`
       : '';
 
-    return `<div class="step-card">
+    return `<div class="step-card" style="--i:${i}">
       <div class="step-header-row">
         <div class="step-number">Step ${i + 1}</div>
         <div class="step-time">~${stepTime}m</div>
@@ -84,7 +84,7 @@ function renderRecipe() {
   return `
     <div class="status-bar"></div>
     <div class="recipe-header">
-      <button class="back-btn" onclick="navigate('${backScreen}')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('${backScreen}')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="recipe-cuisine-badge">${renderEmoji(sauce.cuisineEmoji)} ${sauce.cuisine}</div>
       <div class="recipe-title">${sauce.name}</div>
       <div class="recipe-subtitle">Pair with: ${sauce.compatibleCarbs.join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
@@ -131,7 +131,7 @@ function renderRecipe() {
         ${stepsHTML}
       </div>
       <div class="tip-card">
-        <strong>💡 How to read the chart</strong>
+        <strong><i data-lucide="lightbulb"></i> How to read the chart</strong>
         Each slice shows the relative proportion of that ingredient. Bigger slice = more of it. Adjust the people count above to scale the recipe.
       </div>
     </div>

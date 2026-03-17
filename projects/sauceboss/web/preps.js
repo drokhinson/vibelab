@@ -6,14 +6,14 @@ function renderPrepSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('carb-selector')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('carb-selector')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>${carb.emoji}</span>${carb.name}</div>
       <div class="subtitle">How are you preparing it?</div>
     </div>
     <div class="scroll-body">
       <div class="carb-grid">
-        ${preps.map(p => `
-          <button class="carb-card" onclick="selectPrep('${p.id}')">
+        ${preps.map((p, i) => `
+          <button class="carb-card" style="--i:${i}" onclick="selectPrep('${p.id}')">
             <span class="carb-emoji">${p.emoji || carb.emoji}</span>
             <div class="carb-name">${p.name}</div>
             <div class="carb-desc">${p.cookTime || ''}</div>

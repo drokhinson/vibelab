@@ -6,11 +6,11 @@ function renderProteinVeggieSelector() {
   const selectedIds = new Set(state.selectedAddons.map(a => a.id));
   const count = state.selectedAddons.length;
 
-  const renderOptions = (items) => items.map(o => {
+  const renderOptions = (items) => items.map((o, i) => {
     const isSelected = selectedIds.has(o.id);
     return `
-    <button class="addon-option${isSelected ? ' addon-selected' : ''}" onclick="toggleAddon('${o.id}')">
-      ${isSelected ? '<span class="addon-check">✓</span>' : ''}
+    <button class="addon-option${isSelected ? ' addon-selected' : ''}" style="--i:${i}" onclick="toggleAddon('${o.id}')">
+      ${isSelected ? '<span class="addon-check"><i data-lucide="check"></i></span>' : ''}
       <span class="addon-option-emoji">${o.emoji}</span>
       <div class="addon-option-info">
         <div class="addon-option-name">${o.name}</div>
@@ -27,7 +27,7 @@ function renderProteinVeggieSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('${backScreen}')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('${backScreen}')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>${carb.emoji}</span>Add proteins &amp; veggies?</div>
       <div class="subtitle">Optional — select any combination</div>
     </div>

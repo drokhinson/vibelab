@@ -4,15 +4,15 @@ function renderSaladBaseSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>🥗</span>Pick your salad base</div>
     </div>
     <div class="scroll-body">
       ${state.saladBases.length === 0
         ? '<div class="empty-state">Loading salad bases…</div>'
         : `<div class="carb-grid">
-            ${state.saladBases.map(b => `
-              <button class="carb-card" onclick="selectSaladBase('${b.id}')">
+            ${state.saladBases.map((b, i) => `
+              <button class="carb-card" style="--i:${i}" onclick="selectSaladBase('${b.id}')">
                 <span class="carb-emoji">${b.emoji}</span>
                 <div class="carb-name">${b.name}</div>
                 <div class="carb-desc">${b.description || ''}</div>
