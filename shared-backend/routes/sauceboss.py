@@ -11,14 +11,25 @@ Supabase tables (all prefixed sauceboss_):
 
 Complex reads use the Supabase RPC get_sauceboss_sauces_for_carb(p_carb_id text).
 """
+import os
 import re
 import secrets
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
 
 from db import get_supabase
+
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "dev-admin-key")
+
+
+def _require_admin(authorization: Optional[str] = None):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization required")
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer" or parts[1] != ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
 
 
 # ── Pydantic models for sauce creation ───────────────────────────────────────
@@ -184,3 +195,35 @@ async def upsert_ingredient_category(body: IngredientCategoryInput):
         "p_category": body.category,
     }).execute()
     return {"status": "ok"}
+
+
+# ── Admin endpoints ───────────────────────────────────────────────────────────
+
+@router.get("/admin/sauces")
+async def admin_list_sauces(authorization: Optional[str] = Header(None)):
+    """Return all sauces with their compatible carbs. Requires admin key."""
+    _require_admin(authorization)
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_all_sauces", {}).execute()
+    if result.data is None:
+        return []
+    return result.data
+
+
+@router.delete("/admin/sauces/{sauce_id}")
+async def admin_delete_sauce(sauce_id: str, authorization: Optional[str] = Header(None)):
+    """Delete a sauce and all its steps/ingredients. Requires admin key."""
+    _require_admin(authorization)
+    sb = get_supabase()
+    try:
+        # Get step IDs first for cascading delete
+        steps = sb.table("sauceboss_sauce_steps").select("id").eq("sauce_id", sauce_id).execute()
+        step_ids = [s["id"] for s in (steps.data or [])]
+        if step_ids:
+            sb.table("sauceboss_step_ingredients").delete().in_("step_id", step_ids).execute()
+        sb.table("sauceboss_sauce_steps").delete().eq("sauce_id", sauce_id).execute()
+        sb.table("sauceboss_sauce_carbs").delete().eq("sauce_id", sauce_id).execute()
+        result = sb.table("sauceboss_sauces").delete().eq("id", sauce_id).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+    return {"id": sauce_id, "status": "deleted"}

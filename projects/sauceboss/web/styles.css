@@ -920,3 +920,130 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   border-radius: 8px;
   padding: 2px 8px;
 }
+
+/* ── Multi-select Addon Options ── */
+.addon-selected {
+  border-color: #E85D04 !important;
+  background: #FFF7ED !important;
+  box-shadow: 0 0 0 2px rgba(232,93,4,0.2) !important;
+  position: relative;
+}
+.addon-check {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #E85D04;
+}
+.addon-continue-btn {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: #E85D04;
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.addon-continue-btn:hover { background: #C94E02; }
+
+/* ── Settings / Admin ── */
+.settings-btn {
+  position: absolute;
+  top: 44px;
+  right: 16px;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.settings-btn:hover { background: rgba(255,255,255,0.3); }
+.app-header { position: relative; }
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+.settings-password-input {
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+.settings-error {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #B91C1C;
+  font-weight: 600;
+}
+
+/* ── Admin Sauce List ── */
+.admin-cuisine-group { margin-bottom: 20px; }
+.admin-cuisine-header {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6B7280;
+  padding: 0 0 8px;
+  border-bottom: 1px solid #E5E7EB;
+  margin-bottom: 8px;
+}
+.admin-count {
+  background: #F3F4F6;
+  color: #374151;
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.admin-sauce-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #F3F4F6;
+}
+.admin-sauce-info { flex: 1; min-width: 0; }
+.admin-sauce-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1A1A2E;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-sauce-carbs {
+  font-size: 11px;
+  color: #6B7280;
+  margin-top: 2px;
+}
+.admin-delete-btn {
+  flex-shrink: 0;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #B91C1C;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.admin-delete-btn:hover { background: #FEE2E2; }
