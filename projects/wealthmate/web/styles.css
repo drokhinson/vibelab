@@ -1139,3 +1139,88 @@ dialog article {
     padding: 0;
   }
 }
+
+/* ── Entrance animations ──────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Card list stagger */
+.recent-card,
+.account-card,
+.bill-card,
+.expense-group-card,
+.expense-item-row {
+  animation: fadeUp 200ms ease both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* ── Enhanced hover lift ───────────────────────────────────────────────────── */
+.account-card {
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.account-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.bill-card {
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.bill-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.expense-group-card {
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.expense-group-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.recent-card {
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.recent-card:hover {
+  border-color: rgba(16, 185, 129, 0.35);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Lucide icon sizing ─────────────────────────────────────────────────────── */
+.lucide {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  stroke-width: 2;
+}
+
+/* Nav icons */
+.nav-icon .lucide {
+  width: 1.35rem;
+  height: 1.35rem;
+  vertical-align: middle;
+}
+
+/* Header button icons */
+.btn-sm .lucide,
+.btn-back .lucide {
+  width: 0.9em;
+  height: 0.9em;
+}
+
+/* ── Auth illustration ──────────────────────────────────────────────────────── */
+.auth-illustration {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  opacity: 0.9;
+}
+
+.auth-illustration svg {
+  max-width: 200px;
+  height: auto;
+}

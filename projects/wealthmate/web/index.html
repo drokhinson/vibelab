@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <!-- App styles -->
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -21,6 +23,27 @@
   <div id="view-login" class="view" style="display:none;">
     <div class="auth-container">
       <div class="auth-logo">
+        <div class="auth-illustration">
+          <svg width="200" height="110" viewBox="0 0 200 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Chart area background -->
+            <rect x="10" y="10" width="180" height="90" rx="10" fill="rgba(16,185,129,0.06)" stroke="rgba(16,185,129,0.15)" stroke-width="1"/>
+            <!-- Trend line — upward -->
+            <polyline points="25,80 55,65 80,55 105,40 130,32 160,22 175,16" stroke="#10b981" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Area fill under line -->
+            <polygon points="25,80 55,65 80,55 105,40 130,32 160,22 175,16 175,90 25,90" fill="rgba(16,185,129,0.08)"/>
+            <!-- Data point dots -->
+            <circle cx="25"  cy="80" r="3.5" fill="#10b981"/>
+            <circle cx="80"  cy="55" r="3.5" fill="#10b981"/>
+            <circle cx="130" cy="32" r="3.5" fill="#10b981"/>
+            <circle cx="175" cy="16" r="5"   fill="#34d399"/>
+            <!-- Accent coin circles -->
+            <circle cx="175" cy="16" r="9" fill="rgba(52,211,153,0.15)" stroke="rgba(52,211,153,0.3)" stroke-width="1"/>
+            <!-- Y-axis lines (subtle) -->
+            <line x1="10" y1="90" x2="190" y2="90" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+            <line x1="10" y1="67" x2="190" y2="67" stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="4,4"/>
+            <line x1="10" y1="44" x2="190" y2="44" stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="4,4"/>
+          </svg>
+        </div>
         <span class="logo-icon">$</span>
         <h1>WealthMate</h1>
         <p class="muted">Track your wealth together</p>
@@ -128,7 +151,7 @@
       <!-- ─── Check-In Wizard ─── -->
       <div id="view-checkin" class="view" style="display:none;">
         <div class="wizard-header">
-          <button class="btn-back" id="checkin-back">&larr;</button>
+          <button class="btn-back" id="checkin-back"><i data-lucide="chevron-left"></i></button>
           <h3>Wealth Check-In</h3>
           <div class="wizard-steps" id="wizard-steps">
             <span class="step active" data-step="1">1</span>
@@ -176,7 +199,7 @@
       <div id="view-accounts" class="view" style="display:none;">
         <div class="view-header">
           <h3>Accounts</h3>
-          <button id="btn-add-account" class="btn-sm">+ Add</button>
+          <button id="btn-add-account" class="btn-sm"><i data-lucide="plus"></i> Add</button>
         </div>
         <div id="accounts-list" class="card-grid"></div>
 
@@ -244,13 +267,13 @@
         <div id="cost-big-purchases">
           <div class="view-header" id="big-purchases-header">
             <p class="view-subtitle muted" style="margin:0;">Track large, multi-bill expenses — medical, travel, renovations, etc.</p>
-            <button id="btn-add-expense-group" class="btn-sm">+ New Group</button>
+            <button id="btn-add-expense-group" class="btn-sm"><i data-lucide="plus"></i> New Group</button>
           </div>
           <div id="expense-groups-list" class="card-grid"></div>
 
           <!-- Expense group detail (shown inline) -->
           <div id="expense-detail" style="display:none;">
-            <button class="btn-back" id="expense-detail-back">&larr; Back to Groups</button>
+            <button class="btn-back" id="expense-detail-back"><i data-lucide="chevron-left"></i> Back to Groups</button>
             <h4 id="expense-detail-name"></h4>
             <p class="muted" id="expense-detail-desc"></p>
             <p><strong>Total: </strong><span id="expense-detail-total"></span></p>
@@ -304,7 +327,7 @@
 
           <div class="view-header" style="margin-top:0.75rem;">
             <h5 style="margin:0;">Bills</h5>
-            <button id="btn-add-bill" class="btn-sm">+ Add Bill</button>
+            <button id="btn-add-bill" class="btn-sm"><i data-lucide="plus"></i> Add Bill</button>
           </div>
           <div id="bills-list" class="card-grid"></div>
 
@@ -567,23 +590,23 @@
     <!-- Bottom Navigation -->
     <nav class="bottom-nav" id="bottom-nav">
       <button class="nav-item active" data-view="dashboard">
-        <span class="nav-icon">&#9673;</span>
+        <span class="nav-icon"><i data-lucide="home"></i></span>
         <span class="nav-label">Home</span>
       </button>
       <button class="nav-item" data-view="accounts">
-        <span class="nav-icon">&#9881;</span>
+        <span class="nav-icon"><i data-lucide="landmark"></i></span>
         <span class="nav-label">Accounts</span>
       </button>
       <button class="nav-item" data-view="history">
-        <span class="nav-icon">&#9670;</span>
+        <span class="nav-icon"><i data-lucide="trending-up"></i></span>
         <span class="nav-label">History</span>
       </button>
       <button class="nav-item" data-view="expenses">
-        <span class="nav-icon">&#9733;</span>
+        <span class="nav-icon"><i data-lucide="receipt"></i></span>
         <span class="nav-label">Costs</span>
       </button>
       <button class="nav-item" data-view="settings">
-        <span class="nav-icon">&#9776;</span>
+        <span class="nav-icon"><i data-lucide="settings-2"></i></span>
         <span class="nav-label">Settings</span>
       </button>
     </nav>

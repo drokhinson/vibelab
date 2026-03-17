@@ -16,16 +16,17 @@ function renderAccountsList() {
   const grouped = groupAccounts(accounts);
   let html = "";
 
+  let cardIndex = 0;
   const renderGroup = (label, accts) => {
     if (accts.length === 0) return "";
     let g = `<div class="account-group-label">${label}</div>`;
     for (const a of accts) {
-      g += `<div class="account-card" onclick="openEditAccount('${a.id}')">
+      g += `<div class="account-card" onclick="openEditAccount('${a.id}')" style="--i:${cardIndex++}">
         <div class="account-card-info">
           <h5>${a.name}</h5>
           <span class="muted">${typeLabel(a.account_type)}</span>
         </div>
-        <span class="account-card-arrow">&rsaquo;</span>
+        <span class="account-card-arrow"><i data-lucide="chevron-right"></i></span>
       </div>`;
     }
     return g;
@@ -40,6 +41,7 @@ function renderAccountsList() {
   }
 
   container.innerHTML = html;
+  if (window.lucide) lucide.createIcons();
 }
 
 function buildOwnerOptions() {

@@ -104,4 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
   } else {
     showView("login");
   }
+
+  // Init Lucide icons (for static HTML elements like nav, buttons)
+  if (window.lucide) lucide.createIcons();
 });
