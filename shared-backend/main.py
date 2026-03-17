@@ -13,6 +13,7 @@ from routes import sauceboss
 from routes import wealthmate
 from routes import spotme
 from routes import daywordplay
+from routes import plant_planner
 
 # Infrastructure routers
 from routes import analytics
@@ -47,6 +48,7 @@ app.include_router(sauceboss.router)
 app.include_router(wealthmate.router)
 app.include_router(spotme.router)
 app.include_router(daywordplay.router)
+app.include_router(plant_planner.router)
 
 # ── Infrastructure routers ────────────────────────────────────────────────
 app.include_router(analytics.router)
