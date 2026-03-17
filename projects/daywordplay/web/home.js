@@ -150,8 +150,9 @@ function initHomeListeners() {
   });
 
   // No-group prompt
-  document.getElementById('go-groups-btn')?.addEventListener('click', () => {
+  document.getElementById('go-groups-btn')?.addEventListener('click', async () => {
     currentView = 'groups';
+    if (!groupsSearchResults.length) await searchGroups('');
     renderPageContent();
     initPageListeners();
     updateTabBar();
