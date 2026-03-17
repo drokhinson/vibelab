@@ -4,11 +4,9 @@ function renderSaladBaseSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <div class="logo"><span>🥗</span>SauceBoss</div>
-      <div class="subtitle">Pick your salad base</div>
-      <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager">⚙</button>
+      <button class="back-btn" onclick="navigate('meal-builder')">‹ Back</button>
+      <div class="logo"><span>🥗</span>Pick your salad base</div>
     </div>
-    ${renderTabBar()}
     <div class="scroll-body">
       ${state.saladBases.length === 0
         ? '<div class="empty-state">Loading salad bases…</div>'

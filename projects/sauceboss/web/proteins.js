@@ -4,11 +4,9 @@ function renderProteinSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <div class="logo"><span>🔥</span>SauceBoss</div>
-      <div class="subtitle">What are you marinating?</div>
-      <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager">⚙</button>
+      <button class="back-btn" onclick="navigate('meal-builder')">‹ Back</button>
+      <div class="logo"><span>🔥</span>What are you marinating?</div>
     </div>
-    ${renderTabBar()}
     <div class="scroll-body">
       ${state.proteins.length === 0
         ? '<div class="empty-state">Loading proteins…</div>'

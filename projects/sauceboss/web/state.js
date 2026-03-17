@@ -126,50 +126,61 @@ const CATEGORY_ORDER = ['Produce', 'Dairy', 'Oils & Fats', 'Sauces & Condiments'
 
 // ─── Global state ─────────────────────────────────────────────────────────────
 let state = {
-  // ── Tab navigation ──────────────────────────────────────────────────────────
-  activeTab: 'sauces',          // 'sauces' | 'dressings' | 'marinades'
+  // ── Current screen ──────────────────────────────────────────────────────────
+  screen: 'meal-builder',       // home is the meal builder
 
-  // ── Sauces path (carb → prep → addons → sauce → recipe) ────────────────────
-  screen: 'carb-selector',
+  // ── Meal builder ────────────────────────────────────────────────────────────
+  mealStep: null,               // 'protein' | 'carb' | 'salad' | null — which component is being configured
+  meal: {
+    protein: null,              // selected addon (from state.proteins)
+    marinade: null,             // selected marinade sauce object
+    carb: null,                 // selected carb
+    prep: null,                 // selected carb prep
+    sauce: null,                // selected sauce object
+    saladBase: null,            // selected salad base
+    dressing: null,             // selected dressing sauce object
+  },
+
+  // ── Shared selector state ────────────────────────────────────────────────────
   carbs: [],                    // loaded at boot from DB
   selectedCarb: null,
-  saucesForCurrentCarb: [],     // loaded in selectCarb() from DB
-  allIngredients: [],           // loaded in selectCarb() from DB
+  saucesForCurrentCarb: [],
+  allIngredients: [],
   disabledIngredients: new Set(),
   filterOpen: false,
   expandedCuisines: new Set(),
   selectedSauce: null,
-  servings: 2,                  // number of people (default 2)
+  servings: 2,
   unitSystem: 'imperial',       // 'imperial' | 'metric'
-  ingredientCategories: {},     // name → category lookup
-  substitutions: {},            // name → [{substituteName, notes}] lookup
-  preparations: [],             // loaded per carb in selectCarb()
-  selectedPrep: null,           // currently selected preparation object
-  selectedAddons: [],           // array of selected protein/veggie objects (multi-select)
-  addons: null,                 // { proteins: [], veggies: [] } — loaded from API
+  ingredientCategories: {},
+  substitutions: {},
+  preparations: [],
+  selectedPrep: null,
+  selectedAddons: [],           // addons for the carb path (veggies/proteins with sauce)
+  addons: null,                 // { proteins: [], veggies: [] }
 
-  // ── Dressings path (salad base → dressings → recipe) ───────────────────────
-  saladBases: [],               // loaded when dressings tab is opened
+  // ── Dressings path ──────────────────────────────────────────────────────────
+  saladBases: [],
   selectedSaladBase: null,
-  dressingsForCurrentBase: [],  // loaded when a salad base is selected
-  allDressingIngredients: [],   // for ingredient filter panel
+  dressingsForCurrentBase: [],
+  allDressingIngredients: [],
 
-  // ── Marinades path (protein → marinades → recipe) ──────────────────────────
-  proteins: [],                 // loaded when marinades tab is opened
+  // ── Marinades path ──────────────────────────────────────────────────────────
+  proteins: [],
   selectedProtein: null,
   marinadesForCurrentProtein: [],
   allMarinadeIngredients: [],
 
   // ── Admin / builder ─────────────────────────────────────────────────────────
-  builder: null,                // recipe builder state (set via defaultBuilder())
-  adminKey: null,               // session admin password
-  adminSauces: [],              // loaded in admin screen
+  builder: null,
+  adminKey: null,
+  adminSauces: [],
   adminLoading: false,
   adminError: null,
-  sauceManagerTab: 'sauces',   // 'sauces' | 'carbs' | 'addons'
-  addCarbForm: null,            // null = hidden, {} = form open (admin only)
-  addAddonForm: null,           // null = hidden, {} = form open (admin only)
-  carbPreparations: null,       // { [carbId]: [...preps] } loaded in carbs tab
+  sauceManagerTab: 'sauces',
+  addCarbForm: null,
+  addAddonForm: null,
+  carbPreparations: null,
 };
 
 function defaultBuilder() {
