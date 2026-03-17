@@ -99,11 +99,20 @@ When adding a new app or new tables to the monorepo:
 - **DB storage:** Automatically picked up — tables are grouped by prefix in the storage view.
 
 ### Web Prototypes (`projects/[name]/web/`)
-- No npm, no bundler. Vanilla HTML + Pico.css (via CDN) + vanilla JS.
+- No npm, no bundler. Vanilla HTML + vanilla JS. No build step.
+- **Standard CDN stack** for new projects:
+  - **DaisyUI v4** (Tailwind component library — cards, badges, bottom-nav, toasts, 30+ themes, no build step)
+  - **Lucide Icons** (crisp SVG icon set, replaces emoji for UI chrome)
+  - **Google Fonts: Inter** (body) + optional display font per project
+- Existing projects on Pico.css are migrated to DaisyUI incrementally via `/ui-polish`.
 - `config.js` sets `window.APP_CONFIG = { apiBase: "..." }`. Default: `http://localhost:8000`.
 - Use `fetch()` for all data. Never inline data in JS globals.
 - Mobile-first responsive. Max width 480px for single-column apps, 900px for dashboards.
 - Loading states and error handling are required on every `fetch()`.
+- **Icons:** Use Lucide SVG icons for all UI chrome (nav, buttons, back arrows, action icons). Keep emojis for content/data (food, plants, animals — things that *are* the data).
+- **Illustrations:** Every empty state, loading screen, and app header should include an SVG illustration. Source from [undraw.co](https://undraw.co) (free, MIT). Download the SVG, inline it in the relevant JS render function, and customize the primary fill color to match the project accent.
+- **Motion:** All card lists get entrance animations (`fadeUp` keyframe). Cards get hover lift (`translateY(-2px)` + shadow increase). Stagger list items with `animation-delay: calc(var(--i) * 40ms)`.
+- **Design reference:** Use [v0.app](https://v0.app) to generate visual mockups for complex screens. Do not copy its React code — extract the layout, spacing, and component structure decisions and implement them in DaisyUI + vanilla JS.
 - See **Modular File Structure** below for how to organize JS files.
 
 ### React Native / Expo (`projects/[name]/app/`)

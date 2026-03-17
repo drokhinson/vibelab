@@ -5,30 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{PROJECT_TITLE}}</title>
 
-  <!-- Pico.css — classless CSS framework (dark theme) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <!-- DaisyUI v4 + Tailwind CSS (no build step) -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons (SVG icon set) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+
   <!-- vibelab design system + project overrides -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
-    <nav>
-      <ul><li><strong>{{PROJECT_TITLE}}</strong></li></ul>
-    </nav>
-  </header>
-
-  <main>
-    <div id="app">
-      <div class="loading">Loading…</div>
+  <div id="app">
+    <div class="loading-screen">
+      <span class="loading loading-spinner loading-lg"></span>
+      <p class="text-base-content/50 mt-3 text-sm">Loading…</p>
     </div>
-  </main>
+  </div>
 
   <!-- API config (update apiBase for production) -->
   <script src="config.js"></script>
-  <!-- App logic -->
-  <script src="app.js"></script>
+  <!-- App state -->
+  <script src="state.js"></script>
+  <!-- Helpers & API fetch functions -->
+  <script src="helpers.js"></script>
+  <!-- Feature modules (one per view) -->
+  <!-- <script src="[feature].js"></script> -->
+  <!-- Init: event listeners + startup logic (load last) -->
+  <script src="init.js"></script>
 </body>
 </html>
