@@ -49,15 +49,28 @@ async function loadDashboard() {
     // Recent check-ins
     const recentList = document.getElementById("dash-recent-list");
     if (wealthHistory.length > 0) {
-      recentList.innerHTML = wealthHistory.slice(-5).reverse().map(h => `
-        <div class="recent-card">
+      recentList.innerHTML = wealthHistory.slice(-5).reverse().map((h, i) => `
+        <div class="recent-card" style="--i:${i}">
           <span class="recent-card-date">${fmtDate(h.checkin_date)}</span>
           <span class="recent-card-nw">${fmt(h.net_worth)}</span>
         </div>
       `).join("");
     } else {
-      recentList.innerHTML = '<div class="empty-state">No check-ins yet. Start your first one above!</div>';
+      recentList.innerHTML = `
+        <div class="empty-state">
+          <svg width="120" height="80" viewBox="0 0 120 80" fill="none" style="display:block;margin:0 auto 0.75rem">
+            <rect x="5" y="5" width="110" height="70" rx="8" fill="rgba(16,185,129,0.06)" stroke="rgba(16,185,129,0.12)" stroke-width="1"/>
+            <line x1="20" y1="60" x2="100" y2="60" stroke="rgba(16,185,129,0.2)" stroke-width="1"/>
+            <circle cx="30" cy="60" r="3" fill="rgba(16,185,129,0.3)"/>
+            <circle cx="55" cy="60" r="3" fill="rgba(16,185,129,0.3)"/>
+            <circle cx="80" cy="60" r="3" fill="rgba(16,185,129,0.3)"/>
+            <circle cx="100" cy="60" r="3" fill="rgba(16,185,129,0.3)"/>
+            <text x="60" y="38" text-anchor="middle" font-size="11" fill="rgba(16,185,129,0.4)" font-family="Inter,sans-serif">No data yet</text>
+          </svg>
+          No check-ins yet. Start your first one above!
+        </div>`;
     }
+    if (window.lucide) lucide.createIcons();
   } catch (err) {
     console.error("Dashboard load error:", err);
   }

@@ -45,14 +45,18 @@ function renderExpenseGroups() {
     return;
   }
 
-  container.innerHTML = expenseGroups.map(g => {
+  container.innerHTML = expenseGroups.map((g, i) => {
     const total = g.total || 0;
-    return `<div class="expense-group-card" onclick="openExpenseGroup('${g.id}')">
-      <h5>${g.name}</h5>
+    return `<div class="expense-group-card" onclick="openExpenseGroup('${g.id}')" style="--i:${i}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <h5 style="margin:0 0 0.2rem">${g.name}</h5>
+        <i data-lucide="chevron-right" style="color:var(--pico-muted-color);flex-shrink:0"></i>
+      </div>
       <p class="muted">${g.description || "No description"}</p>
       <span class="expense-group-total">${fmt(total)}</span>
     </div>`;
   }).join("");
+  if (window.lucide) lucide.createIcons();
 }
 
 async function openExpenseGroup(id) {
@@ -85,16 +89,17 @@ function renderExpenseDetail() {
   if (items.length === 0) {
     list.innerHTML = '<div class="empty-state">No items yet.</div>';
   } else {
-    list.innerHTML = items.map(i => `<div class="expense-item-row">
+    list.innerHTML = items.map((item, idx) => `<div class="expense-item-row" style="--i:${idx}">
       <div>
-        <strong>${i.description}</strong>
-        ${i.item_date ? `<span class="muted"> - ${fmtDate(i.item_date)}</span>` : ""}
+        <strong>${item.description}</strong>
+        ${item.item_date ? `<span class="muted"> - ${fmtDate(item.item_date)}</span>` : ""}
       </div>
-      <div>
-        <span>${fmt(i.amount)}</span>
-        <button class="expense-item-delete" onclick="deleteExpenseItem('${currentExpenseGroup.id}', '${i.id}')">&times;</button>
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <span>${fmt(item.amount)}</span>
+        <button class="expense-item-delete" onclick="deleteExpenseItem('${currentExpenseGroup.id}', '${item.id}')"><i data-lucide="trash-2"></i></button>
       </div>
     </div>`).join("");
+    if (window.lucide) lucide.createIcons();
   }
 }
 
@@ -184,8 +189,8 @@ function renderBills() {
     return;
   }
 
-  container.innerHTML = recurringExpenses.map(b => `
-    <div class="bill-card" onclick="openEditBill('${b.id}')">
+  container.innerHTML = recurringExpenses.map((b, i) => `
+    <div class="bill-card" onclick="openEditBill('${b.id}')" style="--i:${i}">
       <div class="bill-card-info">
         <h5>${b.name}<span class="bill-category-badge">${CAT_LABEL[b.category] || b.category}</span></h5>
         ${b.notes ? `<p class="muted">${b.notes}</p>` : ""}
@@ -196,6 +201,7 @@ function renderBills() {
       </div>
     </div>
   `).join("");
+  if (window.lucide) lucide.createIcons();
 }
 
 function openAddBill() {
