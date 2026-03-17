@@ -15,7 +15,6 @@ Supabase tables (all prefixed sauceboss_):
 
 sauce_type values: 'sauce' | 'dressing' | 'marinade'
 """
-import os
 import re
 import secrets
 from typing import List, Optional
@@ -24,16 +23,7 @@ from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
 
 from db import get_supabase
-
-ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "dev-admin-key")
-
-
-def _require_admin(authorization: Optional[str] = None):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization required")
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer" or parts[1] != ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+from auth import require_admin
 
 
 # ── Pydantic models for sauce creation ───────────────────────────────────────
@@ -280,7 +270,7 @@ async def upsert_ingredient_category(body: IngredientCategoryInput):
 @router.get("/admin/sauces")
 async def admin_list_sauces(authorization: Optional[str] = Header(None)):
     """Return all sauces with their compatible carbs. Requires admin key."""
-    _require_admin(authorization)
+    require_admin(authorization)
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_all_sauces", {}).execute()
     if result.data is None:
@@ -299,7 +289,7 @@ class CreateCarbRequest(BaseModel):
 @router.post("/admin/carbs")
 async def admin_create_carb(body: CreateCarbRequest, authorization: Optional[str] = Header(None)):
     """Add a new carb type. Requires admin key."""
-    _require_admin(authorization)
+    require_admin(authorization)
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sb = get_supabase()
     try:
@@ -328,7 +318,7 @@ class CreateAddonRequest(BaseModel):
 @router.post("/admin/addons")
 async def admin_create_addon(body: CreateAddonRequest, authorization: Optional[str] = Header(None)):
     """Add a new protein or veggie addon. Requires admin key."""
-    _require_admin(authorization)
+    require_admin(authorization)
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sb = get_supabase()
     try:
@@ -349,7 +339,7 @@ async def admin_create_addon(body: CreateAddonRequest, authorization: Optional[s
 @router.delete("/admin/sauces/{sauce_id}")
 async def admin_delete_sauce(sauce_id: str, authorization: Optional[str] = Header(None)):
     """Delete a sauce and all its steps/ingredients. Requires admin key."""
-    _require_admin(authorization)
+    require_admin(authorization)
     sb = get_supabase()
     try:
         # Get step IDs first for cascading delete

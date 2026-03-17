@@ -4,18 +4,15 @@ All routes at /api/v1/admin/...
 Protected by ADMIN_API_KEY (Bearer token).
 """
 
-import os
 import secrets
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Header, Query
 
 from db import get_supabase
-from auth import hash_password
+from auth import hash_password, require_admin
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
-
-ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "dev-admin-key")
 
 
 # ---------------------------------------------------------------------------
@@ -154,20 +151,6 @@ APPS_WITH_USERS = {
 
 
 # ---------------------------------------------------------------------------
-# Admin auth
-# ---------------------------------------------------------------------------
-
-def _require_admin(authorization: Optional[str]):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization required")
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
-    if parts[1] != ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-
-# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -182,7 +165,7 @@ async def list_users(
     authorization: Optional[str] = Header(None),
 ):
     """List users for an app. Returns identity fields only — never financial data."""
-    _require_admin(authorization)
+    require_admin(authorization)
 
     if app not in APPS_WITH_USERS:
         raise HTTPException(status_code=400, detail=f"App '{app}' has no user management. Known apps: {list(APPS_WITH_USERS.keys())}")
@@ -205,7 +188,7 @@ async def generate_reset_code(
     authorization: Optional[str] = Header(None),
 ):
     """Generate a password recovery code for a user. Returns the plaintext code."""
-    _require_admin(authorization)
+    require_admin(authorization)
 
     if app not in APPS_WITH_USERS:
         raise HTTPException(status_code=400, detail=f"App '{app}' has no user management.")
@@ -231,7 +214,7 @@ async def generate_reset_code(
 @router.get("/storage")
 async def storage_overview(authorization: Optional[str] = Header(None)):
     """Database storage per app and per table. Calls admin_table_sizes() RPC."""
-    _require_admin(authorization)
+    require_admin(authorization)
 
     sb = get_supabase()
     result = sb.rpc("admin_table_sizes").execute()
@@ -259,7 +242,7 @@ async def storage_overview(authorization: Optional[str] = Header(None)):
 @router.get("/apps-with-users")
 async def apps_with_users(authorization: Optional[str] = Header(None)):
     """Return list of app names that have user management."""
-    _require_admin(authorization)
+    require_admin(authorization)
     return {"apps": list(APPS_WITH_USERS.keys())}
 
 
@@ -270,7 +253,7 @@ async def delete_user(
     authorization: Optional[str] = Header(None),
 ):
     """Delete a user and all their data for the given app."""
-    _require_admin(authorization)
+    require_admin(authorization)
 
     if app not in APPS_WITH_USERS:
         raise HTTPException(status_code=400, detail=f"App '{app}' has no user management.")
