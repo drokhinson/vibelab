@@ -176,6 +176,16 @@ class IngredientCategoryInput(BaseModel):
     category: str = Field(min_length=1)
 
 
+@router.get("/sauces")
+async def list_all_sauces():
+    """Public endpoint: all sauces with full steps, ingredients, and compatible carbs."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_all_sauces_full", {}).execute()
+    if result.data is None:
+        return []
+    return result.data
+
+
 @router.get("/addons")
 async def list_addons():
     """Returns protein and veggie addon options with instructions and timing."""
@@ -208,6 +218,64 @@ async def admin_list_sauces(authorization: Optional[str] = Header(None)):
     if result.data is None:
         return []
     return result.data
+
+
+class CreateCarbRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    emoji: str = Field(min_length=1)
+    description: str = ""
+    cookTimeMinutes: int = 0
+    cookTimeLabel: str = ""
+
+
+@router.post("/admin/carbs")
+async def admin_create_carb(body: CreateCarbRequest, authorization: Optional[str] = Header(None)):
+    """Add a new carb type. Requires admin key."""
+    _require_admin(authorization)
+    slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
+    sb = get_supabase()
+    try:
+        sb.table("sauceboss_carbs").insert({
+            "id": slug,
+            "name": body.name,
+            "emoji": body.emoji,
+            "description": body.description,
+            "cook_time_minutes": body.cookTimeMinutes,
+            "cook_time_label": body.cookTimeLabel,
+        }).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+    return {"id": slug, "status": "created"}
+
+
+class CreateAddonRequest(BaseModel):
+    type: str = Field(pattern=r'^(protein|veggie)$')
+    name: str = Field(min_length=1)
+    emoji: str = Field(min_length=1)
+    desc: str = ""
+    estimatedTime: int = Field(gt=0)
+    instructions: str = Field(min_length=1)
+
+
+@router.post("/admin/addons")
+async def admin_create_addon(body: CreateAddonRequest, authorization: Optional[str] = Header(None)):
+    """Add a new protein or veggie addon. Requires admin key."""
+    _require_admin(authorization)
+    slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
+    sb = get_supabase()
+    try:
+        sb.table("sauceboss_addons").insert({
+            "id": slug,
+            "type": body.type,
+            "name": body.name,
+            "emoji": body.emoji,
+            "description": body.desc,
+            "instructions": body.instructions,
+            "estimated_time": body.estimatedTime,
+        }).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+    return {"id": slug, "status": "created"}
 
 
 @router.delete("/admin/sauces/{sauce_id}")

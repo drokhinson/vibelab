@@ -955,7 +955,7 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 /* ── Settings / Admin ── */
 .settings-btn {
   position: absolute;
-  top: 44px;
+  top: 8px;
   right: 16px;
   background: rgba(255,255,255,0.15);
   border: none;
@@ -1047,3 +1047,98 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   transition: background 0.15s;
 }
 .admin-delete-btn:hover { background: #FEE2E2; }
+
+/* ── Sauce Manager Tabs ── */
+.sauce-manager-tabs {
+  display: flex;
+  border-bottom: 2px solid #F3F4F6;
+  background: #FFFBF5;
+  flex-shrink: 0;
+}
+.sm-tab {
+  flex: 1;
+  padding: 12px 0;
+  background: none;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: #9CA3AF;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.sm-tab-active {
+  color: #E85D04;
+  border-bottom-color: #E85D04;
+}
+.sm-tab:hover:not(.sm-tab-active) { color: #6B7280; }
+
+/* ── Admin Login Link in Header ── */
+.admin-login-link {
+  background: none;
+  border: 1px solid #E85D04;
+  color: #E85D04;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.admin-login-link:hover { background: #FFF7ED; }
+
+/* ── Admin Edit Button ── */
+.admin-edit-btn {
+  flex-shrink: 0;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  color: #1D4ED8;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.admin-edit-btn:hover { background: #DBEAFE; }
+
+/* ── Sauce row clickable ── */
+.admin-sauce-row { cursor: pointer; }
+.admin-sauce-row:hover { background: #FFF7ED; border-radius: 6px; }
+
+/* ── Carb / Addon Tab Rows ── */
+.sm-carb-emoji {
+  font-size: 28px;
+  flex-shrink: 0;
+  width: 36px;
+  text-align: center;
+}
+.sm-type-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.sm-type-protein { background: #FFF3E0; color: #E65100; }
+.sm-type-veggie  { background: #E8F5E9; color: #2E7D32; }
+
+/* ── Add Form (inline) ── */
+.sm-add-form {
+  margin: 12px 0;
+  padding: 14px;
+  background: #FFFBF5;
+  border: 1px solid #FED7AA;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sm-add-form-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #92400E;
+  margin-bottom: 2px;
+}

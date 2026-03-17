@@ -148,6 +148,9 @@ let state = {
   adminSauces: [],              // loaded in admin screen
   adminLoading: false,
   adminError: null,
+  sauceManagerTab: 'sauces',   // 'sauces' | 'carbs' | 'addons'
+  addCarbForm: null,            // null = hidden, {} = form open (admin only)
+  addAddonForm: null,           // null = hidden, {} = form open (admin only)
 };
 
 function defaultBuilder() {
