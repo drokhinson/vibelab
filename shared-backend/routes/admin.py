@@ -117,6 +117,19 @@ async def _delete_daywordplay_user(sb, user_id: str):
     return {"deleted": True, "user_id": user_id, "username": username}
 
 
+async def _delete_plantplanner_user(sb, user_id: str):
+    """Delete a plant-planner user and cascade-remove all their data."""
+    user = sb.table("plantplanner_users").select("id, username").eq("id", user_id).execute()
+    if not user.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    username = user.data[0]["username"]
+
+    # Garden plants and gardens cascade via FK ON DELETE CASCADE,
+    # so deleting the user row is sufficient.
+    sb.table("plantplanner_users").delete().eq("id", user_id).execute()
+    return {"deleted": True, "user_id": user_id, "username": username}
+
+
 APPS_WITH_USERS = {
     "wealthmate": {
         "table": "wealthmate_users",
@@ -131,6 +144,11 @@ APPS_WITH_USERS = {
         "table": "daywordplay_users",
         "identity_columns": "id, username, display_name, email, created_at",
         "delete_handler": _delete_daywordplay_user,
+    },
+    "plant-planner": {
+        "table": "plantplanner_users",
+        "identity_columns": "id, username, display_name, created_at",
+        "delete_handler": _delete_plantplanner_user,
     },
 }
 
