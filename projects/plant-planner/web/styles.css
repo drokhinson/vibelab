@@ -1,6 +1,6 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    PlantPlanner — color themes + layout
-   Three themes selectable via data-color-scheme on <html>.
+   Two themes selectable via data-color-scheme on <html>.
    Pico.css light/dark is controlled via data-theme on <html>.
    ───────────────────────────────────────────────────────────────────────────── */
 
@@ -44,27 +44,6 @@
   --pp-side-ground:             rgba(92, 186, 96, 0.05);
   --pp-side-bar-top:            rgba(92, 186, 96, 0.6);
   --pp-side-bar-bottom:         rgba(92, 186, 96, 0.2);
-}
-
-/* ── Theme C: Greenhouse (light, cool-tinted) ───────────────────────────────── */
-[data-color-scheme="greenhouse"] {
-  --pico-primary:               #2d8653;
-  --pico-primary-hover:         #247045;
-  --pico-primary-focus:         rgba(45, 134, 83, 0.22);
-  --pico-background-color:      #f0f6f4;
-  --pico-card-background-color: #ffffff;
-  --pico-card-border-color:     rgba(0, 0, 0, 0.07);
-  --pp-accent:                  #c9d84a;
-  --pp-sky:                     #3b82c4;
-  --pp-grid-bg:                 rgba(45, 134, 83, 0.06);
-  --pp-grid-border:             rgba(45, 134, 83, 0.15);
-  --pp-grid-hover:              rgba(45, 134, 83, 0.12);
-  --pp-grid-drag:               rgba(45, 134, 83, 0.25);
-  --pp-grid-occupied:           rgba(45, 134, 83, 0.15);
-  --pp-side-sky:                rgba(59, 130, 196, 0.07);
-  --pp-side-ground:             rgba(45, 134, 83, 0.05);
-  --pp-side-bar-top:            rgba(45, 134, 83, 0.55);
-  --pp-side-bar-bottom:         rgba(45, 134, 83, 0.18);
 }
 
 /* ── Shared base vars ───────────────────────────────────────────────────────── */
@@ -462,9 +441,8 @@ dialog::backdrop {
   flex-shrink: 0;
   border: 1px solid rgba(0,0,0,0.1);
 }
-.swatch-sunlit     { background: linear-gradient(135deg, #f9f6f0 50%, #3a7d44 50%); }
-.swatch-golden     { background: linear-gradient(135deg, #0f130a 50%, #f0c040 50%); }
-.swatch-greenhouse { background: linear-gradient(135deg, #f0f6f4 50%, #2d8653 50%); }
+.swatch-sunlit { background: linear-gradient(135deg, #f9f6f0 50%, #3a7d44 50%); }
+.swatch-golden { background: linear-gradient(135deg, #0f130a 50%, #f0c040 50%); }
 
 /* Responsive: stack on mobile */
 @media (max-width: 600px) {
