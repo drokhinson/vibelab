@@ -9,25 +9,40 @@ async function renderGardens() {
     return;
   }
 
-  var html = '<h3>My Gardens</h3>';
+  var html = '<div class="gardens-view-header">';
+  html += '<h3>My Gardens</h3>';
   html += '<button id="new-garden-btn" class="outline">+ New Garden</button>';
+  html += '</div>';
 
   if (gardens.length === 0) {
     html += '<div class="empty-state"><p>No gardens yet. Create your first garden!</p></div>';
   } else {
-    html += '<div class="card-grid">';
+    html += '<div class="gardens-grid">';
     for (var i = 0; i < gardens.length; i++) {
       var g = gardens[i];
+      var typeLabel = g.garden_type === "planter" ? "Planter" : "Garden Bed";
+      var typeIcon = g.garden_type === "planter" ? "🪴" : "🌱";
+      var shadeIcon = sunlightIcon(g.shade_level || "full_sun");
+      var shadeLabel = sunlightLabel(g.shade_level || "full_sun");
+      var season = g.planting_season ? (g.planting_season.charAt(0).toUpperCase() + g.planting_season.slice(1)) : "Spring";
+
       html += '\
         <article class="garden-card" data-id="' + g.id + '">\
-          <header>\
-            <strong>' + escapeHtml(g.name) + '</strong>\
-            <span class="muted"> — ' + g.grid_width + '×' + g.grid_height + ' ft</span>\
-          </header>\
-          <footer>\
-            <button class="open-garden-btn outline" data-id="' + g.id + '">Open</button>\
+          <div class="garden-card-body">\
+            <div class="garden-card-title">' + escapeHtml(g.name) + '</div>\
+            <div class="garden-card-meta">\
+              <span class="garden-chip">' + typeIcon + ' ' + typeLabel + '</span>\
+              <span class="garden-chip">' + g.grid_width + '×' + g.grid_height + ' ft</span>\
+            </div>\
+            <div class="garden-card-meta">\
+              <span class="garden-chip">' + shadeIcon + ' ' + shadeLabel + '</span>\
+              <span class="garden-chip">🗓 ' + season + '</span>\
+            </div>\
+          </div>\
+          <div class="garden-card-actions">\
+            <button class="open-garden-btn" data-id="' + g.id + '">Open</button>\
             <button class="delete-garden-btn secondary outline" data-id="' + g.id + '">Delete</button>\
-          </footer>\
+          </div>\
         </article>';
     }
     html += '</div>';
@@ -50,7 +65,26 @@ function showNewGardenDialog() {
     <article>\
       <header><h4>New Garden</h4></header>\
       <form id="new-garden-form">\
+        <label>Name</label>\
         <input type="text" name="name" placeholder="Garden name" value="My Garden" required />\
+        <label>Type</label>\
+        <select name="garden_type">\
+          <option value="garden_bed">🌱 Garden Bed</option>\
+          <option value="planter">🪴 Planter</option>\
+        </select>\
+        <label>Shade</label>\
+        <select name="shade_level">\
+          <option value="full_sun">☀ Full Sun</option>\
+          <option value="partial">⛅ Partial Shade</option>\
+          <option value="shade">🌙 Full Shade</option>\
+        </select>\
+        <label>Planting Season</label>\
+        <select name="planting_season">\
+          <option value="spring">Spring</option>\
+          <option value="summer">Summer</option>\
+          <option value="fall">Fall</option>\
+          <option value="winter">Winter</option>\
+        </select>\
         <label>Size preset</label>\
         <select name="preset" id="size-preset">\
           <option value="4x4">4×4 ft (Small Planter)</option>\
@@ -64,8 +98,10 @@ function showNewGardenDialog() {
             <input type="number" name="height" placeholder="Height (ft)" min="1" max="20" value="4" />\
           </div>\
         </div>\
-        <button type="submit">Create</button>\
-        <button type="button" class="secondary" id="cancel-new-garden">Cancel</button>\
+        <div style="display:flex;gap:0.5rem;margin-top:1rem">\
+          <button type="submit">Create</button>\
+          <button type="button" class="secondary outline" id="cancel-new-garden">Cancel</button>\
+        </div>\
       </form>\
     </article>';
   document.body.appendChild(dialog);
@@ -94,7 +130,14 @@ function showNewGardenDialog() {
     try {
       await apiFetch("/gardens", {
         method: "POST",
-        body: { name: fd.get("name"), grid_width: w, grid_height: h }
+        body: {
+          name: fd.get("name"),
+          grid_width: w,
+          grid_height: h,
+          garden_type: fd.get("garden_type"),
+          shade_level: fd.get("shade_level"),
+          planting_season: fd.get("planting_season")
+        }
       });
       dialog.close();
       dialog.remove();

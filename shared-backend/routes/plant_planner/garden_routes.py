@@ -31,6 +31,9 @@ async def create_garden(body: CreateGardenBody, user: dict = Depends(get_current
             "name": body.name,
             "grid_width": body.grid_width,
             "grid_height": body.grid_height,
+            "garden_type": body.garden_type,
+            "shade_level": body.shade_level,
+            "planting_season": body.planting_season,
         })
         .execute()
     )
