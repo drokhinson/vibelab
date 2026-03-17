@@ -43,11 +43,11 @@ function renderHobbies() {
     <div class="my-hobbies-section">
       <h3>My Hobbies</h3>
       <div class="hobby-grid">
-        ${myHobbies.map(uh => {
+        ${myHobbies.map((uh, i) => {
           const hobby = uh.spotme_hobbies;
           const cat = hobby?.spotme_hobby_categories;
           return `
-            <div class="hobby-card my-hobby" data-category="${cat?.slug || ''}">
+            <div class="hobby-card my-hobby" data-category="${cat?.slug || ''}" style="--i:${i}">
               <div class="hobby-card-header">
                 <span class="hobby-icon">${cat?.icon || '&#10024;'}</span>
                 <span class="hobby-name">${hobby?.name || 'Unknown'}</span>
@@ -77,11 +77,11 @@ function renderHobbies() {
     <div class="browse-hobbies-section">
       <h3>Browse Hobbies</h3>
       <div class="hobby-grid">
-        ${filteredHobbies.map(h => {
+        ${filteredHobbies.map((h, i) => {
           const cat = h.spotme_hobby_categories;
           const isAdded = myHobbyIds.has(h.id);
           return `
-            <div class="hobby-card browse-hobby ${isAdded ? 'added' : ''}" data-category="${cat?.slug || ''}">
+            <div class="hobby-card browse-hobby ${isAdded ? 'added' : ''}" data-category="${cat?.slug || ''}" style="--i:${i}">
               <div class="hobby-card-header">
                 <span class="hobby-icon">${cat?.icon || '&#10024;'}</span>
                 <span class="hobby-name">${h.name}</span>
@@ -92,7 +92,7 @@ function renderHobbies() {
               <div class="hobby-card-actions">
                 ${isAdded
                   ? '<span class="badge badge-green">Added</span>'
-                  : `<button class="small" onclick="openAddHobby('${h.id}', '${h.name}', '${h.slug}')">+ Add</button>`
+                  : `<button class="small" onclick="openAddHobby('${h.id}', '${h.name}', '${h.slug}')"><i data-lucide="plus"></i> Add</button>`
                 }
               </div>
             </div>
@@ -103,6 +103,7 @@ function renderHobbies() {
   `;
 
   container.innerHTML = filterHtml + myHobbiesHtml + browseHtml;
+  if (window.lucide) lucide.createIcons();
 }
 
 function filterCategory(categoryId) {

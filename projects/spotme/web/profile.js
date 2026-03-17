@@ -19,7 +19,7 @@ function renderProfile() {
 
   const travelingHtml = u.traveling_to_label
     ? `<div class="profile-traveling">
-        <span class="travel-icon">&#127970;</span>
+        <span class="travel-icon"><i data-lucide="plane-takeoff"></i></span>
         Traveling to <strong>${u.traveling_to_label}</strong>
         ${u.traveling_until ? `<span class="muted"> until ${new Date(u.traveling_until).toLocaleDateString()}</span>` : ""}
       </div>`
@@ -36,7 +36,7 @@ function renderProfile() {
       </div>
       ${u.bio ? `<p class="profile-bio">${u.bio}</p>` : '<p class="profile-bio muted">No bio yet</p>'}
       <div class="profile-location">
-        <span class="location-icon">&#128205;</span>
+        <span class="location-icon"><i data-lucide="map-pin"></i></span>
         ${u.home_label || '<span class="muted">No home base set</span>'}
       </div>
       ${travelingHtml}
@@ -44,7 +44,7 @@ function renderProfile() {
         <span class="badge ${u.is_discoverable ? 'badge-green' : 'badge-muted'}">${u.is_discoverable ? "Discoverable" : "Hidden"}</span>
         <span class="muted">Joined ${new Date(u.created_at).toLocaleDateString()}</span>
       </div>
-      <button class="outline" onclick="showEditProfile()">Edit Profile</button>
+      <button class="outline" onclick="showEditProfile()"><i data-lucide="pencil"></i> Edit Profile</button>
     </div>
 
     <div id="edit-profile-section" style="display:none;">
@@ -82,6 +82,7 @@ function renderProfile() {
     </div>
   `;
 
+  if (window.lucide) lucide.createIcons();
   loadProfileHobbies();
 }
 
@@ -90,20 +91,38 @@ async function loadProfileHobbies() {
   try {
     myHobbies = await apiFetch("/me/hobbies");
     if (!myHobbies.length) {
-      container.innerHTML = '<p class="muted">No hobbies added yet. Go to the Hobbies tab to add some!</p>';
+      container.innerHTML = `
+        <div class="empty-state-illo">
+          <svg width="160" height="110" viewBox="0 0 160 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="80" cy="100" rx="60" ry="7" fill="#2d6a4f" opacity="0.07"/>
+            <polygon points="20,100 60,28 100,100" fill="#2d6a4f" opacity="0.18"/>
+            <polygon points="55,100 95,18 135,100" fill="#40916c" opacity="0.22"/>
+            <polygon points="40,100 70,48 100,100" fill="#52b788" opacity="0.12"/>
+            <!-- snow cap -->
+            <polygon points="95,18 85,40 105,40" fill="white" opacity="0.6"/>
+            <!-- compass rose center dot -->
+            <circle cx="80" cy="70" r="14" fill="rgba(45,106,79,0.1)" stroke="#2d6a4f" stroke-width="1.5" stroke-dasharray="4,3"/>
+            <circle cx="80" cy="70" r="3" fill="#d4a373"/>
+            <line x1="80" y1="58" x2="80" y2="62" stroke="#2d6a4f" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="80" y1="78" x2="80" y2="82" stroke="#2d6a4f" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="68" y1="70" x2="72" y2="70" stroke="#2d6a4f" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="88" y1="70" x2="92" y2="70" stroke="#2d6a4f" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <p class="muted">No hobbies yet — explore the Hobbies tab to add some!</p>
+        </div>`;
       return;
     }
-    container.innerHTML = myHobbies.map(uh => {
+    container.innerHTML = `<div class="hobby-tags-list">` + myHobbies.map((uh, i) => {
       const hobby = uh.spotme_hobbies;
       const cat = hobby?.spotme_hobby_categories;
       return `
-        <div class="hobby-tag">
+        <div class="hobby-tag" style="--i:${i}">
           <span class="hobby-icon">${cat?.icon || '&#10024;'}</span>
           <span class="hobby-name">${hobby?.name || 'Unknown'}</span>
           <span class="hobby-peaks">${proficiencyPeaks(uh.proficiency, uh.levels)}</span>
         </div>
       `;
-    }).join('');
+    }).join('') + `</div>`;
   } catch (err) {
     container.innerHTML = `<p class="error-text">${err.message}</p>`;
   }
