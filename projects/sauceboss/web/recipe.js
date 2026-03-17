@@ -2,9 +2,9 @@
 
 function renderRecipe() {
   const sauce = state.selectedSauce;
-  const carb = state.selectedCarb;
-  const carbTotal = (carb.portionPerPerson || 100) * state.servings;
-  const carbUnit = carb.portionUnit || 'g';
+  const carb = state.selectedCarb;  // may be null when coming from sauce manager
+  const carbTotal = carb ? (carb.portionPerPerson || 100) * state.servings : null;
+  const carbUnit = carb ? (carb.portionUnit || 'g') : '';
 
   // Substitution banner for disabled ingredients
   const disabledInRecipe = sauce.ingredients
@@ -22,7 +22,10 @@ function renderRecipe() {
     st.estimatedTime || (SAUCE_TIMES[sauce.id] && SAUCE_TIMES[sauce.id][i]) || 5
   );
   const sauceTime = sauceStepTimes.reduce((s, t) => s + t, 0);
-  const carbTime = (state.selectedPrep?.cookTimeMinutes ?? carb.cookTimeMinutes) ?? CARB_COOK_TIMES[carb.id]?.minutes ?? 0;
+  const carbTime = carb
+    ? ((state.selectedPrep?.cookTimeMinutes ?? carb.cookTimeMinutes) ?? CARB_COOK_TIMES[carb.id]?.minutes ?? 0)
+    : 0;
+  const backScreen = carb ? 'sauce-selector' : 'admin';
   const addons = state.selectedAddons;
   const addonTime = addons.reduce((s, a) => s + (a.estimatedTime || 0), 0);
   const totalTime = sauceTime + carbTime + addonTime;
@@ -81,7 +84,7 @@ function renderRecipe() {
   return `
     <div class="status-bar"></div>
     <div class="recipe-header">
-      <button class="back-btn" onclick="navigate('sauce-selector')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('${backScreen}')">‹ Back</button>
       <div class="recipe-cuisine-badge">${renderEmoji(sauce.cuisineEmoji)} ${sauce.cuisine}</div>
       <div class="recipe-title">${sauce.name}</div>
       <div class="recipe-subtitle">Pair with: ${sauce.compatibleCarbs.join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
@@ -89,8 +92,8 @@ function renderRecipe() {
     <div class="recipe-controls">
       <div class="serving-row">
         <div class="serving-info">
-          <span class="serving-carb">${formatAmount(carbTotal)}${carbUnit} ${carb.name.toLowerCase()}</span>
-          <span class="serving-for">for</span>
+          ${carb ? `<span class="serving-carb">${formatAmount(carbTotal)}${carbUnit} ${carb.name.toLowerCase()}</span>
+          <span class="serving-for">for</span>` : ''}
           <div class="serving-stepper">
             <button class="stepper-btn" onclick="setServings(state.servings - 1)">−</button>
             <span class="stepper-count">${state.servings}</span>
@@ -115,7 +118,7 @@ function renderRecipe() {
       ${state.selectedPrep ? `
       <div class="prep-card">
         <div class="prep-card-header">
-          <span class="prep-card-emoji">${state.selectedPrep.emoji || carb.emoji}</span>
+          <span class="prep-card-emoji">${state.selectedPrep.emoji || (carb ? carb.emoji : '')}</span>
           <div>
             <div class="prep-card-title">${state.selectedPrep.name}</div>
             <div class="prep-card-meta">${state.selectedPrep.cookTime || ''}${state.selectedPrep.waterRatio ? ' · ' + state.selectedPrep.waterRatio : ''}</div>

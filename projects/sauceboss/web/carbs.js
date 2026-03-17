@@ -6,7 +6,7 @@ function renderCarbSelector() {
     <div class="app-header">
       <div class="logo"><span>🍲</span>SauceBoss</div>
       <div class="subtitle">What are you cooking with tonight?</div>
-      <button class="settings-btn" onclick="openSettings()" title="Admin settings">⚙</button>
+      <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager">⚙</button>
     </div>
     <div class="scroll-body">
       <div class="carb-grid">

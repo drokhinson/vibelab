@@ -95,9 +95,45 @@ async function createSauce(data) {
   return res.json();
 }
 
+async function fetchAllSauces() {
+  const res = await fetch(`${API}/api/v1/sauceboss/sauces`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const sauces = await res.json();
+  return sauces.map(sauce => ({
+    ...sauce,
+    ingredientNames: new Set(sauce.ingredients.map(i => i.name)),
+  }));
+}
+
 async function fetchAdminSauces(key) {
   const res = await fetch(`${API}/api/v1/sauceboss/admin/sauces`, {
     headers: { 'Authorization': `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function adminCreateCarb(data, key) {
+  const res = await fetch(`${API}/api/v1/sauceboss/admin/carbs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function adminCreateAddon(data, key) {
+  const res = await fetch(`${API}/api/v1/sauceboss/admin/addons`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify(data),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
