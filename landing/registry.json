@@ -75,7 +75,7 @@
       "description": "Daily vocabulary challenge with friends — learn a new word, write a sentence, vote for the best.",
       "status": "wip",
       "tags": ["vocabulary", "social", "groups", "games"],
-      "webUrl": "",
+      "webUrl": "https://vibelab-daywordplay.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": false,
       "expoSlug": null,
