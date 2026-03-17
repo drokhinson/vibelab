@@ -1,0 +1,245 @@
+'use strict';
+
+async function loadTodayWord() {
+  if (!activeGroupId) return;
+  try {
+    todayData = await apiFetch(`/groups/${activeGroupId}/today`);
+  } catch (err) {
+    todayData = null;
+  }
+}
+
+function renderHomeView() {
+  if (!activeGroupId) {
+    return renderNoGroupPrompt();
+  }
+
+  if (!todayData) {
+    return `<div class="loading" style="height:60vh"></div>`;
+  }
+
+  const { word, submitted, my_sentence, submission_count, member_count, bookmarked } = todayData;
+  const hasYesterday = true; // always show vote option
+
+  return `
+    ${renderGroupSwitcher()}
+    ${renderWordDisplay(word, bookmarked)}
+    ${renderActionRow(word, bookmarked)}
+    ${showEtymology && word.etymology ? renderEtymologyCard(word.etymology) : ''}
+    ${renderSentenceSection(submitted, my_sentence, word.word)}
+    <div class="text-muted text-center mt-16" style="font-size:13px; margin-bottom:16px;">
+      ${submission_count} of ${member_count} members submitted today
+    </div>
+    ${hasYesterday ? `
+      <button class="icon-btn full-width mt-8" id="vote-tab-btn" style="justify-content:center; margin-bottom:24px;">
+        Vote on yesterday's sentences ${icons.chevronRight}
+      </button>
+    ` : ''}
+  `;
+}
+
+function renderNoGroupPrompt() {
+  return `
+    <div class="no-group-prompt">
+      <div class="emoji">👥</div>
+      <h2>Join a Group</h2>
+      <p>You need to be in a group to see the word of the day. Search for a group or create your own!</p>
+      <button class="btn-primary" id="go-groups-btn">Find or Create a Group</button>
+    </div>
+  `;
+}
+
+function renderGroupSwitcher() {
+  if (myGroups.length <= 1) return '';
+  return `
+    <div class="group-switcher">
+      ${myGroups.map(g => `
+        <button class="group-chip ${g.id === activeGroupId ? 'active' : ''}" data-group-switch="${g.id}">
+          ${escHtml(g.name)}
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderWordDisplay(word, bookmarked) {
+  return `
+    <div class="word-display">
+      <div class="word-main">${escHtml(word.word)}</div>
+      ${word.pronunciation ? `
+        <div>
+          <span class="pronunciation-pill">
+            ${icons.volume}
+            ${escHtml(word.pronunciation)}
+          </span>
+        </div>
+      ` : ''}
+      <div class="word-definition">
+        <span class="word-pos">${escHtml(word.part_of_speech)}.</span>
+        ${escHtml(word.definition)}
+      </div>
+    </div>
+  `;
+}
+
+function renderActionRow(word, bookmarked) {
+  return `
+    <div class="action-row">
+      <button class="action-btn ${showEtymology ? 'active' : ''}" id="etymology-btn">
+        ${icons.info}
+        <span>Origin</span>
+      </button>
+      <button class="action-btn" id="share-btn">
+        ${icons.share}
+        <span>Share</span>
+      </button>
+      <button class="action-btn ${bookmarked ? 'active' : ''}" id="bookmark-btn" data-word-id="${word.id}" data-bookmarked="${bookmarked}">
+        ${bookmarked ? icons.bookmarkFill : icons.bookmark}
+        <span>Save</span>
+      </button>
+    </div>
+  `;
+}
+
+function renderEtymologyCard(etymology) {
+  return `
+    <div class="etymology-card">
+      <strong>Etymology:</strong> ${escHtml(etymology)}
+    </div>
+  `;
+}
+
+function renderSentenceSection(submitted, my_sentence, wordText) {
+  if (submitted) {
+    return `
+      <div class="submitted-card">
+        <div class="checkmark">✅</div>
+        <p style="font-weight:600; font-size:15px; color:var(--text-secondary);">Your sentence for today</p>
+        <div class="submitted-sentence-text">"${escHtml(my_sentence.sentence)}"</div>
+        <p class="text-muted">Come back tomorrow to vote on your group's sentences!</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="sentence-section">
+      <h3>Write your sentence</h3>
+      <div class="sentence-input-wrap">
+        <textarea id="sentence-input" placeholder='Use "${wordText}" in a sentence…' rows="3"></textarea>
+        <div class="sentence-submit-row">
+          <button class="btn-primary" id="submit-sentence-btn">Submit</button>
+        </div>
+      </div>
+      <div id="sentence-error"></div>
+    </div>
+  `;
+}
+
+function initHomeListeners() {
+  // Group switcher
+  document.querySelectorAll('[data-group-switch]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      activeGroupId = btn.dataset.groupSwitch;
+      setStoredActiveGroup(activeGroupId);
+      todayData = null;
+      renderPageContent();
+      await loadTodayWord();
+      renderPageContent();
+      initPageListeners();
+    });
+  });
+
+  // No-group prompt
+  document.getElementById('go-groups-btn')?.addEventListener('click', () => {
+    currentView = 'groups';
+    renderPageContent();
+    initPageListeners();
+    updateTabBar();
+  });
+
+  // Etymology toggle
+  document.getElementById('etymology-btn')?.addEventListener('click', () => {
+    showEtymology = !showEtymology;
+    renderPageContent();
+    initPageListeners();
+  });
+
+  // Share
+  document.getElementById('share-btn')?.addEventListener('click', () => {
+    if (todayData?.word) {
+      const text = `Today's word: ${todayData.word.word}\n(${todayData.word.part_of_speech}.) ${todayData.word.definition}`;
+      if (navigator.share) {
+        navigator.share({ title: 'Day Word Play', text }).catch(() => {});
+      } else {
+        navigator.clipboard.writeText(text).catch(() => {});
+        // Brief feedback
+        const btn = document.getElementById('share-btn');
+        if (btn) { btn.querySelector('span').textContent = 'Copied!'; setTimeout(() => { if(document.getElementById('share-btn')) { document.getElementById('share-btn').querySelector('span').textContent = 'Share'; } }, 1500); }
+      }
+    }
+  });
+
+  // Bookmark toggle
+  document.getElementById('bookmark-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const wordId = btn.dataset.wordId;
+    const isBookmarked = btn.dataset.bookmarked === 'true';
+    try {
+      if (isBookmarked) {
+        await apiFetch(`/words/${wordId}/bookmark`, { method: 'DELETE' });
+        if (todayData) todayData.bookmarked = false;
+        bookmarks = bookmarks.filter(b => b.id !== wordId);
+      } else {
+        await apiFetch(`/words/${wordId}/bookmark`, { method: 'POST' });
+        if (todayData) todayData.bookmarked = true;
+        // Refresh bookmarks count
+        const bkData = await apiFetch('/words/bookmarks');
+        bookmarks = bkData.bookmarks || [];
+      }
+      renderPageContent();
+      initPageListeners();
+      // Update header bookmark count
+      const pill = document.querySelector('.bookmark-pill span');
+      if (pill) pill.textContent = `${bookmarks.length}/5+`;
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  // Sentence submission
+  document.getElementById('submit-sentence-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('sentence-input');
+    const errEl = document.getElementById('sentence-error');
+    const sentence = input?.value.trim();
+    if (!sentence || sentence.length < 5) {
+      if (errEl) errEl.innerHTML = renderError('Please write a longer sentence.');
+      return;
+    }
+    const btn = document.getElementById('submit-sentence-btn');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+    try {
+      await apiFetch(`/groups/${activeGroupId}/sentences`, {
+        method: 'POST',
+        body: JSON.stringify({ sentence }),
+      });
+      await loadTodayWord();
+      renderPageContent();
+      initPageListeners();
+    } catch (err) {
+      if (errEl) errEl.innerHTML = renderError(err.message);
+      btn.disabled = false;
+      btn.textContent = 'Submit';
+    }
+  });
+
+  // Vote tab shortcut
+  document.getElementById('vote-tab-btn')?.addEventListener('click', async () => {
+    currentView = 'vote';
+    renderPageContent();
+    await loadYesterdayData();
+    renderPageContent();
+    initPageListeners();
+    updateTabBar();
+  });
+}

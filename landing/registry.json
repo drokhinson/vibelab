@@ -5,7 +5,11 @@
       "name": "SauceBoss",
       "description": "Pick a carb, filter by ingredients, get step-by-step visual sauce recipes.",
       "status": "wip",
-      "tags": ["food", "recipes", "react-native"],
+      "tags": [
+        "food",
+        "recipes",
+        "react-native"
+      ],
       "webUrl": "https://sauceboss-omega.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": true,
@@ -18,7 +22,12 @@
       "name": "SpotMe",
       "description": "Your personal hobby record — track hobbies, proficiency, discover nearby adventurers with shared interests.",
       "status": "wip",
-      "tags": ["hobbies", "social", "discovery", "adventure"],
+      "tags": [
+        "hobbies",
+        "social",
+        "discovery",
+        "adventure"
+      ],
       "webUrl": "https://vibelab-spotme.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": false,
@@ -31,7 +40,11 @@
       "name": "WealthMate",
       "description": "Couples wealth tracking — do periodic check-ins to snapshot account values and watch your net worth grow together.",
       "status": "wip",
-      "tags": ["finance", "couples", "net-worth"],
+      "tags": [
+        "finance",
+        "couples",
+        "net-worth"
+      ],
       "webUrl": "https://vibelab-jusv.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": false,
@@ -44,13 +57,30 @@
       "name": "Vibelab Admin",
       "description": "Owner dashboard for monitoring app usage, managing users, and tracking database storage.",
       "status": "wip",
-      "tags": ["admin", "monitoring", "internal"],
+      "tags": [
+        "admin",
+        "monitoring",
+        "internal"
+      ],
       "webUrl": "https://vibelab-admintool.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": false,
       "expoSlug": null,
       "createdAt": "2026-03-15",
       "icon": "🛠️"
+    },
+    {
+      "id": "daywordplay",
+      "name": "Day Word Play",
+      "description": "Daily vocabulary challenge with friends — learn a new word, write a sentence, vote for the best.",
+      "status": "wip",
+      "tags": ["vocabulary", "social", "groups", "games"],
+      "webUrl": "",
+      "backendUrl": "https://vibelab-production-2119.up.railway.app",
+      "hasNativeApp": false,
+      "expoSlug": null,
+      "createdAt": "2026-03-17",
+      "icon": "📖"
     }
   ]
 }
