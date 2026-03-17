@@ -82,6 +82,44 @@ async function fetchAddons() {
   return res.json();
 }
 
+async function fetchSaladBases() {
+  const res = await fetch(`${API}/api/v1/sauceboss/salad-bases`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchDressingsForBase(baseId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/salad-bases/${encodeURIComponent(baseId)}/dressings`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const dressings = await res.json();
+  return dressings.map(d => ({ ...d, ingredientNames: new Set(d.ingredients.map(i => i.name)) }));
+}
+
+async function fetchIngredientsForBase(baseId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/salad-bases/${encodeURIComponent(baseId)}/ingredients`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchProteins() {
+  const res = await fetch(`${API}/api/v1/sauceboss/proteins`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchMarinadesForProtein(addonId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/proteins/${encodeURIComponent(addonId)}/marinades`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const marinades = await res.json();
+  return marinades.map(m => ({ ...m, ingredientNames: new Set(m.ingredients.map(i => i.name)) }));
+}
+
+async function fetchIngredientsForProtein(addonId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/proteins/${encodeURIComponent(addonId)}/ingredients`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 async function createSauce(data) {
   const res = await fetch(`${API}/api/v1/sauceboss/sauces`, {
     method: 'POST',
@@ -203,9 +241,21 @@ function getSubstitutionText(ingredientName) {
   return subs[0].substituteName;
 }
 
+// Returns the sauce/dressing/marinade list and ingredient list for the current screen.
+function getCurrentSauceContext() {
+  if (state.screen === 'dressing-selector') {
+    return { sauces: state.dressingsForCurrentBase, allIngredients: state.allDressingIngredients };
+  }
+  if (state.screen === 'marinade-selector') {
+    return { sauces: state.marinadesForCurrentProtein, allIngredients: state.allMarinadeIngredients };
+  }
+  return { sauces: state.saucesForCurrentCarb, allIngredients: state.allIngredients };
+}
+
 function getIngredientFrequencies() {
+  const { sauces } = getCurrentSauceContext();
   const freq = {};
-  for (const sauce of state.saucesForCurrentCarb) {
+  for (const sauce of sauces) {
     for (const name of sauce.ingredientNames) {
       freq[name] = (freq[name] || 0) + 1;
     }
@@ -214,13 +264,14 @@ function getIngredientFrequencies() {
 }
 
 function groupIngredientsByCategory() {
+  const { sauces, allIngredients } = getCurrentSauceContext();
   const freq = getIngredientFrequencies();
-  const totalSauces = state.saucesForCurrentCarb.length;
+  const totalSauces = sauces.length;
   const threshold = Math.max(2, Math.ceil(totalSauces * 0.3));
 
   const keySet = new Set();
   const keyItems = [];
-  for (const name of state.allIngredients) {
+  for (const name of allIngredients) {
     if ((freq[name] || 0) >= threshold) {
       keySet.add(name);
       keyItems.push({ name, count: freq[name] });
@@ -229,7 +280,7 @@ function groupIngredientsByCategory() {
   keyItems.sort((a, b) => b.count - a.count);
 
   const groups = {};
-  for (const name of state.allIngredients) {
+  for (const name of allIngredients) {
     if (keySet.has(name)) continue;
     const category = state.ingredientCategories[name] || 'Pantry Staples';
     if (!groups[category]) groups[category] = [];
@@ -363,6 +414,10 @@ function render() {
     case 'prep-selector':          app.innerHTML = renderPrepSelector(); break;
     case 'protein-veggie-selector':app.innerHTML = renderProteinVeggieSelector(); break;
     case 'sauce-selector':         app.innerHTML = renderSauceSelector(); break;
+    case 'salad-base-selector':    app.innerHTML = renderSaladBaseSelector(); break;
+    case 'dressing-selector':      app.innerHTML = renderSauceSelector(); break;
+    case 'protein-selector':       app.innerHTML = renderProteinSelector(); break;
+    case 'marinade-selector':      app.innerHTML = renderSauceSelector(); break;
     case 'recipe':                 app.innerHTML = renderRecipe(); break;
     case 'builder':                app.innerHTML = renderBuilder(); break;
     case 'builder-carbs':          app.innerHTML = renderBuilderCarbs(); break;
@@ -373,3 +428,47 @@ function render() {
 }
 
 function navigate(screen) { state.screen = screen; render(); }
+
+async function switchTab(tab) {
+  if (state.activeTab === tab) return;
+  state.activeTab = tab;
+  state.disabledIngredients = new Set();
+  state.filterOpen = false;
+  state.expandedCuisines = new Set();
+
+  if (tab === 'sauces') {
+    navigate('carb-selector');
+  } else if (tab === 'dressings') {
+    // Lazy-load salad bases on first visit
+    if (state.saladBases.length === 0) {
+      navigate('salad-base-selector'); // shows loading state via empty array guard
+      try {
+        state.saladBases = await fetchSaladBases();
+        render();
+      } catch (err) {
+        document.getElementById('app').innerHTML = `
+          <div style="padding:2rem;text-align:center;color:#dc2626">
+            Failed to load salad bases: ${err.message}
+          </div>`;
+      }
+    } else {
+      navigate('salad-base-selector');
+    }
+  } else if (tab === 'marinades') {
+    // Lazy-load proteins on first visit
+    if (state.proteins.length === 0) {
+      navigate('protein-selector'); // shows loading state via empty array guard
+      try {
+        state.proteins = await fetchProteins();
+        render();
+      } catch (err) {
+        document.getElementById('app').innerHTML = `
+          <div style="padding:2rem;text-align:center;color:#dc2626">
+            Failed to load proteins: ${err.message}
+          </div>`;
+      }
+    } else {
+      navigate('protein-selector');
+    }
+  }
+}

@@ -126,6 +126,10 @@ const CATEGORY_ORDER = ['Produce', 'Dairy', 'Oils & Fats', 'Sauces & Condiments'
 
 // ─── Global state ─────────────────────────────────────────────────────────────
 let state = {
+  // ── Tab navigation ──────────────────────────────────────────────────────────
+  activeTab: 'sauces',          // 'sauces' | 'dressings' | 'marinades'
+
+  // ── Sauces path (carb → prep → addons → sauce → recipe) ────────────────────
   screen: 'carb-selector',
   carbs: [],                    // loaded at boot from DB
   selectedCarb: null,
@@ -143,6 +147,20 @@ let state = {
   selectedPrep: null,           // currently selected preparation object
   selectedAddons: [],           // array of selected protein/veggie objects (multi-select)
   addons: null,                 // { proteins: [], veggies: [] } — loaded from API
+
+  // ── Dressings path (salad base → dressings → recipe) ───────────────────────
+  saladBases: [],               // loaded when dressings tab is opened
+  selectedSaladBase: null,
+  dressingsForCurrentBase: [],  // loaded when a salad base is selected
+  allDressingIngredients: [],   // for ingredient filter panel
+
+  // ── Marinades path (protein → marinades → recipe) ──────────────────────────
+  proteins: [],                 // loaded when marinades tab is opened
+  selectedProtein: null,
+  marinadesForCurrentProtein: [],
+  allMarinadeIngredients: [],
+
+  // ── Admin / builder ─────────────────────────────────────────────────────────
   builder: null,                // recipe builder state (set via defaultBuilder())
   adminKey: null,               // session admin password
   adminSauces: [],              // loaded in admin screen

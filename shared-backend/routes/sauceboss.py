@@ -3,13 +3,17 @@ routes/sauceboss.py — SauceBoss API routes
 All routes at /api/v1/sauceboss/...
 
 Supabase tables (all prefixed sauceboss_):
-  sauceboss_carbs            — id (text PK), name, emoji, description
-  sauceboss_sauces           — id, name, cuisine, cuisine_emoji, color, description
-  sauceboss_sauce_carbs      — sauce_id, carb_id (junction)
-  sauceboss_sauce_steps      — id (bigserial), sauce_id, step_order, title
-  sauceboss_step_ingredients — id (bigserial), step_id, name, amount, unit
+  sauceboss_carbs               — id (text PK), name, emoji, description
+  sauceboss_sauces              — id, name, cuisine, cuisine_emoji, color, description, sauce_type
+  sauceboss_sauce_carbs         — sauce_id, carb_id (junction)
+  sauceboss_salad_bases         — id (text PK), name, emoji, description
+  sauceboss_sauce_salad_bases   — sauce_id, base_id (junction, dressings ↔ bases)
+  sauceboss_sauce_proteins      — sauce_id, addon_id (junction, marinades ↔ proteins)
+  sauceboss_sauce_steps         — id (bigserial), sauce_id, step_order, title
+  sauceboss_step_ingredients    — id (bigserial), step_id, name, amount, unit
+  sauceboss_addons              — id (text PK), type ('protein'|'veggie'), name, emoji, ...
 
-Complex reads use the Supabase RPC get_sauceboss_sauces_for_carb(p_carb_id text).
+sauce_type values: 'sauce' | 'dressing' | 'marinade'
 """
 import os
 import re
@@ -191,6 +195,70 @@ async def list_addons():
     """Returns protein and veggie addon options with instructions and timing."""
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_addons", {}).execute()
+    if result.data is None:
+        return []
+    return result.data
+
+
+# ── Dressings path ────────────────────────────────────────────────────────────
+
+@router.get("/salad-bases")
+async def list_salad_bases():
+    """Returns all salad bases with count of paired dressings."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_salad_bases_with_count", {}).execute()
+    if result.data is None:
+        raise HTTPException(500, "Failed to load salad bases")
+    return result.data
+
+
+@router.get("/salad-bases/{base_id}/dressings")
+async def dressings_for_base(base_id: str):
+    """Returns fully assembled dressings for a given salad base."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_dressings_for_base", {"p_base_id": base_id}).execute()
+    if result.data is None:
+        raise HTTPException(404, f"No dressings found for base '{base_id}'")
+    return result.data
+
+
+@router.get("/salad-bases/{base_id}/ingredients")
+async def ingredients_for_base(base_id: str):
+    """Returns sorted unique ingredient names across all dressings for a salad base."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_ingredients_for_base", {"p_base_id": base_id}).execute()
+    if result.data is None:
+        return []
+    return result.data
+
+
+# ── Marinades path ────────────────────────────────────────────────────────────
+
+@router.get("/proteins")
+async def list_proteins():
+    """Returns protein addons (type='protein') with marinade count for the marinades tab."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_proteins", {}).execute()
+    if result.data is None:
+        return []
+    return result.data
+
+
+@router.get("/proteins/{addon_id}/marinades")
+async def marinades_for_protein(addon_id: str):
+    """Returns fully assembled marinades for a given protein addon."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_marinades_for_protein", {"p_addon_id": addon_id}).execute()
+    if result.data is None:
+        raise HTTPException(404, f"No marinades found for protein '{addon_id}'")
+    return result.data
+
+
+@router.get("/proteins/{addon_id}/ingredients")
+async def ingredients_for_protein(addon_id: str):
+    """Returns sorted unique ingredient names across all marinades for a protein."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_ingredients_for_protein", {"p_addon_id": addon_id}).execute()
     if result.data is None:
         return []
     return result.data
