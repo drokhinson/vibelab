@@ -602,6 +602,96 @@ legend {
   color: var(--sm-primary);
 }
 
+/* ── Entrance animations ──────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Hobby cards stagger */
+.hobby-grid .hobby-card {
+  animation: fadeUp 200ms ease both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* Hobby tags (profile view) stagger */
+.hobby-tags-list .hobby-tag {
+  animation: fadeUp 180ms ease both;
+  animation-delay: calc(var(--i, 0) * 35ms);
+  display: inline-flex;
+}
+
+/* Profile card entrance */
+.profile-card {
+  animation: fadeIn 250ms ease both;
+}
+
+/* ── Enhanced hover lift ──────────────────────────────────────────────────── */
+.hobby-card {
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+
+.hobby-card:hover {
+  background: var(--sm-bg-card-hover);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(45, 106, 79, 0.12);
+}
+
+.hobby-card.my-hobby:hover {
+  border-color: rgba(45, 106, 79, 0.5);
+}
+
+/* ── Lucide icon sizing ────────────────────────────────────────────────────── */
+.lucide {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  stroke-width: 2;
+}
+
+/* Nav icons */
+.nav-icon .lucide {
+  width: 1.3rem;
+  height: 1.3rem;
+  vertical-align: middle;
+}
+
+/* Header icon button */
+.icon-btn .lucide {
+  width: 1.2rem;
+  height: 1.2rem;
+  vertical-align: middle;
+}
+
+/* Location/travel inline icons */
+.profile-location .lucide,
+.profile-traveling .lucide {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+.empty-state-illo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 0.5rem;
+  text-align: center;
+  color: var(--sm-muted);
+}
+
+.empty-state-illo svg {
+  max-width: 180px;
+  height: auto;
+}
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
   .hobby-grid {

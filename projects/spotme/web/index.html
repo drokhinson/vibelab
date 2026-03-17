@@ -10,6 +10,8 @@
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <!-- App styles -->
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -95,7 +97,7 @@
     <!-- Top bar -->
     <header class="app-header">
       <h1 class="app-title">SpotMe</h1>
-      <button class="icon-btn" onclick="showView('settings')" title="Settings">&#9881;</button>
+      <button class="icon-btn" onclick="showView('settings')" title="Settings"><i data-lucide="settings-2"></i></button>
     </header>
 
     <!-- Loading overlay -->
@@ -135,11 +137,11 @@
     <!-- Bottom nav -->
     <nav class="bottom-nav">
       <button class="nav-item active" data-view="profile">
-        <span class="nav-icon">&#128100;</span>
+        <span class="nav-icon"><i data-lucide="user-round"></i></span>
         <span class="nav-label">Profile</span>
       </button>
       <button class="nav-item" data-view="hobbies">
-        <span class="nav-icon">&#127956;</span>
+        <span class="nav-icon"><i data-lucide="mountain"></i></span>
         <span class="nav-label">Hobbies</span>
       </button>
     </nav>
