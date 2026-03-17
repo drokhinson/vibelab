@@ -955,7 +955,7 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 /* ── Settings / Admin ── */
 .settings-btn {
   position: absolute;
-  top: 44px;
+  top: 8px;
   right: 16px;
   background: rgba(255,255,255,0.15);
   border: none;
