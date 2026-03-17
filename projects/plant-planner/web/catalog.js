@@ -54,7 +54,7 @@ function renderCatalog() {
   for (var k = 0; k < filtered.length; k++) {
     var p = filtered[k];
     html += '\
-      <div class="catalog-tile" draggable="true" data-plant-id="' + p.id + '">\
+      <div class="catalog-tile" draggable="true" data-plant-id="' + p.id + '" style="--i:' + k + '">\
         <span class="catalog-emoji">' + p.emoji + '</span>\
         <div class="catalog-info">\
           <span class="catalog-name">' + escapeHtml(p.name) + '</span>\
@@ -99,6 +99,7 @@ function refreshCatalog() {
   if (sidebar) sidebar.innerHTML = renderCatalog();
   bindCatalogEvents();
   bindCatalogDrag();
+  _initIcons();
 }
 
 function bindCatalogDrag() {

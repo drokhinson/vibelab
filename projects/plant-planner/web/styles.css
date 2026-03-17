@@ -482,3 +482,111 @@ dialog::backdrop {
   }
   .catalog-tile { flex: 0 0 auto; }
 }
+
+/* ── Entrance animations ──────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Garden cards stagger */
+.gardens-grid .garden-card {
+  animation: fadeUp 220ms ease both;
+  animation-delay: calc(var(--i, 0) * 50ms);
+}
+
+/* Catalog tiles stagger */
+.catalog-list .catalog-tile {
+  animation: fadeUp 180ms ease both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+
+/* Auth form entrance */
+#app > article {
+  animation: fadeUp 300ms ease both;
+}
+
+/* Builder entrance */
+.builder-header {
+  animation: fadeIn 200ms ease both;
+}
+
+/* ── Hover lift ────────────────────────────────────────────────────────────── */
+.garden-card {
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+}
+.garden-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.catalog-tile {
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.catalog-tile:hover {
+  transform: translateY(-1px);
+}
+
+/* ── Lucide icon sizing ───────────────────────────────────────────────────── */
+.lucide {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  stroke-width: 2;
+}
+
+/* Nav & header icons */
+nav .lucide,
+.gardens-view-header .lucide {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+/* Builder action button icons */
+.builder-actions .lucide {
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.25rem;
+}
+
+/* Settings button in nav */
+#nav-settings .lucide {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+/* Garden card action icons */
+.garden-card-actions .lucide {
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.2rem;
+}
+
+/* Empty state illustration */
+.empty-state-illustration {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1rem 1rem;
+}
+.empty-state-illustration svg {
+  max-width: 200px;
+  height: auto;
+}
+
+/* Auth hero illustration */
+.auth-illustration {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+.auth-illustration svg {
+  max-width: 180px;
+  height: auto;
+}

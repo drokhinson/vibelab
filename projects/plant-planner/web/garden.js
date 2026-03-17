@@ -10,10 +10,10 @@ function renderBuilder() {
   html += '<span class="muted">' + g.grid_width + '×' + g.grid_height + ' ft</span>';
   html += '</div>';
   html += '<div class="builder-actions">';
-  html += '<button id="toggle-view" class="outline small-btn">' + (viewMode === "top" ? "Side View" : "Top View") + '</button>';
-  html += '<button id="save-garden" class="small-btn">Save</button>';
-  html += '<button id="reseed-garden" class="secondary outline small-btn">Reseed</button>';
-  html += '<button id="clear-grid" class="secondary outline small-btn">Clear</button>';
+  html += '<button id="toggle-view" class="outline small-btn"><i data-lucide="' + (viewMode === "top" ? "layers" : "grid-2x2") + '"></i> ' + (viewMode === "top" ? "Side View" : "Top View") + '</button>';
+  html += '<button id="save-garden" class="small-btn"><i data-lucide="save"></i> Save</button>';
+  html += '<button id="reseed-garden" class="secondary outline small-btn"><i data-lucide="refresh-cw"></i> Reseed</button>';
+  html += '<button id="clear-grid" class="secondary outline small-btn"><i data-lucide="trash-2"></i> Clear</button>';
   html += '</div></div>';
 
   html += '<div class="builder-layout">';
@@ -34,6 +34,7 @@ function renderBuilder() {
   bindCatalogEvents();
   bindGridEvents(g);
   bindBuilderButtons();
+  _initIcons();
 }
 
 function renderTopGrid(g) {
@@ -61,10 +62,10 @@ function renderSideView(g) {
 
   // Compass angle buttons
   var angles = [
-    { id: "south", label: "↑ S" },
-    { id: "north", label: "↓ N" },
-    { id: "east",  label: "→ E" },
-    { id: "west",  label: "← W" }
+    { id: "south", label: '<i data-lucide="arrow-up"></i> S' },
+    { id: "north", label: '<i data-lucide="arrow-down"></i> N' },
+    { id: "east",  label: '<i data-lucide="arrow-right"></i> E' },
+    { id: "west",  label: '<i data-lucide="arrow-left"></i> W' }
   ];
   var html = '<div class="side-compass">';
   for (var a = 0; a < angles.length; a++) {
@@ -177,6 +178,7 @@ function bindCompassButtons() {
       var gridArea = document.querySelector(".grid-area");
       if (gridArea) gridArea.innerHTML = renderSideView(currentGarden);
       bindCompassButtons();
+      _initIcons();
     };
   });
 }
