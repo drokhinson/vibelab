@@ -410,6 +410,8 @@ function prepareItems(items) {
 function render() {
   const app = document.getElementById('app');
   switch (state.screen) {
+    case 'meal-builder':           app.innerHTML = renderMealBuilder(); break;
+    case 'meal-recipe':            app.innerHTML = renderMealRecipe(); break;
     case 'carb-selector':          app.innerHTML = renderCarbSelector(); break;
     case 'prep-selector':          app.innerHTML = renderPrepSelector(); break;
     case 'protein-veggie-selector':app.innerHTML = renderProteinVeggieSelector(); break;
@@ -428,47 +430,3 @@ function render() {
 }
 
 function navigate(screen) { state.screen = screen; render(); }
-
-async function switchTab(tab) {
-  if (state.activeTab === tab) return;
-  state.activeTab = tab;
-  state.disabledIngredients = new Set();
-  state.filterOpen = false;
-  state.expandedCuisines = new Set();
-
-  if (tab === 'sauces') {
-    navigate('carb-selector');
-  } else if (tab === 'dressings') {
-    // Lazy-load salad bases on first visit
-    if (state.saladBases.length === 0) {
-      navigate('salad-base-selector'); // shows loading state via empty array guard
-      try {
-        state.saladBases = await fetchSaladBases();
-        render();
-      } catch (err) {
-        document.getElementById('app').innerHTML = `
-          <div style="padding:2rem;text-align:center;color:#dc2626">
-            Failed to load salad bases: ${err.message}
-          </div>`;
-      }
-    } else {
-      navigate('salad-base-selector');
-    }
-  } else if (tab === 'marinades') {
-    // Lazy-load proteins on first visit
-    if (state.proteins.length === 0) {
-      navigate('protein-selector'); // shows loading state via empty array guard
-      try {
-        state.proteins = await fetchProteins();
-        render();
-      } catch (err) {
-        document.getElementById('app').innerHTML = `
-          <div style="padding:2rem;text-align:center;color:#dc2626">
-            Failed to load proteins: ${err.message}
-          </div>`;
-      }
-    } else {
-      navigate('protein-selector');
-    }
-  }
-}

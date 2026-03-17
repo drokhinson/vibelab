@@ -1,33 +1,13 @@
 'use strict';
 
-function renderTabBar() {
-  const tabs = [
-    { id: 'sauces',    label: 'Sauces',    emoji: '🍲' },
-    { id: 'dressings', label: 'Dressings', emoji: '🥗' },
-    { id: 'marinades', label: 'Marinades', emoji: '🔥' },
-  ];
-  return `
-    <div class="tab-bar">
-      ${tabs.map(t => `
-        <button class="tab-btn${state.activeTab === t.id ? ' active' : ''}"
-                onclick="switchTab('${t.id}')">
-          ${t.emoji} ${t.label}
-        </button>
-      `).join('')}
-    </div>
-  `;
-}
-
 function renderCarbSelector() {
-  let subtitle = 'What are you cooking with tonight?';
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <div class="logo"><span>🍲</span>SauceBoss</div>
-      <div class="subtitle">${subtitle}</div>
+      <button class="back-btn" onclick="navigate('meal-builder')">‹ Back</button>
+      <div class="logo"><span>🍝</span>Pick your carb</div>
       <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager">⚙</button>
     </div>
-    ${renderTabBar()}
     <div class="scroll-body">
       <div class="carb-grid">
         ${state.carbs.map(c => `
@@ -38,7 +18,6 @@ function renderCarbSelector() {
           </button>
         `).join('')}
       </div>
-      <button class="create-sauce-btn" onclick="openBuilder()">+ Create a Sauce</button>
     </div>
   `;
 }

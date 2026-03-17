@@ -25,11 +25,7 @@ function renderRecipe() {
   const carbTime = carb
     ? ((state.selectedPrep?.cookTimeMinutes ?? carb.cookTimeMinutes) ?? CARB_COOK_TIMES[carb.id]?.minutes ?? 0)
     : 0;
-  const backScreen = state.selectedSaladBase
-    ? 'dressing-selector'
-    : state.selectedProtein
-      ? 'marinade-selector'
-      : carb ? 'sauce-selector' : 'admin';
+  const backScreen = carb ? 'sauce-selector' : 'admin';
   const addons = state.selectedAddons;
   const addonTime = addons.reduce((s, a) => s + (a.estimatedTime || 0), 0);
   const totalTime = sauceTime + carbTime + addonTime;

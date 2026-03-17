@@ -123,7 +123,26 @@ function renderSauceSelector() {
 function selectSauce(id) {
   const { sauces } = getSauceScreenContext();
   state.selectedSauce = sauces.find(s => s.id === id);
-  navigate('recipe');
+
+  if (state.mealStep === 'carb') {
+    state.meal.carb     = state.selectedCarb;
+    state.meal.prep     = state.selectedPrep;
+    state.meal.sauce    = state.selectedSauce;
+    state.mealStep = null;
+    navigate('meal-builder');
+  } else if (state.mealStep === 'salad') {
+    state.meal.saladBase = state.selectedSaladBase;
+    state.meal.dressing  = state.selectedSauce;
+    state.mealStep = null;
+    navigate('meal-builder');
+  } else if (state.mealStep === 'protein') {
+    state.meal.protein  = state.selectedProtein;
+    state.meal.marinade = state.selectedSauce;
+    state.mealStep = null;
+    navigate('meal-builder');
+  } else {
+    navigate('recipe');
+  }
 }
 
 function toggleFilter() {
