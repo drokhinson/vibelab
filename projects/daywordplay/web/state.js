@@ -19,7 +19,6 @@ let bookmarks = [];
 // ── UI state ──────────────────────────────────────────────────────────────────
 let currentView = 'home';     // home | vote | groups | dictionary | profile | leaderboard
 let showEtymology = false;
-let groupSearchResults = [];
 
 // ── Analytics ping ────────────────────────────────────────────────────────────
 fetch(`${API}/api/v1/analytics/track`, {

@@ -150,12 +150,10 @@ function renderTabBar() {
 }
 
 function updateTabBar() {
-  // Tab buttons
-  document.getElementById('tab-word')?.addEventListener('click', () => { currentView = 'home'; renderPageContent(); updateTabBar(); });
-  document.getElementById('tab-groups')?.addEventListener('click', () => { currentView = 'groups'; renderPageContent(); updateTabBar(); });
-  document.getElementById('tab-stats')?.addEventListener('click', () => { currentView = 'leaderboard'; renderPageContent(); updateTabBar(); });
-  document.getElementById('profile-btn')?.addEventListener('click', () => { currentView = 'profile'; renderPageContent(); updateTabBar(); });
-  document.getElementById('dict-btn-header')?.addEventListener('click', () => { currentView = 'dictionary'; renderPageContent(); updateTabBar(); });
+  const wordActive = currentView === 'home' || currentView === 'vote';
+  document.getElementById('tab-word')?.classList.toggle('active', wordActive);
+  document.getElementById('tab-groups')?.classList.toggle('active', currentView === 'groups');
+  document.getElementById('tab-stats')?.classList.toggle('active', currentView === 'leaderboard' || currentView === 'dictionary');
 }
 
 function renderPageContent() {
