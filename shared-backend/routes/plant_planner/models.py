@@ -3,6 +3,8 @@
 from typing import Optional, List
 from pydantic import BaseModel
 
+from .constants import GardenType, ShadeLevel, PlantingSeason
+
 
 class RegisterBody(BaseModel):
     username: str
@@ -19,18 +21,18 @@ class CreateGardenBody(BaseModel):
     name: str = "My Garden"
     grid_width: int = 4
     grid_height: int = 4
-    garden_type: str = "garden_bed"   # garden_bed | planter
-    shade_level: str = "full_sun"     # full_sun | partial | shade
-    planting_season: str = "spring"   # spring | summer | fall | winter
+    garden_type: GardenType = GardenType.GARDEN_BED
+    shade_level: ShadeLevel = ShadeLevel.FULL_SUN
+    planting_season: PlantingSeason = PlantingSeason.SPRING
 
 
 class UpdateGardenBody(BaseModel):
     name: Optional[str] = None
     grid_width: Optional[int] = None
     grid_height: Optional[int] = None
-    garden_type: Optional[str] = None
-    shade_level: Optional[str] = None
-    planting_season: Optional[str] = None
+    garden_type: Optional[GardenType] = None
+    shade_level: Optional[ShadeLevel] = None
+    planting_season: Optional[PlantingSeason] = None
 
 
 class PlantPlacement(BaseModel):
