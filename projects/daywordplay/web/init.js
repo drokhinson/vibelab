@@ -117,10 +117,4 @@ function initShellListeners() {
     updateTabBar();
   });
 
-  document.getElementById('dict-btn-header')?.addEventListener('click', () => {
-    currentView = 'dictionary';
-    renderPageContent();
-    initPageListeners();
-    updateTabBar();
-  });
 }

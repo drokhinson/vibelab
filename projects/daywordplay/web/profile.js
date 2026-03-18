@@ -24,13 +24,15 @@ function renderProfileView() {
     </div>
 
     <div style="margin-top:24px;">
-      <div style="display:flex; gap:8px; margin-bottom:20px;">
-        <button class="btn-primary" id="profile-join-btn" style="flex:1;">${icons.plus} Join Group</button>
-        <button class="icon-btn" id="profile-create-btn" style="flex:1; justify-content:center;">Create Group</button>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <span style="font-size:20px; font-weight:700; color:var(--text-primary);">My Groups</span>
+        <div style="display:flex; gap:8px;">
+          <button class="icon-btn" id="profile-join-btn" style="padding:6px 12px; font-size:12px;">${icons.plus} Join</button>
+          <button class="icon-btn" id="profile-create-btn" style="padding:6px 12px; font-size:12px;">Create</button>
+        </div>
       </div>
 
       ${myGroups.length > 0 ? `
-        <h3 style="font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.8px; color:var(--text-muted); margin-bottom:10px;">My Groups</h3>
         <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Swipe right to share · swipe left to leave</p>
         <div class="group-list" id="profile-group-list">
           ${myGroups.map(g => renderProfileGroupCard(g)).join('')}
@@ -226,13 +228,12 @@ function initProfileListeners() {
       if (currentX > THRESHOLD) {
         // Swipe right → share
         const appUrl = window.location.href.split('?')[0];
-        const text = `Play Day Word Play with me! 📖\n\nJoin my group "${groupName}" using code ${groupCode} at ${appUrl}\n\nEach day there's a new word — write a sentence, vote on others, climb the leaderboard!`;
+        const text = `I'm inviting you to play Day WordPlay! See who's the better wordsmith.\n\nFollow the link below and join my group, ${groupName} using code: ${groupCode}\n\n${appUrl}`;
+        navigator.clipboard.writeText(text).then(() => {
+          showCopiedToast(card);
+        }).catch(() => {});
         if (navigator.share) {
-          navigator.share({ title: 'Day Word Play', text }).catch(() => {});
-        } else {
-          navigator.clipboard.writeText(text).then(() => {
-            showCopiedToast(card);
-          }).catch(() => {});
+          navigator.share({ title: 'Day WordPlay', text }).catch(() => {});
         }
       } else if (currentX < -THRESHOLD) {
         // Swipe left → leave

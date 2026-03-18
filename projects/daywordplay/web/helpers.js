@@ -94,10 +94,9 @@ function renderApp() {
 }
 
 function renderShell() {
-  const bookmarkCount = bookmarks.length;
   return `
     <div id="app-shell">
-      ${renderTopHeader(bookmarkCount)}
+      ${renderTopHeader()}
       <div class="page-content" id="page-content">
         ${renderCurrentPage()}
       </div>
@@ -106,17 +105,10 @@ function renderShell() {
   `;
 }
 
-function renderTopHeader(bookmarkCount) {
+function renderTopHeader() {
   return `
     <div class="top-header">
-      <div class="header-left"></div>
-      <button class="bookmark-pill" id="dict-btn-header">
-        ${icons.bookmark}
-        <span>${bookmarkCount}/5+</span>
-        <div class="progress-bar">
-          <div class="progress-fill" style="width:${Math.min(bookmarkCount * 20, 100)}%"></div>
-        </div>
-      </button>
+      <span class="app-title">Day WordPlay</span>
       <div class="header-right">
         <button class="avatar-btn" id="profile-btn" aria-label="Settings">
           ${icons.settings}
@@ -136,7 +128,7 @@ function renderTabBar() {
     <div class="tab-bar">
       <button class="tab-btn ${isDict ? 'active' : ''}" id="tab-dict">
         ${icons.bookmark}
-        <span>Saved</span>
+        <span>Dictionary</span>
       </button>
       <button class="tab-btn tab-center ${wordActive ? 'active' : ''}" id="tab-word">
         ${icons.book}

@@ -82,14 +82,16 @@ body {
   height: 44px;
   border-radius: 50%;
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   font-size: 20px;
+  color: var(--text-primary);
   transition: opacity 0.15s;
 }
+.avatar-btn svg { color: var(--text-primary); }
 .avatar-btn:hover { opacity: 0.75; }
 
 .bookmark-pill {
@@ -122,6 +124,14 @@ body {
   background: var(--accent);
   border-radius: 2px;
   transition: width 0.3s ease;
+}
+
+.app-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
 }
 
 .header-right { width: 44px; } /* spacer */
@@ -163,7 +173,7 @@ body {
   position: relative;
 }
 .tab-btn svg { width: 22px; height: 22px; }
-.tab-btn.active { color: var(--text-primary); }
+.tab-btn.active { color: var(--accent); }
 .tab-btn.tab-center {
   background: var(--bg-card);
   border: 1px solid var(--border);
