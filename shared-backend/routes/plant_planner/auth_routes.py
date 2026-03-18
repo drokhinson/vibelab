@@ -2,12 +2,10 @@
 
 from fastapi import Depends, HTTPException
 
+from auth import hash_password, verify_password
 from db import get_supabase
 from . import router
-from .dependencies import (
-    get_current_user,
-    _hash_password, _verify_password, _create_token,
-)
+from .dependencies import get_current_user, create_app_token
 from .models import RegisterBody, LoginBody
 
 
@@ -28,7 +26,7 @@ async def register(body: RegisterBody):
     if existing.data:
         raise HTTPException(status_code=409, detail="Username already taken")
 
-    password_hash = _hash_password(body.password)
+    password_hash = hash_password(body.password)
     user_data = {
         "username": body.username,
         "display_name": body.display_name or body.username,
@@ -39,7 +37,7 @@ async def register(body: RegisterBody):
         raise HTTPException(status_code=500, detail="Failed to create user")
 
     user = result.data[0]
-    token = _create_token(user["id"], user["username"])
+    token = create_app_token(user["id"], user["username"])
     return {
         "token": token,
         "user": {
@@ -63,10 +61,10 @@ async def login(body: LoginBody):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     user = result.data[0]
-    if not _verify_password(body.password, user["password_hash"]):
+    if not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    token = _create_token(user["id"], user["username"])
+    token = create_app_token(user["id"], user["username"])
     return {
         "token": token,
         "user": {

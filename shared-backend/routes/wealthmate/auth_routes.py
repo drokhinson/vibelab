@@ -4,11 +4,11 @@ import secrets
 
 from fastapi import Depends, HTTPException
 
+from auth import hash_password, verify_password
 from db import get_supabase
 from . import router
 from .dependencies import (
-    get_current_user, _require_couple,
-    _hash_password, _verify_password, _create_token, _get_couple_id_for_user,
+    get_current_user, _require_couple, create_app_token, _get_couple_id_for_user,
 )
 from .models import RegisterBody, LoginBody, ResetPasswordBody, UpdateEmailBody
 
@@ -39,9 +39,9 @@ async def register(body: RegisterBody):
     if existing.data:
         raise HTTPException(status_code=409, detail="Username already taken")
 
-    password_hash = _hash_password(body.password)
+    password_hash = hash_password(body.password)
     recovery_code = secrets.token_urlsafe(16)
-    recovery_hash = _hash_password(recovery_code)
+    recovery_hash = hash_password(recovery_code)
     user_data = {
         "username": body.username,
         "display_name": body.display_name or body.username,
@@ -66,7 +66,7 @@ async def register(body: RegisterBody):
             "role": "owner",
         }).execute()
 
-    token = _create_token(user["id"], user["username"], couple_id)
+    token = create_app_token(user["id"], user["username"], couple_id)
     return {
         "token": token,
         "user": {
@@ -96,11 +96,11 @@ async def login(body: LoginBody):
     # Dev convenience: allow dummy accounts to login with "password"
     is_dummy = body.username in ("adam", "eve") and body.password == "password"
     if not is_dummy:
-        if not _verify_password(body.password, user["password_hash"]):
+        if not verify_password(body.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
     couple_id = _get_couple_id_for_user(user["id"])
-    token = _create_token(user["id"], user["username"], couple_id)
+    token = create_app_token(user["id"], user["username"], couple_id)
     return {
         "token": token,
         "user": {
@@ -126,13 +126,13 @@ async def reset_password(body: ResetPasswordBody):
     user = result.data[0]
     if not user.get("recovery_hash"):
         raise HTTPException(status_code=400, detail="No recovery code set for this account")
-    if not _verify_password(body.recovery_code, user["recovery_hash"]):
+    if not verify_password(body.recovery_code, user["recovery_hash"]):
         raise HTTPException(status_code=400, detail="Invalid username or recovery code")
 
     # Update password and rotate recovery code
-    new_password_hash = _hash_password(body.new_password)
+    new_password_hash = hash_password(body.new_password)
     new_recovery_code = secrets.token_urlsafe(16)
-    new_recovery_hash = _hash_password(new_recovery_code)
+    new_recovery_hash = hash_password(new_recovery_code)
     sb.table("wealthmate_users").update({
         "password_hash": new_password_hash,
         "recovery_hash": new_recovery_hash,
@@ -145,7 +145,7 @@ async def reset_password(body: ResetPasswordBody):
 async def generate_recovery_code(user: dict = Depends(get_current_user)):
     sb = get_supabase()
     recovery_code = secrets.token_urlsafe(16)
-    recovery_hash = _hash_password(recovery_code)
+    recovery_hash = hash_password(recovery_code)
     sb.table("wealthmate_users").update({
         "recovery_hash": recovery_hash,
     }).eq("id", user["user_id"]).execute()
