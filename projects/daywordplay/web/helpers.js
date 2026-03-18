@@ -161,6 +161,7 @@ function renderCurrentPage() {
     case 'dictionary': return renderDictionaryView();
     case 'leaderboard': return renderLeaderboardView();
     case 'profile': return renderProfileView();
+    case 'admin': return renderAdminView();
     default: return renderHomeView();
   }
 }

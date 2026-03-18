@@ -12,9 +12,10 @@ let myGroups = [];
 let activeGroupId = null;
 
 // ── Word/sentence state ───────────────────────────────────────────────────────
-let todayData = null;      // { word, submitted, my_sentence, submission_count, member_count, bookmarked }
-let yesterdayData = null;  // { word, sentences, has_voted }
+let todayData = null;          // { word, submitted, my_sentence, submission_count, member_count, bookmarked }
+let yesterdayData = null;      // { word, sentences, has_voted }
 let bookmarks = [];
+let reusableSentences = [];    // sentences user submitted in other groups for today's word
 
 // ── UI state ──────────────────────────────────────────────────────────────────
 let currentView = 'home';     // home | vote | dictionary | profile | leaderboard

@@ -4,17 +4,21 @@ Word of the day: today's word, sentences, voting, bookmarks.
 """
 import random
 from datetime import date, timedelta
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Path
 
 from db import get_supabase
 
 from . import router
-from .models import SubmitSentenceBody
+from .models import ReusableSentencesResponse, SubmitSentenceBody
 from .dependencies import get_current_user
 
 
 def _get_or_assign_word(sb, group_id: str, target_date: date) -> dict:
-    """Return the word assigned to a group for a given date, assigning lazily if needed."""
+    """Return the word assigned to a group for a given date, assigning lazily if needed.
+
+    All groups share the same global word each day. The first group to request a date
+    picks an unused word; subsequent groups reuse that same word_id.
+    """
     date_str = target_date.isoformat()
     existing = sb.table("daywordplay_daily_words").select(
         "word_id, daywordplay_words(id, word, part_of_speech, definition, pronunciation, etymology)"
@@ -23,21 +27,29 @@ def _get_or_assign_word(sb, group_id: str, target_date: date) -> dict:
     if existing.data:
         return existing.data[0]["daywordplay_words"]
 
-    # Lazy-assign: pick a word not recently used in this group
-    recent = sb.table("daywordplay_daily_words").select("word_id").eq("group_id", group_id).execute()
-    used_ids = {r["word_id"] for r in (recent.data or [])}
+    # Check if any group already has today's global word
+    any_assignment = sb.table("daywordplay_daily_words").select(
+        "word_id"
+    ).eq("assigned_date", date_str).limit(1).execute()
 
-    all_words = sb.table("daywordplay_words").select("id").execute()
-    all_ids = [w["id"] for w in (all_words.data or [])]
-    available = [wid for wid in all_ids if wid not in used_ids]
+    if any_assignment.data:
+        word_id = any_assignment.data[0]["word_id"]
+    else:
+        # First group for this date — pick a globally unused word
+        all_used = sb.table("daywordplay_daily_words").select("word_id").execute()
+        used_ids = {r["word_id"] for r in (all_used.data or [])}
 
-    if not available:
-        available = all_ids  # reset cycle if all words exhausted
+        all_words = sb.table("daywordplay_words").select("id").execute()
+        all_ids = [w["id"] for w in (all_words.data or [])]
+        available = [wid for wid in all_ids if wid not in used_ids]
 
-    if not available:
-        raise HTTPException(status_code=500, detail="No words available in the word bank.")
+        if not available:
+            available = all_ids  # reset cycle if all words exhausted
 
-    word_id = random.choice(available)
+        if not available:
+            raise HTTPException(status_code=500, detail="No words available in the word bank.")
+
+        word_id = random.choice(available)
 
     # Insert assignment (ignore conflict in case of race condition)
     try:
@@ -100,6 +112,29 @@ async def get_today(group_id: str, current_user: dict = Depends(get_current_user
         "member_count": member_count,
         "bookmarked": bool(bookmark.data),
     }
+
+
+@router.get(
+    "/groups/{group_id}/today/reusable-sentences",
+    response_model=ReusableSentencesResponse,
+    status_code=200,
+    summary="Get user's sentences from other groups for today's word",
+)
+async def get_reusable_sentences(
+    group_id: str = Path(..., description="Group ID to check reusable sentences for"),
+    current_user: dict = Depends(get_current_user),
+) -> ReusableSentencesResponse:
+    """Return sentences the user already submitted today in other groups for the same word."""
+    sb = get_supabase()
+    _verify_member(sb, group_id, current_user["user_id"])
+    today = date.today()
+    word = _get_or_assign_word(sb, group_id, today)
+    result = sb.table("daywordplay_sentences").select(
+        "id, sentence, group_id"
+    ).eq("user_id", current_user["user_id"]).eq("word_id", word["id"]).eq(
+        "assigned_date", today.isoformat()
+    ).neq("group_id", group_id).execute()
+    return ReusableSentencesResponse(reusable_sentences=result.data or [])
 
 
 @router.post("/groups/{group_id}/sentences")

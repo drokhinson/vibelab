@@ -42,6 +42,9 @@ function renderProfileView() {
 
     <div style="margin-top:32px; padding-bottom:24px;">
       <button class="danger-btn" id="logout-btn">Log Out</button>
+      <div style="margin-top:12px; text-align:center;">
+        <button id="admin-access-btn" style="background:none; border:none; font-size:12px; color:var(--text-muted); cursor:pointer; padding:4px;">Admin</button>
+      </div>
     </div>
 
     ${showJoinGroupModal ? renderJoinModal() : ''}
@@ -182,6 +185,23 @@ function initProfileListeners() {
       btn.disabled = false;
       btn.textContent = 'Create Group';
     }
+  });
+
+  // Admin access
+  document.getElementById('admin-access-btn')?.addEventListener('click', () => {
+    const existingKey = getAdminKey();
+    if (existingKey) {
+      currentView = 'admin';
+      renderPageContent();
+      initPageListeners();
+      return;
+    }
+    const key = prompt('Enter admin code:');
+    if (!key) return;
+    setAdminKey(key);
+    currentView = 'admin';
+    renderPageContent();
+    initPageListeners();
   });
 
   // Swipe gestures on group cards

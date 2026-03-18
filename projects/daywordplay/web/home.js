@@ -9,6 +9,33 @@ async function loadTodayWord() {
   }
 }
 
+async function loadReusableSentences() {
+  if (!activeGroupId || !todayData || todayData.submitted) {
+    reusableSentences = [];
+    return;
+  }
+  try {
+    const data = await apiFetch(`/groups/${activeGroupId}/today/reusable-sentences`);
+    reusableSentences = data.reusable_sentences || [];
+  } catch (_) {
+    reusableSentences = [];
+  }
+}
+
+function renderReusablePills() {
+  if (!reusableSentences.length) return '';
+  return `
+    <div class="reusable-sentences">
+      <p class="reusable-label">Reuse a sentence from another group:</p>
+      <div class="reusable-pills">
+        ${reusableSentences.map((s, i) => `
+          <button class="reusable-pill" data-reuse-idx="${i}">"${escHtml(s.sentence)}"</button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
 function renderHomeView() {
   if (!activeGroupId) {
     return renderNoGroupPrompt();
@@ -106,6 +133,7 @@ function renderSentenceSection(submitted, my_sentence, wordText) {
     <div class="sentence-section">
       <h3>Write your sentence</h3>
       <div class="sentence-input-wrap">
+        ${renderReusablePills()}
         <textarea id="sentence-input" placeholder='Use "${wordText}" in a sentence…' rows="3"></textarea>
         <div class="sentence-submit-row">
           <button class="btn-primary" id="submit-sentence-btn">Submit</button>
@@ -123,11 +151,23 @@ function initHomeListeners() {
       activeGroupId = btn.dataset.groupSwitch;
       setStoredActiveGroup(activeGroupId);
       todayData = null;
+      reusableSentences = [];
       renderPageContent();
       initHomeListeners(); // re-attach so group chips stay clickable during loading
       await loadTodayWord();
+      await loadReusableSentences();
       renderPageContent();
       initPageListeners();
+    });
+  });
+
+  // Reusable sentence pill clicks — populate textarea
+  document.querySelectorAll('[data-reuse-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.reuseIdx, 10);
+      const sentence = reusableSentences[idx]?.sentence || '';
+      const input = document.getElementById('sentence-input');
+      if (input) input.value = sentence;
     });
   });
 

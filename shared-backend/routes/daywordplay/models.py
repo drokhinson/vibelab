@@ -28,3 +28,15 @@ class JoinGroupBody(BaseModel):
 
 class SubmitSentenceBody(BaseModel):
     sentence: str
+
+
+class ReusableSentencesResponse(BaseModel):
+    reusable_sentences: list[dict]
+
+
+class AddWordBody(BaseModel):
+    word: str
+    part_of_speech: str
+    definition: str
+    pronunciation: Optional[str] = None
+    etymology: Optional[str] = None
