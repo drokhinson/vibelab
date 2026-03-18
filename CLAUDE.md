@@ -32,7 +32,7 @@ Then fill in STRUCTURE.md and write `db/migrations/NNN_[name]_schema.sql`.
 
 ### Stage 3 — Prototype (Web)
 Implement `shared-backend/routes/[name].py` (FastAPI) and `projects/[name]/web/` (HTML/JS) together.
-The web prototype is always the first deliverable. Deploy: push to main, Actions auto-deploys.
+The web prototype is always the first deliverable. Deploy: push to branch and create pull request. Once merged to main, Actions auto-deploys.
 
 ### Stage 4 — Native App
 Use the `build-native` skill. Wire `projects/[name]/app/src/api/client.js` to the shared Railway backend.
@@ -58,6 +58,7 @@ vibelab/
 │   ├── shared_models.py       ← shared Pydantic response models (HealthResponse, etc.)
 │   └── routes/[project]/     ← one package per project (see Modular File Structure)
 ├── db/migrations/             ← all Supabase SQL migrations (ONE shared DB)
+├── db/schema/                 ← current-state schema snapshots, one file per project
 ├── _templates/                ← scaffold source, not deployed
 ├── .github/workflows/         ← CI/CD
 ├── .claude/commands/          ← Claude slash command skills
@@ -78,6 +79,8 @@ vibelab/
 - Run migrations in Supabase dashboard → SQL Editor → New Query → Run.
 - Use RPCs (`supabase.rpc()`) for complex multi-table reads.
 - Backend uses `SUPABASE_SERVICE_ROLE_KEY` (bypasses RLS). Never expose it to the frontend.
+- **Always enable RLS on new tables.** Add `ALTER TABLE public.<table> ENABLE ROW LEVEL SECURITY;` immediately after every `CREATE TABLE`. No policies are needed — the backend uses service role key which bypasses RLS. This blocks direct anon-key access to Supabase's REST API.
+- **Keep `db/schema/[project].sql` in sync.** When a migration adds, removes, or alters a table, update the corresponding snapshot file in `db/schema/`. These files give Claude instant schema context without reading all migration files — always check `db/schema/` first when you need to understand a project's tables.
 - **Data belongs in the database, not in code.** Any named list, option set, lookup table, or configurable preset (e.g. skill levels, categories, status values, tags) must be stored as rows in a Supabase table with a migration, not as a Python dict/list or JS array in application code. Hard-coded constants require a deploy to change; a DB row does not. The only things that belong in `constants.py` are secrets, algorithm identifiers, and other true compile-time values.
 
 ### Backend (FastAPI in `shared-backend/`)

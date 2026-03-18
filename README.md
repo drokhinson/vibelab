@@ -4,16 +4,20 @@ A Claude-driven ideation → prototype → native app pipeline. Every idea becom
 
 ## Project Index
 
-See [registry.json](registry.json) for the machine-readable list, or visit the [landing page](landing/) to browse all projects.
+See [registry.json](landing/registry.json) for the machine-readable list, or visit the [landing page](landing/) to browse all projects.
 
 | Project | Status | Web | Native |
 |---|---|---|---|
-| [SauceBoss](projects/sauceboss/) | 🔧 WIP | — | Expo |
-| [SpotMe](projects/spotme/) | 🔧 WIP | — | — |
+| [SauceBoss](projects/sauceboss/) 🍲 | 🔧 WIP | [sauceboss-omega.vercel.app](https://sauceboss-omega.vercel.app) | Expo |
+| [WealthMate](projects/wealthmate/) 💰 | 🔧 WIP | [vibelab-jusv.vercel.app](https://vibelab-jusv.vercel.app) | — |
+| [SpotMe](projects/spotme/) 📍 | 🔧 WIP | [vibelab-spotme.vercel.app](https://vibelab-spotme.vercel.app) | — |
+| [Day Word Play](projects/daywordplay/) 📖 | 🔧 WIP | [vibelab-daywordplay.vercel.app](https://vibelab-daywordplay.vercel.app) | — |
+| [PlantPlanner](projects/plant-planner/) 🌱 | 🔧 WIP | [vibelab-plantplanner.vercel.app](https://vibelab-plantplanner.vercel.app) | — |
+| [Admin](projects/admin/) 🛠️ | 🔧 WIP | [vibelab-admintool.vercel.app](https://vibelab-admintool.vercel.app) | — |
 
 ## Stack
 
-- **Frontend**: Vanilla HTML/CSS/JS + [Pico.css](https://picocss.com) (no build step)
+- **Frontend**: Vanilla HTML/CSS/JS + [DaisyUI v4](https://daisyui.com) (no build step; older projects on Pico.css)
 - **Backend**: Python FastAPI (single shared service on Railway)
 - **Database**: Supabase (PostgreSQL, one shared project)
 - **Frontend hosting**: Vercel
