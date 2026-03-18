@@ -29,12 +29,8 @@ async function selectSaladBase(id) {
   state.servings = 2;
   state.disabledIngredients = new Set();
   state.filterOpen = false;
-
-  document.getElementById('app').innerHTML = `
-    <div class="loading-screen">
-      <div class="spinner"></div>
-      <p class="loading-text">Loading dressings…</p>
-    </div>`;
+  state.loading = 'Loading dressings…';
+  render(); // keeps header + progress bar, shows spinner in scroll-body
 
   try {
     const [dressings, ingredients] = await Promise.all([
@@ -44,13 +40,18 @@ async function selectSaladBase(id) {
     state.dressingsForCurrentBase = dressings;
     state.allDressingIngredients  = ingredients;
     state.expandedCuisines        = new Set([dressings[0]?.cuisine].filter(Boolean));
+    state.loading = null;
     state.screen = 'dressing-selector';
     render();
   } catch (err) {
-    document.getElementById('app').innerHTML = `
-      <div style="padding:2rem;text-align:center;color:#dc2626">
-        Failed to load dressings: ${err.message}<br>
-        <button onclick="navigate('salad-base-selector')" style="margin-top:1rem">‹ Back</button>
-      </div>`;
+    state.loading = null;
+    const scrollBody = document.querySelector('.scroll-body');
+    if (scrollBody) {
+      scrollBody.innerHTML = `
+        <div style="padding:2rem;text-align:center;color:#dc2626">
+          Failed to load dressings: ${err.message}<br>
+          <button onclick="navigate('salad-base-selector')" style="margin-top:1rem">‹ Back</button>
+        </div>`;
+    }
   }
 }

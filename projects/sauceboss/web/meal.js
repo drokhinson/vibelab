@@ -15,14 +15,19 @@ function renderProgressBar() {
   const nodes = [...steps, 'review'];
   return `<div class="flow-progress">
     ${nodes.map((step, i) => {
-      const isDone   = i < current || (step === 'review' && current >= steps.length);
-      const isActive = (step !== 'review' && i === current) || (step === 'review' && current >= steps.length);
+      const isReview = step === 'review';
+      const isDone   = i < current || (isReview && current >= steps.length);
+      const isActive = (!isReview && i === current) || (isReview && current >= steps.length);
       const dotClass = isDone ? 'done' : isActive ? 'active' : '';
-      const label    = step === 'review' ? '✅ Review' : labels[step];
-      const lineClass = i > 0 && (i <= current || (step === 'review' && current >= steps.length)) ? 'done' : '';
+      const label    = isReview ? '✅ Review' : labels[step];
+      const lineClass = i > 0 && (i <= current || (isReview && current >= steps.length)) ? 'done' : '';
+      // Clickable if done or active (for non-review nodes only)
+      const clickable = !isReview && (isDone || isActive);
+      const onclick = clickable ? ` onclick="goToFlowStep(${i})"` : '';
+      const cursorClass = clickable ? ' clickable' : '';
 
       return `${i > 0 ? `<div class="progress-line ${lineClass}"></div>` : ''}
-        <div class="progress-node">
+        <div class="progress-node${cursorClass}"${onclick}>
           <div class="progress-dot ${dotClass}">
             ${isDone ? '<i data-lucide="check"></i>' : i + 1}
           </div>
@@ -30,6 +35,17 @@ function renderProgressBar() {
         </div>`;
     }).join('')}
   </div>`;
+}
+
+// ─── Go back to a previous flow step (for editing) ───────────────────────────
+
+function goToFlowStep(index) {
+  if (index < 0 || index >= state.mealFlowSteps.length) return;
+  // Remember where to return after re-editing this step
+  if (state.mealFlowIndex > index) {
+    state.mealFlowReturnIndex = state.mealFlowIndex;
+  }
+  navigateToFlowStep(index);
 }
 
 // ─── Meal Builder home screen (option selector) ───────────────────────────────
@@ -141,15 +157,15 @@ async function navigateToFlowStep(index) {
 
   if (step === 'protein') {
     if (state.proteins.length === 0) {
+      state.loading = 'Loading proteins…';
       navigate('protein-selector');
       try {
         state.proteins = await fetchProteins();
+        state.loading = null;
         render();
       } catch (err) {
-        document.getElementById('app').innerHTML = `
-          <div style="padding:2rem;text-align:center;color:#dc2626">
-            Failed to load proteins: ${err.message}
-          </div>`;
+        state.loading = null;
+        render();
       }
     } else {
       navigate('protein-selector');
@@ -160,15 +176,15 @@ async function navigateToFlowStep(index) {
     navigate('protein-veggie-selector');
   } else if (step === 'salad') {
     if (state.saladBases.length === 0) {
+      state.loading = 'Loading salad bases…';
       navigate('salad-base-selector');
       try {
         state.saladBases = await fetchSaladBases();
+        state.loading = null;
         render();
       } catch (err) {
-        document.getElementById('app').innerHTML = `
-          <div style="padding:2rem;text-align:center;color:#dc2626">
-            Failed to load salad bases: ${err.message}
-          </div>`;
+        state.loading = null;
+        render();
       }
     } else {
       navigate('salad-base-selector');
@@ -180,6 +196,21 @@ async function navigateToFlowStep(index) {
 
 function advanceToNextStep() {
   if (state.mealFlowIndex < 0) return;
+
+  // If editing a previous step, return to where the user was
+  if (state.mealFlowReturnIndex != null && state.mealFlowReturnIndex > state.mealFlowIndex) {
+    const returnTo = state.mealFlowReturnIndex;
+    state.mealFlowReturnIndex = undefined;
+    if (returnTo >= state.mealFlowSteps.length) {
+      state.mealFlowIndex = state.mealFlowSteps.length;
+      navigate('meal-review');
+    } else {
+      navigateToFlowStep(returnTo);
+    }
+    return;
+  }
+  state.mealFlowReturnIndex = undefined;
+
   const next = state.mealFlowIndex + 1;
   if (next >= state.mealFlowSteps.length) {
     state.mealFlowIndex = state.mealFlowSteps.length; // signals "all done" for progress bar

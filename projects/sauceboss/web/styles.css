@@ -1522,6 +1522,20 @@ body, button, input, select, textarea {
 }
 .progress-line.done { background: rgba(255,255,255,0.8); }
 
+.progress-node.clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.progress-node.clickable:hover .progress-dot { box-shadow: 0 0 0 3px rgba(255,255,255,0.35); }
+.progress-node.clickable:active .progress-dot { transform: scale(0.9); }
+
+/* ── Inline loading (inside scroll-body) ── */
+.loading-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  gap: 12px;
+}
+
 /* ─────────────────────────────
    MEAL REVIEW SCREEN
 ───────────────────────────── */
