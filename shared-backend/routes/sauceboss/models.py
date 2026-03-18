@@ -1,8 +1,20 @@
 """Pydantic request/response models for SauceBoss."""
 
+from enum import StrEnum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+
+class AddonType(StrEnum):
+    PROTEIN = "protein"
+    VEGGIE = "veggie"
+
+
+class SauceType(StrEnum):
+    SAUCE = "sauce"
+    DRESSING = "dressing"
+    MARINADE = "marinade"
 
 
 # ── Sauce creation ────────────────────────────────────────────────────────────
@@ -47,7 +59,7 @@ class CreateCarbRequest(BaseModel):
 
 
 class CreateAddonRequest(BaseModel):
-    type: str = Field(pattern=r'^(protein|veggie)$')
+    type: AddonType
     name: str = Field(min_length=1)
     emoji: str = Field(min_length=1)
     desc: str = ""
