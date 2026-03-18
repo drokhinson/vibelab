@@ -1,30 +1,61 @@
-name: Deploy Project Frontends
+name: Deploy Changed Project Frontends
 
 on:
-  workflow_dispatch:
-    inputs:
-      project:
-        description: 'Project name to deploy (e.g. sauceboss, plant-planner)'
-        required: true
-        type: string
+  push:
+    branches: [main]
+    paths:
+      - projects/**/web/**
 
 jobs:
-  deploy:
+  detect-changes:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: detect
+        name: Detect changed projects
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD \
+            | grep '^projects/' \
+            | cut -d'/' -f2 \
+            | sort -u)
+
+          if [ -z "$CHANGED" ]; then
+            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Build matrix with project name and uppercased key for secret lookup
+          # Dashes are converted to underscores (e.g. plant-planner -> PLANT_PLANNER)
+          MATRIX=$(echo "$CHANGED" | while read p; do
+            UPPER=$(echo "$p" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+            echo "{\"project\":\"$p\",\"projectKey\":\"$UPPER\"}"
+          done | jq -sc .)
+
+          echo "matrix={\"include\":$MATRIX}" >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "Changed projects: $MATRIX"
+
+  deploy:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Compute project key
-        id: key
-        run: |
-          KEY=$(echo "${{ inputs.project }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-          echo "projectKey=$KEY" >> $GITHUB_OUTPUT
-
-      - name: Deploy ${{ inputs.project }} web frontend
+      - name: Deploy ${{ matrix.project }} web frontend
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', steps.key.outputs.projectKey)] }}
-          working-directory: ./projects/${{ inputs.project }}/web
+          vercel-project-id: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', matrix.projectKey)] }}
+          working-directory: ./projects/${{ matrix.project }}/web
           vercel-args: --prod

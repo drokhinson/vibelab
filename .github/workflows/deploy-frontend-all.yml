@@ -1,0 +1,34 @@
+name: Deploy All Project Frontends
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - project: admin
+            projectKey: ADMIN
+          - project: daywordplay
+            projectKey: DAYWORDPLAY
+          - project: plant-planner
+            projectKey: PLANT_PLANNER
+          - project: sauceboss
+            projectKey: SAUCEBOSS
+          - project: spotme
+            projectKey: SPOTME
+          - project: wealthmate
+            projectKey: WEALTHMATE
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy ${{ matrix.project }} web frontend
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', matrix.projectKey)] }}
+          working-directory: ./projects/${{ matrix.project }}/web
+          vercel-args: --prod
