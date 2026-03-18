@@ -59,6 +59,7 @@ const icons = {
   chevronRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`,
   back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`,
   thumbsUp: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
 };
 
 // ── Render helpers ────────────────────────────────────────────────────────────
@@ -108,9 +109,7 @@ function renderShell() {
 function renderTopHeader(bookmarkCount) {
   return `
     <div class="top-header">
-      <button class="avatar-btn" id="profile-btn" aria-label="Profile">
-        ${icons.person}
-      </button>
+      <div class="header-left"></div>
       <button class="bookmark-pill" id="dict-btn-header">
         ${icons.bookmark}
         <span>${bookmarkCount}/5+</span>
@@ -118,30 +117,32 @@ function renderTopHeader(bookmarkCount) {
           <div class="progress-fill" style="width:${Math.min(bookmarkCount * 20, 100)}%"></div>
         </div>
       </button>
-      <div class="header-right"></div>
+      <div class="header-right">
+        <button class="avatar-btn" id="profile-btn" aria-label="Settings">
+          ${icons.settings}
+        </button>
+      </div>
     </div>
   `;
 }
 
 function renderTabBar() {
-  const isHome = currentView === 'home';
-  const isVote = currentView === 'vote';
-  const isGroups = currentView === 'groups';
   const isDict = currentView === 'dictionary';
+  const isVote = currentView === 'vote';
   const isLb = currentView === 'leaderboard';
-  const wordActive = isHome || isVote;
+  const wordActive = currentView === 'home' || isVote;
 
   return `
     <div class="tab-bar">
-      <button class="tab-btn ${isGroups ? 'active' : ''}" id="tab-groups">
-        ${icons.users}
-        <span>Groups</span>
+      <button class="tab-btn ${isDict ? 'active' : ''}" id="tab-dict">
+        ${icons.bookmark}
+        <span>Saved</span>
       </button>
       <button class="tab-btn tab-center ${wordActive ? 'active' : ''}" id="tab-word">
         ${icons.book}
         <span>Word</span>
       </button>
-      <button class="tab-btn ${isLb || isDict ? 'active' : ''}" id="tab-stats">
+      <button class="tab-btn ${isLb ? 'active' : ''}" id="tab-stats">
         ${icons.trophy}
         <span>Stats</span>
       </button>
@@ -152,8 +153,8 @@ function renderTabBar() {
 function updateTabBar() {
   const wordActive = currentView === 'home' || currentView === 'vote';
   document.getElementById('tab-word')?.classList.toggle('active', wordActive);
-  document.getElementById('tab-groups')?.classList.toggle('active', currentView === 'groups');
-  document.getElementById('tab-stats')?.classList.toggle('active', currentView === 'leaderboard' || currentView === 'dictionary');
+  document.getElementById('tab-dict')?.classList.toggle('active', currentView === 'dictionary');
+  document.getElementById('tab-stats')?.classList.toggle('active', currentView === 'leaderboard');
 }
 
 function renderPageContent() {
@@ -165,7 +166,6 @@ function renderCurrentPage() {
   switch (currentView) {
     case 'home': return renderHomeView();
     case 'vote': return renderVoteView();
-    case 'groups': return renderGroupsView();
     case 'dictionary': return renderDictionaryView();
     case 'leaderboard': return renderLeaderboardView();
     case 'profile': return renderProfileView();

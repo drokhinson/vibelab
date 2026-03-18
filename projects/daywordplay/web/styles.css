@@ -837,3 +837,47 @@ body {
 .mt-24 { margin-top: 24px; }
 
 .full-width { width: 100%; }
+
+/* ── Swipe cards (profile group list) ───────────────────────────────────────*/
+.swipe-card-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+}
+
+.swipe-action {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.1s;
+  pointer-events: none;
+}
+.swipe-action svg { width: 18px; height: 18px; }
+
+.swipe-action-left {
+  left: 0;
+  background: var(--accent);
+  color: #fff;
+}
+
+.swipe-action-right {
+  right: 0;
+  background: #E53935;
+  color: #fff;
+}
+
+.swipe-card {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-card);
+  will-change: transform;
+  margin-bottom: 0 !important;
+}

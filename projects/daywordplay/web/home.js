@@ -23,9 +23,8 @@ function renderHomeView() {
 
   return `
     ${renderGroupSwitcher()}
-    ${renderWordDisplay(word, bookmarked)}
-    ${renderActionRow(word, bookmarked)}
-    ${showEtymology && word.etymology ? renderEtymologyCard(word.etymology) : ''}
+    ${renderWordDisplay(word)}
+    ${word.etymology ? renderEtymologyCard(word.etymology) : ''}
     ${renderSentenceSection(submitted, my_sentence, word.word)}
     <div class="text-muted text-center mt-16" style="font-size:13px; margin-bottom:16px;">
       ${submission_count} of ${member_count} members submitted today
@@ -62,41 +61,14 @@ function renderGroupSwitcher() {
   `;
 }
 
-function renderWordDisplay(word, bookmarked) {
+function renderWordDisplay(word) {
   return `
     <div class="word-display">
       <div class="word-main">${escHtml(word.word)}</div>
-      ${word.pronunciation ? `
-        <div>
-          <span class="pronunciation-pill">
-            ${icons.volume}
-            ${escHtml(word.pronunciation)}
-          </span>
-        </div>
-      ` : ''}
       <div class="word-definition">
         <span class="word-pos">${escHtml(word.part_of_speech)}.</span>
         ${escHtml(word.definition)}
       </div>
-    </div>
-  `;
-}
-
-function renderActionRow(word, bookmarked) {
-  return `
-    <div class="action-row">
-      <button class="action-btn ${showEtymology ? 'active' : ''}" id="etymology-btn">
-        ${icons.info}
-        <span>Origin</span>
-      </button>
-      <button class="action-btn" id="share-btn">
-        ${icons.share}
-        <span>Share</span>
-      </button>
-      <button class="action-btn ${bookmarked ? 'active' : ''}" id="bookmark-btn" data-word-id="${word.id}" data-bookmarked="${bookmarked}">
-        ${bookmarked ? icons.bookmarkFill : icons.bookmark}
-        <span>Save</span>
-      </button>
     </div>
   `;
 }
@@ -149,62 +121,12 @@ function initHomeListeners() {
     });
   });
 
-  // No-group prompt
-  document.getElementById('go-groups-btn')?.addEventListener('click', async () => {
-    currentView = 'groups';
-    if (!groupsSearchResults.length) await searchGroups('');
+  // No-group prompt — navigate to profile to join/create
+  document.getElementById('go-groups-btn')?.addEventListener('click', () => {
+    currentView = 'profile';
     renderPageContent();
     initPageListeners();
     updateTabBar();
-  });
-
-  // Etymology toggle
-  document.getElementById('etymology-btn')?.addEventListener('click', () => {
-    showEtymology = !showEtymology;
-    renderPageContent();
-    initPageListeners();
-  });
-
-  // Share
-  document.getElementById('share-btn')?.addEventListener('click', () => {
-    if (todayData?.word) {
-      const text = `Today's word: ${todayData.word.word}\n(${todayData.word.part_of_speech}.) ${todayData.word.definition}`;
-      if (navigator.share) {
-        navigator.share({ title: 'Day Word Play', text }).catch(() => {});
-      } else {
-        navigator.clipboard.writeText(text).catch(() => {});
-        // Brief feedback
-        const btn = document.getElementById('share-btn');
-        if (btn) { btn.querySelector('span').textContent = 'Copied!'; setTimeout(() => { if(document.getElementById('share-btn')) { document.getElementById('share-btn').querySelector('span').textContent = 'Share'; } }, 1500); }
-      }
-    }
-  });
-
-  // Bookmark toggle
-  document.getElementById('bookmark-btn')?.addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    const wordId = btn.dataset.wordId;
-    const isBookmarked = btn.dataset.bookmarked === 'true';
-    try {
-      if (isBookmarked) {
-        await apiFetch(`/words/${wordId}/bookmark`, { method: 'DELETE' });
-        if (todayData) todayData.bookmarked = false;
-        bookmarks = bookmarks.filter(b => b.id !== wordId);
-      } else {
-        await apiFetch(`/words/${wordId}/bookmark`, { method: 'POST' });
-        if (todayData) todayData.bookmarked = true;
-        // Refresh bookmarks count
-        const bkData = await apiFetch('/words/bookmarks');
-        bookmarks = bkData.bookmarks || [];
-      }
-      renderPageContent();
-      initPageListeners();
-      // Update header bookmark count
-      const pill = document.querySelector('.bookmark-pill span');
-      if (pill) pill.textContent = `${bookmarks.length}/5+`;
-    } catch (err) {
-      console.error(err);
-    }
   });
 
   // Sentence submission
