@@ -1,25 +1,17 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" data-color-scheme="golden">
+<html lang="en" data-theme="pastel">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PlantPlanner</title>
 
-  <!-- Apply saved theme before render to prevent flash -->
-  <script>
-    (function() {
-      var t = localStorage.getItem("pp_theme") || "golden";
-      var dark = t === "golden";
-      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-      document.documentElement.setAttribute("data-color-scheme", t);
-    })();
-  </script>
+  <!-- DaisyUI + Tailwind CDN (no build step) -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Pico.css — classless CSS framework -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
-  <!-- Google Fonts: Inter -->
+  <!-- Google Fonts: Inter (body) + Quicksand (display) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Quicksand:wght@500;600;700&display=swap" />
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <!-- Three.js for 3D planter render -->
@@ -28,17 +20,21 @@
   <!-- PlantPlanner styles -->
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <header>
-    <nav>
-      <ul><li><strong>PlantPlanner</strong></li></ul>
-      <ul id="nav-right"></ul>
-    </nav>
-  </header>
+<body class="min-h-screen font-sans">
+  <div class="navbar bg-base-100 border-b border-base-300 px-4 sticky top-0 z-50">
+    <div class="flex-1 gap-2">
+      <i data-lucide="sprout" class="text-primary w-5 h-5"></i>
+      <span class="text-lg font-display font-semibold text-primary">PlantPlanner</span>
+    </div>
+    <div class="flex-none gap-2" id="nav-right"></div>
+  </div>
 
-  <main>
+  <main class="max-w-[920px] mx-auto px-4 py-6">
     <div id="app">
-      <div class="loading">Loading…</div>
+      <div class="flex flex-col items-center justify-center py-12 text-base-content/50 gap-3">
+        <span class="loading loading-spinner loading-md text-primary"></span>
+        Loading...
+      </div>
     </div>
   </main>
 

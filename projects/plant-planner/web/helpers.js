@@ -47,12 +47,11 @@ function logout() {
 function updateNav() {
   var navRight = document.getElementById("nav-right");
   if (!navRight) return;
-  var settingsItem = '<li><button class="outline small-btn" id="nav-settings" title="Settings"><i data-lucide="settings"></i></button></li>';
   if (token && currentUser) {
     navRight.innerHTML =
-      '<li><a href="#" id="nav-gardens">My Gardens</a></li>' +
-      '<li><a href="#" id="nav-logout">Logout</a></li>' +
-      settingsItem;
+      '<button class="btn btn-ghost btn-sm gap-1" id="nav-gardens"><i data-lucide="layout-grid" style="width:1em;height:1em"></i> My Gardens</button>' +
+      '<button class="btn btn-ghost btn-sm gap-1" id="nav-logout"><i data-lucide="log-out" style="width:1em;height:1em"></i> Logout</button>' +
+      '<button class="btn btn-ghost btn-sm btn-circle" id="nav-settings" title="Settings"><i data-lucide="settings" style="width:1.1em;height:1.1em"></i></button>';
     document.getElementById("nav-gardens").onclick = function(e) {
       e.preventDefault();
       showView("gardens");
@@ -62,7 +61,8 @@ function updateNav() {
       logout();
     };
   } else {
-    navRight.innerHTML = settingsItem;
+    navRight.innerHTML =
+      '<button class="btn btn-ghost btn-sm btn-circle" id="nav-settings" title="Settings"><i data-lucide="settings" style="width:1.1em;height:1.1em"></i></button>';
   }
   document.getElementById("nav-settings").onclick = showThemeSettings;
 }
@@ -77,21 +77,21 @@ function showThemeSettings() {
   var optionsHtml = Object.keys(THEMES).map(function(key) {
     var t = THEMES[key];
     return '<label class="theme-option">' +
-      '<input type="radio" name="pp-theme" value="' + key + '"' + (currentTheme === key ? " checked" : "") + '>' +
-      '<span class="theme-swatch swatch-' + key + '"></span>' +
-      '<span>' + t.label + '</span>' +
+      '<input type="radio" name="pp-theme" value="' + key + '"' + (currentTheme === key ? " checked" : "") + ' class="radio radio-sm radio-primary">' +
+      '<span class="theme-swatch ' + (t.swatch || "swatch-" + key) + '"></span>' +
+      '<span class="text-sm">' + t.label + '</span>' +
       '</label>';
   }).join("");
 
   dialog.innerHTML =
-    '<article>' +
-      '<header><strong><i data-lucide="settings"></i> Settings</strong></header>' +
-      '<fieldset>' +
-        '<legend>Color Theme</legend>' +
+    '<div class="dialog-body">' +
+      '<div class="dialog-header"><i data-lucide="settings"></i> Settings</div>' +
+      '<fieldset class="space-y-2">' +
+        '<legend class="text-sm font-medium mb-2">Color Theme</legend>' +
         optionsHtml +
       '</fieldset>' +
-      '<footer><button id="settings-close">Close</button></footer>' +
-    '</article>';
+      '<div class="mt-4"><button id="settings-close" class="btn btn-sm btn-primary w-full">Close</button></div>' +
+    '</div>';
 
   document.body.appendChild(dialog);
   dialog.showModal();

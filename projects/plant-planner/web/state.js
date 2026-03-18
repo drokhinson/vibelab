@@ -15,4 +15,4 @@ var catalogFilter = "all";         // sunlight filter: all | full_sun | partial 
 var catalogFilterSeason = "all";   // bloom season: all | spring | summer | fall | winter
 var catalogFilterCategory = "all"; // category: all | vegetable | herb | flower | fruit
 var sideViewAngle = "south";       // compass angle: south | north | east | west
-var currentTheme = localStorage.getItem("pp_theme") || "sunlit";
+var currentTheme = localStorage.getItem("pp_theme") || "pastel";
