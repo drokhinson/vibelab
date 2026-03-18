@@ -1,67 +1,25 @@
-"""
-routes/sauceboss.py — SauceBoss API routes
-All routes at /api/v1/sauceboss/...
+"""Public SauceBoss API routes — carbs, sauces, dressings, marinades."""
 
-Supabase tables (all prefixed sauceboss_):
-  sauceboss_carbs               — id (text PK), name, emoji, description
-  sauceboss_sauces              — id, name, cuisine, cuisine_emoji, color, description, sauce_type
-  sauceboss_sauce_carbs         — sauce_id, carb_id (junction)
-  sauceboss_salad_bases         — id (text PK), name, emoji, description
-  sauceboss_sauce_salad_bases   — sauce_id, base_id (junction, dressings ↔ bases)
-  sauceboss_sauce_proteins      — sauce_id, addon_id (junction, marinades ↔ proteins)
-  sauceboss_sauce_steps         — id (bigserial), sauce_id, step_order, title
-  sauceboss_step_ingredients    — id (bigserial), step_id, name, amount, unit
-  sauceboss_addons              — id (text PK), type ('protein'|'veggie'), name, emoji, ...
-
-sauce_type values: 'sauce' | 'dressing' | 'marinade'
-"""
 import re
 import secrets
-from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Header
-from pydantic import BaseModel, Field
+from fastapi import HTTPException
 
 from db import get_supabase
-from auth import require_admin
-
-
-# ── Pydantic models for sauce creation ───────────────────────────────────────
-class IngredientInput(BaseModel):
-    name: str = Field(min_length=1)
-    amount: float = Field(gt=0)
-    unit: str = Field(min_length=1)
-
-class StepInput(BaseModel):
-    title: str = Field(min_length=1)
-    ingredients: List[IngredientInput] = Field(min_length=1)
-    inputFromStep: int | None = None
-
-class CreateSauceRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    cuisine: str = Field(min_length=1)
-    cuisineEmoji: str = ""
-    color: str = Field(pattern=r'^#[0-9A-Fa-f]{6}$')
-    description: str = ""
-    carbIds: List[str] = Field(min_length=1)
-    steps: List[StepInput] = Field(min_length=1)
-
-router = APIRouter(prefix="/api/v1/sauceboss", tags=["sauceboss"])
+from . import router
+from .models import CreateSauceRequest, IngredientCategoryInput
 
 
 @router.get("/health")
 async def health():
+    """Health check."""
     return {"project": "sauceboss", "status": "ok"}
 
 
 @router.get("/carbs")
 async def list_carbs():
-    """
-    Returns all carbs. Each carb includes a sauceCount derived from sauce_carbs.
-    Shape: [{ id, name, emoji, description, sauceCount }]
-    """
+    """Returns all carbs with sauce counts."""
     sb = get_supabase()
-    # Fetch carbs + count sauces via RPC to keep it one round-trip
     result = sb.rpc("get_sauceboss_carbs_with_count", {}).execute()
     if result.data is None:
         raise HTTPException(500, "Failed to load carbs")
@@ -70,12 +28,7 @@ async def list_carbs():
 
 @router.get("/carbs/{carb_id}/sauces")
 async def sauces_for_carb(carb_id: str):
-    """
-    Returns fully assembled sauce objects for a given carb.
-    Shape matches the original SAUCES data:
-      { id, name, cuisine, cuisineEmoji, color, description,
-        compatibleCarbs[], ingredients[], steps[{ title, ingredients[] }] }
-    """
+    """Returns fully assembled sauce objects for a given carb."""
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_sauces_for_carb", {"p_carb_id": carb_id}).execute()
     if result.data is None:
@@ -85,11 +38,7 @@ async def sauces_for_carb(carb_id: str):
 
 @router.get("/carbs/{carb_id}/ingredients")
 async def ingredients_for_carb(carb_id: str):
-    """
-    Returns sorted list of unique ingredient names for all sauces compatible
-    with carb_id. Used to populate the ingredient filter panel.
-    Shape: ["garlic", "ginger", ...]
-    """
+    """Returns sorted unique ingredient names for all sauces compatible with a carb."""
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_ingredients_for_carb", {"p_carb_id": carb_id}).execute()
     if result.data is None:
@@ -119,7 +68,7 @@ async def list_substitutions():
 
 @router.get("/carbs/{carb_id}/preparations")
 async def preparations_for_carb(carb_id: str):
-    """Returns preparation options for a given carb (e.g., spaghetti/penne for pasta)."""
+    """Returns preparation options for a given carb."""
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_carb_preparations", {"p_carb_id": carb_id}).execute()
     if result.data is None:
@@ -163,11 +112,6 @@ async def create_sauce(body: CreateSauceRequest):
     if result.data is None:
         raise HTTPException(500, "Failed to create sauce — RPC returned null")
     return {"id": result.data, "status": "created"}
-
-
-class IngredientCategoryInput(BaseModel):
-    ingredientName: str = Field(min_length=1)
-    category: str = Field(min_length=1)
 
 
 @router.get("/sauces")
@@ -226,7 +170,7 @@ async def ingredients_for_base(base_id: str):
 
 @router.get("/proteins")
 async def list_proteins():
-    """Returns protein addons (type='protein') with marinade count for the marinades tab."""
+    """Returns protein addons with marinade count for the marinades tab."""
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_proteins", {}).execute()
     if result.data is None:
@@ -258,98 +202,8 @@ async def ingredients_for_protein(addon_id: str):
 async def upsert_ingredient_category(body: IngredientCategoryInput):
     """Add or update an ingredient's category classification."""
     sb = get_supabase()
-    result = sb.rpc("upsert_sauceboss_ingredient_category", {
+    sb.rpc("upsert_sauceboss_ingredient_category", {
         "p_ingredient_name": body.ingredientName.strip().lower(),
         "p_category": body.category,
     }).execute()
     return {"status": "ok"}
-
-
-# ── Admin endpoints ───────────────────────────────────────────────────────────
-
-@router.get("/admin/sauces")
-async def admin_list_sauces(authorization: Optional[str] = Header(None)):
-    """Return all sauces with their compatible carbs. Requires admin key."""
-    require_admin(authorization)
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_all_sauces", {}).execute()
-    if result.data is None:
-        return []
-    return result.data
-
-
-class CreateCarbRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=60)
-    emoji: str = Field(min_length=1)
-    description: str = ""
-    cookTimeMinutes: int = 0
-    cookTimeLabel: str = ""
-
-
-@router.post("/admin/carbs")
-async def admin_create_carb(body: CreateCarbRequest, authorization: Optional[str] = Header(None)):
-    """Add a new carb type. Requires admin key."""
-    require_admin(authorization)
-    slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
-    sb = get_supabase()
-    try:
-        sb.table("sauceboss_carbs").insert({
-            "id": slug,
-            "name": body.name,
-            "emoji": body.emoji,
-            "description": body.description,
-            "cook_time_minutes": body.cookTimeMinutes,
-            "cook_time_label": body.cookTimeLabel,
-        }).execute()
-    except Exception as e:
-        raise HTTPException(500, f"Database error: {str(e)}")
-    return {"id": slug, "status": "created"}
-
-
-class CreateAddonRequest(BaseModel):
-    type: str = Field(pattern=r'^(protein|veggie)$')
-    name: str = Field(min_length=1)
-    emoji: str = Field(min_length=1)
-    desc: str = ""
-    estimatedTime: int = Field(gt=0)
-    instructions: str = Field(min_length=1)
-
-
-@router.post("/admin/addons")
-async def admin_create_addon(body: CreateAddonRequest, authorization: Optional[str] = Header(None)):
-    """Add a new protein or veggie addon. Requires admin key."""
-    require_admin(authorization)
-    slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
-    sb = get_supabase()
-    try:
-        sb.table("sauceboss_addons").insert({
-            "id": slug,
-            "type": body.type,
-            "name": body.name,
-            "emoji": body.emoji,
-            "description": body.desc,
-            "instructions": body.instructions,
-            "estimated_time": body.estimatedTime,
-        }).execute()
-    except Exception as e:
-        raise HTTPException(500, f"Database error: {str(e)}")
-    return {"id": slug, "status": "created"}
-
-
-@router.delete("/admin/sauces/{sauce_id}")
-async def admin_delete_sauce(sauce_id: str, authorization: Optional[str] = Header(None)):
-    """Delete a sauce and all its steps/ingredients. Requires admin key."""
-    require_admin(authorization)
-    sb = get_supabase()
-    try:
-        # Get step IDs first for cascading delete
-        steps = sb.table("sauceboss_sauce_steps").select("id").eq("sauce_id", sauce_id).execute()
-        step_ids = [s["id"] for s in (steps.data or [])]
-        if step_ids:
-            sb.table("sauceboss_step_ingredients").delete().in_("step_id", step_ids).execute()
-        sb.table("sauceboss_sauce_steps").delete().eq("sauce_id", sauce_id).execute()
-        sb.table("sauceboss_sauce_carbs").delete().eq("sauce_id", sauce_id).execute()
-        result = sb.table("sauceboss_sauces").delete().eq("id", sauce_id).execute()
-    except Exception as e:
-        raise HTTPException(500, f"Database error: {str(e)}")
-    return {"id": sauce_id, "status": "deleted"}
