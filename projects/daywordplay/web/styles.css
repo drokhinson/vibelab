@@ -891,3 +891,40 @@ body {
   will-change: transform;
   margin-bottom: 0 !important;
 }
+
+/* ── Reusable sentence pills ─────────────────────────────────────────────────*/
+.reusable-sentences {
+  margin-bottom: 10px;
+}
+.reusable-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+.reusable-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reusable-pill {
+  background: var(--accent-light);
+  border: 1px solid rgba(74,124,124,0.25);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 13px;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  line-height: 1.4;
+  white-space: normal;
+  transition: background 0.15s;
+}
+.reusable-pill:hover { background: rgba(74,124,124,0.2); }
+
+/* ── Admin card ──────────────────────────────────────────────────────────────*/
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px;
+  border: 1px solid var(--border);
+}

@@ -19,9 +19,10 @@ async function loadInitialData() {
     const bkData = await apiFetch('/words/bookmarks');
     bookmarks = bkData.bookmarks || [];
 
-    // Load today's word for active group
+    // Load today's word + reusable sentences for active group
     if (activeGroupId) {
       await loadTodayWord();
+      await loadReusableSentences();
     }
   } catch (err) {
     console.error('Failed to load initial data:', err);
@@ -45,6 +46,9 @@ function initPageListeners() {
       break;
     case 'profile':
       initProfileListeners();
+      break;
+    case 'admin':
+      initAdminListeners();
       break;
   }
 }
