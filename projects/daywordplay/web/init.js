@@ -37,9 +37,6 @@ function initPageListeners() {
     case 'vote':
       initVoteListeners();
       break;
-    case 'groups':
-      initGroupsListeners();
-      break;
     case 'dictionary':
       initDictionaryListeners();
       break;
@@ -96,9 +93,8 @@ function initShellListeners() {
     updateTabBar();
   });
 
-  document.getElementById('tab-groups')?.addEventListener('click', async () => {
-    currentView = 'groups';
-    if (!groupsSearchResults.length) await searchGroups('');
+  document.getElementById('tab-dict')?.addEventListener('click', () => {
+    currentView = 'dictionary';
     renderPageContent();
     initPageListeners();
     updateTabBar();

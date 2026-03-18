@@ -14,14 +14,11 @@ async function loadLeaderboard() {
 function renderLeaderboardView() {
   if (!activeGroupId) return renderNoGroupPrompt();
 
-  const isStats = currentView === 'leaderboard';
-
   return `
+    ${renderGroupSwitcher()}
     <div class="section-header">
       <span class="section-title">🏆 Leaderboard</span>
-      <button class="icon-btn" id="lb-dict-btn">${icons.book} Dictionary</button>
     </div>
-    ${renderGroupSwitcher()}
     ${!leaderboardData
       ? `<div class="loading" style="height:40vh"></div>`
       : renderLeaderboardContent()
@@ -68,10 +65,16 @@ function renderLeaderboardEntry(entry) {
 }
 
 function initLeaderboardListeners() {
-  document.getElementById('lb-dict-btn')?.addEventListener('click', () => {
-    currentView = 'dictionary';
-    renderPageContent();
-    initPageListeners();
-    updateTabBar();
+  // Group switcher — reload leaderboard when switching groups
+  document.querySelectorAll('[data-group-switch]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      activeGroupId = btn.dataset.groupSwitch;
+      setStoredActiveGroup(activeGroupId);
+      leaderboardData = null;
+      renderPageContent();
+      if (activeGroupId) await loadLeaderboard();
+      renderPageContent();
+      initPageListeners();
+    });
   });
 }
