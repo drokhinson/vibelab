@@ -21,6 +21,11 @@ async function apiFetch(path, opts = {}) {
 }
 
 function showView(view) {
+  // Dispose 3D scene when leaving builder
+  if (currentView === "builder" && view !== "builder" && scene3DHandle) {
+    dispose3DView(scene3DHandle);
+    scene3DHandle = null;
+  }
   currentView = view;
   render();
 }

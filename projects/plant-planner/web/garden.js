@@ -18,13 +18,40 @@ function renderBuilder() {
 
   html += '<div class="builder-layout">';
   html += '<div id="catalog-sidebar" class="catalog-sidebar">' + renderCatalog() + '</div>';
+  html += '<div class="builder-main">';
+
+  // Split pane: 2D grid + 3D render
+  html += '<div class="split-pane">';
   html += '<div class="grid-area">';
   if (viewMode === "top") {
     html += renderTopGrid(g);
   } else {
     html += renderSideView(g);
   }
+  html += '</div>';
+
+  // 3D render pane
+  html += '<div class="render3d-pane">';
+  html += '<div class="render3d-header">';
+  html += '<span class="render3d-label"><i data-lucide="box"></i> 3D View</span>';
+  html += '<div class="style-selector">';
+  var styles = [
+    { id: "toon", label: "Cubirds" },
+    { id: "natural", label: "Natural" },
+    { id: "wireframe", label: "Blueprint" }
+  ];
+  for (var si = 0; si < styles.length; si++) {
+    var st = styles[si];
+    var active = renderStyle === st.id ? " active" : "";
+    html += '<button class="style-btn' + active + '" data-style="' + st.id + '">' + st.label + '</button>';
+  }
   html += '</div></div>';
+  html += '<div id="render3d-container"></div>';
+  html += '</div>';
+
+  html += '</div>'; // .split-pane
+  html += '</div>'; // .builder-main
+  html += '</div>'; // .builder-layout
 
   // Plant info tooltip
   html += '<div id="plant-tooltip" class="plant-tooltip" style="display:none"></div>';
@@ -35,6 +62,9 @@ function renderBuilder() {
   bindGridEvents(g);
   bindBuilderButtons();
   _initIcons();
+
+  // Initialize or update 3D scene
+  init3DScene(g);
 }
 
 function renderTopGrid(g) {
@@ -146,7 +176,10 @@ function bindGridEvents(g) {
       var key = x + "," + y;
       if (draggedPlant) {
         gridPlacements[key] = draggedPlant;
-        renderBuilder();
+        // Update cell in place (no full re-render to preserve 3D scene)
+        cell.classList.add("occupied");
+        cell.innerHTML = '<span class="cell-emoji">' + draggedPlant.emoji + '</span>';
+        sync3DView();
       }
     };
     // Click to remove plant
@@ -156,7 +189,9 @@ function bindGridEvents(g) {
       var key = x + "," + y;
       if (gridPlacements[key]) {
         delete gridPlacements[key];
-        renderBuilder();
+        cell.classList.remove("occupied");
+        cell.innerHTML = "";
+        sync3DView();
       }
     };
     // Hover to show info
@@ -202,19 +237,63 @@ function hideTooltip() {
   if (tip) tip.style.display = "none";
 }
 
+function init3DScene(g) {
+  // Dispose old scene if exists
+  if (scene3DHandle) {
+    dispose3DView(scene3DHandle);
+    scene3DHandle = null;
+  }
+  // Initialize new 3D scene after DOM is ready
+  requestAnimationFrame(function() {
+    scene3DHandle = init3DView("render3d-container", g, gridPlacements);
+  });
+}
+
+function sync3DView() {
+  if (scene3DHandle) {
+    syncSceneWithPlacements(scene3DHandle, gridPlacements);
+  }
+}
+
 function bindBuilderButtons() {
   document.getElementById("toggle-view").onclick = function() {
     viewMode = viewMode === "top" ? "side" : "top";
-    renderBuilder();
+    // Only re-render the 2D grid area, keep 3D scene alive
+    var gridArea = document.querySelector(".grid-area");
+    if (gridArea) {
+      gridArea.innerHTML = viewMode === "top" ? renderTopGrid(currentGarden) : renderSideView(currentGarden);
+      bindGridEvents(currentGarden);
+      if (viewMode === "side") bindCompassButtons();
+      // Update toggle button
+      var btn = document.getElementById("toggle-view");
+      btn.innerHTML = '<i data-lucide="' + (viewMode === "top" ? "layers" : "grid-2x2") + '"></i> ' + (viewMode === "top" ? "Side View" : "Top View");
+      _initIcons();
+    }
   };
   document.getElementById("save-garden").onclick = saveGarden;
   document.getElementById("reseed-garden").onclick = reseedGarden;
   document.getElementById("clear-grid").onclick = function() {
     if (!confirm("Clear all plants from this garden?")) return;
     gridPlacements = {};
-    renderBuilder();
+    var gridArea = document.querySelector(".grid-area");
+    if (gridArea) {
+      gridArea.innerHTML = viewMode === "top" ? renderTopGrid(currentGarden) : renderSideView(currentGarden);
+      bindGridEvents(currentGarden);
+      if (viewMode === "side") bindCompassButtons();
+    }
+    sync3DView();
   };
   if (viewMode === "side") bindCompassButtons();
+
+  // Render style selector
+  document.querySelectorAll(".style-btn").forEach(function(btn) {
+    btn.onclick = function() {
+      document.querySelectorAll(".style-btn").forEach(function(b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      renderStyle = btn.dataset.style;
+      if (scene3DHandle) setRenderStyle(scene3DHandle, renderStyle);
+    };
+  });
 }
 
 async function saveGarden() {

@@ -5,7 +5,7 @@
 
 ## What This App Does
 
-PlantPlanner is a virtual garden and planter box builder. Users create a bird's-eye grid (preset or custom sizes, each cell = 1 sq ft), then drag and drop plants from a catalog onto the grid to plan their garden layout. A side-view toggle shows plant heights as an elevation profile. Users can register accounts to save and load multiple garden designs. The plant catalog (~50 plants) is stored in the database with sunlight, height, and bloom season data.
+PlantPlanner is a virtual garden and planter box builder. Users create a bird's-eye grid (preset or custom sizes, each cell = 1 sq ft), then drag and drop plants from a catalog onto the grid to plan their garden layout. A side-view toggle shows plant heights as an elevation profile. A split-pane 3D render (Three.js with toon shading) shows the planter with plants in a rotatable Cubirds-style low-poly view, with toggleable render styles (Cubirds/Natural/Blueprint). Users can register accounts to save and load multiple garden designs. The plant catalog (~50 plants) is stored in the database with sunlight, height, bloom season, and 3D render parameter data.
 
 ## Current Status
 - Stage: Prototype
@@ -33,7 +33,8 @@ projects/plant-planner/
 │   ├── state.js      — Global state variables
 │   ├── helpers.js    — apiFetch, auth, nav helpers
 │   ├── catalog.js    — Plant catalog sidebar
-│   ├── garden.js     — Grid builder + drag-drop + side view
+│   ├── garden.js     — Grid builder + drag-drop + side view + 3D split pane
+│   ├── render3d.js   — Three.js 3D planter scene (toon/natural/wireframe)
 │   ├── auth.js       — Login/register views
 │   ├── gardens.js    — My gardens list (save/load)
 │   └── init.js       — DOMContentLoaded, event listeners
@@ -46,7 +47,7 @@ db/migrations/007_plant_planner_*.sql — Supabase migrations
 ## Data Model
 
 - **plantplanner_users** — id (uuid PK default gen_random_uuid()), username (text unique), display_name (text), password_hash (text), created_at (timestamptz default now())
-- **plantplanner_plants** — id (uuid PK default gen_random_uuid()), name (text), emoji (text), height_inches (int), sunlight (text: full_sun/partial/shade), bloom_season (text[]), spread_inches (int), description (text), sort_order (int)
+- **plantplanner_plants** — id (uuid PK default gen_random_uuid()), name (text), emoji (text), height_inches (int), sunlight (text: full_sun/partial/shade), bloom_season (text[]), spread_inches (int), description (text), sort_order (int), render_params (jsonb, nullable — procedural 3D geometry descriptors for Three.js)
 - **plantplanner_gardens** — id (uuid PK default gen_random_uuid()), user_id (uuid FK→users), name (text), grid_width (int), grid_height (int), created_at (timestamptz default now()), updated_at (timestamptz default now())
 - **plantplanner_garden_plants** — id (uuid PK default gen_random_uuid()), garden_id (uuid FK→gardens ON DELETE CASCADE), plant_id (uuid FK→plants), grid_x (int), grid_y (int)
 
@@ -73,8 +74,9 @@ My Gardens View (list saved gardens, create new)
     ↓ (select or create garden)
 Garden Builder View
   ├── Plant Catalog Sidebar (draggable plant tiles)
-  ├── Grid (bird's-eye, drop targets)
-  ├── Side View Toggle (elevation profile)
+  ├── Split Pane:
+  │   ├── 2D Grid (bird's-eye or side view, toggle)
+  │   └── 3D Render (rotatable Three.js, render style selector)
   └── Save button
 ```
 

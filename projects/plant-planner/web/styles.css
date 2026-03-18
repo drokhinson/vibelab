@@ -292,10 +292,84 @@ body {
   color: var(--pico-muted-color);
 }
 
-/* Grid area */
-.grid-area {
+/* Builder main area (contains split pane) */
+.builder-main {
   flex: 1;
   min-width: 0;
+}
+
+/* Split pane: 2D grid + 3D render side by side */
+.split-pane {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+/* Grid area */
+.grid-area {
+  min-width: 0;
+}
+
+/* 3D render pane */
+.render3d-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.render3d-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  gap: 0.5rem;
+}
+
+.render3d-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--pico-muted-color);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.style-selector {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.style-btn {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: 5px;
+  background: var(--pico-card-background-color);
+  cursor: pointer;
+  color: var(--pico-muted-color);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.style-btn:hover {
+  border-color: var(--pico-primary-focus);
+  color: var(--pico-primary);
+}
+.style-btn.active {
+  background: var(--pico-primary-focus);
+  border-color: var(--pico-primary);
+  color: var(--pico-primary);
+  font-weight: 600;
+}
+
+#render3d-container {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--pico-card-border-color);
+  background: #e8f4e8;
+}
+[data-color-scheme="golden"] #render3d-container {
+  background: #1a2e1a;
 }
 
 /* Top-down grid */
@@ -459,6 +533,17 @@ dialog::backdrop {
     flex-wrap: wrap;
   }
   .catalog-tile { flex: 0 0 auto; }
+  .split-pane {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Medium screens: still split but tighter */
+@media (max-width: 800px) and (min-width: 601px) {
+  .split-pane {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
 }
 
 /* ── Entrance animations ──────────────────────────────────────────────────── */
