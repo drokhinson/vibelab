@@ -6,6 +6,7 @@ from db import get_supabase
 from . import router
 from .dependencies import get_current_user, _require_couple, _get_couple_id_for_user
 from .models import InviteBody, InviteRespondBody
+from .constants import InvitationStatus, InviteAction
 
 
 @router.get("/couple")
@@ -111,7 +112,7 @@ async def send_invite(body: InviteBody, user: dict = Depends(get_current_user)):
         .select("id")
         .eq("couple_id", couple_id)
         .eq("to_username", body.to_username)
-        .eq("status", "pending")
+        .eq("status", InvitationStatus.PENDING)
         .execute()
     )
     if existing.data:
@@ -121,7 +122,7 @@ async def send_invite(body: InviteBody, user: dict = Depends(get_current_user)):
         "from_user_id": user["user_id"],
         "to_username": body.to_username,
         "couple_id": couple_id,
-        "status": "pending",
+        "status": InvitationStatus.PENDING,
     }).execute()
 
     if not result.data:
@@ -131,8 +132,7 @@ async def send_invite(body: InviteBody, user: dict = Depends(get_current_user)):
 
 @router.post("/couple/invite/{invite_id}/respond")
 async def respond_to_invite(invite_id: str, body: InviteRespondBody, user: dict = Depends(get_current_user)):
-    if body.action not in ("accept", "decline"):
-        raise HTTPException(status_code=400, detail="Action must be 'accept' or 'decline'")
+    # Pydantic validates action is a valid InviteAction enum value
 
     sb = get_supabase()
     # Fetch invite
@@ -140,7 +140,7 @@ async def respond_to_invite(invite_id: str, body: InviteRespondBody, user: dict 
         sb.table("wealthmate_invitations")
         .select("*")
         .eq("id", invite_id)
-        .eq("status", "pending")
+        .eq("status", InvitationStatus.PENDING)
         .execute()
     )
     if not invite.data:
@@ -151,10 +151,10 @@ async def respond_to_invite(invite_id: str, body: InviteRespondBody, user: dict 
     if inv["to_username"] != user["username"]:
         raise HTTPException(status_code=403, detail="This invite is not for you")
 
-    new_status = "accepted" if body.action == "accept" else "declined"
+    new_status = InvitationStatus.ACCEPTED if body.action == InviteAction.ACCEPT else InvitationStatus.DECLINED
     sb.table("wealthmate_invitations").update({"status": new_status}).eq("id", invite_id).execute()
 
-    if body.action == "accept":
+    if body.action == InviteAction.ACCEPT:
         old_couple_id = _get_couple_id_for_user(user["user_id"])
         new_couple_id = inv["couple_id"]
 
@@ -203,7 +203,7 @@ async def respond_to_invite(invite_id: str, body: InviteRespondBody, user: dict 
             "role": "partner",
         }).execute()
 
-    return {"status": new_status, "couple_id": inv["couple_id"] if body.action == "accept" else None}
+    return {"status": new_status, "couple_id": inv["couple_id"] if body.action == InviteAction.ACCEPT else None}
 
 
 @router.get("/couple/invites")
@@ -214,7 +214,7 @@ async def list_invites(user: dict = Depends(get_current_user)):
         sb.table("wealthmate_invitations")
         .select("*")
         .eq("to_username", user["username"])
-        .eq("status", "pending")
+        .eq("status", InvitationStatus.PENDING)
         .order("created_at", desc=True)
         .execute()
     )

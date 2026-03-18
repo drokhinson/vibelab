@@ -8,6 +8,7 @@ from db import get_supabase
 from . import router
 from .dependencies import get_current_user, _require_couple
 from .models import StartCheckinBody, SaveValueBody
+from .constants import CheckinStatus
 
 
 @router.get("/checkins")
@@ -19,7 +20,7 @@ async def list_checkins(user: dict = Depends(get_current_user)):
         sb.table("wealthmate_checkins")
         .select("*")
         .eq("couple_id", couple_id)
-        .eq("status", "submitted")
+        .eq("status", CheckinStatus.SUBMITTED)
         .order("checkin_date", desc=True)
         .execute()
     )
@@ -36,7 +37,7 @@ async def get_active_checkin(user: dict = Depends(get_current_user)):
         .select("*")
         .eq("couple_id", couple_id)
         .eq("initiated_by_user_id", user["user_id"])
-        .eq("status", "in_progress")
+        .eq("status", CheckinStatus.IN_PROGRESS)
         .order("created_at", desc=True)
         .limit(1)
         .execute()
@@ -75,7 +76,7 @@ async def start_checkin(body: StartCheckinBody, user: dict = Depends(get_current
         sb.table("wealthmate_checkins")
         .select("id")
         .eq("couple_id", couple_id)
-        .eq("status", "submitted")
+        .eq("status", CheckinStatus.SUBMITTED)
         .gte("checkin_date", month_start)
         .lt("checkin_date", month_end)
         .execute()
@@ -88,7 +89,7 @@ async def start_checkin(body: StartCheckinBody, user: dict = Depends(get_current
         "couple_id": couple_id,
         "initiated_by_user_id": user["user_id"],
         "checkin_date": body.checkin_date,
-        "status": "in_progress",
+        "status": CheckinStatus.IN_PROGRESS,
     }
     result = sb.table("wealthmate_checkins").insert(checkin_data).execute()
     if not result.data:
@@ -101,7 +102,7 @@ async def start_checkin(body: StartCheckinBody, user: dict = Depends(get_current
         sb.table("wealthmate_checkins")
         .select("id")
         .eq("couple_id", couple_id)
-        .eq("status", "submitted")
+        .eq("status", CheckinStatus.SUBMITTED)
         .order("checkin_date", desc=True)
         .limit(1)
         .execute()
@@ -169,7 +170,7 @@ async def save_checkin_value(
     )
     if not checkin.data:
         raise HTTPException(status_code=404, detail="Check-in not found")
-    if checkin.data[0]["status"] != "in_progress":
+    if checkin.data[0]["status"] != CheckinStatus.IN_PROGRESS:
         raise HTTPException(status_code=400, detail="Check-in already submitted")
 
     # Verify account belongs to couple
@@ -231,13 +232,13 @@ async def submit_checkin(checkin_id: str, user: dict = Depends(get_current_user)
     )
     if not checkin.data:
         raise HTTPException(status_code=404, detail="Check-in not found")
-    if checkin.data[0]["status"] != "in_progress":
+    if checkin.data[0]["status"] != CheckinStatus.IN_PROGRESS:
         raise HTTPException(status_code=400, detail="Check-in already submitted")
 
     result = (
         sb.table("wealthmate_checkins")
         .update({
-            "status": "submitted",
+            "status": CheckinStatus.SUBMITTED,
             "submitted_at": datetime.now(timezone.utc).isoformat(),
         })
         .eq("id", checkin_id)
