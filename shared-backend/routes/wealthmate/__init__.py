@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/v1/wealthmate", tags=["wealthmate"])
 from . import auth_routes      # noqa: F401, E402
 from . import couple_routes    # noqa: F401, E402
 from . import account_routes   # noqa: F401, E402
+from . import checkin_csv_routes  # noqa: F401, E402  (before checkin_routes for path priority)
 from . import checkin_routes   # noqa: F401, E402
 from . import wealth_routes    # noqa: F401, E402
 from . import expense_routes   # noqa: F401, E402
