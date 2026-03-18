@@ -1,0 +1,98 @@
+name: Deploy Specific Project
+
+on:
+  # Trigger when deploy.yml is changed on main
+  push:
+    branches: [main]
+    paths:
+      - deploy.yml
+
+  # Also allow manual trigger with project name input
+  workflow_dispatch:
+    inputs:
+      project:
+        description: "Project to deploy (e.g. sauceboss, plant-planner)"
+        required: true
+        type: string
+      target:
+        description: "What to deploy"
+        required: true
+        type: choice
+        options:
+          - frontend
+          - backend
+          - both
+        default: frontend
+
+jobs:
+  read-config:
+    runs-on: ubuntu-latest
+    outputs:
+      project: ${{ steps.resolve.outputs.project }}
+      projectKey: ${{ steps.resolve.outputs.projectKey }}
+      target: ${{ steps.resolve.outputs.target }}
+      should_deploy: ${{ steps.resolve.outputs.should_deploy }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: resolve
+        name: Resolve deploy target
+        run: |
+          # Prefer workflow_dispatch inputs; fall back to deploy.yml
+          if [ -n "${{ inputs.project }}" ]; then
+            PROJECT="${{ inputs.project }}"
+            TARGET="${{ inputs.target }}"
+          else
+            PROJECT=$(grep '^project:' deploy.yml | sed 's/project:\s*"\?\([^"]*\)"\?.*/\1/' | xargs)
+            TARGET=$(grep '^target:' deploy.yml | sed 's/target:\s*"\?\([^"]*\)"\?.*/\1/' | xargs)
+          fi
+
+          if [ -z "$PROJECT" ]; then
+            echo "No project specified in deploy.yml or workflow input. Skipping."
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Validate project directory exists
+          if [ ! -d "projects/$PROJECT/web" ]; then
+            echo "::error::Project directory projects/$PROJECT/web does not exist"
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          UPPER=$(echo "$PROJECT" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+          echo "project=$PROJECT" >> $GITHUB_OUTPUT
+          echo "projectKey=$UPPER" >> $GITHUB_OUTPUT
+          echo "target=${TARGET:-frontend}" >> $GITHUB_OUTPUT
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+          echo "Deploying: $PROJECT ($TARGET)"
+
+  deploy-frontend:
+    needs: read-config
+    if: needs.read-config.outputs.should_deploy == 'true' && (needs.read-config.outputs.target == 'frontend' || needs.read-config.outputs.target == 'both')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy ${{ needs.read-config.outputs.project }} frontend
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', needs.read-config.outputs.projectKey)] }}
+          working-directory: ./projects/${{ needs.read-config.outputs.project }}/web
+          vercel-args: --prod
+
+  deploy-backend:
+    needs: read-config
+    if: needs.read-config.outputs.should_deploy == 'true' && (needs.read-config.outputs.target == 'backend' || needs.read-config.outputs.target == 'both')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trigger Railway deploy for backend
+        run: |
+          echo "Backend deploys automatically via Railway's GitHub integration."
+          echo "If you need a manual redeploy, use the Railway dashboard or CLI."
+          echo "Project context: ${{ needs.read-config.outputs.project }}"

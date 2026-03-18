@@ -1,0 +1,15 @@
+# Deploy Configuration
+# Specify which project to deploy. Commit this change to main
+# and the deploy-project workflow will pick it up.
+#
+# Usage:
+#   1. Set `project` to the project folder name (e.g. sauceboss, plant-planner)
+#   2. Set `target` to what you want to deploy: frontend, backend, or both
+#   3. Commit & push to main — the workflow handles the rest
+#   4. Revert this file after deploy if you don't want repeat deploys
+#
+# You can also trigger it manually via workflow_dispatch in GitHub Actions
+# and skip editing this file entirely.
+
+project: ""          # e.g. sauceboss, plant-planner, wealthmate
+target: "frontend"   # frontend | backend | both
