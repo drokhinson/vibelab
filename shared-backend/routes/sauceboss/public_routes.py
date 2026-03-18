@@ -6,11 +6,12 @@ import secrets
 from fastapi import HTTPException
 
 from db import get_supabase
+from shared_models import HealthResponse
 from . import router
 from .models import CreateSauceRequest, IngredientCategoryInput
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse, summary="SauceBoss health check")
 async def health():
     """Health check."""
     return {"project": "sauceboss", "status": "ok"}

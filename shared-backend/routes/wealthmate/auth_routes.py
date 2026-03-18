@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException
 
 from auth import hash_password, verify_password
 from db import get_supabase
+from shared_models import HealthResponse
 from . import router
 from .dependencies import (
     get_current_user, _require_couple, create_app_token, _get_couple_id_for_user,
@@ -17,8 +18,9 @@ from .models import RegisterBody, LoginBody, ResetPasswordBody, UpdateEmailBody
 # Health
 # ---------------------------------------------------------------------------
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse, summary="WealthMate health check")
 async def health():
+    """Health check."""
     return {"project": "wealthmate", "status": "ok"}
 
 
