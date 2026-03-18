@@ -26,5 +26,5 @@ function renderPrepSelector() {
 
 function selectPrep(id) {
   state.selectedPrep = state.preparations.find(p => p.id === id) || null;
-  navigate('protein-veggie-selector');
+  navigate('sauce-selector');
 }

@@ -433,6 +433,17 @@ function render() {
     const header = app.querySelector('.app-header');
     if (header) header.insertAdjacentHTML('afterend', renderProgressBar());
   }
+  // Show inline loading spinner (keeps header + progress bar visible)
+  if (state.loading) {
+    const scrollBody = app.querySelector('.scroll-body');
+    if (scrollBody) {
+      scrollBody.innerHTML = `
+        <div class="loading-inline">
+          <div class="spinner"></div>
+          <p class="loading-text">${state.loading}</p>
+        </div>`;
+    }
+  }
   _initIcons();
 }
 
