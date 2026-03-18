@@ -7,17 +7,23 @@ function renderBuilder() {
   var html = '<div class="builder-header">';
   html += '<div class="builder-title">';
   html += '<h4>' + escapeHtml(g.name) + '</h4>';
-  html += '<span class="muted">' + g.grid_width + '×' + g.grid_height + ' ft</span>';
+  html += '<span class="text-sm opacity-50">' + g.grid_width + '×' + g.grid_height + ' ft</span>';
   html += '</div>';
   html += '<div class="builder-actions">';
-  html += '<button id="toggle-view" class="outline small-btn"><i data-lucide="' + (viewMode === "top" ? "layers" : "grid-2x2") + '"></i> ' + (viewMode === "top" ? "Side View" : "Top View") + '</button>';
-  html += '<button id="save-garden" class="small-btn"><i data-lucide="save"></i> Save</button>';
-  html += '<button id="reseed-garden" class="secondary outline small-btn"><i data-lucide="refresh-cw"></i> Reseed</button>';
-  html += '<button id="clear-grid" class="secondary outline small-btn"><i data-lucide="trash-2"></i> Clear</button>';
+  html += '<button id="toggle-view" class="btn btn-sm btn-outline gap-1"><i data-lucide="' + (viewMode === "top" ? "layers" : "grid-2x2") + '"></i> ' + (viewMode === "top" ? "Side View" : "Top View") + '</button>';
+  html += '<button id="save-garden" class="btn btn-sm btn-primary gap-1"><i data-lucide="save"></i> Save</button>';
+  html += '<button id="reseed-garden" class="btn btn-sm btn-outline gap-1"><i data-lucide="refresh-cw"></i> Reseed</button>';
+  html += '<button id="clear-grid" class="btn btn-sm btn-outline btn-error gap-1"><i data-lucide="trash-2"></i> Clear</button>';
   html += '</div></div>';
 
   html += '<div class="builder-layout">';
-  html += '<div id="catalog-sidebar" class="catalog-sidebar">' + renderCatalog() + '</div>';
+
+  // Catalog sidebar with separate filter and list sections
+  html += '<div id="catalog-sidebar" class="catalog-sidebar">';
+  html += '<div class="catalog-filters">' + renderCatalogFilters() + '</div>';
+  html += '<div class="catalog-list-wrapper" id="catalog-list-wrapper">' + renderCatalogList() + '</div>';
+  html += '</div>';
+
   html += '<div class="builder-main">';
 
   // Split pane: 2D grid + 3D render
@@ -83,14 +89,13 @@ function renderTopGrid(g) {
     }
   }
   html += '</div>';
-  html += '<div class="muted" style="text-align:center;margin-top:0.25rem;font-size:0.75rem">Each cell = 1 sq ft</div>';
+  html += '<div class="text-center text-xs opacity-40 mt-1">Each cell = 1 sq ft</div>';
   return html;
 }
 
 function renderSideView(g) {
-  var maxH = 84; // max plant height for scaling
+  var maxH = 84;
 
-  // Compass angle buttons
   var angles = [
     { id: "south", label: '<i data-lucide="arrow-up"></i> S' },
     { id: "north", label: '<i data-lucide="arrow-down"></i> N' },
@@ -105,11 +110,8 @@ function renderSideView(g) {
   }
   html += '</div>';
 
-  // Build the column list based on angle
-  // Each "slice" is the profile seen from that direction
   var slices = [];
   if (sideViewAngle === "south" || sideViewAngle === "north") {
-    // Looking along y-axis — each column is an x position
     var xStart = sideViewAngle === "south" ? 0 : g.grid_width - 1;
     var xEnd   = sideViewAngle === "south" ? g.grid_width : -1;
     var xStep  = sideViewAngle === "south" ? 1 : -1;
@@ -122,7 +124,6 @@ function renderSideView(g) {
       slices.push(tallest);
     }
   } else {
-    // Looking along x-axis — each column is a y position
     var yStart = sideViewAngle === "east" ? 0 : g.grid_height - 1;
     var yEnd   = sideViewAngle === "east" ? g.grid_height : -1;
     var yStep  = sideViewAngle === "east" ? 1 : -1;
@@ -154,7 +155,7 @@ function renderSideView(g) {
   html += '</div>';
 
   var dirLabel = { south: "looking North", north: "looking South", east: "looking West", west: "looking East" };
-  html += '<div class="muted" style="text-align:center;margin-top:0.25rem;font-size:0.75rem">Elevation — ' + dirLabel[sideViewAngle] + '</div>';
+  html += '<div class="text-center text-xs opacity-40 mt-1">Elevation — ' + dirLabel[sideViewAngle] + '</div>';
   return html;
 }
 
@@ -176,13 +177,11 @@ function bindGridEvents(g) {
       var key = x + "," + y;
       if (draggedPlant) {
         gridPlacements[key] = draggedPlant;
-        // Update cell in place (no full re-render to preserve 3D scene)
         cell.classList.add("occupied");
         cell.innerHTML = '<span class="cell-emoji">' + draggedPlant.emoji + '</span>';
         sync3DView();
       }
     };
-    // Click to remove plant
     cell.onclick = function() {
       var x = parseInt(cell.dataset.x);
       var y = parseInt(cell.dataset.y);
@@ -194,7 +193,6 @@ function bindGridEvents(g) {
         sync3DView();
       }
     };
-    // Hover to show info
     cell.onmouseenter = function() {
       var x = parseInt(cell.dataset.x);
       var y = parseInt(cell.dataset.y);
@@ -225,7 +223,7 @@ function showTooltip(el, plant) {
     '<strong>' + plant.emoji + ' ' + escapeHtml(plant.name) + '</strong><br>' +
     sunlightIcon(plant.sunlight) + ' ' + sunlightLabel(plant.sunlight) +
     ' | ' + plant.height_inches + '" tall' +
-    (plant.description ? '<br><span class="muted">' + escapeHtml(plant.description) + '</span>' : '');
+    (plant.description ? '<br><span class="opacity-50 text-sm">' + escapeHtml(plant.description) + '</span>' : '');
   tip.style.display = "block";
   var rect = el.getBoundingClientRect();
   tip.style.left = rect.left + "px";
@@ -238,12 +236,10 @@ function hideTooltip() {
 }
 
 function init3DScene(g) {
-  // Dispose old scene if exists
   if (scene3DHandle) {
     dispose3DView(scene3DHandle);
     scene3DHandle = null;
   }
-  // Initialize new 3D scene after DOM is ready
   requestAnimationFrame(function() {
     scene3DHandle = init3DView("render3d-container", g, gridPlacements);
   });
@@ -258,13 +254,11 @@ function sync3DView() {
 function bindBuilderButtons() {
   document.getElementById("toggle-view").onclick = function() {
     viewMode = viewMode === "top" ? "side" : "top";
-    // Only re-render the 2D grid area, keep 3D scene alive
     var gridArea = document.querySelector(".grid-area");
     if (gridArea) {
       gridArea.innerHTML = viewMode === "top" ? renderTopGrid(currentGarden) : renderSideView(currentGarden);
       bindGridEvents(currentGarden);
       if (viewMode === "side") bindCompassButtons();
-      // Update toggle button
       var btn = document.getElementById("toggle-view");
       btn.innerHTML = '<i data-lucide="' + (viewMode === "top" ? "layers" : "grid-2x2") + '"></i> ' + (viewMode === "top" ? "Side View" : "Top View");
       _initIcons();
@@ -298,7 +292,7 @@ function bindBuilderButtons() {
 
 async function saveGarden() {
   var btn = document.getElementById("save-garden");
-  btn.setAttribute("aria-busy", "true");
+  btn.classList.add("loading");
   btn.disabled = true;
   var placements = [];
   for (var key in gridPlacements) {
@@ -315,11 +309,11 @@ async function saveGarden() {
       body: { plants: placements }
     });
     btn.textContent = "Saved!";
-    setTimeout(function() { btn.textContent = "Save"; }, 1500);
+    setTimeout(function() { btn.innerHTML = '<i data-lucide="save"></i> Save'; _initIcons(); }, 1500);
   } catch (err) {
     alert("Save failed: " + err.message);
   } finally {
-    btn.setAttribute("aria-busy", "false");
+    btn.classList.remove("loading");
     btn.disabled = false;
   }
 }
@@ -327,7 +321,7 @@ async function saveGarden() {
 async function reseedGarden() {
   if (!confirm("Reseed for next season? This will clear all current plants and save an empty garden.")) return;
   var btn = document.getElementById("reseed-garden");
-  btn.setAttribute("aria-busy", "true");
+  btn.classList.add("loading");
   btn.disabled = true;
   try {
     await apiFetch("/gardens/" + currentGarden.id + "/plants", {
@@ -337,13 +331,14 @@ async function reseedGarden() {
     gridPlacements = {};
     btn.textContent = "Reseeded!";
     setTimeout(function() {
-      btn.textContent = "Reseed";
+      btn.innerHTML = '<i data-lucide="refresh-cw"></i> Reseed';
+      _initIcons();
       renderBuilder();
     }, 1200);
   } catch (err) {
     alert("Reseed failed: " + err.message);
   } finally {
-    btn.setAttribute("aria-busy", "false");
+    btn.classList.remove("loading");
     btn.disabled = false;
   }
 }

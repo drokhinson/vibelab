@@ -68,12 +68,12 @@ function buildShapeMesh(desc, style) {
 function buildPlantMesh(renderParams, heightInches, style) {
   var group = new THREE.Group();
   if (!renderParams) {
-    // Fallback: simple green sphere on a stick
+    // Fallback: cute green sphere on a stick
     var fallbackStem = buildShapeMesh({
-      shape: "cylinder", height: 0.3, radius: 0.03, color: "#4a9e3a", segments: 6
+      shape: "cylinder", height: 0.3, radius: 0.035, color: "#3E7D32", segments: 6
     }, style);
     var fallbackTop = buildShapeMesh({
-      shape: "sphere", position: [0, 0.35, 0], scale: [0.15, 0.12, 0.15], color: "#5cb85c", segments: 6
+      shape: "sphere", position: [0, 0.38, 0], scale: [0.18, 0.15, 0.18], color: "#4CAF50", segments: 8
     }, style);
     group.add(fallbackStem);
     group.add(fallbackTop);
@@ -101,6 +101,11 @@ function buildPlantMesh(renderParams, heightInches, style) {
   return group;
 }
 
+function getSceneBgColor(style) {
+  if (style === "wireframe") return "#1a1a2e";
+  return "#E8EEF4"; // soft sky blue-grey
+}
+
 function init3DView(containerId, garden, placements) {
   var container = document.getElementById(containerId);
   if (!container) return null;
@@ -110,14 +115,18 @@ function init3DView(containerId, garden, placements) {
 
   // Scene
   var scene = new THREE.Scene();
-  scene.background = new THREE.Color(renderStyle === "wireframe" ? "#1a1a2e" : "#e8f4e8");
+  scene.background = new THREE.Color(getSceneBgColor(renderStyle));
 
-  // Camera
+  // Camera — ensure minimum distance for small grids
   var camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
   var gw = garden.grid_width;
   var gh = garden.grid_height;
   var maxDim = Math.max(gw, gh);
-  camera.position.set(maxDim * 0.8, maxDim * 0.7, maxDim * 0.8);
+  camera.position.set(
+    Math.max(maxDim * 0.8, 4),
+    Math.max(maxDim * 0.7, 3.5),
+    Math.max(maxDim * 0.8, 4)
+  );
   camera.lookAt(0, 0, 0);
 
   // Renderer
@@ -127,12 +136,15 @@ function init3DView(containerId, garden, placements) {
   container.innerHTML = "";
   container.appendChild(renderer.domElement);
 
-  // Lights
-  var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  // Lights — brighter ambient + main directional + warm fill
+  var ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
   var dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
   dirLight.position.set(5, 8, 5);
   scene.add(dirLight);
+  var fillLight = new THREE.DirectionalLight(0xFFF5E1, 0.3);
+  fillLight.position.set(-3, 4, -3);
+  scene.add(fillLight);
 
   // OrbitControls
   var controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -141,6 +153,15 @@ function init3DView(containerId, garden, placements) {
   controls.maxDistance = maxDim * 3;
   controls.target.set(0, 0, 0);
   controls.update();
+
+  // Ground plane (warm sandy beige)
+  var groundGeom = new THREE.PlaneGeometry(maxDim * 4, maxDim * 4);
+  var groundMat = makeMaterial("#D4C9B8", renderStyle);
+  var ground = new THREE.Mesh(groundGeom, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.06;
+  ground.name = "ground";
+  scene.add(ground);
 
   // Build planter box
   var boxGroup = buildPlanterBox(gw, gh, garden.garden_type === "planter");
@@ -194,8 +215,8 @@ function buildPlanterBox(gw, gh, isPlanter) {
   var group = new THREE.Group();
   var wallH = isPlanter ? 0.4 : 0.2;
   var wallThick = 0.06;
-  var woodColor = isPlanter ? "#8B6914" : "#6b4e2a";
-  var soilColor = "#3d2b1a";
+  var woodColor = isPlanter ? "#A0784C" : "#8B7355";
+  var soilColor = "#5C3D1E";
   var style = renderStyle || "toon";
 
   // Soil floor
@@ -231,7 +252,7 @@ function buildPlanterBox(gw, gh, isPlanter) {
   group.add(right);
 
   // Grid lines on soil
-  var gridMat = new THREE.LineBasicMaterial({ color: 0x5a4a3a, transparent: true, opacity: 0.4 });
+  var gridMat = new THREE.LineBasicMaterial({ color: 0x7a6a5a, transparent: true, opacity: 0.35 });
   var gridPoints = [];
   for (var x = -gw / 2; x <= gw / 2; x++) {
     gridPoints.push(new THREE.Vector3(x, 0.01, -gh / 2));
@@ -285,14 +306,13 @@ function setRenderStyle(handle, newStyle) {
   renderStyle = newStyle;
 
   // Update scene background
-  handle.scene.background = new THREE.Color(newStyle === "wireframe" ? "#1a1a2e" : "#e8f4e8");
+  handle.scene.background = new THREE.Color(getSceneBgColor(newStyle));
 
   // Rebuild all plants with new material
   syncSceneWithPlacements(handle, gridPlacements);
 
-  // Rebuild planter box
+  // Rebuild planter box and ground
   var garden = handle.garden;
-  // Remove old box (first child of scene that isn't lights or plantsGroup)
   var toRemove = [];
   handle.scene.children.forEach(function(child) {
     if (child !== handle.plantsGroup && child.type !== "AmbientLight" && child.type !== "DirectionalLight") {
@@ -303,6 +323,17 @@ function setRenderStyle(handle, newStyle) {
     handle.scene.remove(child);
     disposeObject(child);
   });
+
+  // Re-add ground
+  var maxDim = Math.max(garden.grid_width, garden.grid_height);
+  var groundGeom = new THREE.PlaneGeometry(maxDim * 4, maxDim * 4);
+  var groundMat = makeMaterial("#D4C9B8", newStyle);
+  var ground = new THREE.Mesh(groundGeom, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.06;
+  ground.name = "ground";
+  handle.scene.add(ground);
+
   var newBox = buildPlanterBox(garden.grid_width, garden.grid_height, garden.garden_type === "planter");
   handle.scene.add(newBox);
 }

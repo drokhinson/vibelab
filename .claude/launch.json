@@ -24,6 +24,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "projects/spotme/web", "-l", "5503", "--no-clipboard"],
       "port": 5503
+    },
+    {
+      "name": "plantplanner-web",
+      "runtimeExecutable": "npx.cmd",
+      "runtimeArgs": ["serve", "projects/plant-planner/web", "-l", "5504", "--no-clipboard"],
+      "port": 5504
     }
   ]
 }

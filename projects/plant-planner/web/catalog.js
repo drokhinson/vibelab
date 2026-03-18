@@ -1,14 +1,6 @@
 // catalog.js — Plant catalog sidebar rendering + drag source
 
-function renderCatalog() {
-  var filtered = plants.filter(function(p) {
-    var sunOk = catalogFilter === "all" || p.sunlight === catalogFilter;
-    var seasonOk = catalogFilterSeason === "all" ||
-      (p.bloom_season && p.bloom_season.indexOf(catalogFilterSeason) !== -1);
-    var catOk = catalogFilterCategory === "all" || p.category === catalogFilterCategory;
-    return sunOk && seasonOk && catOk;
-  });
-
+function renderCatalogFilters() {
   // Gather unique categories for the dropdown
   var cats = [];
   for (var i = 0; i < plants.length; i++) {
@@ -18,20 +10,19 @@ function renderCatalog() {
   }
   cats.sort();
 
-  var html = '<div class="catalog-header">';
-  html += '<h5>Plants</h5>';
+  var html = '<div class="catalog-filters-title"><i data-lucide="leaf" style="width:0.9em;height:0.9em"></i> Plants</div>';
 
   // Sunlight filter
-  html += '<select id="catalog-filter-sun" class="catalog-filter-select">';
-  html += '<option value="all"' + (catalogFilter === "all" ? " selected" : "") + '>☀ All light</option>';
-  html += '<option value="full_sun"' + (catalogFilter === "full_sun" ? " selected" : "") + '>☀ Full Sun</option>';
-  html += '<option value="partial"' + (catalogFilter === "partial" ? " selected" : "") + '>⛅ Partial</option>';
-  html += '<option value="shade"' + (catalogFilter === "shade" ? " selected" : "") + '>🌙 Shade</option>';
+  html += '<select id="catalog-filter-sun" class="select select-bordered select-xs w-full">';
+  html += '<option value="all"' + (catalogFilter === "all" ? " selected" : "") + '>All light</option>';
+  html += '<option value="full_sun"' + (catalogFilter === "full_sun" ? " selected" : "") + '>Full Sun</option>';
+  html += '<option value="partial"' + (catalogFilter === "partial" ? " selected" : "") + '>Partial</option>';
+  html += '<option value="shade"' + (catalogFilter === "shade" ? " selected" : "") + '>Shade</option>';
   html += '</select>';
 
   // Bloom season filter
-  html += '<select id="catalog-filter-season" class="catalog-filter-select">';
-  html += '<option value="all"' + (catalogFilterSeason === "all" ? " selected" : "") + '>🌸 All seasons</option>';
+  html += '<select id="catalog-filter-season" class="select select-bordered select-xs w-full">';
+  html += '<option value="all"' + (catalogFilterSeason === "all" ? " selected" : "") + '>All seasons</option>';
   html += '<option value="spring"' + (catalogFilterSeason === "spring" ? " selected" : "") + '>Spring</option>';
   html += '<option value="summer"' + (catalogFilterSeason === "summer" ? " selected" : "") + '>Summer</option>';
   html += '<option value="fall"' + (catalogFilterSeason === "fall" ? " selected" : "") + '>Fall</option>';
@@ -39,8 +30,8 @@ function renderCatalog() {
   html += '</select>';
 
   // Category filter
-  html += '<select id="catalog-filter-cat" class="catalog-filter-select">';
-  html += '<option value="all"' + (catalogFilterCategory === "all" ? " selected" : "") + '>🌱 All types</option>';
+  html += '<select id="catalog-filter-cat" class="select select-bordered select-xs w-full">';
+  html += '<option value="all"' + (catalogFilterCategory === "all" ? " selected" : "") + '>All types</option>';
   for (var j = 0; j < cats.length; j++) {
     var c = cats[j];
     var label = c.charAt(0).toUpperCase() + c.slice(1);
@@ -48,9 +39,19 @@ function renderCatalog() {
   }
   html += '</select>';
 
-  html += '</div>';
+  return html;
+}
 
-  html += '<div class="catalog-list">';
+function renderCatalogList() {
+  var filtered = plants.filter(function(p) {
+    var sunOk = catalogFilter === "all" || p.sunlight === catalogFilter;
+    var seasonOk = catalogFilterSeason === "all" ||
+      (p.bloom_season && p.bloom_season.indexOf(catalogFilterSeason) !== -1);
+    var catOk = catalogFilterCategory === "all" || p.category === catalogFilterCategory;
+    return sunOk && seasonOk && catOk;
+  });
+
+  var html = '<div class="catalog-list">';
   for (var k = 0; k < filtered.length; k++) {
     var p = filtered[k];
     html += '\
@@ -63,7 +64,7 @@ function renderCatalog() {
       </div>';
   }
   if (filtered.length === 0) {
-    html += '<div class="muted" style="padding:1rem;text-align:center">No plants match filters</div>';
+    html += '<div class="text-center text-sm py-4 opacity-50">No plants match filters</div>';
   }
   html += '</div>';
   return html;
@@ -74,29 +75,41 @@ function bindCatalogEvents() {
   if (sunEl) {
     sunEl.onchange = function(e) {
       catalogFilter = e.target.value;
-      refreshCatalog();
+      refreshCatalogList();
     };
   }
   var seasonEl = document.getElementById("catalog-filter-season");
   if (seasonEl) {
     seasonEl.onchange = function(e) {
       catalogFilterSeason = e.target.value;
-      refreshCatalog();
+      refreshCatalogList();
     };
   }
   var catEl = document.getElementById("catalog-filter-cat");
   if (catEl) {
     catEl.onchange = function(e) {
       catalogFilterCategory = e.target.value;
-      refreshCatalog();
+      refreshCatalogList();
     };
   }
   bindCatalogDrag();
 }
 
+function refreshCatalogList() {
+  var listWrapper = document.getElementById("catalog-list-wrapper");
+  if (listWrapper) listWrapper.innerHTML = renderCatalogList();
+  bindCatalogDrag();
+  _initIcons();
+}
+
 function refreshCatalog() {
   var sidebar = document.getElementById("catalog-sidebar");
-  if (sidebar) sidebar.innerHTML = renderCatalog();
+  if (sidebar) {
+    var filtersEl = sidebar.querySelector(".catalog-filters");
+    if (filtersEl) filtersEl.innerHTML = renderCatalogFilters();
+    var listWrapper = document.getElementById("catalog-list-wrapper");
+    if (listWrapper) listWrapper.innerHTML = renderCatalogList();
+  }
   bindCatalogEvents();
   bindCatalogDrag();
   _initIcons();
