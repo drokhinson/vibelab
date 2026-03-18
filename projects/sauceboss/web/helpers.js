@@ -421,11 +421,17 @@ function render() {
     case 'protein-selector':       app.innerHTML = renderProteinSelector(); break;
     case 'marinade-selector':      app.innerHTML = renderSauceSelector(); break;
     case 'recipe':                 app.innerHTML = renderRecipe(); break;
+    case 'meal-review':            app.innerHTML = renderMealReview(); break;
     case 'builder':                app.innerHTML = renderBuilder(); break;
     case 'builder-carbs':          app.innerHTML = renderBuilderCarbs(); break;
     case 'builder-review':         app.innerHTML = renderBuilderReview(); break;
     case 'settings':               app.innerHTML = renderSettings(); break;
     case 'admin':                  app.innerHTML = renderAdmin(); break;
+  }
+  // Inject nodded progress bar into guided flow screens
+  if (state.mealFlowIndex >= 0 && state.mealFlowSteps.length > 0) {
+    const header = app.querySelector('.app-header');
+    if (header) header.insertAdjacentHTML('afterend', renderProgressBar());
   }
   _initIcons();
 }

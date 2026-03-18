@@ -1,8 +1,6 @@
 'use strict';
 
 function renderProteinVeggieSelector() {
-  const carb = state.selectedCarb;
-  const backScreen = state.preparations.length > 0 ? 'prep-selector' : 'carb-selector';
   const selectedIds = new Set(state.selectedAddons.map(a => a.id));
   const count = state.selectedAddons.length;
 
@@ -22,13 +20,13 @@ function renderProteinVeggieSelector() {
 
   const continueBtnLabel = count > 0
     ? `Continue with ${count} selected →`
-    : 'Continue — just the sauce →';
+    : 'Continue — skip add-ons →';
 
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('${backScreen}')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo"><span>${carb.emoji}</span>Add proteins &amp; veggies?</div>
+      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
+      <div class="logo"><span>🧩</span>Add proteins &amp; veggies?</div>
       <div class="subtitle">Optional — select any combination</div>
     </div>
     <div class="scroll-body">
@@ -40,7 +38,7 @@ function renderProteinVeggieSelector() {
       <div class="addon-options-list">
         ${renderOptions((state.addons || PROTEIN_VEGGIE_OPTIONS).veggies)}
       </div>
-      <button class="addon-continue-btn" onclick="navigate('sauce-selector')">${continueBtnLabel}</button>
+      <button class="addon-continue-btn" onclick="completeAddonsStep()">${continueBtnLabel}</button>
     </div>
   `;
 }
@@ -56,8 +54,13 @@ function toggleAddon(id) {
   render();
 }
 
+function completeAddonsStep() {
+  if (state.mealFlowIndex >= 0) advanceToNextStep();
+  else navigate('meal-builder');
+}
+
 // kept for any legacy references
 function skipProteinVeggie() {
   state.selectedAddons = [];
-  navigate('sauce-selector');
+  completeAddonsStep();
 }
