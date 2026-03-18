@@ -71,7 +71,7 @@ function renderMealBuilder() {
       </button>`;
   };
 
-  const heroSVG = !anySelected ? `
+  const heroSVG = `
     <div class="hero-illustration">
       <svg width="180" height="140" viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg">
         <ellipse cx="90" cy="130" rx="62" ry="8" fill="#1A1A2E" opacity="0.06"/>
@@ -88,7 +88,7 @@ function renderMealBuilder() {
         <path d="M90 53 Q94 41 90 31 Q86 21 90 11" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
         <path d="M118 56 Q122 44 118 34 Q114 24 118 14" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
       </svg>
-    </div>` : '';
+    </div>`;
 
   return `
     <div class="status-bar"></div>
