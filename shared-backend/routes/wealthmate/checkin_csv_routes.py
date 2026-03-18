@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from db import get_supabase
 from . import router
 from .dependencies import get_current_user, _require_couple
-from .constants import TYPE_LABEL, LABEL_TO_ACCOUNT_TYPE, CSV_HEADERS
+from .constants import TYPE_LABEL, LABEL_TO_ACCOUNT_TYPE, CSV_HEADERS, CheckinStatus
 
 
 def _clean_numeric(val: str) -> Optional[float]:
@@ -50,7 +50,7 @@ async def export_checkins(user: dict = Depends(get_current_user)):
         sb.table("wealthmate_checkins")
         .select("id, checkin_date")
         .eq("couple_id", couple_id)
-        .eq("status", "submitted")
+        .eq("status", CheckinStatus.SUBMITTED)
         .order("checkin_date")
         .execute()
     )
@@ -208,7 +208,7 @@ async def import_checkins(file: UploadFile = File(...), user: dict = Depends(get
         sb.table("wealthmate_checkins")
         .select("checkin_date")
         .eq("couple_id", couple_id)
-        .eq("status", "submitted")
+        .eq("status", CheckinStatus.SUBMITTED)
         .execute()
     )
     existing_months = set()
@@ -242,7 +242,7 @@ async def import_checkins(file: UploadFile = File(...), user: dict = Depends(get
             "couple_id": couple_id,
             "initiated_by_user_id": user["user_id"],
             "checkin_date": checkin_date,
-            "status": "submitted",
+            "status": CheckinStatus.SUBMITTED,
             "submitted_at": now_str,
         }).execute()
         if not ci_result.data:

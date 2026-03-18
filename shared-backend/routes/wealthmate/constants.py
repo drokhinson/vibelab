@@ -1,6 +1,7 @@
 """Shared constants for WealthMate API."""
 
 import os
+from enum import StrEnum
 
 JWT_SECRET = os.environ.get("WEALTHMATE_JWT_SECRET", "dev-secret-change-me")
 JWT_ALGORITHM = "HS256"
@@ -45,3 +46,45 @@ FREQUENCY_MONTHLY_MULTIPLIER = {
     "quarterly": 1.0 / 3.0,
     "yearly": 1.0 / 12.0,
 }
+
+
+# ── Enums ─────────────────────────────────────────────────────────────────────
+
+class AccountType(StrEnum):
+    CHECKING_PERSONAL = "checking_personal"
+    CHECKING_JOINT = "checking_joint"
+    SAVINGS = "savings"
+    FOUR01K = "401k"
+    ROTH_IRA = "roth_ira"
+    RETIREMENT_OTHER = "retirement_other"
+    INVESTMENT = "investment"
+    PROPERTY_PERSONAL = "property_personal"
+    PROPERTY_RENTAL = "property_rental"
+    CAR_LOAN = "car_loan"
+    MORTGAGE = "mortgage"
+    LOAN = "loan"
+    OTHER = "other"
+    OTHER_LIABILITY = "other_liability"
+
+
+class Frequency(StrEnum):
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+    YEARLY = "yearly"
+
+
+class InvitationStatus(StrEnum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+
+
+class InviteAction(StrEnum):
+    ACCEPT = "accept"
+    DECLINE = "decline"
+
+
+class CheckinStatus(StrEnum):
+    IN_PROGRESS = "in_progress"
+    SUBMITTED = "submitted"

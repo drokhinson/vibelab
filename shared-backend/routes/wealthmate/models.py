@@ -3,6 +3,8 @@
 from typing import Optional
 from pydantic import BaseModel
 
+from .constants import AccountType, Frequency, InviteAction
+
 
 class RegisterBody(BaseModel):
     username: str
@@ -25,12 +27,12 @@ class InviteBody(BaseModel):
 
 
 class InviteRespondBody(BaseModel):
-    action: str  # "accept" or "decline"
+    action: InviteAction
 
 
 class CreateAccountBody(BaseModel):
     name: str
-    account_type: str
+    account_type: AccountType
     owner_user_id: Optional[str] = None
     url: Optional[str] = None
     notes: Optional[str] = None
@@ -45,7 +47,7 @@ class CreateAccountBody(BaseModel):
 
 class UpdateAccountBody(BaseModel):
     name: Optional[str] = None
-    account_type: Optional[str] = None
+    account_type: Optional[AccountType] = None
     owner_user_id: Optional[str] = None
     url: Optional[str] = None
     notes: Optional[str] = None
@@ -83,7 +85,7 @@ class AddExpenseItemBody(BaseModel):
 class CreateRecurringExpenseBody(BaseModel):
     name: str
     amount: float
-    frequency: Optional[str] = "monthly"
+    frequency: Optional[Frequency] = Frequency.MONTHLY
     category: Optional[str] = "other"
     start_date: Optional[str] = None
     notes: Optional[str] = None
@@ -92,7 +94,7 @@ class CreateRecurringExpenseBody(BaseModel):
 class UpdateRecurringExpenseBody(BaseModel):
     name: Optional[str] = None
     amount: Optional[float] = None
-    frequency: Optional[str] = None
+    frequency: Optional[Frequency] = None
     category: Optional[str] = None
     start_date: Optional[str] = None
     notes: Optional[str] = None
