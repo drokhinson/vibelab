@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from db import get_supabase
 from auth import require_admin
+from shared_models import HealthResponse
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
@@ -30,8 +31,9 @@ class TrackBody(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse, summary="Analytics health check")
 async def health():
+    """Health check."""
     return {"project": "analytics", "status": "ok"}
 
 

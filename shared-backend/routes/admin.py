@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Header, Query
 
 from db import get_supabase
 from auth import hash_password, require_admin
+from shared_models import HealthResponse
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -154,8 +155,9 @@ APPS_WITH_USERS = {
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse, summary="Admin health check")
 async def health():
+    """Health check."""
     return {"project": "admin", "status": "ok"}
 
 

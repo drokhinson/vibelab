@@ -21,7 +21,21 @@ from routes import admin
 
 load_dotenv()
 
-app = FastAPI(title="vibelab API", version="1.0.0", docs_url="/docs")
+app = FastAPI(
+    title="vibelab API",
+    version="1.0.0",
+    description="Shared backend for the vibelab monorepo. Each project registers routes under /api/v1/{project}/.",
+    docs_url="/docs",
+    openapi_tags=[
+        {"name": "sauceboss", "description": "SauceBoss — sauce/dressing/marinade discovery and recipe builder"},
+        {"name": "wealthmate", "description": "WealthMate — household financial tracking and check-ins"},
+        {"name": "spotme", "description": "SpotMe — hobby-based social matching"},
+        {"name": "daywordplay", "description": "Day Word Play — daily word games with groups"},
+        {"name": "plant_planner", "description": "Plant Planner — garden layout and companion planting"},
+        {"name": "analytics", "description": "Cross-app analytics tracking"},
+        {"name": "admin", "description": "Admin dashboard and user management"},
+    ],
+)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Set ALLOWED_ORIGINS in Railway to comma-separated Vercel URLs.
@@ -38,8 +52,9 @@ app.add_middleware(
 )
 
 # ── Health ────────────────────────────────────────────────────────────────────
-@app.get("/api/v1/health")
+@app.get("/api/v1/health", summary="Global health check")
 async def health():
+    """Returns overall service status."""
     return {"status": "ok", "service": "vibelab"}
 
 # ── Project routers ────────────────────────────────────────────────────────────

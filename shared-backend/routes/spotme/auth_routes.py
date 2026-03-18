@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException
 
 from auth import hash_password, verify_password
 from db import get_supabase
+from shared_models import HealthResponse
 from . import router
 from .dependencies import get_current_user, create_app_token
 from .models import RegisterBody, LoginBody, ResetPasswordBody
@@ -15,8 +16,9 @@ from .models import RegisterBody, LoginBody, ResetPasswordBody
 # Health
 # ---------------------------------------------------------------------------
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse, summary="SpotMe health check")
 async def health():
+    """Health check."""
     return {"project": "spotme", "status": "ok"}
 
 

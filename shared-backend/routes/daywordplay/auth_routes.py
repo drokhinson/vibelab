@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException
 
 from db import get_supabase
 from auth import hash_password, verify_password, create_token
+from shared_models import HealthResponse
 
 from . import router
 from .models import RegisterBody, LoginBody
@@ -23,8 +24,9 @@ def _make_token(user_id: str, username: str) -> str:
     return create_token(payload, JWT_SECRET, JWT_ALGORITHM)
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse, summary="Day Word Play health check")
 async def health():
+    """Health check."""
     return {"project": "daywordplay", "status": "ok"}
 
 
