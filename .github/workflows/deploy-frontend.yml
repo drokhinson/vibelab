@@ -15,12 +15,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - id: detect
         name: Detect changed projects
         run: |
-          CHANGED=$(git diff --name-only HEAD~1 HEAD \
+          # Diff across all commits in this push, not just the last one.
+          # Falls back to HEAD~1..HEAD on a first-ever push (before SHA is all zeros).
+          BEFORE="${{ github.event.before }}"
+          if echo "$BEFORE" | grep -qE '^0+$'; then
+            RANGE="HEAD~1 HEAD"
+          else
+            RANGE="$BEFORE ${{ github.sha }}"
+          fi
+
+          CHANGED=$(git diff --name-only $RANGE \
             | grep '^projects/' \
             | cut -d'/' -f2 \
             | sort -u)
