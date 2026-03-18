@@ -120,7 +120,44 @@ function renderMealBuilder() {
 
 function toggleMealOption(key) {
   state.mealOptions[key] = !state.mealOptions[key];
-  render();
+  const on = state.mealOptions[key];
+
+  // Update the tapped card in-place (no full re-render = no blink)
+  const card = document.querySelector(`.meal-option-card[onclick="toggleMealOption('${key}')"]`);
+  if (card) {
+    card.classList.toggle('selected', on);
+    const check = card.querySelector('.meal-option-check');
+    if (check) check.innerHTML = on
+      ? '<i data-lucide="check-circle-2"></i>'
+      : '<i data-lucide="circle"></i>';
+    _initIcons();
+  }
+
+  // Show/hide Build Menu button vs hint text
+  const anySelected = Object.values(state.mealOptions).some(v => v);
+  const scrollBody = document.querySelector('.scroll-body');
+  if (scrollBody) {
+    let footer = scrollBody.querySelector('.cook-btn, .meal-hint');
+    if (anySelected) {
+      if (!footer || footer.classList.contains('meal-hint')) {
+        if (footer) footer.remove();
+        const btn = document.createElement('button');
+        btn.className = 'cook-btn';
+        btn.setAttribute('onclick', 'buildMealFlow()');
+        btn.innerHTML = '<i data-lucide="chef-hat"></i> Build Menu';
+        scrollBody.appendChild(btn);
+        _initIcons();
+      }
+    } else {
+      if (!footer || footer.classList.contains('cook-btn')) {
+        if (footer) footer.remove();
+        const hint = document.createElement('p');
+        hint.className = 'meal-hint';
+        hint.textContent = 'Select at least one option to get started';
+        scrollBody.appendChild(hint);
+      }
+    }
+  }
 }
 
 // ─── Guided flow: start ───────────────────────────────────────────────────────
