@@ -5,26 +5,20 @@ from typing import Optional
 from fastapi import HTTPException, Header
 
 from db import get_supabase
-from auth import hash_password, verify_password, create_token, decode_token
+from auth import hash_password, verify_password, create_token, decode_token, extract_bearer_token
 from .constants import JWT_SECRET, JWT_ALGORITHM
 
 
-def _hash_password(password: str) -> str:
-    return hash_password(password)
-
-
-def _verify_password(password: str, password_hash: str) -> bool:
-    return verify_password(password, password_hash)
-
-
-def _create_token(user_id: str, username: str, couple_id: Optional[str] = None) -> str:
+def create_app_token(user_id: str, username: str, couple_id: Optional[str] = None) -> str:
+    """Create a JWT with WealthMate-specific payload (includes couple_id)."""
     return create_token(
         {"user_id": user_id, "username": username, "couple_id": couple_id},
         JWT_SECRET, JWT_ALGORITHM,
     )
 
 
-def _decode_token(token: str) -> dict:
+def decode_app_token(token: str) -> dict:
+    """Decode a WealthMate JWT."""
     return decode_token(token, JWT_SECRET, JWT_ALGORITHM)
 
 
@@ -44,12 +38,8 @@ def _get_couple_id_for_user(user_id: str) -> Optional[str]:
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     """FastAPI dependency — extracts and validates JWT from Authorization header."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header required")
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Authorization header must be: Bearer <token>")
-    payload = _decode_token(parts[1])
+    token = extract_bearer_token(authorization)
+    payload = decode_app_token(token)
     # Refresh couple_id in case it changed since token was issued
     couple_id = _get_couple_id_for_user(payload["user_id"])
     # Auto-create household if missing (handles users registered before solo-first change)
