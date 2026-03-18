@@ -171,6 +171,11 @@ let state = {
   marinadesForCurrentProtein: [],
   allMarinadeIngredients: [],
 
+  // ── Guided meal flow ────────────────────────────────────────────────────────
+  mealOptions: { protein: false, carb: true, salad: false, addons: false },
+  mealFlowSteps: [],    // e.g. ['protein','carb','addons','salad']
+  mealFlowIndex: -1,    // -1 = not in guided flow; 0+ = current step index
+
   // ── Admin / builder ─────────────────────────────────────────────────────────
   builder: null,
   adminKey: null,

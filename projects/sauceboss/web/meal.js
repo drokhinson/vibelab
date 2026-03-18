@@ -1,87 +1,61 @@
 'use strict';
 
-// ─── Meal Builder home screen ─────────────────────────────────────────────────
+// ─── Progress bar (rendered by helpers.js after app-header) ───────────────────
+
+function renderProgressBar() {
+  const steps = state.mealFlowSteps;
+  const current = state.mealFlowIndex;
+  const labels = {
+    protein: '🔥 Protein',
+    carb:    '🍝 Carb',
+    addons:  '🧩 Add-ons',
+    salad:   '🥗 Salad',
+  };
+
+  const nodes = [...steps, 'review'];
+  return `<div class="flow-progress">
+    ${nodes.map((step, i) => {
+      const isDone   = i < current || (step === 'review' && current >= steps.length);
+      const isActive = (step !== 'review' && i === current) || (step === 'review' && current >= steps.length);
+      const dotClass = isDone ? 'done' : isActive ? 'active' : '';
+      const label    = step === 'review' ? '✅ Review' : labels[step];
+      const lineClass = i > 0 && (i <= current || (step === 'review' && current >= steps.length)) ? 'done' : '';
+
+      return `${i > 0 ? `<div class="progress-line ${lineClass}"></div>` : ''}
+        <div class="progress-node">
+          <div class="progress-dot ${dotClass}">
+            ${isDone ? '<i data-lucide="check"></i>' : i + 1}
+          </div>
+          <div class="progress-label">${label}</div>
+        </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── Meal Builder home screen (option selector) ───────────────────────────────
 
 function renderMealBuilder() {
-  const { meal } = state;
-  const hasAny = meal.sauce || meal.dressing || meal.marinade;
+  const opts = state.mealOptions;
+  const anySelected = Object.values(opts).some(v => v);
 
-  const proteinSlot = () => {
-    if (meal.protein && meal.marinade) {
-      return `
-        <div class="meal-slot filled">
-          <div class="meal-slot-header">
-            <span class="meal-slot-icon">${meal.protein.emoji}</span>
-            <div class="meal-slot-info">
-              <div class="meal-slot-title">${meal.protein.name}</div>
-              <div class="meal-slot-sub">${meal.marinade.name} marinade</div>
-            </div>
-            <button class="meal-slot-clear" onclick="clearMealComponent('protein')" title="Remove"><i data-lucide="x"></i></button>
-          </div>
-        </div>`;
-    }
+  const optionCard = (key, emoji, label, hint) => {
+    const on = opts[key];
     return `
-      <button class="meal-slot empty" onclick="startMealComponent('protein')">
-        <span class="meal-slot-add-icon">🔥</span>
-        <div class="meal-slot-add-text">
-          <div class="meal-slot-add-label">Protein &amp; Marinade</div>
-          <div class="meal-slot-add-hint">Chicken, beef, tofu, fish</div>
+      <button class="meal-option-card ${on ? 'selected' : ''}" onclick="toggleMealOption('${key}')">
+        <span class="meal-option-icon">${emoji}</span>
+        <div class="meal-option-info">
+          <div class="meal-option-label">${label}</div>
+          <div class="meal-option-hint">${hint}</div>
         </div>
-        <span class="meal-slot-plus"><i data-lucide="plus-circle"></i></span>
+        <span class="meal-option-check">
+          ${on
+            ? '<i data-lucide="check-circle-2"></i>'
+            : '<i data-lucide="circle"></i>'}
+        </span>
       </button>`;
   };
 
-  const carbSlot = () => {
-    if (meal.carb && meal.sauce) {
-      return `
-        <div class="meal-slot filled">
-          <div class="meal-slot-header">
-            <span class="meal-slot-icon">${meal.carb.emoji}</span>
-            <div class="meal-slot-info">
-              <div class="meal-slot-title">${meal.carb.name}${meal.prep ? ` — ${meal.prep.name}` : ''}</div>
-              <div class="meal-slot-sub">${meal.sauce.name}</div>
-            </div>
-            <button class="meal-slot-clear" onclick="clearMealComponent('carb')" title="Remove"><i data-lucide="x"></i></button>
-          </div>
-        </div>`;
-    }
-    return `
-      <button class="meal-slot empty" onclick="startMealComponent('carb')">
-        <span class="meal-slot-add-icon">🍝</span>
-        <div class="meal-slot-add-text">
-          <div class="meal-slot-add-label">Carb &amp; Sauce</div>
-          <div class="meal-slot-add-hint">Pasta, rice, noodles, bread…</div>
-        </div>
-        <span class="meal-slot-plus"><i data-lucide="plus-circle"></i></span>
-      </button>`;
-  };
-
-  const saladSlot = () => {
-    if (meal.saladBase && meal.dressing) {
-      return `
-        <div class="meal-slot filled">
-          <div class="meal-slot-header">
-            <span class="meal-slot-icon">${meal.saladBase.emoji}</span>
-            <div class="meal-slot-info">
-              <div class="meal-slot-title">${meal.saladBase.name}</div>
-              <div class="meal-slot-sub">${meal.dressing.name}</div>
-            </div>
-            <button class="meal-slot-clear" onclick="clearMealComponent('salad')" title="Remove"><i data-lucide="x"></i></button>
-          </div>
-        </div>`;
-    }
-    return `
-      <button class="meal-slot empty" onclick="startMealComponent('salad')">
-        <span class="meal-slot-add-icon">🥗</span>
-        <div class="meal-slot-add-text">
-          <div class="meal-slot-add-label">Salad &amp; Dressing</div>
-          <div class="meal-slot-add-hint">Romaine, spinach, arugula…</div>
-        </div>
-        <span class="meal-slot-plus"><i data-lucide="plus-circle"></i></span>
-      </button>`;
-  };
-
-  const heroSVG = !hasAny ? `
+  const heroSVG = !anySelected ? `
     <div class="hero-illustration">
       <svg width="180" height="140" viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg">
         <ellipse cx="90" cy="130" rx="62" ry="8" fill="#1A1A2E" opacity="0.06"/>
@@ -104,37 +78,86 @@ function renderMealBuilder() {
     <div class="status-bar"></div>
     <div class="app-header">
       <div class="logo"><span>🍲</span>SauceBoss</div>
-      <div class="subtitle">Build your meal</div>
+      <div class="subtitle">Build your perfect meal</div>
       <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager"><i data-lucide="settings-2"></i></button>
     </div>
     <div class="scroll-body">
       ${heroSVG}
-      <p class="section-label">What are you making tonight?</p>
-      <div class="meal-slots">
-        <div style="--i:0">${proteinSlot()}</div>
-        <div style="--i:1">${carbSlot()}</div>
-        <div style="--i:2">${saladSlot()}</div>
+      <p class="section-label">What's on tonight's menu?</p>
+      <div class="meal-options-list">
+        ${optionCard('protein', '🔥', 'Protein &amp; Marinade', 'Chicken, beef, tofu, fish')}
+        ${optionCard('carb',    '🍝', 'Carb &amp; Sauce',       'Pasta, rice, noodles, bread')}
+        ${optionCard('salad',   '🥗', 'Salad &amp; Dressing',   'Romaine, spinach, arugula')}
+        ${optionCard('addons',  '🧩', 'Add-ons',                'Extra proteins &amp; veggies')}
       </div>
-      ${hasAny ? `
-        <button class="cook-btn" onclick="navigate('meal-recipe')">
-          <i data-lucide="chef-hat"></i> Let's Cook
-        </button>` : `
-        <p class="meal-hint">Add at least one component to get started</p>`
+      ${anySelected
+        ? `<button class="cook-btn" onclick="buildMealFlow()">
+             <i data-lucide="chef-hat"></i> Build Menu
+           </button>`
+        : `<p class="meal-hint">Select at least one option to get started</p>`
       }
     </div>
   `;
 }
 
-// ─── Meal component navigation ─────────────────────────────────────────────────
+// ─── Meal option toggle ────────────────────────────────────────────────────────
 
-async function startMealComponent(step) {
-  state.mealStep = step;
+function toggleMealOption(key) {
+  state.mealOptions[key] = !state.mealOptions[key];
+  render();
+}
+
+// ─── Guided flow: start ───────────────────────────────────────────────────────
+
+function buildMealFlow() {
+  const steps = [];
+  if (state.mealOptions.protein) steps.push('protein');
+  if (state.mealOptions.carb)    steps.push('carb');
+  if (state.mealOptions.addons)  steps.push('addons');
+  if (state.mealOptions.salad)   steps.push('salad');
+  if (steps.length === 0) return;
+
+  state.mealFlowSteps = steps;
+  state.mealFlowIndex = 0;
+  // Reset selections for a fresh flow
+  state.meal = {
+    protein: null, marinade: null,
+    carb: null, prep: null, sauce: null,
+    saladBase: null, dressing: null,
+  };
+  state.selectedAddons = [];
+  navigateToFlowStep(0);
+}
+
+// ─── Guided flow: navigate to a specific step ─────────────────────────────────
+
+async function navigateToFlowStep(index) {
+  const step = state.mealFlowSteps[index];
+  state.mealFlowIndex = index;
+  state.mealStep = step === 'addons' ? null : step;
   state.disabledIngredients = new Set();
   state.filterOpen = false;
   state.expandedCuisines = new Set();
 
-  if (step === 'carb') {
+  if (step === 'protein') {
+    if (state.proteins.length === 0) {
+      navigate('protein-selector');
+      try {
+        state.proteins = await fetchProteins();
+        render();
+      } catch (err) {
+        document.getElementById('app').innerHTML = `
+          <div style="padding:2rem;text-align:center;color:#dc2626">
+            Failed to load proteins: ${err.message}
+          </div>`;
+      }
+    } else {
+      navigate('protein-selector');
+    }
+  } else if (step === 'carb') {
     navigate('carb-selector');
+  } else if (step === 'addons') {
+    navigate('protein-veggie-selector');
   } else if (step === 'salad') {
     if (state.saladBases.length === 0) {
       navigate('salad-base-selector');
@@ -150,36 +173,80 @@ async function startMealComponent(step) {
     } else {
       navigate('salad-base-selector');
     }
-  } else if (step === 'protein') {
-    if (state.proteins.length === 0) {
-      navigate('protein-selector');
-      try {
-        state.proteins = await fetchProteins();
-        render();
-      } catch (err) {
-        document.getElementById('app').innerHTML = `
-          <div style="padding:2rem;text-align:center;color:#dc2626">
-            Failed to load proteins: ${err.message}
-          </div>`;
-      }
-    } else {
-      navigate('protein-selector');
-    }
   }
 }
 
-function clearMealComponent(which) {
-  if (which === 'protein') {
-    state.meal.protein  = null;
-    state.meal.marinade = null;
-  } else if (which === 'carb') {
-    state.meal.carb   = null;
-    state.meal.prep   = null;
-    state.meal.sauce  = null;
-  } else if (which === 'salad') {
-    state.meal.saladBase = null;
-    state.meal.dressing  = null;
+// ─── Guided flow: advance to next step or review ──────────────────────────────
+
+function advanceToNextStep() {
+  if (state.mealFlowIndex < 0) return;
+  const next = state.mealFlowIndex + 1;
+  if (next >= state.mealFlowSteps.length) {
+    state.mealFlowIndex = state.mealFlowSteps.length; // signals "all done" for progress bar
+    navigate('meal-review');
+  } else {
+    navigateToFlowStep(next);
   }
+}
+
+// ─── Meal Review screen ───────────────────────────────────────────────────────
+
+function renderMealReview() {
+  const { meal } = state;
+
+  const componentCard = (emoji, title, sub) => `
+    <div class="review-component-card">
+      <span class="review-card-icon">${emoji}</span>
+      <div class="review-card-info">
+        <div class="review-card-title">${title}</div>
+        <div class="review-card-sub">${sub}</div>
+      </div>
+      <i data-lucide="check-circle-2" class="review-card-check"></i>
+    </div>`;
+
+  const addonsHTML = state.selectedAddons.length > 0 ? `
+    <div class="review-component-card">
+      <span class="review-card-icon">🧩</span>
+      <div class="review-card-info">
+        <div class="review-card-title">Add-ons</div>
+        <div class="review-card-sub">${state.selectedAddons.map(a => `${a.emoji} ${a.name}`).join(' · ')}</div>
+      </div>
+      <i data-lucide="check-circle-2" class="review-card-check"></i>
+    </div>` : '';
+
+  const hasAnything = meal.protein || meal.carb || meal.saladBase || state.selectedAddons.length > 0;
+
+  return `
+    <div class="status-bar"></div>
+    <div class="app-header">
+      <div class="logo"><span>🍲</span>Your Meal</div>
+      <div class="subtitle">Review &amp; let's cook!</div>
+    </div>
+    <div class="scroll-body">
+      <p class="section-label">Everything looks good?</p>
+      <div class="review-components">
+        ${meal.protein  ? componentCard(meal.protein.emoji,  meal.protein.name,    `${meal.marinade?.name || ''} marinade`) : ''}
+        ${meal.carb     ? componentCard(meal.carb.emoji,     meal.carb.name + (meal.prep ? ` — ${meal.prep.name}` : ''), meal.sauce?.name || '') : ''}
+        ${addonsHTML}
+        ${meal.saladBase ? componentCard(meal.saladBase.emoji, meal.saladBase.name, meal.dressing?.name || '') : ''}
+      </div>
+      ${hasAnything ? `
+        <button class="cook-btn" onclick="navigate('meal-recipe')" style="margin-top:20px">
+          <i data-lucide="utensils"></i> Let's Go!
+        </button>` : ''}
+      <button class="review-restart-btn" onclick="restartMealFlow()">
+        <i data-lucide="refresh-cw"></i> Start Over
+      </button>
+    </div>
+  `;
+}
+
+function restartMealFlow() {
+  state.mealFlowSteps = [];
+  state.mealFlowIndex = -1;
+  state.mealStep = null;
+  state.meal = { protein: null, marinade: null, carb: null, prep: null, sauce: null, saladBase: null, dressing: null };
+  state.selectedAddons = [];
   navigate('meal-builder');
 }
 
@@ -288,6 +355,27 @@ function renderMealRecipe() {
       </div>`;
   };
 
+  // ── Selected add-ons cards ─────────────────────────────────────────────────
+  const addonsCardsHTML = () => {
+    if (!state.selectedAddons || state.selectedAddons.length === 0) return '';
+    return state.selectedAddons.map(a => `
+      <div class="meal-section">
+        <div class="meal-section-label" style="background:#92400E">
+          ${a.emoji} ${a.name}
+        </div>
+        <div class="addon-card">
+          <div class="addon-card-header">
+            <span class="addon-emoji">${a.emoji}</span>
+            <div class="addon-info">
+              <div class="addon-name">${a.name}</div>
+              <div class="addon-time">~${a.estimatedTime} min</div>
+            </div>
+          </div>
+          <div class="addon-instructions">${a.instructions}</div>
+        </div>
+      </div>`).join('');
+  };
+
   // Salad toss note
   const saladTossHTML = () => {
     if (!meal.saladBase) return '';
@@ -317,7 +405,7 @@ function renderMealRecipe() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="navigate('meal-review')"><i data-lucide="chevron-left"></i> Review</button>
       <div class="logo"><span>🍲</span>Your Meal</div>
       <div class="subtitle">Full recipe</div>
     </div>
@@ -340,6 +428,7 @@ function renderMealRecipe() {
         </div>` : ''}
       ${sectionHTML(`🍲 Sauce — ${meal.sauce?.name || ''}`, '#4A0072', meal.sauce)}
       ${proteinCardHTML()}
+      ${addonsCardsHTML()}
       ${sectionHTML(`🥗 Dressing — ${meal.dressing?.name || ''}`, '#1B5E20', meal.dressing)}
       ${saladTossHTML()}
     </div>

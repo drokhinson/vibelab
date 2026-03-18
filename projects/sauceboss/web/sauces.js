@@ -26,7 +26,7 @@ function getSauceScreenContext() {
   const carb = state.selectedCarb;
   return {
     sauces: state.saucesForCurrentCarb,
-    backScreen: 'protein-veggie-selector',
+    backScreen: state.preparations.length > 0 ? 'prep-selector' : 'carb-selector',
     emoji: carb ? carb.emoji : '🍲',
     title: carb ? `${carb.name} Sauces` : 'Sauces',
     compatLabel: (s) => s.compatibleCarbs ? s.compatibleCarbs.join(' · ') : '',
@@ -129,17 +129,20 @@ function selectSauce(id) {
     state.meal.prep     = state.selectedPrep;
     state.meal.sauce    = state.selectedSauce;
     state.mealStep = null;
-    navigate('meal-builder');
+    if (state.mealFlowIndex >= 0) advanceToNextStep();
+    else navigate('meal-builder');
   } else if (state.mealStep === 'salad') {
     state.meal.saladBase = state.selectedSaladBase;
     state.meal.dressing  = state.selectedSauce;
     state.mealStep = null;
-    navigate('meal-builder');
+    if (state.mealFlowIndex >= 0) advanceToNextStep();
+    else navigate('meal-builder');
   } else if (state.mealStep === 'protein') {
     state.meal.protein  = state.selectedProtein;
     state.meal.marinade = state.selectedSauce;
     state.mealStep = null;
-    navigate('meal-builder');
+    if (state.mealFlowIndex >= 0) advanceToNextStep();
+    else navigate('meal-builder');
   } else {
     navigate('recipe');
   }
