@@ -15,7 +15,13 @@ function renderHomeView() {
   }
 
   if (!todayData) {
-    return `<div class="loading" style="height:60vh"></div>`;
+    return `
+      ${renderGroupSwitcher()}
+      <div class="section-header" style="padding-top:16px;">
+        <span class="section-title">Word of the Day</span>
+      </div>
+      <div class="loading" style="height:60vh"></div>
+    `;
   }
 
   const { word, submitted, my_sentence, submission_count, member_count, bookmarked } = todayData;
@@ -23,6 +29,9 @@ function renderHomeView() {
 
   return `
     ${renderGroupSwitcher()}
+    <div class="section-header" style="padding-top:16px;">
+      <span class="section-title">Word of the Day</span>
+    </div>
     ${renderWordDisplay(word)}
     ${word.etymology ? renderEtymologyCard(word.etymology) : ''}
     ${renderSentenceSection(submitted, my_sentence, word.word)}
@@ -115,6 +124,7 @@ function initHomeListeners() {
       setStoredActiveGroup(activeGroupId);
       todayData = null;
       renderPageContent();
+      initHomeListeners(); // re-attach so group chips stay clickable during loading
       await loadTodayWord();
       renderPageContent();
       initPageListeners();
