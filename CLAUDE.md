@@ -54,6 +54,8 @@ vibelab/
 ├── shared-backend/            ← ONE FastAPI service for ALL projects
 │   ├── main.py                ← registers all routers
 │   ├── db.py                  ← Supabase client singleton
+│   ├── auth.py                ← shared bcrypt + JWT + admin auth helpers
+│   ├── shared_models.py       ← shared Pydantic response models (HealthResponse, etc.)
 │   └── routes/[project]/     ← one package per project (see Modular File Structure)
 ├── db/migrations/             ← all Supabase SQL migrations (ONE shared DB)
 ├── _templates/                ← scaffold source, not deployed
@@ -102,9 +104,9 @@ vibelab/
 - Name response models with a `Response` suffix: `HealthResponse`, `TokenResponse`, `MessageResponse`.
 
 **Enums instead of string literals:**
-- Any fixed set of string values (account types, statuses, seasons, frequencies) must be a `class MyEnum(str, Enum)` in the project's `constants.py`.
+- Any fixed set of string values (account types, statuses, seasons, frequencies) must be a `class MyEnum(StrEnum)` (from `enum`) in the project's `constants.py`.
 - Use these enums in Pydantic model fields — this provides automatic validation and Swagger dropdowns.
-- Database string values map 1:1 to enum member values.
+- Database string values map 1:1 to enum member values. `StrEnum` is backwards-compatible (`str(MyEnum.FOO)` returns the raw string).
 
 **Swagger / OpenAPI readability:**
 - Every route decorator must include: `response_model`, `status_code`, `summary`.
@@ -115,10 +117,14 @@ vibelab/
 **No duplicate utilities:**
 - Admin auth checking: use `require_admin()` from `auth.py`, not per-file private helpers.
 - Password/JWT helpers: import from `auth.py`, not local wrappers in `dependencies.py`.
+- Bearer token parsing: use `extract_bearer_token()` from `auth.py` inside `get_current_user()` implementations.
 
-### Shared Auth (`shared-backend/auth.py`)
-- Generic bcrypt + JWT helpers: `hash_password`, `verify_password`, `create_token`, `decode_token`, `extract_bearer_token`.
+### Shared Modules (`shared-backend/`)
+- **`auth.py`** — Generic bcrypt + JWT helpers: `hash_password`, `verify_password`, `create_token`, `decode_token`, `extract_bearer_token`, `require_admin`.
+- **`shared_models.py`** — Common Pydantic response models: `HealthResponse`, `StatusResponse`, `ErrorDetail`. Use these across all projects.
+- **`db.py`** — Supabase client singleton via `get_supabase()`.
 - When a new app needs login/user management, import from `auth.py` instead of reimplementing.
+- Each app's `dependencies.py` should define `create_app_token()` and `decode_app_token()` (with app-specific JWT secret/payload) and `get_current_user()` (using `extract_bearer_token()`).
 - Each app keeps its own `{app}_users` table following the same schema pattern as `wealthmate_users`.
 
 ### Admin Dashboard Maintenance
