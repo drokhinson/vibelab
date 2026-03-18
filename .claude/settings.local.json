@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(bash:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
