@@ -1,4 +1,4 @@
-// render3d.js — Three.js 3D planter scene with toon-shaded low-poly plants
+// render3d.js — Three.js 3D planter scene (geometry helpers, scene, planter box, sync)
 
 // Gradient texture for MeshToonMaterial (3-step cel shading)
 var _toonGradient = null;
@@ -65,41 +65,7 @@ function buildShapeMesh(desc, style) {
   return mesh;
 }
 
-function buildPlantMesh(renderParams, heightInches, style) {
-  var group = new THREE.Group();
-  if (!renderParams) {
-    // Fallback: cute green sphere on a stick
-    var fallbackStem = buildShapeMesh({
-      shape: "cylinder", height: 0.3, radius: 0.035, color: "#3E7D32", segments: 6
-    }, style);
-    var fallbackTop = buildShapeMesh({
-      shape: "sphere", position: [0, 0.38, 0], scale: [0.18, 0.15, 0.18], color: "#4CAF50", segments: 8
-    }, style);
-    group.add(fallbackStem);
-    group.add(fallbackTop);
-  } else {
-    // Stem
-    if (renderParams.stem) {
-      group.add(buildShapeMesh(renderParams.stem, style));
-    }
-    // Foliage
-    if (renderParams.foliage) {
-      for (var i = 0; i < renderParams.foliage.length; i++) {
-        group.add(buildShapeMesh(renderParams.foliage[i], style));
-      }
-    }
-    // Accents (flowers, fruit, etc)
-    if (renderParams.accents) {
-      for (var j = 0; j < renderParams.accents.length; j++) {
-        group.add(buildShapeMesh(renderParams.accents[j], style));
-      }
-    }
-  }
-  // Scale group by height (normalize: 84" max = scale 1.0)
-  var s = Math.max(0.2, (heightInches || 12) / 84);
-  group.scale.set(s, s, s);
-  return group;
-}
+// buildPlantMesh is now in plant-models.js
 
 function getSceneBgColor(style) {
   if (style === "wireframe") return "#1a1a2e";
@@ -213,58 +179,154 @@ function init3DView(containerId, garden, placements) {
 
 function buildPlanterBox(gw, gh, isPlanter) {
   var group = new THREE.Group();
-  var wallH = isPlanter ? 0.4 : 0.2;
-  var wallThick = 0.06;
-  var woodColor = isPlanter ? "#A0784C" : "#8B7355";
-  var soilColor = "#5C3D1E";
   var style = renderStyle || "toon";
 
-  // Soil floor
-  var soilGeom = new THREE.BoxGeometry(gw, 0.05, gh);
-  var soilMat = makeMaterial(soilColor, style);
-  var soil = new THREE.Mesh(soilGeom, soilMat);
-  soil.position.y = -0.025;
-  group.add(soil);
+  if (isPlanter) {
+    // === PLANTER: raised box with wood walls and corner posts ===
+    var wallH = 0.4;
+    var wallThick = 0.06;
+    var woodColor = "#A0784C";
+    var postColor = "#8B6914";
+    var soilColor = "#5C3D1E";
 
-  // 4 walls
-  var wallMat = makeMaterial(woodColor, style);
+    // Soil fill (sits inside the planter)
+    var soilGeom = new THREE.BoxGeometry(gw, wallH - 0.04, gh);
+    var soilMat = makeMaterial(soilColor, style);
+    var soil = new THREE.Mesh(soilGeom, soilMat);
+    soil.position.y = (wallH - 0.04) / 2 - 0.02;
+    group.add(soil);
 
-  // Front (z+)
-  var frontGeom = new THREE.BoxGeometry(gw + wallThick * 2, wallH, wallThick);
-  var front = new THREE.Mesh(frontGeom, wallMat);
-  front.position.set(0, wallH / 2, gh / 2 + wallThick / 2);
-  group.add(front);
+    // 4 walls
+    var wallMat = makeMaterial(woodColor, style);
 
-  // Back (z-)
-  var back = front.clone();
-  back.position.z = -gh / 2 - wallThick / 2;
-  group.add(back);
+    var frontGeom = new THREE.BoxGeometry(gw + wallThick * 2, wallH, wallThick);
+    var front = new THREE.Mesh(frontGeom, wallMat);
+    front.position.set(0, wallH / 2, gh / 2 + wallThick / 2);
+    group.add(front);
 
-  // Left (x-)
-  var sideGeom = new THREE.BoxGeometry(wallThick, wallH, gh);
-  var left = new THREE.Mesh(sideGeom, wallMat);
-  left.position.set(-gw / 2 - wallThick / 2, wallH / 2, 0);
-  group.add(left);
+    var back = front.clone();
+    back.position.z = -gh / 2 - wallThick / 2;
+    group.add(back);
 
-  // Right (x+)
-  var right = left.clone();
-  right.position.x = gw / 2 + wallThick / 2;
-  group.add(right);
+    var sideGeom = new THREE.BoxGeometry(wallThick, wallH, gh);
+    var left = new THREE.Mesh(sideGeom, wallMat);
+    left.position.set(-gw / 2 - wallThick / 2, wallH / 2, 0);
+    group.add(left);
 
-  // Grid lines on soil
-  var gridMat = new THREE.LineBasicMaterial({ color: 0x7a6a5a, transparent: true, opacity: 0.35 });
-  var gridPoints = [];
-  for (var x = -gw / 2; x <= gw / 2; x++) {
-    gridPoints.push(new THREE.Vector3(x, 0.01, -gh / 2));
-    gridPoints.push(new THREE.Vector3(x, 0.01, gh / 2));
+    var right = left.clone();
+    right.position.x = gw / 2 + wallThick / 2;
+    group.add(right);
+
+    // Corner posts (taller than walls)
+    var postH = wallH + 0.08;
+    var postR = 0.04;
+    var postGeom = new THREE.CylinderGeometry(postR, postR, postH, 6);
+    var postMat = makeMaterial(postColor, style);
+    var corners = [
+      [-gw / 2 - wallThick / 2, postH / 2, -gh / 2 - wallThick / 2],
+      [ gw / 2 + wallThick / 2, postH / 2, -gh / 2 - wallThick / 2],
+      [-gw / 2 - wallThick / 2, postH / 2,  gh / 2 + wallThick / 2],
+      [ gw / 2 + wallThick / 2, postH / 2,  gh / 2 + wallThick / 2]
+    ];
+    for (var c = 0; c < corners.length; c++) {
+      var post = new THREE.Mesh(postGeom, postMat);
+      post.position.set(corners[c][0], corners[c][1], corners[c][2]);
+      group.add(post);
+    }
+
+    // Plank lines on front/back walls
+    var plankMat = new THREE.LineBasicMaterial({ color: 0x6B4226, transparent: true, opacity: 0.5 });
+    var plankY = [wallH * 0.33, wallH * 0.66];
+    var plankPts = [];
+    for (var pi = 0; pi < plankY.length; pi++) {
+      var py = plankY[pi];
+      // front
+      plankPts.push(new THREE.Vector3(-gw / 2, py, gh / 2 + wallThick));
+      plankPts.push(new THREE.Vector3(gw / 2, py, gh / 2 + wallThick));
+      // back
+      plankPts.push(new THREE.Vector3(-gw / 2, py, -gh / 2 - wallThick));
+      plankPts.push(new THREE.Vector3(gw / 2, py, -gh / 2 - wallThick));
+      // left
+      plankPts.push(new THREE.Vector3(-gw / 2 - wallThick, py, -gh / 2));
+      plankPts.push(new THREE.Vector3(-gw / 2 - wallThick, py, gh / 2));
+      // right
+      plankPts.push(new THREE.Vector3(gw / 2 + wallThick, py, -gh / 2));
+      plankPts.push(new THREE.Vector3(gw / 2 + wallThick, py, gh / 2));
+    }
+    var plankGeom = new THREE.BufferGeometry().setFromPoints(plankPts);
+    group.add(new THREE.LineSegments(plankGeom, plankMat));
+
+    // Grid lines on soil surface
+    var soilTop = wallH - 0.04;
+    var gridMat = new THREE.LineBasicMaterial({ color: 0x7a6a5a, transparent: true, opacity: 0.3 });
+    var gridPoints = [];
+    for (var x = -gw / 2; x <= gw / 2; x++) {
+      gridPoints.push(new THREE.Vector3(x, soilTop, -gh / 2));
+      gridPoints.push(new THREE.Vector3(x, soilTop, gh / 2));
+    }
+    for (var z = -gh / 2; z <= gh / 2; z++) {
+      gridPoints.push(new THREE.Vector3(-gw / 2, soilTop, z));
+      gridPoints.push(new THREE.Vector3(gw / 2, soilTop, z));
+    }
+    var gridGeom = new THREE.BufferGeometry().setFromPoints(gridPoints);
+    group.add(new THREE.LineSegments(gridGeom, gridMat));
+
+  } else {
+    // === GARDEN BED: low border with mounded soil ===
+    var bedH = 0.12;
+    var bedThick = 0.05;
+    var borderColor = "#6D4C2A";
+    var bedSoilColor = "#7B5033";
+
+    // Mounded soil (thicker, slightly above border)
+    var moundGeom = new THREE.BoxGeometry(gw, 0.1, gh);
+    var moundMat = makeMaterial(bedSoilColor, style);
+    var mound = new THREE.Mesh(moundGeom, moundMat);
+    mound.position.y = 0.05;
+    group.add(mound);
+
+    // Thin dark top layer (loose soil texture)
+    var topSoilGeom = new THREE.BoxGeometry(gw - 0.02, 0.02, gh - 0.02);
+    var topSoilMat = makeMaterial("#8B6B4A", style);
+    var topSoil = new THREE.Mesh(topSoilGeom, topSoilMat);
+    topSoil.position.y = 0.11;
+    group.add(topSoil);
+
+    // 4 low border walls
+    var borderMat = makeMaterial(borderColor, style);
+
+    var frontGeom = new THREE.BoxGeometry(gw + bedThick * 2, bedH, bedThick);
+    var front = new THREE.Mesh(frontGeom, borderMat);
+    front.position.set(0, bedH / 2, gh / 2 + bedThick / 2);
+    group.add(front);
+
+    var back = front.clone();
+    back.position.z = -gh / 2 - bedThick / 2;
+    group.add(back);
+
+    var sideGeom = new THREE.BoxGeometry(bedThick, bedH, gh);
+    var left = new THREE.Mesh(sideGeom, borderMat);
+    left.position.set(-gw / 2 - bedThick / 2, bedH / 2, 0);
+    group.add(left);
+
+    var right = left.clone();
+    right.position.x = gw / 2 + bedThick / 2;
+    group.add(right);
+
+    // Grid lines on soil surface
+    var gridMat = new THREE.LineBasicMaterial({ color: 0x6a5a4a, transparent: true, opacity: 0.25 });
+    var gridPoints = [];
+    for (var x = -gw / 2; x <= gw / 2; x++) {
+      gridPoints.push(new THREE.Vector3(x, 0.12, -gh / 2));
+      gridPoints.push(new THREE.Vector3(x, 0.12, gh / 2));
+    }
+    for (var z = -gh / 2; z <= gh / 2; z++) {
+      gridPoints.push(new THREE.Vector3(-gw / 2, 0.12, z));
+      gridPoints.push(new THREE.Vector3(gw / 2, 0.12, z));
+    }
+    var gridGeom = new THREE.BufferGeometry().setFromPoints(gridPoints);
+    group.add(new THREE.LineSegments(gridGeom, gridMat));
   }
-  for (var z = -gh / 2; z <= gh / 2; z++) {
-    gridPoints.push(new THREE.Vector3(-gw / 2, 0.01, z));
-    gridPoints.push(new THREE.Vector3(gw / 2, 0.01, z));
-  }
-  var gridGeom = new THREE.BufferGeometry().setFromPoints(gridPoints);
-  var gridLines = new THREE.LineSegments(gridGeom, gridMat);
-  group.add(gridLines);
 
   return group;
 }
@@ -276,6 +338,8 @@ function syncSceneWithPlacements(handle, placements) {
   var gw = garden.grid_width;
   var gh = garden.grid_height;
   var style = renderStyle || "toon";
+  // Plants sit on top of the soil surface
+  var soilTop = garden.garden_type === "planter" ? 0.36 : 0.12;
 
   // Clear existing plants
   while (pg.children.length > 0) {
@@ -291,11 +355,11 @@ function syncSceneWithPlacements(handle, placements) {
     var gy = parseInt(parts[1]);
     var plant = placements[key];
 
-    var mesh = buildPlantMesh(plant.render_params, plant.height_inches, style);
+    var mesh = buildPlantMesh(plant, style);
     // Position: grid cell center, offset so grid is centered at origin
     mesh.position.x = gx - gw / 2 + 0.5;
     mesh.position.z = gy - gh / 2 + 0.5;
-    mesh.position.y = 0;
+    mesh.position.y = soilTop;
     mesh.userData = { gridKey: key, plantId: plant.id };
     pg.add(mesh);
   }
@@ -308,10 +372,7 @@ function setRenderStyle(handle, newStyle) {
   // Update scene background
   handle.scene.background = new THREE.Color(getSceneBgColor(newStyle));
 
-  // Rebuild all plants with new material
-  syncSceneWithPlacements(handle, gridPlacements);
-
-  // Rebuild planter box and ground
+  // Rebuild planter box and ground (keep plantsGroup and lights)
   var garden = handle.garden;
   var toRemove = [];
   handle.scene.children.forEach(function(child) {
@@ -336,6 +397,9 @@ function setRenderStyle(handle, newStyle) {
 
   var newBox = buildPlanterBox(garden.grid_width, garden.grid_height, garden.garden_type === "planter");
   handle.scene.add(newBox);
+
+  // Rebuild all plants with new material (after box so plants are on top)
+  syncSceneWithPlacements(handle, gridPlacements);
 }
 
 function dispose3DView(handle) {
