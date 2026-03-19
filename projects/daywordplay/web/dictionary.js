@@ -144,6 +144,7 @@ function initDictionaryListeners() {
       pageContent.scrollTop = sectionTop - headerH;
     }
 
+
     function endScrub() {
       scrubbing = false;
       alphaIndex.querySelectorAll('.alpha-index-letter').forEach(b => b.classList.remove('active'));

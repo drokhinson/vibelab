@@ -677,16 +677,22 @@ body {
 
 /* ── Alphabet Scroll Index ──────────────────────────────────────────────────*/
 .dictionary-container {
-  position: relative;
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+}
+.dictionary-container .dictionary-list {
+  flex: 1;
+  min-width: 0;
+  padding-right: 4px;
 }
 .dictionary-list {
   padding-right: 28px;
 }
 .alpha-index {
-  position: fixed;
-  right: max(4px, calc((100vw - 480px) / 2 + 4px));
-  top: 50%;
-  transform: translateY(-50%);
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -697,6 +703,7 @@ body {
   border-radius: 12px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  flex-shrink: 0;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
