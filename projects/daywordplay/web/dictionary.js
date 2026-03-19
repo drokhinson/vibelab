@@ -15,22 +15,26 @@ function renderDictionaryView() {
     : allWords;
 
   return `
-    <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; padding-right:16px;">
-      <span class="section-title">📚 Dictionary</span>
-      <button class="propose-word-btn" id="propose-word-btn">+ Propose word</button>
+    <div class="dict-sticky-header">
+      <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; padding-right:16px;">
+        <span class="section-title">📚 Dictionary</span>
+        <button class="propose-word-btn" id="propose-word-btn">+ Propose word</button>
+      </div>
+      <div class="dict-filter-row">
+        <button class="dict-filter-btn ${dictFilter === 'played' ? 'active' : ''}" id="dict-filter-played">Played</button>
+        <button class="dict-filter-btn ${dictFilter === 'all' ? 'active' : ''}" id="dict-filter-all">All Words</button>
+      </div>
     </div>
-    <div class="dict-filter-row">
-      <button class="dict-filter-btn ${dictFilter === 'all' ? 'active' : ''}" id="dict-filter-all">All Words</button>
-      <button class="dict-filter-btn ${dictFilter === 'played' ? 'active' : ''}" id="dict-filter-played">Played</button>
+    <div class="dict-scroll-area">
+      ${filtered.length === 0
+        ? `<div class="text-muted text-center" style="padding:40px 0;">
+            <div style="font-size:40px; margin-bottom:12px;">${dictFilter === 'played' ? '✍️' : '📖'}</div>
+            <p>${dictFilter === 'played' ? 'No played words yet — submit a sentence to see them here.' : 'No words in the dictionary yet.'}</p>
+          </div>`
+        : renderDictionaryAlpha(filtered)
+      }
+      <div id="propose-modal-container"></div>
     </div>
-    ${filtered.length === 0
-      ? `<div class="text-muted text-center" style="padding:40px 0;">
-          <div style="font-size:40px; margin-bottom:12px;">${dictFilter === 'played' ? '✍️' : '📖'}</div>
-          <p>${dictFilter === 'played' ? 'No played words yet — submit a sentence to see them here.' : 'No words in the dictionary yet.'}</p>
-        </div>`
-      : renderDictionaryAlpha(filtered)
-    }
-    <div id="propose-modal-container"></div>
   `;
 }
 
@@ -53,8 +57,8 @@ function renderDictionaryAlpha(words) {
           </div>
         `).join('')}
       </div>
-      ${letters.length >= 3 ? `
-        <div class="alpha-index">
+      ${letters.length > 0 ? `
+        <div class="alpha-index" id="alpha-index">
           ${letters.map(l => `<button class="alpha-index-letter" data-scroll-letter="${l}">${l}</button>`).join('')}
         </div>
       ` : ''}
@@ -113,12 +117,81 @@ function renderProposeModal() {
 }
 
 function initDictionaryListeners() {
+  // iPhone-style touch/mouse scrubbing on alphabet index
+  const alphaIndex = document.getElementById('alpha-index');
+  if (alphaIndex) {
+    let scrubbing = false;
+
+    function scrubToLetter(clientY) {
+      const el = document.elementFromPoint(alphaIndex.getBoundingClientRect().left + 5, clientY);
+      if (!el || !el.dataset.scrollLetter) return;
+      const letter = el.dataset.scrollLetter;
+      // Clear previous active
+      alphaIndex.querySelectorAll('.alpha-index-letter').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      const section = document.getElementById(`dict-letter-${letter}`);
+      if (section) {
+        const scrollArea = document.querySelector('.dict-scroll-area');
+        if (scrollArea) {
+          scrollArea.scrollTop = section.offsetTop - scrollArea.offsetTop;
+        } else {
+          section.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }
+      }
+    }
+
+    function endScrub() {
+      scrubbing = false;
+      alphaIndex.querySelectorAll('.alpha-index-letter').forEach(b => b.classList.remove('active'));
+    }
+
+    // Touch events
+    alphaIndex.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      scrubbing = true;
+      const touch = e.touches[0];
+      scrubToLetter(touch.clientY);
+    }, { passive: false });
+
+    alphaIndex.addEventListener('touchmove', (e) => {
+      if (!scrubbing) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      scrubToLetter(touch.clientY);
+    }, { passive: false });
+
+    alphaIndex.addEventListener('touchend', endScrub);
+    alphaIndex.addEventListener('touchcancel', endScrub);
+
+    // Mouse events (for desktop)
+    alphaIndex.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      scrubbing = true;
+      scrubToLetter(e.clientY);
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!scrubbing) return;
+      scrubToLetter(e.clientY);
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (scrubbing) endScrub();
+    });
+  }
+
+  // Click fallback for individual letters
   document.querySelectorAll('[data-scroll-letter]').forEach(btn => {
     btn.addEventListener('click', () => {
       const letter = btn.dataset.scrollLetter;
       const section = document.getElementById(`dict-letter-${letter}`);
       if (section) {
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const scrollArea = document.querySelector('.dict-scroll-area');
+        if (scrollArea) {
+          scrollArea.scrollTop = section.offsetTop - scrollArea.offsetTop;
+        } else {
+          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       }
     });
   });
