@@ -28,13 +28,18 @@ function renderReusablePills() {
   const groupNames = {};
   for (const g of myGroups) groupNames[g.id] = g.name;
 
-  // Track seen sentence texts to label duplicates
-  const textCount = {};
-  for (const s of reusableSentences) {
+  // Deduplicate by sentence text — collect all group names per unique sentence
+  const uniqueMap = new Map();
+  for (let i = 0; i < reusableSentences.length; i++) {
+    const s = reusableSentences[i];
     const key = s.sentence.toLowerCase();
-    textCount[key] = (textCount[key] || 0) + 1;
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, { sentence: s.sentence, idx: i, groups: [] });
+    }
+    uniqueMap.get(key).groups.push(groupNames[s.group_id] || 'another group');
   }
-  const textSeen = {};
+
+  const wordText = todayData?.word?.word || '';
 
   return `
     <div class="reusable-sentences">
@@ -43,24 +48,12 @@ function renderReusablePills() {
         <p class="reusable-label">Reuse from another group</p>
       </div>
       <div class="reusable-pills">
-        ${reusableSentences.map((s, i) => {
-          const fromGroup = groupNames[s.group_id] || 'another group';
-          const key = s.sentence.toLowerCase();
-          const isDuplicate = textCount[key] > 1;
-          textSeen[key] = (textSeen[key] || 0) + 1;
-          const occurrence = textSeen[key];
-          // When same text appears more than once, add "also from" label on subsequent ones
-          const sourceLabel = isDuplicate && occurrence > 1
-            ? `also from ${escHtml(fromGroup)}`
-            : `from ${escHtml(fromGroup)}`;
-          const wordText = todayData?.word?.word || '';
-          return `
-            <button class="reusable-pill" data-reuse-idx="${i}">
-              <span class="reusable-pill-text">"${highlightWord(s.sentence, wordText)}"</span>
-              <span class="reusable-pill-source">${sourceLabel}</span>
+        ${[...uniqueMap.values()].map(entry => `
+            <button class="reusable-pill" data-reuse-idx="${entry.idx}">
+              <span class="reusable-pill-text">"${highlightWord(entry.sentence, wordText)}"</span>
+              <span class="reusable-pill-source">from ${entry.groups.map(g => escHtml(g)).join(', ')}</span>
             </button>
-          `;
-        }).join('')}
+          `).join('')}
       </div>
     </div>
   `;

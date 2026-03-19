@@ -22,7 +22,7 @@ let reusableSentences = [];    // sentences user submitted in other groups for t
 // ── UI state ──────────────────────────────────────────────────────────────────
 let currentView = 'home';      // home | dictionary | profile | leaderboard | admin
 let activeWordTab = 'today';   // 'today' | 'vote'
-let dictFilter = 'all';        // 'all' | 'played'
+let dictFilter = 'played';      // 'all' | 'played'
 
 // ── Analytics ping ────────────────────────────────────────────────────────────
 fetch(`${API}/api/v1/analytics/track`, {
