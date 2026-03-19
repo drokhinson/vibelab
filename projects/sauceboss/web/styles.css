@@ -1466,10 +1466,24 @@ body, button, input, select, textarea {
 }
 .flow-progress::-webkit-scrollbar { display: none; }
 
-/* Step group wraps the main node + its sub-step dots */
-.step-group {
+/* Each major step gets an equal-width section */
+.flow-section {
+  flex: 1;
+  min-width: 0;
+}
+.flow-section-inner {
   display: flex;
+  justify-content: space-evenly;
   align-items: flex-start;
+}
+
+/* Wrapper that gives a sub-dot the same 26px bounding box as the main dot for vertical alignment */
+.progress-dot-sizer {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
@@ -1519,14 +1533,13 @@ body, button, input, select, textarea {
   font-weight: 600;
 }
 
-/* Connecting line between step groups */
+/* Connecting line between flow sections — fixed width, aligned to dot center */
 .progress-line {
-  flex: 1;
-  min-width: 16px;
+  flex-shrink: 0;
+  width: 14px;
   height: 2px;
   background: rgba(255, 200, 100, 0.28);
-  margin: 12px 2px 0;
-  flex-shrink: 1;
+  margin: 12px 0 0;
 }
 .progress-line.done { background: rgba(255, 200, 80, 0.8); }
 
@@ -1534,25 +1547,13 @@ body, button, input, select, textarea {
 .progress-node.clickable:hover .progress-dot { box-shadow: 0 0 0 3px rgba(255, 213, 128, 0.4); }
 .progress-node.clickable:active .progress-dot { transform: scale(0.9); }
 
-/* Sub-step dots (small, no labels) within a step group */
-.sub-step-dots {
-  display: flex;
-  align-items: center;
-  margin-top: 8px; /* align centers with the 26px main dot */
-}
-.progress-sub-line {
-  width: 10px;
-  height: 2px;
-  background: rgba(255, 200, 100, 0.28);
-  flex-shrink: 0;
-}
-.progress-sub-line.done { background: rgba(255, 200, 80, 0.8); }
+/* Sub-step dots (small circles inside flow-section-inner, no labels) */
 .progress-sub-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: rgba(255, 200, 100, 0.2);
-  border: 1.5px solid rgba(255, 200, 100, 0.38);
+  background: transparent;
+  border: 2px solid rgba(255, 210, 120, 0.65);
   flex-shrink: 0;
 }
 .progress-sub-dot.active {

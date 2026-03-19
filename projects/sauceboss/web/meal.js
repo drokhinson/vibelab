@@ -40,41 +40,37 @@ function renderProgressBar() {
     // Determine big dot state and content, accounting for sub-screen position
     let dotClass = stepDone ? 'done' : stepActive ? 'active' : '';
     let dotContent = stepDone ? '<i data-lucide="check"></i>' : String(i + 1);
-    let subDotsHTML = '';
+    let subNodeHTML = '';
 
     if (!isReview) {
       const screens = getScreensForStep(step);
       const subScreens = screens.slice(1); // screens after the root selector
+      const curScreenIdx = stepActive ? screens.indexOf(state.screen) : -1;
 
-      if (subScreens.length > 0) {
-        // When active, check which sub-screen we're currently on
-        const curScreenIdx = stepActive ? screens.indexOf(state.screen) : -1;
-
-        // If on a sub-screen (not the root), the big dot flips to done
-        if (stepActive && curScreenIdx > 0) {
-          dotClass = 'done';
-          dotContent = '<i data-lucide="check"></i>';
-        }
-
-        const subDots = subScreens.map((_, si) => {
-          const screenIdx = si + 1; // index in screens[] (0 = root)
-          let sdClass = '';
-          if (stepDone || (stepActive && screenIdx < curScreenIdx)) sdClass = 'done';
-          else if (stepActive && screenIdx === curScreenIdx) sdClass = 'active';
-          const sdLineClass = sdClass === 'done' ? 'done' : '';
-          return `<div class="progress-sub-line ${sdLineClass}"></div><div class="progress-sub-dot ${sdClass}"></div>`;
-        }).join('');
-
-        subDotsHTML = `<div class="sub-step-dots">${subDots}</div>`;
+      // If on a sub-screen (not the root), the big dot flips to done
+      if (stepActive && curScreenIdx > 0) {
+        dotClass = 'done';
+        dotContent = '<i data-lucide="check"></i>';
       }
+
+      // Each sub-screen gets a small dot wrapped in a sizer so it aligns with the 26px main dot
+      subNodeHTML = subScreens.map((_, si) => {
+        const screenIdx = si + 1; // index in screens[] (0 = root)
+        let sdClass = '';
+        if (stepDone || (stepActive && screenIdx < curScreenIdx)) sdClass = 'done';
+        else if (stepActive && screenIdx === curScreenIdx) sdClass = 'active';
+        return `<div class="progress-dot-sizer"><div class="progress-sub-dot ${sdClass}"></div></div>`;
+      }).join('');
     }
 
     const lineHTML = i > 0 ? `<div class="progress-line ${lineClass}"></div>` : '';
-    html += `${lineHTML}<div class="step-group">
-      <div class="progress-node${cursorClass}"${onclick}>
-        <div class="progress-dot ${dotClass}">${dotContent}</div>
-        <div class="progress-label">${label}</div>
-      </div>${subDotsHTML}
+    html += `${lineHTML}<div class="flow-section">
+      <div class="flow-section-inner">
+        <div class="progress-node${cursorClass}"${onclick}>
+          <div class="progress-dot ${dotClass}">${dotContent}</div>
+          <div class="progress-label">${label}</div>
+        </div>${subNodeHTML}
+      </div>
     </div>`;
   });
 
@@ -331,6 +327,7 @@ function renderMealReview() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
+      <button class="back-btn" onclick="goToFlowStep(state.mealFlowSteps.length - 1)"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>🍲</span>Your Meal</div>
       <div class="subtitle">Review &amp; let's cook!</div>
     </div>
