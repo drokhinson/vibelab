@@ -1460,11 +1460,18 @@ body, button, input, select, textarea {
   display: flex;
   align-items: flex-start;
   padding: 10px 12px 8px;
-  background: rgba(0,0,0,0.15);
+  background: rgba(160, 50, 0, 0.22);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 .flow-progress::-webkit-scrollbar { display: none; }
+
+/* Step group wraps the main node + its sub-step dots */
+.step-group {
+  display: flex;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
 
 .progress-node {
   display: flex;
@@ -1478,9 +1485,9 @@ body, button, input, select, textarea {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.25);
-  color: rgba(255,255,255,0.7);
-  border: 2px solid rgba(255,255,255,0.3);
+  background: rgba(255, 200, 100, 0.22);
+  color: rgba(255, 230, 180, 0.8);
+  border: 2px solid rgba(255, 200, 100, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1488,43 +1495,75 @@ body, button, input, select, textarea {
   font-weight: 700;
 }
 .progress-dot.active {
-  background: white;
-  color: #E85D04;
-  border-color: white;
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
+  background: #FFD580;
+  color: #7A3200;
+  border-color: #FFD580;
+  box-shadow: 0 0 0 3px rgba(255, 213, 128, 0.35);
 }
 .progress-dot.done {
-  background: rgba(255,255,255,0.85);
-  color: #E85D04;
-  border-color: rgba(255,255,255,0.85);
+  background: rgba(255, 210, 90, 0.9);
+  color: #7A3200;
+  border-color: rgba(255, 210, 90, 0.9);
 }
 .progress-dot [data-lucide] { width: 13px; height: 13px; }
 
 .progress-label {
   font-size: 9px;
-  color: rgba(255,255,255,0.75);
+  color: rgba(255, 230, 180, 0.75);
   white-space: nowrap;
   letter-spacing: 0.01em;
 }
 .progress-node:has(.progress-dot.active) .progress-label,
 .progress-node:has(.progress-dot.done) .progress-label {
-  color: rgba(255,255,255,0.95);
+  color: rgba(255, 240, 200, 1);
   font-weight: 600;
 }
 
+/* Connecting line between step groups */
 .progress-line {
   flex: 1;
   min-width: 16px;
   height: 2px;
-  background: rgba(255,255,255,0.25);
+  background: rgba(255, 200, 100, 0.28);
   margin: 12px 2px 0;
   flex-shrink: 1;
 }
-.progress-line.done { background: rgba(255,255,255,0.8); }
+.progress-line.done { background: rgba(255, 200, 80, 0.8); }
 
 .progress-node.clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.progress-node.clickable:hover .progress-dot { box-shadow: 0 0 0 3px rgba(255,255,255,0.35); }
+.progress-node.clickable:hover .progress-dot { box-shadow: 0 0 0 3px rgba(255, 213, 128, 0.4); }
 .progress-node.clickable:active .progress-dot { transform: scale(0.9); }
+
+/* Sub-step dots (small, no labels) within a step group */
+.sub-step-dots {
+  display: flex;
+  align-items: center;
+  margin-top: 8px; /* align centers with the 26px main dot */
+}
+.progress-sub-line {
+  width: 10px;
+  height: 2px;
+  background: rgba(255, 200, 100, 0.28);
+  flex-shrink: 0;
+}
+.progress-sub-line.done { background: rgba(255, 200, 80, 0.8); }
+.progress-sub-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 200, 100, 0.2);
+  border: 1.5px solid rgba(255, 200, 100, 0.38);
+  flex-shrink: 0;
+}
+.progress-sub-dot.active {
+  background: #FFD580;
+  border-color: #FFD580;
+  box-shadow: 0 0 0 2px rgba(255, 213, 128, 0.35);
+}
+.progress-sub-dot.done {
+  background: rgba(255, 210, 90, 0.9);
+  border-color: rgba(255, 210, 90, 0.9);
+}
 
 /* ── Inline loading (inside scroll-body) ── */
 .loading-inline {

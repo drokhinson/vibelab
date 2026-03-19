@@ -4,7 +4,7 @@ function renderProteinSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="backFromFlowStep('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>🔥</span>What are you marinating?</div>
     </div>
     <div class="scroll-body">
@@ -39,7 +39,7 @@ async function selectProtein(id) {
     ]);
     state.marinadesForCurrentProtein = marinades;
     state.allMarinadeIngredients     = ingredients;
-    state.expandedCuisines           = new Set([marinades[0]?.cuisine].filter(Boolean));
+    state.expandedCuisines           = new Set();
     state.loading = null;
     state.screen = 'marinade-selector';
     render();

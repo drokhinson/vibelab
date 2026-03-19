@@ -4,7 +4,7 @@ function renderCarbSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="backFromFlowStep('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>🍝</span>Pick your carb</div>
       <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager"><i data-lucide="settings-2"></i></button>
     </div>
@@ -41,7 +41,7 @@ async function selectCarb(id) {
     state.preparations         = preps;
     state.disabledIngredients  = new Set();
     state.filterOpen           = false;
-    state.expandedCuisines     = new Set([sauces[0]?.cuisine].filter(Boolean));
+    state.expandedCuisines     = new Set();
     state.loading = null;
     state.screen = preps.length > 0 ? 'prep-selector' : 'sauce-selector';
     render();

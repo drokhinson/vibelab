@@ -4,7 +4,7 @@ function renderSaladBaseSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="backFromFlowStep('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>🥗</span>Pick your salad base</div>
     </div>
     <div class="scroll-body">
@@ -39,7 +39,7 @@ async function selectSaladBase(id) {
     ]);
     state.dressingsForCurrentBase = dressings;
     state.allDressingIngredients  = ingredients;
-    state.expandedCuisines        = new Set([dressings[0]?.cuisine].filter(Boolean));
+    state.expandedCuisines        = new Set();
     state.loading = null;
     state.screen = 'dressing-selector';
     render();
