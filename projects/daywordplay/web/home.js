@@ -235,7 +235,7 @@ function initHomeListeners() {
       initHomeListeners();
       if (activeWordTab === 'today') {
         await loadTodayWord();
-        await loadReusableSentences();
+        await loadReusableSentences(); // depends on todayData from above
       } else {
         await loadYesterdayData();
       }

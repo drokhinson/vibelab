@@ -18,6 +18,7 @@ let yesterdayData = null;      // { word, sentences, has_voted }
 let wordHistory = [];          // all past words from user's groups with winning sentences
 let allWords = [];             // all words in the word bank (for dictionary view)
 let reusableSentences = [];    // sentences user submitted in other groups for today's word
+let bookmarks = [];            // saved/bookmarked words
 
 // ── UI state ──────────────────────────────────────────────────────────────────
 let currentView = 'home';      // home | dictionary | profile | leaderboard | admin
