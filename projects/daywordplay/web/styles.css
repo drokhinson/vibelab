@@ -200,6 +200,33 @@ body {
   letter-spacing: 0.5px;
 }
 
+/* ── Word Sub-Tabs ───────────────────────────────────────────────────────────*/
+.word-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border);
+  margin: 8px 0 0;
+}
+
+.word-tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  padding: 12px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  letter-spacing: 0.2px;
+}
+
+.word-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* ── Word Display ────────────────────────────────────────────────────────────*/
 .word-display {
   text-align: center;
@@ -368,7 +395,7 @@ body {
   padding: 24px 0 16px;
 }
 .vote-word { font-family: 'Playfair Display', Georgia, serif; font-size: 2rem; font-weight: 700; }
-.vote-date { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.vote-date { font-size: 13px; color: var(--text-muted); margin-top: 4px; text-align: center; margin-bottom: 12px; }
 
 .sentence-cards {
   display: flex;
@@ -575,13 +602,27 @@ body {
 .lb-votes strong { display: block; font-size: 18px; color: var(--text-primary); font-weight: 700; }
 
 /* ── Dictionary ──────────────────────────────────────────────────────────────*/
-.dictionary-list { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.dictionary-list { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
+
+.dict-letter-section { margin-bottom: 4px; }
+
+.dict-letter-header {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 16px 4px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+  letter-spacing: 1px;
+}
 
 .dict-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
+  margin-bottom: 10px;
 }
 .dict-word {
   font-family: 'Playfair Display', Georgia, serif;
@@ -598,18 +639,30 @@ body {
   margin-bottom: 8px;
 }
 
-.unbookmark-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 5px 12px;
+.dict-winning-sentence {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.dict-winning-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.dict-winning-text {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+.dict-winning-author {
   font-size: 12px;
   color: var(--text-muted);
-  cursor: pointer;
-  margin-top: 10px;
-  transition: border-color 0.15s, color 0.15s;
+  margin-top: 4px;
 }
-.unbookmark-btn:hover { border-color: #dc3545; color: #dc3545; }
 
 /* ── Profile View ────────────────────────────────────────────────────────────*/
 .profile-header {

@@ -14,11 +14,12 @@ let activeGroupId = null;
 // ── Word/sentence state ───────────────────────────────────────────────────────
 let todayData = null;          // { word, submitted, my_sentence, submission_count, member_count, bookmarked }
 let yesterdayData = null;      // { word, sentences, has_voted }
-let bookmarks = [];
+let wordHistory = [];          // all past words from user's groups with winning sentences
 let reusableSentences = [];    // sentences user submitted in other groups for today's word
 
 // ── UI state ──────────────────────────────────────────────────────────────────
-let currentView = 'home';     // home | vote | dictionary | profile | leaderboard
+let currentView = 'home';      // home | dictionary | profile | leaderboard | admin
+let activeWordTab = 'today';   // 'today' | 'vote'
 
 // ── Analytics ping ────────────────────────────────────────────────────────────
 fetch(`${API}/api/v1/analytics/track`, {

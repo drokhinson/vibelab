@@ -36,40 +36,69 @@ function renderReusablePills() {
   `;
 }
 
+function renderWordTabs() {
+  return `
+    <div class="word-tabs">
+      <button class="word-tab-btn ${activeWordTab === 'today' ? 'active' : ''}" id="sub-tab-today">Word of the Day</button>
+      <button class="word-tab-btn ${activeWordTab === 'vote' ? 'active' : ''}" id="sub-tab-vote">Vote</button>
+    </div>
+  `;
+}
+
 function renderHomeView() {
   if (!activeGroupId) {
     return renderNoGroupPrompt();
   }
 
-  if (!todayData) {
-    return `
-      ${renderGroupSwitcher()}
-      <div class="section-header" style="padding-top:16px;">
-        <span class="section-title">Word of the Day</span>
-      </div>
-      <div class="loading" style="height:60vh"></div>
-    `;
-  }
-
-  const { word, submitted, my_sentence, submission_count, member_count, bookmarked } = todayData;
-  const hasYesterday = true; // always show vote option
-
   return `
     ${renderGroupSwitcher()}
-    <div class="section-header" style="padding-top:16px;">
-      <span class="section-title">Word of the Day</span>
-    </div>
+    ${renderWordTabs()}
+    ${activeWordTab === 'today' ? renderTodayTab() : renderVoteTab()}
+  `;
+}
+
+function renderTodayTab() {
+  if (!todayData) {
+    return `<div class="loading" style="height:60vh"></div>`;
+  }
+
+  const { word, submitted, my_sentence, submission_count, member_count } = todayData;
+
+  return `
     ${renderWordDisplay(word)}
     ${word.etymology ? renderEtymologyCard(word.etymology) : ''}
     ${renderSentenceSection(submitted, my_sentence, word.word)}
-    <div class="text-muted text-center mt-16" style="font-size:13px; margin-bottom:16px;">
+    <div class="text-muted text-center mt-16" style="font-size:13px; margin-bottom:24px;">
       ${submission_count} of ${member_count} members submitted today
     </div>
-    ${hasYesterday ? `
-      <button class="icon-btn full-width mt-8" id="vote-tab-btn" style="justify-content:center; margin-bottom:24px;">
-        Vote on yesterday's sentences ${icons.chevronRight}
-      </button>
-    ` : ''}
+  `;
+}
+
+function renderVoteTab() {
+  if (!yesterdayData) {
+    return `<div class="loading" style="height:60vh"></div>`;
+  }
+
+  const { word, sentences, has_voted, date } = yesterdayData;
+
+  if (!word || !sentences.length) {
+    return `
+      <div class="text-muted" style="font-size:15px; padding:40px 20px; text-align:center;">
+        No sentences to vote on yet — come back after everyone submits for today!
+      </div>
+    `;
+  }
+
+  const maxVotes = Math.max(...sentences.map(s => s.vote_count), 0);
+
+  return `
+    ${renderWordDisplay(word)}
+    <div class="vote-date">${formatDate(date)} — vote for the best sentence</div>
+    ${has_voted ? renderSuccess('You voted! Results below.') : '<p class="text-muted" style="margin-top:8px; font-size:14px; text-align:center;">Tap ❤️ to vote for your favourite sentence.</p>'}
+    <div class="sentence-cards">
+      ${sentences.map(s => renderSentenceCard(s, has_voted, maxVotes)).join('')}
+    </div>
+    <div style="margin-bottom:24px;"></div>
   `;
 }
 
@@ -145,17 +174,40 @@ function renderSentenceSection(submitted, my_sentence, wordText) {
 }
 
 function initHomeListeners() {
+  // Sub-tab switching
+  document.getElementById('sub-tab-today')?.addEventListener('click', () => {
+    activeWordTab = 'today';
+    renderPageContent();
+    initPageListeners();
+  });
+
+  document.getElementById('sub-tab-vote')?.addEventListener('click', async () => {
+    activeWordTab = 'vote';
+    renderPageContent();
+    initPageListeners();
+    if (!yesterdayData && activeGroupId) {
+      await loadYesterdayData();
+      renderPageContent();
+      initPageListeners();
+    }
+  });
+
   // Group switcher
   document.querySelectorAll('[data-group-switch]').forEach(btn => {
     btn.addEventListener('click', async () => {
       activeGroupId = btn.dataset.groupSwitch;
       setStoredActiveGroup(activeGroupId);
       todayData = null;
+      yesterdayData = null;
       reusableSentences = [];
       renderPageContent();
-      initHomeListeners(); // re-attach so group chips stay clickable during loading
-      await loadTodayWord();
-      await loadReusableSentences();
+      initHomeListeners();
+      if (activeWordTab === 'today') {
+        await loadTodayWord();
+        await loadReusableSentences();
+      } else {
+        await loadYesterdayData();
+      }
       renderPageContent();
       initPageListeners();
     });
@@ -206,13 +258,6 @@ function initHomeListeners() {
     }
   });
 
-  // Vote tab shortcut
-  document.getElementById('vote-tab-btn')?.addEventListener('click', async () => {
-    currentView = 'vote';
-    renderPageContent();
-    await loadYesterdayData();
-    renderPageContent();
-    initPageListeners();
-    updateTabBar();
-  });
+  // Vote listeners are always attached since vote tab may be visible
+  initVoteListeners();
 }
