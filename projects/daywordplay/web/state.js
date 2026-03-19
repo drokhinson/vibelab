@@ -13,6 +13,7 @@ let activeGroupId = null;
 
 // ── Word/sentence state ───────────────────────────────────────────────────────
 let todayData = null;          // { word, submitted, my_sentence, submission_count, member_count, bookmarked }
+let cachedDailyWord = null;    // persists across group switches (same word for all groups)
 let yesterdayData = null;      // { word, sentences, has_voted }
 let wordHistory = [];          // all past words from user's groups with winning sentences
 let reusableSentences = [];    // sentences user submitted in other groups for today's word
