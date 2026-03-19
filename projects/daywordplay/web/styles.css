@@ -664,6 +664,44 @@ body {
   margin-top: 4px;
 }
 
+/* ── Alphabet Scroll Index ──────────────────────────────────────────────────*/
+.dictionary-container {
+  position: relative;
+}
+.alpha-index {
+  position: fixed;
+  right: max(4px, calc((100vw - 480px) / 2 + 4px));
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  z-index: 50;
+  padding: 6px 2px;
+  background: rgba(232, 229, 223, 0.85);
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.alpha-index-letter {
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+  line-height: 1.4;
+  transition: color 0.1s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.alpha-index-letter:hover,
+.alpha-index-letter:active {
+  color: var(--text-primary);
+  transform: scale(1.3);
+}
+
 /* ── Profile View ────────────────────────────────────────────────────────────*/
 .profile-header {
   text-align: center;
@@ -947,12 +985,25 @@ body {
 
 /* ── Reusable sentence pills ─────────────────────────────────────────────────*/
 .reusable-sentences {
-  margin-bottom: 10px;
+  margin-bottom: 14px;
+  background: var(--accent-light);
+  border: 1.5px solid rgba(74,124,124,0.2);
+  border-radius: var(--radius);
+  padding: 12px;
 }
+.reusable-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.reusable-header svg { width: 16px; height: 16px; color: var(--accent); }
+.reusable-icon { display: flex; }
 .reusable-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0;
 }
 .reusable-pills {
   display: flex;
@@ -960,19 +1011,29 @@ body {
   gap: 6px;
 }
 .reusable-pill {
-  background: var(--accent-light);
+  background: #fff;
   border: 1px solid rgba(74,124,124,0.25);
   border-radius: var(--radius-sm);
-  color: var(--accent);
+  color: var(--text-primary);
   font-size: 13px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   text-align: left;
   cursor: pointer;
   line-height: 1.4;
   white-space: normal;
-  transition: background 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: background 0.15s, border-color 0.15s;
 }
-.reusable-pill:hover { background: rgba(74,124,124,0.2); }
+.reusable-pill:hover { background: var(--accent-light); border-color: var(--accent); }
+.reusable-pill-text { color: var(--text-primary); }
+.reusable-pill-source {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  opacity: 0.8;
+}
 
 /* ── Admin card ──────────────────────────────────────────────────────────────*/
 .card {

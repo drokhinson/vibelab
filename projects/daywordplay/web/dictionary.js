@@ -35,13 +35,20 @@ function renderDictionaryAlpha() {
 
   const letters = Object.keys(groups).sort();
   return `
-    <div class="dictionary-list">
-      ${letters.map(letter => `
-        <div class="dict-letter-section">
-          <div class="dict-letter-header">${letter}</div>
-          ${groups[letter].map(w => renderDictCard(w)).join('')}
+    <div class="dictionary-container">
+      <div class="dictionary-list">
+        ${letters.map(letter => `
+          <div class="dict-letter-section" id="dict-letter-${letter}">
+            <div class="dict-letter-header">${letter}</div>
+            ${groups[letter].map(w => renderDictCard(w)).join('')}
+          </div>
+        `).join('')}
+      </div>
+      ${letters.length >= 3 ? `
+        <div class="alpha-index">
+          ${letters.map(l => `<button class="alpha-index-letter" data-scroll-letter="${l}">${l}</button>`).join('')}
         </div>
-      `).join('')}
+      ` : ''}
     </div>
   `;
 }
@@ -66,5 +73,13 @@ function renderDictCard(w) {
 }
 
 function initDictionaryListeners() {
-  // No interactive elements in history-based dictionary
+  document.querySelectorAll('[data-scroll-letter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const letter = btn.dataset.scrollLetter;
+      const section = document.getElementById(`dict-letter-${letter}`);
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
 }

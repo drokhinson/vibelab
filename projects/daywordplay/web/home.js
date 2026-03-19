@@ -4,6 +4,7 @@ async function loadTodayWord() {
   if (!activeGroupId) return;
   try {
     todayData = await apiFetch(`/groups/${activeGroupId}/today`);
+    cachedDailyWord = todayData.word;
   } catch (err) {
     todayData = null;
   }
@@ -24,13 +25,25 @@ async function loadReusableSentences() {
 
 function renderReusablePills() {
   if (!reusableSentences.length) return '';
+  const groupNames = {};
+  for (const g of myGroups) groupNames[g.id] = g.name;
+
   return `
     <div class="reusable-sentences">
-      <p class="reusable-label">Reuse a sentence from another group:</p>
+      <div class="reusable-header">
+        <span class="reusable-icon">${icons.share}</span>
+        <p class="reusable-label">Reuse from another group</p>
+      </div>
       <div class="reusable-pills">
-        ${reusableSentences.map((s, i) => `
-          <button class="reusable-pill" data-reuse-idx="${i}">"${escHtml(s.sentence)}"</button>
-        `).join('')}
+        ${reusableSentences.map((s, i) => {
+          const fromGroup = groupNames[s.group_id] || 'another group';
+          return `
+            <button class="reusable-pill" data-reuse-idx="${i}">
+              <span class="reusable-pill-text">"${escHtml(s.sentence)}"</span>
+              <span class="reusable-pill-source">from ${escHtml(fromGroup)}</span>
+            </button>
+          `;
+        }).join('')}
       </div>
     </div>
   `;
@@ -62,15 +75,17 @@ function renderTodayTab() {
     return `<div class="loading" style="height:60vh"></div>`;
   }
 
-  const { word, submitted, my_sentence, submission_count, member_count } = todayData;
+  const { word, submitted, my_sentence, submission_count, member_count, _loading } = todayData;
 
   return `
     ${renderWordDisplay(word)}
     ${word.etymology ? renderEtymologyCard(word.etymology) : ''}
-    ${renderSentenceSection(submitted, my_sentence, word.word)}
-    <div class="text-muted text-center mt-16" style="font-size:13px; margin-bottom:24px;">
+    ${_loading
+      ? '<div style="display:flex;justify-content:center;padding:32px 0;"><div class="loading-spinner" style="width:20px;height:20px;"></div></div>'
+      : renderSentenceSection(submitted, my_sentence, word.word)}
+    ${!_loading ? `<div class="text-muted text-center mt-16" style="font-size:13px; margin-bottom:24px;">
       ${submission_count} of ${member_count} members submitted today
-    </div>
+    </div>` : ''}
   `;
 }
 
@@ -197,7 +212,12 @@ function initHomeListeners() {
     btn.addEventListener('click', async () => {
       activeGroupId = btn.dataset.groupSwitch;
       setStoredActiveGroup(activeGroupId);
-      todayData = null;
+      // Keep word visible during switch (same word for all groups)
+      if (cachedDailyWord) {
+        todayData = { word: cachedDailyWord, submitted: false, my_sentence: null, submission_count: 0, member_count: 0, bookmarked: false, _loading: true };
+      } else {
+        todayData = null;
+      }
       yesterdayData = null;
       reusableSentences = [];
       renderPageContent();

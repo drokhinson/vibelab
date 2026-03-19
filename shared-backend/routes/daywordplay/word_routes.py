@@ -16,18 +16,13 @@ from .dependencies import get_current_user
 def _get_or_assign_word(sb, group_id: str, target_date: date) -> dict:
     """Return the word assigned to a group for a given date, assigning lazily if needed.
 
-    All groups share the same global word each day. The first group to request a date
-    picks an unused word; subsequent groups reuse that same word_id.
+    All groups share the same global word each day. The global word is determined
+    first (from any existing assignment), then this group's entry is created or
+    corrected to match.
     """
     date_str = target_date.isoformat()
-    existing = sb.table("daywordplay_daily_words").select(
-        "word_id, daywordplay_words(id, word, part_of_speech, definition, pronunciation, etymology)"
-    ).eq("group_id", group_id).eq("assigned_date", date_str).execute()
 
-    if existing.data:
-        return existing.data[0]["daywordplay_words"]
-
-    # Check if any group already has today's global word
+    # 1. Determine the global word for this date (from ANY group's assignment)
     any_assignment = sb.table("daywordplay_daily_words").select(
         "word_id"
     ).eq("assigned_date", date_str).limit(1).execute()
@@ -35,7 +30,7 @@ def _get_or_assign_word(sb, group_id: str, target_date: date) -> dict:
     if any_assignment.data:
         word_id = any_assignment.data[0]["word_id"]
     else:
-        # First group for this date — pick a globally unused word
+        # First request for this date — pick a globally unused word
         all_used = sb.table("daywordplay_daily_words").select("word_id").execute()
         used_ids = {r["word_id"] for r in (all_used.data or [])}
 
@@ -51,17 +46,27 @@ def _get_or_assign_word(sb, group_id: str, target_date: date) -> dict:
 
         word_id = random.choice(available)
 
-    # Insert assignment (ignore conflict in case of race condition)
-    try:
-        sb.table("daywordplay_daily_words").insert({
-            "group_id": group_id,
-            "word_id": word_id,
-            "assigned_date": date_str,
-        }).execute()
-    except Exception:
-        # Race condition — another request inserted first, re-fetch
-        pass
+    # 2. Ensure this group has an entry for this date with the correct word
+    existing = sb.table("daywordplay_daily_words").select(
+        "id, word_id"
+    ).eq("group_id", group_id).eq("assigned_date", date_str).execute()
 
+    if not existing.data:
+        try:
+            sb.table("daywordplay_daily_words").insert({
+                "group_id": group_id,
+                "word_id": word_id,
+                "assigned_date": date_str,
+            }).execute()
+        except Exception:
+            pass  # Race condition — another request inserted first
+    elif existing.data[0]["word_id"] != word_id:
+        # Fix inconsistent data: update to match global word
+        sb.table("daywordplay_daily_words").update(
+            {"word_id": word_id}
+        ).eq("id", existing.data[0]["id"]).execute()
+
+    # 3. Fetch and return the word details
     word_result = sb.table("daywordplay_words").select(
         "id, word, part_of_speech, definition, pronunciation, etymology"
     ).eq("id", word_id).execute()
