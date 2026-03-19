@@ -26,6 +26,10 @@ class JoinGroupBody(BaseModel):
     code: str
 
 
+class ReviewJoinRequestBody(BaseModel):
+    action: str  # "approve" or "deny"
+
+
 class SubmitSentenceBody(BaseModel):
     sentence: str
 

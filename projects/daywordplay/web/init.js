@@ -15,12 +15,15 @@ async function loadInitialData() {
       activeGroupId = myGroups[0].id;
     }
 
-    // Load all words for dictionary
-    await loadAllWords();
-
-    // Load today's word + reusable sentences for active group
+    // Load dictionary, today's word, and reusable sentences in parallel
+    const parallel = [loadAllWords()];
     if (activeGroupId) {
-      await loadTodayWord();
+      parallel.push(loadTodayWord());
+    }
+    await Promise.all(parallel);
+
+    // loadReusableSentences depends on todayData, so run after loadTodayWord
+    if (activeGroupId) {
       await loadReusableSentences();
     }
   } catch (err) {

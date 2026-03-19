@@ -131,14 +131,19 @@ function initDictionaryListeners() {
       el.classList.add('active');
       const section = document.getElementById(`dict-letter-${letter}`);
       if (section) {
-        const scrollArea = document.querySelector('.dict-scroll-area');
-        if (scrollArea) {
-          scrollArea.scrollTop = section.offsetTop - scrollArea.offsetTop;
-        } else {
-          section.scrollIntoView({ behavior: 'auto', block: 'start' });
-        }
+        scrollToSection(section);
       }
     }
+
+    function scrollToSection(section) {
+      const pageContent = document.querySelector('.page-content');
+      if (!pageContent) return;
+      const stickyHeader = document.querySelector('.dict-sticky-header');
+      const headerH = stickyHeader ? stickyHeader.offsetHeight : 0;
+      const sectionTop = section.getBoundingClientRect().top + pageContent.scrollTop - pageContent.getBoundingClientRect().top;
+      pageContent.scrollTop = sectionTop - headerH;
+    }
+
 
     function endScrub() {
       scrubbing = false;
@@ -186,11 +191,12 @@ function initDictionaryListeners() {
       const letter = btn.dataset.scrollLetter;
       const section = document.getElementById(`dict-letter-${letter}`);
       if (section) {
-        const scrollArea = document.querySelector('.dict-scroll-area');
-        if (scrollArea) {
-          scrollArea.scrollTop = section.offsetTop - scrollArea.offsetTop;
-        } else {
-          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const pageContent = document.querySelector('.page-content');
+        if (pageContent) {
+          const stickyHeader = document.querySelector('.dict-sticky-header');
+          const headerH = stickyHeader ? stickyHeader.offsetHeight : 0;
+          const sectionTop = section.getBoundingClientRect().top + pageContent.scrollTop - pageContent.getBoundingClientRect().top;
+          pageContent.scrollTo({ top: sectionTop - headerH, behavior: 'smooth' });
         }
       }
     });
