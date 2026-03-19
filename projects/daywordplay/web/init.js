@@ -15,8 +15,8 @@ async function loadInitialData() {
       activeGroupId = myGroups[0].id;
     }
 
-    // Load word history for dictionary
-    await loadWordHistory();
+    // Load all words for dictionary
+    await loadAllWords();
 
     // Load today's word + reusable sentences for active group
     if (activeGroupId) {
@@ -99,7 +99,7 @@ function initShellListeners() {
     renderPageContent();
     initPageListeners();
     updateTabBar();
-    await loadWordHistory();
+    await loadAllWords();
     renderPageContent();
     initPageListeners();
   });

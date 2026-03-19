@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, Path
 from db import get_supabase
 
 from . import router
-from .models import ReusableSentencesResponse, SubmitSentenceBody
+from .models import ProposeWordBody, ReusableSentencesResponse, SubmitSentenceBody
 from .dependencies import get_current_user
 
 
@@ -158,6 +158,12 @@ async def submit_sentence(
 
     today = date.today()
     word = _get_or_assign_word(sb, group_id, today)
+
+    if word.get("word", "").lower() not in sentence_text.lower():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your sentence must include the word \"{word.get('word', '')}\".",
+        )
 
     # Check for existing submission
     existing = sb.table("daywordplay_sentences").select("id").eq("group_id", group_id).eq("user_id", current_user["user_id"]).eq("assigned_date", today.isoformat()).execute()
@@ -402,3 +408,113 @@ async def remove_bookmark(word_id: str, current_user: dict = Depends(get_current
     sb = get_supabase()
     sb.table("daywordplay_bookmarks").delete().eq("user_id", current_user["user_id"]).eq("word_id", word_id).execute()
     return {"bookmarked": False}
+
+
+@router.get("/words/all", summary="Get all words in the dictionary with play/bookmark metadata")
+async def get_all_words(current_user: dict = Depends(get_current_user)) -> dict:
+    """Return every word in the word bank, annotated with is_played, my_sentence, winning_sentence, and is_bookmarked."""
+    sb = get_supabase()
+    user_id = current_user["user_id"]
+    today = date.today().isoformat()
+
+    # All words in the word bank
+    all_words_result = sb.table("daywordplay_words").select(
+        "id, word, part_of_speech, definition, pronunciation, etymology"
+    ).order("word").execute()
+    all_words = all_words_result.data or []
+    word_ids = [w["id"] for w in all_words]
+
+    if not word_ids:
+        return {"words": []}
+
+    # User's sentences for any of these words (past, not today)
+    my_sentences_result = sb.table("daywordplay_sentences").select(
+        "word_id, sentence"
+    ).eq("user_id", user_id).lt("assigned_date", today).execute()
+    my_sentence_by_word: dict[str, str] = {}
+    for s in (my_sentences_result.data or []):
+        if s["word_id"] not in my_sentence_by_word:
+            my_sentence_by_word[s["word_id"]] = s["sentence"]
+
+    # Winning sentences (most votes) for each word across all groups
+    past_sentences_result = sb.table("daywordplay_sentences").select(
+        "id, sentence, word_id, user_id, daywordplay_users(display_name, username)"
+    ).lt("assigned_date", today).execute()
+    sentences_by_word: dict[str, list] = {}
+    all_sentence_ids: list[str] = []
+    for s in (past_sentences_result.data or []):
+        wid = s["word_id"]
+        if wid not in sentences_by_word:
+            sentences_by_word[wid] = []
+        sentences_by_word[wid].append(s)
+        all_sentence_ids.append(s["id"])
+
+    vote_counts: dict[str, int] = {}
+    if all_sentence_ids:
+        votes = sb.table("daywordplay_votes").select("sentence_id").in_("sentence_id", all_sentence_ids).execute()
+        for v in (votes.data or []):
+            sid = v["sentence_id"]
+            vote_counts[sid] = vote_counts.get(sid, 0) + 1
+
+    # User's bookmarks
+    bookmarks_result = sb.table("daywordplay_bookmarks").select("word_id").eq("user_id", user_id).execute()
+    bookmarked_ids = {b["word_id"] for b in (bookmarks_result.data or [])}
+
+    # Build result
+    result = []
+    for w in all_words:
+        wid = w["id"]
+        word_sentences = sentences_by_word.get(wid, [])
+        winning_sentence = None
+        winning_author = None
+        if word_sentences:
+            best = max(word_sentences, key=lambda s: vote_counts.get(s["id"], 0))
+            if vote_counts.get(best["id"], 0) > 0:
+                winning_sentence = best["sentence"]
+                user_info = best.get("daywordplay_users") or {}
+                winning_author = user_info.get("display_name") or user_info.get("username", "")
+
+        result.append({
+            **w,
+            "is_played": wid in my_sentence_by_word,
+            "my_sentence": my_sentence_by_word.get(wid),
+            "winning_sentence": winning_sentence,
+            "winning_author": winning_author,
+            "is_bookmarked": wid in bookmarked_ids,
+        })
+
+    return {"words": result}
+
+
+@router.post("/words/propose", status_code=201, summary="Propose a new word for the dictionary")
+async def propose_word(
+    body: ProposeWordBody,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Submit a word proposal for admin review. Rejects duplicates of existing or pending words."""
+    sb = get_supabase()
+    word = body.word.strip().lower()
+    if not word:
+        raise HTTPException(status_code=400, detail="Word cannot be empty.")
+
+    # Check active dictionary
+    existing = sb.table("daywordplay_words").select("id").eq("word", word).execute()
+    if existing.data:
+        raise HTTPException(status_code=409, detail=f'"{word}" is already in the dictionary.')
+
+    # Check pending proposals
+    pending = sb.table("daywordplay_proposed_words").select("id").eq("word", word).eq("status", "pending").execute()
+    if pending.data:
+        raise HTTPException(status_code=409, detail=f'"{word}" already has a pending proposal awaiting review.')
+
+    result = sb.table("daywordplay_proposed_words").insert({
+        "word": word,
+        "part_of_speech": body.part_of_speech.strip(),
+        "definition": body.definition.strip(),
+        "pronunciation": body.pronunciation.strip() if body.pronunciation else None,
+        "etymology": body.etymology.strip() if body.etymology else None,
+        "proposed_by": current_user["user_id"],
+        "status": "pending",
+    }).execute()
+
+    return {"proposal": result.data[0]}

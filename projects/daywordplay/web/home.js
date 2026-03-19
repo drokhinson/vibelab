@@ -28,6 +28,14 @@ function renderReusablePills() {
   const groupNames = {};
   for (const g of myGroups) groupNames[g.id] = g.name;
 
+  // Track seen sentence texts to label duplicates
+  const textCount = {};
+  for (const s of reusableSentences) {
+    const key = s.sentence.toLowerCase();
+    textCount[key] = (textCount[key] || 0) + 1;
+  }
+  const textSeen = {};
+
   return `
     <div class="reusable-sentences">
       <div class="reusable-header">
@@ -37,10 +45,19 @@ function renderReusablePills() {
       <div class="reusable-pills">
         ${reusableSentences.map((s, i) => {
           const fromGroup = groupNames[s.group_id] || 'another group';
+          const key = s.sentence.toLowerCase();
+          const isDuplicate = textCount[key] > 1;
+          textSeen[key] = (textSeen[key] || 0) + 1;
+          const occurrence = textSeen[key];
+          // When same text appears more than once, add "also from" label on subsequent ones
+          const sourceLabel = isDuplicate && occurrence > 1
+            ? `also from ${escHtml(fromGroup)}`
+            : `from ${escHtml(fromGroup)}`;
+          const wordText = todayData?.word?.word || '';
           return `
             <button class="reusable-pill" data-reuse-idx="${i}">
-              <span class="reusable-pill-text">"${escHtml(s.sentence)}"</span>
-              <span class="reusable-pill-source">from ${escHtml(fromGroup)}</span>
+              <span class="reusable-pill-text">"${highlightWord(s.sentence, wordText)}"</span>
+              <span class="reusable-pill-source">${sourceLabel}</span>
             </button>
           `;
         }).join('')}
@@ -111,7 +128,7 @@ function renderVoteTab() {
     <div class="vote-date">${formatDate(date)} — vote for the best sentence</div>
     ${has_voted ? renderSuccess('You voted! Results below.') : '<p class="text-muted" style="margin-top:8px; font-size:14px; text-align:center;">Tap ❤️ to vote for your favourite sentence.</p>'}
     <div class="sentence-cards">
-      ${sentences.map(s => renderSentenceCard(s, has_voted, maxVotes)).join('')}
+      ${sentences.map(s => renderSentenceCard(s, has_voted, maxVotes, word.word)).join('')}
     </div>
     <div style="margin-bottom:24px;"></div>
   `;
@@ -167,7 +184,7 @@ function renderSentenceSection(submitted, my_sentence, wordText) {
       <div class="submitted-card">
         <div class="checkmark">✅</div>
         <p style="font-weight:600; font-size:15px; color:var(--text-secondary);">Your sentence for today</p>
-        <div class="submitted-sentence-text">"${escHtml(my_sentence.sentence)}"</div>
+        <div class="submitted-sentence-text">"${highlightWord(my_sentence.sentence, wordText)}"</div>
         <p class="text-muted">Come back tomorrow to vote on your group's sentences!</p>
       </div>
     `;
@@ -179,8 +196,9 @@ function renderSentenceSection(submitted, my_sentence, wordText) {
       <div class="sentence-input-wrap">
         ${renderReusablePills()}
         <textarea id="sentence-input" placeholder='Use "${wordText}" in a sentence…' rows="3"></textarea>
+        <div class="submit-hint" id="submit-hint">Include the word <em>${escHtml(wordText)}</em> to unlock submit</div>
         <div class="sentence-submit-row">
-          <button class="btn-primary" id="submit-sentence-btn">Submit</button>
+          <button class="btn-primary" id="submit-sentence-btn" disabled>Submit</button>
         </div>
       </div>
       <div id="sentence-error"></div>
@@ -233,13 +251,16 @@ function initHomeListeners() {
     });
   });
 
-  // Reusable sentence pill clicks — populate textarea
+  // Reusable sentence pill clicks — populate textarea and trigger word check
   document.querySelectorAll('[data-reuse-idx]').forEach(btn => {
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.dataset.reuseIdx, 10);
       const sentence = reusableSentences[idx]?.sentence || '';
       const input = document.getElementById('sentence-input');
-      if (input) input.value = sentence;
+      if (input) {
+        input.value = sentence;
+        input.dispatchEvent(new Event('input'));
+      }
     });
   });
 
@@ -250,6 +271,21 @@ function initHomeListeners() {
     initPageListeners();
     updateTabBar();
   });
+
+  // Live word-presence check — enable/disable submit button
+  const sentenceInput = document.getElementById('sentence-input');
+  const submitBtn = document.getElementById('submit-sentence-btn');
+  const hintEl = document.getElementById('submit-hint');
+  const wordText = todayData?.word?.word || '';
+
+  if (sentenceInput && submitBtn) {
+    sentenceInput.addEventListener('input', () => {
+      const val = sentenceInput.value;
+      const hasWord = wordText && val.toLowerCase().includes(wordText.toLowerCase());
+      submitBtn.disabled = !hasWord;
+      if (hintEl) hintEl.style.display = hasWord ? 'none' : '';
+    });
+  }
 
   // Sentence submission
   document.getElementById('submit-sentence-btn')?.addEventListener('click', async () => {

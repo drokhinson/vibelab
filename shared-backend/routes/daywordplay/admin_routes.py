@@ -3,6 +3,7 @@ routes/daywordplay/admin_routes.py
 Admin-only endpoints: add words, list groups, delete groups.
 All routes secured via require_admin() from shared auth.py.
 """
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Header, HTTPException, Path
@@ -112,3 +113,108 @@ async def admin_delete_group(
     sb.table("daywordplay_groups").delete().eq("id", group_id).execute()
 
     return {"deleted": True, "group_id": group_id, "group_name": group_name}
+
+
+@router.get(
+    "/admin/proposed-words",
+    status_code=200,
+    summary="List pending word proposals",
+)
+async def admin_list_proposed_words(
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """List all pending community word proposals ordered newest first. Admin only."""
+    require_admin(authorization)
+    sb = get_supabase()
+
+    proposals_result = sb.table("daywordplay_proposed_words").select(
+        "id, word, part_of_speech, definition, pronunciation, etymology, status, created_at, "
+        "daywordplay_users(username, display_name)"
+    ).eq("status", "pending").order("created_at", desc=True).execute()
+
+    proposals = []
+    for p in (proposals_result.data or []):
+        user_info = p.pop("daywordplay_users", None) or {}
+        proposals.append({
+            **p,
+            "proposer_username": user_info.get("username", ""),
+            "proposer_display_name": user_info.get("display_name", ""),
+        })
+
+    return {"proposals": proposals}
+
+
+@router.post(
+    "/admin/proposed-words/{proposal_id}/approve",
+    status_code=200,
+    summary="Approve a word proposal and add it to the dictionary",
+)
+async def admin_approve_proposal(
+    proposal_id: str = Path(..., description="Proposal ID to approve"),
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """Approve a word proposal: copy it to daywordplay_words and mark approved. Admin only."""
+    require_admin(authorization)
+    sb = get_supabase()
+
+    proposal_result = sb.table("daywordplay_proposed_words").select(
+        "id, word, part_of_speech, definition, pronunciation, etymology, status"
+    ).eq("id", proposal_id).execute()
+
+    if not proposal_result.data:
+        raise HTTPException(status_code=404, detail="Proposal not found.")
+
+    proposal = proposal_result.data[0]
+    if proposal["status"] != "pending":
+        raise HTTPException(status_code=409, detail=f"Proposal is already {proposal['status']}.")
+
+    # Race condition guard: re-check the active dictionary
+    existing = sb.table("daywordplay_words").select("id").eq("word", proposal["word"]).execute()
+    if existing.data:
+        raise HTTPException(status_code=409, detail=f'"{proposal["word"]}" already exists in the dictionary.')
+
+    # Add to active word bank
+    sb.table("daywordplay_words").insert({
+        "word": proposal["word"],
+        "part_of_speech": proposal["part_of_speech"],
+        "definition": proposal["definition"],
+        "pronunciation": proposal["pronunciation"],
+        "etymology": proposal["etymology"],
+    }).execute()
+
+    # Mark proposal approved
+    sb.table("daywordplay_proposed_words").update({
+        "status": "approved",
+        "reviewed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", proposal_id).execute()
+
+    return {"approved": True, "word": proposal["word"]}
+
+
+@router.post(
+    "/admin/proposed-words/{proposal_id}/reject",
+    status_code=200,
+    summary="Reject a word proposal",
+)
+async def admin_reject_proposal(
+    proposal_id: str = Path(..., description="Proposal ID to reject"),
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """Reject a word proposal. Admin only."""
+    require_admin(authorization)
+    sb = get_supabase()
+
+    proposal_result = sb.table("daywordplay_proposed_words").select("id, word, status").eq("id", proposal_id).execute()
+    if not proposal_result.data:
+        raise HTTPException(status_code=404, detail="Proposal not found.")
+
+    proposal = proposal_result.data[0]
+    if proposal["status"] != "pending":
+        raise HTTPException(status_code=409, detail=f"Proposal is already {proposal['status']}.")
+
+    sb.table("daywordplay_proposed_words").update({
+        "status": "rejected",
+        "reviewed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", proposal_id).execute()
+
+    return {"rejected": True, "word": proposal["word"]}
