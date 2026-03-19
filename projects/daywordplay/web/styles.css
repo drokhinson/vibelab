@@ -607,7 +607,7 @@ body {
   background: var(--bg);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
   padding-bottom: 4px;
 }
 .dict-scroll-area {
@@ -677,30 +677,26 @@ body {
 
 /* ── Alphabet Scroll Index ──────────────────────────────────────────────────*/
 .dictionary-container {
-  display: flex;
-  flex-direction: row;
-  gap: 0;
+  position: relative;
 }
-.dictionary-container .dictionary-list {
-  flex: 1;
-  min-width: 0;
-  padding-right: 4px;
+.dictionary-list {
+  padding-right: 28px;
 }
 .alpha-index {
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
+  position: fixed;
+  right: max(4px, calc((100vw - 480px) / 2 + 4px));
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0;
-  z-index: 50;
+  z-index: 10;
   padding: 6px 2px;
   background: rgba(232, 229, 223, 0.85);
   border-radius: 12px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  flex-shrink: 0;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
