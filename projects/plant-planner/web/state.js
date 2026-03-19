@@ -9,8 +9,9 @@ var currentGarden = null; // garden being edited {id, name, grid_width, grid_hei
 var gridPlacements = {}; // "x,y" → plant object
 var viewMode = "top";    // "top" | "side"
 var scene3DHandle = null;  // active Three.js scene handle
-var renderStyle = "toon";  // "toon" | "natural" | "wireframe"
-var draggedPlant = null; // plant being dragged from catalog
+var renderStyle = localStorage.getItem("pp_render_style") || "toon"; // "toon" | "natural" | "wireframe"
+var draggedPlant = null; // plant being dragged from catalog or grid
+var dragSourceKey = null; // grid key of cell being moved (null = from catalog)
 var catalogFilter = "all";         // sunlight filter: all | full_sun | partial | shade
 var catalogFilterSeason = "all";   // bloom season: all | spring | summer | fall | winter
 var catalogFilterCategory = "all"; // category: all | vegetable | herb | flower | fruit

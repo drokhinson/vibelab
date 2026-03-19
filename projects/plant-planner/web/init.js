@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", async function() {
     try {
       currentUser = await apiFetch("/auth/me");
       await loadPlants();
+      preloadThumbnails(plants, renderStyle);
       showView("gardens");
     } catch (err) {
       // Token expired or invalid

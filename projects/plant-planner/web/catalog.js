@@ -54,9 +54,10 @@ function renderCatalogList() {
   var html = '<div class="catalog-list">';
   for (var k = 0; k < filtered.length; k++) {
     var p = filtered[k];
+    var catThumb = getPlantThumbnail(p, renderStyle);
     html += '\
       <div class="catalog-tile" draggable="true" data-plant-id="' + p.id + '" style="--i:' + k + '">\
-        <span class="catalog-emoji">' + p.emoji + '</span>\
+        <img class="catalog-thumbnail" src="' + catThumb + '" alt="' + escapeHtml(p.name) + '" draggable="false" />\
         <div class="catalog-info">\
           <span class="catalog-name">' + escapeHtml(p.name) + '</span>\
           <span class="catalog-meta">' + sunlightIcon(p.sunlight) + ' ' + p.height_inches + '"h</span>\

@@ -36,22 +36,11 @@ function renderBuilder() {
   }
   html += '</div>';
 
-  // 3D render pane
+  // 3D render pane (style selector moved to settings)
   html += '<div class="render3d-pane">';
   html += '<div class="render3d-header">';
   html += '<span class="render3d-label"><i data-lucide="box"></i> 3D View</span>';
-  html += '<div class="style-selector">';
-  var styles = [
-    { id: "toon", label: "Cubirds" },
-    { id: "natural", label: "Natural" },
-    { id: "wireframe", label: "Blueprint" }
-  ];
-  for (var si = 0; si < styles.length; si++) {
-    var st = styles[si];
-    var active = renderStyle === st.id ? " active" : "";
-    html += '<button class="style-btn' + active + '" data-style="' + st.id + '">' + st.label + '</button>';
-  }
-  html += '</div></div>';
+  html += '</div>';
   html += '<div id="render3d-container"></div>';
   html += '</div>';
 
@@ -81,11 +70,14 @@ function renderTopGrid(g) {
       var plant = gridPlacements[key];
       var cellContent = "";
       var cellClass = "grid-cell";
+      var cellDrag = "";
       if (plant) {
-        cellContent = '<span class="cell-emoji">' + plant.emoji + '</span>';
+        var thumb = getPlantThumbnail(plant, renderStyle);
+        cellContent = '<img class="cell-thumbnail" src="' + thumb + '" alt="' + escapeHtml(plant.name) + '" draggable="false" />';
         cellClass += " occupied";
+        cellDrag = ' draggable="true"';
       }
-      html += '<div class="' + cellClass + '" data-x="' + x + '" data-y="' + y + '">' + cellContent + '</div>';
+      html += '<div class="' + cellClass + '"' + cellDrag + ' data-x="' + x + '" data-y="' + y + '">' + cellContent + '</div>';
     }
   }
   html += '</div>';
@@ -143,8 +135,9 @@ function renderSideView(g) {
     var barH = tallestSlice ? Math.max(10, (tallestSlice.height_inches / maxH) * 100) : 0;
     html += '<div class="side-col">';
     if (tallestSlice) {
+      var sideThumb = getPlantThumbnail(tallestSlice, renderStyle);
       html += '<div class="side-bar" style="height:' + barH + '%">';
-      html += '<span class="side-emoji">' + tallestSlice.emoji + '</span>';
+      html += '<img class="side-thumbnail" src="' + sideThumb + '" alt="' + escapeHtml(tallestSlice.name) + '" />';
       html += '<span class="side-label">' + tallestSlice.height_inches + '"</span>';
       html += '</div>';
     } else {
@@ -161,9 +154,28 @@ function renderSideView(g) {
 
 function bindGridEvents(g) {
   document.querySelectorAll(".grid-cell").forEach(function(cell) {
+    // Drag start for occupied cells (moving plants within grid)
+    cell.ondragstart = function(e) {
+      var x = parseInt(cell.dataset.x);
+      var y = parseInt(cell.dataset.y);
+      var key = x + "," + y;
+      var plant = gridPlacements[key];
+      if (plant) {
+        draggedPlant = plant;
+        dragSourceKey = key;
+        e.dataTransfer.setData("text/plain", plant.id);
+        e.dataTransfer.effectAllowed = "move";
+        cell.classList.add("dragging");
+      }
+    };
+    cell.ondragend = function() {
+      cell.classList.remove("dragging");
+      dragSourceKey = null;
+      draggedPlant = null;
+    };
     cell.ondragover = function(e) {
       e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
+      e.dataTransfer.dropEffect = dragSourceKey ? "move" : "copy";
       cell.classList.add("drag-over");
     };
     cell.ondragleave = function() {
@@ -176,19 +188,37 @@ function bindGridEvents(g) {
       var y = parseInt(cell.dataset.y);
       var key = x + "," + y;
       if (draggedPlant) {
+        // If moving within grid, clear source cell
+        if (dragSourceKey && dragSourceKey !== key) {
+          delete gridPlacements[dragSourceKey];
+          var srcParts = dragSourceKey.split(",");
+          var sourceCell = document.querySelector('.grid-cell[data-x="' + srcParts[0] + '"][data-y="' + srcParts[1] + '"]');
+          if (sourceCell) {
+            sourceCell.classList.remove("occupied", "dragging");
+            sourceCell.removeAttribute("draggable");
+            sourceCell.innerHTML = "";
+          }
+        }
+        // Place plant in target cell
         gridPlacements[key] = draggedPlant;
         cell.classList.add("occupied");
-        cell.innerHTML = '<span class="cell-emoji">' + draggedPlant.emoji + '</span>';
+        cell.setAttribute("draggable", "true");
+        var thumb = getPlantThumbnail(draggedPlant, renderStyle);
+        cell.innerHTML = '<img class="cell-thumbnail" src="' + thumb + '" alt="' + escapeHtml(draggedPlant.name) + '" draggable="false" />';
+        dragSourceKey = null;
         sync3DView();
       }
     };
     cell.onclick = function() {
+      // Don't remove if we just finished a drag
+      if (cell.classList.contains("dragging")) return;
       var x = parseInt(cell.dataset.x);
       var y = parseInt(cell.dataset.y);
       var key = x + "," + y;
       if (gridPlacements[key]) {
         delete gridPlacements[key];
         cell.classList.remove("occupied");
+        cell.removeAttribute("draggable");
         cell.innerHTML = "";
         sync3DView();
       }
@@ -220,7 +250,7 @@ function showTooltip(el, plant) {
   var tip = document.getElementById("plant-tooltip");
   if (!tip) return;
   tip.innerHTML =
-    '<strong>' + plant.emoji + ' ' + escapeHtml(plant.name) + '</strong><br>' +
+    '<strong>' + escapeHtml(plant.name) + '</strong><br>' +
     sunlightIcon(plant.sunlight) + ' ' + sunlightLabel(plant.sunlight) +
     ' | ' + plant.height_inches + '" tall' +
     (plant.description ? '<br><span class="opacity-50 text-sm">' + escapeHtml(plant.description) + '</span>' : '');
@@ -278,16 +308,6 @@ function bindBuilderButtons() {
     sync3DView();
   };
   if (viewMode === "side") bindCompassButtons();
-
-  // Render style selector
-  document.querySelectorAll(".style-btn").forEach(function(btn) {
-    btn.onclick = function() {
-      document.querySelectorAll(".style-btn").forEach(function(b) { b.classList.remove("active"); });
-      btn.classList.add("active");
-      renderStyle = btn.dataset.style;
-      if (scene3DHandle) setRenderStyle(scene3DHandle, renderStyle);
-    };
-  });
 }
 
 async function saveGarden() {

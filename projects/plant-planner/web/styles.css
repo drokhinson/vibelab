@@ -167,7 +167,12 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   transform: translateY(-1px) scale(1.01);
 }
 .catalog-tile:active { cursor: grabbing; }
-.catalog-emoji { font-size: 1.3rem; }
+.catalog-thumbnail {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
 .catalog-info {
   display: flex;
   flex-direction: column;
@@ -285,9 +290,14 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
 .grid-cell.occupied {
   background: oklch(var(--p) / 0.06);
 }
-.cell-emoji {
-  font-size: clamp(1rem, 3vw, 2rem);
-  line-height: 1;
+.cell-thumbnail {
+  width: 85%;
+  height: 85%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.grid-cell.dragging {
+  opacity: 0.4;
 }
 
 /* Side view compass */
@@ -347,7 +357,11 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   padding-top: 0.25rem;
   min-height: 20px;
 }
-.side-emoji { font-size: 1.2rem; }
+.side-thumbnail {
+  width: 28px;
+  height: auto;
+  object-fit: contain;
+}
 .side-label { font-size: 0.65rem; color: oklch(var(--bc) / 0.45); }
 .side-empty { width: 80%; height: 4px; background: oklch(var(--p) / 0.12); border-radius: 2px; }
 
