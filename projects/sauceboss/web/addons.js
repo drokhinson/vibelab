@@ -25,7 +25,7 @@ function renderProteinVeggieSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="backFromFlowStep('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>🧩</span>Add proteins &amp; veggies?</div>
       <div class="subtitle">Optional — select any combination</div>
     </div>

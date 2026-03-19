@@ -12,29 +12,73 @@ function renderProgressBar() {
     salad:   '🥗 Salad',
   };
 
-  const nodes = [...steps, 'review'];
-  return `<div class="flow-progress">
-    ${nodes.map((step, i) => {
-      const isReview = step === 'review';
-      const isDone   = i < current || (isReview && current >= steps.length);
-      const isActive = (!isReview && i === current) || (isReview && current >= steps.length);
-      const dotClass = isDone ? 'done' : isActive ? 'active' : '';
-      const label    = isReview ? '✅ Review' : labels[step];
-      const lineClass = i > 0 && (i <= current || (isReview && current >= steps.length)) ? 'done' : '';
-      // Clickable if done or active (for non-review nodes only)
-      const clickable = !isReview && (isDone || isActive);
-      const onclick = clickable ? ` onclick="goToFlowStep(${i})"` : '';
-      const cursorClass = clickable ? ' clickable' : '';
+  // Ordered sub-screens for each step type (first = root selector, rest = sub-steps)
+  function getScreensForStep(step) {
+    if (step === 'protein') return ['protein-selector', 'marinade-selector'];
+    if (step === 'carb') {
+      return state.preparations.length > 0
+        ? ['carb-selector', 'prep-selector', 'sauce-selector']
+        : ['carb-selector', 'sauce-selector'];
+    }
+    if (step === 'salad') return ['salad-base-selector', 'dressing-selector'];
+    return ['protein-veggie-selector']; // addons: single screen
+  }
 
-      return `${i > 0 ? `<div class="progress-line ${lineClass}"></div>` : ''}
-        <div class="progress-node${cursorClass}"${onclick}>
-          <div class="progress-dot ${dotClass}">
-            ${isDone ? '<i data-lucide="check"></i>' : i + 1}
-          </div>
-          <div class="progress-label">${label}</div>
-        </div>`;
-    }).join('')}
-  </div>`;
+  const nodes = [...steps, 'review'];
+  let html = '';
+
+  nodes.forEach((step, i) => {
+    const isReview = step === 'review';
+    const stepDone   = i < current || (isReview && current >= steps.length);
+    const stepActive = (!isReview && i === current) || (isReview && current >= steps.length);
+    const lineClass  = i > 0 && (i <= current || (isReview && current >= steps.length)) ? 'done' : '';
+    const label      = isReview ? '✅ Review' : labels[step];
+    const clickable  = !isReview && (stepDone || stepActive);
+    const onclick    = clickable ? ` onclick="goToFlowStep(${i})"` : '';
+    const cursorClass = clickable ? ' clickable' : '';
+
+    // Determine big dot state and content, accounting for sub-screen position
+    let dotClass = stepDone ? 'done' : stepActive ? 'active' : '';
+    let dotContent = stepDone ? '<i data-lucide="check"></i>' : String(i + 1);
+    let subDotsHTML = '';
+
+    if (!isReview) {
+      const screens = getScreensForStep(step);
+      const subScreens = screens.slice(1); // screens after the root selector
+
+      if (subScreens.length > 0) {
+        // When active, check which sub-screen we're currently on
+        const curScreenIdx = stepActive ? screens.indexOf(state.screen) : -1;
+
+        // If on a sub-screen (not the root), the big dot flips to done
+        if (stepActive && curScreenIdx > 0) {
+          dotClass = 'done';
+          dotContent = '<i data-lucide="check"></i>';
+        }
+
+        const subDots = subScreens.map((_, si) => {
+          const screenIdx = si + 1; // index in screens[] (0 = root)
+          let sdClass = '';
+          if (stepDone || (stepActive && screenIdx < curScreenIdx)) sdClass = 'done';
+          else if (stepActive && screenIdx === curScreenIdx) sdClass = 'active';
+          const sdLineClass = sdClass === 'done' ? 'done' : '';
+          return `<div class="progress-sub-line ${sdLineClass}"></div><div class="progress-sub-dot ${sdClass}"></div>`;
+        }).join('');
+
+        subDotsHTML = `<div class="sub-step-dots">${subDots}</div>`;
+      }
+    }
+
+    const lineHTML = i > 0 ? `<div class="progress-line ${lineClass}"></div>` : '';
+    html += `${lineHTML}<div class="step-group">
+      <div class="progress-node${cursorClass}"${onclick}>
+        <div class="progress-dot ${dotClass}">${dotContent}</div>
+        <div class="progress-label">${label}</div>
+      </div>${subDotsHTML}
+    </div>`;
+  });
+
+  return `<div class="flow-progress">${html}</div>`;
 }
 
 // ─── Go back to a previous flow step (for editing) ───────────────────────────
@@ -316,6 +360,18 @@ function restartMealFlow() {
   state.meal = { protein: null, marinade: null, carb: null, prep: null, sauce: null, saladBase: null, dressing: null };
   state.selectedAddons = [];
   navigate('meal-builder');
+}
+
+// Back button handler for flow step root screens.
+// Step 0 → restart (clears flow/progress bar). Step N → go to step N-1. Not in flow → normal back.
+function backFromFlowStep(fallbackScreen) {
+  if (state.mealFlowIndex === 0) {
+    restartMealFlow();
+  } else if (state.mealFlowIndex > 0) {
+    navigateToFlowStep(state.mealFlowIndex - 1);
+  } else {
+    navigate(fallbackScreen);
+  }
 }
 
 // ─── Unified Meal Recipe screen ───────────────────────────────────────────────
