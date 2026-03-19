@@ -57,10 +57,19 @@ async def get_garden(garden_id: str, user: dict = Depends(get_current_user)):
 
     plants = (
         sb.table("plantplanner_garden_plants")
-        .select("*, plantplanner_plants(*)")
+        .select("*, plantplanner_plants(*, plantplanner_renders(*))")
         .eq("garden_id", garden_id)
         .execute()
     )
+
+    # Flatten render data onto the nested plant object
+    for row in plants.data:
+        plant = row.get("plantplanner_plants")
+        if plant:
+            render = plant.pop("plantplanner_renders", None)
+            if render:
+                plant["render_params"] = render.get("params")
+                plant["render_colors"] = render.get("colors")
 
     return {
         **garden.data[0],

@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: migration 026
+-- Last updated: migration 030
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -13,18 +13,27 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_users (
 );
 ALTER TABLE public.plantplanner_users ENABLE ROW LEVEL SECURITY;
 
+-- Reusable 3D render templates keyed by human-readable string
+CREATE TABLE IF NOT EXISTS public.plantplanner_renders (
+  key        TEXT        PRIMARY KEY,
+  label      TEXT        NOT NULL DEFAULT '',
+  params     JSONB       NOT NULL DEFAULT '{}',   -- geometry: stem, foliage, accents (no colors)
+  colors     JSONB       NOT NULL DEFAULT '{}',   -- color map: { stem, foliage: [...], accents: [...] }
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.plantplanner_renders ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE IF NOT EXISTS public.plantplanner_plants (
   id            UUID     PRIMARY KEY DEFAULT gen_random_uuid(),
   name          TEXT     NOT NULL,
-  emoji         TEXT     NOT NULL DEFAULT '🌱',
   height_inches INT      NOT NULL DEFAULT 12,
   sunlight      TEXT     NOT NULL DEFAULT 'full_sun',  -- full_sun | partial | shade
   bloom_season  TEXT[]   NOT NULL DEFAULT '{}',         -- spring | summer | fall | winter
   spread_inches INT      NOT NULL DEFAULT 12,
   description   TEXT,
   sort_order    INT      NOT NULL DEFAULT 0,
-  category      TEXT     NOT NULL DEFAULT 'other'       -- vegetable | herb | flower | fruit | other
-  -- render_params (JSONB) dropped in migration 026: Three.js 3D feature never implemented
+  category      TEXT     NOT NULL DEFAULT 'other',      -- vegetable | herb | flower | fruit | other
+  render_key    TEXT     REFERENCES public.plantplanner_renders(key)
 );
 ALTER TABLE public.plantplanner_plants ENABLE ROW LEVEL SECURITY;
 
