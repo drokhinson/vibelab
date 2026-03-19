@@ -27,7 +27,7 @@
     },
     {
       "name": "plantplanner-web",
-      "runtimeExecutable": "npx.cmd",
+      "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "projects/plant-planner/web", "-l", "5504", "--no-clipboard"],
       "port": 5504
     }
