@@ -120,9 +120,8 @@ function renderTopHeader() {
 
 function renderTabBar() {
   const isDict = currentView === 'dictionary';
-  const isVote = currentView === 'vote';
   const isLb = currentView === 'leaderboard';
-  const wordActive = currentView === 'home' || isVote;
+  const wordActive = currentView === 'home';
 
   return `
     <div class="tab-bar">
@@ -143,7 +142,7 @@ function renderTabBar() {
 }
 
 function updateTabBar() {
-  const wordActive = currentView === 'home' || currentView === 'vote';
+  const wordActive = currentView === 'home';
   document.getElementById('tab-word')?.classList.toggle('active', wordActive);
   document.getElementById('tab-dict')?.classList.toggle('active', currentView === 'dictionary');
   document.getElementById('tab-stats')?.classList.toggle('active', currentView === 'leaderboard');
@@ -157,7 +156,6 @@ function renderPageContent() {
 function renderCurrentPage() {
   switch (currentView) {
     case 'home': return renderHomeView();
-    case 'vote': return renderVoteView();
     case 'dictionary': return renderDictionaryView();
     case 'leaderboard': return renderLeaderboardView();
     case 'profile': return renderProfileView();

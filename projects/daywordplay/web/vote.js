@@ -9,47 +9,6 @@ async function loadYesterdayData() {
   }
 }
 
-function renderVoteView() {
-  if (!activeGroupId) return renderNoGroupPrompt();
-
-  if (!yesterdayData) {
-    return `<div class="loading" style="height:60vh"></div>`;
-  }
-
-  const { word, sentences, has_voted, date } = yesterdayData;
-
-  if (!word || !sentences.length) {
-    return `
-      <div class="vote-page-header">
-        <div class="text-muted" style="font-size:15px; padding:40px 20px; text-align:center;">
-          No sentences to vote on yet — come back after everyone submits for today!
-        </div>
-      </div>
-      <button class="icon-btn full-width" id="back-to-today-btn" style="justify-content:center;">
-        ${icons.back} Back to today's word
-      </button>
-    `;
-  }
-
-  const maxVotes = Math.max(...sentences.map(s => s.vote_count), 0);
-
-  return `
-    <div class="vote-page-header">
-      <div class="vote-word">${escHtml(word.word)}</div>
-      <div class="vote-date">${formatDate(date)} — vote for the best sentence</div>
-      ${has_voted ? renderSuccess('You voted! Results below.') : '<p class="text-muted" style="margin-top:8px; font-size:14px;">Tap ❤️ to vote for your favourite sentence.</p>'}
-    </div>
-    <div class="sentence-cards">
-      ${sentences.map(s => renderSentenceCard(s, has_voted, maxVotes)).join('')}
-    </div>
-    <div style="margin-top:24px; margin-bottom:8px;">
-      <button class="icon-btn full-width" id="back-to-today-btn" style="justify-content:center;">
-        ${icons.back} Back to today's word
-      </button>
-    </div>
-  `;
-}
-
 function renderSentenceCard(s, has_voted, maxVotes) {
   const isWinner = has_voted && s.vote_count === maxVotes && maxVotes > 0;
   const cardClass = s.i_voted ? 'voted' : (isWinner ? 'winner' : '');
@@ -77,14 +36,6 @@ function renderSentenceCard(s, has_voted, maxVotes) {
 }
 
 function initVoteListeners() {
-  document.getElementById('back-to-today-btn')?.addEventListener('click', async () => {
-    currentView = 'home';
-    if (!todayData) await loadTodayWord();
-    renderPageContent();
-    initPageListeners();
-    updateTabBar();
-  });
-
   document.querySelectorAll('[data-vote-sentence]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       if (btn.disabled) return;
@@ -92,12 +43,10 @@ function initVoteListeners() {
       btn.disabled = true;
       try {
         await apiFetch(`/sentences/${sentenceId}/vote`, { method: 'POST' });
-        // Refresh yesterday data
         await loadYesterdayData();
         renderPageContent();
         initPageListeners();
       } catch (err) {
-        // Show brief error
         const card = btn.closest('.sentence-card');
         if (card) {
           const errDiv = document.createElement('div');

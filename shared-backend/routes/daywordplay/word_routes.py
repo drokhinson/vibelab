@@ -276,6 +276,80 @@ async def vote_for_sentence(sentence_id: str, current_user: dict = Depends(get_c
     return {"voted": True, "sentence_id": sentence_id}
 
 
+@router.get("/words/history", summary="Get all past words from user's groups with winning sentences")
+async def get_word_history(current_user: dict = Depends(get_current_user)) -> dict:
+    """Return all past daily words from user's groups, sorted alphabetically, with winning sentence."""
+    sb = get_supabase()
+    user_id = current_user["user_id"]
+    today = date.today().isoformat()
+
+    # Get user's group IDs
+    memberships = sb.table("daywordplay_group_members").select("group_id").eq("user_id", user_id).execute()
+    group_ids = [m["group_id"] for m in (memberships.data or [])]
+    if not group_ids:
+        return {"words": []}
+
+    # Get all past daily word assignments for those groups
+    past = sb.table("daywordplay_daily_words").select(
+        "word_id, group_id, assigned_date, daywordplay_words(id, word, part_of_speech, definition, pronunciation, etymology)"
+    ).in_("group_id", group_ids).lt("assigned_date", today).execute()
+
+    if not past.data:
+        return {"words": []}
+
+    # Build unique word map (dedup by word_id)
+    word_map: dict[str, dict] = {}
+    for row in past.data:
+        wid = row["word_id"]
+        if wid not in word_map:
+            word_map[wid] = row["daywordplay_words"]
+
+    # Get all sentences from those groups for past dates
+    sentences_result = sb.table("daywordplay_sentences").select(
+        "id, sentence, word_id, user_id, daywordplay_users(display_name, username)"
+    ).in_("group_id", group_ids).lt("assigned_date", today).execute()
+
+    sentences_by_word: dict[str, list] = {}
+    sentence_ids: list[str] = []
+    for s in (sentences_result.data or []):
+        wid = s["word_id"]
+        if wid not in sentences_by_word:
+            sentences_by_word[wid] = []
+        sentences_by_word[wid].append(s)
+        sentence_ids.append(s["id"])
+
+    # Get vote counts for all those sentences
+    vote_counts: dict[str, int] = {}
+    if sentence_ids:
+        votes = sb.table("daywordplay_votes").select("sentence_id").in_("sentence_id", sentence_ids).execute()
+        for v in (votes.data or []):
+            sid = v["sentence_id"]
+            vote_counts[sid] = vote_counts.get(sid, 0) + 1
+
+    # Build result: one entry per unique word with winning sentence
+    result = []
+    for wid, word_info in word_map.items():
+        word_sentences = sentences_by_word.get(wid, [])
+        winning_sentence = None
+        winning_author = None
+
+        if word_sentences:
+            best = max(word_sentences, key=lambda s: vote_counts.get(s["id"], 0))
+            if vote_counts.get(best["id"], 0) > 0:
+                winning_sentence = best["sentence"]
+                user_info = best.get("daywordplay_users") or {}
+                winning_author = user_info.get("display_name") or user_info.get("username", "")
+
+        result.append({
+            **word_info,
+            "winning_sentence": winning_sentence,
+            "winning_author": winning_author,
+        })
+
+    result.sort(key=lambda w: w["word"].lower())
+    return {"words": result}
+
+
 @router.get("/words/bookmarks")
 async def get_bookmarks(current_user: dict = Depends(get_current_user)):
     """Get current user's bookmarked words (friend dictionary)."""

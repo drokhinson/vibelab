@@ -15,9 +15,8 @@ async function loadInitialData() {
       activeGroupId = myGroups[0].id;
     }
 
-    // Load bookmarks
-    const bkData = await apiFetch('/words/bookmarks');
-    bookmarks = bkData.bookmarks || [];
+    // Load word history for dictionary
+    await loadWordHistory();
 
     // Load today's word + reusable sentences for active group
     if (activeGroupId) {
@@ -34,9 +33,6 @@ function initPageListeners() {
   switch (currentView) {
     case 'home':
       initHomeListeners();
-      break;
-    case 'vote':
-      initVoteListeners();
       break;
     case 'dictionary':
       initDictionaryListeners();
@@ -91,17 +87,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 function initShellListeners() {
   document.getElementById('tab-word')?.addEventListener('click', async () => {
     currentView = 'home';
+    activeWordTab = 'today';
     if (!todayData && activeGroupId) await loadTodayWord();
     renderPageContent();
     initPageListeners();
     updateTabBar();
   });
 
-  document.getElementById('tab-dict')?.addEventListener('click', () => {
+  document.getElementById('tab-dict')?.addEventListener('click', async () => {
     currentView = 'dictionary';
     renderPageContent();
     initPageListeners();
     updateTabBar();
+    await loadWordHistory();
+    renderPageContent();
+    initPageListeners();
   });
 
   document.getElementById('tab-stats')?.addEventListener('click', async () => {
