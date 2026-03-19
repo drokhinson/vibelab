@@ -42,6 +42,17 @@ function renderAdminView() {
         </div>
       </div>
 
+      <!-- Proposed Words -->
+      <div style="margin-bottom:24px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <h3 style="margin:0; font-size:16px;">Proposed Words</h3>
+          <button class="icon-btn" id="admin-refresh-proposals-btn" style="font-size:12px;">Refresh</button>
+        </div>
+        <div id="admin-proposals-list">
+          <div class="loading" style="height:60px;"></div>
+        </div>
+      </div>
+
       <!-- Groups list -->
       <div>
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
@@ -84,6 +95,90 @@ async function loadAdminGroups() {
   } catch (err) {
     container.innerHTML = `<div class="error-banner">${escHtml(err.message)}</div>`;
   }
+}
+
+function renderAdminProposalRow(p) {
+  const proposer = escHtml(p.proposer_display_name || p.proposer_username || 'unknown');
+  return `
+    <div class="card" style="margin-bottom:10px;" data-admin-proposal-id="${escHtml(p.id)}">
+      <div style="display:flex; align-items:flex-start; gap:8px;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:700; font-size:15px;">${escHtml(p.word)}</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">${escHtml(p.part_of_speech)} · proposed by ${proposer}</div>
+          <div style="font-size:13px; color:var(--text-secondary); line-height:1.5;">${escHtml(p.definition)}</div>
+          ${p.pronunciation ? `<div style="font-size:12px; color:var(--text-muted); margin-top:4px;">${escHtml(p.pronunciation)}</div>` : ''}
+          ${p.etymology ? `<div style="font-size:12px; color:var(--text-muted); margin-top:2px;"><em>Origin:</em> ${escHtml(p.etymology)}</div>` : ''}
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn-primary admin-approve-proposal-btn" data-proposal-id="${escHtml(p.id)}" data-proposal-word="${escHtml(p.word)}"
+          style="flex:1; padding:8px; font-size:13px;">Approve</button>
+        <button class="danger-btn admin-reject-proposal-btn" data-proposal-id="${escHtml(p.id)}" data-proposal-word="${escHtml(p.word)}"
+          style="flex:1; padding:8px; font-size:13px;">Reject</button>
+      </div>
+      <div class="admin-proposal-msg" style="margin-top:6px;"></div>
+    </div>
+  `;
+}
+
+async function loadAdminProposals() {
+  const container = document.getElementById('admin-proposals-list');
+  if (!container) return;
+  try {
+    const data = await adminFetch('/admin/proposed-words');
+    const proposals = data.proposals || [];
+    if (proposals.length === 0) {
+      container.innerHTML = `<p class="text-muted" style="font-size:14px;">No pending proposals.</p>`;
+    } else {
+      container.innerHTML = proposals.map(renderAdminProposalRow).join('');
+    }
+    attachAdminProposalListeners();
+  } catch (err) {
+    container.innerHTML = `<div class="error-banner">${escHtml(err.message)}</div>`;
+  }
+}
+
+function attachAdminProposalListeners() {
+  document.querySelectorAll('.admin-approve-proposal-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const proposalId = btn.dataset.proposalId;
+      const word = btn.dataset.proposalWord;
+      const row = document.querySelector(`[data-admin-proposal-id="${proposalId}"]`);
+      const msgEl = row?.querySelector('.admin-proposal-msg');
+      btn.disabled = true;
+      btn.textContent = 'Approving…';
+      try {
+        await adminFetch(`/admin/proposed-words/${proposalId}/approve`, { method: 'POST' });
+        if (row) {
+          row.innerHTML = `<div class="success-banner" style="margin:0;">"${escHtml(word)}" approved and added to the dictionary.</div>`;
+        }
+      } catch (err) {
+        if (msgEl) msgEl.innerHTML = renderError(err.message);
+        btn.disabled = false;
+        btn.textContent = 'Approve';
+      }
+    });
+  });
+
+  document.querySelectorAll('.admin-reject-proposal-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const proposalId = btn.dataset.proposalId;
+      const word = btn.dataset.proposalWord;
+      if (!confirm(`Reject proposal for "${word}"?`)) return;
+      const row = document.querySelector(`[data-admin-proposal-id="${proposalId}"]`);
+      const msgEl = row?.querySelector('.admin-proposal-msg');
+      btn.disabled = true;
+      btn.textContent = 'Rejecting…';
+      try {
+        await adminFetch(`/admin/proposed-words/${proposalId}/reject`, { method: 'POST' });
+        if (row) row.remove();
+      } catch (err) {
+        if (msgEl) msgEl.innerHTML = renderError(err.message);
+        btn.disabled = false;
+        btn.textContent = 'Reject';
+      }
+    });
+  });
 }
 
 function attachAdminGroupListeners() {
@@ -163,6 +258,10 @@ function initAdminListeners() {
   // Refresh groups
   document.getElementById('admin-refresh-groups-btn')?.addEventListener('click', loadAdminGroups);
 
-  // Load groups on open
+  // Refresh proposals
+  document.getElementById('admin-refresh-proposals-btn')?.addEventListener('click', loadAdminProposals);
+
+  // Load data on open
+  loadAdminProposals();
   loadAdminGroups();
 }

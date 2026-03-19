@@ -9,14 +9,14 @@ async function loadYesterdayData() {
   }
 }
 
-function renderSentenceCard(s, has_voted, maxVotes) {
+function renderSentenceCard(s, has_voted, maxVotes, wordText) {
   const isWinner = has_voted && s.vote_count === maxVotes && maxVotes > 0;
   const cardClass = s.i_voted ? 'voted' : (isWinner ? 'winner' : '');
 
   return `
     <div class="sentence-card ${cardClass}" data-sentence-id="${s.id}">
       ${isWinner ? '<div class="winner-badge">🏆 Top pick</div>' : ''}
-      <div class="sentence-card-text">"${escHtml(s.sentence)}"</div>
+      <div class="sentence-card-text">"${wordText ? highlightWord(s.sentence, wordText) : escHtml(s.sentence)}"</div>
       <div class="sentence-card-footer">
         <span class="sentence-author">
           ${escHtml(s.display_name || s.username)}

@@ -1,33 +1,42 @@
 'use strict';
 
-async function loadWordHistory() {
+async function loadAllWords() {
   try {
-    const data = await apiFetch('/words/history');
-    wordHistory = data.words || [];
+    const data = await apiFetch('/words/all');
+    allWords = data.words || [];
   } catch (err) {
-    wordHistory = [];
+    allWords = [];
   }
 }
 
 function renderDictionaryView() {
+  const filtered = dictFilter === 'played'
+    ? allWords.filter(w => w.is_played)
+    : allWords;
+
   return `
-    <div class="section-header">
+    <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; padding-right:16px;">
       <span class="section-title">📚 Dictionary</span>
+      <button class="propose-word-btn" id="propose-word-btn">+ Propose word</button>
     </div>
-    ${wordHistory.length === 0
+    <div class="dict-filter-row">
+      <button class="dict-filter-btn ${dictFilter === 'all' ? 'active' : ''}" id="dict-filter-all">All Words</button>
+      <button class="dict-filter-btn ${dictFilter === 'played' ? 'active' : ''}" id="dict-filter-played">Played</button>
+    </div>
+    ${filtered.length === 0
       ? `<div class="text-muted text-center" style="padding:40px 0;">
-          <div style="font-size:40px; margin-bottom:12px;">📖</div>
-          <p>No past words yet — come back after your groups play!</p>
+          <div style="font-size:40px; margin-bottom:12px;">${dictFilter === 'played' ? '✍️' : '📖'}</div>
+          <p>${dictFilter === 'played' ? 'No played words yet — submit a sentence to see them here.' : 'No words in the dictionary yet.'}</p>
         </div>`
-      : renderDictionaryAlpha()
+      : renderDictionaryAlpha(filtered)
     }
+    <div id="propose-modal-container"></div>
   `;
 }
 
-function renderDictionaryAlpha() {
-  // Group words by first letter
+function renderDictionaryAlpha(words) {
   const groups = {};
-  for (const w of wordHistory) {
+  for (const w of words) {
     const letter = w.word[0].toUpperCase();
     if (!groups[letter]) groups[letter] = [];
     groups[letter].push(w);
@@ -61,13 +70,44 @@ function renderDictCard(w) {
       <div class="dict-pos">${escHtml(w.part_of_speech)}</div>
       <div class="dict-def">${escHtml(w.definition)}</div>
       ${w.etymology ? `<div class="dict-def" style="font-size:13px; color:var(--text-muted); margin-top:8px;"><strong>Origin:</strong> ${escHtml(w.etymology)}</div>` : ''}
+      ${w.is_played && w.my_sentence ? `
+        <div class="dict-my-sentence">
+          <div class="dict-my-sentence-label">✍️ Your sentence</div>
+          "${highlightWord(w.my_sentence, w.word)}"
+        </div>
+      ` : ''}
       ${w.winning_sentence ? `
         <div class="dict-winning-sentence">
           <div class="dict-winning-label">🏆 Best sentence</div>
-          <div class="dict-winning-text">"${escHtml(w.winning_sentence)}"</div>
+          <div class="dict-winning-text">"${highlightWord(w.winning_sentence, w.word)}"</div>
           ${w.winning_author ? `<div class="dict-winning-author">— ${escHtml(w.winning_author)}</div>` : ''}
         </div>
       ` : ''}
+    </div>
+  `;
+}
+
+function renderProposeModal() {
+  return `
+    <div class="modal-overlay" id="propose-modal-overlay">
+      <div class="modal-sheet" role="dialog" aria-modal="true" aria-label="Propose a word">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div class="modal-title">Propose a Word</div>
+          <button class="modal-close-btn" id="propose-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <p style="font-size:13px; color:var(--text-muted); margin:0 0 20px;">
+          Suggest a word for the dictionary. An admin will review it before it enters rotation.
+        </p>
+        <div class="modal-form-group">
+          <input id="propose-word" type="text" placeholder="Word *" style="width:100%; box-sizing:border-box;" />
+          <input id="propose-pos" type="text" placeholder="Part of speech * (e.g. noun)" style="width:100%; box-sizing:border-box;" />
+          <textarea id="propose-def" placeholder="Definition *" rows="2" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
+          <input id="propose-pron" type="text" placeholder="Pronunciation (optional)" style="width:100%; box-sizing:border-box;" />
+          <textarea id="propose-etym" placeholder="Etymology (optional)" rows="2" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
+        </div>
+        <div id="propose-modal-msg"></div>
+        <button class="btn-primary" id="propose-submit-btn" style="width:100%; margin-top:8px;">Submit Proposal</button>
+      </div>
     </div>
   `;
 }
@@ -82,4 +122,87 @@ function initDictionaryListeners() {
       }
     });
   });
+
+  // Filter toggle
+  document.getElementById('dict-filter-all')?.addEventListener('click', () => {
+    if (dictFilter === 'all') return;
+    dictFilter = 'all';
+    renderPageContent();
+    initPageListeners();
+  });
+
+  document.getElementById('dict-filter-played')?.addEventListener('click', () => {
+    if (dictFilter === 'played') return;
+    dictFilter = 'played';
+    renderPageContent();
+    initPageListeners();
+  });
+
+  // Propose word modal
+  document.getElementById('propose-word-btn')?.addEventListener('click', () => {
+    const container = document.getElementById('propose-modal-container');
+    if (container) {
+      container.innerHTML = renderProposeModal();
+      initProposeModalListeners();
+    }
+  });
+}
+
+function initProposeModalListeners() {
+  // Close on overlay click or close button
+  document.getElementById('propose-modal-close')?.addEventListener('click', closeProposeModal);
+  document.getElementById('propose-modal-overlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'propose-modal-overlay') closeProposeModal();
+  });
+
+  document.getElementById('propose-submit-btn')?.addEventListener('click', async () => {
+    const wordEl = document.getElementById('propose-word');
+    const posEl = document.getElementById('propose-pos');
+    const defEl = document.getElementById('propose-def');
+    const pronEl = document.getElementById('propose-pron');
+    const etymEl = document.getElementById('propose-etym');
+    const msgEl = document.getElementById('propose-modal-msg');
+
+    const word = wordEl?.value.trim().toLowerCase();
+    const pos = posEl?.value.trim();
+    const def = defEl?.value.trim();
+    const pron = pronEl?.value.trim() || null;
+    const etym = etymEl?.value.trim() || null;
+
+    if (!word || !pos || !def) {
+      if (msgEl) msgEl.innerHTML = renderError('Word, part of speech, and definition are required.');
+      return;
+    }
+
+    // Client-side duplicate check against loaded word list
+    const alreadyExists = allWords.some(w => w.word.toLowerCase() === word);
+    if (alreadyExists) {
+      if (msgEl) msgEl.innerHTML = renderError(`"${escHtml(word)}" is already in the dictionary.`);
+      return;
+    }
+
+    const btn = document.getElementById('propose-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    try {
+      await apiFetch('/words/propose', {
+        method: 'POST',
+        body: JSON.stringify({ word, part_of_speech: pos, definition: def, pronunciation: pron, etymology: etym }),
+      });
+      if (msgEl) msgEl.innerHTML = renderSuccess(`"${escHtml(word)}" submitted! An admin will review it.`);
+      // Clear form on success
+      [wordEl, posEl, defEl, pronEl, etymEl].forEach(el => { if (el) el.value = ''; });
+      btn.textContent = 'Submitted ✓';
+    } catch (err) {
+      if (msgEl) msgEl.innerHTML = renderError(err.message);
+      btn.disabled = false;
+      btn.textContent = 'Submit Proposal';
+    }
+  });
+}
+
+function closeProposeModal() {
+  const container = document.getElementById('propose-modal-container');
+  if (container) container.innerHTML = '';
 }

@@ -79,6 +79,18 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+// ── Word highlight ────────────────────────────────────────────────────────────
+// Wraps all occurrences of `word` in a sentence with <span class="word-highlight">.
+// Input text is escaped for HTML; the returned string contains safe HTML.
+function highlightWord(sentence, word) {
+  if (!sentence || !word) return escHtml(sentence);
+  const escaped = escHtml(sentence);
+  const escapedWord = escHtml(word);
+  // Case-insensitive, whole-word boundary match
+  const re = new RegExp(`(${escapedWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return escaped.replace(re, '<span class="word-highlight">$1</span>');
+}
+
 // ── Main render orchestrator ──────────────────────────────────────────────────
 function renderApp() {
   const root = document.getElementById('root');
