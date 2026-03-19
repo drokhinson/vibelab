@@ -774,6 +774,93 @@ body {
 }
 .danger-btn:hover { background: rgba(220,53,69,0.08); }
 
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-secondary svg { width: 16px; height: 16px; }
+.btn-secondary:hover { background: var(--bg-pill); }
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.browse-status {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.browse-status.joined { color: var(--accent); }
+.browse-status.pending { color: #c59000; }
+
+/* ── Join request cards ─────────────────────────────────────────────────────── */
+.join-request-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.join-request-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.join-request-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.join-request-user {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.join-request-actions {
+  display: flex;
+  gap: 8px;
+}
+.approve-btn, .deny-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: opacity 0.15s;
+}
+.approve-btn {
+  background: var(--accent);
+  color: #fff;
+}
+.approve-btn svg { width: 18px; height: 18px; }
+.approve-btn:hover { opacity: 0.85; }
+.deny-btn {
+  background: rgba(220,53,69,0.1);
+  color: #dc3545;
+}
+.deny-btn:hover { opacity: 0.85; }
+
 /* ── Auth Screen ─────────────────────────────────────────────────────────────*/
 .auth-screen {
   display: flex;

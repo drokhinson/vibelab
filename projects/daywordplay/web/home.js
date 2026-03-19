@@ -132,9 +132,26 @@ function renderNoGroupPrompt() {
     <div class="no-group-prompt">
       <div class="emoji">👥</div>
       <h2>Join a Group</h2>
-      <p>You need to be in a group to see the word of the day. Search for a group or create your own!</p>
-      <button class="btn-primary" id="go-groups-btn">Find or Create a Group</button>
+      <p>Browse groups to request to join, enter a code, or create your own!</p>
+      <div style="display:flex; gap:8px; justify-content:center; margin-top:16px;">
+        <button class="btn-primary" id="browse-groups-btn">Browse Groups</button>
+        <button class="btn-secondary" id="join-code-home-btn">${icons.plus} Enter Code</button>
+      </div>
+      <button class="btn-link" id="create-group-home-btn" style="margin-top:12px; font-size:14px;">or create a new group</button>
     </div>
+
+    <div id="browse-groups-area" style="display:none; margin-top:16px;">
+      <div class="search-wrap" style="margin-bottom:12px;">
+        <span class="search-icon">${icons.search}</span>
+        <input type="text" id="browse-search-input" placeholder="Search groups…" />
+      </div>
+      <div id="browse-results" class="group-list">
+        <div class="loading" style="height:100px"></div>
+      </div>
+    </div>
+
+    ${showJoinGroupModal ? renderJoinModal() : ''}
+    ${showCreateGroupModal ? renderCreateModal() : ''}
   `;
 }
 
@@ -257,13 +274,46 @@ function initHomeListeners() {
     });
   });
 
-  // No-group prompt — navigate to profile to join/create
-  document.getElementById('go-groups-btn')?.addEventListener('click', () => {
-    currentView = 'profile';
+  // No-group prompt — browse, join by code, or create
+  document.getElementById('browse-groups-btn')?.addEventListener('click', async () => {
+    const area = document.getElementById('browse-groups-area');
+    if (area) {
+      area.style.display = area.style.display === 'none' ? 'block' : 'none';
+      if (area.style.display === 'block') {
+        await loadBrowseGroups('');
+      }
+    }
+  });
+
+  document.getElementById('join-code-home-btn')?.addEventListener('click', () => {
+    showJoinGroupModal = true;
+    showCreateGroupModal = false;
     renderPageContent();
     initPageListeners();
-    updateTabBar();
   });
+
+  document.getElementById('create-group-home-btn')?.addEventListener('click', () => {
+    showCreateGroupModal = true;
+    showJoinGroupModal = false;
+    renderPageContent();
+    initPageListeners();
+  });
+
+  // Browse search
+  const browseInput = document.getElementById('browse-search-input');
+  if (browseInput) {
+    let browseTimer;
+    browseInput.addEventListener('input', (e) => {
+      clearTimeout(browseTimer);
+      browseTimer = setTimeout(() => loadBrowseGroups(e.target.value), 400);
+    });
+  }
+
+  // Join modal listeners (for no-group state)
+  initJoinCreateModalListeners();
+
+  // Attach request-to-join listeners on browse results
+  attachBrowseJoinListeners();
 
   // Live word-presence check — enable/disable submit button
   const sentenceInput = document.getElementById('sentence-input');
@@ -309,4 +359,150 @@ function initHomeListeners() {
 
   // Vote listeners are always attached since vote tab may be visible
   initVoteListeners();
+}
+
+
+// ── Browse groups (for no-group users) ─────────────────────────────────────
+
+async function loadBrowseGroups(query) {
+  const resultsEl = document.getElementById('browse-results');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = '<div class="loading" style="height:100px"></div>';
+
+  try {
+    const data = await apiFetch(`/groups?q=${encodeURIComponent(query || '')}`);
+    const groups = data.groups || [];
+    if (!groups.length) {
+      resultsEl.innerHTML = '<div class="text-muted text-center" style="padding:24px 0;">No groups found. Try creating one!</div>';
+      return;
+    }
+    resultsEl.innerHTML = groups.map(g => renderBrowseGroupCard(g)).join('');
+    attachBrowseJoinListeners();
+  } catch (err) {
+    resultsEl.innerHTML = renderError('Could not load groups.');
+  }
+}
+
+function renderBrowseGroupCard(g) {
+  const actionHtml = g.is_member
+    ? `<span class="browse-status joined">${icons.check} Joined</span>`
+    : g.has_pending_request
+      ? `<span class="browse-status pending">Requested</span>`
+      : `<button class="join-btn" data-request-join="${g.id}">Request to Join</button>`;
+
+  return `
+    <div class="group-card">
+      <div class="group-card-info">
+        <div class="group-name">${escHtml(g.name)}</div>
+        <div class="group-meta">${g.member_count} member${g.member_count !== 1 ? 's' : ''}</div>
+      </div>
+      ${actionHtml}
+    </div>
+  `;
+}
+
+function attachBrowseJoinListeners() {
+  document.querySelectorAll('[data-request-join]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const groupId = btn.dataset.requestJoin;
+      btn.disabled = true;
+      btn.textContent = 'Requesting…';
+      try {
+        await apiFetch(`/groups/${groupId}/request-join`, { method: 'POST' });
+        btn.outerHTML = '<span class="browse-status pending">Requested</span>';
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Request to Join';
+        btn.closest('.group-card')?.insertAdjacentHTML('beforeend',
+          `<div class="error-banner" style="font-size:12px; margin-top:4px;">${escHtml(err.message)}</div>`
+        );
+      }
+    });
+  });
+}
+
+function initJoinCreateModalListeners() {
+  // Close modals
+  document.getElementById('join-modal-close')?.addEventListener('click', () => {
+    showJoinGroupModal = false;
+    renderPageContent();
+    initPageListeners();
+  });
+  document.getElementById('create-modal-close')?.addEventListener('click', () => {
+    showCreateGroupModal = false;
+    renderPageContent();
+    initPageListeners();
+  });
+  document.getElementById('join-modal-overlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'join-modal-overlay') { showJoinGroupModal = false; renderPageContent(); initPageListeners(); }
+  });
+  document.getElementById('create-modal-overlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'create-modal-overlay') { showCreateGroupModal = false; renderPageContent(); initPageListeners(); }
+  });
+
+  // Join code uppercase
+  const codeInput = document.getElementById('join-code-input');
+  if (codeInput) {
+    codeInput.addEventListener('input', (e) => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+  }
+
+  // Join submit
+  document.getElementById('join-code-submit')?.addEventListener('click', async () => {
+    const code = document.getElementById('join-code-input')?.value.trim().toUpperCase();
+    const errEl = document.getElementById('join-error');
+    if (!code || code.length !== 4) {
+      if (errEl) errEl.innerHTML = renderError('Enter a valid 4-character code.');
+      return;
+    }
+    const btn = document.getElementById('join-code-submit');
+    btn.disabled = true;
+    btn.textContent = 'Joining…';
+    try {
+      const data = await apiFetch('/groups/join', { method: 'POST', body: JSON.stringify({ code }) });
+      const newGroup = data.group;
+      myGroups.push(newGroup);
+      activeGroupId = newGroup.id;
+      setStoredActiveGroup(activeGroupId);
+      showJoinGroupModal = false;
+      todayData = null;
+      await loadTodayWord();
+      renderPageContent();
+      initPageListeners();
+    } catch (err) {
+      if (errEl) errEl.innerHTML = renderError(err.message);
+      btn.disabled = false;
+      btn.textContent = 'Join Group';
+    }
+  });
+
+  // Create submit
+  document.getElementById('create-group-submit')?.addEventListener('click', async () => {
+    const name = document.getElementById('create-name-input')?.value.trim();
+    const errEl = document.getElementById('create-error');
+    if (!name || name.length < 2) {
+      if (errEl) errEl.innerHTML = renderError('Please enter a group name (at least 2 characters).');
+      return;
+    }
+    const btn = document.getElementById('create-group-submit');
+    btn.disabled = true;
+    btn.textContent = 'Creating…';
+    try {
+      const data = await apiFetch('/groups', { method: 'POST', body: JSON.stringify({ name }) });
+      const newGroup = data.group;
+      myGroups.push(newGroup);
+      activeGroupId = newGroup.id;
+      setStoredActiveGroup(activeGroupId);
+      showCreateGroupModal = false;
+      todayData = null;
+      await loadTodayWord();
+      renderPageContent();
+      initPageListeners();
+    } catch (err) {
+      if (errEl) errEl.innerHTML = renderError(err.message);
+      btn.disabled = false;
+      btn.textContent = 'Create Group';
+    }
+  });
 }

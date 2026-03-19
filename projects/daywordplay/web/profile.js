@@ -40,6 +40,8 @@ function renderProfileView() {
       ` : `<p class="text-muted">You haven't joined any groups yet.</p>`}
     </div>
 
+    <div id="join-requests-section" style="margin-top:24px;"></div>
+
     <div style="margin-top:32px; padding-bottom:24px;">
       <button class="danger-btn" id="logout-btn">Log Out</button>
       <div style="margin-top:12px; text-align:center;">
@@ -74,6 +76,9 @@ function renderProfileGroupCard(g) {
 }
 
 function initProfileListeners() {
+  // Load pending join requests for all user's groups
+  loadAllJoinRequests();
+
   document.getElementById('logout-btn')?.addEventListener('click', () => {
     if (!confirm('Log out of Day Word Play?')) return;
     clearToken();
@@ -291,4 +296,97 @@ async function leaveGroup(groupId) {
   } catch (err) {
     alert(`Could not leave group: ${err.message}`);
   }
+}
+
+
+// ── Join request approval ────────────────────────────────────────────────────
+
+async function loadAllJoinRequests() {
+  const section = document.getElementById('join-requests-section');
+  if (!section || !myGroups.length) return;
+
+  // Fetch pending requests for all groups in parallel
+  const results = await Promise.all(
+    myGroups.map(async (g) => {
+      try {
+        const data = await apiFetch(`/groups/${g.id}/join-requests`);
+        return { group: g, requests: data.requests || [] };
+      } catch (_) {
+        return { group: g, requests: [] };
+      }
+    })
+  );
+
+  // Only show groups that have pending requests
+  const withRequests = results.filter(r => r.requests.length > 0);
+  if (!withRequests.length) {
+    section.innerHTML = '';
+    return;
+  }
+
+  section.innerHTML = `
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span style="font-size:20px; font-weight:700; color:var(--text-primary);">Join Requests</span>
+      <span class="badge" style="background:var(--accent); color:#fff; border-radius:10px; padding:2px 8px; font-size:12px; font-weight:600;">${withRequests.reduce((n, r) => n + r.requests.length, 0)}</span>
+    </div>
+    ${withRequests.map(({ group, requests }) => `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px;">${escHtml(group.name)}</div>
+        ${requests.map(req => `
+          <div class="join-request-card" data-req-id="${req.id}" data-group-id="${group.id}">
+            <div class="join-request-info">
+              <span class="join-request-name">${escHtml(req.display_name || req.username)}</span>
+              <span class="join-request-user">@${escHtml(req.username)}</span>
+            </div>
+            <div class="join-request-actions">
+              <button class="approve-btn" data-approve="${req.id}" data-group="${group.id}" title="Approve">${icons.check}</button>
+              <button class="deny-btn" data-deny="${req.id}" data-group="${group.id}" title="Deny">✕</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `).join('')}
+  `;
+
+  attachJoinRequestListeners();
+}
+
+function attachJoinRequestListeners() {
+  document.querySelectorAll('[data-approve]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const requestId = btn.dataset.approve;
+      const groupId = btn.dataset.group;
+      const card = btn.closest('.join-request-card');
+      btn.disabled = true;
+      try {
+        await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'approve' }),
+        });
+        if (card) card.innerHTML = '<div style="color:var(--accent); font-size:13px; padding:8px 0;">Approved</div>';
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message);
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-deny]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const requestId = btn.dataset.deny;
+      const groupId = btn.dataset.group;
+      const card = btn.closest('.join-request-card');
+      btn.disabled = true;
+      try {
+        await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'deny' }),
+        });
+        if (card) card.innerHTML = '<div style="color:var(--text-muted); font-size:13px; padding:8px 0;">Denied</div>';
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message);
+      }
+    });
+  });
 }
