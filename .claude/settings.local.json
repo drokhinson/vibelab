@@ -5,7 +5,10 @@
       "Bash(grep:*)",
       "Bash(git diff:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git -C /c/CodeProjects/vibelab add CLAUDE.md)",
+      "Bash(git -C:*)"
     ]
   }
 }

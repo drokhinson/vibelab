@@ -30,6 +30,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "projects/plant-planner/web", "-l", "5504", "--no-clipboard"],
       "port": 5504
+    },
+    {
+      "name": "daywordplay-web",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\npx.cmd",
+      "runtimeArgs": ["serve", "projects/daywordplay/web", "-l", "5000", "--no-clipboard"],
+      "port": 5000
     }
   ]
 }
