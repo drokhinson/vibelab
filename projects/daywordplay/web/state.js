@@ -16,7 +16,8 @@ let todayData = null;          // { word, submitted, my_sentence, submission_cou
 let cachedDailyWord = null;    // persists across group switches (same word for all groups)
 let yesterdayData = null;      // { word, sentences, has_voted }
 let wordHistory = [];          // all past words from user's groups with winning sentences
-let allWords = [];             // all words in the word bank (for dictionary view)
+let allWords = [];             // all words in the word bank (for dictionary "All Words" view, loaded on demand)
+let playedWords = [];          // words the user has played (for dictionary "Played" view, loaded on demand)
 let reusableSentences = [];    // sentences user submitted in other groups for today's word
 let bookmarks = [];            // saved/bookmarked words
 

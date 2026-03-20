@@ -14,38 +14,35 @@ async function _fetchAndCacheToday(groupId) {
 }
 
 async function loadInitialData() {
-  try {
-    // Load user's groups
-    const groupsData = await apiFetch('/groups/mine');
-    myGroups = groupsData.groups || [];
+  // Round trip 1: verify auth + fetch groups in parallel
+  const [userData, groupsData] = await Promise.all([
+    apiFetch('/auth/me'),
+    apiFetch('/groups/mine'),
+  ]);
+  currentUser = userData;
+  myGroups = groupsData.groups || [];
 
-    // Restore or pick active group
-    const stored = getStoredActiveGroup();
-    if (stored && myGroups.find(g => g.id === stored)) {
-      activeGroupId = stored;
-    } else if (myGroups.length > 0) {
-      activeGroupId = myGroups[0].id;
+  // Restore or pick active group
+  const stored = getStoredActiveGroup();
+  activeGroupId = (stored && myGroups.find(g => g.id === stored))
+    ? stored
+    : myGroups[0]?.id || null;
+
+  // Round trip 2: all group data in parallel (no dictionary)
+  await Promise.all([
+    ...myGroups.map(g => _fetchAndCacheToday(g.id)),
+    _bulkLoadYesterday(),
+    _bulkLoadLeaderboards(),
+    activeGroupId ? loadReusableSentences() : Promise.resolve(),
+  ]);
+
+  // Set todayData from cache — no extra fetch needed
+  if (activeGroupId) {
+    const cached = dwpCache.get('today', activeGroupId);
+    if (cached) {
+      todayData = cached;
+      cachedDailyWord = cached.word;
     }
-
-    // Bulk-load today's word for ALL groups + dictionary in parallel
-    const parallel = [loadAllWords(), ...myGroups.map(g => _fetchAndCacheToday(g.id))];
-    await Promise.all(parallel);
-
-    // Set todayData from cache — no extra fetch needed
-    if (activeGroupId) {
-      const cached = dwpCache.get('today', activeGroupId);
-      if (cached) {
-        todayData = cached;
-        cachedDailyWord = cached.word;
-      }
-    }
-
-    // loadReusableSentences depends on todayData, so run after
-    if (activeGroupId) {
-      await loadReusableSentences();
-    }
-  } catch (err) {
-    console.error('Failed to load initial data:', err);
   }
 }
 
@@ -81,10 +78,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Verify token by fetching /auth/me
+  // Verify token + load all initial data in parallel rounds
   try {
-    const userData = await apiFetch('/auth/me');
-    currentUser = userData;
     await loadInitialData();
   } catch (err) {
     // Token expired or invalid
@@ -120,9 +115,12 @@ function initShellListeners() {
     renderPageContent();
     initPageListeners();
     updateTabBar();
-    await loadAllWords();
-    renderPageContent();
-    initPageListeners();
+    // Auto-load played words for the default "Played" view if not yet cached
+    if (dictFilter === 'played' && playedWords.length === 0) {
+      await loadPlayedWords();
+      renderPageContent();
+      initPageListeners();
+    }
   });
 
   document.getElementById('tab-stats')?.addEventListener('click', async () => {

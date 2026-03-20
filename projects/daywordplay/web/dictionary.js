@@ -9,10 +9,18 @@ async function loadAllWords() {
   }
 }
 
+async function loadPlayedWords() {
+  try {
+    const data = await apiFetch('/words/played');
+    playedWords = data.words || [];
+  } catch (err) {
+    playedWords = [];
+  }
+}
+
 function renderDictionaryView() {
-  const filtered = dictFilter === 'played'
-    ? allWords.filter(w => w.is_played)
-    : allWords;
+  const isLoaded = dictFilter === 'played' ? playedWords.length > 0 : allWords.length > 0;
+  const filtered = dictFilter === 'played' ? playedWords : allWords;
 
   return `
     <div class="dict-sticky-header">
@@ -26,12 +34,14 @@ function renderDictionaryView() {
       </div>
     </div>
     <div class="dict-scroll-area">
-      ${filtered.length === 0
-        ? `<div class="text-muted text-center" style="padding:40px 0;">
-            <div style="font-size:40px; margin-bottom:12px;">${dictFilter === 'played' ? '✍️' : '📖'}</div>
-            <p>${dictFilter === 'played' ? 'No played words yet — submit a sentence to see them here.' : 'No words in the dictionary yet.'}</p>
-          </div>`
-        : renderDictionaryAlpha(filtered)
+      ${!isLoaded
+        ? `<div class="loading" style="height:40vh"></div>`
+        : filtered.length === 0
+          ? `<div class="text-muted text-center" style="padding:40px 0;">
+              <div style="font-size:40px; margin-bottom:12px;">${dictFilter === 'played' ? '✍️' : '📖'}</div>
+              <p>${dictFilter === 'played' ? 'No played words yet — submit a sentence to see them here.' : 'No words in the dictionary yet.'}</p>
+            </div>`
+          : renderDictionaryAlpha(filtered)
       }
       <div id="propose-modal-container"></div>
     </div>
@@ -202,19 +212,29 @@ function initDictionaryListeners() {
     });
   });
 
-  // Filter toggle
-  document.getElementById('dict-filter-all')?.addEventListener('click', () => {
+  // Filter toggle — lazy-load data on first selection
+  document.getElementById('dict-filter-all')?.addEventListener('click', async () => {
     if (dictFilter === 'all') return;
     dictFilter = 'all';
     renderPageContent();
     initPageListeners();
+    if (allWords.length === 0) {
+      await loadAllWords();
+      renderPageContent();
+      initPageListeners();
+    }
   });
 
-  document.getElementById('dict-filter-played')?.addEventListener('click', () => {
+  document.getElementById('dict-filter-played')?.addEventListener('click', async () => {
     if (dictFilter === 'played') return;
     dictFilter = 'played';
     renderPageContent();
     initPageListeners();
+    if (playedWords.length === 0) {
+      await loadPlayedWords();
+      renderPageContent();
+      initPageListeners();
+    }
   });
 
   // Propose word modal
@@ -253,11 +273,13 @@ function initProposeModalListeners() {
       return;
     }
 
-    // Client-side duplicate check against loaded word list
-    const alreadyExists = allWords.some(w => w.word.toLowerCase() === word);
-    if (alreadyExists) {
-      if (msgEl) msgEl.innerHTML = renderError(`"${escHtml(word)}" is already in the dictionary.`);
-      return;
+    // Client-side duplicate check (only when full word list is loaded; server also validates)
+    if (allWords.length > 0) {
+      const alreadyExists = allWords.some(w => w.word.toLowerCase() === word);
+      if (alreadyExists) {
+        if (msgEl) msgEl.innerHTML = renderError(`"${escHtml(word)}" is already in the dictionary.`);
+        return;
+      }
     }
 
     const btn = document.getElementById('propose-submit-btn');
