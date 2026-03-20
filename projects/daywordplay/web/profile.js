@@ -82,6 +82,7 @@ function initProfileListeners() {
   document.getElementById('logout-btn')?.addEventListener('click', () => {
     if (!confirm('Log out of Day Word Play?')) return;
     clearToken();
+    dwpCache.clear();
     currentUser = null;
     myGroups = [];
     activeGroupId = null;

@@ -2,9 +2,17 @@
 
 async function loadTodayWord() {
   if (!activeGroupId) return;
+  const cached = dwpCache.get('today', activeGroupId);
+  if (cached) {
+    todayData = cached;
+    cachedDailyWord = cached.word;
+    return;
+  }
   try {
-    todayData = await apiFetch(`/groups/${activeGroupId}/today`);
-    cachedDailyWord = todayData.word;
+    const data = await apiFetch(`/groups/${activeGroupId}/today`);
+    dwpCache.set('today', activeGroupId, data);
+    todayData = data;
+    cachedDailyWord = data.word;
   } catch (err) {
     todayData = null;
   }
@@ -240,24 +248,45 @@ function initHomeListeners() {
     btn.addEventListener('click', async () => {
       activeGroupId = btn.dataset.groupSwitch;
       setStoredActiveGroup(activeGroupId);
-      // Keep word visible during switch (same word for all groups)
-      if (cachedDailyWord) {
-        todayData = { word: cachedDailyWord, submitted: false, my_sentence: null, submission_count: 0, member_count: 0, bookmarked: false, _loading: true };
-      } else {
-        todayData = null;
-      }
-      yesterdayData = null;
-      reusableSentences = [];
-      renderPageContent();
-      initHomeListeners();
+
       if (activeWordTab === 'today') {
-        await loadTodayWord();
-        await loadReusableSentences(); // depends on todayData from above
+        // Optimistic render with cached word while we check today cache
+        const cachedToday = dwpCache.get('today', activeGroupId);
+        if (cachedToday) {
+          todayData = cachedToday;
+          cachedDailyWord = cachedToday.word;
+        } else if (cachedDailyWord) {
+          todayData = { word: cachedDailyWord, submitted: false, my_sentence: null, submission_count: 0, member_count: 0, bookmarked: false, _loading: true };
+        } else {
+          todayData = null;
+        }
+        reusableSentences = [];
+        renderPageContent();
+        initHomeListeners();
+        if (!cachedToday) {
+          await loadTodayWord();
+        }
+        await loadReusableSentences();
+        renderPageContent();
+        initPageListeners();
       } else {
-        await loadYesterdayData();
+        // Vote tab — render from cache immediately, then refresh vote counts
+        const cachedYesterday = dwpCache.get('yesterday', activeGroupId);
+        if (cachedYesterday) {
+          yesterdayData = cachedYesterday;
+          renderPageContent();
+          initPageListeners();
+          // Non-blocking lightweight refresh of vote counts
+          _refreshVoteCounts(activeGroupId);
+        } else {
+          yesterdayData = null;
+          renderPageContent();
+          initHomeListeners();
+          await loadYesterdayData();
+          renderPageContent();
+          initPageListeners();
+        }
       }
-      renderPageContent();
-      initPageListeners();
     });
   });
 
@@ -347,6 +376,8 @@ function initHomeListeners() {
         method: 'POST',
         body: JSON.stringify({ sentence }),
       });
+      // Invalidate cache so we fetch fresh submitted state
+      dwpCache.set('today', activeGroupId, null);
       await loadTodayWord();
       renderPageContent();
       initPageListeners();

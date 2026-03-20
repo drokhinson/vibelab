@@ -2,10 +2,39 @@
 
 async function loadYesterdayData() {
   if (!activeGroupId) return;
+  const cached = dwpCache.get('yesterday', activeGroupId);
+  if (cached) {
+    yesterdayData = cached;
+    return;
+  }
+  // Cache miss — bulk-load all groups in parallel on first visit
+  await _bulkLoadYesterday();
+  yesterdayData = dwpCache.get('yesterday', activeGroupId) || null;
+}
+
+async function _bulkLoadYesterday() {
+  await Promise.all(myGroups.map(async (g) => {
+    if (dwpCache.get('yesterday', g.id)) return; // already cached
+    try {
+      const data = await apiFetch(`/groups/${g.id}/yesterday`);
+      dwpCache.set('yesterday', g.id, data);
+    } catch (_) {}
+  }));
+}
+
+// Lightweight vote-count refresh for the active group. Called non-blocking on group switch.
+async function _refreshVoteCounts(groupId) {
   try {
-    yesterdayData = await apiFetch(`/groups/${activeGroupId}/yesterday`);
-  } catch (err) {
-    yesterdayData = null;
+    const data = await apiFetch(`/groups/${groupId}/vote-counts`);
+    dwpCache.updateVoteCounts(groupId, data.vote_counts, data.has_voted);
+    // Only update global state if the group is still active when response arrives
+    if (groupId === activeGroupId) {
+      yesterdayData = dwpCache.get('yesterday', activeGroupId);
+      renderPageContent();
+      initPageListeners();
+    }
+  } catch (_) {
+    // Silently fail — stale counts are acceptable
   }
 }
 
@@ -43,7 +72,14 @@ function initVoteListeners() {
       btn.disabled = true;
       try {
         await apiFetch(`/sentences/${sentenceId}/vote`, { method: 'POST' });
-        await loadYesterdayData();
+        // Optimistic in-place update — no re-fetch needed
+        const updated = dwpCache.patchVoteOptimistic(activeGroupId, sentenceId);
+        if (updated) {
+          yesterdayData = updated;
+        } else {
+          // Cache miss fallback — full re-fetch
+          await loadYesterdayData();
+        }
         renderPageContent();
         initPageListeners();
       } catch (err) {

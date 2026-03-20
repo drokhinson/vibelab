@@ -20,6 +20,9 @@ let allWords = [];             // all words in the word bank (for dictionary vie
 let reusableSentences = [];    // sentences user submitted in other groups for today's word
 let bookmarks = [];            // saved/bookmarked words
 
+// ── Leaderboard state ─────────────────────────────────────────────────────────
+let leaderboardData = null;    // { group_name, group_code, leaderboard[] }
+
 // ── UI state ──────────────────────────────────────────────────────────────────
 let currentView = 'home';      // home | dictionary | profile | leaderboard | admin
 let activeWordTab = 'today';   // 'today' | 'vote'

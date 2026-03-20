@@ -19,6 +19,7 @@ async function apiFetch(path, opts = {}) {
 
   if (res.status === 401) {
     clearToken();
+    dwpCache.clear();
     currentUser = null;
     renderApp();
     throw new Error('Session expired. Please log in again.');

@@ -1,14 +1,25 @@
 'use strict';
 
-let leaderboardData = null;
-
 async function loadLeaderboard() {
   if (!activeGroupId) return;
-  try {
-    leaderboardData = await apiFetch(`/groups/${activeGroupId}/leaderboard`);
-  } catch (err) {
-    leaderboardData = null;
+  const cached = dwpCache.get('leaderboard', activeGroupId);
+  if (cached) {
+    leaderboardData = cached;
+    return;
   }
+  // Cache miss — bulk-load all groups in parallel on first visit
+  await _bulkLoadLeaderboards();
+  leaderboardData = dwpCache.get('leaderboard', activeGroupId) || null;
+}
+
+async function _bulkLoadLeaderboards() {
+  await Promise.all(myGroups.map(async (g) => {
+    if (dwpCache.get('leaderboard', g.id)) return; // already cached
+    try {
+      const data = await apiFetch(`/groups/${g.id}/leaderboard`);
+      dwpCache.set('leaderboard', g.id, data);
+    } catch (_) {}
+  }));
 }
 
 function renderLeaderboardView() {
@@ -65,16 +76,23 @@ function renderLeaderboardEntry(entry) {
 }
 
 function initLeaderboardListeners() {
-  // Group switcher — reload leaderboard when switching groups
+  // Group switcher — use cache first, only fetch on miss
   document.querySelectorAll('[data-group-switch]').forEach(btn => {
     btn.addEventListener('click', async () => {
       activeGroupId = btn.dataset.groupSwitch;
       setStoredActiveGroup(activeGroupId);
-      leaderboardData = null;
-      renderPageContent();
-      if (activeGroupId) await loadLeaderboard();
-      renderPageContent();
-      initPageListeners();
+      const cached = dwpCache.get('leaderboard', activeGroupId);
+      if (cached) {
+        leaderboardData = cached;
+        renderPageContent();
+        initPageListeners();
+      } else {
+        leaderboardData = null;
+        renderPageContent();
+        await loadLeaderboard();
+        renderPageContent();
+        initPageListeners();
+      }
     });
   });
 }

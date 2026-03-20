@@ -52,3 +52,14 @@ class ProposeWordBody(BaseModel):
     definition: str
     pronunciation: Optional[str] = None
     etymology: Optional[str] = None
+
+
+class VoteCountItem(BaseModel):
+    sentence_id: str
+    vote_count: int
+    i_voted: bool
+
+
+class VoteCountsResponse(BaseModel):
+    vote_counts: list[VoteCountItem]
+    has_voted: bool

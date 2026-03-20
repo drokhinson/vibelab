@@ -1,6 +1,18 @@
 'use strict';
 
 // ── Boot sequence ─────────────────────────────────────────────────────────────
+
+// Fetch today's data for one group and cache it. Swallows per-group errors.
+async function _fetchAndCacheToday(groupId) {
+  try {
+    const data = await apiFetch(`/groups/${groupId}/today`);
+    dwpCache.set('today', groupId, data);
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function loadInitialData() {
   try {
     // Load user's groups
@@ -15,14 +27,20 @@ async function loadInitialData() {
       activeGroupId = myGroups[0].id;
     }
 
-    // Load dictionary, today's word, and reusable sentences in parallel
-    const parallel = [loadAllWords()];
-    if (activeGroupId) {
-      parallel.push(loadTodayWord());
-    }
+    // Bulk-load today's word for ALL groups + dictionary in parallel
+    const parallel = [loadAllWords(), ...myGroups.map(g => _fetchAndCacheToday(g.id))];
     await Promise.all(parallel);
 
-    // loadReusableSentences depends on todayData, so run after loadTodayWord
+    // Set todayData from cache — no extra fetch needed
+    if (activeGroupId) {
+      const cached = dwpCache.get('today', activeGroupId);
+      if (cached) {
+        todayData = cached;
+        cachedDailyWord = cached.word;
+      }
+    }
+
+    // loadReusableSentences depends on todayData, so run after
     if (activeGroupId) {
       await loadReusableSentences();
     }
@@ -109,7 +127,6 @@ function initShellListeners() {
 
   document.getElementById('tab-stats')?.addEventListener('click', async () => {
     currentView = 'leaderboard';
-    leaderboardData = null;
     renderPageContent();
     if (activeGroupId) await loadLeaderboard();
     renderPageContent();

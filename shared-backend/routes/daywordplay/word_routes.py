@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, Path
 from db import get_supabase
 
 from . import router
-from .models import ProposeWordBody, ReusableSentencesResponse, SubmitSentenceBody
+from .models import ProposeWordBody, ReusableSentencesResponse, SubmitSentenceBody, VoteCountItem, VoteCountsResponse
 from .dependencies import get_current_user
 
 
@@ -242,6 +242,54 @@ async def get_yesterday(group_id: str, current_user: dict = Depends(get_current_
         "sentences": enriched,
         "has_voted": has_voted,
     }
+
+
+@router.get(
+    "/groups/{group_id}/vote-counts",
+    response_model=VoteCountsResponse,
+    status_code=200,
+    summary="Lightweight vote counts for yesterday's sentences",
+)
+async def get_vote_counts(
+    group_id: str = Path(..., description="Group ID"),
+    current_user: dict = Depends(get_current_user),
+) -> VoteCountsResponse:
+    """Return only vote counts and i_voted flags for yesterday's sentences. No sentence text or author info."""
+    sb = get_supabase()
+    _verify_member(sb, group_id, current_user["user_id"])
+
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+
+    sentences_result = sb.table("daywordplay_sentences").select(
+        "id"
+    ).eq("group_id", group_id).eq("assigned_date", yesterday).execute()
+
+    sentence_ids = [s["id"] for s in (sentences_result.data or [])]
+
+    if not sentence_ids:
+        return VoteCountsResponse(vote_counts=[], has_voted=False)
+
+    votes = sb.table("daywordplay_votes").select("sentence_id").in_("sentence_id", sentence_ids).execute()
+    vote_counts: dict[str, int] = {}
+    for v in (votes.data or []):
+        sid = v["sentence_id"]
+        vote_counts[sid] = vote_counts.get(sid, 0) + 1
+
+    my_vote_result = sb.table("daywordplay_votes").select("sentence_id").eq(
+        "voter_user_id", current_user["user_id"]
+    ).in_("sentence_id", sentence_ids).execute()
+    my_votes = {v["sentence_id"] for v in (my_vote_result.data or [])}
+
+    items = [
+        VoteCountItem(
+            sentence_id=sid,
+            vote_count=vote_counts.get(sid, 0),
+            i_voted=sid in my_votes,
+        )
+        for sid in sentence_ids
+    ]
+
+    return VoteCountsResponse(vote_counts=items, has_voted=len(my_votes) > 0)
 
 
 @router.post("/sentences/{sentence_id}/vote")
