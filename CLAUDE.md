@@ -232,10 +232,22 @@ bash scaffold.sh my-app "My App" "Description"
 # Then fill in STRUCTURE.md and implement routes + web/
 ```
 
+### Run the backend locally (always use venv)
+All local backend work must run inside a virtual environment — never install packages globally.
+```bash
+cd shared-backend
+python -m venv .venv                  # create once
+source .venv/Scripts/activate         # Windows (Git Bash)
+# source .venv/bin/activate           # macOS / Linux
+pip install -r requirements.txt       # install deps inside venv
+uvicorn main:app --reload             # starts on http://localhost:8000
+```
+`.venv/` is gitignored. Re-run `pip install -r requirements.txt` after pulling changes that add new deps.
+
 ### Add an API endpoint to an existing project
 1. Edit the relevant file in `shared-backend/routes/[project]/` (e.g. `account_routes.py`)
 2. Update STRUCTURE.md → API Endpoints section
-3. Test: `uvicorn main:app --reload` in `shared-backend/`
+3. Test locally using the venv workflow above
 4. Push — Railway auto-deploys
 
 ### Add a React Native screen
