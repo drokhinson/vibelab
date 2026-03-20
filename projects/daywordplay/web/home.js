@@ -208,6 +208,12 @@ function renderSentenceSection(submitted, my_sentence, wordText) {
     `;
   }
 
+  const unsubmittedOtherCount = myGroups.filter(g => {
+    if (g.id === activeGroupId) return false;
+    const cache = dwpCache.get('today', g.id);
+    return !cache || !cache.submitted;
+  }).length;
+
   return `
     <div class="sentence-section">
       <h3>Write your sentence</h3>
@@ -217,6 +223,7 @@ function renderSentenceSection(submitted, my_sentence, wordText) {
         <div class="submit-hint" id="submit-hint">Include the word <em>${escHtml(wordText)}</em> to unlock submit</div>
         <div class="sentence-submit-row">
           <button class="btn-primary" id="submit-sentence-btn" disabled>Submit</button>
+          ${unsubmittedOtherCount > 0 ? `<button class="btn-secondary" id="submit-all-btn" disabled>Submit to All</button>` : ''}
         </div>
       </div>
       <div id="sentence-error"></div>
@@ -355,6 +362,8 @@ function initHomeListeners() {
       const val = sentenceInput.value;
       const hasWord = wordText && val.toLowerCase().includes(wordText.toLowerCase());
       submitBtn.disabled = !hasWord;
+      const submitAllBtn = document.getElementById('submit-all-btn');
+      if (submitAllBtn) submitAllBtn.disabled = !hasWord;
       if (hintEl) hintEl.style.display = hasWord ? 'none' : '';
     });
   }
@@ -371,21 +380,68 @@ function initHomeListeners() {
     const btn = document.getElementById('submit-sentence-btn');
     btn.disabled = true;
     btn.textContent = 'Submitting…';
+    // Snapshot group at click time — user may switch groups before the await resolves
+    const submittedGroupId = activeGroupId;
     try {
-      await apiFetch(`/groups/${activeGroupId}/sentences`, {
+      await apiFetch(`/groups/${submittedGroupId}/sentences`, {
         method: 'POST',
         body: JSON.stringify({ sentence }),
       });
-      // Invalidate cache so we fetch fresh submitted state
-      dwpCache.set('today', activeGroupId, null);
-      await loadTodayWord();
-      renderPageContent();
-      initPageListeners();
+      // Refresh cache for the group we submitted to, not whatever is active now
+      dwpCache.set('today', submittedGroupId, null);
+      const fresh = await apiFetch(`/groups/${submittedGroupId}/today`);
+      dwpCache.set('today', submittedGroupId, fresh);
+      // Only update UI if user is still on the same group
+      if (activeGroupId === submittedGroupId) {
+        todayData = fresh;
+        cachedDailyWord = fresh.word;
+        renderPageContent();
+        initPageListeners();
+      }
     } catch (err) {
       if (errEl) errEl.innerHTML = renderError(err.message);
       btn.disabled = false;
       btn.textContent = 'Submit';
     }
+  });
+
+  // Submit to All — submit same sentence to every group that hasn't submitted today
+  document.getElementById('submit-all-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('sentence-input');
+    const sentence = input?.value.trim();
+    if (!sentence || sentence.length < 5) return;
+
+    const btn = document.getElementById('submit-all-btn');
+    const submitBtn = document.getElementById('submit-sentence-btn');
+    btn.disabled = true;
+    submitBtn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    // Snapshot unsubmitted groups and active group at click time
+    const groupsToSubmit = myGroups.filter(g => {
+      const cache = dwpCache.get('today', g.id);
+      return !cache || !cache.submitted;
+    });
+    const snapshotActiveGroupId = activeGroupId;
+
+    // Submit + refresh all groups in parallel
+    await Promise.all(groupsToSubmit.map(async g => {
+      try {
+        await apiFetch(`/groups/${g.id}/sentences`, {
+          method: 'POST',
+          body: JSON.stringify({ sentence }),
+        });
+        dwpCache.set('today', g.id, null);
+        const fresh = await apiFetch(`/groups/${g.id}/today`);
+        dwpCache.set('today', g.id, fresh);
+      } catch (_) {}  // skip groups already submitted or on error
+    }));
+
+    // Refresh UI for current active group (may differ from snapshot)
+    const cached = dwpCache.get('today', activeGroupId);
+    if (cached) { todayData = cached; cachedDailyWord = cached.word; }
+    renderPageContent();
+    initPageListeners();
   });
 
   // Vote listeners are always attached since vote tab may be visible

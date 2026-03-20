@@ -254,7 +254,7 @@ function initProfileListeners() {
       if (currentX > THRESHOLD) {
         // Swipe right → share
         const appUrl = window.location.href.split('?')[0];
-        const text = `I'm inviting you to play Day WordPlay! See who's the better wordsmith.\n\nFollow the link below and join my group, ${groupName} using code: ${groupCode}\n\n${appUrl}`;
+        const text = `I'm inviting you to play Day WordPlay! See who's the better wordsmith.\n\nFollow the link below and join my group, ${groupName}!\n\n Use group code: ${groupCode}\n\n${appUrl}`;
         navigator.clipboard.writeText(text).then(() => {
           showCopiedToast(card);
         }).catch(() => {});
