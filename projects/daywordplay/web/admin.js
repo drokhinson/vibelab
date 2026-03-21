@@ -42,7 +42,6 @@ function renderAdminView() {
           <input id="admin-word" type="text" placeholder="Word *" style="width:100%; box-sizing:border-box;" />
           <input id="admin-pos" type="text" placeholder="Part of speech * (e.g. noun)" style="width:100%; box-sizing:border-box;" />
           <textarea id="admin-def" placeholder="Definition *" rows="2" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
-          <input id="admin-pron" type="text" placeholder="Pronunciation (optional)" style="width:100%; box-sizing:border-box;" />
           <textarea id="admin-etym" placeholder="Etymology (optional)" rows="2" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
           <button class="btn-primary" id="admin-add-word-btn">Add Word</button>
           <div id="admin-word-msg"></div>
@@ -112,7 +111,6 @@ function renderAdminProposalRow(p) {
           <div style="font-weight:700; font-size:15px;">${escHtml(p.word)}</div>
           <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">${escHtml(p.part_of_speech)} · proposed by ${proposer}</div>
           <div style="font-size:13px; color:var(--text-secondary); line-height:1.5;">${escHtml(p.definition)}</div>
-          ${p.pronunciation ? `<div style="font-size:12px; color:var(--text-muted); margin-top:4px;">${escHtml(p.pronunciation)}</div>` : ''}
           ${p.etymology ? `<div style="font-size:12px; color:var(--text-muted); margin-top:2px;"><em>Origin:</em> ${escHtml(p.etymology)}</div>` : ''}
         </div>
       </div>
@@ -230,7 +228,6 @@ function initAdminListeners() {
     const word = document.getElementById('admin-word')?.value.trim();
     const pos = document.getElementById('admin-pos')?.value.trim();
     const def = document.getElementById('admin-def')?.value.trim();
-    const pron = document.getElementById('admin-pron')?.value.trim() || null;
     const etym = document.getElementById('admin-etym')?.value.trim() || null;
     const msgEl = document.getElementById('admin-word-msg');
 
@@ -246,11 +243,11 @@ function initAdminListeners() {
     try {
       await adminFetch('/admin/words', {
         method: 'POST',
-        body: JSON.stringify({ word, part_of_speech: pos, definition: def, pronunciation: pron, etymology: etym }),
+        body: JSON.stringify({ word, part_of_speech: pos, definition: def, etymology: etym }),
       });
       if (msgEl) msgEl.innerHTML = renderSuccess(`"${escHtml(word)}" added to word bank.`);
       // Clear form
-      ['admin-word', 'admin-pos', 'admin-def', 'admin-pron', 'admin-etym'].forEach(id => {
+      ['admin-word', 'admin-pos', 'admin-def', 'admin-etym'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });

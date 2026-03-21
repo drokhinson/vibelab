@@ -68,7 +68,7 @@ def _get_or_assign_word(sb, group_id: str, target_date: date) -> dict:
 
     # 3. Fetch and return the word details
     word_result = sb.table("daywordplay_words").select(
-        "id, word, part_of_speech, definition, pronunciation, etymology"
+        "id, word, part_of_speech, definition, etymology"
     ).eq("id", word_id).execute()
 
     return word_result.data[0] if word_result.data else {}
@@ -350,7 +350,7 @@ async def get_word_history(current_user: dict = Depends(get_current_user)) -> di
 
     # Get all past daily word assignments for those groups
     past = sb.table("daywordplay_daily_words").select(
-        "word_id, group_id, assigned_date, daywordplay_words(id, word, part_of_speech, definition, pronunciation, etymology)"
+        "word_id, group_id, assigned_date, daywordplay_words(id, word, part_of_speech, definition, etymology)"
     ).in_("group_id", group_ids).lt("assigned_date", today).execute()
 
     if not past.data:
@@ -414,7 +414,7 @@ async def get_bookmarks(current_user: dict = Depends(get_current_user)):
     """Get current user's bookmarked words (friend dictionary)."""
     sb = get_supabase()
     result = sb.table("daywordplay_bookmarks").select(
-        "id, created_at, daywordplay_words(id, word, part_of_speech, definition, pronunciation, etymology)"
+        "id, created_at, daywordplay_words(id, word, part_of_speech, definition, etymology)"
     ).eq("user_id", current_user["user_id"]).order("created_at", desc=True).execute()
 
     bookmarks = []
@@ -467,7 +467,7 @@ async def get_all_words(current_user: dict = Depends(get_current_user)) -> dict:
 
     # All words in the word bank
     all_words_result = sb.table("daywordplay_words").select(
-        "id, word, part_of_speech, definition, pronunciation, etymology"
+        "id, word, part_of_speech, definition, etymology"
     ).order("word").execute()
     all_words = all_words_result.data or []
     word_ids = [w["id"] for w in all_words]
@@ -557,7 +557,7 @@ async def get_played_words(current_user: dict = Depends(get_current_user)) -> di
 
     # Fetch word details for played words only
     words_result = sb.table("daywordplay_words").select(
-        "id, word, part_of_speech, definition, pronunciation, etymology"
+        "id, word, part_of_speech, definition, etymology"
     ).in_("id", played_word_ids).order("word").execute()
     played_words = words_result.data or []
 
@@ -636,7 +636,6 @@ async def propose_word(
         "word": word,
         "part_of_speech": body.part_of_speech.strip(),
         "definition": body.definition.strip(),
-        "pronunciation": body.pronunciation.strip() if body.pronunciation else None,
         "etymology": body.etymology.strip() if body.etymology else None,
         "proposed_by": current_user["user_id"],
         "status": "pending",

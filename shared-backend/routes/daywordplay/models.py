@@ -42,7 +42,6 @@ class AddWordBody(BaseModel):
     word: str
     part_of_speech: str
     definition: str
-    pronunciation: Optional[str] = None
     etymology: Optional[str] = None
 
 
@@ -50,7 +49,6 @@ class ProposeWordBody(BaseModel):
     word: str
     part_of_speech: str
     definition: str
-    pronunciation: Optional[str] = None
     etymology: Optional[str] = None
 
 

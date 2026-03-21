@@ -79,9 +79,10 @@ function renderDictionaryAlpha(words) {
 function renderDictCard(w) {
   return `
     <div class="dict-card">
-      <div class="dict-word">${escHtml(w.word)}</div>
-      ${w.pronunciation ? `<div class="dict-pronunciation">${escHtml(w.pronunciation)}</div>` : ''}
-      <div class="dict-pos">${escHtml(w.part_of_speech)}</div>
+      <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;">
+        <div class="dict-word">${escHtml(w.word)}</div>
+        <div class="dict-pos">${escHtml(w.part_of_speech)}</div>
+      </div>
       <div class="dict-def">${escHtml(w.definition)}</div>
       ${w.etymology ? `<div class="dict-def" style="font-size:13px; color:var(--text-muted); margin-top:8px;"><strong>Origin:</strong> ${escHtml(w.etymology)}</div>` : ''}
       ${w.is_played && w.my_sentence ? `
@@ -116,7 +117,6 @@ function renderProposeModal() {
           <input id="propose-word" type="text" placeholder="Word *" style="width:100%; box-sizing:border-box;" />
           <input id="propose-pos" type="text" placeholder="Part of speech * (e.g. noun)" style="width:100%; box-sizing:border-box;" />
           <textarea id="propose-def" placeholder="Definition *" rows="2" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
-          <input id="propose-pron" type="text" placeholder="Pronunciation (optional)" style="width:100%; box-sizing:border-box;" />
           <textarea id="propose-etym" placeholder="Etymology (optional)" rows="2" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
         </div>
         <div id="propose-modal-msg"></div>
@@ -258,14 +258,12 @@ function initProposeModalListeners() {
     const wordEl = document.getElementById('propose-word');
     const posEl = document.getElementById('propose-pos');
     const defEl = document.getElementById('propose-def');
-    const pronEl = document.getElementById('propose-pron');
     const etymEl = document.getElementById('propose-etym');
     const msgEl = document.getElementById('propose-modal-msg');
 
     const word = wordEl?.value.trim().toLowerCase();
     const pos = posEl?.value.trim();
     const def = defEl?.value.trim();
-    const pron = pronEl?.value.trim() || null;
     const etym = etymEl?.value.trim() || null;
 
     if (!word || !pos || !def) {
@@ -289,11 +287,11 @@ function initProposeModalListeners() {
     try {
       await apiFetch('/words/propose', {
         method: 'POST',
-        body: JSON.stringify({ word, part_of_speech: pos, definition: def, pronunciation: pron, etymology: etym }),
+        body: JSON.stringify({ word, part_of_speech: pos, definition: def, etymology: etym }),
       });
       if (msgEl) msgEl.innerHTML = renderSuccess(`"${escHtml(word)}" submitted! An admin will review it.`);
       // Clear form on success
-      [wordEl, posEl, defEl, pronEl, etymEl].forEach(el => { if (el) el.value = ''; });
+      [wordEl, posEl, defEl, etymEl].forEach(el => { if (el) el.value = ''; });
       btn.textContent = 'Submitted ✓';
     } catch (err) {
       if (msgEl) msgEl.innerHTML = renderError(err.message);

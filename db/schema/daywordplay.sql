@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Day Word Play — current schema snapshot
--- Last updated: migration 028
+-- Last updated: migration 030
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -38,7 +38,6 @@ CREATE TABLE IF NOT EXISTS public.daywordplay_words (
   word           TEXT        NOT NULL,
   part_of_speech TEXT        NOT NULL,
   definition     TEXT        NOT NULL,
-  pronunciation  TEXT,
   etymology      TEXT,
   created_at     TIMESTAMPTZ DEFAULT now()
 );
@@ -94,7 +93,6 @@ CREATE TABLE IF NOT EXISTS public.daywordplay_proposed_words (
   word           TEXT        NOT NULL,
   part_of_speech TEXT        NOT NULL,
   definition     TEXT        NOT NULL,
-  pronunciation  TEXT,
   etymology      TEXT,
   proposed_by    UUID        REFERENCES public.daywordplay_users(id) ON DELETE SET NULL,
   status         TEXT        NOT NULL DEFAULT 'pending', -- pending | approved | rejected

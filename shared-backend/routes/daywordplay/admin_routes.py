@@ -40,7 +40,6 @@ async def admin_add_word(
         "word": word,
         "part_of_speech": body.part_of_speech.strip(),
         "definition": body.definition.strip(),
-        "pronunciation": body.pronunciation.strip() if body.pronunciation else None,
         "etymology": body.etymology.strip() if body.etymology else None,
     }).execute()
 
@@ -128,7 +127,7 @@ async def admin_list_proposed_words(
     sb = get_supabase()
 
     proposals_result = sb.table("daywordplay_proposed_words").select(
-        "id, word, part_of_speech, definition, pronunciation, etymology, status, created_at, "
+        "id, word, part_of_speech, definition, etymology, status, created_at, "
         "daywordplay_users(username, display_name)"
     ).eq("status", "pending").order("created_at", desc=True).execute()
 
@@ -158,7 +157,7 @@ async def admin_approve_proposal(
     sb = get_supabase()
 
     proposal_result = sb.table("daywordplay_proposed_words").select(
-        "id, word, part_of_speech, definition, pronunciation, etymology, status"
+        "id, word, part_of_speech, definition, etymology, status"
     ).eq("id", proposal_id).execute()
 
     if not proposal_result.data:
@@ -178,7 +177,6 @@ async def admin_approve_proposal(
         "word": proposal["word"],
         "part_of_speech": proposal["part_of_speech"],
         "definition": proposal["definition"],
-        "pronunciation": proposal["pronunciation"],
         "etymology": proposal["etymology"],
     }).execute()
 
