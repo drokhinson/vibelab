@@ -16,6 +16,13 @@ async function adminFetch(path, opts = {}) {
   return data;
 }
 
+function renderAdminLoading() {
+  return `<div style="display:flex; align-items:center; gap:8px; padding:16px 0; color:var(--text-muted); font-size:14px;">
+    <div class="loading-spinner" style="width:16px; height:16px; border-width:2px; flex-shrink:0;"></div>
+    Loading…
+  </div>`;
+}
+
 // ── Admin view ────────────────────────────────────────────────────────────────
 function renderAdminView() {
   return `
@@ -49,7 +56,7 @@ function renderAdminView() {
           <button class="icon-btn" id="admin-refresh-proposals-btn" style="font-size:12px;">Refresh</button>
         </div>
         <div id="admin-proposals-list">
-          <div class="loading" style="height:60px;"></div>
+          ${renderAdminLoading()}
         </div>
       </div>
 
@@ -60,7 +67,7 @@ function renderAdminView() {
           <button class="icon-btn" id="admin-refresh-groups-btn" style="font-size:12px;">Refresh</button>
         </div>
         <div id="admin-groups-list">
-          <div class="loading" style="height:60px;"></div>
+          ${renderAdminLoading()}
         </div>
       </div>
     </div>
@@ -69,13 +76,15 @@ function renderAdminView() {
 
 function renderAdminGroupRow(g) {
   return `
-    <div class="card" style="display:flex; align-items:center; gap:8px; padding:10px 14px; margin-bottom:8px;" data-admin-group-id="${escHtml(g.id)}">
-      <div style="flex:1; min-width:0;">
-        <div style="font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(g.name)}</div>
-        <div style="font-size:12px; color:var(--text-muted);">${escHtml(g.code)} · ${g.member_count} member${g.member_count !== 1 ? 's' : ''}</div>
+    <div class="card" style="padding:10px 14px; margin-bottom:8px;" data-admin-group-id="${escHtml(g.id)}">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(g.name)}</div>
+          <div style="font-size:12px; color:var(--text-muted); white-space:nowrap;">${escHtml(g.code)} · ${g.member_count} member${g.member_count !== 1 ? 's' : ''}</div>
+        </div>
+        <button class="danger-btn admin-delete-group-btn" data-group-id="${escHtml(g.id)}" data-group-name="${escHtml(g.name)}"
+          style="padding:4px 10px; font-size:12px; flex-shrink:0;">Delete</button>
       </div>
-      <button class="danger-btn admin-delete-group-btn" data-group-id="${escHtml(g.id)}" data-group-name="${escHtml(g.name)}"
-        style="padding:4px 10px; font-size:12px; white-space:nowrap;">Delete</button>
     </div>
   `;
 }
@@ -83,6 +92,7 @@ function renderAdminGroupRow(g) {
 async function loadAdminGroups() {
   const container = document.getElementById('admin-groups-list');
   if (!container) return;
+  container.innerHTML = renderAdminLoading();
   try {
     const data = await adminFetch('/admin/groups');
     const groups = data.groups || [];
@@ -124,6 +134,7 @@ function renderAdminProposalRow(p) {
 async function loadAdminProposals() {
   const container = document.getElementById('admin-proposals-list');
   if (!container) return;
+  container.innerHTML = renderAdminLoading();
   try {
     const data = await adminFetch('/admin/proposed-words');
     const proposals = data.proposals || [];
