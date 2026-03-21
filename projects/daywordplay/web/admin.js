@@ -77,14 +77,10 @@ function renderAdminView() {
 function renderAdminGroupRow(g) {
   return `
     <div class="card" style="padding:10px 14px; margin-bottom:8px;" data-admin-group-id="${escHtml(g.id)}">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div style="flex:1; min-width:0;">
-          <div style="font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(g.name)}</div>
-          <div style="font-size:12px; color:var(--text-muted); white-space:nowrap;">${escHtml(g.code)} · ${g.member_count} member${g.member_count !== 1 ? 's' : ''}</div>
-        </div>
-        <button class="danger-btn admin-delete-group-btn" data-group-id="${escHtml(g.id)}" data-group-name="${escHtml(g.name)}"
-          style="padding:4px 10px; font-size:12px; flex-shrink:0;">Delete</button>
-      </div>
+      <div style="font-weight:600; font-size:14px; margin-bottom:2px;">${escHtml(g.name)}</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">${escHtml(g.code)} · ${g.member_count} member${g.member_count !== 1 ? 's' : ''}</div>
+      <button class="danger-btn admin-delete-group-btn" data-group-id="${escHtml(g.id)}" data-group-name="${escHtml(g.name)}"
+        style="width:100%; padding:6px 10px; font-size:13px;">Delete</button>
     </div>
   `;
 }

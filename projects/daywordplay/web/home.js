@@ -126,8 +126,7 @@ function renderVoteTab() {
 
   return `
     ${renderWordDisplay(word)}
-    <div class="vote-date">${formatDate(date)} — vote for the best sentence</div>
-    ${has_voted ? renderSuccess('You voted! Results below.') : '<p class="text-muted" style="margin-top:8px; font-size:14px; text-align:center;">Tap ❤️ to vote for your favourite sentence.</p>'}
+    <div class="vote-date">${formatDate(date)} — ${has_voted ? "you've voted! results below" : 'vote for the best sentence'}</div>
     <div class="sentence-cards">
       ${sentences.map(s => renderSentenceCard(s, has_voted, maxVotes, word.word)).join('')}
     </div>
@@ -220,7 +219,6 @@ function renderSentenceSection(submitted, my_sentence, wordText) {
       <div class="sentence-input-wrap">
         ${renderReusablePills()}
         <textarea id="sentence-input" placeholder='Use "${wordText}" in a sentence…' rows="3"></textarea>
-        <div class="submit-hint" id="submit-hint">Include the word <em>${escHtml(wordText)}</em> to unlock submit</div>
         <div class="sentence-submit-row">
           <button class="btn-primary" id="submit-sentence-btn" disabled>Submit</button>
           ${unsubmittedOtherCount > 0 ? `<button class="btn-secondary" id="submit-all-btn" disabled>Submit to All</button>` : ''}
@@ -354,7 +352,6 @@ function initHomeListeners() {
   // Live word-presence check — enable/disable submit button
   const sentenceInput = document.getElementById('sentence-input');
   const submitBtn = document.getElementById('submit-sentence-btn');
-  const hintEl = document.getElementById('submit-hint');
   const wordText = todayData?.word?.word || '';
 
   if (sentenceInput && submitBtn) {
@@ -364,7 +361,6 @@ function initHomeListeners() {
       submitBtn.disabled = !hasWord;
       const submitAllBtn = document.getElementById('submit-all-btn');
       if (submitAllBtn) submitAllBtn.disabled = !hasWord;
-      if (hintEl) hintEl.style.display = hasWord ? 'none' : '';
     });
   }
 
