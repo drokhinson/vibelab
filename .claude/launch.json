@@ -33,8 +33,8 @@
     },
     {
       "name": "daywordplay-web",
-      "runtimeExecutable": "C:\\Program Files\\nodejs\\npx.cmd",
-      "runtimeArgs": ["serve", "projects/daywordplay/web", "-l", "5000", "--no-clipboard"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Program Files/nodejs/node_modules/npm/bin/npx-cli.js", "serve", "projects/daywordplay/web", "-l", "5000", "--no-clipboard"],
       "port": 5000
     }
   ]

@@ -24,6 +24,9 @@ let bookmarks = [];            // saved/bookmarked words
 // ── Leaderboard state ─────────────────────────────────────────────────────────
 let leaderboardData = null;    // { group_name, group_code, leaderboard[] }
 
+// ── Join request state ────────────────────────────────────────────────────────
+let pendingJoinRequests = [];   // [{group, requests: [{id, username, display_name}]}]
+
 // ── UI state ──────────────────────────────────────────────────────────────────
 let currentView = 'home';      // home | dictionary | profile | leaderboard | admin
 let activeWordTab = 'today';   // 'today' | 'vote'

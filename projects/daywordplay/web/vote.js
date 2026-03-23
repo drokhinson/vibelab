@@ -31,6 +31,7 @@ async function _refreshVoteCounts(groupId) {
     if (groupId === activeGroupId) {
       yesterdayData = dwpCache.get('yesterday', activeGroupId);
       renderPageContent();
+      scrollActiveChipIntoView();
       initPageListeners();
     }
   } catch (_) {
@@ -42,22 +43,24 @@ function renderSentenceCard(s, has_voted, maxVotes, wordText) {
   const isWinner = has_voted && s.vote_count === maxVotes && maxVotes > 0;
   const cardClass = s.i_voted ? 'voted' : (isWinner ? 'winner' : '');
 
+  // Anonymous until user votes: hide author names and vote counts
+  const authorHtml = has_voted
+    ? `${escHtml(s.display_name || s.username)}${s.is_mine ? ' <span style="color:var(--text-muted)">(you)</span>' : ''}`
+    : s.is_mine ? '<span style="color:var(--text-muted)">Your sentence</span>' : '';
+
   return `
     <div class="sentence-card ${cardClass}" data-sentence-id="${s.id}">
       ${isWinner ? '<div class="winner-badge">🏆 Top pick</div>' : ''}
       <div class="sentence-card-text">"${wordText ? highlightWord(s.sentence, wordText) : escHtml(s.sentence)}"</div>
       <div class="sentence-card-footer">
-        <span class="sentence-author">
-          ${escHtml(s.display_name || s.username)}
-          ${s.is_mine ? ' <span style="color:var(--text-muted)">(you)</span>' : ''}
-        </span>
+        <span class="sentence-author">${authorHtml}</span>
         <button
           class="vote-btn ${s.i_voted ? 'voted' : ''} ${s.is_mine ? 'mine' : ''}"
           data-vote-sentence="${s.id}"
           ${s.is_mine || has_voted ? 'disabled' : ''}
         >
           ${icons.thumbsUp}
-          ${s.vote_count}
+          ${has_voted ? s.vote_count : ''}
         </button>
       </div>
     </div>

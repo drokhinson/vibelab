@@ -391,6 +391,7 @@ async def get_word_history(current_user: dict = Depends(get_current_user)) -> di
         word_sentences = sentences_by_word.get(wid, [])
         winning_sentence = None
         winning_author = None
+        winning_user_id = None
 
         if word_sentences:
             best = max(word_sentences, key=lambda s: vote_counts.get(s["id"], 0))
@@ -398,11 +399,13 @@ async def get_word_history(current_user: dict = Depends(get_current_user)) -> di
                 winning_sentence = best["sentence"]
                 user_info = best.get("daywordplay_users") or {}
                 winning_author = user_info.get("display_name") or user_info.get("username", "")
+                winning_user_id = best.get("user_id")
 
         result.append({
             **word_info,
             "winning_sentence": winning_sentence,
             "winning_author": winning_author,
+            "winning_user_id": winning_user_id,
         })
 
     result.sort(key=lambda w: w["word"].lower())
@@ -528,6 +531,7 @@ async def get_all_words(current_user: dict = Depends(get_current_user)) -> dict:
             "my_sentence": my_sentence_by_word.get(wid),
             "winning_sentence": winning_sentence,
             "winning_author": winning_author,
+            "winning_user_id": winning_user_id,
             "is_bookmarked": wid in bookmarked_ids,
         })
 
@@ -605,6 +609,7 @@ async def get_played_words(current_user: dict = Depends(get_current_user)) -> di
             "my_sentence": my_sentence_by_word.get(wid),
             "winning_sentence": winning_sentence,
             "winning_author": winning_author,
+            "winning_user_id": winning_user_id,
             "is_bookmarked": wid in bookmarked_ids,
         })
 

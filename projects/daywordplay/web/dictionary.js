@@ -91,13 +91,16 @@ function renderDictCard(w) {
           "${highlightWord(w.my_sentence, w.word)}"
         </div>
       ` : ''}
-      ${w.winning_sentence ? `
-        <div class="dict-winning-sentence">
-          <div class="dict-winning-label">🏆 Best sentence</div>
+      ${w.winning_sentence ? (() => {
+        const isMyWin = w.winning_user_id && currentUser && w.winning_user_id === currentUser.user_id;
+        return `
+        <div class="dict-winning-sentence ${isMyWin ? 'dict-winning-mine' : ''}">
+          <div class="dict-winning-label">${isMyWin ? '👑 Your winning sentence' : '🏆 Best sentence'}</div>
           <div class="dict-winning-text">"${highlightWord(w.winning_sentence, w.word)}"</div>
-          ${w.winning_author ? `<div class="dict-winning-author">— ${escHtml(w.winning_author)}</div>` : ''}
+          ${!isMyWin && w.winning_author ? `<div class="dict-winning-author">— ${escHtml(w.winning_author)}</div>` : ''}
         </div>
-      ` : ''}
+        `;
+      })() : ''}
     </div>
   `;
 }
@@ -146,12 +149,10 @@ function initDictionaryListeners() {
     }
 
     function scrollToSection(section) {
-      const pageContent = document.querySelector('.page-content');
-      if (!pageContent) return;
-      const stickyHeader = document.querySelector('.dict-sticky-header');
-      const headerH = stickyHeader ? stickyHeader.offsetHeight : 0;
-      const sectionTop = section.getBoundingClientRect().top + pageContent.scrollTop - pageContent.getBoundingClientRect().top;
-      pageContent.scrollTop = sectionTop - headerH;
+      const scrollArea = document.querySelector('.dict-scroll-area');
+      if (!scrollArea) return;
+      const sectionTop = section.getBoundingClientRect().top + scrollArea.scrollTop - scrollArea.getBoundingClientRect().top;
+      scrollArea.scrollTop = sectionTop;
     }
 
 
@@ -201,12 +202,10 @@ function initDictionaryListeners() {
       const letter = btn.dataset.scrollLetter;
       const section = document.getElementById(`dict-letter-${letter}`);
       if (section) {
-        const pageContent = document.querySelector('.page-content');
-        if (pageContent) {
-          const stickyHeader = document.querySelector('.dict-sticky-header');
-          const headerH = stickyHeader ? stickyHeader.offsetHeight : 0;
-          const sectionTop = section.getBoundingClientRect().top + pageContent.scrollTop - pageContent.getBoundingClientRect().top;
-          pageContent.scrollTo({ top: sectionTop - headerH, behavior: 'smooth' });
+        const scrollArea = document.querySelector('.dict-scroll-area');
+        if (scrollArea) {
+          const sectionTop = section.getBoundingClientRect().top + scrollArea.scrollTop - scrollArea.getBoundingClientRect().top;
+          scrollArea.scrollTo({ top: sectionTop, behavior: 'smooth' });
         }
       }
     });

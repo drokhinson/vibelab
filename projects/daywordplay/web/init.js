@@ -34,6 +34,7 @@ async function loadInitialData() {
     _bulkLoadYesterday(),
     _bulkLoadLeaderboards(),
     activeGroupId ? loadReusableSentences() : Promise.resolve(),
+    loadHomeJoinRequests(),
   ]);
 
   // Set todayData from cache — no extra fetch needed
@@ -130,6 +131,14 @@ function initShellListeners() {
     renderPageContent();
     initPageListeners();
     updateTabBar();
+  });
+
+  document.getElementById('help-btn')?.addEventListener('click', () => {
+    document.body.insertAdjacentHTML('beforeend', renderHelpModal());
+    document.getElementById('help-modal-close')?.addEventListener('click', closeHelpModal);
+    document.getElementById('help-modal-overlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'help-modal-overlay') closeHelpModal();
+    });
   });
 
   document.getElementById('profile-btn')?.addEventListener('click', () => {

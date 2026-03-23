@@ -138,7 +138,56 @@ body {
   letter-spacing: -0.3px;
 }
 
-.header-right { width: 44px; } /* spacer */
+.header-left { width: 44px; }
+.header-right { width: 44px; }
+
+.help-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: opacity 0.15s;
+}
+.help-btn svg { width: 20px; height: 20px; }
+.help-btn:hover { opacity: 0.75; }
+
+.help-content { margin-top: 8px; }
+.help-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.help-step-num {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+.help-example {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
 
 /* ── Page Content ────────────────────────────────────────────────────────────*/
 .page-content {
@@ -594,16 +643,21 @@ body {
 .lb-votes strong { display: block; font-size: 18px; color: var(--text-primary); font-weight: 700; }
 
 /* ── Dictionary ──────────────────────────────────────────────────────────────*/
+.page-content.dict-active {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 .dict-sticky-header {
   flex-shrink: 0;
   background: var(--bg);
-  position: sticky;
-  top: 0;
   z-index: 20;
   padding-bottom: 4px;
 }
 .dict-scroll-area {
-  /* Content below sticky header — scrolls naturally within .page-content */
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 .dictionary-list { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
 
@@ -659,6 +713,16 @@ body {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+.dict-winning-mine {
+  background: linear-gradient(135deg, #FFF8E1, #FFE082);
+  border: 1.5px solid #FFD54F;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  border-top: 1.5px solid #FFD54F;
+}
+.dict-winning-mine .dict-winning-label {
+  color: #B8860B;
 }
 
 /* ── Alphabet Scroll Index ──────────────────────────────────────────────────*/
@@ -1260,6 +1324,59 @@ body {
   font-style: normal;
   margin-bottom: 4px;
 }
+
+/* ── Home join request bubbles ───────────────────────────────────────────────*/
+.home-join-requests {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.join-request-bubble {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+.join-request-bubble-text {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  flex: 1;
+}
+.join-request-bubble-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.approve-btn-sm, .deny-btn-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+.approve-btn-sm {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.approve-btn-sm svg { width: 16px; height: 16px; }
+.approve-btn-sm:hover { opacity: 0.85; }
+.deny-btn-sm {
+  background: var(--bg-card);
+  color: var(--text-muted);
+}
+.deny-btn-sm:hover { color: #dc3545; border-color: #dc3545; }
 
 /* ── Admin card ──────────────────────────────────────────────────────────────*/
 .card {

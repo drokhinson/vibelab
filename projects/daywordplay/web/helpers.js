@@ -121,6 +121,11 @@ function renderShell() {
 function renderTopHeader() {
   return `
     <div class="top-header">
+      <div class="header-left">
+        <button class="help-btn" id="help-btn" aria-label="How to play">
+          ${icons.info}
+        </button>
+      </div>
       <span class="app-title">Day WordPlay</span>
       <div class="header-right">
         <button class="avatar-btn" id="profile-btn" aria-label="Settings">
@@ -129,6 +134,46 @@ function renderTopHeader() {
       </div>
     </div>
   `;
+}
+
+function renderHelpModal() {
+  return `
+    <div class="modal-overlay" id="help-modal-overlay">
+      <div class="modal-sheet" role="dialog" aria-modal="true" aria-label="How to play">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div class="modal-title">How to Play</div>
+          <button class="modal-close-btn" id="help-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="help-content">
+          <div class="help-step">
+            <div class="help-step-num">1</div>
+            <div><strong>Read the word</strong> — Every day, your group gets the same word with its definition.</div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">2</div>
+            <div><strong>Write a sentence</strong> — Use the word in your most creative sentence.</div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">3</div>
+            <div><strong>Vote the next day</strong> — Read everyone's anonymous sentences and vote for the best one.</div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">4</div>
+            <div><strong>Win the crown</strong> — The top-voted sentence gets featured in the dictionary!</div>
+          </div>
+          <div class="help-example">
+            <div style="font-size:13px; color:var(--text-muted); margin-bottom:6px;">Example</div>
+            <div style="font-weight:600; margin-bottom:4px;">Word: ephemeral</div>
+            <div style="font-style:italic; line-height:1.5;">"The <span class="word-highlight">ephemeral</span> rainbow vanished before I could grab my camera."</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function closeHelpModal() {
+  document.getElementById('help-modal-overlay')?.remove();
 }
 
 function renderTabBar() {
@@ -163,7 +208,9 @@ function updateTabBar() {
 
 function renderPageContent() {
   const content = document.getElementById('page-content');
-  if (content) content.innerHTML = renderCurrentPage();
+  if (!content) return;
+  content.innerHTML = renderCurrentPage();
+  content.classList.toggle('dict-active', currentView === 'dictionary');
 }
 
 function renderCurrentPage() {

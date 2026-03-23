@@ -76,12 +76,97 @@ function renderWordTabs() {
   `;
 }
 
+// ── Join request loading & rendering for home tab ────────────────────────────
+
+async function loadHomeJoinRequests() {
+  if (!myGroups.length) { pendingJoinRequests = []; return; }
+  const results = await Promise.all(
+    myGroups.map(async (g) => {
+      try {
+        const data = await apiFetch(`/groups/${g.id}/join-requests`);
+        return { group: g, requests: data.requests || [] };
+      } catch (_) {
+        return { group: g, requests: [] };
+      }
+    })
+  );
+  pendingJoinRequests = results.filter(r => r.requests.length > 0);
+}
+
+function renderHomeJoinRequests() {
+  if (!pendingJoinRequests.length) return '';
+  return `
+    <div class="home-join-requests">
+      ${pendingJoinRequests.flatMap(({ group, requests }) =>
+        requests.map(req => `
+          <div class="join-request-bubble" data-req-id="${req.id}" data-group-id="${group.id}">
+            <div class="join-request-bubble-text">
+              <strong>${escHtml(req.display_name || req.username)}</strong> wants to join <strong>${escHtml(group.name)}</strong>
+            </div>
+            <div class="join-request-bubble-actions">
+              <button class="approve-btn-sm" data-home-approve="${req.id}" data-home-group="${group.id}" title="Approve">${icons.check}</button>
+              <button class="deny-btn-sm" data-home-deny="${req.id}" data-home-group="${group.id}" title="Deny">&times;</button>
+            </div>
+          </div>
+        `)
+      ).join('')}
+    </div>
+  `;
+}
+
+function initHomeJoinRequestListeners() {
+  document.querySelectorAll('[data-home-approve]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const requestId = btn.dataset.homeApprove;
+      const groupId = btn.dataset.homeGroup;
+      const bubble = btn.closest('.join-request-bubble');
+      btn.disabled = true;
+      try {
+        await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'approve' }),
+        });
+        if (bubble) bubble.remove();
+        for (const entry of pendingJoinRequests) {
+          entry.requests = entry.requests.filter(r => r.id !== requestId);
+        }
+        pendingJoinRequests = pendingJoinRequests.filter(e => e.requests.length > 0);
+      } catch (err) {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-home-deny]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const requestId = btn.dataset.homeDeny;
+      const groupId = btn.dataset.homeGroup;
+      const bubble = btn.closest('.join-request-bubble');
+      btn.disabled = true;
+      try {
+        await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'deny' }),
+        });
+        if (bubble) bubble.remove();
+        for (const entry of pendingJoinRequests) {
+          entry.requests = entry.requests.filter(r => r.id !== requestId);
+        }
+        pendingJoinRequests = pendingJoinRequests.filter(e => e.requests.length > 0);
+      } catch (err) {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
 function renderHomeView() {
   if (!activeGroupId) {
     return renderNoGroupPrompt();
   }
 
   return `
+    ${renderHomeJoinRequests()}
     ${renderGroupSwitcher()}
     ${renderWordTabs()}
     ${activeWordTab === 'today' ? renderTodayTab() : renderVoteTab()}
@@ -124,11 +209,14 @@ function renderVoteTab() {
 
   const maxVotes = Math.max(...sentences.map(s => s.vote_count), 0);
 
+  // Shuffle sentences before voting so authorship is harder to guess
+  const displaySentences = has_voted ? sentences : [...sentences].sort(() => Math.random() - 0.5);
+
   return `
     ${renderWordDisplay(word)}
     <div class="vote-date">${formatDate(date)} — ${has_voted ? "you've voted! results below" : 'vote for the best sentence'}</div>
     <div class="sentence-cards">
-      ${sentences.map(s => renderSentenceCard(s, has_voted, maxVotes, word.word)).join('')}
+      ${displaySentences.map(s => renderSentenceCard(s, has_voted, maxVotes, word.word)).join('')}
     </div>
     <div style="margin-bottom:24px;"></div>
   `;
@@ -160,6 +248,11 @@ function renderNoGroupPrompt() {
     ${showJoinGroupModal ? renderJoinModal() : ''}
     ${showCreateGroupModal ? renderCreateModal() : ''}
   `;
+}
+
+function scrollActiveChipIntoView() {
+  const chip = document.querySelector('.group-chip.active');
+  if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'instant' });
 }
 
 function renderGroupSwitcher() {
@@ -267,12 +360,14 @@ function initHomeListeners() {
         }
         reusableSentences = [];
         renderPageContent();
+        scrollActiveChipIntoView();
         initHomeListeners();
         if (!cachedToday) {
           await loadTodayWord();
         }
         await loadReusableSentences();
         renderPageContent();
+        scrollActiveChipIntoView();
         initPageListeners();
       } else {
         // Vote tab — render from cache immediately, then refresh vote counts
@@ -280,15 +375,18 @@ function initHomeListeners() {
         if (cachedYesterday) {
           yesterdayData = cachedYesterday;
           renderPageContent();
+          scrollActiveChipIntoView();
           initPageListeners();
           // Non-blocking lightweight refresh of vote counts
           _refreshVoteCounts(activeGroupId);
         } else {
           yesterdayData = null;
           renderPageContent();
+          scrollActiveChipIntoView();
           initHomeListeners();
           await loadYesterdayData();
           renderPageContent();
+          scrollActiveChipIntoView();
           initPageListeners();
         }
       }
@@ -442,6 +540,9 @@ function initHomeListeners() {
 
   // Vote listeners are always attached since vote tab may be visible
   initVoteListeners();
+
+  // Join request bubble listeners
+  initHomeJoinRequestListeners();
 }
 
 
