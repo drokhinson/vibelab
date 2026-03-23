@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Day Word Play — current schema snapshot
--- Last updated: migration 030
+-- Last updated: migration 031
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS public.daywordplay_words (
   created_at     TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.daywordplay_words ENABLE ROW LEVEL SECURITY;
+CREATE INDEX ON public.daywordplay_words USING btree (word);
 
 -- Lazy-assigned on first request of the day for a group
 CREATE TABLE IF NOT EXISTS public.daywordplay_daily_words (

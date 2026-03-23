@@ -56,12 +56,13 @@ vibelab/
 │   ├── db.py                  ← Supabase client singleton
 │   ├── auth.py                ← shared bcrypt + JWT + admin auth helpers
 │   ├── shared_models.py       ← shared Pydantic response models (HealthResponse, etc.)
-│   └── routes/[project]/     ← one package per project (see Modular File Structure)
+│   └── routes/[project]/     ← one package per project
 ├── db/migrations/             ← all Supabase SQL migrations (ONE shared DB)
 ├── db/schema/                 ← current-state schema snapshots, one file per project
 ├── _templates/                ← scaffold source, not deployed
 ├── .github/workflows/         ← CI/CD
 ├── .claude/commands/          ← Claude slash command skills
+├── .claude/rules/             ← domain-specific conventions (loaded by file path)
 └── projects/[name]/
     ├── STRUCTURE.md           ← AI context doc — READ FIRST
     ├── .env.example
@@ -73,119 +74,7 @@ vibelab/
 
 ## Conventions
 
-### Database (Supabase)
-- ONE shared Supabase project for all apps. Tables are app-prefixed: `sauceboss_carbs`, `spotme_locations`.
-- All migrations go in `db/migrations/` as numbered SQL: `001_sauceboss_schema.sql`, `002_sauceboss_seed.sql`.
-- Run migrations in Supabase dashboard → SQL Editor → New Query → Run.
-- Use RPCs (`supabase.rpc()`) for complex multi-table reads.
-- Backend uses `SUPABASE_SERVICE_ROLE_KEY` (bypasses RLS). Never expose it to the frontend.
-- **Always enable RLS on new tables.** Add `ALTER TABLE public.<table> ENABLE ROW LEVEL SECURITY;` immediately after every `CREATE TABLE`. No policies are needed — the backend uses service role key which bypasses RLS. This blocks direct anon-key access to Supabase's REST API.
-- **Keep `db/schema/[project].sql` in sync.** When a migration adds, removes, or alters a table, update the corresponding snapshot file in `db/schema/`. These files give Claude instant schema context without reading all migration files — always check `db/schema/` first when you need to understand a project's tables.
-- **Data belongs in the database, not in code.** Any named list, option set, lookup table, or configurable preset (e.g. skill levels, categories, status values, tags) must be stored as rows in a Supabase table with a migration, not as a Python dict/list or JS array in application code. Hard-coded constants require a deploy to change; a DB row does not. The only things that belong in `constants.py` are secrets, algorithm identifiers, and other true compile-time values.
-
-### Performance — Data Flow & Query Optimization
-
-When working on an existing project, proactively review the data flow from the database through the API to the frontend. The goal is to eliminate unnecessary round-trips, reduce query count, and ensure the UI never blocks on data it already has.
-
-**General rules:**
-- Prefer fetching related data in one query over multiple sequential queries (use Supabase foreign key expansion or RPCs).
-- Count or aggregate in the database (SQL), not in Python loops — Python-side aggregation over large result sets does not scale.
-- Avoid N+1 patterns: never fetch a list of IDs then loop to fetch details one-by-one.
-- For endpoints called on every page load or group switch, profile the number of DB round-trips and reduce to the minimum needed.
-
-**Frontend caching:**
-- Repeated fetches for data that doesn't change mid-session (today's word, leaderboard, yesterday's sentences) should be cached client-side with a TTL.
-- Cache pattern: `cache.js` with a `dwpCache`-style object — `get(type, key)`, `set(type, key, data)`, `clear()`. Default TTL: 10 minutes.
-- Bulk-load data for all groups in parallel on login/first visit rather than fetching one group at a time.
-- On tab/group switch: serve from cache immediately, then optionally fire a lightweight refresh in the background for fields that change frequently (e.g. vote counts).
-- Invalidate cache selectively after mutations (e.g. after submitting a sentence, invalidate today's cache for that group only).
-
-**⚠️ Check in with the user before implementing caching or bulk queries.**
-These are architectural decisions that affect perceived freshness, complexity, and server load. Before writing code:
-1. Describe the current data flow and where the bottleneck is.
-2. Propose the caching or batching strategy (TTL, invalidation rules, new endpoints needed).
-3. **Ask the user to confirm the approach** before proceeding — they may have context about acceptable staleness, server costs, or edge cases that change the design.
-
-Example check-in format:
-> "I'm seeing N separate fetches per group switch on the vote tab. I'd like to bulk-load all groups' yesterday data on first visit and cache it for 10 min, then only hit a lightweight `/vote-counts` endpoint on subsequent switches. Does that sound right, or do you want fresher data on each switch?"
-
-### Backend (FastAPI in `shared-backend/`)
-- All routes namespaced: `/api/v1/[project]/[resource]`
-- `async def` for all route handlers.
-- Register every new router in `shared-backend/main.py` via `from routes import [project]`.
-- `db.py` exports `get_supabase()`. Never import `supabase` directly in route files.
-- Do not add auth unless STRUCTURE.md says it is required.
-- Always include `GET /api/v1/[project]/health` that returns `{"project": "[name]", "status": "ok"}`.
-- See **Modular File Structure** below for how to organize route files.
-
-### Python Code Quality
-
-**Type annotations (required on all functions):**
-- All route handlers: annotate every parameter and return type.
-- All private helpers (`_foo()`): annotate params and return type.
-- FastAPI dependencies (`get_current_user`): return a typed Pydantic model, not `dict`.
-- Type the Supabase client parameter as `Client` from `supabase`.
-
-**Pydantic models (not dicts):**
-- Every request body must use a Pydantic `BaseModel`.
-- Every route must declare `response_model=` in its decorator with a Pydantic model.
-- Common response shapes (health, auth token, message confirmations) get shared models in the project's `models.py`.
-- Name response models with a `Response` suffix: `HealthResponse`, `TokenResponse`, `MessageResponse`.
-
-**Enums instead of string literals:**
-- Any fixed set of string values (account types, statuses, seasons, frequencies) must be a `class MyEnum(StrEnum)` (from `enum`) in the project's `constants.py`.
-- Use these enums in Pydantic model fields — this provides automatic validation and Swagger dropdowns.
-- Database string values map 1:1 to enum member values. `StrEnum` is backwards-compatible (`str(MyEnum.FOO)` returns the raw string).
-
-**Swagger / OpenAPI readability:**
-- Every route decorator must include: `response_model`, `status_code`, `summary`.
-- Every route handler must have a one-line docstring (shows as description in Swagger).
-- Path params use `Path(..., description="...")`. Query params use `Query(..., description="...")`.
-- `main.py` defines `openapi_tags` metadata for all project routers.
-
-**No duplicate utilities:**
-- Admin auth checking: use `require_admin()` from `auth.py`, not per-file private helpers.
-- Password/JWT helpers: import from `auth.py`, not local wrappers in `dependencies.py`.
-- Bearer token parsing: use `extract_bearer_token()` from `auth.py` inside `get_current_user()` implementations.
-
-### Shared Modules (`shared-backend/`)
-- **`auth.py`** — Generic bcrypt + JWT helpers: `hash_password`, `verify_password`, `create_token`, `decode_token`, `extract_bearer_token`, `require_admin`.
-- **`shared_models.py`** — Common Pydantic response models: `HealthResponse`, `StatusResponse`, `ErrorDetail`. Use these across all projects.
-- **`db.py`** — Supabase client singleton via `get_supabase()`.
-- When a new app needs login/user management, import from `auth.py` instead of reimplementing.
-- Each app's `dependencies.py` should define `create_app_token()` and `decode_app_token()` (with app-specific JWT secret/payload) and `get_current_user()` (using `extract_bearer_token()`).
-- Each app keeps its own `{app}_users` table following the same schema pattern as `wealthmate_users`.
-
-### Admin Dashboard Maintenance
-When adding a new app or new tables to the monorepo:
-- **Analytics:** Add the analytics tracking ping to the new app's `app.js` (fire-and-forget `fetch` to `/api/v1/analytics/track`).
-- **User management:** If the new app has user auth, add an entry to `APPS_WITH_USERS` in `shared-backend/routes/admin.py`.
-- **DB storage:** Automatically picked up — tables are grouped by prefix in the storage view.
-
-### Web Prototypes (`projects/[name]/web/`)
-- No npm, no bundler. Vanilla HTML + vanilla JS. No build step.
-- **Standard CDN stack** for new projects:
-  - **DaisyUI v4** (Tailwind component library — cards, badges, bottom-nav, toasts, 30+ themes, no build step)
-  - **Lucide Icons** (crisp SVG icon set, replaces emoji for UI chrome)
-  - **Google Fonts: Inter** (body) + optional display font per project
-- Existing projects on Pico.css are migrated to DaisyUI incrementally via `/ui-polish`.
-- `config.js` sets `window.APP_CONFIG = { apiBase: "..." }`. Default: `http://localhost:8000`.
-- Use `fetch()` for all data. Never inline data in JS globals.
-- Mobile-first responsive. Max width 480px for single-column apps, 900px for dashboards.
-- Loading states and error handling are required on every `fetch()`.
-- **Icons:** Use Lucide SVG icons for all UI chrome (nav, buttons, back arrows, action icons). Keep emojis for content/data (food, plants, animals — things that *are* the data).
-- **Illustrations:** Every empty state, loading screen, and app header should include an SVG illustration. Source from [undraw.co](https://undraw.co) (free, MIT). Download the SVG, inline it in the relevant JS render function, and customize the primary fill color to match the project accent.
-- **Motion:** All card lists get entrance animations (`fadeUp` keyframe). Cards get hover lift (`translateY(-2px)` + shadow increase). Stagger list items with `animation-delay: calc(var(--i) * 40ms)`.
-- **Design reference:** Use [v0.app](https://v0.app) to generate visual mockups for complex screens. Do not copy its React code — extract the layout, spacing, and component structure decisions and implement them in DaisyUI + vanilla JS.
-- See **Modular File Structure** below for how to organize JS files.
-
-### React Native / Expo (`projects/[name]/app/`)
-- Expo managed workflow (bare only when a native module requires it).
-- All API calls go through `src/api/client.js`. Never call `fetch()` directly in a screen.
-- Navigation: `@react-navigation/native-stack`.
-- Theme tokens go in `src/theme.js`.
-- Do NOT use `expo-sqlite`. Use the shared API client.
-- Set `EXPO_PUBLIC_API_URL` in `app/.env` for the Railway backend URL.
+Domain-specific conventions (backend, frontend, database, native, performance) are in `.claude/rules/` and load automatically when editing relevant files.
 
 ### Git
 - Commit format: `[project-name] description` or `[infra] description`
@@ -193,34 +82,13 @@ When adding a new app or new tables to the monorepo:
 - One logical change per commit. Do not batch unrelated projects.
 
 ### Modular File Structure
-
 Keep individual files under ~300 lines. When a file grows beyond that, split it by domain. This reduces AI token usage — Claude only reads the relevant module instead of a full monolith.
 
-**Frontend (vanilla JS):** No ES modules — use `<script>` tags sharing global scope. Load order matters: state → helpers → feature modules → init.
-
-| File | Purpose |
-|------|---------|
-| `config.js` | API base URL |
-| `state.js` | All global `let` variables (shared state) |
-| `helpers.js` | Formatting, auth tokens, `apiFetch()`, `showView()`, navigation |
-| `[feature].js` | One file per view/feature (e.g. `dashboard.js`, `accounts.js`, `checkin.js`) |
-| `init.js` | `DOMContentLoaded` handler: all event listeners, startup logic. Loaded last. |
-
-Add `<script>` tags to `index.html` in the order above. All functions remain global.
-
-**Backend (FastAPI):** Convert `routes/[project].py` into a `routes/[project]/` package. `main.py` still does `from routes import [project]` — Python resolves through `__init__.py`.
-
-| File | Purpose |
-|------|---------|
-| `__init__.py` | Creates `router = APIRouter(prefix=...)`, imports all sub-modules |
-| `models.py` | Pydantic request/response models |
-| `constants.py` | Lookup tables, config values, enums |
-| `dependencies.py` | `get_current_user()`, auth helpers, shared FastAPI dependencies |
-| `[domain]_routes.py` | One file per route group (e.g. `auth_routes.py`, `account_routes.py`) |
-
-Each sub-module imports `router` from `__init__.py` via `from . import router` and decorates routes onto it.
-
-**When to split:** Start with a single file during initial prototyping. Split once any file exceeds ~300 lines or has 3+ distinct feature areas. Small apps (under 300 lines total) can stay as a single file.
+### Admin Dashboard Maintenance
+When adding a new app or new tables to the monorepo:
+- **Analytics:** Add the analytics tracking ping to the new app's `app.js` (fire-and-forget `fetch` to `/api/v1/analytics/track`).
+- **User management:** If the new app has user auth, add an entry to `APPS_WITH_USERS` in `shared-backend/routes/admin.py`.
+- **DB storage:** Automatically picked up — tables are grouped by prefix in the storage view.
 
 ---
 
@@ -244,23 +112,6 @@ uvicorn main:app --reload             # starts on http://localhost:8000
 ```
 `.venv/` is gitignored. Re-run `pip install -r requirements.txt` after pulling changes that add new deps.
 
-### Add an API endpoint to an existing project
-1. Edit the relevant file in `shared-backend/routes/[project]/` (e.g. `account_routes.py`)
-2. Update STRUCTURE.md → API Endpoints section
-3. Test locally using the venv workflow above
-4. Push — Railway auto-deploys
-
-### Add a React Native screen
-1. Create `projects/[name]/app/src/screens/[ScreenName].js`
-2. Register in the navigator in `App.js`
-3. Add any new API calls to `src/api/client.js`
-4. Update STRUCTURE.md → Screen Flow section
-
-### Run a Supabase migration
-1. Write SQL in `db/migrations/[NNN]_[project]_[description].sql`
-2. Paste into Supabase dashboard → SQL Editor → Run
-3. Commit the file
-
 ### Update the landing page
 Edit `registry.json` — the landing page reads it at load time. Set `status`, `webUrl`, `backendUrl` when deploying.
 
@@ -283,17 +134,3 @@ All vars are in Railway (backend) and Vercel (frontend) dashboards. Never commit
 | `EXPO_PUBLIC_API_URL` | `app/.env` | Railway backend URL for React Native |
 | `ADMIN_API_KEY` | Railway | Admin dashboard authentication key |
 | `WEALTHMATE_JWT_SECRET` | Railway | WealthMate JWT signing secret |
-
----
-
-## Available Skills
-
-| Skill | Command | When to use |
-|---|---|---|
-| New project | `/new-project` | Turn an idea into a scaffold + STRUCTURE.md |
-| Build prototype | `/build-prototype` | Implement web/ + backend routes from STRUCTURE.md |
-| UI polish | `/ui-polish` | Improve visual design of a working prototype |
-| Build native | `/build-native` | Create Expo app wired to backend |
-| Deploy check | `/deploy-check` | Verify all deployments are live and correct |
-| Retrofit | `/retrofit` | Migrate an existing project into this structure |
-| Add auth | `/add-supabase-auth` | Add Supabase Auth + RLS to a project |

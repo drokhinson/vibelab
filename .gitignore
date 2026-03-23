@@ -38,7 +38,7 @@ Thumbs.db
 *.swp
 
 # Claude Code
-.claude/
+.claude/settings.local.json
 
 # Vercel
 .vercel/
