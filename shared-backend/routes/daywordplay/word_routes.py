@@ -99,6 +99,36 @@ def _verify_member(sb, group_id: str, user_id: str):
         raise HTTPException(status_code=403, detail="You are not a member of this group.")
 
 
+def _build_today_response(sb, group_id: str, user_id: str, today: date, word: dict) -> dict:
+    """Assemble the full 'today' payload for a group — reused by GET and POST."""
+    date_str = today.isoformat()
+
+    sentence_result = sb.table("daywordplay_sentences").select(
+        "id, sentence, created_at"
+    ).eq("group_id", group_id).eq("user_id", user_id).eq("assigned_date", date_str).execute()
+
+    submitted = bool(sentence_result.data)
+    my_sentence = sentence_result.data[0] if submitted else None
+
+    all_sentences = sb.table("daywordplay_sentences").select("user_id").eq("group_id", group_id).eq("assigned_date", date_str).execute()
+    submission_count = len(all_sentences.data or [])
+
+    members = sb.table("daywordplay_group_members").select("user_id").eq("group_id", group_id).execute()
+    member_count = len(members.data or [])
+
+    bookmark = sb.table("daywordplay_bookmarks").select("id").eq("user_id", user_id).eq("word_id", word["id"]).execute()
+
+    return {
+        "word": word,
+        "date": date_str,
+        "submitted": submitted,
+        "my_sentence": my_sentence,
+        "submission_count": submission_count,
+        "member_count": member_count,
+        "bookmarked": bool(bookmark.data),
+    }
+
+
 @router.get("/groups/{group_id}/today")
 async def get_today(group_id: str, current_user: dict = Depends(get_current_user)):
     """Today's word for a group + current user's submission status."""
@@ -107,35 +137,7 @@ async def get_today(group_id: str, current_user: dict = Depends(get_current_user
 
     today = date.today()
     word = _get_or_assign_word(sb, group_id, today)
-
-    # Check if user already submitted today
-    sentence_result = sb.table("daywordplay_sentences").select(
-        "id, sentence, created_at"
-    ).eq("group_id", group_id).eq("user_id", current_user["user_id"]).eq("assigned_date", today.isoformat()).execute()
-
-    submitted = bool(sentence_result.data)
-    my_sentence = sentence_result.data[0] if submitted else None
-
-    # Count submissions in this group today
-    all_sentences = sb.table("daywordplay_sentences").select("user_id").eq("group_id", group_id).eq("assigned_date", today.isoformat()).execute()
-    submission_count = len(all_sentences.data or [])
-
-    # Count group members
-    members = sb.table("daywordplay_group_members").select("user_id").eq("group_id", group_id).execute()
-    member_count = len(members.data or [])
-
-    # Check if user is bookmarked
-    bookmark = sb.table("daywordplay_bookmarks").select("id").eq("user_id", current_user["user_id"]).eq("word_id", word["id"]).execute()
-
-    return {
-        "word": word,
-        "date": today.isoformat(),
-        "submitted": submitted,
-        "my_sentence": my_sentence,
-        "submission_count": submission_count,
-        "member_count": member_count,
-        "bookmarked": bool(bookmark.data),
-    }
+    return _build_today_response(sb, group_id, current_user["user_id"], today, word)
 
 
 @router.get(
@@ -189,7 +191,7 @@ async def submit_sentence(
     if existing.data:
         raise HTTPException(status_code=409, detail="You already submitted a sentence for today.")
 
-    result = sb.table("daywordplay_sentences").insert({
+    sb.table("daywordplay_sentences").insert({
         "group_id": group_id,
         "word_id": word["id"],
         "user_id": current_user["user_id"],
@@ -197,7 +199,7 @@ async def submit_sentence(
         "assigned_date": today.isoformat(),
     }).execute()
 
-    return {"sentence": result.data[0]}
+    return _build_today_response(sb, group_id, current_user["user_id"], today, word)
 
 
 @router.get("/groups/{group_id}/yesterday")

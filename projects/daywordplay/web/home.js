@@ -477,13 +477,10 @@ function initHomeListeners() {
     // Snapshot group at click time — user may switch groups before the await resolves
     const submittedGroupId = activeGroupId;
     try {
-      await apiFetch(`/groups/${submittedGroupId}/sentences`, {
+      const fresh = await apiFetch(`/groups/${submittedGroupId}/sentences`, {
         method: 'POST',
         body: JSON.stringify({ sentence }),
       });
-      // Refresh cache for the group we submitted to, not whatever is active now
-      dwpCache.set('today', submittedGroupId, null);
-      const fresh = await apiFetch(`/groups/${submittedGroupId}/today`);
       dwpCache.set('today', submittedGroupId, fresh);
       // Only update UI if user is still on the same group
       if (activeGroupId === submittedGroupId) {
@@ -521,12 +518,10 @@ function initHomeListeners() {
     // Submit + refresh all groups in parallel
     await Promise.all(groupsToSubmit.map(async g => {
       try {
-        await apiFetch(`/groups/${g.id}/sentences`, {
+        const fresh = await apiFetch(`/groups/${g.id}/sentences`, {
           method: 'POST',
           body: JSON.stringify({ sentence }),
         });
-        dwpCache.set('today', g.id, null);
-        const fresh = await apiFetch(`/groups/${g.id}/today`);
         dwpCache.set('today', g.id, fresh);
       } catch (_) {}  // skip groups already submitted or on error
     }));
