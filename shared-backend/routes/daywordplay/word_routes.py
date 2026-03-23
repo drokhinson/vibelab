@@ -13,14 +13,26 @@ from .models import ProposeWordBody, ReusableSentencesResponse, SubmitSentenceBo
 from .dependencies import get_current_user
 
 
+# Module-level cache: same word for all groups on a given date.
+# Keyed by date_str → { word_id, word dict }. Avoids redundant DB lookups
+# when multiple groups request the same date's word within a single process.
+_word_cache: dict[str, dict] = {}
+
+
 def _get_or_assign_word(sb, group_id: str, target_date: date) -> dict:
     """Return the word assigned to a group for a given date, assigning lazily if needed.
 
     All groups share the same global word each day. The global word is determined
     first (from any existing assignment), then this group's entry is created or
-    corrected to match.
+    corrected to match. Results are cached per date to avoid redundant queries.
     """
     date_str = target_date.isoformat()
+
+    # Fast path: word already resolved for this date
+    if date_str in _word_cache:
+        cached = _word_cache[date_str]
+        _ensure_group_assignment(sb, group_id, date_str, cached["id"])
+        return cached
 
     # 1. Determine the global word for this date (from ANY group's assignment)
     any_assignment = sb.table("daywordplay_daily_words").select(
@@ -47,6 +59,21 @@ def _get_or_assign_word(sb, group_id: str, target_date: date) -> dict:
         word_id = random.choice(available)
 
     # 2. Ensure this group has an entry for this date with the correct word
+    _ensure_group_assignment(sb, group_id, date_str, word_id)
+
+    # 3. Fetch and return the word details
+    word_result = sb.table("daywordplay_words").select(
+        "id, word, part_of_speech, definition, etymology"
+    ).eq("id", word_id).execute()
+
+    word = word_result.data[0] if word_result.data else {}
+    if word:
+        _word_cache[date_str] = word
+    return word
+
+
+def _ensure_group_assignment(sb, group_id: str, date_str: str, word_id: str) -> None:
+    """Ensure this group has a daily_words row for the given date with the correct word_id."""
     existing = sb.table("daywordplay_daily_words").select(
         "id, word_id"
     ).eq("group_id", group_id).eq("assigned_date", date_str).execute()
@@ -61,17 +88,9 @@ def _get_or_assign_word(sb, group_id: str, target_date: date) -> dict:
         except Exception:
             pass  # Race condition — another request inserted first
     elif existing.data[0]["word_id"] != word_id:
-        # Fix inconsistent data: update to match global word
         sb.table("daywordplay_daily_words").update(
             {"word_id": word_id}
         ).eq("id", existing.data[0]["id"]).execute()
-
-    # 3. Fetch and return the word details
-    word_result = sb.table("daywordplay_words").select(
-        "id, word, part_of_speech, definition, etymology"
-    ).eq("id", word_id).execute()
-
-    return word_result.data[0] if word_result.data else {}
 
 
 def _verify_member(sb, group_id: str, user_id: str):

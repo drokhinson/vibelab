@@ -90,10 +90,12 @@ function attachLoginListener() {
       });
       setToken(data.token);
       currentUser = data.user;
-      await loadInitialData();
+      localStorage.setItem('dwp_user', JSON.stringify(data.user));
+      await loadEagerData();
       renderApp();
       initShellListeners();
       initPageListeners();
+      _loadDeferredData();
     } catch (err) {
       document.getElementById('auth-form-wrap').innerHTML = renderLoginForm(err.message);
       attachLoginListener();
@@ -117,10 +119,12 @@ function attachRegisterListener() {
       });
       setToken(data.token);
       currentUser = data.user;
-      await loadInitialData();
+      localStorage.setItem('dwp_user', JSON.stringify(data.user));
+      await loadEagerData();
       renderApp();
       initShellListeners();
       initPageListeners();
+      _loadDeferredData();
     } catch (err) {
       document.getElementById('auth-form-wrap').innerHTML = renderRegisterForm(err.message);
       attachRegisterListener();

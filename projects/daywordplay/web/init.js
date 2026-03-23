@@ -13,14 +13,32 @@ async function _fetchAndCacheToday(groupId) {
   }
 }
 
-async function loadInitialData() {
-  // Round trip 1: verify auth + fetch groups in parallel
-  const [userData, groupsData] = await Promise.all([
-    apiFetch('/auth/me'),
-    apiFetch('/groups/mine'),
-  ]);
-  currentUser = userData;
-  myGroups = groupsData.groups || [];
+async function loadEagerData() {
+  // Try cached user first, fall back to /auth/me
+  const cachedUser = localStorage.getItem('dwp_user');
+  let userData;
+  if (cachedUser) {
+    try { userData = JSON.parse(cachedUser); } catch (_) { userData = null; }
+  }
+
+  if (userData) {
+    currentUser = userData;
+    const groupsData = await apiFetch('/groups/mine');
+    myGroups = groupsData.groups || [];
+    // Refresh user profile in background (catches display_name changes, etc.)
+    apiFetch('/auth/me').then(fresh => {
+      currentUser = fresh;
+      localStorage.setItem('dwp_user', JSON.stringify(fresh));
+    }).catch(() => {});
+  } else {
+    const [freshUser, groupsData] = await Promise.all([
+      apiFetch('/auth/me'),
+      apiFetch('/groups/mine'),
+    ]);
+    currentUser = freshUser;
+    localStorage.setItem('dwp_user', JSON.stringify(freshUser));
+    myGroups = groupsData.groups || [];
+  }
 
   // Restore or pick active group
   const stored = getStoredActiveGroup();
@@ -28,22 +46,40 @@ async function loadInitialData() {
     ? stored
     : myGroups[0]?.id || null;
 
-  // Round trip 2: all group data in parallel (no dictionary)
+  // Only fetch today's word for the active group (critical path)
+  if (activeGroupId) {
+    const data = await _fetchAndCacheToday(activeGroupId);
+    if (data) {
+      todayData = data;
+      cachedDailyWord = data.word;
+    }
+  }
+}
+
+// Load non-essential data in background after first render.
+// Re-renders only if the loaded data is relevant to the current view.
+async function _loadDeferredData() {
   await Promise.all([
-    ...myGroups.map(g => _fetchAndCacheToday(g.id)),
+    // Other groups' today data
+    ...myGroups.filter(g => g.id !== activeGroupId).map(g => _fetchAndCacheToday(g.id)),
     _bulkLoadYesterday(),
     _bulkLoadLeaderboards(),
     activeGroupId ? loadReusableSentences() : Promise.resolve(),
     loadHomeJoinRequests(),
   ]);
 
-  // Set todayData from cache — no extra fetch needed
-  if (activeGroupId) {
-    const cached = dwpCache.get('today', activeGroupId);
-    if (cached) {
-      todayData = cached;
-      cachedDailyWord = cached.word;
-    }
+  // Re-render if deferred data affects the current view
+  if (currentView === 'home' && activeWordTab === 'vote') {
+    yesterdayData = dwpCache.get('yesterday', activeGroupId) || null;
+    renderPageContent();
+    initPageListeners();
+  } else if (currentView === 'home' && pendingJoinRequests.length > 0) {
+    renderPageContent();
+    initPageListeners();
+  } else if (currentView === 'leaderboard') {
+    leaderboardData = dwpCache.get('leaderboard', activeGroupId) || null;
+    renderPageContent();
+    initPageListeners();
   }
 }
 
@@ -79,9 +115,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Verify token + load all initial data in parallel rounds
+  // Load only critical data before first render
   try {
-    await loadInitialData();
+    await loadEagerData();
   } catch (err) {
     // Token expired or invalid
     clearToken();
@@ -97,6 +133,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   initShellListeners();
   initPageListeners();
+
+  // Load remaining data in background (no await)
+  _loadDeferredData();
 });
 
 // ── Shell listeners (tabs, header buttons) ───────────────────────────────────

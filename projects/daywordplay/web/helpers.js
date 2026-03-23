@@ -3,7 +3,7 @@
 // ── Auth token ────────────────────────────────────────────────────────────────
 function getToken() { return localStorage.getItem('dwp_token'); }
 function setToken(t) { localStorage.setItem('dwp_token', t); }
-function clearToken() { localStorage.removeItem('dwp_token'); }
+function clearToken() { localStorage.removeItem('dwp_token'); localStorage.removeItem('dwp_user'); }
 
 function getStoredActiveGroup() { return localStorage.getItem('dwp_active_group'); }
 function setStoredActiveGroup(id) { localStorage.setItem('dwp_active_group', id); }
