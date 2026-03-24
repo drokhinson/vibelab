@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, Path
 from db import get_supabase
 
 from . import router
-from .models import ProposeWordBody, ReusableSentencesResponse, SubmitSentenceBody, VoteCountItem, VoteCountsResponse
+from .models import BulkYesterdayGroupEntry, BulkYesterdayResponse, ProposeWordBody, ReusableSentencesResponse, SubmitSentenceBody, VoteCountItem, VoteCountsResponse
 from .dependencies import get_current_user
 
 
@@ -200,6 +200,95 @@ async def submit_sentence(
     }).execute()
 
     return _build_today_response(sb, group_id, current_user["user_id"], today, word)
+
+
+@router.get(
+    "/bulk-yesterday",
+    response_model=BulkYesterdayResponse,
+    status_code=200,
+    summary="All groups' yesterday data in one request",
+)
+async def get_bulk_yesterday(
+    current_user: dict = Depends(get_current_user),
+) -> BulkYesterdayResponse:
+    """Return yesterday's word, sentences, and vote status for every group the user belongs to."""
+    sb = get_supabase()
+    user_id: str = current_user["user_id"]
+    yesterday = date.today() - timedelta(days=1)
+    yesterday_str = yesterday.isoformat()
+
+    # 1. All groups this user belongs to (replaces N _verify_member calls)
+    memberships = sb.table("daywordplay_group_members").select(
+        "group_id"
+    ).eq("user_id", user_id).execute()
+    group_ids: list[str] = [m["group_id"] for m in (memberships.data or [])]
+
+    if not group_ids:
+        return BulkYesterdayResponse(groups={})
+
+    # 2. Resolve yesterday's word (same for all groups) — uses module cache
+    word = _get_or_assign_word(sb, group_ids[0], yesterday)
+
+    # Ensure remaining groups have their daily_words assignment
+    if len(group_ids) > 1 and word:
+        existing = sb.table("daywordplay_daily_words").select(
+            "group_id"
+        ).in_("group_id", group_ids[1:]).eq("assigned_date", yesterday_str).execute()
+        assigned_ids = {r["group_id"] for r in (existing.data or [])}
+        for gid in group_ids[1:]:
+            if gid not in assigned_ids:
+                _ensure_group_assignment(sb, gid, yesterday_str, word["id"])
+
+    # 3. All sentences across all groups for yesterday
+    sentences_result = sb.table("daywordplay_sentences").select(
+        "id, sentence, user_id, group_id, created_at, daywordplay_users(username, display_name)"
+    ).in_("group_id", group_ids).eq("assigned_date", yesterday_str).execute()
+    sentences = sentences_result.data or []
+    sentence_ids: list[str] = [s["id"] for s in sentences]
+
+    # 4 & 5. Votes — batch across all sentences
+    vote_counts: dict[str, int] = {}
+    my_votes: set[str] = set()
+    if sentence_ids:
+        votes = sb.table("daywordplay_votes").select(
+            "sentence_id"
+        ).in_("sentence_id", sentence_ids).execute()
+        for v in (votes.data or []):
+            sid = v["sentence_id"]
+            vote_counts[sid] = vote_counts.get(sid, 0) + 1
+
+        my_vote_result = sb.table("daywordplay_votes").select(
+            "sentence_id"
+        ).eq("voter_user_id", user_id).in_("sentence_id", sentence_ids).execute()
+        my_votes = {v["sentence_id"] for v in (my_vote_result.data or [])}
+
+    # 6. Group sentences by group_id and build per-group responses
+    groups_map: dict[str, list[dict]] = {gid: [] for gid in group_ids}
+    for s in sentences:
+        user_info = s.get("daywordplay_users") or {}
+        groups_map[s["group_id"]].append({
+            "id": s["id"],
+            "sentence": s["sentence"],
+            "user_id": s["user_id"],
+            "username": user_info.get("username", ""),
+            "display_name": user_info.get("display_name", ""),
+            "vote_count": vote_counts.get(s["id"], 0),
+            "i_voted": s["id"] in my_votes,
+            "is_mine": s["user_id"] == user_id,
+        })
+
+    result: dict[str, BulkYesterdayGroupEntry] = {}
+    for gid in group_ids:
+        enriched = sorted(groups_map[gid], key=lambda x: x["vote_count"], reverse=True)
+        group_my_votes = any(s["i_voted"] for s in enriched)
+        result[gid] = BulkYesterdayGroupEntry(
+            word=word,
+            date=yesterday_str,
+            sentences=enriched,
+            has_voted=group_my_votes,
+        )
+
+    return BulkYesterdayResponse(groups=result)
 
 
 @router.get("/groups/{group_id}/yesterday")
