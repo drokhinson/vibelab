@@ -86,7 +86,7 @@ function renderDictCard(w) {
       <div class="dict-def">${escHtml(w.definition)}</div>
       ${w.etymology ? `<div class="dict-def" style="font-size:13px; color:var(--text-muted); margin-top:8px;"><strong>Origin:</strong> ${escHtml(w.etymology)}</div>` : ''}
       ${(() => {
-        const isMyWin = w.winning_user_id && currentUser && w.winning_user_id === currentUser.user_id;
+        const isMyWin = w.winning_user_id && currentUser && w.winning_user_id === currentUser.id;
         return w.is_played && w.my_sentence && !isMyWin ? `
           <div class="dict-my-sentence">
             <div class="dict-my-sentence-label">✍️ Your sentence</div>
@@ -95,7 +95,7 @@ function renderDictCard(w) {
         ` : '';
       })()}
       ${w.winning_sentence ? (() => {
-        const isMyWin = w.winning_user_id && currentUser && w.winning_user_id === currentUser.user_id;
+        const isMyWin = w.winning_user_id && currentUser && w.winning_user_id === currentUser.id;
         return `
         <div class="dict-winning-sentence ${isMyWin ? 'dict-winning-mine' : ''}">
           <div class="dict-winning-label">${isMyWin ? '👑 Your winning sentence' : '🏆 Best sentence'}</div>
