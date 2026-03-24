@@ -1348,6 +1348,13 @@ body {
 }
 
 /* ── Inline join request bubbles (under group cards in profile) ───────────────*/
+.join-req-loading {
+  height: 2px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 4px 0;
+  opacity: 0.5;
+}
 .group-join-reqs {
   display: flex;
   flex-direction: column;

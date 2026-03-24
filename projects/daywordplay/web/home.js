@@ -91,6 +91,7 @@ async function loadHomeJoinRequests() {
     })
   );
   pendingJoinRequests = results.filter(r => r.requests.length > 0);
+  updateSettingsBadge();
 }
 
 function renderHomeView() {

@@ -186,6 +186,7 @@ function initShellListeners() {
     currentView = 'profile';
     renderPageContent();
     initPageListeners();
+    updateSettingsBadge();
     updateTabBar();
   });
 
