@@ -539,12 +539,14 @@ async def get_all_words(current_user: dict = Depends(get_current_user)) -> dict:
         word_sentences = sentences_by_word.get(wid, [])
         winning_sentence = None
         winning_author = None
+        winning_user_id = None
         if word_sentences:
             best = max(word_sentences, key=lambda s: vote_counts.get(s["id"], 0))
             if vote_counts.get(best["id"], 0) > 0:
                 winning_sentence = best["sentence"]
                 user_info = best.get("daywordplay_users") or {}
                 winning_author = user_info.get("display_name") or user_info.get("username", "")
+                winning_user_id = best.get("user_id")
 
         result.append({
             **w,
@@ -617,12 +619,14 @@ async def get_played_words(current_user: dict = Depends(get_current_user)) -> di
         word_sentences = sentences_by_word.get(wid, [])
         winning_sentence = None
         winning_author = None
+        winning_user_id = None
         if word_sentences:
             best = max(word_sentences, key=lambda s: vote_counts.get(s["id"], 0))
             if vote_counts.get(best["id"], 0) > 0:
                 winning_sentence = best["sentence"]
                 user_info = best.get("daywordplay_users") or {}
                 winning_author = user_info.get("display_name") or user_info.get("username", "")
+                winning_user_id = best.get("user_id")
 
         result.append({
             **w,
