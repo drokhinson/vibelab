@@ -81,6 +81,7 @@ function bindAuthSubmit(isLogin) {
       setToken(data.token);
       currentUser = data.user;
       await loadPlants();
+      try { preloadThumbnails(plants, renderStyle); } catch (_) {}
       showView("gardens");
     } catch (err) {
       errEl.innerHTML = '<div class="error-banner">' + err.message + '</div>';
