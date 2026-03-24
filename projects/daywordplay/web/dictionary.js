@@ -85,12 +85,15 @@ function renderDictCard(w) {
       </div>
       <div class="dict-def">${escHtml(w.definition)}</div>
       ${w.etymology ? `<div class="dict-def" style="font-size:13px; color:var(--text-muted); margin-top:8px;"><strong>Origin:</strong> ${escHtml(w.etymology)}</div>` : ''}
-      ${w.is_played && w.my_sentence ? `
-        <div class="dict-my-sentence">
-          <div class="dict-my-sentence-label">✍️ Your sentence</div>
-          "${highlightWord(w.my_sentence, w.word)}"
-        </div>
-      ` : ''}
+      ${(() => {
+        const isMyWin = w.winning_user_id && currentUser && w.winning_user_id === currentUser.user_id;
+        return w.is_played && w.my_sentence && !isMyWin ? `
+          <div class="dict-my-sentence">
+            <div class="dict-my-sentence-label">✍️ Your sentence</div>
+            "${highlightWord(w.my_sentence, w.word)}"
+          </div>
+        ` : '';
+      })()}
       ${w.winning_sentence ? (() => {
         const isMyWin = w.winning_user_id && currentUser && w.winning_user_id === currentUser.user_id;
         return `
