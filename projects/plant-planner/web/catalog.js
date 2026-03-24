@@ -58,10 +58,7 @@ function renderCatalogList() {
     html += '\
       <div class="catalog-tile" draggable="true" data-plant-id="' + p.id + '" style="--i:' + k + '">\
         <img class="catalog-thumbnail" src="' + catThumb + '" alt="' + escapeHtml(p.name) + '" draggable="false" />\
-        <div class="catalog-info">\
-          <span class="catalog-name">' + escapeHtml(p.name) + '</span>\
-          <span class="catalog-meta">' + sunlightIcon(p.sunlight) + ' ' + p.height_inches + '"h</span>\
-        </div>\
+        <span class="catalog-name">' + escapeHtml(p.name) + '</span>\
       </div>';
   }
   if (filtered.length === 0) {
@@ -128,6 +125,7 @@ function bindCatalogDrag() {
       draggedPlant = null;
     };
   });
+  bindCatalogTouch();
 }
 
 function getPlantById(id) {
