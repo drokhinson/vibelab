@@ -73,7 +73,8 @@ function renderTopGrid(g) {
       var cellDrag = "";
       if (plant) {
         var thumb = getPlantThumbnail(plant, renderStyle);
-        cellContent = '<img class="cell-thumbnail" src="' + thumb + '" alt="' + escapeHtml(plant.name) + '" draggable="false" />';
+        cellContent = '<img class="cell-thumbnail" src="' + thumb + '" alt="' + escapeHtml(plant.name) + '" draggable="false" />' +
+          '<span class="cell-label">' + escapeHtml(plant.name) + '</span>';
         cellClass += " occupied";
         cellDrag = ' draggable="true"';
       }
@@ -204,7 +205,8 @@ function bindGridEvents(g) {
         cell.classList.add("occupied");
         cell.setAttribute("draggable", "true");
         var thumb = getPlantThumbnail(draggedPlant, renderStyle);
-        cell.innerHTML = '<img class="cell-thumbnail" src="' + thumb + '" alt="' + escapeHtml(draggedPlant.name) + '" draggable="false" />';
+        cell.innerHTML = '<img class="cell-thumbnail" src="' + thumb + '" alt="' + escapeHtml(draggedPlant.name) + '" draggable="false" />' +
+          '<span class="cell-label">' + escapeHtml(draggedPlant.name) + '</span>';
         dragSourceKey = null;
         sync3DView();
       }
@@ -232,6 +234,7 @@ function bindGridEvents(g) {
     };
     cell.onmouseleave = function() { hideTooltip(); };
   });
+  bindGridTouch();
 }
 
 function bindCompassButtons() {
