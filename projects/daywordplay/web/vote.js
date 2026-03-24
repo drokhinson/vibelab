@@ -13,13 +13,21 @@ async function loadYesterdayData() {
 }
 
 async function _bulkLoadYesterday() {
-  await Promise.all(myGroups.map(async (g) => {
-    if (dwpCache.get('yesterday', g.id)) return; // already cached
-    try {
-      const data = await apiFetch(`/groups/${g.id}/yesterday`);
-      dwpCache.set('yesterday', g.id, data);
-    } catch (_) {}
-  }));
+  try {
+    const data = await apiFetch('/bulk-yesterday');
+    for (const [groupId, groupData] of Object.entries(data.groups || {})) {
+      dwpCache.set('yesterday', groupId, groupData);
+    }
+  } catch (_) {
+    // Fallback to per-group requests if bulk endpoint unavailable
+    await Promise.all(myGroups.map(async (g) => {
+      if (dwpCache.get('yesterday', g.id)) return;
+      try {
+        const d = await apiFetch(`/groups/${g.id}/yesterday`);
+        dwpCache.set('yesterday', g.id, d);
+      } catch (_) {}
+    }));
+  }
 }
 
 // Lightweight vote-count refresh for the active group. Called non-blocking on group switch.

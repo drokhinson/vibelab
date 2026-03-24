@@ -61,3 +61,25 @@ class VoteCountItem(BaseModel):
 class VoteCountsResponse(BaseModel):
     vote_counts: list[VoteCountItem]
     has_voted: bool
+
+
+class BulkSentenceItem(BaseModel):
+    id: str
+    sentence: str
+    user_id: str
+    username: str
+    display_name: str
+    vote_count: int
+    i_voted: bool
+    is_mine: bool
+
+
+class BulkYesterdayGroupEntry(BaseModel):
+    word: Optional[dict] = None
+    date: str
+    sentences: list[BulkSentenceItem]
+    has_voted: bool
+
+
+class BulkYesterdayResponse(BaseModel):
+    groups: dict[str, BulkYesterdayGroupEntry]
