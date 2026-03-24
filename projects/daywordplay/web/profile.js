@@ -35,12 +35,15 @@ function renderProfileView() {
       ${myGroups.length > 0 ? `
         <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Swipe right to share · swipe left to leave</p>
         <div class="group-list" id="profile-group-list">
-          ${myGroups.map(g => renderProfileGroupCard(g)).join('')}
+          ${myGroups.map(g => `
+            <div class="group-with-reqs">
+              ${renderProfileGroupCard(g)}
+              <div class="group-join-reqs" id="join-reqs-${escHtml(g.id)}"></div>
+            </div>
+          `).join('')}
         </div>
       ` : `<p class="text-muted">You haven't joined any groups yet.</p>`}
     </div>
-
-    <div id="join-requests-section" style="margin-top:24px;"></div>
 
     <div style="margin-top:32px; padding-bottom:24px;">
       <button class="danger-btn" id="logout-btn">Log Out</button>
@@ -303,8 +306,7 @@ async function leaveGroup(groupId) {
 // ── Join request approval ────────────────────────────────────────────────────
 
 async function loadAllJoinRequests() {
-  const section = document.getElementById('join-requests-section');
-  if (!section || !myGroups.length) return;
+  if (!myGroups.length) return;
 
   // Fetch pending requests for all groups in parallel
   const results = await Promise.all(
@@ -318,38 +320,27 @@ async function loadAllJoinRequests() {
     })
   );
 
-  // Only show groups that have pending requests
-  const withRequests = results.filter(r => r.requests.length > 0);
-  if (!withRequests.length) {
-    section.innerHTML = '';
-    return;
+  // Update global state
+  pendingJoinRequests = results.filter(r => r.requests.length > 0);
+
+  // Populate per-group inline slots
+  for (const { group, requests } of results) {
+    const slot = document.getElementById(`join-reqs-${group.id}`);
+    if (!slot) continue;
+    if (!requests.length) { slot.innerHTML = ''; continue; }
+    slot.innerHTML = requests.map(req => `
+      <div class="join-req-bubble" data-req-id="${req.id}" data-group-id="${group.id}">
+        <span class="join-req-name"><strong>${escHtml(req.display_name || req.username)}</strong> wants to join</span>
+        <div class="join-req-actions">
+          <button class="approve-btn-sm" data-approve="${req.id}" data-group="${group.id}" title="Approve">${icons.check}</button>
+          <button class="deny-btn-sm" data-deny="${req.id}" data-group="${group.id}" title="Reject">&times;</button>
+        </div>
+      </div>
+    `).join('');
   }
 
-  section.innerHTML = `
-    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-      <span style="font-size:20px; font-weight:700; color:var(--text-primary);">Join Requests</span>
-      <span class="badge" style="background:var(--accent); color:#fff; border-radius:10px; padding:2px 8px; font-size:12px; font-weight:600;">${withRequests.reduce((n, r) => n + r.requests.length, 0)}</span>
-    </div>
-    ${withRequests.map(({ group, requests }) => `
-      <div style="margin-bottom:16px;">
-        <div style="font-size:13px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px;">${escHtml(group.name)}</div>
-        ${requests.map(req => `
-          <div class="join-request-card" data-req-id="${req.id}" data-group-id="${group.id}">
-            <div class="join-request-info">
-              <span class="join-request-name">${escHtml(req.display_name || req.username)}</span>
-              <span class="join-request-user">@${escHtml(req.username)}</span>
-            </div>
-            <div class="join-request-actions">
-              <button class="approve-btn" data-approve="${req.id}" data-group="${group.id}" title="Approve">${icons.check}</button>
-              <button class="deny-btn" data-deny="${req.id}" data-group="${group.id}" title="Deny">✕</button>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    `).join('')}
-  `;
-
   attachJoinRequestListeners();
+  updateSettingsBadge();
 }
 
 function attachJoinRequestListeners() {
@@ -357,14 +348,18 @@ function attachJoinRequestListeners() {
     btn.addEventListener('click', async () => {
       const requestId = btn.dataset.approve;
       const groupId = btn.dataset.group;
-      const card = btn.closest('.join-request-card');
+      const bubble = btn.closest('.join-req-bubble');
       btn.disabled = true;
       try {
         await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
           method: 'POST',
           body: JSON.stringify({ action: 'approve' }),
         });
-        if (card) card.innerHTML = '<div style="color:var(--accent); font-size:13px; padding:8px 0;">Approved</div>';
+        if (bubble) bubble.remove();
+        for (const entry of pendingJoinRequests)
+          entry.requests = entry.requests.filter(r => r.id !== requestId);
+        pendingJoinRequests = pendingJoinRequests.filter(e => e.requests.length > 0);
+        updateSettingsBadge();
       } catch (err) {
         btn.disabled = false;
         alert(err.message);
@@ -376,14 +371,18 @@ function attachJoinRequestListeners() {
     btn.addEventListener('click', async () => {
       const requestId = btn.dataset.deny;
       const groupId = btn.dataset.group;
-      const card = btn.closest('.join-request-card');
+      const bubble = btn.closest('.join-req-bubble');
       btn.disabled = true;
       try {
         await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
           method: 'POST',
           body: JSON.stringify({ action: 'deny' }),
         });
-        if (card) card.innerHTML = '<div style="color:var(--text-muted); font-size:13px; padding:8px 0;">Denied</div>';
+        if (bubble) bubble.remove();
+        for (const entry of pendingJoinRequests)
+          entry.requests = entry.requests.filter(r => r.id !== requestId);
+        pendingJoinRequests = pendingJoinRequests.filter(e => e.requests.length > 0);
+        updateSettingsBadge();
       } catch (err) {
         btn.disabled = false;
         alert(err.message);
