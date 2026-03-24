@@ -228,6 +228,95 @@ async def get_leaderboard(group_id: str, current_user: dict = Depends(get_curren
     return {"group_name": group_info.get("name"), "group_code": group_info.get("code"), "leaderboard": leaderboard}
 
 
+@router.get("/leaderboards/bulk")
+async def get_bulk_leaderboards(current_user: dict = Depends(get_current_user)):
+    """All-time leaderboards for all groups the current user belongs to, in one request."""
+    sb = get_supabase()
+    user_id = current_user["user_id"]
+
+    # 1. Get all user's group memberships + group name/code
+    memberships = sb.table("daywordplay_group_members").select(
+        "group_id, daywordplay_groups(name, code)"
+    ).eq("user_id", user_id).execute()
+
+    group_ids = [m["group_id"] for m in (memberships.data or [])]
+    group_info_map = {
+        m["group_id"]: m.get("daywordplay_groups") or {}
+        for m in (memberships.data or [])
+    }
+
+    if not group_ids:
+        return {"leaderboards": {}}
+
+    # 2. Get all sentences for those groups
+    sentences = sb.table("daywordplay_sentences").select("id, user_id, group_id").in_("group_id", group_ids).execute()
+    sentence_ids = [s["id"] for s in (sentences.data or [])]
+    # Maps: sentence_id -> user_id, sentence_id -> group_id
+    sentence_user_map = {s["id"]: s["user_id"] for s in (sentences.data or [])}
+    sentence_group_map = {s["id"]: s["group_id"] for s in (sentences.data or [])}
+
+    # 3. Get all votes for those sentences
+    vote_counts: dict[str, int] = {}
+    if sentence_ids:
+        votes = sb.table("daywordplay_votes").select("sentence_id").in_("sentence_id", sentence_ids).execute()
+        for v in (votes.data or []):
+            sid = v["sentence_id"]
+            vote_counts[sid] = vote_counts.get(sid, 0) + 1
+
+    # 4. Get all members + user info for those groups
+    members_result = sb.table("daywordplay_group_members").select(
+        "group_id, user_id, daywordplay_users(username, display_name)"
+    ).in_("group_id", group_ids).execute()
+
+    # Aggregate votes and sentence counts per user per group
+    user_vote_totals: dict[str, dict[str, int]] = {}   # group_id -> user_id -> total_votes
+    user_sentence_counts: dict[str, dict[str, int]] = {}  # group_id -> user_id -> count
+    for sid, uid in sentence_user_map.items():
+        gid = sentence_group_map[sid]
+        user_vote_totals.setdefault(gid, {})
+        user_sentence_counts.setdefault(gid, {})
+        user_vote_totals[gid][uid] = user_vote_totals[gid].get(uid, 0) + vote_counts.get(sid, 0)
+        user_sentence_counts[gid][uid] = user_sentence_counts[gid].get(uid, 0) + 1
+
+    # Build per-group member lookup
+    group_members: dict[str, list] = {}
+    for m in (members_result.data or []):
+        gid = m["group_id"]
+        group_members.setdefault(gid, []).append(m)
+
+    # Assemble leaderboards
+    leaderboards: dict[str, dict] = {}
+    for gid in group_ids:
+        members = group_members.get(gid, [])
+        g_votes = user_vote_totals.get(gid, {})
+        g_sentences = user_sentence_counts.get(gid, {})
+        g_info = group_info_map.get(gid, {})
+
+        leaderboard = []
+        for m in members:
+            uid = m["user_id"]
+            user_info = m.get("daywordplay_users") or {}
+            leaderboard.append({
+                "user_id": uid,
+                "username": user_info.get("username", ""),
+                "display_name": user_info.get("display_name", ""),
+                "total_votes": g_votes.get(uid, 0),
+                "sentences_submitted": g_sentences.get(uid, 0),
+            })
+
+        leaderboard.sort(key=lambda x: x["total_votes"], reverse=True)
+        for i, entry in enumerate(leaderboard):
+            entry["rank"] = i + 1
+
+        leaderboards[gid] = {
+            "group_name": g_info.get("name"),
+            "group_code": g_info.get("code"),
+            "leaderboard": leaderboard,
+        }
+
+    return {"leaderboards": leaderboards}
+
+
 @router.delete("/groups/{group_id}/leave")
 async def leave_group(group_id: str, current_user: dict = Depends(get_current_user)):
     """Leave a group."""

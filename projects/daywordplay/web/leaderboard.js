@@ -13,13 +13,12 @@ async function loadLeaderboard() {
 }
 
 async function _bulkLoadLeaderboards() {
-  await Promise.all(myGroups.map(async (g) => {
-    if (dwpCache.get('leaderboard', g.id)) return; // already cached
-    try {
-      const data = await apiFetch(`/groups/${g.id}/leaderboard`);
-      dwpCache.set('leaderboard', g.id, data);
-    } catch (_) {}
-  }));
+  try {
+    const data = await apiFetch('/leaderboards/bulk');
+    for (const [groupId, lb] of Object.entries(data.leaderboards || {})) {
+      dwpCache.set('leaderboard', groupId, lb);
+    }
+  } catch (_) {}
 }
 
 function renderLeaderboardView() {
@@ -31,7 +30,7 @@ function renderLeaderboardView() {
       <span class="section-title">🏆 Leaderboard</span>
     </div>
     ${!leaderboardData
-      ? `<div class="loading" style="height:40vh"></div>`
+      ? `<div class="loading-screen" style="height:40vh"><div class="loading-spinner"></div></div>`
       : renderLeaderboardContent()
     }
   `;
