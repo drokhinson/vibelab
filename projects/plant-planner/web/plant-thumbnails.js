@@ -65,12 +65,37 @@ function _renderPlantThumbnail(plant, style) {
   return _thumbRenderer.domElement.toDataURL("image/png");
 }
 
+function _svgFallback(plant) {
+  var desc = getPlantDescriptor(plant);
+  var foliageColor = "#4CAF50";
+  var stemColor = desc.stem && desc.stem.color ? desc.stem.color : "#4a7c3f";
+  if (desc.foliage && desc.foliage.length > 0 && desc.foliage[0].color) {
+    foliageColor = desc.foliage[0].color;
+  }
+  var accentColor = foliageColor;
+  if (desc.accents && desc.accents.length > 0 && desc.accents[0].color) {
+    accentColor = desc.accents[0].color;
+  }
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">' +
+    '<rect x="58" y="50" width="12" height="50" rx="3" fill="' + stemColor + '"/>' +
+    '<ellipse cx="64" cy="45" rx="30" ry="25" fill="' + foliageColor + '" opacity="0.85"/>' +
+    '<ellipse cx="72" cy="38" rx="12" ry="10" fill="' + accentColor + '" opacity="0.7"/>' +
+    '</svg>';
+  return "data:image/svg+xml," + encodeURIComponent(svg);
+}
+
 function getPlantThumbnail(plant, style) {
   var key = plant.id + "_" + (style || renderStyle);
   if (plantThumbnailCache[key]) return plantThumbnailCache[key];
-  var url = _renderPlantThumbnail(plant, style || renderStyle);
-  plantThumbnailCache[key] = url;
-  return url;
+  try {
+    var url = _renderPlantThumbnail(plant, style || renderStyle);
+    plantThumbnailCache[key] = url;
+    return url;
+  } catch (e) {
+    var fallback = _svgFallback(plant);
+    plantThumbnailCache[key] = fallback;
+    return fallback;
+  }
 }
 
 function preloadThumbnails(plantList, style) {
@@ -78,7 +103,11 @@ function preloadThumbnails(plantList, style) {
   for (var i = 0; i < plantList.length; i++) {
     var key = plantList[i].id + "_" + style;
     if (!plantThumbnailCache[key]) {
-      plantThumbnailCache[key] = _renderPlantThumbnail(plantList[i], style);
+      try {
+        plantThumbnailCache[key] = _renderPlantThumbnail(plantList[i], style);
+      } catch (_) {
+        plantThumbnailCache[key] = _svgFallback(plantList[i]);
+      }
     }
   }
   _disposeThumbRenderer();
