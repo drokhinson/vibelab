@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash:*)",
+      "Bash(git:*)",
+      "Bash(uvicorn:*)",
+      "Bash(python:*)",
+      "Bash(pip:*)"
+    ]
+  }
+}
