@@ -81,6 +81,9 @@ async function _loadDeferredData() {
     renderPageContent();
     initPageListeners();
   }
+
+  // Show popup for any pending join requests regardless of current view
+  showPendingRequestsModal();
 }
 
 // ── Page listener dispatcher ──────────────────────────────────────────────────
