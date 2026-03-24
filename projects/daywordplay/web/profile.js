@@ -308,6 +308,12 @@ async function leaveGroup(groupId) {
 async function loadAllJoinRequests() {
   if (!myGroups.length) return;
 
+  // Show loading state in all slots immediately
+  for (const g of myGroups) {
+    const slot = document.getElementById(`join-reqs-${g.id}`);
+    if (slot) slot.innerHTML = '<div class="join-req-loading"></div>';
+  }
+
   // Fetch pending requests for all groups in parallel
   const results = await Promise.all(
     myGroups.map(async (g) => {
