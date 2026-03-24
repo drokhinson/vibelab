@@ -35,7 +35,7 @@ function renderDictionaryView() {
     </div>
     <div class="dict-scroll-area">
       ${!isLoaded
-        ? `<div class="loading" style="height:40vh"></div>`
+        ? `<div style="display:flex;justify-content:center;align-items:center;height:40vh;"><div class="loading-spinner"></div></div>`
         : filtered.length === 0
           ? `<div class="text-muted text-center" style="padding:40px 0;">
               <div style="font-size:40px; margin-bottom:12px;">${dictFilter === 'played' ? '✍️' : '📖'}</div>
