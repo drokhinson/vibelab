@@ -126,7 +126,7 @@ function renderTodayTab() {
 
 function renderVoteTab() {
   if (!yesterdayData) {
-    return `<div class="loading" style="height:60vh"></div>`;
+    return `<div style="display:flex;justify-content:center;align-items:center;height:60vh;"><div class="loading-spinner"></div></div>`;
   }
 
   const { word, sentences, has_voted, date } = yesterdayData;
