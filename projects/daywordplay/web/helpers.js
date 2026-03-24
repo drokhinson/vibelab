@@ -92,6 +92,16 @@ function highlightWord(sentence, word) {
   return escaped.replace(re, '<span class="word-highlight">$1</span>');
 }
 
+// ── Settings badge ────────────────────────────────────────────────────────────
+function updateSettingsBadge() {
+  const btn = document.getElementById('profile-btn');
+  if (!btn) return;
+  btn.querySelector('.settings-badge')?.remove();
+  if (pendingJoinRequests.some(e => e.requests.length > 0)) {
+    btn.insertAdjacentHTML('beforeend', '<span class="settings-badge">!</span>');
+  }
+}
+
 // ── Main render orchestrator ──────────────────────────────────────────────────
 function renderApp() {
   const root = document.getElementById('root');

@@ -76,7 +76,7 @@ function renderWordTabs() {
   `;
 }
 
-// ── Join request loading & rendering for home tab ────────────────────────────
+// ── Join request loading ──────────────────────────────────────────────────────
 
 async function loadHomeJoinRequests() {
   if (!myGroups.length) { pendingJoinRequests = []; return; }
@@ -93,190 +93,12 @@ async function loadHomeJoinRequests() {
   pendingJoinRequests = results.filter(r => r.requests.length > 0);
 }
 
-function renderHomeJoinRequests() {
-  if (!pendingJoinRequests.length) return '';
-  return `
-    <div class="home-join-requests">
-      ${pendingJoinRequests.flatMap(({ group, requests }) =>
-        requests.map(req => `
-          <div class="join-request-bubble" data-req-id="${req.id}" data-group-id="${group.id}">
-            <div class="join-request-bubble-text">
-              <strong>${escHtml(req.display_name || req.username)}</strong> wants to join <strong>${escHtml(group.name)}</strong>
-            </div>
-            <div class="join-request-bubble-actions">
-              <button class="approve-btn-sm" data-home-approve="${req.id}" data-home-group="${group.id}" title="Approve">${icons.check}</button>
-              <button class="deny-btn-sm" data-home-deny="${req.id}" data-home-group="${group.id}" title="Deny">&times;</button>
-            </div>
-          </div>
-        `)
-      ).join('')}
-    </div>
-  `;
-}
-
-function initHomeJoinRequestListeners() {
-  document.querySelectorAll('[data-home-approve]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const requestId = btn.dataset.homeApprove;
-      const groupId = btn.dataset.homeGroup;
-      const bubble = btn.closest('.join-request-bubble');
-      btn.disabled = true;
-      try {
-        await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
-          method: 'POST',
-          body: JSON.stringify({ action: 'approve' }),
-        });
-        if (bubble) bubble.remove();
-        for (const entry of pendingJoinRequests) {
-          entry.requests = entry.requests.filter(r => r.id !== requestId);
-        }
-        pendingJoinRequests = pendingJoinRequests.filter(e => e.requests.length > 0);
-      } catch (err) {
-        btn.disabled = false;
-      }
-    });
-  });
-
-  document.querySelectorAll('[data-home-deny]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const requestId = btn.dataset.homeDeny;
-      const groupId = btn.dataset.homeGroup;
-      const bubble = btn.closest('.join-request-bubble');
-      btn.disabled = true;
-      try {
-        await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
-          method: 'POST',
-          body: JSON.stringify({ action: 'deny' }),
-        });
-        if (bubble) bubble.remove();
-        for (const entry of pendingJoinRequests) {
-          entry.requests = entry.requests.filter(r => r.id !== requestId);
-        }
-        pendingJoinRequests = pendingJoinRequests.filter(e => e.requests.length > 0);
-      } catch (err) {
-        btn.disabled = false;
-      }
-    });
-  });
-}
-
-// ── Join request modal (shown on login) ──────────────────────────────────────
-
-function renderPendingRequestsModal() {
-  const total = pendingJoinRequests.reduce((n, r) => n + r.requests.length, 0);
-  return `
-    <div class="modal-overlay" id="pending-requests-modal-overlay">
-      <div class="modal-sheet" role="dialog" aria-modal="true" aria-label="Join Requests">
-        <div class="modal-handle"></div>
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-          <div class="modal-title" style="display:flex; align-items:center; gap:8px;">
-            Join Requests
-            <span style="background:var(--accent); color:#fff; border-radius:10px; padding:2px 8px; font-size:12px; font-weight:600;">${total}</span>
-          </div>
-          <button class="modal-close-btn" id="pending-requests-modal-close" aria-label="Close">&times;</button>
-        </div>
-        <div id="pending-requests-modal-body">
-          ${pendingJoinRequests.flatMap(({ group, requests }) =>
-            requests.map(req => `
-              <div class="join-request-card" data-modal-req-id="${req.id}" data-modal-group-id="${group.id}">
-                <div class="join-request-info">
-                  <span class="join-request-name">${escHtml(req.display_name || req.username)}</span>
-                  <span class="join-request-user">@${escHtml(req.username)} &rarr; <em>${escHtml(group.name)}</em></span>
-                </div>
-                <div class="join-request-actions">
-                  <button class="approve-btn" data-modal-approve="${req.id}" data-modal-group="${group.id}" title="Approve">${icons.check}</button>
-                  <button class="deny-btn" data-modal-deny="${req.id}" data-modal-group="${group.id}" title="Deny">&times;</button>
-                </div>
-              </div>
-            `)
-          ).join('')}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function showPendingRequestsModal() {
-  if (!pendingJoinRequests.length) return;
-  if (document.getElementById('pending-requests-modal-overlay')) return;
-
-  document.body.insertAdjacentHTML('beforeend', renderPendingRequestsModal());
-
-  const overlay = document.getElementById('pending-requests-modal-overlay');
-
-  document.getElementById('pending-requests-modal-close')?.addEventListener('click', () => overlay?.remove());
-  overlay?.addEventListener('click', (e) => {
-    if (e.target.id === 'pending-requests-modal-overlay') overlay.remove();
-  });
-
-  function _closeIfEmpty() {
-    if (!pendingJoinRequests.length) overlay?.remove();
-  }
-
-  document.querySelectorAll('[data-modal-approve]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const requestId = btn.dataset.modalApprove;
-      const groupId = btn.dataset.modalGroup;
-      const card = btn.closest('[data-modal-req-id]');
-      btn.disabled = true;
-      try {
-        await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
-          method: 'POST',
-          body: JSON.stringify({ action: 'approve' }),
-        });
-        if (card) {
-          const msg = document.createElement('div');
-          msg.style.cssText = 'color:var(--accent);font-size:13px;padding:8px 0;';
-          msg.textContent = 'Approved';
-          card.replaceWith(msg);
-        }
-        for (const entry of pendingJoinRequests)
-          entry.requests = entry.requests.filter(r => r.id !== requestId);
-        pendingJoinRequests = pendingJoinRequests.filter(e => e.requests.length > 0);
-        _closeIfEmpty();
-      } catch (err) {
-        btn.disabled = false;
-        alert(err.message);
-      }
-    });
-  });
-
-  document.querySelectorAll('[data-modal-deny]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const requestId = btn.dataset.modalDeny;
-      const groupId = btn.dataset.modalGroup;
-      const card = btn.closest('[data-modal-req-id]');
-      btn.disabled = true;
-      try {
-        await apiFetch(`/groups/${groupId}/join-requests/${requestId}`, {
-          method: 'POST',
-          body: JSON.stringify({ action: 'deny' }),
-        });
-        if (card) {
-          const msg = document.createElement('div');
-          msg.style.cssText = 'color:var(--text-muted);font-size:13px;padding:8px 0;';
-          msg.textContent = 'Denied';
-          card.replaceWith(msg);
-        }
-        for (const entry of pendingJoinRequests)
-          entry.requests = entry.requests.filter(r => r.id !== requestId);
-        pendingJoinRequests = pendingJoinRequests.filter(e => e.requests.length > 0);
-        _closeIfEmpty();
-      } catch (err) {
-        btn.disabled = false;
-        alert(err.message);
-      }
-    });
-  });
-}
-
 function renderHomeView() {
   if (!activeGroupId) {
     return renderNoGroupPrompt();
   }
 
   return `
-    ${renderHomeJoinRequests()}
     ${renderGroupSwitcher()}
     ${renderWordTabs()}
     ${activeWordTab === 'today' ? renderTodayTab() : renderVoteTab()}
@@ -645,9 +467,6 @@ function initHomeListeners() {
 
   // Vote listeners are always attached since vote tab may be visible
   initVoteListeners();
-
-  // Join request bubble listeners
-  initHomeJoinRequestListeners();
 }
 
 

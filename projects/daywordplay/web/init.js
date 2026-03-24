@@ -73,17 +73,16 @@ async function _loadDeferredData() {
     yesterdayData = dwpCache.get('yesterday', activeGroupId) || null;
     renderPageContent();
     initPageListeners();
-  } else if (currentView === 'home' && pendingJoinRequests.length > 0) {
-    renderPageContent();
-    initPageListeners();
   } else if (currentView === 'leaderboard') {
     leaderboardData = dwpCache.get('leaderboard', activeGroupId) || null;
     renderPageContent();
     initPageListeners();
+  } else if (currentView === 'profile') {
+    loadAllJoinRequests();
   }
 
-  // Show popup for any pending join requests regardless of current view
-  showPendingRequestsModal();
+  // Update settings badge with pending request count
+  updateSettingsBadge();
 }
 
 // ── Page listener dispatcher ──────────────────────────────────────────────────
