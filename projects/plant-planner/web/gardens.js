@@ -53,7 +53,7 @@ async function renderGardens() {
             </div>\
           </div>\
           <div class="garden-card-actions">\
-            <button class="btn btn-sm btn-primary btn-outline gap-1 open-garden-btn" data-id="' + g.id + '"><i data-lucide="layout-grid" style="width:0.85em;height:0.85em"></i> Open</button>\
+            <button class="btn btn-sm btn-primary gap-1 open-garden-btn" data-id="' + g.id + '"><i data-lucide="layout-grid" style="width:0.85em;height:0.85em"></i> Open</button>\
             <button class="btn btn-sm btn-ghost text-error gap-1 delete-garden-btn" data-id="' + g.id + '"><i data-lucide="trash-2" style="width:0.85em;height:0.85em"></i> Delete</button>\
           </div>\
         </div>';
