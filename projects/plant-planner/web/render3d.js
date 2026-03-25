@@ -497,21 +497,15 @@ function hideCellHighlight(handle) {
 }
 
 function lockBirdsEye(handle) {
-  if (!handle || handle._birdsEyeLocked) return;
-  handle._savedMinPolar = handle.controls.minPolarAngle;
-  handle._savedMaxPolar = handle.controls.maxPolarAngle;
-  handle.controls.minPolarAngle = 0;
-  handle.controls.maxPolarAngle = 0.001;
-  handle._birdsEyeLocked = true;
-  handle.controls.update();
+  if (!handle || handle._dragLocked) return;
+  handle.controls.enableRotate = false;
+  handle._dragLocked = true;
 }
 
 function unlockCamera(handle) {
-  if (!handle || !handle._birdsEyeLocked) return;
-  handle.controls.minPolarAngle = handle._savedMinPolar || 0;
-  handle.controls.maxPolarAngle = handle._savedMaxPolar !== undefined ? handle._savedMaxPolar : Math.PI / 2;
-  handle._birdsEyeLocked = false;
-  handle.controls.update();
+  if (!handle || !handle._dragLocked) return;
+  handle.controls.enableRotate = true;
+  handle._dragLocked = false;
 }
 
 function setup3DDragDrop(handle, callbacks) {
