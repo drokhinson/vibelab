@@ -120,6 +120,7 @@ function init3DView(containerId, garden, placements) {
   controls.enablePan = false;
   controls.minDistance = 2;
   controls.maxDistance = maxDim * 3;
+  controls.maxPolarAngle = Math.PI / 2;
   controls.target.set(0, 0, 0);
   controls.update();
 
@@ -508,7 +509,7 @@ function lockBirdsEye(handle) {
 function unlockCamera(handle) {
   if (!handle || !handle._birdsEyeLocked) return;
   handle.controls.minPolarAngle = handle._savedMinPolar || 0;
-  handle.controls.maxPolarAngle = handle._savedMaxPolar !== undefined ? handle._savedMaxPolar : Math.PI;
+  handle.controls.maxPolarAngle = handle._savedMaxPolar !== undefined ? handle._savedMaxPolar : Math.PI / 2;
   handle._birdsEyeLocked = false;
   handle.controls.update();
 }
