@@ -451,8 +451,12 @@ function disposeObject(obj) {
     if (child.geometry) child.geometry.dispose();
     if (child.material) {
       if (Array.isArray(child.material)) {
-        child.material.forEach(function(m) { m.dispose(); });
+        child.material.forEach(function(m) {
+          if (m.map) m.map.dispose();
+          m.dispose();
+        });
       } else {
+        if (child.material.map) child.material.map.dispose();
         child.material.dispose();
       }
     }

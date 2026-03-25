@@ -90,15 +90,21 @@ function getPlantDescriptor(plant) {
 }
 
 function buildPlantMesh(plant, style) {
-  var desc = getPlantDescriptor(plant);
-  var group = new THREE.Group();
+  var group;
 
-  if (desc.stem) group.add(buildShapeMesh(desc.stem, style));
-  if (desc.foliage) {
-    for (var i = 0; i < desc.foliage.length; i++) group.add(buildShapeMesh(desc.foliage[i], style));
-  }
-  if (desc.accents) {
-    for (var j = 0; j < desc.accents.length; j++) group.add(buildShapeMesh(desc.accents[j], style));
+  if (style === "realistic") {
+    group = buildBillboardMesh(plant);
+  } else {
+    var desc = getPlantDescriptor(plant);
+    group = new THREE.Group();
+
+    if (desc.stem) group.add(buildShapeMesh(desc.stem, style));
+    if (desc.foliage) {
+      for (var i = 0; i < desc.foliage.length; i++) group.add(buildShapeMesh(desc.foliage[i], style));
+    }
+    if (desc.accents) {
+      for (var j = 0; j < desc.accents.length; j++) group.add(buildShapeMesh(desc.accents[j], style));
+    }
   }
 
   // Proportional height scaling — plants are correctly sized relative to each other
