@@ -87,6 +87,15 @@ function _svgFallback(plant) {
 function getPlantThumbnail(plant, style) {
   var key = plant.id + "_" + (style || renderStyle);
   if (plantThumbnailCache[key]) return plantThumbnailCache[key];
+
+  // Realistic mode: use the plant image directly as thumbnail
+  if ((style || renderStyle) === "realistic") {
+    var slug = plantNameToSlug(plant.name);
+    var imgUrl = "assets/plants/" + slug + ".png";
+    plantThumbnailCache[key] = imgUrl;
+    return imgUrl;
+  }
+
   try {
     var url = _renderPlantThumbnail(plant, style || renderStyle);
     plantThumbnailCache[key] = url;
@@ -99,6 +108,18 @@ function getPlantThumbnail(plant, style) {
 }
 
 function preloadThumbnails(plantList, style) {
+  // Realistic mode: populate cache with asset URLs, no offscreen render needed
+  if (style === "realistic") {
+    for (var j = 0; j < plantList.length; j++) {
+      var rKey = plantList[j].id + "_" + style;
+      if (!plantThumbnailCache[rKey]) {
+        var slug = plantNameToSlug(plantList[j].name);
+        plantThumbnailCache[rKey] = "assets/plants/" + slug + ".png";
+      }
+    }
+    return;
+  }
+
   _ensureThumbRenderer();
   for (var i = 0; i < plantList.length; i++) {
     var key = plantList[i].id + "_" + style;
