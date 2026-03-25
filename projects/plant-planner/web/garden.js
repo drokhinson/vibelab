@@ -273,8 +273,13 @@ function init3DScene(g) {
     dispose3DView(scene3DHandle);
     scene3DHandle = null;
   }
+  // Double RAF ensures CSS layout (including media queries) is fully committed
+  // before reading container dimensions — a single RAF can fire before the browser
+  // has reflowed the new DOM inserted via innerHTML, returning clientWidth = 0.
   requestAnimationFrame(function() {
-    scene3DHandle = init3DView("render3d-container", g, gridPlacements);
+    requestAnimationFrame(function() {
+      scene3DHandle = init3DView("render3d-container", g, gridPlacements);
+    });
   });
 }
 
