@@ -76,8 +76,11 @@ function init3DView(containerId, garden, placements) {
   var container = document.getElementById(containerId);
   if (!container) return null;
 
-  var w = container.clientWidth || 400;
-  var h = container.clientHeight || 300;
+  // getBoundingClientRect() forces a synchronous reflow, returning accurate
+  // dimensions even immediately after innerHTML insertion on mobile.
+  var rect = container.getBoundingClientRect();
+  var w = rect.width || 400;
+  var h = rect.height || Math.round((rect.width || 400) * 3 / 4);
 
   // Scene
   var scene = new THREE.Scene();
@@ -173,6 +176,18 @@ function init3DView(containerId, garden, placements) {
   });
   ro.observe(container);
   handle._resizeObserver = ro;
+
+  // Safety net: if the ResizeObserver's initial fire saw 0px (layout not yet
+  // committed), re-apply the correct size after a short delay.
+  setTimeout(function() {
+    var cw = container.clientWidth;
+    var ch = container.clientHeight;
+    if (cw > 0 && ch > 0 && (Math.abs(cw - renderer.domElement.width) > 2 || Math.abs(ch - renderer.domElement.height) > 2)) {
+      camera.aspect = cw / ch;
+      camera.updateProjectionMatrix();
+      renderer.setSize(cw, ch);
+    }
+  }, 150);
 
   return handle;
 }
