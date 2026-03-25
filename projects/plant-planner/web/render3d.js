@@ -387,11 +387,15 @@ function setRenderStyle(handle, newStyle) {
   // Update scene background
   handle.scene.background = new THREE.Color(getSceneBgColor(newStyle));
 
-  // Rebuild planter box and ground (keep plantsGroup and lights)
+  // Rebuild planter box and ground (keep plantsGroup, lights, and interaction helpers)
   var garden = handle.garden;
   var toRemove = [];
   handle.scene.children.forEach(function(child) {
-    if (child !== handle.plantsGroup && child.type !== "AmbientLight" && child.type !== "DirectionalLight") {
+    if (child !== handle.plantsGroup &&
+        child.type !== "AmbientLight" &&
+        child.type !== "DirectionalLight" &&
+        child.name !== "hitPlane" &&
+        child.name !== "cellHighlight") {
       toRemove.push(child);
     }
   });
@@ -451,5 +455,116 @@ function disposeObject(obj) {
         child.material.dispose();
       }
     }
+  });
+}
+
+// ── 3D Drag-and-Drop Interaction ───────────────────────────────────────────
+
+function getRaycastCell(handle, clientX, clientY) {
+  if (!handle || !handle.hitPlane) return null;
+  var canvas = handle.renderer.domElement;
+  var rect = canvas.getBoundingClientRect();
+  var mouse = new THREE.Vector2(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1
+  );
+  var raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, handle.camera);
+  var hits = raycaster.intersectObject(handle.hitPlane);
+  if (hits.length === 0) return null;
+  var pt = hits[0].point;
+  var gw = handle.garden.grid_width;
+  var gh = handle.garden.grid_height;
+  var gx = Math.floor(pt.x + gw / 2);
+  var gy = Math.floor(pt.z + gh / 2);
+  if (gx < 0 || gx >= gw || gy < 0 || gy >= gh) return null;
+  return { gx: gx, gy: gy };
+}
+
+function showCellHighlight(handle, gx, gy) {
+  if (!handle || !handle.cellHighlight) return;
+  var gw = handle.garden.grid_width;
+  var gh = handle.garden.grid_height;
+  handle.cellHighlight.position.x = gx - gw / 2 + 0.5;
+  handle.cellHighlight.position.z = gy - gh / 2 + 0.5;
+  handle.cellHighlight.visible = true;
+}
+
+function hideCellHighlight(handle) {
+  if (!handle || !handle.cellHighlight) return;
+  handle.cellHighlight.visible = false;
+}
+
+function lockBirdsEye(handle) {
+  if (!handle || handle._birdsEyeLocked) return;
+  handle._savedMinPolar = handle.controls.minPolarAngle;
+  handle._savedMaxPolar = handle.controls.maxPolarAngle;
+  handle.controls.minPolarAngle = 0;
+  handle.controls.maxPolarAngle = 0.001;
+  handle._birdsEyeLocked = true;
+  handle.controls.update();
+}
+
+function unlockCamera(handle) {
+  if (!handle || !handle._birdsEyeLocked) return;
+  handle.controls.minPolarAngle = handle._savedMinPolar || 0;
+  handle.controls.maxPolarAngle = handle._savedMaxPolar !== undefined ? handle._savedMaxPolar : Math.PI;
+  handle._birdsEyeLocked = false;
+  handle.controls.update();
+}
+
+function setup3DDragDrop(handle, callbacks) {
+  if (!handle) return;
+  var garden = handle.garden;
+  var gw = garden.grid_width;
+  var gh = garden.grid_height;
+  var soilTop = garden.garden_type === "planter" ? 0.36 : 0.12;
+
+  // Invisible hit plane at soil level for raycasting
+  var hitGeom = new THREE.PlaneGeometry(gw, gh);
+  var hitMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
+  var hitPlane = new THREE.Mesh(hitGeom, hitMat);
+  hitPlane.rotation.x = -Math.PI / 2;
+  hitPlane.position.y = soilTop;
+  hitPlane.name = "hitPlane";
+  handle.scene.add(hitPlane);
+  handle.hitPlane = hitPlane;
+
+  // Semi-transparent cell highlight at soil level
+  var hlGeom = new THREE.PlaneGeometry(0.92, 0.92);
+  var hlMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthTest: false });
+  var highlight = new THREE.Mesh(hlGeom, hlMat);
+  highlight.rotation.x = -Math.PI / 2;
+  highlight.position.y = soilTop + 0.01;
+  highlight.name = "cellHighlight";
+  highlight.visible = false;
+  handle.scene.add(highlight);
+  handle.cellHighlight = highlight;
+
+  var canvas = handle.renderer.domElement;
+
+  canvas.addEventListener("dragover", function(e) {
+    if (!draggedPlant) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    lockBirdsEye(handle);
+    var cell = getRaycastCell(handle, e.clientX, e.clientY);
+    if (cell) showCellHighlight(handle, cell.gx, cell.gy);
+    else hideCellHighlight(handle);
+  });
+
+  canvas.addEventListener("drop", function(e) {
+    e.preventDefault();
+    var cell = getRaycastCell(handle, e.clientX, e.clientY);
+    hideCellHighlight(handle);
+    unlockCamera(handle);
+    if (cell) callbacks.onDrop(cell.gx, cell.gy);
+    else callbacks.onLeave();
+  });
+
+  canvas.addEventListener("dragleave", function() {
+    hideCellHighlight(handle);
+    unlockCamera(handle);
+    callbacks.onLeave();
   });
 }
