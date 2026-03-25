@@ -10,10 +10,8 @@ function renderBuilder() {
   html += '<span class="text-sm opacity-50">' + g.grid_width + '×' + g.grid_height + ' ft</span>';
   html += '</div>';
   html += '<div class="builder-actions">';
-  html += '<button id="toggle-view" class="btn btn-sm btn-outline gap-1"><i data-lucide="' + (viewMode === "top" ? "layers" : "grid-2x2") + '"></i> ' + (viewMode === "top" ? "Side View" : "Top View") + '</button>';
   html += '<button id="save-garden" class="btn btn-sm btn-primary gap-1"><i data-lucide="save"></i> Save</button>';
   html += '<button id="reseed-garden" class="btn btn-sm btn-outline gap-1"><i data-lucide="refresh-cw"></i> Reseed</button>';
-  html += '<button id="clear-grid" class="btn btn-sm btn-outline btn-error gap-1"><i data-lucide="trash-2"></i> Clear</button>';
   html += '</div></div>';
 
   html += '<div class="builder-layout">';
@@ -29,11 +27,7 @@ function renderBuilder() {
   // Split pane: 2D grid + 3D render
   html += '<div class="split-pane">';
   html += '<div class="grid-area">';
-  if (viewMode === "top") {
-    html += renderTopGrid(g);
-  } else {
-    html += renderSideView(g);
-  }
+  html += renderTopGrid(g);
   html += '</div>';
 
   // 3D render pane (style selector moved to settings)
@@ -86,72 +80,6 @@ function renderTopGrid(g) {
   return html;
 }
 
-function renderSideView(g) {
-  var maxH = 84;
-
-  var angles = [
-    { id: "south", label: '<i data-lucide="arrow-up"></i> S' },
-    { id: "north", label: '<i data-lucide="arrow-down"></i> N' },
-    { id: "east",  label: '<i data-lucide="arrow-right"></i> E' },
-    { id: "west",  label: '<i data-lucide="arrow-left"></i> W' }
-  ];
-  var html = '<div class="side-compass">';
-  for (var a = 0; a < angles.length; a++) {
-    var ang = angles[a];
-    var active = sideViewAngle === ang.id ? " active" : "";
-    html += '<button class="compass-btn' + active + '" data-angle="' + ang.id + '">' + ang.label + '</button>';
-  }
-  html += '</div>';
-
-  var slices = [];
-  if (sideViewAngle === "south" || sideViewAngle === "north") {
-    var xStart = sideViewAngle === "south" ? 0 : g.grid_width - 1;
-    var xEnd   = sideViewAngle === "south" ? g.grid_width : -1;
-    var xStep  = sideViewAngle === "south" ? 1 : -1;
-    for (var x = xStart; x !== xEnd; x += xStep) {
-      var tallest = null;
-      for (var y = 0; y < g.grid_height; y++) {
-        var p = gridPlacements[x + "," + y];
-        if (p && (!tallest || p.height_inches > tallest.height_inches)) tallest = p;
-      }
-      slices.push(tallest);
-    }
-  } else {
-    var yStart = sideViewAngle === "east" ? 0 : g.grid_height - 1;
-    var yEnd   = sideViewAngle === "east" ? g.grid_height : -1;
-    var yStep  = sideViewAngle === "east" ? 1 : -1;
-    for (var yi = yStart; yi !== yEnd; yi += yStep) {
-      var tallestY = null;
-      for (var xi = 0; xi < g.grid_width; xi++) {
-        var pY = gridPlacements[xi + "," + yi];
-        if (pY && (!tallestY || pY.height_inches > tallestY.height_inches)) tallestY = pY;
-      }
-      slices.push(tallestY);
-    }
-  }
-
-  html += '<div class="side-view">';
-  for (var s = 0; s < slices.length; s++) {
-    var tallestSlice = slices[s];
-    var barH = tallestSlice ? Math.max(10, (tallestSlice.height_inches / maxH) * 100) : 0;
-    html += '<div class="side-col">';
-    if (tallestSlice) {
-      var sideThumb = getPlantThumbnail(tallestSlice, renderStyle);
-      html += '<div class="side-bar" style="height:' + barH + '%">';
-      html += '<img class="side-thumbnail" src="' + sideThumb + '" alt="' + escapeHtml(tallestSlice.name) + '" />';
-      html += '<span class="side-label">' + tallestSlice.height_inches + '"</span>';
-      html += '</div>';
-    } else {
-      html += '<div class="side-empty"></div>';
-    }
-    html += '</div>';
-  }
-  html += '</div>';
-
-  var dirLabel = { south: "looking North", north: "looking South", east: "looking West", west: "looking East" };
-  html += '<div class="text-center text-xs opacity-40 mt-1">Elevation — ' + dirLabel[sideViewAngle] + '</div>';
-  return html;
-}
 
 function bindGridEvents(g) {
   document.querySelectorAll(".grid-cell").forEach(function(cell) {
@@ -237,17 +165,6 @@ function bindGridEvents(g) {
   bindGridTouch();
 }
 
-function bindCompassButtons() {
-  document.querySelectorAll(".compass-btn").forEach(function(btn) {
-    btn.onclick = function() {
-      sideViewAngle = btn.dataset.angle;
-      var gridArea = document.querySelector(".grid-area");
-      if (gridArea) gridArea.innerHTML = renderSideView(currentGarden);
-      bindCompassButtons();
-      _initIcons();
-    };
-  });
-}
 
 function showTooltip(el, plant) {
   var tip = document.getElementById("plant-tooltip");
@@ -290,32 +207,8 @@ function sync3DView() {
 }
 
 function bindBuilderButtons() {
-  document.getElementById("toggle-view").onclick = function() {
-    viewMode = viewMode === "top" ? "side" : "top";
-    var gridArea = document.querySelector(".grid-area");
-    if (gridArea) {
-      gridArea.innerHTML = viewMode === "top" ? renderTopGrid(currentGarden) : renderSideView(currentGarden);
-      bindGridEvents(currentGarden);
-      if (viewMode === "side") bindCompassButtons();
-      var btn = document.getElementById("toggle-view");
-      btn.innerHTML = '<i data-lucide="' + (viewMode === "top" ? "layers" : "grid-2x2") + '"></i> ' + (viewMode === "top" ? "Side View" : "Top View");
-      _initIcons();
-    }
-  };
   document.getElementById("save-garden").onclick = saveGarden;
   document.getElementById("reseed-garden").onclick = reseedGarden;
-  document.getElementById("clear-grid").onclick = function() {
-    if (!confirm("Clear all plants from this garden?")) return;
-    gridPlacements = {};
-    var gridArea = document.querySelector(".grid-area");
-    if (gridArea) {
-      gridArea.innerHTML = viewMode === "top" ? renderTopGrid(currentGarden) : renderSideView(currentGarden);
-      bindGridEvents(currentGarden);
-      if (viewMode === "side") bindCompassButtons();
-    }
-    sync3DView();
-  };
-  if (viewMode === "side") bindCompassButtons();
 }
 
 async function saveGarden() {
