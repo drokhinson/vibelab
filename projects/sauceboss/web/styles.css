@@ -1664,3 +1664,102 @@ body, button, input, select, textarea {
   font-size: 13px;
   color: #9CA3AF;
 }
+
+/* ── Builder entry row (Create / Import buttons) ── */
+.builder-entry-row {
+  display: flex;
+  gap: 8px;
+  padding: 16px 0 8px;
+}
+.builder-entry-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 10px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid #E85D04;
+  background: white;
+  color: #E85D04;
+  transition: background 0.15s, color 0.15s;
+}
+.builder-entry-btn:hover { background: #FFF0E6; }
+.builder-entry-btn [data-lucide] { width: 16px; height: 16px; }
+.builder-entry-btn--import {
+  border-color: #7C3AED;
+  color: #7C3AED;
+}
+.builder-entry-btn--import:hover { background: #F5F0FF; }
+
+/* ── Import modal overlay ── */
+.import-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 150ms ease both;
+}
+.import-modal {
+  background: #FFF8F0;
+  border-radius: 20px 20px 0 0;
+  padding: 24px 20px 36px;
+  width: 100%;
+  max-width: 390px;
+  animation: slideUp 200ms ease both;
+}
+.import-modal h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1A1A2E;
+  margin-bottom: 6px;
+}
+.import-modal .import-hint {
+  font-size: 13px;
+  color: #6B7280;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.import-error {
+  font-size: 13px;
+  color: #DC2626;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #FEF2F2;
+  border-radius: 8px;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* ── Servings field in builder ── */
+.builder-servings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.builder-servings-row label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6B7280;
+  white-space: nowrap;
+}
+.builder-servings-row input {
+  width: 72px;
+}
+
+/* ── Original text hint in ingredient rows ── */
+.ing-original-hint {
+  font-size: 11px;
+  color: #9CA3AF;
+  padding: 2px 0 4px 2px;
+  font-style: italic;
+}

@@ -192,12 +192,34 @@ async function deleteAdminSauce(id, key) {
   return res.json();
 }
 
+// ─── Unit loading ─────────────────────────────────────────────────────────────
+async function loadUnits() {
+  try {
+    const res = await fetch(`${API}/api/v1/sauceboss/units`);
+    if (!res.ok) return;
+    const units = await res.json();
+    state.units = {};
+    for (const u of units) state.units[u.abbreviation] = u;
+  } catch (_) { /* fail silently — hardcoded fallbacks in convertUnit */ }
+}
+
 // ─── Unit conversion ──────────────────────────────────────────────────────────
 function toTsp(amount, unit) { return amount * (TO_TSP[unit] || 1); }
 
 function convertUnit(amount, unit, system) {
   if (system === 'imperial') return { amount, unit };
   const lower = unit.toLowerCase();
+  // Use DB-backed unit definitions when available
+  const unitDef = state.units && state.units[lower];
+  if (unitDef) {
+    if (unitDef.unit_type === 'count') return { amount, unit };
+    if (unitDef.unit_type === 'volume' && unitDef.to_ml)
+      return { amount: Math.round(amount * unitDef.to_ml * 10) / 10, unit: 'ml' };
+    if (unitDef.unit_type === 'weight' && unitDef.to_g)
+      return { amount: Math.round(amount * unitDef.to_g * 10) / 10, unit: 'g' };
+    return { amount, unit };
+  }
+  // Fallback to hardcoded constants
   if (COUNT_UNITS.has(lower)) return { amount, unit };
   if (VOLUME_TO_ML[lower]) return { amount: amount * VOLUME_TO_ML[lower], unit: 'ml' };
   if (WEIGHT_TO_G[lower])  return { amount: amount * WEIGHT_TO_G[lower], unit: 'g' };

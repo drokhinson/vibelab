@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       fetchSubstitutions().catch(() => []),
       fetchAddons().catch(() => []),
     ]);
+    loadUnits(); // fire-and-forget — falls back to hardcoded constants if it fails
     state.carbs = carbs;
 
     if (Array.isArray(addonsRaw) && addonsRaw.length > 0) {

@@ -25,6 +25,8 @@ function renderBuilder() {
         </select>
       </div>` : '';
 
+    const unitOptions = Object.keys(state.units).length > 0 ? Object.keys(state.units) : UNITS;
+
     const ingsHTML = step.ingredients.map((ing, ii) => {
       const isAcActive = b.acStep === si && b.acIng === ii && b.acResults.length > 0;
       const acDropdown = isAcActive ? `
@@ -45,6 +47,9 @@ function renderBuilder() {
           </div>
         </div>` : '';
 
+      const originalHint = ing.originalText
+        ? `<div class="ing-original-hint">originally: ${ing.originalText}</div>` : '';
+
       return `<div class="ingredient-row-wrap">
         <div class="ingredient-row">
           <div class="ing-name-wrap">
@@ -53,11 +58,12 @@ function renderBuilder() {
           </div>
           <input class="builder-input ing-amount" type="number" step="0.1" min="0" placeholder="Qty" value="${ing.amount}" data-builder-field="ing-amount" data-step="${si}" data-ing="${ii}">
           <select class="ing-unit" data-builder-field="ing-unit" data-step="${si}" data-ing="${ii}">
-            ${UNITS.map(u => `<option ${ing.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+            ${unitOptions.map(u => `<option ${ing.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
           </select>
           ${step.ingredients.length > 1 ? `<button class="remove-ing-btn" onclick="builderRemoveIngredient(${si},${ii})">✕</button>` : ''}
         </div>
         ${categoryChips}
+        ${originalHint}
       </div>`;
     }).join('');
 
@@ -82,6 +88,12 @@ function renderBuilder() {
     <div class="scroll-body">
       <div class="builder-sticky-header">
         <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
+        <div class="builder-servings-row">
+          <label>Servings</label>
+          <input class="builder-input" type="number" min="1" step="1" placeholder="e.g. 4" value="${b.servings || ''}" data-builder-field="servings">
+          ${b.yieldQuantity ? `<span style="font-size:13px;color:#9CA3AF">≈ ${b.yieldQuantity} ${b.yieldUnit || ''}</span>` : ''}
+        </div>
+        ${b.sourceName ? `<p style="font-size:12px;color:#9CA3AF;margin-bottom:8px">Imported from ${b.sourceName}</p>` : ''}
         <p class="builder-label">Cuisine</p>
         <div class="cuisine-chips">${cuisineChips}</div>
         <p class="builder-label">Color</p>
@@ -178,7 +190,7 @@ function builderSetColor(hex) {
 }
 
 function builderAddStep() {
-  state.builder.steps.push({ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
+  state.builder.steps.push({ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp', unitType: 'volume' }] });
   render();
 }
 
@@ -193,7 +205,7 @@ function builderRemoveStep(si) {
 }
 
 function builderAddIngredient(si) {
-  state.builder.steps[si].ingredients.push({ name: '', amount: '', unit: 'tsp' });
+  state.builder.steps[si].ingredients.push({ name: '', amount: '', unit: 'tsp', unitType: 'volume' });
   render();
 }
 
@@ -228,7 +240,13 @@ function builderHandleInput(el) {
       break;
     }
     case 'ing-amount': b.steps[si].ingredients[ii].amount = el.value; break;
-    case 'ing-unit': b.steps[si].ingredients[ii].unit = el.value; break;
+    case 'ing-unit': {
+      b.steps[si].ingredients[ii].unit = el.value;
+      const unitDef = state.units[el.value];
+      b.steps[si].ingredients[ii].unitType = unitDef ? unitDef.unit_type : 'volume';
+      break;
+    }
+    case 'servings': b.servings = el.value ? parseInt(el.value) : null; break;
     case 'input-from-step': {
       b.steps[si].inputFromStep = el.value ? parseInt(el.value) : null;
       break;
@@ -292,6 +310,11 @@ async function builderSave() {
       color: b.color,
       description: b.description,
       carbIds: b.carbIds,
+      ...(b.servings != null && { servings: b.servings }),
+      ...(b.yieldQuantity != null && { yield_quantity: b.yieldQuantity }),
+      ...(b.yieldUnit && { yield_unit: b.yieldUnit }),
+      ...(b.sourceUrl && { source_url: b.sourceUrl }),
+      ...(b.sourceName && { source_name: b.sourceName }),
       steps: b.steps
         .filter(s => s.title.trim())
         .map(s => ({
@@ -299,7 +322,13 @@ async function builderSave() {
           inputFromStep: s.inputFromStep || null,
           ingredients: s.ingredients
             .filter(i => i.name.trim() && parseFloat(i.amount) > 0)
-            .map(i => ({ name: i.name.trim(), amount: parseFloat(i.amount), unit: i.unit })),
+            .map(i => ({
+              name: i.name.trim(),
+              amount: parseFloat(i.amount),
+              unit: i.unit,
+              unit_type: i.unitType || 'volume',
+              ...(i.originalText && { original_text: i.originalText }),
+            })),
         }))
         .filter(s => s.ingredients.length > 0),
     };
@@ -311,4 +340,99 @@ async function builderSave() {
     b.error = err.message;
     render();
   }
+}
+
+// ─── URL Import Modal ──────────────────────────────────────────────────────────
+function renderImportModal() {
+  return `
+    <div class="import-overlay" onclick="if(event.target===this)closeImportModal()">
+      <div class="import-modal">
+        <h3>Import from URL</h3>
+        <p class="import-hint">Paste a recipe URL — we'll parse the ingredients and pre-fill the sauce builder for you to review.</p>
+        <input class="builder-input" id="import-url-input" type="url"
+          placeholder="https://..."
+          ${state.importLoading ? 'disabled' : ''}
+          onkeydown="if(event.key==='Enter')submitImportUrl()">
+        ${state.importError ? `<p class="import-error">${state.importError}</p>` : ''}
+        <button class="builder-primary-btn" onclick="submitImportUrl()" ${state.importLoading ? 'disabled' : ''}>
+          ${state.importLoading ? '<span class="spinner-sm"></span> Importing…' : 'Import Recipe'}
+        </button>
+        <button class="builder-secondary-btn" onclick="closeImportModal()">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function openImportModal() {
+  state.importModal = true;
+  state.importError = null;
+  render();
+  // Focus the URL input after render
+  requestAnimationFrame(() => {
+    const input = document.getElementById('import-url-input');
+    if (input) input.focus();
+  });
+}
+
+function closeImportModal() {
+  state.importModal = false;
+  state.importLoading = false;
+  state.importError = null;
+  render();
+}
+
+async function submitImportUrl() {
+  const input = document.getElementById('import-url-input');
+  const url = input ? input.value.trim() : '';
+  if (!url) return;
+  state.importLoading = true;
+  state.importError = null;
+  render();
+  try {
+    const res = await fetch(`${API}/api/v1/sauceboss/import-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    state.importModal = false;
+    state.importLoading = false;
+    prefillBuilder(data);
+  } catch (err) {
+    state.importLoading = false;
+    state.importError = err.message;
+    render();
+  }
+}
+
+function prefillBuilder(data) {
+  state.builder = {
+    ...defaultBuilder(),
+    name: data.name || '',
+    description: data.description || '',
+    cuisine: data.cuisine || '',
+    cuisineEmoji: '',
+    servings: data.servings || null,
+    yieldQuantity: data.yield_quantity || null,
+    yieldUnit: data.yield_unit || null,
+    sourceUrl: data.source_url || null,
+    sourceName: data.source_name || null,
+    steps: Array.isArray(data.steps) && data.steps.length > 0
+      ? data.steps.map(s => ({
+          title: s.title || '',
+          inputFromStep: null,
+          ingredients: (s.ingredients || []).map(i => ({
+            name: i.name || '',
+            amount: i.amount || '',
+            unit: i.unit || 'tsp',
+            unitType: i.unit_type || 'volume',
+            originalText: i.original_text || null,
+          })),
+        }))
+      : defaultBuilder().steps,
+  };
+  navigate('builder');
 }

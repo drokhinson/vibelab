@@ -17,12 +17,20 @@ class SauceType(StrEnum):
     MARINADE = "marinade"
 
 
+class UnitType(StrEnum):
+    VOLUME = "volume"
+    WEIGHT = "weight"
+    COUNT = "count"
+
+
 # ── Sauce creation ────────────────────────────────────────────────────────────
 
 class IngredientInput(BaseModel):
     name: str = Field(min_length=1)
     amount: float = Field(gt=0)
     unit: str = Field(min_length=1)
+    unit_type: UnitType = UnitType.VOLUME
+    original_text: str | None = None
 
 
 class StepInput(BaseModel):
@@ -39,6 +47,12 @@ class CreateSauceRequest(BaseModel):
     description: str = ""
     carbIds: List[str] = Field(min_length=1)
     steps: List[StepInput] = Field(min_length=1)
+    sauce_type: SauceType = SauceType.SAUCE
+    servings: int | None = None
+    yield_quantity: float | None = None
+    yield_unit: str | None = None
+    source_url: str | None = None
+    source_name: str | None = None
 
 
 # ── Ingredient categories ────────────────────────────────────────────────────

@@ -5,3 +5,5 @@ python-dotenv>=1.0.0
 bcrypt>=4.1.0
 PyJWT>=2.8.0
 python-multipart>=0.0.9
+recipe-scrapers>=14.0.0
+rapidfuzz>=3.0.0

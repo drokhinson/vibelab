@@ -116,7 +116,12 @@ function renderSauceSelector() {
       </div>
       <p class="section-label">Pick a recipe</p>
       ${accordionHTML}
+      <div class="builder-entry-row">
+        <button class="builder-entry-btn" onclick="openBuilder()"><i data-lucide="chef-hat"></i> Create New Sauce</button>
+        <button class="builder-entry-btn builder-entry-btn--import" onclick="openImportModal()"><i data-lucide="link"></i> Import from URL</button>
+      </div>
     </div>
+    ${state.importModal ? renderImportModal() : ''}
   `;
 }
 

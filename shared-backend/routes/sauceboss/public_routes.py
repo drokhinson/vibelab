@@ -77,6 +77,14 @@ async def preparations_for_carb(carb_id: str):
     return result.data
 
 
+@router.get("/units", summary="List all supported units")
+async def list_units():
+    """Returns all unit definitions with type classification and metric conversion factors."""
+    sb = get_supabase()
+    result = sb.table("sauceboss_units").select("*").order("abbreviation").execute()
+    return result.data or []
+
+
 @router.post("/sauces")
 async def create_sauce(body: CreateSauceRequest):
     """Create a user-submitted sauce with steps, ingredients, and carb pairings."""
@@ -90,6 +98,12 @@ async def create_sauce(body: CreateSauceRequest):
         "cuisineEmoji": body.cuisineEmoji,
         "color": body.color,
         "description": body.description,
+        "sauce_type": body.sauce_type,
+        "servings": body.servings,
+        "yield_quantity": body.yield_quantity,
+        "yield_unit": body.yield_unit,
+        "source_url": body.source_url,
+        "source_name": body.source_name,
         "carbIds": body.carbIds,
         "steps": [
             {
@@ -97,7 +111,13 @@ async def create_sauce(body: CreateSauceRequest):
                 "stepOrder": idx + 1,
                 "inputFromStep": step.inputFromStep,
                 "ingredients": [
-                    {"name": ing.name, "amount": ing.amount, "unit": ing.unit}
+                    {
+                        "name": ing.name,
+                        "amount": ing.amount,
+                        "unit": ing.unit,
+                        "unit_type": ing.unit_type,
+                        "original_text": ing.original_text,
+                    }
                     for ing in step.ingredients
                 ],
             }

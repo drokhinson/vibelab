@@ -186,14 +186,24 @@ let state = {
   addCarbForm: null,
   addAddonForm: null,
   carbPreparations: null,
+
+  // ── Units reference (loaded from /units endpoint) ────────────────────────
+  units: {},                    // keyed by abbreviation, e.g. { tsp: { unit_type:'volume', to_ml:5, ... } }
+
+  // ── URL import modal ─────────────────────────────────────────────────────
+  importModal: false,
+  importLoading: false,
+  importError: null,
 };
 
 function defaultBuilder() {
   return {
     name: '', cuisine: '', cuisineEmoji: '', color: '#E85D04', description: '',
-    steps: [{ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
+    steps: [{ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp', unitType: 'volume' }] }],
     carbIds: [], saving: false, error: null,
     acStep: null, acIng: null, acResults: [], acSelected: -1,
     pendingCategories: [],
+    servings: null, yieldQuantity: null, yieldUnit: null,
+    sourceUrl: null, sourceName: null,
   };
 }

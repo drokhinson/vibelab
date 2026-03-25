@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SauceBoss — current schema snapshot
--- Last updated: migration 026
+-- Last updated: migration 036
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,12 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauces (
   cuisine_emoji TEXT NOT NULL,
   color         TEXT NOT NULL,
   description   TEXT NOT NULL,
-  sauce_type    TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade'))
+  sauce_type    TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade')),
+  servings      INT,
+  yield_quantity REAL,
+  yield_unit    TEXT,
+  source_url    TEXT,
+  source_name   TEXT
 );
 ALTER TABLE public.sauceboss_sauces ENABLE ROW LEVEL SECURITY;
 
@@ -45,11 +50,22 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_steps (
 ALTER TABLE public.sauceboss_sauce_steps ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.sauceboss_step_ingredients (
-  id      BIGSERIAL PRIMARY KEY,
-  step_id BIGINT NOT NULL REFERENCES public.sauceboss_sauce_steps(id) ON DELETE CASCADE,
-  name    TEXT   NOT NULL,
-  amount  REAL   NOT NULL,
-  unit    TEXT   NOT NULL
+  id            BIGSERIAL PRIMARY KEY,
+  step_id       BIGINT NOT NULL REFERENCES public.sauceboss_sauce_steps(id) ON DELETE CASCADE,
+  name          TEXT   NOT NULL,
+  amount        REAL   NOT NULL,
+  unit          TEXT   NOT NULL,
+  unit_type     TEXT   NOT NULL DEFAULT 'volume' CHECK (unit_type IN ('volume', 'weight', 'count')),
+  original_text TEXT
+);
+
+CREATE TABLE IF NOT EXISTS public.sauceboss_units (
+  abbreviation  TEXT PRIMARY KEY,
+  display_name  TEXT NOT NULL,
+  unit_type     TEXT NOT NULL CHECK (unit_type IN ('volume', 'weight', 'count')),
+  standard_unit TEXT NOT NULL,
+  to_ml         REAL,
+  to_g          REAL
 );
 ALTER TABLE public.sauceboss_step_ingredients ENABLE ROW LEVEL SECURITY;
 
