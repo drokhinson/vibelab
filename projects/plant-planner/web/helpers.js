@@ -85,10 +85,8 @@ function showThemeSettings() {
 
   // Draw style options
   var styleOptions = [
-    { id: "toon", label: "Cubirds" },
-    { id: "natural", label: "Natural" },
-    { id: "wireframe", label: "Blueprint" },
-    { id: "realistic", label: "Realistic" }
+    { id: "realistic", label: "Realistic" },
+    { id: "natural", label: "Cublants" }
   ];
   var styleHtml = styleOptions.map(function(s) {
     return '<label class="theme-option">' +

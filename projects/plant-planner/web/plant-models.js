@@ -95,15 +95,16 @@ function buildPlantMesh(plant, style) {
   if (style === "realistic") {
     group = buildBillboardMesh(plant);
   } else {
+    // "natural" style — procedural 3D geometry
     var desc = getPlantDescriptor(plant);
     group = new THREE.Group();
 
-    if (desc.stem) group.add(buildShapeMesh(desc.stem, style));
+    if (desc.stem) group.add(buildShapeMesh(desc.stem));
     if (desc.foliage) {
-      for (var i = 0; i < desc.foliage.length; i++) group.add(buildShapeMesh(desc.foliage[i], style));
+      for (var i = 0; i < desc.foliage.length; i++) group.add(buildShapeMesh(desc.foliage[i]));
     }
     if (desc.accents) {
-      for (var j = 0; j < desc.accents.length; j++) group.add(buildShapeMesh(desc.accents[j], style));
+      for (var j = 0; j < desc.accents.length; j++) group.add(buildShapeMesh(desc.accents[j]));
     }
   }
 
