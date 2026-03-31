@@ -92,13 +92,30 @@
       "name": "PlantPlanner",
       "description": "Virtual garden and planter box builder with drag-and-drop plant placement",
       "status": "wip",
-      "tags": ["garden", "planning", "drag-drop"],
+      "tags": [
+        "garden",
+        "planning",
+        "drag-drop"
+      ],
       "webUrl": "https://vibelab-plantplanner.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": false,
       "expoSlug": null,
       "createdAt": "2026-03-17",
       "icon": "🌱"
+    },
+    {
+      "id": "boardgame-buddy",
+      "name": "BoardgameBuddy",
+      "description": "Build your board game closet, track plays, and quick-reference game guides",
+      "status": "wip",
+      "tags": [],
+      "webUrl": null,
+      "backendUrl": null,
+      "hasNativeApp": false,
+      "expoSlug": null,
+      "createdAt": "2026-03-27",
+      "icon": "🔧"
     }
   ]
 }

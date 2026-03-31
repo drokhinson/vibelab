@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BoardgameBuddy</title>
+
+  <!-- DaisyUI v4 + Tailwind CSS (no build step) -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons (SVG icon set) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <!-- Supabase JS Client (for auth) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Google Fonts: Inter + Playfair Display (board game aesthetic) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" />
+
+  <!-- Project styles -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="max-w-lg mx-auto min-h-screen flex flex-col pb-20">
+
+    <!-- Top bar -->
+    <header class="sticky top-0 z-30 bg-base-100/95 backdrop-blur px-4 py-3 flex items-center justify-between border-b border-base-300" data-auth-only>
+      <h1 class="text-lg font-bold font-display">🎲 BoardgameBuddy</h1>
+      <div class="flex items-center gap-2">
+        <span id="profile-name" class="text-sm text-base-content/60"></span>
+        <button class="btn btn-ghost btn-sm btn-circle" onclick="handleLogout()" title="Log out">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Auth View -->
+    <main data-view="auth" id="auth-container" class="flex-1 px-4 py-4"></main>
+
+    <!-- Browse Games View -->
+    <main data-view="browse" class="hidden flex-1 px-4 py-4">
+      <form id="game-search-form" class="mb-4">
+        <div class="join w-full">
+          <input type="text" id="game-search-input" class="input input-bordered join-item w-full" placeholder="Search games..." />
+          <button type="submit" class="btn btn-primary join-item">
+            <i data-lucide="search" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </form>
+
+      <!-- BGG Live Search -->
+      <details class="collapse collapse-arrow bg-base-200 mb-4">
+        <summary class="collapse-title text-sm font-medium">
+          <i data-lucide="globe" class="w-4 h-4 inline mr-1"></i> Search BoardGameGeek
+        </summary>
+        <div class="collapse-content">
+          <div class="flex gap-2 mb-2">
+            <input type="text" id="bgg-search-input" class="input input-bordered input-sm flex-1" placeholder="Search BGG..." />
+            <button class="btn btn-sm btn-outline" onclick="searchBGG()">Search</button>
+          </div>
+          <div id="bgg-results"></div>
+        </div>
+      </details>
+
+      <div id="games-grid"></div>
+    </main>
+
+    <!-- My Collection View -->
+    <main data-view="collection" class="hidden flex-1 px-4 py-4">
+      <h2 class="text-xl font-bold mb-3">My Games</h2>
+      <div id="collection-tabs" class="tabs tabs-boxed mb-4">
+        <button class="tab tab-active" data-filter="all" onclick="setCollectionFilter('all')">All</button>
+        <button class="tab" data-filter="owned" onclick="setCollectionFilter('owned')">📦 Closet</button>
+        <button class="tab" data-filter="played" onclick="setCollectionFilter('played')">🎯 Played</button>
+        <button class="tab" data-filter="wishlist" onclick="setCollectionFilter('wishlist')">⭐ Wishlist</button>
+      </div>
+      <div id="collection-grid"></div>
+    </main>
+
+    <!-- Game Detail View -->
+    <main data-view="game-detail" class="hidden flex-1 px-4 py-4">
+      <div id="game-detail-content"></div>
+    </main>
+
+    <!-- Log Play View -->
+    <main data-view="log-play" class="hidden flex-1 px-4 py-4">
+      <div id="log-play-content"></div>
+    </main>
+
+    <!-- Play History View -->
+    <main data-view="history" class="hidden flex-1 px-4 py-4">
+      <h2 class="text-xl font-bold mb-3 flex items-center gap-2">
+        <i data-lucide="history" class="w-5 h-5"></i> Play History
+      </h2>
+      <div id="history-content"></div>
+    </main>
+
+    <!-- Toast -->
+    <div id="toast" class="toast toast-end toast-top hidden z-50"></div>
+
+    <!-- Bottom Navigation -->
+    <nav class="btm-nav btm-nav-sm z-40" data-auth-only>
+      <button data-nav="browse" class="active">
+        <i data-lucide="library" class="w-5 h-5"></i>
+        <span class="btm-nav-label text-xs">Browse</span>
+      </button>
+      <button data-nav="collection">
+        <i data-lucide="box" class="w-5 h-5"></i>
+        <span class="btm-nav-label text-xs">My Games</span>
+      </button>
+      <button data-nav="log-play">
+        <i data-lucide="plus-circle" class="w-5 h-5"></i>
+        <span class="btm-nav-label text-xs">Log Play</span>
+      </button>
+      <button data-nav="history">
+        <i data-lucide="trophy" class="w-5 h-5"></i>
+        <span class="btm-nav-label text-xs">History</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Scripts: load order matters -->
+  <script src="config.js"></script>
+  <script src="state.js"></script>
+  <script src="helpers.js"></script>
+  <script src="auth.js"></script>
+  <script src="games.js"></script>
+  <script src="collection.js"></script>
+  <script src="game-detail.js"></script>
+  <script src="plays.js"></script>
+  <script src="init.js"></script>
+</body>
+</html>
