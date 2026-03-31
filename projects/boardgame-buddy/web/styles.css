@@ -1,0 +1,114 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   vibelab design system — base styles
+   Uses DaisyUI v4 + Tailwind CSS. Override per-project below.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Brand accent */
+  --accent:        #8B6914;
+  --accent-hover:  #7A5C11;
+
+  /* Game-specific theming (set dynamically in game-detail.js) */
+  --game-accent: #6C63FF;
+  --game-accent-light: #6C63FF22;
+
+  /* Layout */
+  --app-max-width: 512px;
+  --app-padding:   0;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Playfair Display', Georgia, serif;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  background: oklch(var(--b1));
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* ── Motion — entrance animation ────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-fadeUp {
+  animation: fadeUp 200ms ease both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* ── Card hover lift ─────────────────────────────────────────────────────────── */
+.card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+/* ── Guide text styling ──────────────────────────────────────────────────────── */
+.guide-text h3,
+.guide-text h4 {
+  color: oklch(var(--bc));
+}
+
+.guide-text li {
+  margin-bottom: 0.25rem;
+}
+
+.guide-text strong {
+  color: oklch(var(--bc));
+}
+
+/* ── Line clamp ──────────────────────────────────────────────────────────────── */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* ── Bottom nav active state ─────────────────────────────────────────────────── */
+.btm-nav button.active {
+  color: oklch(var(--p));
+  border-top-color: oklch(var(--p));
+}
+
+/* ── Lucide icon sizing helpers ──────────────────────────────────────────────── */
+[data-lucide] {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* ── Loading screen ──────────────────────────────────────────────────────────── */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+/* ── Toast positioning ───────────────────────────────────────────────────────── */
+.toast {
+  z-index: 100;
+}

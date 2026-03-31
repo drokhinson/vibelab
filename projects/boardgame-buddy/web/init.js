@@ -1,0 +1,41 @@
+// init.js — DOMContentLoaded: wire events, check auth, initial render
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Initialize Supabase Auth
+  initSupabase();
+
+  // Render initial auth view
+  renderAuth();
+
+  // Game search form
+  document.getElementById("game-search-form").addEventListener("submit", handleGameSearch);
+
+  // Bottom nav
+  document.querySelectorAll(".btm-nav button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.nav;
+      if (!session && target !== "browse") {
+        showToast("Please log in first", "warning");
+        return;
+      }
+      showView(target);
+      if (target === "browse") loadGames();
+      if (target === "collection") loadCollection();
+      if (target === "log-play") { playerRowCount = 0; renderLogPlayForm(); }
+      if (target === "history") loadPlays();
+    });
+  });
+
+  // Check for existing session
+  supabaseClient.auth.getSession().then(({ data: { session: s } }) => {
+    if (s) {
+      session = s;
+      loadProfile();
+    } else {
+      showView("auth");
+    }
+  });
+
+  // Analytics
+  trackEvent("page_view");
+});

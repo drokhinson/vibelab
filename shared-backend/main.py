@@ -14,6 +14,7 @@ from routes import wealthmate
 from routes import spotme
 from routes import daywordplay
 from routes import plant_planner
+from routes import boardgame_buddy
 
 # Infrastructure routers
 from routes import analytics
@@ -33,6 +34,7 @@ app = FastAPI(
         {"name": "daywordplay", "description": "Day Word Play — daily word games with groups"},
         {"name": "plant_planner", "description": "Plant Planner — garden layout and companion planting"},
         {"name": "analytics", "description": "Cross-app analytics tracking"},
+        {"name": "boardgame_buddy", "description": "BoardgameBuddy — board game collection, play logging, and quick-reference guides"},
         {"name": "admin", "description": "Admin dashboard and user management"},
     ],
 )
@@ -64,6 +66,7 @@ app.include_router(wealthmate.router)
 app.include_router(spotme.router)
 app.include_router(daywordplay.router)
 app.include_router(plant_planner.router)
+app.include_router(boardgame_buddy.router)
 
 # ── Infrastructure routers ────────────────────────────────────────────────
 app.include_router(analytics.router)
