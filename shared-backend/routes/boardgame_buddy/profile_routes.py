@@ -3,7 +3,7 @@
 from fastapi import Depends, HTTPException
 
 from db import get_supabase
-from supabase_auth import SupabaseUser, get_current_supabase_user
+from jwt_auth import SupabaseUser, get_current_supabase_user
 
 from . import router
 from .models import ProfileCreate, ProfileResponse

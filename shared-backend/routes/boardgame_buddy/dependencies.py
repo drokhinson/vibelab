@@ -3,7 +3,7 @@
 from fastapi import Depends
 from pydantic import BaseModel
 
-from supabase_auth import SupabaseUser, get_current_supabase_user
+from jwt_auth import SupabaseUser, get_current_supabase_user
 from db import get_supabase
 
 
