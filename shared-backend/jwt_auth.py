@@ -1,11 +1,11 @@
 """
-supabase_auth.py — Shared Supabase Auth verification for the vibelab backend.
+jwt_auth.py — Shared Supabase Auth JWT verification for the vibelab backend.
 
 Verifies JWTs issued by Supabase Auth. This is the pilot pattern —
 all future apps should use this instead of custom JWT auth.
 
 Usage in route dependencies:
-    from supabase_auth import get_current_supabase_user, SupabaseUser
+    from jwt_auth import get_current_supabase_user, SupabaseUser
 
     async def get_current_user(
         su_user: SupabaseUser = Depends(get_current_supabase_user),
@@ -15,11 +15,11 @@ Usage in route dependencies:
 """
 
 import os
+from typing import Optional
 
 import jwt
 from fastapi import HTTPException, Header
 from pydantic import BaseModel
-from typing import Optional
 
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
 
