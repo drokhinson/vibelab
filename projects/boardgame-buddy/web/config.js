@@ -1,7 +1,9 @@
-// config.js — API base URL and Supabase configuration
+// config.js — local dev defaults
+// In production this file is overwritten by build.sh using Vercel env vars.
+// Set SUPABASE_URL and SUPABASE_ANON_KEY in the Vercel project dashboard.
 window.APP_CONFIG = {
-  apiBase: "https://vibelab-production-2119.up.railway.app",
+  apiBase: "http://localhost:8000",
   project: "boardgame-buddy",
-  supabaseUrl: "https://your-project.supabase.co",
-  supabaseAnonKey: "your-anon-key"
+  supabaseUrl: "",
+  supabaseAnonKey: ""
 };
