@@ -26,15 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Check for existing session
-  supabaseClient.auth.getSession().then(({ data: { session: s } }) => {
-    if (s) {
-      session = s;
-      loadProfile();
-    } else {
-      showView("auth");
-    }
-  });
+  // Session is handled by onAuthStateChange in auth.js (fires INITIAL_SESSION on load)
 
   // Analytics
   trackEvent("page_view");
