@@ -21,8 +21,19 @@ jobs:
             projectKey: SPOTME
           - project: wealthmate
             projectKey: WEALTHMATE
+          - project: boardgame-buddy
+            projectKey: BOARDGAME_BUDDY
     steps:
       - uses: actions/checkout@v4
+
+      - name: Run project build script (if present)
+        working-directory: ./projects/${{ matrix.project }}/web
+        env:
+          API_BASE: https://vibelab-production-2119.up.railway.app
+          SUPABASE_URL: ${{ secrets[format('{0}_SUPABASE_URL', matrix.projectKey)] }}
+          SUPABASE_ANON_KEY: ${{ secrets[format('{0}_SUPABASE_ANON_KEY', matrix.projectKey)] }}
+        run: |
+          if [ -f build.sh ]; then bash build.sh; fi
 
       - name: Deploy ${{ matrix.project }} web frontend
         uses: amondnet/vercel-action@v25
@@ -32,3 +43,4 @@ jobs:
           vercel-project-id: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', matrix.projectKey)] }}
           working-directory: ./projects/${{ matrix.project }}/web
           vercel-args: --prod
+          github-token: ${{ github.token }}
