@@ -30,6 +30,10 @@ async function loadProfile() {
       currentUser = await apiFetch("/profile");
     } catch (e) {
       console.error("Profile error:", e);
+      showToast("Could not connect to server. Please try again.", "error");
+      session = null;
+      showView("auth");
+      return;
     }
   }
   showView("browse");
