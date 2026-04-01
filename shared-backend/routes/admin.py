@@ -148,6 +148,10 @@ APPS_WITH_USERS = {
         "identity_columns": "id, username, display_name, created_at",
         "delete_handler": _delete_plantplanner_user,
     },
+    "boardgame-buddy": {
+        "table": "boardgamebuddy_profiles",
+        "identity_columns": "id, display_name, avatar_url, created_at",
+    },
 }
 
 

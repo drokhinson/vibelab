@@ -108,14 +108,14 @@
       "id": "boardgame-buddy",
       "name": "BoardgameBuddy",
       "description": "Build your board game closet, track plays, and quick-reference game guides",
-      "status": "wip",
-      "tags": [],
-      "webUrl": null,
-      "backendUrl": null,
+      "status": "live",
+      "tags": ["games", "hobbies", "social"],
+      "webUrl": "https://vibelab-boardgamebuddy.vercel.app",
+      "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": false,
       "expoSlug": null,
       "createdAt": "2026-03-27",
-      "icon": "🔧"
+      "icon": "🎲"
     }
   ]
 }
