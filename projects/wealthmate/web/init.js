@@ -1,14 +1,11 @@
 // init.js — WealthMate event listeners and startup
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   // Auth forms
   document.getElementById("login-form").addEventListener("submit", handleLogin);
   document.getElementById("register-form").addEventListener("submit", handleRegister);
   document.getElementById("show-register").addEventListener("click", e => { e.preventDefault(); showView("register"); });
   document.getElementById("show-login").addEventListener("click", e => { e.preventDefault(); showView("login"); });
-  document.getElementById("show-forgot-password").addEventListener("click", e => { e.preventDefault(); showView("forgot-password"); });
-  document.getElementById("fp-back-to-login").addEventListener("click", e => { e.preventDefault(); showView("login"); });
-  document.getElementById("forgot-password-form").addEventListener("submit", handleForgotPassword);
 
   // Bottom nav
   document.querySelectorAll(".nav-item").forEach(btn => {
@@ -65,17 +62,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("email-invite-form").addEventListener("submit", handleEmailInvite);
   document.getElementById("btn-logout").addEventListener("click", logout);
   document.getElementById("btn-delete-account").addEventListener("click", deleteAccount);
-  document.getElementById("btn-generate-recovery").addEventListener("click", handleGenerateRecoveryCode);
-  document.getElementById("btn-save-email").addEventListener("click", handleSaveEmail);
-  document.getElementById("recovery-dialog-close").addEventListener("click", () => document.getElementById("recovery-code-dialog").close());
-  document.getElementById("recovery-dialog-done").addEventListener("click", () => document.getElementById("recovery-code-dialog").close());
-  document.getElementById("recovery-code-copy").addEventListener("click", () => {
-    const code = document.getElementById("recovery-code-value").textContent;
-    navigator.clipboard.writeText(code).then(() => {
-      document.getElementById("recovery-code-copy").textContent = "Copied!";
-      setTimeout(() => { document.getElementById("recovery-code-copy").textContent = "Copy"; }, 2000);
-    });
-  });
 
   // Data Management
   document.getElementById("btn-export-csv").addEventListener("click", handleExportCSV);
@@ -98,12 +84,27 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("wm_theme", theme);
   });
 
-  // Init: check if logged in
-  if (isLoggedIn()) {
-    showView("dashboard");
+  // Init: check if logged in via Supabase session
+  const loggedIn = await isLoggedIn();
+  if (loggedIn) {
+    try {
+      currentUser = await apiFetch("/auth/me");
+      showView("dashboard");
+    } catch (e) {
+      await sb.auth.signOut();
+      showView("login");
+    }
   } else {
     showView("login");
   }
+
+  // React to Supabase auth state changes (e.g. session expiry)
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") {
+      currentUser = null;
+      showView("login");
+    }
+  });
 
   // Init Lucide icons (for static HTML elements like nav, buttons)
   if (window.lucide) lucide.createIcons();

@@ -1,9 +1,10 @@
 """
 routes/wealthmate/ — WealthMate API routes package
 All routes at /api/v1/wealthmate/...
+Auth: Supabase Auth (email/password) — see supabase_auth.py
 
 Supabase tables (all prefixed wealthmate_):
-  wealthmate_users              — id, username, display_name, password_hash
+  wealthmate_profiles           — id (→ auth.users), username, display_name, email
   wealthmate_couples            — id, created_at
   wealthmate_couple_members     — id, couple_id, user_id, role, joined_at
   wealthmate_invitations        — id, from_user_id, to_username, couple_id, status

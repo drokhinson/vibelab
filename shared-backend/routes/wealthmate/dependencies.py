@@ -5,21 +5,7 @@ from typing import Optional
 from fastapi import HTTPException, Header
 
 from db import get_supabase
-from auth import hash_password, verify_password, create_token, decode_token, extract_bearer_token
-from .constants import JWT_SECRET, JWT_ALGORITHM
-
-
-def create_app_token(user_id: str, username: str, couple_id: Optional[str] = None) -> str:
-    """Create a JWT with WealthMate-specific payload (includes couple_id)."""
-    return create_token(
-        {"user_id": user_id, "username": username, "couple_id": couple_id},
-        JWT_SECRET, JWT_ALGORITHM,
-    )
-
-
-def decode_app_token(token: str) -> dict:
-    """Decode a WealthMate JWT."""
-    return decode_token(token, JWT_SECRET, JWT_ALGORITHM)
+from supabase_auth import get_supabase_user
 
 
 def _get_couple_id_for_user(user_id: str) -> Optional[str]:
@@ -37,12 +23,14 @@ def _get_couple_id_for_user(user_id: str) -> Optional[str]:
 
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
-    """FastAPI dependency — extracts and validates JWT from Authorization header."""
-    token = extract_bearer_token(authorization)
-    payload = decode_app_token(token)
-    # Refresh couple_id in case it changed since token was issued
-    couple_id = _get_couple_id_for_user(payload["user_id"])
-    # Auto-create household if missing (handles users registered before solo-first change)
+    """FastAPI dependency — decode Supabase JWT and look up couple membership."""
+    auth_user = await get_supabase_user(authorization)
+    user_id = auth_user["user_id"]
+
+    # Look up couple membership
+    couple_id = _get_couple_id_for_user(user_id)
+
+    # Auto-create household if missing
     if not couple_id:
         sb = get_supabase()
         couple_result = sb.table("wealthmate_couples").insert({}).execute()
@@ -50,11 +38,21 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
             couple_id = couple_result.data[0]["id"]
             sb.table("wealthmate_couple_members").insert({
                 "couple_id": couple_id,
-                "user_id": payload["user_id"],
+                "user_id": user_id,
                 "role": "owner",
             }).execute()
-    payload["couple_id"] = couple_id
-    return payload
+
+    # Look up username from profile
+    sb = get_supabase()
+    profile = sb.table("wealthmate_profiles").select("username").eq("id", user_id).execute()
+    username = profile.data[0]["username"] if profile.data else ""
+
+    return {
+        "user_id": user_id,
+        "username": username,
+        "couple_id": couple_id,
+        "email": auth_user.get("email"),
+    }
 
 
 def _require_couple(user: dict) -> str:

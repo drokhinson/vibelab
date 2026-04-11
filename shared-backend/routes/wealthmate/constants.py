@@ -1,10 +1,6 @@
 """Shared constants for WealthMate API."""
 
-import os
 from enum import StrEnum
-
-JWT_SECRET = os.environ.get("WEALTHMATE_JWT_SECRET", "dev-secret-change-me")
-JWT_ALGORITHM = "HS256"
 
 TYPE_LABEL = {
     "checking_personal": "Bank Account",

@@ -3,7 +3,7 @@
 async function loadSettings() {
   document.getElementById("settings-display-name").textContent = currentUser?.display_name || "--";
   document.getElementById("settings-username").textContent = currentUser?.username || "--";
-  document.getElementById("settings-email").value = currentUser?.email || "";
+  document.getElementById("settings-email").textContent = currentUser?.email || "--";
 
   const coupleEl = document.getElementById("settings-couple-info");
   const inviteSection = document.getElementById("settings-invite-section");
@@ -114,7 +114,7 @@ async function deleteAccount() {
     showLoading(true);
     await apiFetch("/auth/me", { method: "DELETE" });
     showLoading(false);
-    clearToken();
+    await sb.auth.signOut();
     currentUser = null;
     coupleInfo = null;
     alert("Your account and all data have been deleted.");
@@ -125,8 +125,8 @@ async function deleteAccount() {
   }
 }
 
-function logout() {
-  clearToken();
+async function logout() {
+  await sb.auth.signOut();
   currentUser = null;
   coupleInfo = null;
   activeCheckin = null;
@@ -139,7 +139,7 @@ function logout() {
 // ── Data Management (CSV export/import) ──────────────────────────────────────
 
 async function downloadCSV(endpoint, fallbackName) {
-  const token = getToken();
+  const token = await getToken();
   try {
     const res = await fetch(`${API}${BASE}${endpoint}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -195,7 +195,7 @@ async function handleImportCSV() {
     const formData = new FormData();
     formData.append("file", file);
 
-    const token = getToken();
+    const token = await getToken();
     const res = await fetch(`${API}${BASE}/checkins/import`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -239,86 +239,3 @@ async function handleImportCSV() {
   }
 }
 
-// ── Recovery Code ─────────────────────────────────────────────────────────────
-function showRecoveryCode(code) {
-  document.getElementById("recovery-code-value").textContent = code;
-  document.getElementById("recovery-code-dialog").showModal();
-}
-
-async function handleForgotPassword(e) {
-  e.preventDefault();
-  const btn = document.getElementById("fp-btn");
-  const errEl = document.getElementById("fp-error");
-  errEl.style.display = "none";
-  btn.setAttribute("aria-busy", "true");
-  btn.disabled = true;
-
-  try {
-    const newPass = document.getElementById("fp-new-password").value;
-    const confirmPass = document.getElementById("fp-confirm-password").value;
-    if (newPass !== confirmPass) {
-      throw new Error("Passwords do not match");
-    }
-    const body = {
-      username: document.getElementById("fp-username").value.trim(),
-      recovery_code: document.getElementById("fp-recovery-code").value.trim(),
-      new_password: newPass,
-    };
-    const res = await fetch(`${API}${BASE}/auth/reset-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-
-    document.getElementById("forgot-password-form").reset();
-    showView("login");
-    if (data.new_recovery_code) {
-      showRecoveryCode(data.new_recovery_code);
-    }
-  } catch (err) {
-    errEl.textContent = err.message;
-    errEl.style.display = "block";
-  } finally {
-    btn.removeAttribute("aria-busy");
-    btn.disabled = false;
-  }
-}
-
-async function handleGenerateRecoveryCode() {
-  const btn = document.getElementById("btn-generate-recovery");
-  btn.setAttribute("aria-busy", "true");
-  btn.disabled = true;
-
-  try {
-    const data = await apiFetch("/auth/recovery-code", { method: "POST" });
-    if (data.recovery_code) {
-      showRecoveryCode(data.recovery_code);
-    }
-  } catch (err) {
-    alert(err.message);
-  } finally {
-    btn.removeAttribute("aria-busy");
-    btn.disabled = false;
-  }
-}
-
-async function handleSaveEmail() {
-  const btn = document.getElementById("btn-save-email");
-  const email = document.getElementById("settings-email").value.trim();
-  if (!email) return;
-  btn.setAttribute("aria-busy", "true");
-  btn.disabled = true;
-  try {
-    await apiFetch("/auth/email", { method: "PUT", body: { email } });
-    currentUser.email = email;
-    btn.textContent = "Saved!";
-    setTimeout(() => { btn.textContent = "Save"; }, 2000);
-  } catch (err) {
-    alert(err.message);
-  } finally {
-    btn.removeAttribute("aria-busy");
-    btn.disabled = false;
-  }
-}

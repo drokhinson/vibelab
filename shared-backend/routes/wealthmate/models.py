@@ -6,16 +6,10 @@ from pydantic import BaseModel
 from .constants import AccountType, Frequency, InviteAction
 
 
-class RegisterBody(BaseModel):
+class UpsertProfileBody(BaseModel):
     username: str
-    password: str
     display_name: Optional[str] = None
     email: Optional[str] = None
-
-
-class LoginBody(BaseModel):
-    username: str
-    password: str
 
 
 class CreateCoupleBody(BaseModel):
@@ -101,11 +95,3 @@ class UpdateRecurringExpenseBody(BaseModel):
     is_active: Optional[bool] = None
 
 
-class ResetPasswordBody(BaseModel):
-    username: str
-    recovery_code: str
-    new_password: str
-
-
-class UpdateEmailBody(BaseModel):
-    email: str

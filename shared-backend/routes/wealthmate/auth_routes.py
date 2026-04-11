@@ -1,17 +1,12 @@
-"""Auth routes: register, login, reset-password, recovery-code, me, email, delete account."""
-
-import secrets
+"""Auth routes: profile upsert, me, delete account."""
 
 from fastapi import Depends, HTTPException
 
-from auth import hash_password, verify_password
-from db import get_supabase
+from db import get_supabase, delete_auth_user
 from shared_models import HealthResponse
 from . import router
-from .dependencies import (
-    get_current_user, _require_couple, create_app_token, _get_couple_id_for_user,
-)
-from .models import RegisterBody, LoginBody, ResetPasswordBody, UpdateEmailBody
+from .dependencies import get_current_user, _require_couple, _get_couple_id_for_user
+from .models import UpsertProfileBody
 
 
 # ---------------------------------------------------------------------------
@@ -28,137 +23,59 @@ async def health():
 # Auth
 # ---------------------------------------------------------------------------
 
-@router.post("/auth/register")
-async def register(body: RegisterBody):
+@router.post("/auth/profile")
+async def upsert_profile(body: UpsertProfileBody, user: dict = Depends(get_current_user)):
+    """Create or update user profile after Supabase Auth signup."""
     sb = get_supabase()
-    # Check username uniqueness
+    user_id = user["user_id"]
+
+    # Check username uniqueness (exclude self)
     existing = (
-        sb.table("wealthmate_users")
+        sb.table("wealthmate_profiles")
         .select("id")
         .eq("username", body.username)
+        .neq("id", user_id)
         .execute()
     )
     if existing.data:
         raise HTTPException(status_code=409, detail="Username already taken")
 
-    password_hash = hash_password(body.password)
-    recovery_code = secrets.token_urlsafe(16)
-    recovery_hash = hash_password(recovery_code)
-    user_data = {
+    profile_data = {
+        "id": user_id,
         "username": body.username,
         "display_name": body.display_name or body.username,
-        "password_hash": password_hash,
-        "recovery_hash": recovery_hash,
+        "email": body.email or user.get("email"),
     }
-    if body.email:
-        user_data["email"] = body.email
-    result = sb.table("wealthmate_users").insert(user_data).execute()
-    if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to create user")
+    sb.table("wealthmate_profiles").upsert(profile_data).execute()
 
-    user = result.data[0]
+    # Auto-create household if this is a new profile
+    couple_id = _get_couple_id_for_user(user_id)
+    if not couple_id:
+        couple_result = sb.table("wealthmate_couples").insert({}).execute()
+        if couple_result.data:
+            couple_id = couple_result.data[0]["id"]
+            sb.table("wealthmate_couple_members").insert({
+                "couple_id": couple_id,
+                "user_id": user_id,
+                "role": "owner",
+            }).execute()
 
-    # Auto-create a solo household so the user can start immediately
-    couple_result = sb.table("wealthmate_couples").insert({}).execute()
-    couple_id = couple_result.data[0]["id"] if couple_result.data else None
-    if couple_id:
-        sb.table("wealthmate_couple_members").insert({
-            "couple_id": couple_id,
-            "user_id": user["id"],
-            "role": "owner",
-        }).execute()
-
-    token = create_app_token(user["id"], user["username"], couple_id)
     return {
-        "token": token,
         "user": {
-            "id": user["id"],
-            "username": user["username"],
-            "display_name": user["display_name"],
+            "id": user_id,
+            "username": body.username,
+            "display_name": body.display_name or body.username,
             "couple_id": couple_id,
-        },
-        "recovery_code": recovery_code,
+        }
     }
-
-
-@router.post("/auth/login")
-async def login(body: LoginBody):
-    sb = get_supabase()
-    result = (
-        sb.table("wealthmate_users")
-        .select("*")
-        .eq("username", body.username)
-        .execute()
-    )
-    if not result.data:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-
-    user = result.data[0]
-
-    # Dev convenience: allow dummy accounts to login with "password"
-    is_dummy = body.username in ("adam", "eve") and body.password == "password"
-    if not is_dummy:
-        if not verify_password(body.password, user["password_hash"]):
-            raise HTTPException(status_code=401, detail="Invalid username or password")
-
-    couple_id = _get_couple_id_for_user(user["id"])
-    token = create_app_token(user["id"], user["username"], couple_id)
-    return {
-        "token": token,
-        "user": {
-            "id": user["id"],
-            "username": user["username"],
-            "display_name": user["display_name"],
-            "couple_id": couple_id,
-        },
-    }
-
-
-@router.post("/auth/reset-password")
-async def reset_password(body: ResetPasswordBody):
-    sb = get_supabase()
-    result = (
-        sb.table("wealthmate_users")
-        .select("id, recovery_hash")
-        .eq("username", body.username)
-        .execute()
-    )
-    if not result.data:
-        raise HTTPException(status_code=400, detail="Invalid username or recovery code")
-    user = result.data[0]
-    if not user.get("recovery_hash"):
-        raise HTTPException(status_code=400, detail="No recovery code set for this account")
-    if not verify_password(body.recovery_code, user["recovery_hash"]):
-        raise HTTPException(status_code=400, detail="Invalid username or recovery code")
-
-    # Update password and rotate recovery code
-    new_password_hash = hash_password(body.new_password)
-    new_recovery_code = secrets.token_urlsafe(16)
-    new_recovery_hash = hash_password(new_recovery_code)
-    sb.table("wealthmate_users").update({
-        "password_hash": new_password_hash,
-        "recovery_hash": new_recovery_hash,
-    }).eq("id", user["id"]).execute()
-
-    return {"message": "Password reset successful", "new_recovery_code": new_recovery_code}
-
-
-@router.post("/auth/recovery-code")
-async def generate_recovery_code(user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    recovery_code = secrets.token_urlsafe(16)
-    recovery_hash = hash_password(recovery_code)
-    sb.table("wealthmate_users").update({
-        "recovery_hash": recovery_hash,
-    }).eq("id", user["user_id"]).execute()
-    return {"recovery_code": recovery_code}
 
 
 @router.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
+    """Get current user profile."""
     sb = get_supabase()
     result = (
-        sb.table("wealthmate_users")
+        sb.table("wealthmate_profiles")
         .select("id, username, display_name, email, created_at")
         .eq("id", user["user_id"])
         .execute()
@@ -168,15 +85,6 @@ async def me(user: dict = Depends(get_current_user)):
     u = result.data[0]
     u["couple_id"] = user["couple_id"]
     return u
-
-
-@router.put("/auth/email")
-async def update_email(body: UpdateEmailBody, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    sb.table("wealthmate_users").update({
-        "email": body.email,
-    }).eq("id", user["user_id"]).execute()
-    return {"message": "Email updated", "email": body.email}
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +111,6 @@ async def delete_account(user: dict = Depends(get_current_user)):
 
         if is_solo:
             # Solo household — delete everything
-            # Get checkin IDs to delete values
             checkins = (
                 sb.table("wealthmate_checkins")
                 .select("id")
@@ -214,7 +121,6 @@ async def delete_account(user: dict = Depends(get_current_user)):
             if checkin_ids:
                 sb.table("wealthmate_checkin_values").delete().in_("checkin_id", checkin_ids).execute()
 
-            # Get account IDs to delete loan details
             accts = (
                 sb.table("wealthmate_accounts")
                 .select("id")
@@ -225,7 +131,6 @@ async def delete_account(user: dict = Depends(get_current_user)):
             if acct_ids:
                 sb.table("wealthmate_account_loan_details").delete().in_("account_id", acct_ids).execute()
 
-            # Delete expense items via groups
             groups = (
                 sb.table("wealthmate_expense_groups")
                 .select("id")
@@ -236,7 +141,6 @@ async def delete_account(user: dict = Depends(get_current_user)):
             if group_ids:
                 sb.table("wealthmate_expense_items").delete().in_("group_id", group_ids).execute()
 
-            # Delete top-level couple data
             sb.table("wealthmate_checkins").delete().eq("couple_id", couple_id).execute()
             sb.table("wealthmate_accounts").delete().eq("couple_id", couple_id).execute()
             sb.table("wealthmate_expense_groups").delete().eq("couple_id", couple_id).execute()
@@ -245,9 +149,8 @@ async def delete_account(user: dict = Depends(get_current_user)):
             sb.table("wealthmate_couple_members").delete().eq("couple_id", couple_id).execute()
             sb.table("wealthmate_couples").delete().eq("id", couple_id).execute()
         else:
-            # Merged household — remove user from couple, reassign their personal accounts to partner
+            # Merged household — remove user from couple, reassign their personal accounts
             sb.table("wealthmate_couple_members").delete().eq("user_id", user_id).execute()
-            # Set personal accounts owned by this user to no owner (become joint)
             sb.table("wealthmate_accounts").update(
                 {"owner_user_id": None}
             ).eq("couple_id", couple_id).eq("owner_user_id", user_id).execute()
@@ -256,7 +159,7 @@ async def delete_account(user: dict = Depends(get_current_user)):
     sb.table("wealthmate_invitations").delete().eq("from_user_id", user_id).execute()
     sb.table("wealthmate_invitations").delete().eq("to_username", user["username"]).execute()
 
-    # Delete the user
-    sb.table("wealthmate_users").delete().eq("id", user_id).execute()
+    # Delete from Supabase Auth — ON DELETE CASCADE handles profile
+    delete_auth_user(user_id)
 
     return {"status": "deleted"}

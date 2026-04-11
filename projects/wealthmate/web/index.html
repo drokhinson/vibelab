@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <!-- Supabase JS (auth) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <!-- App styles -->
@@ -49,39 +51,14 @@
         <p class="muted">Track your wealth together</p>
       </div>
       <form id="login-form">
-        <label for="login-username">Username</label>
-        <input type="text" id="login-username" placeholder="Enter username" required autocomplete="username" />
+        <label for="login-email">Email</label>
+        <input type="email" id="login-email" placeholder="you@email.com" required autocomplete="email" />
         <label for="login-password">Password</label>
         <input type="password" id="login-password" placeholder="Enter password" required autocomplete="current-password" />
         <div id="login-error" class="error-banner" style="display:none;"></div>
         <button type="submit" id="login-btn">Log In</button>
       </form>
       <p class="auth-switch">Don't have an account? <a href="#" id="show-register">Sign up</a></p>
-      <p class="auth-switch"><a href="#" id="show-forgot-password">Forgot password?</a></p>
-    </div>
-  </div>
-
-  <!-- ═══════════════════════════ FORGOT PASSWORD ═══════════════════════════ -->
-  <div id="view-forgot-password" class="view" style="display:none;">
-    <div class="auth-container">
-      <div class="auth-logo">
-        <span class="logo-icon">$</span>
-        <h1>WealthMate</h1>
-        <p class="muted">Reset your password</p>
-      </div>
-      <form id="forgot-password-form">
-        <label for="fp-username">Username</label>
-        <input type="text" id="fp-username" placeholder="Enter your username" required autocomplete="username" />
-        <label for="fp-recovery-code">Recovery Code</label>
-        <input type="text" id="fp-recovery-code" placeholder="Enter your recovery code" required autocomplete="off" />
-        <label for="fp-new-password">New Password</label>
-        <input type="password" id="fp-new-password" placeholder="Choose a new password" required autocomplete="new-password" />
-        <label for="fp-confirm-password">Confirm New Password</label>
-        <input type="password" id="fp-confirm-password" placeholder="Confirm new password" required autocomplete="new-password" />
-        <div id="fp-error" class="error-banner" style="display:none;"></div>
-        <button type="submit" id="fp-btn">Reset Password</button>
-      </form>
-      <p class="auth-switch"><a href="#" id="fp-back-to-login">Back to login</a></p>
     </div>
   </div>
 
@@ -93,14 +70,14 @@
         <p class="muted">Create your account</p>
       </div>
       <form id="register-form">
-        <label for="reg-display">Display Name</label>
-        <input type="text" id="reg-display" placeholder="e.g. Adam" required />
-        <label for="reg-username">Username</label>
-        <input type="text" id="reg-username" placeholder="Choose a username" required autocomplete="username" />
-        <label for="reg-email">Email (for account recovery)</label>
-        <input type="email" id="reg-email" placeholder="you@email.com" autocomplete="email" />
+        <label for="reg-email">Email</label>
+        <input type="email" id="reg-email" placeholder="you@email.com" required autocomplete="email" />
         <label for="reg-password">Password</label>
         <input type="password" id="reg-password" placeholder="Choose a password" required autocomplete="new-password" />
+        <label for="reg-username">Username</label>
+        <input type="text" id="reg-username" placeholder="Choose a username" required autocomplete="username" />
+        <label for="reg-display">Display Name</label>
+        <input type="text" id="reg-display" placeholder="e.g. Adam" required />
         <div id="register-error" class="error-banner" style="display:none;"></div>
         <button type="submit" id="register-btn">Create Account</button>
       </form>
@@ -387,13 +364,7 @@
           <h5>Profile</h5>
           <p>Display Name: <strong id="settings-display-name"></strong></p>
           <p>Username: <strong id="settings-username"></strong></p>
-          <div class="settings-email-row">
-            <label for="settings-email">Email (for account recovery)</label>
-            <div class="settings-email-input-row">
-              <input type="email" id="settings-email" placeholder="you@email.com" />
-              <button type="button" id="btn-save-email" class="btn-sm">Save</button>
-            </div>
-          </div>
+          <p>Email: <strong id="settings-email"></strong></p>
         </article>
 
         <article class="settings-card">
@@ -427,12 +398,6 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
-        </article>
-
-        <article class="settings-card">
-          <h5>Recovery Code</h5>
-          <p class="muted" style="font-size:0.85rem;">Generate a recovery code to reset your password if you forget it. Save it somewhere safe.</p>
-          <button id="btn-generate-recovery" class="btn-outline-block">Generate Recovery Code</button>
         </article>
 
         <article class="settings-card">
@@ -562,26 +527,6 @@
               <button type="button" id="acct-delete-btn" class="btn-danger" style="display:none;">Delete Account</button>
             </footer>
           </form>
-        </article>
-      </dialog>
-
-      <!-- ─── Recovery Code Dialog ─── -->
-      <dialog id="recovery-code-dialog">
-        <article>
-          <header>
-            <button aria-label="Close" rel="prev" class="dialog-close" id="recovery-dialog-close"></button>
-            <h4>Your Recovery Code</h4>
-          </header>
-          <div class="recovery-code-card">
-            <p class="recovery-warning">Save this code somewhere safe. You will need it to reset your password. It will not be shown again.</p>
-            <div class="recovery-code-display">
-              <code id="recovery-code-value"></code>
-              <button type="button" id="recovery-code-copy" class="btn-sm">Copy</button>
-            </div>
-          </div>
-          <footer>
-            <button type="button" id="recovery-dialog-done" class="btn-primary-block">I've saved my code</button>
-          </footer>
         </article>
       </dialog>
 

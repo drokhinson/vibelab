@@ -25,6 +25,7 @@ let acctChart = null;
 let acctHistoryData = null;  // { dates, accounts }
 let selectedAcctIds = new Set();
 let currentView = "dashboard";
+let sb = null;  // Supabase client (initialized in helpers.js)
 let checkinStep = 1;
 let addAccountFromCheckin = false;
 let checkinNewAccounts = {};  // account_id -> { current_value, balance_owed }

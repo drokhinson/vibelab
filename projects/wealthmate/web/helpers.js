@@ -66,24 +66,26 @@ function typeToCategory(t) {
   return "other_asset";
 }
 
+// ── Supabase client ──────────────────────────────────────────────────────────
+sb = window.supabase.createClient(
+  window.APP_CONFIG.supabaseUrl,
+  window.APP_CONFIG.supabaseAnonKey
+);
+
 // ── Auth helpers ──────────────────────────────────────────────────────────────
-function getToken() {
-  return localStorage.getItem("wm_token");
+async function getToken() {
+  const session = (await sb.auth.getSession()).data.session;
+  return session ? session.access_token : null;
 }
-function setToken(t) {
-  localStorage.setItem("wm_token", t);
-}
-function clearToken() {
-  localStorage.removeItem("wm_token");
-}
-function isLoggedIn() {
-  return !!getToken();
+async function isLoggedIn() {
+  const session = (await sb.auth.getSession()).data.session;
+  return !!session;
 }
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
-  const token = getToken();
+  const token = await getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${API}${BASE}${path}`, {
     ...opts,
@@ -91,7 +93,7 @@ async function apiFetch(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   if (res.status === 401) {
-    clearToken();
+    await sb.auth.signOut();
     currentUser = null;
     showView("login");
     throw new Error("Session expired. Please log in again.");
@@ -109,7 +111,6 @@ function showView(name) {
   const appShell = document.getElementById("app-shell");
   const loginView = document.getElementById("view-login");
   const registerView = document.getElementById("view-register");
-  const forgotView = document.getElementById("view-forgot-password");
 
   if (name === "login") {
     appShell.style.display = "none";
@@ -121,17 +122,11 @@ function showView(name) {
     registerView.style.display = "block";
     return;
   }
-  if (name === "forgot-password") {
-    appShell.style.display = "none";
-    forgotView.style.display = "block";
-    return;
-  }
 
   // App views
   appShell.style.display = "block";
   loginView.style.display = "none";
   registerView.style.display = "none";
-  forgotView.style.display = "none";
 
   const el = document.getElementById(`view-${name}`);
   if (el) el.style.display = "block";
@@ -165,13 +160,11 @@ async function handleLogin(e) {
   btn.disabled = true;
 
   try {
-    const body = {
-      username: document.getElementById("login-username").value.trim(),
-      password: document.getElementById("login-password").value,
-    };
-    const data = await apiFetch("/auth/login", { method: "POST", body });
-    setToken(data.token);
-    currentUser = data.user;
+    const email = document.getElementById("login-email").value.trim();
+    const password = document.getElementById("login-password").value;
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    currentUser = await apiFetch("/auth/me");
     showView("dashboard");
   } catch (err) {
     errEl.textContent = err.message;
@@ -191,20 +184,22 @@ async function handleRegister(e) {
   btn.disabled = true;
 
   try {
-    const emailVal = document.getElementById("reg-email").value.trim();
-    const body = {
-      username: document.getElementById("reg-username").value.trim(),
-      password: document.getElementById("reg-password").value,
-      display_name: document.getElementById("reg-display").value.trim(),
-    };
-    if (emailVal) body.email = emailVal;
-    const data = await apiFetch("/auth/register", { method: "POST", body });
-    setToken(data.token);
-    currentUser = data.user;
+    const email = document.getElementById("reg-email").value.trim();
+    const password = document.getElementById("reg-password").value;
+    const username = document.getElementById("reg-username").value.trim();
+    const display_name = document.getElementById("reg-display").value.trim();
+
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if (error) throw new Error(error.message);
+    if (!data.session) throw new Error("Check your email to confirm your account.");
+
+    // Create profile in backend
+    const profileData = await apiFetch("/auth/profile", {
+      method: "POST",
+      body: { username, display_name: display_name || username, email },
+    });
+    currentUser = profileData.user;
     showView("dashboard");
-    if (data.recovery_code) {
-      showRecoveryCode(data.recovery_code);
-    }
   } catch (err) {
     errEl.textContent = err.message;
     errEl.style.display = "block";
