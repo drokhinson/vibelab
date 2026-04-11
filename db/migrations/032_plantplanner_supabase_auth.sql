@@ -1,11 +1,21 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- PlantPlanner — current schema snapshot
--- Last updated: migration 032 (Supabase Auth migration)
--- FOR REFERENCE ONLY — apply changes via db/migrations/
+-- 032 — PlantPlanner: migrate from custom auth to Supabase Auth
+--
+-- Drops the old plantplanner_users table (with password_hash) and replaces it
+-- with plantplanner_profiles linked to auth.users via ON DELETE CASCADE.
+-- Garden/plant data tables are rebuilt with FKs pointing to profiles.
+-- Plant catalog (plantplanner_plants, plantplanner_renders) is untouched.
+--
+-- WARNING: This migration deletes all existing user + garden data.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Profile table linked to Supabase Auth (replaces plantplanner_users)
-CREATE TABLE IF NOT EXISTS public.plantplanner_profiles (
+-- 1. Drop user-owned tables (cascade removes garden_plants via FK)
+DROP TABLE IF EXISTS public.plantplanner_garden_plants CASCADE;
+DROP TABLE IF EXISTS public.plantplanner_gardens CASCADE;
+DROP TABLE IF EXISTS public.plantplanner_users CASCADE;
+
+-- 2. Create profile table linked to Supabase Auth
+CREATE TABLE public.plantplanner_profiles (
   id            UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   username      TEXT        UNIQUE NOT NULL,
   display_name  TEXT        NOT NULL,
@@ -13,31 +23,8 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_profiles (
 );
 ALTER TABLE public.plantplanner_profiles ENABLE ROW LEVEL SECURITY;
 
--- Reusable 3D render templates keyed by human-readable string
-CREATE TABLE IF NOT EXISTS public.plantplanner_renders (
-  key        TEXT        PRIMARY KEY,
-  label      TEXT        NOT NULL DEFAULT '',
-  params     JSONB       NOT NULL DEFAULT '{}',
-  colors     JSONB       NOT NULL DEFAULT '{}',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-ALTER TABLE public.plantplanner_renders ENABLE ROW LEVEL SECURITY;
-
-CREATE TABLE IF NOT EXISTS public.plantplanner_plants (
-  id            UUID     PRIMARY KEY DEFAULT gen_random_uuid(),
-  name          TEXT     NOT NULL,
-  height_inches INT      NOT NULL DEFAULT 12,
-  sunlight      TEXT     NOT NULL DEFAULT 'full_sun',
-  bloom_season  TEXT[]   NOT NULL DEFAULT '{}',
-  spread_inches INT      NOT NULL DEFAULT 12,
-  description   TEXT,
-  sort_order    INT      NOT NULL DEFAULT 0,
-  category      TEXT     NOT NULL DEFAULT 'other',
-  render_key    TEXT     REFERENCES public.plantplanner_renders(key)
-);
-ALTER TABLE public.plantplanner_plants ENABLE ROW LEVEL SECURITY;
-
-CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
+-- 3. Recreate gardens referencing profiles
+CREATE TABLE public.plantplanner_gardens (
   id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID        NOT NULL REFERENCES public.plantplanner_profiles(id) ON DELETE CASCADE,
   name            TEXT        NOT NULL DEFAULT 'My Garden',
@@ -51,7 +38,8 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
 );
 ALTER TABLE public.plantplanner_gardens ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS public.plantplanner_garden_plants (
+-- 4. Recreate garden plants (same schema, FK to gardens)
+CREATE TABLE public.plantplanner_garden_plants (
   id        UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   garden_id UUID    NOT NULL REFERENCES public.plantplanner_gardens(id) ON DELETE CASCADE,
   plant_id  UUID    NOT NULL REFERENCES public.plantplanner_plants(id),

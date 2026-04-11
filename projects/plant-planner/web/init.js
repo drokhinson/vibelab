@@ -1,21 +1,32 @@
 // init.js — DOMContentLoaded handler, startup logic
 
 document.addEventListener("DOMContentLoaded", async function() {
-  // If we have a stored token, try to restore session
-  if (token) {
+  // Check for existing Supabase session
+  var { data: { session } } = await sb.auth.getSession();
+  if (session) {
     try {
       currentUser = await apiFetch("/auth/me");
       await loadPlants();
       try { preloadThumbnails(plants, renderStyle); } catch (_) {}
       showView("gardens");
     } catch (err) {
-      // Token expired or invalid
-      setToken(null);
+      // Session invalid or profile missing
+      await sb.auth.signOut();
       showView("auth");
     }
   } else {
     showView("auth");
   }
+
+  // Listen for auth state changes (e.g. token refresh)
+  sb.auth.onAuthStateChange(function(event, session) {
+    if (event === "SIGNED_OUT") {
+      currentUser = null;
+      currentGarden = null;
+      gridPlacements = {};
+      if (currentView !== "auth") showView("auth");
+    }
+  });
 
   // Analytics ping (fire-and-forget)
   try {

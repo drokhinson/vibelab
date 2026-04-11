@@ -6,15 +6,9 @@ from pydantic import BaseModel
 from .constants import GardenType, ShadeLevel, PlantingSeason
 
 
-class RegisterBody(BaseModel):
+class UpsertProfileBody(BaseModel):
     username: str
-    password: str
     display_name: Optional[str] = None
-
-
-class LoginBody(BaseModel):
-    username: str
-    password: str
 
 
 class CreateGardenBody(BaseModel):

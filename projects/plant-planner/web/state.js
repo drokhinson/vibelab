@@ -1,7 +1,6 @@
 // state.js — All global state variables
 
 var currentView = "auth"; // auth | gardens | builder
-var token = localStorage.getItem("pp_token") || null;
 var currentUser = null;
 var plants = [];         // plant catalog from API
 var gardens = [];        // user's saved gardens
@@ -14,3 +13,6 @@ var catalogFilter = "all";         // sunlight filter: all | full_sun | partial 
 var catalogFilterSeason = "all";   // bloom season: all | spring | summer | fall | winter
 var catalogFilterCategory = "all"; // category: all | vegetable | herb | flower | fruit
 var currentTheme = localStorage.getItem("pp_theme") || "pastel";
+
+// Supabase client (initialized in helpers.js)
+var sb = null;

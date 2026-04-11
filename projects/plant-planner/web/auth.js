@@ -1,4 +1,4 @@
-// auth.js — Login / Register views
+// auth.js — Login / Register views (Supabase Auth)
 
 function renderAuth() {
   app.innerHTML = '\
@@ -46,7 +46,7 @@ function renderAuth() {
 function loginFormHTML() {
   return '\
     <form id="auth-submit" class="space-y-3 w-full">\
-      <input type="text" name="username" placeholder="Username" required class="input input-bordered w-full input-sm" />\
+      <input type="email" name="email" placeholder="Email" required class="input input-bordered w-full input-sm" />\
       <input type="password" name="password" placeholder="Password" required class="input input-bordered w-full input-sm" />\
       <button type="submit" class="btn btn-primary w-full btn-sm">Login</button>\
     </form>';
@@ -55,9 +55,10 @@ function loginFormHTML() {
 function registerFormHTML() {
   return '\
     <form id="auth-submit" class="space-y-3 w-full">\
+      <input type="email" name="email" placeholder="Email" required class="input input-bordered w-full input-sm" />\
       <input type="text" name="username" placeholder="Username" required class="input input-bordered w-full input-sm" />\
       <input type="text" name="display_name" placeholder="Display Name (optional)" class="input input-bordered w-full input-sm" />\
-      <input type="password" name="password" placeholder="Password" required class="input input-bordered w-full input-sm" />\
+      <input type="password" name="password" placeholder="Password (min 6 chars)" required minlength="6" class="input input-bordered w-full input-sm" />\
       <button type="submit" class="btn btn-primary w-full btn-sm">Register</button>\
     </form>';
 }
@@ -70,16 +71,35 @@ function bindAuthSubmit(isLogin) {
     var errEl = document.getElementById("auth-error");
     errEl.innerHTML = "";
     var fd = new FormData(form);
-    var body = { username: fd.get("username"), password: fd.get("password") };
-    if (!isLogin && fd.get("display_name")) body.display_name = fd.get("display_name");
     var btn = form.querySelector("button");
     btn.classList.add("loading");
     btn.disabled = true;
     try {
-      var endpoint = isLogin ? "/auth/login" : "/auth/register";
-      var data = await apiFetch(endpoint, { method: "POST", body: body });
-      setToken(data.token);
-      currentUser = data.user;
+      if (isLogin) {
+        var { data, error } = await sb.auth.signInWithPassword({
+          email: fd.get("email"),
+          password: fd.get("password"),
+        });
+        if (error) throw new Error(error.message);
+        // Fetch existing profile
+        currentUser = await apiFetch("/auth/me");
+      } else {
+        var { data, error } = await sb.auth.signUp({
+          email: fd.get("email"),
+          password: fd.get("password"),
+        });
+        if (error) throw new Error(error.message);
+        if (!data.session) throw new Error("Check your email to confirm your account.");
+        // Create profile in backend
+        var profileData = await apiFetch("/auth/profile", {
+          method: "POST",
+          body: {
+            username: fd.get("username"),
+            display_name: fd.get("display_name") || fd.get("username"),
+          },
+        });
+        currentUser = profileData.user;
+      }
       await loadPlants();
       try { preloadThumbnails(plants, renderStyle); } catch (_) {}
       showView("gardens");

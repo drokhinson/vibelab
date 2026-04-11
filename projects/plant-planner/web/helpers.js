@@ -1,17 +1,37 @@
-// helpers.js — apiFetch, auth token, navigation, formatting
+// helpers.js — Supabase client, apiFetch, auth helpers, navigation, formatting
 
 var API = window.APP_CONFIG?.apiBase ?? "http://localhost:8000";
 var PREFIX = "/api/v1/plant_planner";
 var app = document.getElementById("app");
 
+// Initialize Supabase client
+sb = window.supabase.createClient(
+  window.APP_CONFIG.supabaseUrl,
+  window.APP_CONFIG.supabaseAnonKey
+);
+
+async function getToken() {
+  var session = (await sb.auth.getSession()).data.session;
+  return session ? session.access_token : null;
+}
+
 async function apiFetch(path, opts = {}) {
   var headers = opts.headers || {};
-  if (token) headers["Authorization"] = "Bearer " + token;
+  var accessToken = await getToken();
+  if (accessToken) headers["Authorization"] = "Bearer " + accessToken;
   if (opts.body && typeof opts.body === "object") {
     headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(opts.body);
   }
   var res = await fetch(API + PREFIX + path, { ...opts, headers });
+  if (res.status === 401) {
+    await sb.auth.signOut();
+    currentUser = null;
+    currentGarden = null;
+    gridPlacements = {};
+    showView("auth");
+    throw new Error("Session expired. Please log in again.");
+  }
   if (!res.ok) {
     var err;
     try { err = (await res.json()).detail; } catch (_) { err = res.statusText; }
@@ -30,14 +50,8 @@ function showView(view) {
   render();
 }
 
-function setToken(t) {
-  token = t;
-  if (t) localStorage.setItem("pp_token", t);
-  else localStorage.removeItem("pp_token");
-}
-
-function logout() {
-  setToken(null);
+async function logout() {
+  await sb.auth.signOut();
   currentUser = null;
   currentGarden = null;
   gridPlacements = {};
@@ -47,7 +61,7 @@ function logout() {
 function updateNav() {
   var navRight = document.getElementById("nav-right");
   if (!navRight) return;
-  if (token && currentUser) {
+  if (currentUser) {
     navRight.innerHTML =
       '<button class="btn btn-ghost btn-sm gap-1" id="nav-gardens"><i data-lucide="layout-grid" style="width:1em;height:1em"></i> My Gardens</button>' +
       '<button class="btn btn-ghost btn-sm gap-1" id="nav-logout"><i data-lucide="log-out" style="width:1em;height:1em"></i> Logout</button>' +
