@@ -10,6 +10,8 @@
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+  <!-- Supabase JS (auth) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <!-- App styles -->
@@ -33,38 +35,14 @@
         <p class="muted">Your personal hobby record</p>
       </div>
       <form id="login-form">
-        <label for="login-username">Username</label>
-        <input type="text" id="login-username" placeholder="Enter username" required autocomplete="username" />
+        <label for="login-email">Email</label>
+        <input type="email" id="login-email" placeholder="you@email.com" required autocomplete="email" />
         <label for="login-password">Password</label>
         <input type="password" id="login-password" placeholder="Enter password" required autocomplete="current-password" />
         <div id="login-error" class="error-banner" style="display:none;"></div>
         <button type="submit" id="login-btn">Log In</button>
       </form>
       <p class="auth-switch">Don't have an account? <a href="#" id="show-register">Sign up</a></p>
-      <p class="auth-switch"><a href="#" id="show-forgot-password">Forgot password?</a></p>
-    </div>
-  </div>
-
-  <!-- ═══════════════════════════ FORGOT PASSWORD ═══════════════════════════ -->
-  <div id="view-forgot-password" class="view" style="display:none;">
-    <div class="auth-container">
-      <div class="auth-logo">
-        <h1>SpotMe</h1>
-        <p class="muted">Reset your password</p>
-      </div>
-      <form id="forgot-password-form">
-        <label for="fp-username">Username</label>
-        <input type="text" id="fp-username" placeholder="Enter your username" required autocomplete="username" />
-        <label for="fp-recovery-code">Recovery Code</label>
-        <input type="text" id="fp-recovery-code" placeholder="Enter your recovery code" required autocomplete="off" />
-        <label for="fp-new-password">New Password</label>
-        <input type="password" id="fp-new-password" placeholder="Choose a new password" required autocomplete="new-password" />
-        <label for="fp-confirm-password">Confirm New Password</label>
-        <input type="password" id="fp-confirm-password" placeholder="Confirm new password" required autocomplete="new-password" />
-        <div id="fp-error" class="error-banner" style="display:none;"></div>
-        <button type="submit" id="fp-btn">Reset Password</button>
-      </form>
-      <p class="auth-switch"><a href="#" id="fp-back-to-login">Back to login</a></p>
     </div>
   </div>
 
@@ -76,14 +54,14 @@
         <p class="muted">Create your account</p>
       </div>
       <form id="register-form">
-        <label for="reg-display">Display Name</label>
-        <input type="text" id="reg-display" placeholder="e.g. Alex" required />
+        <label for="reg-email">Email</label>
+        <input type="email" id="reg-email" placeholder="you@email.com" required autocomplete="email" />
         <label for="reg-username">Username</label>
         <input type="text" id="reg-username" placeholder="Choose a username" required autocomplete="username" />
-        <label for="reg-email">Email (for account recovery)</label>
-        <input type="email" id="reg-email" placeholder="you@email.com" autocomplete="email" />
+        <label for="reg-display">Display Name</label>
+        <input type="text" id="reg-display" placeholder="e.g. Alex" />
         <label for="reg-password">Password</label>
-        <input type="password" id="reg-password" placeholder="Choose a password" required autocomplete="new-password" />
+        <input type="password" id="reg-password" placeholder="Choose a password (min 6 chars)" required minlength="6" autocomplete="new-password" />
         <div id="register-error" class="error-banner" style="display:none;"></div>
         <button type="submit" id="register-btn">Sign Up</button>
       </form>
@@ -122,11 +100,6 @@
       <div class="container">
         <h2>Settings</h2>
         <div class="settings-section">
-          <h3>Recovery Code</h3>
-          <p class="muted">Generate a new recovery code for password reset.</p>
-          <button class="outline" id="btn-generate-recovery">Generate Recovery Code</button>
-        </div>
-        <div class="settings-section">
           <h3>Account</h3>
           <button class="outline" id="btn-logout">Log Out</button>
           <button class="outline danger" id="btn-delete-account">Delete Account</button>
@@ -149,22 +122,6 @@
   </div>
 
   <!-- ═══════════════════════════ DIALOGS ═══════════════════════════ -->
-
-  <!-- Recovery Code Dialog -->
-  <dialog id="recovery-code-dialog">
-    <article>
-      <header>
-        <button id="recovery-dialog-close" aria-label="Close" rel="prev"></button>
-        <h3>Recovery Code</h3>
-      </header>
-      <p>Save this code somewhere safe. You'll need it to reset your password.</p>
-      <pre id="recovery-code-value" class="recovery-code"></pre>
-      <footer>
-        <button class="outline" id="recovery-code-copy">Copy</button>
-        <button id="recovery-dialog-done">Done</button>
-      </footer>
-    </article>
-  </dialog>
 
   <!-- Add Hobby Dialog -->
   <dialog id="add-hobby-dialog">

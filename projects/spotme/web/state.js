@@ -18,3 +18,6 @@ let hobbyCategories = [];     // [{ id, slug, name, icon, sort_order }]
 let allHobbies = [];          // [{ id, name, slug, category_id, spotme_hobby_categories: {...} }]
 let myHobbies = [];           // [{ id, hobby_id, proficiency, notes, spotme_hobbies: {...} }]
 let selectedCategoryFilter = null;  // category_id or null for "all"
+
+// Supabase client (initialized in helpers.js)
+let sb = null;

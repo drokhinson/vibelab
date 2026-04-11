@@ -1,5 +1,11 @@
 // helpers.js — SpotMe shared utilities
 
+// ── Supabase client ──────────────────────────────────────────────────────────
+sb = window.supabase.createClient(
+  window.APP_CONFIG.supabaseUrl,
+  window.APP_CONFIG.supabaseAnonKey
+);
+
 // ── Proficiency helpers ──────────────────────────────────────────────────────
 // levels: array of {value, label} from the API. Falls back gracefully.
 
@@ -48,23 +54,20 @@ function proficiencyPeaks(p, levels) {
 }
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
-function getToken() {
-  return localStorage.getItem("sm_token");
+async function getToken() {
+  const session = (await sb.auth.getSession()).data.session;
+  return session ? session.access_token : null;
 }
-function setToken(t) {
-  localStorage.setItem("sm_token", t);
-}
-function clearToken() {
-  localStorage.removeItem("sm_token");
-}
-function isLoggedIn() {
-  return !!getToken();
+function clearToken() {}
+async function isLoggedIn() {
+  const session = (await sb.auth.getSession()).data.session;
+  return !!session;
 }
 
 // ── API helpers ──────────────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
-  const token = getToken();
+  const token = await getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${API}${BASE}${path}`, {
     ...opts,
@@ -72,7 +75,7 @@ async function apiFetch(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   if (res.status === 401) {
-    clearToken();
+    await sb.auth.signOut();
     currentUser = null;
     showView("login");
     throw new Error("Session expired. Please log in again.");
@@ -90,7 +93,6 @@ function showView(name) {
   const appShell = document.getElementById("app-shell");
   const loginView = document.getElementById("view-login");
   const registerView = document.getElementById("view-register");
-  const forgotView = document.getElementById("view-forgot-password");
 
   if (name === "login") {
     appShell.style.display = "none";
@@ -102,17 +104,11 @@ function showView(name) {
     registerView.style.display = "block";
     return;
   }
-  if (name === "forgot-password") {
-    appShell.style.display = "none";
-    forgotView.style.display = "block";
-    return;
-  }
 
   // App views
   appShell.style.display = "block";
   loginView.style.display = "none";
   registerView.style.display = "none";
-  forgotView.style.display = "none";
 
   const el = document.getElementById(`view-${name}`);
   if (el) el.style.display = "block";
@@ -144,13 +140,11 @@ async function handleLogin(e) {
   btn.disabled = true;
 
   try {
-    const body = {
-      username: document.getElementById("login-username").value.trim(),
-      password: document.getElementById("login-password").value,
-    };
-    const data = await apiFetch("/auth/login", { method: "POST", body });
-    setToken(data.token);
-    currentUser = data.user;
+    const email = document.getElementById("login-email").value.trim();
+    const password = document.getElementById("login-password").value;
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    currentUser = await apiFetch("/auth/me");
     showView("profile");
   } catch (err) {
     errEl.textContent = err.message;
@@ -170,20 +164,22 @@ async function handleRegister(e) {
   btn.disabled = true;
 
   try {
-    const emailVal = document.getElementById("reg-email").value.trim();
-    const body = {
-      username: document.getElementById("reg-username").value.trim(),
-      password: document.getElementById("reg-password").value,
-      display_name: document.getElementById("reg-display").value.trim(),
-    };
-    if (emailVal) body.email = emailVal;
-    const data = await apiFetch("/auth/register", { method: "POST", body });
-    setToken(data.token);
-    currentUser = data.user;
+    const email = document.getElementById("reg-email").value.trim();
+    const password = document.getElementById("reg-password").value;
+    const username = document.getElementById("reg-username").value.trim();
+    const display_name = document.getElementById("reg-display").value.trim();
+
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if (error) throw new Error(error.message);
+    if (!data.session) throw new Error("Check your email to confirm your account.");
+
+    // Create profile in backend
+    const profileData = await apiFetch("/auth/profile", {
+      method: "POST",
+      body: { username, display_name: display_name || username, email },
+    });
+    currentUser = profileData.user;
     showView("profile");
-    if (data.recovery_code) {
-      showRecoveryCode(data.recovery_code);
-    }
   } catch (err) {
     errEl.textContent = err.message;
     errEl.style.display = "block";
@@ -193,43 +189,8 @@ async function handleRegister(e) {
   }
 }
 
-function showRecoveryCode(code) {
-  document.getElementById("recovery-code-value").textContent = code;
-  document.getElementById("recovery-code-dialog").showModal();
-}
-
-async function handleForgotPassword(e) {
-  e.preventDefault();
-  const btn = document.getElementById("fp-btn");
-  const errEl = document.getElementById("fp-error");
-  errEl.style.display = "none";
-  btn.setAttribute("aria-busy", "true");
-  btn.disabled = true;
-
-  try {
-    const pw = document.getElementById("fp-new-password").value;
-    const confirm = document.getElementById("fp-confirm-password").value;
-    if (pw !== confirm) throw new Error("Passwords do not match");
-
-    const body = {
-      username: document.getElementById("fp-username").value.trim(),
-      recovery_code: document.getElementById("fp-recovery-code").value.trim(),
-      new_password: pw,
-    };
-    const data = await apiFetch("/auth/reset-password", { method: "POST", body });
-    alert("Password reset successful! Your new recovery code: " + data.new_recovery_code);
-    showView("login");
-  } catch (err) {
-    errEl.textContent = err.message;
-    errEl.style.display = "block";
-  } finally {
-    btn.removeAttribute("aria-busy");
-    btn.disabled = false;
-  }
-}
-
-function logout() {
-  clearToken();
+async function logout() {
+  await sb.auth.signOut();
   currentUser = null;
   showView("login");
 }

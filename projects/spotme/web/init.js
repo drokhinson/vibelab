@@ -1,25 +1,11 @@
 // init.js — SpotMe event listeners and startup
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   // Auth forms
   document.getElementById("login-form").addEventListener("submit", handleLogin);
   document.getElementById("register-form").addEventListener("submit", handleRegister);
   document.getElementById("show-register").addEventListener("click", e => { e.preventDefault(); showView("register"); });
   document.getElementById("show-login").addEventListener("click", e => { e.preventDefault(); showView("login"); });
-  document.getElementById("show-forgot-password").addEventListener("click", e => { e.preventDefault(); showView("forgot-password"); });
-  document.getElementById("fp-back-to-login").addEventListener("click", e => { e.preventDefault(); showView("login"); });
-  document.getElementById("forgot-password-form").addEventListener("submit", handleForgotPassword);
-
-  // Recovery code dialog
-  document.getElementById("recovery-dialog-close").addEventListener("click", () => document.getElementById("recovery-code-dialog").close());
-  document.getElementById("recovery-dialog-done").addEventListener("click", () => document.getElementById("recovery-code-dialog").close());
-  document.getElementById("recovery-code-copy").addEventListener("click", () => {
-    const code = document.getElementById("recovery-code-value").textContent;
-    navigator.clipboard.writeText(code).then(() => {
-      document.getElementById("recovery-code-copy").textContent = "Copied!";
-      setTimeout(() => { document.getElementById("recovery-code-copy").textContent = "Copy"; }, 2000);
-    });
-  });
 
   // Bottom nav
   document.querySelectorAll(".nav-item").forEach(btn => {
@@ -37,14 +23,28 @@ document.addEventListener("DOMContentLoaded", () => {
   // Settings
   document.getElementById("btn-logout").addEventListener("click", logout);
   document.getElementById("btn-delete-account").addEventListener("click", deleteAccount);
-  document.getElementById("btn-generate-recovery").addEventListener("click", handleGenerateRecoveryCode);
 
-  // Init: check if logged in
-  if (isLoggedIn()) {
-    showView("profile");
+  // Check for existing Supabase session
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    try {
+      currentUser = await apiFetch("/auth/me");
+      showView("profile");
+    } catch (err) {
+      await sb.auth.signOut();
+      showView("login");
+    }
   } else {
     showView("login");
   }
+
+  // Listen for auth state changes
+  sb.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT") {
+      currentUser = null;
+      showView("login");
+    }
+  });
 
   // Init Lucide icons for static HTML elements (nav, header)
   if (window.lucide) lucide.createIcons();
@@ -61,18 +61,9 @@ async function deleteAccount() {
   if (!confirm("This will permanently delete all your data. Type 'delete' mentally and click OK.")) return;
   try {
     await apiFetch("/auth/me", { method: "DELETE" });
-    clearToken();
+    await sb.auth.signOut();
     currentUser = null;
     showView("login");
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
-async function handleGenerateRecoveryCode() {
-  try {
-    const data = await apiFetch("/auth/recovery-code", { method: "POST" });
-    showRecoveryCode(data.recovery_code);
   } catch (err) {
     alert(err.message);
   }
