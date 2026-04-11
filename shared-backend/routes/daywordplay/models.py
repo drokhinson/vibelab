@@ -6,16 +6,10 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class RegisterBody(BaseModel):
+class UpsertProfileBody(BaseModel):
     username: str
-    password: str
     display_name: Optional[str] = None
     email: Optional[str] = None
-
-
-class LoginBody(BaseModel):
-    username: str
-    password: str
 
 
 class CreateGroupBody(BaseModel):

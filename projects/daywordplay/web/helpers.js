@@ -1,9 +1,17 @@
 'use strict';
 
-// ── Auth token ────────────────────────────────────────────────────────────────
-function getToken() { return localStorage.getItem('dwp_token'); }
-function setToken(t) { localStorage.setItem('dwp_token', t); }
-function clearToken() { localStorage.removeItem('dwp_token'); localStorage.removeItem('dwp_user'); }
+// ── Supabase client ──────────────────────────────────────────────────────────
+sb = window.supabase.createClient(
+  window.APP_CONFIG.supabaseUrl,
+  window.APP_CONFIG.supabaseAnonKey
+);
+
+// ── Auth helpers ─────────────────────────────────────────────────────────────
+async function getToken() {
+  const session = (await sb.auth.getSession()).data.session;
+  return session ? session.access_token : null;
+}
+function clearToken() { localStorage.removeItem('dwp_user'); }
 
 function getStoredActiveGroup() { return localStorage.getItem('dwp_active_group'); }
 function setStoredActiveGroup(id) { localStorage.setItem('dwp_active_group', id); }
@@ -11,13 +19,14 @@ function setStoredActiveGroup(id) { localStorage.setItem('dwp_active_group', id)
 // ── API Fetch ─────────────────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-  const token = getToken();
+  const token = await getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${API}${BASE}${path}`, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
 
   if (res.status === 401) {
+    await sb.auth.signOut();
     clearToken();
     dwpCache.clear();
     currentUser = null;

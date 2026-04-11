@@ -108,9 +108,10 @@ function initPageListeners() {
 
 // ── DOMContentLoaded ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  const token = getToken();
+  // Check for existing Supabase session
+  const { data: { session } } = await sb.auth.getSession();
 
-  if (!token) {
+  if (!session) {
     // Not logged in — show auth screen
     renderApp();
     initAuthListeners();
@@ -121,7 +122,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     await loadEagerData();
   } catch (err) {
-    // Token expired or invalid
+    // Session invalid or profile missing
+    await sb.auth.signOut();
     clearToken();
     currentUser = null;
   }
@@ -135,6 +137,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   initShellListeners();
   initPageListeners();
+
+  // Listen for auth state changes
+  sb.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') {
+      clearToken();
+      dwpCache.clear();
+      currentUser = null;
+      renderApp();
+      initAuthListeners();
+    }
+  });
 
   // Load remaining data in background (no await)
   _loadDeferredData();

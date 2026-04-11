@@ -32,6 +32,9 @@ let currentView = 'home';      // home | dictionary | profile | leaderboard | ad
 let activeWordTab = 'today';   // 'today' | 'vote'
 let dictFilter = 'played';      // 'all' | 'played'
 
+// ── Supabase client ──────────────────────────────────────────────────────────
+let sb = null;
+
 // ── Analytics ping ────────────────────────────────────────────────────────────
 fetch(`${API}/api/v1/analytics/track`, {
   method: 'POST',
