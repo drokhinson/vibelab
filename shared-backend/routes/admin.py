@@ -4,13 +4,12 @@ All routes at /api/v1/admin/...
 Protected by ADMIN_API_KEY (Bearer token).
 """
 
-import secrets
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Header, Query
 
 from db import get_supabase
-from auth import hash_password, require_admin
+from auth import require_admin
 from shared_models import HealthResponse
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -21,14 +20,18 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 # ---------------------------------------------------------------------------
 
 async def _delete_wealthmate_user(sb, user_id: str):
-    """Delete a wealthmate user and cascade-remove all their data."""
-    # Look up user
-    user = sb.table("wealthmate_users").select("id, username").eq("id", user_id).execute()
+    """Delete a WealthMate user via Supabase Auth admin API.
+
+    Solo households: manually delete all couple-owned data before the profile
+    vanishes via ON DELETE CASCADE from auth.users.
+    Merged households: detach the leaving member and reassign their personal
+    accounts to joint — the partner keeps the household intact.
+    """
+    user = sb.table("wealthmate_profiles").select("id, username").eq("id", user_id).execute()
     if not user.data:
         raise HTTPException(status_code=404, detail="User not found")
     username = user.data[0]["username"]
 
-    # Find couple membership
     membership = (
         sb.table("wealthmate_couple_members")
         .select("couple_id")
@@ -38,7 +41,6 @@ async def _delete_wealthmate_user(sb, user_id: str):
     couple_id = membership.data[0]["couple_id"] if membership.data else None
 
     if couple_id:
-        # Check if user is the only member of their household
         members = (
             sb.table("wealthmate_couple_members")
             .select("id, user_id")
@@ -48,7 +50,7 @@ async def _delete_wealthmate_user(sb, user_id: str):
         is_solo = len(members.data or []) <= 1
 
         if is_solo:
-            # Solo household — delete everything
+            # Solo household — delete all couple-owned data first
             checkins = sb.table("wealthmate_checkins").select("id").eq("couple_id", couple_id).execute()
             checkin_ids = [c["id"] for c in (checkins.data or [])]
             if checkin_ids:
@@ -72,81 +74,96 @@ async def _delete_wealthmate_user(sb, user_id: str):
             sb.table("wealthmate_couple_members").delete().eq("couple_id", couple_id).execute()
             sb.table("wealthmate_couples").delete().eq("id", couple_id).execute()
         else:
-            # Merged household — detach user, keep partner's data
+            # Merged household — detach user, keep partner's data intact
             sb.table("wealthmate_couple_members").delete().eq("user_id", user_id).execute()
             sb.table("wealthmate_accounts").update(
                 {"owner_user_id": None}
             ).eq("couple_id", couple_id).eq("owner_user_id", user_id).execute()
 
-    # Delete invitations sent by or to this user
+    # Delete any invitations this user is part of
     sb.table("wealthmate_invitations").delete().eq("from_user_id", user_id).execute()
     sb.table("wealthmate_invitations").delete().eq("to_username", username).execute()
 
-    # Delete the user
-    sb.table("wealthmate_users").delete().eq("id", user_id).execute()
+    # Delete from Supabase Auth — CASCADE handles wealthmate_profiles row
+    from db import delete_auth_user
+    delete_auth_user(user_id)
     return {"deleted": True, "user_id": user_id, "username": username}
 
 
 # Registry of apps that have user tables.
 # Update this dict when a new app adopts shared auth.
 async def _delete_daywordplay_user(sb, user_id: str):
-    """Delete a daywordplay user and cascade-remove all their data."""
-    user = sb.table("daywordplay_users").select("id, username").eq("id", user_id).execute()
+    """Delete a daywordplay user via Supabase Auth admin API.
+
+    ON DELETE CASCADE from auth.users → daywordplay_profiles → all data tables
+    handles all data cleanup automatically.
+    """
+    user = sb.table("daywordplay_profiles").select("id, username").eq("id", user_id).execute()
     if not user.data:
         raise HTTPException(status_code=404, detail="User not found")
     username = user.data[0]["username"]
 
-    # Delete votes cast by user
-    sb.table("daywordplay_votes").delete().eq("voter_user_id", user_id).execute()
-
-    # Delete votes received on their sentences
-    sentences = sb.table("daywordplay_sentences").select("id").eq("user_id", user_id).execute()
-    sentence_ids = [s["id"] for s in (sentences.data or [])]
-    if sentence_ids:
-        sb.table("daywordplay_votes").delete().in_("sentence_id", sentence_ids).execute()
-
-    # Delete sentences, bookmarks, group memberships
-    sb.table("daywordplay_sentences").delete().eq("user_id", user_id).execute()
-    sb.table("daywordplay_bookmarks").delete().eq("user_id", user_id).execute()
-    sb.table("daywordplay_group_members").delete().eq("user_id", user_id).execute()
-
-    # Delete user
-    sb.table("daywordplay_users").delete().eq("id", user_id).execute()
+    from db import delete_auth_user
+    delete_auth_user(user_id)
     return {"deleted": True, "user_id": user_id, "username": username}
 
 
 async def _delete_plantplanner_user(sb, user_id: str):
-    """Delete a plant-planner user and cascade-remove all their data."""
-    user = sb.table("plantplanner_users").select("id, username").eq("id", user_id).execute()
+    """Delete a plant-planner user via Supabase Auth admin API.
+
+    ON DELETE CASCADE from auth.users → plantplanner_profiles → gardens → garden_plants
+    handles all data cleanup automatically.
+    """
+    user = sb.table("plantplanner_profiles").select("id, username").eq("id", user_id).execute()
     if not user.data:
         raise HTTPException(status_code=404, detail="User not found")
     username = user.data[0]["username"]
 
-    # Garden plants and gardens cascade via FK ON DELETE CASCADE,
-    # so deleting the user row is sufficient.
-    sb.table("plantplanner_users").delete().eq("id", user_id).execute()
+    from db import delete_auth_user
+    delete_auth_user(user_id)
+    return {"deleted": True, "user_id": user_id, "username": username}
+
+
+async def _delete_spotme_user(sb, user_id: str):
+    """Delete a SpotMe user via Supabase Auth admin API.
+
+    ON DELETE CASCADE from auth.users → spotme_profiles → user_hobbies
+    handles all data cleanup automatically.
+    """
+    user = sb.table("spotme_profiles").select("id, username").eq("id", user_id).execute()
+    if not user.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    username = user.data[0]["username"]
+
+    from db import delete_auth_user
+    delete_auth_user(user_id)
     return {"deleted": True, "user_id": user_id, "username": username}
 
 
 APPS_WITH_USERS = {
     "wealthmate": {
-        "table": "wealthmate_users",
+        "table": "wealthmate_profiles",
         "identity_columns": "id, username, display_name, email, created_at",
         "delete_handler": _delete_wealthmate_user,
+        "uses_supabase_auth": True,
     },
     "spotme": {
-        "table": "spotme_users",
+        "table": "spotme_profiles",
         "identity_columns": "id, username, display_name, email, created_at",
+        "delete_handler": _delete_spotme_user,
+        "uses_supabase_auth": True,
     },
     "daywordplay": {
-        "table": "daywordplay_users",
+        "table": "daywordplay_profiles",
         "identity_columns": "id, username, display_name, email, created_at",
         "delete_handler": _delete_daywordplay_user,
+        "uses_supabase_auth": True,
     },
     "plant-planner": {
-        "table": "plantplanner_users",
+        "table": "plantplanner_profiles",
         "identity_columns": "id, username, display_name, created_at",
         "delete_handler": _delete_plantplanner_user,
+        "uses_supabase_auth": True,
     },
     "boardgame-buddy": {
         "table": "boardgamebuddy_profiles",
@@ -185,36 +202,6 @@ async def list_users(
         .execute()
     )
     return {"app": app, "users": result.data or []}
-
-
-@router.post("/users/{user_id}/reset-code")
-async def generate_reset_code(
-    user_id: str,
-    app: str = Query(..., description="App name, e.g. 'wealthmate'"),
-    authorization: Optional[str] = Header(None),
-):
-    """Generate a password recovery code for a user. Returns the plaintext code."""
-    require_admin(authorization)
-
-    if app not in APPS_WITH_USERS:
-        raise HTTPException(status_code=400, detail=f"App '{app}' has no user management.")
-
-    cfg = APPS_WITH_USERS[app]
-    sb = get_supabase()
-
-    # Verify user exists
-    check = sb.table(cfg["table"]).select("id").eq("id", user_id).execute()
-    if not check.data:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Generate and store recovery code
-    recovery_code = secrets.token_urlsafe(16)
-    recovery_hash_value = hash_password(recovery_code)
-    sb.table(cfg["table"]).update({
-        "recovery_hash": recovery_hash_value,
-    }).eq("id", user_id).execute()
-
-    return {"user_id": user_id, "recovery_code": recovery_code}
 
 
 @router.get("/storage")

@@ -155,18 +155,12 @@ async function loadUsers(appName) {
         <td>${esc(u.email || "—")}</td>
         <td>${created}</td>
         <td>
-          <button class="outline secondary reset-btn" data-uid="${esc(u.id)}" data-app="${esc(appName)}">Reset Code</button>
           <button class="outline delete-btn" data-uid="${esc(u.id)}" data-app="${esc(appName)}" data-username="${esc(u.username)}">Delete</button>
         </td>
       </tr>`;
     }
     html += "</tbody></table></div>";
     el.innerHTML = html;
-
-    // Attach reset button handlers
-    el.querySelectorAll(".reset-btn").forEach((btn) => {
-      btn.addEventListener("click", () => generateResetCode(btn.dataset.uid, btn.dataset.app, btn));
-    });
 
     // Attach delete button handlers
     el.querySelectorAll(".delete-btn").forEach((btn) => {
@@ -176,27 +170,6 @@ async function loadUsers(appName) {
     el.innerHTML = `<p class="error-text">Failed to load users: ${esc(err.message)}</p>`;
   }
 }
-
-async function generateResetCode(userId, appName, btn) {
-  btn.setAttribute("aria-busy", "true");
-  btn.disabled = true;
-  try {
-    const data = await apiFetch(`/api/v1/admin/users/${userId}/reset-code?app=${encodeURIComponent(appName)}`, {
-      method: "POST",
-    });
-    document.getElementById("reset-code-display").textContent = data.recovery_code;
-    document.getElementById("reset-dialog").showModal();
-  } catch (err) {
-    alert("Failed to generate reset code: " + err.message);
-  } finally {
-    btn.removeAttribute("aria-busy");
-    btn.disabled = false;
-  }
-}
-
-document.getElementById("reset-dialog-close").addEventListener("click", () => {
-  document.getElementById("reset-dialog").close();
-});
 
 // --- Delete user ---
 
