@@ -37,7 +37,7 @@ Owner-only dashboard for monitoring all vibelab apps. Tracks app usage (open cou
 - `GET /api/v1/admin/health` — Health check
 - `GET /api/v1/admin/apps-with-users` — List apps that have user management (admin-only)
 - `GET /api/v1/admin/users?app=wealthmate` — List users for an app (admin-only)
-- `POST /api/v1/admin/users/{user_id}/reset-code?app=wealthmate` — Generate recovery code (admin-only)
+- `DELETE /api/v1/admin/users/{user_id}?app=wealthmate` — Delete user and all their data (admin-only)
 - `GET /api/v1/admin/storage` — Per-app and per-table DB storage (admin-only)
 
 ## Screen / Page Flow
@@ -45,7 +45,7 @@ Owner-only dashboard for monitoring all vibelab apps. Tracks app usage (open cou
 ```
 Login (admin key) → Dashboard
   ├── App Usage section (auto-loads)
-  ├── User Management section (select app → user table → reset code button → dialog)
+  ├── User Management section (select app → user table → delete button → confirmation dialog)
   └── Database Storage section (expandable per-app → per-table breakdown)
 ```
 

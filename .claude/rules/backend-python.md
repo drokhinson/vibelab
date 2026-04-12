@@ -40,16 +40,22 @@ paths:
 
 **No duplicate utilities:**
 - Admin auth checking: use `require_admin()` from `auth.py`, not per-file private helpers.
-- Password/JWT helpers: import from `auth.py`, not local wrappers in `dependencies.py`.
-- Bearer token parsing: use `extract_bearer_token()` from `auth.py` inside `get_current_user()` implementations.
+- User auth: use `get_supabase_user()` from `supabase_auth.py` — never reimplement JWT decoding per app.
+- Admin user deletion: use `delete_auth_user()` from `db.py`, which calls the Supabase Auth admin API and relies on `ON DELETE CASCADE` from `auth.users` → `{app}_profiles` to clean up app data.
 
 ## Shared Modules (`shared-backend/`)
-- **`auth.py`** — Generic bcrypt + JWT helpers: `hash_password`, `verify_password`, `create_token`, `decode_token`, `extract_bearer_token`, `require_admin`.
+- **`supabase_auth.py`** — `get_supabase_user()` FastAPI dependency that decodes Supabase-issued JWTs using `SUPABASE_JWT_SECRET`. Returns `{"user_id": ..., "email": ..., "user_metadata": ...}`.
+- **`auth.py`** — `require_admin()` for admin-key-protected routes. No bcrypt/JWT helpers anymore — all user auth goes through Supabase Auth.
 - **`shared_models.py`** — Common Pydantic response models: `HealthResponse`, `StatusResponse`, `ErrorDetail`. Use these across all projects.
-- **`db.py`** — Supabase client singleton via `get_supabase()`.
-- When a new app needs login/user management, import from `auth.py` instead of reimplementing.
-- Each app's `dependencies.py` should define `create_app_token()` and `decode_app_token()` (with app-specific JWT secret/payload) and `get_current_user()` (using `extract_bearer_token()`).
-- Each app keeps its own `{app}_users` table following the same schema pattern as `wealthmate_users`.
+- **`db.py`** — Supabase client singleton via `get_supabase()`, plus `delete_auth_user(user_id)` for admin deletes.
+
+## Auth Pattern (all apps)
+Every app uses Supabase Auth for user accounts:
+- Frontend calls `sb.auth.signUp()` / `sb.auth.signInWithPassword()` via the Supabase JS client.
+- After sign-up, the frontend POSTs to `/api/v1/{app}/auth/profile` (Bearer Supabase JWT) to create a row in `{app}_profiles`.
+- Every `{app}_profiles` table has `id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE`, so deleting the auth user cascades through all app data.
+- Each app's `dependencies.py` defines `get_current_user()` that wraps `get_supabase_user()` and enriches it with app-specific context (e.g. WealthMate looks up `couple_id` from `wealthmate_couple_members`).
+- There is **no** per-app JWT secret or bcrypt hash. `SUPABASE_JWT_SECRET` is set once in Railway and used by `supabase_auth.py`.
 
 ## Modular Backend File Structure
 

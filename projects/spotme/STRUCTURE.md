@@ -44,9 +44,9 @@ projects/spotme/
 shared-backend/routes/spotme/
 ├── __init__.py            ← router + imports
 ├── models.py              ← Pydantic schemas
-├── constants.py           ← JWT secret, proficiency levels
-├── dependencies.py        ← get_current_user auth dependency
-├── auth_routes.py         ← register, login, me, reset-password, delete
+├── constants.py           ← proficiency levels
+├── dependencies.py        ← get_current_user (Supabase Auth JWT)
+├── auth_routes.py         ← profile upsert, me, delete
 ├── profile_routes.py      ← profile, location, traveling, discoverable
 └── hobby_routes.py        ← categories, hobbies, user hobbies CRUD
 
@@ -57,7 +57,7 @@ db/migrations/
 
 ## Data Model (Phase 1)
 
-- **spotme_users** — id, username, display_name, email, password_hash, recovery_hash, bio, avatar_url, is_discoverable, home_lat/lng/label, traveling fields, created_at
+- **spotme_profiles** — id (→ auth.users), username, display_name, email, bio, avatar_url, is_discoverable, home_lat/lng, traveling fields, created_at
 - **spotme_hobby_categories** — id, slug, name, icon, sort_order (9 categories)
 - **spotme_hobbies** — id, category_id, name, slug (shared dictionary)
 - **spotme_user_hobbies** — id, user_id, hobby_id, proficiency, notes, is_active
@@ -66,12 +66,9 @@ Proficiency levels: want_to_learn, beginner, intermediate, advanced, expert
 
 ## API Endpoints
 
-### Auth
+### Auth (Supabase Auth — signup/login handled client-side)
 - `GET /api/v1/spotme/health`
-- `POST /api/v1/spotme/auth/register` — {username, password, display_name?, email?}
-- `POST /api/v1/spotme/auth/login` — {username, password}
-- `POST /api/v1/spotme/auth/reset-password` — {username, recovery_code, new_password}
-- `POST /api/v1/spotme/auth/recovery-code` — (authed) generate new code
+- `POST /api/v1/spotme/auth/profile` — (authed) create/update profile after Supabase sign-up
 - `GET /api/v1/spotme/auth/me` — (authed) full user profile
 - `DELETE /api/v1/spotme/auth/me` — (authed) delete account
 

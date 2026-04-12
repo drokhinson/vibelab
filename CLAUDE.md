@@ -39,7 +39,7 @@ Use the `build-native` skill. Wire `projects/[name]/app/src/api/client.js` to th
 The React Native app shares Supabase tables with the web prototype. Do NOT use expo-sqlite.
 
 ### Stage 5 — Polish
-Use the `ui-polish` skill to refine the web prototype. Add Supabase Auth if needed via `add-supabase-auth`.
+Use the `ui-polish` skill to refine the web prototype. All apps use Supabase Auth for user accounts — see `add-supabase-auth` skill if wiring up a new project.
 
 ---
 
@@ -54,7 +54,8 @@ vibelab/
 ├── shared-backend/            ← ONE FastAPI service for ALL projects
 │   ├── main.py                ← registers all routers
 │   ├── db.py                  ← Supabase client singleton
-│   ├── auth.py                ← shared bcrypt + JWT + admin auth helpers
+│   ├── auth.py                ← admin auth (require_admin only)
+│   ├── supabase_auth.py       ← Supabase JWT decoder (get_supabase_user)
 │   ├── shared_models.py       ← shared Pydantic response models (HealthResponse, etc.)
 │   └── routes/[project]/     ← one package per project
 ├── db/migrations/             ← all Supabase SQL migrations (ONE shared DB)
@@ -133,4 +134,4 @@ All vars are in Railway (backend) and Vercel (frontend) dashboards. Never commit
 | `ALLOWED_ORIGINS` | Railway | Comma-separated CORS origins |
 | `EXPO_PUBLIC_API_URL` | `app/.env` | Railway backend URL for React Native |
 | `ADMIN_API_KEY` | Railway | Admin dashboard authentication key |
-| `WEALTHMATE_JWT_SECRET` | Railway | WealthMate JWT signing secret |
+| `SUPABASE_JWT_SECRET` | Railway | Supabase Auth JWT signing secret (used by `supabase_auth.py`) |
