@@ -1,12 +1,12 @@
 """Auth helpers and FastAPI dependencies for SpotMe (Supabase Auth)."""
 
-from typing import Optional
+from fastapi import Depends
 
-from fastapi import Header
-
-from supabase_auth import get_supabase_user
+from jwt_auth import SupabaseUser, get_current_supabase_user
 
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+async def get_current_user(
+    su_user: SupabaseUser = Depends(get_current_supabase_user),
+) -> dict:
     """FastAPI dependency — decode Supabase Auth JWT from Authorization header."""
-    return await get_supabase_user(authorization)
+    return {"user_id": su_user.sub, "email": su_user.email}

@@ -2,10 +2,10 @@
 
 from typing import Optional
 
-from fastapi import HTTPException, Header
+from fastapi import Depends, HTTPException
 
 from db import get_supabase
-from supabase_auth import get_supabase_user
+from jwt_auth import SupabaseUser, get_current_supabase_user
 
 
 def _get_couple_id_for_user(user_id: str) -> Optional[str]:
@@ -22,10 +22,11 @@ def _get_couple_id_for_user(user_id: str) -> Optional[str]:
     return None
 
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+async def get_current_user(
+    su_user: SupabaseUser = Depends(get_current_supabase_user),
+) -> dict:
     """FastAPI dependency — decode Supabase JWT and look up couple membership."""
-    auth_user = await get_supabase_user(authorization)
-    user_id = auth_user["user_id"]
+    user_id = su_user.sub
 
     # Look up couple membership
     couple_id = _get_couple_id_for_user(user_id)
@@ -51,7 +52,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
         "user_id": user_id,
         "username": username,
         "couple_id": couple_id,
-        "email": auth_user.get("email"),
+        "email": su_user.email,
     }
 
 

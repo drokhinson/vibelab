@@ -1,8 +1,8 @@
 """
 auth.py — Admin auth helpers for the vibelab backend.
 
-All app user auth now uses Supabase Auth — see supabase_auth.py for the
-`get_supabase_user()` FastAPI dependency that decodes Supabase-issued JWTs.
+All app user auth now uses Supabase Auth — see jwt_auth.py for the
+`get_current_supabase_user()` FastAPI dependency that decodes Supabase-issued JWTs.
 This file only retains `require_admin()` used by admin + analytics routes.
 """
 

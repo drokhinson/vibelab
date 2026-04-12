@@ -55,7 +55,7 @@ vibelab/
 │   ├── main.py                ← registers all routers
 │   ├── db.py                  ← Supabase client singleton
 │   ├── auth.py                ← admin auth (require_admin only)
-│   ├── supabase_auth.py       ← Supabase JWT decoder (get_supabase_user)
+│   ├── jwt_auth.py            ← Supabase JWT decoder (get_current_supabase_user)
 │   ├── shared_models.py       ← shared Pydantic response models (HealthResponse, etc.)
 │   └── routes/[project]/     ← one package per project
 ├── db/migrations/             ← all Supabase SQL migrations (ONE shared DB)
@@ -134,4 +134,4 @@ All vars are in Railway (backend) and Vercel (frontend) dashboards. Never commit
 | `ALLOWED_ORIGINS` | Railway | Comma-separated CORS origins |
 | `EXPO_PUBLIC_API_URL` | `app/.env` | Railway backend URL for React Native |
 | `ADMIN_API_KEY` | Railway | Admin dashboard authentication key |
-| `SUPABASE_JWT_SECRET` | Railway | Supabase Auth JWT signing secret (used by `supabase_auth.py`) |
+| `SUPABASE_JWT_SECRET` | Railway | Supabase Auth JWT signing secret (used by `jwt_auth.py`) |
