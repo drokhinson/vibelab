@@ -36,11 +36,10 @@ jobs:
           if [ -f build.sh ]; then bash build.sh; fi
 
       - name: Deploy ${{ matrix.project }} web frontend
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', matrix.projectKey)] }}
-          working-directory: ./projects/${{ matrix.project }}/web
-          vercel-args: --prod
-          github-token: ${{ github.token }}
+        working-directory: ./projects/${{ matrix.project }}/web
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', matrix.projectKey)] }}
+        run: |
+          npx vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel@latest deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
