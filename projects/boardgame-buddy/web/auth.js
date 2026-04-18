@@ -1,6 +1,7 @@
 // auth.js — Supabase Auth: login, signup, session management
 
 let authConfigError = null;
+let profileLoadInFlight = false;
 
 function initSupabase() {
   const cfg = window.APP_CONFIG;
@@ -27,38 +28,46 @@ function initSupabase() {
 }
 
 async function loadProfile() {
+  // Supabase fires onAuthStateChange multiple times on OAuth return
+  // (INITIAL_SESSION, SIGNED_IN); this guard keeps the fetch + toast single-shot.
+  if (profileLoadInFlight || currentUser) return;
+  profileLoadInFlight = true;
   try {
-    currentUser = await apiFetch("/profile");
-  } catch (getErr) {
-    // 404 means profile doesn't exist yet — try to create it.
-    // Any other error (CORS, 401, 500) should surface so the user can debug.
-    const isMissingProfile = /not found/i.test(getErr?.message || "") || /404/.test(getErr?.message || "");
-    if (!isMissingProfile) {
-      console.error("GET /profile failed:", getErr);
-      showToast(`Login failed: ${getErr.message || "unknown error"}`, "error");
-      session = null;
-      showView("auth");
-      return;
-    }
     try {
-      const email = session.user?.email || "";
-      const name = email.split("@")[0] || "Player";
-      await apiFetch("/profile", {
-        method: "POST",
-        body: { display_name: name },
-      });
       currentUser = await apiFetch("/profile");
-    } catch (e) {
-      console.error("POST /profile failed:", e);
-      showToast(`Login failed: ${e.message || "unknown error"}`, "error");
-      session = null;
-      showView("auth");
-      return;
+    } catch (getErr) {
+      // 404 means profile doesn't exist yet — try to create it.
+      // Any other error (CORS, 401, 500) should surface so the user can debug.
+      const isMissingProfile = /not found/i.test(getErr?.message || "") || /404/.test(getErr?.message || "");
+      if (!isMissingProfile) {
+        console.error("GET /profile failed:", getErr);
+        showToast(`Login failed: ${getErr.message || "unknown error"}`, "error");
+        session = null;
+        showView("auth");
+        return;
+      }
+      try {
+        const email = session.user?.email || "";
+        const name = email.split("@")[0] || "Player";
+        await apiFetch("/profile", {
+          method: "POST",
+          body: { display_name: name },
+        });
+        currentUser = await apiFetch("/profile");
+      } catch (e) {
+        console.error("POST /profile failed:", e);
+        showToast(`Login failed: ${e.message || "unknown error"}`, "error");
+        session = null;
+        showView("auth");
+        return;
+      }
     }
+    showView("browse");
+    loadGames();
+    updateProfileUI();
+  } finally {
+    profileLoadInFlight = false;
   }
-  showView("browse");
-  loadGames();
-  updateProfileUI();
 }
 
 function updateProfileUI() {
