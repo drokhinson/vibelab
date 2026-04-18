@@ -36,7 +36,6 @@ jobs:
           if [ -f build.sh ]; then bash build.sh; fi
 
       - name: Deploy ${{ matrix.project }} web frontend
-        working-directory: ./projects/${{ matrix.project }}/web
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets[format('VERCEL_{0}_PROJECT_ID', matrix.projectKey)] }}
