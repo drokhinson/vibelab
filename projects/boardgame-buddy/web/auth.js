@@ -1,18 +1,29 @@
 // auth.js — Supabase Auth: login, signup, session management
 
+let authConfigError = null;
+
 function initSupabase() {
   const cfg = window.APP_CONFIG;
-  supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-
-  supabaseClient.auth.onAuthStateChange((event, sess) => {
-    session = sess;
-    if (sess) {
-      loadProfile();
-    } else {
-      currentUser = null;
-      showView("auth");
+  try {
+    if (!cfg?.supabaseUrl || !cfg?.supabaseAnonKey) {
+      throw new Error("Supabase URL and anon key are not configured.");
     }
-  });
+    supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+
+    supabaseClient.auth.onAuthStateChange((event, sess) => {
+      session = sess;
+      if (sess) {
+        loadProfile();
+      } else {
+        currentUser = null;
+        showView("auth");
+      }
+    });
+  } catch (err) {
+    console.error("Supabase init failed:", err);
+    authConfigError = err.message || "Supabase auth could not be initialized.";
+    showView("auth");
+  }
 }
 
 async function loadProfile() {
@@ -50,6 +61,14 @@ function updateProfileUI() {
 
 function renderAuth() {
   const container = document.getElementById("auth-container");
+  const configBanner = authConfigError
+    ? `<div class="alert alert-warning mb-4 text-sm">
+         <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+         <span>Auth is misconfigured: ${authConfigError} Check Supabase env vars.</span>
+       </div>`
+    : "";
+  const oauthDisabled = authConfigError ? "disabled" : "";
+
   container.innerHTML = `
     <div class="flex flex-col items-center justify-center min-h-[60vh] px-4">
       <div class="mb-8 text-center">
@@ -60,6 +79,21 @@ function renderAuth() {
 
       <div class="card bg-base-200 w-full max-w-sm">
         <div class="card-body">
+          ${configBanner}
+
+          <div class="flex flex-col gap-2">
+            <button type="button" class="btn btn-outline w-full" onclick="handleOAuthLogin('google')" ${oauthDisabled}>
+              <i data-lucide="chrome" class="w-4 h-4"></i>
+              Continue with Google
+            </button>
+            <button type="button" class="btn btn-outline w-full" onclick="handleOAuthLogin('apple')" ${oauthDisabled}>
+              <i data-lucide="apple" class="w-4 h-4"></i>
+              Continue with Apple
+            </button>
+          </div>
+
+          <div class="divider text-xs text-base-content/50 my-4">or continue with email</div>
+
           <div class="tabs tabs-boxed mb-4">
             <button class="tab tab-active" id="tab-login" onclick="switchAuthTab('login')">Log In</button>
             <button class="tab" id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
@@ -76,12 +110,36 @@ function renderAuth() {
               <input type="text" id="auth-display-name" placeholder="Display name" class="input input-bordered w-full" />
             </div>
             <div id="auth-error" class="text-error text-sm mb-3 hidden"></div>
-            <button type="submit" id="auth-btn" class="btn btn-primary w-full">Log In</button>
+            <button type="submit" id="auth-btn" class="btn btn-primary w-full" ${oauthDisabled}>Log In</button>
           </form>
         </div>
       </div>
     </div>
   `;
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
+async function handleOAuthLogin(provider) {
+  const errorEl = document.getElementById("auth-error");
+  errorEl.classList.add("hidden");
+
+  if (!supabaseClient) {
+    errorEl.textContent = "Auth is not configured. Cannot sign in.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) throw error;
+  } catch (err) {
+    errorEl.textContent = err.message || `${provider} sign-in failed`;
+    errorEl.classList.remove("hidden");
+  }
 }
 
 let authMode = "login";
@@ -100,6 +158,12 @@ async function handleAuth(e) {
   const btn = document.getElementById("auth-btn");
   const errorEl = document.getElementById("auth-error");
   errorEl.classList.add("hidden");
+
+  if (!supabaseClient) {
+    errorEl.textContent = "Auth is not configured. Cannot sign in.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
 
   const email = document.getElementById("auth-email").value;
   const password = document.getElementById("auth-password").value;
@@ -127,7 +191,9 @@ async function handleAuth(e) {
 }
 
 async function handleLogout() {
-  await supabaseClient.auth.signOut();
+  if (supabaseClient) {
+    await supabaseClient.auth.signOut();
+  }
   session = null;
   currentUser = null;
   showView("auth");
