@@ -29,8 +29,17 @@ function initSupabase() {
 async function loadProfile() {
   try {
     currentUser = await apiFetch("/profile");
-  } catch {
-    // Profile doesn't exist yet — create it
+  } catch (getErr) {
+    // 404 means profile doesn't exist yet — try to create it.
+    // Any other error (CORS, 401, 500) should surface so the user can debug.
+    const isMissingProfile = /not found/i.test(getErr?.message || "") || /404/.test(getErr?.message || "");
+    if (!isMissingProfile) {
+      console.error("GET /profile failed:", getErr);
+      showToast(`Login failed: ${getErr.message || "unknown error"}`, "error");
+      session = null;
+      showView("auth");
+      return;
+    }
     try {
       const email = session.user?.email || "";
       const name = email.split("@")[0] || "Player";
@@ -40,8 +49,8 @@ async function loadProfile() {
       });
       currentUser = await apiFetch("/profile");
     } catch (e) {
-      console.error("Profile error:", e);
-      showToast("Could not connect to server. Please try again.", "error");
+      console.error("POST /profile failed:", e);
+      showToast(`Login failed: ${e.message || "unknown error"}`, "error");
       session = null;
       showView("auth");
       return;
