@@ -26,7 +26,7 @@
   <div id="app" class="max-w-lg mx-auto min-h-screen flex flex-col pb-20">
 
     <!-- Top bar -->
-    <header class="sticky top-0 z-30 bg-base-100/95 backdrop-blur px-4 py-3 flex items-center justify-between border-b border-base-300" data-auth-only>
+    <header class="hidden sticky top-0 z-30 bg-base-100/95 backdrop-blur px-4 py-3 flex items-center justify-between border-b border-base-300" data-auth-only>
       <h1 class="text-lg font-bold font-display">🎲 BoardgameBuddy</h1>
       <div class="flex items-center gap-2">
         <span id="profile-name" class="text-sm text-base-content/60"></span>
@@ -101,7 +101,7 @@
     <div id="toast" class="toast toast-end toast-top hidden z-50"></div>
 
     <!-- Bottom Navigation -->
-    <nav class="btm-nav btm-nav-sm z-40" data-auth-only>
+    <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
       <button data-nav="browse" class="active">
         <i data-lucide="library" class="w-5 h-5"></i>
         <span class="btm-nav-label text-xs">Browse</span>
