@@ -1,8 +1,9 @@
 """
 jwt_auth.py — Shared Supabase Auth JWT verification for the vibelab backend.
 
-Verifies JWTs issued by Supabase Auth. This is the pilot pattern —
-all future apps should use this instead of custom JWT auth.
+Verifies JWTs issued by Supabase Auth using the project's published JWKS
+(asymmetric signing keys). This is the pilot pattern — all future apps
+should use this instead of custom JWT auth.
 
 Usage in route dependencies:
     from jwt_auth import get_current_supabase_user, SupabaseUser
@@ -18,10 +19,13 @@ import os
 from typing import Optional
 
 import jwt
+from jwt import PyJWKClient
 from fastapi import HTTPException, Header
 from pydantic import BaseModel
 
-SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+_JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json" if SUPABASE_URL else ""
+_jwks_client = PyJWKClient(_JWKS_URL) if _JWKS_URL else None
 
 
 class SupabaseUser(BaseModel):
@@ -47,14 +51,15 @@ async def get_current_supabase_user(
 
     token = parts[1]
 
-    if not SUPABASE_JWT_SECRET:
-        raise HTTPException(status_code=500, detail="SUPABASE_JWT_SECRET not configured")
+    if not _jwks_client:
+        raise HTTPException(status_code=500, detail="SUPABASE_URL not configured")
 
     try:
+        signing_key = _jwks_client.get_signing_key_from_jwt(token).key
         payload = jwt.decode(
             token,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
+            signing_key,
+            algorithms=["ES256", "RS256"],
             audience="authenticated",
         )
     except jwt.ExpiredSignatureError:
