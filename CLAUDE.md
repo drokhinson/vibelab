@@ -129,7 +129,8 @@ All vars are in Railway (backend) and Vercel (frontend) dashboards. Never commit
 |---|---|---|
 | `SUPABASE_URL` | Railway | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Railway | Server-side DB access (bypasses RLS) |
-| `SUPABASE_ANON_KEY` | Vercel (per project) | Client-side access for web (respects RLS) |
+| `VIBELAB_SUPABASE_URL` | GitHub Secrets | Shared Supabase URL injected into every app's `config.js` at deploy time |
+| `VIBELAB_SUPABASE_ANON_KEY` | GitHub Secrets | Shared Supabase anon key for all frontends (one auth system across the monorepo) |
 | `ALLOWED_ORIGINS` | Railway | Comma-separated CORS origins |
 | `EXPO_PUBLIC_API_URL` | `app/.env` | Railway backend URL for React Native |
 | `ADMIN_API_KEY` | Railway | Admin dashboard authentication key |

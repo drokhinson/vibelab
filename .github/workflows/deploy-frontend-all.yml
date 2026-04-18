@@ -30,8 +30,8 @@ jobs:
         working-directory: ./projects/${{ matrix.project }}/web
         env:
           API_BASE: https://vibelab-production-2119.up.railway.app
-          SUPABASE_URL: ${{ secrets[format('{0}_SUPABASE_URL', matrix.projectKey)] }}
-          SUPABASE_ANON_KEY: ${{ secrets[format('{0}_SUPABASE_ANON_KEY', matrix.projectKey)] }}
+          SUPABASE_URL: ${{ secrets.VIBELAB_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VIBELAB_SUPABASE_ANON_KEY }}
         run: |
           if [ -f build.sh ]; then bash build.sh; fi
 
