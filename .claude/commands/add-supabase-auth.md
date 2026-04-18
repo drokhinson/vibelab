@@ -6,6 +6,12 @@ Add Supabase Auth to project: $ARGUMENTS
 
 2. **Supabase setup** (user must do this in Supabase dashboard):
    - Enable Email auth (or chosen provider) in Authentication → Providers
+   - **For OAuth providers (Google, Apple, etc.):** add the project's deployed URL to Authentication → URL Configuration → **Redirect URLs** allow-list. Both the bare origin and a `/**` wildcard entry:
+     ```
+     https://vibelab-<project>.vercel.app
+     https://vibelab-<project>.vercel.app/**
+     ```
+     Without this, Supabase silently ignores the code's `redirectTo` and falls back to **Site URL** (default `http://localhost:3000`) — OAuth will appear to succeed then land on an unreachable localhost page on mobile.
    - Inform the user: "Please enable authentication in your Supabase dashboard before I proceed."
 
 3. **Web prototype auth** (`projects/$ARGUMENTS/web/`):
