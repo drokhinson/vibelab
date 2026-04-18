@@ -2,10 +2,14 @@
 routes/plant_planner/ — PlantPlanner API routes package
 All routes at /api/v1/plant_planner/...
 
+Authentication is delegated to Supabase Auth — JWTs are verified by the
+shared `jwt_auth.get_current_supabase_user` dependency.
+
 Supabase tables (all prefixed plantplanner_):
-  plantplanner_users          — id, username, display_name, password_hash
-  plantplanner_plants         — id, name, emoji, height_inches, sunlight, bloom_season, spread_inches
-  plantplanner_gardens        — id, user_id, name, grid_width, grid_height
+  plantplanner_profiles       — id (FK auth.users), display_name
+  plantplanner_plants         — id, name, height_inches, sunlight, bloom_season, ...
+  plantplanner_renders        — key (PK), label, params, colors
+  plantplanner_gardens        — id, user_id (FK plantplanner_profiles), name, grid dims
   plantplanner_garden_plants  — id, garden_id, plant_id, grid_x, grid_y
 """
 

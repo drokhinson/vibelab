@@ -1,8 +1,9 @@
 // state.js — All global state variables
 
-var currentView = "auth"; // auth | gardens | builder
-var token = localStorage.getItem("pp_token") || null;
-var currentUser = null;
+var currentView = "auth"; // auth | profile-setup | gardens | builder
+var supabaseClient = null; // Supabase JS client (set by initSupabase)
+var session = null;        // Supabase session ({ access_token, user, ... }) or null
+var currentUser = null;    // PlantPlanner profile { id, display_name, created_at }
 var plants = [];         // plant catalog from API
 var gardens = [];        // user's saved gardens
 var currentGarden = null; // garden being edited {id, name, grid_width, grid_height, plants:[]}

@@ -8,6 +8,20 @@ Add Supabase Auth to project: $ARGUMENTS
    - Enable Email auth (or chosen provider) in Authentication → Providers
    - Inform the user: "Please enable authentication in your Supabase dashboard before I proceed."
 
+   **Adding OAuth providers (Google / Apple)** — when the user wants social login:
+   - **Google**: user creates an OAuth Client (Web application) in Google Cloud Console → APIs & Services → Credentials. Authorized redirect URI: `https://<project>.supabase.co/auth/v1/callback`. Paste the Client ID + Secret into Supabase → Authentication → Providers → Google.
+   - **Apple**: user creates a Services ID in Apple Developer Portal, generates a `.p8` key, and pastes Services ID + Team ID + Key ID + key contents into Supabase → Authentication → Providers → Apple.
+   - **Redirect URL allowlist**: in Supabase → Authentication → URL Configuration, add the production Vercel URL and the local dev URL (e.g. `http://localhost:5500`) so the OAuth round-trip lands back on the app.
+   - **Frontend call** (per provider button):
+     ```js
+     await supabaseClient.auth.signInWithOAuth({
+       provider: "google", // or "apple"
+       options: { redirectTo: window.location.origin + window.location.pathname }
+     });
+     ```
+   - The browser redirects to the provider, the user consents, and Supabase brings them back with a session. The existing `onAuthStateChange` listener picks it up — no extra callback handler is needed.
+   - Reference implementation: `projects/plant-planner/web/auth.js`.
+
 3. **Web prototype auth** (`projects/$ARGUMENTS/web/`):
    - Add Supabase JS client via CDN: `<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>`
    - Add to `config.js`: `supabaseUrl` and `supabaseAnonKey`

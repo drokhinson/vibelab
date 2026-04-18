@@ -4,17 +4,17 @@ from fastapi import Depends, HTTPException
 
 from db import get_supabase
 from . import router
-from .dependencies import get_current_user
+from .dependencies import CurrentUser, get_current_user
 from .models import CreateGardenBody, UpdateGardenBody, SavePlantsBody
 
 
 @router.get("/gardens")
-async def list_gardens(user: dict = Depends(get_current_user)):
+async def list_gardens(user: CurrentUser = Depends(get_current_user)):
     sb = get_supabase()
     result = (
         sb.table("plantplanner_gardens")
         .select("*")
-        .eq("user_id", user["user_id"])
+        .eq("user_id", user.user_id)
         .order("updated_at", desc=True)
         .execute()
     )
@@ -22,12 +22,12 @@ async def list_gardens(user: dict = Depends(get_current_user)):
 
 
 @router.post("/gardens")
-async def create_garden(body: CreateGardenBody, user: dict = Depends(get_current_user)):
+async def create_garden(body: CreateGardenBody, user: CurrentUser = Depends(get_current_user)):
     sb = get_supabase()
     result = (
         sb.table("plantplanner_gardens")
         .insert({
-            "user_id": user["user_id"],
+            "user_id": user.user_id,
             "name": body.name,
             "grid_width": body.grid_width,
             "grid_height": body.grid_height,
@@ -43,13 +43,13 @@ async def create_garden(body: CreateGardenBody, user: dict = Depends(get_current
 
 
 @router.get("/gardens/{garden_id}")
-async def get_garden(garden_id: str, user: dict = Depends(get_current_user)):
+async def get_garden(garden_id: str, user: CurrentUser = Depends(get_current_user)):
     sb = get_supabase()
     garden = (
         sb.table("plantplanner_gardens")
         .select("*")
         .eq("id", garden_id)
-        .eq("user_id", user["user_id"])
+        .eq("user_id", user.user_id)
         .execute()
     )
     if not garden.data:
@@ -78,13 +78,13 @@ async def get_garden(garden_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.put("/gardens/{garden_id}")
-async def update_garden(garden_id: str, body: UpdateGardenBody, user: dict = Depends(get_current_user)):
+async def update_garden(garden_id: str, body: UpdateGardenBody, user: CurrentUser = Depends(get_current_user)):
     sb = get_supabase()
     existing = (
         sb.table("plantplanner_gardens")
         .select("id")
         .eq("id", garden_id)
-        .eq("user_id", user["user_id"])
+        .eq("user_id", user.user_id)
         .execute()
     )
     if not existing.data:
@@ -105,13 +105,13 @@ async def update_garden(garden_id: str, body: UpdateGardenBody, user: dict = Dep
 
 
 @router.delete("/gardens/{garden_id}")
-async def delete_garden(garden_id: str, user: dict = Depends(get_current_user)):
+async def delete_garden(garden_id: str, user: CurrentUser = Depends(get_current_user)):
     sb = get_supabase()
     existing = (
         sb.table("plantplanner_gardens")
         .select("id")
         .eq("id", garden_id)
-        .eq("user_id", user["user_id"])
+        .eq("user_id", user.user_id)
         .execute()
     )
     if not existing.data:
@@ -122,13 +122,13 @@ async def delete_garden(garden_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.put("/gardens/{garden_id}/plants")
-async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: dict = Depends(get_current_user)):
+async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: CurrentUser = Depends(get_current_user)):
     sb = get_supabase()
     existing = (
         sb.table("plantplanner_gardens")
         .select("id")
         .eq("id", garden_id)
-        .eq("user_id", user["user_id"])
+        .eq("user_id", user.user_id)
         .execute()
     )
     if not existing.data:

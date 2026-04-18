@@ -6,7 +6,8 @@ var app = document.getElementById("app");
 
 async function apiFetch(path, opts = {}) {
   var headers = opts.headers || {};
-  if (token) headers["Authorization"] = "Bearer " + token;
+  var accessToken = session && session.access_token;
+  if (accessToken) headers["Authorization"] = "Bearer " + accessToken;
   if (opts.body && typeof opts.body === "object") {
     headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(opts.body);
@@ -15,7 +16,9 @@ async function apiFetch(path, opts = {}) {
   if (!res.ok) {
     var err;
     try { err = (await res.json()).detail; } catch (_) { err = res.statusText; }
-    throw new Error(err || "Request failed");
+    var error = new Error(err || "Request failed");
+    error.status = res.status;
+    throw error;
   }
   return res.json();
 }
@@ -30,24 +33,23 @@ function showView(view) {
   render();
 }
 
-function setToken(t) {
-  token = t;
-  if (t) localStorage.setItem("pp_token", t);
-  else localStorage.removeItem("pp_token");
-}
-
-function logout() {
-  setToken(null);
-  currentUser = null;
+async function logout() {
   currentGarden = null;
   gridPlacements = {};
-  showView("auth");
+  if (supabaseClient) {
+    // onAuthStateChange clears session/currentUser and re-renders
+    await supabaseClient.auth.signOut();
+  } else {
+    session = null;
+    currentUser = null;
+    showView("auth");
+  }
 }
 
 function updateNav() {
   var navRight = document.getElementById("nav-right");
   if (!navRight) return;
-  if (token && currentUser) {
+  if (session && currentUser) {
     navRight.innerHTML =
       '<button class="btn btn-ghost btn-sm gap-1" id="nav-gardens"><i data-lucide="layout-grid" style="width:1em;height:1em"></i> My Gardens</button>' +
       '<button class="btn btn-ghost btn-sm gap-1" id="nav-logout"><i data-lucide="log-out" style="width:1em;height:1em"></i> Logout</button>' +
@@ -164,6 +166,7 @@ function _initIcons() {
 function render() {
   updateNav();
   if (currentView === "auth") renderAuth();
+  else if (currentView === "profile-setup") renderProfileSetup();
   else if (currentView === "gardens") renderGardens();
   else if (currentView === "builder") renderBuilder();
   _initIcons();

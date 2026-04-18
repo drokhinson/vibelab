@@ -1,20 +1,19 @@
-"""Pydantic request body models for PlantPlanner API."""
+"""Pydantic request/response models for PlantPlanner API."""
 
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .constants import GardenType, ShadeLevel, PlantingSeason
 
 
-class RegisterBody(BaseModel):
-    username: str
-    password: str
-    display_name: Optional[str] = None
+class ProfileBody(BaseModel):
+    display_name: str = Field(..., min_length=1, max_length=80)
 
 
-class LoginBody(BaseModel):
-    username: str
-    password: str
+class ProfileResponse(BaseModel):
+    id: str
+    display_name: str
+    created_at: str
 
 
 class CreateGardenBody(BaseModel):

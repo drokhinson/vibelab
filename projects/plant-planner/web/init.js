@@ -1,21 +1,13 @@
 // init.js — DOMContentLoaded handler, startup logic
 
-document.addEventListener("DOMContentLoaded", async function() {
-  // If we have a stored token, try to restore session
-  if (token) {
-    try {
-      currentUser = await apiFetch("/auth/me");
-      await loadPlants();
-      try { preloadThumbnails(plants, renderStyle); } catch (_) {}
-      showView("gardens");
-    } catch (err) {
-      // Token expired or invalid
-      setToken(null);
-      showView("auth");
-    }
-  } else {
-    showView("auth");
-  }
+document.addEventListener("DOMContentLoaded", function() {
+  // Clean up any leftover token from the old custom-JWT system.
+  try { localStorage.removeItem("pp_token"); } catch (_) {}
+
+  // initSupabase() registers an onAuthStateChange listener that fires once
+  // synchronously on startup with the current session (or null), which then
+  // routes to /profile or the auth view.
+  initSupabase();
 
   // Analytics ping (fire-and-forget)
   try {

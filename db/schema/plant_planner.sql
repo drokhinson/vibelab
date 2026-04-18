@@ -1,17 +1,16 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: migration 030
+-- Last updated: migration 034 (Supabase Auth migration)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS public.plantplanner_users (
-  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  username      TEXT        UNIQUE NOT NULL,
-  display_name  TEXT        NOT NULL,
-  password_hash TEXT        NOT NULL,
-  created_at    TIMESTAMPTZ DEFAULT now()
+-- One row per Supabase auth.users id. Stores app-specific display name.
+CREATE TABLE IF NOT EXISTS public.plantplanner_profiles (
+  id            UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  display_name  TEXT        NOT NULL DEFAULT '',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-ALTER TABLE public.plantplanner_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plantplanner_profiles ENABLE ROW LEVEL SECURITY;
 
 -- Reusable 3D render templates keyed by human-readable string
 CREATE TABLE IF NOT EXISTS public.plantplanner_renders (
@@ -39,15 +38,15 @@ ALTER TABLE public.plantplanner_plants ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
   id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id         UUID        NOT NULL REFERENCES public.plantplanner_users(id) ON DELETE CASCADE,
+  user_id         UUID        NOT NULL REFERENCES public.plantplanner_profiles(id) ON DELETE CASCADE,
   name            TEXT        NOT NULL DEFAULT 'My Garden',
   grid_width      INT         NOT NULL DEFAULT 4,
   grid_height     INT         NOT NULL DEFAULT 4,
   garden_type     TEXT        NOT NULL DEFAULT 'garden_bed',  -- garden_bed | planter
   shade_level     TEXT        NOT NULL DEFAULT 'full_sun',    -- full_sun | partial | shade
   planting_season TEXT        NOT NULL DEFAULT 'spring',      -- spring | summer | fall | winter
-  created_at      TIMESTAMPTZ DEFAULT now(),
-  updated_at      TIMESTAMPTZ DEFAULT now()
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE public.plantplanner_gardens ENABLE ROW LEVEL SECURITY;
 
