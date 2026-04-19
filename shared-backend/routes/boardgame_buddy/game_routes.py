@@ -51,7 +51,7 @@ async def list_games(
     if category:
         query = query.contains("categories", [category])
 
-    query = query.order("bgg_rank", nulls_last=True)
+    query = query.order("bgg_rank")
     result = query.range(offset, offset + per_page - 1).execute()
 
     games = [GameSummary(**g) for g in (result.data or [])]
@@ -70,10 +70,14 @@ async def search_bgg(
     query: str = Query(..., min_length=2, description="Search query"),
 ) -> list[BggSearchResult]:
     """Proxy search to BGG XML API for games not yet in our database."""
-    bgg_url = f"https://boardgamegeek.com/xmlapi2/search?query={query}&type=boardgame"
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(bgg_url)
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"User-Agent": "vibelab-boardgame-buddy/1.0"},
+    ) as client:
+        resp = await client.get(
+            "https://boardgamegeek.com/xmlapi2/search",
+            params={"query": query, "type": "boardgame"},
+        )
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail="BGG API unavailable")
 
@@ -158,9 +162,14 @@ async def import_bgg_game(
         return GameSummary(**existing.data[0])
 
     # Fetch from BGG
-    bgg_url = f"https://boardgamegeek.com/xmlapi2/thing?id={bgg_id}&stats=1"
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.get(bgg_url)
+    async with httpx.AsyncClient(
+        timeout=15.0,
+        headers={"User-Agent": "vibelab-boardgame-buddy/1.0"},
+    ) as client:
+        resp = await client.get(
+            "https://boardgamegeek.com/xmlapi2/thing",
+            params={"id": bgg_id, "stats": 1},
+        )
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail="BGG API unavailable")
 
