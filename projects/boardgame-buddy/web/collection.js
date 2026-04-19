@@ -3,7 +3,6 @@
 const SHELVES = [
   { key: "owned",    label: "Owned",   icon: "package" },
   { key: "played",   label: "Played",  icon: "dice-5" },
-  { key: "wishlist", label: "Wish",    icon: "star" },
 ];
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -24,18 +23,42 @@ async function loadCloset() {
 function applyClosetControls() {
   const sortSel = document.getElementById("closet-sort");
   if (sortSel) sortSel.value = closetSort;
+
   const toggleBtn = document.getElementById("closet-view-toggle");
   if (toggleBtn) {
     const icon = closetView === "shelves" ? "list" : "library-big";
     toggleBtn.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i>`;
     toggleBtn.title = closetView === "shelves" ? "Switch to list view" : "Switch to shelf view";
   }
+
+  const tabCollection = document.getElementById("tab-collection");
+  const tabWishlist = document.getElementById("tab-wishlist");
+  const controls = document.getElementById("closet-controls");
+  if (tabCollection) tabCollection.classList.toggle("tab-active", closetTab === "collection");
+  if (tabWishlist) tabWishlist.classList.toggle("tab-active", closetTab === "wishlist");
+  if (controls) controls.classList.toggle("hidden", closetTab === "wishlist");
+}
+
+function switchClosetTab(tab) {
+  closetTab = tab;
+  applyClosetControls();
+  renderCloset();
 }
 
 function renderCloset() {
   const shelvesEl = document.getElementById("closet-shelves");
   const listEl = document.getElementById("closet-list");
+  const wishlistEl = document.getElementById("closet-wishlist");
 
+  if (closetTab === "wishlist") {
+    shelvesEl.classList.add("hidden");
+    listEl.classList.add("hidden");
+    wishlistEl.classList.remove("hidden");
+    renderWishlist();
+    return;
+  }
+
+  wishlistEl.classList.add("hidden");
   if (closetView === "shelves") {
     shelvesEl.classList.remove("hidden");
     listEl.classList.add("hidden");
@@ -61,7 +84,6 @@ function sortItems(items) {
   if (closetSort === "alphabetical") {
     copy.sort((a, b) => (a.game?.name || "").localeCompare(b.game?.name || ""));
   } else {
-    // last_played desc; items without a play fall back to added_at
     copy.sort((a, b) => {
       const ad = a.last_played_at || a.added_at || "";
       const bd = b.last_played_at || b.added_at || "";
@@ -71,14 +93,15 @@ function sortItems(items) {
   return copy;
 }
 
-// ── Shelf view ───────────────────────────────────────────────────────────────
+// ── Shelf view (owned + played only) ─────────────────────────────────────────
 
 function renderShelves() {
   const container = document.getElementById("closet-shelves");
-  const visible = filterItems(sortItems(collectionItems));
+  const collectionOnly = collectionItems.filter(it => it.status !== "wishlist");
+  const visible = filterItems(sortItems(collectionOnly));
 
-  if (!collectionItems.length) {
-    container.innerHTML = emptyStateHTML();
+  if (!collectionOnly.length) {
+    container.innerHTML = emptyCollectionHTML();
     return;
   }
 
@@ -116,14 +139,15 @@ function bookSpineHTML(item, i) {
     </button>`;
 }
 
-// ── List view ────────────────────────────────────────────────────────────────
+// ── List view (owned + played only) ──────────────────────────────────────────
 
 function renderList() {
   const container = document.getElementById("closet-list");
-  const visible = filterItems(sortItems(collectionItems));
+  const collectionOnly = collectionItems.filter(it => it.status !== "wishlist");
+  const visible = filterItems(sortItems(collectionOnly));
 
-  if (!collectionItems.length) {
-    container.innerHTML = emptyStateHTML();
+  if (!collectionOnly.length) {
+    container.innerHTML = emptyCollectionHTML();
     return;
   }
 
@@ -162,13 +186,75 @@ function listRowHTML(item, i) {
     </div>`;
 }
 
-// ── Empty state ──────────────────────────────────────────────────────────────
+// ── Wishlist view (flat list) ─────────────────────────────────────────────────
 
-function emptyStateHTML() {
+function renderWishlist() {
+  const container = document.getElementById("closet-wishlist");
+  const wishlist = collectionItems.filter(it => it.status === "wishlist");
+
+  if (!wishlist.length) {
+    container.innerHTML = `
+      <div class="text-center py-12 text-base-content/60">
+        <div class="text-5xl mb-3">⭐</div>
+        <p class="mb-4">Your wishlist is empty.</p>
+        <button class="btn btn-primary btn-sm" onclick="showView('browse'); loadGames();">
+          <i data-lucide="plus" class="w-4 h-4"></i> Browse Games
+        </button>
+      </div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  const sorted = wishlist.slice().sort((a, b) => (a.game?.name || "").localeCompare(b.game?.name || ""));
+  container.innerHTML = `
+    <div class="space-y-2">
+      ${sorted.map((item, i) => wishlistRowHTML(item, i)).join("")}
+    </div>`;
+  lucide.createIcons();
+}
+
+function wishlistRowHTML(item, i) {
+  const g = item.game;
+  return `
+    <div class="card card-side bg-base-200 h-20 animate-fadeUp" style="--i:${i}">
+      <figure class="w-16 flex-shrink-0 cursor-pointer" onclick="openGameDetail('${g.id}')">
+        <img src="${g.thumbnail_url || ''}" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
+      </figure>
+      <div class="card-body p-2 justify-center cursor-pointer" onclick="openGameDetail('${g.id}')">
+        <h3 class="font-semibold text-sm leading-tight line-clamp-2">${escapeHtml(g.name)}</h3>
+        ${g.bgg_rating ? `<div class="text-xs text-base-content/60">★ ${formatRating(g.bgg_rating)}</div>` : ""}
+      </div>
+      <div class="flex items-center pr-3 flex-shrink-0">
+        <button class="btn btn-sm btn-primary" onclick="moveWishlistToOwned('${g.id}')">
+          📦 Own It
+        </button>
+      </div>
+    </div>`;
+}
+
+async function moveWishlistToOwned(gameId) {
+  try {
+    await apiFetch(`/collection/${gameId}`, {
+      method: "PATCH",
+      body: { status: "owned" },
+    });
+    showToast("Added to collection!", "success");
+    collectionItems = await apiFetch("/collection");
+    closetTab = "collection";
+    applyClosetControls();
+    renderCloset();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
+// ── Empty states ──────────────────────────────────────────────────────────────
+
+function emptyCollectionHTML() {
   return `
     <div class="text-center py-12 text-base-content/60">
       <div class="text-5xl mb-3">📚</div>
-      <p class="mb-4">Your closet is empty.</p>
+      <p class="mb-4">Your collection is empty.</p>
       <button class="btn btn-primary btn-sm" onclick="showView('browse'); loadGames();">
         <i data-lucide="plus" class="w-4 h-4"></i> Add your first game
       </button>
@@ -185,14 +271,12 @@ function onBookClick(gameId, el) {
     openGameDetail(gameId);
   };
   el.addEventListener("animationend", done);
-  // Safety fallback in case animation event doesn't fire
   setTimeout(() => { if (el.classList.contains("pulling")) done(); }, 600);
 }
 
 // ── Small utilities ──────────────────────────────────────────────────────────
 
 function colorFromName(name) {
-  // Deterministic hue from string — used when theme_color is missing.
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
   return `hsl(${h}, 55%, 42%)`;

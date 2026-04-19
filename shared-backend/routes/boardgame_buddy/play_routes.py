@@ -139,6 +139,25 @@ async def log_play(
             is_winner=p.is_winner,
         ))
 
+    # Auto-mark game as "played" in collection unless already owned
+    try:
+        col = (
+            sb.table("boardgamebuddy_collections")
+            .select("status")
+            .eq("user_id", user.user_id)
+            .eq("game_id", body.game_id)
+            .execute()
+        )
+        current_status = col.data[0]["status"] if col.data else None
+        if current_status != "owned":
+            sb.table("boardgamebuddy_collections").upsert({
+                "user_id": user.user_id,
+                "game_id": body.game_id,
+                "status": "played",
+            }, on_conflict="user_id,game_id").execute()
+    except Exception:
+        pass
+
     return PlayResponse(
         id=play["id"],
         game_id=play["game_id"],

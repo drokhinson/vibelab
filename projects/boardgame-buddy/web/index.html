@@ -83,7 +83,13 @@
           <i data-lucide="plus" class="w-4 h-4"></i> Add Game
         </button>
       </div>
-      <div class="flex items-center gap-2 mb-3">
+      <!-- Tabs: Collection | Wishlist -->
+      <div role="tablist" class="tabs tabs-boxed mb-3">
+        <button role="tab" id="tab-collection" class="tab tab-active" onclick="switchClosetTab('collection')">📚 Collection</button>
+        <button role="tab" id="tab-wishlist" class="tab" onclick="switchClosetTab('wishlist')">⭐ Wishlist</button>
+      </div>
+      <!-- Collection controls (hidden on wishlist tab) -->
+      <div class="flex items-center gap-2 mb-3" id="closet-controls">
         <input type="text" id="closet-search" class="input input-bordered input-sm flex-1" placeholder="Search your games..." />
         <select id="closet-sort" class="select select-bordered select-sm">
           <option value="alphabetical">A → Z</option>
@@ -95,6 +101,7 @@
       </div>
       <div id="closet-shelves"></div>
       <div id="closet-list" class="hidden"></div>
+      <div id="closet-wishlist" class="hidden"></div>
     </main>
 
     <!-- Game Detail View -->

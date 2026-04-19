@@ -123,16 +123,20 @@ async def update_collection(
     """Change the status of a game in the user's collection."""
     sb = get_supabase()
 
-    result = (
-        sb.table("boardgamebuddy_collections")
-        .update({"status": body.status.value})
-        .eq("user_id", user.user_id)
-        .eq("game_id", game_id)
+    game = (
+        sb.table("boardgamebuddy_games")
+        .select("id")
+        .eq("id", game_id)
         .execute()
     )
+    if not game.data:
+        raise HTTPException(status_code=404, detail="Game not found")
 
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Game not in collection")
+    sb.table("boardgamebuddy_collections").upsert({
+        "user_id": user.user_id,
+        "game_id": game_id,
+        "status": body.status.value,
+    }, on_conflict="user_id,game_id").execute()
 
     return MessageResponse(message=f"Status updated to {body.status.value}")
 
