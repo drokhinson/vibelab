@@ -27,9 +27,10 @@ function renderGamesGrid() {
   if (!gamesCache.length) {
     container.innerHTML = `
       <div class="text-center py-12 text-base-content/50">
-        <div class="text-5xl mb-4">🎯</div>
+        <i data-lucide="search-x" class="w-12 h-12 mb-4 opacity-50"></i>
         <p>No games found. Try a different search.</p>
       </div>`;
+    lucide.createIcons();
     return;
   }
 
@@ -39,14 +40,14 @@ function renderGamesGrid() {
         <div class="card bg-base-200 cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeUp"
              style="--i:${i}" onclick="openGameDetail('${g.id}')">
           <figure class="px-3 pt-3">
-            <img src="${g.thumbnail_url || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><rect fill=%22%23333%22 width=%22200%22 height=%22200%22/><text x=%2250%25%22 y=%2250%25%22 fill=%22%23666%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22>🎲</text></svg>'}"
+            <img src="${g.thumbnail_url || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><rect fill=%22%23333%22 width=%22200%22 height=%22200%22/></svg>'}"
                  alt="${g.name}" class="rounded-lg w-full h-32 object-cover bg-base-300" loading="lazy" />
           </figure>
           <div class="card-body p-3 pt-2">
             <h3 class="font-semibold text-sm leading-tight line-clamp-2">${g.name}</h3>
             <div class="flex items-center gap-2 text-xs text-base-content/60 mt-1">
               ${g.bgg_rank ? `<span class="badge badge-sm badge-ghost">#${g.bgg_rank}</span>` : ""}
-              ${g.bgg_rating ? `<span>★ ${formatRating(g.bgg_rating)}</span>` : ""}
+              ${g.bgg_rating ? `<span><i data-lucide="star" class="w-3 h-3 inline mr-0.5"></i>${formatRating(g.bgg_rating)}</span>` : ""}
             </div>
             <div class="text-xs text-base-content/50 mt-1">
               ${playerRange(g.min_players, g.max_players)}

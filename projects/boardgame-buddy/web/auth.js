@@ -90,7 +90,7 @@ function renderAuth() {
   container.innerHTML = `
     <div class="flex flex-col items-center justify-center min-h-[60vh] px-4">
       <div class="mb-8 text-center">
-        <div class="text-6xl mb-4">🎲</div>
+        <div class="mb-4" style="color: var(--accent)"><i data-lucide="dice-6" style="width:64px;height:64px;"></i></div>
         <h1 class="text-3xl font-bold text-base-content">BoardgameBuddy</h1>
         <p class="text-base-content/60 mt-2">Your board game closet & play tracker</p>
       </div>

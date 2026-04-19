@@ -15,7 +15,7 @@ async function renderLogPlayForm(preselectedGameId, preselectedGameName) {
 
   container.innerHTML = `
     <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
-      <i data-lucide="trophy" class="w-5 h-5 text-warning"></i> Log a Play
+      <i data-lucide="trophy" class="w-5 h-5" style="color: var(--accent)"></i> Log a Play
     </h2>
 
     <form onsubmit="handleLogPlay(event)" class="space-y-4">
@@ -80,7 +80,7 @@ function addPlayerRow(name) {
     <datalist id="buddy-list-${idx}">${buddySuggestions}</datalist>
     <label class="flex items-center gap-1 cursor-pointer">
       <input type="checkbox" class="checkbox checkbox-sm checkbox-warning player-winner" />
-      <span class="text-xs">🏆</span>
+      <i data-lucide="trophy" class="w-4 h-4"></i>
     </label>
     <button type="button" class="btn btn-ghost btn-xs" onclick="document.getElementById('player-row-${idx}').remove()">
       <i data-lucide="x" class="w-3 h-3"></i>
@@ -181,10 +181,11 @@ function renderPlays() {
   if (!plays.length) {
     container.innerHTML = `
       <div class="text-center py-12 text-base-content/50">
-        <div class="text-5xl mb-4">🏆</div>
+        <i data-lucide="trophy" class="w-12 h-12 mb-4 opacity-50"></i>
         <p>No plays recorded yet.</p>
         <button class="btn btn-primary btn-sm mt-4" onclick="showView('log-play'); renderLogPlayForm();">Log Your First Play</button>
       </div>`;
+    lucide.createIcons();
     return;
   }
 
@@ -196,7 +197,7 @@ function renderPlays() {
             <div class="flex items-start gap-3">
               ${p.game_thumbnail
                 ? `<img src="${p.game_thumbnail}" class="w-12 h-12 rounded object-cover flex-shrink-0" />`
-                : '<div class="w-12 h-12 rounded bg-base-300 flex items-center justify-center text-2xl flex-shrink-0">🎲</div>'
+                : '<div class="w-12 h-12 rounded bg-base-300 flex items-center justify-center flex-shrink-0"><i data-lucide="dice-6" class="w-6 h-6 opacity-40"></i></div>'
               }
               <div class="flex-1 min-w-0">
                 <h3 class="font-semibold text-sm leading-tight">${p.game_name}</h3>
@@ -205,7 +206,7 @@ function renderPlays() {
                   <div class="flex flex-wrap gap-1 mt-1.5">
                     ${p.players.map(pl => `
                       <span class="badge badge-sm ${pl.is_winner ? 'badge-warning' : 'badge-ghost'}">
-                        ${pl.is_winner ? '🏆 ' : ''}${pl.name}
+                        ${pl.is_winner ? '<i data-lucide="trophy" class="w-3 h-3 inline mr-0.5"></i>' : ''}${pl.name}
                       </span>
                     `).join("")}
                   </div>` : ""}

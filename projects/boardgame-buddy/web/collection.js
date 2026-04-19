@@ -195,7 +195,7 @@ function renderWishlist() {
   if (!wishlist.length) {
     container.innerHTML = `
       <div class="text-center py-12 text-base-content/60">
-        <div class="text-5xl mb-3">⭐</div>
+        <i data-lucide="star" class="w-12 h-12 mb-3 opacity-50"></i>
         <p class="mb-4">Your wishlist is empty.</p>
         <button class="btn btn-primary btn-sm" onclick="showView('browse'); loadGames();">
           <i data-lucide="plus" class="w-4 h-4"></i> Browse Games
@@ -226,7 +226,7 @@ function wishlistRowHTML(item, i) {
       </div>
       <div class="flex items-center pr-3 flex-shrink-0">
         <button class="btn btn-sm btn-primary" onclick="moveWishlistToOwned('${g.id}')">
-          📦 Own It
+          <i data-lucide="package" class="w-4 h-4"></i> Own It
         </button>
       </div>
     </div>`;
@@ -253,7 +253,7 @@ async function moveWishlistToOwned(gameId) {
 function emptyCollectionHTML() {
   return `
     <div class="text-center py-12 text-base-content/60">
-      <div class="text-5xl mb-3">📚</div>
+      <i data-lucide="library-big" class="w-12 h-12 mb-3 opacity-50"></i>
       <p class="mb-4">Your collection is empty.</p>
       <button class="btn btn-primary btn-sm" onclick="showView('browse'); loadGames();">
         <i data-lucide="plus" class="w-4 h-4"></i> Add your first game
@@ -345,7 +345,8 @@ async function renderCollectionButtons(gameId) {
           ${statuses.map(s => `
             <button class="btn btn-sm ${existing.status === s ? 'btn-primary' : 'btn-outline'}"
                     onclick="updateCollectionStatus('${gameId}', '${s}')">
-              ${s === "owned" ? "📦" : s === "played" ? "🎯" : "⭐"} ${s.charAt(0).toUpperCase() + s.slice(1)}
+              <i data-lucide="${s === 'owned' ? 'package' : s === 'played' ? 'target' : 'star'}" class="w-4 h-4"></i>
+              ${s.charAt(0).toUpperCase() + s.slice(1)}
             </button>
           `).join("")}
           <button class="btn btn-sm btn-ghost text-error" onclick="removeFromCollection('${gameId}')">
@@ -355,9 +356,9 @@ async function renderCollectionButtons(gameId) {
     } else {
       container.innerHTML = `
         <div class="flex gap-2 flex-wrap">
-          <button class="btn btn-sm btn-primary" onclick="addToCollection('${gameId}', 'owned')">📦 Own It</button>
-          <button class="btn btn-sm btn-outline" onclick="addToCollection('${gameId}', 'played')">🎯 Played</button>
-          <button class="btn btn-sm btn-outline" onclick="addToCollection('${gameId}', 'wishlist')">⭐ Wishlist</button>
+          <button class="btn btn-sm btn-primary" onclick="addToCollection('${gameId}', 'owned')"><i data-lucide="package" class="w-4 h-4"></i> Own It</button>
+          <button class="btn btn-sm btn-outline" onclick="addToCollection('${gameId}', 'played')"><i data-lucide="target" class="w-4 h-4"></i> Played</button>
+          <button class="btn btn-sm btn-outline" onclick="addToCollection('${gameId}', 'wishlist')"><i data-lucide="star" class="w-4 h-4"></i> Wishlist</button>
         </div>`;
     }
     lucide.createIcons();

@@ -19,24 +19,24 @@ async function openGameDetail(gameId) {
 function applyGameTheme(game) {
   const color = game.theme_color || getCategoryColor(game.categories);
   document.documentElement.style.setProperty("--game-accent", color);
-  document.documentElement.style.setProperty("--game-accent-light", color + "22");
+  document.documentElement.style.setProperty("--game-accent-light", color + "28");
 }
 
 function getCategoryColor(categories) {
   if (!categories || !categories.length) return "#6C63FF";
   const map = {
-    "Strategy": "#8B6914",
-    "Card Game": "#2E5A3C",
-    "Party Game": "#D4457D",
-    "Family Game": "#4A90D9",
-    "Wargame": "#6B3A3A",
-    "Abstract Strategy": "#555555",
-    "Economic": "#B8860B",
+    "Strategy":          "#C9922A",
+    "Card Game":         "#1A4A32",
+    "Party Game":        "#8B1A4A",
+    "Family Game":       "#1A3D6B",
+    "Wargame":           "#7A2020",
+    "Abstract Strategy": "#4A3520",
+    "Economic":          "#A07800",
   };
   for (const cat of categories) {
     if (map[cat]) return map[cat];
   }
-  return "#6C63FF";
+  return "#6B3FA0";
 }
 
 function renderGameDetail() {
@@ -62,7 +62,7 @@ function renderGameDetail() {
       <div class="flex flex-wrap gap-2 mt-3">
         ${g.bgg_rank ? `<div class="badge" style="border-color: var(--game-accent); color: var(--game-accent);">
           #${g.bgg_rank} on BGG</div>` : ""}
-        ${g.bgg_rating ? `<div class="badge badge-ghost">★ ${formatRating(g.bgg_rating)}</div>` : ""}
+        ${g.bgg_rating ? `<div class="badge badge-ghost"><i data-lucide="star" class="w-3 h-3 mr-0.5"></i>${formatRating(g.bgg_rating)}</div>` : ""}
         ${g.min_players ? `<div class="badge badge-ghost"><i data-lucide="users" class="w-3 h-3 mr-1"></i>${playerRange(g.min_players, g.max_players)}</div>` : ""}
         ${g.playing_time ? `<div class="badge badge-ghost"><i data-lucide="clock" class="w-3 h-3 mr-1"></i>${formatTime(g.playing_time)}</div>` : ""}
       </div>
