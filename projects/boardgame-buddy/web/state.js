@@ -20,6 +20,7 @@ let collectionItems = [];
 let closetView = localStorage.getItem("bgb_closet_view") || "shelves";  // shelves | list
 let closetSort = localStorage.getItem("bgb_closet_sort") || "alphabetical"; // alphabetical | last_played
 let closetSearch = "";
+let closetTab = "collection"; // collection | wishlist
 
 // Plays
 let plays = [];
