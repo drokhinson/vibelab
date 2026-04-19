@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="luxury">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -27,7 +27,7 @@
 
     <!-- Top bar -->
     <header class="hidden sticky top-0 z-30 bg-base-100/95 backdrop-blur px-4 py-3 flex items-center justify-between border-b border-base-300" data-auth-only>
-      <h1 class="text-lg font-bold font-display">🎲 BoardgameBuddy</h1>
+      <h1 class="text-lg font-bold font-display flex items-center gap-2"><i data-lucide="dice-6" class="w-5 h-5"></i> BoardgameBuddy</h1>
       <div class="flex items-center gap-2">
         <span id="profile-name" class="text-sm text-base-content/60"></span>
         <button class="btn btn-ghost btn-sm btn-circle" onclick="handleLogout()" title="Log out">
@@ -85,8 +85,8 @@
       </div>
       <!-- Tabs: Collection | Wishlist -->
       <div role="tablist" class="tabs tabs-boxed mb-3">
-        <button role="tab" id="tab-collection" class="tab tab-active" onclick="switchClosetTab('collection')">📚 Collection</button>
-        <button role="tab" id="tab-wishlist" class="tab" onclick="switchClosetTab('wishlist')">⭐ Wishlist</button>
+        <button role="tab" id="tab-collection" class="tab tab-active" onclick="switchClosetTab('collection')"><i data-lucide="library-big" class="w-4 h-4 mr-1"></i> Collection</button>
+        <button role="tab" id="tab-wishlist" class="tab" onclick="switchClosetTab('wishlist')"><i data-lucide="star" class="w-4 h-4 mr-1"></i> Wishlist</button>
       </div>
       <!-- Collection controls (hidden on wishlist tab) -->
       <div class="flex items-center gap-2 mb-3" id="closet-controls">
