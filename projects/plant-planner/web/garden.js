@@ -26,7 +26,7 @@ function renderBuilder() {
   html += '<div class="builder-main">';
   html += '<div class="render3d-pane">';
   html += '<div class="render3d-header">';
-  html += '<span class="render3d-label"><i data-lucide="box"></i> Drag plants from catalog to place &nbsp;·&nbsp; click a plant to remove</span>';
+  html += '<span class="render3d-label"><i data-lucide="box"></i> Drag from catalog to place &nbsp;·&nbsp; hold to move &nbsp;·&nbsp; tap to remove</span>';
   html += '</div>';
   html += '<div id="render3d-container"></div>';
   html += '</div>';
@@ -58,6 +58,7 @@ function init3DScene(g) {
       if (scene3DHandle) {
         bind3DDragDrop();
         bind3DClick();
+        bindPlantDrag(scene3DHandle);
       }
     });
   });
@@ -87,6 +88,7 @@ function bind3DDragDrop() {
 function bind3DClick() {
   var canvas = scene3DHandle.renderer.domElement;
   canvas.addEventListener("click", function(e) {
+    if (Date.now() - _lastPickupEndTime < 300) return;
     var rect = canvas.getBoundingClientRect();
     var mouse = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
