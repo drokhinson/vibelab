@@ -368,7 +368,9 @@ function setRenderStyle(handle, newStyle) {
         child.type !== "AmbientLight" &&
         child.type !== "DirectionalLight" &&
         child.name !== "hitPlane" &&
-        child.name !== "cellHighlight") {
+        child.name !== "cellHighlight" &&
+        child.name !== "_carryPlane" &&
+        child.name !== "groundPlants") {
       toRemove.push(child);
     }
   });
@@ -399,6 +401,9 @@ function dispose3DView(handle) {
   if (handle.animId) cancelAnimationFrame(handle.animId);
   if (handle._resizeObserver) handle._resizeObserver.disconnect();
   if (handle.controls) handle.controls.dispose();
+  if (handle.groundPlantsGroup) {
+    handle.groundPlantsGroup.children.slice().forEach(function(c) { disposeObject(c); });
+  }
 
   // Dispose all scene objects
   handle.scene.traverse(function(obj) {
