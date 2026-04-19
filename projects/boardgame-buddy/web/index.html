@@ -39,8 +39,14 @@
     <!-- Auth View -->
     <main data-view="auth" id="auth-container" class="flex-1 px-4 py-4"></main>
 
-    <!-- Browse Games View -->
+    <!-- Browse Games View (reached via + Add Game on Closet) -->
     <main data-view="browse" class="hidden flex-1 px-4 py-4">
+      <div class="flex items-center gap-2 mb-3">
+        <button class="btn btn-ghost btn-sm btn-square" onclick="showView('closet')" title="Back to closet">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        </button>
+        <h2 class="text-lg font-bold">Add a Game</h2>
+      </div>
       <form id="game-search-form" class="mb-4">
         <div class="join w-full">
           <input type="text" id="game-search-input" class="input input-bordered join-item w-full" placeholder="Search games..." />
@@ -67,16 +73,28 @@
       <div id="games-grid"></div>
     </main>
 
-    <!-- My Collection View -->
-    <main data-view="collection" class="hidden flex-1 px-4 py-4">
-      <h2 class="text-xl font-bold mb-3">My Games</h2>
-      <div id="collection-tabs" class="tabs tabs-boxed mb-4">
-        <button class="tab tab-active" data-filter="all" onclick="setCollectionFilter('all')">All</button>
-        <button class="tab" data-filter="owned" onclick="setCollectionFilter('owned')">📦 Closet</button>
-        <button class="tab" data-filter="played" onclick="setCollectionFilter('played')">🎯 Played</button>
-        <button class="tab" data-filter="wishlist" onclick="setCollectionFilter('wishlist')">⭐ Wishlist</button>
+    <!-- Closet View (home) -->
+    <main data-view="closet" class="hidden flex-1 px-4 py-4">
+      <div class="flex items-center justify-between mb-3 gap-2">
+        <h2 class="text-xl font-bold font-display flex items-center gap-2">
+          <i data-lucide="library-big" class="w-5 h-5"></i> My Closet
+        </h2>
+        <button id="closet-add-btn" class="btn btn-primary btn-sm">
+          <i data-lucide="plus" class="w-4 h-4"></i> Add Game
+        </button>
       </div>
-      <div id="collection-grid"></div>
+      <div class="flex items-center gap-2 mb-3">
+        <input type="text" id="closet-search" class="input input-bordered input-sm flex-1" placeholder="Search your games..." />
+        <select id="closet-sort" class="select select-bordered select-sm">
+          <option value="alphabetical">A → Z</option>
+          <option value="last_played">Last Played</option>
+        </select>
+        <button id="closet-view-toggle" class="btn btn-sm btn-ghost btn-square" title="Toggle view">
+          <i data-lucide="list" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div id="closet-shelves"></div>
+      <div id="closet-list" class="hidden"></div>
     </main>
 
     <!-- Game Detail View -->
@@ -102,13 +120,9 @@
 
     <!-- Bottom Navigation -->
     <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
-      <button data-nav="browse" class="active">
-        <i data-lucide="library" class="w-5 h-5"></i>
-        <span class="btm-nav-label text-xs">Browse</span>
-      </button>
-      <button data-nav="collection">
-        <i data-lucide="box" class="w-5 h-5"></i>
-        <span class="btm-nav-label text-xs">My Games</span>
+      <button data-nav="closet" class="active">
+        <i data-lucide="home" class="w-5 h-5"></i>
+        <span class="btm-nav-label text-xs">Closet</span>
       </button>
       <button data-nav="log-play">
         <i data-lucide="plus-circle" class="w-5 h-5"></i>

@@ -85,6 +85,7 @@ class CollectionItem(BaseModel):
     game_id: str
     status: str
     added_at: datetime
+    last_played_at: Optional[date] = None
     game: GameSummary
 
 

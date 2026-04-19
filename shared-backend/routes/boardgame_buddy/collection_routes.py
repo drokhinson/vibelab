@@ -47,6 +47,19 @@ async def get_collection(
 
     result = query.execute()
 
+    plays_result = (
+        sb.table("boardgamebuddy_plays")
+        .select("game_id, played_at")
+        .eq("user_id", user.user_id)
+        .order("played_at", desc=True)
+        .execute()
+    )
+    last_played_by_game: dict[str, str] = {}
+    for play in plays_result.data or []:
+        gid = play["game_id"]
+        if gid not in last_played_by_game:
+            last_played_by_game[gid] = play["played_at"]
+
     items: list[CollectionItem] = []
     for row in result.data or []:
         game_data = row.get("boardgamebuddy_games", {})
@@ -56,6 +69,7 @@ async def get_collection(
                 game_id=row["game_id"],
                 status=row["status"],
                 added_at=row["added_at"],
+                last_played_at=last_played_by_game.get(row["game_id"]),
                 game=GameSummary(**game_data),
             ))
 
