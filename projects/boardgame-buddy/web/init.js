@@ -7,20 +7,56 @@ document.addEventListener("DOMContentLoaded", () => {
   // Render initial auth view
   renderAuth();
 
-  // Game search form
+  // Game search form (Browse view, reached via "+ Add Game")
   document.getElementById("game-search-form").addEventListener("submit", handleGameSearch);
+
+  // Closet controls
+  const sortSel = document.getElementById("closet-sort");
+  if (sortSel) {
+    sortSel.value = closetSort;
+    sortSel.addEventListener("change", (e) => {
+      closetSort = e.target.value;
+      localStorage.setItem("bgb_closet_sort", closetSort);
+      renderCloset();
+    });
+  }
+
+  const toggleBtn = document.getElementById("closet-view-toggle");
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
+      closetView = closetView === "shelves" ? "list" : "shelves";
+      localStorage.setItem("bgb_closet_view", closetView);
+      applyClosetControls();
+      renderCloset();
+    });
+  }
+
+  const searchInput = document.getElementById("closet-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      closetSearch = e.target.value;
+      renderCloset();
+    });
+  }
+
+  const addBtn = document.getElementById("closet-add-btn");
+  if (addBtn) {
+    addBtn.addEventListener("click", () => {
+      showView("browse");
+      loadGames();
+    });
+  }
 
   // Bottom nav
   document.querySelectorAll(".btm-nav button").forEach(btn => {
     btn.addEventListener("click", () => {
       const target = btn.dataset.nav;
-      if (!session && target !== "browse") {
+      if (!session) {
         showToast("Please log in first", "warning");
         return;
       }
       showView(target);
-      if (target === "browse") loadGames();
-      if (target === "collection") loadCollection();
+      if (target === "closet") loadCloset();
       if (target === "log-play") { playerRowCount = 0; renderLogPlayForm(); }
       if (target === "history") loadPlays();
     });

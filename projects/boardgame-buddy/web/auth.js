@@ -62,8 +62,8 @@ async function loadProfile() {
         return;
       }
     }
-    showView("browse");
-    loadGames();
+    showView("closet");
+    loadCloset();
     updateProfileUI();
   } finally {
     profileLoadInFlight = false;

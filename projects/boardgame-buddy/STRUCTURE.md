@@ -1,7 +1,7 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-03-27
+> Last updated: 2026-04-19
 
 ## What It Does
 A board game collection manager. Users browse the top 1000 BoardGameGeek-ranked games, build their closet (owned / played / wishlist), log game sessions with friends, and access quick-reference guides (setup reminders, turn summaries, rulebook links).
@@ -121,7 +121,7 @@ Linked to Supabase Auth `auth.users`.
 - `POST /api/v1/boardgame_buddy/games/{game_id}/guide`
 
 ## Screen Flow
-1. Auth (login/signup) → 2. Browse games → 3. Game detail (themed) → 4. My Collection (tabs) → 5. Log Play → 6. Play History
+1. Auth (login/signup) → 2. **Closet** (home: shelves for Owned / Played / Wish as book-spines, with list-view toggle and sort by Alphabetical or Last Played; in-closet search filters your games) → 3. Tap a spine → pull-down animation → Game detail (themed, with Log Play + guide) → 4. Log Play → 5. Play History. "+ Add Game" from the Closet opens the Browse catalog (BGG top 1000 + live BGG search).
 
 ## Environment Variables
 | Variable | Where | Purpose |
