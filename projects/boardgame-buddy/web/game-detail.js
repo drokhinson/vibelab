@@ -47,7 +47,7 @@ function renderGameDetail() {
   container.innerHTML = `
     <!-- Header banner -->
     <div class="relative -mx-4 -mt-4 mb-4">
-      <div class="h-48 bg-cover bg-center relative" style="background-image: url('${g.image_url || ""}')">
+      <div class="h-48 bg-cover bg-center relative" style="${g.image_url ? `background-image: url('${g.image_url}')` : `background-color: var(--game-accent-light)`}">
         <div class="absolute inset-0" style="background: linear-gradient(transparent 30%, var(--game-accent-light) 70%, var(--b1, #1d232a) 100%)"></div>
         <button class="btn btn-circle btn-ghost btn-sm absolute top-3 left-3 bg-base-100/50" onclick="showView('closet'); loadCloset();">
           <i data-lucide="arrow-left" class="w-5 h-5"></i>

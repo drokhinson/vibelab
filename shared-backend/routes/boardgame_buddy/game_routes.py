@@ -11,12 +11,22 @@ from db import get_supabase
 from shared_models import HealthResponse
 
 from . import router
-from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult
+from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
 
 logger = logging.getLogger(__name__)
 
 BGG_API_BASE = "https://boardgamegeek.com/xmlapi2"
 BGG_USER_AGENT = "vibelab-boardgame-buddy/1.0"
+
+
+def _normalize_image_url(url: str | None) -> str | None:
+    """Ensure BGG image URLs have an explicit https: scheme (BGG returns protocol-relative URLs)."""
+    if not url:
+        return None
+    url = url.strip()
+    if url.startswith("//"):
+        return "https:" + url
+    return url
 
 
 async def _fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
@@ -274,8 +284,8 @@ async def import_bgg_game(
         "min_players": int(min_el.get("value", "0")) if min_el is not None else None,
         "max_players": int(max_el.get("value", "0")) if max_el is not None else None,
         "playing_time": int(time_el.get("value", "0")) if time_el is not None else None,
-        "image_url": img_el.text if img_el is not None else None,
-        "thumbnail_url": thumb_el.text if thumb_el is not None else None,
+        "image_url": _normalize_image_url(img_el.text if img_el is not None else None),
+        "thumbnail_url": _normalize_image_url(thumb_el.text if thumb_el is not None else None),
         "bgg_rating": rating,
         "categories": categories,
         "mechanics": mechanics,
@@ -288,3 +298,41 @@ async def import_bgg_game(
     )
 
     return GameSummary(**result.data[0])
+
+
+@router.post(
+    "/games/refresh-images",
+    response_model=RefreshImagesResponse,
+    status_code=200,
+    summary="Refresh image URLs for all games",
+)
+async def refresh_game_images() -> RefreshImagesResponse:
+    """Re-fetch image and thumbnail URLs from BGG for games with missing or protocol-relative URLs."""
+    sb = get_supabase()
+    result = sb.table("boardgamebuddy_games").select("id, bgg_id, image_url, thumbnail_url").execute()
+    updated = 0
+    for game in result.data or []:
+        needs_update = (
+            not game["image_url"]
+            or game["image_url"].startswith("//")
+            or not game["thumbnail_url"]
+            or game["thumbnail_url"].startswith("//")
+        )
+        if not needs_update or not game["bgg_id"]:
+            continue
+        try:
+            body = await _fetch_bgg("/thing", {"id": game["bgg_id"], "stats": 0}, timeout=10.0)
+            root = _parse_bgg_xml(body, context=f"refresh bgg_id={game['bgg_id']}")
+            item = root.find("item")
+            if item is None:
+                continue
+            img_el = item.find("image")
+            thumb_el = item.find("thumbnail")
+            sb.table("boardgamebuddy_games").update({
+                "image_url": _normalize_image_url(img_el.text if img_el is not None else None),
+                "thumbnail_url": _normalize_image_url(thumb_el.text if thumb_el is not None else None),
+            }).eq("id", game["id"]).execute()
+            updated += 1
+        except Exception:
+            continue
+    return RefreshImagesResponse(updated=updated)

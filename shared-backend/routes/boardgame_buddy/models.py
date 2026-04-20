@@ -18,6 +18,10 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class RefreshImagesResponse(BaseModel):
+    updated: int
+
+
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 class ProfileCreate(BaseModel):
