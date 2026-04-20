@@ -1,5 +1,7 @@
 // collection.js — Closet: shelves + list view, plus collection mutations used by game detail.
 
+const IMG_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='80' viewBox='0 0 64 80'%3E%3Crect width='64' height='80' fill='%23333'/%3E%3Ctext x='32' y='44' font-size='28' text-anchor='middle' fill='%23666'%3E%3F%3C/text%3E%3C/svg%3E";
+
 const SHELVES = [
   { key: "owned",    label: "Owned",   icon: "package" },
   { key: "played",   label: "Played",  icon: "dice-5" },
@@ -174,7 +176,7 @@ function listRowHTML(item, i) {
     <div class="card card-side bg-base-200 h-20 cursor-pointer hover:shadow-md transition-all animate-fadeUp"
          style="--i:${i}" onclick="openGameDetail('${g.id}')">
       <figure class="w-16 flex-shrink-0">
-        <img src="${g.thumbnail_url || ''}" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
+        <img src="${g.thumbnail_url || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
       </figure>
       <div class="card-body p-2 justify-center">
         <h3 class="font-semibold text-sm leading-tight line-clamp-1">${escapeHtml(g.name)}</h3>
@@ -218,7 +220,7 @@ function wishlistRowHTML(item, i) {
   return `
     <div class="card card-side bg-base-200 h-20 animate-fadeUp" style="--i:${i}">
       <figure class="w-16 flex-shrink-0 cursor-pointer" onclick="openGameDetail('${g.id}')">
-        <img src="${g.thumbnail_url || ''}" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
+        <img src="${g.thumbnail_url || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
       </figure>
       <div class="card-body p-2 justify-center cursor-pointer" onclick="openGameDetail('${g.id}')">
         <h3 class="font-semibold text-sm leading-tight line-clamp-2">${escapeHtml(g.name)}</h3>
