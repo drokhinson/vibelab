@@ -84,26 +84,50 @@ Linked to Supabase Auth `auth.users`.
 | buddy_id | UUID FK | → buddies |
 | is_winner | BOOLEAN | |
 
-### boardgamebuddy_guides
+### boardgamebuddy_chunk_types (lookup)
+| Column | Type | Notes |
+|--------|------|-------|
+| id | TEXT PK | `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant`, `rulebook` |
+| label | TEXT | human label |
+| icon | TEXT | lucide icon name |
+| display_order | INT | sort in UI |
+
+### boardgamebuddy_guide_chunks
+Reusable chunks of guide content contributed by any authed user.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | UUID PK | |
 | game_id | UUID FK | → games |
-| quick_setup | TEXT | markdown |
-| player_guide | TEXT | markdown |
-| rulebook_url | TEXT | link to PDF |
-| contributed_by | UUID FK | nullable → profiles |
-| is_official | BOOLEAN | seed = true |
-| created_at | TIMESTAMPTZ | |
-| updated_at | TIMESTAMPTZ | |
+| chunk_type | TEXT FK | → chunk_types |
+| title | TEXT | short label |
+| created_by | UUID FK | nullable → profiles (only creator can edit/delete) |
+| layout | TEXT | `text` for now; future `table`, `grid` |
+| content | TEXT | markdown for `text` layout |
+| created_at / updated_at | TIMESTAMPTZ | |
+
+### boardgamebuddy_guide_selections
+Per-user ordered selection of chunks that assemble into that user's guide.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| user_id | UUID FK | → profiles |
+| game_id | UUID FK | → games |
+| chunk_id | UUID FK | → guide_chunks |
+| display_order | INT | position within the user's guide |
+
+### boardgamebuddy_guides (legacy)
+Flat guide table from the initial prototype. Retained temporarily during rollout
+of the chunk system; will be dropped in a follow-up migration.
 
 ## API Endpoints
 
 ### Public
 - `GET /api/v1/boardgame_buddy/health`
 - `GET /api/v1/boardgame_buddy/games` — paginated, search, filter
-- `GET /api/v1/boardgame_buddy/games/{game_id}` — detail + guide
+- `GET /api/v1/boardgame_buddy/games/{game_id}` — detail (includes derived `bgg_url`)
 - `GET /api/v1/boardgame_buddy/games/search-bgg?query=` — proxy BGG API
+- `GET /api/v1/boardgame_buddy/games/{game_id}/chunks` — all guide chunks for a game
+- `GET /api/v1/boardgame_buddy/chunk-types` — chunk type lookup
 
 ### Auth Required
 - `GET /api/v1/boardgame_buddy/profile`
@@ -117,8 +141,11 @@ Linked to Supabase Auth `auth.users`.
 - `DELETE /api/v1/boardgame_buddy/plays/{play_id}`
 - `GET /api/v1/boardgame_buddy/buddies`
 - `POST /api/v1/boardgame_buddy/buddies/{buddy_id}/link`
-- `GET /api/v1/boardgame_buddy/games/{game_id}/guide`
-- `POST /api/v1/boardgame_buddy/games/{game_id}/guide`
+- `POST /api/v1/boardgame_buddy/games/{game_id}/chunks` — contribute a new chunk
+- `PATCH /api/v1/boardgame_buddy/chunks/{chunk_id}` — edit own chunk
+- `DELETE /api/v1/boardgame_buddy/chunks/{chunk_id}` — delete own chunk
+- `GET /api/v1/boardgame_buddy/games/{game_id}/my-guide` — this user's chunk selection
+- `PUT /api/v1/boardgame_buddy/games/{game_id}/my-guide` — replace selection (ordered)
 
 ## Screen Flow
 1. Auth (login/signup) → 2. **Closet** (home: shelves for Owned / Played / Wish as book-spines, with list-view toggle and sort by Alphabetical or Last Played; in-closet search filters your games) → 3. Tap a spine → pull-down animation → Game detail (themed, with Log Play + guide) → 4. Log Play → 5. Play History. "+ Add Game" from the Closet opens the Browse catalog (BGG top 1000 + live BGG search).

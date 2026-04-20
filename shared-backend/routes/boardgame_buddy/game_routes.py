@@ -1,5 +1,6 @@
 """Game catalog endpoints — browse, search, detail, BGG proxy."""
 
+import logging
 import xml.etree.ElementTree as ET
 from typing import Optional
 
@@ -11,6 +12,67 @@ from shared_models import HealthResponse
 
 from . import router
 from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult
+
+logger = logging.getLogger(__name__)
+
+BGG_API_BASE = "https://boardgamegeek.com/xmlapi2"
+BGG_USER_AGENT = "vibelab-boardgame-buddy/1.0"
+
+
+async def _fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
+    """GET an XML document from the BGG API with consistent error mapping."""
+    try:
+        async with httpx.AsyncClient(
+            timeout=timeout,
+            headers={"User-Agent": BGG_USER_AGENT},
+        ) as client:
+            resp = await client.get(f"{BGG_API_BASE}{path}", params=params)
+    except httpx.HTTPError as exc:
+        logger.warning("BGG network error on %s %s: %s", path, params, exc)
+        raise HTTPException(
+            status_code=503,
+            detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
+        )
+
+    if resp.status_code == 202:
+        # BGG returns 202 when the result is being generated (cold cache).
+        logger.info("BGG 202 (warming up) for %s %s", path, params)
+        raise HTTPException(
+            status_code=503,
+            detail="BoardGameGeek is warming up this result. Retry in a few seconds.",
+        )
+    if resp.status_code == 429:
+        logger.warning("BGG 429 rate limit for %s %s", path, params)
+        raise HTTPException(
+            status_code=429,
+            detail="BoardGameGeek rate-limited us. Wait a few seconds and try again.",
+        )
+    if resp.status_code != 200:
+        logger.warning(
+            "BGG returned %s for %s %s: %s",
+            resp.status_code, path, params, resp.text[:200],
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"BoardGameGeek returned HTTP {resp.status_code}.",
+        )
+
+    return resp.text
+
+
+def _parse_bgg_xml(body: str, *, context: str) -> ET.Element:
+    """Parse a BGG XML payload; map parse errors to a 502."""
+    try:
+        return ET.fromstring(body)
+    except ET.ParseError as exc:
+        logger.warning(
+            "BGG XML parse error (%s): %s\nbody[:300]=%r",
+            context, exc, body[:300],
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Could not parse BoardGameGeek response.",
+        )
 
 
 @router.get(
@@ -70,27 +132,31 @@ async def search_bgg(
     query: str = Query(..., min_length=2, description="Search query"),
 ) -> list[BggSearchResult]:
     """Proxy search to BGG XML API for games not yet in our database."""
-    async with httpx.AsyncClient(
+    body = await _fetch_bgg(
+        "/search",
+        {"query": query, "type": "boardgame"},
         timeout=10.0,
-        headers={"User-Agent": "vibelab-boardgame-buddy/1.0"},
-    ) as client:
-        resp = await client.get(
-            "https://boardgamegeek.com/xmlapi2/search",
-            params={"query": query, "type": "boardgame"},
-        )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="BGG API unavailable")
+    )
+    root = _parse_bgg_xml(body, context=f"search query={query!r}")
 
-    root = ET.fromstring(resp.text)
     results: list[BggSearchResult] = []
-
     bgg_ids: list[int] = []
     for item in root.findall("item")[:20]:
-        bgg_id = int(item.get("id", "0"))
+        try:
+            bgg_id = int(item.get("id", "0"))
+        except (TypeError, ValueError):
+            continue
+        if not bgg_id:
+            continue
         name_el = item.find("name")
         year_el = item.find("yearpublished")
         name = name_el.get("value", "") if name_el is not None else ""
-        year = int(year_el.get("value", "0")) if year_el is not None else None
+        year = None
+        if year_el is not None:
+            try:
+                year = int(year_el.get("value", "0")) or None
+            except (TypeError, ValueError):
+                year = None
 
         bgg_ids.append(bgg_id)
         results.append(BggSearchResult(
@@ -162,18 +228,12 @@ async def import_bgg_game(
         return GameSummary(**existing.data[0])
 
     # Fetch from BGG
-    async with httpx.AsyncClient(
+    body = await _fetch_bgg(
+        "/thing",
+        {"id": bgg_id, "stats": 1},
         timeout=15.0,
-        headers={"User-Agent": "vibelab-boardgame-buddy/1.0"},
-    ) as client:
-        resp = await client.get(
-            "https://boardgamegeek.com/xmlapi2/thing",
-            params={"id": bgg_id, "stats": 1},
-        )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="BGG API unavailable")
-
-    root = ET.fromstring(resp.text)
+    )
+    root = _parse_bgg_xml(body, context=f"thing id={bgg_id}")
     item = root.find("item")
     if item is None:
         raise HTTPException(status_code=404, detail="Game not found on BGG")

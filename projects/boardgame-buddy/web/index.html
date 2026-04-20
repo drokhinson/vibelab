@@ -125,6 +125,24 @@
     <!-- Toast -->
     <div id="toast" class="toast toast-end toast-top hidden z-50"></div>
 
+    <!-- Guide chunk manager -->
+    <dialog id="chunk-manager" class="modal">
+      <div class="modal-box max-w-lg">
+        <h3 class="font-bold text-lg mb-2">Customize this guide</h3>
+        <div id="chunk-manager-body"></div>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Chunk create/edit -->
+    <dialog id="chunk-editor" class="modal">
+      <div class="modal-box max-w-md">
+        <h3 class="font-bold text-lg mb-2">Guide chunk</h3>
+        <div id="chunk-editor-body"></div>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
     <!-- Bottom Navigation -->
     <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
       <button data-nav="closet" class="active">
@@ -150,6 +168,7 @@
   <script src="games.js"></script>
   <script src="collection.js"></script>
   <script src="game-detail.js"></script>
+  <script src="guide.js"></script>
   <script src="plays.js"></script>
   <script src="init.js"></script>
 </body>

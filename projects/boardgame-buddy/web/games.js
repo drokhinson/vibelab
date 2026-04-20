@@ -119,9 +119,13 @@ function renderBggResults() {
   }
   container.innerHTML = bggSearchResults.map(r => `
     <div class="flex items-center justify-between py-2 border-b border-base-300">
-      <div>
-        <span class="font-medium text-sm">${r.name}</span>
-        ${r.year_published ? `<span class="text-xs text-base-content/50">(${r.year_published})</span>` : ""}
+      <div class="min-w-0">
+        <a href="${r.bgg_url}" target="_blank" rel="noopener"
+           class="font-medium text-sm link link-hover inline-flex items-center gap-1">
+          ${r.name}
+          <i data-lucide="external-link" class="w-3 h-3 opacity-60"></i>
+        </a>
+        ${r.year_published ? `<span class="text-xs text-base-content/50 ml-1">(${r.year_published})</span>` : ""}
       </div>
       ${r.already_in_db
         ? '<span class="badge badge-sm badge-success">In library</span>'
@@ -129,6 +133,7 @@ function renderBggResults() {
       }
     </div>
   `).join("");
+  lucide.createIcons();
 }
 
 async function importBggGame(bggId) {

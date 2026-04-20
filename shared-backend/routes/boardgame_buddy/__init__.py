@@ -13,5 +13,5 @@ router = APIRouter(
 from . import game_routes      # noqa: F401, E402
 from . import collection_routes  # noqa: F401, E402
 from . import play_routes      # noqa: F401, E402
-from . import guide_routes     # noqa: F401, E402
+from . import chunk_routes     # noqa: F401, E402
 from . import profile_routes   # noqa: F401, E402
