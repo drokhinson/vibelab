@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 032
+-- Last updated: migration 034
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
 );
 ALTER TABLE public.boardgamebuddy_play_players ENABLE ROW LEVEL SECURITY;
 
+-- Legacy single-row guide table. Retained during rollout of the chunk system
+-- (migration 034); will be dropped in a follow-up migration.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
@@ -83,6 +85,39 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guides (
 );
 ALTER TABLE public.boardgamebuddy_guides ENABLE ROW LEVEL SECURITY;
 
+-- Chunked guide system (migration 034)
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chunk_types (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  icon TEXT,
+  display_order INT DEFAULT 0
+);
+ALTER TABLE public.boardgamebuddy_chunk_types ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chunks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
+  chunk_type TEXT NOT NULL REFERENCES public.boardgamebuddy_chunk_types(id),
+  title TEXT NOT NULL,
+  created_by UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE SET NULL,
+  layout TEXT NOT NULL DEFAULT 'text' CHECK (layout IN ('text')),
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.boardgamebuddy_guide_chunks ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_selections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
+  chunk_id UUID NOT NULL REFERENCES public.boardgamebuddy_guide_chunks(id) ON DELETE CASCADE,
+  display_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (user_id, chunk_id)
+);
+ALTER TABLE public.boardgamebuddy_guide_selections ENABLE ROW LEVEL SECURITY;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_bgb_games_bgg_id ON public.boardgamebuddy_games(bgg_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_name ON public.boardgamebuddy_games USING gin(to_tsvector('english', name));
@@ -92,3 +127,6 @@ CREATE INDEX IF NOT EXISTS idx_bgb_collections_game ON public.boardgamebuddy_col
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_user ON public.boardgamebuddy_plays(user_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_game ON public.boardgamebuddy_plays(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(game_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game ON public.boardgamebuddy_guide_chunks(game_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game
+  ON public.boardgamebuddy_guide_selections(user_id, game_id);

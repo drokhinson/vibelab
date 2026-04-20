@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from .constants import CollectionStatus
 
@@ -46,6 +46,11 @@ class GameSummary(BaseModel):
     bgg_rating: Optional[float] = None
     theme_color: Optional[str] = None
 
+    @computed_field  # type: ignore[misc]
+    @property
+    def bgg_url(self) -> Optional[str]:
+        return f"https://boardgamegeek.com/boardgame/{self.bgg_id}" if self.bgg_id else None
+
 
 class GameDetail(GameSummary):
     description: Optional[str] = None
@@ -67,6 +72,11 @@ class BggSearchResult(BaseModel):
     name: str
     year_published: Optional[int] = None
     already_in_db: bool = False
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def bgg_url(self) -> str:
+        return f"https://boardgamegeek.com/boardgame/{self.bgg_id}"
 
 
 # ── Collection ────────────────────────────────────────────────────────────────
@@ -133,20 +143,42 @@ class BuddyLinkBody(BaseModel):
     user_id: str
 
 
-# ── Guides ────────────────────────────────────────────────────────────────────
+# ── Guide chunks ──────────────────────────────────────────────────────────────
 
-class GuideResponse(BaseModel):
+class ChunkTypeResponse(BaseModel):
+    id: str
+    label: str
+    icon: Optional[str] = None
+    display_order: int
+
+
+class ChunkCreate(BaseModel):
+    chunk_type: str
+    title: str
+    content: str
+    layout: str = "text"
+
+
+class ChunkUpdate(BaseModel):
+    chunk_type: Optional[str] = None
+    title: Optional[str] = None
+    content: Optional[str] = None
+    layout: Optional[str] = None
+
+
+class ChunkResponse(BaseModel):
     id: str
     game_id: str
-    quick_setup: Optional[str] = None
-    player_guide: Optional[str] = None
-    rulebook_url: Optional[str] = None
-    is_official: bool
-    contributed_by: Optional[str] = None
+    chunk_type: str
+    chunk_type_label: Optional[str] = None
+    chunk_type_icon: Optional[str] = None
+    title: str
+    layout: str
+    content: str
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
     updated_at: datetime
 
 
-class GuideCreate(BaseModel):
-    quick_setup: Optional[str] = None
-    player_guide: Optional[str] = None
-    rulebook_url: Optional[str] = None
+class GuideSelectionUpdate(BaseModel):
+    chunk_ids: list[str]

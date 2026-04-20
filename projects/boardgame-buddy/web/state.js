@@ -13,7 +13,9 @@ let gamesPerPage = 24;
 
 // Current game detail
 let currentGame = null;
-let currentGuide = null;
+let currentGuideChunks = [];    // ordered list of ChunkResponse displayed as the guide
+let chunkLibrary = [];          // all chunks for currentGame (in the manager modal)
+let chunkTypeCache = null;      // [{id,label,icon,display_order}] fetched once
 
 // Closet (user collection)
 let collectionItems = [];
