@@ -3,6 +3,11 @@
 const API = window.APP_CONFIG?.apiBase || "http://localhost:8000";
 const PREFIX = "/api/v1/boardgame_buddy";
 
+function bggImg(url) {
+  if (!url) return null;
+  return `${API}${PREFIX}/games/image-proxy?url=${encodeURIComponent(url)}`;
+}
+
 // ── API ──────────────────────────────────────────────────────────────────────
 
 async function apiFetch(path, opts = {}) {

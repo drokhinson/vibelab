@@ -6,6 +6,7 @@ from typing import Optional
 
 import httpx
 from fastapi import Query, Path, HTTPException
+from fastapi.responses import Response
 
 from db import get_supabase
 from shared_models import HealthResponse
@@ -336,3 +337,32 @@ async def refresh_game_images() -> RefreshImagesResponse:
         except Exception:
             continue
     return RefreshImagesResponse(updated=updated)
+
+
+@router.get(
+    "/games/image-proxy",
+    status_code=200,
+    summary="Proxy a BGG CDN image to avoid hotlink blocking",
+)
+async def proxy_bgg_image(
+    url: str = Query(..., description="BGG CDN image URL to proxy"),
+) -> Response:
+    """Fetch a BGG image server-side and stream it back to the browser."""
+    if not url.startswith("https://cf.geekdo-images.com/"):
+        raise HTTPException(status_code=400, detail="Only BGG CDN images are supported")
+    try:
+        async with httpx.AsyncClient(
+            timeout=10.0,
+            headers={"User-Agent": BGG_USER_AGENT},
+            follow_redirects=True,
+        ) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch image: {exc}")
+    content_type = resp.headers.get("content-type", "image/jpeg")
+    return Response(
+        content=resp.content,
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
