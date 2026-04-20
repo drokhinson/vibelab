@@ -40,7 +40,8 @@ function renderGamesGrid() {
         <div class="card bg-base-200 cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeUp"
              style="--i:${i}" onclick="openGameDetail('${g.id}')">
           <figure class="px-3 pt-3">
-            <img src="${g.thumbnail_url || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><rect fill=%22%23333%22 width=%22200%22 height=%22200%22/></svg>'}"
+            <img src="${bggImg(g.thumbnail_url) || IMG_PLACEHOLDER}"
+                 onerror="this.onerror=null;this.src=IMG_PLACEHOLDER"
                  alt="${g.name}" class="rounded-lg w-full h-32 object-cover bg-base-300" loading="lazy" />
           </figure>
           <div class="card-body p-3 pt-2">

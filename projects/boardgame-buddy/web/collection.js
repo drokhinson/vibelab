@@ -176,7 +176,7 @@ function listRowHTML(item, i) {
     <div class="card card-side bg-base-200 h-20 cursor-pointer hover:shadow-md transition-all animate-fadeUp"
          style="--i:${i}" onclick="openGameDetail('${g.id}')">
       <figure class="w-16 flex-shrink-0">
-        <img src="${g.thumbnail_url || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
+        <img src="${bggImg(g.thumbnail_url) || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
       </figure>
       <div class="card-body p-2 justify-center">
         <h3 class="font-semibold text-sm leading-tight line-clamp-1">${escapeHtml(g.name)}</h3>
@@ -220,7 +220,7 @@ function wishlistRowHTML(item, i) {
   return `
     <div class="card card-side bg-base-200 h-20 animate-fadeUp" style="--i:${i}">
       <figure class="w-16 flex-shrink-0 cursor-pointer" onclick="openGameDetail('${g.id}')">
-        <img src="${g.thumbnail_url || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
+        <img src="${bggImg(g.thumbnail_url) || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
       </figure>
       <div class="card-body p-2 justify-center cursor-pointer" onclick="openGameDetail('${g.id}')">
         <h3 class="font-semibold text-sm leading-tight line-clamp-2">${escapeHtml(g.name)}</h3>
