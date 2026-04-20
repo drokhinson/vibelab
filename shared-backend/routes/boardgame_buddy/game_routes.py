@@ -348,6 +348,8 @@ async def proxy_bgg_image(
     url: str = Query(..., description="BGG CDN image URL to proxy"),
 ) -> Response:
     """Fetch a BGG image server-side and stream it back to the browser."""
+    if url.startswith("//"):
+        url = "https:" + url
     if not url.startswith("https://cf.geekdo-images.com/"):
         raise HTTPException(status_code=400, detail="Only BGG CDN images are supported")
     try:
