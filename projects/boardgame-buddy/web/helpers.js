@@ -5,8 +5,8 @@ const PREFIX = "/api/v1/boardgame_buddy";
 
 function bggImg(url) {
   if (!url) return null;
-  if (url.startsWith("//")) url = "https:" + url;
-  return `${API}${PREFIX}/games/image-proxy?url=${encodeURIComponent(url)}`;
+  if (url.startsWith("//")) return "https:" + url;
+  return url;
 }
 
 // ── API ──────────────────────────────────────────────────────────────────────
