@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 034
+-- Last updated: migration 035
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
