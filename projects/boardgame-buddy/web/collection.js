@@ -9,16 +9,75 @@ const SHELVES = [
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
+const _shelfObservers = { owned: null, played: null };
+
+function resetShelfState() {
+  for (const key of ["owned", "played"]) {
+    shelfItems[key] = [];
+    shelfPage[key] = 1;
+    shelfTotal[key] = 0;
+    shelfHasMore[key] = true;
+    shelfLoading[key] = false;
+    if (_shelfObservers[key]) {
+      _shelfObservers[key].disconnect();
+      _shelfObservers[key] = null;
+    }
+  }
+}
+
 async function loadCloset() {
+  resetShelfState();
+  applyClosetControls();
+
+  if (closetTab === "wishlist") {
+    await loadWishlist();
+    renderCloset();
+    return;
+  }
+
   const shelvesEl = document.getElementById("closet-shelves");
   shelvesEl.innerHTML = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
 
   try {
-    collectionItems = await apiFetch("/collection");
-    applyClosetControls();
+    await Promise.all([loadShelfPage("owned", 1), loadShelfPage("played", 1)]);
     renderCloset();
   } catch (err) {
     shelvesEl.innerHTML = `<div class="text-error text-center py-8">${err.message}</div>`;
+  }
+}
+
+async function loadShelfPage(shelf, page) {
+  if (shelfLoading[shelf]) return;
+  if (page > 1 && !shelfHasMore[shelf]) return;
+
+  shelfLoading[shelf] = true;
+  try {
+    const params = new URLSearchParams({
+      status: shelf,
+      page,
+      per_page: SHELF_PER_PAGE,
+      sort: closetSort,
+    });
+    const data = await apiFetch(`/collection/shelf?${params}`);
+    if (page === 1) {
+      shelfItems[shelf] = data.items;
+    } else {
+      shelfItems[shelf] = shelfItems[shelf].concat(data.items);
+    }
+    shelfPage[shelf] = page;
+    shelfTotal[shelf] = data.total;
+    shelfHasMore[shelf] = shelfItems[shelf].length < data.total;
+  } finally {
+    shelfLoading[shelf] = false;
+  }
+}
+
+async function loadWishlist() {
+  try {
+    wishlistItems = await apiFetch("/collection?status=wishlist");
+  } catch (err) {
+    wishlistItems = [];
+    showToast(err.message, "error");
   }
 }
 
@@ -41,9 +100,14 @@ function applyClosetControls() {
   if (controls) controls.classList.toggle("hidden", closetTab === "wishlist");
 }
 
-function switchClosetTab(tab) {
+async function switchClosetTab(tab) {
   closetTab = tab;
   applyClosetControls();
+  if (tab === "wishlist") {
+    const el = document.getElementById("closet-wishlist");
+    if (el) el.innerHTML = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
+    await loadWishlist();
+  }
   renderCloset();
 }
 
@@ -73,7 +137,7 @@ function renderCloset() {
   lucide.createIcons();
 }
 
-// ── Sort + filter ────────────────────────────────────────────────────────────
+// ── Sort + filter (client-side, applied to loaded pages only) ───────────────
 
 function filterItems(items) {
   const q = closetSearch.trim().toLowerCase();
@@ -81,49 +145,85 @@ function filterItems(items) {
   return items.filter(it => (it.game?.name || "").toLowerCase().includes(q));
 }
 
-function sortItems(items) {
-  const copy = items.slice();
-  if (closetSort === "alphabetical") {
-    copy.sort((a, b) => (a.game?.name || "").localeCompare(b.game?.name || ""));
-  } else {
-    copy.sort((a, b) => {
-      const ad = a.last_played_at || a.added_at || "";
-      const bd = b.last_played_at || b.added_at || "";
-      return bd.localeCompare(ad);
-    });
-  }
-  return copy;
-}
-
 // ── Shelf view (owned + played only) ─────────────────────────────────────────
 
 function renderShelves() {
   const container = document.getElementById("closet-shelves");
-  const collectionOnly = collectionItems.filter(it => it.status !== "wishlist");
-  const visible = filterItems(sortItems(collectionOnly));
+  const hasAny = shelfTotal.owned > 0 || shelfTotal.played > 0;
 
-  if (!collectionOnly.length) {
+  if (!hasAny) {
     container.innerHTML = emptyCollectionHTML();
+    lucide.createIcons();
     return;
   }
 
-  container.innerHTML = SHELVES.map(shelf => {
-    const books = visible.filter(it => it.status === shelf.key);
-    return `
-      <section class="shelf mb-5">
-        <div class="shelf__label">
-          <i data-lucide="${shelf.icon}" class="w-4 h-4"></i>
-          <span>${shelf.label}</span>
-          <span class="shelf__count">${books.length}</span>
-        </div>
-        <div class="shelf__row">
-          ${books.length
-            ? books.map((it, i) => bookSpineHTML(it, i)).join("")
-            : `<div class="shelf__empty">No ${shelf.label.toLowerCase()} games yet.</div>`}
-          <div class="shelf__base"></div>
-        </div>
-      </section>`;
-  }).join("");
+  container.innerHTML = SHELVES.map(shelf => `
+    <section class="shelf mb-5" data-shelf="${shelf.key}">
+      <div class="shelf__label">
+        <i data-lucide="${shelf.icon}" class="w-4 h-4"></i>
+        <span>${shelf.label}</span>
+        <span class="shelf__count" data-shelf-count="${shelf.key}">0</span>
+      </div>
+      <div class="shelf__row" data-shelf-row="${shelf.key}">
+        <div class="shelf__base"></div>
+      </div>
+    </section>
+  `).join("");
+
+  for (const shelf of SHELVES) renderShelfRow(shelf.key);
+  lucide.createIcons();
+}
+
+function renderShelfRow(shelf) {
+  const row = document.querySelector(`[data-shelf-row="${shelf}"]`);
+  const countEl = document.querySelector(`[data-shelf-count="${shelf}"]`);
+  if (!row) return;
+
+  const shelfDef = SHELVES.find(s => s.key === shelf);
+  const visible = filterItems(shelfItems[shelf]);
+
+  const total = shelfTotal[shelf];
+  const loaded = shelfItems[shelf].length;
+  if (countEl) {
+    countEl.textContent = loaded < total ? `${loaded} / ${total}` : String(total);
+  }
+
+  let content;
+  if (!visible.length) {
+    if (shelfItems[shelf].length && closetSearch) {
+      content = `<div class="shelf__empty">No ${shelfDef.label.toLowerCase()} games match "${escapeHtml(closetSearch)}".</div>`;
+    } else if (!loaded) {
+      content = `<div class="shelf__empty">No ${shelfDef.label.toLowerCase()} games yet.</div>`;
+    } else {
+      content = "";
+    }
+  } else {
+    content = visible.map((it, i) => bookSpineHTML(it, i)).join("");
+  }
+
+  row.innerHTML = `
+    ${content}
+    ${shelfHasMore[shelf] ? '<div class="shelf__sentinel" data-sentinel="' + shelf + '"></div>' : ""}
+    <div class="shelf__base"></div>
+  `;
+
+  if (_shelfObservers[shelf]) {
+    _shelfObservers[shelf].disconnect();
+    _shelfObservers[shelf] = null;
+  }
+  if (shelfHasMore[shelf]) {
+    const sentinel = row.querySelector(`[data-sentinel="${shelf}"]`);
+    if (sentinel) {
+      _shelfObservers[shelf] = new IntersectionObserver(async (entries) => {
+        if (!entries[0].isIntersecting) return;
+        if (shelfLoading[shelf] || !shelfHasMore[shelf]) return;
+        await loadShelfPage(shelf, shelfPage[shelf] + 1);
+        renderShelfRow(shelf);
+        lucide.createIcons();
+      }, { root: row, rootMargin: "0px 300px 0px 0px" });
+      _shelfObservers[shelf].observe(sentinel);
+    }
+  }
 }
 
 function bookSpineHTML(item, i) {
@@ -145,28 +245,42 @@ function bookSpineHTML(item, i) {
 
 function renderList() {
   const container = document.getElementById("closet-list");
-  const collectionOnly = collectionItems.filter(it => it.status !== "wishlist");
-  const visible = filterItems(sortItems(collectionOnly));
+  const hasAny = shelfTotal.owned > 0 || shelfTotal.played > 0;
 
-  if (!collectionOnly.length) {
+  if (!hasAny) {
     container.innerHTML = emptyCollectionHTML();
     return;
   }
 
   container.innerHTML = SHELVES.map(shelf => {
-    const rows = visible.filter(it => it.status === shelf.key);
-    if (!rows.length) return "";
+    const rows = filterItems(shelfItems[shelf.key]);
+    const total = shelfTotal[shelf.key];
+    const loaded = shelfItems[shelf.key].length;
+    const countLabel = loaded < total ? `${loaded} / ${total}` : String(total);
+    if (!total) return "";
     return `
-      <section class="mb-5">
+      <section class="mb-5" data-shelf-list="${shelf.key}">
         <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60 mb-2 flex items-center gap-2">
           <i data-lucide="${shelf.icon}" class="w-4 h-4"></i> ${shelf.label}
-          <span class="badge badge-sm badge-ghost">${rows.length}</span>
+          <span class="badge badge-sm badge-ghost">${countLabel}</span>
         </h3>
         <div class="grid grid-cols-1 gap-2">
-          ${rows.map((it, i) => listRowHTML(it, i)).join("")}
+          ${rows.length
+            ? rows.map((it, i) => listRowHTML(it, i)).join("")
+            : `<div class="text-base-content/50 text-sm italic">No matches in loaded pages.</div>`}
         </div>
+        ${shelfHasMore[shelf.key] ? `
+          <button class="btn btn-sm btn-ghost w-full mt-2" onclick="loadMoreList('${shelf.key}')">
+            <i data-lucide="chevron-down" class="w-4 h-4"></i> Load more
+          </button>` : ""}
       </section>`;
   }).join("") || `<div class="text-center py-8 text-base-content/50">No games match "${escapeHtml(closetSearch)}"</div>`;
+}
+
+async function loadMoreList(shelf) {
+  await loadShelfPage(shelf, shelfPage[shelf] + 1);
+  renderList();
+  lucide.createIcons();
 }
 
 function listRowHTML(item, i) {
@@ -192,7 +306,7 @@ function listRowHTML(item, i) {
 
 function renderWishlist() {
   const container = document.getElementById("closet-wishlist");
-  const wishlist = collectionItems.filter(it => it.status === "wishlist");
+  const wishlist = wishlistItems;
 
   if (!wishlist.length) {
     container.innerHTML = `
@@ -241,10 +355,8 @@ async function moveWishlistToOwned(gameId) {
       body: { status: "owned" },
     });
     showToast("Added to collection!", "success");
-    collectionItems = await apiFetch("/collection");
     closetTab = "collection";
-    applyClosetControls();
-    renderCloset();
+    await loadCloset();
   } catch (err) {
     showToast(err.message, "error");
   }
