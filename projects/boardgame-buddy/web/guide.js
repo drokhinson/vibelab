@@ -112,7 +112,7 @@ function renderGuide() {
         const label = c.chunk_type_label || c.chunk_type;
         return `
           <div class="collapse collapse-arrow scroll-chunk">
-            <input type="checkbox" checked />
+            <input type="checkbox" />
             <div class="collapse-title font-medium text-sm flex items-center justify-between gap-2">
               <span class="flex items-center gap-1">
                 <i data-lucide="${icon}" class="w-4 h-4"></i>
