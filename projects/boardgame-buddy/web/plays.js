@@ -196,11 +196,13 @@ function renderPlays() {
           <div class="card-body p-3">
             <div class="flex items-start gap-3">
               ${p.game_thumbnail
-                ? `<img src="${p.game_thumbnail}" class="w-12 h-12 rounded object-cover flex-shrink-0" />`
-                : '<div class="w-12 h-12 rounded bg-base-300 flex items-center justify-center flex-shrink-0"><i data-lucide="dice-6" class="w-6 h-6 opacity-40"></i></div>'
+                ? `<img src="${p.game_thumbnail}" class="w-12 h-12 rounded object-cover flex-shrink-0 cursor-pointer" onclick="openGameDetail('${p.game_id}')" />`
+                : `<div class="w-12 h-12 rounded bg-base-300 flex items-center justify-center flex-shrink-0 cursor-pointer" onclick="openGameDetail('${p.game_id}')"><i data-lucide="dice-6" class="w-6 h-6 opacity-40"></i></div>`
               }
               <div class="flex-1 min-w-0">
-                <h3 class="font-semibold text-sm leading-tight">${p.game_name}</h3>
+                <h3 class="font-semibold text-sm leading-tight">
+                  <a class="link link-hover" onclick="openGameDetail('${p.game_id}')">${p.game_name}</a>
+                </h3>
                 <p class="text-xs text-base-content/50 mt-0.5">${formatDate(p.played_at)}</p>
                 ${p.players.length ? `
                   <div class="flex flex-wrap gap-1 mt-1.5">
