@@ -17,14 +17,19 @@ function initSupabase() {
         loadProfile();
       } else {
         currentUser = null;
-        showView("auth");
+        showAuthView();
       }
     });
   } catch (err) {
     console.error("Supabase init failed:", err);
     authConfigError = err.message || "Supabase auth could not be initialized.";
-    showView("auth");
+    showAuthView();
   }
+}
+
+function showAuthView() {
+  renderAuth();
+  showView("auth");
 }
 
 async function loadProfile() {
@@ -43,7 +48,7 @@ async function loadProfile() {
         console.error("GET /profile failed:", getErr);
         showToast(`Login failed: ${getErr.message || "unknown error"}`, "error");
         session = null;
-        showView("auth");
+        showAuthView();
         return;
       }
       try {
@@ -58,7 +63,7 @@ async function loadProfile() {
         console.error("POST /profile failed:", e);
         showToast(`Login failed: ${e.message || "unknown error"}`, "error");
         session = null;
-        showView("auth");
+        showAuthView();
         return;
       }
     }
@@ -198,6 +203,9 @@ async function handleAuth(e) {
       const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) throw error;
       trackEvent("login");
+      // Swap to the splash so the login form doesn't flash while /profile loads.
+      // onAuthStateChange will fire SIGNED_IN → loadProfile() → showView("closet").
+      showView("splash");
     }
   } catch (err) {
     errorEl.textContent = err.message || "Authentication failed";
@@ -214,6 +222,5 @@ async function handleLogout() {
   }
   session = null;
   currentUser = null;
-  showView("auth");
-  renderAuth();
+  showAuthView();
 }

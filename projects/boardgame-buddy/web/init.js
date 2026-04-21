@@ -1,11 +1,12 @@
 // init.js — DOMContentLoaded: wire events, check auth, initial render
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Initialize Supabase Auth
-  initSupabase();
+  // Render any lucide icons already in the static DOM (splash icon, etc.)
+  if (window.lucide) window.lucide.createIcons();
 
-  // Render initial auth view
-  renderAuth();
+  // Initialize Supabase Auth. The splash view is shown by default; auth or
+  // closet will be swapped in once onAuthStateChange fires INITIAL_SESSION.
+  initSupabase();
 
   // Game search form (Browse view, reached via "+ Add Game")
   document.getElementById("game-search-form").addEventListener("submit", handleGameSearch);

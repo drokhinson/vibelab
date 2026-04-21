@@ -36,8 +36,14 @@
       </div>
     </header>
 
+    <!-- Splash / boot view — visible while we wait for the Supabase session to resolve -->
+    <main data-view="splash" id="splash-view" class="flex-1 px-4 py-4 flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div style="color: var(--accent)"><i data-lucide="dice-6" style="width:64px;height:64px;"></i></div>
+      <span class="loading loading-dots loading-md" style="color: var(--accent)"></span>
+    </main>
+
     <!-- Auth View -->
-    <main data-view="auth" id="auth-container" class="flex-1 px-4 py-4"></main>
+    <main data-view="auth" id="auth-container" class="hidden flex-1 px-4 py-4"></main>
 
     <!-- Browse Games View (reached via + Add Game on Closet) -->
     <main data-view="browse" class="hidden flex-1 px-4 py-4">
