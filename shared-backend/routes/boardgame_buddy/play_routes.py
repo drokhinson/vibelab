@@ -9,6 +9,7 @@ from .models import (
     BuddyLinkBody,
     BuddyResponse,
     MessageResponse,
+    PlayCountResponse,
     PlayCreate,
     PlayPlayerResponse,
     PlayResponse,
@@ -139,25 +140,6 @@ async def log_play(
             is_winner=p.is_winner,
         ))
 
-    # Auto-mark game as "played" in collection unless already owned
-    try:
-        col = (
-            sb.table("boardgamebuddy_collections")
-            .select("status")
-            .eq("user_id", user.user_id)
-            .eq("game_id", body.game_id)
-            .execute()
-        )
-        current_status = col.data[0]["status"] if col.data else None
-        if current_status != "owned":
-            sb.table("boardgamebuddy_collections").upsert({
-                "user_id": user.user_id,
-                "game_id": body.game_id,
-                "status": "played",
-            }, on_conflict="user_id,game_id").execute()
-    except Exception:
-        pass
-
     return PlayResponse(
         id=play["id"],
         game_id=play["game_id"],
@@ -190,6 +172,28 @@ async def delete_play(
     ).execute()
 
     return MessageResponse(message="Play deleted")
+
+
+@router.get(
+    "/games/{game_id}/play-count",
+    response_model=PlayCountResponse,
+    status_code=200,
+    summary="Count plays for a game",
+)
+async def get_play_count(
+    game_id: str = Path(..., description="Game UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayCountResponse:
+    """Return the number of plays the current user has logged for this game."""
+    sb = get_supabase()
+    result = (
+        sb.table("boardgamebuddy_plays")
+        .select("id", count="exact")
+        .eq("user_id", user.user_id)
+        .eq("game_id", game_id)
+        .execute()
+    )
+    return PlayCountResponse(count=result.count or 0)
 
 
 @router.get(

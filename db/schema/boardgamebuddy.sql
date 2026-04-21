@@ -1,7 +1,12 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 036
+-- Last updated: migration 038
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
+--
+-- Note: status='played' on boardgamebuddy_collections is no longer written by
+-- the app (migration 038). The CHECK still allows it for backward compat, but
+-- the Played shelf in the closet is derived server-side from
+-- boardgamebuddy_plays.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (

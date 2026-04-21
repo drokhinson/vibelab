@@ -338,33 +338,47 @@ async function renderCollectionButtons(gameId) {
 
   try {
     const items = await apiFetch("/collection");
-    const existing = items.find(i => i.game_id === gameId);
+    // Derived "played" rows are not user-selected collection entries — they
+    // only exist so the Played shelf in the closet populates automatically.
+    const existing = items.find(
+      i => i.game_id === gameId && i.status !== "played"
+    );
+    const current = existing?.status || null;
 
-    if (existing) {
-      const statuses = ["owned", "played", "wishlist"];
-      container.innerHTML = `
-        <div class="flex gap-2 flex-wrap">
-          ${statuses.map(s => `
-            <button class="btn btn-sm ${existing.status === s ? 'btn-primary' : 'btn-outline'}"
-                    onclick="updateCollectionStatus('${gameId}', '${s}')">
-              <i data-lucide="${s === 'owned' ? 'package' : s === 'played' ? 'target' : 'star'}" class="w-4 h-4"></i>
-              ${s.charAt(0).toUpperCase() + s.slice(1)}
-            </button>
-          `).join("")}
-          <button class="btn btn-sm btn-ghost text-error" onclick="removeFromCollection('${gameId}')">
-            <i data-lucide="trash-2" class="w-4 h-4"></i>
-          </button>
-        </div>`;
-    } else {
-      container.innerHTML = `
-        <div class="flex gap-2 flex-wrap">
-          <button class="btn btn-sm btn-primary" onclick="addToCollection('${gameId}', 'owned')"><i data-lucide="package" class="w-4 h-4"></i> Own It</button>
-          <button class="btn btn-sm btn-outline" onclick="addToCollection('${gameId}', 'played')"><i data-lucide="target" class="w-4 h-4"></i> Played</button>
-          <button class="btn btn-sm btn-outline" onclick="addToCollection('${gameId}', 'wishlist')"><i data-lucide="star" class="w-4 h-4"></i> Wishlist</button>
-        </div>`;
-    }
+    const options = [
+      { key: "owned",    label: "Owned",    icon: "package" },
+      { key: "wishlist", label: "Wishlist", icon: "star" },
+    ];
+
+    container.innerHTML = `
+      <div class="collection-toggle join w-full">
+        ${options.map(opt => {
+          const active = current === opt.key;
+          return `
+            <button
+              class="btn join-item flex-1 ${active ? 'btn-primary collection-toggle__active' : 'btn-outline'}"
+              aria-pressed="${active}"
+              style="${active ? 'background: var(--game-accent); border-color: var(--game-accent); color: #fff;' : ''}"
+              onclick="toggleCollectionStatus('${gameId}', '${opt.key}', ${active ? 'true' : 'false'})">
+              <i data-lucide="${opt.icon}" class="w-4 h-4"></i>
+              <span>${opt.label}</span>
+              ${active ? '<i data-lucide="x" class="w-3 h-3 opacity-70 ml-1"></i>' : ''}
+            </button>`;
+        }).join("")}
+      </div>
+      ${current ? '<p class="text-xs text-base-content/50 mt-1 text-center">Tap the active button to remove</p>' : ''}
+    `;
     lucide.createIcons();
   } catch {
     container.innerHTML = '<p class="text-sm text-base-content/50">Log in to add to collection</p>';
   }
+}
+
+async function toggleCollectionStatus(gameId, status, isActive) {
+  if (isActive) {
+    await removeFromCollection(gameId);
+    return;
+  }
+  // Use POST (upsert) so it works whether or not there's an existing row.
+  await addToCollection(gameId, status);
 }

@@ -61,6 +61,7 @@ async def get_collection(
             last_played_by_game[gid] = play["played_at"]
 
     items: list[CollectionItem] = []
+    collection_game_ids: set[str] = set()
     for row in result.data or []:
         game_data = row.get("boardgamebuddy_games", {})
         if game_data:
@@ -72,6 +73,34 @@ async def get_collection(
                 last_played_at=last_played_by_game.get(row["game_id"]),
                 game=GameSummary(**game_data),
             ))
+            collection_game_ids.add(row["game_id"])
+
+    # Derive a synthetic "played" row for every game the user has logged a play
+    # for that isn't already in their collection. Status "played" is no longer
+    # a user-selectable value — it's computed from play history so the Played
+    # shelf in the closet stays populated.
+    if status is None or status == CollectionStatus.PLAYED:
+        missing_ids = [gid for gid in last_played_by_game if gid not in collection_game_ids]
+        if missing_ids:
+            games = (
+                sb.table("boardgamebuddy_games")
+                .select(
+                    "id, bgg_id, name, year_published, min_players, max_players, "
+                    "playing_time, thumbnail_url, bgg_rank, bgg_rating, theme_color"
+                )
+                .in_("id", missing_ids)
+                .execute()
+            )
+            for g in games.data or []:
+                last_played = last_played_by_game[g["id"]]
+                items.append(CollectionItem(
+                    id=f"derived-{g['id']}",
+                    game_id=g["id"],
+                    status=CollectionStatus.PLAYED.value,
+                    added_at=f"{last_played}T00:00:00+00:00",
+                    last_played_at=last_played,
+                    game=GameSummary(**g),
+                ))
 
     return items
 
