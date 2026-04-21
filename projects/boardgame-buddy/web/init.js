@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
     sortSel.addEventListener("change", (e) => {
       closetSort = e.target.value;
       localStorage.setItem("bgb_closet_sort", closetSort);
-      renderCloset();
+      loadCloset();
     });
   }
 

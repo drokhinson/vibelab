@@ -341,6 +341,15 @@ body {
   font-style: italic;
 }
 
+/* Infinite-scroll sentinel — invisible, just a target for IntersectionObserver. */
+.shelf__sentinel {
+  flex-shrink: 0;
+  width: 1px;
+  height: 100%;
+  margin-bottom: 10px;
+  pointer-events: none;
+}
+
 /* Book spine — stands on the shelf base */
 .book-spine {
   position: relative;

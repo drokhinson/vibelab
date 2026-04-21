@@ -103,6 +103,13 @@ class CollectionItem(BaseModel):
     game: GameSummary
 
 
+class CollectionPageResponse(BaseModel):
+    items: list[CollectionItem]
+    total: int
+    page: int
+    per_page: int
+
+
 # ── Plays ─────────────────────────────────────────────────────────────────────
 
 class PlayerEntry(BaseModel):

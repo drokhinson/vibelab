@@ -9,6 +9,11 @@ class CollectionStatus(StrEnum):
     WISHLIST = "wishlist"
 
 
+class CollectionSort(StrEnum):
+    ALPHABETICAL = "alphabetical"
+    LAST_PLAYED = "last_played"
+
+
 # Default theme colors by primary category (fallback when game has no theme_color)
 CATEGORY_COLORS: dict[str, str] = {
     "Strategy": "#8B6914",
