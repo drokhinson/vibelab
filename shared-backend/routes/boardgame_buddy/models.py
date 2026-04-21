@@ -134,6 +134,10 @@ class PlayResponse(BaseModel):
     created_at: datetime
 
 
+class PlayCountResponse(BaseModel):
+    count: int
+
+
 # ── Buddies ───────────────────────────────────────────────────────────────────
 
 class BuddyResponse(BaseModel):

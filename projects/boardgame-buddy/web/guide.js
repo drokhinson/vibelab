@@ -10,6 +10,22 @@
 
 function renderMarkdown(text) {
   if (!text) return "";
+
+  // Extract GitHub-style pipe tables before line-level replacements clobber
+  // newlines. Header row, --- separator row, then one or more body rows.
+  text = text.replace(
+    /^\|(.+)\|[ \t]*\n\|([ :\-|]+)\|[ \t]*\n((?:\|.*\|[ \t]*\n?)+)/gm,
+    (_m, header, _sep, body) => {
+      const ths = header.split("|").map(s => s.trim()).filter(Boolean)
+        .map(c => `<th>${c}</th>`).join("");
+      const rows = body.trim().split("\n").map(line => {
+        const cells = line.replace(/^\||\|$/g, "").split("|").map(s => s.trim());
+        return `<tr>${cells.map(c => `<td>${c}</td>`).join("")}</tr>`;
+      }).join("");
+      return `<div class="overflow-x-auto my-2"><table class="table table-xs table-zebra guide-table"><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+  );
+
   return text
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
@@ -49,9 +65,34 @@ async function loadGuide(gameId) {
 
 function renderGuide() {
   const container = document.getElementById("guide-content");
+  const rulebookHost = document.getElementById("rulebook-section");
   const chunks = currentGuideChunks;
 
-  if (!chunks.length) {
+  const rulebookChunks = chunks.filter(c => c.chunk_type === "rulebook");
+  const otherChunks = chunks.filter(c => c.chunk_type !== "rulebook");
+
+  // Rulebook gets its own section above Quick Reference.
+  if (rulebookHost) {
+    if (rulebookChunks.length) {
+      rulebookHost.className = "mb-4 space-y-2";
+      rulebookHost.innerHTML = rulebookChunks.map(c => `
+        <a href="${escapeAttr(c.content.trim())}" target="_blank" rel="noopener"
+           class="rulebook-card">
+          <i data-lucide="file-text" class="w-5 h-5"></i>
+          <div class="rulebook-card__text">
+            <div class="rulebook-card__title">${c.title || "Rulebook"}</div>
+            <div class="rulebook-card__sub">Open official rulebook</div>
+          </div>
+          <i data-lucide="external-link" class="w-4 h-4 opacity-60"></i>
+        </a>
+      `).join("");
+    } else {
+      rulebookHost.className = "";
+      rulebookHost.innerHTML = "";
+    }
+  }
+
+  if (!otherChunks.length) {
     container.innerHTML = `
       <div class="text-center py-4 text-base-content/50">
         <p class="text-sm">No guide chunks yet.</p>
@@ -65,29 +106,22 @@ function renderGuide() {
 
   container.innerHTML = `
     <div class="space-y-3">
-      ${chunks.map(c => {
-        const isRulebook = c.chunk_type === "rulebook";
+      ${otherChunks.map(c => {
         const isMine = myId && c.created_by === myId;
         const icon = c.chunk_type_icon || "sticky-note";
         const label = c.chunk_type_label || c.chunk_type;
-        const body = isRulebook
-          ? `<a href="${escapeAttr(c.content.trim())}" target="_blank" rel="noopener"
-                class="btn btn-outline btn-sm w-full mt-1">
-               <i data-lucide="file-text" class="w-4 h-4"></i> Open rulebook
-             </a>`
-          : `<div class="collapse-content text-sm leading-relaxed guide-text">${renderMarkdown(c.content)}</div>`;
         return `
-          <div class="collapse collapse-arrow bg-base-200 border border-base-300">
+          <div class="collapse collapse-arrow scroll-chunk">
             <input type="checkbox" checked />
             <div class="collapse-title font-medium text-sm flex items-center justify-between gap-2">
               <span class="flex items-center gap-1">
-                <i data-lucide="${icon}" class="w-4 h-4" style="color: var(--game-accent)"></i>
-                <span class="badge badge-sm badge-ghost">${label}</span>
+                <i data-lucide="${icon}" class="w-4 h-4"></i>
+                <span class="badge badge-sm">${label}</span>
                 <span>${c.title}</span>
               </span>
-              ${c.created_by_name ? `<span class="text-xs text-base-content/50">by ${c.created_by_name}</span>` : ""}
+              ${c.created_by_name ? `<span class="text-xs opacity-60">by ${c.created_by_name}</span>` : ""}
             </div>
-            ${body}
+            <div class="collapse-content text-sm leading-relaxed guide-text">${renderMarkdown(c.content)}</div>
             ${isMine ? `
               <div class="px-4 pb-3 flex gap-2">
                 <button class="btn btn-xs btn-ghost" onclick="event.stopPropagation(); openChunkEditor('${c.id}')">

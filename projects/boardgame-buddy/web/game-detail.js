@@ -11,10 +11,26 @@ async function openGameDetail(gameId) {
     renderGameDetail();
     loadGuide(gameId);
     renderGuideToolbar();
-    if (session) renderCollectionButtons(gameId);
+    if (session) {
+      renderCollectionButtons(gameId);
+      loadPlayCount(gameId);
+    }
   } catch (err) {
     container.innerHTML = `<div class="text-error text-center py-8">${err.message}</div>`;
   }
+}
+
+async function loadPlayCount(gameId) {
+  try {
+    const { count } = await apiFetch(`/games/${gameId}/play-count`);
+    const slot = document.getElementById("play-count-badge");
+    if (!slot || !count) return;
+    slot.innerHTML = `
+      <div class="badge" style="border-color: var(--game-accent); color: var(--game-accent);">
+        <i data-lucide="dice-5" class="w-3 h-3 mr-1"></i>Played ${count}×
+      </div>`;
+    lucide.createIcons();
+  } catch { /* ignore — badge just stays empty */ }
 }
 
 function applyGameTheme(game) {
@@ -69,6 +85,7 @@ function renderGameDetail() {
         ${g.bgg_rating ? `<div class="badge badge-ghost"><i data-lucide="star" class="w-3 h-3 mr-0.5"></i>${formatRating(g.bgg_rating)}</div>` : ""}
         ${g.min_players ? `<div class="badge badge-ghost"><i data-lucide="users" class="w-3 h-3 mr-1"></i>${playerRange(g.min_players, g.max_players)}</div>` : ""}
         ${g.playing_time ? `<div class="badge badge-ghost"><i data-lucide="clock" class="w-3 h-3 mr-1"></i>${formatTime(g.playing_time)}</div>` : ""}
+        <span id="play-count-badge"></span>
       </div>
 
       ${g.categories?.length ? `
@@ -82,6 +99,9 @@ function renderGameDetail() {
       ${session ? '<span class="loading loading-spinner loading-xs"></span>' : '<p class="text-sm text-base-content/50">Log in to add to collection</p>'}
     </div>
 
+    <!-- Rulebook (rendered by guide.js if a rulebook chunk exists) -->
+    <div id="rulebook-section"></div>
+
     <!-- Quick Reference Guide -->
     <div id="guide-section" class="mb-4">
       <div class="flex items-center justify-between mb-2">
@@ -91,7 +111,7 @@ function renderGameDetail() {
         </h2>
         <div id="guide-toolbar"></div>
       </div>
-      <div id="guide-content">
+      <div id="guide-content" class="scroll-panel">
         <span class="loading loading-spinner loading-sm"></span>
       </div>
     </div>
@@ -106,11 +126,10 @@ function renderGameDetail() {
         </div>
       </div>` : ""}
 
-    <!-- Log play shortcut -->
     ${session ? `
-      <button class="btn btn-block mt-4" style="background: var(--game-accent); color: white; border: none;"
+      <button class="fab-log-play" aria-label="Log a play"
               onclick="startLogPlay('${g.id}', '${g.name.replace(/'/g, "\\'")}')">
-        <i data-lucide="plus-circle" class="w-5 h-5"></i> Log a Play
+        <i data-lucide="plus" class="w-6 h-6"></i>
       </button>` : ""}
   `;
   lucide.createIcons();
