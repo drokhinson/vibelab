@@ -1,6 +1,7 @@
 """Game catalog endpoints — browse, search, detail, BGG proxy."""
 
 import logging
+import os
 import xml.etree.ElementTree as ET
 from typing import Optional
 
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 BGG_API_BASE = "https://boardgamegeek.com/xmlapi2"
 BGG_USER_AGENT = "vibelab-boardgame-buddy/1.0"
+BGG_API_TOKEN = os.getenv("BGG_API_TOKEN")
 STORAGE_BUCKET = "boardgamebuddy-games"
 
 
@@ -62,10 +64,14 @@ async def _upload_to_storage(sb: Client, bgg_id: int, url: str | None, kind: str
 
 async def _fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
     """GET an XML document from the BGG API with consistent error mapping."""
+    headers = {"User-Agent": BGG_USER_AGENT}
+    if BGG_API_TOKEN:
+        headers["Authorization"] = f"Bearer {BGG_API_TOKEN}"
+
     try:
         async with httpx.AsyncClient(
             timeout=timeout,
-            headers={"User-Agent": BGG_USER_AGENT},
+            headers=headers,
         ) as client:
             resp = await client.get(f"{BGG_API_BASE}{path}", params=params)
     except httpx.HTTPError as exc:
@@ -75,6 +81,12 @@ async def _fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
             detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
         )
 
+    if resp.status_code == 401:
+        logger.error("BGG 401 — BGG_API_TOKEN missing or invalid")
+        raise HTTPException(
+            status_code=502,
+            detail="BoardGameGeek authentication failed. Ensure BGG_API_TOKEN is set in Railway.",
+        )
     if resp.status_code == 202:
         # BGG returns 202 when the result is being generated (cold cache).
         logger.info("BGG 202 (warming up) for %s %s", path, params)
