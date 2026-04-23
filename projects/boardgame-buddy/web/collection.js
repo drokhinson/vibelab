@@ -133,6 +133,9 @@ function renderCloset() {
     shelvesEl.classList.add("hidden");
     listEl.classList.remove("hidden");
     renderList();
+    lucide.createIcons();
+    attachAllListSwipes();
+    return;
   }
   lucide.createIcons();
 }
@@ -220,24 +223,29 @@ function renderShelfRow(shelf) {
         await loadShelfPage(shelf, shelfPage[shelf] + 1);
         renderShelfRow(shelf);
         lucide.createIcons();
+        attachShelfGestures(shelf);
       }, { root: row, rootMargin: "0px 300px 0px 0px" });
       _shelfObservers[shelf].observe(sentinel);
     }
   }
+  attachShelfGestures(shelf);
 }
 
 function bookSpineHTML(item, i) {
   const g = item.game;
   const color = g.theme_color || colorFromName(g.name);
   const thumb = g.thumbnail_url || "";
+  const plays = item.play_count || 0;
   return `
     <button type="button"
             class="book-spine animate-fadeUp"
             style="--book-color:${color}; --i:${i};"
-            onclick="onBookClick('${g.id}', this)"
+            data-game-id="${g.id}"
+            data-game-name="${escapeAttr(g.name)}"
             title="${escapeAttr(g.name)}">
       ${thumb ? `<div class="book-spine__art" style="background-image:url('${thumb}')"></div>` : '<div class="book-spine__art book-spine__art--blank"></div>'}
       <div class="book-spine__title">${escapeHtml(g.name)}</div>
+      ${plays > 0 ? `<div class="book-spine__plays">${plays}×</div>` : ""}
     </button>`;
 }
 
@@ -281,22 +289,33 @@ async function loadMoreList(shelf) {
   await loadShelfPage(shelf, shelfPage[shelf] + 1);
   renderList();
   lucide.createIcons();
+  attachAllListSwipes();
 }
 
 function listRowHTML(item, i) {
   const g = item.game;
   const lastPlayed = item.last_played_at ? `Last played ${formatDate(item.last_played_at)}` : "Never played";
+  const plays = item.play_count || 0;
   return `
-    <div class="card card-side bg-base-200 h-20 cursor-pointer hover:shadow-md transition-all animate-fadeUp"
-         style="--i:${i}" onclick="openGameDetail('${g.id}')">
-      <figure class="w-16 flex-shrink-0">
-        <img src="${bggImg(g.thumbnail_url) || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
-      </figure>
-      <div class="card-body p-2 justify-center">
-        <h3 class="font-semibold text-sm leading-tight line-clamp-1">${escapeHtml(g.name)}</h3>
-        <div class="flex items-center gap-2 text-xs text-base-content/60">
-          <span>${lastPlayed}</span>
-          ${g.bgg_rating ? `<span>★ ${formatRating(g.bgg_rating)}</span>` : ""}
+    <div class="swipe-wrap animate-fadeUp" style="--i:${i}"
+         data-game-id="${g.id}" data-game-name="${escapeAttr(g.name)}">
+      <div class="swipe-hint swipe-hint--log">
+        <i data-lucide="plus" class="w-5 h-5"></i><span>Log Play</span>
+      </div>
+      <div class="swipe-hint swipe-hint--guide">
+        <i data-lucide="book-open" class="w-5 h-5"></i><span>Guide</span>
+      </div>
+      <div class="card card-side bg-base-200 h-20 cursor-pointer hover:shadow-md transition-all">
+        <figure class="w-16 flex-shrink-0">
+          <img src="${bggImg(g.thumbnail_url) || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
+        </figure>
+        <div class="card-body p-2 justify-center">
+          <h3 class="font-semibold text-sm leading-tight line-clamp-1">${escapeHtml(g.name)}</h3>
+          <div class="flex items-center gap-2 text-xs text-base-content/60">
+            <span>${lastPlayed}</span>
+            ${plays > 0 ? `<span><i data-lucide="dice-5" class="w-3 h-3"></i> ${plays}×</span>` : ""}
+            ${g.bgg_rating ? `<span>★ ${formatRating(g.bgg_rating)}</span>` : ""}
+          </div>
         </div>
       </div>
     </div>`;
@@ -386,6 +405,169 @@ function onBookClick(gameId, el) {
   };
   el.addEventListener("animationend", done);
   setTimeout(() => { if (el.classList.contains("pulling")) done(); }, 600);
+}
+
+// ── Navigate to game detail scrolled to the guide section ────────────────────
+
+function openGameGuide(gameId) {
+  window._pendingScrollToGuide = true;
+  openGameDetail(gameId);
+}
+
+// ── Book spine gesture: pull up → log play, pull down → guide ────────────────
+
+function createBookGhost(el, rect) {
+  const g = el.cloneNode(true);
+  g.classList.remove("animate-fadeUp", "pulling");
+  Object.assign(g.style, {
+    position: "fixed",
+    top: rect.top + "px",
+    left: rect.left + "px",
+    width: rect.width + "px",
+    height: rect.height + "px",
+    zIndex: "100",
+    pointerEvents: "none",
+    margin: "0",
+    transition: "none",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
+  });
+  document.body.appendChild(g);
+  return g;
+}
+
+function attachBookGesture(el, gameId, gameName) {
+  let startX, startY, axis = null, ghost = null, origRect, active = false;
+
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    startX = e.clientX; startY = e.clientY;
+    axis = null; active = true; ghost = null;
+  });
+
+  el.addEventListener("pointermove", (e) => {
+    if (!active) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!axis) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx) + 4) {
+        axis = "v";
+        el.setPointerCapture(e.pointerId);
+        origRect = el.getBoundingClientRect();
+        ghost = createBookGhost(el, origRect);
+        el.style.opacity = "0.3";
+      } else if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) + 4) {
+        axis = "h"; active = false;
+      }
+      return;
+    }
+    if (axis === "v" && ghost) {
+      ghost.style.top = (origRect.top + dy) + "px";
+      ghost.style.boxShadow = dy < -40
+        ? "0 0 22px rgba(201,146,42,0.8), 0 4px 20px rgba(0,0,0,0.5)"
+        : dy > 40
+        ? "0 0 22px rgba(100,160,255,0.5), 0 4px 20px rgba(0,0,0,0.5)"
+        : "0 12px 30px rgba(0,0,0,0.6)";
+    }
+  });
+
+  el.addEventListener("pointerup", (e) => {
+    if (!active) return;
+    active = false;
+    const dy = e.clientY - startY;
+    if (axis === "h") { axis = null; return; }
+    el.style.opacity = "";
+    if (ghost) {
+      if (dy < -50) {
+        Object.assign(ghost.style, {
+          transition: "transform 300ms ease-in, opacity 280ms ease-in",
+          transform: "translateY(-180px) rotate(8deg)",
+          opacity: "0",
+        });
+        setTimeout(() => { ghost.remove(); startLogPlay(gameId, gameName); }, 280);
+      } else if (dy > 50) {
+        Object.assign(ghost.style, {
+          transition: "transform 340ms ease-in, opacity 280ms ease-in",
+          transform: "translateY(160px) rotate(-10deg)",
+          opacity: "0",
+        });
+        setTimeout(() => { ghost.remove(); openGameGuide(gameId); }, 300);
+      } else {
+        Object.assign(ghost.style, {
+          transition: "top 180ms ease, opacity 180ms",
+          top: origRect.top + "px",
+          opacity: "1",
+        });
+        setTimeout(() => ghost.remove(), 180);
+        if (!axis && Math.abs(dy) < 8) onBookClick(gameId, el);
+      }
+      ghost = null;
+    } else {
+      onBookClick(gameId, el);
+    }
+    axis = null;
+  });
+
+  el.addEventListener("pointercancel", () => {
+    active = false; axis = null;
+    el.style.opacity = "";
+    if (ghost) { ghost.remove(); ghost = null; }
+  });
+}
+
+function attachShelfGestures(shelfKey) {
+  const row = document.querySelector(`[data-shelf-row="${shelfKey}"]`);
+  if (!row) return;
+  row.querySelectorAll(".book-spine[data-game-id]").forEach(el => {
+    attachBookGesture(el, el.dataset.gameId, el.dataset.gameName);
+  });
+}
+
+// ── List card swipe: right → log play, left → guide ──────────────────────────
+
+function attachListSwipe(wrapEl) {
+  const card = wrapEl.querySelector(".card");
+  const gameId = wrapEl.dataset.gameId;
+  const gameName = wrapEl.dataset.gameName;
+  let startX = null, isDragging = false;
+
+  wrapEl.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    startX = e.clientX; isDragging = false;
+  });
+
+  wrapEl.addEventListener("pointermove", (e) => {
+    if (startX === null) return;
+    const dx = e.clientX - startX;
+    if (!isDragging && Math.abs(dx) > 8) {
+      isDragging = true;
+      wrapEl.setPointerCapture(e.pointerId);
+    }
+    if (isDragging) {
+      const clamped = Math.sign(dx) * Math.min(Math.abs(dx), 110);
+      card.style.cssText = `transform: translateX(${clamped}px); transition: none;`;
+    }
+  });
+
+  wrapEl.addEventListener("pointerup", (e) => {
+    if (startX === null) return;
+    const dx = e.clientX - startX;
+    startX = null;
+    if (!isDragging) { openGameDetail(gameId); return; }
+    isDragging = false;
+    card.style.cssText = "transform: translateX(0); transition: transform 200ms ease;";
+    if (dx > 70) setTimeout(() => startLogPlay(gameId, gameName), 150);
+    else if (dx < -70) setTimeout(() => openGameGuide(gameId), 150);
+  });
+
+  wrapEl.addEventListener("pointercancel", () => {
+    startX = null; isDragging = false;
+    if (card) card.style.cssText = "";
+  });
+}
+
+function attachAllListSwipes() {
+  const listEl = document.getElementById("closet-list");
+  if (!listEl) return;
+  listEl.querySelectorAll(".swipe-wrap[data-game-id]").forEach(attachListSwipe);
 }
 
 // ── Small utilities ──────────────────────────────────────────────────────────

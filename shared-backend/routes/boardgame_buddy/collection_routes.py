@@ -62,8 +62,10 @@ async def get_collection(
         .execute()
     )
     last_played_by_game: dict[str, str] = {}
+    play_counts: dict[str, int] = {}
     for play in plays_result.data or []:
         gid = play["game_id"]
+        play_counts[gid] = play_counts.get(gid, 0) + 1
         if gid not in last_played_by_game:
             last_played_by_game[gid] = play["played_at"]
 
@@ -78,6 +80,7 @@ async def get_collection(
                 status=row["status"],
                 added_at=row["added_at"],
                 last_played_at=last_played_by_game.get(row["game_id"]),
+                play_count=play_counts.get(row["game_id"], 0),
                 game=GameSummary(**game_data),
             ))
             if row["status"] == CollectionStatus.OWNED.value:
@@ -107,6 +110,7 @@ async def get_collection(
                     status=CollectionStatus.PLAYED.value,
                     added_at=f"{last_played}T00:00:00+00:00",
                     last_played_at=last_played,
+                    play_count=play_counts.get(g["id"], 0),
                     game=GameSummary(**g),
                 ))
 
@@ -140,8 +144,10 @@ async def get_collection_shelf(
             .execute()
         )
         last_played: dict[str, str] = {}
+        play_counts_shelf: dict[str, int] = {}
         for p in plays.data or []:
             gid = p["game_id"]
+            play_counts_shelf[gid] = play_counts_shelf.get(gid, 0) + 1
             if gid not in last_played:
                 last_played[gid] = p["played_at"]
 
@@ -192,6 +198,7 @@ async def get_collection_shelf(
                     status=CollectionStatus.PLAYED.value,
                     added_at=f"{lp}T00:00:00+00:00",
                     last_played_at=lp,
+                    play_count=play_counts_shelf.get(gid, 0),
                     game=GameSummary(**g),
                 ))
 
@@ -218,6 +225,7 @@ async def get_collection_shelf(
         page_game_ids = [row["game_id"] for row in result.data or []]
 
         last_played_by_game: dict[str, str] = {}
+        play_counts_alpha: dict[str, int] = {}
         if page_game_ids:
             plays = (
                 sb.table("boardgamebuddy_plays")
@@ -229,6 +237,7 @@ async def get_collection_shelf(
             )
             for p in plays.data or []:
                 gid = p["game_id"]
+                play_counts_alpha[gid] = play_counts_alpha.get(gid, 0) + 1
                 if gid not in last_played_by_game:
                     last_played_by_game[gid] = p["played_at"]
 
@@ -243,6 +252,7 @@ async def get_collection_shelf(
                 status=row["status"],
                 added_at=row["added_at"],
                 last_played_at=last_played_by_game.get(row["game_id"]),
+                play_count=play_counts_alpha.get(row["game_id"], 0),
                 game=GameSummary(**game_data),
             ))
         return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
@@ -269,8 +279,10 @@ async def get_collection_shelf(
         .execute()
     )
     last_played_by_game: dict[str, str] = {}
+    play_counts_lp: dict[str, int] = {}
     for p in plays.data or []:
         gid = p["game_id"]
+        play_counts_lp[gid] = play_counts_lp.get(gid, 0) + 1
         if gid not in last_played_by_game:
             last_played_by_game[gid] = p["played_at"]
 
@@ -306,6 +318,7 @@ async def get_collection_shelf(
             status=status.value,
             added_at=r["added_at"],
             last_played_at=last_played_by_game.get(r["game_id"]),
+            play_count=play_counts_lp.get(r["game_id"], 0),
             game=GameSummary(**g),
         ))
 

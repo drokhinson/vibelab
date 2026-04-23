@@ -15,6 +15,12 @@ async function openGameDetail(gameId) {
       renderCollectionButtons(gameId);
       loadPlayCount(gameId);
     }
+    if (window._pendingScrollToGuide) {
+      window._pendingScrollToGuide = false;
+      setTimeout(() => {
+        document.getElementById("guide-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 500);
+    }
   } catch (err) {
     container.innerHTML = `<div class="text-error text-center py-8">${err.message}</div>`;
   }

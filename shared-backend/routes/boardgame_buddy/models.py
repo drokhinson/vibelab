@@ -100,6 +100,7 @@ class CollectionItem(BaseModel):
     status: str
     added_at: datetime
     last_played_at: Optional[date] = None
+    play_count: int = 0
     game: GameSummary
 
 

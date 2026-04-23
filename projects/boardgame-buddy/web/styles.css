@@ -384,6 +384,11 @@ body {
   outline-offset: 2px;
 }
 
+/* Allow horizontal shelf scroll; JS handles vertical drag */
+.book-spine {
+  touch-action: pan-x;
+}
+
 .book-spine__art {
   width: 100%;
   height: 46px;
@@ -417,7 +422,7 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Pull-down animation */
+/* Pull-down animation (tap → detail) */
 @keyframes pullDown {
   0%   { transform: translateY(0) rotate(0);        opacity: 1; }
   30%  { transform: translateY(-6px) rotate(-4deg); opacity: 1; }
@@ -428,4 +433,59 @@ body {
   animation: pullDown 450ms ease-in forwards;
   pointer-events: none;
   z-index: 10;
+}
+
+/* Play count badge — inside book spine at bottom */
+.book-spine__plays {
+  position: absolute;
+  bottom: 3px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+}
+
+/* ── List view swipe gestures ────────────────────────────────────────────────── */
+.swipe-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  touch-action: pan-y; /* browser handles vertical scroll; JS handles horizontal swipe */
+}
+
+.swipe-hint {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.swipe-hint--log {
+  left: 0;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.swipe-hint--guide {
+  right: 0;
+  background: rgba(100, 160, 255, 0.15);
+  color: #78b4f0;
+}
+
+/* Card inside swipe wrapper — no hover lift (swipe handles interaction) */
+.swipe-wrap .card:hover {
+  transform: none;
 }
