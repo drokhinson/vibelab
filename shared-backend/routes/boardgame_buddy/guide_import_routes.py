@@ -20,7 +20,7 @@ from .models import (
 )
 
 
-async def _apply_bundle(bundle: GuideBundle, force: bool) -> GuideImportResponse:
+async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[str] = None) -> GuideImportResponse:
     """Insert a validated GuideBundle's chunks into the DB. Shared by admin direct + approval paths."""
     sb = get_supabase()
 
@@ -81,7 +81,7 @@ async def _apply_bundle(bundle: GuideBundle, force: bool) -> GuideImportResponse
             "title": chunk.title,
             "content": chunk.content,
             "layout": chunk.layout,
-            "created_by": None,
+            "created_by": created_by,
         })
         existing_keys.add(key)
 
@@ -149,7 +149,7 @@ async def submit_guide(
     is_admin = bool(profile.data[0].get("is_admin"))
 
     if is_admin:
-        result = await _apply_bundle(bundle, force)
+        result = await _apply_bundle(bundle, force, created_by=su_user.sub)
         return PendingGuideSubmitResponse(
             status="imported",
             message=f"Imported {result.chunks_inserted} chunk(s).",
@@ -281,7 +281,7 @@ async def approve_pending_guide(
 
     bundle_data = body.override_bundle.model_dump(mode="json") if body.override_bundle else row["bundle"]
     bundle = GuideBundle(**bundle_data)
-    import_result = await _apply_bundle(bundle, body.force)
+    import_result = await _apply_bundle(bundle, body.force, created_by=row["uploader_id"])
 
     sb.table("boardgamebuddy_pending_guides").update({
         "status": "approved",
