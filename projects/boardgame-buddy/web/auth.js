@@ -76,9 +76,13 @@ async function loadProfile() {
 }
 
 function updateProfileUI() {
-  const el = document.getElementById("profile-name");
+  const el = document.getElementById("profile-avatar");
   if (el && currentUser) {
-    el.textContent = currentUser.display_name;
+    const parts = (currentUser.display_name || "").trim().split(/\s+/);
+    const initials = parts.length >= 2
+      ? parts[0][0] + parts[parts.length - 1][0]
+      : (parts[0] || "?").slice(0, 2);
+    el.textContent = initials;
   }
 }
 
