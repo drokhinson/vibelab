@@ -1,7 +1,7 @@
 // state.js — All global state variables
-let currentView = "auth";       // auth | closet | browse | game-detail | log-play | history
+let currentView = "auth";       // auth | browse | closet | game-detail | log-play | history | import | pending-guides | profile
 let session = null;             // Supabase auth session
-let currentUser = null;         // { user_id, display_name }
+let currentUser = null;         // { user_id, display_name, is_admin }
 let supabaseClient = null;      // Supabase JS client
 
 // Games
@@ -25,7 +25,7 @@ let shelfHasMore = { owned: true, played: true };
 let shelfLoading = { owned: false, played: false };
 const SHELF_PER_PAGE = 20;
 let wishlistItems = [];
-let closetView = localStorage.getItem("bgb_closet_view") || "shelves";  // shelves | list
+let closetView = localStorage.getItem("bgb_closet_view") || "list";  // list | shelves  (default: list)
 let closetSort = localStorage.getItem("bgb_closet_sort") || "alphabetical"; // alphabetical | last_played
 let closetSearch = "";
 let closetTab = "collection"; // collection | wishlist

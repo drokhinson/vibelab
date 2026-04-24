@@ -29,9 +29,9 @@
     <header class="hidden sticky top-0 z-30 bg-base-100/95 backdrop-blur px-4 py-3 flex items-center justify-between border-b border-base-300" data-auth-only>
       <h1 class="text-lg font-bold font-display flex items-center gap-2"><i data-lucide="dice-6" class="w-5 h-5"></i> BoardgameBuddy</h1>
       <div class="flex items-center gap-2">
-        <span id="profile-name" class="text-sm text-base-content/60"></span>
-        <button id="admin-entry-btn" class="hidden btn btn-ghost btn-sm btn-circle" onclick="showView('admin-guides'); renderAdminGuides();" title="Admin">
-          <i data-lucide="shield" class="w-4 h-4"></i>
+        <button id="profile-chip" class="btn btn-ghost btn-sm gap-1" onclick="showView('profile'); renderProfile();" title="Account">
+          <i data-lucide="user" class="w-4 h-4"></i>
+          <span id="profile-name" class="text-sm"></span>
         </button>
         <button class="btn btn-ghost btn-sm btn-circle" onclick="handleLogout()" title="Log out">
           <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -48,13 +48,15 @@
     <!-- Auth View -->
     <main data-view="auth" id="auth-container" class="hidden flex-1 px-4 py-4"></main>
 
-    <!-- Browse Games View (reached via + Add Game on Closet) -->
+    <!-- Browse Games View — primary tab -->
     <main data-view="browse" class="hidden flex-1 px-4 py-4">
-      <div class="flex items-center gap-2 mb-3">
-        <button class="btn btn-ghost btn-sm btn-square" onclick="showView('closet')" title="Back to closet">
-          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      <div class="flex items-center justify-between mb-3 gap-2">
+        <h2 class="text-xl font-bold font-display flex items-center gap-2">
+          <i data-lucide="search" class="w-5 h-5"></i> Browse Games
+        </h2>
+        <button class="btn btn-outline btn-sm" onclick="showView('import'); renderImport();" title="Import new games">
+          <i data-lucide="download" class="w-4 h-4"></i> Import
         </button>
-        <h2 class="text-lg font-bold">Add a Game</h2>
       </div>
       <form id="game-search-form" class="mb-4">
         <div class="join w-full">
@@ -65,32 +67,15 @@
         </div>
       </form>
 
-      <!-- BGG Live Search -->
-      <details class="collapse collapse-arrow bg-base-200 mb-4">
-        <summary class="collapse-title text-sm font-medium">
-          <i data-lucide="globe" class="w-4 h-4 inline mr-1"></i> Search BoardGameGeek
-        </summary>
-        <div class="collapse-content">
-          <div class="flex gap-2 mb-2">
-            <input type="text" id="bgg-search-input" class="input input-bordered input-sm flex-1" placeholder="Search BGG..." />
-            <button class="btn btn-sm btn-outline" onclick="searchBGG()">Search</button>
-          </div>
-          <div id="bgg-results"></div>
-        </div>
-      </details>
-
       <div id="games-grid"></div>
     </main>
 
-    <!-- Closet View (home) -->
+    <!-- Closet View -->
     <main data-view="closet" class="hidden flex-1 px-4 py-4">
       <div class="flex items-center justify-between mb-3 gap-2">
         <h2 class="text-xl font-bold font-display flex items-center gap-2">
           <i data-lucide="library-big" class="w-5 h-5"></i> My Closet
         </h2>
-        <button id="closet-add-btn" class="btn btn-primary btn-sm">
-          <i data-lucide="plus" class="w-4 h-4"></i> Add Game
-        </button>
       </div>
       <!-- Tabs: Collection | Wishlist -->
       <div role="tablist" class="tabs tabs-boxed mb-3">
@@ -105,11 +90,11 @@
           <option value="last_played">Last Played</option>
         </select>
         <button id="closet-view-toggle" class="btn btn-sm btn-ghost btn-square" title="Toggle view">
-          <i data-lucide="list" class="w-4 h-4"></i>
+          <i data-lucide="library-big" class="w-4 h-4"></i>
         </button>
       </div>
-      <div id="closet-shelves"></div>
-      <div id="closet-list" class="hidden"></div>
+      <div id="closet-shelves" class="hidden"></div>
+      <div id="closet-list"></div>
       <div id="closet-wishlist" class="hidden"></div>
     </main>
 
@@ -123,15 +108,33 @@
       <div id="log-play-content"></div>
     </main>
 
-    <!-- Admin: Guide Bundle Import (only reachable via ?admin=1) -->
-    <main data-view="admin-guides" class="hidden flex-1 px-4 py-4"></main>
+    <!-- Import View — BGG search, file upload, review queue, download skill -->
+    <main data-view="import" class="hidden flex-1 px-4 py-4">
+      <div id="import-content"></div>
+    </main>
 
-    <!-- Play History View -->
+    <!-- Pending Guide Review View (admin only) -->
+    <main data-view="pending-guides" class="hidden flex-1 px-4 py-4">
+      <div id="pending-guides-content"></div>
+    </main>
+
+    <!-- User Profile View -->
+    <main data-view="profile" class="hidden flex-1 px-4 py-4">
+      <div id="profile-content"></div>
+    </main>
+
+    <!-- Play Log (history) View -->
     <main data-view="history" class="hidden flex-1 px-4 py-4">
       <h2 class="text-xl font-bold mb-3 flex items-center gap-2">
-        <i data-lucide="history" class="w-5 h-5"></i> Play History
+        <i data-lucide="history" class="w-5 h-5"></i> Play Log
       </h2>
       <div id="history-content"></div>
+
+      <!-- Floating "+" to log a new play -->
+      <button id="fab-log-play-history" class="fab-log-play" aria-label="Log a play"
+              onclick="showView('log-play'); playerRowCount = 0; renderLogPlayForm();">
+        <i data-lucide="plus" class="w-6 h-6"></i>
+      </button>
     </main>
 
     <!-- Toast -->
@@ -155,19 +158,19 @@
       <form method="dialog" class="modal-backdrop"><button>close</button></form>
     </dialog>
 
-    <!-- Bottom Navigation -->
+    <!-- Bottom Navigation: Browse | Closet | Play Log -->
     <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
+      <button data-nav="browse">
+        <i data-lucide="search" class="w-5 h-5"></i>
+        <span class="btm-nav-label text-xs">Browse</span>
+      </button>
       <button data-nav="closet" class="active">
-        <i data-lucide="home" class="w-5 h-5"></i>
+        <i data-lucide="library-big" class="w-5 h-5"></i>
         <span class="btm-nav-label text-xs">Closet</span>
       </button>
-      <button data-nav="log-play">
-        <i data-lucide="plus-circle" class="w-5 h-5"></i>
-        <span class="btm-nav-label text-xs">Log Play</span>
-      </button>
       <button data-nav="history">
-        <i data-lucide="trophy" class="w-5 h-5"></i>
-        <span class="btm-nav-label text-xs">History</span>
+        <i data-lucide="history" class="w-5 h-5"></i>
+        <span class="btm-nav-label text-xs">Play Log</span>
       </button>
     </nav>
   </div>
@@ -182,7 +185,8 @@
   <script src="game-detail.js"></script>
   <script src="guide.js"></script>
   <script src="plays.js"></script>
-  <script src="admin-guides.js"></script>
+  <script src="import.js"></script>
+  <script src="profile.js"></script>
   <script src="init.js"></script>
 </body>
 </html>

@@ -32,7 +32,12 @@ class ProfileResponse(BaseModel):
     id: str
     display_name: str
     avatar_url: Optional[str] = None
+    is_admin: bool = False
     created_at: datetime
+
+
+class AdminKeyBody(BaseModel):
+    admin_key: str
 
 
 # ── Games ─────────────────────────────────────────────────────────────────────
@@ -227,3 +232,32 @@ class GuideImportResponse(BaseModel):
     chunks_inserted: int
     chunks_skipped: int
     skipped_reasons: list[str]
+
+
+# ── Pending guide review (user-uploaded bundles) ──────────────────────────────
+
+class PendingGuideSubmitResponse(BaseModel):
+    id: Optional[str] = None
+    status: str  # "submitted" (queued for review) | "imported" (admin — direct)
+    message: str
+    import_result: Optional[GuideImportResponse] = None
+
+
+class PendingGuideSummary(BaseModel):
+    id: str
+    uploader_id: str
+    uploader_name: Optional[str] = None
+    game_name: str
+    bgg_id: Optional[int] = None
+    chunk_count: int
+    status: str
+    created_at: datetime
+
+
+class PendingGuideDetail(PendingGuideSummary):
+    bundle: dict[str, Any]
+
+
+class PendingGuideDecisionBody(BaseModel):
+    notes: Optional[str] = None
+    force: bool = False

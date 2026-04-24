@@ -2,11 +2,12 @@
 
 from fastapi import Depends, HTTPException
 
+from auth import ADMIN_API_KEY
 from db import get_supabase
 from jwt_auth import SupabaseUser, get_current_supabase_user
 
 from . import router
-from .models import ProfileCreate, ProfileResponse
+from .models import AdminKeyBody, MessageResponse, ProfileCreate, ProfileResponse
 
 
 @router.get(
@@ -53,3 +54,46 @@ async def create_or_update_profile(
         .execute()
     )
     return ProfileResponse(**result.data[0])
+
+
+@router.post(
+    "/profile/become-admin",
+    response_model=ProfileResponse,
+    status_code=200,
+    summary="Promote current user to admin by admin key",
+)
+async def become_admin(
+    body: AdminKeyBody,
+    su_user: SupabaseUser = Depends(get_current_supabase_user),
+) -> ProfileResponse:
+    """Exchange the shared admin API key for the is_admin flag on this user's profile."""
+    if body.admin_key != ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+    sb = get_supabase()
+    result = (
+        sb.table("boardgamebuddy_profiles")
+        .update({"is_admin": True})
+        .eq("id", su_user.sub)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return ProfileResponse(**result.data[0])
+
+
+@router.delete(
+    "/profile",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Delete the current user's account and data",
+)
+async def delete_profile(
+    su_user: SupabaseUser = Depends(get_current_supabase_user),
+) -> MessageResponse:
+    """Delete the current user's profile. Cascades to collections, plays, chunks they authored (set null), etc."""
+    sb = get_supabase()
+    # Deleting the profile cascades via ON DELETE CASCADE to collections, plays,
+    # buddies, pending guides, guide selections. Guide chunks the user authored
+    # have created_by set to NULL (ON DELETE SET NULL).
+    sb.table("boardgamebuddy_profiles").delete().eq("id", su_user.sub).execute()
+    return MessageResponse(message="Account deleted")

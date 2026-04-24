@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // closet will be swapped in once onAuthStateChange fires INITIAL_SESSION.
   initSupabase();
 
-  // Game search form (Browse view, reached via "+ Add Game")
+  // Game search form (Browse view)
   document.getElementById("game-search-form").addEventListener("submit", handleGameSearch);
 
   // Closet controls
@@ -40,15 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const addBtn = document.getElementById("closet-add-btn");
-  if (addBtn) {
-    addBtn.addEventListener("click", () => {
-      showView("browse");
-      loadGames();
-    });
-  }
-
-  // Bottom nav
+  // Bottom nav: Browse | Closet | Play Log
   document.querySelectorAll(".btm-nav button").forEach(btn => {
     btn.addEventListener("click", () => {
       const target = btn.dataset.nav;
@@ -57,19 +49,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       showView(target);
+      if (target === "browse") loadGames();
       if (target === "closet") loadCloset();
-      if (target === "log-play") { playerRowCount = 0; renderLogPlayForm(); }
       if (target === "history") loadPlays();
     });
   });
 
   // Session is handled by onAuthStateChange in auth.js (fires INITIAL_SESSION on load)
-
-  // Admin entry point: reveal the header icon only when ?admin=1 is in the URL.
-  if (isAdminMode()) {
-    const btn = document.getElementById("admin-entry-btn");
-    if (btn) btn.classList.remove("hidden");
-  }
 
   // Analytics
   trackEvent("page_view");

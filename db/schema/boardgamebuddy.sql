@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 038
+-- Last updated: migration 039
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -33,9 +33,26 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   display_name TEXT NOT NULL,
   avatar_url TEXT,
+  is_admin BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Review queue for guide bundles uploaded by non-admin users (migration 039).
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_pending_guides (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  uploader_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  game_name TEXT NOT NULL,
+  bgg_id INTEGER,
+  chunk_count INTEGER NOT NULL DEFAULT 0,
+  bundle JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  review_notes TEXT,
+  reviewed_by UUID REFERENCES public.boardgamebuddy_profiles(id),
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.boardgamebuddy_pending_guides ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -135,3 +152,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(g
 CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game ON public.boardgamebuddy_guide_chunks(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game
   ON public.boardgamebuddy_guide_selections(user_id, game_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_status
+  ON public.boardgamebuddy_pending_guides(status);
+CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_uploader
+  ON public.boardgamebuddy_pending_guides(uploader_id);

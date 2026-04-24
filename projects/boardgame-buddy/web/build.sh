@@ -14,3 +14,10 @@ window.APP_CONFIG = {
 EOF
 
 echo "config.js generated."
+
+# Copy the Guide Builder skill file into the web root so the Import screen can
+# offer it as a download (/guide-from-rulebook.md).
+if [ -f "../../../.claude/commands/guide-from-rulebook.md" ]; then
+  cp "../../../.claude/commands/guide-from-rulebook.md" "./guide-from-rulebook.md"
+  echo "guide-from-rulebook.md copied into web/."
+fi

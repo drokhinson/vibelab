@@ -1,33 +1,29 @@
-"""Bulk import endpoint for agent-generated guide bundles."""
+"""Guide bundle import: admin direct, user-submit with review queue, and review endpoints."""
 
 from typing import Optional
 
-from fastapi import Header, HTTPException, Query
+from fastapi import Depends, Header, HTTPException, Path, Query
 
 from auth import require_admin
 from db import get_supabase
+from jwt_auth import SupabaseUser, get_current_supabase_user
 
 from . import router
 from .game_routes import import_bgg_game
-from .models import GuideBundle, GuideImportResponse
-
-
-@router.post(
-    "/guides/import",
-    response_model=GuideImportResponse,
-    status_code=200,
-    summary="Bulk import a generated guide bundle",
+from .models import (
+    GuideBundle,
+    GuideImportResponse,
+    PendingGuideDecisionBody,
+    PendingGuideDetail,
+    PendingGuideSubmitResponse,
+    PendingGuideSummary,
 )
-async def import_guide(
-    bundle: GuideBundle,
-    force: bool = Query(False, description="Replace existing seed chunks (created_by IS NULL) before inserting"),
-    authorization: Optional[str] = Header(None),
-) -> GuideImportResponse:
-    """Import a JSON guide bundle produced by the agentic generator. Admin auth required."""
-    require_admin(authorization)
+
+
+async def _apply_bundle(bundle: GuideBundle, force: bool) -> GuideImportResponse:
+    """Insert a validated GuideBundle's chunks into the DB. Shared by admin direct + approval paths."""
     sb = get_supabase()
 
-    # Validate chunk types against the lookup table (single round-trip).
     valid_type_rows = (
         sb.table("boardgamebuddy_chunk_types")
         .select("id")
@@ -41,7 +37,6 @@ async def import_guide(
             detail=f"Unknown chunk_type(s): {unknown}. Valid: {sorted(valid_types)}",
         )
 
-    # Look up the game by bgg_id; import from BGG if missing.
     imported_game = False
     existing_game = (
         sb.table("boardgamebuddy_games")
@@ -56,7 +51,6 @@ async def import_guide(
         game_id = summary.id
         imported_game = True
 
-    # Optional: wipe existing seed chunks for this game (preserving user contributions).
     if force:
         (
             sb.table("boardgamebuddy_guide_chunks")
@@ -66,7 +60,6 @@ async def import_guide(
             .execute()
         )
 
-    # Fetch existing (chunk_type, title) pairs once to dedupe without N+1.
     existing_rows = (
         sb.table("boardgamebuddy_guide_chunks")
         .select("chunk_type, title")
@@ -90,7 +83,7 @@ async def import_guide(
             "layout": chunk.layout,
             "created_by": None,
         })
-        existing_keys.add(key)  # guard against dupes within this bundle too
+        existing_keys.add(key)
 
     if to_insert:
         sb.table("boardgamebuddy_guide_chunks").insert(to_insert).execute()
@@ -101,4 +94,249 @@ async def import_guide(
         chunks_inserted=len(to_insert),
         chunks_skipped=len(skipped_reasons),
         skipped_reasons=skipped_reasons,
+    )
+
+
+def _require_profile_admin(sb, user_id: str) -> None:
+    """Block unless the profile row has is_admin=true."""
+    profile = (
+        sb.table("boardgamebuddy_profiles")
+        .select("is_admin")
+        .eq("id", user_id)
+        .execute()
+    )
+    if not profile.data or not profile.data[0].get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+
+@router.post(
+    "/guides/import",
+    response_model=GuideImportResponse,
+    status_code=200,
+    summary="Bulk import a generated guide bundle (admin API key)",
+)
+async def import_guide(
+    bundle: GuideBundle,
+    force: bool = Query(False, description="Replace existing seed chunks (created_by IS NULL) before inserting"),
+    authorization: Optional[str] = Header(None),
+) -> GuideImportResponse:
+    """Import a JSON guide bundle. Authenticated via shared ADMIN_API_KEY."""
+    require_admin(authorization)
+    return await _apply_bundle(bundle, force)
+
+
+@router.post(
+    "/guides/submit",
+    response_model=PendingGuideSubmitResponse,
+    status_code=200,
+    summary="Submit a guide bundle (admin imports directly; others queue for review)",
+)
+async def submit_guide(
+    bundle: GuideBundle,
+    force: bool = Query(False, description="Admin-only: replace existing seed chunks before inserting"),
+    su_user: SupabaseUser = Depends(get_current_supabase_user),
+) -> PendingGuideSubmitResponse:
+    """Admin users import bundles directly. Non-admin submissions are queued for admin review."""
+    sb = get_supabase()
+    profile = (
+        sb.table("boardgamebuddy_profiles")
+        .select("is_admin")
+        .eq("id", su_user.sub)
+        .execute()
+    )
+    if not profile.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    is_admin = bool(profile.data[0].get("is_admin"))
+
+    if is_admin:
+        result = await _apply_bundle(bundle, force)
+        return PendingGuideSubmitResponse(
+            status="imported",
+            message=f"Imported {result.chunks_inserted} chunk(s).",
+            import_result=result,
+        )
+
+    inserted = (
+        sb.table("boardgamebuddy_pending_guides")
+        .insert({
+            "uploader_id": su_user.sub,
+            "game_name": bundle.game.name,
+            "bgg_id": bundle.game.bgg_id,
+            "chunk_count": len(bundle.chunks),
+            "bundle": bundle.model_dump(mode="json"),
+            "status": "pending",
+        })
+        .execute()
+    )
+    pending_id = inserted.data[0]["id"] if inserted.data else None
+    return PendingGuideSubmitResponse(
+        id=pending_id,
+        status="submitted",
+        message="Submitted for admin review. You'll see it appear once an admin approves it.",
+    )
+
+
+@router.get(
+    "/guides/pending",
+    response_model=list[PendingGuideSummary],
+    status_code=200,
+    summary="List pending user-submitted guide bundles (admin only)",
+)
+async def list_pending_guides(
+    su_user: SupabaseUser = Depends(get_current_supabase_user),
+) -> list[PendingGuideSummary]:
+    """Admin-only: list all pending guide submissions with uploader display names."""
+    sb = get_supabase()
+    _require_profile_admin(sb, su_user.sub)
+
+    rows = (
+        sb.table("boardgamebuddy_pending_guides")
+        .select("id, uploader_id, game_name, bgg_id, chunk_count, status, created_at")
+        .eq("status", "pending")
+        .order("created_at", desc=False)
+        .execute()
+    )
+    records = rows.data or []
+    uploader_ids = list({r["uploader_id"] for r in records})
+    name_map: dict[str, str] = {}
+    if uploader_ids:
+        names = (
+            sb.table("boardgamebuddy_profiles")
+            .select("id, display_name")
+            .in_("id", uploader_ids)
+            .execute()
+        )
+        name_map = {r["id"]: r["display_name"] for r in (names.data or [])}
+
+    return [
+        PendingGuideSummary(
+            uploader_name=name_map.get(r["uploader_id"]),
+            **r,
+        )
+        for r in records
+    ]
+
+
+@router.get(
+    "/guides/pending/{pending_id}",
+    response_model=PendingGuideDetail,
+    status_code=200,
+    summary="Get a pending guide submission's full bundle (admin only)",
+)
+async def get_pending_guide(
+    pending_id: str = Path(..., description="Pending guide submission UUID"),
+    su_user: SupabaseUser = Depends(get_current_supabase_user),
+) -> PendingGuideDetail:
+    """Admin-only: fetch a single pending submission including its full bundle for review."""
+    sb = get_supabase()
+    _require_profile_admin(sb, su_user.sub)
+
+    result = (
+        sb.table("boardgamebuddy_pending_guides")
+        .select("*")
+        .eq("id", pending_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Pending submission not found")
+    row = result.data[0]
+    uploader_name = None
+    names = (
+        sb.table("boardgamebuddy_profiles")
+        .select("display_name")
+        .eq("id", row["uploader_id"])
+        .execute()
+    )
+    if names.data:
+        uploader_name = names.data[0]["display_name"]
+    return PendingGuideDetail(uploader_name=uploader_name, **row)
+
+
+@router.post(
+    "/guides/pending/{pending_id}/approve",
+    response_model=GuideImportResponse,
+    status_code=200,
+    summary="Approve and import a pending guide submission (admin only)",
+)
+async def approve_pending_guide(
+    body: PendingGuideDecisionBody,
+    pending_id: str = Path(..., description="Pending guide submission UUID"),
+    su_user: SupabaseUser = Depends(get_current_supabase_user),
+) -> GuideImportResponse:
+    """Admin-only: import the submitted bundle and mark the pending row approved."""
+    sb = get_supabase()
+    _require_profile_admin(sb, su_user.sub)
+
+    result = (
+        sb.table("boardgamebuddy_pending_guides")
+        .select("*")
+        .eq("id", pending_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Pending submission not found")
+    row = result.data[0]
+    if row["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"Already {row['status']}")
+
+    bundle = GuideBundle(**row["bundle"])
+    import_result = await _apply_bundle(bundle, body.force)
+
+    sb.table("boardgamebuddy_pending_guides").update({
+        "status": "approved",
+        "review_notes": body.notes,
+        "reviewed_by": su_user.sub,
+        "reviewed_at": "now()",
+    }).eq("id", pending_id).execute()
+
+    return import_result
+
+
+@router.post(
+    "/guides/pending/{pending_id}/reject",
+    response_model=PendingGuideSummary,
+    status_code=200,
+    summary="Reject a pending guide submission (admin only)",
+)
+async def reject_pending_guide(
+    body: PendingGuideDecisionBody,
+    pending_id: str = Path(..., description="Pending guide submission UUID"),
+    su_user: SupabaseUser = Depends(get_current_supabase_user),
+) -> PendingGuideSummary:
+    """Admin-only: mark a pending submission as rejected, leaving an audit row."""
+    sb = get_supabase()
+    _require_profile_admin(sb, su_user.sub)
+
+    result = (
+        sb.table("boardgamebuddy_pending_guides")
+        .select("*")
+        .eq("id", pending_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Pending submission not found")
+    row = result.data[0]
+    if row["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"Already {row['status']}")
+
+    updated = (
+        sb.table("boardgamebuddy_pending_guides")
+        .update({
+            "status": "rejected",
+            "review_notes": body.notes,
+            "reviewed_by": su_user.sub,
+            "reviewed_at": "now()",
+        })
+        .eq("id", pending_id)
+        .execute()
+    )
+    final = updated.data[0] if updated.data else row
+    return PendingGuideSummary(
+        id=final["id"],
+        uploader_id=final["uploader_id"],
+        game_name=final["game_name"],
+        bgg_id=final.get("bgg_id"),
+        chunk_count=final["chunk_count"],
+        status=final["status"],
+        created_at=final["created_at"],
     )

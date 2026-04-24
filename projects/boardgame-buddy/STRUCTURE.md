@@ -45,6 +45,23 @@ Linked to Supabase Auth `auth.users`.
 | id | UUID PK | references auth.users(id) |
 | display_name | TEXT | |
 | avatar_url | TEXT | nullable |
+| is_admin | BOOLEAN | default false; granted via `POST /profile/become-admin` with the shared admin key |
+| created_at | TIMESTAMPTZ | |
+
+### boardgamebuddy_pending_guides
+Review queue for guide bundles uploaded by non-admin users.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| uploader_id | UUID FK | → profiles |
+| game_name | TEXT | |
+| bgg_id | INTEGER | nullable |
+| chunk_count | INTEGER | |
+| bundle | JSONB | the full GuideBundle payload |
+| status | TEXT | `pending` / `approved` / `rejected` |
+| review_notes | TEXT | nullable |
+| reviewed_by | UUID FK | nullable → profiles |
+| reviewed_at | TIMESTAMPTZ | nullable |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_collections
@@ -132,6 +149,8 @@ of the chunk system; will be dropped in a follow-up migration.
 ### Auth Required
 - `GET /api/v1/boardgame_buddy/profile`
 - `POST /api/v1/boardgame_buddy/profile`
+- `POST /api/v1/boardgame_buddy/profile/become-admin` — body `{admin_key}`; sets `is_admin=true` if the key matches `ADMIN_API_KEY`
+- `DELETE /api/v1/boardgame_buddy/profile` — delete current user's account and data
 - `GET /api/v1/boardgame_buddy/collection`
 - `POST /api/v1/boardgame_buddy/collection`
 - `PATCH /api/v1/boardgame_buddy/collection/{game_id}`
@@ -146,6 +165,11 @@ of the chunk system; will be dropped in a follow-up migration.
 - `DELETE /api/v1/boardgame_buddy/chunks/{chunk_id}` — delete own chunk
 - `GET /api/v1/boardgame_buddy/games/{game_id}/my-guide` — this user's chunk selection
 - `PUT /api/v1/boardgame_buddy/games/{game_id}/my-guide` — replace selection (ordered)
+- `POST /api/v1/boardgame_buddy/guides/submit` — upload a GuideBundle. Admin users import directly; everyone else's submission is queued for admin review.
+- `GET /api/v1/boardgame_buddy/guides/pending` — *admin-only* list of pending submissions
+- `GET /api/v1/boardgame_buddy/guides/pending/{id}` — *admin-only* fetch full bundle
+- `POST /api/v1/boardgame_buddy/guides/pending/{id}/approve` — *admin-only* import
+- `POST /api/v1/boardgame_buddy/guides/pending/{id}/reject` — *admin-only* reject
 
 ### Admin (ADMIN_API_KEY)
 - `POST /api/v1/boardgame_buddy/guides/import?force=<bool>` — bulk import a guide bundle produced by the `/guide-from-rulebook` slash command. Request body = `GuideBundle` JSON (see below). If the referenced game isn't in `boardgamebuddy_games`, the endpoint calls the existing BGG import flow. `force=true` deletes existing chunks with `created_by IS NULL` for the game before inserting (user chunks are preserved). Dedupe key: `(game_id, chunk_type, title)`.
@@ -171,10 +195,16 @@ of the chunk system; will be dropped in a follow-up migration.
 `chunk_type` must be one of the seven IDs in `boardgamebuddy_chunk_types`. Up to 25 chunks per bundle (7 specialist agents × 3 max each).
 
 ### Admin UI
-- `?admin=1` in the URL reveals a shield icon in the header. Clicking it opens the `admin-guides` view, which accepts a JSON bundle file and POSTs it to the import endpoint with the admin API key stored in `sessionStorage.bgbAdminKey`.
+- Promote via **Profile** screen → "Become admin" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the admin-only controls (direct imports and pending-review list) inside the **Import** screen.
 
 ## Screen Flow
-1. Auth (login/signup) → 2. **Closet** (home: shelves for Owned / Played / Wish as book-spines, with list-view toggle and sort by Alphabetical or Last Played; in-closet search filters your games) → 3. Tap a spine → pull-down animation → Game detail (themed, with Log Play + guide) → 4. Log Play → 5. Play History. "+ Add Game" from the Closet opens the Browse catalog (BGG top 1000 + live BGG search).
+Bottom nav has three tabs: **Browse**, **Closet**, **Play Log**.
+
+1. Auth (login/signup) → 2. **Closet** (home): list view of Owned/Played (toggleable to shelf/book-spine view), plus a Wishlist tab. In-closet search filters your games. → 3. Tap a row/spine → Game detail (themed, with Log Play + guide).
+4. **Browse** tab: list of available games (BGG top 1000 + search). "Import games" button opens the Import screen.
+5. **Play Log** tab: history of plays. Floating "+" button opens the Log a Play form (the form lets the user clear/change the selected game).
+6. **Import** screen: *Import from BoardGameGeek* (live BGG API search + add), *Import from file* (upload a GuideBundle JSON — admins import directly, others queue for review), *Review pending additions* (admin only), *Download Guide Builder instructions* (downloads `guide-from-rulebook.md` so users can feed the prompt into their own AI).
+7. **Profile** (click username in header): account info, delete account, become admin via admin key. Future: link BGG account, friends.
 
 ## Environment Variables
 | Variable | Where | Purpose |
