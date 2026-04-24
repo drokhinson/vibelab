@@ -6,6 +6,9 @@ on:
     paths:
       - projects/**/web/**
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
