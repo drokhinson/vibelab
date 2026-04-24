@@ -14,23 +14,21 @@ async function renderLogPlayForm(preselectedGameId, preselectedGameName) {
   } catch { buddies = []; }
 
   container.innerHTML = `
-    <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
-      <i data-lucide="trophy" class="w-5 h-5" style="color: var(--accent)"></i> Log a Play
-    </h2>
+    <div class="flex items-center gap-2 mb-3">
+      <button class="btn btn-ghost btn-sm btn-square" onclick="showView('history'); loadPlays();" title="Back to Play Log">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      </button>
+      <h2 class="text-xl font-bold flex items-center gap-2">
+        <i data-lucide="trophy" class="w-5 h-5" style="color: var(--accent)"></i> Log a Play
+      </h2>
+    </div>
 
     <form onsubmit="handleLogPlay(event)" class="space-y-4">
       <!-- Game selection -->
       <div class="form-control">
         <label class="label"><span class="label-text">Game</span></label>
-        ${preselectedGameId
-          ? `<input type="hidden" id="play-game-id" value="${preselectedGameId}" />
-             <div class="input input-bordered flex items-center">${preselectedGameName}
-               <button type="button" class="btn btn-ghost btn-xs ml-auto" onclick="renderLogPlayForm()">Change</button>
-             </div>`
-          : `<input type="text" id="play-game-search" class="input input-bordered" placeholder="Search for a game..." oninput="searchPlayGame(this.value)" />
-             <input type="hidden" id="play-game-id" />
-             <div id="play-game-results" class="mt-1"></div>`
-        }
+        <input type="hidden" id="play-game-id" />
+        <div id="play-game-slot"></div>
       </div>
 
       <!-- Date -->
@@ -59,8 +57,26 @@ async function renderLogPlayForm(preselectedGameId, preselectedGameName) {
   `;
   lucide.createIcons();
 
+  if (preselectedGameId) {
+    selectPlayGame(preselectedGameId, preselectedGameName);
+  } else {
+    clearPlayGame();
+  }
+
   // Auto-add current user as first player
   addPlayerRow(currentUser?.display_name || "");
+}
+
+function clearPlayGame() {
+  const slot = document.getElementById("play-game-slot");
+  const hidden = document.getElementById("play-game-id");
+  if (hidden) hidden.value = "";
+  if (!slot) return;
+  slot.innerHTML = `
+    <input type="text" id="play-game-search" class="input input-bordered w-full"
+           placeholder="Search for a game..." oninput="searchPlayGame(this.value)" autofocus />
+    <div id="play-game-results" class="mt-1"></div>
+  `;
 }
 
 let playerRowCount = 0;
@@ -112,13 +128,21 @@ async function searchPlayGame(query) {
 }
 
 function selectPlayGame(id, name) {
-  document.getElementById("play-game-id").value = id;
-  const searchInput = document.getElementById("play-game-search");
-  if (searchInput) {
-    searchInput.value = name;
-    searchInput.disabled = true;
-  }
-  document.getElementById("play-game-results").innerHTML = "";
+  const slot = document.getElementById("play-game-slot");
+  const hidden = document.getElementById("play-game-id");
+  if (hidden) hidden.value = id;
+  if (!slot) return;
+  const safeName = escapeHtml(name);
+  slot.innerHTML = `
+    <div class="input input-bordered flex items-center gap-2">
+      <span class="truncate">${safeName}</span>
+      <button type="button" class="btn btn-ghost btn-xs ml-auto" onclick="clearPlayGame()"
+              aria-label="Clear game selection" title="Clear">
+        <i data-lucide="x" class="w-3 h-3"></i> Clear
+      </button>
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons();
 }
 
 async function handleLogPlay(e) {
@@ -183,7 +207,7 @@ function renderPlays() {
       <div class="text-center py-12 text-base-content/50">
         <i data-lucide="trophy" class="w-12 h-12 mb-4 opacity-50"></i>
         <p>No plays recorded yet.</p>
-        <button class="btn btn-primary btn-sm mt-4" onclick="showView('log-play'); renderLogPlayForm();">Log Your First Play</button>
+        <p class="text-xs mt-2 opacity-60">Tap the <i data-lucide="plus" class="w-3 h-3 inline"></i> button to log your first play.</p>
       </div>`;
     lucide.createIcons();
     return;

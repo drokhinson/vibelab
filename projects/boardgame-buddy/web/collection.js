@@ -36,13 +36,17 @@ async function loadCloset() {
   }
 
   const shelvesEl = document.getElementById("closet-shelves");
-  shelvesEl.innerHTML = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
+  const listEl = document.getElementById("closet-list");
+  const spinner = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
+  shelvesEl.innerHTML = spinner;
+  listEl.innerHTML = spinner;
 
   try {
     await Promise.all([loadShelfPage("owned", 1), loadShelfPage("played", 1)]);
     renderCloset();
   } catch (err) {
     shelvesEl.innerHTML = `<div class="text-error text-center py-8">${err.message}</div>`;
+    listEl.innerHTML = `<div class="text-error text-center py-8">${err.message}</div>`;
   }
 }
 
@@ -87,9 +91,10 @@ function applyClosetControls() {
 
   const toggleBtn = document.getElementById("closet-view-toggle");
   if (toggleBtn) {
-    const icon = closetView === "shelves" ? "list" : "library-big";
+    // The icon shows what you'll *switch to* when tapping.
+    const icon = closetView === "list" ? "library-big" : "list";
     toggleBtn.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i>`;
-    toggleBtn.title = closetView === "shelves" ? "Switch to list view" : "Switch to shelf view";
+    toggleBtn.title = closetView === "list" ? "Switch to shelf view" : "Switch to list view";
   }
 
   const tabCollection = document.getElementById("tab-collection");
@@ -333,7 +338,7 @@ function renderWishlist() {
         <i data-lucide="star" class="w-12 h-12 mb-3 opacity-50"></i>
         <p class="mb-4">Your wishlist is empty.</p>
         <button class="btn btn-primary btn-sm" onclick="showView('browse'); loadGames();">
-          <i data-lucide="plus" class="w-4 h-4"></i> Browse Games
+          <i data-lucide="search" class="w-4 h-4"></i> Browse Games
         </button>
       </div>`;
     lucide.createIcons();
@@ -389,7 +394,7 @@ function emptyCollectionHTML() {
       <i data-lucide="library-big" class="w-12 h-12 mb-3 opacity-50"></i>
       <p class="mb-4">Your collection is empty.</p>
       <button class="btn btn-primary btn-sm" onclick="showView('browse'); loadGames();">
-        <i data-lucide="plus" class="w-4 h-4"></i> Add your first game
+        <i data-lucide="search" class="w-4 h-4"></i> Browse games to add
       </button>
     </div>`;
 }
