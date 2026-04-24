@@ -1,10 +1,16 @@
 // guide.js — Chunk-based quick reference guides
 //
 // Data model:
-//   Chunk: { id, game_id, chunk_type, chunk_type_label, chunk_type_icon,
-//            title, layout, content, created_by, created_by_name, updated_at }
-//   A user's guide = their ordered selection of chunks for a game.
-//   Anon users see the full chunk library grouped by type.
+//   Chunk (MyGuideChunkResponse): { id, game_id, chunk_type, chunk_type_label,
+//     chunk_type_icon, chunk_type_order, title, layout, content, created_by,
+//     created_by_name, updated_at, is_hidden, user_display_order }
+//   Anon users see the full chunk library grouped by type (no hide/reorder).
+//   Signed-in users see chunks with per-user is_hidden and user_display_order.
+//
+// Gestures (mobile-first, works with pointer/mouse too):
+//   swipe right → edit (creator or admin; toast if blocked)
+//   swipe left  → hide the chunk from the guide
+//   long-press  → enter reorder mode; drag card to reposition
 
 // ── Markdown renderer (shared with legacy guide) ─────────────────────────────
 
@@ -41,24 +47,51 @@ function escapeAttr(s) {
   return String(s || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+// ── Permissions ──────────────────────────────────────────────────────────────
+
+function canEditChunk(chunk) {
+  if (!currentUser) return false;
+  if (currentUser.is_admin) return true;
+  return chunk.created_by === currentUser.user_id;
+}
+
+// ── Sorting ──────────────────────────────────────────────────────────────────
+
+function sortVisibleChunks(chunks) {
+  // user_display_order wins when set; otherwise fall back to chunk type order
+  // (bumped way up so user-ordered rows always sort ahead of unordered ones)
+  // then title as a stable tiebreak.
+  return chunks.slice().sort((a, b) => {
+    const aHas = a.user_display_order !== null && a.user_display_order !== undefined;
+    const bHas = b.user_display_order !== null && b.user_display_order !== undefined;
+    if (aHas && bHas) return a.user_display_order - b.user_display_order;
+    if (aHas) return -1;
+    if (bHas) return 1;
+    const typeDiff = (a.chunk_type_order || 0) - (b.chunk_type_order || 0);
+    if (typeDiff !== 0) return typeDiff;
+    return (a.title || "").localeCompare(b.title || "");
+  });
+}
+
 // ── Guide loading ────────────────────────────────────────────────────────────
 
 async function loadGuide(gameId) {
   const container = document.getElementById("guide-content");
   try {
+    let all;
     if (session) {
-      // My selection first.
-      currentGuideChunks = await apiFetch(`/games/${gameId}/my-guide`);
-      if (!currentGuideChunks.length) {
-        // Fall back to the full library so the user sees something useful.
-        currentGuideChunks = await apiFetch(`/games/${gameId}/chunks`);
-      }
+      all = await apiFetch(`/games/${gameId}/my-guide`);
     } else {
-      currentGuideChunks = await apiFetch(`/games/${gameId}/chunks`);
+      // Anon users: library chunks with no per-user metadata.
+      all = await apiFetch(`/games/${gameId}/chunks`);
     }
+    currentGuideChunks = sortVisibleChunks(all.filter(c => !c.is_hidden));
+    hiddenChunks = all.filter(c => c.is_hidden);
     renderGuide();
+    renderGuideToolbar();
   } catch (err) {
     currentGuideChunks = [];
+    hiddenChunks = [];
     container.innerHTML = `<p class="text-error text-sm">${err.message}</p>`;
   }
 }
@@ -96,55 +129,74 @@ function renderGuide() {
     container.innerHTML = `
       <div class="text-center py-4 text-base-content/50">
         <p class="text-sm">No guide chunks yet.</p>
-        ${session ? '<button class="btn btn-sm btn-outline mt-2" onclick="openChunkManager()">Add the first chunk</button>' : ""}
+        ${session ? '<button class="btn btn-sm btn-outline mt-2" onclick="openChunkEditor()">Add the first chunk</button>' : ""}
       </div>`;
     lucide.createIcons();
     return;
   }
 
-  const myId = currentUser?.user_id || session?.user?.id || null;
+  const allowGestures = !!session;
 
   container.innerHTML = `
-    <div class="space-y-3">
-      ${otherChunks.map(c => {
-        const isMine = myId && c.created_by === myId;
+    <div id="guide-chunk-list" class="space-y-3 ${guideReorderMode ? "reorder-mode" : ""}">
+      ${otherChunks.map((c, i) => {
         const icon = c.chunk_type_icon || "sticky-note";
         const label = c.chunk_type_label || c.chunk_type;
+        const editable = canEditChunk(c);
         return `
-          <div class="collapse collapse-arrow scroll-chunk">
-            <input type="checkbox" />
-            <div class="collapse-title font-medium text-sm flex items-center justify-between gap-2">
-              <span class="flex items-center gap-1">
-                <i data-lucide="${icon}" class="w-4 h-4"></i>
-                <span class="badge badge-sm">${label}</span>
-                <span>${c.title}</span>
-              </span>
-              ${c.created_by_name ? `<span class="text-xs opacity-60">by ${c.created_by_name}</span>` : ""}
+          <div class="swipe-row" data-chunk-id="${c.id}" data-chunk-index="${i}"
+               data-can-edit="${editable ? "1" : "0"}">
+            <div class="swipe-action swipe-action--hide">
+              <i data-lucide="eye-off" class="w-5 h-5"></i>
+              <span>Hide</span>
             </div>
-            <div class="collapse-content text-sm leading-relaxed guide-text">${renderMarkdown(c.content)}</div>
-            ${isMine ? `
-              <div class="px-4 pb-3 flex gap-2">
-                <button class="btn btn-xs btn-ghost" onclick="event.stopPropagation(); openChunkEditor('${c.id}')">
-                  <i data-lucide="pencil" class="w-3 h-3"></i> Edit
-                </button>
-                <button class="btn btn-xs btn-ghost text-error" onclick="event.stopPropagation(); deleteChunk('${c.id}')">
-                  <i data-lucide="trash-2" class="w-3 h-3"></i> Delete
-                </button>
-              </div>` : ""}
+            <div class="swipe-action swipe-action--edit">
+              <i data-lucide="pencil" class="w-5 h-5"></i>
+              <span>Edit</span>
+            </div>
+            <div class="collapse collapse-arrow scroll-chunk swipe-target">
+              <input type="checkbox" />
+              <div class="collapse-title font-medium text-sm flex items-center justify-between gap-2">
+                <span class="flex items-center gap-1">
+                  <i data-lucide="grip-vertical" class="w-3 h-3 reorder-handle"></i>
+                  <i data-lucide="${icon}" class="w-4 h-4"></i>
+                  <span class="badge badge-sm">${label}</span>
+                  <span>${c.title}</span>
+                </span>
+                ${c.created_by_name ? `<span class="text-xs opacity-60">by ${c.created_by_name}</span>` : ""}
+              </div>
+              <div class="collapse-content text-sm leading-relaxed guide-text">${renderMarkdown(c.content)}</div>
+            </div>
           </div>`;
       }).join("")}
     </div>`;
   lucide.createIcons();
+
+  if (allowGestures) {
+    container.querySelectorAll(".swipe-row").forEach(attachChunkGestures);
+  }
 }
 
 function renderGuideToolbar() {
   const host = document.getElementById("guide-toolbar");
   if (!host) return;
   if (!session) { host.innerHTML = ""; return; }
+  const hiddenCount = hiddenChunks.length;
   host.innerHTML = `
-    <button class="btn btn-xs btn-outline" onclick="openChunkManager()">
-      <i data-lucide="sliders-horizontal" class="w-3 h-3"></i> Customize
-    </button>`;
+    <div class="flex items-center gap-2 flex-wrap">
+      <button class="btn btn-xs btn-outline" onclick="openChunkEditor()">
+        <i data-lucide="plus" class="w-3 h-3"></i> New chunk
+      </button>
+      <button class="btn btn-xs btn-ghost ${hiddenCount ? "" : "btn-disabled"}"
+              onclick="openHiddenChunksPanel()">
+        <i data-lucide="eye-off" class="w-3 h-3"></i> Hidden (${hiddenCount})
+      </button>
+      ${guideReorderMode ? `
+        <button class="btn btn-xs btn-primary" onclick="exitReorderMode()">
+          <i data-lucide="check" class="w-3 h-3"></i> Done reordering
+        </button>` : `
+        <span class="text-xs opacity-60">Swipe ↔ or press &amp; hold</span>`}
+    </div>`;
   lucide.createIcons();
 }
 
@@ -156,172 +208,311 @@ async function loadChunkTypes() {
   return chunkTypeCache;
 }
 
-// ── Chunk manager modal ──────────────────────────────────────────────────────
+// ── Gesture layer (swipe + long-press reorder) ───────────────────────────────
 
-async function openChunkManager() {
+const SWIPE_ACTIVATE_PX = 8;   // horizontal threshold before we claim the gesture
+const SWIPE_COMMIT_FRAC = 0.35; // fraction of row width that commits the action
+const LONG_PRESS_MS = 450;
+
+function attachChunkGestures(row) {
+  const target = row.querySelector(".swipe-target");
+  if (!target) return;
+
+  let startX = null;
+  let startY = null;
+  let isSwipe = false;
+  let isLongPressDrag = false;
+  let holdTimer = null;
+  let pointerId = null;
+
+  const clearHold = () => {
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+  };
+
+  const resetVisual = () => {
+    target.style.cssText = "transform: translateX(0); transition: transform 200ms ease;";
+  };
+
+  row.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    // Reorder mode uses its own handler — skip swipe gestures there.
+    if (guideReorderMode) {
+      startDragReorder(row, e);
+      return;
+    }
+    startX = e.clientX;
+    startY = e.clientY;
+    pointerId = e.pointerId;
+    isSwipe = false;
+    isLongPressDrag = false;
+
+    clearHold();
+    holdTimer = setTimeout(() => {
+      holdTimer = null;
+      // Long-press fires only if no swipe is in progress.
+      if (isSwipe) return;
+      enterReorderMode();
+      startDragReorder(row, { clientX: startX, clientY: startY, pointerId });
+      startX = null;
+      isLongPressDrag = true;
+    }, LONG_PRESS_MS);
+  });
+
+  row.addEventListener("pointermove", (e) => {
+    if (isLongPressDrag) return;
+    if (startX === null) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (!isSwipe) {
+      if (Math.abs(dy) > SWIPE_ACTIVATE_PX && Math.abs(dy) > Math.abs(dx)) {
+        // Vertical scroll — abandon swipe.
+        clearHold();
+        startX = null;
+        return;
+      }
+      if (Math.abs(dx) > SWIPE_ACTIVATE_PX) {
+        isSwipe = true;
+        clearHold();
+        try { row.setPointerCapture(e.pointerId); } catch (_) {}
+      } else {
+        return;
+      }
+    }
+    const maxDrag = row.clientWidth * 0.9;
+    const clamped = Math.sign(dx) * Math.min(Math.abs(dx), maxDrag);
+    target.style.cssText = `transform: translateX(${clamped}px); transition: none;`;
+    row.classList.toggle("swiping-right", clamped > 0);
+    row.classList.toggle("swiping-left", clamped < 0);
+  });
+
+  const finish = (e) => {
+    if (isLongPressDrag) {
+      endDragReorder(e);
+      isLongPressDrag = false;
+      return;
+    }
+    clearHold();
+    if (startX === null) return;
+    const dx = e.clientX - startX;
+    startX = null;
+    row.classList.remove("swiping-right", "swiping-left");
+    if (!isSwipe) {
+      // Plain tap — let the collapse toggle naturally (input[type=checkbox]).
+      return;
+    }
+    isSwipe = false;
+    const commitPx = row.clientWidth * SWIPE_COMMIT_FRAC;
+    if (dx > commitPx) {
+      // Swipe right → edit
+      resetVisual();
+      const chunkId = row.dataset.chunkId;
+      if (row.dataset.canEdit === "1") {
+        setTimeout(() => openChunkEditor(chunkId), 120);
+      } else {
+        showToast("Only the creator or an admin can edit this chunk.", "info");
+      }
+    } else if (dx < -commitPx) {
+      // Swipe left → hide
+      const chunkId = row.dataset.chunkId;
+      // Slide off before the API call for responsiveness.
+      target.style.cssText = `transform: translateX(-110%); transition: transform 180ms ease;`;
+      setTimeout(() => hideChunk(chunkId), 180);
+    } else {
+      resetVisual();
+    }
+  };
+
+  row.addEventListener("pointerup", finish);
+  row.addEventListener("pointercancel", (e) => {
+    clearHold();
+    startX = null;
+    isSwipe = false;
+    row.classList.remove("swiping-right", "swiping-left");
+    resetVisual();
+    if (isLongPressDrag) {
+      endDragReorder(e);
+      isLongPressDrag = false;
+    }
+  });
+}
+
+// ── Reorder mode (press-and-hold drag) ───────────────────────────────────────
+
+let _dragState = null; // { row, startY, placeholder }
+
+function enterReorderMode() {
+  if (guideReorderMode) return;
+  guideReorderMode = true;
+  document.getElementById("guide-chunk-list")?.classList.add("reorder-mode");
+  renderGuideToolbar();
+  if (navigator.vibrate) navigator.vibrate(15);
+}
+
+function exitReorderMode() {
+  if (!guideReorderMode) return;
+  guideReorderMode = false;
+  document.getElementById("guide-chunk-list")?.classList.remove("reorder-mode");
+  renderGuideToolbar();
+  saveReorderedGuide();
+}
+
+function startDragReorder(row, e) {
+  const list = row.parentElement;
+  if (!list) return;
+  row.classList.add("is-dragging");
+  const rect = row.getBoundingClientRect();
+  _dragState = {
+    row,
+    list,
+    pointerId: e.pointerId,
+    offsetY: e.clientY - rect.top,
+    height: rect.height,
+  };
+  try { row.setPointerCapture(e.pointerId); } catch (_) {}
+  row.style.cssText = `
+    position: relative;
+    z-index: 20;
+    transition: none;
+    transform: translateY(0);
+  `;
+}
+
+function handleDragReorderMove(e) {
+  if (!_dragState) return;
+  const { row, list, height } = _dragState;
+  const listRect = list.getBoundingClientRect();
+  const y = e.clientY - listRect.top - _dragState.offsetY;
+  row.style.transform = `translateY(${y - row.offsetTop}px)`;
+
+  // Figure out which sibling we're hovering over and swap if past its midpoint.
+  const siblings = Array.from(list.querySelectorAll(".swipe-row")).filter(n => n !== row);
+  const pointerY = e.clientY;
+  for (const sib of siblings) {
+    const r = sib.getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    if (pointerY < mid && sib.previousElementSibling !== row) {
+      list.insertBefore(row, sib);
+      row.style.transform = "";
+      const newRect = row.getBoundingClientRect();
+      _dragState.offsetY = e.clientY - newRect.top;
+      break;
+    } else if (pointerY > mid && sib.nextElementSibling !== row &&
+               siblings.indexOf(sib) === siblings.length - 1) {
+      list.appendChild(row);
+      row.style.transform = "";
+      const newRect = row.getBoundingClientRect();
+      _dragState.offsetY = e.clientY - newRect.top;
+      break;
+    }
+  }
+}
+
+function endDragReorder(_e) {
+  if (!_dragState) return;
+  const { row } = _dragState;
+  row.classList.remove("is-dragging");
+  row.style.cssText = "";
+  _dragState = null;
+}
+
+// Global listeners so drag keeps working even if the pointer leaves the row.
+document.addEventListener("pointermove", (e) => {
+  if (_dragState) handleDragReorderMove(e);
+});
+document.addEventListener("pointerup", (e) => {
+  if (_dragState) endDragReorder(e);
+});
+
+async function saveReorderedGuide() {
   if (!session || !currentGame) return;
-  const dlg = document.getElementById("chunk-manager");
-  dlg.showModal();
-  document.getElementById("chunk-manager-body").innerHTML = `
-    <div class="flex justify-center py-6"><span class="loading loading-spinner"></span></div>`;
-  try {
-    const [lib, types] = await Promise.all([
-      apiFetch(`/games/${currentGame.id}/chunks`),
-      loadChunkTypes(),
-    ]);
-    chunkLibrary = lib;
-    // Start with whatever is currently in my guide (preserve order).
-    const selected = currentGuideChunks
-      .map(c => c.id)
-      .filter(id => lib.some(l => l.id === id));
-    renderChunkManager(selected, types);
-  } catch (err) {
-    document.getElementById("chunk-manager-body").innerHTML =
-      `<p class="text-error text-sm">${err.message}</p>`;
-  }
-}
-
-function closeChunkManager() {
-  const dlg = document.getElementById("chunk-manager");
-  if (dlg && dlg.open) dlg.close();
-}
-
-function renderChunkManager(selectedIds, types) {
-  const body = document.getElementById("chunk-manager-body");
-  const myId = currentUser?.user_id || session?.user?.id || null;
-  const byType = {};
-  for (const c of chunkLibrary) {
-    (byType[c.chunk_type] = byType[c.chunk_type] || []).push(c);
-  }
-
-  // Selected-order preview
-  const selectedChunks = selectedIds
-    .map(id => chunkLibrary.find(c => c.id === id))
-    .filter(Boolean);
-
-  const selectedHtml = selectedChunks.length
-    ? selectedChunks.map((c, i) => `
-        <div class="flex items-center gap-2 py-1">
-          <span class="badge badge-sm badge-ghost">${c.chunk_type_label || c.chunk_type}</span>
-          <span class="text-sm flex-1 truncate">${c.title}</span>
-          <button class="btn btn-xs btn-ghost" ${i === 0 ? "disabled" : ""}
-                  onclick="reorderSelected(${i}, -1)" title="Move up">
-            <i data-lucide="chevron-up" class="w-3 h-3"></i>
-          </button>
-          <button class="btn btn-xs btn-ghost" ${i === selectedChunks.length - 1 ? "disabled" : ""}
-                  onclick="reorderSelected(${i}, 1)" title="Move down">
-            <i data-lucide="chevron-down" class="w-3 h-3"></i>
-          </button>
-        </div>`).join("")
-    : '<p class="text-sm text-base-content/50">No chunks selected yet — toggle some below.</p>';
-
-  const libraryHtml = types
-    .filter(t => byType[t.id]?.length)
-    .map(t => `
-      <div class="mb-3">
-        <h4 class="font-semibold text-xs uppercase opacity-70 mb-1 flex items-center gap-1">
-          <i data-lucide="${t.icon || "sticky-note"}" class="w-3 h-3"></i> ${t.label}
-        </h4>
-        ${byType[t.id].map(c => {
-          const checked = selectedIds.includes(c.id) ? "checked" : "";
-          const mine = myId && c.created_by === myId;
-          return `
-            <label class="flex items-start gap-2 py-1 cursor-pointer">
-              <input type="checkbox" class="checkbox checkbox-sm mt-1"
-                     data-chunk-id="${c.id}" ${checked}
-                     onchange="toggleChunkSelected('${c.id}', this.checked)" />
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium truncate">${c.title}</div>
-                <div class="text-xs text-base-content/50">
-                  ${c.created_by_name ? `by ${c.created_by_name}` : "by someone"}
-                </div>
-              </div>
-              ${mine ? `
-                <button class="btn btn-xs btn-ghost" onclick="openChunkEditor('${c.id}')">
-                  <i data-lucide="pencil" class="w-3 h-3"></i>
-                </button>
-                <button class="btn btn-xs btn-ghost text-error" onclick="deleteChunk('${c.id}')">
-                  <i data-lucide="trash-2" class="w-3 h-3"></i>
-                </button>` : ""}
-            </label>`;
-        }).join("")}
-      </div>`).join("");
-
-  body.innerHTML = `
-    <div class="space-y-4">
-      <section>
-        <h3 class="font-bold text-sm mb-1">Your guide</h3>
-        <p class="text-xs text-base-content/60 mb-2">Shown on the game page in this order.</p>
-        <div id="selected-preview">${selectedHtml}</div>
-      </section>
-
-      <section>
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-bold text-sm">Available chunks</h3>
-          <button class="btn btn-xs btn-primary" onclick="openChunkEditor()">
-            <i data-lucide="plus" class="w-3 h-3"></i> New chunk
-          </button>
-        </div>
-        ${libraryHtml || '<p class="text-sm text-base-content/50">No chunks yet. Create the first one.</p>'}
-      </section>
-    </div>
-
-    <div class="modal-action">
-      <button class="btn btn-ghost" onclick="closeChunkManager()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveGuideSelection()">Save guide</button>
-    </div>`;
-
-  // Persist the current in-modal selection on the dialog element so
-  // toggles/reorders have somewhere to read/write.
-  body.dataset.selectedIds = JSON.stringify(selectedIds);
-  lucide.createIcons();
-}
-
-function getManagerSelection() {
-  const body = document.getElementById("chunk-manager-body");
-  return JSON.parse(body.dataset.selectedIds || "[]");
-}
-
-function setManagerSelection(ids) {
-  const body = document.getElementById("chunk-manager-body");
-  body.dataset.selectedIds = JSON.stringify(ids);
-  // Re-render with cached types (already loaded).
-  renderChunkManager(ids, chunkTypeCache || []);
-}
-
-function toggleChunkSelected(chunkId, checked) {
-  const current = getManagerSelection();
-  let next;
-  if (checked) {
-    next = current.includes(chunkId) ? current : [...current, chunkId];
-  } else {
-    next = current.filter(id => id !== chunkId);
-  }
-  setManagerSelection(next);
-}
-
-function reorderSelected(index, delta) {
-  const current = getManagerSelection();
-  const target = index + delta;
-  if (target < 0 || target >= current.length) return;
-  const next = current.slice();
-  [next[index], next[target]] = [next[target], next[index]];
-  setManagerSelection(next);
-}
-
-async function saveGuideSelection() {
-  const ids = getManagerSelection();
+  const list = document.getElementById("guide-chunk-list");
+  if (!list) return;
+  const ids = Array.from(list.querySelectorAll(".swipe-row")).map(r => r.dataset.chunkId);
   try {
     await apiFetch(`/games/${currentGame.id}/my-guide`, {
       method: "PUT",
       body: { chunk_ids: ids },
     });
-    showToast("Guide saved!", "success");
-    closeChunkManager();
+    showToast("Order saved", "success");
     await loadGuide(currentGame.id);
   } catch (err) {
     showToast(err.message, "error");
   }
+}
+
+// ── Hide / unhide ────────────────────────────────────────────────────────────
+
+async function hideChunk(chunkId) {
+  try {
+    await apiFetch(`/chunks/${chunkId}/visibility`, {
+      method: "POST",
+      body: { is_hidden: true },
+    });
+    showToast("Chunk hidden. Tap “Hidden” to restore.", "info");
+    await loadGuide(currentGame.id);
+  } catch (err) {
+    showToast(err.message, "error");
+    await loadGuide(currentGame.id);
+  }
+}
+
+async function unhideChunk(chunkId) {
+  try {
+    await apiFetch(`/chunks/${chunkId}/visibility`, {
+      method: "POST",
+      body: { is_hidden: false },
+    });
+    showToast("Chunk restored", "success");
+    await loadGuide(currentGame.id);
+    // Refresh the hidden panel content if it's still open.
+    const dlg = document.getElementById("hidden-chunks-dialog");
+    if (dlg?.open) renderHiddenChunksPanel();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
+// ── Hidden chunks modal ──────────────────────────────────────────────────────
+
+function openHiddenChunksPanel() {
+  if (!session || !currentGame) return;
+  const dlg = document.getElementById("hidden-chunks-dialog");
+  dlg.showModal();
+  renderHiddenChunksPanel();
+}
+
+function closeHiddenChunksPanel() {
+  const dlg = document.getElementById("hidden-chunks-dialog");
+  if (dlg && dlg.open) dlg.close();
+}
+
+function renderHiddenChunksPanel() {
+  const body = document.getElementById("hidden-chunks-body");
+  if (!body) return;
+  if (!hiddenChunks.length) {
+    body.innerHTML = `
+      <p class="text-sm text-base-content/60">Nothing hidden. Swipe a chunk left on the guide to hide it.</p>
+      <div class="modal-action">
+        <button class="btn btn-ghost btn-sm" onclick="closeHiddenChunksPanel()">Close</button>
+      </div>`;
+    return;
+  }
+  body.innerHTML = `
+    <p class="text-xs text-base-content/60 mb-2">Tap Show to restore a chunk to the guide.</p>
+    <div class="space-y-1">
+      ${hiddenChunks.map(c => `
+        <div class="flex items-center gap-2 py-1">
+          <span class="badge badge-sm badge-ghost">${c.chunk_type_label || c.chunk_type}</span>
+          <span class="text-sm flex-1 truncate">${c.title}</span>
+          <button class="btn btn-xs btn-primary" onclick="unhideChunk('${c.id}')">
+            <i data-lucide="eye" class="w-3 h-3"></i> Show
+          </button>
+        </div>`).join("")}
+    </div>
+    <div class="modal-action">
+      <button class="btn btn-ghost btn-sm" onclick="closeHiddenChunksPanel()">Close</button>
+    </div>`;
+  lucide.createIcons();
 }
 
 // ── Chunk editor (create + edit) ─────────────────────────────────────────────
@@ -329,7 +520,9 @@ async function saveGuideSelection() {
 async function openChunkEditor(chunkId) {
   if (!session || !currentGame) return;
   const types = await loadChunkTypes();
-  const existing = chunkId ? chunkLibrary.find(c => c.id === chunkId) : null;
+  // Look in both visible and hidden chunks for the existing record.
+  const pool = [...currentGuideChunks, ...hiddenChunks];
+  const existing = chunkId ? pool.find(c => c.id === chunkId) : null;
 
   const dlg = document.getElementById("chunk-editor");
   dlg.showModal();
@@ -358,6 +551,11 @@ async function openChunkEditor(chunkId) {
                   required>${(existing?.content || "").replace(/</g, "&lt;")}</textarea>
       </div>
       <div class="modal-action">
+        ${existing && canEditChunk(existing) ? `
+          <button type="button" class="btn btn-ghost btn-sm text-error"
+                  onclick="deleteChunk('${existing.id}')">
+            <i data-lucide="trash-2" class="w-3 h-3"></i> Delete
+          </button>` : ""}
         <button type="button" class="btn btn-ghost btn-sm" onclick="closeChunkEditor()">Cancel</button>
         <button type="submit" class="btn btn-primary btn-sm">
           ${existing ? "Save changes" : "Create chunk"}
@@ -382,26 +580,14 @@ async function submitChunk(e, chunkId) {
   if (!body.title || !body.content) return;
 
   try {
-    let saved;
     if (chunkId) {
-      saved = await apiFetch(`/chunks/${chunkId}`, { method: "PATCH", body });
+      await apiFetch(`/chunks/${chunkId}`, { method: "PATCH", body });
       showToast("Chunk updated", "success");
     } else {
-      saved = await apiFetch(`/games/${currentGame.id}/chunks`, { method: "POST", body });
+      await apiFetch(`/games/${currentGame.id}/chunks`, { method: "POST", body });
       showToast("Chunk created", "success");
     }
     closeChunkEditor();
-
-    // Refresh the manager (if open) and the live guide.
-    const dlg = document.getElementById("chunk-manager");
-    if (dlg?.open) {
-      chunkLibrary = await apiFetch(`/games/${currentGame.id}/chunks`);
-      let selection = getManagerSelection();
-      if (!chunkId && saved?.id && !selection.includes(saved.id)) {
-        selection = [...selection, saved.id]; // auto-select newly created chunk
-      }
-      setManagerSelection(selection);
-    }
     await loadGuide(currentGame.id);
   } catch (err) {
     showToast(err.message, "error");
@@ -413,13 +599,7 @@ async function deleteChunk(chunkId) {
   try {
     await apiFetch(`/chunks/${chunkId}`, { method: "DELETE" });
     showToast("Chunk deleted", "success");
-
-    const dlg = document.getElementById("chunk-manager");
-    if (dlg?.open) {
-      chunkLibrary = await apiFetch(`/games/${currentGame.id}/chunks`);
-      const selection = getManagerSelection().filter(id => id !== chunkId);
-      setManagerSelection(selection);
-    }
+    closeChunkEditor();
     await loadGuide(currentGame.id);
   } catch (err) {
     showToast(err.message, "error");

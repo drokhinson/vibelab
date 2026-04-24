@@ -11,6 +11,7 @@ class CurrentUser(BaseModel):
     """App-level user context."""
     user_id: str
     display_name: str
+    is_admin: bool = False
 
 
 async def get_current_user(
@@ -23,14 +24,18 @@ async def get_current_user(
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_profiles")
-        .select("id, display_name")
+        .select("id, display_name, is_admin")
         .eq("id", su_user.sub)
         .execute()
     )
 
     if result.data:
         row = result.data[0]
-        return CurrentUser(user_id=row["id"], display_name=row["display_name"])
+        return CurrentUser(
+            user_id=row["id"],
+            display_name=row["display_name"],
+            is_admin=bool(row.get("is_admin", False)),
+        )
 
     # Auto-create profile on first auth
     display_name = su_user.email.split("@")[0]
@@ -39,4 +44,4 @@ async def get_current_user(
         "display_name": display_name,
     }).execute()
 
-    return CurrentUser(user_id=su_user.sub, display_name=display_name)
+    return CurrentUser(user_id=su_user.sub, display_name=display_name, is_admin=False)

@@ -13,9 +13,10 @@ let gamesPerPage = 12;
 
 // Current game detail
 let currentGame = null;
-let currentGuideChunks = [];    // ordered list of ChunkResponse displayed as the guide
-let chunkLibrary = [];          // all chunks for currentGame (in the manager modal)
+let currentGuideChunks = [];    // visible chunks (MyGuideChunkResponse) in render order
+let hiddenChunks = [];          // chunks the user has hidden for this game
 let chunkTypeCache = null;      // [{id,label,icon,display_order}] fetched once
+let guideReorderMode = false;   // true while user is in press-and-hold reorder mode
 
 // Closet (user collection) — shelves are paginated server-side.
 let shelfItems = { owned: [], played: [] };
