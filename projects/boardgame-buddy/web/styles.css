@@ -146,18 +146,27 @@ body {
   color: #2B1D0A;
   border: 1px solid rgba(139, 111, 60, 0.35);
   border-radius: 3px;
+  border-collapse: collapse;
 }
 .scroll-panel .guide-table thead th {
   background: rgba(139, 111, 60, 0.25);
   color: #2B1D0A;
   font-weight: 700;
+  border-left: 1px solid rgba(139, 111, 60, 0.18);
 }
+
 .scroll-panel .guide-table tbody td {
   border-top: 1px solid rgba(139, 111, 60, 0.18);
+  border-left: 1px solid rgba(139, 111, 60, 0.18);
   color: #2B1D0A;
 }
-.scroll-panel .guide-table tr:nth-child(even) td {
-  background: rgba(201, 146, 42, 0.09);
+
+.scroll-panel .guide-table tbody tr:nth-child(odd) td {
+  background: #fcfbf8;
+}
+
+.scroll-panel .guide-table tbody tr:nth-child(even) td {
+  background: #e7e3db;
 }
 
 /* ── Rulebook card ──────────────────────────────────────────────────────────── */
