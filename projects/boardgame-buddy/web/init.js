@@ -65,6 +65,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Session is handled by onAuthStateChange in auth.js (fires INITIAL_SESSION on load)
 
+  // Admin entry point: reveal the header icon only when ?admin=1 is in the URL.
+  if (isAdminMode()) {
+    const btn = document.getElementById("admin-entry-btn");
+    if (btn) btn.classList.remove("hidden");
+  }
+
   // Analytics
   trackEvent("page_view");
 });

@@ -1,7 +1,7 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-04-19
+> Last updated: 2026-04-24
 
 ## What It Does
 A board game collection manager. Users browse the top 1000 BoardGameGeek-ranked games, build their closet (owned / played / wishlist), log game sessions with friends, and access quick-reference guides (setup reminders, turn summaries, rulebook links).
@@ -147,6 +147,32 @@ of the chunk system; will be dropped in a follow-up migration.
 - `GET /api/v1/boardgame_buddy/games/{game_id}/my-guide` — this user's chunk selection
 - `PUT /api/v1/boardgame_buddy/games/{game_id}/my-guide` — replace selection (ordered)
 
+### Admin (ADMIN_API_KEY)
+- `POST /api/v1/boardgame_buddy/guides/import?force=<bool>` — bulk import a guide bundle produced by the `/guide-from-rulebook` slash command. Request body = `GuideBundle` JSON (see below). If the referenced game isn't in `boardgamebuddy_games`, the endpoint calls the existing BGG import flow. `force=true` deletes existing chunks with `created_by IS NULL` for the game before inserting (user chunks are preserved). Dedupe key: `(game_id, chunk_type, title)`.
+
+#### GuideBundle schema
+```json
+{
+  "version": 1,
+  "game": { "bgg_id": 68448, "name": "7 Wonders" },
+  "source": {
+    "generated_at": "2026-04-24T00:00:00Z",
+    "generator": "guide-from-rulebook@2",
+    "rulebook_urls": [{ "url": "...", "label": "Publisher EN", "source": "publisher" }],
+    "missing": ["variant"]
+  },
+  "chunks": [
+    { "chunk_type": "setup",        "title": "Components & Dealing", "content": "markdown", "layout": "text" },
+    { "chunk_type": "player_turn",  "title": "Turn Actions",         "content": "markdown", "layout": "text" },
+    { "chunk_type": "rulebook",     "title": "Official Rulebook (PDF)", "content": "https://…pdf", "layout": "text" }
+  ]
+}
+```
+`chunk_type` must be one of the seven IDs in `boardgamebuddy_chunk_types`. Up to 25 chunks per bundle (7 specialist agents × 3 max each).
+
+### Admin UI
+- `?admin=1` in the URL reveals a shield icon in the header. Clicking it opens the `admin-guides` view, which accepts a JSON bundle file and POSTs it to the import endpoint with the admin API key stored in `sessionStorage.bgbAdminKey`.
+
 ## Screen Flow
 1. Auth (login/signup) → 2. **Closet** (home: shelves for Owned / Played / Wish as book-spines, with list-view toggle and sort by Alphabetical or Last Played; in-closet search filters your games) → 3. Tap a spine → pull-down animation → Game detail (themed, with Log Play + guide) → 4. Log Play → 5. Play History. "+ Add Game" from the Closet opens the Browse catalog (BGG top 1000 + live BGG search).
 
@@ -158,9 +184,11 @@ of the chunk system; will be dropped in a follow-up migration.
 | SUPABASE_ANON_KEY | Vercel | Client-side Supabase Auth |
 | SUPABASE_JWT_SECRET | Railway | Verify Supabase JWTs in backend |
 | ALLOWED_ORIGINS | Railway | CORS |
+| ADMIN_API_KEY | Railway | Protects `POST /guides/import` (admin guide upload) |
 
 ## Active Development Notes
 - Pilot project for Supabase Auth across the monorepo
 - Hybrid data: pre-seeded top 1000 BGG games + live BGG API search
 - Quick reference guides seeded for: Puerto Rico, Castles of Burgundy, Lost Cities, 7 Wonders
+- Guides can now be generated agentically via `/guide-from-rulebook <game name>`, which writes a JSON bundle to `projects/boardgame-buddy/web/sample-guides/<slug>.json` for an admin to upload through `?admin=1`.
 - Game detail pages themed with accent color + header image from box art
