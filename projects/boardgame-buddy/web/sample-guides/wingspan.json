@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 266192,
+    "name": "Wingspan"
+  },
+  "source": {
+    "generated_at": "2026-04-24T00:00:00Z",
+    "generator": "guide-from-rulebook@2",
+    "rulebook_urls": [
+      { "url": "https://stonemaiergames.com/games/wingspan/rules/", "label": "Publisher Rules & FAQ Hub (Stonemaier)", "source": "publisher" },
+      { "url": "https://wingspan.rulepop.com/", "label": "Official Rulepop Reference (Stonemaier)", "source": "publisher" },
+      { "url": "https://cdn.1j1ju.com/medias/c3/2d/f0-wingspan-appendix-rulebook.pdf", "label": "Wingspan Appendix Rulebook (PDF)", "source": "bgg_files" },
+      { "url": "https://cdn.1j1ju.com/medias/79/31/ed-wingspan-automa-rulebook.pdf", "label": "Wingspan Automa (Solo) Rulebook (PDF)", "source": "bgg_files" },
+      { "url": "https://boardgamegeek.com/filepage/173599/wingspan-core-rulebook", "label": "BGG Files: Wingspan Core Rulebook", "source": "bgg_files" }
+    ],
+    "missing": []
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Per-Player Setup",
+      "content": "## Each Player Receives\n- 1 player mat (Forest / Grassland / Wetland habitats)\n- 8 action cubes (one color)\n- 1 of each food token (invertebrate, seed, fish, fruit, rodent) — 5 total\n- 5 bird cards\n- 2 bonus cards\n\n## Choose & Discard\n- **Bonus cards:** keep 1, discard the other\n- **Starting hand:** discard any combination of birds + food so total kept = **5**\n\n| Keep Birds | Keep Food | Total |\n|---|---|---|\n| 5 | 0 | 5 |\n| 4 | 1 | 5 |\n| 3 | 2 | 5 |\n| 2 | 3 | 5 |\n| 1 | 4 | 5 |\n| 0 | 5 | 5 |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "setup",
+      "title": "Shared Table Setup",
+      "content": "## Center of Table\n1. Place the **goal board** in the middle\n2. Shuffle 8 end-of-round goal tiles face-down, draw **4**, place one per round slot\n   - Either side up (newer printings: optional friendly/green-side setup)\n3. Reveal **3 bird cards** face-up into the **bird tray**\n4. Roll all **5 food dice** into the **birdfeeder** (dice tower)\n5. Give the **first-player token** to the starting player\n\n## Dice Faces (Birdfeeder)\n- Invertebrate (green worm)\n- Seed (tan)\n- Fish (blue)\n- Fruit (red/pink)\n- Rodent (grey)\n- Wild",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Turn Actions Summary",
+      "content": "## Take EXACTLY ONE action — place cube on LEFTMOST EXPOSED slot in that row, then activate BROWN powers right-to-left.\n\n| # | Action | Row | What You Do |\n|---|---|---|---|\n| 1 | Play a Bird | Top | Pay food cost + egg cost (by column), place on matching habitat slot; trigger WHITE \"when played\" power once |\n| 2 | Gain Food | Forest | Take N dice from birdfeeder (N = slot value); each die = 1 matching food token (WILD = any) |\n| 3 | Lay Eggs | Grassland | Lay N eggs (N = slot value) on your birds; respect each bird's egg capacity; split freely |\n| 4 | Draw Cards | Wetland | Draw N cards (N = slot value); for each, take top of deck OR one of 3 face-up tray cards; refill tray after |\n\n### Play a Bird — Egg Cost by Column\n| Column | Egg Cost |\n|---|---|\n| 1 (leftmost) | 0 |\n| 2 | 1 |\n| 3 | 1 |\n| 4 | 2 |\n| 5 | 2 |\n\n- Food cost: `/` = OR, wildcard symbol = any food.\n- Birdfeeder: if all remaining dice show the same face (or only 1 die left), you MAY reset & re-roll all 5 before gaining food. Auto-resets when empty.\n- Wetland \"+\" slots: spend listed food to draw 1 extra card.\n- Cube is still spent even if action has no legal effect (e.g. no playable bird).",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Bird Power Timing & Activation Order",
+      "content": "## Power Colors — When They Trigger\n\n| Color | Trigger | Notes |\n|---|---|---|\n| WHITE | When Played | Fires once, immediately on play |\n| BROWN | When Activated | Fires on the row action you just took |\n| PINK | Once Between Turns | Triggers on OTHER players' turns, once per round |\n| YELLOW | End of Game | Scored in final scoring only |\n\n## Activation Order for BROWN Powers\n\n- After resolving the row's basic effect, activate BROWN powers in that row **right-to-left** (rightmost bird first).\n- Only birds in the row matching the action you took activate.\n- Each bird activates once per action (unless its text says otherwise).\n- You choose order only among ties; otherwise strict right-to-left.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Bird Card Anatomy",
+      "content": "## Bird Card Anatomy\n\nEach of the 170 bird cards shows these elements:\n\n| Location / Element | Meaning |\n|---|---|\n| Upper-left food icons | Food cost to play. `/` between icons = OR (pick one). Wildcard = any food. |\n| Habitat band | Forest / grassland / wetland. Many birds allow multiple habitats. |\n| Egg capacity (circles) | Max eggs this bird can hold, typically 2-6. |\n| Nest type icon | Bowl, cavity, ground, platform, or star/wild. |\n| Wingspan (cm) | Used for predator interactions and some bonus cards. |\n| Points (VP) | Base VP scored at game end. |\n| Power text (colored) | Ability; color = when it triggers (see Power Timing). |\n\n**Note:** Nest type does NOT affect laying eggs. It only matters for bonus cards and end-of-round goals. Star/wild nests count as any nest type.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Power Timing Colors",
+      "content": "## Power Timing Colors\n\nThe background color of a bird's power text tells you WHEN it triggers.\n\n| Color | Trigger | Notes |\n|---|---|---|\n| WHITE | When Played | One-time effect, fires as you play the bird. |\n| BROWN | When Activated | Fires each time you take that row's action. Resolve row **right-to-left**. |\n| PINK | Once Between Turns | Triggers on an opponent's turn that matches the condition. Once per round of turns. |\n| YELLOW | End of Game | Permanent scoring bonus tallied at game end. |\n\n### Common power categories\n- **Cache food** (brown): store food on the bird; 1 VP each at end; cannot be spent.\n- **Tuck cards** (brown): tuck a card under the bird; 1 VP per tucked card at end.\n- **Predator** (skull icon): roll/flip to hunt; on success tuck the caught card.\n- **Extra egg-laying**: lay eggs beyond capacity via power.\n- **Copy**: some birds copy another bird's power.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Food Dice Faces & Nest Types",
+      "content": "## Food Dice & Nest Types\n\n### Birdfeeder dice (5 custom dice)\n\n| Face | Food | Token? |\n|---|---|---|\n| Green worm | Invertebrate | Yes |\n| Tan | Seed | Yes |\n| Blue | Fish | Yes |\n| Red/pink | Fruit | Yes |\n| Grey | Rodent | Yes |\n| Wild (1 face per die) | Any food of your choice | **No token** - die face only |\n\n### Nest types\n\n| Type | Bonus/Goal behavior |\n|---|---|\n| Bowl | Counts only as bowl |\n| Cavity | Counts only as cavity |\n| Ground | Counts only as ground |\n| Platform | Counts only as platform |\n| Star / Wild | Counts as ANY nest type for bonus cards and end-of-round goals |\n\nReminder: nest type is irrelevant to laying eggs - it only matters for bonuses and goals.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "End-Game Scoring (6 Categories)",
+      "content": "## Final Scoring — Wingspan\n\nAfter round 4, sum all six categories. Highest total wins.\n\n| # | Category | VP |\n|---|---|---|\n| 1 | Birds in play | Face-value VP printed on each card |\n| 2 | Bonus cards | Per card's scoring tiers (qualifying birds) |\n| 3 | End-of-round goals | Sum of all 4 placements on goal board |\n| 4 | Eggs | 1 VP each (currently on bird cards) |\n| 5 | Cached food | 1 VP each (stored on birds via cache powers) |\n| 6 | Tucked cards | 1 VP each (tucked under birds) |\n\n### Tiebreaker\n- Most food tokens + eggs + tucked cards remaining wins.\n- Some editions fall back to birds-in-play or bonus cards next — check rulebook.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "End-of-Round Goal Board Scoring",
+      "content": "## Goal Board Placement (4x per Game)\n\nAt end of each round, rank players on the round's goal tile and place an action cube.\n\n### Point values by tile side\n\n| Place | Blue side | Green side |\n|---|---|---|\n| 1st | 5 | 6 |\n| 2nd | 2 | 3 |\n| 3rd | 1 | 1 |\n| 4th | 0 | 0 |\n\n### Ties\n- Tied players both place on the HIGHER tied spot.\n- The next spot down is SKIPPED.\n- At game end, add the tied spots' values together and divide by number of tied players (round down).\n\n### Notes\n- 4th place always scores 0.\n- A player with zero qualifying items can still place (and score 0 or be beaten by anyone with 1+).",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "tips",
+      "title": "First-Timer Tips That Change Your Turn",
+      "content": "## Tips for New Players\n\n- **Read your bonus card FIRST** — it often dictates which habitat or bird trait to chase all game.\n- **Check all 4 round goals before turn 1** — the goal board is fixed at setup, so plan your tempo around it.\n- **Even a token push beats 4th place** — 4th in a round-end goal is 0 VP, so drop a single cube rather than abandon it.\n- **Fill leftmost slots early** — column 1 costs 0 eggs and unlocks higher-value slots to the right.\n- **Stack BROWN powers in your favorite habitat** — they retrigger every time you take that action, compounding fast.\n- **Play WHITE 'when played' birds earlier, not later** — their ongoing effects need rounds left to pay off.\n- **Don't hoard eggs for VP** — you need them as currency to play birds in columns 2–5; 1 VP each is a consolation, not a plan.\n- **Front-load big engines before Round 4** — you only get 5 turns in the final round, so cache/tuck setups played then barely fire.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "tips",
+      "title": "End-Game Decision Checks",
+      "content": "## Last-Round Decisions\n\n- **Count your remaining turns out loud** — Round 4 is 5 turns; activating a row is often worth more than playing a new bird.\n- **Trigger your best BROWN row one more time** — a full habitat row action usually beats a marginal bird play.\n- **Spend leftover eggs on cheap bird plays** — an unplayed bird on your board is often more VP than an egg sitting in a nest.\n- **Check the final round goal mid-round, not at the end** — a single cube placement can swing 2–3 places.\n- **Prefer activating cached-food / tucking birds over feeding new ones** — those VP tokens are locked in immediately.\n- **Don't draw cards on your last 1–2 turns** — face-down cards in hand score nothing.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "variant",
+      "title": "Solo Automa Quick Reference",
+      "content": "## Solo Automa (1-player Variant)\n\nShipped with base game. Automa has no player mat, no cards, no food, no eggs — just action cubes and her own deck.\n\n### Difficulty Ladder\n\n| Difficulty | VP per face-down bird card |\n|---|---|\n| Easy | 3 |\n| Medium | 4 |\n| Hard | 5 |\n| Expert | 5 (+ harder setup) |\n\n### Round Structure\n\n| Round | Your actions | Automa cards |\n|---|---|---|\n| 1 | 8 | 10 |\n| 2 | 7 | 9 |\n| 3 | 6 | 8 |\n| 4 | 5 | 7 |\n\nAutoma may outpace you — this is intentional.\n\n### Automa Action Symbols\n\nFlip top card, resolve the symbol matching the current round.\n\n| Symbol | Automa does |\n|---|---|\n| Play a Bird | Takes 1+ bird-tray cards matching her game-end goal (tiebreak leftmost/rightmost per card); places face-up or face-down in aviary. Refill tray. |\n| Gain Food | Removes ALL dice from birdfeeder showing the first food in the card's priority order (denies you). |\n| Lay Eggs | Gains eggs equal to value (1 VP each at game end). |\n| Draw Cards | Takes 1 face-down card from deck (or sometimes face-up). |\n| Goal / Pink | Places/removes a cube on current round's goal tile, or triggers a pink-power effect. |\n\n### End-of-Round Goals\n\nAutoma's goal-tile count = cubes placed during the round ± base modifier on her Goal Reference card. Award 1st/2nd normally.\n\n### Final Scoring (Automa)\n\n- Face value of face-up bird cards collected\n- 3 / 4 / 5 VP per face-down bird card (by difficulty)\n- 1 VP per egg\n- End-of-round goal points\n- Points from her game-end goal card\n\nYou win if your total VP > Automa's.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://stonemaiergames.com/games/wingspan/rules/",
+      "layout": "text"
+    }
+  ]
+}
