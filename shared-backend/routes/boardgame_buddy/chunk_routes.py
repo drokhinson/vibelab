@@ -12,8 +12,10 @@ from .models import (
     ChunkResponse,
     ChunkTypeResponse,
     ChunkUpdate,
+    ChunkVisibilityUpdate,
     GuideSelectionUpdate,
     MessageResponse,
+    MyGuideChunkResponse,
 )
 from .dependencies import CurrentUser, get_current_user
 
@@ -21,15 +23,16 @@ from .dependencies import CurrentUser, get_current_user
 def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
     """Flatten a Supabase row with joined chunk_type and profile into ChunkResponse."""
     chunk_type = row.get("chunk_type")
-    # Supabase FK expansion returns a nested dict when using PostgREST embedding.
     type_obj = row.get("boardgamebuddy_chunk_types")
     profile_obj = row.get("boardgamebuddy_profiles")
 
     chunk_type_label = None
     chunk_type_icon = None
+    chunk_type_order = 0
     if isinstance(type_obj, dict):
         chunk_type_label = type_obj.get("label")
         chunk_type_icon = type_obj.get("icon")
+        chunk_type_order = int(type_obj.get("display_order") or 0)
 
     created_by_name = None
     if isinstance(profile_obj, dict):
@@ -41,6 +44,7 @@ def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
         chunk_type=chunk_type,
         chunk_type_label=chunk_type_label,
         chunk_type_icon=chunk_type_icon,
+        chunk_type_order=chunk_type_order,
         title=row["title"],
         layout=row.get("layout", "text"),
         content=row["content"],
@@ -52,9 +56,17 @@ def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
 
 _CHUNK_SELECT = (
     "id, game_id, chunk_type, title, layout, content, created_by, updated_at,"
-    " boardgamebuddy_chunk_types(label, icon),"
+    " boardgamebuddy_chunk_types(label, icon, display_order),"
     " boardgamebuddy_profiles(display_name)"
 )
+
+
+def _sort_chunk_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sort by chunk_type.display_order, then title."""
+    return sorted(rows, key=lambda r: (
+        int(((r.get("boardgamebuddy_chunk_types") or {}).get("display_order")) or 0),
+        r.get("title") or "",
+    ))
 
 
 @router.get(
@@ -84,7 +96,7 @@ async def list_chunk_types() -> list[ChunkTypeResponse]:
 async def list_chunks(
     game_id: str = Path(..., description="Game UUID"),
 ) -> list[ChunkResponse]:
-    """Return every chunk contributed for a game, ordered by type then title."""
+    """Return every chunk contributed for a game, ordered by type display_order then title."""
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_guide_chunks")
@@ -92,11 +104,7 @@ async def list_chunks(
         .eq("game_id", game_id)
         .execute()
     )
-    rows = result.data or []
-    rows.sort(key=lambda r: (
-        ((r.get("boardgamebuddy_chunk_types") or {}).get("label") or r.get("chunk_type") or ""),
-        r.get("title") or "",
-    ))
+    rows = _sort_chunk_rows(result.data or [])
     return [_chunk_row_to_response(r) for r in rows]
 
 
@@ -114,7 +122,6 @@ async def create_chunk(
     """Create a new guide chunk attached to a game."""
     sb = get_supabase()
 
-    # Verify game exists.
     game = (
         sb.table("boardgamebuddy_games")
         .select("id")
@@ -124,7 +131,6 @@ async def create_chunk(
     if not game.data:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    # Verify chunk_type is valid.
     chunk_type = (
         sb.table("boardgamebuddy_chunk_types")
         .select("id")
@@ -168,7 +174,7 @@ async def update_chunk(
     chunk_id: str = Path(..., description="Chunk UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ChunkResponse:
-    """Edit an existing chunk. Only the creator may edit."""
+    """Edit an existing chunk. Creator or admin may edit."""
     sb = get_supabase()
 
     existing = (
@@ -179,7 +185,7 @@ async def update_chunk(
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Chunk not found")
-    if existing.data[0]["created_by"] != user.user_id:
+    if existing.data[0]["created_by"] != user.user_id and not user.is_admin:
         raise HTTPException(status_code=403, detail="You can only edit chunks you created")
 
     updates: dict[str, Any] = {"updated_at": "now()"}
@@ -221,7 +227,7 @@ async def delete_chunk(
     chunk_id: str = Path(..., description="Chunk UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Delete a chunk. Only the creator may delete. Cascades to selections."""
+    """Delete a chunk. Creator or admin may delete. Cascades to selections."""
     sb = get_supabase()
 
     existing = (
@@ -232,7 +238,7 @@ async def delete_chunk(
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Chunk not found")
-    if existing.data[0]["created_by"] != user.user_id:
+    if existing.data[0]["created_by"] != user.user_id and not user.is_admin:
         raise HTTPException(status_code=403, detail="You can only delete chunks you created")
 
     sb.table("boardgamebuddy_guide_chunks").delete().eq("id", chunk_id).execute()
@@ -241,52 +247,68 @@ async def delete_chunk(
 
 @router.get(
     "/games/{game_id}/my-guide",
-    response_model=list[ChunkResponse],
+    response_model=list[MyGuideChunkResponse],
     status_code=200,
     summary="Get my assembled guide for a game",
 )
 async def get_my_guide(
     game_id: str = Path(..., description="Game UUID"),
     user: CurrentUser = Depends(get_current_user),
-) -> list[ChunkResponse]:
-    """Return the current user's selected chunks for the game, in order."""
-    sb = get_supabase()
-    selections = (
-        sb.table("boardgamebuddy_guide_selections")
-        .select("chunk_id, display_order")
-        .eq("user_id", user.user_id)
-        .eq("game_id", game_id)
-        .order("display_order")
-        .execute()
-    )
-    rows = selections.data or []
-    if not rows:
-        return []
+) -> list[MyGuideChunkResponse]:
+    """Return every chunk for a game, annotated with this user's hide/order state.
 
-    chunk_ids = [r["chunk_id"] for r in rows]
-    chunks = (
+    Frontend filters is_hidden=true into the hidden panel and sorts the rest by
+    user_display_order (when set) falling back to chunk_type display_order.
+    """
+    sb = get_supabase()
+
+    chunks_res = (
         sb.table("boardgamebuddy_guide_chunks")
         .select(_CHUNK_SELECT)
-        .in_("id", chunk_ids)
+        .eq("game_id", game_id)
         .execute()
     )
-    by_id = {c["id"]: c for c in (chunks.data or [])}
-    ordered = [by_id[cid] for cid in chunk_ids if cid in by_id]
-    return [_chunk_row_to_response(r) for r in ordered]
+    chunk_rows = _sort_chunk_rows(chunks_res.data or [])
+
+    selections_res = (
+        sb.table("boardgamebuddy_guide_selections")
+        .select("chunk_id, display_order, is_hidden")
+        .eq("user_id", user.user_id)
+        .eq("game_id", game_id)
+        .execute()
+    )
+    selections_by_chunk = {
+        r["chunk_id"]: r for r in (selections_res.data or [])
+    }
+
+    result: list[MyGuideChunkResponse] = []
+    for row in chunk_rows:
+        base = _chunk_row_to_response(row)
+        sel = selections_by_chunk.get(row["id"])
+        result.append(MyGuideChunkResponse(
+            **base.model_dump(),
+            is_hidden=bool(sel["is_hidden"]) if sel else False,
+            user_display_order=sel["display_order"] if sel else None,
+        ))
+    return result
 
 
 @router.put(
     "/games/{game_id}/my-guide",
     response_model=MessageResponse,
     status_code=200,
-    summary="Replace my guide selection",
+    summary="Replace my visible chunk order",
 )
 async def set_my_guide(
     body: GuideSelectionUpdate,
     game_id: str = Path(..., description="Game UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Replace this user's chunk selection for the game with the given ordered list."""
+    """Replace the user's visible-chunk ordering for the game.
+
+    Only non-hidden selection rows are rewritten — hidden rows are preserved
+    so the "Hidden chunks" panel stays intact across reorders.
+    """
     sb = get_supabase()
 
     if body.chunk_ids:
@@ -305,12 +327,13 @@ async def set_my_guide(
                 detail=f"Chunks not found for this game: {invalid}",
             )
 
-    # Atomic replace: clear existing, insert new ordered rows.
+    # Clear only the user's non-hidden rows for this game; leave is_hidden=true rows alone.
     (
         sb.table("boardgamebuddy_guide_selections")
         .delete()
         .eq("user_id", user.user_id)
         .eq("game_id", game_id)
+        .eq("is_hidden", False)
         .execute()
     )
 
@@ -321,9 +344,95 @@ async def set_my_guide(
                 "game_id": game_id,
                 "chunk_id": chunk_id,
                 "display_order": idx,
+                "is_hidden": False,
             }
             for idx, chunk_id in enumerate(body.chunk_ids)
         ]
         sb.table("boardgamebuddy_guide_selections").insert(rows).execute()
 
     return MessageResponse(message="Guide updated")
+
+
+@router.post(
+    "/chunks/{chunk_id}/visibility",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Hide or unhide a chunk for the current user",
+)
+async def set_chunk_visibility(
+    body: ChunkVisibilityUpdate,
+    chunk_id: str = Path(..., description="Chunk UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Per-user hide/unhide. Upserts a selection row with is_hidden set."""
+    sb = get_supabase()
+
+    chunk = (
+        sb.table("boardgamebuddy_guide_chunks")
+        .select("id, game_id")
+        .eq("id", chunk_id)
+        .execute()
+    )
+    if not chunk.data:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+    game_id = chunk.data[0]["game_id"]
+
+    existing = (
+        sb.table("boardgamebuddy_guide_selections")
+        .select("id, display_order, is_hidden")
+        .eq("user_id", user.user_id)
+        .eq("chunk_id", chunk_id)
+        .execute()
+    )
+
+    if existing.data:
+        row_id = existing.data[0]["id"]
+        updates: dict[str, Any] = {"is_hidden": body.is_hidden}
+        # When unhiding, park the chunk at the end of the visible list.
+        if not body.is_hidden:
+            tail = (
+                sb.table("boardgamebuddy_guide_selections")
+                .select("display_order")
+                .eq("user_id", user.user_id)
+                .eq("game_id", game_id)
+                .eq("is_hidden", False)
+                .order("display_order", desc=True)
+                .limit(1)
+                .execute()
+            )
+            next_order = (tail.data[0]["display_order"] + 1) if tail.data else 0
+            updates["display_order"] = next_order
+        (
+            sb.table("boardgamebuddy_guide_selections")
+            .update(updates)
+            .eq("id", row_id)
+            .execute()
+        )
+    else:
+        # No existing selection row — create one.
+        display_order = 0
+        if not body.is_hidden:
+            tail = (
+                sb.table("boardgamebuddy_guide_selections")
+                .select("display_order")
+                .eq("user_id", user.user_id)
+                .eq("game_id", game_id)
+                .eq("is_hidden", False)
+                .order("display_order", desc=True)
+                .limit(1)
+                .execute()
+            )
+            display_order = (tail.data[0]["display_order"] + 1) if tail.data else 0
+        (
+            sb.table("boardgamebuddy_guide_selections")
+            .insert({
+                "user_id": user.user_id,
+                "game_id": game_id,
+                "chunk_id": chunk_id,
+                "display_order": display_order,
+                "is_hidden": body.is_hidden,
+            })
+            .execute()
+        )
+
+    return MessageResponse(message="Hidden" if body.is_hidden else "Visible")

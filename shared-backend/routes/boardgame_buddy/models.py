@@ -193,6 +193,7 @@ class ChunkResponse(BaseModel):
     chunk_type: str
     chunk_type_label: Optional[str] = None
     chunk_type_icon: Optional[str] = None
+    chunk_type_order: int = 0
     title: str
     layout: str
     content: str
@@ -201,8 +202,17 @@ class ChunkResponse(BaseModel):
     updated_at: datetime
 
 
+class MyGuideChunkResponse(ChunkResponse):
+    is_hidden: bool = False
+    user_display_order: Optional[int] = None
+
+
 class GuideSelectionUpdate(BaseModel):
     chunk_ids: list[str]
+
+
+class ChunkVisibilityUpdate(BaseModel):
+    is_hidden: bool
 
 
 # ── Guide bundle import (agentic generator) ───────────────────────────────────

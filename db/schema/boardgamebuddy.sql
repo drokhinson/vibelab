@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 039
+-- Last updated: migration 040
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_selections (
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
   chunk_id UUID NOT NULL REFERENCES public.boardgamebuddy_guide_chunks(id) ON DELETE CASCADE,
   display_order INT NOT NULL DEFAULT 0,
+  is_hidden BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE (user_id, chunk_id)
 );
@@ -152,6 +153,8 @@ CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(g
 CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game ON public.boardgamebuddy_guide_chunks(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game
   ON public.boardgamebuddy_guide_selections(user_id, game_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game_hidden
+  ON public.boardgamebuddy_guide_selections(user_id, game_id, is_hidden);
 CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_status
   ON public.boardgamebuddy_pending_guides(status);
 CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_uploader
