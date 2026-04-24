@@ -261,3 +261,4 @@ class PendingGuideDetail(PendingGuideSummary):
 class PendingGuideDecisionBody(BaseModel):
     notes: Optional[str] = None
     force: bool = False
+    override_bundle: Optional[GuideBundle] = None

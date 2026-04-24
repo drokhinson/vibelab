@@ -279,7 +279,8 @@ async def approve_pending_guide(
     if row["status"] != "pending":
         raise HTTPException(status_code=400, detail=f"Already {row['status']}")
 
-    bundle = GuideBundle(**row["bundle"])
+    bundle_data = body.override_bundle.model_dump(mode="json") if body.override_bundle else row["bundle"]
+    bundle = GuideBundle(**bundle_data)
     import_result = await _apply_bundle(bundle, body.force)
 
     sb.table("boardgamebuddy_pending_guides").update({
