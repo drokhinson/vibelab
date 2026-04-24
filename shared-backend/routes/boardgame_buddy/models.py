@@ -1,8 +1,8 @@
 """Pydantic models for BoardgameBuddy."""
 
 from datetime import date, datetime
-from typing import Optional
-from pydantic import BaseModel, computed_field
+from typing import Any, Optional
+from pydantic import BaseModel, Field, computed_field
 
 from .constants import CollectionStatus
 
@@ -198,3 +198,32 @@ class ChunkResponse(BaseModel):
 
 class GuideSelectionUpdate(BaseModel):
     chunk_ids: list[str]
+
+
+# ── Guide bundle import (agentic generator) ───────────────────────────────────
+
+class GuideBundleGame(BaseModel):
+    bgg_id: int = Field(..., gt=0)
+    name: str
+
+
+class GuideBundleChunk(BaseModel):
+    chunk_type: str
+    title: str = Field(..., max_length=200)
+    content: str
+    layout: str = "text"
+
+
+class GuideBundle(BaseModel):
+    version: int = 1
+    game: GuideBundleGame
+    chunks: list[GuideBundleChunk] = Field(..., min_length=1, max_length=25)
+    source: Optional[dict[str, Any]] = None
+
+
+class GuideImportResponse(BaseModel):
+    game_id: str
+    imported_game: bool
+    chunks_inserted: int
+    chunks_skipped: int
+    skipped_reasons: list[str]
