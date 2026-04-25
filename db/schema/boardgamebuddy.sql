@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 040
+-- Last updated: migration 041
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chunks (
   created_by UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE SET NULL,
   layout TEXT NOT NULL DEFAULT 'text' CHECK (layout IN ('text')),
   content TEXT NOT NULL,
+  expansion_name TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

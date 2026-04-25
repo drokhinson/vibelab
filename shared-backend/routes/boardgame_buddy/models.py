@@ -178,6 +178,7 @@ class ChunkCreate(BaseModel):
     title: str
     content: str
     layout: str = "text"
+    expansion_name: Optional[str] = None
 
 
 class ChunkUpdate(BaseModel):
@@ -185,6 +186,7 @@ class ChunkUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     layout: Optional[str] = None
+    expansion_name: Optional[str] = None
 
 
 class ChunkResponse(BaseModel):
@@ -197,6 +199,7 @@ class ChunkResponse(BaseModel):
     title: str
     layout: str
     content: str
+    expansion_name: Optional[str] = None
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
     updated_at: datetime
@@ -227,6 +230,7 @@ class GuideBundleChunk(BaseModel):
     title: str = Field(..., max_length=200)
     content: str
     layout: str = "text"
+    expansion_name: Optional[str] = None
 
 
 class GuideBundle(BaseModel):
@@ -248,7 +252,7 @@ class GuideImportResponse(BaseModel):
 
 class PendingGuideSubmitResponse(BaseModel):
     id: Optional[str] = None
-    status: str  # "submitted" (queued for review) | "imported" (admin — direct)
+    status: str  # "submitted" — always queued for admin review
     message: str
     import_result: Optional[GuideImportResponse] = None
 

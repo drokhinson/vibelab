@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, Path, Query
+from fastapi import Depends, Header, HTTPException, Path, Query  # Query used by /guides/import
 
 from auth import require_admin
 from db import get_supabase
@@ -81,6 +81,7 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
             "title": chunk.title,
             "content": chunk.content,
             "layout": chunk.layout,
+            "expansion_name": chunk.expansion_name,
             "created_by": created_by,
         })
         existing_keys.add(key)
@@ -129,33 +130,14 @@ async def import_guide(
     "/guides/submit",
     response_model=PendingGuideSubmitResponse,
     status_code=200,
-    summary="Submit a guide bundle (admin imports directly; others queue for review)",
+    summary="Submit a guide bundle for review (all users, including admins)",
 )
 async def submit_guide(
     bundle: GuideBundle,
-    force: bool = Query(False, description="Admin-only: replace existing seed chunks before inserting"),
     su_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> PendingGuideSubmitResponse:
-    """Admin users import bundles directly. Non-admin submissions are queued for admin review."""
+    """Queue a guide bundle for admin review. All users — including admins — go through review."""
     sb = get_supabase()
-    profile = (
-        sb.table("boardgamebuddy_profiles")
-        .select("is_admin")
-        .eq("id", su_user.sub)
-        .execute()
-    )
-    if not profile.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    is_admin = bool(profile.data[0].get("is_admin"))
-
-    if is_admin:
-        result = await _apply_bundle(bundle, force, created_by=su_user.sub)
-        return PendingGuideSubmitResponse(
-            status="imported",
-            message=f"Imported {result.chunks_inserted} chunk(s).",
-            import_result=result,
-        )
-
     inserted = (
         sb.table("boardgamebuddy_pending_guides")
         .insert({
@@ -172,7 +154,7 @@ async def submit_guide(
     return PendingGuideSubmitResponse(
         id=pending_id,
         status="submitted",
-        message="Submitted for admin review. You'll see it appear once an admin approves it.",
+        message="Submitted for review. An admin will approve or reject it shortly.",
     )
 
 
