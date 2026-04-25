@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 367220,
+    "name": "Sea Salt & Paper"
+  },
+  "source": {
+    "generated_at": "2026-04-25T00:00:00Z",
+    "generator": "guide-from-rulebook@2",
+    "rulebook_urls": [
+      {
+        "url": "https://studiobombyx.com/en/rules/sea-salt-and-paper/",
+        "label": "Bombyx Official Rules Page EN",
+        "source": "publisher"
+      },
+      {
+        "url": "https://fgbradleys.com/wp-content/uploads/Sea-Salt-and-Paper-Rulebook.pdf",
+        "label": "Publisher EN (Pandasaurus/FG Bradley's)",
+        "source": "publisher"
+      },
+      {
+        "url": "https://cdn.1j1ju.com/medias/a5/4b/bb-sea-salt-paper-rulebook.pdf",
+        "label": "Bombyx Rulebook EN (1j1ju CDN)",
+        "source": "publisher"
+      }
+    ],
+    "missing": ["variant"]
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Components & Initial Setup",
+      "content": "## Components & Initial Setup\n\n**Components**\n- 58 cards\n- 6 game aid cards (one per player)\n- Rulebook\n\n**Setup Steps**\n1. Shuffle all 58 cards into a face-down draw deck.\n2. Flip the top 2 cards face-up, placed side by side as **2 separate discard piles**.\n3. All players start with **no cards in hand**.\n4. Choose a start player randomly.\n5. Each player takes 1 game aid card.\n\n**VP Thresholds (game end)**\n\n| Players | Points to Win |\n|---------|---------------|\n| 2 | 40 |\n| 3 | 35 |\n| 4 | 30 |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "setup",
+      "title": "Round Reset",
+      "content": "## Round Reset\n\nAfter each round is scored:\n1. Gather **all** cards, shuffle, form a new draw deck.\n2. Flip the top 2 cards face-up to start 2 fresh discard piles.\n3. Players start the new round with **no cards in hand**.\n\n**First player next round:**\n- **LAST CHANCE** triggered → the player who called it goes first.\n- **STOP** called → the next player **clockwise** from the STOP-caller goes first.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Turn Actions",
+      "content": "## Turn Actions\n\nOn your turn, perform **exactly one** of the two actions below, then optionally play Duos.\n\n| Action | What You Do |\n|---|---|\n| **Draw from Deck** | Take top 2 cards; keep 1 in hand, place the other face-up on top of either discard pile |\n| **Take from Discard** | Take the top card from either discard pile into your hand |\n\n### After Your Action — Play Duos (Optional)\n- A **Duo** = 2 matching cards played face-up in front of you\n- Triggers the pair's special effect and scores **1 point** at round end\n- You may play **multiple Duos** in the same turn\n- You may also keep matched pairs in hand — they still score **1 pt per pair** at round end",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "End-of-Round Triggers",
+      "content": "## End-of-Round Triggers\n\n| Trigger | Condition | What Happens |\n|---|---|---|\n| **STOP or LAST CHANCE** | After your action, if your visible total (hand + played Duos) is **7 or more points** | You may announce to end the round |\n| **Deck Exhaustion** | Draw deck runs out | Round ends immediately as if STOP was called |\n\n- **STOP** — round ends immediately; **all players** reveal and score normally.\n- **LAST CHANCE** — all opponents each take one more turn, then scoring happens (see STOP vs LAST CHANCE in Scoring).",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Duo Cards — Pairs & Immediate Effects",
+      "content": "## Duo Cards\n\nPlay **both cards face-up** to trigger the effect. Each duo scores **+1 pt** at round end.\n\n| Pair | Effect |\n|---|---|\n| Crab + Crab | No effect — just 1 pt for the pair |\n| Fish + Fish | Draw the top card of the deck |\n| Seahorse + Seahorse | Look at top 5 cards of deck; take 1, shuffle rest back |\n| Crab + Lobster | Take top 5 cards of deck; keep 1, shuffle other 4 back |\n| Penguin + Penguin | Look at **all** opponents' hands |\n| Boat + Boat | Steal 1 card from an opponent's hand (**opponent** chooses which) |\n| Shark + Swimmer | Steal 1 card of **your choice** from an opponent's hand |\n\n> **Note:** Crab has 9 cards; any 2 crabs form a pair. Penguin has 3 cards; any 2 penguins form a pair.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Collector & Scoring Cards — Point Values",
+      "content": "## Collector Cards (scored by quantity held at round end)\n\n| Card | Copies | 1 | 2 | 3 | 4 | 5 | 6 |\n|---|---|---|---|---|---|---|---|\n| Shell | ×6 | 0 | 2 | 4 | 6 | 8 | 10 |\n| Octopus | ×5 | 0 | 3 | 6 | 9 | 12 | — |\n| Penguin | ×3 | 1 | 3 | 5 | — | — | — |\n| Sailor | ×2 | 0 | 5 | — | — | — | — |\n\n## Special Scoring Cards\n\n| Card | Copies | Scoring Rule |\n|---|---|---|\n| Mermaid | ×4 | +1 pt per card of your **most-common colour** (each Mermaid targets a different colour; can't double-count). Hold **all 4** → **instant game win**. |\n| Lighthouse | ×1 | +1 pt per **Boat** card you hold |\n| Shoal of Fish | ×1 | +1 pt per **Fish** card you hold |\n| Seahorse | — | Also counts as 1 collector card of your **largest collection** type (requires ≥1 of that type) |\n\n## Colour Bonus (every player, every round)\n\n+1 pt per card of your most-common colour (hand + played area). **Mermaid cards are excluded** from this tally.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Expansion Cards (More)",
+      "content": "## Sea Salt & Paper — *More* Expansion\n\nThe **More** expansion (published separately by Bombyx) adds new card types to the base game. Specific card effects and scoring rules for expansion cards were **not present** in the base rulebook used for this reference.\n\nConsult the *More* expansion rulebook insert for details on new card types and any rule modifications.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "End-Round Scoring — All VP Sources",
+      "content": "## End-Round Scoring\n\nScore **all cards in hand + face-up Duos** each round.\n\n### Set Scoring\n\n| Card | 1 | 2 | 3 | 4 | 5 | 6 |\n|---|---|---|---|---|---|---|\n| Shell | 0 | 2 | 4 | 6 | 8 | 10 |\n| Octopus | 0 | 3 | 6 | 9 | 12 | — |\n| Penguin | 1 | 3 | 5 | — | — | — |\n| Sailor pair | 0 | 5 | — | — | — | — |\n\n### Individual Card Scoring\n\n- **Duo pairs** (played face-up OR matching pair in hand): 1 pt each\n- **Mermaid**: 1 pt per card of your most-common colour (each Mermaid counts a *different* colour; no repeats)\n- **Lighthouse**: 1 pt per Boat card held\n- **Shoal of Fish**: 1 pt per Fish card held\n\n### Colour Bonus (all players, every round)\n\n1 pt per card of your most-common colour — Mermaids **not** counted\n\n### Game End & Thresholds\n\n| Players | Points to trigger end |\n|---|---|\n| 2 | 40 |\n| 3 | 35 |\n| 4 | 30 |\n\nWhen ≥1 player hits the threshold, **highest cumulative total wins**.\n\n**Tiebreaker:** tied player who did *not* trigger the final round wins. If still tied, share victory.\n\n**Instant Win:** collect all 4 Mermaids in one round → win immediately regardless of scores.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "STOP vs LAST CHANCE — Scoring Consequences",
+      "content": "## STOP vs LAST CHANCE Scoring\n\n### STOP\n\nRound ends **immediately**. All players (including the triggerer) reveal and score **full points + colour bonus** normally.\n\nNext round: play passes to the next player clockwise from the STOP-caller.\n\n### LAST CHANCE\n\nAll opponents each take **one more turn**, then compare totals:\n\n| Outcome | Triggerer scores | Opponents score |\n|---|---|---|\n| Triggerer has **≥ points** than every opponent | Full points + colour bonus | Colour bonus only |\n| Any opponent has **more points** than triggerer | Colour bonus only | Full points + colour bonus |\n\n> Colour bonus = 1 pt per card of your most-common colour (Mermaids not counted).",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "tips",
+      "title": "Strategic Tips for New Players",
+      "content": "## Strategic Tips for New Players\n\n### Card Management\n- **Play Duos early for effects, not just points.** A Duo played face-up triggers its effect immediately — Crab+Lobster or Seahorse+Seahorse let you dig into the deck and grab exactly what you need. Hoarding Duos in hand only earns 1 pt each, which is rarely better.\n- **Watch the face-up discard piles.** Action 2 lets you take the top card of any discard pile directly — no random draw. If an opponent just discarded something you need for a Duo or set, take it before someone else does.\n- **Build toward one colour intentionally.** The colour bonus (1 pt per card of your most-common colour) scores every round for every player. Concentrating on one colour makes your bonus meaningful and sets you up for Mermaid synergy.\n\n### Timing the Round End\n- **STOP is almost always correct when you're not sure.** Calling LAST CHANCE is a high-stakes gamble — if any opponent beats your score, you score nothing except colour bonus. Early in the game, banking points with STOP is safer than risking a zero.\n- **Use LAST CHANCE only when you have a commanding lead.** Before calling it, mentally estimate opponents' likely scores. If someone has a large visible Duo tableau or a long set on the table, your lead may be smaller than it looks.\n- **Don't let the deck run out on you.** A deck-empty round end is treated as STOP — fine in principle, but you lose the option to call LAST CHANCE on your own terms. If you're close to a winning score, end the round yourself rather than waiting.\n\n### Scoring Awareness\n- **Track the victory threshold for your player count.** The target drops sharply (40 → 35 → 30 pts) as players are added. In a 4-player game you can reach the threshold surprisingly fast; don't assume you need a big engine before ending a round.\n- **Mermaids are a side objective, not a main plan.** Collecting all 4 Mermaids is an instant win, but opponents will block it once they notice. Treat Mermaids as bonus multipliers for your colour strategy rather than a primary goal.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://studiobombyx.com/en/rules/sea-salt-and-paper/",
+      "layout": "text"
+    }
+  ]
+}
