@@ -543,12 +543,22 @@ async function openChunkEditor(chunkId) {
                value="${escapeAttr(existing?.title || "")}" />
       </div>
       <div class="form-control">
-        <label class="label">
+        <div class="flex items-center justify-between mb-1">
           <span class="label-text text-xs">Content</span>
-          <span class="label-text-alt text-xs opacity-60">Markdown supported</span>
-        </label>
+          <div class="join">
+            <button type="button" id="tab-write"
+                    class="btn btn-xs join-item btn-active"
+                    onclick="toggleChunkEditorTab('write')">Write</button>
+            <button type="button" id="tab-preview"
+                    class="btn btn-xs join-item"
+                    onclick="toggleChunkEditorTab('preview')">Preview</button>
+          </div>
+        </div>
+        <span class="text-xs opacity-60 mb-1">Markdown supported</span>
         <textarea id="chunk-content" class="textarea textarea-bordered text-sm h-40"
                   required>${(existing?.content || "").replace(/</g, "&lt;")}</textarea>
+        <div id="chunk-preview"
+             class="hidden h-40 overflow-y-auto p-3 rounded-lg border border-base-300 bg-base-200 text-sm guide-text"></div>
       </div>
       <div class="modal-action">
         ${existing && canEditChunk(existing) ? `
@@ -568,6 +578,26 @@ async function openChunkEditor(chunkId) {
 function closeChunkEditor() {
   const dlg = document.getElementById("chunk-editor");
   if (dlg && dlg.open) dlg.close();
+}
+
+function toggleChunkEditorTab(tab) {
+  const textarea   = document.getElementById("chunk-content");
+  const preview    = document.getElementById("chunk-preview");
+  const writeBtn   = document.getElementById("tab-write");
+  const previewBtn = document.getElementById("tab-preview");
+  if (tab === "preview") {
+    preview.innerHTML = renderMarkdown(textarea.value)
+      || '<span class="opacity-40 text-xs">Nothing to preview</span>';
+    textarea.classList.add("hidden");
+    preview.classList.remove("hidden");
+    writeBtn.classList.remove("btn-active");
+    previewBtn.classList.add("btn-active");
+  } else {
+    textarea.classList.remove("hidden");
+    preview.classList.add("hidden");
+    writeBtn.classList.add("btn-active");
+    previewBtn.classList.remove("btn-active");
+  }
 }
 
 async function submitChunk(e, chunkId) {
