@@ -35,5 +35,10 @@ let closetTab = "collection"; // collection | wishlist
 let plays = [];
 let buddies = [];
 
+// Active in-progress play session (mirrors the server draft row).
+let activeSession = null;          // PlayDraftResponse | null
+let sessionExpanded = false;       // bubble visible vs. collapsed into FAB
+let sessionSaveTimer = null;       // debounce handle for PUT /plays/draft
+
 // BGG search
 let bggSearchResults = [];

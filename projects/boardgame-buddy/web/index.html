@@ -102,11 +102,6 @@
       <div id="game-detail-content"></div>
     </main>
 
-    <!-- Log Play View -->
-    <main data-view="log-play" class="hidden flex-1 px-4 py-4">
-      <div id="log-play-content"></div>
-    </main>
-
     <!-- Import View — BGG search, file upload, review queue, download skill -->
     <main data-view="import" class="hidden flex-1 px-4 py-4">
       <div id="import-content"></div>
@@ -128,12 +123,6 @@
         <i data-lucide="history" class="w-5 h-5"></i> Play Log
       </h2>
       <div id="history-content"></div>
-
-      <!-- Floating "+" to log a new play -->
-      <button id="fab-log-play-history" class="fab-log-play" aria-label="Log a play"
-              onclick="showView('log-play'); playerRowCount = 0; renderLogPlayForm();">
-        <i data-lucide="plus" class="w-6 h-6"></i>
-      </button>
     </main>
 
     <!-- Toast -->
@@ -172,6 +161,17 @@
         <span class="btm-nav-label text-xs">Play Log</span>
       </button>
     </nav>
+
+    <!-- Global Log-a-Play bubble: FAB + expandable session panel -->
+    <!-- Panel + backdrop are toggled by session.js via sessionExpanded; the
+         FAB itself uses data-auth-only so it appears on every authed view. -->
+    <div id="session-backdrop" class="session-backdrop hidden"
+         onclick="minimizeSession()"></div>
+    <div id="session-panel" class="session-panel hidden"></div>
+    <button id="session-fab" class="fab-log-play hidden" data-auth-only
+            aria-label="Log a play" onclick="toggleSessionBubble()">
+      <i data-lucide="plus" class="w-6 h-6"></i>
+    </button>
   </div>
 
   <!-- Scripts: load order matters -->
@@ -184,6 +184,7 @@
   <script src="game-detail.js"></script>
   <script src="guide.js"></script>
   <script src="plays.js"></script>
+  <script src="session.js"></script>
   <script src="import.js"></script>
   <script src="profile.js"></script>
   <script src="init.js"></script>

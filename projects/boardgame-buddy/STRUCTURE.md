@@ -101,6 +101,20 @@ Review queue for guide bundles uploaded by non-admin users.
 | buddy_id | UUID FK | → buddies |
 | is_winner | BOOLEAN | |
 
+### boardgamebuddy_play_drafts
+In-progress (unsaved) play session. One row per user (PK = user_id). Per-round
+scores live here as JSONB while the user is mid-game; on save the draft row is
+deleted and only the winner is persisted to `boardgamebuddy_play_players`.
+| Column | Type | Notes |
+|--------|------|-------|
+| user_id | UUID PK | → profiles |
+| game_id | UUID FK | nullable → games |
+| played_at | DATE | nullable |
+| notes | TEXT | nullable |
+| players | JSONB | `[{name, is_winner_override, round_scores:[num,...]}]` |
+| round_count | INT | default 1 |
+| updated_at | TIMESTAMPTZ | |
+
 ### boardgamebuddy_chunk_types (lookup)
 | Column | Type | Notes |
 |--------|------|-------|
@@ -158,6 +172,9 @@ of the chunk system; will be dropped in a follow-up migration.
 - `GET /api/v1/boardgame_buddy/plays`
 - `POST /api/v1/boardgame_buddy/plays`
 - `DELETE /api/v1/boardgame_buddy/plays/{play_id}`
+- `GET /api/v1/boardgame_buddy/plays/draft` — current user's in-progress play session (or `null`)
+- `PUT /api/v1/boardgame_buddy/plays/draft` — upsert in-progress play session (debounced from FE)
+- `DELETE /api/v1/boardgame_buddy/plays/draft` — discard the in-progress play session
 - `GET /api/v1/boardgame_buddy/buddies`
 - `POST /api/v1/boardgame_buddy/buddies/{buddy_id}/link`
 - `POST /api/v1/boardgame_buddy/games/{game_id}/chunks` — contribute a new chunk
@@ -202,7 +219,7 @@ Bottom nav has three tabs: **Browse**, **Closet**, **Play Log**.
 
 1. Auth (login/signup) → 2. **Closet** (home): list view of Owned/Played (toggleable to shelf/book-spine view), plus a Wishlist tab. In-closet search filters your games. → 3. Tap a row/spine → Game detail (themed, with Log Play + guide).
 4. **Browse** tab: list of available games (BGG top 1000 + search). "Import games" button opens the Import screen.
-5. **Play Log** tab: history of plays. Floating "+" button opens the Log a Play form (the form lets the user clear/change the selected game).
+5. **Play Log** tab: history of plays. The global floating "+" button (visible on every authed view) opens a live **session bubble** with game + players + per-round score grid + notes. The bubble can be minimized back into the FAB while the session keeps running on the server (`boardgamebuddy_play_drafts`), so the user can flip to the Quick Reference guide for the game and come back. On Save, the winner is computed (highest total, or manual override) and persisted to `boardgamebuddy_play_players`; the draft row and per-round scores are discarded.
 6. **Import** screen: *Import from BoardGameGeek* (live BGG API search + add), *Import from file* (upload a GuideBundle JSON — admins import directly, others queue for review), *Review pending additions* (admin only), *Download Guide Builder instructions* (downloads `guide-from-rulebook.md` so users can feed the prompt into their own AI).
 7. **Profile** (click username in header): account info, delete account, become admin via admin key. Future: link BGG account, friends.
 

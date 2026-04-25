@@ -236,6 +236,57 @@ body {
   outline-offset: 3px;
 }
 
+/* "Active session" pulse — the FAB color shifts to brass while a draft
+   session is in progress so the user knows the bubble is one tap away. */
+.fab-log-play--active {
+  background: var(--accent);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.5),
+    0 0 18px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* ── Live session bubble (overlay panel above the FAB) ──────────────────── */
+.session-backdrop {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+  z-index: 39; backdrop-filter: blur(2px);
+}
+.session-panel {
+  position: fixed;
+  right: 12px; left: 12px;
+  bottom: 156px;                                    /* clears btm-nav + FAB */
+  max-width: 488px;
+  margin-left: auto; margin-right: auto;
+  max-height: 72vh; overflow-y: auto;
+  background: oklch(var(--b2));
+  border: 1px solid rgba(201, 146, 42, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  z-index: 41; padding: 14px;
+  animation: fadeUp 180ms ease both;
+}
+
+.session-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+.session-grid th,
+.session-grid td {
+  border: 1px solid rgba(201, 146, 42, 0.18);
+  padding: 4px 6px;
+  text-align: center;
+  font-size: 0.85rem;
+  vertical-align: middle;
+}
+.session-grid thead th { background: rgba(201, 146, 42, 0.06); }
+.session-grid input { width: 100%; min-width: 0; }
+.session-grid tfoot td {
+  font-weight: 700;
+  background: rgba(201, 146, 42, 0.10);
+}
+.session-grid .winner-cell {
+  color: var(--accent);
+}
+
 /* ── Line clamp ──────────────────────────────────────────────────────────────── */
 .line-clamp-1 {
   overflow: hidden;

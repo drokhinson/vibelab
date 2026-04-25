@@ -132,13 +132,11 @@ function renderGameDetail() {
         </div>
       </div>` : ""}
 
-    ${session ? `
-      <button class="fab-log-play" aria-label="Log a play"
-              onclick="startLogPlay('${g.id}', '${g.name.replace(/'/g, "\\'")}')">
-        <i data-lucide="plus" class="w-6 h-6"></i>
-      </button>` : ""}
   `;
   lucide.createIcons();
 }
 
-// Guide rendering and the chunk manager live in guide.js.
+// Guide rendering and the chunk manager live in guide.js. The "Log a play"
+// FAB is global (see index.html / session.js); on Game Detail, the
+// "Collection actions" row also exposes a contextual "Start session" button
+// pre-loaded with this game (see renderCollectionButtons in collection.js).
