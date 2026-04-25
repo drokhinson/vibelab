@@ -516,18 +516,22 @@ function renderHiddenChunksPanel() {
 }
 
 // ── Chunk editor (create + edit) ─────────────────────────────────────────────
+// openChunkEditorModal is the shared popup used by both the guide and the
+// import review flow. Callers pass onSave/onDelete callbacks; what gets done
+// with the data differs per context.
 
-async function openChunkEditor(chunkId) {
-  if (!session || !currentGame) return;
+let _chunkEditorOnSave = null;
+let _chunkEditorOnDelete = null;
+
+async function openChunkEditorModal({ existing = null, onSave, onDelete = null }) {
   const types = await loadChunkTypes();
-  // Look in both visible and hidden chunks for the existing record.
-  const pool = [...currentGuideChunks, ...hiddenChunks];
-  const existing = chunkId ? pool.find(c => c.id === chunkId) : null;
+  _chunkEditorOnSave = onSave;
+  _chunkEditorOnDelete = onDelete;
 
   const dlg = document.getElementById("chunk-editor");
   dlg.showModal();
   document.getElementById("chunk-editor-body").innerHTML = `
-    <form onsubmit="submitChunk(event, ${existing ? `'${existing.id}'` : "null"})" class="space-y-3">
+    <form onsubmit="submitChunkEditor(event)" class="space-y-3">
       <div class="form-control">
         <label class="label"><span class="label-text text-xs">Type</span></label>
         <select id="chunk-type" class="select select-bordered select-sm" required>
@@ -561,9 +565,9 @@ async function openChunkEditor(chunkId) {
              class="hidden h-40 overflow-y-auto p-3 rounded-lg border border-base-300 bg-base-200 text-sm guide-text"></div>
       </div>
       <div class="modal-action">
-        ${existing && canEditChunk(existing) ? `
+        ${onDelete ? `
           <button type="button" class="btn btn-ghost btn-sm text-error"
-                  onclick="deleteChunk('${existing.id}')">
+                  onclick="deleteChunkEditor()">
             <i data-lucide="trash-2" class="w-3 h-3"></i> Delete
           </button>` : ""}
         <button type="button" class="btn btn-ghost btn-sm" onclick="closeChunkEditor()">Cancel</button>
@@ -600,38 +604,54 @@ function toggleChunkEditorTab(tab) {
   }
 }
 
-async function submitChunk(e, chunkId) {
+async function submitChunkEditor(e) {
   e.preventDefault();
-  const body = {
+  const data = {
     chunk_type: document.getElementById("chunk-type").value,
     title: document.getElementById("chunk-title").value.trim(),
     content: document.getElementById("chunk-content").value,
   };
-  if (!body.title || !body.content) return;
-
+  if (!data.title || !data.content) return;
   try {
-    if (chunkId) {
-      await apiFetch(`/chunks/${chunkId}`, { method: "PATCH", body });
-      showToast("Chunk updated", "success");
-    } else {
-      await apiFetch(`/games/${currentGame.id}/chunks`, { method: "POST", body });
-      showToast("Chunk created", "success");
-    }
+    await _chunkEditorOnSave(data);
     closeChunkEditor();
-    await loadGuide(currentGame.id);
   } catch (err) {
     showToast(err.message, "error");
   }
 }
 
-async function deleteChunk(chunkId) {
-  if (!confirm("Delete this chunk? It will be removed from everyone's guide.")) return;
+async function deleteChunkEditor() {
+  if (!_chunkEditorOnDelete) return;
   try {
-    await apiFetch(`/chunks/${chunkId}`, { method: "DELETE" });
-    showToast("Chunk deleted", "success");
-    closeChunkEditor();
-    await loadGuide(currentGame.id);
+    await _chunkEditorOnDelete();
   } catch (err) {
     showToast(err.message, "error");
   }
+}
+
+async function openChunkEditor(chunkId) {
+  if (!session || !currentGame) return;
+  const pool = [...currentGuideChunks, ...hiddenChunks];
+  const existing = chunkId ? pool.find(c => c.id === chunkId) : null;
+
+  await openChunkEditorModal({
+    existing,
+    onSave: async (data) => {
+      if (chunkId) {
+        await apiFetch(`/chunks/${chunkId}`, { method: "PATCH", body: data });
+        showToast("Chunk updated", "success");
+      } else {
+        await apiFetch(`/games/${currentGame.id}/chunks`, { method: "POST", body: data });
+        showToast("Chunk created", "success");
+      }
+      await loadGuide(currentGame.id);
+    },
+    onDelete: chunkId && canEditChunk(existing) ? async () => {
+      if (!confirm("Delete this chunk? It will be removed from everyone's guide.")) return;
+      await apiFetch(`/chunks/${chunkId}`, { method: "DELETE" });
+      showToast("Chunk deleted", "success");
+      closeChunkEditor();
+      await loadGuide(currentGame.id);
+    } : null,
+  });
 }
