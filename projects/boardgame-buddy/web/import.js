@@ -243,71 +243,19 @@ function deleteBundleChunk(index) {
   bundleEditCtx.rerender();
 }
 
-function openChunkEditForm(index) {
+async function openChunkEditForm(index) {
   if (!bundleEditCtx) return;
   const chunk = bundleEditCtx.bundle.chunks[index];
   if (!chunk) return;
 
-  const modal = document.createElement("div");
-  modal.id = "chunk-edit-modal";
-  modal.className = "fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4";
-  modal.innerHTML = `
-    <div class="card bg-base-100 w-full max-w-lg">
-      <div class="card-body p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="font-bold text-base">Edit chunk</h3>
-          <button class="btn btn-ghost btn-sm btn-square" onclick="document.getElementById('chunk-edit-modal').remove()">
-            <i data-lucide="x" class="w-4 h-4"></i>
-          </button>
-        </div>
-        <div class="space-y-3">
-          <div>
-            <label class="label py-0 pb-1"><span class="label-text text-xs font-medium">Chunk type</span></label>
-            <input id="cedit-type" type="text" class="input input-bordered input-sm w-full font-mono"
-              value="${escapeHtml(chunk.chunk_type || "")}" placeholder="e.g. setup, player_turn, scoring" />
-          </div>
-          <div>
-            <label class="label py-0 pb-1"><span class="label-text text-xs font-medium">Title</span></label>
-            <input id="cedit-title" type="text" class="input input-bordered input-sm w-full"
-              value="${escapeHtml(chunk.title || "")}" maxlength="200" />
-          </div>
-          <div>
-            <label class="label py-0 pb-1"><span class="label-text text-xs font-medium">Content (markdown)</span></label>
-            <textarea id="cedit-content" class="textarea textarea-bordered w-full font-mono text-xs leading-relaxed"
-              rows="10">${escapeHtml(chunk.content || "")}</textarea>
-          </div>
-        </div>
-        <div class="flex justify-end gap-2 mt-4">
-          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('chunk-edit-modal').remove()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="saveChunkEdit(${index})">
-            <i data-lucide="check" class="w-4 h-4"></i> Save
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  if (window.lucide) window.lucide.createIcons();
-  document.getElementById("cedit-title").focus();
-}
-
-function saveChunkEdit(index) {
-  if (!bundleEditCtx) return;
-  const type = document.getElementById("cedit-type")?.value.trim();
-  const title = document.getElementById("cedit-title")?.value.trim();
-  const content = document.getElementById("cedit-content")?.value;
-  if (!type || !title) {
-    showToast("Chunk type and title are required.", "error");
-    return;
-  }
-  bundleEditCtx.bundle.chunks[index] = {
-    ...bundleEditCtx.bundle.chunks[index],
-    chunk_type: type,
-    title,
-    content: content || "",
-  };
-  document.getElementById("chunk-edit-modal")?.remove();
-  bundleEditCtx.rerender();
+  await openChunkEditorModal({
+    existing: chunk,
+    onSave: (data) => {
+      Object.assign(bundleEditCtx.bundle.chunks[index], data);
+      bundleEditCtx.rerender();
+      showToast("Chunk updated", "success");
+    },
+  });
 }
 
 // ── Admin: pending review queue ──────────────────────────────────────────────
