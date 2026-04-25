@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 170216,
+    "name": "Blood Rage"
+  },
+  "source": {
+    "generated_at": "2026-04-25T00:00:00Z",
+    "generator": "guide-from-rulebook@2",
+    "rulebook_urls": [
+      {"url": "https://www.cmon.com/wp-content/uploads/2023/06/BLR001-Rulebook.pdf", "label": "Publisher EN", "source": "publisher"},
+      {"url": "https://cdn.1j1ju.com/medias/88/21/c2-blood-rage-rulebook.pdf", "label": "1j1ju EN Mirror", "source": "third_party"},
+      {"url": "https://cmon-files.s3.amazonaws.com/pdf/assets_item/resource/31/Blood_Rage_FAQ_1.1.pdf", "label": "Official FAQ v1.1", "source": "publisher"}
+    ],
+    "missing": []
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Components & Initial Placement",
+      "content": "## Components & Initial Placement\n\n### Per-Clan Components\nEach player takes:\n- 1 Clan Sheet + 1 Valhalla Sheet\n- 8 Warriors (STR 1), 1 Leader (STR 3), 1 Ship (STR 0)\n- Clan tokens for Rage, Axes, Horns, Glory\n\n### Starting Stats (all clans identical)\n| Stat | Starting Value |\n|------|----------------|\n| Rage | 6 |\n| Axes | 3 |\n| Horns | 4 |\n| Glory | 0 |\n\n### Board Setup\n1. Place board in center\n2. Place one Pillage token (green border, reward side up) on Yggdrasil (center province)\n3. Shuffle remaining 8 Pillage tokens; place one face-up on each outer province\n4. Place Ragnarök tokens on Ragnarök Track (one province destroyed per Age)\n5. Randomly determine First Player; give First Player token",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "setup",
+      "title": "Reserve Placement & Gods' Gifts Draft",
+      "content": "## Reserve Placement & Gods' Gifts Draft\n\n### Starting Reserve\n- Place figures in reserve up to your **Horns limit (4)**\n- Default starting reserve: Leader (1) + Ship (1) + 2 Warriors = 4 figures\n\n### Gods' Gifts Draft (start of each Age)\n1. Deal **8 cards** from the current Age deck to each player\n2. Each player selects **1 card**, places it face down, passes remaining 7 to the **LEFT**\n3. Repeat until each player has drafted **6 cards**\n4. The final 2 cards per player are discarded unseen\n\n> Battle Cards are **not** drafted — each player holds their own separate personal hand of Battle Cards.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Action Phase — Turn Actions",
+      "content": "## Action Phase — Turn Actions\n\nAt the start of the Action Phase, all players reset **Rage** to their current Rage stat. On your turn, choose **ONE** action. When Rage = 0, you must Pass.\n\n| Action | Rage Cost | Details |\n|---|---|---|\n| **Invade** | = figure's STR (min 1) | Place 1 figure from reserve into any empty village in an outer province, or into your fjord (Ship only). Ships have STR 0 but cost 1 Rage. Cannot invade Yggdrasil directly. |\n| **March** | 1 | Pick one province. Move any/all your figures from it to empty villages in one other province. Triggers battle if enemies are present. |\n| **Upgrade** | 0 (most) | Play an Upgrade card from hand onto your Clan Sheet. Apply effect immediately. Monster cards add that Monster figure to your reserve. |\n| **Quest** | 0 | Play a Quest card face down onto your Clan Sheet quest slot. One active quest at a time. Scored at end of Age in Quest Phase. |\n| **Pillage** | 0 | Declare a province where you have ≥1 figure. Opponents may contest by spending Rage to Invade. Battle resolves if contested. Win = gain Pillage token reward. |\n| **Pass** | 0 | End your turn. Action Phase ends when all players pass or hit 0 Rage. |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Battle Resolution",
+      "content": "## Battle Resolution\n\nTriggered during **Invade**, **March**, or **Pillage** when enemy figures are present.\n\n### Steps\n1. Each involved player secretly selects 1 Battle Card from hand, places face down\n2. All players reveal simultaneously\n3. Each player totals: **STR of all figures in province + Battle Card STR bonus**\n4. **Highest total wins** → winner gains Glory equal to their **Axes** stat\n5. **Tie** → ALL tied players lose (figures go to Valhalla; no Axes Glory awarded)\n6. **Losers** → all figures in the province sent to Valhalla; no base Glory from losing\n7. All participants discard their played Battle Card\n\n> Used Battle Cards are gone for the Age — they do not refresh until the next Age's draft.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Card Types Overview",
+      "content": "## Card Types Overview\n\n| Card Type | Played Where | Persists? | Primary Purpose |\n|---|---|---|---|\n| **Upgrade** | Clan Sheet slot | Yes — permanent | Boost stats (Rage/Axes/Horns) or grant special abilities including combat triggers |\n| **Monster** (Upgrade subtype) | Clan Sheet + reserve | Yes — permanent | Adds Monster figure (STR 4–6) + printed special ability |\n| **Quest** | Hand (secret) | Yes — revealed at scoring | Secret objective; scored at end of Age if conditions met |\n| **Battle** | Personal hand | No — discarded after use | Played face-down each battle; provides STR bonus or a special effect |\n\n### Upgrade Card Slots on Clan Sheet\n- **Warrior upgrades** — boost STR of all Warrior figures\n- **Leader upgrade** — improves Leader figure\n- **Ship upgrade** — improves Ship figure\n- **Clan upgrades** — raise Rage, Axes, or Horns stats",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Gods' Gifts Draft — Playing Drafted Cards",
+      "content": "## Gods' Gifts Draft — Playing Drafted Cards\n\n### Playing Cards After the Draft\n- **Upgrade / Monster cards** — played during the Action Phase as the Upgrade action (0 Rage for most; apply effect immediately)\n- **Quest cards** — kept secret in hand; never \"played\" as an action, they are revealed automatically at end-of-Age Quest Phase if their condition is met\n- **Battle Cards** — not drafted; held in your separate personal hand and played during battles\n\n### Key Reminders\n- Cards already played on your Clan Sheet (Upgrades) **remain** there through the Discard Phase — only unplayed hand cards are discarded\n- Quest cards are discarded after scoring whether or not they were fulfilled\n- Monster figures added to reserve count against your **Horns** limit",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Combat Card Resolution Order",
+      "content": "## Combat Card Resolution Order\n\nThe sequence in which card effects fire during a battle:\n\n| Step | What Happens | Card Effects That Fire |\n|---|---|---|\n| 1 | Battle announced | Effects worded **\"when battle is announced\"** trigger now |\n| 2 | Players secretly select 1 Battle Card | — |\n| 3 | All Battle Cards revealed simultaneously | Effects worded **\"before STR calculation\"** or **\"before battle\"** trigger now |\n| 4 | STR totals calculated | **Passive Upgrade abilities** are always-on — they modify base STR automatically and do not \"trigger\" |\n| 5 | Outcome-altering effects apply | Battle Card or Upgrade effects that say **\"highest STR loses instead\"** or similar resolve here, after totals are known |\n| 6 | Winner determined; Axes Glory awarded | — |\n| 7 | Loser figures sent to Valhalla | — |\n| 8 | Post-battle effects fire | Effects worded **\"after battle\"** or **\"after result\"** trigger now |\n\n### Priority Rules for Simultaneous Effects\n- **Simultaneous triggers** resolve in **clockwise order** starting from the player who initiated the battle (the Pillage declarer or Invading/Marching player)\n- **Conflicting outcome-change effects** (two players both trying to flip the result): player with the **lower Axes stat** resolves first *(verify against official FAQ)*\n- **Monster abilities**: check each card for its timing keyword (\"before battle\", \"during STR calculation\", \"after battle\") and slot into the matching step above",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Ongoing VP Sources (Glory Track)",
+      "content": "## Ongoing VP Sources\n\nAll Glory is tracked live on the shared Glory Track — there is no end-game calculation.\n\n| Source | Glory Earned | When |\n|---|---|---|\n| Win a battle | = your current **Axes** stat | Immediately on winning |\n| Figure consumed by Ragnarök | +1 per figure destroyed | Ragnarök Phase each Age |\n| Fulfill a Quest | Amount on Quest card | Quest Phase each Age |\n| Pillage a province | Amount on Pillage token | When pillage succeeds |\n| Card effects | As stated on card | Per card timing |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "End-Game Winner & Tiebreakers",
+      "content": "## End-Game (After Age III Release Valhalla Phase)\n\nPlayer with the **most Glory** on the Glory Track wins.\n\n### Tiebreakers (in order)\n1. Highest **Rage** stat\n2. Highest **Axes** stat\n3. Share the victory",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "tips",
+      "title": "Strategic Tips for First-Time Players",
+      "content": "## Strategic Tips for First-Time Players\n\n### Draft (Gods' Gifts)\n- **Draft for synergy, not isolated power.** A Quest card is worthless without the figures or actions to complete it. Commit to a strategy in the first 2–3 picks and draft to reinforce it.\n- **Deny powerful combos.** If a card doesn't fit your plan but would supercharge an opponent's, consider drafting it purely to block them.\n- **Upgrades you pass are gone.** Don't assume you can grab a key Clan Upgrade next round — if you skip it in Age I, assume you'll never see it again.\n\n### Rage & Actions\n- **Rage is your budget — spend it deliberately.** Overcommitting to provinces early leaves you unable to react when opponents invade or Ragnarök hits.\n- **Ragnarök death is free Glory.** Before each Age's Ragnarök phase, park figures in the doomed province intentionally — you earn 1 Glory per figure consumed. Dying in Ragnarök beats dying in a failed battle.\n\n### Battle & Battle Cards\n- **Your Battle Card hand is finite and does not reset mid-Age.** Burning cards in early skirmishes leaves you defenseless in decisive late-Age battles.\n- **Low Axes clans should avoid combat.** Glory from winning scales with your Axes stat. If yours is low, prioritize Pillage and Quests over fighting.\n\n### Figures & Deployment\n- **Dead figures return at end of each Age.** Don't over-value keeping figures alive — what matters is *where* they die. Valhalla is a revolving door, not a graveyard.\n- **Monsters eat Horns capacity.** A Monster in reserve counts against your Horns limit, shrinking your deployable force. Only recruit Monsters when you have a clear plan to deploy them.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "variant",
+      "title": "5th Player Expansion",
+      "content": "## 5th Player Expansion\n\nExtends the base game (2–4 players) to support **5 players**.\n\n- Adds a 5th clan with its own clan sheet, figures, and Age cards\n- Board and province village counts adjusted to accommodate 5 players\n- Draft and Age structure remain the same as the base game\n\n> Full setup adjustments are in the expansion insert; the base rulebook covers 2–4 players only.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "variant",
+      "title": "Gods of Asgard Expansion",
+      "content": "## Gods of Asgard Expansion\n\nAdds large **God figures** (e.g., Thor, Odin, Loki) that roam provinces and influence battles.\n\n- God figures occupy provinces and interact with clan figures during battles in their province\n- Each God has a unique ability that triggers during or after combat\n- Gods can be invoked by players using expansion-specific cards or actions\n\n> Individual God STR values, invocation costs, and Ragnarök interactions require the expansion rulebook.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "variant",
+      "title": "Mystics of Midgard Expansion",
+      "content": "## Mystics of Midgard Expansion\n\nAdds **Mystic figures** to each clan with unique special abilities.\n\n- Each clan gains one or more Mystic figures with passive or active abilities\n- Mystics are recruited and deployed like standard figures but interact with expansion-specific mechanics\n- Abilities vary per clan and may affect battles, pillaging, or quests\n\n> Individual Mystic ability text, recruitment costs, and whether Mystics count toward Horns limits are on expansion cards only.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://www.cmon.com/wp-content/uploads/2023/06/BLR001-Rulebook.pdf",
+      "layout": "text"
+    }
+  ]
+}
