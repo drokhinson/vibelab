@@ -48,6 +48,7 @@ def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
         title=row["title"],
         layout=row.get("layout", "text"),
         content=row["content"],
+        expansion_name=row.get("expansion_name"),
         created_by=row.get("created_by"),
         created_by_name=created_by_name,
         updated_at=row["updated_at"],
@@ -55,7 +56,7 @@ def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
 
 
 _CHUNK_SELECT = (
-    "id, game_id, chunk_type, title, layout, content, created_by, updated_at,"
+    "id, game_id, chunk_type, title, layout, content, expansion_name, created_by, updated_at,"
     " boardgamebuddy_chunk_types(label, icon, display_order),"
     " boardgamebuddy_profiles(display_name)"
 )
@@ -148,6 +149,7 @@ async def create_chunk(
             "title": body.title,
             "content": body.content,
             "layout": body.layout,
+            "expansion_name": body.expansion_name,
             "created_by": user.user_id,
         })
         .execute()
@@ -205,6 +207,8 @@ async def update_chunk(
         updates["content"] = body.content
     if body.layout is not None:
         updates["layout"] = body.layout
+    if body.expansion_name is not None:
+        updates["expansion_name"] = body.expansion_name
 
     sb.table("boardgamebuddy_guide_chunks").update(updates).eq("id", chunk_id).execute()
 

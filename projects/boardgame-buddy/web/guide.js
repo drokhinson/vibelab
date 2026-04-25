@@ -157,13 +157,17 @@ function renderGuide() {
             <div class="collapse collapse-arrow scroll-chunk swipe-target">
               <input type="checkbox" />
               <div class="collapse-title font-medium text-sm flex items-center justify-between gap-2">
-                <span class="flex items-center gap-1">
-                  <i data-lucide="grip-vertical" class="w-3 h-3 reorder-handle"></i>
-                  <i data-lucide="${icon}" class="w-4 h-4"></i>
-                  <span class="badge badge-sm">${label}</span>
-                  <span>${c.title}</span>
+                <span class="flex items-center gap-1 min-w-0">
+                  <i data-lucide="grip-vertical" class="w-3 h-3 reorder-handle flex-shrink-0"></i>
+                  <i data-lucide="${icon}" class="w-4 h-4 flex-shrink-0"></i>
+                  <span class="badge badge-sm flex-shrink-0">${label}</span>
+                  ${c.expansion_name ? `<span class="badge badge-sm badge-secondary flex-shrink-0">expansion</span>` : ""}
+                  <span class="leading-tight min-w-0">
+                    <span class="block truncate">${c.title}</span>
+                    ${c.expansion_name ? `<span class="block text-xs font-normal opacity-60 truncate">${escapeAttr(c.expansion_name)}</span>` : ""}
+                  </span>
                 </span>
-                ${c.created_by_name ? `<span class="text-xs opacity-60">by ${c.created_by_name}</span>` : ""}
+                ${c.created_by_name ? `<span class="text-xs opacity-60 flex-shrink-0">by ${c.created_by_name}</span>` : ""}
               </div>
               <div class="collapse-content text-sm leading-relaxed guide-text">${renderMarkdown(c.content)}</div>
             </div>
@@ -547,6 +551,12 @@ async function openChunkEditorModal({ existing = null, onSave, onDelete = null }
                value="${escapeAttr(existing?.title || "")}" />
       </div>
       <div class="form-control">
+        <label class="label"><span class="label-text text-xs">Expansion <span class="opacity-60">(optional)</span></span></label>
+        <input id="chunk-expansion" type="text" class="input input-bordered input-sm"
+               placeholder="e.g. More, Prosperity, Seaside"
+               value="${escapeAttr(existing?.expansion_name || "")}" />
+      </div>
+      <div class="form-control">
         <div class="flex items-center justify-between mb-1">
           <span class="label-text text-xs">Content</span>
           <div class="join">
@@ -606,10 +616,12 @@ function toggleChunkEditorTab(tab) {
 
 async function submitChunkEditor(e) {
   e.preventDefault();
+  const expansionRaw = document.getElementById("chunk-expansion")?.value.trim();
   const data = {
     chunk_type: document.getElementById("chunk-type").value,
     title: document.getElementById("chunk-title").value.trim(),
     content: document.getElementById("chunk-content").value,
+    expansion_name: expansionRaw || null,
   };
   if (!data.title || !data.content) return;
   try {
