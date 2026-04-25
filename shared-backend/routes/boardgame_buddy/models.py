@@ -151,6 +151,28 @@ class PlayCountResponse(BaseModel):
     count: int
 
 
+# ── Play session draft (in-progress, unsaved) ─────────────────────────────────
+
+class PlayDraftPlayer(BaseModel):
+    name: str
+    is_winner_override: Optional[bool] = None
+    round_scores: list[float] = []
+
+
+class PlayDraftBody(BaseModel):
+    game_id: Optional[str] = None
+    played_at: Optional[date] = None
+    notes: Optional[str] = None
+    players: list[PlayDraftPlayer] = []
+    round_count: int = 1
+
+
+class PlayDraftResponse(PlayDraftBody):
+    game_name: Optional[str] = None
+    game_thumbnail: Optional[str] = None
+    updated_at: datetime
+
+
 # ── Buddies ───────────────────────────────────────────────────────────────────
 
 class BuddyResponse(BaseModel):

@@ -44,6 +44,9 @@ function showView(view) {
   document.querySelectorAll("[data-auth-only]").forEach(el => {
     el.classList.toggle("hidden", !isAuthed);
   });
+  // Re-paint the session FAB so it reflects the active-session state on
+  // every nav (showView strips/re-adds `hidden` and resets the icon HTML).
+  if (typeof refreshSessionFab === "function") refreshSessionFab();
 }
 
 // ── Formatting ───────────────────────────────────────────────────────────────

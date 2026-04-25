@@ -70,6 +70,7 @@ async function loadProfile() {
     showView("closet");
     loadCloset();
     updateProfileUI();
+    initSession();
   } finally {
     profileLoadInFlight = false;
   }
@@ -226,5 +227,8 @@ async function handleLogout() {
   }
   session = null;
   currentUser = null;
+  activeSession = null;
+  sessionExpanded = false;
+  if (typeof refreshSessionFab === "function") refreshSessionFab();
   showAuthView();
 }
