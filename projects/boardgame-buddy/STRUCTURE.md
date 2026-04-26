@@ -1,7 +1,7 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-04-26
+> Last updated: 2026-04-26 (migration 044)
 
 ## What It Does
 A board game collection manager. Users browse the top 1000 BoardGameGeek-ranked games, build their closet (owned / played / wishlist), log game sessions with friends, and access quick-reference guides (setup reminders, turn summaries, rulebook links).
@@ -31,8 +31,6 @@ Game catalog seeded from BGG top 1000.
 | description | TEXT | |
 | image_url | TEXT | BGG box art |
 | thumbnail_url | TEXT | |
-| bgg_rank | INTEGER | overall rank |
-| bgg_rating | NUMERIC(4,2) | average rating |
 | categories | TEXT[] | e.g. Strategy, Card Game |
 | mechanics | TEXT[] | e.g. Drafting, Set Collection |
 | theme_color | TEXT | hex color for UI theming |
@@ -195,15 +193,26 @@ of the chunk system; will be dropped in a follow-up migration.
 - `GET /api/v1/boardgame_buddy/guides/pending/{id}` — *admin-only* fetch full bundle
 - `POST /api/v1/boardgame_buddy/guides/pending/{id}/approve` — *admin-only* import
 - `POST /api/v1/boardgame_buddy/guides/pending/{id}/reject` — *admin-only* reject
+- `GET  /api/v1/boardgame_buddy/games/admin/missing-images` — *admin-only* list of games whose `image_url` or `thumbnail_url` is NULL
+- `POST /api/v1/boardgame_buddy/games/admin/{game_id}/refresh-images` — *admin-only* re-fetch one game's box art + thumbnail from BGG and re-host in Storage
+- `POST /api/v1/boardgame_buddy/games/refresh-images` — *admin-only* bulk refresh of all games with missing or BGG-hosted image URLs
 
 ### Admin (ADMIN_API_KEY)
 - `POST /api/v1/boardgame_buddy/guides/import?force=<bool>` — bulk import a guide bundle produced by the `/guide-from-rulebook` slash command. Request body = `GuideBundle` JSON (see below). If the referenced game isn't in `boardgamebuddy_games`, the endpoint calls the existing BGG import flow. `force=true` deletes existing chunks with `created_by IS NULL` for the game before inserting (user chunks are preserved). Dedupe key: `(game_id, chunk_type, title)`.
 
 #### GuideBundle schema
+If `min_players`, `max_players`, and `playing_time` are all present in the bundle's `game` object, `/guides/import` skips the BGG XML API call and inserts the game directly. `image_url` / `thumbnail_url` stay NULL on that path — admins backfill them from the Import screen → "Refresh missing images". Otherwise the import falls back to the existing BGG-fetch flow.
 ```json
 {
   "version": 1,
-  "game": { "bgg_id": 68448, "name": "7 Wonders" },
+  "game": {
+    "bgg_id": 68448,
+    "name": "7 Wonders",
+    "min_players": 2,
+    "max_players": 7,
+    "playing_time": 30,
+    "bgg_url": "https://boardgamegeek.com/boardgame/68448"
+  },
   "source": {
     "generated_at": "2026-04-24T00:00:00Z",
     "generator": "guide-from-rulebook@2",
@@ -249,3 +258,4 @@ Bottom nav has three tabs: **Browse**, **Closet**, **Play Log**.
 - Quick reference guides seeded for: Puerto Rico, Castles of Burgundy, Lost Cities, 7 Wonders
 - Guides can now be generated agentically via `/guide-from-rulebook <game name>`, which writes a JSON bundle to `projects/boardgame-buddy/web/sample-guides/<slug>.json` for an admin to upload through `?admin=1`.
 - Game detail pages themed with accent color + header image from box art
+- BGG XML API has a daily request quota. Imports prefer bundle metadata (skips the API call when player counts + playtime are present); image refresh is admin-gated and sequential to spread requests across the day.

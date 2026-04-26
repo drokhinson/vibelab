@@ -47,8 +47,26 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
     if existing_game.data:
         game_id = existing_game.data[0]["id"]
     else:
-        summary = await import_bgg_game(bundle.game.bgg_id)
-        game_id = summary.id
+        # If the bundle carries the core BGG metadata, insert directly and skip
+        # the BGG XML API call (saves daily quota). image_url / thumbnail_url
+        # are left NULL — admins backfill via /games/admin/{id}/refresh-images.
+        g = bundle.game
+        if g.min_players is not None and g.max_players is not None and g.playing_time is not None:
+            insert = (
+                sb.table("boardgamebuddy_games")
+                .insert({
+                    "bgg_id": g.bgg_id,
+                    "name": g.name,
+                    "min_players": g.min_players,
+                    "max_players": g.max_players,
+                    "playing_time": g.playing_time,
+                })
+                .execute()
+            )
+            game_id = insert.data[0]["id"]
+        else:
+            summary = await import_bgg_game(g.bgg_id)
+            game_id = summary.id
         imported_game = True
 
     if force:

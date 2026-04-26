@@ -46,11 +46,7 @@ function renderGamesGrid() {
           </figure>
           <div class="card-body p-3 pt-2">
             <h3 class="font-semibold text-sm leading-tight line-clamp-2">${g.name}</h3>
-            <div class="flex items-center gap-2 text-xs text-base-content/60 mt-1">
-              ${g.bgg_rank ? `<span class="badge badge-sm badge-ghost">#${g.bgg_rank}</span>` : ""}
-              ${g.bgg_rating ? `<span><i data-lucide="star" class="w-3 h-3 inline mr-0.5"></i>${formatRating(g.bgg_rating)}</span>` : ""}
-            </div>
-            <div class="text-xs text-base-content/50 mt-1">
+            <div class="text-xs text-base-content/60 mt-1">
               ${playerRange(g.min_players, g.max_players)}
               ${g.playing_time ? ` · ${formatTime(g.playing_time)}` : ""}
             </div>

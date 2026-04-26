@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional
 
 import httpx
-from fastapi import Query, Path, HTTPException
+from fastapi import Depends, Query, Path, HTTPException
 from fastapi.responses import Response
 from supabase import Client
 
@@ -14,6 +14,7 @@ from db import get_supabase
 from shared_models import HealthResponse
 
 from . import router
+from .dependencies import CurrentUser, get_current_admin
 from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
 
 logger = logging.getLogger(__name__)
@@ -157,7 +158,7 @@ async def list_games(
 
     query = sb.table("boardgamebuddy_games").select(
         "id, bgg_id, name, year_published, min_players, max_players, "
-        "playing_time, thumbnail_url, bgg_rank, bgg_rating, theme_color",
+        "playing_time, thumbnail_url, image_url, theme_color",
         count="exact",
     )
 
@@ -166,7 +167,7 @@ async def list_games(
     if category:
         query = query.contains("categories", [category])
 
-    query = query.order("bgg_rank")
+    query = query.order("name")
     result = query.range(offset, offset + per_page - 1).execute()
 
     games = [GameSummary(**g) for g in (result.data or [])]
@@ -301,15 +302,6 @@ async def import_bgg_game(
     img_el = item.find("image")
     thumb_el = item.find("thumbnail")
 
-    # Extract rating
-    rating_el = item.find(".//ratings/average")
-    rating = None
-    if rating_el is not None:
-        try:
-            rating = round(float(rating_el.get("value", "0")), 2)
-        except (ValueError, TypeError):
-            pass
-
     # Extract categories and mechanics
     categories = [
         link.get("value", "")
@@ -333,7 +325,6 @@ async def import_bgg_game(
         "thumbnail_url": await _upload_to_storage(
             sb, bgg_id, _normalize_image_url(thumb_el.text if thumb_el is not None else None), "thumb"
         ),
-        "bgg_rating": rating,
         "categories": categories,
         "mechanics": mechanics,
     }
@@ -351,10 +342,12 @@ async def import_bgg_game(
     "/games/refresh-images",
     response_model=RefreshImagesResponse,
     status_code=200,
-    summary="Refresh image URLs for all games",
+    summary="Refresh image URLs for all games (admin)",
 )
-async def refresh_game_images() -> RefreshImagesResponse:
-    """Re-host images in Supabase Storage for games with missing or BGG-hosted image URLs."""
+async def refresh_game_images(
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> RefreshImagesResponse:
+    """Admin-only: re-host images in Supabase Storage for games with missing or BGG-hosted image URLs."""
     sb = get_supabase()
     result = sb.table("boardgamebuddy_games").select("id, bgg_id, image_url, thumbnail_url").execute()
     updated = 0
@@ -385,6 +378,90 @@ async def refresh_game_images() -> RefreshImagesResponse:
         except Exception:
             continue
     return RefreshImagesResponse(updated=updated)
+
+
+_MISSING_IMAGES_FIELDS = (
+    "id, bgg_id, name, year_published, min_players, max_players, "
+    "playing_time, thumbnail_url, image_url, theme_color"
+)
+
+
+@router.get(
+    "/games/admin/missing-images",
+    response_model=list[GameSummary],
+    status_code=200,
+    summary="List games missing image_url or thumbnail_url (admin)",
+)
+async def list_games_missing_images(
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> list[GameSummary]:
+    """Admin-only: games whose box art or thumbnail hasn't been hydrated yet."""
+    sb = get_supabase()
+    result = (
+        sb.table("boardgamebuddy_games")
+        .select(_MISSING_IMAGES_FIELDS)
+        .or_("image_url.is.null,thumbnail_url.is.null")
+        .order("name")
+        .execute()
+    )
+    return [GameSummary(**g) for g in (result.data or [])]
+
+
+@router.post(
+    "/games/admin/{game_id}/refresh-images",
+    response_model=GameSummary,
+    status_code=200,
+    summary="Refresh image URLs for a single game from BGG (admin)",
+)
+async def refresh_single_game_images(
+    game_id: str = Path(..., description="Game UUID"),
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> GameSummary:
+    """Admin-only: re-fetch image + thumbnail for one game from BGG and re-host in Storage."""
+    sb = get_supabase()
+
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select("id, bgg_id")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    bgg_id = existing.data[0]["bgg_id"]
+    if not bgg_id:
+        raise HTTPException(status_code=400, detail="Game has no bgg_id; cannot refresh from BGG")
+
+    body = await _fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
+    root = _parse_bgg_xml(body, context=f"refresh bgg_id={bgg_id}")
+    item = root.find("item")
+    if item is None:
+        raise HTTPException(status_code=404, detail="Game not found on BGG")
+
+    img_el = item.find("image")
+    thumb_el = item.find("thumbnail")
+    raw_img = _normalize_image_url(img_el.text if img_el is not None else None)
+    raw_thumb = _normalize_image_url(thumb_el.text if thumb_el is not None else None)
+
+    updated = (
+        sb.table("boardgamebuddy_games")
+        .update({
+            "image_url": await _upload_to_storage(sb, bgg_id, raw_img, "image"),
+            "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
+        })
+        .eq("id", game_id)
+        .execute()
+    )
+    if not updated.data:
+        raise HTTPException(status_code=500, detail="Failed to update game row")
+
+    refreshed = (
+        sb.table("boardgamebuddy_games")
+        .select(_MISSING_IMAGES_FIELDS)
+        .eq("id", game_id)
+        .execute()
+    )
+    return GameSummary(**refreshed.data[0])
 
 
 @router.get(

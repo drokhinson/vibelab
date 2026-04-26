@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 043
+-- Last updated: migration 044
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -20,8 +20,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   description TEXT,
   image_url TEXT,
   thumbnail_url TEXT,
-  bgg_rank INTEGER,
-  bgg_rating NUMERIC(4,2),
   categories TEXT[] DEFAULT '{}',
   mechanics TEXT[] DEFAULT '{}',
   theme_color TEXT,
@@ -159,7 +157,6 @@ ALTER TABLE public.boardgamebuddy_guide_selections ENABLE ROW LEVEL SECURITY;
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_bgb_games_bgg_id ON public.boardgamebuddy_games(bgg_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_name ON public.boardgamebuddy_games USING gin(to_tsvector('english', name));
-CREATE INDEX IF NOT EXISTS idx_bgb_games_rank ON public.boardgamebuddy_games(bgg_rank);
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_user ON public.boardgamebuddy_collections(user_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_game ON public.boardgamebuddy_collections(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_user ON public.boardgamebuddy_plays(user_id);

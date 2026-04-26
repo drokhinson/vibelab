@@ -74,6 +74,21 @@ function renderImport() {
           </button>
         </div>
       </div>
+      <div class="card bg-base-200 mb-3">
+        <div class="card-body p-4">
+          <h3 class="font-semibold flex items-center gap-2">
+            <i data-lucide="image-off" class="w-4 h-4"></i> Refresh missing images
+          </h3>
+          <p class="text-xs text-base-content/60">
+            List games imported without BGG box art / thumbnail. Each refresh hits
+            the BGG API — note the daily request limit.
+          </p>
+          <button class="btn btn-outline btn-sm mt-2"
+                  onclick="showView('missing-images'); renderMissingImages();">
+            <i data-lucide="image-off" class="w-4 h-4"></i> Open missing-images list
+          </button>
+        </div>
+      </div>
     ` : ""}
 
     <!-- 4. Download Guide Builder instructions -->
@@ -412,4 +427,139 @@ async function rejectPendingGuide(id) {
   } catch (err) {
     showToast("Reject failed: " + err.message, "error");
   }
+}
+
+// ── Admin: refresh missing images ────────────────────────────────────────────
+
+let missingImagesCache = [];
+let missingImagesBusy = false;
+
+async function renderMissingImages() {
+  const container = document.getElementById("missing-images-content");
+  container.innerHTML = `
+    <div class="flex items-center gap-2 mb-3">
+      <button class="btn btn-ghost btn-sm btn-square" onclick="showView('import'); renderImport();" title="Back to Import">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      </button>
+      <h2 class="text-xl font-bold flex items-center gap-2">
+        <i data-lucide="image-off" class="w-5 h-5"></i> Missing images
+      </h2>
+    </div>
+    <p class="text-xs text-base-content/60 mb-3">
+      Each refresh hits the BoardGameGeek API. BGG enforces a daily request quota — refresh in moderation.
+    </p>
+    <div id="missing-images-list">
+      <div class="flex justify-center py-8"><span class="loading loading-spinner loading-md"></span></div>
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons();
+
+  try {
+    missingImagesCache = await apiFetch("/games/admin/missing-images");
+  } catch (err) {
+    document.getElementById("missing-images-list").innerHTML =
+      `<div class="alert alert-error text-sm">${escapeHtml(err.message)}</div>`;
+    return;
+  }
+  renderMissingImagesList();
+}
+
+function renderMissingImagesList() {
+  const list = document.getElementById("missing-images-list");
+  if (!missingImagesCache.length) {
+    list.innerHTML = `
+      <div class="text-center py-12 text-base-content/50">
+        <i data-lucide="check-circle-2" class="w-12 h-12 mb-3 opacity-50"></i>
+        <p>All games have box art and thumbnails.</p>
+      </div>`;
+    if (window.lucide) window.lucide.createIcons();
+    return;
+  }
+
+  list.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-sm text-base-content/70">
+        ${missingImagesCache.length} game${missingImagesCache.length === 1 ? "" : "s"} need refresh
+      </span>
+      <button class="btn btn-primary btn-sm" id="refresh-all-btn"
+              onclick="refreshAllMissingImages()" ${missingImagesBusy ? "disabled" : ""}>
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        Refresh all (sequential)
+      </button>
+    </div>
+    <div id="refresh-progress" class="text-xs text-base-content/60 mb-2 ${missingImagesBusy ? "" : "hidden"}"></div>
+    <div class="space-y-2">
+      ${missingImagesCache.map((g, i) => `
+        <div class="card bg-base-200 animate-fadeUp" style="--i:${i}" data-game-row="${g.id}">
+          <div class="card-body p-3 flex-row items-center gap-3">
+            <div class="w-12 h-12 rounded bg-base-300 flex items-center justify-center flex-shrink-0">
+              ${g.thumbnail_url
+                ? `<img src="${bggImg(g.thumbnail_url)}" alt="" class="w-full h-full object-cover rounded" />`
+                : `<i data-lucide="image-off" class="w-5 h-5 opacity-40"></i>`}
+            </div>
+            <div class="min-w-0 flex-1">
+              <h3 class="font-semibold text-sm truncate">${escapeHtml(g.name)}</h3>
+              <p class="text-xs text-base-content/60">
+                ${g.bgg_id ? `BGG #${g.bgg_id}` : "no bgg_id"}
+                ${!g.image_url ? " · missing image" : ""}
+                ${!g.thumbnail_url ? " · missing thumbnail" : ""}
+              </p>
+            </div>
+            <button class="btn btn-xs btn-outline" onclick="refreshOneGameImages('${g.id}')"
+                    ${g.bgg_id ? "" : "disabled"} ${missingImagesBusy ? "disabled" : ""}>
+              <i data-lucide="refresh-cw" class="w-3 h-3"></i> Refresh
+            </button>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+async function refreshOneGameImages(gameId) {
+  try {
+    const refreshed = await apiFetch(`/games/admin/${gameId}/refresh-images`, { method: "POST" });
+    if (refreshed.image_url && refreshed.thumbnail_url) {
+      missingImagesCache = missingImagesCache.filter(g => g.id !== gameId);
+      showToast(`${refreshed.name} refreshed.`, "success");
+    } else {
+      const idx = missingImagesCache.findIndex(g => g.id === gameId);
+      if (idx >= 0) missingImagesCache[idx] = refreshed;
+      showToast(`${refreshed.name}: still missing one URL.`, "info");
+    }
+    renderMissingImagesList();
+  } catch (err) {
+    showToast("Refresh failed: " + err.message, "error");
+  }
+}
+
+async function refreshAllMissingImages() {
+  if (missingImagesBusy) return;
+  if (!confirm(`Refresh ${missingImagesCache.length} game(s) sequentially? This will use BGG API quota.`)) return;
+  missingImagesBusy = true;
+  renderMissingImagesList();
+  const progress = document.getElementById("refresh-progress");
+  let done = 0, failed = 0;
+  const total = missingImagesCache.length;
+  // Snapshot of ids at start — refreshOneGameImages mutates the cache.
+  const ids = missingImagesCache.filter(g => g.bgg_id).map(g => g.id);
+  for (const id of ids) {
+    if (progress) progress.textContent = `Refreshing ${done + 1} / ${total}…`;
+    try {
+      const refreshed = await apiFetch(`/games/admin/${id}/refresh-images`, { method: "POST" });
+      if (refreshed.image_url && refreshed.thumbnail_url) {
+        missingImagesCache = missingImagesCache.filter(g => g.id !== id);
+      } else {
+        const idx = missingImagesCache.findIndex(g => g.id === id);
+        if (idx >= 0) missingImagesCache[idx] = refreshed;
+      }
+    } catch {
+      failed += 1;
+    }
+    done += 1;
+  }
+  missingImagesBusy = false;
+  showToast(`Refreshed ${done - failed}/${total}${failed ? ` (${failed} failed)` : ""}.`, failed ? "warning" : "success");
+  renderMissingImagesList();
 }

@@ -83,12 +83,9 @@ function renderGameDetail() {
       ${g.year_published ? `<span class="text-base-content/50 text-sm">(${g.year_published})</span>` : ""}
 
       <div class="flex flex-wrap gap-2 mt-3">
-        ${g.bgg_rank ? `<div class="badge" style="border-color: var(--game-accent); color: var(--game-accent);">
-          #${g.bgg_rank} on BGG</div>` : ""}
         ${g.bgg_url ? `<a href="${g.bgg_url}" target="_blank" rel="noopener"
           class="badge badge-outline gap-1 hover:badge-primary">
           <i data-lucide="external-link" class="w-3 h-3"></i>BGG</a>` : ""}
-        ${g.bgg_rating ? `<div class="badge badge-ghost"><i data-lucide="star" class="w-3 h-3 mr-0.5"></i>${formatRating(g.bgg_rating)}</div>` : ""}
         ${g.min_players ? `<div class="badge badge-ghost"><i data-lucide="users" class="w-3 h-3 mr-1"></i>${playerRange(g.min_players, g.max_players)}</div>` : ""}
         ${g.playing_time ? `<div class="badge badge-ghost"><i data-lucide="clock" class="w-3 h-3 mr-1"></i>${formatTime(g.playing_time)}</div>` : ""}
         <span id="play-count-badge"></span>

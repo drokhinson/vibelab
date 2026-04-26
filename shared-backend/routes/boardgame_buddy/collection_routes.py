@@ -21,7 +21,7 @@ from .dependencies import CurrentUser, get_current_user
 
 _GAME_FIELDS = (
     "id, bgg_id, name, year_published, min_players, max_players, "
-    "playing_time, thumbnail_url, bgg_rank, bgg_rating, theme_color"
+    "playing_time, thumbnail_url, theme_color"
 )
 
 
@@ -43,7 +43,7 @@ async def get_collection(
         .select(
             "id, game_id, status, added_at, "
             "boardgamebuddy_games(id, bgg_id, name, year_published, min_players, "
-            "max_players, playing_time, thumbnail_url, bgg_rank, bgg_rating, theme_color)"
+            "max_players, playing_time, thumbnail_url, theme_color)"
         )
         .eq("user_id", user.user_id)
         .order("added_at", desc=True)
@@ -97,7 +97,7 @@ async def get_collection(
                 sb.table("boardgamebuddy_games")
                 .select(
                     "id, bgg_id, name, year_published, min_players, max_players, "
-                    "playing_time, thumbnail_url, bgg_rank, bgg_rating, theme_color"
+                    "playing_time, thumbnail_url, theme_color"
                 )
                 .in_("id", missing_ids)
                 .execute()

@@ -51,8 +51,7 @@ class GameSummary(BaseModel):
     max_players: Optional[int] = None
     playing_time: Optional[int] = None
     thumbnail_url: Optional[str] = None
-    bgg_rank: Optional[int] = None
-    bgg_rating: Optional[float] = None
+    image_url: Optional[str] = None
     theme_color: Optional[str] = None
 
     @computed_field  # type: ignore[misc]
@@ -63,7 +62,6 @@ class GameSummary(BaseModel):
 
 class GameDetail(GameSummary):
     description: Optional[str] = None
-    image_url: Optional[str] = None
     categories: list[str] = []
     mechanics: list[str] = []
     created_at: datetime
@@ -259,6 +257,10 @@ class ChunkVisibilityUpdate(BaseModel):
 class GuideBundleGame(BaseModel):
     bgg_id: int = Field(..., gt=0)
     name: str
+    min_players: Optional[int] = None
+    max_players: Optional[int] = None
+    playing_time: Optional[int] = None
+    bgg_url: Optional[str] = None
 
 
 class GuideBundleChunk(BaseModel):

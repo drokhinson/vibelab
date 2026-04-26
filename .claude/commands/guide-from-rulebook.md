@@ -94,7 +94,14 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 ```json
 {
   "version": 1,
-  "game": { "bgg_id": <int>, "name": "<primary name>" },
+  "game": {
+    "bgg_id": <int>,
+    "name": "<primary name>",
+    "min_players": <int|null>,
+    "max_players": <int|null>,
+    "playing_time": <int|null>,
+    "bgg_url": "https://boardgamegeek.com/boardgame/<bgg_id>"
+  },
   "source": {
     "generated_at": "<ISO timestamp>",
     "generator": "guide-from-rulebook@2",
@@ -130,6 +137,7 @@ Next step: an admin uploads this file via the BoardgameBuddy web UI at ?admin=1 
 - **Don't hit the backend.** This skill only writes a JSON file. Import is a separate admin action.
 - **Respect chunk types.** Only the seven IDs listed above are valid.
 - **Don't run migrations.** The old version of this skill wrote SQL; this version does not.
+- **BGG API has a daily request limit.** Each guide-from-rulebook run hits the BGG XML API for search + thing detail. Don't loop over many games — generate one bundle at a time and rely on the bundle metadata so the backend can skip a second BGG call on import.
 
 ## Input validation
 
