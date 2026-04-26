@@ -19,10 +19,10 @@ function emptySession() {
     players: [{
       name: seedName,
       initials: seedName ? computeInitials(seedName) : "",
-      round_scores: [0],
+      round_scores: [],
       is_winner_override: null,
     }],
-    round_count: 1,
+    round_count: 0,
   };
 }
 
@@ -47,7 +47,7 @@ function padScores(arr, len) {
 function normalizeSession(s) {
   s.notes = s.notes || "";
   s.played_at = s.played_at || TODAY();
-  s.round_count = Math.max(1, s.round_count || 1);
+  s.round_count = Math.max(0, Number(s.round_count) || 0);
   s.players = (s.players || []).map(p => {
     const name = p.name || "";
     return {
@@ -77,6 +77,7 @@ async function initSession() {
   } catch {
     activeSession = null;
   }
+  sessionDirty = false;
   refreshSessionFab();
   // Buddies list is used by the player-name autocomplete inside the bubble.
   if (!buddies.length) {
@@ -115,10 +116,11 @@ function openSession({ gameId, gameName, gameThumb } = {}) {
   if (!activeSession) activeSession = emptySession();
 
   if (gameId && !activeSession.game_id) {
+    // Seed the game in memory only — don't persist a draft until the user
+    // actually does something. Closing without changes leaves no trace.
     activeSession.game_id = gameId;
     activeSession.game_name = gameName || null;
     activeSession.game_thumbnail = gameThumb || null;
-    scheduleDraftSave();
   } else if (gameId && activeSession.game_id && activeSession.game_id !== gameId) {
     const prev = activeSession.game_name || "current game";
     if (confirm(`Replace ${prev} with ${gameName || "this game"} in the active session?`)) {
@@ -139,12 +141,18 @@ function minimizeSession() {
   sessionExpanded = false;
   document.getElementById("session-backdrop").classList.add("hidden");
   document.getElementById("session-panel").classList.add("hidden");
+  // If the user opened the bubble but never made a real change, drop the
+  // in-memory session so closing leaves no trace (no server draft was created).
+  if (!sessionDirty && activeSession && !activeSession.updated_at) {
+    activeSession = null;
+  }
   refreshSessionFab();
 }
 
 // ── Debounced draft sync ─────────────────────────────────────────────────────
 
 function scheduleDraftSave() {
+  sessionDirty = true;
   refreshSessionFab();
   if (sessionSaveTimer) clearTimeout(sessionSaveTimer);
   sessionSaveTimer = setTimeout(saveDraftNow, 600);
@@ -152,6 +160,7 @@ function scheduleDraftSave() {
 
 async function saveDraftNow() {
   if (!session || !activeSession) return;
+  if (!sessionDirty) return;
   const body = {
     game_id: activeSession.game_id,
     played_at: activeSession.played_at,
@@ -209,7 +218,7 @@ function addRound() {
 }
 
 function removeRound(idx) {
-  if (activeSession.round_count <= 1) return;
+  if (activeSession.round_count <= 0) return;
   activeSession.round_count -= 1;
   for (const p of activeSession.players) p.round_scores.splice(idx, 1);
   scheduleDraftSave();
@@ -265,6 +274,7 @@ function openAddPlayerForm() {
   nameInput.value = "";
   initialsInput.value = "";
   initialsInput.dataset.userEdited = "false";
+  renderBuddySuggestions("");
   nameInput.focus();
 }
 
@@ -281,6 +291,7 @@ function openEditPlayer(idx) {
   nameInput.value = p.name || "";
   initialsInput.value = p.initials || "";
   initialsInput.dataset.userEdited = "true";
+  renderBuddySuggestions(nameInput.value);
   nameInput.focus();
 }
 
@@ -291,15 +302,16 @@ function cancelAddPlayer() {
   form.classList.add("hidden");
   document.getElementById("add-player-name").value = "";
   document.getElementById("add-player-initials").value = "";
+  hideBuddySuggestions();
 }
 
 function onAddPlayerNameInput(name) {
   const initialsInput = document.getElementById("add-player-initials");
-  if (!initialsInput) return;
-  // Auto-populate initials only if the user hasn't manually edited the field.
-  if (initialsInput.dataset.userEdited === "true") return;
-  const base = name ? computeInitials(name) : "";
-  initialsInput.value = disambiguateInitials(base, editingPlayerIdx ?? -1);
+  if (initialsInput && initialsInput.dataset.userEdited !== "true") {
+    const base = name ? computeInitials(name) : "";
+    initialsInput.value = disambiguateInitials(base, editingPlayerIdx ?? -1);
+  }
+  renderBuddySuggestions(name);
 }
 
 function onAddPlayerNameChange(name) {
@@ -316,6 +328,92 @@ function onAddPlayerNameChange(name) {
     if (nameInput) nameInput.value = display;
     onAddPlayerNameInput(display);
   }
+}
+
+function buddyDisplayName(b) {
+  return b.linked_display_name || b.name || "";
+}
+
+function renderBuddySuggestions(query) {
+  const panel = document.getElementById("buddy-suggestions");
+  if (!panel) return;
+  const q = (query || "").trim().toLowerCase();
+  const usedNames = new Set(
+    (activeSession?.players || [])
+      .map((p, i) => i === editingPlayerIdx ? null : (p.name || "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const all = (buddies || [])
+    .map(b => ({ b, name: buddyDisplayName(b) }))
+    .filter(({ name }) => name);
+  const matches = q
+    ? all.filter(({ name }) => name.toLowerCase().includes(q))
+    : all;
+  matches.sort((a, b) => a.name.localeCompare(b.name));
+
+  const exact = q && matches.some(({ name }) => name.toLowerCase() === q);
+  const newRow = (q && !exact) ? `
+    <li class="px-2 py-1.5 rounded cursor-pointer hover:bg-base-200 text-sm flex items-center gap-2 text-base-content/70"
+        onmousedown="event.preventDefault()"
+        onclick="pickNewBuddy(${JSON.stringify(query)})">
+      <i data-lucide="user-plus" class="w-3 h-3"></i>
+      <span>Use "<span class="font-medium">${escapeHtml(query)}</span>" as new buddy</span>
+    </li>` : "";
+
+  const rows = matches.map(({ b, name }) => {
+    const used = usedNames.has(name.toLowerCase());
+    const initials = computeInitials(name);
+    return `
+      <li class="px-2 py-1.5 rounded cursor-pointer hover:bg-base-200 text-sm flex items-center gap-2 ${used ? 'opacity-40' : ''}"
+          onmousedown="event.preventDefault()"
+          onclick="pickBuddy(${JSON.stringify(name)})">
+        <span class="avatar-bubble avatar-bubble--xs">${escapeHtml(initials)}</span>
+        <span class="flex-1 truncate">${escapeHtml(name)}</span>
+        ${b.play_count ? `<span class="text-xs opacity-50">${b.play_count}</span>` : ""}
+      </li>`;
+  }).join("");
+
+  if (!rows && !newRow) {
+    panel.innerHTML = `<div class="px-2 py-3 text-xs text-base-content/50 text-center">No buddies yet — type a name to add one.</div>`;
+  } else {
+    panel.innerHTML = `<ul class="max-h-48 overflow-y-auto space-y-0.5">${newRow}${rows}</ul>`;
+  }
+  panel.classList.remove("hidden");
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function showBuddySuggestions() {
+  const nameInput = document.getElementById("add-player-name");
+  renderBuddySuggestions(nameInput?.value || "");
+}
+
+function hideBuddySuggestions() {
+  const panel = document.getElementById("buddy-suggestions");
+  if (panel) panel.classList.add("hidden");
+}
+
+function onAddPlayerNameBlur() {
+  // Delay so a click on a suggestion row registers before we hide.
+  setTimeout(hideBuddySuggestions, 150);
+}
+
+function pickBuddy(name) {
+  const nameInput = document.getElementById("add-player-name");
+  const initialsInput = document.getElementById("add-player-initials");
+  if (nameInput) nameInput.value = name;
+  if (initialsInput) initialsInput.dataset.userEdited = "false";
+  onAddPlayerNameInput(name);
+  onAddPlayerNameChange(name);
+  hideBuddySuggestions();
+  initialsInput?.focus();
+}
+
+function pickNewBuddy(name) {
+  const nameInput = document.getElementById("add-player-name");
+  if (nameInput) nameInput.value = name;
+  onAddPlayerNameInput(name);
+  hideBuddySuggestions();
+  document.getElementById("add-player-initials")?.focus();
 }
 
 function onAddPlayerInitialsInput(value) {
@@ -443,6 +541,7 @@ async function saveSession() {
     await apiFetch("/plays", { method: "POST", body });
     try { await apiFetch("/plays/draft", { method: "DELETE" }); } catch { /* ignore */ }
     activeSession = null;
+    sessionDirty = false;
     sessionExpanded = false;
     document.getElementById("session-backdrop").classList.add("hidden");
     document.getElementById("session-panel").classList.add("hidden");
@@ -460,6 +559,7 @@ async function discardSession() {
   if (!confirm("Discard this in-progress session?")) return;
   try { await apiFetch("/plays/draft", { method: "DELETE" }); } catch { /* ignore */ }
   activeSession = null;
+  sessionDirty = false;
   sessionExpanded = false;
   document.getElementById("session-backdrop").classList.add("hidden");
   document.getElementById("session-panel").classList.add("hidden");
@@ -507,11 +607,17 @@ function renderSessionPanel() {
       <div id="session-add-player" class="hidden mt-2 p-2 rounded border border-base-content/10 bg-base-200/40">
         <div class="text-xs opacity-60 mb-1" id="session-add-player-title">Add player</div>
         <div class="flex gap-1 items-center">
-          <input type="text" id="add-player-name"
-                 class="input input-bordered input-xs flex-1 min-w-0"
-                 placeholder="Player name" list="session-buddies"
-                 oninput="onAddPlayerNameInput(this.value)"
-                 onchange="onAddPlayerNameChange(this.value)" />
+          <div class="relative flex-1 min-w-0">
+            <input type="text" id="add-player-name"
+                   class="input input-bordered input-xs w-full"
+                   placeholder="Player name" autocomplete="off"
+                   oninput="onAddPlayerNameInput(this.value)"
+                   onchange="onAddPlayerNameChange(this.value)"
+                   onfocus="showBuddySuggestions()"
+                   onblur="onAddPlayerNameBlur()" />
+            <div id="buddy-suggestions"
+                 class="hidden absolute z-50 left-0 right-0 mt-1 bg-base-100 border border-base-300 rounded-box shadow-xl p-1"></div>
+          </div>
           <input type="text" id="add-player-initials" maxlength="3"
                  class="input input-bordered input-xs w-14 text-center"
                  placeholder="ABC"
@@ -522,10 +628,6 @@ function renderSessionPanel() {
         </div>
       </div>
     </div>
-
-    <datalist id="session-buddies">
-      ${(buddies || []).map(b => `<option value="${escapeHtml(b.linked_display_name || b.name)}">`).join("")}
-    </datalist>
 
     <div class="mb-3">
       <label class="text-xs opacity-60 block mb-1">Notes</label>
@@ -638,11 +740,10 @@ function renderGridBody() {
     rows += `<tr>
       <th class="text-left text-xs opacity-60">
         R${r+1}
-        ${s.round_count > 1 ? `
-          <button class="btn btn-ghost btn-xs btn-square ml-1" title="Remove round"
-                  onclick="removeRound(${r})">
-            <i data-lucide="x" class="w-3 h-3"></i>
-          </button>` : ""}
+        <button class="btn btn-ghost btn-xs btn-square ml-1" title="Remove round"
+                onclick="removeRound(${r})">
+          <i data-lucide="x" class="w-3 h-3"></i>
+        </button>
       </th>
       ${s.players.map((p, i) => `
         <td>

@@ -791,3 +791,9 @@ body {
   flex-shrink: 0;
 }
 
+.avatar-bubble--xs {
+  width: 20px;
+  height: 20px;
+  font-size: 0.55rem;
+}
+

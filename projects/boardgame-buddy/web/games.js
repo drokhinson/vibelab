@@ -97,13 +97,7 @@ function changePage(delta) {
 
 // ── Browse filter strip ───────────────────────────────────────────────────────
 
-const PLAYER_CHIPS = [
-  { label: "2", value: 2 },
-  { label: "3", value: 3 },
-  { label: "4", value: 4 },
-  { label: "5", value: 5 },
-  { label: "6+", value: 6 },
-];
+const PLAYER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 const PLAYTIME_CHIPS = [
   { label: "≤30 min",   min: null, max: 30  },
@@ -115,12 +109,27 @@ const PLAYTIME_CHIPS = [
 async function initBrowseFilters() {
   if (mechanicsOptions.length > 0) {
     renderFilterStrip();
+    _ensureBrowseDropdownCloser();
     return;
   }
   try {
     mechanicsOptions = await apiFetch("/games/mechanics");
   } catch { mechanicsOptions = []; }
   renderFilterStrip();
+  _ensureBrowseDropdownCloser();
+}
+
+let _browseDropdownCloserAttached = false;
+function _ensureBrowseDropdownCloser() {
+  if (_browseDropdownCloserAttached) return;
+  document.addEventListener("click", _closeBrowseDropdowns);
+  _browseDropdownCloserAttached = true;
+}
+
+function _closeBrowseDropdowns(e) {
+  if (!e.target.closest("#mechanics-dropdown")) {
+    document.getElementById("mechanics-panel")?.classList.add("hidden");
+  }
 }
 
 function renderFilterStrip() {
@@ -132,18 +141,21 @@ function renderFilterStrip() {
     || gamesFilterPlaytimeMax !== null
     || gamesFilterMechanics.length > 0;
 
+  const mechanicsCount = gamesFilterMechanics.length;
+
   el.innerHTML = `
     <div class="space-y-2">
 
       <!-- Players row -->
       <div class="flex items-center gap-1.5 flex-wrap">
         <span class="text-xs text-base-content/50 mr-1">Players</span>
-        ${PLAYER_CHIPS.map(c => `
-          <button class="btn btn-xs ${gamesFilterPlayers === c.value ? 'btn-primary' : 'btn-outline'}"
-                  onclick="togglePlayersFilter(${c.value})">
-            ${c.label}
-          </button>
-        `).join("")}
+        <select class="select select-bordered select-xs"
+                onchange="setPlayersFilter(this.value)">
+          <option value="" ${gamesFilterPlayers === null ? 'selected' : ''}>Any</option>
+          ${PLAYER_OPTIONS.map(n => `
+            <option value="${n}" ${gamesFilterPlayers === n ? 'selected' : ''}>${n === 8 ? '8+' : n}</option>
+          `).join("")}
+        </select>
       </div>
 
       <!-- Playtime row -->
@@ -159,20 +171,26 @@ function renderFilterStrip() {
         }).join("")}
       </div>
 
-      <!-- Mechanics row -->
+      <!-- Mechanics dropdown -->
       ${mechanicsOptions.length ? `
-        <div>
-          <div id="mechanics-chips" class="flex items-center gap-1.5 flex-wrap">
-            <span class="text-xs text-base-content/50 mr-1">Mechanics</span>
-            ${mechanicsOptions.slice(0, 20).map(m => {
-              const active = gamesFilterMechanics.includes(m);
-              return `<button class="btn btn-xs ${active ? 'btn-primary' : 'btn-outline'}"
-                              onclick="toggleMechanicFilter(${JSON.stringify(m)})">${m}</button>`;
-            }).join("")}
-            ${mechanicsOptions.length > 20 ? `
-              <button class="btn btn-xs btn-ghost" onclick="expandMechanics()">
-                +${mechanicsOptions.length - 20} more
-              </button>` : ""}
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-xs text-base-content/50 mr-1">Mechanics</span>
+          <div class="relative" id="mechanics-dropdown">
+            <button class="btn btn-xs ${mechanicsCount ? 'btn-primary' : 'btn-outline'} gap-1"
+                    onclick="event.stopPropagation(); _toggleMechanicsPanel()">
+              <span>Mechanics</span>
+              <span id="mechanics-badge" class="badge badge-xs ${mechanicsCount ? '' : 'hidden'}">${mechanicsCount}</span>
+              <i data-lucide="chevron-down" class="w-3 h-3 opacity-60"></i>
+            </button>
+            <div id="mechanics-panel" class="hidden absolute z-50 left-0 mt-1 w-72 bg-base-100 border border-base-300 rounded-box shadow-xl p-2">
+              <input type="text" class="input input-sm input-bordered w-full mb-2"
+                     placeholder="Search mechanics..."
+                     oninput="_filterMechanicsList(this)"
+                     onclick="event.stopPropagation()" />
+              <ul id="mechanics-list" class="max-h-64 overflow-y-auto space-y-0.5">
+                ${_renderMechanicsList()}
+              </ul>
+            </div>
           </div>
         </div>
       ` : ""}
@@ -187,10 +205,11 @@ function renderFilterStrip() {
       ` : ""}
     </div>
   `;
+  if (window.lucide) window.lucide.createIcons();
 }
 
-function togglePlayersFilter(value) {
-  gamesFilterPlayers = gamesFilterPlayers === value ? null : value;
+function setPlayersFilter(value) {
+  gamesFilterPlayers = value === "" || value === null ? null : Number(value);
   gamesPage = 1;
   renderFilterStrip();
   loadGames();
@@ -219,7 +238,7 @@ function toggleMechanicFilter(mechanic) {
     gamesFilterMechanics = gamesFilterMechanics.filter(m => m !== mechanic);
   }
   gamesPage = 1;
-  renderFilterStrip();
+  _rerenderMechanicsPanelInPlace();
   loadGames();
 }
 
@@ -233,18 +252,57 @@ function clearBrowseFilters() {
   loadGames();
 }
 
-function expandMechanics() {
-  const container = document.getElementById("mechanics-chips");
-  if (!container) return;
-  // Replace the "show 20" slice with all mechanics
-  const extra = mechanicsOptions.slice(20).map(m => {
-    const active = gamesFilterMechanics.includes(m);
-    return `<button class="btn btn-xs ${active ? 'btn-primary' : 'btn-outline'}"
-                    onclick="toggleMechanicFilter(${JSON.stringify(m)})">${m}</button>`;
+// ── Mechanics dropdown helpers ────────────────────────────────────────────────
+
+function _renderMechanicsList() {
+  // Checked items first (in selection order); then the rest, alphabetically.
+  const checked = gamesFilterMechanics.filter(m => mechanicsOptions.includes(m));
+  const rest = mechanicsOptions
+    .filter(m => !gamesFilterMechanics.includes(m))
+    .slice()
+    .sort((a, b) => a.localeCompare(b));
+  const ordered = [...checked, ...rest];
+  return ordered.map(m => {
+    const isChecked = gamesFilterMechanics.includes(m);
+    const safe = JSON.stringify(m);
+    return `
+      <li class="px-2 py-1.5 rounded cursor-pointer hover:bg-base-200 text-sm flex items-center gap-2"
+          data-mechanic="${escapeAttr(m)}"
+          onclick="event.stopPropagation(); toggleMechanicFilter(${safe})">
+        <input type="checkbox" class="checkbox checkbox-xs pointer-events-none" ${isChecked ? 'checked' : ''} />
+        <span class="flex-1">${escapeHtml(m)}</span>
+      </li>`;
+  }).join("");
+}
+
+function _filterMechanicsList(input) {
+  const q = input.value.toLowerCase();
+  document.querySelectorAll("#mechanics-list li").forEach(li => {
+    const name = (li.dataset.mechanic || "").toLowerCase();
+    li.style.display = name.includes(q) ? "" : "none";
   });
-  const showMoreBtn = container.querySelector("button[onclick='expandMechanics()']");
-  if (showMoreBtn) {
-    showMoreBtn.replaceWith(...extra.map(h => { const d = document.createElement("div"); d.innerHTML = h; return d.firstChild; }));
+}
+
+function _toggleMechanicsPanel() {
+  const panel = document.getElementById("mechanics-panel");
+  if (!panel) return;
+  panel.classList.toggle("hidden");
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function _rerenderMechanicsPanelInPlace() {
+  const list = document.getElementById("mechanics-list");
+  const badge = document.getElementById("mechanics-badge");
+  const dropdownBtn = document.querySelector("#mechanics-dropdown > button");
+  if (list) list.innerHTML = _renderMechanicsList();
+  if (badge) {
+    const n = gamesFilterMechanics.length;
+    badge.textContent = String(n);
+    badge.classList.toggle("hidden", n === 0);
+  }
+  if (dropdownBtn) {
+    dropdownBtn.classList.toggle("btn-primary", gamesFilterMechanics.length > 0);
+    dropdownBtn.classList.toggle("btn-outline", gamesFilterMechanics.length === 0);
   }
 }
 
