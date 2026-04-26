@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 66646,
+    "name": "Carcassonne: Bridges, Castles and Bazaars",
+    "min_players": 2,
+    "max_players": 6,
+    "playing_time": 50,
+    "bgg_url": "https://boardgamegeek.com/boardgame/66646",
+    "is_expansion": true,
+    "base_game_bgg_id": 822
+  },
+  "source": {
+    "generated_at": "2026-04-26T00:00:00Z",
+    "generator": "expansion-guide@1",
+    "rulebook_urls": [
+      {
+        "url": "https://cdn.svc.asmodee.net/production-zman/uploads/2024/10/Bridges-Castles-Bazaars-Rulebook.pdf",
+        "label": "Bridges, Castles and Bazaars Rulebook (Asmodee/Z-Man, 2024)",
+        "source": "publisher"
+      }
+    ],
+    "missing": []
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Bridges, Castles & Bazaars — Setup Changes",
+      "content": "## New Tiles\n\nShuffle **12 new land tiles** (8 of which have the bazaar icon) into the regular tile supply.\n\n## Per-Player Token Distribution\n\n| Player Count | Bridges (each) | Castles (each) |\n|---|---|---|\n| 2–4 players | 3 | 3 |\n| 5–6 players | 2 | 2 |\n\nEach player keeps their Bridges and Castles in their personal supply alongside their followers.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Bridges & Castles — Quick Reference",
+      "content": "## Bridges\n\n| Rule | Detail |\n|---|---|\n| When | After placing your tile (once per turn) |\n| Where | On the just-placed tile OR any adjacent already-placed tile |\n| What | Spans 2 opposing field edges of a tile; acts as 1 road segment |\n| Scoring | 1 pt per tile — same as normal roads |\n| Restrictions | Permanent once placed; cannot be placed on existing road/city/monastery segments |\n\n## Castles\n\n| Rule | Detail |\n|---|---|\n| Trigger | You complete a city of **exactly 2 tiles** |\n| Action | Instead of scoring the city, place a Castle token + 1 of your followers on it |\n| Fief | The 2 castle tiles + up to 2 tiles immediately left + 2 immediately right (max 6 tiles total) |\n| Scoring trigger | When the NEXT road, city, or cloister completes **anywhere in the fief**, castle owner scores those same points |\n| Removal | Castle and follower removed after scoring |\n| Game end | Castle scores **0 pts** if no fief feature completes before end |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Bazaar Tiles — Quick Reference",
+      "content": "## Bazaar Tiles\n\n| Rule | Detail |\n|---|---|\n| Which tiles | 8 of the 12 expansion tiles show a bazaar icon |\n| Trigger | Placing a bazaar tile starts a tile auction immediately |\n| Tiles drawn | Draw N face-down tiles (N = number of players) |\n| Auction order | For each tile: players bid points from current score; highest bidder wins |\n| Bid cost | Winner reduces their score by their bid amount |\n| First bidder | The placing player bids first for each tile |\n| Last tile | The placing player takes the last tile **for free** (no bid) |\n| Acquired tiles | Held in front of player; may be placed on any future turn instead of drawing from supply |\n| Chain auctions | Placing an acquired bazaar tile also triggers a new auction |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Bridges, Castles & Bazaars — Castle Option",
+      "content": "## Castle Placement (Alternative to Scoring a 2-Tile City)\n\n**Trigger:** You complete a city consisting of **exactly 2 tiles** in Step 3.\n\n**Normal path:** Score the city immediately (4 pts base, plus pennants).\n\n**Castle path (optional instead):**\n\n| Step | Action |\n|---|---|\n| 1 | Place a **Castle token** on the completed 2-tile city |\n| 2 | Place **1 of your followers** on the castle to mark ownership |\n| 3 | The city is **not scored now** — castle waits for its fief |\n\n**Scoring the castle later:**\n- When the **next** road, city, or cloister is completed **anywhere in the fief** (2 castle tiles + 2 left + 2 right, max 6 tiles), castle owner scores those points.\n- Castle and follower are then removed.\n- If game ends before any fief feature completes: **0 pts**.\n\n> **Key trade-off:** You forgo the guaranteed ~4 pts from the 2-tile city, hoping a more valuable feature completes nearby.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Bridges, Castles & Bazaars — Bazaar Auction",
+      "content": "## Bazaar Tile Auction (Interrupts Turn)\n\nWhen a tile bearing the **bazaar icon** is placed in Step 1, a tile auction begins before Step 2.\n\n### Auction Sequence\n\n| Step | Action |\n|------|--------|\n| 1 | Draw **N tiles** from the supply face-down (N = number of players) |\n| 2 | Reveal and auction each tile **one at a time** |\n| 3 | The active player (who placed the bazaar tile) **bids first** on each tile |\n| 4 | Players bid points from their current score; highest bidder takes the tile and reduces their score by the bid |\n| 5 | The **last tile** goes to the active player **for free** (no bid) |\n\n### After the Auction\n- All N tiles are distributed. Play resumes at **Step 2** for the active player.\n- Tiles won at auction are **held face-up** in front of you.\n\n### Playing Acquired Tiles\n- On any future turn, instead of drawing from the supply, you may play one of your acquired tiles as your Step 1 placement.\n- If an acquired tile has a bazaar icon, it triggers another auction.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Bridges, Castles & Bazaars — New Scoring Rules",
+      "content": "## Castles (Fief Scoring)\n\nA Castle replaces normal scoring for a completed 2-tile city. The 2-tile city itself scores **0 pts** when converted.\n\n| Trigger | What Castle Owner Scores |\n|---|---|\n| Next road/city/cloister completed inside the fief | Same pts as that completed feature |\n| Game ends before any fief feature completes | **0 pts** |\n\n**Fief boundary:** the 2 castle tiles + up to 2 tiles to the left + 2 tiles to the right (max 6 tiles total).\n\n**Key trade-off:** forfeiting the guaranteed ~4 pts from the 2-tile city in exchange for a potentially larger fief payout.\n\n## Bazaar Auctions\n\n| Event | Score Effect |\n|---|---|\n| You win a tile auction with a bid of N | Your score is immediately reduced by **N pts** |\n| You lose an auction | No score change |\n\nAcquired tiles have no inherent point value — only future placement scoring earns points.\n\n## Bridges\n\nRoads crossing bridges score **1 pt per tile** (bridge tile counts as a tile) — no change to road scoring rate.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://cdn.svc.asmodee.net/production-zman/uploads/2024/10/Bridges-Castles-Bazaars-Rulebook.pdf",
+      "layout": "text"
+    }
+  ]
+}
