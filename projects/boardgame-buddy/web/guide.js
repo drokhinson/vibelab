@@ -580,12 +580,6 @@ async function openChunkEditorModal({ existing = null, onSave, onDelete = null }
                value="${escapeAttr(existing?.title || "")}" />
       </div>
       <div class="form-control">
-        <label class="label"><span class="label-text text-xs">Expansion <span class="opacity-60">(optional)</span></span></label>
-        <input id="chunk-expansion" type="text" class="input input-bordered input-sm"
-               placeholder="e.g. More, Prosperity, Seaside"
-               value="${escapeAttr(existing?.expansion_name || "")}" />
-      </div>
-      <div class="form-control">
         <div class="flex items-center justify-between mb-1">
           <span class="label-text text-xs">Content</span>
           <div class="join">
@@ -645,12 +639,10 @@ function toggleChunkEditorTab(tab) {
 
 async function submitChunkEditor(e) {
   e.preventDefault();
-  const expansionRaw = document.getElementById("chunk-expansion")?.value.trim();
   const data = {
     chunk_type: document.getElementById("chunk-type").value,
     title: document.getElementById("chunk-title").value.trim(),
     content: document.getElementById("chunk-content").value,
-    expansion_name: expansionRaw || null,
   };
   if (!data.title || !data.content) return;
   try {

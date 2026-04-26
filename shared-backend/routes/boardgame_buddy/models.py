@@ -232,7 +232,6 @@ class ChunkCreate(BaseModel):
     title: str
     content: str
     layout: str = "text"
-    expansion_name: Optional[str] = None
 
 
 class ChunkUpdate(BaseModel):
@@ -240,7 +239,6 @@ class ChunkUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     layout: Optional[str] = None
-    expansion_name: Optional[str] = None
 
 
 class ExpansionInline(BaseModel):
@@ -264,7 +262,6 @@ class ChunkResponse(BaseModel):
     title: str
     layout: str
     content: str
-    expansion_name: Optional[str] = None
     is_default: bool = False
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
@@ -308,7 +305,6 @@ class GuideBundleChunk(BaseModel):
     title: str = Field(..., max_length=200)
     content: str
     layout: str = "text"
-    expansion_name: Optional[str] = None
 
 
 class GuideBundle(BaseModel):
