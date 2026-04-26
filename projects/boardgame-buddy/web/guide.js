@@ -10,7 +10,6 @@
 // Gestures (mobile-first, works with pointer/mouse too):
 //   swipe right → edit (creator or admin; toast if blocked)
 //   swipe left  → hide the chunk from the guide
-//   long-press  → enter reorder mode; drag card to reposition
 
 // ── Markdown renderer (shared with legacy guide) ─────────────────────────────
 
@@ -173,7 +172,7 @@ function renderGuide() {
   // Group by chunk_type: section headers replace the per-card type badge.
   // The flat array keeps its sort order from sortVisibleChunks(), so groups
   // appear in chunk_type_order, and within each group rows preserve user
-  // ordering. A single global running index drives reorder DOM contracts.
+  // ordering.
   const groups = [];
   const seen = new Map();
   for (const c of otherChunks) {
@@ -191,17 +190,15 @@ function renderGuide() {
     groups[seen.get(key)].chunks.push(c);
   }
 
-  let runningIndex = 0;
   const renderChunk = (c) => {
     const editable = canEditChunk(c);
-    const idx = runningIndex++;
     const dot = c.expansion?.color
       ? `<span class="expansion-dot flex-shrink-0"
                style="background:${escapeAttr(c.expansion.color)}"
                title="${escapeAttr(c.expansion.name || "Expansion")}"></span>`
       : "";
     return `
-      <div class="swipe-row" data-chunk-id="${c.id}" data-chunk-index="${idx}"
+      <div class="swipe-row" data-chunk-id="${c.id}"
            data-can-edit="${editable ? "1" : "0"}">
         <div class="swipe-action swipe-action--hide">
           <i data-lucide="eye-off" class="w-5 h-5"></i>
@@ -215,7 +212,6 @@ function renderGuide() {
           <input type="checkbox" />
           <div class="collapse-title font-medium text-sm flex items-center justify-between gap-2">
             <span class="flex items-center gap-1.5 min-w-0">
-              <i data-lucide="grip-vertical" class="w-3 h-3 reorder-handle flex-shrink-0"></i>
               ${dot}
               <span class="block truncate">${c.title}</span>
             </span>
@@ -227,7 +223,7 @@ function renderGuide() {
   };
 
   container.innerHTML = `
-    <div id="guide-chunk-list" class="${guideReorderMode ? "reorder-mode" : ""}">
+    <div id="guide-chunk-list">
       ${groups.map(g => `
         <section class="guide-section">
           <h3 class="guide-section__title">
@@ -335,11 +331,7 @@ function renderGuideToolbar() {
               onclick="openHiddenChunksPanel()">
         <i data-lucide="eye-off" class="w-3 h-3"></i> ${panelLabel} (${panelCount})
       </button>
-      ${guideReorderMode ? `
-        <button class="btn btn-xs btn-primary" onclick="exitReorderMode()">
-          <i data-lucide="check" class="w-3 h-3"></i> Done reordering
-        </button>` : `
-        <span class="text-xs opacity-60">Swipe ↔ or press &amp; hold</span>`}
+      <span class="text-xs opacity-60">Swipe ↔</span>
     </div>`;
   lucide.createIcons();
 }
@@ -352,11 +344,10 @@ async function loadChunkTypes() {
   return chunkTypeCache;
 }
 
-// ── Gesture layer (swipe + long-press reorder) ───────────────────────────────
+// ── Gesture layer (swipe) ────────────────────────────────────────────────────
 
 const SWIPE_ACTIVATE_PX = 8;   // horizontal threshold before we claim the gesture
 const SWIPE_COMMIT_FRAC = 0.35; // fraction of row width that commits the action
-const LONG_PRESS_MS = 450;
 
 function attachChunkGestures(row) {
   const target = row.querySelector(".swipe-target");
@@ -365,13 +356,6 @@ function attachChunkGestures(row) {
   let startX = null;
   let startY = null;
   let isSwipe = false;
-  let isLongPressDrag = false;
-  let holdTimer = null;
-  let pointerId = null;
-
-  const clearHold = () => {
-    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-  };
 
   const resetVisual = () => {
     target.style.cssText = "transform: translateX(0); transition: transform 200ms ease;";
@@ -379,44 +363,23 @@ function attachChunkGestures(row) {
 
   row.addEventListener("pointerdown", (e) => {
     if (e.button) return;
-    // Reorder mode uses its own handler — skip swipe gestures there.
-    if (guideReorderMode) {
-      startDragReorder(row, e);
-      return;
-    }
     startX = e.clientX;
     startY = e.clientY;
-    pointerId = e.pointerId;
     isSwipe = false;
-    isLongPressDrag = false;
-
-    clearHold();
-    holdTimer = setTimeout(() => {
-      holdTimer = null;
-      // Long-press fires only if no swipe is in progress.
-      if (isSwipe) return;
-      enterReorderMode();
-      startDragReorder(row, { clientX: startX, clientY: startY, pointerId });
-      startX = null;
-      isLongPressDrag = true;
-    }, LONG_PRESS_MS);
   });
 
   row.addEventListener("pointermove", (e) => {
-    if (isLongPressDrag) return;
     if (startX === null) return;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
     if (!isSwipe) {
       if (Math.abs(dy) > SWIPE_ACTIVATE_PX && Math.abs(dy) > Math.abs(dx)) {
         // Vertical scroll — abandon swipe.
-        clearHold();
         startX = null;
         return;
       }
       if (Math.abs(dx) > SWIPE_ACTIVATE_PX) {
         isSwipe = true;
-        clearHold();
         try { row.setPointerCapture(e.pointerId); } catch (_) {}
       } else {
         return;
@@ -430,12 +393,6 @@ function attachChunkGestures(row) {
   });
 
   const finish = (e) => {
-    if (isLongPressDrag) {
-      endDragReorder(e);
-      isLongPressDrag = false;
-      return;
-    }
-    clearHold();
     if (startX === null) return;
     const dx = e.clientX - startX;
     startX = null;
@@ -467,132 +424,12 @@ function attachChunkGestures(row) {
   };
 
   row.addEventListener("pointerup", finish);
-  row.addEventListener("pointercancel", (e) => {
-    clearHold();
+  row.addEventListener("pointercancel", () => {
     startX = null;
     isSwipe = false;
     row.classList.remove("swiping-right", "swiping-left");
     resetVisual();
-    if (isLongPressDrag) {
-      endDragReorder(e);
-      isLongPressDrag = false;
-    }
   });
-}
-
-// ── Reorder mode (press-and-hold drag) ───────────────────────────────────────
-
-let _dragState = null; // { row, startY, placeholder }
-
-function enterReorderMode() {
-  if (guideReorderMode) return;
-  guideReorderMode = true;
-  document.getElementById("guide-chunk-list")?.classList.add("reorder-mode");
-  renderGuideToolbar();
-  if (navigator.vibrate) navigator.vibrate(15);
-}
-
-function exitReorderMode() {
-  if (!guideReorderMode) return;
-  guideReorderMode = false;
-  document.getElementById("guide-chunk-list")?.classList.remove("reorder-mode");
-  renderGuideToolbar();
-  saveReorderedGuide();
-}
-
-function startDragReorder(row, e) {
-  const list = row.parentElement;
-  if (!list) return;
-  row.classList.add("is-dragging");
-  const rect = row.getBoundingClientRect();
-  _dragState = {
-    row,
-    list,
-    pointerId: e.pointerId,
-    offsetY: e.clientY - rect.top,
-    height: rect.height,
-  };
-  try { row.setPointerCapture(e.pointerId); } catch (_) {}
-  row.style.cssText = `
-    position: relative;
-    z-index: 20;
-    transition: none;
-    transform: translateY(0);
-  `;
-}
-
-function handleDragReorderMove(e) {
-  if (!_dragState) return;
-  const { row, list } = _dragState;
-  const listRect = list.getBoundingClientRect();
-
-  // Apply the transform that puts the row's top at (pointer.y - offsetY).
-  // offsetY stays constant across the whole drag — the user's grip on the
-  // row should not migrate when the row swaps slots, otherwise every swap
-  // produces a visual hop of ~half a row height.
-  const applyTransform = () => {
-    const y = e.clientY - listRect.top - _dragState.offsetY;
-    row.style.transform = `translateY(${y - row.offsetTop}px)`;
-  };
-  applyTransform();
-
-  // Figure out which sibling we're hovering over and swap if past its midpoint.
-  const siblings = Array.from(list.querySelectorAll(".swipe-row")).filter(n => n !== row);
-  const pointerY = e.clientY;
-  for (let i = 0; i < siblings.length; i++) {
-    const sib = siblings[i];
-    const r = sib.getBoundingClientRect();
-    const mid = r.top + r.height / 2;
-    let swapped = false;
-    if (pointerY < mid && sib.previousElementSibling !== row) {
-      list.insertBefore(row, sib);
-      swapped = true;
-    } else if (pointerY > mid && sib.nextElementSibling !== row &&
-               i === siblings.length - 1) {
-      list.appendChild(row);
-      swapped = true;
-    }
-    if (swapped) {
-      // After the DOM swap, row.offsetTop reflects its NEW natural slot, so
-      // re-applying the same transform formula here keeps the row glued to
-      // the pointer in the same frame — no untranslated paint, no jump.
-      applyTransform();
-      break;
-    }
-  }
-}
-
-function endDragReorder(_e) {
-  if (!_dragState) return;
-  const { row } = _dragState;
-  row.classList.remove("is-dragging");
-  row.style.cssText = "";
-  _dragState = null;
-}
-
-// Global listeners so drag keeps working even if the pointer leaves the row.
-document.addEventListener("pointermove", (e) => {
-  if (_dragState) handleDragReorderMove(e);
-});
-document.addEventListener("pointerup", (e) => {
-  if (_dragState) endDragReorder(e);
-});
-
-async function saveReorderedGuide() {
-  if (!session || !currentGame) return;
-  const list = document.getElementById("guide-chunk-list");
-  if (!list) return;
-  const ids = Array.from(list.querySelectorAll(".swipe-row")).map(r => r.dataset.chunkId);
-  try {
-    await apiFetch(`/games/${currentGame.id}/my-guide`, {
-      method: "PUT",
-      body: { chunk_ids: ids },
-    });
-    showToast("Order saved", "success");
-    await loadGuide(currentGame.id);
-  } catch (err) {
-    showToast(err.message, "error");
-  }
 }
 
 // ── Hide / unhide ────────────────────────────────────────────────────────────

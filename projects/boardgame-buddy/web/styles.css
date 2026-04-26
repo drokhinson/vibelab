@@ -706,7 +706,7 @@ body {
   flex-shrink: 0;
 }
 
-/* ── Guide chunk swipe + reorder ────────────────────────────────────────────── */
+/* ── Guide chunk swipe ──────────────────────────────────────────────────────── */
 .swipe-row {
   position: relative;
   overflow: hidden;
@@ -752,27 +752,6 @@ body {
 .swipe-row.swiping-right .swipe-action--edit,
 .swipe-row.swiping-left  .swipe-action--hide {
   opacity: 1;
-}
-
-/* Reorder mode: grid of drag handles, swipe disabled while active */
-.reorder-handle {
-  display: none;
-  color: #8B6F3C;
-  cursor: grab;
-  flex-shrink: 0;
-}
-.reorder-mode .reorder-handle { display: inline-block; }
-.reorder-mode .swipe-row {
-  touch-action: none;
-  cursor: grab;
-}
-.reorder-mode .swipe-action { display: none; }
-.reorder-mode .collapse-arrow > .collapse-title::after { opacity: 0.3; }
-
-.swipe-row.is-dragging .swipe-target {
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
-  transform: scale(1.02);
-  opacity: 0.95;
 }
 
 .avatar-bubble {
