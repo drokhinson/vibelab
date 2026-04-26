@@ -16,11 +16,12 @@ Spawn **one** `Agent` with `subagent_type=general-purpose` (it needs `WebFetch` 
 > You are the BGG sourcer for BoardgameBuddy. Input: game name = `$ARGUMENTS`.
 >
 > Steps:
-> 1. Search BGG: `https://boardgamegeek.com/xmlapi2/search?query=<url-encoded name>&type=boardgame`. Pick the best match by name similarity + year + BGG popularity.
+> 1. Search BGG: `https://boardgamegeek.com/xmlapi2/search?query=<url-encoded name>&type=boardgame,boardgameexpansion`. Pick the best match by name similarity + year + BGG popularity. The `type` filter must include `boardgameexpansion` so expansions are findable.
 > 2. Fetch full detail: `https://boardgamegeek.com/xmlapi2/thing?id=<bgg_id>&stats=1`. Extract `bgg_id`, primary `name`, `yearpublished`, `minplayers`, `maxplayers`, `playingtime`.
-> 3. Find rulebook PDFs: WebFetch `https://boardgamegeek.com/boardgame/<bgg_id>/files` and collect any rulebook/rules PDF links. WebSearch `"<game> rulebook pdf"` to find the publisher's copy — prefer publisher over BGG Files.
-> 4. WebFetch the best rulebook URL and capture its text in `raw_rules_text` (truncate to 40,000 chars).
-> 5. If no rulebook is findable but BGG has a detailed description or FAQ, fall back to those (record in `missing`: `["rulebook_pdf"]`).
+> 3. **Detect expansion linkage.** On the same `<item>` element, inspect the `type` attribute. If `type="boardgameexpansion"`, set `is_expansion=true` and find the inbound expansion link `<link type="boardgameexpansion" inbound="true" id="...">` — the `id` is the parent base game's `bgg_id` (`base_game_bgg_id`). If multiple inbound links exist, take the first. If `type="boardgame"`, set `is_expansion=false` and `base_game_bgg_id=null`.
+> 4. Find rulebook PDFs: WebFetch `https://boardgamegeek.com/boardgame/<bgg_id>/files` and collect any rulebook/rules PDF links. WebSearch `"<game> rulebook pdf"` to find the publisher's copy — prefer publisher over BGG Files.
+> 5. WebFetch the best rulebook URL and capture its text in `raw_rules_text` (truncate to 40,000 chars).
+> 6. If no rulebook is findable but BGG has a detailed description or FAQ, fall back to those (record in `missing`: `["rulebook_pdf"]`).
 >
 > Return ONLY a JSON object, no prose:
 > ```json
@@ -31,6 +32,8 @@ Spawn **one** `Agent` with `subagent_type=general-purpose` (it needs `WebFetch` 
 >   "min_players": int|null,
 >   "max_players": int|null,
 >   "playing_time": int|null,
+>   "is_expansion": bool,
+>   "base_game_bgg_id": int|null,
 >   "rulebook_urls": [{"url": "...", "label": "Publisher EN", "source": "publisher|bgg_files"}],
 >   "raw_rules_text": "...",
 >   "bgg_page_url": "https://boardgamegeek.com/boardgame/<id>",
@@ -100,7 +103,9 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
     "min_players": <int|null>,
     "max_players": <int|null>,
     "playing_time": <int|null>,
-    "bgg_url": "https://boardgamegeek.com/boardgame/<bgg_id>"
+    "bgg_url": "https://boardgamegeek.com/boardgame/<bgg_id>",
+    "is_expansion": <bool>,
+    "base_game_bgg_id": <int|null>
   },
   "source": {
     "generated_at": "<ISO timestamp>",

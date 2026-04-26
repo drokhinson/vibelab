@@ -26,3 +26,18 @@ CATEGORY_COLORS: dict[str, str] = {
     "Economic": "#B8860B",
     "default": "#6C63FF",
 }
+
+# Cycle through this palette when auto-assigning a color to a newly imported
+# expansion. Index = number of existing expansions on the same base game,
+# modulo length. Saturated, mutually distinct, contrast-tested against both
+# luxury (dark) and parchment (scroll) backgrounds.
+EXPANSION_COLOR_PALETTE: list[str] = [
+    "#f97316",  # orange
+    "#06b6d4",  # cyan
+    "#a855f7",  # purple
+    "#22c55e",  # green
+    "#eab308",  # yellow
+    "#ef4444",  # red
+    "#ec4899",  # pink
+    "#3b82f6",  # blue
+]

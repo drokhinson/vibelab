@@ -53,6 +53,9 @@ class GameSummary(BaseModel):
     thumbnail_url: Optional[str] = None
     image_url: Optional[str] = None
     theme_color: Optional[str] = None
+    is_expansion: bool = False
+    base_game_bgg_id: Optional[int] = None
+    expansion_color: Optional[str] = None
 
     @computed_field  # type: ignore[misc]
     @property
@@ -240,6 +243,17 @@ class ChunkUpdate(BaseModel):
     expansion_name: Optional[str] = None
 
 
+class ExpansionInline(BaseModel):
+    """Source-pack metadata inlined on chunks that come from an expansion.
+
+    `expansion_game_id` is the game UUID (FK target). The frontend uses
+    `color` to render the dot in the chunk header; `name` powers the tooltip.
+    """
+    expansion_game_id: str
+    name: str
+    color: Optional[str] = None
+
+
 class ChunkResponse(BaseModel):
     id: str
     game_id: str
@@ -255,6 +269,7 @@ class ChunkResponse(BaseModel):
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
     updated_at: datetime
+    expansion: Optional[ExpansionInline] = None
 
 
 class MyGuideChunkResponse(ChunkResponse):
@@ -284,6 +299,8 @@ class GuideBundleGame(BaseModel):
     max_players: Optional[int] = None
     playing_time: Optional[int] = None
     bgg_url: Optional[str] = None
+    is_expansion: bool = False
+    base_game_bgg_id: Optional[int] = None
 
 
 class GuideBundleChunk(BaseModel):
@@ -337,3 +354,23 @@ class PendingGuideDecisionBody(BaseModel):
     notes: Optional[str] = None
     force: bool = False
     override_bundle: Optional[GuideBundle] = None
+
+
+# ── Expansions ────────────────────────────────────────────────────────────────
+
+class ExpansionListItem(BaseModel):
+    expansion_game_id: str
+    bgg_id: Optional[int] = None
+    name: str
+    thumbnail_url: Optional[str] = None
+    color: Optional[str] = None
+    is_enabled: bool = False
+    chunk_count: int = 0
+
+
+class ExpansionToggleRequest(BaseModel):
+    is_enabled: bool
+
+
+class ExpansionColorUpdate(BaseModel):
+    color: str

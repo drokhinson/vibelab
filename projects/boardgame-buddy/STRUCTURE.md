@@ -34,6 +34,9 @@ Game catalog seeded from BGG top 1000.
 | categories | TEXT[] | e.g. Strategy, Card Game |
 | mechanics | TEXT[] | e.g. Drafting, Set Collection |
 | theme_color | TEXT | hex color for UI theming |
+| is_expansion | BOOLEAN | default false; true when this row is an expansion of another game |
+| base_game_bgg_id | INTEGER | nullable; BGG id of the base game this expansion extends (no FK — expansions may be imported before their base game) |
+| expansion_color | TEXT | nullable; auto-assigned at import for the expansion-dot UI (admin-overridable) |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_profiles
@@ -151,6 +154,16 @@ Per-user ordered selection of chunks that assemble into that user's guide.
 | chunk_id | UUID FK | → guide_chunks |
 | display_order | INT | position within the user's guide |
 
+### boardgamebuddy_user_expansions
+Per-user toggle: presence of a row means the user has enabled that expansion
+for its base game, which merges the expansion's default chunks into the
+user's reference guide.
+| Column | Type | Notes |
+|--------|------|-------|
+| user_id | UUID FK | → profiles, PK part 1 |
+| expansion_game_id | UUID FK | → games (the expansion), PK part 2 |
+| enabled_at | TIMESTAMPTZ | |
+
 ### boardgamebuddy_guides (legacy)
 Flat guide table from the initial prototype. Retained temporarily during rollout
 of the chunk system; will be dropped in a follow-up migration.
@@ -163,6 +176,7 @@ of the chunk system; will be dropped in a follow-up migration.
 - `GET /api/v1/boardgame_buddy/games/{game_id}` — detail (includes derived `bgg_url`)
 - `GET /api/v1/boardgame_buddy/games/search-bgg?query=` — proxy BGG API
 - `GET /api/v1/boardgame_buddy/games/{game_id}/chunks` — all guide chunks for a game
+- `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise
 - `GET /api/v1/boardgame_buddy/chunk-types` — chunk type lookup
 
 ### Auth Required
@@ -186,8 +200,10 @@ of the chunk system; will be dropped in a follow-up migration.
 - `POST /api/v1/boardgame_buddy/games/{game_id}/chunks` — contribute a new chunk
 - `PATCH /api/v1/boardgame_buddy/chunks/{chunk_id}` — edit own chunk
 - `DELETE /api/v1/boardgame_buddy/chunks/{chunk_id}` — delete own chunk
-- `GET /api/v1/boardgame_buddy/games/{game_id}/my-guide` — this user's chunk selection
-- `PUT /api/v1/boardgame_buddy/games/{game_id}/my-guide` — replace selection (ordered)
+- `GET /api/v1/boardgame_buddy/games/{game_id}/my-guide` — this user's chunk selection. Default chunks of any expansion the user has toggled on are merged in; each merged chunk's response carries an `expansion: {expansion_game_id, name, color}` object so the UI can render the source dot.
+- `PUT /api/v1/boardgame_buddy/games/{game_id}/my-guide` — replace selection (ordered). Accepts chunk ids from the base game OR any enabled expansion.
+- `POST /api/v1/boardgame_buddy/games/{base_id}/expansions/{expansion_id}/toggle` — body `{is_enabled}`; per-user enable/disable. Inserts or deletes one row in `boardgamebuddy_user_expansions`.
+- `PATCH /api/v1/boardgame_buddy/games/admin/{game_id}/expansion-color` — *admin-only* override the auto-assigned `expansion_color`
 - `POST /api/v1/boardgame_buddy/guides/submit` — upload a GuideBundle. Admin users import directly; everyone else's submission is queued for admin review.
 - `GET /api/v1/boardgame_buddy/guides/pending` — *admin-only* list of pending submissions
 - `GET /api/v1/boardgame_buddy/guides/pending/{id}` — *admin-only* fetch full bundle
@@ -211,7 +227,9 @@ If `min_players`, `max_players`, and `playing_time` are all present in the bundl
     "min_players": 2,
     "max_players": 7,
     "playing_time": 30,
-    "bgg_url": "https://boardgamegeek.com/boardgame/68448"
+    "bgg_url": "https://boardgamegeek.com/boardgame/68448",
+    "is_expansion": false,
+    "base_game_bgg_id": null
   },
   "source": {
     "generated_at": "2026-04-24T00:00:00Z",
@@ -227,6 +245,8 @@ If `min_players`, `max_players`, and `playing_time` are all present in the bundl
 }
 ```
 `chunk_type` must be one of the seven IDs in `boardgamebuddy_chunk_types`. Up to 25 chunks per bundle (7 specialist agents × 3 max each).
+
+When the bundle's `game.is_expansion` is true, the import flow stamps `is_expansion`, `base_game_bgg_id`, and (if not already set) auto-assigns `expansion_color` from the palette in `boardgame_buddy/constants.py`. The expansion then surfaces in the base game's `GET /games/{id}/expansions` response with `is_enabled=false` until the viewer flips the toggle.
 
 ### Admin UI
 - Promote via **Profile** screen → "Become admin" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the admin-only controls (direct imports and pending-review list) inside the **Import** screen.

@@ -633,6 +633,79 @@ body {
   transform: none;
 }
 
+/* ── Guide sections (grouping by chunk_type) ─────────────────────────────── */
+.guide-section + .guide-section { margin-top: 1rem; }
+.guide-section__title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(60, 35, 5, 0.75);
+  padding: 0.1rem 0 0.35rem 0;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(139, 111, 60, 0.35);
+}
+.scroll-panel .guide-section__title [data-lucide] { color: #6B4A1A; }
+
+/* ── Expansion source dot (matches the toggle row's color) ──────────────── */
+.expansion-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 1px rgba(255, 250, 235, 0.85);
+}
+.expansion-dot--lg { width: 0.75rem; height: 0.75rem; }
+
+/* ── Expansions panel (above the scroll, below the toolbar) ─────────────── */
+.expansions-panel {
+  border: 1px solid rgba(201, 146, 42, 0.28);
+  background: oklch(var(--b2));
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+.expansions-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin-bottom: 0.4rem;
+}
+.expansions-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.expansions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 0.1rem;
+  cursor: pointer;
+}
+.expansions-row__name {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.expansions-row__count {
+  font-size: 0.7rem;
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
 /* ── Guide chunk swipe + reorder ────────────────────────────────────────────── */
 .swipe-row {
   position: relative;
