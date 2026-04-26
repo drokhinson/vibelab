@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import Depends, HTTPException, Path
+from fastapi import Depends, HTTPException, Path, Response
 
 from db import get_supabase
 
@@ -16,6 +16,7 @@ from .models import (
     GuideSelectionUpdate,
     MessageResponse,
     MyGuideChunkResponse,
+    MyGuideResponse,
 )
 from .dependencies import CurrentUser, get_current_user
 
@@ -49,6 +50,7 @@ def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
         layout=row.get("layout", "text"),
         content=row["content"],
         expansion_name=row.get("expansion_name"),
+        is_default=bool(row.get("is_default")),
         created_by=row.get("created_by"),
         created_by_name=created_by_name,
         updated_at=row["updated_at"],
@@ -56,7 +58,8 @@ def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
 
 
 _CHUNK_SELECT = (
-    "id, game_id, chunk_type, title, layout, content, expansion_name, created_by, updated_at,"
+    "id, game_id, chunk_type, title, layout, content, expansion_name, is_default,"
+    " created_by, updated_at,"
     " boardgamebuddy_chunk_types(label, icon, display_order),"
     " boardgamebuddy_profiles(display_name)"
 )
@@ -92,17 +95,23 @@ async def list_chunk_types() -> list[ChunkTypeResponse]:
     "/games/{game_id}/chunks",
     response_model=list[ChunkResponse],
     status_code=200,
-    summary="List chunks for a game",
+    summary="List default chunks for a game",
 )
 async def list_chunks(
     game_id: str = Path(..., description="Game UUID"),
 ) -> list[ChunkResponse]:
-    """Return every chunk contributed for a game, ordered by type display_order then title."""
+    """Return the default (curated) chunks for a game.
+
+    Used by anonymous viewers and as the seed view for signed-in users with no
+    customizations. Non-default community chunks only become reachable after a
+    user opts into customizing their guide.
+    """
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_guide_chunks")
         .select(_CHUNK_SELECT)
         .eq("game_id", game_id)
+        .eq("is_default", True)
         .execute()
     )
     rows = _sort_chunk_rows(result.data or [])
@@ -251,28 +260,24 @@ async def delete_chunk(
 
 @router.get(
     "/games/{game_id}/my-guide",
-    response_model=list[MyGuideChunkResponse],
+    response_model=MyGuideResponse,
     status_code=200,
     summary="Get my assembled guide for a game",
 )
 async def get_my_guide(
     game_id: str = Path(..., description="Game UUID"),
     user: CurrentUser = Depends(get_current_user),
-) -> list[MyGuideChunkResponse]:
-    """Return every chunk for a game, annotated with this user's hide/order state.
+) -> MyGuideResponse:
+    """Return the user's guide view for a game.
 
-    Frontend filters is_hidden=true into the hidden panel and sorts the rest by
-    user_display_order (when set) falling back to chunk_type display_order.
+    Two view modes, distinguished by `has_customizations`:
+    - **No selections:** returns only `is_default=true` chunks; the user is in
+      the default view and the frontend hides the panel + restore button.
+    - **Has selections:** returns *all* chunks with per-user `is_hidden` and
+      `user_display_order` overlays so the frontend can split visible vs. the
+      Hidden / available chunks panel.
     """
     sb = get_supabase()
-
-    chunks_res = (
-        sb.table("boardgamebuddy_guide_chunks")
-        .select(_CHUNK_SELECT)
-        .eq("game_id", game_id)
-        .execute()
-    )
-    chunk_rows = _sort_chunk_rows(chunks_res.data or [])
 
     selections_res = (
         sb.table("boardgamebuddy_guide_selections")
@@ -281,20 +286,56 @@ async def get_my_guide(
         .eq("game_id", game_id)
         .execute()
     )
-    selections_by_chunk = {
-        r["chunk_id"]: r for r in (selections_res.data or [])
-    }
+    selections = selections_res.data or []
+    has_customizations = bool(selections)
 
-    result: list[MyGuideChunkResponse] = []
+    chunks_query = (
+        sb.table("boardgamebuddy_guide_chunks")
+        .select(_CHUNK_SELECT)
+        .eq("game_id", game_id)
+    )
+    if not has_customizations:
+        chunks_query = chunks_query.eq("is_default", True)
+    chunks_res = chunks_query.execute()
+    chunk_rows = _sort_chunk_rows(chunks_res.data or [])
+
+    selections_by_chunk = {r["chunk_id"]: r for r in selections}
+
+    chunks: list[MyGuideChunkResponse] = []
     for row in chunk_rows:
         base = _chunk_row_to_response(row)
         sel = selections_by_chunk.get(row["id"])
-        result.append(MyGuideChunkResponse(
+        chunks.append(MyGuideChunkResponse(
             **base.model_dump(),
             is_hidden=bool(sel["is_hidden"]) if sel else False,
             user_display_order=sel["display_order"] if sel else None,
         ))
-    return result
+    return MyGuideResponse(has_customizations=has_customizations, chunks=chunks)
+
+
+@router.delete(
+    "/games/{game_id}/my-guide",
+    status_code=204,
+    summary="Restore my guide to defaults",
+)
+async def reset_my_guide(
+    game_id: str = Path(..., description="Game UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    """Wipe the user's hide/reorder selections for a game.
+
+    Reverts the guide to the curated default view. Idempotent — safe to call
+    even when no selection rows exist.
+    """
+    sb = get_supabase()
+    (
+        sb.table("boardgamebuddy_guide_selections")
+        .delete()
+        .eq("user_id", user.user_id)
+        .eq("game_id", game_id)
+        .execute()
+    )
+    return Response(status_code=204)
 
 
 @router.put(

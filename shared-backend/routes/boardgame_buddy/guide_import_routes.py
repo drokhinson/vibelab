@@ -74,7 +74,7 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
             sb.table("boardgamebuddy_guide_chunks")
             .delete()
             .eq("game_id", game_id)
-            .is_("created_by", "null")
+            .eq("is_default", True)
             .execute()
         )
 
@@ -86,6 +86,10 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
     )
     existing_keys = {(r["chunk_type"], r["title"]) for r in (existing_rows.data or [])}
 
+    # Admin direct imports (created_by=None) are seed chunks and become the
+    # curated defaults. Approved community submissions land as non-default
+    # contributions until promoted.
+    is_default = created_by is None
     to_insert = []
     skipped_reasons: list[str] = []
     for chunk in bundle.chunks:
@@ -100,6 +104,7 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
             "content": chunk.content,
             "layout": chunk.layout,
             "expansion_name": chunk.expansion_name,
+            "is_default": is_default,
             "created_by": created_by,
         })
         existing_keys.add(key)
@@ -136,7 +141,7 @@ def _require_profile_admin(sb, user_id: str) -> None:
 )
 async def import_guide(
     bundle: GuideBundle,
-    force: bool = Query(False, description="Replace existing seed chunks (created_by IS NULL) before inserting"),
+    force: bool = Query(False, description="Replace existing default chunks (is_default=true) before inserting"),
     authorization: Optional[str] = Header(None),
 ) -> GuideImportResponse:
     """Import a JSON guide bundle. Authenticated via shared ADMIN_API_KEY."""

@@ -234,6 +234,7 @@ class ChunkResponse(BaseModel):
     layout: str
     content: str
     expansion_name: Optional[str] = None
+    is_default: bool = False
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
     updated_at: datetime
@@ -242,6 +243,11 @@ class ChunkResponse(BaseModel):
 class MyGuideChunkResponse(ChunkResponse):
     is_hidden: bool = False
     user_display_order: Optional[int] = None
+
+
+class MyGuideResponse(BaseModel):
+    has_customizations: bool
+    chunks: list[MyGuideChunkResponse]
 
 
 class GuideSelectionUpdate(BaseModel):

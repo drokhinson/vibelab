@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 044
+-- Last updated: migration 045
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chunks (
   layout TEXT NOT NULL DEFAULT 'text' CHECK (layout IN ('text')),
   content TEXT NOT NULL,
   expansion_name TEXT,
+  is_default BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -163,6 +164,8 @@ CREATE INDEX IF NOT EXISTS idx_bgb_plays_user ON public.boardgamebuddy_plays(use
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_game ON public.boardgamebuddy_plays(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game ON public.boardgamebuddy_guide_chunks(game_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game_default
+  ON public.boardgamebuddy_guide_chunks(game_id, is_default);
 CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game
   ON public.boardgamebuddy_guide_selections(user_id, game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game_hidden

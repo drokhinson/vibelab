@@ -25,6 +25,8 @@ async function apiFetch(path, opts = {}) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || res.statusText);
   }
+  // 204 No Content (e.g. DELETE /my-guide) — no JSON body to parse.
+  if (res.status === 204) return null;
   return res.json();
 }
 

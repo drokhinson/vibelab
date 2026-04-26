@@ -14,7 +14,12 @@ let gamesPerPage = 12;
 // Current game detail
 let currentGame = null;
 let currentGuideChunks = [];    // visible chunks (MyGuideChunkResponse) in render order
-let hiddenChunks = [];          // chunks the user has hidden for this game
+let hiddenChunks = [];          // chunks shown in the Hidden / available panel
+                                // (explicitly hidden + non-default chunks the
+                                //  user hasn't added yet, in custom mode)
+let hasGuideCustomizations = false; // true if the user has any selection rows
+                                    // for the current game; drives Restore button
+                                    // visibility and the panel's existence
 let chunkTypeCache = null;      // [{id,label,icon,display_order}] fetched once
 let guideReorderMode = false;   // true while user is in press-and-hold reorder mode
 

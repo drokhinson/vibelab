@@ -80,18 +80,41 @@ async function loadGuide(gameId) {
   try {
     let all;
     if (session) {
-      all = await apiFetch(`/games/${gameId}/my-guide`);
+      // /my-guide returns { has_customizations, chunks }. When the user has no
+      // selections, `chunks` is the curated default set; otherwise it's the
+      // full library so the panel can offer non-default chunks to add.
+      const data = await apiFetch(`/games/${gameId}/my-guide`);
+      hasGuideCustomizations = !!data.has_customizations;
+      all = data.chunks || [];
     } else {
-      // Anon users: library chunks with no per-user metadata.
+      // Anon users see only the curated defaults — no per-user metadata.
       all = await apiFetch(`/games/${gameId}/chunks`);
+      hasGuideCustomizations = false;
     }
-    currentGuideChunks = sortVisibleChunks(all.filter(c => !c.is_hidden));
-    hiddenChunks = all.filter(c => c.is_hidden);
+
+    if (!hasGuideCustomizations) {
+      // Default mode: every chunk in the response is visible. No panel.
+      currentGuideChunks = sortVisibleChunks(all.filter(c => !c.is_hidden));
+      hiddenChunks = [];
+    } else {
+      // Custom mode: a chunk is in the visible guide if NOT hidden AND
+      // (the user has a selection row for it OR it's a default chunk that
+      //  hasn't been hidden). Everything else lands in the panel as either
+      // hidden-by-user or available-to-add.
+      const visible = all.filter(c =>
+        !c.is_hidden && (c.user_display_order !== null || c.is_default)
+      );
+      const visibleIds = new Set(visible.map(c => c.id));
+      currentGuideChunks = sortVisibleChunks(visible);
+      hiddenChunks = all.filter(c => !visibleIds.has(c.id));
+    }
+
     renderGuide();
     renderGuideToolbar();
   } catch (err) {
     currentGuideChunks = [];
     hiddenChunks = [];
+    hasGuideCustomizations = false;
     container.innerHTML = `<p class="text-error text-sm">${err.message}</p>`;
   }
 }
@@ -137,6 +160,8 @@ function renderGuide() {
 
   const allowGestures = !!session;
 
+  const showRestore = !!session && hasGuideCustomizations;
+
   container.innerHTML = `
     <div id="guide-chunk-list" class="space-y-3 ${guideReorderMode ? "reorder-mode" : ""}">
       ${otherChunks.map((c, i) => {
@@ -173,7 +198,14 @@ function renderGuide() {
             </div>
           </div>`;
       }).join("")}
-    </div>`;
+    </div>
+    ${showRestore ? `
+      <div class="mt-4 flex justify-center">
+        <button class="btn btn-xs btn-ghost text-base-content/60"
+                onclick="restoreGuideDefaults()">
+          <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Restore default guide
+        </button>
+      </div>` : ""}`;
   lucide.createIcons();
 
   if (allowGestures) {
@@ -185,15 +217,19 @@ function renderGuideToolbar() {
   const host = document.getElementById("guide-toolbar");
   if (!host) return;
   if (!session) { host.innerHTML = ""; return; }
-  const hiddenCount = hiddenChunks.length;
+  const panelCount = hiddenChunks.length;
+  // In custom mode the panel doubles as a picker (hidden + available chunks),
+  // so the label says "More" rather than "Hidden". In default mode the panel
+  // doesn't surface — there's nothing to add or restore.
+  const panelLabel = hasGuideCustomizations ? "More" : "Hidden";
   host.innerHTML = `
     <div class="flex items-center gap-2 flex-wrap">
       <button class="btn btn-xs btn-outline" onclick="openChunkEditor()">
         <i data-lucide="plus" class="w-3 h-3"></i> New chunk
       </button>
-      <button class="btn btn-xs btn-ghost ${hiddenCount ? "" : "btn-disabled"}"
+      <button class="btn btn-xs btn-ghost ${panelCount ? "" : "btn-disabled"}"
               onclick="openHiddenChunksPanel()">
-        <i data-lucide="eye-off" class="w-3 h-3"></i> Hidden (${hiddenCount})
+        <i data-lucide="eye-off" class="w-3 h-3"></i> ${panelLabel} (${panelCount})
       </button>
       ${guideReorderMode ? `
         <button class="btn btn-xs btn-primary" onclick="exitReorderMode()">
@@ -383,29 +419,40 @@ function startDragReorder(row, e) {
 
 function handleDragReorderMove(e) {
   if (!_dragState) return;
-  const { row, list, height } = _dragState;
+  const { row, list } = _dragState;
   const listRect = list.getBoundingClientRect();
-  const y = e.clientY - listRect.top - _dragState.offsetY;
-  row.style.transform = `translateY(${y - row.offsetTop}px)`;
+
+  // Apply the transform that puts the row's top at (pointer.y - offsetY).
+  // offsetY stays constant across the whole drag — the user's grip on the
+  // row should not migrate when the row swaps slots, otherwise every swap
+  // produces a visual hop of ~half a row height.
+  const applyTransform = () => {
+    const y = e.clientY - listRect.top - _dragState.offsetY;
+    row.style.transform = `translateY(${y - row.offsetTop}px)`;
+  };
+  applyTransform();
 
   // Figure out which sibling we're hovering over and swap if past its midpoint.
   const siblings = Array.from(list.querySelectorAll(".swipe-row")).filter(n => n !== row);
   const pointerY = e.clientY;
-  for (const sib of siblings) {
+  for (let i = 0; i < siblings.length; i++) {
+    const sib = siblings[i];
     const r = sib.getBoundingClientRect();
     const mid = r.top + r.height / 2;
+    let swapped = false;
     if (pointerY < mid && sib.previousElementSibling !== row) {
       list.insertBefore(row, sib);
-      row.style.transform = "";
-      const newRect = row.getBoundingClientRect();
-      _dragState.offsetY = e.clientY - newRect.top;
-      break;
+      swapped = true;
     } else if (pointerY > mid && sib.nextElementSibling !== row &&
-               siblings.indexOf(sib) === siblings.length - 1) {
+               i === siblings.length - 1) {
       list.appendChild(row);
-      row.style.transform = "";
-      const newRect = row.getBoundingClientRect();
-      _dragState.offsetY = e.clientY - newRect.top;
+      swapped = true;
+    }
+    if (swapped) {
+      // After the DOM swap, row.offsetTop reflects its NEW natural slot, so
+      // re-applying the same transform formula here keeps the row glued to
+      // the pointer in the same frame — no untranslated paint, no jump.
+      applyTransform();
       break;
     }
   }
@@ -501,22 +548,47 @@ function renderHiddenChunksPanel() {
       </div>`;
     return;
   }
+  // Items in the panel are either explicitly hidden by the user or
+  // community-contributed chunks they haven't added to their guide yet.
+  // Both cases use the same Add/Show button; backend's POST /visibility upserts
+  // either way.
+  const intro = hasGuideCustomizations
+    ? "Tap Add to bring a chunk into your guide."
+    : "Tap Show to restore a chunk to the guide.";
   body.innerHTML = `
-    <p class="text-xs text-base-content/60 mb-2">Tap Show to restore a chunk to the guide.</p>
+    <p class="text-xs text-base-content/60 mb-2">${intro}</p>
     <div class="space-y-1">
-      ${hiddenChunks.map(c => `
-        <div class="flex items-center gap-2 py-1">
-          <span class="badge badge-sm badge-ghost">${c.chunk_type_label || c.chunk_type}</span>
-          <span class="text-sm flex-1 truncate">${c.title}</span>
-          <button class="btn btn-xs btn-primary" onclick="unhideChunk('${c.id}')">
-            <i data-lucide="eye" class="w-3 h-3"></i> Show
-          </button>
-        </div>`).join("")}
+      ${hiddenChunks.map(c => {
+        const wasHidden = !!c.is_hidden;
+        const buttonLabel = wasHidden ? "Show" : "Add";
+        return `
+          <div class="flex items-center gap-2 py-1">
+            <span class="badge badge-sm badge-ghost">${c.chunk_type_label || c.chunk_type}</span>
+            <span class="text-sm flex-1 truncate">${c.title}</span>
+            <button class="btn btn-xs btn-primary" onclick="unhideChunk('${c.id}')">
+              <i data-lucide="eye" class="w-3 h-3"></i> ${buttonLabel}
+            </button>
+          </div>`;
+      }).join("")}
     </div>
     <div class="modal-action">
       <button class="btn btn-ghost btn-sm" onclick="closeHiddenChunksPanel()">Close</button>
     </div>`;
   lucide.createIcons();
+}
+
+// ── Restore to default ───────────────────────────────────────────────────────
+
+async function restoreGuideDefaults() {
+  if (!session || !currentGame) return;
+  if (!confirm("Restore the default reference guide? This removes your custom order and any hidden chunks.")) return;
+  try {
+    await apiFetch(`/games/${currentGame.id}/my-guide`, { method: "DELETE" });
+    showToast("Restored to default", "success");
+    await loadGuide(currentGame.id);
+  } catch (err) {
+    showToast(err.message, "error");
+  }
 }
 
 // ── Chunk editor (create + edit) ─────────────────────────────────────────────
