@@ -143,7 +143,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chunks (
   created_by UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE SET NULL,
   layout TEXT NOT NULL DEFAULT 'text' CHECK (layout IN ('text')),
   content TEXT NOT NULL,
-  expansion_name TEXT,
   is_default BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()

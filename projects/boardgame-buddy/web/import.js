@@ -159,11 +159,9 @@ function renderBundlePreview(bundle, editable = false) {
     <tr>
       <td class="text-xs">
         <span class="badge badge-sm badge-ghost">${escapeHtml(c.chunk_type || "?")}</span>
-        ${c.expansion_name ? `<span class="badge badge-sm badge-secondary mt-0.5">expansion</span>` : ""}
       </td>
       <td class="text-sm leading-tight">
         ${escapeHtml(c.title || "(no title)")}
-        ${c.expansion_name ? `<br><span class="text-xs opacity-60">${escapeHtml(c.expansion_name)}</span>` : ""}
       </td>
       <td class="text-xs text-base-content/60">${((c.content || "") + "").length} chars</td>
       ${editable ? `
