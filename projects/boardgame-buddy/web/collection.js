@@ -242,16 +242,18 @@ function bookSpineHTML(item, i) {
   const thumb = g.thumbnail_url || "";
   const plays = item.play_count || 0;
   return `
-    <button type="button"
-            class="book-spine animate-fadeUp"
-            style="--book-color:${color}; --i:${i};"
-            data-game-id="${g.id}"
-            data-game-name="${escapeAttr(g.name)}"
-            title="${escapeAttr(g.name)}">
-      ${thumb ? `<div class="book-spine__art" style="background-image:url('${thumb}')"></div>` : '<div class="book-spine__art book-spine__art--blank"></div>'}
-      <div class="book-spine__title">${escapeHtml(g.name)}</div>
-      ${plays > 0 ? `<div class="book-spine__plays">${plays}×</div>` : ""}
-    </button>`;
+    <div class="book-slot animate-fadeUp"
+         style="--book-color:${color}; --i:${i};"
+         data-game-id="${g.id}"
+         data-game-name="${escapeAttr(g.name)}">
+      <div class="book-hint book-hint--guide"><i data-lucide="book-open"></i><span>Guide</span></div>
+      <div class="book-hint book-hint--log"><i data-lucide="plus"></i><span>Log Play</span></div>
+      <button type="button" class="book-spine" title="${escapeAttr(g.name)}">
+        ${thumb ? `<div class="book-spine__art" style="background-image:url('${thumb}')"></div>` : '<div class="book-spine__art book-spine__art--blank"></div>'}
+        <div class="book-spine__title">${escapeHtml(g.name)}</div>
+        ${plays > 0 ? `<div class="book-spine__plays">${plays}×</div>` : ""}
+      </button>
+    </div>`;
 }
 
 // ── List view (owned + played only) ──────────────────────────────────────────
@@ -420,108 +422,151 @@ function openGameGuide(gameId) {
 }
 
 // ── Book spine gesture: pull up → log play, pull down → guide ────────────────
+// Mirrors the list-view slide-action pattern (attachListSwipe) but vertical:
+// the spine translates Y inside its slot, revealing a hint behind it.
 
-function createBookGhost(el, rect) {
-  const g = el.cloneNode(true);
-  g.classList.remove("animate-fadeUp", "pulling");
-  Object.assign(g.style, {
-    position: "fixed",
-    top: rect.top + "px",
-    left: rect.left + "px",
-    width: rect.width + "px",
-    height: rect.height + "px",
-    zIndex: "100",
-    pointerEvents: "none",
-    margin: "0",
-    transition: "none",
-    boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
-  });
-  document.body.appendChild(g);
-  return g;
-}
+const BOOK_DRAG_MAX = 104;       // ~2/3 of 156px book height
+const BOOK_TRIGGER_PX = 50;      // threshold to fire log/guide on release
+const BOOK_TAP_MAX_PX = 6;       // movement under this counts as a tap
+const BOOK_TAP_MAX_MS = 300;
 
-function attachBookGesture(el, gameId, gameName) {
-  let startX, startY, axis = null, ghost = null, origRect, active = false;
+function attachBookGesture(slot, gameId, gameName) {
+  const spine = slot.querySelector(".book-spine");
+  if (!spine) return;
 
-  el.addEventListener("pointerdown", (e) => {
+  let startX = 0, startY = 0, t0 = 0;
+  let axis = null;       // null | "v" | "h"
+  let dragging = false;
+  let dy = 0;
+  let pointerId = null;
+
+  const resetSpine = () => {
+    spine.style.transition = "";
+    spine.style.transform = "";
+    spine.style.opacity = "";
+  };
+
+  const clearArmed = () => {
+    slot.classList.remove("dragging", "armed-up", "armed-down");
+  };
+
+  const releaseCapture = () => {
+    if (pointerId !== null) {
+      try { slot.releasePointerCapture(pointerId); } catch (_) { /* already released */ }
+      pointerId = null;
+    }
+  };
+
+  const snapBack = () => {
+    if (!slot.isConnected) return;
+    spine.style.transition = "transform 180ms ease, opacity 180ms ease";
+    spine.style.transform = "translateY(0)";
+    spine.style.opacity = "";
+    clearArmed();
+  };
+
+  const completeAndTrigger = (direction, action) => {
+    const offset = direction === "up" ? -BOOK_DRAG_MAX : BOOK_DRAG_MAX;
+    spine.style.transition = "transform 240ms ease-in, opacity 220ms ease-in";
+    spine.style.transform = `translateY(${offset}px)`;
+    spine.style.opacity = "0";
+    setTimeout(() => { try { action(); } catch (_) {} }, 260);
+    // In case the action doesn't navigate away, reset the spine.
+    setTimeout(() => {
+      if (!slot.isConnected) return;
+      resetSpine();
+      clearArmed();
+    }, 460);
+  };
+
+  slot.addEventListener("pointerdown", (e) => {
     if (e.button) return;
-    startX = e.clientX; startY = e.clientY;
-    axis = null; active = true; ghost = null;
+    startX = e.clientX;
+    startY = e.clientY;
+    t0 = Date.now();
+    axis = null;
+    dragging = false;
+    dy = 0;
+    pointerId = null;
   });
 
-  el.addEventListener("pointermove", (e) => {
-    if (!active) return;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
+  slot.addEventListener("pointermove", (e) => {
+    if (axis === "h") return;
+    const dx = e.clientX - startX;
+    const dyRaw = e.clientY - startY;
+
     if (!axis) {
-      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx) + 4) {
+      if (Math.abs(dyRaw) > 8 && Math.abs(dyRaw) > Math.abs(dx) + 4) {
         axis = "v";
-        el.setPointerCapture(e.pointerId);
-        origRect = el.getBoundingClientRect();
-        ghost = createBookGhost(el, origRect);
-        el.style.opacity = "0.3";
-      } else if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) + 4) {
-        axis = "h"; active = false;
+        dragging = true;
+        pointerId = e.pointerId;
+        try { slot.setPointerCapture(pointerId); } catch (_) {}
+        slot.classList.add("dragging");
+        spine.style.transition = "none";
+      } else if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dyRaw) + 4) {
+        axis = "h";
+        return;
+      } else {
+        return;
       }
+    }
+
+    if (axis === "v") {
+      e.preventDefault();
+      dy = Math.max(-BOOK_DRAG_MAX, Math.min(BOOK_DRAG_MAX, dyRaw));
+      spine.style.transform = `translateY(${dy}px)`;
+      slot.classList.toggle("armed-up", dy < -BOOK_TRIGGER_PX);
+      slot.classList.toggle("armed-down", dy > BOOK_TRIGGER_PX);
+    }
+  });
+
+  slot.addEventListener("pointerup", (e) => {
+    const dx = e.clientX - startX;
+    const dyRaw = e.clientY - startY;
+    const elapsed = Date.now() - t0;
+    const wasDragging = dragging;
+    const finalAxis = axis;
+
+    releaseCapture();
+    dragging = false;
+    axis = null;
+
+    if (finalAxis === "v" && wasDragging) {
+      if (dyRaw < -BOOK_TRIGGER_PX) {
+        completeAndTrigger("up", () => startLogPlay(gameId, gameName));
+        clearArmed();
+        return;
+      }
+      if (dyRaw > BOOK_TRIGGER_PX) {
+        completeAndTrigger("down", () => openGameGuide(gameId));
+        clearArmed();
+        return;
+      }
+      snapBack();
       return;
     }
-    if (axis === "v" && ghost) {
-      ghost.style.top = (origRect.top + dy) + "px";
-      ghost.style.boxShadow = dy < -40
-        ? "0 0 22px rgba(201,146,42,0.8), 0 4px 20px rgba(0,0,0,0.5)"
-        : dy > 40
-        ? "0 0 22px rgba(100,160,255,0.5), 0 4px 20px rgba(0,0,0,0.5)"
-        : "0 12px 30px rgba(0,0,0,0.6)";
+
+    if (finalAxis === "h") return;
+
+    if (Math.abs(dx) + Math.abs(dyRaw) < BOOK_TAP_MAX_PX && elapsed < BOOK_TAP_MAX_MS) {
+      onBookClick(gameId, spine);
     }
   });
 
-  el.addEventListener("pointerup", (e) => {
-    if (!active) return;
-    active = false;
-    const dy = e.clientY - startY;
-    if (axis === "h") { axis = null; return; }
-    el.style.opacity = "";
-    if (ghost) {
-      if (dy < -50) {
-        Object.assign(ghost.style, {
-          transition: "transform 300ms ease-in, opacity 280ms ease-in",
-          transform: "translateY(-180px) rotate(8deg)",
-          opacity: "0",
-        });
-        setTimeout(() => { ghost.remove(); startLogPlay(gameId, gameName); }, 280);
-      } else if (dy > 50) {
-        Object.assign(ghost.style, {
-          transition: "transform 340ms ease-in, opacity 280ms ease-in",
-          transform: "translateY(160px) rotate(-10deg)",
-          opacity: "0",
-        });
-        setTimeout(() => { ghost.remove(); openGameGuide(gameId); }, 300);
-      } else {
-        Object.assign(ghost.style, {
-          transition: "top 180ms ease, opacity 180ms",
-          top: origRect.top + "px",
-          opacity: "1",
-        });
-        setTimeout(() => ghost.remove(), 180);
-        if (!axis && Math.abs(dy) < 8) onBookClick(gameId, el);
-      }
-      ghost = null;
-    } else {
-      onBookClick(gameId, el);
-    }
+  slot.addEventListener("pointercancel", () => {
+    releaseCapture();
+    dragging = false;
     axis = null;
-  });
-
-  el.addEventListener("pointercancel", () => {
-    active = false; axis = null;
-    el.style.opacity = "";
-    if (ghost) { ghost.remove(); ghost = null; }
+    if (slot.isConnected) snapBack();
   });
 }
 
 function attachShelfGestures(shelfKey) {
   const row = document.querySelector(`[data-shelf-row="${shelfKey}"]`);
   if (!row) return;
-  row.querySelectorAll(".book-spine[data-game-id]").forEach(el => {
+  row.querySelectorAll(".book-slot[data-game-id]").forEach(el => {
+    if (el.dataset.gestureBound) return;
+    el.dataset.gestureBound = "1";
     attachBookGesture(el, el.dataset.gameId, el.dataset.gameName);
   });
 }
