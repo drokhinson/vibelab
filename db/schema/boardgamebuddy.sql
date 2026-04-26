@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 042
+-- Last updated: migration 043
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -174,3 +174,11 @@ CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_status
   ON public.boardgamebuddy_pending_guides(status);
 CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_uploader
   ON public.boardgamebuddy_pending_guides(uploader_id);
+-- Buddies linking (migration 043): one linked-row per (owner, target) and a
+-- fast lookup for "plays where I'm a linked buddy".
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_buddies_owner_linked
+  ON public.boardgamebuddy_buddies (owner_id, linked_user_id)
+  WHERE linked_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_bgb_buddies_linked_user
+  ON public.boardgamebuddy_buddies (linked_user_id)
+  WHERE linked_user_id IS NOT NULL;

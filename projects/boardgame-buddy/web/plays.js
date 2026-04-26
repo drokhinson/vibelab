@@ -37,7 +37,7 @@ function renderPlays() {
   container.innerHTML = `
     <div class="space-y-3">
       ${plays.map((p, i) => `
-        <div class="card bg-base-200 animate-fadeUp" style="--i:${i}">
+        <div class="card bg-base-200 animate-fadeUp ${p.is_own ? "" : "opacity-90 border border-base-300"}" style="--i:${i}">
           <div class="card-body p-3">
             <div class="flex items-start gap-3">
               ${p.game_thumbnail
@@ -48,7 +48,13 @@ function renderPlays() {
                 <h3 class="font-semibold text-sm leading-tight">
                   <a class="link link-hover" onclick="openGameDetail('${p.game_id}')">${p.game_name}</a>
                 </h3>
-                <p class="text-xs text-base-content/50 mt-0.5">${formatDate(p.played_at)}</p>
+                <div class="flex items-center gap-2 flex-wrap mt-0.5">
+                  <p class="text-xs text-base-content/50">${formatDate(p.played_at)}</p>
+                  ${p.is_own ? "" : `
+                    <span class="badge badge-ghost badge-xs gap-1">
+                      <i data-lucide="user" class="w-3 h-3"></i> logged by ${escapeHtml(p.logged_by_name)}
+                    </span>`}
+                </div>
                 ${p.players.length ? `
                   <div class="flex flex-wrap gap-1 mt-1.5">
                     ${p.players.map(pl => `
@@ -59,9 +65,10 @@ function renderPlays() {
                   </div>` : ""}
                 ${p.notes ? `<p class="text-xs text-base-content/60 mt-1 italic">${p.notes}</p>` : ""}
               </div>
-              <button class="btn btn-ghost btn-xs flex-shrink-0" onclick="deletePlay('${p.id}')">
-                <i data-lucide="trash-2" class="w-3 h-3"></i>
-              </button>
+              ${p.is_own ? `
+                <button class="btn btn-ghost btn-xs flex-shrink-0" onclick="deletePlay('${p.id}')">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i>
+                </button>` : ""}
             </div>
           </div>
         </div>

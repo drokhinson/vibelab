@@ -145,6 +145,11 @@ class PlayResponse(BaseModel):
     notes: Optional[str] = None
     players: list[PlayPlayerResponse] = []
     created_at: datetime
+    # Logger metadata — lets the FE distinguish own logs from shared plays
+    # (where the current user appears via a linked buddy).
+    logged_by_id: str
+    logged_by_name: str
+    is_own: bool = True
 
 
 class PlayCountResponse(BaseModel):
@@ -177,13 +182,21 @@ class PlayDraftResponse(PlayDraftBody):
 
 class BuddyResponse(BaseModel):
     id: str
-    name: str
+    name: str  # original free-text name (preserved even after linking)
     linked_user_id: Optional[str] = None
+    linked_display_name: Optional[str] = None  # joined from boardgamebuddy_profiles
+    play_count: int = 0
     created_at: datetime
 
 
 class BuddyLinkBody(BaseModel):
     user_id: str
+
+
+class ProfileSearchResult(BaseModel):
+    id: str
+    display_name: str
+    email: Optional[str] = None
 
 
 # ── Guide chunks ──────────────────────────────────────────────────────────────
