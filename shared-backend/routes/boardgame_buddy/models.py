@@ -162,6 +162,7 @@ class PlayDraftPlayer(BaseModel):
     name: str
     is_winner_override: Optional[bool] = None
     round_scores: list[float] = []
+    initials: Optional[str] = None
 
 
 class PlayDraftBody(BaseModel):

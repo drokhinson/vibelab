@@ -266,7 +266,7 @@ body {
 }
 
 .session-grid {
-  width: 100%;
+  width: auto;
   border-collapse: collapse;
 }
 .session-grid th,
@@ -276,9 +276,24 @@ body {
   text-align: center;
   font-size: 0.85rem;
   vertical-align: middle;
+  white-space: nowrap;
 }
 .session-grid thead th { background: rgba(201, 146, 42, 0.06); }
-.session-grid input { width: 100%; min-width: 0; }
+.session-grid thead th:first-child,
+.session-grid tbody th:first-child,
+.session-grid tfoot th:first-child {
+  min-width: 56px;
+}
+.session-grid thead th:not(:first-child) {
+  min-width: 56px;
+}
+.session-grid tbody td input[type="number"] {
+  width: 56px;
+  text-align: center;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+.session-grid input { min-width: 0; }
 .session-grid tfoot td {
   font-weight: 700;
   background: rgba(201, 146, 42, 0.10);
@@ -286,6 +301,16 @@ body {
 .session-grid .winner-cell {
   color: var(--accent);
 }
+.player-header-btn {
+  font-weight: 700;
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: inherit;
+}
+.player-header-btn:hover { text-decoration: underline; }
 
 /* ── Line clamp ──────────────────────────────────────────────────────────────── */
 .line-clamp-1 {

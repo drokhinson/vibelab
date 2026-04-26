@@ -36,6 +36,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["C:/Program Files/nodejs/node_modules/npm/bin/npx-cli.js", "serve", "projects/daywordplay/web", "-l", "5000", "--no-clipboard"],
       "port": 5000
+    },
+    {
+      "name": "boardgamebuddy-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "projects/boardgame-buddy/web", "-l", "5004", "--no-clipboard"],
+      "port": 5004
     }
   ]
 }

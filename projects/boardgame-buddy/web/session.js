@@ -9,6 +9,7 @@
 const TODAY = () => new Date().toISOString().split("T")[0];
 
 function emptySession() {
+  const seedName = currentUser?.display_name || "";
   return {
     game_id: null,
     game_name: null,
@@ -16,7 +17,8 @@ function emptySession() {
     played_at: TODAY(),
     notes: "",
     players: [{
-      name: currentUser?.display_name || "",
+      name: seedName,
+      initials: seedName ? computeInitials(seedName) : "",
       round_scores: [0],
       is_winner_override: null,
     }],
@@ -46,14 +48,20 @@ function normalizeSession(s) {
   s.notes = s.notes || "";
   s.played_at = s.played_at || TODAY();
   s.round_count = Math.max(1, s.round_count || 1);
-  s.players = (s.players || []).map(p => ({
-    name: p.name || "",
-    is_winner_override: p.is_winner_override ?? null,
-    round_scores: padScores(p.round_scores, s.round_count),
-  }));
+  s.players = (s.players || []).map(p => {
+    const name = p.name || "";
+    return {
+      name,
+      initials: (p.initials || (name ? computeInitials(name) : "")).toUpperCase().slice(0, 3),
+      is_winner_override: p.is_winner_override ?? null,
+      round_scores: padScores(p.round_scores, s.round_count),
+    };
+  });
   if (!s.players.length) {
+    const seedName = currentUser?.display_name || "";
     s.players.push({
-      name: currentUser?.display_name || "",
+      name: seedName,
+      initials: seedName ? computeInitials(seedName) : "",
       round_scores: padScores([], s.round_count),
       is_winner_override: null,
     });
@@ -150,6 +158,7 @@ async function saveDraftNow() {
     notes: activeSession.notes || null,
     players: activeSession.players.map(p => ({
       name: p.name,
+      initials: p.initials || null,
       is_winner_override: p.is_winner_override,
       round_scores: p.round_scores,
     })),
@@ -167,9 +176,10 @@ async function saveDraftNow() {
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-function addPlayer(name = "") {
+function addPlayer(name = "", initials = "") {
   activeSession.players.push({
     name,
+    initials: (initials || (name ? computeInitials(name) : "")).toUpperCase().slice(0, 3),
     is_winner_override: null,
     round_scores: padScores([], activeSession.round_count),
   });
@@ -182,6 +192,7 @@ function removePlayer(idx) {
   if (!activeSession.players.length) {
     activeSession.players.push({
       name: "",
+      initials: "",
       is_winner_override: null,
       round_scores: padScores([], activeSession.round_count),
     });
@@ -216,6 +227,126 @@ function setScore(playerIdx, roundIdx, value) {
 function setPlayerName(idx, name) {
   activeSession.players[idx].name = name;
   scheduleDraftSave();
+}
+
+// Append "2", "3", ... if `base` collides with another player's initials.
+// If base is already 3 chars, replace the last char with the digit ("ABC" → "AB2").
+// `excludeIdx` skips a specific player (used during edits).
+function disambiguateInitials(base, excludeIdx = -1) {
+  const used = new Set(
+    activeSession.players
+      .map((p, i) => (i === excludeIdx ? null : (p.initials || "").toUpperCase()))
+      .filter(Boolean),
+  );
+  const candidate = (base || "").toUpperCase().slice(0, 3);
+  if (!candidate) return "";
+  if (!used.has(candidate)) return candidate;
+  const stem = candidate.length >= 3 ? candidate.slice(0, 2) : candidate;
+  for (let n = 2; n < 100; n++) {
+    const next = stem + n;
+    if (!used.has(next)) return next;
+  }
+  return candidate;
+}
+
+// ── Add / edit player form ───────────────────────────────────────────────────
+
+let editingPlayerIdx = null;
+
+function openAddPlayerForm() {
+  editingPlayerIdx = null;
+  const form = document.getElementById("session-add-player");
+  if (!form) return;
+  form.classList.remove("hidden");
+  document.getElementById("session-add-player-title").textContent = "Add player";
+  document.getElementById("session-add-player-confirm").textContent = "Add";
+  const nameInput = document.getElementById("add-player-name");
+  const initialsInput = document.getElementById("add-player-initials");
+  nameInput.value = "";
+  initialsInput.value = "";
+  initialsInput.dataset.userEdited = "false";
+  nameInput.focus();
+}
+
+function openEditPlayer(idx) {
+  editingPlayerIdx = idx;
+  const p = activeSession.players[idx];
+  const form = document.getElementById("session-add-player");
+  if (!form) return;
+  form.classList.remove("hidden");
+  document.getElementById("session-add-player-title").textContent = "Edit player";
+  document.getElementById("session-add-player-confirm").textContent = "Save";
+  const nameInput = document.getElementById("add-player-name");
+  const initialsInput = document.getElementById("add-player-initials");
+  nameInput.value = p.name || "";
+  initialsInput.value = p.initials || "";
+  initialsInput.dataset.userEdited = "true";
+  nameInput.focus();
+}
+
+function cancelAddPlayer() {
+  editingPlayerIdx = null;
+  const form = document.getElementById("session-add-player");
+  if (!form) return;
+  form.classList.add("hidden");
+  document.getElementById("add-player-name").value = "";
+  document.getElementById("add-player-initials").value = "";
+}
+
+function onAddPlayerNameInput(name) {
+  const initialsInput = document.getElementById("add-player-initials");
+  if (!initialsInput) return;
+  // Auto-populate initials only if the user hasn't manually edited the field.
+  if (initialsInput.dataset.userEdited === "true") return;
+  const base = name ? computeInitials(name) : "";
+  initialsInput.value = disambiguateInitials(base, editingPlayerIdx ?? -1);
+}
+
+function onAddPlayerNameChange(name) {
+  // If the typed value matches a buddy's display name, snap to the canonical form.
+  const trimmed = (name || "").trim();
+  if (!trimmed) return;
+  const match = (buddies || []).find(b => {
+    const display = b.linked_display_name || b.name;
+    return display && display.toLowerCase() === trimmed.toLowerCase();
+  });
+  if (match) {
+    const display = match.linked_display_name || match.name;
+    const nameInput = document.getElementById("add-player-name");
+    if (nameInput) nameInput.value = display;
+    onAddPlayerNameInput(display);
+  }
+}
+
+function onAddPlayerInitialsInput(value) {
+  const initialsInput = document.getElementById("add-player-initials");
+  if (!initialsInput) return;
+  initialsInput.dataset.userEdited = "true";
+  initialsInput.value = (value || "").toUpperCase().slice(0, 3);
+}
+
+function confirmAddPlayer() {
+  const nameInput = document.getElementById("add-player-name");
+  const initialsInput = document.getElementById("add-player-initials");
+  const name = (nameInput?.value || "").trim();
+  if (!name) {
+    nameInput?.focus();
+    return;
+  }
+  const rawInitials = (initialsInput?.value || "").trim() || computeInitials(name);
+  const excludeIdx = editingPlayerIdx ?? -1;
+  const initials = disambiguateInitials(rawInitials, excludeIdx);
+
+  if (editingPlayerIdx === null) {
+    addPlayer(name, initials);
+  } else {
+    const p = activeSession.players[editingPlayerIdx];
+    p.name = name;
+    p.initials = initials;
+    scheduleDraftSave();
+    renderSessionPanel();
+  }
+  cancelAddPlayer();
 }
 
 function setWinnerOverride(idx) {
@@ -369,9 +500,26 @@ function renderSessionPanel() {
         <button class="btn btn-ghost btn-xs" onclick="addRound()">
           <i data-lucide="plus" class="w-3 h-3"></i> Round
         </button>
-        <button class="btn btn-ghost btn-xs" onclick="addPlayer()">
+        <button class="btn btn-ghost btn-xs" onclick="openAddPlayerForm()">
           <i data-lucide="user-plus" class="w-3 h-3"></i> Player
         </button>
+      </div>
+      <div id="session-add-player" class="hidden mt-2 p-2 rounded border border-base-content/10 bg-base-200/40">
+        <div class="text-xs opacity-60 mb-1" id="session-add-player-title">Add player</div>
+        <div class="flex gap-1 items-center">
+          <input type="text" id="add-player-name"
+                 class="input input-bordered input-xs flex-1 min-w-0"
+                 placeholder="Player name" list="session-buddies"
+                 oninput="onAddPlayerNameInput(this.value)"
+                 onchange="onAddPlayerNameChange(this.value)" />
+          <input type="text" id="add-player-initials" maxlength="3"
+                 class="input input-bordered input-xs w-14 text-center"
+                 placeholder="ABC"
+                 oninput="onAddPlayerInitialsInput(this.value)" />
+          <button id="session-add-player-confirm" class="btn btn-primary btn-xs"
+                  onclick="confirmAddPlayer()">Add</button>
+          <button class="btn btn-ghost btn-xs" onclick="cancelAddPlayer()">Cancel</button>
+        </div>
       </div>
     </div>
 
@@ -461,18 +609,23 @@ function renderGridHeader() {
   thead.innerHTML = `
     <tr>
       <th></th>
-      ${s.players.map((p, i) => `
+      ${s.players.map((p, i) => {
+        const initials = p.initials || (p.name ? computeInitials(p.name) : `P${i+1}`);
+        const fullName = p.name || `Player ${i+1}`;
+        return `
         <th>
-          <input type="text" class="input input-ghost input-xs w-20 px-1"
-                 placeholder="Player ${i+1}" list="session-buddies"
-                 value="${escapeHtml(p.name || "")}"
-                 onchange="setPlayerName(${i}, this.value)" />
+          <button class="player-header-btn" title="${escapeHtml(fullName)}"
+                  aria-label="Edit ${escapeHtml(fullName)}"
+                  onclick="openEditPlayer(${i})">
+            ${escapeHtml(initials)}
+          </button>
           ${s.players.length > 1 ? `
             <button class="btn btn-ghost btn-xs btn-square" title="Remove player"
                     onclick="removePlayer(${i})">
               <i data-lucide="x" class="w-3 h-3"></i>
             </button>` : ""}
-        </th>`).join("")}
+        </th>`;
+      }).join("")}
     </tr>`;
 }
 
@@ -494,7 +647,7 @@ function renderGridBody() {
       ${s.players.map((p, i) => `
         <td>
           <input type="number" inputmode="numeric"
-                 class="input input-ghost input-xs w-16 text-center px-1"
+                 class="input input-ghost input-xs text-center px-1"
                  value="${p.round_scores[r] ?? 0}"
                  oninput="setScore(${i}, ${r}, this.value)" />
         </td>`).join("")}
