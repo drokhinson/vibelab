@@ -42,6 +42,22 @@ function renderMarkdown(text) {
     .replace(/\n/g, "<br>");
 }
 
+function renderCardAnatomy(content) {
+  const DIAG = '[DIAGRAM]\n';
+  const LEG  = '\n[LEGEND]\n';
+  const lIdx = content.indexOf(LEG);
+  if (!content.includes(DIAG) || lIdx === -1) return renderMarkdown(content);
+  const diagram    = content.slice(content.indexOf(DIAG) + DIAG.length, lIdx);
+  const legendText = content.slice(lIdx + LEG.length).trim();
+  const items = legendText.split('\n').map(line => {
+    const m = line.match(/^([①-⑫])\s+([^:]+):\s+(.+)$/);
+    return m
+      ? `<dt class="card-anatomy-num">${m[1]}</dt><dd><strong>${m[2].trim()}</strong> — ${m[3].trim()}</dd>`
+      : '';
+  }).filter(Boolean).join('');
+  return `<div class="card-anatomy"><pre class="card-anatomy-diagram">${diagram}</pre><dl class="card-anatomy-legend">${items}</dl></div>`;
+}
+
 function escapeAttr(s) {
   return String(s || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -217,7 +233,7 @@ function renderGuide() {
             </span>
             ${c.created_by_name ? `<span class="text-xs opacity-60 flex-shrink-0">by ${c.created_by_name}</span>` : ""}
           </div>
-          <div class="collapse-content text-sm leading-relaxed guide-text">${renderMarkdown(c.content)}</div>
+          <div class="collapse-content text-sm leading-relaxed guide-text">${c.layout === 'card_anatomy' ? renderCardAnatomy(c.content) : renderMarkdown(c.content)}</div>
         </div>
       </div>`;
   };
