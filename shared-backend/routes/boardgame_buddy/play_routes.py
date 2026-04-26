@@ -296,6 +296,97 @@ async def list_buddies(
 
 
 @router.post(
+    "/buddies",
+    response_model=BuddyResponse,
+    status_code=201,
+    summary="Add a buddy by user account",
+)
+async def add_buddy(
+    body: BuddyLinkBody,
+    user: CurrentUser = Depends(get_current_user),
+) -> BuddyResponse:
+    """Create a new buddy directly linked to an existing user account."""
+    sb = get_supabase()
+
+    if body.user_id == user.user_id:
+        raise HTTPException(status_code=400, detail="Cannot add yourself as a buddy")
+
+    target = (
+        sb.table("boardgamebuddy_profiles")
+        .select("id, display_name")
+        .eq("id", body.user_id)
+        .execute()
+    )
+    if not target.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    target_name: str = target.data[0]["display_name"]
+
+    # Idempotent: already linked to this user
+    existing = (
+        sb.table("boardgamebuddy_buddies")
+        .select("id, name, linked_user_id, created_at, boardgamebuddy_play_players(count)")
+        .eq("owner_id", user.user_id)
+        .eq("linked_user_id", body.user_id)
+        .execute()
+    )
+    if existing.data:
+        r = existing.data[0]
+        pp = r.get("boardgamebuddy_play_players") or []
+        return BuddyResponse(
+            id=r["id"],
+            name=r["name"],
+            linked_user_id=r.get("linked_user_id"),
+            linked_display_name=target_name,
+            play_count=pp[0]["count"] if pp else 0,
+            created_at=r["created_at"],
+        )
+
+    # Name collision: link an existing unlinked buddy with the same name
+    collision = (
+        sb.table("boardgamebuddy_buddies")
+        .select("id, name, created_at, boardgamebuddy_play_players(count)")
+        .eq("owner_id", user.user_id)
+        .eq("name", target_name)
+        .is_("linked_user_id", "null")
+        .execute()
+    )
+    if collision.data:
+        c = collision.data[0]
+        sb.table("boardgamebuddy_buddies").update(
+            {"linked_user_id": body.user_id}
+        ).eq("id", c["id"]).execute()
+        pp = c.get("boardgamebuddy_play_players") or []
+        return BuddyResponse(
+            id=c["id"],
+            name=c["name"],
+            linked_user_id=body.user_id,
+            linked_display_name=target_name,
+            play_count=pp[0]["count"] if pp else 0,
+            created_at=c["created_at"],
+        )
+
+    # Default: create new buddy row linked to the target account
+    result = (
+        sb.table("boardgamebuddy_buddies")
+        .insert({
+            "owner_id": user.user_id,
+            "name": target_name,
+            "linked_user_id": body.user_id,
+        })
+        .execute()
+    )
+    r = result.data[0]
+    return BuddyResponse(
+        id=r["id"],
+        name=r["name"],
+        linked_user_id=body.user_id,
+        linked_display_name=target_name,
+        play_count=0,
+        created_at=r["created_at"],
+    )
+
+
+@router.post(
     "/buddies/{buddy_id}/link",
     response_model=MessageResponse,
     status_code=200,

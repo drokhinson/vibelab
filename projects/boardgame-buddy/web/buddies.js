@@ -4,6 +4,13 @@
 let buddySearchTimer = null;
 let buddyLinkTargetId = null;
 let buddyLinkTargetName = null;
+let addBuddySearchTimer = null;
+
+function computeInitials(name) {
+  const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return (parts[0] || "?").slice(0, 2).toUpperCase();
+}
 
 async function renderBuddiesTab() {
   const container = document.getElementById("profile-tab-content");
@@ -22,16 +29,27 @@ async function renderBuddiesTab() {
         <i data-lucide="users" class="w-12 h-12 mb-4 opacity-50"></i>
         <p>No buddies yet.</p>
         <p class="text-xs mt-2 opacity-60">Add players when you log a play and they'll show up here.</p>
-      </div>`;
+        <button class="btn btn-primary btn-sm mt-4" onclick="openAddBuddyModal()">
+          <i data-lucide="user-plus" class="w-4 h-4"></i> Add Buddy
+        </button>
+      </div>
+      ${renderAddBuddyDialog()}`;
     if (window.lucide) window.lucide.createIcons();
     return;
   }
 
   container.innerHTML = `
+    <div class="flex justify-between items-center mb-3">
+      <span class="font-semibold text-sm">Buddies</span>
+      <button class="btn btn-primary btn-sm" onclick="openAddBuddyModal()">
+        <i data-lucide="user-plus" class="w-4 h-4"></i> Add
+      </button>
+    </div>
     <ul class="menu bg-base-200 rounded-box p-2 gap-1">
       ${buddies.map((b, i) => renderBuddyRow(b, i)).join("")}
     </ul>
     ${renderLinkBuddyDialog()}
+    ${renderAddBuddyDialog()}
   `;
   if (window.lucide) window.lucide.createIcons();
 }
@@ -40,12 +58,15 @@ function renderBuddyRow(b, i) {
   const linked = !!b.linked_user_id;
   const display = linked ? (b.linked_display_name || b.name) : b.name;
   const playLabel = b.play_count === 1 ? "1 game" : `${b.play_count} games`;
+  const avatarColors = linked
+    ? "bg-success/20 text-success"
+    : "bg-base-300 text-base-content";
   return `
     <li class="animate-fadeUp" style="--i:${i}">
       <div class="flex items-center gap-3 px-2 py-2 bg-base-100 rounded-lg">
         <div class="avatar placeholder">
-          <div class="bg-base-300 text-base-content w-9 h-9 rounded-full">
-            <i data-lucide="${linked ? "user-check" : "user"}" class="w-4 h-4 ${linked ? "text-success" : "opacity-60"}"></i>
+          <div class="${avatarColors} w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold">
+            <span>${computeInitials(display)}</span>
           </div>
         </div>
         <div class="flex-1 min-w-0">
@@ -130,9 +151,16 @@ async function doBuddySearch(q) {
   out.innerHTML = results.map(r => `
     <button type="button" class="btn btn-ghost btn-sm w-full justify-start text-left h-auto py-2"
             onclick="confirmLinkBuddy('${r.id}', ${escapeHtml(JSON.stringify(r.display_name))})">
-      <div class="flex flex-col items-start">
-        <span class="font-semibold text-sm">${escapeHtml(r.display_name)}</span>
-        ${r.email ? `<span class="text-xs text-base-content/60">${escapeHtml(r.email)}</span>` : ""}
+      <div class="flex items-center gap-2">
+        <div class="avatar placeholder">
+          <div class="bg-base-300 text-base-content w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">
+            <span>${computeInitials(r.display_name)}</span>
+          </div>
+        </div>
+        <div class="flex flex-col items-start">
+          <span class="font-semibold text-sm">${escapeHtml(r.display_name)}</span>
+          ${r.email ? `<span class="text-xs text-base-content/60">${escapeHtml(r.email)}</span>` : ""}
+        </div>
       </div>
     </button>
   `).join("");
@@ -158,5 +186,102 @@ async function confirmLinkBuddy(targetUserId, targetDisplayName) {
     renderBuddiesTab();
   } catch (err) {
     showToast(err.message || "Could not link buddy.", "error");
+  }
+}
+
+// ── Add buddy modal ──────────────────────────────────────────────────────────
+
+function renderAddBuddyDialog() {
+  return `
+    <dialog id="add-buddy-dialog" class="modal">
+      <div class="modal-box max-w-md">
+        <h3 class="font-bold text-lg mb-1">Add buddy</h3>
+        <p class="text-xs text-base-content/60 mb-3">Search for a BoardgameBuddy user to add.</p>
+        <input id="add-buddy-search" type="text" autocomplete="off"
+               class="input input-bordered input-sm w-full"
+               placeholder="Search by display name..." />
+        <div id="add-buddy-results" class="mt-3 space-y-1 min-h-12"></div>
+        <div class="modal-action">
+          <form method="dialog">
+            <button class="btn btn-ghost btn-sm">Cancel</button>
+          </form>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+  `;
+}
+
+function openAddBuddyModal() {
+  const dlg = document.getElementById("add-buddy-dialog");
+  if (!dlg) return;
+  const input = document.getElementById("add-buddy-search");
+  input.value = "";
+  document.getElementById("add-buddy-results").innerHTML =
+    `<p class="text-xs text-base-content/50 px-1">Type at least 2 characters.</p>`;
+  input.oninput = (e) => onAddBuddySearchInput(e.target.value);
+  dlg.showModal();
+  setTimeout(() => input.focus(), 50);
+}
+
+function onAddBuddySearchInput(q) {
+  clearTimeout(addBuddySearchTimer);
+  const out = document.getElementById("add-buddy-results");
+  if (!q || q.trim().length < 2) {
+    out.innerHTML = `<p class="text-xs text-base-content/50 px-1">Type at least 2 characters.</p>`;
+    return;
+  }
+  addBuddySearchTimer = setTimeout(() => doAddBuddySearch(q.trim()), 250);
+}
+
+async function doAddBuddySearch(q) {
+  const out = document.getElementById("add-buddy-results");
+  out.innerHTML = `<div class="flex justify-center py-3"><span class="loading loading-spinner loading-sm"></span></div>`;
+  let results = [];
+  try {
+    results = await apiFetch(`/profiles/search?q=${encodeURIComponent(q)}`);
+  } catch (err) {
+    out.innerHTML = `<div class="text-error text-xs px-1">${escapeHtml(err.message)}</div>`;
+    return;
+  }
+
+  const linkedIds = new Set((buddies || []).filter(b => b.linked_user_id).map(b => b.linked_user_id));
+  const available = results.filter(r => !linkedIds.has(r.id));
+
+  if (!available.length) {
+    const msg = results.length ? "Already in your buddy list." : "No matching accounts.";
+    out.innerHTML = `<p class="text-xs text-base-content/50 px-1">${msg}</p>`;
+    return;
+  }
+
+  out.innerHTML = available.map(r => `
+    <button type="button" class="btn btn-ghost btn-sm w-full justify-start text-left h-auto py-2"
+            onclick="confirmAddBuddy('${r.id}', ${escapeHtml(JSON.stringify(r.display_name))})">
+      <div class="flex items-center gap-2">
+        <div class="avatar placeholder">
+          <div class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold">
+            <span>${computeInitials(r.display_name)}</span>
+          </div>
+        </div>
+        <div class="flex flex-col items-start">
+          <span class="font-semibold text-sm">${escapeHtml(r.display_name)}</span>
+          ${r.email ? `<span class="text-xs text-base-content/60">${escapeHtml(r.email)}</span>` : ""}
+        </div>
+      </div>
+    </button>
+  `).join("");
+}
+
+async function confirmAddBuddy(targetUserId, targetDisplayName) {
+  try {
+    await apiFetch("/buddies", {
+      method: "POST",
+      body: { user_id: targetUserId },
+    });
+    document.getElementById("add-buddy-dialog")?.close();
+    showToast(`${escapeHtml(targetDisplayName)} added as a buddy!`, "success");
+    renderBuddiesTab();
+  } catch (err) {
+    showToast(err.message || "Could not add buddy.", "error");
   }
 }
