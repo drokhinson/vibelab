@@ -14,6 +14,7 @@ async function openGameDetail(gameId) {
     if (session) {
       renderCollectionButtons(gameId);
       loadPlayCount(gameId);
+      loadGamePlays(gameId);
     }
     if (window._pendingScrollToGuide) {
       window._pendingScrollToGuide = false;
@@ -119,6 +120,9 @@ function renderGameDetail() {
       </div>
     </div>
 
+    <!-- Play History (logged-in only, populated async) -->
+    ${session ? '<div id="game-history-section" class="mb-4"></div>' : ''}
+
     <!-- Description -->
     ${g.description ? `
       <div class="collapse collapse-arrow bg-base-200 mb-4">
@@ -129,6 +133,69 @@ function renderGameDetail() {
         </div>
       </div>` : ""}
 
+  `;
+  lucide.createIcons();
+}
+
+async function loadGamePlays(gameId) {
+  const section = document.getElementById("game-history-section");
+  if (!section) return;
+  try {
+    const gamePlays = await apiFetch(`/games/${gameId}/plays`);
+    renderGamePlays(gamePlays);
+  } catch { /* supplementary — fail silently */ }
+}
+
+function renderGamePlays(gamePlays) {
+  const section = document.getElementById("game-history-section");
+  if (!section) return;
+
+  // Update play-count badge from the authoritative play list
+  if (gamePlays.length) {
+    const slot = document.getElementById("play-count-badge");
+    if (slot) {
+      slot.innerHTML = `
+        <div class="badge" style="border-color: var(--game-accent); color: var(--game-accent);">
+          <i data-lucide="dice-5" class="w-3 h-3 mr-1"></i>Played ${gamePlays.length}×
+        </div>`;
+    }
+  }
+
+  if (!gamePlays.length) {
+    section.innerHTML = `
+      <h2 class="text-lg font-bold flex items-center gap-2 mb-2">
+        <i data-lucide="history" class="w-5 h-5" style="color: var(--game-accent)"></i>
+        Play History
+      </h2>
+      <p class="text-sm text-base-content/50">No plays logged yet.</p>`;
+    lucide.createIcons();
+    return;
+  }
+
+  section.innerHTML = `
+    <h2 class="text-lg font-bold flex items-center gap-2 mb-2">
+      <i data-lucide="history" class="w-5 h-5" style="color: var(--game-accent)"></i>
+      Play History
+      <span class="badge badge-sm">${gamePlays.length}</span>
+    </h2>
+    <div class="space-y-2">
+      ${gamePlays.map((p, i) => `
+        <div class="bg-base-200 rounded-xl p-3 animate-fadeUp" style="--i:${i}">
+          <div class="flex items-center justify-between gap-2 mb-1.5">
+            <span class="text-sm font-medium">${formatDate(p.played_at)}</span>
+          </div>
+          ${p.players.length ? `
+            <div class="flex flex-wrap gap-1">
+              ${p.players.map(pl => `
+                <span class="badge badge-sm ${pl.is_winner ? 'badge-warning' : 'badge-ghost'}">
+                  ${pl.is_winner ? '<i data-lucide="trophy" class="w-3 h-3 inline mr-0.5"></i>' : ''}${escapeHtml(pl.name)}
+                </span>
+              `).join("")}
+            </div>` : ""}
+          ${p.notes ? `<p class="text-xs text-base-content/60 mt-1.5 italic">${escapeHtml(p.notes)}</p>` : ""}
+        </div>
+      `).join("")}
+    </div>
   `;
   lucide.createIcons();
 }

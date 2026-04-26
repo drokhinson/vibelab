@@ -10,6 +10,10 @@ async function loadGames() {
       per_page: gamesPerPage,
     });
     if (gamesSearch) params.set("search", gamesSearch);
+    if (gamesFilterPlayers !== null) params.set("players", gamesFilterPlayers);
+    if (gamesFilterPlaytimeMin !== null) params.set("playtime_min", gamesFilterPlaytimeMin);
+    if (gamesFilterPlaytimeMax !== null) params.set("playtime_max", gamesFilterPlaytimeMax);
+    gamesFilterMechanics.forEach(m => params.append("mechanics", m));
 
     const data = await apiFetch(`/games?${params}`);
     gamesCache = data.games;
@@ -28,7 +32,7 @@ function renderGamesGrid() {
     container.innerHTML = `
       <div class="text-center py-12 text-base-content/50">
         <i data-lucide="search-x" class="w-12 h-12 mb-4 opacity-50"></i>
-        <p>No games found. Try a different search.</p>
+        <p>No games found. Try a different search or filter.</p>
       </div>`;
     lucide.createIcons();
     return;
@@ -89,6 +93,159 @@ function changePage(delta) {
   if (gamesPage < 1) gamesPage = 1;
   loadGames();
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ── Browse filter strip ───────────────────────────────────────────────────────
+
+const PLAYER_CHIPS = [
+  { label: "2", value: 2 },
+  { label: "3", value: 3 },
+  { label: "4", value: 4 },
+  { label: "5", value: 5 },
+  { label: "6+", value: 6 },
+];
+
+const PLAYTIME_CHIPS = [
+  { label: "≤30 min",   min: null, max: 30  },
+  { label: "31–60 min", min: 31,   max: 60  },
+  { label: "61–120 min",min: 61,   max: 120 },
+  { label: "120+ min",  min: 121,  max: null },
+];
+
+async function initBrowseFilters() {
+  if (mechanicsOptions.length > 0) {
+    renderFilterStrip();
+    return;
+  }
+  try {
+    mechanicsOptions = await apiFetch("/games/mechanics");
+  } catch { mechanicsOptions = []; }
+  renderFilterStrip();
+}
+
+function renderFilterStrip() {
+  const el = document.getElementById("browse-filters");
+  if (!el) return;
+
+  const hasActiveFilter = gamesFilterPlayers !== null
+    || gamesFilterPlaytimeMin !== null
+    || gamesFilterPlaytimeMax !== null
+    || gamesFilterMechanics.length > 0;
+
+  el.innerHTML = `
+    <div class="space-y-2">
+
+      <!-- Players row -->
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="text-xs text-base-content/50 mr-1">Players</span>
+        ${PLAYER_CHIPS.map(c => `
+          <button class="btn btn-xs ${gamesFilterPlayers === c.value ? 'btn-primary' : 'btn-outline'}"
+                  onclick="togglePlayersFilter(${c.value})">
+            ${c.label}
+          </button>
+        `).join("")}
+      </div>
+
+      <!-- Playtime row -->
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="text-xs text-base-content/50 mr-1">Length</span>
+        ${PLAYTIME_CHIPS.map((c, i) => {
+          const active = gamesFilterPlaytimeMin === c.min && gamesFilterPlaytimeMax === c.max;
+          return `
+            <button class="btn btn-xs ${active ? 'btn-primary' : 'btn-outline'}"
+                    onclick="togglePlaytimeFilter(${i})">
+              ${c.label}
+            </button>`;
+        }).join("")}
+      </div>
+
+      <!-- Mechanics row -->
+      ${mechanicsOptions.length ? `
+        <div>
+          <div id="mechanics-chips" class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-xs text-base-content/50 mr-1">Mechanics</span>
+            ${mechanicsOptions.slice(0, 20).map(m => {
+              const active = gamesFilterMechanics.includes(m);
+              return `<button class="btn btn-xs ${active ? 'btn-primary' : 'btn-outline'}"
+                              onclick="toggleMechanicFilter(${JSON.stringify(m)})">${m}</button>`;
+            }).join("")}
+            ${mechanicsOptions.length > 20 ? `
+              <button class="btn btn-xs btn-ghost" onclick="expandMechanics()">
+                +${mechanicsOptions.length - 20} more
+              </button>` : ""}
+          </div>
+        </div>
+      ` : ""}
+
+      <!-- Clear filters -->
+      ${hasActiveFilter ? `
+        <div>
+          <button class="btn btn-ghost btn-xs text-base-content/50" onclick="clearBrowseFilters()">
+            ✕ Clear filters
+          </button>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function togglePlayersFilter(value) {
+  gamesFilterPlayers = gamesFilterPlayers === value ? null : value;
+  gamesPage = 1;
+  renderFilterStrip();
+  loadGames();
+}
+
+function togglePlaytimeFilter(index) {
+  const c = PLAYTIME_CHIPS[index];
+  const already = gamesFilterPlaytimeMin === c.min && gamesFilterPlaytimeMax === c.max;
+  if (already) {
+    gamesFilterPlaytimeMin = null;
+    gamesFilterPlaytimeMax = null;
+  } else {
+    gamesFilterPlaytimeMin = c.min;
+    gamesFilterPlaytimeMax = c.max;
+  }
+  gamesPage = 1;
+  renderFilterStrip();
+  loadGames();
+}
+
+function toggleMechanicFilter(mechanic) {
+  const idx = gamesFilterMechanics.indexOf(mechanic);
+  if (idx === -1) {
+    gamesFilterMechanics = [...gamesFilterMechanics, mechanic];
+  } else {
+    gamesFilterMechanics = gamesFilterMechanics.filter(m => m !== mechanic);
+  }
+  gamesPage = 1;
+  renderFilterStrip();
+  loadGames();
+}
+
+function clearBrowseFilters() {
+  gamesFilterPlayers = null;
+  gamesFilterPlaytimeMin = null;
+  gamesFilterPlaytimeMax = null;
+  gamesFilterMechanics = [];
+  gamesPage = 1;
+  renderFilterStrip();
+  loadGames();
+}
+
+function expandMechanics() {
+  const container = document.getElementById("mechanics-chips");
+  if (!container) return;
+  // Replace the "show 20" slice with all mechanics
+  const extra = mechanicsOptions.slice(20).map(m => {
+    const active = gamesFilterMechanics.includes(m);
+    return `<button class="btn btn-xs ${active ? 'btn-primary' : 'btn-outline'}"
+                    onclick="toggleMechanicFilter(${JSON.stringify(m)})">${m}</button>`;
+  });
+  const showMoreBtn = container.querySelector("button[onclick='expandMechanics()']");
+  if (showMoreBtn) {
+    showMoreBtn.replaceWith(...extra.map(h => { const d = document.createElement("div"); d.innerHTML = h; return d.firstChild; }));
+  }
 }
 
 // ── BGG Live Search ──────────────────────────────────────────────────────────

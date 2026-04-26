@@ -39,6 +39,19 @@ let closetTab = "collection"; // collection | wishlist
 // Plays
 let plays = [];
 let buddies = [];
+let playsPage = 1;
+let playsTotalCount = 0;
+const PLAYS_PER_PAGE = 20;
+let playsFilterGameId = null;
+let playsFilterBuddyId = null;
+let playsFilterOptions = null;  // { games: [{id, name}], buddies: [{id, name}] }
+
+// Browse filters
+let gamesFilterPlayers = null;
+let gamesFilterPlaytimeMin = null;
+let gamesFilterPlaytimeMax = null;
+let gamesFilterMechanics = [];
+let mechanicsOptions = [];
 
 // Profile (account page tab state — survives re-renders)
 let profileTab = "account"; // account | buddies

@@ -154,6 +154,23 @@ class PlayCountResponse(BaseModel):
     count: int
 
 
+class PlayListResponse(BaseModel):
+    plays: list[PlayResponse]
+    total: int
+    page: int
+    per_page: int
+
+
+class PlayFilterOption(BaseModel):
+    id: str
+    name: str
+
+
+class PlayFilterOptions(BaseModel):
+    games: list[PlayFilterOption]
+    buddies: list[PlayFilterOption]
+
+
 # ── Play session draft (in-progress, unsaved) ─────────────────────────────────
 
 class PlayDraftPlayer(BaseModel):

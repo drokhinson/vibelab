@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       showView(target);
-      if (target === "browse") loadGames();
+      if (target === "browse") { loadGames(); initBrowseFilters(); }
       if (target === "closet") loadCloset();
       if (target === "history") loadPlays();
     });

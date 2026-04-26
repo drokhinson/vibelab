@@ -151,6 +151,10 @@ async def list_games(
     per_page: int = Query(24, ge=1, le=100, description="Items per page"),
     search: Optional[str] = Query(None, description="Search by name"),
     category: Optional[str] = Query(None, description="Filter by category"),
+    players: Optional[int] = Query(None, ge=1, le=20, description="Exact player count (game's range must include this)"),
+    playtime_min: Optional[int] = Query(None, ge=1, description="Min playing time in minutes (inclusive)"),
+    playtime_max: Optional[int] = Query(None, ge=1, description="Max playing time in minutes (inclusive)"),
+    mechanics: Optional[list[str]] = Query(None, description="Required mechanics (AND logic)"),
 ) -> GameListResponse:
     """List games from the catalog, with optional search and filters."""
     sb = get_supabase()
@@ -166,6 +170,16 @@ async def list_games(
         query = query.ilike("name", f"%{search}%")
     if category:
         query = query.contains("categories", [category])
+    if players is not None:
+        query = query.gte("max_players", players)
+        if players < 6:
+            query = query.lte("min_players", players)
+    if playtime_min is not None:
+        query = query.gte("playing_time", playtime_min)
+    if playtime_max is not None:
+        query = query.lte("playing_time", playtime_max)
+    if mechanics:
+        query = query.contains("mechanics", mechanics)
 
     query = query.order("name")
     result = query.range(offset, offset + per_page - 1).execute()
@@ -233,6 +247,24 @@ async def search_bgg(
             r.already_in_db = r.bgg_id in existing_set
 
     return results
+
+
+@router.get(
+    "/games/mechanics",
+    response_model=list[str],
+    status_code=200,
+    summary="Distinct mechanics",
+)
+async def list_mechanics() -> list[str]:
+    """Return a sorted list of all distinct mechanic strings across all games."""
+    sb = get_supabase()
+    rows = sb.table("boardgamebuddy_games").select("mechanics").execute()
+    seen: set[str] = set()
+    for row in rows.data or []:
+        for m in row.get("mechanics") or []:
+            if m:
+                seen.add(m)
+    return sorted(seen)
 
 
 @router.get(
