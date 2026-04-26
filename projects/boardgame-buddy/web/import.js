@@ -152,32 +152,47 @@ async function handleImportFileSelect(e) {
   if (window.lucide) window.lucide.createIcons();
 }
 
+function groupBundleChunksByType(chunks) {
+  const seen = new Map();
+  const groups = [];
+  chunks.forEach((c, i) => {
+    const key = c.chunk_type || "?";
+    if (!seen.has(key)) {
+      seen.set(key, groups.length);
+      groups.push({ label: key, items: [] });
+    }
+    groups[seen.get(key)].items.push({ chunk: c, index: i });
+  });
+  return groups;
+}
+
 function renderBundlePreview(bundle, editable = false) {
   const missing = bundle.source?.missing || [];
   const chunks = (bundle.chunks || []).slice(0, 25);
-  const chunkRows = chunks.map((c, i) => `
-    <tr>
-      <td class="text-xs">
-        <span class="badge badge-sm badge-ghost">${escapeHtml(c.chunk_type || "?")}</span>
-      </td>
-      <td class="text-sm leading-tight">
-        ${escapeHtml(c.title || "(no title)")}
-      </td>
-      <td class="text-xs text-base-content/60">${((c.content || "") + "").length} chars</td>
-      ${editable ? `
-      <td class="text-right">
-        <button class="btn btn-ghost btn-xs" onclick="openChunkEditForm(${i})" title="Edit chunk">
-          <i data-lucide="pencil" class="w-3 h-3"></i>
-        </button>
-        <button class="btn btn-ghost btn-xs text-error" onclick="deleteBundleChunk(${i})" title="Delete chunk">
-          <i data-lucide="trash-2" class="w-3 h-3"></i>
-        </button>
-      </td>` : ""}
-    </tr>
-  `).join("");
+  const cols = editable ? 3 : 2;
+
+  const groups = groupBundleChunksByType(chunks);
+  const chunkRows = groups.map(g => {
+    const headerRow = `<tr><td colspan="${cols}" class="text-xs font-semibold text-base-content/50 uppercase tracking-wide pt-2 pb-0.5">${escapeHtml(g.label)}</td></tr>`;
+    const dataRows = g.items.map(({ chunk: c, index: i }) => `
+        <tr>
+          <td class="text-sm leading-tight">${escapeHtml(c.title || "(no title)")}</td>
+          <td class="text-xs text-base-content/60">${((c.content || "") + "").length} chars</td>
+          ${editable ? `
+          <td class="text-right">
+            <button class="btn btn-ghost btn-xs" onclick="openChunkEditForm(${i})" title="Edit chunk">
+              <i data-lucide="pencil" class="w-3 h-3"></i>
+            </button>
+            <button class="btn btn-ghost btn-xs text-error" onclick="deleteBundleChunk(${i})" title="Delete chunk">
+              <i data-lucide="trash-2" class="w-3 h-3"></i>
+            </button>
+          </td>` : ""}
+        </tr>`).join("");
+    return headerRow + dataRows;
+  }).join("");
 
   const emptyRow = editable && !chunks.length
-    ? `<tr><td colspan="4" class="text-center text-xs text-base-content/50 py-3">All chunks removed — add at least one before importing.</td></tr>`
+    ? `<tr><td colspan="${cols}" class="text-center text-xs text-base-content/50 py-3">All chunks removed — add at least one before importing.</td></tr>`
     : "";
 
   return `
@@ -191,7 +206,7 @@ function renderBundlePreview(bundle, editable = false) {
       </div>
       <div class="overflow-x-auto">
         <table class="table table-xs">
-          <thead><tr><th>Type</th><th>Title</th><th>Size</th>${editable ? "<th></th>" : ""}</tr></thead>
+          <thead><tr><th>Title</th><th>Size</th>${editable ? "<th></th>" : ""}</tr></thead>
           <tbody>${chunkRows}${emptyRow}</tbody>
         </table>
       </div>

@@ -347,7 +347,6 @@ function renderGuideToolbar() {
               onclick="openHiddenChunksPanel()">
         <i data-lucide="eye-off" class="w-3 h-3"></i> ${panelLabel} (${panelCount})
       </button>
-      <span class="text-xs opacity-60">Swipe ↔</span>
     </div>`;
   lucide.createIcons();
 }
@@ -494,6 +493,20 @@ function closeHiddenChunksPanel() {
   if (dlg && dlg.open) dlg.close();
 }
 
+function groupByChunkType(chunks) {
+  const seen = new Map();
+  const groups = [];
+  for (const c of chunks) {
+    const key = c.chunk_type;
+    if (!seen.has(key)) {
+      seen.set(key, groups.length);
+      groups.push({ label: c.chunk_type_label || key, chunks: [] });
+    }
+    groups[seen.get(key)].chunks.push(c);
+  }
+  return groups;
+}
+
 function renderHiddenChunksPanel() {
   const body = document.getElementById("hidden-chunks-body");
   if (!body) return;
@@ -505,28 +518,20 @@ function renderHiddenChunksPanel() {
       </div>`;
     return;
   }
-  // Items in the panel are either explicitly hidden by the user or
-  // community-contributed chunks they haven't added to their guide yet.
-  // Both cases use the same Add/Show button; backend's POST /visibility upserts
-  // either way.
-  const intro = hasGuideCustomizations
-    ? "Tap Add to bring a chunk into your guide."
-    : "Tap Show to restore a chunk to the guide.";
   body.innerHTML = `
-    <p class="text-xs text-base-content/60 mb-2">${intro}</p>
+    <p class="text-xs text-base-content/60 mb-2">Tap Show to bring a chunk into your guide.</p>
     <div class="space-y-1">
-      ${hiddenChunks.map(c => {
-        const wasHidden = !!c.is_hidden;
-        const buttonLabel = wasHidden ? "Show" : "Add";
-        return `
-          <div class="flex items-center gap-2 py-1">
-            <span class="badge badge-sm badge-ghost">${c.chunk_type_label || c.chunk_type}</span>
-            <span class="text-sm flex-1 truncate">${c.title}</span>
-            <button class="btn btn-xs btn-primary" onclick="unhideChunk('${c.id}')">
-              <i data-lucide="eye" class="w-3 h-3"></i> ${buttonLabel}
-            </button>
-          </div>`;
-      }).join("")}
+      ${groupByChunkType(hiddenChunks).map(g => `
+        <div class="mb-2">
+          <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-1">${escapeHtml(g.label)}</p>
+          ${g.chunks.map(c => `
+            <div class="flex items-center gap-2 py-1">
+              <span class="text-sm flex-1 truncate">${escapeHtml(c.title)}</span>
+              <button class="btn btn-xs btn-primary" onclick="unhideChunk('${c.id}')">
+                <i data-lucide="eye" class="w-3 h-3"></i> Show
+              </button>
+            </div>`).join("")}
+        </div>`).join("")}
     </div>
     <div class="modal-action">
       <button class="btn btn-ghost btn-sm" onclick="closeHiddenChunksPanel()">Close</button>
