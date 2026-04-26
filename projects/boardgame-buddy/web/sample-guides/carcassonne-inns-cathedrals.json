@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 2993,
+    "name": "Carcassonne: Inns & Cathedrals",
+    "min_players": 2,
+    "max_players": 6,
+    "playing_time": 45,
+    "bgg_url": "https://boardgamegeek.com/boardgame/2993",
+    "is_expansion": true,
+    "base_game_bgg_id": 822
+  },
+  "source": {
+    "generated_at": "2026-04-26T00:00:00Z",
+    "generator": "expansion-guide@1",
+    "rulebook_urls": [
+      {
+        "url": "https://cdn.svc.asmodee.net/production-zman/uploads/2024/09/zm7811_carcassonne_exp1_rules.pdf",
+        "label": "Inns & Cathedrals Rulebook (Z-Man/Asmodee, 2024)",
+        "source": "publisher"
+      }
+    ],
+    "missing": []
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Inns & Cathedrals — Components to Add",
+      "content": "## New Components to Add at Setup\n\nShuffle these into the base game draw pile and supply before play begins.\n\n| Component | Qty | Notes |\n|---|---|---|\n| New land tiles | 18 | Shuffle into the 71 base draw tiles (89-tile draw pile total, plus 1 starting tile) |\n| Large Follower (per player color) | 1 each | Add to each player's supply alongside their 7 normal followers; returned when the feature it occupies is scored |\n| Scoring tiles (50 pt / 100 pt) | several | Place face-up near the scoreboard; take a **50** tile when your marker passes 50 and reset to 0, then a **100** tile at 100 |\n\n### 6th Player (optional)\n- Add the **8 grey followers** (7 normal + 1 Large) to supply for the 6th player.\n- Grey player also receives a score marker placed on 0.\n\n### Tile Breakdown (18 new tiles)\n| Tile type | Qty |\n|---|---|\n| Inn-lake tiles (road with lakeside inn symbol) | 6 |\n| Cathedral tiles (city containing a cathedral) | 2 |\n| Other new landscape tiles | 10 |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Inns & Cathedrals — New Tiles & Figures",
+      "content": "## New Tiles\n\n| Tile Type | Count | What It Is | Effect |\n|-----------|-------|------------|--------|\n| Inn-lake tiles | 6 | Road tile with a lake icon bearing an inn symbol | Road passing through this tile: completed = **2 pts/tile** (double normal). Incomplete at end = **0 pts** (vs. base 1 pt/tile). |\n| Cathedral tiles | 2 | City tile with a cathedral building inside | City containing this tile: completed = **3 pts/tile + 3 pts/pennant** (vs. base 2+2). Incomplete at end = **0 pts** (vs. base 1 pt/tile + 1 pt/pennant). |\n| Other new tiles | 10 | Standard land tiles with varied terrain | No special rule — expand the map like normal tiles. |\n\n**Total new tiles:** 18\n\n## New Figures\n\n| Figure | Who Gets One | How to Deploy | Special Rule |\n|--------|-------------|---------------|-------------|\n| Large Follower | 1 per player color | Placed like a normal follower on any legal feature | Counts as **2 normal followers** for majority in roads, cities, and fields. In monasteries counts as **1** (no bonus). Returned to supply when the feature scores. |\n| Grey followers | 8 grey followers total | Used for a 6th player (grey color) | No special rule beyond enabling 6-player games. |\n\n## Key Rules\n\n- **Inn bonus is all-or-nothing:** double points if the road completes, zero if it doesn't.\n- **Cathedral penalty is all-or-nothing:** bonus points if the city completes, zero if it doesn't.\n- **Large Follower majority:** one Large Follower beats up to two normal followers; two normal followers tie one Large Follower.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Inns & Cathedrals — Modified Scoring Rules",
+      "content": "## Roads with Inns\n\nAn inn symbol (lake icon) on a road tile modifies scoring for the **entire road** it belongs to.\n\n| State | Base Game | With Inn |\n|---|---|---|\n| Completed road | 1 pt/tile | **2 pts/tile** |\n| Incomplete at end of game | 1 pt/tile | **0 pts** |\n\n- Multiple inns on the same road do not stack — the road still scores 2×/tile (or 0) once.\n\n## Cities with Cathedrals\n\nA cathedral tile inside a city modifies scoring for the **entire city** it belongs to.\n\n| State | Base Game | With Cathedral |\n|---|---|---|\n| Completed city (per tile) | 2 pts | **3 pts** |\n| Completed city (per pennant) | 2 pts | **3 pts** |\n| Incomplete at end of game | 1 pt/tile + 1 pt/pennant | **0 pts** |\n\n- Only one cathedral is needed to trigger the bonus/penalty for the entire city.\n\n## Large Follower (Majority)\n\n| Context | Effect |\n|---|---|\n| Majority contest | Counts as **2 normal followers** |\n| Points scored | Same as 1 normal follower (no point bonus) |\n\n- Applies to roads, cities, and fields. No bonus in monasteries.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://cdn.svc.asmodee.net/production-zman/uploads/2024/09/zm7811_carcassonne_exp1_rules.pdf",
+      "layout": "text"
+    }
+  ]
+}

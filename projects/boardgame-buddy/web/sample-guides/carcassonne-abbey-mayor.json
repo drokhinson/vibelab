@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 59858,
+    "name": "Carcassonne: Abbey & Mayor",
+    "min_players": 2,
+    "max_players": 6,
+    "playing_time": 45,
+    "bgg_url": "https://boardgamegeek.com/boardgame/59858",
+    "is_expansion": true,
+    "base_game_bgg_id": 822
+  },
+  "source": {
+    "generated_at": "2026-04-26T00:00:00Z",
+    "generator": "expansion-guide@1",
+    "rulebook_urls": [
+      {
+        "url": "https://images.zmangames.com/filer_public/48/90/48909233-453b-446f-bbb6-3aee9058a41b/zm7815_carcassonne_exp5_rules.pdf",
+        "label": "Abbey & Mayor Rulebook (Z-Man Games)",
+        "source": "publisher"
+      }
+    ],
+    "missing": []
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Abbey & Mayor — Per-Player Components",
+      "content": "## Each Player Receives (in their color, held in personal supply)\n\n| Piece | Qty | Notes |\n|---|---|---|\n| Abbey tile | 1 | Placed **instead** of drawing a tile; held all game |\n| Mayor figure | 1 | New city-follower type |\n| Wagon figure | 1 | Can occupy road, city, or monastery |\n| Barn figure | 1 | Placed at field corners |\n\n> With fewer than 6 players, return unused colors' pieces to the box.\n\n**12 new land tiles** are shuffled into the regular tile supply. **Abbey tiles are NOT shuffled in** — each player holds their own.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Abbey & Mayor — Abbey, Mayor, Wagon, Barn",
+      "content": "## New Pieces Quick Reference\n\n| Piece | Placement | Key Effects |\n|-------|-----------|-------------|\n| **Abbey** | Instead of drawing a tile; fill a gap (tiles on all 4 orthogonal sides); no edge-matching required | Terminates all adjacent features. Scored like a monastery: 9 pts complete, 1 pt/surrounding tile incomplete. Monk may be placed on it. |\n| **Mayor** | In a city, during follower deployment step | Majority strength = number of pennants in that city. If 0 pennants → Mayor counts as 0 followers (scores nothing). Returned when city scored. |\n| **Wagon** | Road, city, or monastery (not fields), during follower deployment step | When its feature is scored, may move to an adjacent incomplete unoccupied feature instead of returning to supply. |\n| **Barn** | At a corner point where 4 field quadrants converge (between tiles, not on a tile feature); may be placed even if farmers are present | On placement: all farmers in that field are immediately scored (3 pts/completed adjacent city, normal majority) and returned. No new farmers or barns may join that field afterward. End-game: most barns in field = 4 pts/completed adjacent city (ties share). |\n\n### Mayor — Pennant Majority Table\n\n| City Pennants | Mayor Counts As |\n|---|---|\n| 0 | 0 followers (scores nothing) |\n| 1 | 1 follower (ties a lone Knight) |\n| 2 | 2 followers (beats lone Knights) |\n| 3+ | 3+ followers |\n\n### Wagon Adjacency\n\n\"Adjacent\" = features sharing a tile edge or road junction with the just-scored feature. The Wagon cannot move to a completed or already-occupied feature.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Abbey & Mayor — Step 1: Abbey Option",
+      "content": "## Step 1 Change: Placing Your Abbey\n\nInstead of drawing a tile from the stack, you may place your **Abbey tile** on your turn.\n\n| Rule | Detail |\n|---|---|\n| When | Only if you still have your Abbey tile (one per player, used once) |\n| Where | In a gap — an empty space with tiles on **all 4 orthogonal sides** |\n| Edge-matching | **Not required** — the Abbey ignores normal edge-matching rules |\n| Draw a tile too? | No — placing the Abbey fully replaces your draw |\n\nAfter placing the Abbey, proceed normally to Step 2 (you may deploy a follower on it as a Monk).",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Abbey & Mayor — Step 2: New Figure Options",
+      "content": "## Step 2: Additional Deployment Options\n\nIn addition to a normal follower, you may deploy one of the following:\n\n| Figure | Where to Deploy | Special Rule |\n|---|---|---|\n| **Mayor** | City only | Counts as followers = number of **pennants** in that city (0 if no pennants) |\n| **Wagon** | Road, city, or monastery | After the feature is **scored**, Wagon may move to an adjacent unoccupied incomplete feature |\n| **Barn** | Field corner where **4 field quadrants meet** | On placement, **immediately score and return** all farmers in that field |\n| **Monk** | Abbey tile (if Abbey placed in Step 1) | Functions like a Monk on a monastery |\n\n> You still deploy **at most one figure** in Step 2.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Abbey & Mayor — Barn & Farm Scoring",
+      "content": "## Barn & Farm Scoring\n\n### On Barn Placement (immediate)\n\n| Who Scores | Rate | Condition |\n|---|---|---|\n| Player(s) with majority of farmers in that field | 3 pts per completed adjacent city | Normal farmer majority rules apply |\n\nFarmers are returned to their owners after this scoring. No more farmers may join the field afterward.\n\n### End-Game Farm Scoring with Barns\n\n| Owner | Rate | Condition |\n|---|---|---|\n| Player with most barns in a field | 4 pts per completed adjacent city | Majority of barns wins |\n| Tied barn counts | 4 pts each per completed adjacent city | Ties share |\n| Minority barn holders | 0 pts | — |\n\n### Key Differences vs Base Game\n\n| Rule | Base Game | With Barn |\n|---|---|---|\n| End-game rate | 3 pts/completed city | **4 pts/completed city** |\n| Farmers scored at end-game? | Yes (majority) | No — already returned at barn placement |\n| Majority metric at end-game | Follower count | Barn count |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Abbey & Mayor — Mayor City Scoring",
+      "content": "## Mayor City Scoring\n\nThe Mayor's follower-count equals the number of **pennants** in the city it occupies.\n\n| City Pennants | Mayor Counts As | Effect |\n|---|---|---|\n| 0 | 0 followers | Mayor scores **0 pts** from that city |\n| 1 | 1 follower | Ties a lone Knight |\n| 2+ | 2+ followers | Beats lone Knights, wins majority |\n\n- Majority math is otherwise unchanged: most followers = full pts, tied = both score full, minority = 0.\n- A Mayor placed in a 0-pennant city yields no points — a key trap for new players.\n\n## Abbey Scoring\n\nScored exactly like a monastery:\n\n| Condition | Points |\n|---|---|\n| Completed (all 8 surrounding spaces filled) | 9 pts |\n| Incomplete at end-game | 1 pt per surrounding tile including the Abbey (max 9) |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://images.zmangames.com/filer_public/48/90/48909233-453b-446f-bbb6-3aee9058a41b/zm7815_carcassonne_exp5_rules.pdf",
+      "layout": "text"
+    }
+  ]
+}

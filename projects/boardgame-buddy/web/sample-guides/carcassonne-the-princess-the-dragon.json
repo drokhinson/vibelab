@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 15158,
+    "name": "Carcassonne: The Princess & the Dragon",
+    "min_players": 2,
+    "max_players": 6,
+    "playing_time": 45,
+    "bgg_url": "https://boardgamegeek.com/boardgame/15158",
+    "is_expansion": true,
+    "base_game_bgg_id": 822
+  },
+  "source": {
+    "generated_at": "2026-04-26T00:00:00Z",
+    "generator": "expansion-guide@1",
+    "rulebook_urls": [
+      {
+        "url": "https://images.zmangames.com/filer_public/da/30/da30ce4e-814e-427c-b97b-2be3501961e1/zm7813_carcassonne_exp3_rules.pdf",
+        "label": "The Princess & the Dragon Rulebook (Z-Man Games)",
+        "source": "publisher"
+      }
+    ],
+    "missing": []
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "The Princess & the Dragon — Setup Changes",
+      "content": "## New Components\n\n| Component | Qty | Notes |\n|---|---|---|\n| New land tiles | 30 | Contain Volcano, Dragon movement, Magic Portal, and Princess symbols — shuffle into tile stack |\n| Dragon figure (wooden) | 1 | Shared board element; starts **off the board** |\n| Fairy figure (wooden) | 1 | Shared board element; starts **off the board** |\n\n## Figure Placement at Game Start\n\n- **Dragon:** Place off the board. It enters the board the first time a Volcano tile is drawn and placed.\n- **Fairy:** Place off the board. Any player may move it (instead of placing a follower) to a tile containing one of their own followers.\n\nNeither the Dragon nor the Fairy belongs to any single player — both are shared board elements.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Princess & Dragon — Special Tiles",
+      "content": "## Special Tile Types\n\n| Tile | Placement Rule | Special Effect |\n|---|---|---|\n| **Volcano** | No follower may be placed on it | Dragon moves to this tile immediately; if Dragon was off-board, it enters here |\n| **Dragon** | Normal follower placement applies first | After placement, Dragon moves 6 steps (see Dragon figure below) |\n| **Magic Portal** | Normal tile placement | Instead of placing your follower on the just-placed tile, you may deploy to **any** tile already on the board (standard occupation rules apply — no occupied or completed features) |\n| **Princess** | Must connect to an existing city | If that city has ≥1 Knight: placing player **must** remove exactly 1 Knight (any player's, placer's choice). No Knights in city = no effect. |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Princess & Dragon — Shared Figures",
+      "content": "## Dragon Figure\n\n| Property | Rule |\n|---|---|\n| Enters board | On first Volcano tile drawn; moves to that tile |\n| Movement trigger | Drawing a Dragon-symbol tile |\n| Steps per activation | **6 total**, distributed among players in clockwise order from the placing player (1 step each) |\n| Movement constraint | Orthogonally adjacent tiles only; cannot revisit a tile in the same sequence |\n| Blocked tile | Cannot enter the tile occupied by the Fairy |\n| Effect | All followers on an entered tile are removed and returned to owners (Fairy is unaffected); can eat normal followers, large followers, builder, pig, mayor, wagon |\n\n## Fairy Figure\n\n| Property | Rule |\n|---|---|\n| How to deploy | **Instead of** placing a follower in Step 2, move the Fairy to any tile containing one of your own followers |\n| Dragon protection | Dragon cannot enter the Fairy's current tile |\n| Turn-start bonus | At the **start of your turn**, if the Fairy is on a tile with your follower: score **+1 pt** immediately |\n| Feature completion bonus | When the feature containing the Fairy's tile is completed and scored, the follower owner on that tile gains **+3 bonus pts** |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Princess & the Dragon — Modified Turn Sequence",
+      "content": "## Turn Sequence\n\n### Before Your Turn\n- If the **Fairy** is on a tile with **your follower**, score **+1 pt** immediately before drawing.\n\n### Step 1 — Draw & Place Tile\n- **Volcano tile:** Dragon immediately moves to that tile. You **cannot** place a follower this turn (skip Step 2).\n- **Princess tile:** If the tile connects to a city containing knights, **one knight must be removed** before anything else proceeds.\n- All other tiles: normal placement rules.\n\n### Step 2 — Follower or Fairy Move (skip if Volcano placed)\n\n| Option | Rule |\n|---|---|\n| Place a follower | Standard rule — on just-placed tile |\n| Move the Fairy | To any tile where you currently have a follower |\n| Magic Portal bonus | If you placed a Magic Portal tile, your follower may go on **any already-placed tile** on the board |\n\n### Step 2.5 — Dragon Movement (Dragon-symbol tile only)\n\n| Detail | Rule |\n|---|---|\n| Who moves | Starting with you, then clockwise — each player moves Dragon **1 step** |\n| Total steps | **6 steps** per activation |\n| Movement | Orthogonal only; no revisiting in this sequence; cannot enter Fairy's tile |\n| Effect | **Eats all followers** on every tile entered |\n\n### Step 3 — Score Completed Features\n- Normal scoring applies.\n\n### Quick Reference Table\n\n| Situation | Effect |\n|---|---|\n| Fairy on your follower at turn start | +1 pt before drawing |\n| Volcano tile placed | Dragon teleports there; skip Step 2 |\n| Princess tile connects to city with knights | Remove 1 knight immediately |\n| Magic Portal tile placed | Follower in Step 2 may go on ANY existing tile |\n| Dragon-symbol tile placed | Dragon moves 6 steps after Step 2 |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Princess & the Dragon — Fairy Scoring Bonuses",
+      "content": "## Fairy Scoring Bonuses\n\nAll other scoring (roads, cities, monasteries, farms) is unchanged. Dragon, Volcano, Magic Portal, and Princess tiles do not award points — they modify board state.\n\n| Trigger | Condition | Points |\n|---|---|---|\n| Start-of-turn bonus | Fairy occupies the same tile as one of **your** followers at the start of your turn | **+1 pt** (before drawing) |\n| Feature completion bonus | A feature is completed that includes the Fairy's tile and you have a follower on that tile | **+3 pts** (added to normal feature score) |\n\n**Key notes:**\n- Only the player whose follower shares the Fairy's tile benefits.\n- Both bonuses can apply to the same player in the same turn if conditions are met.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://images.zmangames.com/filer_public/da/30/da30ce4e-814e-427c-b97b-2be3501961e1/zm7813_carcassonne_exp3_rules.pdf",
+      "layout": "text"
+    }
+  ]
+}

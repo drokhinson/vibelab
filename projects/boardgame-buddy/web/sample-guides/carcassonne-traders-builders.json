@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 5405,
+    "name": "Carcassonne: Traders & Builders",
+    "min_players": 2,
+    "max_players": 6,
+    "playing_time": 45,
+    "bgg_url": "https://boardgamegeek.com/boardgame/5405",
+    "is_expansion": true,
+    "base_game_bgg_id": 822
+  },
+  "source": {
+    "generated_at": "2026-04-26T00:00:00Z",
+    "generator": "expansion-guide@1",
+    "rulebook_urls": [
+      {
+        "url": "https://cdn.svc.asmodee.net/production-zman/uploads/2024/09/zm7812_carcassonne_exp2_rules.pdf",
+        "label": "Traders & Builders Rulebook (Z-Man/Asmodee, 2024)",
+        "source": "publisher"
+      }
+    ],
+    "missing": []
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Traders & Builders — New Components",
+      "content": "## New Components to Add at Setup\n\n| Component | Count | Notes |\n|---|---|---|\n| New land tiles | 24 | Shuffle into base tile stack |\n| Goods tokens (Wine) | 9 | Sorted by type in a visible supply |\n| Goods tokens (Grain) | 6 | Sorted by type in a visible supply |\n| Goods tokens (Cloth) | 5 | Sorted by type in a visible supply |\n| Builder figure | 1 per player | Each player takes their color |\n| Pig figure | 1 per player | Each player takes their color |\n| Drawstring bag | 1 | Optional — use to draw tiles |\n\n## Distribution\n\n- Each player receives **1 builder** and **1 pig** in their color; held in personal supply (not placed at start).\n- Goods tokens sit in **three separate face-up piles** (Wine, Grain, Cloth) visible to all.\n- The 24 new tiles are **shuffled into the existing base-game tile stack** before drawing begins.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Traders & Builders — Builder, Pig & Goods Quick Reference",
+      "content": "## New Pieces Overview\n\n| Piece | Placed On | Effect | Limit |\n|-------|-----------|--------|-------|\n| Builder | City or Road | Grants a 2nd tile draw/place when you extend that feature | 1 per player; 1 per feature |\n| Pig | Field | Boosts your farmers in that field to 4 pts/city at end-game | 1 per player |\n| Goods Token | (supply) | Collected when cities complete; scored at end-game | 20 total: 9 Wine, 6 Grain, 5 Cloth |\n\n---\n\n## Builder\n\n**How to deploy:** Instead of a regular follower, place your Builder in a city or road where you **already have a Knight or Thief**.\n\n**Double-turn trigger:** On any later turn, if the tile you place **extends** the same city or road, immediately draw and place a 2nd tile. You may deploy a follower on the 2nd tile as normal.\n\n**Key restrictions:**\n- Cannot be placed on a completed feature.\n- Only one Builder per player; only one on any single feature.\n- Builder returns to your supply when the feature is scored.\n\n---\n\n## Pig\n\n**How to deploy:** Instead of a regular follower, place your Pig in a field where you **already have a Farmer**.\n\n**Effect:** At end-game, all your Farmers in that field score **4 pts** per completed adjacent city (instead of the standard 3 pts).\n\n**Key restrictions:**\n- Pig does not add to your Farmer count for majority purposes.\n- Only one Pig per player.\n\n---\n\n## Goods Tiles & Tokens\n\n**Goods symbols** appear on city segments of the 24 new expansion tiles: Wine (grape) · Grain (wheat) · Cloth (fabric)\n\n**Collecting:** When a city with goods symbols is **completed**, the player placing the **completing tile** takes 1 goods token per symbol from the supply.\n\n**End-game scoring:**\n\n| Goods Type | Tokens Available | Bonus for Most |\n|------------|-----------------|----------------|\n| Wine | 9 | 10 pts |\n| Grain | 6 | 10 pts |\n| Cloth | 5 | 10 pts |\n\nTies for most of a type: all tied players score the full **10 pts**.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Traders & Builders — Builder Double Turn",
+      "content": "## Builder Piece\n\nPlace the Builder **instead of a regular follower**, onto a city or road where you **already have a Knight or Thief**.\n\n## Double Turn (Builder Trigger)\n\nOn any future turn, if **tile 1 you place extends the city or road where your Builder stands**, your turn becomes a double turn:\n\n| Step | Action |\n|---|---|\n| 1 | Draw & place **tile 1** — must extend the Builder's feature |\n| 2 | Optionally deploy a follower on tile 1 |\n| 3 | Draw & place **tile 2** — any valid placement |\n| 4 | Optionally deploy a follower on tile 2 |\n| 5 | Score any completed features from both placements |\n\nTurn ends normally after step 5. Builder returns when the feature it occupies is scored.\n\n## Pig Piece\n\nPlace the Pig **instead of a regular follower**, in a field where you **already have a Farmer**. The Pig does **not** trigger a double turn — it only boosts end-game farm scoring.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Traders & Builders — Goods Token Scoring",
+      "content": "## Goods Tokens (Wine / Grain / Cloth)\n\nWhen a city containing goods symbols is **completed**, the player placing the completing tile takes 1 goods token per symbol.\n\n- Tokens are **not scored immediately** — held until end-game.\n- At end-game, the player with the **most tokens of each type** scores **10 pts**.\n- **Ties:** all tied players score the full 10 pts for that type.\n\n| Goods Type | End-Game Bonus (majority) |\n|---|---|\n| Wine | 10 pts |\n| Grain | 10 pts |\n| Cloth | 10 pts |\n\nScoring is independent per type — a player can win all three, some, or none.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Traders & Builders — Pig Farm Boost",
+      "content": "## Pig — Farm Scoring Boost\n\nThe pig modifies end-game farm scoring **only for its owner's farmers** in the same field.\n\n| Condition | Pts per Completed Adjacent City |\n|---|---|\n| Farmer — base rule, no pig | 3 pts |\n| Farmer in same field as **own pig** | **4 pts** |\n\n**Key rules:**\n- The pig does **not** count as a follower for majority purposes — only farmers determine field control.\n- The boost applies only to the pig owner's farmers, even if other players share the field.\n- Majority/tie rules for field control remain unchanged.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://cdn.svc.asmodee.net/production-zman/uploads/2024/09/zm7812_carcassonne_exp2_rules.pdf",
+      "layout": "text"
+    }
+  ]
+}
