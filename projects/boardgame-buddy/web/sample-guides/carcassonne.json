@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 822,
+    "name": "Carcassonne",
+    "min_players": 2,
+    "max_players": 5,
+    "playing_time": 35,
+    "bgg_url": "https://boardgamegeek.com/boardgame/822"
+  },
+  "source": {
+    "generated_at": "2026-04-26T00:00:00Z",
+    "generator": "guide-from-rulebook@2",
+    "rulebook_urls": [
+      {
+        "url": "https://images.zmangames.com/filer_public/d5/20/d5208d61-8583-478b-a06d-b49fc9cd7aaa/zm7810_carcassonne_rules.pdf",
+        "label": "Publisher EN",
+        "source": "publisher"
+      },
+      {
+        "url": "https://images.zmangames.com/filer_public/b7/df/b7df3dfa-d535-4473-b422-f4e5d4564c5f/carcassonne_rulesheet_en.pdf",
+        "label": "Publisher EN (Rule Sheet)",
+        "source": "publisher"
+      }
+    ],
+    "missing": ["variant"]
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Components & Setup",
+      "content": "## Components Per Player\n\n| Color Count | Followers Each | As Scoring Marker | As Play Supply |\n|---|---|---|---|\n| 1 of 5 colors | 8 | 1 (placed on score track) | 7 (kept in front of player) |\n\n**Full component list:** 72 land tiles (1 start tile with distinct back), 1 scoreboard, 40 followers in 5 colors (8 per player).\n\n## Setup Steps\n\n1. Place the **start tile** face-up in the center of the table (distinct back identifies it).\n2. Shuffle the remaining **71 tiles** face-down into several stacks within reach of all players.\n3. Place the **scoreboard** near the table edge.\n4. Each player picks a color and takes **8 followers**.\n5. Place **1 follower** on space **0** of the scoreboard as scoring marker.\n6. Keep remaining **7 followers** in personal supply in front of you.\n7. The player who **most recently visited a walled city** goes first (or determine randomly); play proceeds **clockwise**.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Turn Actions",
+      "content": "## Turn Actions (in order)\n\nOn your turn, perform these steps in order:\n\n| Step | Action | Required? | Details |\n|------|--------|-----------|----------|\n| 1 | Draw & place a tile | **Mandatory** | Draw 1 tile from any face-down stack; place adjacent to existing tiles matching all edges (road↔road, city↔city, field↔field). If unplaceable, discard and draw again. |\n| 2 | Place a follower | Optional | Place 1 follower from your supply onto any feature of the tile **just placed**. Cannot place on a feature already occupied by any follower (even via connected tiles). |\n| 3 | Score completed features | Mandatory (if applicable) | Check roads, cities, and monasteries for completion; score immediately. Farmers do **not** score mid-game. |\n\n### Follower Placement Roles\n\n| Placement Location | Role |\n|--------------------|------|\n| Road segment | Thief |\n| City segment | Knight |\n| Monastery tile | Monk |\n| Field segment | Farmer |\n\n**Supply:** Each player has 7 followers available (1 is used as score marker). Followers on completed features are returned to your supply after scoring. Farmers stay on the board until end-game.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Mid-Game Scoring (Feature Completion)",
+      "content": "## Mid-Game Scoring — Completed Features\n\nTriggered in Step 3 of your turn whenever a placed tile completes a feature.\n\n| Feature | Completion Condition | Points |\n|---------|----------------------|--------|\n| Road | Both ends terminated (crossroads, city, monastery, or loop) | **1 pt per tile** in road |\n| City | Fully enclosed (no wall gaps) | **2 pts per tile** + **2 pts per pennant (coat of arms)** |\n| Monastery | Surrounded on all 8 sides by tiles | **9 pts** (1 monastery tile + 8 surrounding tiles) |\n| Farm | — | Does not score mid-game |\n\n### Shared Feature Majority Rule\n- Player with **most followers** on the feature scores **full points**.\n- **Tied players each score full points** independently.\n- Minority holders score nothing.\n- All followers on the scored feature are returned to their owners' supplies.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Tile Types & Placement Rules",
+      "content": "## Tile Types & Placement Rules\n\nAll edges must match when placing a tile (road→road, city→city, field→field).\n\n| Tile Type | Key Feature | Placement Note |\n|---|---|---|\n| City tiles | Enclosed city segments | All city edges must connect to city edges |\n| Road tiles | Road segments ending at crossroads, city, monastery, or loop | Both ends must terminate to complete the road |\n| Monastery (Cloister) | Single monastery in center of tile | Scores when all 8 surrounding tiles are placed |\n| City + Coat of Arms (Pennant) | Shield symbol inside city | Worth extra points (see scoring) |\n| Starting tile | City edge on one side, road, open fields | Pre-placed at game start; differently marked back |\n| Combination tiles | Mix of city, road, and field | Edges must still match all adjacent tiles |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Follower Roles by Tile Feature",
+      "content": "## Follower Roles by Tile Feature\n\nWhen placing a follower after tile placement, the feature it occupies determines its role:\n\n| Feature Placed On | Follower Role | Scores When |\n|---|---|---|\n| Road segment | Thief (Highwayman) | Road is completed (both ends terminated) |\n| City segment | Knight | City is fully enclosed |\n| Monastery tile | Monk | Monastery tile is surrounded on all 8 sides |\n| Field segment | Farmer | End of game only |\n\n**Restriction:** Cannot place on any feature already occupied by any follower (yours or opponent's), even across multiple connected tiles.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Coat of Arms (Pennant) Tiles — Point Value",
+      "content": "## Coat of Arms (Pennant) Tiles — Point Value\n\nSome city tiles contain a shield/coat-of-arms symbol. These modify scoring:\n\n| Situation | Points per Pennant |\n|---|---|\n| City completed (during game or end-game) | +2 points each |\n| City incomplete (end-game only) | +1 point each |\n\n**Note:** Pennant bonuses apply in addition to the per-tile city score. Multiple pennants in one city all count.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Ongoing Scoring (During Play)",
+      "content": "## Ongoing Scoring (During Play)\n\nScore immediately when a feature is **completed** after tile placement.\n\n| Feature | Completion Condition | Points |\n|---|---|---|\n| Road | Both ends terminate (crossroads, city, monastery, or loops) | 1 pt per tile |\n| City | Fully enclosed (no gaps) | 2 pts per tile + 2 pts per pennant |\n| Monastery | Surrounded on all 8 sides | 9 pts total (1 + 8 surrounding) |\n| Farm | — | Does not score during play |\n\n**Shared features (majority rule):** Player(s) with the most followers score full points. Tied players each score full points. Minority followers return with 0 points.\n\nFollowers on scored features are returned to their owner's supply.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "End-Game Scoring",
+      "content": "## End-Game Scoring\n\nTriggered immediately when the last tile is placed.\n\n### Incomplete Features\n\n| Feature | Points |\n|---|---|\n| Incomplete road | 1 pt per tile |\n| Incomplete city | 1 pt per tile + 1 pt per pennant (half the in-game rate) |\n| Incomplete monastery | 1 pt for monastery tile + 1 pt per surrounding tile (max 9) |\n\n### Farms (Fields)\n\n- Each **completed** city adjacent to a farm scores **3 pts** for the controlling farmer(s).\n- Incomplete cities do **not** count.\n- Majority rule applies across connected fields: player(s) with the most farmers on a connected field each score full points.\n\n### Majority Rule (all features)\n\nMost followers on a feature = full points. Tied players each score full points.\n\n### Tiebreaker\n\nNo official tiebreaker is defined in the base rules — tied scores share the victory.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "tips",
+      "title": "Strategic Tips for First-Time Players",
+      "content": "## Strategic Tips for First-Time Players\n\n- **Farm early, farm quietly.** Farmers never come back to your hand — but each completed city adjacent to your farm scores 3 points at game end. Sneaking a farmer onto a large field early can be worth more than multiple road/city grabs.\n- **Don't over-commit followers to roads.** Roads score only 1 point per tile; cities score 2. Reserve followers for cities and farms unless you're sure the road will close fast.\n- **Prioritize pennant (coat-of-arms) cities.** Each pennant doubles the tile's value in a completed city. A 3-tile city with 2 pennants scores 10 points — fight for those.\n- **Force shared majorities instead of fighting.** Connecting into an opponent's city or road to tie the lead is often better than starting a new feature — you score full points for free and they gain nothing extra.\n- **Don't park a monk unless the monastery is likely to fill.** A monastery needs all 8 surrounding tiles placed. In a 2-player game with fewer tiles on the board, interior monasteries are safer bets than edge ones.\n- **Incomplete cities score half — cut your losses.** If a city won't close, sometimes it's better to stop defending it and retrieve nothing (you get the follower back at game end anyway) rather than deepening investment.\n- **Watch your supply.** You only have 7 active followers. Locking too many into long-running features leaves you unable to contest new opportunities — keep 2–3 free at all times.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://images.zmangames.com/filer_public/d5/20/d5208d61-8583-478b-a06d-b49fc9cd7aaa/zm7810_carcassonne_rules.pdf",
+      "layout": "text"
+    }
+  ]
+}
