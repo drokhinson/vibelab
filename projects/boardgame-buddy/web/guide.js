@@ -78,19 +78,26 @@ function sortVisibleChunks(chunks) {
 async function loadGuide(gameId) {
   const container = document.getElementById("guide-content");
   try {
+    // Pull the expansion list in parallel with the guide so the toggle panel
+    // and the merged chunks land together — avoids a second flicker after
+    // the guide paints.
+    const [guideRes, expansionsRes] = await Promise.all([
+      session
+        ? apiFetch(`/games/${gameId}/my-guide`)
+        : apiFetch(`/games/${gameId}/chunks`),
+      apiFetch(`/games/${gameId}/expansions`).catch(() => []),
+    ]);
+
     let all;
     if (session) {
-      // /my-guide returns { has_customizations, chunks }. When the user has no
-      // selections, `chunks` is the curated default set; otherwise it's the
-      // full library so the panel can offer non-default chunks to add.
-      const data = await apiFetch(`/games/${gameId}/my-guide`);
-      hasGuideCustomizations = !!data.has_customizations;
-      all = data.chunks || [];
+      hasGuideCustomizations = !!guideRes.has_customizations;
+      all = guideRes.chunks || [];
     } else {
-      // Anon users see only the curated defaults — no per-user metadata.
-      all = await apiFetch(`/games/${gameId}/chunks`);
+      all = guideRes || [];
       hasGuideCustomizations = false;
     }
+
+    currentExpansions = Array.isArray(expansionsRes) ? expansionsRes : [];
 
     if (!hasGuideCustomizations) {
       // Default mode: every chunk in the response is visible. No panel.
@@ -111,9 +118,11 @@ async function loadGuide(gameId) {
 
     renderGuide();
     renderGuideToolbar();
+    renderExpansionsPanel();
   } catch (err) {
     currentGuideChunks = [];
     hiddenChunks = [];
+    currentExpansions = [];
     hasGuideCustomizations = false;
     container.innerHTML = `<p class="text-error text-sm">${err.message}</p>`;
   }
@@ -159,45 +168,77 @@ function renderGuide() {
   }
 
   const allowGestures = !!session;
-
   const showRestore = !!session && hasGuideCustomizations;
 
+  // Group by chunk_type: section headers replace the per-card type badge.
+  // The flat array keeps its sort order from sortVisibleChunks(), so groups
+  // appear in chunk_type_order, and within each group rows preserve user
+  // ordering. A single global running index drives reorder DOM contracts.
+  const groups = [];
+  const seen = new Map();
+  for (const c of otherChunks) {
+    const key = c.chunk_type;
+    if (!seen.has(key)) {
+      const idx = groups.length;
+      seen.set(key, idx);
+      groups.push({
+        chunk_type: key,
+        label: c.chunk_type_label || key,
+        icon: c.chunk_type_icon || "sticky-note",
+        chunks: [],
+      });
+    }
+    groups[seen.get(key)].chunks.push(c);
+  }
+
+  let runningIndex = 0;
+  const renderChunk = (c) => {
+    const editable = canEditChunk(c);
+    const idx = runningIndex++;
+    const dot = c.expansion?.color
+      ? `<span class="expansion-dot flex-shrink-0"
+               style="background:${escapeAttr(c.expansion.color)}"
+               title="${escapeAttr(c.expansion.name || "Expansion")}"></span>`
+      : "";
+    return `
+      <div class="swipe-row" data-chunk-id="${c.id}" data-chunk-index="${idx}"
+           data-can-edit="${editable ? "1" : "0"}">
+        <div class="swipe-action swipe-action--hide">
+          <i data-lucide="eye-off" class="w-5 h-5"></i>
+          <span>Hide</span>
+        </div>
+        <div class="swipe-action swipe-action--edit">
+          <i data-lucide="pencil" class="w-5 h-5"></i>
+          <span>Edit</span>
+        </div>
+        <div class="collapse collapse-arrow scroll-chunk swipe-target">
+          <input type="checkbox" />
+          <div class="collapse-title font-medium text-sm flex items-center justify-between gap-2">
+            <span class="flex items-center gap-1.5 min-w-0">
+              <i data-lucide="grip-vertical" class="w-3 h-3 reorder-handle flex-shrink-0"></i>
+              ${dot}
+              <span class="block truncate">${c.title}</span>
+            </span>
+            ${c.created_by_name ? `<span class="text-xs opacity-60 flex-shrink-0">by ${c.created_by_name}</span>` : ""}
+          </div>
+          <div class="collapse-content text-sm leading-relaxed guide-text">${renderMarkdown(c.content)}</div>
+        </div>
+      </div>`;
+  };
+
   container.innerHTML = `
-    <div id="guide-chunk-list" class="space-y-3 ${guideReorderMode ? "reorder-mode" : ""}">
-      ${otherChunks.map((c, i) => {
-        const icon = c.chunk_type_icon || "sticky-note";
-        const label = c.chunk_type_label || c.chunk_type;
-        const editable = canEditChunk(c);
-        return `
-          <div class="swipe-row" data-chunk-id="${c.id}" data-chunk-index="${i}"
-               data-can-edit="${editable ? "1" : "0"}">
-            <div class="swipe-action swipe-action--hide">
-              <i data-lucide="eye-off" class="w-5 h-5"></i>
-              <span>Hide</span>
-            </div>
-            <div class="swipe-action swipe-action--edit">
-              <i data-lucide="pencil" class="w-5 h-5"></i>
-              <span>Edit</span>
-            </div>
-            <div class="collapse collapse-arrow scroll-chunk swipe-target">
-              <input type="checkbox" />
-              <div class="collapse-title font-medium text-sm flex items-center justify-between gap-2">
-                <span class="flex items-center gap-1 min-w-0">
-                  <i data-lucide="grip-vertical" class="w-3 h-3 reorder-handle flex-shrink-0"></i>
-                  <i data-lucide="${icon}" class="w-4 h-4 flex-shrink-0"></i>
-                  <span class="badge badge-sm flex-shrink-0">${label}</span>
-                  ${c.expansion_name ? `<span class="badge badge-sm badge-secondary flex-shrink-0">expansion</span>` : ""}
-                  <span class="leading-tight min-w-0">
-                    <span class="block truncate">${c.title}</span>
-                    ${c.expansion_name ? `<span class="block text-xs font-normal opacity-60 truncate">${escapeAttr(c.expansion_name)}</span>` : ""}
-                  </span>
-                </span>
-                ${c.created_by_name ? `<span class="text-xs opacity-60 flex-shrink-0">by ${c.created_by_name}</span>` : ""}
-              </div>
-              <div class="collapse-content text-sm leading-relaxed guide-text">${renderMarkdown(c.content)}</div>
-            </div>
-          </div>`;
-      }).join("")}
+    <div id="guide-chunk-list" class="${guideReorderMode ? "reorder-mode" : ""}">
+      ${groups.map(g => `
+        <section class="guide-section">
+          <h3 class="guide-section__title">
+            <i data-lucide="${g.icon}" class="w-4 h-4"></i>
+            <span>${g.label}</span>
+          </h3>
+          <div class="space-y-2">
+            ${g.chunks.map(renderChunk).join("")}
+          </div>
+        </section>
+      `).join("")}
     </div>
     ${showRestore ? `
       <div class="mt-4 flex justify-center">
@@ -210,6 +251,69 @@ function renderGuide() {
 
   if (allowGestures) {
     container.querySelectorAll(".swipe-row").forEach(attachChunkGestures);
+  }
+}
+
+// ── Expansions panel ────────────────────────────────────────────────────────
+// Linked expansions auto-appear once their game is imported (the import flow
+// stamps is_expansion + base_game_bgg_id). Per-user toggle merges that
+// expansion's default chunks into the visible guide.
+
+function renderExpansionsPanel() {
+  const host = document.getElementById("expansions-panel");
+  if (!host) return;
+  if (!currentExpansions.length) {
+    host.innerHTML = "";
+    return;
+  }
+  host.innerHTML = `
+    <div class="expansions-panel">
+      <div class="expansions-panel__title">
+        <i data-lucide="puzzle" class="w-4 h-4"></i>
+        <span>Expansions</span>
+      </div>
+      <div class="expansions-panel__list">
+        ${currentExpansions.map(e => {
+          const color = e.color || "#6C63FF";
+          const enabled = !!e.is_enabled;
+          const interactive = !!session;
+          const disabled = interactive ? "" : "disabled";
+          return `
+            <label class="expansions-row">
+              <span class="expansion-dot expansion-dot--lg flex-shrink-0"
+                    style="background:${escapeAttr(color)}"></span>
+              <span class="expansions-row__name">${escapeAttr(e.name)}</span>
+              <span class="expansions-row__count">${e.chunk_count || 0} chunk${e.chunk_count === 1 ? "" : "s"}</span>
+              <input type="checkbox" class="toggle toggle-sm"
+                     style="--tglbg:${escapeAttr(color)}"
+                     ${enabled ? "checked" : ""}
+                     ${disabled}
+                     onchange="toggleExpansion('${e.expansion_game_id}', this.checked)" />
+            </label>`;
+        }).join("")}
+      </div>
+      ${session ? "" : `
+        <p class="text-xs text-base-content/50 mt-2">Sign in to toggle expansions.</p>`}
+    </div>`;
+  lucide.createIcons();
+}
+
+async function toggleExpansion(expansionGameId, isEnabled) {
+  if (!session || !currentGame) return;
+  // Optimistic local update so the toggle "lands" immediately.
+  const exp = currentExpansions.find(e => e.expansion_game_id === expansionGameId);
+  if (exp) exp.is_enabled = isEnabled;
+  try {
+    await apiFetch(
+      `/games/${currentGame.id}/expansions/${expansionGameId}/toggle`,
+      { method: "POST", body: { is_enabled: isEnabled } }
+    );
+    // Reload the guide so freshly-merged (or removed) chunks appear in place.
+    await loadGuide(currentGame.id);
+  } catch (err) {
+    if (exp) exp.is_enabled = !isEnabled;
+    renderExpansionsPanel();
+    showToast(err.message, "error");
   }
 }
 

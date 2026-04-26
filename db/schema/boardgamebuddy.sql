@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 045
+-- Last updated: migration 046
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   categories TEXT[] DEFAULT '{}',
   mechanics TEXT[] DEFAULT '{}',
   theme_color TEXT,
+  -- Expansion linkage (migration 046). is_expansion flags the row; when true,
+  -- base_game_bgg_id stores the parent's BGG id (kept as a soft reference, not
+  -- a FK, so expansions can be imported before their base game). expansion_color
+  -- is auto-assigned at import time and used for the toggle/dot UI.
+  is_expansion BOOLEAN NOT NULL DEFAULT false,
+  base_game_bgg_id INTEGER,
+  expansion_color TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_games ENABLE ROW LEVEL SECURITY;
@@ -143,6 +150,17 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chunks (
 );
 ALTER TABLE public.boardgamebuddy_guide_chunks ENABLE ROW LEVEL SECURITY;
 
+-- Per-user expansion toggle (migration 046). Row presence = enabled; absence
+-- = disabled (default). When an expansion is enabled, its default chunks are
+-- merged into the base game's reference guide for that user.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_expansions (
+  user_id            UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  expansion_game_id  UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
+  enabled_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, expansion_game_id)
+);
+ALTER TABLE public.boardgamebuddy_user_expansions ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_selections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -174,6 +192,12 @@ CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_status
   ON public.boardgamebuddy_pending_guides(status);
 CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_uploader
   ON public.boardgamebuddy_pending_guides(uploader_id);
+-- Expansions (migration 046): fast lookup of a base game's expansions by bgg_id.
+CREATE INDEX IF NOT EXISTS idx_bgb_games_base_bgg
+  ON public.boardgamebuddy_games(base_game_bgg_id)
+  WHERE is_expansion = true;
+CREATE INDEX IF NOT EXISTS idx_bgb_user_expansions_user
+  ON public.boardgamebuddy_user_expansions(user_id);
 -- Buddies linking (migration 043): one linked-row per (owner, target) and a
 -- fast lookup for "plays where I'm a linked buddy".
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_buddies_owner_linked

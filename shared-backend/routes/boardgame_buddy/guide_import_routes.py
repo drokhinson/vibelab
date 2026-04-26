@@ -9,7 +9,7 @@ from db import get_supabase
 from jwt_auth import SupabaseUser, get_current_supabase_user
 
 from . import router
-from .game_routes import import_bgg_game
+from .game_routes import _next_expansion_color, import_bgg_game
 from .models import (
     GuideBundle,
     GuideImportResponse,
@@ -40,29 +40,44 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
     imported_game = False
     existing_game = (
         sb.table("boardgamebuddy_games")
-        .select("id")
+        .select("id, is_expansion, base_game_bgg_id, expansion_color")
         .eq("bgg_id", bundle.game.bgg_id)
         .execute()
     )
+    g = bundle.game
     if existing_game.data:
         game_id = existing_game.data[0]["id"]
+        # Backfill expansion linkage if the bundle now claims expansion status
+        # but the existing row predates this feature (or was imported as a
+        # base game by mistake). Trust the bundle.
+        if g.is_expansion:
+            existing_row = existing_game.data[0]
+            updates: dict[str, object] = {}
+            if not existing_row.get("is_expansion"):
+                updates["is_expansion"] = True
+            if g.base_game_bgg_id and existing_row.get("base_game_bgg_id") != g.base_game_bgg_id:
+                updates["base_game_bgg_id"] = g.base_game_bgg_id
+            if not existing_row.get("expansion_color"):
+                updates["expansion_color"] = _next_expansion_color(sb, g.base_game_bgg_id)
+            if updates:
+                sb.table("boardgamebuddy_games").update(updates).eq("id", game_id).execute()
     else:
         # If the bundle carries the core BGG metadata, insert directly and skip
         # the BGG XML API call (saves daily quota). image_url / thumbnail_url
         # are left NULL — admins backfill via /games/admin/{id}/refresh-images.
-        g = bundle.game
         if g.min_players is not None and g.max_players is not None and g.playing_time is not None:
-            insert = (
-                sb.table("boardgamebuddy_games")
-                .insert({
-                    "bgg_id": g.bgg_id,
-                    "name": g.name,
-                    "min_players": g.min_players,
-                    "max_players": g.max_players,
-                    "playing_time": g.playing_time,
-                })
-                .execute()
-            )
+            new_row: dict[str, object] = {
+                "bgg_id": g.bgg_id,
+                "name": g.name,
+                "min_players": g.min_players,
+                "max_players": g.max_players,
+                "playing_time": g.playing_time,
+                "is_expansion": g.is_expansion,
+                "base_game_bgg_id": g.base_game_bgg_id,
+            }
+            if g.is_expansion:
+                new_row["expansion_color"] = _next_expansion_color(sb, g.base_game_bgg_id)
+            insert = sb.table("boardgamebuddy_games").insert(new_row).execute()
             game_id = insert.data[0]["id"]
         else:
             summary = await import_bgg_game(g.bgg_id)

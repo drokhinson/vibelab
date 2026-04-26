@@ -14,6 +14,7 @@ from db import get_supabase
 from shared_models import HealthResponse
 
 from . import router
+from .constants import EXPANSION_COLOR_PALETTE
 from .dependencies import CurrentUser, get_current_admin
 from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
 
@@ -112,6 +113,42 @@ async def _fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
         )
 
     return resp.text
+
+
+def _extract_expansion_meta(item: ET.Element) -> tuple[bool, int | None]:
+    """Detect whether a BGG item is an expansion and identify its base game.
+
+    BGG marks expansions with `type="boardgameexpansion"` on the <item> tag.
+    The base game is the inbound `<link type="boardgameexpansion" inbound="true">`
+    — BGG uses the same link type for both directions and disambiguates via
+    `inbound`. There can be more than one inbound link when the expansion
+    extends multiple base games; we keep the first.
+    """
+    if item.get("type") != "boardgameexpansion":
+        return False, None
+    for link in item.findall("link[@type='boardgameexpansion']"):
+        if link.get("inbound") != "true":
+            continue
+        try:
+            return True, int(link.get("id", "0")) or None
+        except (TypeError, ValueError):
+            continue
+    return True, None
+
+
+def _next_expansion_color(sb: Client, base_game_bgg_id: int | None) -> str:
+    """Pick the next palette color for a new expansion of this base game."""
+    if not base_game_bgg_id:
+        return EXPANSION_COLOR_PALETTE[0]
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select("id", count="exact")
+        .eq("is_expansion", True)
+        .eq("base_game_bgg_id", base_game_bgg_id)
+        .execute()
+    )
+    idx = (existing.count or 0) % len(EXPANSION_COLOR_PALETTE)
+    return EXPANSION_COLOR_PALETTE[idx]
 
 
 def _parse_bgg_xml(body: str, *, context: str) -> ET.Element:
@@ -344,6 +381,9 @@ async def import_bgg_game(
         for link in item.findall("link[@type='boardgamemechanic']")
     ]
 
+    is_expansion, base_game_bgg_id = _extract_expansion_meta(item)
+    expansion_color = _next_expansion_color(sb, base_game_bgg_id) if is_expansion else None
+
     game_data = {
         "bgg_id": bgg_id,
         "name": name,
@@ -359,6 +399,9 @@ async def import_bgg_game(
         ),
         "categories": categories,
         "mechanics": mechanics,
+        "is_expansion": is_expansion,
+        "base_game_bgg_id": base_game_bgg_id,
+        "expansion_color": expansion_color,
     }
 
     result = (

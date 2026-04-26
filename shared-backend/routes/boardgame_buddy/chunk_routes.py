@@ -1,6 +1,6 @@
 """Guide chunk endpoints — reusable guide pieces plus per-user selections."""
 
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import Depends, HTTPException, Path, Response
 
@@ -13,6 +13,7 @@ from .models import (
     ChunkTypeResponse,
     ChunkUpdate,
     ChunkVisibilityUpdate,
+    ExpansionInline,
     GuideSelectionUpdate,
     MessageResponse,
     MyGuideChunkResponse,
@@ -21,8 +22,16 @@ from .models import (
 from .dependencies import CurrentUser, get_current_user
 
 
-def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
-    """Flatten a Supabase row with joined chunk_type and profile into ChunkResponse."""
+def _chunk_row_to_response(
+    row: dict[str, Any],
+    expansion_map: Optional[dict[str, ExpansionInline]] = None,
+) -> ChunkResponse:
+    """Flatten a Supabase row with joined chunk_type and profile into ChunkResponse.
+
+    `expansion_map` keys on `game_id`. When the chunk's `game_id` is found
+    there, the chunk was contributed by an enabled expansion and the
+    matching ExpansionInline (name + dot color) is attached to the response.
+    """
     chunk_type = row.get("chunk_type")
     type_obj = row.get("boardgamebuddy_chunk_types")
     profile_obj = row.get("boardgamebuddy_profiles")
@@ -39,6 +48,8 @@ def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
     if isinstance(profile_obj, dict):
         created_by_name = profile_obj.get("display_name")
 
+    expansion = expansion_map.get(row["game_id"]) if expansion_map else None
+
     return ChunkResponse(
         id=row["id"],
         game_id=row["game_id"],
@@ -54,6 +65,7 @@ def _chunk_row_to_response(row: dict[str, Any]) -> ChunkResponse:
         created_by=row.get("created_by"),
         created_by_name=created_by_name,
         updated_at=row["updated_at"],
+        expansion=expansion,
     )
 
 
@@ -71,6 +83,49 @@ def _sort_chunk_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         int(((r.get("boardgamebuddy_chunk_types") or {}).get("display_order")) or 0),
         r.get("title") or "",
     ))
+
+
+def _enabled_expansions_for(
+    base_bgg_id: Optional[int],
+    user_id: str,
+) -> tuple[list[str], dict[str, ExpansionInline]]:
+    """Return (enabled_game_ids, expansion_map keyed by game_id) for a user+base.
+
+    Empty when the base game has no expansions or the user has none enabled.
+    """
+    if not base_bgg_id:
+        return [], {}
+    sb = get_supabase()
+    expansions = (
+        sb.table("boardgamebuddy_games")
+        .select("id, name, expansion_color")
+        .eq("is_expansion", True)
+        .eq("base_game_bgg_id", base_bgg_id)
+        .execute()
+    )
+    rows = expansions.data or []
+    if not rows:
+        return [], {}
+    exp_ids = [r["id"] for r in rows]
+    enabled = (
+        sb.table("boardgamebuddy_user_expansions")
+        .select("expansion_game_id")
+        .eq("user_id", user_id)
+        .in_("expansion_game_id", exp_ids)
+        .execute()
+    )
+    enabled_ids = {r["expansion_game_id"] for r in (enabled.data or [])}
+    enabled_list = [r["id"] for r in rows if r["id"] in enabled_ids]
+    expansion_map = {
+        r["id"]: ExpansionInline(
+            expansion_game_id=r["id"],
+            name=r["name"],
+            color=r.get("expansion_color"),
+        )
+        for r in rows
+        if r["id"] in enabled_ids
+    }
+    return enabled_list, expansion_map
 
 
 @router.get(
@@ -276,8 +331,24 @@ async def get_my_guide(
     - **Has selections:** returns *all* chunks with per-user `is_hidden` and
       `user_display_order` overlays so the frontend can split visible vs. the
       Hidden / available chunks panel.
+
+    Default chunks of any expansion the user has toggled on are merged into
+    the response; each merged chunk is tagged with its source expansion's
+    color so the UI can render the dot.
     """
     sb = get_supabase()
+
+    base_row = (
+        sb.table("boardgamebuddy_games")
+        .select("bgg_id")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not base_row.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    base_bgg_id = base_row.data[0].get("bgg_id")
+
+    enabled_ids, expansion_map = _enabled_expansions_for(base_bgg_id, user.user_id)
 
     selections_res = (
         sb.table("boardgamebuddy_guide_selections")
@@ -289,10 +360,11 @@ async def get_my_guide(
     selections = selections_res.data or []
     has_customizations = bool(selections)
 
+    target_game_ids = [game_id, *enabled_ids]
     chunks_query = (
         sb.table("boardgamebuddy_guide_chunks")
         .select(_CHUNK_SELECT)
-        .eq("game_id", game_id)
+        .in_("game_id", target_game_ids)
     )
     if not has_customizations:
         chunks_query = chunks_query.eq("is_default", True)
@@ -303,7 +375,7 @@ async def get_my_guide(
 
     chunks: list[MyGuideChunkResponse] = []
     for row in chunk_rows:
-        base = _chunk_row_to_response(row)
+        base = _chunk_row_to_response(row, expansion_map)
         sel = selections_by_chunk.get(row["id"])
         chunks.append(MyGuideChunkResponse(
             **base.model_dump(),
@@ -357,10 +429,22 @@ async def set_my_guide(
     sb = get_supabase()
 
     if body.chunk_ids:
+        # Accept chunks belonging to the base game OR any expansion the user
+        # has toggled on — those are the chunks the frontend can legitimately
+        # show, hide, or reorder in the merged guide.
+        base_row = (
+            sb.table("boardgamebuddy_games")
+            .select("bgg_id")
+            .eq("id", game_id)
+            .execute()
+        )
+        base_bgg_id = base_row.data[0].get("bgg_id") if base_row.data else None
+        enabled_ids, _ = _enabled_expansions_for(base_bgg_id, user.user_id)
+        allowed_game_ids = [game_id, *enabled_ids]
         valid = (
             sb.table("boardgamebuddy_guide_chunks")
             .select("id")
-            .eq("game_id", game_id)
+            .in_("game_id", allowed_game_ids)
             .in_("id", body.chunk_ids)
             .execute()
         )

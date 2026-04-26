@@ -115,6 +115,7 @@ function renderGameDetail() {
         </h2>
         <div id="guide-toolbar"></div>
       </div>
+      <div id="expansions-panel" class="mb-2"></div>
       <div id="guide-content" class="scroll-panel">
         <span class="loading loading-spinner loading-sm"></span>
       </div>
