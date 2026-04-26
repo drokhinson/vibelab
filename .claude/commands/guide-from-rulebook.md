@@ -69,6 +69,21 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 
 3. **card_reference specialist** (`chunk_type: "card_reference"`):
    > Find rules tied to specific cards/components worth quick lookup. Split by category when useful (e.g., "Building Cards", "Wonder Cards", "Guild Cards"). Prefer tables — one row per card/effect.
+   >
+   > **Also consider:** if the game's cards or tiles have a structured physical layout (distinct zones for cost, VP, card type, effect, etc.), produce one additional chunk titled **"How to Read a [Card/Tile]"** using an ASCII/Unicode box-drawing diagram to illustrate the anatomy. Label every zone clearly. Example structure:
+   > ```
+   > ┌──────────────────────────┐
+   > │ [Cost]      [Card Type]  │
+   > │──────────────────────────│
+   > │                          │
+   > │      [Art / Symbol]      │
+   > │                          │
+   > │──────────────────────────│
+   > │ [Effect / ability text]  │
+   > │                   [VPs] │
+   > └──────────────────────────┘
+   > ```
+   > Adapt the diagram to match the actual card layout from the rulebook. Skip this chunk if the game uses featureless tiles or the layout is trivially obvious from the component names alone.
 
 4. **scoring specialist** (`chunk_type: "scoring"`):
    > Find end-game and ongoing scoring rules. Default: one "End-Game Scoring" chunk with every VP source + tiebreaker. Add a second "Ongoing Scoring" chunk only if the game awards VP during play.

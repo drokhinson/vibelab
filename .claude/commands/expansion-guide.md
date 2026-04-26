@@ -114,6 +114,21 @@ For each expansion (process one expansion per round), spawn all 5 specialists in
 
 2. **card_reference specialist** (`chunk_type: "card_reference"`):
    > Find rules tied to new cards, tiles, tokens, or other physical components introduced by the expansion. Split by category when useful. Prefer tables — one row per component/effect with name, description, and any special rule. If no new components exist, return `[]`.
+   >
+   > **Also consider:** if the expansion introduces new card types with a distinct physical layout (icons/zones that differ from the base game cards or that are unique to this expansion), produce one additional chunk titled **"How to Read a [New Card Type]"** using an ASCII/Unicode box-drawing diagram to illustrate the anatomy. Label every zone clearly. Example structure:
+   > ```
+   > ┌──────────────────────────┐
+   > │ [Cost]      [Card Type]  │
+   > │──────────────────────────│
+   > │                          │
+   > │      [Art / Symbol]      │
+   > │                          │
+   > │──────────────────────────│
+   > │ [Effect / ability text]  │
+   > │                   [VPs] │
+   > └──────────────────────────┘
+   > ```
+   > Adapt the diagram to match the actual layout from the expansion's rulebook. Skip this chunk if the new components are tiles without distinct card anatomy, or if the layout is self-explanatory.
 
 3. **player_turn specialist** (`chunk_type: "player_turn"`):
    > Find rules that alter the player turn sequence compared to the base game. Describe ONLY the changes — new mandatory steps, new optional actions, or modified existing steps (e.g., "After placing a tile, you may now also…"). If the expansion adds no changes to turn structure, return `[]`.
