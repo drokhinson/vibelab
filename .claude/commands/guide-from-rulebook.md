@@ -70,20 +70,29 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 3. **card_reference specialist** (`chunk_type: "card_reference"`):
    > Find rules tied to specific cards/components worth quick lookup. Split by category when useful (e.g., "Building Cards", "Wonder Cards", "Guild Cards"). Prefer tables — one row per card/effect.
    >
-   > **Also consider:** if the game's cards or tiles have a structured physical layout (distinct zones for cost, VP, card type, effect, etc.), produce one additional chunk titled **"How to Read a [Card/Tile]"** using an ASCII/Unicode box-drawing diagram to illustrate the anatomy. Label every zone clearly. Example structure:
+   > **Also consider:** if the game's cards or tiles have a structured physical layout with distinct labeled zones (e.g. cost corner, VP corner, effect text area, card type label), produce one additional chunk with `"layout": "card_anatomy"` (instead of the default `"layout": "text"`). Title it **"How to Read a [Card/Tile]"**. Use this exact content format — two sections separated by `[LEGEND]`:
+   >
    > ```
+   > [DIAGRAM]
    > ┌──────────────────────────┐
-   > │ [Cost]      [Card Type]  │
+   > │ ①Cost        ②CardType  │
    > │──────────────────────────│
    > │                          │
-   > │      [Art / Symbol]      │
+   > │       ③Art / Symbol      │
    > │                          │
    > │──────────────────────────│
-   > │ [Effect / ability text]  │
-   > │                   [VPs] │
+   > │ ④Effect text...    ⑤VP  │
    > └──────────────────────────┘
+   >
+   > [LEGEND]
+   > ① Cost: Resources or coins required to play this card
+   > ② Card Type: Category label printed on the card
+   > ③ Art: Illustration — no game effect
+   > ④ Effect: What the card does when played
+   > ⑤ VP: Victory points scored at end of game
    > ```
-   > Adapt the diagram to match the actual card layout from the rulebook. Skip this chunk if the game uses featureless tiles or the layout is trivially obvious from the component names alone.
+   >
+   > Rules: use Unicode box-drawing characters (`┌ ─ ┐ │ └ ┘`). Number each zone with circled numerals ①②③… and match them in the legend. Each legend line: `① Label: description`. Up to 8 zones; omit zones with no game-relevant meaning. Skip this chunk entirely if the game uses featureless tiles or the layout adds no useful reference information.
 
 4. **scoring specialist** (`chunk_type: "scoring"`):
    > Find end-game and ongoing scoring rules. Default: one "End-Game Scoring" chunk with every VP source + tiebreaker. Add a second "Ongoing Scoring" chunk only if the game awards VP during play.
@@ -135,7 +144,7 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 }
 ```
 
-Every chunk object must have: `chunk_type`, `title`, `content`, `layout: "text"`. `chunk_type` must be one of the seven IDs from `db/migrations/034_boardgamebuddy_guide_chunks.sql`: `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant`, `rulebook`.
+Every chunk object must have: `chunk_type`, `title`, `content`, `layout`. Default `layout` is `"text"`; card anatomy chunks use `"card_anatomy"`. `chunk_type` must be one of the seven IDs from `db/migrations/034_boardgamebuddy_guide_chunks.sql`: `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant`, `rulebook`.
 
 8. Print a summary to the user:
 ```

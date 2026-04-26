@@ -776,3 +776,51 @@ body {
   font-size: 0.55rem;
 }
 
+/* ── Card anatomy diagram (layout: "card_anatomy") ───────────────────────── */
+.card-anatomy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.card-anatomy-diagram {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  background: oklch(var(--b2));
+  border: 1px solid color-mix(in oklch, var(--accent) 35%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  white-space: pre;
+  color: oklch(var(--bc));
+}
+
+.card-anatomy-legend {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.75rem;
+  align-items: baseline;
+  margin: 0;
+}
+
+.card-anatomy-num {
+  font-size: 1rem;
+  color: var(--accent);
+  line-height: 1.4;
+  padding-top: 0.05rem;
+}
+
+.card-anatomy-legend dd {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: oklch(var(--bc) / 0.9);
+}
+
+@media (min-width: 480px) {
+  .card-anatomy-diagram {
+    font-size: 0.84rem;
+  }
+}
+
