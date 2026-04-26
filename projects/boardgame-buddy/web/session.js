@@ -376,7 +376,7 @@ function renderSessionPanel() {
     </div>
 
     <datalist id="session-buddies">
-      ${(buddies || []).map(b => `<option value="${escapeHtml(b.name)}">`).join("")}
+      ${(buddies || []).map(b => `<option value="${escapeHtml(b.linked_display_name || b.name)}">`).join("")}
     </datalist>
 
     <div class="mb-3">

@@ -1,13 +1,22 @@
 """User profile endpoints."""
 
-from fastapi import Depends, HTTPException
+from typing import Optional
+
+from fastapi import Depends, HTTPException, Query
 
 from auth import ADMIN_API_KEY
 from db import get_supabase
 from jwt_auth import SupabaseUser, get_current_supabase_user
 
 from . import router
-from .models import AdminKeyBody, MessageResponse, ProfileCreate, ProfileResponse
+from .dependencies import CurrentUser, get_current_user
+from .models import (
+    AdminKeyBody,
+    MessageResponse,
+    ProfileCreate,
+    ProfileResponse,
+    ProfileSearchResult,
+)
 
 
 @router.get(
@@ -79,6 +88,43 @@ async def become_admin(
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found")
     return ProfileResponse(**result.data[0])
+
+
+@router.get(
+    "/profiles/search",
+    response_model=list[ProfileSearchResult],
+    status_code=200,
+    summary="Search profiles by display name (for buddy linking)",
+)
+async def search_profiles(
+    q: str = Query(..., min_length=1, max_length=50, description="Display name fragment"),
+    user: CurrentUser = Depends(get_current_user),
+) -> list[ProfileSearchResult]:
+    """Find other BoardgameBuddy users by display name. Email shown for tiebreaking."""
+    sb = get_supabase()
+    rows = (
+        sb.table("boardgamebuddy_profiles")
+        .select("id, display_name")
+        .ilike("display_name", f"%{q}%")
+        .neq("id", user.user_id)
+        .order("display_name")
+        .limit(20)
+        .execute()
+    )
+    out: list[ProfileSearchResult] = []
+    for row in rows.data or []:
+        email: Optional[str] = None
+        try:
+            au = sb.auth.admin.get_user_by_id(row["id"])
+            email = getattr(au.user, "email", None) if au else None
+        except Exception:
+            email = None
+        out.append(ProfileSearchResult(
+            id=row["id"],
+            display_name=row["display_name"],
+            email=email,
+        ))
+    return out
 
 
 @router.delete(

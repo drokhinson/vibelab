@@ -35,6 +35,9 @@ let closetTab = "collection"; // collection | wishlist
 let plays = [];
 let buddies = [];
 
+// Profile (account page tab state — survives re-renders)
+let profileTab = "account"; // account | buddies
+
 // Active in-progress play session (mirrors the server draft row).
 let activeSession = null;          // PlayDraftResponse | null
 let sessionExpanded = false;       // bubble visible vs. collapsed into FAB

@@ -1,7 +1,7 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-04-24
+> Last updated: 2026-04-26
 
 ## What It Does
 A board game collection manager. Users browse the top 1000 BoardGameGeek-ranked games, build their closet (owned / played / wishlist), log game sessions with friends, and access quick-reference guides (setup reminders, turn summaries, rulebook links).
@@ -75,13 +75,20 @@ Review queue for guide bundles uploaded by non-admin users.
 | UNIQUE(user_id, game_id) | | |
 
 ### boardgamebuddy_buddies
+A buddy is a person you've played with — auto-created on play log by name.
+Free-text by default; can be linked to a real BoardgameBuddy account, at which
+point the linked profile's display name is shown everywhere and the linked user
+sees those plays in their own log. Linking is one-way and consolidates: linking
+a second buddy of yours to the same account merges into the first.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | UUID PK | |
 | owner_id | UUID FK | → profiles |
-| name | TEXT | typed name |
+| name | TEXT | typed name; rewritten to linked profile's display_name on link |
 | linked_user_id | UUID FK | nullable → profiles |
 | created_at | TIMESTAMPTZ | |
+| UNIQUE(owner_id, name) | | |
+| UNIQUE(owner_id, linked_user_id) WHERE linked_user_id IS NOT NULL | | one linked row per (owner, target) |
 
 ### boardgamebuddy_plays
 | Column | Type | Notes |
@@ -164,19 +171,20 @@ of the chunk system; will be dropped in a follow-up migration.
 - `GET /api/v1/boardgame_buddy/profile`
 - `POST /api/v1/boardgame_buddy/profile`
 - `POST /api/v1/boardgame_buddy/profile/become-admin` — body `{admin_key}`; sets `is_admin=true` if the key matches `ADMIN_API_KEY`
+- `GET /api/v1/boardgame_buddy/profiles/search?q=` — search other users by display name (returns id, display_name, email) for buddy linking
 - `DELETE /api/v1/boardgame_buddy/profile` — delete current user's account and data
 - `GET /api/v1/boardgame_buddy/collection`
 - `POST /api/v1/boardgame_buddy/collection`
 - `PATCH /api/v1/boardgame_buddy/collection/{game_id}`
 - `DELETE /api/v1/boardgame_buddy/collection/{game_id}`
-- `GET /api/v1/boardgame_buddy/plays`
+- `GET /api/v1/boardgame_buddy/plays` — own plays plus shared plays (where the current user is a linked buddy). Each play includes `is_own`, `logged_by_id`, `logged_by_name`.
 - `POST /api/v1/boardgame_buddy/plays`
-- `DELETE /api/v1/boardgame_buddy/plays/{play_id}`
+- `DELETE /api/v1/boardgame_buddy/plays/{play_id}` — only the original logger can delete
 - `GET /api/v1/boardgame_buddy/plays/draft` — current user's in-progress play session (or `null`)
 - `PUT /api/v1/boardgame_buddy/plays/draft` — upsert in-progress play session (debounced from FE)
 - `DELETE /api/v1/boardgame_buddy/plays/draft` — discard the in-progress play session
-- `GET /api/v1/boardgame_buddy/buddies`
-- `POST /api/v1/boardgame_buddy/buddies/{buddy_id}/link`
+- `GET /api/v1/boardgame_buddy/buddies` — alphabetical list with `linked_display_name` and `play_count`
+- `POST /api/v1/boardgame_buddy/buddies/{buddy_id}/link` — body `{user_id}`; one-way link, merges any of the owner's other buddies that already linked to (or have the display name of) the target
 - `POST /api/v1/boardgame_buddy/games/{game_id}/chunks` — contribute a new chunk
 - `PATCH /api/v1/boardgame_buddy/chunks/{chunk_id}` — edit own chunk
 - `DELETE /api/v1/boardgame_buddy/chunks/{chunk_id}` — delete own chunk
@@ -221,7 +229,9 @@ Bottom nav has three tabs: **Browse**, **Closet**, **Play Log**.
 4. **Browse** tab: list of available games (BGG top 1000 + search). "Import games" button opens the Import screen.
 5. **Play Log** tab: history of plays. The global floating "+" button (visible on every authed view) opens a live **session bubble** with game + players + per-round score grid + notes. The bubble can be minimized back into the FAB while the session keeps running on the server (`boardgamebuddy_play_drafts`), so the user can flip to the Quick Reference guide for the game and come back. On Save, the winner is computed (highest total, or manual override) and persisted to `boardgamebuddy_play_players`; the draft row and per-round scores are discarded.
 6. **Import** screen: *Import from BoardGameGeek* (live BGG API search + add), *Import from file* (upload a GuideBundle JSON — admins import directly, others queue for review), *Review pending additions* (admin only), *Download Guide Builder instructions* (downloads `guide-from-rulebook.md` so users can feed the prompt into their own AI).
-7. **Profile** (click username in header): account info, delete account, become admin via admin key. Future: link BGG account, friends.
+7. **Profile** (click username in header): two tabs.
+   - **Account:** display name, email, become-admin, delete account.
+   - **Buddies:** alphabetical list of everyone you've played with and how many games. A free-text buddy has a "Link" button that opens a search-by-display-name modal (with email shown for tiebreaking) — picking a result one-way links the buddy to that BoardgameBuddy account, merges any other buddies of yours that point to the same person, and from then on those plays appear in the linked user's own Play Log (read-only, badged "logged by …"). Future: link BGG account.
 
 ## Environment Variables
 | Variable | Where | Purpose |

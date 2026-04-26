@@ -26,57 +26,102 @@ from .dependencies import CurrentUser, get_current_user
     "/plays",
     response_model=list[PlayResponse],
     status_code=200,
-    summary="List play history",
+    summary="List play history (own + shared)",
 )
 async def list_plays(
     user: CurrentUser = Depends(get_current_user),
 ) -> list[PlayResponse]:
-    """List all plays logged by the current user."""
+    """
+    List plays the current user has logged, plus plays where they were a
+    linked buddy (read-only on the FE, see is_own=False).
+    """
     sb = get_supabase()
 
-    plays = (
+    # 1) Plays the current user logged themselves.
+    own = (
         sb.table("boardgamebuddy_plays")
         .select(
-            "id, game_id, played_at, notes, created_at, "
-            "boardgamebuddy_games(name, thumbnail_url)"
+            "id, user_id, game_id, played_at, notes, created_at, "
+            "boardgamebuddy_games(name, thumbnail_url), "
+            "boardgamebuddy_profiles!user_id(display_name)"
         )
         .eq("user_id", user.user_id)
-        .order("played_at", desc=True)
         .execute()
     )
 
-    result: list[PlayResponse] = []
-    for play in plays.data or []:
-        game = play.get("boardgamebuddy_games", {})
+    # 2) Plays where the current user appears as a linked buddy.
+    linked_buddies = (
+        sb.table("boardgamebuddy_buddies")
+        .select("id")
+        .eq("linked_user_id", user.user_id)
+        .execute()
+    )
+    buddy_ids = [b["id"] for b in (linked_buddies.data or [])]
 
-        # Fetch players for this play
-        players_data = (
+    shared_play_ids: list[str] = []
+    if buddy_ids:
+        pps = (
             sb.table("boardgamebuddy_play_players")
-            .select("buddy_id, is_winner, boardgamebuddy_buddies(name)")
-            .eq("play_id", play["id"])
+            .select("play_id")
+            .in_("buddy_id", buddy_ids)
             .execute()
         )
+        shared_play_ids = list({p["play_id"] for p in (pps.data or [])})
 
-        players = [
-            PlayPlayerResponse(
-                buddy_id=p["buddy_id"],
-                name=p.get("boardgamebuddy_buddies", {}).get("name", "Unknown"),
-                is_winner=p["is_winner"],
+    shared_rows: list[dict] = []
+    if shared_play_ids:
+        shared = (
+            sb.table("boardgamebuddy_plays")
+            .select(
+                "id, user_id, game_id, played_at, notes, created_at, "
+                "boardgamebuddy_games(name, thumbnail_url), "
+                "boardgamebuddy_profiles!user_id(display_name)"
             )
-            for p in (players_data.data or [])
-        ]
+            .in_("id", shared_play_ids)
+            .neq("user_id", user.user_id)  # avoid double-counting own plays
+            .execute()
+        )
+        shared_rows = shared.data or []
 
-        result.append(PlayResponse(
+    # Bulk-fetch players for all involved plays in one query (no N+1).
+    all_play_ids = [p["id"] for p in (own.data or [])] + [p["id"] for p in shared_rows]
+    players_by_play: dict[str, list[PlayPlayerResponse]] = {pid: [] for pid in all_play_ids}
+    if all_play_ids:
+        pps = (
+            sb.table("boardgamebuddy_play_players")
+            .select("play_id, buddy_id, is_winner, boardgamebuddy_buddies(name)")
+            .in_("play_id", all_play_ids)
+            .execute()
+        )
+        for row in pps.data or []:
+            players_by_play.setdefault(row["play_id"], []).append(
+                PlayPlayerResponse(
+                    buddy_id=row["buddy_id"],
+                    name=(row.get("boardgamebuddy_buddies") or {}).get("name", "Unknown"),
+                    is_winner=row.get("is_winner", False),
+                )
+            )
+
+    def _to_response(play: dict, *, is_own: bool) -> PlayResponse:
+        game = play.get("boardgamebuddy_games") or {}
+        logger_profile = play.get("boardgamebuddy_profiles") or {}
+        return PlayResponse(
             id=play["id"],
             game_id=play["game_id"],
             game_name=game.get("name", "Unknown"),
             game_thumbnail=game.get("thumbnail_url"),
             played_at=play["played_at"],
             notes=play.get("notes"),
-            players=players,
+            players=players_by_play.get(play["id"], []),
             created_at=play["created_at"],
-        ))
+            logged_by_id=play["user_id"],
+            logged_by_name=logger_profile.get("display_name", "Unknown"),
+            is_own=is_own,
+        )
 
+    result = [_to_response(p, is_own=True) for p in (own.data or [])]
+    result.extend(_to_response(p, is_own=False) for p in shared_rows)
+    result.sort(key=lambda r: (r.played_at, r.created_at), reverse=True)
     return result
 
 
@@ -154,6 +199,9 @@ async def log_play(
         notes=play.get("notes"),
         players=players,
         created_at=play["created_at"],
+        logged_by_id=user.user_id,
+        logged_by_name=user.display_name,
+        is_own=True,
     )
 
 
@@ -210,18 +258,41 @@ async def get_play_count(
 async def list_buddies(
     user: CurrentUser = Depends(get_current_user),
 ) -> list[BuddyResponse]:
-    """List all game buddies for the current user."""
+    """
+    List all game buddies for the current user, with the linked profile's
+    display name (when linked) and the play_count across all sessions.
+    """
     sb = get_supabase()
 
-    result = (
+    rows = (
         sb.table("boardgamebuddy_buddies")
-        .select("id, name, linked_user_id, created_at")
+        .select(
+            "id, name, linked_user_id, created_at, "
+            "boardgamebuddy_profiles!linked_user_id(display_name), "
+            "boardgamebuddy_play_players(count)"
+        )
         .eq("owner_id", user.user_id)
-        .order("name")
         .execute()
     )
 
-    return [BuddyResponse(**b) for b in (result.data or [])]
+    out: list[BuddyResponse] = []
+    for r in rows.data or []:
+        linked_profile = r.get("boardgamebuddy_profiles") or {}
+        # Embedded count is returned as [{"count": N}] from PostgREST.
+        pp = r.get("boardgamebuddy_play_players") or []
+        play_count = pp[0]["count"] if pp and isinstance(pp, list) else 0
+        out.append(BuddyResponse(
+            id=r["id"],
+            name=r["name"],
+            linked_user_id=r.get("linked_user_id"),
+            linked_display_name=linked_profile.get("display_name"),
+            play_count=play_count,
+            created_at=r["created_at"],
+        ))
+
+    # Sort alphabetically by the display name the user actually sees.
+    out.sort(key=lambda b: (b.linked_display_name or b.name).lower())
+    return out
 
 
 @router.post(
@@ -235,7 +306,13 @@ async def link_buddy(
     buddy_id: str = Path(..., description="Buddy UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Link a game buddy to another user's account."""
+    """
+    Link a free-text buddy to another user's BoardgameBuddy account.
+
+    Linking is one-way and consolidates duplicates: if the current user already
+    has another buddy linked to the same target, all play_players from this
+    buddy are re-pointed to the existing one and this buddy row is deleted.
+    """
     sb = get_supabase()
 
     # Verify buddy belongs to current user
@@ -249,18 +326,60 @@ async def link_buddy(
     if not buddy.data:
         raise HTTPException(status_code=404, detail="Buddy not found")
 
-    # Verify target user exists
+    # Verify target user exists, capture display_name so future autocomplete
+    # picks of that name reuse this same buddy row.
     target = (
         sb.table("boardgamebuddy_profiles")
-        .select("id")
+        .select("id, display_name")
         .eq("id", body.user_id)
         .execute()
     )
     if not target.data:
         raise HTTPException(status_code=404, detail="Target user not found")
+    target_name = target.data[0]["display_name"]
 
+    # Find an existing buddy by this owner already linked to the target.
+    existing = (
+        sb.table("boardgamebuddy_buddies")
+        .select("id")
+        .eq("owner_id", user.user_id)
+        .eq("linked_user_id", body.user_id)
+        .neq("id", buddy_id)
+        .execute()
+    )
+    if existing.data:
+        # MERGE: re-point all play_players from this buddy to the existing one,
+        # then delete this buddy row.
+        target_buddy_id = existing.data[0]["id"]
+        sb.table("boardgamebuddy_play_players").update(
+            {"buddy_id": target_buddy_id}
+        ).eq("buddy_id", buddy_id).execute()
+        sb.table("boardgamebuddy_buddies").delete().eq("id", buddy_id).execute()
+        return MessageResponse(message="Buddy merged into linked account")
+
+    # If the target's display_name collides with another (unlinked) buddy of
+    # the same owner, merge that one in first to preserve UNIQUE(owner,name).
+    if target_name:
+        collision = (
+            sb.table("boardgamebuddy_buddies")
+            .select("id")
+            .eq("owner_id", user.user_id)
+            .eq("name", target_name)
+            .neq("id", buddy_id)
+            .execute()
+        )
+        if collision.data:
+            collision_id = collision.data[0]["id"]
+            sb.table("boardgamebuddy_play_players").update(
+                {"buddy_id": buddy_id}
+            ).eq("buddy_id", collision_id).execute()
+            sb.table("boardgamebuddy_buddies").delete().eq("id", collision_id).execute()
+
+    # Plain link — set linked_user_id and rename to the linked display_name so
+    # autocomplete picks of that name reuse this buddy on subsequent plays.
     sb.table("boardgamebuddy_buddies").update({
         "linked_user_id": body.user_id,
+        "name": target_name,
     }).eq("id", buddy_id).execute()
 
     return MessageResponse(message="Buddy linked to user account")

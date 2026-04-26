@@ -1,4 +1,5 @@
-// profile.js — User profile screen: account info, delete account, become admin.
+// profile.js — Account page: tab bar (Account | Buddies) and account-tab content.
+// Buddies tab is rendered by buddies.js (renderBuddiesTab).
 
 function renderProfile() {
   const container = document.getElementById("profile-content");
@@ -6,9 +7,6 @@ function renderProfile() {
     container.innerHTML = '<p class="text-sm text-base-content/60">Please log in.</p>';
     return;
   }
-
-  const email = session?.user?.email || "";
-  const isAdmin = !!currentUser.is_admin;
 
   container.innerHTML = `
     <div class="flex items-center gap-2 mb-3">
@@ -20,6 +18,39 @@ function renderProfile() {
       </h2>
     </div>
 
+    <div role="tablist" class="tabs tabs-boxed mb-3">
+      <button role="tab" id="profile-tab-account" class="tab" onclick="switchProfileTab('account')">
+        <i data-lucide="user" class="w-4 h-4 mr-1"></i> Account
+      </button>
+      <button role="tab" id="profile-tab-buddies" class="tab" onclick="switchProfileTab('buddies')">
+        <i data-lucide="users" class="w-4 h-4 mr-1"></i> Buddies
+      </button>
+    </div>
+
+    <div id="profile-tab-content"></div>
+  `;
+
+  switchProfileTab(profileTab || "account");
+}
+
+function switchProfileTab(tab) {
+  profileTab = tab;
+  document.getElementById("profile-tab-account")?.classList.toggle("tab-active", tab === "account");
+  document.getElementById("profile-tab-buddies")?.classList.toggle("tab-active", tab === "buddies");
+  if (tab === "buddies") {
+    renderBuddiesTab();
+  } else {
+    renderAccountTab();
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function renderAccountTab() {
+  const container = document.getElementById("profile-tab-content");
+  const email = session?.user?.email || "";
+  const isAdmin = !!currentUser.is_admin;
+
+  container.innerHTML = `
     <div class="card bg-base-200 mb-3">
       <div class="card-body p-4">
         <div class="flex items-center justify-between">
@@ -38,7 +69,6 @@ function renderProfile() {
       </div>
     </div>
 
-    <!-- Become admin -->
     ${isAdmin ? "" : `
       <div class="card bg-base-200 mb-3">
         <div class="card-body p-4">
@@ -54,7 +84,6 @@ function renderProfile() {
       </div>
     `}
 
-    <!-- Future: BGG link + friends -->
     <div class="card bg-base-200 mb-3 opacity-70">
       <div class="card-body p-4">
         <h3 class="font-semibold flex items-center gap-2">
@@ -64,17 +93,7 @@ function renderProfile() {
         <p class="text-xs text-base-content/60">Link your BGG account to sync your collection and see your geek score.</p>
       </div>
     </div>
-    <div class="card bg-base-200 mb-3 opacity-70">
-      <div class="card-body p-4">
-        <h3 class="font-semibold flex items-center gap-2">
-          <i data-lucide="users" class="w-4 h-4"></i> Friends
-          <span class="badge badge-xs badge-ghost">coming soon</span>
-        </h3>
-        <p class="text-xs text-base-content/60">See the game closets and play history of your linked friends.</p>
-      </div>
-    </div>
 
-    <!-- Danger zone -->
     <div class="card bg-base-200 border border-error/30">
       <div class="card-body p-4">
         <h3 class="font-semibold flex items-center gap-2 text-error">
@@ -107,7 +126,7 @@ async function handleBecomeAdmin() {
     });
     currentUser = updated;
     showToast("You're now an admin.", "success");
-    renderProfile();
+    renderAccountTab();
   } catch (err) {
     showToast(err.message || "Could not verify admin key.", "error");
   }
