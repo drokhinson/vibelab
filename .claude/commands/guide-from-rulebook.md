@@ -44,9 +44,9 @@ Spawn **one** `Agent` with `subagent_type=general-purpose` (it needs `WebFetch` 
 
 **If the sourcer returns `error: not_found`**, print the reason and stop. Do not proceed to Phase B.
 
-### Phase B — Specialists (parallel, 7 Agent calls in ONE message)
+### Phase B — Specialists (parallel, 6 Agent calls in ONE message)
 
-Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_type=general-purpose`). Each gets the Phase A JSON in its prompt.
+Spawn all six in a single message with multiple `Agent` tool calls (`subagent_type=general-purpose`). Each gets the Phase A JSON in its prompt.
 
 **Shared contract** (every specialist receives this header):
 > You extract QUICK REFERENCE chunks for BoardgameBuddy. Scan the rules through the lens of your chunk type and return **1–3 distinct chunks** worth a quick lookup during play. Do NOT clone the rulebook. Do NOT paraphrase the whole game. Do NOT duplicate content across your chunks. Titles within your output must be distinct.
@@ -59,7 +59,7 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 > ```
 > Content rules: markdown only. Use `##`/`###` headers, GitHub-style pipe tables, bullets. Match the style of `db/migrations/035_boardgamebuddy_sevenwonders_guide.sql`. No HTML. No code fences around the content itself.
 
-**The seven specialist prompts** (append each to the shared header):
+**The six specialist prompts** (append each to the shared header):
 
 1. **setup specialist** (`chunk_type: "setup"`):
    > Look for setup-related rules worth a quick-reference chunk. Typical slice: one "Components & Dealing" chunk plus, when rules diverge meaningfully, a separate chunk per player count (e.g., "2-Player Setup", "Solo Setup"). Capture per-player components, starting resources, dealing order, pass direction. Omit turn structure and scoring.
@@ -100,10 +100,7 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 5. **tips specialist** (`chunk_type: "tips"`):
    > Find strategic nuances for first-time players: 5–8 actionable tips. One chunk is the default; split into two thematic chunks (e.g., "Early Game", "End Game") only if clearly distinct. **Mandatory** — return at least one chunk. No rule restatement.
 
-6. **variant specialist** (`chunk_type: "variant"`):
-   > Find official variants / expansions / standard house rules. One chunk per variant, up to 3. If the game has no variants, return `[]` and set `missing: ["variant"]` on an empty placeholder (or just return `[]`).
-
-7. **rulebook specialist** (`chunk_type: "rulebook"`):
+6. **rulebook specialist** (`chunk_type: "rulebook"`):
    > Return exactly **one** chunk. `title: "Official Rulebook (PDF)"`. `content` must be the plain URL string of the best official rulebook (prefer publisher over BGG Files). No markdown, no surrounding text. **Never fabricate URLs.** If nothing was found in Phase A, return `[]`.
 
 ### Phase C — Assembly (orchestrator)
@@ -115,6 +112,7 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 3. Enforce distinct `(chunk_type, title)` pairs across the whole bundle. On collision, append ` (2)`, ` (3)` to the title rather than dropping.
 4. If `tips` ended up with 0 chunks, **re-invoke the tips specialist once** with a stricter version of its prompt ("You MUST return at least one chunk with 5–8 actionable tips."). If it still returns empty, record `"tips"` in `source.missing` and continue — the bundle is still valid.
 5. If `rulebook` has 0 chunks, record `"rulebook"` in `source.missing` (bundle is still valid).
+6. Drop any chunk with `chunk_type: "variant"` — that type no longer exists in the schema.
 6. Compute `slug` = kebab-case of the BGG primary name (lowercase, alphanumerics only, spaces → `-`). Example: `"7 Wonders"` → `7-wonders`.
 7. Write the bundle with `Write` to `projects/boardgame-buddy/web/sample-guides/<slug>.json`:
 
@@ -144,13 +142,13 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 }
 ```
 
-Every chunk object must have: `chunk_type`, `title`, `content`, `layout`. Default `layout` is `"text"`; card anatomy chunks use `"card_anatomy"`. `chunk_type` must be one of the seven IDs from `db/migrations/034_boardgamebuddy_guide_chunks.sql`: `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant`, `rulebook`.
+Every chunk object must have: `chunk_type`, `title`, `content`, `layout`. Default `layout` is `"text"`; card anatomy chunks use `"card_anatomy"`. Valid `chunk_type` values: `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `rulebook`. Do **not** emit `variant` chunks — expansions are tracked as separate guide entries.
 
 8. Print a summary to the user:
 ```
 ✓ Wrote projects/boardgame-buddy/web/sample-guides/<slug>.json
-  Chunks by type: setup=2, player_turn=1, card_reference=3, scoring=1, tips=1, variant=0, rulebook=1
-  Missing: [variant]
+  Chunks by type: setup=2, player_turn=1, card_reference=3, scoring=1, tips=1, rulebook=1
+  Missing: []
   Low-confidence: [card_reference/"Wonder Cards"]
   Rulebook source: <publisher url or "(none found)">
 
@@ -164,7 +162,7 @@ Next step: an admin uploads this file via the BoardgameBuddy web UI at ?admin=1 
 - **Never fabricate URLs.** The rulebook specialist must return `[]` rather than guess.
 - **Don't clone rules.** Every specialist is told explicitly: quick reference only, no paraphrased rulebook.
 - **Don't hit the backend.** This skill only writes a JSON file. Import is a separate admin action.
-- **Respect chunk types.** Only the seven IDs listed above are valid.
+- **Respect chunk types.** Only the six IDs listed above are valid. Never emit `variant`.
 - **Don't run migrations.** The old version of this skill wrote SQL; this version does not.
 - **BGG API has a daily request limit.** Each guide-from-rulebook run hits the BGG XML API for search + thing detail. Don't loop over many games — generate one bundle at a time and rely on the bundle metadata so the backend can skip a second BGG call on import.
 
