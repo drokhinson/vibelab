@@ -1,5 +1,6 @@
 """Guide bundle import: admin direct, user-submit with review queue, and review endpoints."""
 
+import logging
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Path, Query  # Query used by /guides/import
@@ -9,8 +10,14 @@ from db import get_supabase
 from jwt_auth import SupabaseUser, get_current_supabase_user
 
 from . import router
-from .game_routes import _next_expansion_color, import_bgg_game
+from .game_routes import (
+    _GAME_SUMMARY_FIELDS,
+    _hydrate_images_from_bgg,
+    _next_expansion_color,
+    import_bgg_game,
+)
 from .models import (
+    GameSummary,
     GuideBundle,
     GuideImportResponse,
     PendingGuideDecisionBody,
@@ -18,6 +25,8 @@ from .models import (
     PendingGuideSubmitResponse,
     PendingGuideSummary,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[str] = None) -> GuideImportResponse:
@@ -38,6 +47,7 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
         )
 
     imported_game = False
+    direct_inserted = False  # bundle had full metadata → no BGG call yet
     existing_game = (
         sb.table("boardgamebuddy_games")
         .select("id, is_expansion, base_game_bgg_id, expansion_color")
@@ -64,7 +74,7 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
     else:
         # If the bundle carries the core BGG metadata, insert directly and skip
         # the BGG XML API call (saves daily quota). image_url / thumbnail_url
-        # are left NULL — admins backfill via /games/admin/{id}/refresh-images.
+        # are left NULL — best-effort image hydration runs after insert below.
         if g.min_players is not None and g.max_players is not None and g.playing_time is not None:
             new_row: dict[str, object] = {
                 "bgg_id": g.bgg_id,
@@ -79,6 +89,7 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
                 new_row["expansion_color"] = _next_expansion_color(sb, g.base_game_bgg_id)
             insert = sb.table("boardgamebuddy_games").insert(new_row).execute()
             game_id = insert.data[0]["id"]
+            direct_inserted = True
         else:
             summary = await import_bgg_game(g.bgg_id)
             game_id = summary.id
@@ -103,8 +114,8 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
 
     # Admin direct imports (created_by=None) are seed chunks and become the
     # curated defaults. Approved community submissions land as non-default
-    # contributions until promoted.
-    is_default = created_by is None
+    # contributions until the admin opts in via the per-chunk is_default flag.
+    bulk_default = created_by is None
     to_insert = []
     skipped_reasons: list[str] = []
     for chunk in bundle.chunks:
@@ -112,14 +123,14 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
         if key in existing_keys:
             skipped_reasons.append(f"duplicate: {chunk.chunk_type} / {chunk.title!r}")
             continue
+        effective_default = chunk.is_default if chunk.is_default is not None else bulk_default
         to_insert.append({
             "game_id": game_id,
             "chunk_type": chunk.chunk_type,
             "title": chunk.title,
             "content": chunk.content,
             "layout": chunk.layout,
-            "expansion_name": chunk.expansion_name,
-            "is_default": is_default,
+            "is_default": effective_default,
             "created_by": created_by,
         })
         existing_keys.add(key)
@@ -127,12 +138,24 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
     if to_insert:
         sb.table("boardgamebuddy_guide_chunks").insert(to_insert).execute()
 
+    image_fetch_warning: Optional[str] = None
+    if direct_inserted:
+        try:
+            await _hydrate_images_from_bgg(sb, game_id, g.bgg_id)
+        except Exception as exc:
+            logger.warning("post-insert image hydration failed bgg_id=%s: %s", g.bgg_id, exc)
+            image_fetch_warning = (
+                "Game added, but BGG image fetch failed. "
+                "It will appear in the Missing images list — refresh from there."
+            )
+
     return GuideImportResponse(
         game_id=game_id,
         imported_game=imported_game,
         chunks_inserted=len(to_insert),
         chunks_skipped=len(skipped_reasons),
         skipped_reasons=skipped_reasons,
+        image_fetch_warning=image_fetch_warning,
     )
 
 
@@ -269,7 +292,27 @@ async def get_pending_guide(
     )
     if names.data:
         uploader_name = names.data[0]["display_name"]
-    return PendingGuideDetail(uploader_name=uploader_name, **row)
+
+    game_exists = False
+    existing_game: Optional[GameSummary] = None
+    bundle_bgg_id = (row.get("bundle") or {}).get("game", {}).get("bgg_id")
+    if bundle_bgg_id:
+        catalog = (
+            sb.table("boardgamebuddy_games")
+            .select(_GAME_SUMMARY_FIELDS)
+            .eq("bgg_id", bundle_bgg_id)
+            .execute()
+        )
+        if catalog.data:
+            game_exists = True
+            existing_game = GameSummary(**catalog.data[0])
+
+    return PendingGuideDetail(
+        uploader_name=uploader_name,
+        game_exists=game_exists,
+        existing_game=existing_game,
+        **row,
+    )
 
 
 @router.post(

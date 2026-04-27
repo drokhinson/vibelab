@@ -5,7 +5,11 @@
 
 let importPendingBundle = null;
 let pendingGuidesCache = [];
-let bundleEditCtx = null; // { bundle, rerender: fn } — shared by upload and review contexts
+// bundleEditCtx is shared by upload and review contexts:
+//   { bundle, rerender, gameExistsInfo?, showDefaultToggle? }
+// gameExistsInfo: { state: "loading" | "exists" | "new", game?: GameSummary }
+// showDefaultToggle: true in admin review modal — exposes per-chunk + master is_default toggles
+let bundleEditCtx = null;
 
 function renderImport() {
   const container = document.getElementById("import-content");
@@ -135,14 +139,33 @@ async function handleImportFileSelect(e) {
     importPendingBundle = bundle;
     bundleEditCtx = {
       bundle: importPendingBundle,
+      gameExistsInfo: { state: "loading" },
       rerender: () => {
-        preview.innerHTML = renderBundlePreview(importPendingBundle, true);
+        preview.innerHTML = renderBundlePreview(importPendingBundle, true, {
+          showDefaultToggle: false,
+          gameExistsInfo: bundleEditCtx?.gameExistsInfo,
+        });
         if (window.lucide) window.lucide.createIcons();
         submit.disabled = !importPendingBundle.chunks.length;
       },
     };
-    preview.innerHTML = renderBundlePreview(bundle, true);
+    bundleEditCtx.rerender();
     submit.disabled = false;
+    // Fire the catalog lookup, then re-render with the resolved state.
+    apiFetch(`/games/lookup-by-bgg/${bundle.game.bgg_id}`)
+      .then(found => {
+        if (!bundleEditCtx) return;
+        bundleEditCtx.gameExistsInfo = found
+          ? { state: "exists", game: found }
+          : { state: "new" };
+        bundleEditCtx.rerender();
+      })
+      .catch(() => {
+        if (!bundleEditCtx) return;
+        // Lookup failed — fall back to "new" so the user still sees a banner.
+        bundleEditCtx.gameExistsInfo = { state: "new" };
+        bundleEditCtx.rerender();
+      });
   } catch (err) {
     importPendingBundle = null;
     bundleEditCtx = null;
@@ -166,10 +189,13 @@ function groupBundleChunksByType(chunks) {
   return groups;
 }
 
-function renderBundlePreview(bundle, editable = false) {
+function renderBundlePreview(bundle, editable = false, opts = {}) {
+  const { showDefaultToggle = false, gameExistsInfo = null } = opts;
   const missing = bundle.source?.missing || [];
   const chunks = (bundle.chunks || []).slice(0, 25);
-  const cols = editable ? 3 : 2;
+  const defaultCol = showDefaultToggle ? 1 : 0;
+  const editCol = editable ? 1 : 0;
+  const cols = 2 + defaultCol + editCol;
 
   const groups = groupBundleChunksByType(chunks);
   const chunkRows = groups.map(g => {
@@ -178,6 +204,12 @@ function renderBundlePreview(bundle, editable = false) {
         <tr>
           <td class="text-sm leading-tight">${escapeHtml(c.title || "(no title)")}</td>
           <td class="text-xs text-base-content/60">${((c.content || "") + "").length} chars</td>
+          ${showDefaultToggle ? `
+          <td class="text-center">
+            <input type="checkbox" class="checkbox checkbox-xs"
+                   ${c.is_default ? "checked" : ""}
+                   onchange="toggleBundleChunkDefault(${i}, this.checked)" />
+          </td>` : ""}
           ${editable ? `
           <td class="text-right">
             <button class="btn btn-ghost btn-xs" onclick="openChunkEditForm(${i})" title="Edit chunk">
@@ -195,8 +227,23 @@ function renderBundlePreview(bundle, editable = false) {
     ? `<tr><td colspan="${cols}" class="text-center text-xs text-base-content/50 py-3">All chunks removed — add at least one before importing.</td></tr>`
     : "";
 
+  const allDefault = chunks.length > 0 && chunks.every(c => c.is_default);
+  const masterToggle = showDefaultToggle ? `
+    <div class="flex items-center gap-2 text-xs px-1 mb-1">
+      <input type="checkbox" class="checkbox checkbox-xs"
+             ${allDefault ? "checked" : ""}
+             onchange="toggleAllBundleDefaults(this.checked)" />
+      <span>Mark all as default</span>
+      <span class="opacity-60" title="Default chunks appear in every user's reference guide for this game.">
+        <i data-lucide="info" class="w-3 h-3"></i>
+      </span>
+    </div>` : "";
+
+  const banner = renderGameStatusBanner(bundle, gameExistsInfo);
+
   return `
     <div class="card bg-base-300 p-3 mt-2">
+      ${banner}
       <div class="flex items-center justify-between mb-2">
         <div>
           <div class="font-bold">${escapeHtml(bundle.game?.name || "Unknown")}</div>
@@ -204,14 +251,84 @@ function renderBundlePreview(bundle, editable = false) {
         </div>
         ${missing.length ? `<span class="badge badge-warning badge-sm">missing: ${missing.map(escapeHtml).join(", ")}</span>` : ""}
       </div>
+      ${masterToggle}
       <div class="overflow-x-auto">
         <table class="table table-xs">
-          <thead><tr><th>Title</th><th>Size</th>${editable ? "<th></th>" : ""}</tr></thead>
+          <thead><tr>
+            <th>Title</th>
+            <th>Size</th>
+            ${showDefaultToggle ? `<th class="text-center" title="Include in the default guide for this game">Default</th>` : ""}
+            ${editable ? "<th></th>" : ""}
+          </tr></thead>
           <tbody>${chunkRows}${emptyRow}</tbody>
         </table>
       </div>
     </div>
   `;
+}
+
+// Status banner showing whether approval will create a NEW game or just append
+// chunks to an EXISTING one. For NEW games, also surfaces which required BGG
+// metadata fields are present in the bundle and warns when a BGG XML API call
+// will be triggered on approval.
+function renderGameStatusBanner(bundle, info) {
+  if (!info) return "";
+  if (info.state === "loading") {
+    return `
+      <div class="alert alert-sm py-2 text-xs mb-2">
+        <span class="loading loading-spinner loading-xs"></span>
+        Checking catalog…
+      </div>`;
+  }
+  if (info.state === "exists" && info.game) {
+    const g = info.game;
+    return `
+      <div class="alert alert-success alert-sm py-2 text-xs mb-2">
+        <i data-lucide="library" class="w-4 h-4"></i>
+        <div class="min-w-0">
+          <div class="font-semibold">Existing game · adding chunks</div>
+          <div class="opacity-80 truncate">${escapeHtml(g.name)} · BGG #${g.bgg_id ?? "–"}</div>
+        </div>
+        ${g.thumbnail_url ? `<img src="${bggImg(g.thumbnail_url)}" alt="" class="w-8 h-8 rounded object-cover ml-auto" />` : ""}
+      </div>`;
+  }
+  // NEW game — show metadata completeness + BGG call warning
+  const game = bundle.game || {};
+  const fields = [
+    { key: "min_players", label: "Min players", value: game.min_players },
+    { key: "max_players", label: "Max players", value: game.max_players },
+    { key: "playing_time", label: "Playing time", value: game.playing_time },
+  ];
+  const missing = fields.filter(f => f.value == null);
+  const haveAll = missing.length === 0;
+  const chips = fields.map(f => f.value != null
+    ? `<span class="badge badge-ghost badge-sm">${escapeHtml(f.label)}: ${escapeHtml(String(f.value))}</span>`
+    : `<span class="badge badge-error badge-sm">${escapeHtml(f.label)}: missing</span>`
+  ).join(" ");
+  const note = haveAll
+    ? `Metadata complete. Game will be inserted directly; BGG will only be called for box art (best effort — won't block approval).`
+    : `Required metadata missing — BGG XML API will be called on approval to fill in the rest.`;
+  return `
+    <div class="alert ${haveAll ? "alert-info" : "alert-warning"} alert-sm py-2 text-xs mb-2 flex-col items-start gap-1">
+      <div class="flex items-center gap-2">
+        <i data-lucide="${haveAll ? "package-plus" : "alert-triangle"}" class="w-4 h-4"></i>
+        <span class="font-semibold">New game</span>
+      </div>
+      <div class="flex flex-wrap gap-1">${chips}</div>
+      <div class="opacity-80">${escapeHtml(note)}</div>
+    </div>`;
+}
+
+function toggleBundleChunkDefault(index, checked) {
+  if (!bundleEditCtx) return;
+  bundleEditCtx.bundle.chunks[index].is_default = checked;
+  bundleEditCtx.rerender();
+}
+
+function toggleAllBundleDefaults(checked) {
+  if (!bundleEditCtx) return;
+  bundleEditCtx.bundle.chunks.forEach(c => { c.is_default = checked; });
+  bundleEditCtx.rerender();
 }
 
 async function handleImportSubmit() {
@@ -360,6 +477,13 @@ async function viewPendingGuide(id) {
   try {
     const detail = await apiFetch(`/guides/pending/${id}`);
     const reviewedBundle = JSON.parse(JSON.stringify(detail.bundle));
+    // Admin opts in to defaults explicitly per chunk; reset whatever the
+    // uploader sent so the modal starts in a clean "nothing default yet" state.
+    (reviewedBundle.chunks || []).forEach(c => { c.is_default = false; });
+
+    const gameExistsInfo = detail.game_exists
+      ? { state: "exists", game: detail.existing_game }
+      : { state: "new" };
 
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4";
@@ -367,6 +491,7 @@ async function viewPendingGuide(id) {
 
     function renderModalBody() {
       const hasChunks = reviewedBundle.chunks?.length > 0;
+      const defaultCount = (reviewedBundle.chunks || []).filter(c => c.is_default).length;
       return `
         <div class="card bg-base-100 max-w-lg w-full max-h-[85vh] overflow-y-auto">
           <div class="card-body p-4">
@@ -376,7 +501,7 @@ async function viewPendingGuide(id) {
                 <i data-lucide="x" class="w-4 h-4"></i>
               </button>
             </div>
-            ${renderBundlePreview(reviewedBundle, true)}
+            ${renderBundlePreview(reviewedBundle, true, { showDefaultToggle: true, gameExistsInfo })}
             <div class="flex gap-2 justify-end mt-3">
               <button class="btn btn-ghost btn-sm" onclick="this.closest('.fixed').remove(); bundleEditCtx = null;">
                 Close
@@ -386,7 +511,7 @@ async function viewPendingGuide(id) {
               </button>
               <button class="btn btn-success btn-sm" ${hasChunks ? "" : "disabled"}
                 onclick="approvePendingGuide('${id}', reviewedBundleFor_${id.replace(/-/g, "_")}); this.closest('.fixed').remove(); bundleEditCtx = null;">
-                <i data-lucide="check" class="w-4 h-4"></i> Approve${hasChunks && reviewedBundle.chunks.length !== detail.bundle.chunks?.length ? ` (${reviewedBundle.chunks.length} chunks)` : ""}
+                <i data-lucide="check" class="w-4 h-4"></i> Approve (${reviewedBundle.chunks.length} chunks · ${defaultCount} default)
               </button>
             </div>
           </div>
@@ -400,6 +525,8 @@ async function viewPendingGuide(id) {
 
     bundleEditCtx = {
       bundle: reviewedBundle,
+      gameExistsInfo,
+      showDefaultToggle: true,
       rerender: () => {
         modal.innerHTML = renderModalBody();
         if (window.lucide) window.lucide.createIcons();
@@ -420,6 +547,9 @@ async function approvePendingGuide(id, overrideBundle = null) {
     const body = overrideBundle ? { override_bundle: overrideBundle } : {};
     const r = await apiFetch(`/guides/pending/${id}/approve`, { method: "POST", body });
     showToast(`Imported ${r.chunks_inserted} chunk(s).`, "success");
+    if (r.image_fetch_warning) {
+      showToast(r.image_fetch_warning, "warning");
+    }
     pendingGuidesCache = pendingGuidesCache.filter(p => p.id !== id);
     renderPendingGuidesList();
     // Clean up window ref

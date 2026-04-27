@@ -239,6 +239,8 @@ class ChunkUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     layout: Optional[str] = None
+    # Admin-only. Promotes/demotes a chunk in the curated default guide.
+    is_default: Optional[bool] = None
 
 
 class ExpansionInline(BaseModel):
@@ -305,6 +307,9 @@ class GuideBundleChunk(BaseModel):
     title: str = Field(..., max_length=200)
     content: str
     layout: str = "text"
+    # Per-chunk override. None falls back to the bulk default determined by the
+    # caller (admin direct import → True; community submission → False).
+    is_default: Optional[bool] = None
 
 
 class GuideBundle(BaseModel):
@@ -320,6 +325,9 @@ class GuideImportResponse(BaseModel):
     chunks_inserted: int
     chunks_skipped: int
     skipped_reasons: list[str]
+    # Set when a new game was inserted directly from bundle metadata and the
+    # follow-up best-effort BGG image fetch failed. Approval still succeeds.
+    image_fetch_warning: Optional[str] = None
 
 
 # ── Pending guide review (user-uploaded bundles) ──────────────────────────────
@@ -344,6 +352,9 @@ class PendingGuideSummary(BaseModel):
 
 class PendingGuideDetail(PendingGuideSummary):
     bundle: dict[str, Any]
+    # Existing-game lookup so the review UI can show NEW vs EXISTING up front.
+    game_exists: bool = False
+    existing_game: Optional[GameSummary] = None
 
 
 class PendingGuideDecisionBody(BaseModel):
