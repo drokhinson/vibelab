@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 442250,
+    "name": "Sea Salt & Paper: Extra Pepper",
+    "min_players": 2,
+    "max_players": 4,
+    "playing_time": 45,
+    "bgg_url": "https://boardgamegeek.com/boardgame/442250",
+    "is_expansion": true,
+    "base_game_bgg_id": 367220
+  },
+  "source": {
+    "generated_at": "2026-04-27T00:00:00Z",
+    "generator": "expansion-guide@1",
+    "rulebook_urls": [
+      {"url": "https://studiobombyx.com/assets/EXTRAPEPPER_rules_EN.pdf", "label": "Sea Salt & Paper: Extra Pepper — Official English Rulebook", "source": "publisher"}
+    ],
+    "missing": []
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Extra Pepper: Expansion Setup",
+      "content": "## Extra Pepper: Expansion Setup\n\nRequires the Sea Salt & Paper base game.\n\n**New Components:** 12 Event cards, 1 mini rulebook.\n\n### Additional Setup Step\nAfter completing base game setup, shuffle the 12 Event cards into a **separate face-down deck** and place it next to the main draw pile.\n\n> Event cards are **never mixed** into the main Sea Salt & Paper deck.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Event Cards — How They Work",
+      "content": "## Event Card System\n\nEach event card has two distinct zones:\n\n| Zone | Description |\n|---|---|\n| **Round Effect** | A rule that applies to **all players** for the entire round it is revealed |\n| **Trophy symbol** | Determines who *keeps* the card after scoring — **+** goes to the points leader, **−** goes to the points trailer |\n\nThe trophy rule only activates **after** the round ends. A held card's effect applies only to its holder and is discarded the moment that player is no longer in the qualifying position. A player may hold at most **one** personal event card at a time.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Event Cards — Full Reference",
+      "content": "## Event Cards\n\n12 cards in a separate deck. Reveal one at the start of each round — its effect applies to all players that round. After scoring, award the card to the points leader (+) or trailer (−); its effect then applies only to that holder going forward.\n\n| # | Name | Trophy | Round Effect (all players) |\n|---|---|---|---|\n| 1 | The Kraken | − | Each octopus card scores only **1 pt** this round |\n| 2 | Dance of the Mermaids | + | Holding **3** mermaid cards (instead of 4) triggers an instant round win |\n| 3 | Tornado | − | Mermaid cards score **0 pts** this round (collecting all 4 still wins instantly) |\n| 4 | Treasure Chest | + | \"Stop\" / \"Last Chance\" threshold raised to **10 pts** (from 7) |\n| 5 | Diodon Fish | − | \"Stop\" is **forbidden** this round — only \"Last Chance\" may be called |\n| 6 | The Angelfish | + | After your turn, if both face-up discard cards share a color, you may take one into your hand |\n| 7 | Dolphins | + | When you discard a collection card during Option A, draw the top card of the draw pile |\n| 8 | Coral Reef | − | You may place a shell card face-down in front of you (removing it from scoring) to become immune to attack cards |\n| 9 | Dance of the Shells | + | Crab + Crab duo: active player takes one card from **each** discard pile |\n| 10 | Hermit Crab | − | When any player discards a collection card, the top draw pile card goes to the **discarder's** hand |\n| 11 | Sunfish | + | Fish + Fish duo: active player draws the top **two** cards (instead of one) |\n| 12 | Sea Turtle | − | Shell cards each score a flat **2 pts** this round (overrides the normal shell table) |\n\n### Interaction Notes\n- **Dance of the Shells (9):** upgrades Crab + Crab to match the base Crab + Lobster effect for the round.\n- **Sunfish (11):** upgrades Fish + Fish from 1 draw to 2 draws.\n- **The Kraken (1):** flat 1 pt per octopus, regardless of how many you hold.\n- **Sea Turtle (12):** flat 2 pts per shell, overrides entire shell scoring table.\n- **Tornado (3):** suppresses mermaid point bonuses but the 4-mermaid instant win still fires.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "Expansion: Turn Structure Changes",
+      "content": "## New End-of-Turn Option (The Angelfish, card 6)\n\nWhen **The Angelfish (+)** event is active, the holder gains a new optional action after Step 2:\n\n| New Step | Condition | Action |\n|----------|-----------|--------|\n| 3 — End-of-Turn Grab | The two face-up discard top cards are the same color | You **may** take one of those cards into your hand |\n\n## Modified Step 1 — Discard Triggers\n\n| Event Card | Trigger | Effect |\n|------------|---------|--------|\n| **Dolphins (+)** (card 7) | You discard a collection card during Option A | Immediately draw the top card of the draw pile |\n| **Hermit Crab (−)** (card 10) | Any player discards a collection card during Option A | Top card of draw pile goes to the **discarder's** hand |\n\n## Modified Step 2 — Duo Play Effects\n\n| Event Card | Pair Played | Modified Effect |\n|------------|-------------|------------------|\n| **Dance of the Shells (+)** (card 9) | Crab + Crab | Take one card from **each** discard pile |\n| **Sunfish (+)** (card 11) | Fish + Fish | Draw the top **two** cards of the draw pile |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Event Cards: Modified Scoring Rules",
+      "content": "## Event Cards That Change Scoring\n\nSome event cards override base game VP values for the duration of the round they are active.\n\n| Event Card | Affected Component | Base Game Score | This Round's Score |\n|---|---|---|---|\n| The Kraken (−) | Each Octopus card | Set-collection table (0/3/6/9/12) | **1 pt flat per card** |\n| Sea Turtle (−) | Each Shell card | Set-collection table (0/2/4/6/8/10) | **2 pts flat per card** |\n| Tornado (−) | Mermaid cards | +1 pt per most plentiful color | **0 pts** |\n| Dance of the Mermaids (+) | Mermaid instant-win threshold | Collect all **4** Mermaids | Collect **3** Mermaids → instant round win |\n| Treasure Chest (+) | Round-end call threshold | 7 pts to call Stop/Last Chance | **10 pts** required |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://studiobombyx.com/assets/EXTRAPEPPER_rules_EN.pdf",
+      "layout": "text"
+    }
+  ]
+}

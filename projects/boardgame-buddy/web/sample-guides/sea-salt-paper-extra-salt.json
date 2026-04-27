@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "game": {
+    "bgg_id": 396545,
+    "name": "Sea Salt & Paper: Extra Salt",
+    "min_players": 2,
+    "max_players": 4,
+    "playing_time": 30,
+    "bgg_url": "https://boardgamegeek.com/boardgame/396545",
+    "is_expansion": true,
+    "base_game_bgg_id": 367220
+  },
+  "source": {
+    "generated_at": "2026-04-26T00:00:00Z",
+    "generator": "expansion-guide@1",
+    "rulebook_urls": [
+      {"url": "https://studiobombyx.com/assets/EXTRA_SALT_rules_EN.pdf", "label": "Sea Salt & Paper: Extra Salt — Official Rules (EN)", "source": "publisher"}
+    ],
+    "missing": []
+  },
+  "chunks": [
+    {
+      "chunk_type": "setup",
+      "title": "Extra Salt: Setup Changes",
+      "content": "## Shuffling In the New Cards\n\nExtra Salt adds **8 new cards** to the game. During setup, shuffle all 8 new cards together with the standard 58-card deck before building the central draw pile.\n\n- No other setup steps change.\n- No new tokens, boards, or player components are added.\n- Discard pile formation and starting hand size remain identical to the base game.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "New Cards — Effects & Scoring",
+      "content": "## New Cards (Extra Salt Expansion)\n\nShuffle all 8 expansion cards into the standard deck during setup.\n\n| Card | Scoring | Effect When Played |\n|---|---|---|\n| Jellyfish | 1 pt per Swimmer + Jellyfish combination you have in front of you | On opposing players' **next turn**, they may only draw the top card of the deck — they cannot take from a discard pile |\n| Lobster | 1 pt per Lobster + Crab combination you have in front of you | Draw the top 5 cards from the deck; keep 1, return the other 4 to the **bottom** of the deck, then shuffle it |\n| Starfish | +2 pts added to the Duo it joins (trio scores **3 pts** total) | See **Trio** rule below — does not trigger the Duo's normal effect |\n| Seahorse | Counts as one card in a Collector set (Shell / Octopus / Penguin / Sailor) of your choice | You must already have at least 1 card of the chosen collection; cannot exceed that collection's printed maximum |\n| Basket of Crabs | 1 pt per Crab card you have in front of you | *(Passive multiplier — played to tableau, no immediate action effect. Does **not** count as a Crab card itself.)* |\n\n> **Lobster scoring note:** The standalone Lobster card scores via pairing with any Crab card you have — distinct from the base-game *Crab + Lobster* duo effect.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "card_reference",
+      "title": "Trio Rule (Starfish)",
+      "content": "## Trio Rule\n\nA **Trio** is formed when a player holds a matched **Duo** pair plus a **Starfish** card.\n\n- Place all three cards in front of you as a group.\n- The trio scores **3 points total** (the Duo's base 1 pt/pair + 2 pts from the Starfish).\n- **The Duo's normal effect is cancelled** — you do not draw, steal, search, or take another turn.\n- A Starfish can only be combined with a Duo pair, not with a single card.",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "player_turn",
+      "title": "New Duo Effects That Change Turn Actions",
+      "content": "## New Duo Effects That Alter Turn Actions\n\nThree expansion cards introduce changes to what players can do on their turn.\n\n### Jellyfish — Restricts Opponents' Draw Step\n\nWhen you play a Jellyfish duo, each opposing player's **next Step 1 (Draw)** is restricted:\n\n- They **may only draw the top card from the deck** (Option A).\n- They **may not take from either discard pile** (Option B is unavailable).\n\nThis lasts for their immediately following turn only.\n\n### Lobster — New Draw Action as a Duo Effect\n\nWhen you play a Lobster duo (Lobster + Crab), resolve the following as the duo's effect:\n\n1. Take the **top 5 cards** from the deck.\n2. **Keep 1** and add it to your hand.\n3. Return the other 4 to the **bottom** of the deck, then shuffle it.\n\n### Starfish — Trio Formation (New Option in Step 2)\n\nDuring Step 2, if you hold **one Starfish card plus a matching Duo pair**, you may form a **trio** instead of a normal duo:\n\n| Formation | Cards | Points | Effect |\n|-----------|-------|--------|--------|\n| Standard duo | 2 matching cards | 1 pt | Duo effect triggers |\n| Trio (Starfish) | Duo pair + 1 Starfish | 3 pts total | **Duo effect is cancelled** |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "scoring",
+      "title": "Extra Salt: New Scoring Sources",
+      "content": "## Extra Salt: New Scoring Sources\n\nAll five new card types introduce VP sources not present in the base game.\n\n| Card | Scoring Rule | Notes |\n|---|---|---|\n| **Jellyfish** | +1 pt per Swimmer + Jellyfish pair in front of you | Each matched pair = 1 pt |\n| **Lobster** | +1 pt per Lobster + Crab pair in front of you | Each matched pair = 1 pt |\n| **Starfish** | Adds 2 pts to any Duo card, forming a Trio worth 3 pts total | Cancels the Duo card's normal effect |\n| **Seahorse** | Acts as a wild for one Collector card (Octopus, Shell, Penguin, or Sailor) | Must already have ≥1 card of that collection; cannot exceed the Collector's max printed score |\n| **Basket of Crabs** | +1 pt per Crab card you have in front of you | Does not count as a Crab card itself |",
+      "layout": "text"
+    },
+    {
+      "chunk_type": "rulebook",
+      "title": "Official Rulebook (PDF)",
+      "content": "https://studiobombyx.com/assets/EXTRA_SALT_rules_EN.pdf",
+      "layout": "text"
+    }
+  ]
+}
