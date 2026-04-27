@@ -22,6 +22,8 @@ let hasGuideCustomizations = false; // true if the user has any selection rows
                                     // visibility and the panel's existence
 let chunkTypeCache = null;      // [{id,label,icon,display_order}] fetched once
 let currentExpansions = [];     // [{expansion_game_id, name, color, is_enabled, chunk_count, ...}]
+let allGuideChunks = [];        // cache of every linked-expansion chunk;
+                                // currentGuideChunks / hiddenChunks are derived
 
 // Closet (user collection) — shelves are paginated server-side.
 let shelfItems = { owned: [], played: [] };

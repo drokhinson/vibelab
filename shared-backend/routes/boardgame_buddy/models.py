@@ -274,6 +274,10 @@ class ChunkResponse(BaseModel):
 class MyGuideChunkResponse(ChunkResponse):
     is_hidden: bool = False
     user_display_order: Optional[int] = None
+    # True for base-game chunks and chunks from expansions the user has
+    # enabled. False only when include_all_expansions=true surfaces a chunk
+    # from a linked-but-disabled expansion so the frontend can cache it.
+    is_expansion_enabled: bool = True
 
 
 class MyGuideResponse(BaseModel):
