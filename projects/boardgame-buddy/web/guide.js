@@ -308,7 +308,7 @@ function renderExpansionsPanel() {
                     style="background:${escapeAttr(color)}"></span>
               <span class="expansions-row__name">${escapeAttr(e.name)}</span>
               <span class="expansions-row__count">${e.chunk_count || 0} chunk${e.chunk_count === 1 ? "" : "s"}</span>
-              <input type="checkbox" class="toggle toggle-sm toggle-success"
+              <input type="checkbox" class="toggle toggle-sm expansion-toggle"
                      ${enabled ? "checked" : ""}
                      ${disabled}
                      onchange="toggleExpansion('${e.expansion_game_id}', this.checked)" />

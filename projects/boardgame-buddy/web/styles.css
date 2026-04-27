@@ -707,6 +707,20 @@ body {
   flex-shrink: 0;
 }
 
+/* Grey-when-off, gold-when-on toggle for expansion rows. White thumb in both
+   states keeps the on/off contrast obvious; the colored .expansion-dot beside
+   the name still identifies which expansion the row represents. */
+.expansion-toggle {
+  --tglbg: #ffffff;
+  background-color: rgba(120, 120, 120, 0.55);
+  border-color: rgba(120, 120, 120, 0.55);
+}
+.expansion-toggle:checked,
+.expansion-toggle[checked="checked"] {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ── Guide chunk swipe ──────────────────────────────────────────────────────── */
 .swipe-row {
   position: relative;
