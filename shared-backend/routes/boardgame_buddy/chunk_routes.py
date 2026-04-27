@@ -269,6 +269,10 @@ async def update_chunk(
         updates["content"] = body.content
     if body.layout is not None:
         updates["layout"] = body.layout
+    if body.is_default is not None:
+        if not user.is_admin:
+            raise HTTPException(status_code=403, detail="Only admins can change the default-guide flag")
+        updates["is_default"] = body.is_default
 
     sb.table("boardgamebuddy_guide_chunks").update(updates).eq("id", chunk_id).execute()
 

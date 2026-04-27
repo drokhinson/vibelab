@@ -584,6 +584,14 @@ async function openChunkEditorModal({ existing = null, onSave, onDelete = null }
                required maxlength="80"
                value="${escapeAttr(existing?.title || "")}" />
       </div>
+      ${currentUser?.is_admin ? `
+      <div class="form-control">
+        <label class="label cursor-pointer gap-2 justify-start py-1">
+          <input id="chunk-is-default" type="checkbox" class="checkbox checkbox-sm"
+                 ${existing?.is_default ? "checked" : ""} />
+          <span class="label-text text-xs">Mark as default for this game's curated guide</span>
+        </label>
+      </div>` : ""}
       <div class="form-control">
         <div class="flex items-center justify-between mb-1">
           <span class="label-text text-xs">Content</span>
@@ -649,6 +657,8 @@ async function submitChunkEditor(e) {
     title: document.getElementById("chunk-title").value.trim(),
     content: document.getElementById("chunk-content").value,
   };
+  const defaultEl = document.getElementById("chunk-is-default");
+  if (defaultEl) data.is_default = defaultEl.checked;
   if (!data.title || !data.content) return;
   try {
     await _chunkEditorOnSave(data);

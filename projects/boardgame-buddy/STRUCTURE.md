@@ -175,6 +175,7 @@ of the chunk system; will be dropped in a follow-up migration.
 - `GET /api/v1/boardgame_buddy/games` — paginated, search, filter
 - `GET /api/v1/boardgame_buddy/games/{game_id}` — detail (includes derived `bgg_url`)
 - `GET /api/v1/boardgame_buddy/games/search-bgg?query=` — proxy BGG API
+- `GET /api/v1/boardgame_buddy/games/lookup-by-bgg/{bgg_id}` — null-or-`GameSummary`; the import preview uses this to label a bundle as "new game" vs "existing game"
 - `GET /api/v1/boardgame_buddy/games/{game_id}/chunks` — all guide chunks for a game
 - `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise
 - `GET /api/v1/boardgame_buddy/chunk-types` — chunk type lookup
@@ -206,8 +207,8 @@ of the chunk system; will be dropped in a follow-up migration.
 - `PATCH /api/v1/boardgame_buddy/games/admin/{game_id}/expansion-color` — *admin-only* override the auto-assigned `expansion_color`
 - `POST /api/v1/boardgame_buddy/guides/submit` — upload a GuideBundle. Admin users import directly; everyone else's submission is queued for admin review.
 - `GET /api/v1/boardgame_buddy/guides/pending` — *admin-only* list of pending submissions
-- `GET /api/v1/boardgame_buddy/guides/pending/{id}` — *admin-only* fetch full bundle
-- `POST /api/v1/boardgame_buddy/guides/pending/{id}/approve` — *admin-only* import
+- `GET /api/v1/boardgame_buddy/guides/pending/{id}` — *admin-only* fetch full bundle. Response includes `game_exists` and `existing_game` so the review UI can show a NEW vs EXISTING banner without a second round-trip.
+- `POST /api/v1/boardgame_buddy/guides/pending/{id}/approve` — *admin-only* import. Per-chunk `is_default` from the override bundle decides which chunks land in the curated default guide; by default community-submitted chunks are non-default. When the bundle has full metadata for a new game, image hydration runs best-effort — failures surface as `image_fetch_warning` instead of blocking approval.
 - `POST /api/v1/boardgame_buddy/guides/pending/{id}/reject` — *admin-only* reject
 - `GET  /api/v1/boardgame_buddy/games/admin/missing-images` — *admin-only* list of games whose `image_url` or `thumbnail_url` is NULL
 - `POST /api/v1/boardgame_buddy/games/admin/{game_id}/refresh-images` — *admin-only* re-fetch one game's box art + thumbnail from BGG and re-host in Storage

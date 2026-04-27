@@ -455,10 +455,59 @@ async def refresh_game_images(
     return RefreshImagesResponse(updated=updated)
 
 
-_MISSING_IMAGES_FIELDS = (
+_GAME_SUMMARY_FIELDS = (
     "id, bgg_id, name, year_published, min_players, max_players, "
-    "playing_time, thumbnail_url, image_url, theme_color"
+    "playing_time, thumbnail_url, image_url, theme_color, "
+    "is_expansion, base_game_bgg_id, expansion_color"
 )
+# Legacy alias kept so existing call sites read identically.
+_MISSING_IMAGES_FIELDS = _GAME_SUMMARY_FIELDS
+
+
+async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> None:
+    """Fetch box art + thumbnail from BGG, re-host in Storage, and patch the row.
+
+    Raises on any BGG/network/parse failure so callers that need to gate on
+    success (admin refresh) can surface the error; the import flow wraps this
+    in try/except so a flaky BGG call doesn't block approval.
+    """
+    body = await _fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
+    root = _parse_bgg_xml(body, context=f"hydrate images bgg_id={bgg_id}")
+    item = root.find("item")
+    if item is None:
+        raise HTTPException(status_code=404, detail="Game not found on BGG")
+
+    img_el = item.find("image")
+    thumb_el = item.find("thumbnail")
+    raw_img = _normalize_image_url(img_el.text if img_el is not None else None)
+    raw_thumb = _normalize_image_url(thumb_el.text if thumb_el is not None else None)
+
+    sb.table("boardgamebuddy_games").update({
+        "image_url": await _upload_to_storage(sb, bgg_id, raw_img, "image"),
+        "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
+    }).eq("id", game_id).execute()
+
+
+@router.get(
+    "/games/lookup-by-bgg/{bgg_id}",
+    response_model=Optional[GameSummary],
+    status_code=200,
+    summary="Look up an existing catalog game by BGG id",
+)
+async def lookup_game_by_bgg(
+    bgg_id: int = Path(..., description="BoardGameGeek game id"),
+) -> Optional[GameSummary]:
+    """Return the catalog row for this BGG id if it's already imported, else null."""
+    sb = get_supabase()
+    result = (
+        sb.table("boardgamebuddy_games")
+        .select(_GAME_SUMMARY_FIELDS)
+        .eq("bgg_id", bgg_id)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return GameSummary(**result.data[0])
 
 
 @router.get(
@@ -507,35 +556,16 @@ async def refresh_single_game_images(
     if not bgg_id:
         raise HTTPException(status_code=400, detail="Game has no bgg_id; cannot refresh from BGG")
 
-    body = await _fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
-    root = _parse_bgg_xml(body, context=f"refresh bgg_id={bgg_id}")
-    item = root.find("item")
-    if item is None:
-        raise HTTPException(status_code=404, detail="Game not found on BGG")
-
-    img_el = item.find("image")
-    thumb_el = item.find("thumbnail")
-    raw_img = _normalize_image_url(img_el.text if img_el is not None else None)
-    raw_thumb = _normalize_image_url(thumb_el.text if thumb_el is not None else None)
-
-    updated = (
-        sb.table("boardgamebuddy_games")
-        .update({
-            "image_url": await _upload_to_storage(sb, bgg_id, raw_img, "image"),
-            "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
-        })
-        .eq("id", game_id)
-        .execute()
-    )
-    if not updated.data:
-        raise HTTPException(status_code=500, detail="Failed to update game row")
+    await _hydrate_images_from_bgg(sb, game_id, bgg_id)
 
     refreshed = (
         sb.table("boardgamebuddy_games")
-        .select(_MISSING_IMAGES_FIELDS)
+        .select(_GAME_SUMMARY_FIELDS)
         .eq("id", game_id)
         .execute()
     )
+    if not refreshed.data:
+        raise HTTPException(status_code=500, detail="Failed to update game row")
     return GameSummary(**refreshed.data[0])
 
 
