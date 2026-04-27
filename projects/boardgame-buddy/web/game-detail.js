@@ -103,7 +103,7 @@ function renderGameDetail() {
       ${session ? '<span class="loading loading-spinner loading-xs"></span>' : '<p class="text-sm text-base-content/50">Log in to add to collection</p>'}
     </div>
 
-    <!-- Rulebook (rendered by guide.js if a rulebook chunk exists) -->
+    <!-- Rulebook (rendered by guide.js from currentGame.rulebook_url) -->
     <div id="rulebook-section"></div>
 
     <!-- Quick Reference Guide -->
@@ -119,6 +119,8 @@ function renderGameDetail() {
       <div id="guide-content" class="scroll-panel">
         <span class="loading loading-spinner loading-sm"></span>
       </div>
+      <!-- Expansion rulebooks (rendered by guide.js when expansions are toggled on) -->
+      <div id="expansion-rulebooks-section"></div>
     </div>
 
     <!-- Play History (logged-in only, populated async) -->

@@ -145,8 +145,8 @@ For each expansion (process one expansion per round), spawn all 5 specialists in
 4. **scoring specialist** (`chunk_type: "scoring"`):
    > Find new or modified scoring rules introduced by the expansion. List every new VP source with exact point values. Use a table where possible. If the expansion adds no new scoring rules, return `[]`.
 
-5. **rulebook specialist** (`chunk_type: "rulebook"`):
-   > Return exactly **one** chunk. `title: "Official Rulebook (PDF)"`. `content` must be the plain URL string of the best official rulebook found in the expansion's Phase B data (prefer publisher over BGG Files). No markdown, no surrounding text. **Never fabricate URLs.** If no rulebook URL was found in Phase B, return `[]`.
+5. **rulebook URL picker** (NOT a chunk):
+   > Pick the single best official rulebook URL from this expansion's Phase B `rulebook_urls` (prefer publisher over BGG Files). Return ONLY a JSON object `{"rulebook_url": "<url>"}` or `{"rulebook_url": null}` if none was found. **Never fabricate URLs.** This URL becomes `bundle.game.rulebook_url` — it is no longer emitted as a chunk.
 
 ---
 
@@ -154,12 +154,13 @@ For each expansion (process one expansion per round), spawn all 5 specialists in
 
 For each expansion:
 
-1. Collect all 5 specialist JSON arrays. Treat invalid JSON or non-arrays as `[]`.
-2. Flatten into one `chunks` list. Drop any chunk where `content` is empty or whitespace.
+1. Collect the 4 content specialists' JSON arrays (setup, card_reference, player_turn, scoring) plus the rulebook URL picker's JSON object. Treat invalid JSON or non-arrays as `[]`; treat invalid URL-picker output as `{"rulebook_url": null}`.
+2. Flatten the arrays into one `chunks` list. Drop any chunk where `content` is empty or whitespace.
 3. Clamp each specialist's contribution to its top **2** chunks (by `confidence: high` first, then order).
 4. Enforce distinct `(chunk_type, title)` pairs across the bundle. On collision, append ` (2)`, ` (3)`.
-5. Compute `slug` = kebab-case of the BGG expansion primary name (lowercase, alphanumerics only, spaces → `-`).
-6. Write the bundle with `Write` to `projects/boardgame-buddy/web/sample-guides/<slug>.json`:
+5. Set `bundle.game.rulebook_url` from the URL picker's result (string or null). If null, append `"rulebook"` to `source.missing`.
+6. Compute `slug` = kebab-case of the BGG expansion primary name (lowercase, alphanumerics only, spaces → `-`).
+7. Write the bundle with `Write` to `projects/boardgame-buddy/web/sample-guides/<slug>.json`:
 
 ```json
 {
@@ -172,7 +173,8 @@ For each expansion:
     "playing_time": <int|null>,
     "bgg_url": "https://boardgamegeek.com/boardgame/<bgg_id>",
     "is_expansion": true,
-    "base_game_bgg_id": <int>
+    "base_game_bgg_id": <int>,
+    "rulebook_url": "<url|null>"
   },
   "source": {
     "generated_at": "<ISO timestamp>",
@@ -187,7 +189,7 @@ For each expansion:
 }
 ```
 
-Every chunk object must have: `chunk_type`, `title`, `content`, `layout`. Default `layout` is `"text"`; card anatomy chunks use `"card_anatomy"`. Valid `chunk_type` values: `setup`, `card_reference`, `player_turn`, `scoring`, `rulebook` only.
+Every chunk object must have: `chunk_type`, `title`, `content`, `layout`. Default `layout` is `"text"`; card anatomy chunks use `"card_anatomy"`. Valid `chunk_type` values: `setup`, `card_reference`, `player_turn`, `scoring`. The rulebook URL is per-game metadata at `game.rulebook_url`; do NOT emit `rulebook` chunks.
 
 After writing all expansion bundles, print a summary:
 
@@ -195,10 +197,12 @@ After writing all expansion bundles, print a summary:
 ✓ Generated X expansion guides for <Base Game Name>:
 
   <Expansion Name 1> → projects/boardgame-buddy/web/sample-guides/<slug>.json
-    Chunks: setup=1, card_reference=2, player_turn=1, scoring=1, rulebook=1
+    Chunks: setup=1, card_reference=2, player_turn=1, scoring=1
+    Rulebook URL: <publisher url or "(none found)">
 
   <Expansion Name 2> → projects/boardgame-buddy/web/sample-guides/<slug>.json
-    Chunks: setup=0, card_reference=1, player_turn=0, scoring=1, rulebook=1
+    Chunks: setup=0, card_reference=1, player_turn=0, scoring=1
+    Rulebook URL: <publisher url or "(none found)">
 
 Next step: an admin uploads these files via the BoardgameBuddy web UI at ?admin=1 → header shield icon.
 ```
@@ -207,10 +211,10 @@ Next step: an admin uploads these files via the BoardgameBuddy web UI at ?admin=
 
 ## Guardrails
 
-- **Only 5 chunk types**: `setup`, `card_reference`, `player_turn`, `scoring`, `rulebook`. Never produce `tips` or `variant` chunks.
+- **Only 4 chunk types**: `setup`, `card_reference`, `player_turn`, `scoring`. Never produce `tips`, `rulebook`, or `variant` chunks. The rulebook URL is per-game metadata at `game.rulebook_url`.
 - **Empty is correct**: if an expansion doesn't change a particular aspect, the specialist returns `[]` — do not fabricate content.
 - **Focus on differences**: every content chunk must describe what's new or changed, not re-explain the base game.
-- **Never fabricate URLs.** The rulebook specialist returns `[]` rather than guess.
+- **Never fabricate URLs.** The rulebook URL picker returns `null` rather than guess.
 - **Don't hit the backend.** This skill only writes JSON files. Import is a separate admin action.
 - **Cap at 6 expansions** per run. If Phase A finds more, take the top 6 by BGG rating.
 - **BGG API rate limiting.** Each sourcing agent should make at most 3 BGG API calls.

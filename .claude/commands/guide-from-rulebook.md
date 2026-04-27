@@ -46,7 +46,7 @@ Spawn **one** `Agent` with `subagent_type=general-purpose` (it needs `WebFetch` 
 
 ### Phase B — Specialists (parallel, 6 Agent calls in ONE message)
 
-Spawn all six in a single message with multiple `Agent` tool calls (`subagent_type=general-purpose`). Each gets the Phase A JSON in its prompt.
+Spawn all six in a single message with multiple `Agent` tool calls (`subagent_type=general-purpose`). Each gets the Phase A JSON in its prompt. Five emit chunk arrays; the sixth (rulebook URL picker) emits a single URL or null that becomes `bundle.game.rulebook_url`.
 
 **Shared contract** (every specialist receives this header):
 > You extract QUICK REFERENCE chunks for BoardgameBuddy. Scan the rules through the lens of your chunk type and return **1–3 distinct chunks** worth a quick lookup during play. Do NOT clone the rulebook. Do NOT paraphrase the whole game. Do NOT duplicate content across your chunks. Titles within your output must be distinct.
@@ -100,18 +100,18 @@ Spawn all six in a single message with multiple `Agent` tool calls (`subagent_ty
 5. **tips specialist** (`chunk_type: "tips"`):
    > Find strategic nuances for first-time players: 5–8 actionable tips. One chunk is the default; split into two thematic chunks (e.g., "Early Game", "End Game") only if clearly distinct. **Mandatory** — return at least one chunk. No rule restatement.
 
-6. **rulebook specialist** (`chunk_type: "rulebook"`):
-   > Return exactly **one** chunk. `title: "Official Rulebook (PDF)"`. `content` must be the plain URL string of the best official rulebook (prefer publisher over BGG Files). No markdown, no surrounding text. **Never fabricate URLs.** If nothing was found in Phase A, return `[]`.
+6. **rulebook URL picker** (NOT a chunk):
+   > Pick the single best official rulebook URL from Phase A's `rulebook_urls` (prefer publisher over BGG Files). Return ONLY a JSON object `{"rulebook_url": "<url>"}` or `{"rulebook_url": null}` if nothing was found. **Never fabricate URLs.** This URL becomes `bundle.game.rulebook_url` — it is no longer emitted as a chunk.
 
 ### Phase C — Assembly (orchestrator)
 
-1. Collect every specialist's JSON array. If any returned invalid JSON or a non-array, log the failure and treat as `[]`.
-2. Flatten all arrays into one `chunks` list. For each chunk:
+1. Collect the 5 chunk specialists' JSON arrays plus the rulebook URL picker's JSON object. If any returned invalid JSON or the wrong shape, log the failure and treat as `[]` / `{"rulebook_url": null}` respectively.
+2. Flatten the chunk arrays into one `chunks` list. For each chunk:
    - Drop if `content` is empty or whitespace.
    - Clamp each specialist's contribution to its top **3** chunks (by `confidence: high` first, then by order returned).
 3. Enforce distinct `(chunk_type, title)` pairs across the whole bundle. On collision, append ` (2)`, ` (3)` to the title rather than dropping.
 4. If `tips` ended up with 0 chunks, **re-invoke the tips specialist once** with a stricter version of its prompt ("You MUST return at least one chunk with 5–8 actionable tips."). If it still returns empty, record `"tips"` in `source.missing` and continue — the bundle is still valid.
-5. If `rulebook` has 0 chunks, record `"rulebook"` in `source.missing` (bundle is still valid).
+5. If the rulebook URL picker returned `null`, set `bundle.game.rulebook_url = null` and record `"rulebook"` in `source.missing` (bundle is still valid).
 6. Drop any chunk with `chunk_type: "variant"` — that type no longer exists in the schema.
 6. Compute `slug` = kebab-case of the BGG primary name (lowercase, alphanumerics only, spaces → `-`). Example: `"7 Wonders"` → `7-wonders`.
 7. Write the bundle with `Write` to `projects/boardgame-buddy/web/sample-guides/<slug>.json`:
@@ -127,7 +127,8 @@ Spawn all six in a single message with multiple `Agent` tool calls (`subagent_ty
     "playing_time": <int|null>,
     "bgg_url": "https://boardgamegeek.com/boardgame/<bgg_id>",
     "is_expansion": <bool>,
-    "base_game_bgg_id": <int|null>
+    "base_game_bgg_id": <int|null>,
+    "rulebook_url": "<url|null>"
   },
   "source": {
     "generated_at": "<ISO timestamp>",
@@ -142,15 +143,15 @@ Spawn all six in a single message with multiple `Agent` tool calls (`subagent_ty
 }
 ```
 
-Every chunk object must have: `chunk_type`, `title`, `content`, `layout`. Default `layout` is `"text"`; card anatomy chunks use `"card_anatomy"`. Valid `chunk_type` values: `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `rulebook`. Do **not** emit `variant` chunks — expansions are tracked as separate guide entries.
+Every chunk object must have: `chunk_type`, `title`, `content`, `layout`. Default `layout` is `"text"`; card anatomy chunks use `"card_anatomy"`. Valid `chunk_type` values: `setup`, `player_turn`, `card_reference`, `scoring`, `tips`. The rulebook URL is now per-game metadata at `game.rulebook_url`, not a chunk. Do **not** emit `rulebook` or `variant` chunks — expansions are tracked as separate guide entries.
 
 8. Print a summary to the user:
 ```
 ✓ Wrote projects/boardgame-buddy/web/sample-guides/<slug>.json
-  Chunks by type: setup=2, player_turn=1, card_reference=3, scoring=1, tips=1, rulebook=1
+  Chunks by type: setup=2, player_turn=1, card_reference=3, scoring=1, tips=1
+  Rulebook URL: <publisher url or "(none found)">
   Missing: []
   Low-confidence: [card_reference/"Wonder Cards"]
-  Rulebook source: <publisher url or "(none found)">
 
 Next step: an admin uploads this file via the BoardgameBuddy web UI at ?admin=1 → header shield icon.
 ```
@@ -159,10 +160,10 @@ Next step: an admin uploads this file via the BoardgameBuddy web UI at ?admin=1 
 
 ## Guardrails
 
-- **Never fabricate URLs.** The rulebook specialist must return `[]` rather than guess.
+- **Never fabricate URLs.** The rulebook URL picker must return `null` rather than guess.
 - **Don't clone rules.** Every specialist is told explicitly: quick reference only, no paraphrased rulebook.
 - **Don't hit the backend.** This skill only writes a JSON file. Import is a separate admin action.
-- **Respect chunk types.** Only the six IDs listed above are valid. Never emit `variant`.
+- **Respect chunk types.** Only the five IDs listed above are valid. Never emit `rulebook` or `variant`.
 - **Don't run migrations.** The old version of this skill wrote SQL; this version does not.
 - **BGG API has a daily request limit.** Each guide-from-rulebook run hits the BGG XML API for search + thing detail. Don't loop over many games — generate one bundle at a time and rely on the bundle metadata so the backend can skip a second BGG call on import.
 

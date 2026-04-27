@@ -217,7 +217,8 @@ async def list_games(
 
     query = sb.table("boardgamebuddy_games").select(
         "id, bgg_id, name, year_published, min_players, max_players, "
-        "playing_time, thumbnail_url, image_url, theme_color",
+        "playing_time, thumbnail_url, image_url, theme_color, "
+        "is_expansion, base_game_bgg_id, expansion_color, rulebook_url",
         count="exact",
     )
 
@@ -478,7 +479,7 @@ async def refresh_game_images(
 _GAME_SUMMARY_FIELDS = (
     "id, bgg_id, name, year_published, min_players, max_players, "
     "playing_time, thumbnail_url, image_url, theme_color, "
-    "is_expansion, base_game_bgg_id, expansion_color"
+    "is_expansion, base_game_bgg_id, expansion_color, rulebook_url"
 )
 # Legacy alias kept so existing call sites read identically.
 _MISSING_IMAGES_FIELDS = _GAME_SUMMARY_FIELDS

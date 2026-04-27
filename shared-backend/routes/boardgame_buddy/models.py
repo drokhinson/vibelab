@@ -56,6 +56,7 @@ class GameSummary(BaseModel):
     is_expansion: bool = False
     base_game_bgg_id: Optional[int] = None
     expansion_color: Optional[str] = None
+    rulebook_url: Optional[str] = None
 
     @computed_field  # type: ignore[misc]
     @property
@@ -304,6 +305,7 @@ class GuideBundleGame(BaseModel):
     bgg_url: Optional[str] = None
     is_expansion: bool = False
     base_game_bgg_id: Optional[int] = None
+    rulebook_url: Optional[str] = None
 
 
 class GuideBundleChunk(BaseModel):
@@ -377,6 +379,7 @@ class ExpansionListItem(BaseModel):
     color: Optional[str] = None
     is_enabled: bool = False
     chunk_count: int = 0
+    rulebook_url: Optional[str] = None
 
 
 class ExpansionToggleRequest(BaseModel):
