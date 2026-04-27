@@ -95,52 +95,65 @@ async function loadGuide(gameId) {
   try {
     // Pull the expansion list in parallel with the guide so the toggle panel
     // and the merged chunks land together — avoids a second flicker after
-    // the guide paints.
+    // the guide paints. include_all_expansions=1 returns chunks for disabled
+    // expansions too so we can toggle them in memory.
     const [guideRes, expansionsRes] = await Promise.all([
       session
-        ? apiFetch(`/games/${gameId}/my-guide`)
+        ? apiFetch(`/games/${gameId}/my-guide?include_all_expansions=1`)
         : apiFetch(`/games/${gameId}/chunks`),
       apiFetch(`/games/${gameId}/expansions`).catch(() => []),
     ]);
 
-    let all;
     if (session) {
       hasGuideCustomizations = !!guideRes.has_customizations;
-      all = guideRes.chunks || [];
+      allGuideChunks = guideRes.chunks || [];
     } else {
-      all = guideRes || [];
+      allGuideChunks = guideRes || [];
       hasGuideCustomizations = false;
     }
 
     currentExpansions = Array.isArray(expansionsRes) ? expansionsRes : [];
 
-    if (!hasGuideCustomizations) {
-      // Default mode: every chunk in the response is visible. No panel.
-      currentGuideChunks = sortVisibleChunks(all.filter(c => !c.is_hidden));
-      hiddenChunks = [];
-    } else {
-      // Custom mode: a chunk is in the visible guide if NOT hidden AND
-      // (the user has a selection row for it OR it's a default chunk that
-      //  hasn't been hidden). Everything else lands in the panel as either
-      // hidden-by-user or available-to-add.
-      const visible = all.filter(c =>
-        !c.is_hidden && (c.user_display_order !== null || c.is_default)
-      );
-      const visibleIds = new Set(visible.map(c => c.id));
-      currentGuideChunks = sortVisibleChunks(visible);
-      hiddenChunks = all.filter(c => !visibleIds.has(c.id));
-    }
-
-    renderGuide();
-    renderGuideToolbar();
-    renderExpansionsPanel();
+    recomputeGuideViews();
   } catch (err) {
+    allGuideChunks = [];
     currentGuideChunks = [];
     hiddenChunks = [];
     currentExpansions = [];
     hasGuideCustomizations = false;
     container.innerHTML = `<p class="text-error text-sm">${err.message}</p>`;
   }
+}
+
+// Rebuilds currentGuideChunks / hiddenChunks from the cache. Out-of-scope
+// chunks (from disabled expansions) stay in allGuideChunks so a re-enable
+// brings them back without a refetch.
+function recomputeGuideViews() {
+  const enabledExpansionIds = new Set(
+    currentExpansions.filter(e => e.is_enabled).map(e => e.expansion_game_id),
+  );
+  const inScope = allGuideChunks.filter(c => {
+    if (!c.expansion) return true;
+    return enabledExpansionIds.has(c.expansion.expansion_game_id);
+  });
+
+  if (!hasGuideCustomizations) {
+    currentGuideChunks = sortVisibleChunks(inScope.filter(c => !c.is_hidden));
+    hiddenChunks = [];
+  } else {
+    const visible = inScope.filter(c =>
+      !c.is_hidden && (c.user_display_order !== null || c.is_default)
+    );
+    const visibleIds = new Set(visible.map(c => c.id));
+    currentGuideChunks = sortVisibleChunks(visible);
+    hiddenChunks = inScope.filter(c => !visibleIds.has(c.id));
+  }
+
+  renderGuide();
+  renderGuideToolbar();
+  renderExpansionsPanel();
+  const dlg = document.getElementById("hidden-chunks-dialog");
+  if (dlg?.open) renderHiddenChunksPanel();
 }
 
 function renderGuide() {
@@ -226,14 +239,14 @@ function renderGuide() {
         </div>
         <div class="collapse collapse-arrow scroll-chunk swipe-target">
           <input type="checkbox" />
-          <div class="collapse-title font-medium text-sm flex items-center justify-between gap-2">
-            <span class="flex items-center gap-1.5 min-w-0">
-              ${dot}
-              <span class="block truncate">${c.title}</span>
-            </span>
-            ${c.created_by_name ? `<span class="text-xs opacity-60 flex-shrink-0">by ${c.created_by_name}</span>` : ""}
+          <div class="collapse-title font-medium text-sm flex items-center gap-1.5 min-w-0">
+            ${dot}
+            <span class="block truncate">${c.title}</span>
           </div>
-          <div class="collapse-content text-sm leading-relaxed guide-text">${c.layout === 'card_anatomy' ? renderCardAnatomy(c.content) : renderMarkdown(c.content)}</div>
+          <div class="collapse-content text-sm leading-relaxed guide-text">
+            ${c.layout === 'card_anatomy' ? renderCardAnatomy(c.content) : renderMarkdown(c.content)}
+            ${c.created_by_name ? `<div class="text-xs opacity-60 mt-2">by ${escapeAttr(c.created_by_name)}</div>` : ""}
+          </div>
         </div>
       </div>`;
   };
@@ -312,19 +325,18 @@ function renderExpansionsPanel() {
 
 async function toggleExpansion(expansionGameId, isEnabled) {
   if (!session || !currentGame) return;
-  // Optimistic local update so the toggle "lands" immediately.
   const exp = currentExpansions.find(e => e.expansion_game_id === expansionGameId);
-  if (exp) exp.is_enabled = isEnabled;
+  if (!exp) return;
+  exp.is_enabled = isEnabled;
+  recomputeGuideViews();
   try {
     await apiFetch(
       `/games/${currentGame.id}/expansions/${expansionGameId}/toggle`,
       { method: "POST", body: { is_enabled: isEnabled } }
     );
-    // Reload the guide so freshly-merged (or removed) chunks appear in place.
-    await loadGuide(currentGame.id);
   } catch (err) {
-    if (exp) exp.is_enabled = !isEnabled;
-    renderExpansionsPanel();
+    exp.is_enabled = !isEnabled;
+    recomputeGuideViews();
     showToast(err.message, "error");
   }
 }
@@ -449,34 +461,37 @@ function attachChunkGestures(row) {
 
 // ── Hide / unhide ────────────────────────────────────────────────────────────
 
-async function hideChunk(chunkId) {
+async function setChunkHidden(chunkId, isHidden) {
+  const cached = allGuideChunks.find(c => c.id === chunkId);
+  if (!cached) return;
+  const prevHidden = cached.is_hidden;
+  const prevHadCustomizations = hasGuideCustomizations;
+  cached.is_hidden = isHidden;
+  // Hiding/unhiding flips the user into custom mode: the backend creates a
+  // selection row, so subsequent loads will return has_customizations=true.
+  hasGuideCustomizations = true;
+  recomputeGuideViews();
   try {
     await apiFetch(`/chunks/${chunkId}/visibility`, {
       method: "POST",
-      body: { is_hidden: true },
+      body: { is_hidden: isHidden },
     });
-    showToast("Chunk hidden. Tap “Hidden” to restore.", "info");
-    await loadGuide(currentGame.id);
   } catch (err) {
+    cached.is_hidden = prevHidden;
+    hasGuideCustomizations = prevHadCustomizations;
+    recomputeGuideViews();
     showToast(err.message, "error");
-    await loadGuide(currentGame.id);
   }
 }
 
+async function hideChunk(chunkId) {
+  await setChunkHidden(chunkId, true);
+  showToast("Chunk hidden. Tap “Hidden” to restore.", "info");
+}
+
 async function unhideChunk(chunkId) {
-  try {
-    await apiFetch(`/chunks/${chunkId}/visibility`, {
-      method: "POST",
-      body: { is_hidden: false },
-    });
-    showToast("Chunk restored", "success");
-    await loadGuide(currentGame.id);
-    // Refresh the hidden panel content if it's still open.
-    const dlg = document.getElementById("hidden-chunks-dialog");
-    if (dlg?.open) renderHiddenChunksPanel();
-  } catch (err) {
-    showToast(err.message, "error");
-  }
+  await setChunkHidden(chunkId, false);
+  showToast("Chunk restored", "success");
 }
 
 // ── Hidden chunks modal ──────────────────────────────────────────────────────
@@ -544,11 +559,32 @@ function renderHiddenChunksPanel() {
 async function restoreGuideDefaults() {
   if (!session || !currentGame) return;
   if (!confirm("Restore the default reference guide? This removes your custom order and any hidden chunks.")) return;
+  const snapshot = allGuideChunks.map(c => ({
+    id: c.id,
+    is_hidden: c.is_hidden,
+    user_display_order: c.user_display_order,
+  }));
+  const prevHadCustomizations = hasGuideCustomizations;
+  for (const c of allGuideChunks) {
+    c.is_hidden = false;
+    c.user_display_order = null;
+  }
+  hasGuideCustomizations = false;
+  recomputeGuideViews();
   try {
     await apiFetch(`/games/${currentGame.id}/my-guide`, { method: "DELETE" });
     showToast("Restored to default", "success");
-    await loadGuide(currentGame.id);
   } catch (err) {
+    const byId = new Map(snapshot.map(s => [s.id, s]));
+    for (const c of allGuideChunks) {
+      const s = byId.get(c.id);
+      if (s) {
+        c.is_hidden = s.is_hidden;
+        c.user_display_order = s.user_display_order;
+      }
+    }
+    hasGuideCustomizations = prevHadCustomizations;
+    recomputeGuideViews();
     showToast(err.message, "error");
   }
 }

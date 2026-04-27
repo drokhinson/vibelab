@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from fastapi import Depends, HTTPException, Path, Response
+from fastapi import Depends, HTTPException, Path, Query, Response
 
 from db import get_supabase
 
@@ -84,16 +84,18 @@ def _sort_chunk_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ))
 
 
-def _enabled_expansions_for(
+def _linked_expansions_for(
     base_bgg_id: Optional[int],
     user_id: str,
-) -> tuple[list[str], dict[str, ExpansionInline]]:
-    """Return (enabled_game_ids, expansion_map keyed by game_id) for a user+base.
+) -> tuple[list[str], list[str], dict[str, ExpansionInline]]:
+    """Return (all_linked_ids, enabled_ids, expansion_map keyed by game_id).
 
-    Empty when the base game has no expansions or the user has none enabled.
+    `expansion_map` covers every linked expansion (enabled or not) so
+    callers can render dot color/name for cached-but-disabled chunks.
+    Empty when the base game has no expansions.
     """
     if not base_bgg_id:
-        return [], {}
+        return [], [], {}
     sb = get_supabase()
     expansions = (
         sb.table("boardgamebuddy_games")
@@ -104,17 +106,17 @@ def _enabled_expansions_for(
     )
     rows = expansions.data or []
     if not rows:
-        return [], {}
-    exp_ids = [r["id"] for r in rows]
+        return [], [], {}
+    all_ids = [r["id"] for r in rows]
     enabled = (
         sb.table("boardgamebuddy_user_expansions")
         .select("expansion_game_id")
         .eq("user_id", user_id)
-        .in_("expansion_game_id", exp_ids)
+        .in_("expansion_game_id", all_ids)
         .execute()
     )
-    enabled_ids = {r["expansion_game_id"] for r in (enabled.data or [])}
-    enabled_list = [r["id"] for r in rows if r["id"] in enabled_ids]
+    enabled_set = {r["expansion_game_id"] for r in (enabled.data or [])}
+    enabled_list = [r["id"] for r in rows if r["id"] in enabled_set]
     expansion_map = {
         r["id"]: ExpansionInline(
             expansion_game_id=r["id"],
@@ -122,9 +124,8 @@ def _enabled_expansions_for(
             color=r.get("expansion_color"),
         )
         for r in rows
-        if r["id"] in enabled_ids
     }
-    return enabled_list, expansion_map
+    return all_ids, enabled_list, expansion_map
 
 
 @router.get(
@@ -321,6 +322,15 @@ async def delete_chunk(
 )
 async def get_my_guide(
     game_id: str = Path(..., description="Game UUID"),
+    include_all_expansions: bool = Query(
+        False,
+        description=(
+            "If true, also include default chunks from every linked expansion "
+            "regardless of whether the user has toggled it on. Each chunk's "
+            "`is_expansion_enabled` flag tells the frontend whether to show it. "
+            "Lets the frontend cache the full guide and toggle expansions in memory."
+        ),
+    ),
     user: CurrentUser = Depends(get_current_user),
 ) -> MyGuideResponse:
     """Return the user's guide view for a game.
@@ -334,7 +344,9 @@ async def get_my_guide(
 
     Default chunks of any expansion the user has toggled on are merged into
     the response; each merged chunk is tagged with its source expansion's
-    color so the UI can render the dot.
+    color so the UI can render the dot. With `include_all_expansions=true`,
+    chunks from disabled expansions are also returned (with `is_expansion_enabled=false`)
+    so the client can cache and toggle locally.
     """
     sb = get_supabase()
 
@@ -348,7 +360,10 @@ async def get_my_guide(
         raise HTTPException(status_code=404, detail="Game not found")
     base_bgg_id = base_row.data[0].get("bgg_id")
 
-    enabled_ids, expansion_map = _enabled_expansions_for(base_bgg_id, user.user_id)
+    all_linked_ids, enabled_ids, expansion_map = _linked_expansions_for(
+        base_bgg_id, user.user_id,
+    )
+    enabled_set = set(enabled_ids)
 
     selections_res = (
         sb.table("boardgamebuddy_guide_selections")
@@ -360,7 +375,8 @@ async def get_my_guide(
     selections = selections_res.data or []
     has_customizations = bool(selections)
 
-    target_game_ids = [game_id, *enabled_ids]
+    chunk_source_ids = all_linked_ids if include_all_expansions else enabled_ids
+    target_game_ids = [game_id, *chunk_source_ids]
     chunks_query = (
         sb.table("boardgamebuddy_guide_chunks")
         .select(_CHUNK_SELECT)
@@ -377,10 +393,14 @@ async def get_my_guide(
     for row in chunk_rows:
         base = _chunk_row_to_response(row, expansion_map)
         sel = selections_by_chunk.get(row["id"])
+        is_expansion_enabled = (
+            row["game_id"] == game_id or row["game_id"] in enabled_set
+        )
         chunks.append(MyGuideChunkResponse(
             **base.model_dump(),
             is_hidden=bool(sel["is_hidden"]) if sel else False,
             user_display_order=sel["display_order"] if sel else None,
+            is_expansion_enabled=is_expansion_enabled,
         ))
     return MyGuideResponse(has_customizations=has_customizations, chunks=chunks)
 
@@ -439,7 +459,7 @@ async def set_my_guide(
             .execute()
         )
         base_bgg_id = base_row.data[0].get("bgg_id") if base_row.data else None
-        enabled_ids, _ = _enabled_expansions_for(base_bgg_id, user.user_id)
+        _, enabled_ids, _ = _linked_expansions_for(base_bgg_id, user.user_id)
         allowed_game_ids = [game_id, *enabled_ids]
         valid = (
             sb.table("boardgamebuddy_guide_chunks")

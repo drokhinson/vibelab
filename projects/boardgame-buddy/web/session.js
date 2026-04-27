@@ -175,6 +175,9 @@ async function saveDraftNow() {
   };
   try {
     const updated = await apiFetch("/plays/draft", { method: "PUT", body });
+    // The user may have hit Save (which nulls activeSession) while this PUT
+    // was in flight — drop the response in that case.
+    if (!activeSession) return;
     activeSession.updated_at = updated.updated_at;
     if (updated.game_name)      activeSession.game_name = updated.game_name;
     if (updated.game_thumbnail) activeSession.game_thumbnail = updated.game_thumbnail;
@@ -535,11 +538,21 @@ async function saveSession() {
     })),
   };
 
+  // Cancel any pending debounced draft save so it can't race the cleanup
+  // below (and resurrect a draft we're about to delete).
+  if (sessionSaveTimer) { clearTimeout(sessionSaveTimer); sessionSaveTimer = null; }
+
   const btn = document.getElementById("session-save-btn");
   if (btn) { btn.classList.add("loading"); btn.disabled = true; }
   try {
     await apiFetch("/plays", { method: "POST", body });
-    try { await apiFetch("/plays/draft", { method: "DELETE" }); } catch { /* ignore */ }
+    try {
+      await apiFetch("/plays/draft", { method: "DELETE" });
+    } catch (err) {
+      // Don't block the cleanup — the play is already logged. But surface
+      // the failure so a stuck server draft doesn't silently resurrect.
+      console.warn("Failed to delete play draft after save:", err);
+    }
     activeSession = null;
     sessionDirty = false;
     sessionExpanded = false;
