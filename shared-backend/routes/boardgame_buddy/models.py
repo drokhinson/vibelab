@@ -263,6 +263,10 @@ class ChunkResponse(BaseModel):
     layout: str
     content: str
     is_default: bool = False
+    # approved=false rows are visible only to the creator until an admin
+    # approves them; pending_guide_id links to the review-queue submission.
+    approved: bool = True
+    pending_guide_id: Optional[str] = None
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
     updated_at: datetime
@@ -339,17 +343,52 @@ class PendingGuideSummary(BaseModel):
     bgg_id: Optional[int] = None
     chunk_count: int
     status: str
+    # True when the bundle's bgg_id has no matching boardgamebuddy_games row —
+    # i.e. approving will create the game. False when chunks are being added
+    # to a game that's already in the library.
+    is_new_game: bool = True
     created_at: datetime
 
 
 class PendingGuideDetail(PendingGuideSummary):
     bundle: dict[str, Any]
+    # Live chunk rows linked to this submission (approved=false rows).
+    # The frontend renders the modal off these rather than the cached JSONB
+    # so per-chunk default toggles + edits work against real DB rows.
+    chunks: list[ChunkResponse] = []
 
 
 class PendingGuideDecisionBody(BaseModel):
     notes: Optional[str] = None
     force: bool = False
     override_bundle: Optional[GuideBundle] = None
+    # UUIDs of chunks the admin wants promoted to is_default=true on approve.
+    # Frontend's "Select all as default" passes every chunk's id; default state
+    # is empty (chunks land as community contributions unless promoted).
+    default_chunk_ids: list[str] = []
+
+
+# ── BGG metadata preview (used by import + review UIs) ───────────────────────
+
+class BggGameMetaResponse(BaseModel):
+    bgg_id: int
+    name: str
+    year_published: Optional[int] = None
+    min_players: Optional[int] = None
+    max_players: Optional[int] = None
+    playing_time: Optional[int] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    categories: list[str] = []
+    mechanics: list[str] = []
+    is_expansion: bool = False
+    base_game_bgg_id: Optional[int] = None
+    # When true, the game is already in our library (DB row served instead of
+    # a fresh BGG fetch); db_game_id points to the existing UUID. Lets the FE
+    # skip the BGG roundtrip and render an "Adding to existing game" header.
+    already_in_db: bool = False
+    db_game_id: Optional[str] = None
 
 
 # ── Expansions ────────────────────────────────────────────────────────────────

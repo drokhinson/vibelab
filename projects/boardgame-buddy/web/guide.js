@@ -121,10 +121,15 @@ async function loadGuide(gameId) {
     } else {
       // Custom mode: a chunk is in the visible guide if NOT hidden AND
       // (the user has a selection row for it OR it's a default chunk that
-      //  hasn't been hidden). Everything else lands in the panel as either
-      // hidden-by-user or available-to-add.
+      //  hasn't been hidden OR it's the user's own pending submission —
+      //  unapproved chunks always render for their submitter so they can
+      //  see/use their work before admin review).
       const visible = all.filter(c =>
-        !c.is_hidden && (c.user_display_order !== null || c.is_default)
+        !c.is_hidden && (
+          c.user_display_order !== null
+          || c.is_default
+          || c.approved === false
+        )
       );
       const visibleIds = new Set(visible.map(c => c.id));
       currentGuideChunks = sortVisibleChunks(visible);
@@ -213,6 +218,9 @@ function renderGuide() {
                style="background:${escapeAttr(c.expansion.color)}"
                title="${escapeAttr(c.expansion.name || "Expansion")}"></span>`
       : "";
+    const pendingBadge = c.approved === false
+      ? `<span class="badge badge-warning badge-xs flex-shrink-0" title="Awaiting admin review — visible only to you">Pending</span>`
+      : "";
     return `
       <div class="swipe-row" data-chunk-id="${c.id}"
            data-can-edit="${editable ? "1" : "0"}">
@@ -230,6 +238,7 @@ function renderGuide() {
             <span class="flex items-center gap-1.5 min-w-0">
               ${dot}
               <span class="block truncate">${c.title}</span>
+              ${pendingBadge}
             </span>
             ${c.created_by_name ? `<span class="text-xs opacity-60 flex-shrink-0">by ${c.created_by_name}</span>` : ""}
           </div>
@@ -238,7 +247,21 @@ function renderGuide() {
       </div>`;
   };
 
+  const pendingMine = otherChunks.filter(c =>
+    c.approved === false && currentUser && c.created_by === currentUser.user_id
+  );
+  const pendingBanner = pendingMine.length ? `
+    <div class="alert alert-warning text-xs py-2 mb-2">
+      <i data-lucide="clock" class="w-4 h-4"></i>
+      <div>
+        ${pendingMine.length} chunk${pendingMine.length === 1 ? "" : "s"} you submitted
+        ${pendingMine.length === 1 ? "is" : "are"} awaiting review.
+        Visible only to you until an admin approves.
+      </div>
+    </div>` : "";
+
   container.innerHTML = `
+    ${pendingBanner}
     <div id="guide-chunk-list">
       ${groups.map(g => `
         <section class="guide-section">

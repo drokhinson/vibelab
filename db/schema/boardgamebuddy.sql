@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 046
+-- Last updated: migration 048
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -144,6 +144,11 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chunks (
   layout TEXT NOT NULL DEFAULT 'text' CHECK (layout IN ('text')),
   content TEXT NOT NULL,
   is_default BOOLEAN NOT NULL DEFAULT false,
+  -- Approval flow (migration 048). approved=false rows are visible only to
+  -- their creator until an admin approves them; pending_guide_id links the
+  -- row to its review-queue entry so admins can flip/delete chunks as a unit.
+  approved BOOLEAN NOT NULL DEFAULT true,
+  pending_guide_id UUID REFERENCES public.boardgamebuddy_pending_guides(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -183,6 +188,11 @@ CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(g
 CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game ON public.boardgamebuddy_guide_chunks(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game_default
   ON public.boardgamebuddy_guide_chunks(game_id, is_default);
+CREATE INDEX IF NOT EXISTS idx_bgb_chunks_pending_guide
+  ON public.boardgamebuddy_guide_chunks(pending_guide_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_chunks_unapproved_creator
+  ON public.boardgamebuddy_guide_chunks(created_by, game_id)
+  WHERE approved = false;
 CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game
   ON public.boardgamebuddy_guide_selections(user_id, game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game_hidden

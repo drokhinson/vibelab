@@ -4,6 +4,7 @@
 // All uploads — including admins — are queued in boardgamebuddy_pending_guides for review.
 
 let importPendingBundle = null;
+let importGameContext = null; // BggGameMetaResponse for the bundle's game, populated after file select
 let pendingGuidesCache = [];
 let bundleEditCtx = null; // { bundle, rerender: fn } — shared by upload and review contexts
 
@@ -110,9 +111,59 @@ function renderImport() {
   if (window.lucide) window.lucide.createIcons();
 
   importPendingBundle = null;
+  importGameContext = null;
   bundleEditCtx = null;
   document.getElementById("import-guide-file").addEventListener("change", handleImportFileSelect);
   document.getElementById("import-guide-submit").addEventListener("click", handleImportSubmit);
+}
+
+// Render a header card distinguishing new-game-creation from chunk-add-to-existing.
+// `meta` is a BggGameMetaResponse (already_in_db + bgg fields).
+function renderGameContextHeader(meta) {
+  if (!meta) return "";
+  const name = escapeHtml(meta.name || "Unknown");
+  if (meta.already_in_db) {
+    return `
+      <div class="alert alert-info text-sm py-2 mt-2">
+        <i data-lucide="library" class="w-4 h-4"></i>
+        <div>
+          <span class="font-semibold">Adding chunks to existing game:</span>
+          ${name}
+        </div>
+      </div>
+    `;
+  }
+  const players = (meta.min_players || meta.max_players)
+    ? `${meta.min_players ?? "?"}–${meta.max_players ?? "?"} players`
+    : "";
+  const time = meta.playing_time ? `${meta.playing_time} min` : "";
+  const year = meta.year_published ? `(${meta.year_published})` : "";
+  const meta_line = [players, time].filter(Boolean).join(" · ");
+  const desc = (meta.description || "").replace(/&#10;/g, " ").trim();
+  const descShort = desc.length > 240 ? desc.slice(0, 240) + "…" : desc;
+  return `
+    <div class="alert alert-warning text-sm py-2 mt-2">
+      <i data-lucide="sparkles" class="w-4 h-4"></i>
+      <div><span class="font-semibold">Creating new game</span> from this bundle.</div>
+    </div>
+    <div class="card bg-base-300 mt-2">
+      <div class="card-body p-3 flex-row gap-3">
+        ${meta.thumbnail_url ? `
+          <img src="${escapeHtml(meta.thumbnail_url)}" alt=""
+               class="w-20 h-20 rounded object-cover flex-shrink-0" />
+        ` : `
+          <div class="w-20 h-20 rounded bg-base-200 flex items-center justify-center flex-shrink-0">
+            <i data-lucide="image" class="w-6 h-6 opacity-40"></i>
+          </div>
+        `}
+        <div class="min-w-0">
+          <div class="font-bold">${name} <span class="text-xs text-base-content/60">${year}</span></div>
+          ${meta_line ? `<div class="text-xs text-base-content/60 mt-0.5">${meta_line}</div>` : ""}
+          ${descShort ? `<div class="text-xs text-base-content/70 mt-1 line-clamp-3">${escapeHtml(descShort)}</div>` : ""}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 async function handleImportFileSelect(e) {
@@ -121,6 +172,7 @@ async function handleImportFileSelect(e) {
   const submit = document.getElementById("import-guide-submit");
   if (!file) {
     importPendingBundle = null;
+    importGameContext = null;
     bundleEditCtx = null;
     preview.innerHTML = "";
     submit.disabled = true;
@@ -133,18 +185,29 @@ async function handleImportFileSelect(e) {
       throw new Error("Missing required fields: game.bgg_id and chunks[]");
     }
     importPendingBundle = bundle;
-    bundleEditCtx = {
-      bundle: importPendingBundle,
-      rerender: () => {
-        preview.innerHTML = renderBundlePreview(importPendingBundle, true);
-        if (window.lucide) window.lucide.createIcons();
-        submit.disabled = !importPendingBundle.chunks.length;
-      },
+    importGameContext = null;
+    const renderAll = () => {
+      const ctxHeader = renderGameContextHeader(importGameContext);
+      preview.innerHTML = ctxHeader + renderBundlePreview(importPendingBundle, true);
+      if (window.lucide) window.lucide.createIcons();
+      submit.disabled = !importPendingBundle.chunks.length;
     };
-    preview.innerHTML = renderBundlePreview(bundle, true);
+    bundleEditCtx = { bundle: importPendingBundle, rerender: renderAll };
+    renderAll();
     submit.disabled = false;
+    // Fetch BGG/DB context in the background — don't block the preview.
+    apiFetch(`/games/bgg-preview/${bundle.game.bgg_id}`)
+      .then((meta) => {
+        importGameContext = meta;
+        renderAll();
+      })
+      .catch((err) => {
+        // Soft-fail: BGG quota or network — preview still works without the header.
+        console.warn("BGG preview lookup failed:", err);
+      });
   } catch (err) {
     importPendingBundle = null;
+    importGameContext = null;
     bundleEditCtx = null;
     preview.innerHTML = `<div class="alert alert-error text-sm"><i data-lucide="alert-circle" class="w-4 h-4"></i> ${escapeHtml(err.message)}</div>`;
     submit.disabled = true;
@@ -226,6 +289,7 @@ async function handleImportSubmit() {
     });
     showToast(result.message || "Submitted for review.", "success");
     importPendingBundle = null;
+    importGameContext = null;
     bundleEditCtx = null;
     document.getElementById("import-guide-file").value = "";
     document.getElementById("import-guide-preview").innerHTML = "";
@@ -329,8 +393,13 @@ function renderPendingGuidesList() {
           <div class="card-body p-3">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <h3 class="font-semibold text-sm">${escapeHtml(p.game_name)}</h3>
-                <p class="text-xs text-base-content/60">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h3 class="font-semibold text-sm">${escapeHtml(p.game_name)}</h3>
+                  ${p.is_new_game
+                    ? `<span class="badge badge-warning badge-sm">New game</span>`
+                    : `<span class="badge badge-info badge-sm">Existing game</span>`}
+                </div>
+                <p class="text-xs text-base-content/60 mt-0.5">
                   ${p.bgg_id ? `BGG #${p.bgg_id} · ` : ""}${p.chunk_count} chunk(s) ·
                   by ${escapeHtml(p.uploader_name || "unknown")} ·
                   ${formatDate(p.created_at)}
@@ -339,9 +408,6 @@ function renderPendingGuidesList() {
               <div class="flex gap-1 flex-shrink-0">
                 <button class="btn btn-xs btn-ghost" onclick="viewPendingGuide('${p.id}')" title="View & edit">
                   <i data-lucide="eye" class="w-3 h-3"></i>
-                </button>
-                <button class="btn btn-xs btn-success" onclick="approvePendingGuide('${p.id}')" title="Approve as-is">
-                  <i data-lucide="check" class="w-3 h-3"></i>
                 </button>
                 <button class="btn btn-xs btn-error btn-outline" onclick="rejectPendingGuide('${p.id}')" title="Reject">
                   <i data-lucide="x" class="w-3 h-3"></i>
@@ -356,75 +422,216 @@ function renderPendingGuidesList() {
   if (window.lucide) window.lucide.createIcons();
 }
 
+// Local state for the open review modal — cleared when modal closes.
+let pendingReviewState = null;
+// { id, detail, defaultIds: Set<string>, bggMeta: BggGameMetaResponse|null, modalEl }
+
 async function viewPendingGuide(id) {
   try {
     const detail = await apiFetch(`/guides/pending/${id}`);
-    const reviewedBundle = JSON.parse(JSON.stringify(detail.bundle));
 
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4";
-    modal.onclick = (e) => { if (e.target === modal) { modal.remove(); bundleEditCtx = null; } };
+    modal.onclick = (e) => { if (e.target === modal) closePendingReview(); };
 
-    function renderModalBody() {
-      const hasChunks = reviewedBundle.chunks?.length > 0;
-      return `
-        <div class="card bg-base-100 max-w-lg w-full max-h-[85vh] overflow-y-auto">
-          <div class="card-body p-4">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="font-bold">${escapeHtml(detail.game_name)}</h3>
-              <button class="btn btn-ghost btn-sm btn-square" onclick="this.closest('.fixed').remove(); bundleEditCtx = null;">
-                <i data-lucide="x" class="w-4 h-4"></i>
-              </button>
-            </div>
-            ${renderBundlePreview(reviewedBundle, true)}
-            <div class="flex gap-2 justify-end mt-3">
-              <button class="btn btn-ghost btn-sm" onclick="this.closest('.fixed').remove(); bundleEditCtx = null;">
-                Close
-              </button>
-              <button class="btn btn-error btn-outline btn-sm" onclick="rejectPendingGuide('${id}'); this.closest('.fixed').remove(); bundleEditCtx = null;">
-                <i data-lucide="x" class="w-4 h-4"></i> Reject
-              </button>
-              <button class="btn btn-success btn-sm" ${hasChunks ? "" : "disabled"}
-                onclick="approvePendingGuide('${id}', reviewedBundleFor_${id.replace(/-/g, "_")}); this.closest('.fixed').remove(); bundleEditCtx = null;">
-                <i data-lucide="check" class="w-4 h-4"></i> Approve${hasChunks && reviewedBundle.chunks.length !== detail.bundle.chunks?.length ? ` (${reviewedBundle.chunks.length} chunks)` : ""}
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    // Expose the reviewedBundle so the inline onclick can reach it
-    const safeId = id.replace(/-/g, "_");
-    window[`reviewedBundleFor_${safeId}`] = reviewedBundle;
-
-    bundleEditCtx = {
-      bundle: reviewedBundle,
-      rerender: () => {
-        modal.innerHTML = renderModalBody();
-        if (window.lucide) window.lucide.createIcons();
-      },
+    pendingReviewState = {
+      id,
+      detail,
+      defaultIds: new Set(),
+      bggMeta: null,
+      modalEl: modal,
     };
 
-    modal.innerHTML = renderModalBody();
+    renderPendingReviewModal();
     document.body.appendChild(modal);
-    if (window.lucide) window.lucide.createIcons();
+
+    if (detail.bgg_id) {
+      apiFetch(`/games/bgg-preview/${detail.bgg_id}`)
+        .then((meta) => {
+          if (pendingReviewState && pendingReviewState.id === id) {
+            pendingReviewState.bggMeta = meta;
+            renderPendingReviewModal();
+          }
+        })
+        .catch((err) => console.warn("BGG preview failed:", err));
+    }
   } catch (err) {
     showToast(err.message, "error");
   }
 }
 
-async function approvePendingGuide(id, overrideBundle = null) {
-  if (!confirm("Approve and import this submission?")) return;
+function closePendingReview() {
+  if (pendingReviewState?.modalEl) pendingReviewState.modalEl.remove();
+  pendingReviewState = null;
+}
+
+function togglePendingChunkDefault(chunkId) {
+  if (!pendingReviewState) return;
+  const set = pendingReviewState.defaultIds;
+  if (set.has(chunkId)) set.delete(chunkId);
+  else set.add(chunkId);
+  renderPendingReviewModal();
+}
+
+function togglePendingSelectAll() {
+  if (!pendingReviewState) return;
+  const chunks = pendingReviewState.detail.chunks || [];
+  const allSelected = chunks.length > 0 && chunks.every((c) => pendingReviewState.defaultIds.has(c.id));
+  if (allSelected) pendingReviewState.defaultIds.clear();
+  else chunks.forEach((c) => pendingReviewState.defaultIds.add(c.id));
+  renderPendingReviewModal();
+}
+
+function renderPendingReviewModal() {
+  if (!pendingReviewState) return;
+  const { detail, defaultIds, bggMeta, modalEl } = pendingReviewState;
+  const chunks = detail.chunks || [];
+  const allSelected = chunks.length > 0 && chunks.every((c) => defaultIds.has(c.id));
+
+  const groups = new Map();
+  chunks.forEach((c) => {
+    const key = c.chunk_type_label || c.chunk_type || "?";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  });
+
+  const chunkRows = Array.from(groups.entries()).map(([label, items]) => `
+    <tr><td colspan="4" class="text-xs font-semibold text-base-content/50 uppercase tracking-wide pt-2 pb-0.5">
+      ${escapeHtml(label)}
+    </td></tr>
+    ${items.map((c) => `
+      <tr>
+        <td class="w-6">
+          <input type="checkbox" class="checkbox checkbox-xs"
+                 ${defaultIds.has(c.id) ? "checked" : ""}
+                 onchange="togglePendingChunkDefault('${c.id}')"
+                 title="Add to default guide" />
+        </td>
+        <td class="text-sm leading-tight">${escapeHtml(c.title || "(no title)")}</td>
+        <td class="text-xs text-base-content/60">${(c.content || "").length} chars</td>
+        <td class="text-right">
+          <button class="btn btn-ghost btn-xs" onclick="editPendingChunk('${c.id}')" title="Edit chunk">
+            <i data-lucide="pencil" class="w-3 h-3"></i>
+          </button>
+          <button class="btn btn-ghost btn-xs text-error" onclick="deletePendingChunk('${c.id}')" title="Delete chunk">
+            <i data-lucide="trash-2" class="w-3 h-3"></i>
+          </button>
+        </td>
+      </tr>
+    `).join("")}
+  `).join("");
+
+  const isNewGame = detail.is_new_game;
+  const headerCard = bggMeta
+    ? renderGameContextHeader(bggMeta)
+    : `<div class="alert ${isNewGame ? "alert-warning" : "alert-info"} text-sm py-2 mt-2">
+        <i data-lucide="${isNewGame ? "sparkles" : "library"}" class="w-4 h-4"></i>
+        <div>
+          <span class="font-semibold">${isNewGame ? "Creating new game:" : "Adding chunks to existing game:"}</span>
+          ${escapeHtml(detail.game_name)}
+        </div>
+      </div>`;
+
+  modalEl.innerHTML = `
+    <div class="card bg-base-100 max-w-lg w-full max-h-[85vh] overflow-y-auto">
+      <div class="card-body p-4">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <h3 class="font-bold">${escapeHtml(detail.game_name)}</h3>
+            <p class="text-xs text-base-content/60">
+              by ${escapeHtml(detail.uploader_name || "unknown")} · ${formatDate(detail.created_at)}
+            </p>
+          </div>
+          <button class="btn btn-ghost btn-sm btn-square" onclick="closePendingReview()">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        ${headerCard}
+        <div class="flex items-center justify-between mt-3 mb-1">
+          <span class="text-xs font-semibold text-base-content/70">
+            ${chunks.length} chunk(s) · ${defaultIds.size} marked as default
+          </span>
+          <button class="btn btn-ghost btn-xs" onclick="togglePendingSelectAll()" ${chunks.length ? "" : "disabled"}>
+            <i data-lucide="${allSelected ? "square" : "check-square"}" class="w-3 h-3"></i>
+            ${allSelected ? "Clear all" : "Select all as default"}
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table table-xs">
+            <thead><tr><th></th><th>Title</th><th>Size</th><th></th></tr></thead>
+            <tbody>${chunkRows || `<tr><td colspan="4" class="text-center text-xs text-base-content/50 py-3">No chunks left.</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div class="flex gap-2 justify-end mt-3">
+          <button class="btn btn-ghost btn-sm" onclick="closePendingReview()">Close</button>
+          <button class="btn btn-error btn-outline btn-sm" onclick="rejectPendingGuide('${detail.id}'); closePendingReview();">
+            <i data-lucide="x" class="w-4 h-4"></i> Reject
+          </button>
+          <button class="btn btn-success btn-sm" ${chunks.length ? "" : "disabled"}
+            onclick="approvePendingGuide('${detail.id}')">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            Approve${defaultIds.size ? ` (${defaultIds.size} default)` : ""}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+async function editPendingChunk(chunkId) {
+  if (!pendingReviewState) return;
+  const chunk = pendingReviewState.detail.chunks.find((c) => c.id === chunkId);
+  if (!chunk) return;
+  await openChunkEditorModal({
+    existing: chunk,
+    onSave: async (data) => {
+      try {
+        const updated = await apiFetch(`/chunks/${chunkId}`, {
+          method: "PATCH",
+          body: data,
+        });
+        const idx = pendingReviewState.detail.chunks.findIndex((c) => c.id === chunkId);
+        if (idx >= 0) pendingReviewState.detail.chunks[idx] = updated;
+        renderPendingReviewModal();
+        showToast("Chunk updated", "success");
+      } catch (err) {
+        showToast("Update failed: " + err.message, "error");
+      }
+    },
+  });
+}
+
+async function deletePendingChunk(chunkId) {
+  if (!pendingReviewState) return;
+  if (!confirm("Delete this chunk?")) return;
   try {
-    const body = overrideBundle ? { override_bundle: overrideBundle } : {};
-    const r = await apiFetch(`/guides/pending/${id}/approve`, { method: "POST", body });
-    showToast(`Imported ${r.chunks_inserted} chunk(s).`, "success");
-    pendingGuidesCache = pendingGuidesCache.filter(p => p.id !== id);
+    await apiFetch(`/chunks/${chunkId}`, { method: "DELETE" });
+    pendingReviewState.detail.chunks = pendingReviewState.detail.chunks.filter((c) => c.id !== chunkId);
+    pendingReviewState.defaultIds.delete(chunkId);
+    renderPendingReviewModal();
+  } catch (err) {
+    showToast("Delete failed: " + err.message, "error");
+  }
+}
+
+async function approvePendingGuide(id) {
+  const state = pendingReviewState && pendingReviewState.id === id ? pendingReviewState : null;
+  const defaultChunkIds = state ? Array.from(state.defaultIds) : [];
+  const chunkCount = state ? (state.detail.chunks?.length || 0) : null;
+  const summary = chunkCount !== null
+    ? `Approve ${chunkCount} chunk(s)? ${defaultChunkIds.length} will be added to the default guide.`
+    : "Approve and import this submission?";
+  if (!confirm(summary)) return;
+  try {
+    const r = await apiFetch(`/guides/pending/${id}/approve`, {
+      method: "POST",
+      body: { default_chunk_ids: defaultChunkIds },
+    });
+    showToast(`Approved ${r.chunks_inserted} chunk(s).`, "success");
+    pendingGuidesCache = pendingGuidesCache.filter((p) => p.id !== id);
     renderPendingGuidesList();
-    // Clean up window ref
-    const safeId = id.replace(/-/g, "_");
-    delete window[`reviewedBundleFor_${safeId}`];
+    closePendingReview();
   } catch (err) {
     showToast("Approve failed: " + err.message, "error");
   }

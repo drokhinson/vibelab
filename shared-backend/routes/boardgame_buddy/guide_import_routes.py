@@ -9,6 +9,7 @@ from db import get_supabase
 from jwt_auth import SupabaseUser, get_current_supabase_user
 
 from . import router
+from .chunk_routes import _CHUNK_SELECT, _chunk_row_to_response, _sort_chunk_rows
 from .game_routes import _next_expansion_color, import_bgg_game
 from .models import (
     GuideBundle,
@@ -20,8 +21,21 @@ from .models import (
 )
 
 
-async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[str] = None) -> GuideImportResponse:
-    """Insert a validated GuideBundle's chunks into the DB. Shared by admin direct + approval paths."""
+async def _apply_bundle(
+    bundle: GuideBundle,
+    force: bool,
+    *,
+    created_by: Optional[str] = None,
+    approved: bool = True,
+    pending_guide_id: Optional[str] = None,
+) -> GuideImportResponse:
+    """Insert a validated GuideBundle's chunks into the DB.
+
+    Shared by admin direct import (`approved=True`, `pending_guide_id=None`)
+    and user-submit (`approved=False`, `pending_guide_id=<row id>`). On user
+    submit the rows are visible only to the uploader until an admin flips
+    them via `approve_pending_guide`.
+    """
     sb = get_supabase()
 
     valid_type_rows = (
@@ -103,8 +117,8 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
 
     # Admin direct imports (created_by=None) are seed chunks and become the
     # curated defaults. Approved community submissions land as non-default
-    # contributions until promoted.
-    is_default = created_by is None
+    # contributions until promoted via admin review.
+    is_default = created_by is None and approved
     to_insert = []
     skipped_reasons: list[str] = []
     for chunk in bundle.chunks:
@@ -118,8 +132,9 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
             "title": chunk.title,
             "content": chunk.content,
             "layout": chunk.layout,
-            "expansion_name": chunk.expansion_name,
             "is_default": is_default,
+            "approved": approved,
+            "pending_guide_id": pending_guide_id,
             "created_by": created_by,
         })
         existing_keys.add(key)
@@ -148,6 +163,20 @@ def _require_profile_admin(sb, user_id: str) -> None:
         raise HTTPException(status_code=403, detail="Admin privileges required")
 
 
+def _is_new_game(sb, bgg_id: Optional[int]) -> bool:
+    """True when the bgg_id has no matching boardgamebuddy_games row."""
+    if not bgg_id:
+        return True
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select("id")
+        .eq("bgg_id", bgg_id)
+        .limit(1)
+        .execute()
+    )
+    return not existing.data
+
+
 @router.post(
     "/guides/import",
     response_model=GuideImportResponse,
@@ -174,7 +203,12 @@ async def submit_guide(
     bundle: GuideBundle,
     su_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> PendingGuideSubmitResponse:
-    """Queue a guide bundle for admin review. All users — including admins — go through review."""
+    """Queue a guide bundle for admin review.
+
+    Chunks are materialized immediately as approved=false and linked to the
+    pending row so the uploader sees their work in their own guide right
+    away. They become visible to other users only after admin approval.
+    """
     sb = get_supabase()
     inserted = (
         sb.table("boardgamebuddy_pending_guides")
@@ -189,10 +223,23 @@ async def submit_guide(
         .execute()
     )
     pending_id = inserted.data[0]["id"] if inserted.data else None
+    import_result = None
+    if pending_id:
+        import_result = await _apply_bundle(
+            bundle,
+            force=False,
+            created_by=su_user.sub,
+            approved=False,
+            pending_guide_id=pending_id,
+        )
     return PendingGuideSubmitResponse(
         id=pending_id,
         status="submitted",
-        message="Submitted for review. An admin will approve or reject it shortly.",
+        message=(
+            "Submitted for review. Your chunks are visible only to you "
+            "until an admin approves them."
+        ),
+        import_result=import_result,
     )
 
 
@@ -228,9 +275,23 @@ async def list_pending_guides(
         )
         name_map = {r["id"]: r["display_name"] for r in (names.data or [])}
 
+    # Single round-trip to figure out which bgg_ids are already in the games
+    # table — drives the "New game" / "Existing game" pill on the FE.
+    bgg_ids = [r["bgg_id"] for r in records if r.get("bgg_id")]
+    existing_bgg: set[int] = set()
+    if bgg_ids:
+        games = (
+            sb.table("boardgamebuddy_games")
+            .select("bgg_id")
+            .in_("bgg_id", bgg_ids)
+            .execute()
+        )
+        existing_bgg = {g["bgg_id"] for g in (games.data or [])}
+
     return [
         PendingGuideSummary(
             uploader_name=name_map.get(r["uploader_id"]),
+            is_new_game=(r.get("bgg_id") not in existing_bgg) if r.get("bgg_id") else True,
             **r,
         )
         for r in records
@@ -269,7 +330,22 @@ async def get_pending_guide(
     )
     if names.data:
         uploader_name = names.data[0]["display_name"]
-    return PendingGuideDetail(uploader_name=uploader_name, **row)
+
+    chunk_rows = (
+        sb.table("boardgamebuddy_guide_chunks")
+        .select(_CHUNK_SELECT)
+        .eq("pending_guide_id", pending_id)
+        .execute()
+    )
+    sorted_rows = _sort_chunk_rows(chunk_rows.data or [])
+    chunk_responses = [_chunk_row_to_response(r) for r in sorted_rows]
+
+    return PendingGuideDetail(
+        uploader_name=uploader_name,
+        is_new_game=_is_new_game(sb, row.get("bgg_id")),
+        chunks=chunk_responses,
+        **row,
+    )
 
 
 @router.post(
@@ -283,7 +359,15 @@ async def approve_pending_guide(
     pending_id: str = Path(..., description="Pending guide submission UUID"),
     su_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> GuideImportResponse:
-    """Admin-only: import the submitted bundle and mark the pending row approved."""
+    """Admin-only: flip the submitted chunks to approved, optionally promoting some to defaults.
+
+    Two paths:
+    - Default: flip the existing pending chunks to approved=true (and
+      is_default=true for ids in `default_chunk_ids`).
+    - Override: if `override_bundle` is provided the admin has edited the
+      bundle in the modal; we delete the pending chunks and re-import the
+      override as approved chunks linked to the same pending_id.
+    """
     sb = get_supabase()
     _require_profile_admin(sb, su_user.sub)
 
@@ -299,9 +383,62 @@ async def approve_pending_guide(
     if row["status"] != "pending":
         raise HTTPException(status_code=400, detail=f"Already {row['status']}")
 
-    bundle_data = body.override_bundle.model_dump(mode="json") if body.override_bundle else row["bundle"]
-    bundle = GuideBundle(**bundle_data)
-    import_result = await _apply_bundle(bundle, body.force, created_by=row["uploader_id"])
+    if body.override_bundle is not None:
+        # Admin edited the bundle in-place — replace the pending chunks with
+        # the override and import them as approved.
+        sb.table("boardgamebuddy_guide_chunks").delete().eq("pending_guide_id", pending_id).execute()
+        bundle = body.override_bundle
+        import_result = await _apply_bundle(
+            bundle,
+            body.force,
+            created_by=row["uploader_id"],
+            approved=True,
+            pending_guide_id=pending_id,
+        )
+        # Promote any chunks the admin marked as default. Override-bundle
+        # chunks don't have stable ids before insert, so this only matches
+        # if the FE re-uses ids it received earlier (it doesn't today —
+        # override path lands as community contributions).
+        if body.default_chunk_ids:
+            (
+                sb.table("boardgamebuddy_guide_chunks")
+                .update({"is_default": True})
+                .in_("id", body.default_chunk_ids)
+                .execute()
+            )
+    else:
+        pending_chunks = (
+            sb.table("boardgamebuddy_guide_chunks")
+            .select("id, game_id")
+            .eq("pending_guide_id", pending_id)
+            .execute()
+        )
+        chunk_rows = pending_chunks.data or []
+        chunk_ids = [c["id"] for c in chunk_rows]
+        game_id = chunk_rows[0]["game_id"] if chunk_rows else None
+        default_ids = [cid for cid in body.default_chunk_ids if cid in chunk_ids]
+        non_default_ids = [cid for cid in chunk_ids if cid not in default_ids]
+        if default_ids:
+            (
+                sb.table("boardgamebuddy_guide_chunks")
+                .update({"approved": True, "is_default": True, "updated_at": "now()"})
+                .in_("id", default_ids)
+                .execute()
+            )
+        if non_default_ids:
+            (
+                sb.table("boardgamebuddy_guide_chunks")
+                .update({"approved": True, "is_default": False, "updated_at": "now()"})
+                .in_("id", non_default_ids)
+                .execute()
+            )
+        import_result = GuideImportResponse(
+            game_id=game_id or "",
+            imported_game=False,
+            chunks_inserted=len(chunk_ids),
+            chunks_skipped=0,
+            skipped_reasons=[],
+        )
 
     sb.table("boardgamebuddy_pending_guides").update({
         "status": "approved",
@@ -324,7 +461,7 @@ async def reject_pending_guide(
     pending_id: str = Path(..., description="Pending guide submission UUID"),
     su_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> PendingGuideSummary:
-    """Admin-only: mark a pending submission as rejected, leaving an audit row."""
+    """Admin-only: delete the submission's pending chunks and mark the row rejected (audit only)."""
     sb = get_supabase()
     _require_profile_admin(sb, su_user.sub)
 
@@ -339,6 +476,9 @@ async def reject_pending_guide(
     row = result.data[0]
     if row["status"] != "pending":
         raise HTTPException(status_code=400, detail=f"Already {row['status']}")
+
+    # Drop the pending chunks so they disappear from the uploader's view.
+    sb.table("boardgamebuddy_guide_chunks").delete().eq("pending_guide_id", pending_id).execute()
 
     updated = (
         sb.table("boardgamebuddy_pending_guides")
@@ -359,5 +499,6 @@ async def reject_pending_guide(
         bgg_id=final.get("bgg_id"),
         chunk_count=final["chunk_count"],
         status=final["status"],
+        is_new_game=_is_new_game(sb, final.get("bgg_id")),
         created_at=final["created_at"],
     )

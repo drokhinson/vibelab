@@ -16,7 +16,14 @@ from shared_models import HealthResponse
 from . import router
 from .constants import EXPANSION_COLOR_PALETTE
 from .dependencies import CurrentUser, get_current_admin
-from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
+from .models import (
+    BggGameMetaResponse,
+    BggSearchResult,
+    GameDetail,
+    GameListResponse,
+    GameSummary,
+    RefreshImagesResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +171,66 @@ def _parse_bgg_xml(body: str, *, context: str) -> ET.Element:
             status_code=502,
             detail="Could not parse BoardGameGeek response.",
         )
+
+
+def _safe_int_attr(el: Optional[ET.Element]) -> Optional[int]:
+    """Read an int from a BGG element's `value` attribute; 0/missing → None."""
+    if el is None:
+        return None
+    try:
+        return int(el.get("value", "0")) or None
+    except (TypeError, ValueError):
+        return None
+
+
+async def _fetch_bgg_meta(bgg_id: int) -> dict:
+    """Fetch and parse a BGG game's full metadata.
+
+    Shared by `import_bgg_game` (which persists) and the read-only
+    `/games/bgg-preview/{bgg_id}` endpoint. Image URLs are returned as
+    BGG-hosted URLs; callers that persist should re-host them via
+    `_upload_to_storage()`.
+    """
+    body = await _fetch_bgg("/thing", {"id": bgg_id, "stats": 1}, timeout=15.0)
+    root = _parse_bgg_xml(body, context=f"thing id={bgg_id}")
+    item = root.find("item")
+    if item is None:
+        raise HTTPException(status_code=404, detail="Game not found on BGG")
+
+    name_el = item.find("name[@type='primary']")
+    name = name_el.get("value", "") if name_el is not None else "Unknown"
+
+    desc_el = item.find("description")
+
+    img_el = item.find("image")
+    thumb_el = item.find("thumbnail")
+
+    categories = [
+        link.get("value", "")
+        for link in item.findall("link[@type='boardgamecategory']")
+    ]
+    mechanics = [
+        link.get("value", "")
+        for link in item.findall("link[@type='boardgamemechanic']")
+    ]
+
+    is_expansion, base_game_bgg_id = _extract_expansion_meta(item)
+
+    return {
+        "bgg_id": bgg_id,
+        "name": name,
+        "year_published": _safe_int_attr(item.find("yearpublished")),
+        "min_players": _safe_int_attr(item.find("minplayers")),
+        "max_players": _safe_int_attr(item.find("maxplayers")),
+        "playing_time": _safe_int_attr(item.find("playingtime")),
+        "description": (desc_el.text if desc_el is not None else None),
+        "image_url": _normalize_image_url(img_el.text if img_el is not None else None),
+        "thumbnail_url": _normalize_image_url(thumb_el.text if thumb_el is not None else None),
+        "categories": categories,
+        "mechanics": mechanics,
+        "is_expansion": is_expansion,
+        "base_game_bgg_id": base_game_bgg_id,
+    }
 
 
 @router.get(
@@ -328,6 +395,57 @@ async def get_game(
     return GameDetail(**result.data[0])
 
 
+@router.get(
+    "/games/bgg-preview/{bgg_id}",
+    response_model=BggGameMetaResponse,
+    status_code=200,
+    summary="Preview a game's BGG metadata (or its existing DB row)",
+)
+async def bgg_preview(
+    bgg_id: int = Path(..., description="BoardGameGeek game ID"),
+) -> BggGameMetaResponse:
+    """Used by the import + admin review UIs to render the game header.
+
+    If the game is already in the library, returns the stored row (no BGG
+    quota cost). Otherwise fetches metadata from BGG without persisting
+    anything — callers display it as a "you're about to create this game"
+    preview.
+    """
+    sb = get_supabase()
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select(
+            "id, bgg_id, name, year_published, min_players, max_players,"
+            " playing_time, description, image_url, thumbnail_url,"
+            " categories, mechanics, is_expansion, base_game_bgg_id"
+        )
+        .eq("bgg_id", bgg_id)
+        .execute()
+    )
+    if existing.data:
+        row = existing.data[0]
+        return BggGameMetaResponse(
+            bgg_id=row["bgg_id"],
+            name=row["name"],
+            year_published=row.get("year_published"),
+            min_players=row.get("min_players"),
+            max_players=row.get("max_players"),
+            playing_time=row.get("playing_time"),
+            description=row.get("description"),
+            image_url=row.get("image_url"),
+            thumbnail_url=row.get("thumbnail_url"),
+            categories=row.get("categories") or [],
+            mechanics=row.get("mechanics") or [],
+            is_expansion=bool(row.get("is_expansion")),
+            base_game_bgg_id=row.get("base_game_bgg_id"),
+            already_in_db=True,
+            db_game_id=row["id"],
+        )
+
+    meta = await _fetch_bgg_meta(bgg_id)
+    return BggGameMetaResponse(**meta, already_in_db=False, db_game_id=None)
+
+
 @router.post(
     "/games/import-bgg/{bgg_id}",
     response_model=GameSummary,
@@ -340,7 +458,6 @@ async def import_bgg_game(
     """Fetch a game from BGG API and add it to our database."""
     sb = get_supabase()
 
-    # Check if already exists
     existing = (
         sb.table("boardgamebuddy_games")
         .select("*")
@@ -350,57 +467,24 @@ async def import_bgg_game(
     if existing.data:
         return GameSummary(**existing.data[0])
 
-    # Fetch from BGG
-    body = await _fetch_bgg(
-        "/thing",
-        {"id": bgg_id, "stats": 1},
-        timeout=15.0,
+    meta = await _fetch_bgg_meta(bgg_id)
+    expansion_color = (
+        _next_expansion_color(sb, meta["base_game_bgg_id"]) if meta["is_expansion"] else None
     )
-    root = _parse_bgg_xml(body, context=f"thing id={bgg_id}")
-    item = root.find("item")
-    if item is None:
-        raise HTTPException(status_code=404, detail="Game not found on BGG")
-
-    name_el = item.find("name[@type='primary']")
-    name = name_el.get("value", "") if name_el is not None else "Unknown"
-
-    year_el = item.find("yearpublished")
-    min_el = item.find("minplayers")
-    max_el = item.find("maxplayers")
-    time_el = item.find("playingtime")
-    img_el = item.find("image")
-    thumb_el = item.find("thumbnail")
-
-    # Extract categories and mechanics
-    categories = [
-        link.get("value", "")
-        for link in item.findall("link[@type='boardgamecategory']")
-    ]
-    mechanics = [
-        link.get("value", "")
-        for link in item.findall("link[@type='boardgamemechanic']")
-    ]
-
-    is_expansion, base_game_bgg_id = _extract_expansion_meta(item)
-    expansion_color = _next_expansion_color(sb, base_game_bgg_id) if is_expansion else None
 
     game_data = {
         "bgg_id": bgg_id,
-        "name": name,
-        "year_published": int(year_el.get("value", "0")) if year_el is not None else None,
-        "min_players": int(min_el.get("value", "0")) if min_el is not None else None,
-        "max_players": int(max_el.get("value", "0")) if max_el is not None else None,
-        "playing_time": int(time_el.get("value", "0")) if time_el is not None else None,
-        "image_url": await _upload_to_storage(
-            sb, bgg_id, _normalize_image_url(img_el.text if img_el is not None else None), "image"
-        ),
-        "thumbnail_url": await _upload_to_storage(
-            sb, bgg_id, _normalize_image_url(thumb_el.text if thumb_el is not None else None), "thumb"
-        ),
-        "categories": categories,
-        "mechanics": mechanics,
-        "is_expansion": is_expansion,
-        "base_game_bgg_id": base_game_bgg_id,
+        "name": meta["name"],
+        "year_published": meta["year_published"],
+        "min_players": meta["min_players"],
+        "max_players": meta["max_players"],
+        "playing_time": meta["playing_time"],
+        "image_url": await _upload_to_storage(sb, bgg_id, meta["image_url"], "image"),
+        "thumbnail_url": await _upload_to_storage(sb, bgg_id, meta["thumbnail_url"], "thumb"),
+        "categories": meta["categories"],
+        "mechanics": meta["mechanics"],
+        "is_expansion": meta["is_expansion"],
+        "base_game_bgg_id": meta["base_game_bgg_id"],
         "expansion_color": expansion_color,
     }
 

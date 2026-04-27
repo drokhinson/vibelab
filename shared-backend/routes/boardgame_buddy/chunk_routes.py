@@ -61,6 +61,8 @@ def _chunk_row_to_response(
         layout=row.get("layout", "text"),
         content=row["content"],
         is_default=bool(row.get("is_default")),
+        approved=bool(row.get("approved", True)),
+        pending_guide_id=row.get("pending_guide_id"),
         created_by=row.get("created_by"),
         created_by_name=created_by_name,
         updated_at=row["updated_at"],
@@ -70,7 +72,7 @@ def _chunk_row_to_response(
 
 _CHUNK_SELECT = (
     "id, game_id, chunk_type, title, layout, content, is_default,"
-    " created_by, updated_at,"
+    " approved, pending_guide_id, created_by, updated_at,"
     " boardgamebuddy_chunk_types(label, icon, display_order),"
     " boardgamebuddy_profiles(display_name)"
 )
@@ -166,6 +168,7 @@ async def list_chunks(
         .select(_CHUNK_SELECT)
         .eq("game_id", game_id)
         .eq("is_default", True)
+        .eq("approved", True)
         .execute()
     )
     rows = _sort_chunk_rows(result.data or [])
@@ -362,8 +365,20 @@ async def get_my_guide(
         .select(_CHUNK_SELECT)
         .in_("game_id", target_game_ids)
     )
+    # Visibility:
+    #  - approved chunks are global (subject to the default filter below);
+    #  - unapproved chunks are visible only to their submitter so the
+    #    uploader sees their work right after submitting, even before
+    #    admin review.
+    own_unapproved = f"and(approved.eq.false,created_by.eq.{user.user_id})"
     if not has_customizations:
-        chunks_query = chunks_query.eq("is_default", True)
+        # Default view: curated defaults + the user's own pending chunks.
+        chunks_query = chunks_query.or_(
+            f"and(approved.eq.true,is_default.eq.true),{own_unapproved}"
+        )
+    else:
+        # Customized view: every approved chunk + the user's own pending.
+        chunks_query = chunks_query.or_(f"approved.eq.true,{own_unapproved}")
     chunks_res = chunks_query.execute()
     chunk_rows = _sort_chunk_rows(chunks_res.data or [])
 
