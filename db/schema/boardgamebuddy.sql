@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 046
+-- Last updated: migration 048
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   is_expansion BOOLEAN NOT NULL DEFAULT false,
   base_game_bgg_id INTEGER,
   expansion_color TEXT,
+  -- Official rulebook URL (migration 048). Promoted from a `chunk_type='rulebook'`
+  -- row to a per-game column so it can be fetched alongside the game and isn't
+  -- subject to the chunk system's hide/reorder/customize flow.
+  rulebook_url TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_games ENABLE ROW LEVEL SECURITY;

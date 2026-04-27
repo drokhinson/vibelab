@@ -33,13 +33,26 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
     """Insert a validated GuideBundle's chunks into the DB. Shared by admin direct + approval paths."""
     sb = get_supabase()
 
+    # Rulebook moved from a chunk_type='rulebook' chunk to a column on the
+    # games row (migration 048). Accept either form: prefer the explicit
+    # bundle.game.rulebook_url, fall back to a legacy chunk's content for
+    # older sample-guide JSON files. Filter rulebook chunks out of the
+    # iteration so they never persist regardless.
+    g = bundle.game
+    effective_rulebook_url = (g.rulebook_url or "").strip() or None
+    if not effective_rulebook_url:
+        legacy = next((c for c in bundle.chunks if c.chunk_type == "rulebook"), None)
+        if legacy and legacy.content.strip():
+            effective_rulebook_url = legacy.content.strip()
+    bundle_chunks = [c for c in bundle.chunks if c.chunk_type != "rulebook"]
+
     valid_type_rows = (
         sb.table("boardgamebuddy_chunk_types")
         .select("id")
         .execute()
     )
     valid_types = {r["id"] for r in (valid_type_rows.data or [])}
-    unknown = sorted({c.chunk_type for c in bundle.chunks if c.chunk_type not in valid_types})
+    unknown = sorted({c.chunk_type for c in bundle_chunks if c.chunk_type not in valid_types})
     if unknown:
         raise HTTPException(
             status_code=400,
@@ -54,23 +67,24 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
         .eq("bgg_id", bundle.game.bgg_id)
         .execute()
     )
-    g = bundle.game
     if existing_game.data:
         game_id = existing_game.data[0]["id"]
         # Backfill expansion linkage if the bundle now claims expansion status
         # but the existing row predates this feature (or was imported as a
         # base game by mistake). Trust the bundle.
+        existing_row = existing_game.data[0]
+        updates: dict[str, object] = {}
         if g.is_expansion:
-            existing_row = existing_game.data[0]
-            updates: dict[str, object] = {}
             if not existing_row.get("is_expansion"):
                 updates["is_expansion"] = True
             if g.base_game_bgg_id and existing_row.get("base_game_bgg_id") != g.base_game_bgg_id:
                 updates["base_game_bgg_id"] = g.base_game_bgg_id
             if not existing_row.get("expansion_color"):
                 updates["expansion_color"] = _next_expansion_color(sb, g.base_game_bgg_id)
-            if updates:
-                sb.table("boardgamebuddy_games").update(updates).eq("id", game_id).execute()
+        if effective_rulebook_url:
+            updates["rulebook_url"] = effective_rulebook_url
+        if updates:
+            sb.table("boardgamebuddy_games").update(updates).eq("id", game_id).execute()
     else:
         # If the bundle carries the core BGG metadata, insert directly and skip
         # the BGG XML API call (saves daily quota). image_url / thumbnail_url
@@ -84,6 +98,7 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
                 "playing_time": g.playing_time,
                 "is_expansion": g.is_expansion,
                 "base_game_bgg_id": g.base_game_bgg_id,
+                "rulebook_url": effective_rulebook_url,
             }
             if g.is_expansion:
                 new_row["expansion_color"] = _next_expansion_color(sb, g.base_game_bgg_id)
@@ -93,6 +108,10 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
         else:
             summary = await import_bgg_game(g.bgg_id)
             game_id = summary.id
+            if effective_rulebook_url:
+                sb.table("boardgamebuddy_games").update(
+                    {"rulebook_url": effective_rulebook_url}
+                ).eq("id", game_id).execute()
         imported_game = True
 
     if force:
@@ -118,7 +137,7 @@ async def _apply_bundle(bundle: GuideBundle, force: bool, created_by: Optional[s
     bulk_default = created_by is None
     to_insert = []
     skipped_reasons: list[str] = []
-    for chunk in bundle.chunks:
+    for chunk in bundle_chunks:
         key = (chunk.chunk_type, chunk.title)
         if key in existing_keys:
             skipped_reasons.append(f"duplicate: {chunk.chunk_type} / {chunk.title!r}")

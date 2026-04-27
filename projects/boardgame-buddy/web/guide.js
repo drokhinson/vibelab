@@ -152,6 +152,7 @@ function recomputeGuideViews() {
   renderGuide();
   renderGuideToolbar();
   renderExpansionsPanel();
+  renderExpansionRulebooks();
   const dlg = document.getElementById("hidden-chunks-dialog");
   if (dlg?.open) renderHiddenChunksPanel();
 }
@@ -161,31 +162,29 @@ function renderGuide() {
   const rulebookHost = document.getElementById("rulebook-section");
   const chunks = currentGuideChunks;
 
-  const rulebookChunks = chunks.filter(c => c.chunk_type === "rulebook");
-  const otherChunks = chunks.filter(c => c.chunk_type !== "rulebook");
-
-  // Rulebook gets its own section above Quick Reference.
+  // Rulebook URL is now per-game metadata (boardgamebuddy_games.rulebook_url),
+  // not a chunk. Render the link card straight from currentGame.
   if (rulebookHost) {
-    if (rulebookChunks.length) {
+    const url = (currentGame?.rulebook_url || "").trim();
+    if (url) {
       rulebookHost.className = "mb-4 space-y-2";
-      rulebookHost.innerHTML = rulebookChunks.map(c => `
-        <a href="${escapeAttr(c.content.trim())}" target="_blank" rel="noopener"
+      rulebookHost.innerHTML = `
+        <a href="${escapeAttr(url)}" target="_blank" rel="noopener"
            class="rulebook-card">
           <i data-lucide="file-text" class="w-5 h-5"></i>
           <div class="rulebook-card__text">
-            <div class="rulebook-card__title">${c.title || "Rulebook"}</div>
+            <div class="rulebook-card__title">Official Rulebook</div>
             <div class="rulebook-card__sub">Open official rulebook</div>
           </div>
           <i data-lucide="external-link" class="w-4 h-4 opacity-60"></i>
-        </a>
-      `).join("");
+        </a>`;
     } else {
       rulebookHost.className = "";
       rulebookHost.innerHTML = "";
     }
   }
 
-  if (!otherChunks.length) {
+  if (!chunks.length) {
     container.innerHTML = `
       <div class="text-center py-4 text-base-content/50">
         <p class="text-sm">No guide chunks yet.</p>
@@ -204,7 +203,7 @@ function renderGuide() {
   // ordering.
   const groups = [];
   const seen = new Map();
-  for (const c of otherChunks) {
+  for (const c of chunks) {
     const key = c.chunk_type;
     if (!seen.has(key)) {
       const idx = groups.length;
@@ -320,6 +319,40 @@ function renderExpansionsPanel() {
       ${session ? "" : `
         <p class="text-xs text-base-content/50 mt-2">Sign in to toggle expansions.</p>`}
     </div>`;
+  lucide.createIcons();
+}
+
+// Section at the bottom of the Quick Reference: link cards for the rulebooks
+// of every expansion the user has currently toggled on. Empty when no enabled
+// expansion has a rulebook URL. recomputeGuideViews() drives this on every
+// toggle, so the section live-updates with the panel above.
+function renderExpansionRulebooks() {
+  const host = document.getElementById("expansion-rulebooks-section");
+  if (!host) return;
+  const enabled = (currentExpansions || []).filter(
+    e => e.is_enabled && (e.rulebook_url || "").trim(),
+  );
+  if (!enabled.length) {
+    host.className = "";
+    host.innerHTML = "";
+    return;
+  }
+  host.className = "mt-4 space-y-2";
+  host.innerHTML = `
+    <h3 class="text-sm font-semibold text-base-content/70 px-1 mb-1">
+      Expansion rulebooks
+    </h3>
+    ${enabled.map(e => `
+      <a href="${escapeAttr(e.rulebook_url.trim())}" target="_blank" rel="noopener"
+         class="rulebook-card">
+        <i data-lucide="file-text" class="w-5 h-5"
+           style="color:${escapeAttr(e.color || "currentColor")}"></i>
+        <div class="rulebook-card__text">
+          <div class="rulebook-card__title">${escapeHtml(e.name)}</div>
+          <div class="rulebook-card__sub">Open expansion rulebook</div>
+        </div>
+        <i data-lucide="external-link" class="w-4 h-4 opacity-60"></i>
+      </a>`).join("")}`;
   lucide.createIcons();
 }
 

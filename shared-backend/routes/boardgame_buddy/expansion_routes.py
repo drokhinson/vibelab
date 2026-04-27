@@ -61,7 +61,7 @@ async def list_expansions(
 
     expansions = (
         sb.table("boardgamebuddy_games")
-        .select("id, bgg_id, name, thumbnail_url, expansion_color")
+        .select("id, bgg_id, name, thumbnail_url, expansion_color, rulebook_url")
         .eq("is_expansion", True)
         .eq("base_game_bgg_id", base_bgg_id)
         .order("name")
@@ -105,6 +105,7 @@ async def list_expansions(
             color=r.get("expansion_color"),
             is_enabled=r["id"] in enabled_ids,
             chunk_count=chunk_counts.get(r["id"], 0),
+            rulebook_url=r.get("rulebook_url"),
         )
         for r in rows
     ]

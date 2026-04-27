@@ -37,6 +37,7 @@ Game catalog seeded from BGG top 1000.
 | is_expansion | BOOLEAN | default false; true when this row is an expansion of another game |
 | base_game_bgg_id | INTEGER | nullable; BGG id of the base game this expansion extends (no FK — expansions may be imported before their base game) |
 | expansion_color | TEXT | nullable; auto-assigned at import for the expansion-dot UI (admin-overridable) |
+| rulebook_url | TEXT | nullable; official rulebook URL surfaced as a link card on the game's reference guide. Per-game metadata, not a chunk |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_profiles
@@ -126,7 +127,7 @@ deleted and only the winner is persisted to `boardgamebuddy_play_players`.
 ### boardgamebuddy_chunk_types (lookup)
 | Column | Type | Notes |
 |--------|------|-------|
-| id | TEXT PK | `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant`, `rulebook` |
+| id | TEXT PK | `setup`, `player_turn`, `card_reference`, `scoring`, `tips` (the legacy `rulebook` type was promoted to `boardgamebuddy_games.rulebook_url` in migration 048) |
 | label | TEXT | human label |
 | icon | TEXT | lucide icon name |
 | display_order | INT | sort in UI |
@@ -177,7 +178,7 @@ of the chunk system; will be dropped in a follow-up migration.
 - `GET /api/v1/boardgame_buddy/games/search-bgg?query=` — proxy BGG API
 - `GET /api/v1/boardgame_buddy/games/lookup-by-bgg/{bgg_id}` — null-or-`GameSummary`; the import preview uses this to label a bundle as "new game" vs "existing game"
 - `GET /api/v1/boardgame_buddy/games/{game_id}/chunks` — all guide chunks for a game
-- `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise
+- `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise. Each item includes the expansion's `rulebook_url` so the frontend can render expansion-rulebook links at the bottom of the Quick Reference when the toggle is on
 - `GET /api/v1/boardgame_buddy/chunk-types` — chunk type lookup
 
 ### Auth Required
@@ -230,7 +231,8 @@ If `min_players`, `max_players`, and `playing_time` are all present in the bundl
     "playing_time": 30,
     "bgg_url": "https://boardgamegeek.com/boardgame/68448",
     "is_expansion": false,
-    "base_game_bgg_id": null
+    "base_game_bgg_id": null,
+    "rulebook_url": "https://example.com/7-wonders-rulebook.pdf"
   },
   "source": {
     "generated_at": "2026-04-24T00:00:00Z",
@@ -240,12 +242,11 @@ If `min_players`, `max_players`, and `playing_time` are all present in the bundl
   },
   "chunks": [
     { "chunk_type": "setup",        "title": "Components & Dealing", "content": "markdown", "layout": "text" },
-    { "chunk_type": "player_turn",  "title": "Turn Actions",         "content": "markdown", "layout": "text" },
-    { "chunk_type": "rulebook",     "title": "Official Rulebook (PDF)", "content": "https://…pdf", "layout": "text" }
+    { "chunk_type": "player_turn",  "title": "Turn Actions",         "content": "markdown", "layout": "text" }
   ]
 }
 ```
-`chunk_type` must be one of the seven IDs in `boardgamebuddy_chunk_types`. Up to 25 chunks per bundle (7 specialist agents × 3 max each).
+`chunk_type` must be one of the IDs in `boardgamebuddy_chunk_types` (`setup`, `player_turn`, `card_reference`, `scoring`, `tips`). The rulebook URL is per-game metadata at `game.rulebook_url`, not a chunk. Up to 25 chunks per bundle. Legacy bundles that still carry a `chunk_type='rulebook'` chunk are accepted: the importer migrates the URL into `boardgamebuddy_games.rulebook_url` and drops the chunk.
 
 When the bundle's `game.is_expansion` is true, the import flow stamps `is_expansion`, `base_game_bgg_id`, and (if not already set) auto-assigns `expansion_color` from the palette in `boardgame_buddy/constants.py`. The expansion then surfaces in the base game's `GET /games/{id}/expansions` response with `is_enabled=false` until the viewer flips the toggle.
 
