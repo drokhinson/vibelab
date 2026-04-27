@@ -640,15 +640,16 @@ body {
   align-items: center;
   gap: 0.4rem;
   font-family: var(--font-display);
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(60, 35, 5, 0.75);
+  color: var(--accent);
   padding: 0.1rem 0 0.35rem 0;
   margin-bottom: 0.4rem;
-  border-bottom: 1px solid rgba(139, 111, 60, 0.35);
+  border-bottom: 1px solid rgba(201, 146, 42, 0.55);
 }
+.scroll-panel .guide-section__title { color: #6B4A1A; border-bottom-color: rgba(107, 74, 26, 0.45); }
 .scroll-panel .guide-section__title [data-lucide] { color: #6B4A1A; }
 
 /* ── Expansion source dot (matches the toggle row's color) ──────────────── */
