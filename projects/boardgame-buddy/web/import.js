@@ -251,6 +251,17 @@ function renderBundlePreview(bundle, editable = false, opts = {}) {
         </div>
         ${missing.length ? `<span class="badge badge-warning badge-sm">missing: ${missing.map(escapeHtml).join(", ")}</span>` : ""}
       </div>
+      <h3 class="guide-section__title mt-2 mb-1">
+        <i data-lucide="info" class="w-3 h-3"></i>
+        <span>Game Info</span>
+      </h3>
+      <div class="flex flex-wrap gap-1 mb-2">
+        ${renderGameMetadata(bundle, gameExistsInfo)}
+      </div>
+      <h3 class="guide-section__title mt-2 mb-1">
+        <i data-lucide="list" class="w-3 h-3"></i>
+        <span>Quick Reference Guide Chunks</span>
+      </h3>
       ${masterToggle}
       <div class="overflow-x-auto">
         <table class="table table-xs">
@@ -292,19 +303,14 @@ function renderGameStatusBanner(bundle, info) {
         ${g.thumbnail_url ? `<img src="${bggImg(g.thumbnail_url)}" alt="" class="w-8 h-8 rounded object-cover ml-auto" />` : ""}
       </div>`;
   }
-  // NEW game — show metadata completeness + BGG call warning
+  // NEW game — note whether BGG XML API will be triggered on approval. The
+  // metadata badges themselves now live in the dedicated "Game Info" section
+  // rendered by renderGameMetadata().
   const game = bundle.game || {};
-  const fields = [
-    { key: "min_players", label: "Min players", value: game.min_players },
-    { key: "max_players", label: "Max players", value: game.max_players },
-    { key: "playing_time", label: "Playing time", value: game.playing_time },
-  ];
-  const missing = fields.filter(f => f.value == null);
-  const haveAll = missing.length === 0;
-  const chips = fields.map(f => f.value != null
-    ? `<span class="badge badge-ghost badge-sm">${escapeHtml(f.label)}: ${escapeHtml(String(f.value))}</span>`
-    : `<span class="badge badge-error badge-sm">${escapeHtml(f.label)}: missing</span>`
-  ).join(" ");
+  const haveAll =
+    game.min_players != null &&
+    game.max_players != null &&
+    game.playing_time != null;
   const note = haveAll
     ? `Metadata complete. Game will be inserted directly; BGG will only be called for box art (best effort — won't block approval).`
     : `Required metadata missing — BGG XML API will be called on approval to fill in the rest.`;
@@ -314,9 +320,29 @@ function renderGameStatusBanner(bundle, info) {
         <i data-lucide="${haveAll ? "package-plus" : "alert-triangle"}" class="w-4 h-4"></i>
         <span class="font-semibold">New game</span>
       </div>
-      <div class="flex flex-wrap gap-1">${chips}</div>
       <div class="opacity-80">${escapeHtml(note)}</div>
     </div>`;
+}
+
+// Renders the Game Info badge row. Pulls min/max players + playing time from
+// the uploaded bundle first, then falls back to the existing catalog game
+// (when adding chunks to a known game with a sparse bundle). Missing fields
+// surface as a red "missing" badge so the user sees they'll be backfilled
+// from BGG on approval.
+function renderGameMetadata(bundle, gameExistsInfo) {
+  const bundleGame = bundle.game || {};
+  const existingGame = gameExistsInfo?.game || {};
+  const fields = [
+    { key: "min_players", label: "Min players" },
+    { key: "max_players", label: "Max players" },
+    { key: "playing_time", label: "Playing time" },
+  ];
+  return fields.map(f => {
+    const value = bundleGame[f.key] != null ? bundleGame[f.key] : existingGame[f.key];
+    return value != null
+      ? `<span class="badge badge-ghost badge-sm">${escapeHtml(f.label)}: ${escapeHtml(String(value))}</span>`
+      : `<span class="badge badge-error badge-sm">${escapeHtml(f.label)}: missing</span>`;
+  }).join(" ");
 }
 
 function toggleBundleChunkDefault(index, checked) {
