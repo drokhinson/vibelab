@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional
 
 import httpx
-from fastapi import Depends, Query, Path, HTTPException
+from fastapi import Depends, Header, Query, Path, HTTPException
 from fastapi.responses import Response
 from supabase import Client
 
@@ -15,7 +15,7 @@ from shared_models import HealthResponse
 
 from . import router
 from .constants import EXPANSION_COLOR_PALETTE
-from .dependencies import CurrentUser, get_current_admin
+from .dependencies import CurrentUser, get_current_admin, maybe_supabase_user
 from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
 
 logger = logging.getLogger(__name__)
@@ -192,10 +192,28 @@ async def list_games(
     playtime_min: Optional[int] = Query(None, ge=1, description="Min playing time in minutes (inclusive)"),
     playtime_max: Optional[int] = Query(None, ge=1, description="Max playing time in minutes (inclusive)"),
     mechanics: Optional[list[str]] = Query(None, description="Required mechanics (AND logic)"),
+    owned_only: bool = Query(False, description="Only games in the caller's owned collection (requires auth; ignored otherwise)"),
+    authorization: Optional[str] = Header(None),
 ) -> GameListResponse:
     """List games from the catalog, with optional search and filters."""
     sb = get_supabase()
     offset = (page - 1) * per_page
+
+    owned_ids: Optional[list[str]] = None
+    if owned_only:
+        su_user = await maybe_supabase_user(authorization)
+        if su_user is None:
+            return GameListResponse(games=[], total=0, page=page, per_page=per_page)
+        col = (
+            sb.table("boardgamebuddy_collections")
+            .select("game_id")
+            .eq("user_id", su_user.sub)
+            .eq("status", "owned")
+            .execute()
+        )
+        owned_ids = [row["game_id"] for row in (col.data or [])]
+        if not owned_ids:
+            return GameListResponse(games=[], total=0, page=page, per_page=per_page)
 
     query = sb.table("boardgamebuddy_games").select(
         "id, bgg_id, name, year_published, min_players, max_players, "
@@ -203,6 +221,8 @@ async def list_games(
         count="exact",
     )
 
+    if owned_ids is not None:
+        query = query.in_("id", owned_ids)
     if search:
         query = query.ilike("name", f"%{search}%")
     if category:

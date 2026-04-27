@@ -14,6 +14,7 @@ async function loadGames() {
     if (gamesFilterPlaytimeMin !== null) params.set("playtime_min", gamesFilterPlaytimeMin);
     if (gamesFilterPlaytimeMax !== null) params.set("playtime_max", gamesFilterPlaytimeMax);
     gamesFilterMechanics.forEach(m => params.append("mechanics", m));
+    if (gamesFilterOwnedOnly && currentUser) params.set("owned_only", "true");
 
     const data = await apiFetch(`/games?${params}`);
     gamesCache = data.games;
@@ -139,12 +140,28 @@ function renderFilterStrip() {
   const hasActiveFilter = gamesFilterPlayers !== null
     || gamesFilterPlaytimeMin !== null
     || gamesFilterPlaytimeMax !== null
-    || gamesFilterMechanics.length > 0;
+    || gamesFilterMechanics.length > 0
+    || gamesFilterOwnedOnly;
 
   const mechanicsCount = gamesFilterMechanics.length;
 
+  // Source toggle: only meaningful when signed in (the API ignores owned_only
+  // for anon callers anyway, but hiding it avoids a misleading UI).
+  const sourceToggle = currentUser ? `
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="text-xs text-base-content/50 mr-1">Show</span>
+        <div class="join">
+          <button class="btn btn-xs join-item ${gamesFilterOwnedOnly ? 'btn-outline' : 'btn-primary'}"
+                  onclick="setOwnedOnlyFilter(false)">All games</button>
+          <button class="btn btn-xs join-item ${gamesFilterOwnedOnly ? 'btn-primary' : 'btn-outline'}"
+                  onclick="setOwnedOnlyFilter(true)">Owned only</button>
+        </div>
+      </div>` : "";
+
   el.innerHTML = `
     <div class="space-y-2">
+
+      ${sourceToggle}
 
       <!-- Players row -->
       <div class="flex items-center gap-1.5 flex-wrap">
@@ -247,6 +264,15 @@ function clearBrowseFilters() {
   gamesFilterPlaytimeMin = null;
   gamesFilterPlaytimeMax = null;
   gamesFilterMechanics = [];
+  gamesFilterOwnedOnly = false;
+  gamesPage = 1;
+  renderFilterStrip();
+  loadGames();
+}
+
+function setOwnedOnlyFilter(value) {
+  if (gamesFilterOwnedOnly === value) return;
+  gamesFilterOwnedOnly = value;
   gamesPage = 1;
   renderFilterStrip();
   loadGames();
@@ -264,11 +290,10 @@ function _renderMechanicsList() {
   const ordered = [...checked, ...rest];
   return ordered.map(m => {
     const isChecked = gamesFilterMechanics.includes(m);
-    const safe = JSON.stringify(m);
     return `
       <li class="px-2 py-1.5 rounded cursor-pointer hover:bg-base-200 text-sm flex items-center gap-2"
           data-mechanic="${escapeAttr(m)}"
-          onclick="event.stopPropagation(); toggleMechanicFilter(${safe})">
+          onclick="event.stopPropagation(); toggleMechanicFilter(this.dataset.mechanic)">
         <input type="checkbox" class="checkbox checkbox-xs pointer-events-none" ${isChecked ? 'checked' : ''} />
         <span class="flex-1">${escapeHtml(m)}</span>
       </li>`;

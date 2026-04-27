@@ -1,5 +1,7 @@
 """FastAPI dependencies for BoardgameBuddy."""
 
+from typing import Optional
+
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
@@ -54,3 +56,17 @@ async def get_current_admin(
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return user
+
+
+async def maybe_supabase_user(authorization: Optional[str]) -> Optional[SupabaseUser]:
+    """Decode the bearer token if present; return None when missing or invalid.
+
+    For anon-friendly endpoints that surface a richer per-user view to signed-in
+    callers without forcing auth.
+    """
+    if not authorization:
+        return None
+    try:
+        return await get_current_supabase_user(authorization=authorization)
+    except HTTPException:
+        return None

@@ -172,7 +172,7 @@ of the chunk system; will be dropped in a follow-up migration.
 
 ### Public
 - `GET /api/v1/boardgame_buddy/health`
-- `GET /api/v1/boardgame_buddy/games` — paginated, search, filter
+- `GET /api/v1/boardgame_buddy/games` — paginated, search, filter. Supports `players`, `playtime_min/max`, `mechanics` (AND logic), and `owned_only=true` (requires bearer token; intersected with the caller's `boardgamebuddy_collections` rows where `status='owned'`)
 - `GET /api/v1/boardgame_buddy/games/{game_id}` — detail (includes derived `bgg_url`)
 - `GET /api/v1/boardgame_buddy/games/search-bgg?query=` — proxy BGG API
 - `GET /api/v1/boardgame_buddy/games/lookup-by-bgg/{bgg_id}` — null-or-`GameSummary`; the import preview uses this to label a bundle as "new game" vs "existing game"

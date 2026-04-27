@@ -13,10 +13,14 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, Path
 
 from db import get_supabase
-from jwt_auth import SupabaseUser, get_current_supabase_user
 
 from . import router
-from .dependencies import CurrentUser, get_current_admin, get_current_user
+from .dependencies import (
+    CurrentUser,
+    get_current_admin,
+    get_current_user,
+    maybe_supabase_user,
+)
 from .models import (
     ExpansionColorUpdate,
     ExpansionListItem,
@@ -24,20 +28,6 @@ from .models import (
     GameSummary,
     MessageResponse,
 )
-
-
-async def _maybe_supabase_user(authorization: Optional[str]) -> Optional[SupabaseUser]:
-    """Decode the bearer token if present; return None when missing or invalid.
-
-    Used by anon-friendly endpoints that surface a richer per-user view to
-    signed-in callers without requiring auth.
-    """
-    if not authorization:
-        return None
-    try:
-        return await get_current_supabase_user(authorization=authorization)
-    except HTTPException:
-        return None
 
 
 @router.get(
@@ -56,7 +46,7 @@ async def list_expansions(
     state. Anon callers always see `is_enabled=false`.
     """
     sb = get_supabase()
-    su_user = await _maybe_supabase_user(authorization)
+    su_user = await maybe_supabase_user(authorization)
     base = (
         sb.table("boardgamebuddy_games")
         .select("bgg_id")

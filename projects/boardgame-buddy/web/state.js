@@ -52,6 +52,7 @@ let gamesFilterPlaytimeMin = null;
 let gamesFilterPlaytimeMax = null;
 let gamesFilterMechanics = [];
 let mechanicsOptions = [];
+let gamesFilterOwnedOnly = false;
 
 // Profile (account page tab state — survives re-renders)
 let profileTab = "account"; // account | buddies
