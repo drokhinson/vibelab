@@ -37,9 +37,8 @@ async function loadCloset() {
 
   const shelvesEl = document.getElementById("closet-shelves");
   const listEl = document.getElementById("closet-list");
-  const spinner = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
-  shelvesEl.innerHTML = spinner;
-  listEl.innerHTML = spinner;
+  shelvesEl.innerHTML = renderShelvesSkeleton();
+  listEl.innerHTML = renderListSkeleton();
 
   try {
     await Promise.all([loadShelfPage("owned", 1), loadShelfPage("played", 1)]);
@@ -83,6 +82,53 @@ async function loadWishlist() {
     wishlistItems = [];
     showToast(err.message, "error");
   }
+}
+
+// ── Loading skeletons ────────────────────────────────────────────────────────
+// Mirror the real shelf + list layouts so the closet doesn't reflow when
+// content lands. Sized to match book-slot (48×156) and list cards (h-20).
+
+function renderShelvesSkeleton() {
+  const shelf = (bookCount) => `
+    <div class="shelf">
+      <div class="shelf__label">
+        <div class="skeleton h-3 w-20 rounded"></div>
+        <div class="skeleton h-3 w-8 rounded ml-auto"></div>
+      </div>
+      <div class="shelf__row">
+        ${'<div class="skeleton-book"></div>'.repeat(bookCount)}
+        <div class="shelf__base"></div>
+      </div>
+    </div>`;
+  return `<div role="status" aria-label="Loading collection">
+    ${shelf(6)}
+    ${shelf(4)}
+  </div>`;
+}
+
+function renderListSkeleton() {
+  const row = `
+    <div class="card card-side bg-base-200 h-20">
+      <div class="skeleton w-16 h-full rounded-l-box rounded-r-none"></div>
+      <div class="card-body p-2 justify-center gap-2">
+        <div class="skeleton h-3 w-2/3 rounded"></div>
+        <div class="skeleton h-2 w-1/2 rounded"></div>
+      </div>
+    </div>`;
+  const section = (rowCount) => `
+    <section class="mb-5">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="skeleton h-3 w-16 rounded"></div>
+        <div class="skeleton h-4 w-6 rounded-full"></div>
+      </div>
+      <div class="grid grid-cols-1 gap-2">
+        ${row.repeat(rowCount)}
+      </div>
+    </section>`;
+  return `<div role="status" aria-label="Loading collection">
+    ${section(4)}
+    ${section(2)}
+  </div>`;
 }
 
 function applyClosetControls() {

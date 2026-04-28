@@ -47,7 +47,7 @@
     <!-- Auth View -->
     <main data-view="auth" id="auth-container" class="hidden flex-1 px-4 py-4"></main>
 
-    <!-- Browse Games View — primary tab -->
+    <!-- Browse Games View -->
     <main data-view="browse" class="hidden flex-1 px-4 py-4">
       <div class="flex items-center justify-between mb-3 gap-2">
         <h2 class="text-xl font-bold font-display flex items-center gap-2">
@@ -153,15 +153,15 @@
       <form method="dialog" class="modal-backdrop"><button>close</button></form>
     </dialog>
 
-    <!-- Bottom Navigation: Browse | Closet | Play Log -->
+    <!-- Bottom Navigation: Closet (default) | Browse | Play Log -->
     <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
-      <button data-nav="browse">
-        <i data-lucide="search" class="w-5 h-5"></i>
-        <span class="btm-nav-label text-xs">Browse</span>
-      </button>
       <button data-nav="closet" class="active">
         <i data-lucide="library-big" class="w-5 h-5"></i>
         <span class="btm-nav-label text-xs">Closet</span>
+      </button>
+      <button data-nav="browse">
+        <i data-lucide="search" class="w-5 h-5"></i>
+        <span class="btm-nav-label text-xs">Browse</span>
       </button>
       <button data-nav="history">
         <i data-lucide="history" class="w-5 h-5"></i>

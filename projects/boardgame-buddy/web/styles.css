@@ -446,6 +446,28 @@ body {
   touch-action: pan-x;
 }
 
+/* Skeleton book — same footprint as a real spine so the shelf doesn't
+   reflow when real books arrive. Sits on the shelf base. */
+.skeleton-book {
+  width: 48px;
+  height: 156px;
+  flex-shrink: 0;
+  margin-bottom: 10px;
+  border-radius: 3px 3px 2px 2px;
+  background: linear-gradient(
+    90deg,
+    oklch(var(--b2)) 0%,
+    oklch(var(--b3)) 50%,
+    oklch(var(--b2)) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+}
+@keyframes skeleton-shimmer {
+  to { background-position: -200% 0; }
+}
+
 /* Book spine — stands on the shelf base, fills its slot */
 .book-spine {
   position: absolute;
