@@ -148,12 +148,12 @@ function renderFilterStrip() {
   // Source toggle: only meaningful when signed in (the API ignores owned_only
   // for anon callers anyway, but hiding it avoids a misleading UI).
   const sourceToggle = currentUser ? `
-      <div class="flex items-center gap-1.5 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
         <span class="text-xs text-base-content/50 mr-1">Show</span>
         <div class="join">
-          <button class="btn btn-xs join-item ${gamesFilterOwnedOnly ? 'btn-outline' : 'btn-primary'}"
+          <button class="btn btn-sm join-item ${gamesFilterOwnedOnly ? 'btn-outline' : 'btn-primary'}"
                   onclick="setOwnedOnlyFilter(false)">All games</button>
-          <button class="btn btn-xs join-item ${gamesFilterOwnedOnly ? 'btn-primary' : 'btn-outline'}"
+          <button class="btn btn-sm join-item ${gamesFilterOwnedOnly ? 'btn-primary' : 'btn-outline'}"
                   onclick="setOwnedOnlyFilter(true)">Owned only</button>
         </div>
       </div>` : "";
@@ -164,9 +164,9 @@ function renderFilterStrip() {
       ${sourceToggle}
 
       <!-- Players row -->
-      <div class="flex items-center gap-1.5 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
         <span class="text-xs text-base-content/50 mr-1">Players</span>
-        <select class="select select-bordered select-xs"
+        <select class="select select-bordered select-sm"
                 onchange="setPlayersFilter(this.value)">
           <option value="" ${gamesFilterPlayers === null ? 'selected' : ''}>Any</option>
           ${PLAYER_OPTIONS.map(n => `
@@ -176,12 +176,12 @@ function renderFilterStrip() {
       </div>
 
       <!-- Playtime row -->
-      <div class="flex items-center gap-1.5 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
         <span class="text-xs text-base-content/50 mr-1">Length</span>
         ${PLAYTIME_CHIPS.map((c, i) => {
           const active = gamesFilterPlaytimeMin === c.min && gamesFilterPlaytimeMax === c.max;
           return `
-            <button class="btn btn-xs ${active ? 'btn-primary' : 'btn-outline'}"
+            <button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}"
                     onclick="togglePlaytimeFilter(${i})">
               ${c.label}
             </button>`;
@@ -190,13 +190,13 @@ function renderFilterStrip() {
 
       <!-- Mechanics dropdown -->
       ${mechanicsOptions.length ? `
-        <div class="flex items-center gap-1.5 flex-wrap">
+        <div class="flex items-center gap-2 flex-wrap">
           <span class="text-xs text-base-content/50 mr-1">Mechanics</span>
           <div class="relative" id="mechanics-dropdown">
-            <button class="btn btn-xs ${mechanicsCount ? 'btn-primary' : 'btn-outline'} gap-1"
+            <button class="btn btn-sm ${mechanicsCount ? 'btn-primary' : 'btn-outline'} gap-1"
                     onclick="event.stopPropagation(); _toggleMechanicsPanel()">
               <span>Mechanics</span>
-              <span id="mechanics-badge" class="badge badge-xs ${mechanicsCount ? '' : 'hidden'}">${mechanicsCount}</span>
+              <span id="mechanics-badge" class="badge badge-sm ${mechanicsCount ? '' : 'hidden'}">${mechanicsCount}</span>
               <i data-lucide="chevron-down" class="w-3 h-3 opacity-60"></i>
             </button>
             <div id="mechanics-panel" class="hidden absolute z-50 left-0 mt-1 w-72 bg-base-100 border border-base-300 rounded-box shadow-xl p-2">

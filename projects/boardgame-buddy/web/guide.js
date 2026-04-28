@@ -62,6 +62,184 @@ function escapeAttr(s) {
   return String(s || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+// ── Search highlight ────────────────────────────────────────────────────────
+// Wrap matches in <mark>. When `alreadyHtml` is true the input is the rendered
+// chunk body (HTML); we walk text nodes only so we never inject <mark> into
+// tag attributes, table cells, or existing markup. Otherwise we treat the
+// input as plain text (used for chunk titles which are escaped at render time).
+function _escapeRegex(s) {
+  return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function highlightSearch(input, query, alreadyHtml = false) {
+  const q = (query || "").trim();
+  if (!q) return input == null ? "" : String(input);
+  const re = new RegExp(_escapeRegex(q), "gi");
+  if (!alreadyHtml) {
+    return String(input || "").replace(re, m => `<mark>${m}</mark>`);
+  }
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = input;
+  const walker = document.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  let n; while ((n = walker.nextNode())) nodes.push(n);
+  for (const tn of nodes) {
+    if (!re.test(tn.nodeValue)) { re.lastIndex = 0; continue; }
+    re.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    tn.nodeValue.replace(re, (match, idx) => {
+      if (idx > last) frag.appendChild(document.createTextNode(tn.nodeValue.slice(last, idx)));
+      const mark = document.createElement("mark");
+      mark.textContent = match;
+      frag.appendChild(mark);
+      last = idx + match.length;
+      return match;
+    });
+    if (last < tn.nodeValue.length) frag.appendChild(document.createTextNode(tn.nodeValue.slice(last)));
+    tn.parentNode.replaceChild(frag, tn);
+  }
+  return wrapper.innerHTML;
+}
+
+// ── Sticky guide header (back / search / chunk-type pills / expand-all) ───
+// Lives inside #guide-sticky-host (mounted by game-detail.js) so the back
+// button and lookup affordances stay one tap away while the player scrolls
+// deep into chunk content.
+
+function renderGuideStickyHeader() {
+  const host = document.getElementById("guide-sticky-host");
+  if (!host) return;
+  if (!currentGame) { host.innerHTML = ""; return; }
+
+  // Build chunk-type tally from the user's current visible guide so unused
+  // types are dropped and counts are accurate post-filter.
+  const counts = new Map();
+  for (const c of currentGuideChunks) {
+    counts.set(c.chunk_type, {
+      count: (counts.get(c.chunk_type)?.count || 0) + 1,
+      label: c.chunk_type_label || c.chunk_type,
+      icon: c.chunk_type_icon || "sticky-note",
+      order: c.chunk_type_order || 0,
+    });
+  }
+  const types = [...counts.entries()]
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => a.order - b.order);
+
+  const allActive = guideTypeFilter === null;
+  const expandLabel = guideExpandAll ? "Collapse all" : "Expand all";
+  const expandIcon  = guideExpandAll ? "chevrons-down-up" : "chevrons-up-down";
+
+  host.innerHTML = `
+    <div class="guide-sticky">
+      <div class="guide-sticky__row">
+        <button class="guide-sticky__back" type="button"
+                aria-label="Back to closet"
+                onclick="goBackFromGameDetail()">
+          <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </button>
+        <input class="guide-search" type="search"
+               placeholder="Search guide…" autocomplete="off"
+               aria-label="Search guide"
+               value="${escapeAttr(guideSearchQuery)}"
+               oninput="onGuideSearchInput(this.value)">
+        ${currentGuideChunks.length > 1 ? `
+          <button class="guide-sticky__expand-all" type="button"
+                  onclick="toggleExpandAllChunks()" title="${expandLabel}">
+            <i data-lucide="${expandIcon}" class="w-3 h-3"></i>
+            <span class="ml-1">${expandLabel}</span>
+          </button>` : ""}
+      </div>
+      <div class="guide-pill-row" role="tablist" aria-label="Filter by section">
+        <button type="button" class="guide-pill" role="tab"
+                aria-pressed="${allActive ? "true" : "false"}"
+                onclick="setGuideTypeFilter(null)">
+          All <span class="guide-pill__count">${currentGuideChunks.length}</span>
+        </button>
+        ${types.map(t => `
+          <button type="button" class="guide-pill" role="tab"
+                  aria-pressed="${guideTypeFilter === t.id ? "true" : "false"}"
+                  onclick="setGuideTypeFilter('${escapeAttr(t.id)}')">
+            <i data-lucide="${escapeAttr(t.icon)}" class="w-3 h-3"></i>
+            ${escapeAttr(t.label)}
+            <span class="guide-pill__count">${t.count}</span>
+          </button>`).join("")}
+      </div>
+    </div>`;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+// ── Filter / search / expand-all handlers ───────────────────────────────────
+
+function setGuideTypeFilter(typeId) {
+  guideTypeFilter = typeId || null;
+  applyGuideFilters();
+  renderGuideStickyHeader();
+}
+
+let _guideSearchDebounce = null;
+function onGuideSearchInput(value) {
+  // Debounce so each keystroke doesn't re-render the entire guide.
+  clearTimeout(_guideSearchDebounce);
+  _guideSearchDebounce = setTimeout(() => {
+    guideSearchQuery = value || "";
+    // Re-render so every chunk gets fresh <mark> highlights and is force-open.
+    renderGuide();
+    applyGuideFilters();
+    renderGuideStickyHeader();
+  }, 140);
+}
+
+function toggleExpandAllChunks() {
+  guideExpandAll = !guideExpandAll;
+  // Cheap path: flip checkbox state on every existing collapse without a full
+  // re-render so scroll position is preserved.
+  document.querySelectorAll("#guide-content .scroll-chunk > input[type=checkbox]")
+    .forEach(cb => { cb.checked = guideExpandAll; });
+  renderGuideStickyHeader();
+}
+
+// Hide chunk rows whose type or search-haystack doesn't match. Kept separate
+// from renderGuide() so type-pill switching is O(N) DOM mutation, not a full
+// re-paint of every markdown chunk.
+function applyGuideFilters() {
+  const q = (guideSearchQuery || "").trim().toLowerCase();
+  const list = document.querySelectorAll("#guide-content .swipe-row");
+  let visibleTotal = 0;
+  list.forEach(row => {
+    const matchesType = !guideTypeFilter || row.dataset.chunkType === guideTypeFilter;
+    const matchesSearch = !q || (row.dataset.searchHaystack || "").includes(q);
+    const visible = matchesType && matchesSearch;
+    row.hidden = !visible;
+    if (visible) visibleTotal++;
+  });
+  // Hide entire section blocks whose chunks are all hidden.
+  document.querySelectorAll("#guide-content .guide-section").forEach(sec => {
+    const stillVisible = sec.querySelectorAll(".swipe-row:not([hidden])").length;
+    sec.style.display = stillVisible ? "" : "none";
+  });
+  // Empty-state messaging when search/filter wipe out everything.
+  const empty = document.getElementById("guide-empty-state");
+  const list_el = document.getElementById("guide-chunk-list");
+  if (!visibleTotal && currentGuideChunks.length) {
+    if (!empty && list_el) {
+      list_el.insertAdjacentHTML("afterend",
+        `<div id="guide-empty-state" class="guide-empty">
+           No chunks match this filter${q ? ` for “${escapeAttr(q)}”` : ""}.
+         </div>`);
+    }
+  } else if (empty) {
+    empty.remove();
+  }
+}
+
+// Back button used by the sticky guide header. Mirrors the existing inline
+// onclick on the hero back button so behaviour stays consistent.
+function goBackFromGameDetail() {
+  showView("closet");
+  if (typeof loadCloset === "function") loadCloset();
+}
+
 // ── Permissions ──────────────────────────────────────────────────────────────
 
 function canEditChunk(chunk) {
@@ -92,6 +270,11 @@ function sortVisibleChunks(chunks) {
 
 async function loadGuide(gameId) {
   const container = document.getElementById("guide-content");
+  // Reset per-game UI state so filters/search/expand from a previous game
+  // don't bleed into the new view.
+  guideTypeFilter = null;
+  guideSearchQuery = "";
+  guideExpandAll = false;
   try {
     // Pull the expansion list in parallel with the guide so the toggle panel
     // and the merged chunks land together — avoids a second flicker after
@@ -150,6 +333,8 @@ function recomputeGuideViews() {
   }
 
   renderGuide();
+  renderGuideStickyHeader();
+  applyGuideFilters();
   renderGuideToolbar();
   renderExpansionsPanel();
   renderExpansionRulebooks();
@@ -225,25 +410,37 @@ function renderGuide() {
                style="background:${escapeAttr(c.expansion.color)}"
                title="${escapeAttr(c.expansion.name || "Expansion")}"></span>`
       : "";
+    const titleSearch = (c.title || "").toLowerCase();
+    const contentSearch = (c.content || "").toLowerCase();
+    const haystack = `${titleSearch}\n${contentSearch}`;
+    const renderedTitle = highlightSearch(c.title, guideSearchQuery);
+    const renderedBody = c.layout === 'card_anatomy'
+      ? renderCardAnatomy(c.content)
+      : renderMarkdown(c.content);
+    const finalBody = guideSearchQuery
+      ? highlightSearch(renderedBody, guideSearchQuery, /*alreadyHtml*/ true)
+      : renderedBody;
     return `
       <div class="swipe-row" data-chunk-id="${c.id}"
+           data-chunk-type="${escapeAttr(c.chunk_type || "")}"
+           data-search-haystack="${escapeAttr(haystack)}"
            data-can-edit="${editable ? "1" : "0"}">
         <div class="swipe-action swipe-action--hide">
-          <i data-lucide="eye-off" class="w-5 h-5"></i>
+          <i data-lucide="eye-off" class="w-6 h-6"></i>
           <span>Hide</span>
         </div>
         <div class="swipe-action swipe-action--edit">
-          <i data-lucide="pencil" class="w-5 h-5"></i>
+          <i data-lucide="pencil" class="w-6 h-6"></i>
           <span>Edit</span>
         </div>
         <div class="collapse collapse-arrow scroll-chunk swipe-target">
-          <input type="checkbox" />
-          <div class="collapse-title font-medium text-sm flex items-center gap-1.5 min-w-0">
+          <input type="checkbox" ${guideExpandAll || guideSearchQuery ? "checked" : ""} />
+          <div class="collapse-title flex items-center gap-2 min-w-0">
             ${dot}
-            <span class="block truncate">${c.title}</span>
+            <span class="block truncate">${renderedTitle}</span>
           </div>
           <div class="collapse-content text-sm leading-relaxed guide-text">
-            ${c.layout === 'card_anatomy' ? renderCardAnatomy(c.content) : renderMarkdown(c.content)}
+            ${finalBody}
             ${c.created_by_name ? `<div class="text-xs opacity-60 mt-2">by ${escapeAttr(c.created_by_name)}</div>` : ""}
           </div>
         </div>
@@ -266,9 +463,9 @@ function renderGuide() {
     </div>
     ${showRestore ? `
       <div class="mt-4 flex justify-center">
-        <button class="btn btn-xs btn-ghost text-base-content/60"
+        <button class="btn btn-sm btn-ghost text-base-content/60"
                 onclick="restoreGuideDefaults()">
-          <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Restore default guide
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Restore default guide
         </button>
       </div>` : ""}`;
   lucide.createIcons();
@@ -308,7 +505,7 @@ function renderExpansionsPanel() {
                     style="background:${escapeAttr(color)}"></span>
               <span class="expansions-row__name">${escapeAttr(e.name)}</span>
               <span class="expansions-row__count">${e.chunk_count || 0} chunk${e.chunk_count === 1 ? "" : "s"}</span>
-              <input type="checkbox" class="toggle toggle-sm expansion-toggle"
+              <input type="checkbox" class="toggle expansion-toggle"
                      ${enabled ? "checked" : ""}
                      ${disabled}
                      onchange="toggleExpansion('${e.expansion_game_id}', this.checked)" />
@@ -384,12 +581,12 @@ function renderGuideToolbar() {
   const panelLabel = hasGuideCustomizations ? "More" : "Hidden";
   host.innerHTML = `
     <div class="flex items-center gap-2 flex-wrap">
-      <button class="btn btn-xs btn-outline" onclick="openChunkEditor()">
-        <i data-lucide="plus" class="w-3 h-3"></i> New chunk
+      <button class="btn btn-sm btn-outline" onclick="openChunkEditor()">
+        <i data-lucide="plus" class="w-4 h-4"></i> New chunk
       </button>
-      <button class="btn btn-xs btn-ghost ${panelCount ? "" : "btn-disabled"}"
+      <button class="btn btn-sm btn-ghost ${panelCount ? "" : "btn-disabled"}"
               onclick="openHiddenChunksPanel()">
-        <i data-lucide="eye-off" class="w-3 h-3"></i> ${panelLabel} (${panelCount})
+        <i data-lucide="eye-off" class="w-4 h-4"></i> ${panelLabel} (${panelCount})
       </button>
     </div>`;
   lucide.createIcons();
@@ -561,7 +758,7 @@ function renderHiddenChunksPanel() {
     body.innerHTML = `
       <p class="text-sm text-base-content/60">Nothing hidden. Swipe a chunk left on the guide to hide it.</p>
       <div class="modal-action">
-        <button class="btn btn-ghost btn-sm" onclick="closeHiddenChunksPanel()">Close</button>
+        <button class="btn btn-ghost" onclick="closeHiddenChunksPanel()">Close</button>
       </div>`;
     return;
   }
@@ -572,16 +769,16 @@ function renderHiddenChunksPanel() {
         <div class="mb-2">
           <p class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-1">${escapeHtml(g.label)}</p>
           ${g.chunks.map(c => `
-            <div class="flex items-center gap-2 py-1">
+            <div class="flex items-center gap-2 py-2">
               <span class="text-sm flex-1 truncate">${escapeHtml(c.title)}</span>
-              <button class="btn btn-xs btn-primary" onclick="unhideChunk('${c.id}')">
-                <i data-lucide="eye" class="w-3 h-3"></i> Show
+              <button class="btn btn-sm btn-primary" onclick="unhideChunk('${c.id}')">
+                <i data-lucide="eye" class="w-4 h-4"></i> Show
               </button>
             </div>`).join("")}
         </div>`).join("")}
     </div>
     <div class="modal-action">
-      <button class="btn btn-ghost btn-sm" onclick="closeHiddenChunksPanel()">Close</button>
+      <button class="btn btn-ghost" onclick="closeHiddenChunksPanel()">Close</button>
     </div>`;
   lucide.createIcons();
 }
@@ -640,7 +837,7 @@ async function openChunkEditorModal({ existing = null, onSave, onDelete = null }
     <form onsubmit="submitChunkEditor(event)" class="space-y-3">
       <div class="form-control">
         <label class="label"><span class="label-text text-xs">Type</span></label>
-        <select id="chunk-type" class="select select-bordered select-sm" required>
+        <select id="chunk-type" class="select select-bordered" required>
           ${types.map(t => `
             <option value="${t.id}" ${existing?.chunk_type === t.id ? "selected" : ""}>${t.label}</option>
           `).join("")}
@@ -648,7 +845,7 @@ async function openChunkEditorModal({ existing = null, onSave, onDelete = null }
       </div>
       <div class="form-control">
         <label class="label"><span class="label-text text-xs">Title</span></label>
-        <input id="chunk-title" type="text" class="input input-bordered input-sm"
+        <input id="chunk-title" type="text" class="input input-bordered"
                required maxlength="80"
                value="${escapeAttr(existing?.title || "")}" />
       </div>
@@ -673,19 +870,19 @@ async function openChunkEditorModal({ existing = null, onSave, onDelete = null }
           </div>
         </div>
         <span class="text-xs opacity-60 mb-1">Markdown supported</span>
-        <textarea id="chunk-content" class="textarea textarea-bordered text-sm h-40"
+        <textarea id="chunk-content" class="textarea textarea-bordered text-base h-40"
                   required>${(existing?.content || "").replace(/</g, "&lt;")}</textarea>
         <div id="chunk-preview"
              class="hidden h-40 overflow-y-auto p-3 rounded-lg border border-base-300 bg-base-200 text-sm guide-text"></div>
       </div>
       <div class="modal-action">
         ${onDelete ? `
-          <button type="button" class="btn btn-ghost btn-sm text-error"
+          <button type="button" class="btn btn-ghost text-error"
                   onclick="deleteChunkEditor()">
-            <i data-lucide="trash-2" class="w-3 h-3"></i> Delete
+            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
           </button>` : ""}
-        <button type="button" class="btn btn-ghost btn-sm" onclick="closeChunkEditor()">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm">
+        <button type="button" class="btn btn-ghost" onclick="closeChunkEditor()">Cancel</button>
+        <button type="submit" class="btn btn-primary">
           ${existing ? "Save changes" : "Create chunk"}
         </button>
       </div>

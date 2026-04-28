@@ -108,7 +108,9 @@ function renderGameDetail() {
 
     <!-- Quick Reference Guide -->
     <div id="guide-section" class="mb-4">
-      <div class="flex items-center justify-between mb-2">
+      <!-- Sticky header (back / search / chunk-type pills / expand-all) populated by guide.js -->
+      <div id="guide-sticky-host"></div>
+      <div class="flex items-center justify-between mb-2 mt-3">
         <h2 class="text-lg font-bold flex items-center gap-2">
           <i data-lucide="book-open" class="w-5 h-5" style="color: var(--game-accent)"></i>
           Quick Reference

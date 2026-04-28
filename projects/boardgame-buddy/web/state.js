@@ -64,6 +64,13 @@ let activeSession = null;          // PlayDraftResponse | null
 let sessionExpanded = false;       // bubble visible vs. collapsed into FAB
 let sessionSaveTimer = null;       // debounce handle for PUT /plays/draft
 let sessionDirty = false;          // true once the user has actually mutated the session
+let sessionShowingGuide = false;   // true when the session bubble is overlaid by the in-place guide
+
+// Quick Reference guide UI state — survives chunk re-renders so a search/filter
+// in progress isn't wiped by recomputeGuideViews().
+let guideTypeFilter = null;        // null = all types, otherwise chunk_type id ('setup', 'scoring', ...)
+let guideSearchQuery = "";         // case-insensitive substring search
+let guideExpandAll = false;        // when true, every chunk renders open
 
 // BGG search
 let bggSearchResults = [];

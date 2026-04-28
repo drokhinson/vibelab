@@ -3,8 +3,12 @@
 // Replaces the old standalone Log a Play view. Tapping the global "+" FAB
 // opens a floating panel that tracks game + players + per-round scores +
 // notes; the panel can be minimized back into the FAB while the session
-// stays alive on the server (boardgamebuddy_play_drafts), so the user can
-// flip to the Quick Reference guide mid-game and come back.
+// stays alive on the server (boardgamebuddy_play_drafts).
+//
+// The bubble's "Reference" button overlays an in-place Quick Reference
+// guide on top of the scoreboard so a player can look up a rule mid-game
+// without losing scores. The session DOM is rebuilt on close (renderSessionPanel)
+// so no state mutation is needed.
 
 const TODAY = () => new Date().toISOString().split("T")[0];
 
@@ -139,6 +143,7 @@ function openSession({ gameId, gameName, gameThumb } = {}) {
 
 function minimizeSession() {
   sessionExpanded = false;
+  sessionShowingGuide = false;            // back to scoreboard on reopen
   document.getElementById("session-backdrop").classList.add("hidden");
   document.getElementById("session-panel").classList.add("hidden");
   // If the user opened the bubble but never made a real change, drop the
@@ -588,8 +593,13 @@ function renderSessionPanel() {
     <div class="flex items-center gap-2 mb-3">
       <i data-lucide="dice-5" class="w-5 h-5" style="color: var(--accent)"></i>
       <h3 class="font-bold text-base flex-1">Session</h3>
-      <button class="btn btn-ghost btn-xs btn-square" title="Minimize" onclick="minimizeSession()">
-        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+      ${currentGame || activeSession?.game_id ? `
+      <button class="btn btn-ghost btn-sm" title="View Quick Reference"
+              onclick="openSessionGuide()">
+        <i data-lucide="book-open" class="w-4 h-4"></i> Reference
+      </button>` : ""}
+      <button class="btn btn-ghost btn-sm btn-square" title="Minimize" onclick="minimizeSession()">
+        <i data-lucide="chevron-down" class="w-5 h-5"></i>
       </button>
     </div>
 
@@ -600,7 +610,7 @@ function renderSessionPanel() {
 
     <div class="mb-2 flex items-center gap-2">
       <label class="text-xs opacity-60 w-10">Date</label>
-      <input type="date" class="input input-bordered input-sm flex-1" value="${s.played_at}"
+      <input type="date" class="input input-bordered flex-1" value="${s.played_at}"
              onchange="setPlayedAt(this.value)" />
     </div>
 
@@ -610,19 +620,19 @@ function renderSessionPanel() {
         <table class="session-grid"><thead></thead><tbody></tbody><tfoot></tfoot></table>
       </div>
       <div class="flex gap-2 mt-2">
-        <button class="btn btn-ghost btn-xs" onclick="addRound()">
-          <i data-lucide="plus" class="w-3 h-3"></i> Round
+        <button class="btn btn-sm btn-ghost" onclick="addRound()">
+          <i data-lucide="plus" class="w-4 h-4"></i> Round
         </button>
-        <button class="btn btn-ghost btn-xs" onclick="openAddPlayerForm()">
-          <i data-lucide="user-plus" class="w-3 h-3"></i> Player
+        <button class="btn btn-sm btn-ghost" onclick="openAddPlayerForm()">
+          <i data-lucide="user-plus" class="w-4 h-4"></i> Player
         </button>
       </div>
       <div id="session-add-player" class="hidden mt-2 p-2 rounded border border-base-content/10 bg-base-200/40">
         <div class="text-xs opacity-60 mb-1" id="session-add-player-title">Add player</div>
-        <div class="flex gap-1 items-center">
-          <div class="relative flex-1 min-w-0">
+        <div class="flex gap-2 items-center flex-wrap">
+          <div class="relative flex-1 min-w-[140px]">
             <input type="text" id="add-player-name"
-                   class="input input-bordered input-xs w-full"
+                   class="input input-bordered input-sm w-full"
                    placeholder="Player name" autocomplete="off"
                    oninput="onAddPlayerNameInput(this.value)"
                    onchange="onAddPlayerNameChange(this.value)"
@@ -632,28 +642,28 @@ function renderSessionPanel() {
                  class="hidden absolute z-50 left-0 right-0 mt-1 bg-base-100 border border-base-300 rounded-box shadow-xl p-1"></div>
           </div>
           <input type="text" id="add-player-initials" maxlength="3"
-                 class="input input-bordered input-xs w-14 text-center"
+                 class="input input-bordered input-sm w-16 text-center"
                  placeholder="ABC"
                  oninput="onAddPlayerInitialsInput(this.value)" />
-          <button id="session-add-player-confirm" class="btn btn-primary btn-xs"
+          <button id="session-add-player-confirm" class="btn btn-sm btn-primary"
                   onclick="confirmAddPlayer()">Add</button>
-          <button class="btn btn-ghost btn-xs" onclick="cancelAddPlayer()">Cancel</button>
+          <button class="btn btn-sm btn-ghost" onclick="cancelAddPlayer()">Cancel</button>
         </div>
       </div>
     </div>
 
     <div class="mb-3">
       <label class="text-xs opacity-60 block mb-1">Notes</label>
-      <textarea class="textarea textarea-bordered textarea-sm w-full"
+      <textarea class="textarea textarea-bordered w-full text-sm"
                 placeholder="Fun moments, close calls..."
                 oninput="setNotes(this.value)">${escapeHtml(s.notes || "")}</textarea>
     </div>
 
     <div class="flex gap-2">
-      <button class="btn btn-ghost btn-sm flex-1" onclick="discardSession()">
+      <button class="btn btn-ghost flex-1" onclick="discardSession()">
         <i data-lucide="trash-2" class="w-4 h-4"></i> Discard
       </button>
-      <button id="session-save-btn" class="btn btn-primary btn-sm flex-1" onclick="saveSession()">
+      <button id="session-save-btn" class="btn btn-primary flex-1" onclick="saveSession()">
         <i data-lucide="check" class="w-4 h-4"></i> Save Play
       </button>
     </div>
@@ -668,16 +678,16 @@ function renderGameSlot() {
   const s = activeSession;
   if (s.game_id && s.game_name) {
     slot.innerHTML = `
-      <div class="input input-bordered input-sm flex items-center gap-2">
-        ${s.game_thumbnail ? `<img src="${s.game_thumbnail}" class="w-5 h-5 rounded object-cover" />` : ""}
+      <div class="input input-bordered flex items-center gap-2">
+        ${s.game_thumbnail ? `<img src="${s.game_thumbnail}" class="w-6 h-6 rounded object-cover" />` : ""}
         <span class="truncate flex-1">${escapeHtml(s.game_name)}</span>
-        <button class="btn btn-ghost btn-xs" onclick="clearSessionGame()" title="Change game">
-          <i data-lucide="x" class="w-3 h-3"></i>
+        <button class="btn btn-ghost btn-sm btn-square" onclick="clearSessionGame()" title="Change game">
+          <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>`;
   } else {
     slot.innerHTML = `
-      <input type="text" id="session-game-search" class="input input-bordered input-sm w-full"
+      <input type="text" id="session-game-search" class="input input-bordered w-full"
              placeholder="Search for a game..." oninput="searchSessionGame(this.value)" autofocus />
       <div id="session-game-results" class="mt-1"></div>`;
   }
@@ -696,7 +706,7 @@ async function searchSessionGame(q) {
       const out = document.getElementById("session-game-results");
       // Use data-attributes (safe under any name with quotes/HTML) + delegated click.
       out.innerHTML = data.games.map(g => `
-        <button type="button" class="btn btn-ghost btn-xs w-full justify-start text-left session-game-pick"
+        <button type="button" class="btn btn-ghost btn-sm w-full justify-start text-left session-game-pick"
                 data-id="${g.id}"
                 data-name="${escapeHtml(g.name)}"
                 data-thumb="${escapeHtml(g.thumbnail_url || "")}">
@@ -729,16 +739,18 @@ function renderGridHeader() {
         const fullName = p.name || `Player ${i+1}`;
         return `
         <th>
-          <button class="player-header-btn" title="${escapeHtml(fullName)}"
-                  aria-label="Edit ${escapeHtml(fullName)}"
-                  onclick="openEditPlayer(${i})">
-            ${escapeHtml(initials)}
-          </button>
-          ${s.players.length > 1 ? `
-            <button class="btn btn-ghost btn-xs btn-square" title="Remove player"
-                    onclick="removePlayer(${i})">
-              <i data-lucide="x" class="w-3 h-3"></i>
-            </button>` : ""}
+          <div class="flex items-center justify-center gap-2">
+            <button class="player-header-btn" title="${escapeHtml(fullName)}"
+                    aria-label="Edit ${escapeHtml(fullName)}"
+                    onclick="openEditPlayer(${i})">
+              ${escapeHtml(initials)}
+            </button>
+            ${s.players.length > 1 ? `
+              <button class="btn btn-ghost btn-sm btn-square" title="Remove player"
+                      onclick="removePlayer(${i})">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>` : ""}
+          </div>
         </th>`;
       }).join("")}
     </tr>`;
@@ -752,16 +764,18 @@ function renderGridBody() {
   for (let r = 0; r < s.round_count; r++) {
     rows += `<tr>
       <th class="text-left text-xs opacity-60">
-        R${r+1}
-        <button class="btn btn-ghost btn-xs btn-square ml-1" title="Remove round"
-                onclick="removeRound(${r})">
-          <i data-lucide="x" class="w-3 h-3"></i>
-        </button>
+        <span class="inline-flex items-center gap-2">
+          R${r+1}
+          <button class="btn btn-ghost btn-sm btn-square" title="Remove round"
+                  onclick="removeRound(${r})">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </span>
       </th>
       ${s.players.map((p, i) => `
         <td>
-          <input type="number" inputmode="numeric"
-                 class="input input-ghost input-xs text-center px-1"
+          <input type="number" inputmode="decimal"
+                 class="input input-ghost text-center"
                  value="${p.round_scores[r] ?? 0}"
                  oninput="setScore(${i}, ${r}, this.value)" />
         </td>`).join("")}
@@ -784,13 +798,231 @@ function renderTotalsRow() {
       ${s.players.map((p, i) => {
         const isWinner = winners.has(i);
         return `<td class="${isWinner ? "winner-cell" : ""}">
-          <button class="btn btn-ghost btn-xs btn-square" title="${isWinner ? "Winner" : "Mark as winner"}"
-                  onclick="setWinnerOverride(${i})">
-            ${isWinner ? '<i data-lucide="trophy" class="w-3 h-3"></i>' : '<i data-lucide="circle" class="w-3 h-3 opacity-25"></i>'}
-          </button>
-          <span>${totals[i]}</span>
+          <div class="flex items-center justify-center gap-1.5">
+            <button class="btn btn-ghost btn-sm btn-square" title="${isWinner ? "Winner" : "Mark as winner"}"
+                    onclick="setWinnerOverride(${i})">
+              ${isWinner ? '<i data-lucide="trophy" class="w-4 h-4"></i>' : '<i data-lucide="circle" class="w-4 h-4 opacity-25"></i>'}
+            </button>
+            <span class="font-bold">${totals[i]}</span>
+          </div>
         </td>`;
       }).join("")}
     </tr>`;
   if (window.lucide) window.lucide.createIcons();
+}
+
+// ── Session → Guide overlay ──────────────────────────────────────────────────
+// Mid-game rule lookup: re-uses the active session's game_id (or the open
+// game-detail's currentGame) and overlays a focused Quick Reference inside
+// the bubble. Scores and player state remain on the server draft; closing
+// the overlay rebuilds the scoreboard panel from activeSession unchanged.
+//
+// Scoped IDs (session-guide-*) avoid collisions with #guide-content from
+// game-detail, which may be in the DOM beneath the bubble.
+
+let _sessionGuideChunks = [];      // cached chunks for the active overlay
+let _sessionGuideTypeFilter = null;
+let _sessionGuideSearch = "";
+let _sessionGuideExpandAll = false;
+
+async function openSessionGuide() {
+  const gameId = activeSession?.game_id || currentGame?.id;
+  if (!gameId) {
+    showToast("Pick a game first to open its reference.", "info");
+    return;
+  }
+  sessionShowingGuide = true;
+  _sessionGuideTypeFilter = null;
+  _sessionGuideSearch = "";
+  _sessionGuideExpandAll = false;
+
+  const panel = document.getElementById("session-panel");
+  const gameName = activeSession?.game_name || currentGame?.name || "Quick Reference";
+  panel.innerHTML = `
+    <div class="flex items-center gap-2 mb-2">
+      <button class="btn btn-ghost btn-sm" onclick="closeSessionGuide()">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        <span class="ml-1">Session</span>
+      </button>
+      <h3 class="font-bold text-sm flex-1 text-center truncate font-display"
+          style="color: var(--accent)">${escapeHtml(gameName)}</h3>
+      <button class="btn btn-ghost btn-sm btn-square" title="Minimize"
+              onclick="minimizeSession()">
+        <i data-lucide="chevron-down" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <div id="session-guide-sticky"></div>
+    <div id="session-guide-content" class="scroll-panel">
+      <div class="text-center py-4"><span class="loading loading-spinner loading-sm"></span></div>
+    </div>`;
+  if (window.lucide) window.lucide.createIcons();
+
+  try {
+    const chunks = session
+      ? (await apiFetch(`/games/${gameId}/my-guide?include_all_expansions=1`)).chunks
+      : await apiFetch(`/games/${gameId}/chunks`);
+    _sessionGuideChunks = sortVisibleChunks(
+      (chunks || []).filter(c => !c.is_hidden && (c.user_display_order !== null || c.is_default || !session))
+    );
+    renderSessionGuideHeader();
+    renderSessionGuideBody();
+  } catch (err) {
+    document.getElementById("session-guide-content").innerHTML =
+      `<p class="text-error text-sm">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function closeSessionGuide() {
+  sessionShowingGuide = false;
+  _sessionGuideChunks = [];
+  renderSessionPanel();
+}
+
+function renderSessionGuideHeader() {
+  const host = document.getElementById("session-guide-sticky");
+  if (!host) return;
+  const counts = new Map();
+  for (const c of _sessionGuideChunks) {
+    counts.set(c.chunk_type, {
+      count: (counts.get(c.chunk_type)?.count || 0) + 1,
+      label: c.chunk_type_label || c.chunk_type,
+      icon: c.chunk_type_icon || "sticky-note",
+      order: c.chunk_type_order || 0,
+    });
+  }
+  const types = [...counts.entries()]
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => a.order - b.order);
+  const allActive = _sessionGuideTypeFilter === null;
+  const expandLabel = _sessionGuideExpandAll ? "Collapse all" : "Expand all";
+  const expandIcon  = _sessionGuideExpandAll ? "chevrons-down-up" : "chevrons-up-down";
+
+  host.innerHTML = `
+    <div class="guide-sticky" style="margin-left: -0.5rem; margin-right: -0.5rem; margin-top: -0.25rem;">
+      <div class="guide-sticky__row">
+        <input class="guide-search" type="search"
+               placeholder="Search this guide…" autocomplete="off"
+               aria-label="Search guide"
+               value="${escapeAttr(_sessionGuideSearch)}"
+               oninput="onSessionGuideSearchInput(this.value)">
+        ${_sessionGuideChunks.length > 1 ? `
+          <button class="guide-sticky__expand-all" type="button"
+                  onclick="toggleSessionGuideExpandAll()" title="${expandLabel}">
+            <i data-lucide="${expandIcon}" class="w-3 h-3"></i>
+            <span class="ml-1">${expandLabel}</span>
+          </button>` : ""}
+      </div>
+      <div class="guide-pill-row" role="tablist" aria-label="Filter by section">
+        <button type="button" class="guide-pill"
+                aria-pressed="${allActive ? "true" : "false"}"
+                onclick="setSessionGuideTypeFilter(null)">
+          All <span class="guide-pill__count">${_sessionGuideChunks.length}</span>
+        </button>
+        ${types.map(t => `
+          <button type="button" class="guide-pill"
+                  aria-pressed="${_sessionGuideTypeFilter === t.id ? "true" : "false"}"
+                  onclick="setSessionGuideTypeFilter('${escapeAttr(t.id)}')">
+            <i data-lucide="${escapeAttr(t.icon)}" class="w-3 h-3"></i>
+            ${escapeAttr(t.label)}
+            <span class="guide-pill__count">${t.count}</span>
+          </button>`).join("")}
+      </div>
+    </div>`;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function renderSessionGuideBody() {
+  const host = document.getElementById("session-guide-content");
+  if (!host) return;
+  const q = (_sessionGuideSearch || "").toLowerCase().trim();
+  const filtered = _sessionGuideChunks.filter(c => {
+    if (_sessionGuideTypeFilter && c.chunk_type !== _sessionGuideTypeFilter) return false;
+    if (!q) return true;
+    return (c.title || "").toLowerCase().includes(q) ||
+           (c.content || "").toLowerCase().includes(q);
+  });
+
+  if (!filtered.length) {
+    host.innerHTML = `
+      <div class="guide-empty">
+        ${_sessionGuideChunks.length
+          ? `No chunks match this filter${q ? ` for “${escapeHtml(q)}”` : ""}.`
+          : "No guide available for this game yet."}
+      </div>`;
+    return;
+  }
+
+  // Group by chunk_type
+  const groups = [];
+  const seen = new Map();
+  for (const c of filtered) {
+    if (!seen.has(c.chunk_type)) {
+      seen.set(c.chunk_type, groups.length);
+      groups.push({
+        chunk_type: c.chunk_type,
+        label: c.chunk_type_label || c.chunk_type,
+        icon: c.chunk_type_icon || "sticky-note",
+        chunks: [],
+      });
+    }
+    groups[seen.get(c.chunk_type)].chunks.push(c);
+  }
+
+  const open = _sessionGuideExpandAll || !!q;
+  host.innerHTML = `
+    <div id="session-guide-chunk-list">
+      ${groups.map(g => `
+        <section class="guide-section">
+          <h3 class="guide-section__title">
+            <i data-lucide="${escapeAttr(g.icon)}" class="w-4 h-4"></i>
+            <span>${escapeAttr(g.label)}</span>
+          </h3>
+          <div class="space-y-2">
+            ${g.chunks.map(c => {
+              const dot = c.expansion?.color
+                ? `<span class="expansion-dot flex-shrink-0"
+                         style="background:${escapeAttr(c.expansion.color)}"></span>`
+                : "";
+              const bodyHtml = c.layout === 'card_anatomy'
+                ? renderCardAnatomy(c.content)
+                : renderMarkdown(c.content);
+              const finalBody = q ? highlightSearch(bodyHtml, q, true) : bodyHtml;
+              const finalTitle = q ? highlightSearch(c.title, q) : escapeHtml(c.title);
+              return `
+                <div class="collapse collapse-arrow scroll-chunk">
+                  <input type="checkbox" ${open ? "checked" : ""} />
+                  <div class="collapse-title flex items-center gap-2 min-w-0">
+                    ${dot}
+                    <span class="block truncate">${finalTitle}</span>
+                  </div>
+                  <div class="collapse-content text-sm leading-relaxed guide-text">
+                    ${finalBody}
+                  </div>
+                </div>`;
+            }).join("")}
+          </div>
+        </section>`).join("")}
+    </div>`;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function setSessionGuideTypeFilter(typeId) {
+  _sessionGuideTypeFilter = typeId || null;
+  renderSessionGuideHeader();
+  renderSessionGuideBody();
+}
+
+let _sessionGuideSearchDebounce = null;
+function onSessionGuideSearchInput(value) {
+  clearTimeout(_sessionGuideSearchDebounce);
+  _sessionGuideSearchDebounce = setTimeout(() => {
+    _sessionGuideSearch = value || "";
+    renderSessionGuideBody();
+  }, 140);
+}
+
+function toggleSessionGuideExpandAll() {
+  _sessionGuideExpandAll = !_sessionGuideExpandAll;
+  renderSessionGuideBody();
+  renderSessionGuideHeader();
 }
