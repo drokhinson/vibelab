@@ -82,6 +82,11 @@ function renderAdmin() {
     <div class="scroll-body">
       ${bodyHTML}
     </div>
+    ${tab === 'sauces' ? `
+      <button class="fab" aria-label="Add a sauce" onclick="openBuilder()">
+        <i data-lucide="plus"></i>
+      </button>
+    ` : ''}
   `;
 }
 
