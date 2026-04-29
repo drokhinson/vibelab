@@ -11,19 +11,15 @@ async function selectCarb(id) {
   navigate('sauce-selector', { replace: true });
 
   try {
-    const [sauces, ingredients, preps] = await Promise.all([
-      fetchSaucesForCarb(id),
-      fetchIngredientsForCarb(id),
-      fetchPreparationsForCarb(id).catch(() => []),
-    ]);
+    const { sauces, ingredients, preparations } = await fetchCarbLoad(id);
     state.saucesForCurrentCarb = sauces;
     state.allIngredients       = ingredients;
-    state.preparations         = preps;
+    state.preparations         = preparations;
     state.disabledIngredients  = new Set();
     state.filterOpen           = false;
     state.expandedCuisines     = new Set();
     state.loading = null;
-    navigate(preps.length > 0 ? 'prep-selector' : 'sauce-selector');
+    navigate(preparations.length > 0 ? 'prep-selector' : 'sauce-selector');
   } catch (err) {
     state.loading = null;
     const scrollBody = document.querySelector('.scroll-body');

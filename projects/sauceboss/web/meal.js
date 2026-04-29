@@ -2,25 +2,30 @@
 
 // ─── Meal Builder home — single-pick across three sections ──────────────────
 
+// Shared pot illustration. Rendered both on the splash (in index.html) and
+// as the hero illustration on the meal-builder home; class names below let
+// CSS animate the steam and wiggle the pot during loading.
+function potSVG() {
+  return `
+    <svg class="pot-svg" width="180" height="140" viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="90" cy="130" rx="62" ry="8" fill="#1A1A2E" opacity="0.06"/>
+      <path d="M28 68 Q28 112 90 112 Q152 112 152 68 Z" fill="#FFF3E6"/>
+      <rect x="20" y="60" width="140" height="14" rx="7" fill="#E85D04"/>
+      <path d="M28 68 Q28 112 90 112 Q152 112 152 68" stroke="#C94E02" stroke-width="2" fill="none"/>
+      <ellipse cx="90" cy="96" rx="40" ry="10" fill="#E85D04" opacity="0.1"/>
+      <circle class="steam-circle steam-circle--1" cx="70"  cy="91"  r="9" fill="#E85D04" opacity="0.85"/>
+      <circle class="steam-circle steam-circle--2" cx="93"  cy="84"  r="7" fill="#F48C06" opacity="0.9"/>
+      <circle class="steam-circle steam-circle--3" cx="114" cy="93"  r="8" fill="#C94E02" opacity="0.85"/>
+      <circle class="steam-circle steam-circle--4" cx="82"  cy="103" r="5" fill="#FAA307" opacity="0.9"/>
+      <path d="M58 76 Q72 62 88 76 Q104 90 118 74" stroke="#E85D04" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.5"/>
+      <path class="steam-trail steam-trail--1" d="M62 56 Q66 44 62 34 Q58 24 62 14"     stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <path class="steam-trail steam-trail--2" d="M90 53 Q94 41 90 31 Q86 21 90 11"     stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <path class="steam-trail steam-trail--3" d="M118 56 Q122 44 118 34 Q114 24 118 14" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+    </svg>`;
+}
+
 function renderMealBuilder() {
-  const heroSVG = `
-    <div class="hero-illustration">
-      <svg width="180" height="140" viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <ellipse cx="90" cy="130" rx="62" ry="8" fill="#1A1A2E" opacity="0.06"/>
-        <path d="M28 68 Q28 112 90 112 Q152 112 152 68 Z" fill="#FFF3E6"/>
-        <rect x="20" y="60" width="140" height="14" rx="7" fill="#E85D04"/>
-        <path d="M28 68 Q28 112 90 112 Q152 112 152 68" stroke="#C94E02" stroke-width="2" fill="none"/>
-        <ellipse cx="90" cy="96" rx="40" ry="10" fill="#E85D04" opacity="0.1"/>
-        <circle cx="70" cy="91" r="9" fill="#E85D04" opacity="0.85"/>
-        <circle cx="93" cy="84" r="7" fill="#F48C06" opacity="0.9"/>
-        <circle cx="114" cy="93" r="8" fill="#C94E02" opacity="0.85"/>
-        <circle cx="82" cy="103" r="5" fill="#FAA307" opacity="0.9"/>
-        <path d="M58 76 Q72 62 88 76 Q104 90 118 74" stroke="#E85D04" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.5"/>
-        <path d="M62 56 Q66 44 62 34 Q58 24 62 14" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-        <path d="M90 53 Q94 41 90 31 Q86 21 90 11" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-        <path d="M118 56 Q122 44 118 34 Q114 24 118 14" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-      </svg>
-    </div>`;
+  const heroSVG = `<div class="hero-illustration" id="hero-illustration">${potSVG()}</div>`;
 
   const carbCard = (item, onclickAttr, i) => `
     <button class="carb-card" style="--i:${i}" ${onclickAttr}>

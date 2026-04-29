@@ -13,10 +13,7 @@ async function selectSaladBase(id) {
   render();
 
   try {
-    const [dressings, ingredients] = await Promise.all([
-      fetchDressingsForBase(id),
-      fetchIngredientsForBase(id),
-    ]);
+    const { dressings, ingredients } = await fetchSaladBaseLoad(id);
     state.dressingsForCurrentBase = dressings;
     state.allDressingIngredients  = ingredients;
     state.expandedCuisines        = new Set();

@@ -13,10 +13,7 @@ async function selectProtein(id) {
   render();
 
   try {
-    const [marinades, ingredients] = await Promise.all([
-      fetchMarinadesForProtein(id),
-      fetchIngredientsForProtein(id),
-    ]);
+    const { marinades, ingredients } = await fetchProteinLoad(id);
     state.marinadesForCurrentProtein = marinades;
     state.allMarinadeIngredients     = ingredients;
     state.expandedCuisines           = new Set();

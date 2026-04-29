@@ -35,25 +35,54 @@ fetch(`${API}/api/v1/analytics/track`, {
   body: JSON.stringify({ app: window.APP_CONFIG?.project || 'sauceboss', event: 'app_open' })
 }).catch(() => {});
 
-async function fetchCarbs() {
-  const res = await fetch(`${API}/api/v1/sauceboss/carbs`);
+function _withIngredientNames(sauce) {
+  return { ...sauce, ingredientNames: new Set(sauce.ingredients.map(i => i.name)) };
+}
+
+async function fetchInitialLoad() {
+  const res = await fetch(`${API}/api/v1/sauceboss/initial-load`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
-  return data.map(c => ({ ...c, desc: c.description }));
+  return {
+    carbs: (data.carbs || []).map(c => ({ ...c, desc: c.description })),
+    proteins: data.proteins || [],
+    saladBases: data.saladBases || [],
+  };
 }
 
-async function fetchSaucesForCarb(carbId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${carbId}/sauces`);
+async function fetchCarbLoad(carbId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${encodeURIComponent(carbId)}/load`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const sauces = await res.json();
-  return sauces.map(sauce => ({
-    ...sauce,
-    ingredientNames: new Set(sauce.ingredients.map(i => i.name)),
-  }));
+  const data = await res.json();
+  return {
+    sauces: (data.sauces || []).map(_withIngredientNames),
+    ingredients: data.ingredients || [],
+    preparations: data.preparations || [],
+  };
 }
 
-async function fetchIngredientsForCarb(carbId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${carbId}/ingredients`);
+async function fetchProteinLoad(addonId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/proteins/${encodeURIComponent(addonId)}/load`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return {
+    marinades: (data.marinades || []).map(_withIngredientNames),
+    ingredients: data.ingredients || [],
+  };
+}
+
+async function fetchSaladBaseLoad(baseId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/salad-bases/${encodeURIComponent(baseId)}/load`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return {
+    dressings: (data.dressings || []).map(_withIngredientNames),
+    ingredients: data.ingredients || [],
+  };
+}
+
+async function fetchPreparationsForCarb(carbId) {
+  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${encodeURIComponent(carbId)}/preparations`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -66,50 +95,6 @@ async function fetchIngredientCategories() {
 
 async function fetchSubstitutions() {
   const res = await fetch(`${API}/api/v1/sauceboss/substitutions`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-async function fetchPreparationsForCarb(carbId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${carbId}/preparations`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-async function fetchSaladBases() {
-  const res = await fetch(`${API}/api/v1/sauceboss/salad-bases`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-async function fetchDressingsForBase(baseId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/salad-bases/${encodeURIComponent(baseId)}/dressings`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const dressings = await res.json();
-  return dressings.map(d => ({ ...d, ingredientNames: new Set(d.ingredients.map(i => i.name)) }));
-}
-
-async function fetchIngredientsForBase(baseId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/salad-bases/${encodeURIComponent(baseId)}/ingredients`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-async function fetchProteins() {
-  const res = await fetch(`${API}/api/v1/sauceboss/proteins`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-async function fetchMarinadesForProtein(addonId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/proteins/${encodeURIComponent(addonId)}/marinades`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const marinades = await res.json();
-  return marinades.map(m => ({ ...m, ingredientNames: new Set(m.ingredients.map(i => i.name)) }));
-}
-
-async function fetchIngredientsForProtein(addonId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/proteins/${encodeURIComponent(addonId)}/ingredients`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
