@@ -373,14 +373,6 @@ body {
   margin-top: 2px;
 }
 
-/* ── Collection toggle ──────────────────────────────────────────────────────── */
-.collection-toggle .btn {
-  gap: 0.35rem;
-}
-.collection-toggle__active {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--game-accent) 35%, transparent);
-}
-
 /* ── Log-a-Play floating action button ──────────────────────────────────────── */
 .fab-log-play {
   position: fixed;

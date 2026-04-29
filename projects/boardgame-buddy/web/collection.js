@@ -691,7 +691,7 @@ async function addToCollection(gameId, status) {
     });
     showToast(`Added to ${status}!`, "success");
     if (currentGame && currentGame.id === gameId) {
-      renderCollectionButtons(gameId);
+      renderCollectionBookmark(gameId);
     }
   } catch (err) {
     showToast(err.message, "error");
@@ -705,7 +705,7 @@ async function updateCollectionStatus(gameId, newStatus) {
       body: { status: newStatus },
     });
     showToast(`Moved to ${newStatus}`, "success");
-    renderCollectionButtons(gameId);
+    renderCollectionBookmark(gameId);
   } catch (err) {
     showToast(err.message, "error");
   }
@@ -716,16 +716,18 @@ async function removeFromCollection(gameId) {
     await apiFetch(`/collection/${gameId}`, { method: "DELETE" });
     showToast("Removed from collection", "info");
     if (currentView === "closet") loadCloset();
-    if (currentGame && currentGame.id === gameId) renderCollectionButtons(gameId);
+    if (currentGame && currentGame.id === gameId) renderCollectionBookmark(gameId);
   } catch (err) {
     showToast(err.message, "error");
   }
 }
 
-async function renderCollectionButtons(gameId) {
-  const container = document.getElementById("collection-actions");
-  if (!container) return;
+async function renderCollectionBookmark(gameId) {
+  const wrapper = document.getElementById("collection-bookmark");
+  const menu = document.getElementById("collection-bookmark-menu");
+  if (!wrapper || !menu) return;
 
+  let current = null;
   try {
     const items = await apiFetch("/collection");
     // Derived "played" rows are not user-selected collection entries — they
@@ -733,42 +735,61 @@ async function renderCollectionButtons(gameId) {
     const existing = items.find(
       i => i.game_id === gameId && i.status !== "played"
     );
-    const current = existing?.status || null;
-
-    const options = [
-      { key: "owned",    label: "Owned",    icon: "package" },
-      { key: "wishlist", label: "Wishlist", icon: "star" },
-    ];
-
-    container.innerHTML = `
-      <div class="collection-toggle join w-full">
-        ${options.map(opt => {
-          const active = current === opt.key;
-          return `
-            <button
-              class="btn join-item flex-1 ${active ? 'btn-primary collection-toggle__active' : 'btn-outline'}"
-              aria-pressed="${active}"
-              style="${active ? 'background: var(--game-accent); border-color: var(--game-accent); color: #fff;' : ''}"
-              onclick="toggleCollectionStatus('${gameId}', '${opt.key}', ${active ? 'true' : 'false'})">
-              <i data-lucide="${opt.icon}" class="w-4 h-4"></i>
-              <span>${opt.label}</span>
-              ${active ? '<i data-lucide="x" class="w-3 h-3 opacity-70 ml-1"></i>' : ''}
-            </button>`;
-        }).join("")}
-      </div>
-      ${current ? '<p class="text-xs text-base-content/50 mt-1 text-center">Tap the active button to remove</p>' : ''}
-    `;
-    lucide.createIcons();
+    current = existing?.status || null;
   } catch {
-    container.innerHTML = '<p class="text-sm text-base-content/50">Log in to add to collection</p>';
-  }
-}
-
-async function toggleCollectionStatus(gameId, status, isActive) {
-  if (isActive) {
-    await removeFromCollection(gameId);
+    wrapper.classList.add("hidden");
     return;
   }
-  // Use POST (upsert) so it works whether or not there's an existing row.
-  await addToCollection(gameId, status);
+
+  wrapper.dataset.status = current || "";
+
+  const iconByStatus = {
+    owned:    "package",
+    wishlist: "star",
+  };
+  const buttonIcon = iconByStatus[current] || "bookmark-plus";
+  const buttonLabel = current ? `In ${current}` : "Add to collection";
+
+  const button = wrapper.querySelector("button");
+  button.setAttribute("aria-label", buttonLabel);
+  button.innerHTML = `<i data-lucide="${buttonIcon}" class="w-5 h-5" ${current ? `style="color: var(--game-accent);"` : ""}></i>`;
+
+  const items = [
+    { key: "owned",    label: "Owned",    icon: "package" },
+    { key: "wishlist", label: "Wishlist", icon: "star" },
+  ];
+
+  menu.innerHTML = `
+    ${items.map(opt => {
+      const active = current === opt.key;
+      return `
+        <li>
+          <a onclick="setCollectionStatusFromMenu('${gameId}', '${opt.key}')"
+             class="${active ? "active" : ""}">
+            <i data-lucide="${opt.icon}" class="w-4 h-4"></i>
+            <span class="flex-1">${opt.label}</span>
+            ${active ? '<i data-lucide="check" class="w-4 h-4"></i>' : ""}
+          </a>
+        </li>`;
+    }).join("")}
+    <li class="${current ? "" : "menu-disabled"}">
+      <a ${current ? `onclick="setCollectionStatusFromMenu('${gameId}', null)"` : ""}>
+        <i data-lucide="x" class="w-4 h-4"></i>
+        <span>Remove</span>
+      </a>
+    </li>
+  `;
+  lucide.createIcons();
+}
+
+async function setCollectionStatusFromMenu(gameId, status) {
+  // Close the dropdown by blurring the active element so DaisyUI's :focus-within hides it.
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+
+  const current = document.getElementById("collection-bookmark")?.dataset.status || null;
+  if (status === null || status === current) {
+    await removeFromCollection(gameId);
+  } else {
+    await addToCollection(gameId, status);
+  }
 }

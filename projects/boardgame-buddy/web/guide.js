@@ -128,8 +128,6 @@ function renderGuideControls() {
     .sort((a, b) => a.order - b.order);
 
   const allActive = guideTypeFilter === null;
-  const expandLabel = guideExpandAll ? "Collapse all" : "Expand all";
-  const expandIcon  = guideExpandAll ? "chevrons-down-up" : "chevrons-up-down";
 
   host.innerHTML = `
     <div class="guide-controls">
@@ -139,12 +137,6 @@ function renderGuideControls() {
                aria-label="Search guide"
                value="${escapeAttr(guideSearchQuery)}"
                oninput="onGuideSearchInput(this.value)">
-        ${currentGuideChunks.length > 1 ? `
-          <button class="guide-sticky__expand-all" type="button"
-                  onclick="toggleExpandAllChunks()" title="${expandLabel}">
-            <i data-lucide="${expandIcon}" class="w-3 h-3"></i>
-            <span class="ml-1">${expandLabel}</span>
-          </button>` : ""}
       </div>
       <div class="guide-pill-row" role="tablist" aria-label="Filter by section">
         <button type="button" class="guide-pill" role="tab"
@@ -192,15 +184,6 @@ function onGuideSearchInput(value) {
     renderGuide();
     applyGuideFilters();
   }, 140);
-}
-
-function toggleExpandAllChunks() {
-  guideExpandAll = !guideExpandAll;
-  // Cheap path: flip checkbox state on every existing collapse without a full
-  // re-render so scroll position is preserved.
-  document.querySelectorAll("#guide-content .scroll-chunk > input[type=checkbox]")
-    .forEach(cb => { cb.checked = guideExpandAll; });
-  renderGuideControls();
 }
 
 // Hide chunk rows whose type or search-haystack doesn't match. Kept separate
@@ -267,11 +250,10 @@ function sortVisibleChunks(chunks) {
 
 async function loadGuide(gameId) {
   const container = document.getElementById("guide-content");
-  // Reset per-game UI state so filters/search/expand from a previous game
-  // don't bleed into the new view.
+  // Reset per-game UI state so filters/search from a previous game don't
+  // bleed into the new view.
   guideTypeFilter = null;
   guideSearchQuery = "";
-  guideExpandAll = false;
   try {
     // Pull the expansion list in parallel with the guide so the toggle panel
     // and the merged chunks land together — avoids a second flicker after
@@ -408,7 +390,7 @@ function renderGuide() {
           <span>Edit</span>
         </div>
         <div class="collapse collapse-arrow scroll-chunk swipe-target">
-          <input type="checkbox" ${guideExpandAll || guideSearchQuery ? "checked" : ""} />
+          <input type="checkbox" ${guideSearchQuery ? "checked" : ""} />
           <div class="collapse-title flex items-center gap-2 min-w-0">
             ${dot}
             <span class="block truncate">${renderedTitle}</span>
