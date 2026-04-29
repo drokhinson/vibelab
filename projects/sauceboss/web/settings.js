@@ -31,12 +31,37 @@ function renderSettings() {
 function renderAdmin() {
   const isAdmin = !!state.adminKey;
   const tab = state.sauceManagerTab || 'sauces';
+  const search = state.sauceManagerSearch || '';
+  const typeFilter = state.sauceManagerTypeFilter || 'all';
 
   const tabBar = `
     <div class="sauce-manager-tabs">
       <button class="sm-tab ${tab === 'sauces' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('sauces')">Sauces</button>
       <button class="sm-tab ${tab === 'dish' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('dish')">Dish</button>
     </div>`;
+
+  const searchPlaceholder = tab === 'sauces' ? 'Search sauces, cuisine, ingredients…' : 'Search items…';
+  const searchBar = `
+    <div class="sm-search-wrap">
+      <span class="sm-search-icon"><i data-lucide="search"></i></span>
+      <input
+        id="sm-search-input"
+        type="text"
+        class="sm-search-input"
+        placeholder="${searchPlaceholder}"
+        value="${search.replace(/"/g, '&quot;')}"
+        oninput="setSauceManagerSearch(this.value)"
+      >
+      ${search ? `<button class="sm-search-clear" onclick="setSauceManagerSearch('')" aria-label="Clear search"><i data-lucide="x"></i></button>` : ''}
+    </div>`;
+
+  const typeFilterRow = tab === 'sauces' ? `
+    <div class="sm-type-filter">
+      <button class="sm-type-pill ${typeFilter === 'all' ? 'sm-type-pill-active' : ''}" onclick="setSauceManagerTypeFilter('all')">All</button>
+      ${SAUCE_TYPES.map(t => `
+        <button class="sm-type-pill ${typeFilter === t.value ? 'sm-type-pill-active' : ''}" onclick="setSauceManagerTypeFilter('${t.value}')">${t.label}</button>
+      `).join('')}
+    </div>` : '';
 
   let bodyHTML = '';
   if (tab === 'sauces') bodyHTML = renderSaucesTab(isAdmin);
@@ -52,6 +77,8 @@ function renderAdmin() {
     </div>
     ${state.adminError ? `<div class="settings-error" style="margin:8px 16px">${state.adminError}</div>` : ''}
     ${tabBar}
+    ${searchBar}
+    ${typeFilterRow}
     <div class="scroll-body">
       ${bodyHTML}
     </div>
@@ -59,22 +86,41 @@ function renderAdmin() {
 }
 
 function renderSaucesTab(isAdmin) {
+  const typeFilter = state.sauceManagerTypeFilter || 'all';
+  const q = (state.sauceManagerSearch || '').trim().toLowerCase();
+
+  const filtered = state.adminSauces.filter(s => {
+    if (typeFilter !== 'all' && (s.sauceType || 'sauce') !== typeFilter) return false;
+    if (!q) return true;
+    const haystack = [
+      s.name || '',
+      s.cuisine || '',
+      (s.compatibleItems || []).join(' '),
+    ].join(' ').toLowerCase();
+    return haystack.includes(q);
+  });
+
+  if (state.adminSauces.length === 0) {
+    return '<p style="padding:16px;color:#888">No sauces found.</p>';
+  }
+  if (filtered.length === 0) {
+    return '<p style="padding:16px;color:#888">No sauces match your filters.</p>';
+  }
+
   const grouped = {};
-  for (const sauce of state.adminSauces) {
+  for (const sauce of filtered) {
     if (!grouped[sauce.cuisine]) grouped[sauce.cuisine] = [];
     grouped[sauce.cuisine].push(sauce);
   }
   const cuisines = Object.keys(grouped).sort();
-
-  if (cuisines.length === 0) {
-    return '<p style="padding:16px;color:#888">No sauces found.</p>';
-  }
 
   return cuisines.map(cuisine => `
     <div class="admin-cuisine-group">
       <div class="admin-cuisine-header">${cuisine} <span class="admin-count">${grouped[cuisine].length}</span></div>
       ${grouped[cuisine].map(s => {
         const safeName = s.name.replace(/'/g, "\\'");
+        const typeValue = s.sauceType || 'sauce';
+        const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
         return `
         <div class="admin-sauce-row" onclick="selectSauceFromManager('${s.id}')">
           <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
@@ -82,6 +128,7 @@ function renderSaucesTab(isAdmin) {
             <div class="admin-sauce-name">${s.name}</div>
             <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
           </div>
+          <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>
           ${isAdmin ? `
             <button class="admin-edit-btn" onclick="event.stopPropagation(); openBuilderEdit('${s.id}')">Edit</button>
             <button class="admin-delete-btn" onclick="event.stopPropagation(); adminDeleteSauce('${s.id}', '${safeName}')">Delete</button>
@@ -101,8 +148,39 @@ const SECTION_META = [
 
 function renderDishTab(isAdmin) {
   const items = state.adminItems || { carbs: [], proteins: [], salads: [] };
+  const q = (state.sauceManagerSearch || '').trim().toLowerCase();
+  const matches = name => (name || '').toLowerCase().includes(q);
+
+  const filteredBySection = {};
+  let totalShown = 0;
+  for (const sec of SECTION_META) {
+    const list = items[sec.key] || [];
+    if (!q) {
+      filteredBySection[sec.key] = list;
+      totalShown += list.length;
+      continue;
+    }
+    const kept = [];
+    for (const parent of list) {
+      const parentMatch = matches(parent.name);
+      const matchedVariants = (parent.variants || []).filter(v => matches(v.name));
+      if (parentMatch) {
+        kept.push(parent);
+      } else if (matchedVariants.length > 0) {
+        state.expandedParents[parent.id] = true;
+        kept.push({ ...parent, variants: matchedVariants });
+      }
+    }
+    filteredBySection[sec.key] = kept;
+    totalShown += kept.length;
+  }
+
+  if (q && totalShown === 0) {
+    return '<p style="padding:16px;color:#888">No items match your search.</p>';
+  }
+
   return SECTION_META
-    .map(sec => renderDishSection(sec, items[sec.key] || [], isAdmin))
+    .map(sec => renderDishSection(sec, filteredBySection[sec.key] || [], isAdmin))
     .join('');
 }
 
@@ -223,6 +301,8 @@ function renderItemForm() {
 async function openSauceManager() {
   state.adminError = null;
   state.sauceManagerTab = 'sauces';
+  state.sauceManagerSearch = '';
+  state.sauceManagerTypeFilter = 'all';
   state.itemForm = null;
   try {
     const [sauces, items] = await Promise.all([
@@ -250,6 +330,27 @@ function setSauceManagerTab(tab) {
   if (tab === 'dish') {
     refreshAdminItems();
   }
+}
+
+function setSauceManagerSearch(value) {
+  state.sauceManagerSearch = value || '';
+  const wasFocused = document.activeElement && document.activeElement.id === 'sm-search-input';
+  const caret = wasFocused ? document.activeElement.selectionStart : null;
+  render();
+  if (wasFocused) {
+    const el = document.getElementById('sm-search-input');
+    if (el) {
+      el.focus();
+      if (caret != null) {
+        try { el.setSelectionRange(caret, caret); } catch (e) {}
+      }
+    }
+  }
+}
+
+function setSauceManagerTypeFilter(value) {
+  state.sauceManagerTypeFilter = value || 'all';
+  render();
 }
 
 async function refreshAdminItems() {

@@ -1231,6 +1231,105 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 .sm-tab:hover:not(.sm-tab-active) { color: #6B7280; }
 
+/* ── Sauce Manager Search ── */
+.sm-search-wrap {
+  position: relative;
+  padding: 8px 16px;
+  background: #FFFBF5;
+  flex-shrink: 0;
+}
+.sm-search-icon {
+  position: absolute;
+  left: 26px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9CA3AF;
+  pointer-events: none;
+  display: inline-flex;
+}
+.sm-search-icon [data-lucide] { width: 16px; height: 16px; }
+.sm-search-input {
+  width: 100%;
+  padding: 8px 32px 8px 36px;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  font-size: 14px;
+  background: white;
+  color: #1A1A2E;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+.sm-search-input:focus {
+  border-color: #E85D04;
+  box-shadow: 0 0 0 3px rgba(232, 93, 4, 0.12);
+}
+.sm-search-input::placeholder { color: #9CA3AF; }
+.sm-search-clear {
+  position: absolute;
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #9CA3AF;
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sm-search-clear:hover { color: #6B7280; }
+.sm-search-clear [data-lucide] { width: 14px; height: 14px; }
+
+/* ── Sauce Manager Type Filter ── */
+.sm-type-filter {
+  display: flex;
+  gap: 6px;
+  padding: 0 16px 8px;
+  background: #FFFBF5;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.sm-type-pill {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border: 1px solid #E5E7EB;
+  background: white;
+  color: #6B7280;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sm-type-pill:hover:not(.sm-type-pill-active) {
+  color: #1A1A2E;
+  border-color: #D1D5DB;
+}
+.sm-type-pill-active {
+  background: #E85D04;
+  color: white;
+  border-color: #E85D04;
+}
+
+/* ── Per-row Sauce Type Tag ── */
+.sauce-type-tag {
+  display: inline-block;
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.sauce-type-sauce    { background: #FEE7D6; color: #B43E0A; }
+.sauce-type-marinade { background: #FEE2E2; color: #B91C1C; }
+.sauce-type-dressing { background: #DCFCE7; color: #166534; }
+
 /* ── Admin Login Link in Header ── */
 .admin-login-link {
   background: none;
