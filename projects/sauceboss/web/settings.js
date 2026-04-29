@@ -80,7 +80,7 @@ function renderSaucesTab(isAdmin) {
           <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
           <div class="admin-sauce-info">
             <div class="admin-sauce-name">${s.name}</div>
-            <div class="admin-sauce-carbs">${(s.compatibleCarbs || s.compatible_carbs || []).join(' · ')}</div>
+            <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
           </div>
           ${isAdmin ? `
             <button class="admin-edit-btn" onclick="event.stopPropagation(); openBuilderEdit('${s.id}')">Edit</button>
@@ -275,9 +275,13 @@ function toggleParentExpansion(parentId) {
 function selectSauceFromManager(id) {
   const sauce = state.adminSauces.find(s => s.id === id);
   if (!sauce) return;
-  state.selectedSauce = sauce;
-  state.selectedCarb = null;
-  state.selectedPrep = null;
+  if (!sauce.ingredientNames) {
+    sauce.ingredientNames = new Set((sauce.ingredients || []).map(i => i.name));
+  }
+  state.selectedSauce       = sauce;
+  state.selectedItem        = null;
+  state.selectedPrep        = null;
+  state.disabledIngredients = new Set();
   navigate('recipe');
 }
 
@@ -291,7 +295,8 @@ function openBuilderEdit(id) {
     cuisineEmoji: sauce.cuisineEmoji || '',
     color: sauce.color || '#E85D04',
     description: sauce.description || '',
-    carbIds: sauce.compatibleCarbs || [],
+    sauceType: sauce.sauceType || 'sauce',
+    itemIds: sauce.compatibleItems || [],
     steps: (sauce.steps || []).map(s => ({
       title: s.title,
       inputFromStep: s.inputFromStep || null,

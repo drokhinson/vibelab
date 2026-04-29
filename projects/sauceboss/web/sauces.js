@@ -1,35 +1,14 @@
 'use strict';
 
-// Returns header context based on the current screen path.
+// Header context derived from the currently selected item's category.
 function getSauceScreenContext() {
-  if (state.screen === 'dressing-selector') {
-    const base = state.selectedSaladBase;
-    return {
-      sauces: state.dressingsForCurrentBase,
-      backScreen: 'meal-builder',
-      emoji: base ? base.emoji : '🥗',
-      title: base ? `${base.name} Dressings` : 'Dressings',
-      compatLabel: (s) => s.compatibleBases ? s.compatibleBases.join(' · ') : '',
-    };
-  }
-  if (state.screen === 'marinade-selector') {
-    const protein = state.selectedProtein;
-    return {
-      sauces: state.marinadesForCurrentProtein,
-      backScreen: 'meal-builder',
-      emoji: protein ? protein.emoji : '🔥',
-      title: protein ? `${protein.name} Marinades` : 'Marinades',
-      compatLabel: (s) => s.compatibleProteins ? s.compatibleProteins.join(' · ') : '',
-    };
-  }
-  // Default: sauces path
-  const carb = state.selectedCarb;
+  const item = state.selectedItem;
+  const meta = flowMetaFor(item);
   return {
-    sauces: state.saucesForCurrentCarb,
-    backScreen: state.preparations.length > 0 ? 'prep-selector' : 'meal-builder',
-    emoji: carb ? carb.emoji : '🍲',
-    title: carb ? `${carb.name} Sauces` : 'Sauces',
-    compatLabel: (s) => s.compatibleCarbs ? s.compatibleCarbs.join(' · ') : '',
+    sauces:      state.saucesForCurrentItem,
+    backScreen:  state.preparations.length > 0 ? 'prep-selector' : 'meal-builder',
+    emoji:       item ? item.emoji : '🍲',
+    title:       item ? `${item.name} ${meta.sauceTypeLabel.charAt(0).toUpperCase() + meta.sauceTypeLabel.slice(1)}` : 'Sauces',
   };
 }
 
@@ -75,7 +54,7 @@ function renderSauceSelector() {
         const sub = getSubstitutionText(m);
         return sub ? `${m} (try ${sub})` : m;
       }).join(', ');
-      const compatText = ctx.compatLabel(sauce);
+      const compatText = (sauce.compatibleItems || []).join(' · ');
       return `<div class="sauce-item ${available ? '' : 'unavailable'}" onclick="selectSauce('${sauce.id}')">
         <span class="sauce-dot" style="background:${sauce.color}"></span>
         <div class="sauce-info">
@@ -121,20 +100,10 @@ function renderSauceSelector() {
 }
 
 function selectSauce(id) {
-  const { sauces } = getSauceScreenContext();
-  state.selectedSauce = sauces.find(s => s.id === id);
-
-  if (state.screen === 'sauce-selector') {
-    state.meal.carb     = state.selectedCarb;
-    state.meal.prep     = state.selectedPrep;
-    state.meal.sauce    = state.selectedSauce;
-  } else if (state.screen === 'marinade-selector') {
-    state.meal.protein  = state.selectedProtein;
-    state.meal.marinade = state.selectedSauce;
-  } else if (state.screen === 'dressing-selector') {
-    state.meal.saladBase = state.selectedSaladBase;
-    state.meal.dressing  = state.selectedSauce;
-  }
+  state.selectedSauce = state.saucesForCurrentItem.find(s => s.id === id);
+  state.meal.item  = state.selectedItem;
+  state.meal.prep  = state.selectedPrep;
+  state.meal.sauce = state.selectedSauce;
   navigate('meal-recipe');
 }
 

@@ -245,13 +245,6 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 .unit-toggle:hover { border-color: #E85D04; color: #E85D04; }
 
-/* Addon card reuse for meal recipe */
-.meal-section .addon-card {
-  border-radius: 0 0 12px 12px;
-  margin-top: 0;
-  border-top: none;
-}
-
 /* ─────────────────────────────
    SCREEN 1 — Carb Selector
 ───────────────────────────── */
@@ -1039,30 +1032,6 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   background: #FFF7ED;
   border-radius: 10px;
   padding: 4px 10px;
-}
-
-/* ── Recipe: Addon Card ── */
-.addon-card {
-  border-radius: 16px;
-  padding: 14px 16px;
-  margin: 0 16px 12px;
-}
-.addon-protein { background: #FFF7ED; }
-.addon-veggie { background: #F0FDF4; }
-.addon-card-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.addon-card-emoji { font-size: 28px; }
-.addon-card-title { font-size: 15px; font-weight: 700; color: #1A1A2E; }
-.addon-card-meta { font-size: 12px; color: #E85D04; font-weight: 600; margin-top: 1px; }
-.addon-card-instructions {
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.5;
-  margin: 0;
 }
 
 /* ── Recipe: Time Summary ── */

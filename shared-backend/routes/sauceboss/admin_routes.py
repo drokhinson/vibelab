@@ -137,12 +137,10 @@ async def admin_update_item(
 
 @router.delete("/admin/items/{item_id}")
 async def admin_delete_item(item_id: str, authorization: Optional[str] = Header(None)):
-    """Delete an item and its sauce↔item junction rows. Requires admin key."""
+    """Delete an item; child variants and sauce_items rows cascade via FK."""
     require_admin(authorization)
-    sb = get_supabase()
     try:
-        sb.table("sauceboss_sauce_items").delete().eq("item_id", item_id).execute()
-        sb.table("sauceboss_items").delete().eq("id", item_id).execute()
+        get_supabase().table("sauceboss_items").delete().eq("id", item_id).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
     return {"id": item_id, "status": "deleted"}
@@ -150,17 +148,10 @@ async def admin_delete_item(item_id: str, authorization: Optional[str] = Header(
 
 @router.delete("/admin/sauces/{sauce_id}")
 async def admin_delete_sauce(sauce_id: str, authorization: Optional[str] = Header(None)):
-    """Delete a sauce and all its steps/ingredients. Requires admin key."""
+    """Delete a sauce; steps, ingredients, and sauce_items rows cascade via FK."""
     require_admin(authorization)
-    sb = get_supabase()
     try:
-        steps = sb.table("sauceboss_sauce_steps").select("id").eq("sauce_id", sauce_id).execute()
-        step_ids = [s["id"] for s in (steps.data or [])]
-        if step_ids:
-            sb.table("sauceboss_step_ingredients").delete().in_("step_id", step_ids).execute()
-        sb.table("sauceboss_sauce_steps").delete().eq("sauce_id", sauce_id).execute()
-        sb.table("sauceboss_sauce_items").delete().eq("sauce_id", sauce_id).execute()
-        sb.table("sauceboss_sauces").delete().eq("id", sauce_id).execute()
+        get_supabase().table("sauceboss_sauces").delete().eq("id", sauce_id).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
     return {"id": sauce_id, "status": "deleted"}

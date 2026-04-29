@@ -1,20 +1,9 @@
 'use strict';
 
-// Generic variant picker. Currently only carbs have variants seeded, but the
-// unified items table supports variants on any category — proteins/salad bases
-// will route through here automatically once their variants are added.
-function _currentVariantParent() {
-  return state.selectedCarb || state.selectedProtein || state.selectedSaladBase;
-}
-
-function _nextSelectorScreen() {
-  if (state.selectedSaladBase) return 'dressing-selector';
-  if (state.selectedProtein)   return 'marinade-selector';
-  return 'sauce-selector';
-}
-
+// Generic variant picker for the current selectedItem (any category).
 function renderPrepSelector() {
-  const item = _currentVariantParent();
+  const item = state.selectedItem;
+  if (!item) return '';
   const preps = state.preparations;
   return `
     <div class="status-bar"></div>
@@ -41,5 +30,5 @@ function renderPrepSelector() {
 
 function selectPrep(id) {
   state.selectedPrep = state.preparations.find(p => p.id === id) || null;
-  navigate(_nextSelectorScreen());
+  navigate('sauce-selector');
 }

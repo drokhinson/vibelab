@@ -38,7 +38,8 @@ class CreateSauceRequest(BaseModel):
     cuisineEmoji: str = ""
     color: str = Field(pattern=r'^#[0-9A-Fa-f]{6}$')
     description: str = ""
-    carbIds: List[str] = Field(min_length=1)
+    sauceType: SauceType = SauceType.SAUCE
+    itemIds: List[str] = Field(min_length=1)
     steps: List[StepInput] = Field(min_length=1)
 
 

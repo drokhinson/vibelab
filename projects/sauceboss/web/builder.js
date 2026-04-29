@@ -13,6 +13,10 @@ function renderBuilder() {
     `<button class="color-swatch ${b.color === hex ? 'selected' : ''}" style="background:${hex}" onclick="builderSetColor('${hex}')"></button>`
   ).join('');
 
+  const sauceTypeChips = SAUCE_TYPES.map(t =>
+    `<button class="cuisine-chip ${b.sauceType === t.value ? 'selected' : ''}" onclick="builderSetSauceType('${t.value}')">${t.label}</button>`
+  ).join('');
+
   const stepsHTML = b.steps.map((step, si) => {
     const stepRefHTML = si > 0 ? `
       <div class="step-ref-row">
@@ -82,6 +86,8 @@ function renderBuilder() {
     <div class="scroll-body">
       <div class="builder-sticky-header">
         <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
+        <p class="builder-label">Type</p>
+        <div class="cuisine-chips">${sauceTypeChips}</div>
         <p class="builder-label">Cuisine</p>
         <div class="cuisine-chips">${cuisineChips}</div>
         <p class="builder-label">Color</p>
@@ -90,19 +96,30 @@ function renderBuilder() {
       <p class="builder-label" style="margin-top:16px">Steps</p>
       ${stepsHTML}
       <button class="add-step-btn" onclick="builderAddStep()">+ Add Step</button>
-      <button class="builder-primary-btn" onclick="navigate('builder-carbs')" ${canContinue ? '' : 'disabled'}>Continue — Pair with Carbs</button>
+      <button class="builder-primary-btn" onclick="navigate('builder-items')" ${canContinue ? '' : 'disabled'}>Continue — Pair with ${SAUCE_TYPES.find(t => t.value === b.sauceType)?.pairLabel || 'Items'}</button>
     </div>
   `;
 }
 
-function renderBuilderCarbs() {
+function _builderItemPool() {
+  const t = SAUCE_TYPES.find(x => x.value === state.builder.sauceType);
+  if (!t) return [];
+  if (t.category === 'carb')    return state.carbs;
+  if (t.category === 'protein') return state.proteins;
+  if (t.category === 'salad')   return state.saladBases;
+  return [];
+}
+
+function renderBuilderItems() {
   const b = state.builder;
-  const carbsHTML = state.carbs.map(c => {
-    const selected = b.carbIds.includes(c.id);
-    return `<button class="carb-card carb-card-check ${selected ? 'selected' : ''}" onclick="builderToggleCarb('${c.id}')">
+  const t = SAUCE_TYPES.find(x => x.value === b.sauceType);
+  const pool = _builderItemPool();
+  const itemsHTML = pool.map(item => {
+    const selected = b.itemIds.includes(item.id);
+    return `<button class="carb-card carb-card-check ${selected ? 'selected' : ''}" onclick="builderToggleItem('${item.id}')">
       ${selected ? '<span class="check-mark">✓</span>' : ''}
-      <span class="carb-emoji">${c.emoji}</span>
-      <div class="carb-name">${c.name}</div>
+      <span class="carb-emoji">${item.emoji}</span>
+      <div class="carb-name">${item.name}</div>
     </button>`;
   }).join('');
 
@@ -111,19 +128,20 @@ function renderBuilderCarbs() {
     <div class="app-header">
       <button class="back-btn" onclick="navigate('builder')">‹ Back</button>
       <div class="logo"><span class="color-dot-header" style="background:${b.color}"></span>${b.name || 'New Sauce'}</div>
-      <div class="subtitle">${b.cuisine ? renderEmoji(b.cuisineEmoji) + ' ' + b.cuisine : 'Select carbs'}</div>
+      <div class="subtitle">${b.cuisine ? renderEmoji(b.cuisineEmoji) + ' ' + b.cuisine : `Select ${t?.pairLabel?.toLowerCase() || 'items'}`}</div>
     </div>
     <div class="scroll-body">
-      <p class="section-label">Which carbs go with this sauce?</p>
-      <div class="carb-grid">${carbsHTML}</div>
-      <button class="builder-primary-btn" onclick="navigate('builder-review')" ${b.carbIds.length > 0 ? '' : 'disabled'}>Review Sauce</button>
+      <p class="section-label">Which ${t?.pairLabel?.toLowerCase() || 'dishes'} go with this ${t?.label?.toLowerCase() || 'sauce'}?</p>
+      <div class="carb-grid">${itemsHTML}</div>
+      <button class="builder-primary-btn" onclick="navigate('builder-review')" ${b.itemIds.length > 0 ? '' : 'disabled'}>Review Sauce</button>
     </div>
   `;
 }
 
 function renderBuilderReview() {
   const b = state.builder;
-  const pairedCarbs = state.carbs.filter(c => b.carbIds.includes(c.id));
+  const pool = _builderItemPool();
+  const pairedItems = pool.filter(c => b.itemIds.includes(c.id));
   const totalIngs = b.steps.reduce((sum, s) => sum + s.ingredients.filter(i => i.name.trim()).length, 0);
 
   const stepsPreview = b.steps.map((step, si) => `
@@ -142,13 +160,13 @@ function renderBuilderReview() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('builder-carbs')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('builder-items')">‹ Back</button>
       <div class="logo"><span class="color-dot-header" style="background:${b.color}"></span>${b.name}</div>
       <div class="subtitle">${renderEmoji(b.cuisineEmoji)} ${b.cuisine} · ${b.steps.length} step${b.steps.length > 1 ? 's' : ''} · ${totalIngs} ingredients</div>
     </div>
     <div class="scroll-body">
       <div class="review-summary">
-        <div class="review-carbs">Pairs with: ${pairedCarbs.map(c => c.emoji + ' ' + c.name).join(', ')}</div>
+        <div class="review-carbs">Pairs with: ${pairedItems.map(c => c.emoji + ' ' + c.name).join(', ')}</div>
       </div>
       ${stepsPreview}
       ${b.error ? `<div class="builder-error">${b.error}</div>` : ''}
@@ -202,10 +220,17 @@ function builderRemoveIngredient(si, ii) {
   render();
 }
 
-function builderToggleCarb(id) {
-  const idx = state.builder.carbIds.indexOf(id);
-  if (idx >= 0) state.builder.carbIds.splice(idx, 1);
-  else state.builder.carbIds.push(id);
+function builderSetSauceType(value) {
+  if (state.builder.sauceType === value) return;
+  state.builder.sauceType = value;
+  state.builder.itemIds = [];   // selections from another category no longer apply
+  render();
+}
+
+function builderToggleItem(id) {
+  const idx = state.builder.itemIds.indexOf(id);
+  if (idx >= 0) state.builder.itemIds.splice(idx, 1);
+  else state.builder.itemIds.push(id);
   render();
 }
 
@@ -291,7 +316,8 @@ async function builderSave() {
       cuisineEmoji: b.cuisineEmoji,
       color: b.color,
       description: b.description,
-      carbIds: b.carbIds,
+      sauceType: b.sauceType,
+      itemIds: b.itemIds,
       steps: b.steps
         .filter(s => s.title.trim())
         .map(s => ({
