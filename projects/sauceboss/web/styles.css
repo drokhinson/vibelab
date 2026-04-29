@@ -1227,8 +1227,11 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 .swipe-action-delete { right: 0; background: #FEF2F2; color: #B91C1C; }
 
 /* ── Floating action button ── */
+/* Anchored inside the #app phone shell (position: relative, max-width: 390px)
+   so the FAB sits at the bottom-right of the visible app on every viewport
+   instead of the viewport's right edge (which on desktop is in the dark gutter). */
 .fab {
-  position: fixed;
+  position: absolute;
   right: 20px;
   bottom: 20px;
   width: 56px;
@@ -1244,11 +1247,10 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   cursor: pointer;
   z-index: 50;
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-  animation: fadeUp 220ms ease both;
 }
-.fab:hover { transform: translateY(-2px); background: #D9530A; box-shadow: 0 6px 16px rgba(232, 93, 4, 0.4), 0 2px 6px rgba(0, 0, 0, 0.1); }
+.fab:hover  { transform: translateY(-2px); background: #D9530A; box-shadow: 0 6px 16px rgba(232, 93, 4, 0.4), 0 2px 6px rgba(0, 0, 0, 0.1); }
 .fab:active { transform: translateY(0); }
-.fab [data-lucide] { width: 26px; height: 26px; stroke-width: 2.5; }
+.fab svg    { width: 26px; height: 26px; stroke-width: 2.5; }
 
 /* ── Sauce Manager Tabs ── */
 .sauce-manager-tabs {
