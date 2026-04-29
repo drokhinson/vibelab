@@ -2,6 +2,8 @@
 
 async function selectCarb(id) {
   state.selectedCarb = state.carbs.find(c => c.id === id);
+  state.selectedProtein = null;
+  state.selectedSaladBase = null;
   state.servings = 2;
   state.selectedPrep = null;
   state.preparations = [];
@@ -11,15 +13,15 @@ async function selectCarb(id) {
   navigate('sauce-selector', { replace: true });
 
   try {
-    const { sauces, ingredients, preparations } = await fetchCarbLoad(id);
+    const { sauces, ingredients, variants } = await fetchItemLoad(id);
     state.saucesForCurrentCarb = sauces;
     state.allIngredients       = ingredients;
-    state.preparations         = preparations;
+    state.preparations         = variants;
     state.disabledIngredients  = new Set();
     state.filterOpen           = false;
     state.expandedCuisines     = new Set();
     state.loading = null;
-    navigate(preparations.length > 0 ? 'prep-selector' : 'sauce-selector');
+    navigate(variants.length > 0 ? 'prep-selector' : 'sauce-selector');
   } catch (err) {
     state.loading = null;
     const scrollBody = document.querySelector('.scroll-body');

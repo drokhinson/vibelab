@@ -1,24 +1,31 @@
 'use strict';
 
-// Future: when proteins gain cooking-style variants (grill / oven / fry),
-// fetch them here and route to a 'protein-prep-selector' screen first.
 async function selectProtein(id) {
   state.selectedProtein = state.proteins.find(p => p.id === id);
+  state.selectedCarb = null;
+  state.selectedSaladBase = null;
   state.servings = 2;
   state.disabledIngredients = new Set();
   state.filterOpen = false;
   state.marinadesForCurrentProtein = [];
+  state.preparations = [];
+  state.selectedPrep = null;
   state.loading = 'Loading marinades…';
   state.screen = 'marinade-selector';
   render();
 
   try {
-    const { marinades, ingredients } = await fetchProteinLoad(id);
-    state.marinadesForCurrentProtein = marinades;
+    const { sauces, ingredients, variants } = await fetchItemLoad(id);
+    state.marinadesForCurrentProtein = sauces;
     state.allMarinadeIngredients     = ingredients;
+    state.preparations               = variants;
     state.expandedCuisines           = new Set();
     state.loading = null;
-    render();
+    if (variants.length > 0) {
+      navigate('prep-selector');
+    } else {
+      render();
+    }
   } catch (err) {
     state.loading = null;
     const scrollBody = document.querySelector('.scroll-body');

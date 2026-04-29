@@ -1,20 +1,29 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SauceBoss — current schema snapshot
--- Last updated: migration 049
+-- Last updated: migration 056 (unified items table)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS public.sauceboss_carbs (
+-- Unified selector table. Type rows have parent_id IS NULL; Variant rows
+-- (e.g. basmati rice as a prep variant of rice) point at their Type via
+-- parent_id. Replaces the legacy sauceboss_carbs / sauceboss_addons /
+-- sauceboss_salad_bases / sauceboss_carb_preparations tables.
+CREATE TABLE IF NOT EXISTS public.sauceboss_items (
   id                 TEXT PRIMARY KEY,
+  category           TEXT NOT NULL CHECK (category IN ('carb', 'protein', 'salad')),
+  parent_id          TEXT REFERENCES public.sauceboss_items(id) ON DELETE CASCADE,
   name               TEXT NOT NULL,
-  emoji              TEXT NOT NULL,
-  description        TEXT NOT NULL,
-  portion_per_person REAL NOT NULL DEFAULT 100,
-  portion_unit       TEXT NOT NULL DEFAULT 'g',
-  cook_time_minutes  INT,
-  cook_time_label    TEXT
+  emoji              TEXT NOT NULL DEFAULT '',
+  description        TEXT NOT NULL DEFAULT '',
+  sort_order         INT  NOT NULL DEFAULT 0,
+  cook_time_minutes  INT,                    -- NULL when item is raw (e.g. romaine)
+  instructions       TEXT,                   -- prep / cook text
+  water_ratio        TEXT,                   -- carb-prep specific
+  portion_per_person REAL NOT NULL,
+  portion_unit       TEXT NOT NULL,
+  CHECK (parent_id IS NULL OR parent_id <> id)
 );
-ALTER TABLE public.sauceboss_carbs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sauceboss_items ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.sauceboss_sauces (
   id            TEXT PRIMARY KEY,
@@ -27,12 +36,15 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauces (
 );
 ALTER TABLE public.sauceboss_sauces ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_carbs (
+-- Unified sauce↔item junction. Replaces sauceboss_sauce_carbs /
+-- sauceboss_sauce_proteins / sauceboss_sauce_salad_bases. A trigger enforces
+-- sauce_type ↔ item.category alignment and rejects links to Variant rows.
+CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_items (
   sauce_id TEXT NOT NULL REFERENCES public.sauceboss_sauces(id) ON DELETE CASCADE,
-  carb_id  TEXT NOT NULL REFERENCES public.sauceboss_carbs(id)  ON DELETE CASCADE,
-  PRIMARY KEY (sauce_id, carb_id)
+  item_id  TEXT NOT NULL REFERENCES public.sauceboss_items(id)  ON DELETE CASCADE,
+  PRIMARY KEY (sauce_id, item_id)
 );
-ALTER TABLE public.sauceboss_sauce_carbs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sauceboss_sauce_items ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_steps (
   id              BIGSERIAL PRIMARY KEY,
@@ -68,56 +80,7 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_ingredient_substitutions (
 );
 ALTER TABLE public.sauceboss_ingredient_substitutions ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS public.sauceboss_carb_preparations (
-  id               TEXT PRIMARY KEY,
-  carb_id          TEXT NOT NULL REFERENCES public.sauceboss_carbs(id) ON DELETE CASCADE,
-  name             TEXT NOT NULL,
-  emoji            TEXT,
-  water_ratio      TEXT,
-  cook_time        TEXT,
-  instructions     TEXT,
-  sort_order       INT  DEFAULT 0,
-  cook_time_minutes INT
-);
-ALTER TABLE public.sauceboss_carb_preparations ENABLE ROW LEVEL SECURITY;
-
-CREATE TABLE IF NOT EXISTS public.sauceboss_addons (
-  id             TEXT PRIMARY KEY,
-  type           TEXT NOT NULL CHECK (type IN ('protein', 'veggie')),
-  name           TEXT NOT NULL,
-  emoji          TEXT NOT NULL,
-  description    TEXT NOT NULL,
-  instructions   TEXT NOT NULL,
-  estimated_time INT  NOT NULL,
-  sort_order     INT  DEFAULT 0
-);
-ALTER TABLE public.sauceboss_addons ENABLE ROW LEVEL SECURITY;
-
-CREATE TABLE IF NOT EXISTS public.sauceboss_salad_bases (
-  id          TEXT PRIMARY KEY,
-  name        TEXT NOT NULL,
-  emoji       TEXT NOT NULL,
-  description TEXT
-);
-ALTER TABLE public.sauceboss_salad_bases ENABLE ROW LEVEL SECURITY;
-
-CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_salad_bases (
-  sauce_id TEXT REFERENCES public.sauceboss_sauces(id)       ON DELETE CASCADE,
-  base_id  TEXT REFERENCES public.sauceboss_salad_bases(id)  ON DELETE CASCADE,
-  PRIMARY KEY (sauce_id, base_id)
-);
-ALTER TABLE public.sauceboss_sauce_salad_bases ENABLE ROW LEVEL SECURITY;
-
-CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_proteins (
-  sauce_id TEXT REFERENCES public.sauceboss_sauces(id) ON DELETE CASCADE,
-  addon_id TEXT REFERENCES public.sauceboss_addons(id) ON DELETE CASCADE,
-  PRIMARY KEY (sauce_id, addon_id)
-);
-ALTER TABLE public.sauceboss_sauce_proteins ENABLE ROW LEVEL SECURITY;
-
--- ── Combined-load RPCs (migration 049) ──────────────────────────────────────
--- Wrap multiple per-resource RPCs into a single round-trip:
---   get_sauceboss_initial_load()           → { carbs, proteins, saladBases }
---   get_sauceboss_carb_load(p_carb_id)     → { sauces, ingredients, preparations }
---   get_sauceboss_protein_load(p_addon_id) → { marinades, ingredients }
---   get_sauceboss_salad_base_load(p_base_id) → { dressings, ingredients }
+-- ── Combined-load RPCs (migration 054) ──────────────────────────────────────
+-- Two unified RPCs replace the four legacy category-specific load RPCs:
+--   get_sauceboss_initial_load()         → { carbs, proteins, saladBases }
+--   get_sauceboss_item_load(p_item_id)   → { item, variants, sauces, ingredients }

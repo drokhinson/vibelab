@@ -1,24 +1,31 @@
 'use strict';
 
-// Future: when salad bases gain prep variants, fetch them here and route to a
-// 'salad-prep-selector' screen first.
 async function selectSaladBase(id) {
   state.selectedSaladBase = state.saladBases.find(b => b.id === id);
+  state.selectedCarb = null;
+  state.selectedProtein = null;
   state.servings = 2;
   state.disabledIngredients = new Set();
   state.filterOpen = false;
   state.dressingsForCurrentBase = [];
+  state.preparations = [];
+  state.selectedPrep = null;
   state.loading = 'Loading dressings…';
   state.screen = 'dressing-selector';
   render();
 
   try {
-    const { dressings, ingredients } = await fetchSaladBaseLoad(id);
-    state.dressingsForCurrentBase = dressings;
+    const { sauces, ingredients, variants } = await fetchItemLoad(id);
+    state.dressingsForCurrentBase = sauces;
     state.allDressingIngredients  = ingredients;
+    state.preparations            = variants;
     state.expandedCuisines        = new Set();
     state.loading = null;
-    render();
+    if (variants.length > 0) {
+      navigate('prep-selector');
+    } else {
+      render();
+    }
   } catch (err) {
     state.loading = null;
     const scrollBody = document.querySelector('.scroll-body');

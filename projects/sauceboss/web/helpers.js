@@ -66,41 +66,14 @@ async function fetchInitialLoad() {
   };
 }
 
-async function fetchCarbLoad(carbId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${encodeURIComponent(carbId)}/load`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
+async function fetchItemLoad(itemId) {
+  const data = await _loggedJson(`${API}/api/v1/sauceboss/items/${encodeURIComponent(itemId)}/load`);
   return {
+    item: data.item || null,
+    variants: data.variants || [],
     sauces: (data.sauces || []).map(_withIngredientNames),
     ingredients: data.ingredients || [],
-    preparations: data.preparations || [],
   };
-}
-
-async function fetchProteinLoad(addonId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/proteins/${encodeURIComponent(addonId)}/load`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  return {
-    marinades: (data.marinades || []).map(_withIngredientNames),
-    ingredients: data.ingredients || [],
-  };
-}
-
-async function fetchSaladBaseLoad(baseId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/salad-bases/${encodeURIComponent(baseId)}/load`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  return {
-    dressings: (data.dressings || []).map(_withIngredientNames),
-    ingredients: data.ingredients || [],
-  };
-}
-
-async function fetchPreparationsForCarb(carbId) {
-  const res = await fetch(`${API}/api/v1/sauceboss/carbs/${encodeURIComponent(carbId)}/preparations`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
 }
 
 async function fetchIngredientCategories() {
@@ -149,21 +122,8 @@ async function fetchAdminSauces(key) {
   return res.json();
 }
 
-async function adminCreateCarb(data, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/carbs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-async function adminCreateAddon(data, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/addons`, {
+async function adminCreateItem(data, key) {
+  const res = await fetch(`${API}/api/v1/sauceboss/admin/items`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
     body: JSON.stringify(data),

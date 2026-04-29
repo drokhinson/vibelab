@@ -136,10 +136,6 @@ let state = {
   marinadesForCurrentProtein: [],
   allMarinadeIngredients: [],
 
-  // Admin sauce-manager Add-ons tab. Proteins is a live reference to state.proteins
-  // so admin-added proteins flow into the home screen automatically.
-  addons: null,
-
   // ── Admin / builder ─────────────────────────────────────────────────────────
   builder: null,
   adminKey: null,
@@ -148,8 +144,7 @@ let state = {
   adminError: null,
   sauceManagerTab: 'sauces',
   addCarbForm: null,
-  addAddonForm: null,
-  carbPreparations: null,
+  addProteinForm: null,
 };
 
 function defaultBuilder() {

@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     state.carbs = carbs;
     state.proteins = proteins;
     state.saladBases = saladBases;
-    state.addons = { proteins, veggies: [] };
   } catch (err) {
     console.error('[sauceboss] initial load failed', err);
     document.getElementById('splash-screen')?.remove();
