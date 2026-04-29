@@ -142,7 +142,9 @@ let state = {
   adminSauces: [],
   adminLoading: false,
   adminError: null,
-  sauceManagerTab: 'sauces',
+  sauceManagerTab: 'sauces',                    // 'sauces' | 'items'
+  itemSections: { carbs: true, proteins: true }, // expanded by default
+  editItemForm: null,                            // {id, category, name, emoji, ...}
   addCarbForm: null,
   addProteinForm: null,
 };
