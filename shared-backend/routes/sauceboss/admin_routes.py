@@ -8,7 +8,7 @@ from fastapi import HTTPException, Header
 from auth import require_admin
 from db import get_supabase
 from . import router
-from .models import CreateCarbRequest, CreateAddonRequest
+from .models import CreateItemRequest
 
 
 @router.get("/admin/sauces")
@@ -22,41 +22,26 @@ async def admin_list_sauces(authorization: Optional[str] = Header(None)):
     return result.data
 
 
-@router.post("/admin/carbs")
-async def admin_create_carb(body: CreateCarbRequest, authorization: Optional[str] = Header(None)):
-    """Add a new carb type. Requires admin key."""
+@router.post("/admin/items")
+async def admin_create_item(body: CreateItemRequest, authorization: Optional[str] = Header(None)):
+    """Add a new item (carb / protein / salad base, optionally a variant). Requires admin key."""
     require_admin(authorization)
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sb = get_supabase()
     try:
-        sb.table("sauceboss_carbs").insert({
+        sb.table("sauceboss_items").insert({
             "id": slug,
+            "category": body.category,
+            "parent_id": body.parentId,
             "name": body.name,
             "emoji": body.emoji,
             "description": body.description,
+            "sort_order": body.sortOrder,
             "cook_time_minutes": body.cookTimeMinutes,
-            "cook_time_label": body.cookTimeLabel,
-        }).execute()
-    except Exception as e:
-        raise HTTPException(500, f"Database error: {str(e)}")
-    return {"id": slug, "status": "created"}
-
-
-@router.post("/admin/addons")
-async def admin_create_addon(body: CreateAddonRequest, authorization: Optional[str] = Header(None)):
-    """Add a new protein or veggie addon. Requires admin key."""
-    require_admin(authorization)
-    slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
-    sb = get_supabase()
-    try:
-        sb.table("sauceboss_addons").insert({
-            "id": slug,
-            "type": body.type,
-            "name": body.name,
-            "emoji": body.emoji,
-            "description": body.desc,
             "instructions": body.instructions,
-            "estimated_time": body.estimatedTime,
+            "water_ratio": body.waterRatio,
+            "portion_per_person": body.portionPerPerson,
+            "portion_unit": body.portionUnit,
         }).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
@@ -74,7 +59,7 @@ async def admin_delete_sauce(sauce_id: str, authorization: Optional[str] = Heade
         if step_ids:
             sb.table("sauceboss_step_ingredients").delete().in_("step_id", step_ids).execute()
         sb.table("sauceboss_sauce_steps").delete().eq("sauce_id", sauce_id).execute()
-        sb.table("sauceboss_sauce_carbs").delete().eq("sauce_id", sauce_id).execute()
+        sb.table("sauceboss_sauce_items").delete().eq("sauce_id", sauce_id).execute()
         sb.table("sauceboss_sauces").delete().eq("id", sauce_id).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")

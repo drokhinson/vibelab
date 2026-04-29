@@ -1,4 +1,4 @@
-"""Public SauceBoss API routes — carbs, sauces, dressings, marinades."""
+"""Public SauceBoss API routes — unified items + sauces."""
 
 import logging
 import re
@@ -10,12 +10,10 @@ from db import get_supabase
 from shared_models import HealthResponse
 from . import router
 from .models import (
-    CarbLoadResponse,
     CreateSauceRequest,
     IngredientCategoryInput,
     InitialLoadResponse,
-    ProteinLoadResponse,
-    SaladBaseLoadResponse,
+    ItemLoadResponse,
 )
 
 logger = logging.getLogger("sauceboss")
@@ -25,36 +23,6 @@ logger = logging.getLogger("sauceboss")
 async def health():
     """Health check."""
     return {"project": "sauceboss", "status": "ok"}
-
-
-@router.get("/carbs")
-async def list_carbs():
-    """Returns all carbs with sauce counts."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_carbs_with_count", {}).execute()
-    if result.data is None:
-        raise HTTPException(500, "Failed to load carbs")
-    return result.data
-
-
-@router.get("/carbs/{carb_id}/sauces")
-async def sauces_for_carb(carb_id: str):
-    """Returns fully assembled sauce objects for a given carb."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_sauces_for_carb", {"p_carb_id": carb_id}).execute()
-    if result.data is None:
-        raise HTTPException(404, f"No sauces found for carb '{carb_id}'")
-    return result.data
-
-
-@router.get("/carbs/{carb_id}/ingredients")
-async def ingredients_for_carb(carb_id: str):
-    """Returns sorted unique ingredient names for all sauces compatible with a carb."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_ingredients_for_carb", {"p_carb_id": carb_id}).execute()
-    if result.data is None:
-        return []
-    return result.data
 
 
 @router.get("/ingredient-categories")
@@ -77,19 +45,14 @@ async def list_substitutions():
     return result.data
 
 
-@router.get("/carbs/{carb_id}/preparations")
-async def preparations_for_carb(carb_id: str):
-    """Returns preparation options for a given carb."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_carb_preparations", {"p_carb_id": carb_id}).execute()
-    if result.data is None:
-        return []
-    return result.data
-
-
 @router.post("/sauces")
 async def create_sauce(body: CreateSauceRequest):
-    """Create a user-submitted sauce with steps, ingredients, and carb pairings."""
+    """Create a user-submitted sauce with steps, ingredients, and item pairings.
+
+    The ``carbIds`` field is a list of Type-row item ids (kept as ``carbIds``
+    for backward compat — the builder UI only creates sauces, which link to
+    carbs). The DB trigger on sauceboss_sauce_items rejects any mismatch.
+    """
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sauce_id = f"user-{slug}-{secrets.token_hex(2)}"
 
@@ -130,80 +93,6 @@ async def list_all_sauces():
     """Public endpoint: all sauces with full steps, ingredients, and compatible carbs."""
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_all_sauces_full", {}).execute()
-    if result.data is None:
-        return []
-    return result.data
-
-
-@router.get("/addons")
-async def list_addons():
-    """Returns protein and veggie addon options with instructions and timing."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_addons", {}).execute()
-    if result.data is None:
-        return []
-    return result.data
-
-
-# ── Dressings path ────────────────────────────────────────────────────────────
-
-@router.get("/salad-bases")
-async def list_salad_bases():
-    """Returns all salad bases with count of paired dressings."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_salad_bases_with_count", {}).execute()
-    if result.data is None:
-        raise HTTPException(500, "Failed to load salad bases")
-    return result.data
-
-
-@router.get("/salad-bases/{base_id}/dressings")
-async def dressings_for_base(base_id: str):
-    """Returns fully assembled dressings for a given salad base."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_dressings_for_base", {"p_base_id": base_id}).execute()
-    if result.data is None:
-        raise HTTPException(404, f"No dressings found for base '{base_id}'")
-    return result.data
-
-
-@router.get("/salad-bases/{base_id}/ingredients")
-async def ingredients_for_base(base_id: str):
-    """Returns sorted unique ingredient names across all dressings for a salad base."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_ingredients_for_base", {"p_base_id": base_id}).execute()
-    if result.data is None:
-        return []
-    return result.data
-
-
-# ── Marinades path ────────────────────────────────────────────────────────────
-
-@router.get("/proteins")
-async def list_proteins():
-    """Returns protein addons with marinade count for the marinades tab."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_proteins", {}).execute()
-    if result.data is None:
-        return []
-    return result.data
-
-
-@router.get("/proteins/{addon_id}/marinades")
-async def marinades_for_protein(addon_id: str):
-    """Returns fully assembled marinades for a given protein addon."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_marinades_for_protein", {"p_addon_id": addon_id}).execute()
-    if result.data is None:
-        raise HTTPException(404, f"No marinades found for protein '{addon_id}'")
-    return result.data
-
-
-@router.get("/proteins/{addon_id}/ingredients")
-async def ingredients_for_protein(addon_id: str):
-    """Returns sorted unique ingredient names across all marinades for a protein."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_ingredients_for_protein", {"p_addon_id": addon_id}).execute()
     if result.data is None:
         return []
     return result.data
@@ -252,30 +141,17 @@ async def initial_load() -> InitialLoadResponse:
 
 
 @router.get(
-    "/carbs/{carb_id}/load",
-    response_model=CarbLoadResponse,
-    summary="Sauces, ingredients, and prep options for a carb",
+    "/items/{item_id}/load",
+    response_model=ItemLoadResponse,
+    summary="Variants, sauces, and ingredients for any item",
 )
-async def carb_load(carb_id: str) -> CarbLoadResponse:
-    """Single round-trip returning everything the sauce-selector screen needs for a carb."""
-    return _rpc_or_500("get_sauceboss_carb_load", {"p_carb_id": carb_id}, f"carb-load:{carb_id}")
+async def item_load(item_id: str) -> ItemLoadResponse:
+    """Single round-trip returning everything the per-selection screen needs.
 
-
-@router.get(
-    "/proteins/{addon_id}/load",
-    response_model=ProteinLoadResponse,
-    summary="Marinades and ingredients for a protein",
-)
-async def protein_load(addon_id: str) -> ProteinLoadResponse:
-    """Single round-trip returning everything the marinade-selector screen needs for a protein."""
-    return _rpc_or_500("get_sauceboss_protein_load", {"p_addon_id": addon_id}, f"protein-load:{addon_id}")
-
-
-@router.get(
-    "/salad-bases/{base_id}/load",
-    response_model=SaladBaseLoadResponse,
-    summary="Dressings and ingredients for a salad base",
-)
-async def salad_base_load(base_id: str) -> SaladBaseLoadResponse:
-    """Single round-trip returning everything the dressing-selector screen needs for a salad base."""
-    return _rpc_or_500("get_sauceboss_salad_base_load", {"p_base_id": base_id}, f"salad-base-load:{base_id}")
+    Replaces the legacy carb-load / protein-load / salad-base-load endpoints.
+    Returns an empty ``variants`` list for items with no preparation variants
+    (proteins and salad bases today). The ``sauces`` field is the universal
+    payload regardless of category — the frontend renders it as sauces /
+    marinades / dressings based on the calling screen.
+    """
+    return _rpc_or_500("get_sauceboss_item_load", {"p_item_id": item_id}, f"item-load:{item_id}")

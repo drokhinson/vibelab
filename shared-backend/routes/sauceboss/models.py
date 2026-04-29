@@ -6,9 +6,10 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
-class AddonType(StrEnum):
+class ItemCategory(StrEnum):
+    CARB = "carb"
     PROTEIN = "protein"
-    VEGGIE = "veggie"
+    SALAD = "salad"
 
 
 class SauceType(StrEnum):
@@ -50,21 +51,18 @@ class IngredientCategoryInput(BaseModel):
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
 
-class CreateCarbRequest(BaseModel):
+class CreateItemRequest(BaseModel):
+    category: ItemCategory
+    parentId: Optional[str] = None
     name: str = Field(min_length=1, max_length=60)
     emoji: str = Field(min_length=1)
     description: str = ""
-    cookTimeMinutes: int = 0
-    cookTimeLabel: str = ""
-
-
-class CreateAddonRequest(BaseModel):
-    type: AddonType
-    name: str = Field(min_length=1)
-    emoji: str = Field(min_length=1)
-    desc: str = ""
-    estimatedTime: int = Field(gt=0)
-    instructions: str = Field(min_length=1)
+    sortOrder: int = 0
+    cookTimeMinutes: Optional[int] = None
+    instructions: Optional[str] = None
+    waterRatio: Optional[str] = None
+    portionPerPerson: float = Field(gt=0)
+    portionUnit: str = Field(min_length=1)
 
 
 # ── Combined-load responses ──────────────────────────────────────────────────
@@ -75,17 +73,8 @@ class InitialLoadResponse(BaseModel):
     saladBases: List[Dict[str, Any]]
 
 
-class CarbLoadResponse(BaseModel):
+class ItemLoadResponse(BaseModel):
+    item: Optional[Dict[str, Any]]
+    variants: List[Dict[str, Any]]
     sauces: List[Dict[str, Any]]
-    ingredients: List[Dict[str, Any]]
-    preparations: List[Dict[str, Any]]
-
-
-class ProteinLoadResponse(BaseModel):
-    marinades: List[Dict[str, Any]]
-    ingredients: List[str]
-
-
-class SaladBaseLoadResponse(BaseModel):
-    dressings: List[Dict[str, Any]]
     ingredients: List[str]

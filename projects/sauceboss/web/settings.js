@@ -36,13 +36,13 @@ function renderAdmin() {
     <div class="sauce-manager-tabs">
       <button class="sm-tab ${tab === 'sauces' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('sauces')">Sauces</button>
       <button class="sm-tab ${tab === 'carbs' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('carbs')">Carbs</button>
-      <button class="sm-tab ${tab === 'addons' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('addons')">Add-ons</button>
+      <button class="sm-tab ${tab === 'proteins' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('proteins')">Proteins</button>
     </div>`;
 
   let bodyHTML = '';
   if (tab === 'sauces') bodyHTML = renderSaucesTab(isAdmin);
   else if (tab === 'carbs') bodyHTML = renderCarbsTab(isAdmin);
-  else bodyHTML = renderAddonsTab(isAdmin);
+  else bodyHTML = renderProteinsTab(isAdmin);
 
   return `
     <div class="status-bar"></div>
@@ -95,35 +95,17 @@ function renderSaucesTab(isAdmin) {
 }
 
 function renderCarbsTab(isAdmin) {
-  const carbRows = state.carbs.map(c => {
-    const preps = (state.carbPreparations || {})[c.id] || [];
-    const prepRows = preps.map(p => `
-      <div class="admin-sauce-row" style="padding-left:32px;opacity:0.8">
-        <span class="sm-carb-emoji" style="font-size:14px">${p.emoji || '↳'}</span>
-        <div class="admin-sauce-info">
-          <div class="admin-sauce-name" style="font-size:13px">${p.name}</div>
-          <div class="admin-sauce-carbs">${p.cookTime || ''}</div>
-        </div>
-      </div>
-    `).join('');
-    return `
+  const carbRows = state.carbs.map(c => `
     <div class="admin-sauce-row">
       <span class="sm-carb-emoji">${c.emoji}</span>
       <div class="admin-sauce-info">
         <div class="admin-sauce-name">${c.name}</div>
-        <div class="admin-sauce-carbs">${c.cookTimeLabel || (c.cookTimeMinutes ? c.cookTimeMinutes + ' min' : '')} · ${c.sauceCount || 0} sauce${c.sauceCount !== 1 ? 's' : ''}</div>
+        <div class="admin-sauce-carbs">${c.cookTimeMinutes ? c.cookTimeMinutes + ' min' : ''} · ${c.sauceCount || 0} sauce${c.sauceCount !== 1 ? 's' : ''}</div>
       </div>
-    </div>
-    ${prepRows}`;
-  }).join('');
-
-  const loadingNote = !state.carbPreparations
-    ? '<p style="padding:8px 16px;color:#888;font-size:13px">Loading sub-carbs…</p>'
-    : '';
+    </div>`).join('');
 
   const addForm = isAdmin ? renderAddCarbForm() : '';
-
-  return carbRows + loadingNote + addForm;
+  return carbRows + addForm;
 }
 
 function renderAddCarbForm() {
@@ -140,7 +122,7 @@ function renderAddCarbForm() {
       <input class="builder-input" placeholder="Description" value="${esc(f.description)}" oninput="state.addCarbForm.description=this.value">
       <div style="display:flex;gap:8px">
         <input class="builder-input" type="number" placeholder="Cook time (min)" value="${f.cookTimeMinutes || ''}" style="flex:1" oninput="state.addCarbForm.cookTimeMinutes=parseInt(this.value)||0">
-        <input class="builder-input" placeholder="Label (e.g. 15 min)" value="${esc(f.cookTimeLabel)}" style="flex:1" oninput="state.addCarbForm.cookTimeLabel=this.value">
+        <input class="builder-input" type="number" placeholder="Portion (g/person)" value="${f.portionPerPerson || ''}" style="flex:1" oninput="state.addCarbForm.portionPerPerson=parseFloat(this.value)||0">
       </div>
       ${f.error ? `<div class="settings-error">${f.error}</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:8px">
@@ -152,47 +134,44 @@ function renderAddCarbForm() {
     </div>`;
 }
 
-function renderAddonsTab(isAdmin) {
-  const src = state.addons || { proteins: [], veggies: [] };
-  const addonRow = (a) => `
+function renderProteinsTab(isAdmin) {
+  const proteinRow = (p) => `
     <div class="admin-sauce-row">
-      <span class="sm-carb-emoji">${a.emoji}</span>
+      <span class="sm-carb-emoji">${p.emoji}</span>
       <div class="admin-sauce-info">
-        <div class="admin-sauce-name">${a.name} <span class="sm-type-badge sm-type-${a.type}">${a.type}</span></div>
-        <div class="admin-sauce-carbs">~${a.estimatedTime}m · ${a.desc}</div>
+        <div class="admin-sauce-name">${p.name}</div>
+        <div class="admin-sauce-carbs">~${p.estimatedTime || 0}m · ${p.desc || ''}</div>
       </div>
     </div>`;
 
-  const rows = [...src.proteins, ...src.veggies].map(addonRow).join('');
-  const addForm = isAdmin ? renderAddAddonForm() : '';
-
+  const rows = (state.proteins || []).map(proteinRow).join('');
+  const addForm = isAdmin ? renderAddProteinForm() : '';
   return rows + addForm;
 }
 
-function renderAddAddonForm() {
-  const f = state.addAddonForm;
+function renderAddProteinForm() {
+  const f = state.addProteinForm;
   if (!f) {
-    return `<button class="add-step-btn" style="margin:12px 0" onclick="openAddAddonForm()">+ Add Add-on</button>`;
+    return `<button class="add-step-btn" style="margin:12px 0" onclick="openAddProteinForm()">+ Add Protein</button>`;
   }
   const esc = s => (s || '').replace(/"/g, '&quot;');
   return `
     <div class="sm-add-form">
-      <div class="sm-add-form-title">New Add-on</div>
-      <select class="ing-unit" style="width:100%;margin-bottom:8px" onchange="state.addAddonForm.type=this.value">
-        <option value="protein" ${f.type === 'protein' ? 'selected' : ''}>Protein</option>
-        <option value="veggie" ${f.type === 'veggie' ? 'selected' : ''}>Veggie</option>
-      </select>
-      <input class="builder-input" placeholder="Name (e.g. Shrimp)" value="${esc(f.name)}" oninput="state.addAddonForm.name=this.value">
-      <input class="builder-input" placeholder="Emoji (e.g. 🍤)" value="${esc(f.emoji)}" oninput="state.addAddonForm.emoji=this.value">
-      <input class="builder-input" placeholder="Short description" value="${esc(f.desc)}" oninput="state.addAddonForm.desc=this.value">
-      <input class="builder-input" type="number" placeholder="Cook time (min)" value="${f.estimatedTime || ''}" oninput="state.addAddonForm.estimatedTime=parseInt(this.value)||0">
-      <textarea class="builder-input" placeholder="Instructions" style="min-height:80px;resize:vertical" oninput="state.addAddonForm.instructions=this.value">${esc(f.instructions)}</textarea>
+      <div class="sm-add-form-title">New Protein</div>
+      <input class="builder-input" placeholder="Name (e.g. Shrimp)" value="${esc(f.name)}" oninput="state.addProteinForm.name=this.value">
+      <input class="builder-input" placeholder="Emoji (e.g. 🍤)" value="${esc(f.emoji)}" oninput="state.addProteinForm.emoji=this.value">
+      <input class="builder-input" placeholder="Short description" value="${esc(f.desc)}" oninput="state.addProteinForm.desc=this.value">
+      <div style="display:flex;gap:8px">
+        <input class="builder-input" type="number" placeholder="Cook time (min)" value="${f.estimatedTime || ''}" style="flex:1" oninput="state.addProteinForm.estimatedTime=parseInt(this.value)||0">
+        <input class="builder-input" type="number" placeholder="Portion (g/person)" value="${f.portionPerPerson || ''}" style="flex:1" oninput="state.addProteinForm.portionPerPerson=parseFloat(this.value)||0">
+      </div>
+      <textarea class="builder-input" placeholder="Instructions" style="min-height:80px;resize:vertical" oninput="state.addProteinForm.instructions=this.value">${esc(f.instructions)}</textarea>
       ${f.error ? `<div class="settings-error">${f.error}</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="builder-primary-btn" style="flex:1" onclick="adminAddAddon()" ${f.saving ? 'disabled' : ''}>
-          ${f.saving ? '<span class="spinner-sm"></span> Saving…' : 'Add Add-on'}
+        <button class="builder-primary-btn" style="flex:1" onclick="adminAddProtein()" ${f.saving ? 'disabled' : ''}>
+          ${f.saving ? '<span class="spinner-sm"></span> Saving…' : 'Add Protein'}
         </button>
-        <button class="builder-secondary-btn" onclick="closeAddAddonForm()">Cancel</button>
+        <button class="builder-secondary-btn" onclick="closeAddProteinForm()">Cancel</button>
       </div>
     </div>`;
 }
@@ -202,8 +181,7 @@ async function openSauceManager() {
   state.adminError = null;
   state.sauceManagerTab = 'sauces';
   state.addCarbForm = null;
-  state.addAddonForm = null;
-  state.carbPreparations = null;
+  state.addProteinForm = null;
   try {
     state.adminSauces = await fetchAllSauces();
   } catch (err) {
@@ -221,20 +199,7 @@ function openSettings() {
 function setSauceManagerTab(tab) {
   state.sauceManagerTab = tab;
   state.addCarbForm = null;
-  state.addAddonForm = null;
-  if (tab === 'carbs' && !state.carbPreparations) loadCarbPreparations();
-  render();
-}
-
-async function loadCarbPreparations() {
-  const pairs = await Promise.all(
-    state.carbs.map(c =>
-      fetchPreparationsForCarb(c.id)
-        .then(preps => [c.id, preps])
-        .catch(() => [c.id, []])
-    )
-  );
-  state.carbPreparations = Object.fromEntries(pairs);
+  state.addProteinForm = null;
   render();
 }
 
@@ -308,7 +273,7 @@ async function adminDeleteSauce(id, name) {
 
 // ─── Add Carb ─────────────────────────────────────────────────────────────────
 function openAddCarbForm() {
-  state.addCarbForm = { name: '', emoji: '', description: '', cookTimeMinutes: 0, cookTimeLabel: '', saving: false, error: null };
+  state.addCarbForm = { name: '', emoji: '', description: '', cookTimeMinutes: 0, portionPerPerson: 100, saving: false, error: null };
   render();
 }
 
@@ -319,8 +284,8 @@ function closeAddCarbForm() {
 
 async function adminAddCarb() {
   const f = state.addCarbForm;
-  if (!f || !f.name.trim() || !f.emoji.trim()) {
-    if (f) f.error = 'Name and emoji are required.';
+  if (!f || !f.name.trim() || !f.emoji.trim() || !f.portionPerPerson) {
+    if (f) f.error = 'Name, emoji, and portion are required.';
     render();
     return;
   }
@@ -328,20 +293,24 @@ async function adminAddCarb() {
   f.error = null;
   render();
   try {
-    const result = await adminCreateCarb({
+    const result = await adminCreateItem({
+      category: 'carb',
       name: f.name.trim(),
       emoji: f.emoji.trim(),
       description: f.description.trim(),
       cookTimeMinutes: f.cookTimeMinutes || 0,
-      cookTimeLabel: f.cookTimeLabel.trim(),
+      portionPerPerson: f.portionPerPerson,
+      portionUnit: 'g',
     }, state.adminKey);
     state.carbs.push({
       id: result.id,
       name: f.name.trim(),
       emoji: f.emoji.trim(),
+      description: f.description.trim(),
       desc: f.description.trim(),
       cookTimeMinutes: f.cookTimeMinutes || 0,
-      cookTimeLabel: f.cookTimeLabel.trim(),
+      portionPerPerson: f.portionPerPerson,
+      portionUnit: 'g',
       sauceCount: 0,
     });
     state.addCarbForm = null;
@@ -353,19 +322,19 @@ async function adminAddCarb() {
   }
 }
 
-// ─── Add Add-on ───────────────────────────────────────────────────────────────
-function openAddAddonForm() {
-  state.addAddonForm = { type: 'protein', name: '', emoji: '', desc: '', estimatedTime: 0, instructions: '', saving: false, error: null };
+// ─── Add Protein ──────────────────────────────────────────────────────────────
+function openAddProteinForm() {
+  state.addProteinForm = { name: '', emoji: '', desc: '', estimatedTime: 0, portionPerPerson: 150, instructions: '', saving: false, error: null };
   render();
 }
 
-function closeAddAddonForm() {
-  state.addAddonForm = null;
+function closeAddProteinForm() {
+  state.addProteinForm = null;
   render();
 }
 
-async function adminAddAddon() {
-  const f = state.addAddonForm;
+async function adminAddProtein() {
+  const f = state.addProteinForm;
   if (!f || !f.name.trim() || !f.emoji.trim() || !f.instructions.trim() || !f.estimatedTime) {
     if (f) f.error = 'Name, emoji, cook time, and instructions are required.';
     render();
@@ -375,27 +344,28 @@ async function adminAddAddon() {
   f.error = null;
   render();
   try {
-    const result = await adminCreateAddon({
-      type: f.type,
+    const result = await adminCreateItem({
+      category: 'protein',
       name: f.name.trim(),
       emoji: f.emoji.trim(),
-      desc: f.desc.trim(),
-      estimatedTime: f.estimatedTime,
+      description: f.desc.trim(),
+      cookTimeMinutes: f.estimatedTime,
       instructions: f.instructions.trim(),
+      portionPerPerson: f.portionPerPerson,
+      portionUnit: 'g',
     }, state.adminKey);
-    const newAddon = {
+    state.proteins.push({
       id: result.id,
-      type: f.type,
       name: f.name.trim(),
       emoji: f.emoji.trim(),
       desc: f.desc.trim(),
       estimatedTime: f.estimatedTime,
       instructions: f.instructions.trim(),
-    };
-    if (!state.addons) state.addons = { proteins: [], veggies: [] };
-    if (f.type === 'protein') state.addons.proteins.push(newAddon);
-    else state.addons.veggies.push(newAddon);
-    state.addAddonForm = null;
+      portionPerPerson: f.portionPerPerson,
+      portionUnit: 'g',
+      marinadeCount: 0,
+    });
+    state.addProteinForm = null;
     render();
   } catch (err) {
     f.saving = false;
