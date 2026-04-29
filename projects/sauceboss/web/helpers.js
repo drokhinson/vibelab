@@ -39,10 +39,26 @@ function _withIngredientNames(sauce) {
   return { ...sauce, ingredientNames: new Set(sauce.ingredients.map(i => i.name)) };
 }
 
+async function _loggedJson(url) {
+  console.log('[sauceboss] fetch →', url);
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    console.error('[sauceboss] network error on', url, e);
+    throw new Error(`Network error reaching ${url}: ${e.message}`);
+  }
+  console.log('[sauceboss] fetch ←', url, res.status, res.statusText);
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json()).detail || ''; } catch { /* ignore */ }
+    throw new Error(`HTTP ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''} (${url})`);
+  }
+  return res.json();
+}
+
 async function fetchInitialLoad() {
-  const res = await fetch(`${API}/api/v1/sauceboss/initial-load`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
+  const data = await _loggedJson(`${API}/api/v1/sauceboss/initial-load`);
   return {
     carbs: (data.carbs || []).map(c => ({ ...c, desc: c.description })),
     proteins: data.proteins || [],

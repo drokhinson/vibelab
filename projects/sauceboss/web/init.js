@@ -11,11 +11,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     state.saladBases = saladBases;
     state.addons = { proteins, veggies: [] };
   } catch (err) {
+    console.error('[sauceboss] initial load failed', err);
     document.getElementById('splash-screen')?.remove();
     document.body.classList.remove('splash--loading');
     document.getElementById('app').innerHTML = `
-      <div style="padding:2rem;text-align:center;color:#dc2626">
-        Failed to load: ${err.message}
+      <div style="padding:2rem;text-align:center;color:#dc2626;font-family:Inter,sans-serif">
+        <p style="font-weight:700;margin-bottom:8px">Failed to load</p>
+        <p style="font-size:13px;color:#6B7280;word-break:break-word">${err.message}</p>
+        <p style="font-size:11px;color:#9CA3AF;margin-top:12px">Check the browser console for full details.</p>
       </div>`;
     return;
   }
