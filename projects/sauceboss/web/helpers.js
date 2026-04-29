@@ -135,14 +135,9 @@ async function adminCreateItem(data, key) {
   return res.json();
 }
 
-async function fetchAdminItems(key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/items`, {
-    headers: { 'Authorization': `Bearer ${key}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
+async function fetchItems() {
+  const res = await fetch(`${API}/api/v1/sauceboss/items`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 

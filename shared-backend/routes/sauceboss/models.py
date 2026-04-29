@@ -1,9 +1,12 @@
 """Pydantic request/response models for SauceBoss."""
 
+import logging
 from enum import StrEnum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("sauceboss")
 
 
 class ItemCategory(StrEnum):
@@ -91,3 +94,60 @@ class ItemLoadResponse(BaseModel):
     variants: List[Dict[str, Any]]
     sauces: List[Dict[str, Any]]
     ingredients: List[str]
+
+
+# Note: uses key "salads" (not "saladBases" like InitialLoadResponse) — matches
+# the existing dish-tab consumer in projects/sauceboss/web/settings.js.
+class ItemsGroupedResponse(BaseModel):
+    carbs: List[Dict[str, Any]]
+    proteins: List[Dict[str, Any]]
+    salads: List[Dict[str, Any]]
+
+
+def _shape_items_grouped(rows: list[dict]) -> dict:
+    """Group raw sauceboss_items rows into {carbs, proteins, salads} with nested variants."""
+    def shape(r: dict) -> dict:
+        return {
+            "id": r["id"],
+            "category": r["category"],
+            "parentId": r.get("parent_id"),
+            "name": r["name"],
+            "emoji": r.get("emoji") or "",
+            "description": r.get("description") or "",
+            "sortOrder": r.get("sort_order") or 0,
+            "cookTimeMinutes": r.get("cook_time_minutes"),
+            "instructions": r.get("instructions"),
+            "waterRatio": r.get("water_ratio"),
+            "portionPerPerson": r.get("portion_per_person"),
+            "portionUnit": r.get("portion_unit"),
+        }
+
+    parents_by_id: Dict[str, dict] = {}
+    orphan_count = 0
+    for r in rows:
+        if r.get("parent_id") is None:
+            it = shape(r)
+            it["variants"] = []
+            parents_by_id[r["id"]] = it
+
+    for r in rows:
+        if r.get("parent_id") is None:
+            continue
+        parent = parents_by_id.get(r["parent_id"])
+        if parent is None:
+            orphan_count += 1
+        else:
+            parent["variants"].append(shape(r))
+
+    if orphan_count:
+        logger.warning("sauceboss: %d variant rows reference missing parents", orphan_count)
+
+    grouped: Dict[str, List[dict]] = {"carbs": [], "proteins": [], "salads": []}
+    for parent in parents_by_id.values():
+        if parent["category"] == "carb":
+            grouped["carbs"].append(parent)
+        elif parent["category"] == "protein":
+            grouped["proteins"].append(parent)
+        elif parent["category"] == "salad":
+            grouped["salads"].append(parent)
+    return grouped

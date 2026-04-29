@@ -226,7 +226,7 @@ async function openSauceManager() {
   try {
     const [sauces, items] = await Promise.all([
       fetchAllSauces(),
-      state.adminKey ? fetchAdminItems(state.adminKey).catch(() => null) : Promise.resolve(null),
+      fetchItems().catch(() => null),
     ]);
     state.adminSauces = sauces;
     if (items) state.adminItems = { carbs: items.carbs || [], proteins: items.proteins || [], salads: items.salads || [] };
@@ -246,14 +246,14 @@ function setSauceManagerTab(tab) {
   state.sauceManagerTab = tab;
   state.itemForm = null;
   render();
-  if (tab === 'dish' && state.adminKey) {
+  if (tab === 'dish') {
     refreshAdminItems();
   }
 }
 
 async function refreshAdminItems() {
   try {
-    const items = await fetchAdminItems(state.adminKey);
+    const items = await fetchItems();
     state.adminItems = { carbs: items.carbs || [], proteins: items.proteins || [], salads: items.salads || [] };
     render();
   } catch (err) {
@@ -321,10 +321,6 @@ async function submitAdminPassword() {
     state.adminKey = key;
     state.adminLoading = false;
     state.adminError = null;
-    fetchAdminItems(key).then(items => {
-      state.adminItems = { carbs: items.carbs || [], proteins: items.proteins || [], salads: items.salads || [] };
-      render();
-    }).catch(() => {});
     navigate('admin');
   } catch (err) {
     state.adminLoading = false;
