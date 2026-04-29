@@ -6,7 +6,7 @@ function renderPrepSelector() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('carb-selector')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>${carb.emoji}</span>${carb.name}</div>
       <div class="subtitle">How are you preparing it?</div>
     </div>

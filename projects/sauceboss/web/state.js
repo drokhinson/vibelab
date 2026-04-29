@@ -40,38 +40,6 @@ const SAUCE_TIMES = {
   'coconut-tomato-curry':[5, 10],
 };
 
-// ─── Protein & veggie options (fallback) ─────────────────────────────────────
-const PROTEIN_VEGGIE_OPTIONS = {
-  proteins: [
-    { id: 'chicken', type: 'protein', name: 'Chicken Breast', emoji: '🍗',
-      desc: 'Pan-seared and sliced', estimatedTime: 18,
-      instructions: 'Season with salt and pepper. Heat oil over medium-high. Cook 6-7 min per side until 165\u00B0F. Rest 5 min, slice.' },
-    { id: 'beef', type: 'protein', name: 'Beef Strips', emoji: '🥩',
-      desc: 'Quick stir-fried strips', estimatedTime: 8,
-      instructions: 'Slice against grain into thin strips. Sear in hot oiled pan 2-3 min. Season with salt and pepper.' },
-    { id: 'tofu', type: 'protein', name: 'Crispy Tofu', emoji: '🧈',
-      desc: 'Pressed and pan-fried until golden', estimatedTime: 28,
-      instructions: 'Press firm tofu 15 min. Cube, toss with cornstarch. Pan-fry in oil, turning until golden on all sides ~10 min.' },
-    { id: 'fish', type: 'protein', name: 'White Fish Fillet', emoji: '🐟',
-      desc: 'Pan-seared with crispy skin', estimatedTime: 10,
-      instructions: 'Pat dry, season. Place skin-side down in hot oiled pan 4 min, flip, cook 2-3 min more.' },
-  ],
-  veggies: [
-    { id: 'mushrooms', type: 'veggie', name: 'Grilled Mushrooms', emoji: '🍄',
-      desc: 'Mixed mushrooms, seared until golden', estimatedTime: 8,
-      instructions: 'Slice mushrooms. Sear in hot pan with butter, don\'t crowd. Cook 5-6 min until golden. Season with salt.' },
-    { id: 'fajita-veggies', type: 'veggie', name: 'Fajita-Style Veggies', emoji: '🫑',
-      desc: 'Bell peppers and onions, charred', estimatedTime: 10,
-      instructions: 'Slice peppers and onions into strips. Cook in hot oiled pan over high heat 6-8 min until charred edges appear.' },
-    { id: 'roasted-broccoli', type: 'veggie', name: 'Roasted Broccoli', emoji: '🥦',
-      desc: 'Oven-roasted with garlic', estimatedTime: 22,
-      instructions: 'Cut into florets, toss with oil, garlic, salt. Roast at 425\u00B0F for 18-20 min until edges are crispy.' },
-    { id: 'sauteed-spinach', type: 'veggie', name: 'Sauteed Spinach', emoji: '🥬',
-      desc: 'Quick wilted with garlic', estimatedTime: 5,
-      instructions: 'Heat oil, add minced garlic for 30 sec. Add spinach, toss until wilted ~2-3 min. Season.' },
-  ],
-};
-
 // ─── Builder constants ───────────────────────────────────────────────────────
 const CUISINES = [
   { name: 'Italian', emoji: '🇮🇹' },
@@ -129,10 +97,9 @@ let state = {
   // ── Current screen ──────────────────────────────────────────────────────────
   screen: 'meal-builder',       // home is the meal builder
 
-  // ── Meal builder ────────────────────────────────────────────────────────────
-  mealStep: null,               // 'protein' | 'carb' | 'salad' | null — which component is being configured
+  // ── Meal selections (one path is populated; others stay null) ──────────────
   meal: {
-    protein: null,              // selected addon (from state.proteins)
+    protein: null,              // selected protein (from state.proteins)
     marinade: null,             // selected marinade sauce object
     carb: null,                 // selected carb
     prep: null,                 // selected carb prep
@@ -156,8 +123,6 @@ let state = {
   substitutions: {},
   preparations: [],
   selectedPrep: null,
-  selectedAddons: [],           // addons for the carb path (veggies/proteins with sauce)
-  addons: null,                 // { proteins: [], veggies: [] }
 
   // ── Dressings path ──────────────────────────────────────────────────────────
   saladBases: [],
@@ -171,10 +136,9 @@ let state = {
   marinadesForCurrentProtein: [],
   allMarinadeIngredients: [],
 
-  // ── Guided meal flow ────────────────────────────────────────────────────────
-  mealOptions: { protein: false, carb: false, salad: false, addons: false },
-  mealFlowSteps: [],    // e.g. ['protein','carb','addons','salad']
-  mealFlowIndex: -1,    // -1 = not in guided flow; 0+ = current step index
+  // Admin sauce-manager Add-ons tab. Proteins is a live reference to state.proteins
+  // so admin-added proteins flow into the home screen automatically.
+  addons: null,
 
   // ── Admin / builder ─────────────────────────────────────────────────────────
   builder: null,

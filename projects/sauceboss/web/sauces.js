@@ -6,7 +6,7 @@ function getSauceScreenContext() {
     const base = state.selectedSaladBase;
     return {
       sauces: state.dressingsForCurrentBase,
-      backScreen: 'salad-base-selector',
+      backScreen: 'meal-builder',
       emoji: base ? base.emoji : '🥗',
       title: base ? `${base.name} Dressings` : 'Dressings',
       compatLabel: (s) => s.compatibleBases ? s.compatibleBases.join(' · ') : '',
@@ -16,7 +16,7 @@ function getSauceScreenContext() {
     const protein = state.selectedProtein;
     return {
       sauces: state.marinadesForCurrentProtein,
-      backScreen: 'protein-selector',
+      backScreen: 'meal-builder',
       emoji: protein ? protein.emoji : '🔥',
       title: protein ? `${protein.name} Marinades` : 'Marinades',
       compatLabel: (s) => s.compatibleProteins ? s.compatibleProteins.join(' · ') : '',
@@ -26,7 +26,7 @@ function getSauceScreenContext() {
   const carb = state.selectedCarb;
   return {
     sauces: state.saucesForCurrentCarb,
-    backScreen: state.preparations.length > 0 ? 'prep-selector' : 'carb-selector',
+    backScreen: state.preparations.length > 0 ? 'prep-selector' : 'meal-builder',
     emoji: carb ? carb.emoji : '🍲',
     title: carb ? `${carb.name} Sauces` : 'Sauces',
     compatLabel: (s) => s.compatibleCarbs ? s.compatibleCarbs.join(' · ') : '',
@@ -124,28 +124,18 @@ function selectSauce(id) {
   const { sauces } = getSauceScreenContext();
   state.selectedSauce = sauces.find(s => s.id === id);
 
-  if (state.mealStep === 'carb') {
+  if (state.screen === 'sauce-selector') {
     state.meal.carb     = state.selectedCarb;
     state.meal.prep     = state.selectedPrep;
     state.meal.sauce    = state.selectedSauce;
-    state.mealStep = null;
-    if (state.mealFlowIndex >= 0) advanceToNextStep();
-    else navigate('meal-builder');
-  } else if (state.mealStep === 'salad') {
-    state.meal.saladBase = state.selectedSaladBase;
-    state.meal.dressing  = state.selectedSauce;
-    state.mealStep = null;
-    if (state.mealFlowIndex >= 0) advanceToNextStep();
-    else navigate('meal-builder');
-  } else if (state.mealStep === 'protein') {
+  } else if (state.screen === 'marinade-selector') {
     state.meal.protein  = state.selectedProtein;
     state.meal.marinade = state.selectedSauce;
-    state.mealStep = null;
-    if (state.mealFlowIndex >= 0) advanceToNextStep();
-    else navigate('meal-builder');
-  } else {
-    navigate('recipe');
+  } else if (state.screen === 'dressing-selector') {
+    state.meal.saladBase = state.selectedSaladBase;
+    state.meal.dressing  = state.selectedSauce;
   }
+  navigate('meal-recipe');
 }
 
 function toggleFilter() {
