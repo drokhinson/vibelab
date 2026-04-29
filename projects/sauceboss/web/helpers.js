@@ -431,7 +431,18 @@ function render() {
   _initIcons();
 }
 
-function navigate(screen) { state.screen = screen; render(); }
+function navigate(screen, opts = {}) {
+  const { push = true, replace = false } = opts;
+  state.screen = screen;
+  const histState = { screen, sb: true };
+  const url = '#' + screen;
+  if (replace) {
+    history.replaceState(histState, '', url);
+  } else if (push) {
+    history.pushState(histState, '', url);
+  }
+  render();
+}
 
 function _initIcons() {
   if (window.lucide) requestAnimationFrame(() => lucide.createIcons());

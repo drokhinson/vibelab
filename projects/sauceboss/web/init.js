@@ -38,6 +38,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   render();
 
+  history.replaceState({ screen: state.screen, sb: true }, '', '#' + state.screen);
+
+  window.addEventListener('popstate', (e) => {
+    if (e.state && e.state.sb && e.state.screen) {
+      navigate(e.state.screen, { push: false });
+    }
+  });
+
   const appEl = document.getElementById('app');
 
   // Ingredient chip toggles
