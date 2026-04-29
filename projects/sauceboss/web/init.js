@@ -65,6 +65,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('splash--exiting');
     setTimeout(() => {
       document.getElementById('splash-screen')?.remove();
+      // Pin the hero pot's animation off before lifting splash--exiting,
+      // otherwise the .hero-illustration { animation: fadeIn ... } rule
+      // re-triggers and the pot fades in from 0 again.
+      const heroNow = document.getElementById('hero-illustration');
+      if (heroNow) heroNow.style.animation = 'none';
       document.body.classList.remove('splash--exiting');
     }, 750);
   });
