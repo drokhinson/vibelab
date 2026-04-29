@@ -142,11 +142,11 @@ let state = {
   adminSauces: [],
   adminLoading: false,
   adminError: null,
-  sauceManagerTab: 'sauces',                    // 'sauces' | 'items'
-  itemSections: { carbs: true, proteins: true }, // expanded by default
-  editItemForm: null,                            // {id, category, name, emoji, ...}
-  addCarbForm: null,
-  addProteinForm: null,
+  sauceManagerTab: 'sauces',                                      // 'sauces' | 'dish'
+  itemSections: { carbs: true, proteins: true, salads: true },    // category-level expand
+  expandedParents: {},                                             // { [parentId]: true }
+  adminItems: { carbs: [], proteins: [], salads: [] },             // parents w/ nested variants
+  itemForm: null,                                                  // shared add/edit form
 };
 
 function defaultBuilder() {
