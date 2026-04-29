@@ -1,5 +1,6 @@
 """Public SauceBoss API routes — carbs, sauces, dressings, marinades."""
 
+import logging
 import re
 import secrets
 
@@ -16,6 +17,8 @@ from .models import (
     ProteinLoadResponse,
     SaladBaseLoadResponse,
 )
+
+logger = logging.getLogger("sauceboss")
 
 
 @router.get("/health", response_model=HealthResponse, summary="SauceBoss health check")
@@ -219,6 +222,25 @@ async def upsert_ingredient_category(body: IngredientCategoryInput):
 
 # ── Combined-load endpoints (one round-trip per user action) ─────────────────
 
+def _rpc_or_500(name: str, params: dict, log_label: str):
+    """Run a Supabase RPC and surface failure detail in both logs and response."""
+    logger.info("[%s] calling RPC %s params=%s", log_label, name, params)
+    try:
+        result = get_supabase().rpc(name, params).execute()
+    except Exception as e:
+        logger.exception("[%s] RPC %s raised", log_label, name)
+        raise HTTPException(500, f"{log_label} RPC error: {type(e).__name__}: {e}")
+    if result.data is None:
+        logger.error("[%s] RPC %s returned data=None", log_label, name)
+        raise HTTPException(500, f"{log_label} returned no data")
+    if isinstance(result.data, (list, dict)):
+        size = len(result.data)
+        logger.info("[%s] RPC %s ok, payload size=%s top-level keys/items", log_label, name, size)
+    else:
+        logger.info("[%s] RPC %s ok, type=%s", log_label, name, type(result.data).__name__)
+    return result.data
+
+
 @router.get(
     "/initial-load",
     response_model=InitialLoadResponse,
@@ -226,11 +248,7 @@ async def upsert_ingredient_category(body: IngredientCategoryInput):
 )
 async def initial_load() -> InitialLoadResponse:
     """Single round-trip returning all base meal-type lists for the meal builder."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_initial_load", {}).execute()
-    if result.data is None:
-        raise HTTPException(500, "Failed to load initial bundle")
-    return result.data
+    return _rpc_or_500("get_sauceboss_initial_load", {}, "initial-load")
 
 
 @router.get(
@@ -240,11 +258,7 @@ async def initial_load() -> InitialLoadResponse:
 )
 async def carb_load(carb_id: str) -> CarbLoadResponse:
     """Single round-trip returning everything the sauce-selector screen needs for a carb."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_carb_load", {"p_carb_id": carb_id}).execute()
-    if result.data is None:
-        raise HTTPException(404, f"No data found for carb '{carb_id}'")
-    return result.data
+    return _rpc_or_500("get_sauceboss_carb_load", {"p_carb_id": carb_id}, f"carb-load:{carb_id}")
 
 
 @router.get(
@@ -254,11 +268,7 @@ async def carb_load(carb_id: str) -> CarbLoadResponse:
 )
 async def protein_load(addon_id: str) -> ProteinLoadResponse:
     """Single round-trip returning everything the marinade-selector screen needs for a protein."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_protein_load", {"p_addon_id": addon_id}).execute()
-    if result.data is None:
-        raise HTTPException(404, f"No data found for protein '{addon_id}'")
-    return result.data
+    return _rpc_or_500("get_sauceboss_protein_load", {"p_addon_id": addon_id}, f"protein-load:{addon_id}")
 
 
 @router.get(
@@ -268,8 +278,4 @@ async def protein_load(addon_id: str) -> ProteinLoadResponse:
 )
 async def salad_base_load(base_id: str) -> SaladBaseLoadResponse:
     """Single round-trip returning everything the dressing-selector screen needs for a salad base."""
-    sb = get_supabase()
-    result = sb.rpc("get_sauceboss_salad_base_load", {"p_base_id": base_id}).execute()
-    if result.data is None:
-        raise HTTPException(404, f"No data found for salad base '{base_id}'")
-    return result.data
+    return _rpc_or_500("get_sauceboss_salad_base_load", {"p_base_id": base_id}, f"salad-base-load:{base_id}")
