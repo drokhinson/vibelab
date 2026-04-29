@@ -101,13 +101,14 @@ function highlightSearch(input, query, alreadyHtml = false) {
   return wrapper.innerHTML;
 }
 
-// ── Sticky guide header (back / search / chunk-type pills / expand-all) ───
-// Lives inside #guide-sticky-host (mounted by game-detail.js) so the back
-// button and lookup affordances stay one tap away while the player scrolls
-// deep into chunk content.
+// ── Guide controls (search / chunk-type pills / expand-all) ───────────────
+// Lives inside #guide-controls (mounted by game-detail.js) directly under
+// the "Quick Reference" heading. Re-rendered when the chunk pool changes
+// (load, expansion toggle), but NOT on every keystroke — the search input
+// keeps focus while the user types.
 
-function renderGuideStickyHeader() {
-  const host = document.getElementById("guide-sticky-host");
+function renderGuideControls() {
+  const host = document.getElementById("guide-controls");
   if (!host) return;
   if (!currentGame) { host.innerHTML = ""; return; }
 
@@ -131,13 +132,8 @@ function renderGuideStickyHeader() {
   const expandIcon  = guideExpandAll ? "chevrons-down-up" : "chevrons-up-down";
 
   host.innerHTML = `
-    <div class="guide-sticky">
-      <div class="guide-sticky__row">
-        <button class="guide-sticky__back" type="button"
-                aria-label="Back to closet"
-                onclick="goBackFromGameDetail()">
-          <i data-lucide="arrow-left" class="w-5 h-5"></i>
-        </button>
+    <div class="guide-controls">
+      <div class="guide-controls__row">
         <input class="guide-search" type="search"
                placeholder="Search guide…" autocomplete="off"
                aria-label="Search guide"
@@ -152,12 +148,14 @@ function renderGuideStickyHeader() {
       </div>
       <div class="guide-pill-row" role="tablist" aria-label="Filter by section">
         <button type="button" class="guide-pill" role="tab"
+                data-pill-type=""
                 aria-pressed="${allActive ? "true" : "false"}"
                 onclick="setGuideTypeFilter(null)">
           All <span class="guide-pill__count">${currentGuideChunks.length}</span>
         </button>
         ${types.map(t => `
           <button type="button" class="guide-pill" role="tab"
+                  data-pill-type="${escapeAttr(t.id)}"
                   aria-pressed="${guideTypeFilter === t.id ? "true" : "false"}"
                   onclick="setGuideTypeFilter('${escapeAttr(t.id)}')">
             <i data-lucide="${escapeAttr(t.icon)}" class="w-3 h-3"></i>
@@ -174,7 +172,12 @@ function renderGuideStickyHeader() {
 function setGuideTypeFilter(typeId) {
   guideTypeFilter = typeId || null;
   applyGuideFilters();
-  renderGuideStickyHeader();
+  // Update aria-pressed on each pill in place — re-rendering would destroy
+  // the search input and steal focus if the user is typing.
+  document.querySelectorAll("#guide-controls .guide-pill").forEach(btn => {
+    const id = btn.dataset.pillType || null;
+    btn.setAttribute("aria-pressed", (guideTypeFilter || null) === id ? "true" : "false");
+  });
 }
 
 let _guideSearchDebounce = null;
@@ -183,10 +186,11 @@ function onGuideSearchInput(value) {
   clearTimeout(_guideSearchDebounce);
   _guideSearchDebounce = setTimeout(() => {
     guideSearchQuery = value || "";
-    // Re-render so every chunk gets fresh <mark> highlights and is force-open.
+    // Re-render chunks for fresh <mark> highlights + force-open. Do NOT
+    // re-render #guide-controls — that would replace the active <input>
+    // and steal focus mid-type.
     renderGuide();
     applyGuideFilters();
-    renderGuideStickyHeader();
   }, 140);
 }
 
@@ -196,7 +200,7 @@ function toggleExpandAllChunks() {
   // re-render so scroll position is preserved.
   document.querySelectorAll("#guide-content .scroll-chunk > input[type=checkbox]")
     .forEach(cb => { cb.checked = guideExpandAll; });
-  renderGuideStickyHeader();
+  renderGuideControls();
 }
 
 // Hide chunk rows whose type or search-haystack doesn't match. Kept separate
@@ -231,13 +235,6 @@ function applyGuideFilters() {
   } else if (empty) {
     empty.remove();
   }
-}
-
-// Back button used by the sticky guide header. Mirrors the existing inline
-// onclick on the hero back button so behaviour stays consistent.
-function goBackFromGameDetail() {
-  showView("closet");
-  if (typeof loadCloset === "function") loadCloset();
 }
 
 // ── Permissions ──────────────────────────────────────────────────────────────
@@ -333,41 +330,18 @@ function recomputeGuideViews() {
   }
 
   renderGuide();
-  renderGuideStickyHeader();
+  renderGuideControls();
   applyGuideFilters();
   renderGuideToolbar();
   renderExpansionsPanel();
-  renderExpansionRulebooks();
+  renderRulebooksSection();
   const dlg = document.getElementById("hidden-chunks-dialog");
   if (dlg?.open) renderHiddenChunksPanel();
 }
 
 function renderGuide() {
   const container = document.getElementById("guide-content");
-  const rulebookHost = document.getElementById("rulebook-section");
   const chunks = currentGuideChunks;
-
-  // Rulebook URL is now per-game metadata (boardgamebuddy_games.rulebook_url),
-  // not a chunk. Render the link card straight from currentGame.
-  if (rulebookHost) {
-    const url = (currentGame?.rulebook_url || "").trim();
-    if (url) {
-      rulebookHost.className = "mb-4 space-y-2";
-      rulebookHost.innerHTML = `
-        <a href="${escapeAttr(url)}" target="_blank" rel="noopener"
-           class="rulebook-card">
-          <i data-lucide="file-text" class="w-5 h-5"></i>
-          <div class="rulebook-card__text">
-            <div class="rulebook-card__title">Official Rulebook</div>
-            <div class="rulebook-card__sub">Open official rulebook</div>
-          </div>
-          <i data-lucide="external-link" class="w-4 h-4 opacity-60"></i>
-        </a>`;
-    } else {
-      rulebookHost.className = "";
-      rulebookHost.innerHTML = "";
-    }
-  }
 
   if (!chunks.length) {
     container.innerHTML = `
@@ -518,37 +492,51 @@ function renderExpansionsPanel() {
   lucide.createIcons();
 }
 
-// Section at the bottom of the Quick Reference: link cards for the rulebooks
-// of every expansion the user has currently toggled on. Empty when no enabled
-// expansion has a rulebook URL. recomputeGuideViews() drives this on every
-// toggle, so the section live-updates with the panel above.
-function renderExpansionRulebooks() {
-  const host = document.getElementById("expansion-rulebooks-section");
+// Combined Rulebooks section, rendered below the Quick Reference scroll:
+// official rulebook (from currentGame.rulebook_url) + a card per enabled
+// expansion that has its own rulebook URL. recomputeGuideViews() drives
+// this on every expansion toggle, so the section live-updates.
+function renderRulebooksSection() {
+  const host = document.getElementById("rulebooks-section");
   if (!host) return;
-  const enabled = (currentExpansions || []).filter(
+  const officialUrl = (currentGame?.rulebook_url || "").trim();
+  const enabledExpansions = (currentExpansions || []).filter(
     e => e.is_enabled && (e.rulebook_url || "").trim(),
   );
-  if (!enabled.length) {
+  if (!officialUrl && !enabledExpansions.length) {
     host.className = "";
     host.innerHTML = "";
     return;
   }
-  host.className = "mt-4 space-y-2";
+  host.className = "mb-4 space-y-2";
+  const officialCard = officialUrl ? `
+    <a href="${escapeAttr(officialUrl)}" target="_blank" rel="noopener"
+       class="rulebook-card">
+      <i data-lucide="file-text" class="w-5 h-5"></i>
+      <div class="rulebook-card__text">
+        <div class="rulebook-card__title">Official Rulebook</div>
+        <div class="rulebook-card__sub">Open official rulebook</div>
+      </div>
+      <i data-lucide="external-link" class="w-4 h-4 opacity-60"></i>
+    </a>` : "";
+  const expansionCards = enabledExpansions.map(e => `
+    <a href="${escapeAttr(e.rulebook_url.trim())}" target="_blank" rel="noopener"
+       class="rulebook-card">
+      <i data-lucide="file-text" class="w-5 h-5"
+         style="color:${escapeAttr(e.color || "currentColor")}"></i>
+      <div class="rulebook-card__text">
+        <div class="rulebook-card__title">${escapeHtml(e.name)}</div>
+        <div class="rulebook-card__sub">Open expansion rulebook</div>
+      </div>
+      <i data-lucide="external-link" class="w-4 h-4 opacity-60"></i>
+    </a>`).join("");
   host.innerHTML = `
-    <h3 class="text-sm font-semibold text-base-content/70 px-1 mb-1">
-      Expansion rulebooks
-    </h3>
-    ${enabled.map(e => `
-      <a href="${escapeAttr(e.rulebook_url.trim())}" target="_blank" rel="noopener"
-         class="rulebook-card">
-        <i data-lucide="file-text" class="w-5 h-5"
-           style="color:${escapeAttr(e.color || "currentColor")}"></i>
-        <div class="rulebook-card__text">
-          <div class="rulebook-card__title">${escapeHtml(e.name)}</div>
-          <div class="rulebook-card__sub">Open expansion rulebook</div>
-        </div>
-        <i data-lucide="external-link" class="w-4 h-4 opacity-60"></i>
-      </a>`).join("")}`;
+    <h2 class="text-lg font-bold flex items-center gap-2 mb-2">
+      <i data-lucide="book-marked" class="w-5 h-5" style="color: var(--game-accent)"></i>
+      Rulebooks
+    </h2>
+    ${officialCard}
+    ${expansionCards}`;
   lucide.createIcons();
 }
 

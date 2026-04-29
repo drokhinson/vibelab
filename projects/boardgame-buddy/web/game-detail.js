@@ -10,7 +10,6 @@ async function openGameDetail(gameId) {
     applyGameTheme(currentGame);
     renderGameDetail();
     loadGuide(gameId);
-    renderGuideToolbar();
     if (session) {
       renderCollectionButtons(gameId);
       loadPlayCount(gameId);
@@ -103,27 +102,24 @@ function renderGameDetail() {
       ${session ? '<span class="loading loading-spinner loading-xs"></span>' : '<p class="text-sm text-base-content/50">Log in to add to collection</p>'}
     </div>
 
-    <!-- Rulebook (rendered by guide.js from currentGame.rulebook_url) -->
-    <div id="rulebook-section"></div>
-
     <!-- Quick Reference Guide -->
     <div id="guide-section" class="mb-4">
-      <!-- Sticky header (back / search / chunk-type pills / expand-all) populated by guide.js -->
-      <div id="guide-sticky-host"></div>
-      <div class="flex items-center justify-between mb-2 mt-3">
-        <h2 class="text-lg font-bold flex items-center gap-2">
-          <i data-lucide="book-open" class="w-5 h-5" style="color: var(--game-accent)"></i>
-          Quick Reference
-        </h2>
-        <div id="guide-toolbar"></div>
-      </div>
+      <h2 class="text-lg font-bold flex items-center gap-2 mt-3 mb-2">
+        <i data-lucide="book-open" class="w-5 h-5" style="color: var(--game-accent)"></i>
+        Quick Reference
+      </h2>
+      <!-- Search + chunk-type pills + expand-all (rendered by guide.js) -->
+      <div id="guide-controls"></div>
       <div id="expansions-panel" class="mb-2"></div>
       <div id="guide-content" class="scroll-panel">
         <span class="loading loading-spinner loading-sm"></span>
       </div>
-      <!-- Expansion rulebooks (rendered by guide.js when expansions are toggled on) -->
-      <div id="expansion-rulebooks-section"></div>
+      <!-- New chunk / Hidden — moved below the scroll (rendered by guide.js) -->
+      <div id="guide-toolbar" class="mt-3"></div>
     </div>
+
+    <!-- Rulebooks (official + enabled expansions, rendered by guide.js) -->
+    <div id="rulebooks-section" class="mb-4"></div>
 
     <!-- Play History (logged-in only, populated async) -->
     ${session ? '<div id="game-history-section" class="mb-4"></div>' : ''}
