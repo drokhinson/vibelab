@@ -1,7 +1,7 @@
 """Pydantic request/response models for SauceBoss."""
 
 from enum import StrEnum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -65,3 +65,27 @@ class CreateAddonRequest(BaseModel):
     desc: str = ""
     estimatedTime: int = Field(gt=0)
     instructions: str = Field(min_length=1)
+
+
+# ── Combined-load responses ──────────────────────────────────────────────────
+
+class InitialLoadResponse(BaseModel):
+    carbs: List[Dict[str, Any]]
+    proteins: List[Dict[str, Any]]
+    saladBases: List[Dict[str, Any]]
+
+
+class CarbLoadResponse(BaseModel):
+    sauces: List[Dict[str, Any]]
+    ingredients: List[Dict[str, Any]]
+    preparations: List[Dict[str, Any]]
+
+
+class ProteinLoadResponse(BaseModel):
+    marinades: List[Dict[str, Any]]
+    ingredients: List[str]
+
+
+class SaladBaseLoadResponse(BaseModel):
+    dressings: List[Dict[str, Any]]
+    ingredients: List[str]

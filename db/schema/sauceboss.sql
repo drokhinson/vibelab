@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SauceBoss — current schema snapshot
--- Last updated: migration 026
+-- Last updated: migration 049
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -114,3 +114,10 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_proteins (
   PRIMARY KEY (sauce_id, addon_id)
 );
 ALTER TABLE public.sauceboss_sauce_proteins ENABLE ROW LEVEL SECURITY;
+
+-- ── Combined-load RPCs (migration 049) ──────────────────────────────────────
+-- Wrap multiple per-resource RPCs into a single round-trip:
+--   get_sauceboss_initial_load()           → { carbs, proteins, saladBases }
+--   get_sauceboss_carb_load(p_carb_id)     → { sauces, ingredients, preparations }
+--   get_sauceboss_protein_load(p_addon_id) → { marinades, ingredients }
+--   get_sauceboss_salad_base_load(p_base_id) → { dressings, ingredients }

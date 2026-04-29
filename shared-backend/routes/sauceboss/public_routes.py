@@ -8,7 +8,14 @@ from fastapi import HTTPException
 from db import get_supabase
 from shared_models import HealthResponse
 from . import router
-from .models import CreateSauceRequest, IngredientCategoryInput
+from .models import (
+    CarbLoadResponse,
+    CreateSauceRequest,
+    IngredientCategoryInput,
+    InitialLoadResponse,
+    ProteinLoadResponse,
+    SaladBaseLoadResponse,
+)
 
 
 @router.get("/health", response_model=HealthResponse, summary="SauceBoss health check")
@@ -208,3 +215,61 @@ async def upsert_ingredient_category(body: IngredientCategoryInput):
         "p_category": body.category,
     }).execute()
     return {"status": "ok"}
+
+
+# ── Combined-load endpoints (one round-trip per user action) ─────────────────
+
+@router.get(
+    "/initial-load",
+    response_model=InitialLoadResponse,
+    summary="Bundle of carbs, proteins, and salad bases for the home screen",
+)
+async def initial_load() -> InitialLoadResponse:
+    """Single round-trip returning all base meal-type lists for the meal builder."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_initial_load", {}).execute()
+    if result.data is None:
+        raise HTTPException(500, "Failed to load initial bundle")
+    return result.data
+
+
+@router.get(
+    "/carbs/{carb_id}/load",
+    response_model=CarbLoadResponse,
+    summary="Sauces, ingredients, and prep options for a carb",
+)
+async def carb_load(carb_id: str) -> CarbLoadResponse:
+    """Single round-trip returning everything the sauce-selector screen needs for a carb."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_carb_load", {"p_carb_id": carb_id}).execute()
+    if result.data is None:
+        raise HTTPException(404, f"No data found for carb '{carb_id}'")
+    return result.data
+
+
+@router.get(
+    "/proteins/{addon_id}/load",
+    response_model=ProteinLoadResponse,
+    summary="Marinades and ingredients for a protein",
+)
+async def protein_load(addon_id: str) -> ProteinLoadResponse:
+    """Single round-trip returning everything the marinade-selector screen needs for a protein."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_protein_load", {"p_addon_id": addon_id}).execute()
+    if result.data is None:
+        raise HTTPException(404, f"No data found for protein '{addon_id}'")
+    return result.data
+
+
+@router.get(
+    "/salad-bases/{base_id}/load",
+    response_model=SaladBaseLoadResponse,
+    summary="Dressings and ingredients for a salad base",
+)
+async def salad_base_load(base_id: str) -> SaladBaseLoadResponse:
+    """Single round-trip returning everything the dressing-selector screen needs for a salad base."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_salad_base_load", {"p_base_id": base_id}).execute()
+    if result.data is None:
+        raise HTTPException(404, f"No data found for salad base '{base_id}'")
+    return result.data

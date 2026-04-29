@@ -2,26 +2,34 @@
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    const [carbs, proteins, saladBases, categoriesRaw, subsRaw] = await Promise.all([
-      fetchCarbs(),
-      fetchProteins().catch(() => []),
-      fetchSaladBases().catch(() => []),
-      fetchIngredientCategories().catch(() => []),
-      fetchSubstitutions().catch(() => []),
-    ]);
-    state.carbs = carbs;
-    state.proteins = Array.isArray(proteins) ? proteins : [];
-    state.saladBases = Array.isArray(saladBases) ? saladBases : [];
-    state.addons = { proteins: state.proteins, veggies: [] };
+  document.body.classList.add('splash--loading');
 
+  try {
+    const { carbs, proteins, saladBases } = await fetchInitialLoad();
+    state.carbs = carbs;
+    state.proteins = proteins;
+    state.saladBases = saladBases;
+    state.addons = { proteins, veggies: [] };
+  } catch (err) {
+    document.getElementById('splash-screen')?.remove();
+    document.body.classList.remove('splash--loading');
+    document.getElementById('app').innerHTML = `
+      <div style="padding:2rem;text-align:center;color:#dc2626">
+        Failed to load: ${err.message}
+      </div>`;
+    return;
+  }
+
+  // Lazy-load reference data needed only inside the recipe builder.
+  // Fire and forget — failures are non-fatal.
+  Promise.all([
+    fetchIngredientCategories().catch(() => []),
+    fetchSubstitutions().catch(() => []),
+  ]).then(([categoriesRaw, subsRaw]) => {
     state.ingredientCategories = {};
     if (Array.isArray(categoriesRaw)) {
-      for (const c of categoriesRaw) {
-        state.ingredientCategories[c.ingredientName] = c.category;
-      }
+      for (const c of categoriesRaw) state.ingredientCategories[c.ingredientName] = c.category;
     }
-
     state.substitutions = {};
     if (Array.isArray(subsRaw)) {
       for (const s of subsRaw) {
@@ -29,14 +37,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.substitutions[s.ingredientName].push({ substituteName: s.substituteName, notes: s.notes });
       }
     }
-  } catch (err) {
-    document.getElementById('app').innerHTML = `
-      <div style="padding:2rem;text-align:center;color:#dc2626">
-        Failed to load: ${err.message}
-      </div>`;
-    return;
-  }
+  });
+
+  // Render the meal-builder behind the splash, then animate the handoff:
+  // measure where the hero illustration will sit, slide the splash pot to
+  // that position, drop the orange header in from the top, and stagger the
+  // section cards. Once the slide ends, drop the splash from the DOM and
+  // the meal-builder's own hero pot becomes visible (visually identical).
   render();
+
+  requestAnimationFrame(() => {
+    const splash    = document.getElementById('splash-screen');
+    const splashPot = document.getElementById('splash-pot');
+    const hero      = document.getElementById('hero-illustration');
+    if (splash && splashPot && hero) {
+      const a = splashPot.getBoundingClientRect();
+      const b = hero.getBoundingClientRect();
+      const dx = (b.left + b.width / 2)  - (a.left + a.width / 2);
+      const dy = (b.top  + b.height / 2) - (a.top  + a.height / 2);
+      splashPot.style.setProperty('--pot-target-x', `${dx}px`);
+      splashPot.style.setProperty('--pot-target-y', `${dy}px`);
+      splashPot.style.setProperty('--pot-target-scale', '1');
+    }
+    document.body.classList.remove('splash--loading');
+    document.body.classList.add('splash--exiting');
+    setTimeout(() => {
+      document.getElementById('splash-screen')?.remove();
+      document.body.classList.remove('splash--exiting');
+    }, 750);
+  });
 
   history.replaceState({ screen: state.screen, sb: true }, '', '#' + state.screen);
 

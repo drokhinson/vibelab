@@ -1664,3 +1664,109 @@ body, button, input, select, textarea {
   font-size: 13px;
   color: #9CA3AF;
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   SPLASH SCREEN — wiggling pot + animated steam during initial load
+   ───────────────────────────────────────────────────────────────── */
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #FFF8F0;
+  pointer-events: none;
+}
+
+.splash-pot-wrap {
+  transform-origin: 50% 70%;
+  animation: potWiggle 1.4s ease-in-out infinite;
+  will-change: transform;
+}
+
+.splash-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #E85D04;
+  letter-spacing: 0.2px;
+}
+.splash-dots span {
+  display: inline-block;
+  animation: splashDot 1.2s ease-in-out infinite;
+  opacity: 0.3;
+}
+.splash-dots span:nth-child(2) { animation-delay: 0.2s; }
+.splash-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* Steam — only animated while the splash is on screen, so the same
+   shared SVG sits still inside the meal-builder hero illustration. */
+.splash .steam-circle    { animation: steamPulse 1.6s ease-in-out infinite; transform-origin: center; }
+.splash .steam-circle--2 { animation-delay: 0.2s; }
+.splash .steam-circle--3 { animation-delay: 0.4s; }
+.splash .steam-circle--4 { animation-delay: 0.6s; }
+
+.splash .steam-trail    { animation: steamRise 1.8s ease-in-out infinite; transform-origin: center bottom; }
+.splash .steam-trail--2 { animation-delay: 0.3s; }
+.splash .steam-trail--3 { animation-delay: 0.6s; }
+
+@keyframes potWiggle {
+  0%, 100% { transform: rotate(-3deg); }
+  50%      { transform: rotate(3deg); }
+}
+@keyframes steamPulse {
+  0%, 100% { transform: translateY(0)    scale(1);    opacity: 0.85; }
+  50%      { transform: translateY(-3px) scale(1.08); opacity: 1; }
+}
+@keyframes steamRise {
+  0%   { transform: translateY(4px)   scaleY(0.9); opacity: 0.2; }
+  40%  { opacity: 0.85; }
+  100% { transform: translateY(-10px) scaleY(1.05); opacity: 0; }
+}
+@keyframes splashDot {
+  0%, 80%, 100% { opacity: 0.2; }
+  40%           { opacity: 1; }
+}
+
+/* ── Splash exit + meal-builder entrance ──────────────────────────
+   `body.splash--exiting` is added by init.js once the data has
+   landed. We slide the splash pot toward its final hero position
+   (offset is set by JS in --pot-target-x/y), drop the orange header
+   in from above, and stagger-fade the carb / protein / salad cards. */
+
+body.splash--exiting .splash-pot-wrap {
+  animation: none;
+  transition: transform 480ms cubic-bezier(0.6, 0, 0.2, 1),
+              opacity   180ms 360ms ease;
+  transform: translate(var(--pot-target-x, 0), var(--pot-target-y, 0))
+             scale(var(--pot-target-scale, 1));
+}
+body.splash--exiting .splash-text { transition: opacity 200ms ease; opacity: 0; }
+body.splash--exiting .splash      { transition: opacity 200ms 480ms ease; opacity: 0; }
+
+body.splash--exiting .status-bar,
+body.splash--exiting .app-header {
+  animation: headerSlideDown 380ms 80ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes headerSlideDown {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
+}
+
+/* While loading, hide the meal-builder entirely so the splash owns
+   the screen. During the exit animation, reveal the meal-builder so
+   the splash pot fades out on top of the (now-positioned) hero pot
+   for a seamless handoff. */
+body.splash--loading #app { visibility: hidden; }
+body.splash--exiting  #app { visibility: visible; }
+body.splash--exiting .hero-illustration { animation: none; }
+
+/* Cards and section labels wait for the header to land. */
+body.splash--exiting .scroll-body .section-label,
+body.splash--exiting .scroll-body .carb-grid {
+  animation: fadeUp 260ms 320ms ease both;
+}
