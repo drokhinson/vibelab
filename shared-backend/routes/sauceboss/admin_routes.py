@@ -8,7 +8,7 @@ from fastapi import HTTPException, Header
 from auth import require_admin
 from db import get_supabase
 from . import router
-from .models import CreateItemRequest
+from .models import CreateItemRequest, UpdateItemRequest
 
 
 @router.get("/admin/sauces")
@@ -46,6 +46,48 @@ async def admin_create_item(body: CreateItemRequest, authorization: Optional[str
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
     return {"id": slug, "status": "created"}
+
+
+@router.patch("/admin/items/{item_id}")
+async def admin_update_item(
+    item_id: str,
+    body: UpdateItemRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """Update an existing carb / protein / salad item. Requires admin key."""
+    require_admin(authorization)
+    payload = {k: v for k, v in {
+        "name": body.name,
+        "emoji": body.emoji,
+        "description": body.description,
+        "sort_order": body.sortOrder,
+        "cook_time_minutes": body.cookTimeMinutes,
+        "instructions": body.instructions,
+        "water_ratio": body.waterRatio,
+        "portion_per_person": body.portionPerPerson,
+        "portion_unit": body.portionUnit,
+    }.items() if v is not None}
+    if not payload:
+        raise HTTPException(400, "No fields provided to update")
+    sb = get_supabase()
+    try:
+        sb.table("sauceboss_items").update(payload).eq("id", item_id).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+    return {"id": item_id, "status": "updated"}
+
+
+@router.delete("/admin/items/{item_id}")
+async def admin_delete_item(item_id: str, authorization: Optional[str] = Header(None)):
+    """Delete an item and its sauce↔item junction rows. Requires admin key."""
+    require_admin(authorization)
+    sb = get_supabase()
+    try:
+        sb.table("sauceboss_sauce_items").delete().eq("item_id", item_id).execute()
+        sb.table("sauceboss_items").delete().eq("id", item_id).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+    return {"id": item_id, "status": "deleted"}
 
 
 @router.delete("/admin/sauces/{sauce_id}")

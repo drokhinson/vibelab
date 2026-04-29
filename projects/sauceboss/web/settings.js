@@ -35,14 +35,12 @@ function renderAdmin() {
   const tabBar = `
     <div class="sauce-manager-tabs">
       <button class="sm-tab ${tab === 'sauces' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('sauces')">Sauces</button>
-      <button class="sm-tab ${tab === 'carbs' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('carbs')">Carbs</button>
-      <button class="sm-tab ${tab === 'proteins' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('proteins')">Proteins</button>
+      <button class="sm-tab ${tab === 'items' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('items')">Items</button>
     </div>`;
 
   let bodyHTML = '';
   if (tab === 'sauces') bodyHTML = renderSaucesTab(isAdmin);
-  else if (tab === 'carbs') bodyHTML = renderCarbsTab(isAdmin);
-  else bodyHTML = renderProteinsTab(isAdmin);
+  else bodyHTML = renderItemsTab(isAdmin);
 
   return `
     <div class="status-bar"></div>
@@ -94,18 +92,72 @@ function renderSaucesTab(isAdmin) {
   `).join('');
 }
 
-function renderCarbsTab(isAdmin) {
-  const carbRows = state.carbs.map(c => `
-    <div class="admin-sauce-row">
-      <span class="sm-carb-emoji">${c.emoji}</span>
-      <div class="admin-sauce-info">
-        <div class="admin-sauce-name">${c.name}</div>
-        <div class="admin-sauce-carbs">${c.cookTimeMinutes ? c.cookTimeMinutes + ' min' : ''} · ${c.sauceCount || 0} sauce${c.sauceCount !== 1 ? 's' : ''}</div>
-      </div>
-    </div>`).join('');
+function renderItemsTab(isAdmin) {
+  return renderItemSection('carbs', 'Carbs', state.carbs || [], isAdmin)
+       + renderItemSection('proteins', 'Proteins', state.proteins || [], isAdmin);
+}
 
-  const addForm = isAdmin ? renderAddCarbForm() : '';
-  return carbRows + addForm;
+function renderItemSection(key, label, list, isAdmin) {
+  const open = !!state.itemSections[key];
+  const body = open
+    ? list.map(it => renderItemRow(it, key, isAdmin)).join('')
+      + (isAdmin ? (key === 'carbs' ? renderAddCarbForm() : renderAddProteinForm()) : '')
+    : '';
+  return `
+    <div class="admin-cuisine-group">
+      <div class="admin-cuisine-header" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between" onclick="toggleItemSection('${key}')">
+        <span>${label} <span class="admin-count">${list.length}</span></span>
+        <i data-lucide="${open ? 'chevron-down' : 'chevron-right'}"></i>
+      </div>
+      ${body}
+    </div>`;
+}
+
+function renderItemRow(it, sectionKey, isAdmin) {
+  if (state.editItemForm && state.editItemForm.id === it.id) return renderEditItemForm();
+  const safeName = (it.name || '').replace(/'/g, "\\'");
+  const sub = sectionKey === 'carbs'
+    ? `${it.cookTimeMinutes ? it.cookTimeMinutes + ' min' : ''}${it.cookTimeMinutes ? ' · ' : ''}${it.sauceCount || 0} sauce${it.sauceCount !== 1 ? 's' : ''}`
+    : `~${it.estimatedTime || it.cookTimeMinutes || 0}m · ${it.desc || it.description || ''}`;
+  return `
+    <div class="admin-sauce-row">
+      <span class="sm-carb-emoji">${it.emoji}</span>
+      <div class="admin-sauce-info">
+        <div class="admin-sauce-name">${it.name}</div>
+        <div class="admin-sauce-carbs">${sub}</div>
+      </div>
+      ${isAdmin ? `
+        <button class="admin-edit-btn" onclick="openEditItemForm('${it.id}', '${sectionKey}')">Edit</button>
+        <button class="admin-delete-btn" onclick="adminDeleteItemAction('${it.id}', '${sectionKey}', '${safeName}')">Delete</button>
+      ` : ''}
+    </div>`;
+}
+
+function renderEditItemForm() {
+  const f = state.editItemForm;
+  const esc = s => (s || '').replace(/"/g, '&quot;');
+  const isProtein = f.category === 'protein';
+  const isCarb = f.category === 'carb';
+  return `
+    <div class="sm-add-form">
+      <div class="sm-add-form-title">Edit ${isProtein ? 'Protein' : 'Carb'}</div>
+      <input class="builder-input" placeholder="Name" value="${esc(f.name)}" oninput="state.editItemForm.name=this.value">
+      <input class="builder-input" placeholder="Emoji" value="${esc(f.emoji)}" oninput="state.editItemForm.emoji=this.value">
+      <input class="builder-input" placeholder="Description" value="${esc(f.description)}" oninput="state.editItemForm.description=this.value">
+      <div style="display:flex;gap:8px">
+        <input class="builder-input" type="number" placeholder="Cook time (min)" value="${f.cookTimeMinutes || ''}" style="flex:1" oninput="state.editItemForm.cookTimeMinutes=parseInt(this.value)||0">
+        <input class="builder-input" type="number" placeholder="Portion (g/person)" value="${f.portionPerPerson || ''}" style="flex:1" oninput="state.editItemForm.portionPerPerson=parseFloat(this.value)||0">
+      </div>
+      ${isProtein ? `<textarea class="builder-input" placeholder="Instructions" style="min-height:80px;resize:vertical" oninput="state.editItemForm.instructions=this.value">${esc(f.instructions)}</textarea>` : ''}
+      ${isCarb ? `<input class="builder-input" placeholder="Water ratio (e.g. 2:1, optional)" value="${esc(f.waterRatio)}" oninput="state.editItemForm.waterRatio=this.value">` : ''}
+      ${f.error ? `<div class="settings-error">${f.error}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="builder-primary-btn" style="flex:1" onclick="adminUpdateItemAction()" ${f.saving ? 'disabled' : ''}>
+          ${f.saving ? '<span class="spinner-sm"></span> Saving…' : 'Save'}
+        </button>
+        <button class="builder-secondary-btn" onclick="closeEditItemForm()">Cancel</button>
+      </div>
+    </div>`;
 }
 
 function renderAddCarbForm() {
@@ -132,21 +184,6 @@ function renderAddCarbForm() {
         <button class="builder-secondary-btn" onclick="closeAddCarbForm()">Cancel</button>
       </div>
     </div>`;
-}
-
-function renderProteinsTab(isAdmin) {
-  const proteinRow = (p) => `
-    <div class="admin-sauce-row">
-      <span class="sm-carb-emoji">${p.emoji}</span>
-      <div class="admin-sauce-info">
-        <div class="admin-sauce-name">${p.name}</div>
-        <div class="admin-sauce-carbs">~${p.estimatedTime || 0}m · ${p.desc || ''}</div>
-      </div>
-    </div>`;
-
-  const rows = (state.proteins || []).map(proteinRow).join('');
-  const addForm = isAdmin ? renderAddProteinForm() : '';
-  return rows + addForm;
 }
 
 function renderAddProteinForm() {
@@ -182,6 +219,7 @@ async function openSauceManager() {
   state.sauceManagerTab = 'sauces';
   state.addCarbForm = null;
   state.addProteinForm = null;
+  state.editItemForm = null;
   try {
     state.adminSauces = await fetchAllSauces();
   } catch (err) {
@@ -200,6 +238,12 @@ function setSauceManagerTab(tab) {
   state.sauceManagerTab = tab;
   state.addCarbForm = null;
   state.addProteinForm = null;
+  state.editItemForm = null;
+  render();
+}
+
+function toggleItemSection(key) {
+  state.itemSections[key] = !state.itemSections[key];
   render();
 }
 
@@ -370,6 +414,103 @@ async function adminAddProtein() {
   } catch (err) {
     f.saving = false;
     f.error = err.message;
+    render();
+  }
+}
+
+// ─── Edit / Delete Item ──────────────────────────────────────────────────────
+function openEditItemForm(id, sectionKey) {
+  const list = sectionKey === 'carbs' ? state.carbs : state.proteins;
+  const it = (list || []).find(x => x.id === id);
+  if (!it) return;
+  const category = sectionKey === 'carbs' ? 'carb' : 'protein';
+  state.editItemForm = {
+    id: it.id,
+    category,
+    name: it.name || '',
+    emoji: it.emoji || '',
+    description: it.description || it.desc || '',
+    cookTimeMinutes: it.cookTimeMinutes || it.estimatedTime || 0,
+    portionPerPerson: it.portionPerPerson || 0,
+    portionUnit: it.portionUnit || 'g',
+    instructions: it.instructions || '',
+    waterRatio: it.waterRatio || '',
+    saving: false,
+    error: null,
+  };
+  state.addCarbForm = null;
+  state.addProteinForm = null;
+  render();
+}
+
+function closeEditItemForm() {
+  state.editItemForm = null;
+  render();
+}
+
+async function adminUpdateItemAction() {
+  const f = state.editItemForm;
+  if (!f) return;
+  if (!f.name.trim() || !f.emoji.trim()) {
+    f.error = 'Name and emoji are required.';
+    render();
+    return;
+  }
+  f.saving = true;
+  f.error = null;
+  render();
+  const payload = {
+    name: f.name.trim(),
+    emoji: f.emoji.trim(),
+    description: f.description.trim(),
+    cookTimeMinutes: f.cookTimeMinutes || 0,
+    portionPerPerson: f.portionPerPerson || null,
+    portionUnit: f.portionUnit || 'g',
+  };
+  if (f.category === 'protein') payload.instructions = f.instructions.trim();
+  if (f.category === 'carb') payload.waterRatio = f.waterRatio ? f.waterRatio.trim() : null;
+  try {
+    await adminUpdateItem(f.id, payload, state.adminKey);
+    const list = f.category === 'carb' ? state.carbs : state.proteins;
+    const idx = list.findIndex(x => x.id === f.id);
+    if (idx >= 0) {
+      const existing = list[idx];
+      list[idx] = {
+        ...existing,
+        name: payload.name,
+        emoji: payload.emoji,
+        description: payload.description,
+        desc: payload.description,
+        cookTimeMinutes: payload.cookTimeMinutes,
+        estimatedTime: payload.cookTimeMinutes,
+        portionPerPerson: payload.portionPerPerson || existing.portionPerPerson,
+        portionUnit: payload.portionUnit,
+        instructions: f.category === 'protein' ? payload.instructions : existing.instructions,
+        waterRatio: f.category === 'carb' ? payload.waterRatio : existing.waterRatio,
+      };
+    }
+    state.editItemForm = null;
+    render();
+  } catch (err) {
+    f.saving = false;
+    f.error = err.message;
+    render();
+  }
+}
+
+async function adminDeleteItemAction(id, sectionKey, name) {
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try {
+    await adminDeleteItem(id, state.adminKey);
+    if (sectionKey === 'carbs') {
+      state.carbs = state.carbs.filter(c => c.id !== id);
+    } else {
+      state.proteins = (state.proteins || []).filter(p => p.id !== id);
+    }
+    if (state.editItemForm && state.editItemForm.id === id) state.editItemForm = null;
+    render();
+  } catch (err) {
+    state.adminError = `Failed to delete: ${err.message}`;
     render();
   }
 }

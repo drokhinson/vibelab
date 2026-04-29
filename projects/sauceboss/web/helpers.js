@@ -135,6 +135,31 @@ async function adminCreateItem(data, key) {
   return res.json();
 }
 
+async function adminUpdateItem(id, data, key) {
+  const res = await fetch(`${API}/api/v1/sauceboss/admin/items/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function adminDeleteItem(id, key) {
+  const res = await fetch(`${API}/api/v1/sauceboss/admin/items/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 async function deleteAdminSauce(id, key) {
   const res = await fetch(`${API}/api/v1/sauceboss/admin/sauces/${encodeURIComponent(id)}`, {
     method: 'DELETE',

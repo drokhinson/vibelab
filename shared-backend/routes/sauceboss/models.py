@@ -65,6 +65,18 @@ class CreateItemRequest(BaseModel):
     portionUnit: str = Field(min_length=1)
 
 
+class UpdateItemRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=60)
+    emoji: Optional[str] = Field(default=None, min_length=1)
+    description: Optional[str] = None
+    sortOrder: Optional[int] = None
+    cookTimeMinutes: Optional[int] = None
+    instructions: Optional[str] = None
+    waterRatio: Optional[str] = None
+    portionPerPerson: Optional[float] = Field(default=None, gt=0)
+    portionUnit: Optional[str] = Field(default=None, min_length=1)
+
+
 # ── Combined-load responses ──────────────────────────────────────────────────
 
 class InitialLoadResponse(BaseModel):
