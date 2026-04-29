@@ -1226,6 +1226,30 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 .swipe-action-edit   { left: 0;  background: #EFF6FF; color: #0369A1; }
 .swipe-action-delete { right: 0; background: #FEF2F2; color: #B91C1C; }
 
+/* ── Floating action button ── */
+.fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: #E85D04;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(232, 93, 4, 0.35), 0 2px 4px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  animation: fadeUp 220ms ease both;
+}
+.fab:hover { transform: translateY(-2px); background: #D9530A; box-shadow: 0 6px 16px rgba(232, 93, 4, 0.4), 0 2px 6px rgba(0, 0, 0, 0.1); }
+.fab:active { transform: translateY(0); }
+.fab [data-lucide] { width: 26px; height: 26px; stroke-width: 2.5; }
+
 /* ── Sauce Manager Tabs ── */
 .sauce-manager-tabs {
   display: flex;

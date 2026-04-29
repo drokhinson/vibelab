@@ -96,6 +96,9 @@ function renderSauceSelector() {
       <p class="section-label">Pick a recipe</p>
       ${accordionHTML}
     </div>
+    <button class="fab" aria-label="Add a sauce" onclick="openBuilder()">
+      <i data-lucide="plus"></i>
+    </button>
   `;
 }
 
