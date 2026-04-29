@@ -8,8 +8,7 @@ async function selectCarb(id) {
   state.saucesForCurrentCarb = [];
   state.loading = 'Loading sauces…';
   // Show the loading state on a fresh selector screen so the spinner appears immediately.
-  state.screen = 'sauce-selector';
-  render();
+  navigate('sauce-selector', { replace: true });
 
   try {
     const [sauces, ingredients, preps] = await Promise.all([
@@ -24,8 +23,7 @@ async function selectCarb(id) {
     state.filterOpen           = false;
     state.expandedCuisines     = new Set();
     state.loading = null;
-    state.screen = preps.length > 0 ? 'prep-selector' : 'sauce-selector';
-    render();
+    navigate(preps.length > 0 ? 'prep-selector' : 'sauce-selector');
   } catch (err) {
     state.loading = null;
     const scrollBody = document.querySelector('.scroll-body');
