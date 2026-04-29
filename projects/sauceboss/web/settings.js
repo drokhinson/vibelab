@@ -135,6 +135,7 @@ function renderParent(parent, sec, isAdmin) {
   const expanded = !!state.expandedParents[parent.id];
   const variants = parent.variants || [];
   const hasVariants = variants.length > 0;
+  const canExpand = hasVariants || isAdmin;
   if (isEditing) return `<div style="padding:0 16px">${renderItemForm()}</div>`;
   const safeName = (parent.name || '').replace(/'/g, "\\'");
   const sub = sec.category === 'carb'
@@ -143,8 +144,8 @@ function renderParent(parent, sec, isAdmin) {
       ? `${variants.length} variant${variants.length !== 1 ? 's' : ''}${parent.cookTimeMinutes ? ' · ' + parent.cookTimeMinutes + ' min' : ''}`
       : `${variants.length} variant${variants.length !== 1 ? 's' : ''}`;
   return `
-    <div class="admin-parent-row" style="padding:10px 16px;border-top:1px solid #f0e6d6;display:flex;align-items:center;gap:8px;cursor:${hasVariants ? 'pointer' : 'default'}" ${hasVariants ? `onclick="toggleParentExpansion('${parent.id}')"` : ''}>
-      <i data-lucide="${expanded ? 'chevron-down' : 'chevron-right'}" style="width:16px;height:16px;${hasVariants ? '' : 'visibility:hidden'}"></i>
+    <div class="admin-parent-row" style="padding:10px 16px;border-top:1px solid #f0e6d6;display:flex;align-items:center;gap:8px;cursor:${canExpand ? 'pointer' : 'default'}" ${canExpand ? `onclick="toggleParentExpansion('${parent.id}')"` : ''}>
+      <i data-lucide="${expanded ? 'chevron-down' : 'chevron-right'}" style="width:16px;height:16px;${canExpand ? '' : 'visibility:hidden'}"></i>
       <span class="sm-carb-emoji">${parent.emoji || ''}</span>
       <div class="admin-sauce-info" style="flex:1">
         <div class="admin-sauce-name">${parent.name}</div>
