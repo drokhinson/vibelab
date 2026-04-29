@@ -70,7 +70,6 @@ let sessionShowingGuide = false;   // true when the session bubble is overlaid b
 // in progress isn't wiped by recomputeGuideViews().
 let guideTypeFilter = null;        // null = all types, otherwise chunk_type id ('setup', 'scoring', ...)
 let guideSearchQuery = "";         // case-insensitive substring search
-let guideExpandAll = false;        // when true, every chunk renders open
 
 // BGG search
 let bggSearchResults = [];

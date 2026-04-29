@@ -11,7 +11,7 @@ async function openGameDetail(gameId) {
     renderGameDetail();
     loadGuide(gameId);
     if (session) {
-      renderCollectionButtons(gameId);
+      renderCollectionBookmark(gameId);
       loadPlayCount(gameId);
       loadGamePlays(gameId);
     }
@@ -74,6 +74,15 @@ function renderGameDetail() {
         <button class="btn btn-circle btn-ghost btn-sm absolute top-3 left-3 bg-base-100/50" onclick="showView('closet'); loadCloset();">
           <i data-lucide="arrow-left" class="w-5 h-5"></i>
         </button>
+        ${session ? `
+        <div class="dropdown dropdown-end absolute top-3 right-3" id="collection-bookmark">
+          <button tabindex="0" class="btn btn-circle btn-ghost btn-sm bg-base-100/50"
+                  aria-label="Add to collection">
+            <i data-lucide="bookmark-plus" class="w-5 h-5"></i>
+          </button>
+          <ul tabindex="0" id="collection-bookmark-menu"
+              class="dropdown-content menu bg-base-200 rounded-box z-30 w-44 p-2 shadow"></ul>
+        </div>` : ""}
       </div>
     </div>
 
@@ -95,11 +104,6 @@ function renderGameDetail() {
         <div class="flex flex-wrap gap-1 mt-2">
           ${g.categories.map(c => `<span class="badge badge-sm badge-outline">${c}</span>`).join("")}
         </div>` : ""}
-    </div>
-
-    <!-- Collection actions -->
-    <div id="collection-actions" class="mb-4">
-      ${session ? '<span class="loading loading-spinner loading-xs"></span>' : '<p class="text-sm text-base-content/50">Log in to add to collection</p>'}
     </div>
 
     <!-- Quick Reference Guide -->
@@ -201,7 +205,3 @@ function renderGamePlays(gamePlays) {
   lucide.createIcons();
 }
 
-// Guide rendering and the chunk manager live in guide.js. The "Log a play"
-// FAB is global (see index.html / session.js); on Game Detail, the
-// "Collection actions" row also exposes a contextual "Start session" button
-// pre-loaded with this game (see renderCollectionButtons in collection.js).
