@@ -26,8 +26,8 @@ function renderRecipe() {
     ? ((state.selectedPrep?.cookTimeMinutes ?? carb.cookTimeMinutes) ?? CARB_COOK_TIMES[carb.id]?.minutes ?? 0)
     : 0;
   const backScreen = carb ? 'sauce-selector' : 'admin';
-  const addons = state.selectedAddons;
-  const addonTime = addons.reduce((s, a) => s + (a.estimatedTime || 0), 0);
+  const addons = [];
+  const addonTime = 0;
   const totalTime = sauceTime + carbTime + addonTime;
 
   const stepsHTML = sauce.steps.map((step, i) => {

@@ -47,7 +47,7 @@ function renderAdmin() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('carb-selector')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span><i data-lucide="settings-2"></i></span>Sauce Manager</div>
       <div class="subtitle">${isAdmin ? 'Admin mode' : ''}</div>
       ${!isAdmin ? `<button class="settings-btn" onclick="openSettings()" title="Admin login"><i data-lucide="key-round"></i></button>` : ''}
@@ -244,7 +244,6 @@ function selectSauceFromManager(id) {
   state.selectedSauce = sauce;
   state.selectedCarb = null;
   state.selectedPrep = null;
-  state.selectedAddons = [];
   navigate('recipe');
 }
 

@@ -76,7 +76,7 @@ function renderBuilder() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('carb-selector')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('admin')">‹ Back</button>
       <div class="logo"><span>🍲</span>Create a Sauce</div>
     </div>
     <div class="scroll-body">
@@ -305,7 +305,7 @@ async function builderSave() {
     };
     await createSauce(payload);
     state.builder = null;
-    navigate('carb-selector');
+    navigate('admin');
   } catch (err) {
     b.saving = false;
     b.error = err.message;

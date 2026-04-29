@@ -1,36 +1,16 @@
 'use strict';
 
-function renderProteinSelector() {
-  return `
-    <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="backFromFlowStep('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo"><span>🔥</span>What are you marinating?</div>
-    </div>
-    <div class="scroll-body">
-      ${state.proteins.length === 0
-        ? '<div class="empty-state">Loading proteins…</div>'
-        : `<div class="carb-grid">
-            ${state.proteins.map((p, i) => `
-              <button class="carb-card" style="--i:${i}" onclick="selectProtein('${p.id}')">
-                <span class="carb-emoji">${p.emoji}</span>
-                <div class="carb-name">${p.name}</div>
-                <div class="carb-desc">${p.desc || ''}</div>
-              </button>
-            `).join('')}
-          </div>`
-      }
-    </div>
-  `;
-}
-
+// Future: when proteins gain cooking-style variants (grill / oven / fry),
+// fetch them here and route to a 'protein-prep-selector' screen first.
 async function selectProtein(id) {
   state.selectedProtein = state.proteins.find(p => p.id === id);
   state.servings = 2;
   state.disabledIngredients = new Set();
   state.filterOpen = false;
+  state.marinadesForCurrentProtein = [];
   state.loading = 'Loading marinades…';
-  render(); // keeps header + progress bar, shows spinner in scroll-body
+  state.screen = 'marinade-selector';
+  render();
 
   try {
     const [marinades, ingredients] = await Promise.all([
@@ -41,7 +21,6 @@ async function selectProtein(id) {
     state.allMarinadeIngredients     = ingredients;
     state.expandedCuisines           = new Set();
     state.loading = null;
-    state.screen = 'marinade-selector';
     render();
   } catch (err) {
     state.loading = null;
@@ -50,7 +29,7 @@ async function selectProtein(id) {
       scrollBody.innerHTML = `
         <div style="padding:2rem;text-align:center;color:#dc2626">
           Failed to load marinades: ${err.message}<br>
-          <button onclick="navigate('protein-selector')" style="margin-top:1rem">‹ Back</button>
+          <button onclick="navigate('meal-builder')" style="margin-top:1rem">‹ Back</button>
         </div>`;
     }
   }

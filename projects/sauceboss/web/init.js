@@ -3,22 +3,17 @@
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const [carbs, categoriesRaw, subsRaw, addonsRaw] = await Promise.all([
+    const [carbs, proteins, saladBases, categoriesRaw, subsRaw] = await Promise.all([
       fetchCarbs(),
+      fetchProteins().catch(() => []),
+      fetchSaladBases().catch(() => []),
       fetchIngredientCategories().catch(() => []),
       fetchSubstitutions().catch(() => []),
-      fetchAddons().catch(() => []),
     ]);
     state.carbs = carbs;
-
-    if (Array.isArray(addonsRaw) && addonsRaw.length > 0) {
-      state.addons = {
-        proteins: addonsRaw.filter(a => a.type === 'protein'),
-        veggies: addonsRaw.filter(a => a.type === 'veggie'),
-      };
-    } else {
-      state.addons = PROTEIN_VEGGIE_OPTIONS;
-    }
+    state.proteins = Array.isArray(proteins) ? proteins : [];
+    state.saladBases = Array.isArray(saladBases) ? saladBases : [];
+    state.addons = { proteins: state.proteins, veggies: [] };
 
     state.ingredientCategories = {};
     if (Array.isArray(categoriesRaw)) {

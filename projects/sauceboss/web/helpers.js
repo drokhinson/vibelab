@@ -76,12 +76,6 @@ async function fetchPreparationsForCarb(carbId) {
   return res.json();
 }
 
-async function fetchAddons() {
-  const res = await fetch(`${API}/api/v1/sauceboss/addons`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
 async function fetchSaladBases() {
   const res = await fetch(`${API}/api/v1/sauceboss/salad-bases`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -412,28 +406,18 @@ function render() {
   switch (state.screen) {
     case 'meal-builder':           app.innerHTML = renderMealBuilder(); break;
     case 'meal-recipe':            app.innerHTML = renderMealRecipe(); break;
-    case 'carb-selector':          app.innerHTML = renderCarbSelector(); break;
     case 'prep-selector':          app.innerHTML = renderPrepSelector(); break;
-    case 'protein-veggie-selector':app.innerHTML = renderProteinVeggieSelector(); break;
     case 'sauce-selector':         app.innerHTML = renderSauceSelector(); break;
-    case 'salad-base-selector':    app.innerHTML = renderSaladBaseSelector(); break;
     case 'dressing-selector':      app.innerHTML = renderSauceSelector(); break;
-    case 'protein-selector':       app.innerHTML = renderProteinSelector(); break;
     case 'marinade-selector':      app.innerHTML = renderSauceSelector(); break;
     case 'recipe':                 app.innerHTML = renderRecipe(); break;
-    case 'meal-review':            app.innerHTML = renderMealReview(); break;
     case 'builder':                app.innerHTML = renderBuilder(); break;
     case 'builder-carbs':          app.innerHTML = renderBuilderCarbs(); break;
     case 'builder-review':         app.innerHTML = renderBuilderReview(); break;
     case 'settings':               app.innerHTML = renderSettings(); break;
     case 'admin':                  app.innerHTML = renderAdmin(); break;
   }
-  // Inject nodded progress bar into guided flow screens
-  if (state.mealFlowIndex >= 0 && state.mealFlowSteps.length > 0) {
-    const header = app.querySelector('.app-header');
-    if (header) header.insertAdjacentHTML('afterend', renderProgressBar());
-  }
-  // Show inline loading spinner (keeps header + progress bar visible)
+  // Show inline loading spinner inside the current screen's body
   if (state.loading) {
     const scrollBody = app.querySelector('.scroll-body');
     if (scrollBody) {
