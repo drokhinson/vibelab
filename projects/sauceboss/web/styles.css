@@ -282,12 +282,11 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
    SCREEN 2 — Sauce Selector
 ───────────────────────────── */
 .section-label {
-  font-size: 11px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: #9CA3AF;
-  margin-bottom: 8px;
+  letter-spacing: 0.2px;
+  color: #1A1A2E;
+  margin-bottom: 10px;
 }
 
 /* Ingredient filter */
@@ -1574,6 +1573,19 @@ body, button, input, select, textarea {
   padding: 64px 24px;
   gap: 12px;
 }
+.loading-pot {
+  display: inline-block;
+  transform-origin: 50% 70%;
+  animation: potWiggle 1.4s ease-in-out infinite;
+}
+.loading-pot .pot-svg { width: 90px; height: 70px; }
+.loading-pot .steam-circle    { animation: steamPulse 1.6s ease-in-out infinite; transform-origin: center; }
+.loading-pot .steam-circle--2 { animation-delay: 0.2s; }
+.loading-pot .steam-circle--3 { animation-delay: 0.4s; }
+.loading-pot .steam-circle--4 { animation-delay: 0.6s; }
+.loading-pot .steam-trail    { animation: steamRise 1.8s ease-in-out infinite; transform-origin: center bottom; }
+.loading-pot .steam-trail--2 { animation-delay: 0.3s; }
+.loading-pot .steam-trail--3 { animation-delay: 0.6s; }
 
 /* ─────────────────────────────
    MEAL REVIEW SCREEN
@@ -1684,8 +1696,12 @@ body, button, input, select, textarea {
 
 .splash-pot-wrap {
   transform-origin: 50% 70%;
-  animation: potWiggle 1.4s ease-in-out infinite;
   will-change: transform;
+}
+.splash-pot-wiggle {
+  display: inline-block;
+  transform-origin: 50% 70%;
+  animation: potWiggle 1.4s ease-in-out infinite;
 }
 
 .splash-text {
@@ -1738,18 +1754,18 @@ body, button, input, select, textarea {
    in from above, and stagger-fade the carb / protein / salad cards. */
 
 body.splash--exiting .splash-pot-wrap {
-  animation: none;
-  transition: transform 480ms cubic-bezier(0.6, 0, 0.2, 1),
+  transition: transform 480ms cubic-bezier(0.2, 0.8, 0.2, 1),
               opacity   180ms 360ms ease;
   transform: translate(var(--pot-target-x, 0), var(--pot-target-y, 0))
              scale(var(--pot-target-scale, 1));
 }
+body.splash--exiting .splash-pot-wiggle { animation-play-state: paused; }
 body.splash--exiting .splash-text { transition: opacity 200ms ease; opacity: 0; }
 body.splash--exiting .splash      { transition: opacity 200ms 480ms ease; opacity: 0; }
 
 body.splash--exiting .status-bar,
 body.splash--exiting .app-header {
-  animation: headerSlideDown 380ms 80ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: headerSlideDown 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 @keyframes headerSlideDown {

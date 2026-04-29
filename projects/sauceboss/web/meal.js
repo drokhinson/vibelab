@@ -53,9 +53,9 @@ function renderMealBuilder() {
     </div>
     <div class="scroll-body">
       ${heroSVG}
-      ${sectionHTML('🍝 Carbs',    state.carbs,      'selectCarb')}
-      ${sectionHTML('🔥 Proteins', state.proteins,   'selectProtein')}
-      ${sectionHTML('🥗 Salads',   state.saladBases, 'selectSaladBase')}
+      ${sectionHTML('Carbs',    state.carbs,      'selectCarb')}
+      ${sectionHTML('Proteins', state.proteins,   'selectProtein')}
+      ${sectionHTML('Salads',   state.saladBases, 'selectSaladBase')}
     </div>
   `;
 }
