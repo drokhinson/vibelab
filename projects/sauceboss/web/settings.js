@@ -121,18 +121,24 @@ function renderSaucesTab(isAdmin) {
         const safeName = s.name.replace(/'/g, "\\'");
         const typeValue = s.sauceType || 'sauce';
         const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
-        return `
-        <div class="admin-sauce-row" onclick="selectSauceFromManager('${s.id}')">
+        const inner = `
           <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
           <div class="admin-sauce-info">
             <div class="admin-sauce-name">${s.name}</div>
             <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
           </div>
-          <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>
-          ${isAdmin ? `
-            <button class="admin-edit-btn" onclick="event.stopPropagation(); openBuilderEdit('${s.id}')">Edit</button>
-            <button class="admin-delete-btn" onclick="event.stopPropagation(); adminDeleteSauce('${s.id}', '${safeName}')">Delete</button>
-          ` : ''}
+          <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>`;
+        if (!isAdmin) {
+          return `<div class="admin-sauce-row" onclick="selectSauceFromManager('${s.id}')">${inner}</div>`;
+        }
+        return `
+        <div class="swipe-row" data-swipe
+             data-tap-action="selectSauceFromManager('${s.id}')"
+             data-edit-action="openBuilderEdit('${s.id}')"
+             data-delete-action="adminDeleteSauce('${s.id}', '${safeName}')">
+          <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
+          <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
+          <div class="swipe-content admin-sauce-row">${inner}</div>
         </div>`;
       }).join('')}
     </div>
@@ -221,19 +227,26 @@ function renderParent(parent, sec, isAdmin) {
     : sec.category === 'protein'
       ? `${variants.length} variant${variants.length !== 1 ? 's' : ''}${parent.cookTimeMinutes ? ' · ' + parent.cookTimeMinutes + ' min' : ''}`
       : `${variants.length} variant${variants.length !== 1 ? 's' : ''}`;
-  return `
-    <div class="admin-parent-row" style="padding:10px 16px;border-top:1px solid #f0e6d6;display:flex;align-items:center;gap:8px;cursor:${canExpand ? 'pointer' : 'default'}" ${canExpand ? `onclick="toggleParentExpansion('${parent.id}')"` : ''}>
+  const parentRowStyle = `padding:10px 16px;border-top:1px solid #f0e6d6;display:flex;align-items:center;gap:8px;cursor:${canExpand ? 'pointer' : 'default'}`;
+  const parentInner = `
       <span class="parent-chevron" style="display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;${canExpand ? '' : 'visibility:hidden'}"><i data-lucide="${expanded ? 'chevron-down' : 'chevron-right'}"></i></span>
       <span class="sm-carb-emoji">${parent.emoji || ''}</span>
       <div class="admin-sauce-info" style="flex:1">
         <div class="admin-sauce-name">${parent.name}</div>
         <div class="admin-sauce-carbs">${sub}</div>
-      </div>
-      ${isAdmin ? `
-        <button class="admin-edit-btn" onclick="event.stopPropagation(); openEditItemFormById('${parent.id}')">Edit</button>
-        <button class="admin-delete-btn" onclick="event.stopPropagation(); adminDeleteItemAction('${parent.id}','${safeName}',${hasVariants ? 'true' : 'false'})">Delete</button>
-      ` : ''}
-    </div>
+      </div>`;
+  const parentRow = !isAdmin
+    ? `<div class="admin-parent-row" style="${parentRowStyle}" ${canExpand ? `onclick="toggleParentExpansion('${parent.id}')"` : ''}>${parentInner}</div>`
+    : `<div class="swipe-row" data-swipe
+           ${canExpand ? `data-tap-action="toggleParentExpansion('${parent.id}')"` : ''}
+           data-edit-action="openEditItemFormById('${parent.id}')"
+           data-delete-action="adminDeleteItemAction('${parent.id}','${safeName}',${hasVariants ? 'true' : 'false'})">
+        <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
+        <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
+        <div class="swipe-content admin-parent-row" style="${parentRowStyle}">${parentInner}</div>
+      </div>`;
+  return `
+    ${parentRow}
     ${expanded ? `
       <div style="padding-left:12px">
         ${showAddVariantForm ? `<div style="padding:0 16px">${renderItemForm()}</div>` : ''}
@@ -250,17 +263,22 @@ function renderVariantRow(v, sec, isAdmin) {
   if (f && f.mode === 'edit' && f.id === v.id) return `<div style="padding:0 16px">${renderItemForm()}</div>`;
   const safeName = (v.name || '').replace(/'/g, "\\'");
   const sub = `${v.cookTimeMinutes ? v.cookTimeMinutes + ' min' : ''}${v.cookTimeMinutes && v.description ? ' · ' : ''}${v.description || ''}`;
-  return `
-    <div class="admin-sauce-row" style="padding-left:38px">
+  const inner = `
       <span class="sm-carb-emoji">${v.emoji || ''}</span>
       <div class="admin-sauce-info">
         <div class="admin-sauce-name">${v.name}</div>
         <div class="admin-sauce-carbs">${sub}</div>
-      </div>
-      ${isAdmin ? `
-        <button class="admin-edit-btn" onclick="openEditItemFormById('${v.id}')">Edit</button>
-        <button class="admin-delete-btn" onclick="adminDeleteItemAction('${v.id}','${safeName}',false)">Delete</button>
-      ` : ''}
+      </div>`;
+  if (!isAdmin) {
+    return `<div class="admin-sauce-row" style="padding-left:38px">${inner}</div>`;
+  }
+  return `
+    <div class="swipe-row" data-swipe
+         data-edit-action="openEditItemFormById('${v.id}')"
+         data-delete-action="adminDeleteItemAction('${v.id}','${safeName}',false)">
+      <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
+      <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
+      <div class="swipe-content admin-sauce-row" style="padding-left:38px">${inner}</div>
     </div>`;
 }
 

@@ -1205,6 +1205,27 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 .admin-delete-btn:hover { background: #FEE2E2; }
 
+/* ── Swipe-to-reveal admin actions (edit / delete) ── */
+.swipe-row { position: relative; overflow: hidden; touch-action: pan-y; user-select: none; }
+.swipe-content {
+  position: relative;
+  background: #FFFBF5;
+  transition: transform 0.2s ease;
+  will-change: transform;
+}
+.swipe-row.swiping .swipe-content { transition: none; }
+.swipe-action {
+  position: absolute;
+  top: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  font-weight: 700;
+  font-size: 13px;
+}
+.swipe-action-edit   { left: 0;  background: #EFF6FF; color: #0369A1; }
+.swipe-action-delete { right: 0; background: #FEF2F2; color: #B91C1C; }
+
 /* ── Sauce Manager Tabs ── */
 .sauce-manager-tabs {
   display: flex;
