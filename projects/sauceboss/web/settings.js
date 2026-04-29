@@ -145,7 +145,7 @@ function renderParent(parent, sec, isAdmin) {
       : `${variants.length} variant${variants.length !== 1 ? 's' : ''}`;
   return `
     <div class="admin-parent-row" style="padding:10px 16px;border-top:1px solid #f0e6d6;display:flex;align-items:center;gap:8px;cursor:${canExpand ? 'pointer' : 'default'}" ${canExpand ? `onclick="toggleParentExpansion('${parent.id}')"` : ''}>
-      <i data-lucide="${expanded ? 'chevron-down' : 'chevron-right'}" style="width:16px;height:16px;${canExpand ? '' : 'visibility:hidden'}"></i>
+      <span class="parent-chevron" style="display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;${canExpand ? '' : 'visibility:hidden'}"><i data-lucide="${expanded ? 'chevron-down' : 'chevron-right'}"></i></span>
       <span class="sm-carb-emoji">${parent.emoji || ''}</span>
       <div class="admin-sauce-info" style="flex:1">
         <div class="admin-sauce-name">${parent.name}</div>
