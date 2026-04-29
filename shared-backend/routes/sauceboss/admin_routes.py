@@ -22,64 +22,6 @@ async def admin_list_sauces(authorization: Optional[str] = Header(None)):
     return result.data
 
 
-@router.get("/admin/items")
-async def admin_list_items(authorization: Optional[str] = Header(None)):
-    """Return all items grouped by category with variants nested under each parent. Requires admin key."""
-    require_admin(authorization)
-    sb = get_supabase()
-    result = sb.table("sauceboss_items").select(
-        "id,category,parent_id,name,emoji,description,sort_order,"
-        "cook_time_minutes,instructions,water_ratio,portion_per_person,portion_unit"
-    ).order("sort_order").order("name").execute()
-    rows = result.data or []
-
-    def shape(r: dict) -> dict:
-        return {
-            "id": r["id"],
-            "category": r["category"],
-            "parentId": r.get("parent_id"),
-            "name": r["name"],
-            "emoji": r.get("emoji") or "",
-            "description": r.get("description") or "",
-            "sortOrder": r.get("sort_order") or 0,
-            "cookTimeMinutes": r.get("cook_time_minutes"),
-            "instructions": r.get("instructions"),
-            "waterRatio": r.get("water_ratio"),
-            "portionPerPerson": r.get("portion_per_person"),
-            "portionUnit": r.get("portion_unit"),
-        }
-
-    parents_by_id: dict[str, dict] = {}
-    orphan_variants: list[dict] = []
-    for r in rows:
-        if r.get("parent_id") is None:
-            it = shape(r)
-            it["variants"] = []
-            parents_by_id[r["id"]] = it
-
-    for r in rows:
-        if r.get("parent_id") is None:
-            continue
-        parent = parents_by_id.get(r["parent_id"])
-        if parent is None:
-            orphan_variants.append(shape(r))
-        else:
-            parent["variants"].append(shape(r))
-
-    grouped: dict[str, list[dict]] = {"carbs": [], "proteins": [], "salads": []}
-    for parent in parents_by_id.values():
-        if parent["category"] == "carb":
-            grouped["carbs"].append(parent)
-        elif parent["category"] == "protein":
-            grouped["proteins"].append(parent)
-        elif parent["category"] == "salad":
-            grouped["salads"].append(parent)
-
-    if orphan_variants:
-        grouped["orphans"] = orphan_variants
-    return grouped
-
-
 @router.post("/admin/items")
 async def admin_create_item(body: CreateItemRequest, authorization: Optional[str] = Header(None)):
     """Add a new item (carb / protein / salad base, optionally a variant). Requires admin key."""

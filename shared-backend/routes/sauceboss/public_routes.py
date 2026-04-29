@@ -14,6 +14,8 @@ from .models import (
     IngredientCategoryInput,
     InitialLoadResponse,
     ItemLoadResponse,
+    ItemsGroupedResponse,
+    _shape_items_grouped,
 )
 
 logger = logging.getLogger("sauceboss")
@@ -98,6 +100,22 @@ async def list_all_sauces():
     if result.data is None:
         return []
     return result.data
+
+
+@router.get(
+    "/items",
+    response_model=ItemsGroupedResponse,
+    status_code=200,
+    summary="All dish items grouped by category with nested variants",
+)
+async def list_items() -> dict:
+    """Public read of carbs/proteins/salads parents with nested variants."""
+    sb = get_supabase()
+    result = sb.table("sauceboss_items").select(
+        "id,category,parent_id,name,emoji,description,sort_order,"
+        "cook_time_minutes,instructions,water_ratio,portion_per_person,portion_unit"
+    ).order("sort_order").order("name").execute()
+    return _shape_items_grouped(result.data or [])
 
 
 @router.post("/ingredient-categories")
