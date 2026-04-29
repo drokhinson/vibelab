@@ -1,10 +1,13 @@
 'use strict';
 
+// Standalone single-sauce recipe view (e.g. when previewing a sauce from the
+// admin Sauce Manager). For the full meal flow with paired item prep, see
+// meal.js → renderMealRecipe.
 function renderRecipe() {
   const sauce = state.selectedSauce;
-  const carb = state.selectedCarb;  // may be null when coming from sauce manager
-  const carbTotal = carb ? (carb.portionPerPerson || 100) * state.servings : null;
-  const carbUnit = carb ? (carb.portionUnit || 'g') : '';
+  const item  = state.selectedItem;            // may be null when coming from sauce manager
+  const itemTotal = item ? (item.portionPerPerson || 100) * state.servings : null;
+  const itemUnit  = item ? (item.portionUnit || 'g') : '';
 
   // Substitution banner for disabled ingredients
   const disabledInRecipe = sauce.ingredients
@@ -18,24 +21,18 @@ function renderRecipe() {
     </div>` : '';
 
   // Time calculations
-  const sauceStepTimes = sauce.steps.map((st, i) =>
-    st.estimatedTime || (SAUCE_TIMES[sauce.id] && SAUCE_TIMES[sauce.id][i]) || 5
-  );
+  const sauceStepTimes = sauce.steps.map(st => st.estimatedTime || 5);
   const sauceTime = sauceStepTimes.reduce((s, t) => s + t, 0);
-  const carbTime = carb
-    ? ((state.selectedPrep?.cookTimeMinutes ?? carb.cookTimeMinutes) ?? CARB_COOK_TIMES[carb.id]?.minutes ?? 0)
+  const itemTime  = item
+    ? ((state.selectedPrep?.cookTimeMinutes ?? item.cookTimeMinutes) ?? 0)
     : 0;
-  const backScreen = carb ? 'sauce-selector' : 'admin';
-  const addons = [];
-  const addonTime = 0;
-  const totalTime = sauceTime + carbTime + addonTime;
+  const backScreen = item ? 'sauce-selector' : 'admin';
+  const totalTime  = sauceTime + itemTime;
 
   const stepsHTML = sauce.steps.map((step, i) => {
     const stepTime = sauceStepTimes[i] || 5;
     const displayItems = prepareItems(step.ingredients);
 
-    // Fix: if this step combines output from a previous step, compute tsp-equivalent
-    // correctly (summing across all units) for accurate pie chart proportions
     const refStep = step.inputFromStep ? sauce.steps[step.inputFromStep - 1] : null;
     if (refStep) {
       const refTspTotal = refStep.ingredients.reduce((s, it) =>
@@ -65,34 +62,18 @@ function renderRecipe() {
     </div>`;
   }).join('');
 
-  const addonCardsHTML = addons.map(addon => `
-    <div class="addon-card ${addon.type === 'protein' ? 'addon-protein' : 'addon-veggie'}">
-      <div class="addon-card-header">
-        <span class="addon-card-emoji">${addon.emoji}</span>
-        <div>
-          <div class="addon-card-title">${addon.name}</div>
-          <div class="addon-card-meta">~${addon.estimatedTime} min</div>
-        </div>
-      </div>
-      <p class="addon-card-instructions">${addon.instructions}</p>
-    </div>`).join('');
-
-  const addonTimeBadgesHTML = addons.map(addon =>
-    `<span class="time-badge">${addon.emoji} ~${addon.estimatedTime}m</span>`
-  ).join('');
-
   return `
     <div class="status-bar"></div>
     <div class="recipe-header">
       <button class="back-btn" onclick="navigate('${backScreen}')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="recipe-cuisine-badge">${renderEmoji(sauce.cuisineEmoji)} ${sauce.cuisine}</div>
       <div class="recipe-title">${sauce.name}</div>
-      <div class="recipe-subtitle">Pair with: ${sauce.compatibleCarbs.join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
+      <div class="recipe-subtitle">Pair with: ${(sauce.compatibleItems || []).join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
     </div>
     <div class="recipe-controls">
       <div class="serving-row">
         <div class="serving-info">
-          ${carb ? `<span class="serving-carb">${formatAmount(carbTotal)}${carbUnit} ${carb.name.toLowerCase()}</span>
+          ${item ? `<span class="serving-carb">${formatAmount(itemTotal)}${itemUnit} ${item.name.toLowerCase()}</span>
           <span class="serving-for">for</span>` : ''}
           <div class="serving-stepper">
             <button class="stepper-btn" onclick="setServings(state.servings - 1)">−</button>
@@ -107,9 +88,8 @@ function renderRecipe() {
         </div>
       </div>
       <div class="time-summary">
-        ${carbTime > 0 ? `<span class="time-badge">${carb.emoji} ~${carbTime}m</span>` : ''}
+        ${itemTime > 0 ? `<span class="time-badge">${item.emoji} ~${itemTime}m</span>` : ''}
         <span class="time-badge">🧂 Sauce ~${sauceTime}m</span>
-        ${addonTimeBadgesHTML}
         <span class="time-total">Total ~${totalTime}m</span>
       </div>
     </div>
@@ -118,15 +98,14 @@ function renderRecipe() {
       ${state.selectedPrep ? `
       <div class="prep-card">
         <div class="prep-card-header">
-          <span class="prep-card-emoji">${state.selectedPrep.emoji || (carb ? carb.emoji : '')}</span>
+          <span class="prep-card-emoji">${state.selectedPrep.emoji || (item ? item.emoji : '')}</span>
           <div>
             <div class="prep-card-title">${state.selectedPrep.name}</div>
-            <div class="prep-card-meta">${state.selectedPrep.cookTime || ''}${state.selectedPrep.waterRatio ? ' · ' + state.selectedPrep.waterRatio : ''}</div>
+            <div class="prep-card-meta">${state.selectedPrep.cookTimeMinutes ? state.selectedPrep.cookTimeMinutes + ' min' : ''}${state.selectedPrep.waterRatio ? ' · ' + state.selectedPrep.waterRatio : ''}</div>
           </div>
         </div>
         <p class="prep-card-instructions">${state.selectedPrep.instructions || ''}</p>
       </div>` : ''}
-      ${addonCardsHTML}
       <div class="steps-container">
         ${stepsHTML}
       </div>

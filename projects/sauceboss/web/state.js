@@ -1,45 +1,5 @@
 'use strict';
 
-// ─── Carb cook times ─────────────────────────────────────────────────────────
-const CARB_COOK_TIMES = {
-  pasta:    { minutes: 10, label: '8-12 min' },
-  rice:     { minutes: 18, label: '15-20 min' },
-  noodles:  { minutes: 8,  label: '5-10 min' },
-  bread:    { minutes: 0,  label: 'Ready to serve' },
-  potatoes: { minutes: 25, label: '20-30 min' },
-  couscous: { minutes: 5,  label: '5 min' },
-};
-
-// ─── Sauce step times (per sauce id → array of minutes per step) ─────────────
-const SAUCE_TIMES = {
-  'peanut-sauce':        [3, 2],
-  'teriyaki':            [2, 5],
-  'gochujang-sauce':     [3],
-  'pad-thai-sauce':      [3],
-  'sesame-ginger':       [2, 2],
-  'marinara':            [5, 15],
-  'alfredo':             [3, 5],
-  'pesto':               [5],
-  'arrabbiata':          [5, 15],
-  'aglio-olio':          [8, 2],
-  'salsa-roja':          [10, 3],
-  'chipotle-cream':      [3],
-  'quick-mole':          [5, 8],
-  'tzatziki':            [3, 2],
-  'chermoula':           [3, 3],
-  'harissa-sauce':       [3],
-  'bbq-sauce':           [3, 10],
-  'honey-mustard':       [3],
-  'buffalo':             [5],
-  'beurre-blanc':        [8, 5],
-  'tikka-masala':        [5, 3, 10],
-  'saag-sauce':          [5, 3, 5],
-  'dal-makhani':         [5, 10, 5],
-  'korma-sauce':         [5, 8],
-  'vindaloo-sauce':      [5, 10],
-  'coconut-tomato-curry':[5, 10],
-};
-
 // ─── Builder constants ───────────────────────────────────────────────────────
 const CUISINES = [
   { name: 'Italian', emoji: '🇮🇹' },
@@ -52,6 +12,12 @@ const CUISINES = [
 ];
 const UNITS = ['tsp', 'tbsp', 'cup', 'oz', 'g', 'clove', 'cloves', 'piece', 'pinch'];
 const COLOR_SWATCHES = ['#E85D04','#DC2626','#22C55E','#3B1F0A','#FBBF24','#457B9D','#7C3AED','#EA580C','#15803D','#B91C1C'];
+
+const SAUCE_TYPES = [
+  { value: 'sauce',    label: 'Sauce',    category: 'carb',    pairLabel: 'Carbs'    },
+  { value: 'marinade', label: 'Marinade', category: 'protein', pairLabel: 'Proteins' },
+  { value: 'dressing', label: 'Dressing', category: 'salad',   pairLabel: 'Salads'   },
+];
 
 // ─── Colour palette ───────────────────────────────────────────────────────────
 const PALETTE = [
@@ -96,45 +62,34 @@ const CATEGORY_ORDER = ['Produce', 'Dairy', 'Oils & Fats', 'Sauces & Condiments'
 let state = {
   // ── Current screen ──────────────────────────────────────────────────────────
   screen: 'meal-builder',       // home is the meal builder
+  loading: null,                // when set, the active screen renders an inline pot loader
 
-  // ── Meal selections (one path is populated; others stay null) ──────────────
-  meal: {
-    protein: null,              // selected protein (from state.proteins)
-    marinade: null,             // selected marinade sauce object
-    carb: null,                 // selected carb
-    prep: null,                 // selected carb prep
-    sauce: null,                // selected sauce object
-    saladBase: null,            // selected salad base
-    dressing: null,             // selected dressing sauce object
-  },
+  // ── Initial-load lists (populated once on boot) ────────────────────────────
+  carbs: [],
+  proteins: [],
+  saladBases: [],
 
-  // ── Shared selector state ────────────────────────────────────────────────────
-  carbs: [],                    // loaded at boot from DB
-  selectedCarb: null,
-  saucesForCurrentCarb: [],
-  allIngredients: [],
-  disabledIngredients: new Set(),
-  filterOpen: false,
-  expandedCuisines: new Set(),
+  // ── Current selection (one item flow) ───────────────────────────────────────
+  selectedItem: null,           // a parent item (carb / protein / salad)
+  selectedPrep: null,           // optional variant of selectedItem
+  preparations: [],             // variants for selectedItem (may be empty)
+  saucesForCurrentItem: [],     // sauces/marinades/dressings paired with selectedItem
+  allIngredients: [],           // unique ingredient names across saucesForCurrentItem
   selectedSauce: null,
   servings: 2,
   unitSystem: 'imperial',       // 'imperial' | 'metric'
   ingredientCategories: {},
   substitutions: {},
-  preparations: [],
-  selectedPrep: null,
+  disabledIngredients: new Set(),
+  filterOpen: false,
+  expandedCuisines: new Set(),
 
-  // ── Dressings path ──────────────────────────────────────────────────────────
-  saladBases: [],
-  selectedSaladBase: null,
-  dressingsForCurrentBase: [],
-  allDressingIngredients: [],
-
-  // ── Marinades path ──────────────────────────────────────────────────────────
-  proteins: [],
-  selectedProtein: null,
-  marinadesForCurrentProtein: [],
-  allMarinadeIngredients: [],
+  // ── Final meal (filled from selections above when sauce is picked) ─────────
+  meal: {
+    item: null,                 // the chosen carb / protein / salad
+    prep: null,                 // optional chosen variant
+    sauce: null,                // the chosen sauce (sauce / marinade / dressing)
+  },
 
   // ── Admin / builder ─────────────────────────────────────────────────────────
   builder: null,
@@ -152,8 +107,9 @@ let state = {
 function defaultBuilder() {
   return {
     name: '', cuisine: '', cuisineEmoji: '', color: '#E85D04', description: '',
+    sauceType: 'sauce',          // 'sauce' | 'marinade' | 'dressing'
     steps: [{ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
-    carbIds: [], saving: false, error: null,
+    itemIds: [], saving: false, error: null,
     acStep: null, acIng: null, acResults: [], acSelected: -1,
     pendingCategories: [],
   };

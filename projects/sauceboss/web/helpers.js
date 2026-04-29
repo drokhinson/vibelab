@@ -60,7 +60,7 @@ async function _loggedJson(url) {
 async function fetchInitialLoad() {
   const data = await _loggedJson(`${API}/api/v1/sauceboss/initial-load`);
   return {
-    carbs: (data.carbs || []).map(c => ({ ...c, desc: c.description })),
+    carbs: data.carbs || [],
     proteins: data.proteins || [],
     saladBases: data.saladBases || [],
   };
@@ -232,15 +232,9 @@ function getSubstitutionText(ingredientName) {
   return subs[0].substituteName;
 }
 
-// Returns the sauce/dressing/marinade list and ingredient list for the current screen.
+// Returns the sauce list + ingredient list for the currently selected item.
 function getCurrentSauceContext() {
-  if (state.screen === 'dressing-selector') {
-    return { sauces: state.dressingsForCurrentBase, allIngredients: state.allDressingIngredients };
-  }
-  if (state.screen === 'marinade-selector') {
-    return { sauces: state.marinadesForCurrentProtein, allIngredients: state.allMarinadeIngredients };
-  }
-  return { sauces: state.saucesForCurrentCarb, allIngredients: state.allIngredients };
+  return { sauces: state.saucesForCurrentItem, allIngredients: state.allIngredients };
 }
 
 function getIngredientFrequencies() {
@@ -405,11 +399,9 @@ function render() {
     case 'meal-recipe':            app.innerHTML = renderMealRecipe(); break;
     case 'prep-selector':          app.innerHTML = renderPrepSelector(); break;
     case 'sauce-selector':         app.innerHTML = renderSauceSelector(); break;
-    case 'dressing-selector':      app.innerHTML = renderSauceSelector(); break;
-    case 'marinade-selector':      app.innerHTML = renderSauceSelector(); break;
     case 'recipe':                 app.innerHTML = renderRecipe(); break;
     case 'builder':                app.innerHTML = renderBuilder(); break;
-    case 'builder-carbs':          app.innerHTML = renderBuilderCarbs(); break;
+    case 'builder-items':          app.innerHTML = renderBuilderItems(); break;
     case 'builder-review':         app.innerHTML = renderBuilderReview(); break;
     case 'settings':               app.innerHTML = renderSettings(); break;
     case 'admin':                  app.innerHTML = renderAdmin(); break;

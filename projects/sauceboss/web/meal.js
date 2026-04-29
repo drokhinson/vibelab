@@ -27,18 +27,16 @@ function potSVG() {
 function renderMealBuilder() {
   const heroSVG = `<div class="hero-illustration" id="hero-illustration">${potSVG()}</div>`;
 
-  const carbCard = (item, onclickAttr, i) => `
-    <button class="carb-card" style="--i:${i}" ${onclickAttr}>
+  const itemCard = (item, i) => `
+    <button class="carb-card" style="--i:${i}" onclick="selectItem('${item.id}')">
       <span class="carb-emoji">${item.emoji}</span>
       <div class="carb-name">${item.name}</div>
-      <div class="carb-desc">${item.desc || item.description || ''}</div>
+      <div class="carb-desc">${item.description || ''}</div>
     </button>`;
 
-  const sectionHTML = (label, items, onclickFn) => {
+  const sectionHTML = (label, items) => {
     if (!items || items.length === 0) return '';
-    const cards = items.map((it, i) =>
-      carbCard(it, `onclick="${onclickFn}('${it.id}')"`, i)
-    ).join('');
+    const cards = items.map(itemCard).join('');
     return `
       <p class="section-label" style="margin-top:18px">${label}</p>
       <div class="carb-grid">${cards}</div>`;
@@ -53,74 +51,42 @@ function renderMealBuilder() {
     </div>
     <div class="scroll-body">
       ${heroSVG}
-      ${sectionHTML('Carbs',    state.carbs,      'selectCarb')}
-      ${sectionHTML('Proteins', state.proteins,   'selectProtein')}
-      ${sectionHTML('Salads',   state.saladBases, 'selectSaladBase')}
+      ${sectionHTML('Carbs',    state.carbs)}
+      ${sectionHTML('Proteins', state.proteins)}
+      ${sectionHTML('Salads',   state.saladBases)}
     </div>
   `;
 }
 
 // ─── Unified Meal Recipe screen ───────────────────────────────────────────────
 
-function mealTitleParts() {
-  const { meal } = state;
-  if (meal.carb) {
-    const primary = meal.prep?.name || meal.carb.name;
-    const sauce = meal.sauce?.name || '';
-    return { emoji: meal.carb.emoji, title: sauce ? `${primary} with ${sauce}` : primary, cuisine: meal.sauce?.cuisine };
-  }
-  if (meal.protein) {
-    const m = meal.marinade?.name;
-    return { emoji: meal.protein.emoji, title: m ? `${meal.protein.name} with ${m}` : meal.protein.name, cuisine: meal.marinade?.cuisine };
-  }
-  if (meal.saladBase) {
-    const d = meal.dressing?.name;
-    return { emoji: meal.saladBase.emoji, title: d ? `${meal.saladBase.name} with ${d}` : meal.saladBase.name, cuisine: meal.dressing?.cuisine };
-  }
-  return { emoji: '🍲', title: 'Your Meal', cuisine: null };
-}
-
 function renderMealRecipe() {
   const { meal } = state;
+  if (!meal.item || !meal.sauce) return '';
+  const item  = meal.item;
+  const prep  = meal.prep;
+  const sauce = meal.sauce;
+  const meta  = flowMetaFor(item);
 
   // ── Timing summary ───────────────────────────────────────────────────────────
-  let marineTime = 0;
-  let cookTime = 0;
-  let saladTime = 0;
-
-  if (meal.marinade) {
-    marineTime = meal.marinade.steps.reduce((s, st, i) =>
-      s + (st.estimatedTime || (SAUCE_TIMES[meal.marinade.id]?.[i]) || 5), 0);
-  }
-  if (meal.sauce) {
-    const sauceStepTime = meal.sauce.steps.reduce((s, st, i) =>
-      s + (st.estimatedTime || (SAUCE_TIMES[meal.sauce.id]?.[i]) || 5), 0);
-    const carbTime = meal.carb
-      ? ((meal.prep?.cookTimeMinutes ?? meal.carb.cookTimeMinutes) ?? CARB_COOK_TIMES[meal.carb.id]?.minutes ?? 0)
-      : 0;
-    cookTime = Math.max(sauceStepTime, carbTime);
-  }
-  if (meal.dressing) {
-    saladTime = meal.dressing.steps.reduce((s, st, i) =>
-      s + (st.estimatedTime || (SAUCE_TIMES[meal.dressing.id]?.[i]) || 3), 0);
-  }
-  const totalTime = marineTime + cookTime + saladTime;
-  const marineAhead = marineTime > 20;
+  const sauceTime = sauce.steps.reduce(
+    (s, st) => s + (st.estimatedTime || 5), 0,
+  );
+  const itemCookTime = (prep?.cookTimeMinutes ?? item.cookTimeMinutes) || 0;
+  const totalTime = sauceTime + itemCookTime;
+  const isMarinade = sauce.sauceType === 'marinade';
+  const marineAhead = isMarinade && sauceTime > 20;
 
   const timingBanner = `
     <div class="meal-timing-banner">
       <div class="meal-timing-total"><i data-lucide="clock"></i> Total: ~${totalTime} min active</div>
-      ${marineAhead ? `<div class="meal-timing-note"><i data-lucide="triangle-alert"></i> Start marinade ${marineTime}+ min before you cook</div>` : ''}
+      ${marineAhead ? `<div class="meal-timing-note"><i data-lucide="triangle-alert"></i> Start marinade ${sauceTime}+ min before you cook</div>` : ''}
     </div>`;
 
-  // ── Section renderer (reuses step-card format) ────────────────────────────
-  function sectionHTML(label, labelColor, sauceObj) {
-    if (!sauceObj) return '';
-    const stepTimes = sauceObj.steps.map((st, i) =>
-      st.estimatedTime || (SAUCE_TIMES[sauceObj.id]?.[i]) || 5);
-
-    const stepsHTML = sauceObj.steps.map((step, i) => {
-      const stepTime = stepTimes[i];
+  // ── Sauce/marinade/dressing steps ────────────────────────────────────────────
+  function sauceStepsHTML(sauceObj) {
+    return sauceObj.steps.map((step, i) => {
+      const stepTime = step.estimatedTime || 5;
       const displayItems = prepareItems(step.ingredients);
 
       const refStep = step.inputFromStep ? sauceObj.steps[step.inputFromStep - 1] : null;
@@ -135,9 +101,6 @@ function renderMealRecipe() {
       const refBadge = refStep
         ? `<div class="step-ref-badge"><i data-lucide="corner-down-right"></i> Combine all of Step ${step.inputFromStep} into this bowl</div>` : '';
 
-      const pieHTML = buildPieChart(displayItems, 80);
-      const legendHTML = buildLegend(displayItems);
-
       return `<div class="step-card">
         <div class="step-header-row">
           <div class="step-number">Step ${i + 1}</div>
@@ -146,34 +109,42 @@ function renderMealRecipe() {
         <div class="step-title">${step.title}</div>
         ${refBadge}
         <div class="step-viz">
-          ${pieHTML}
-          <div class="step-legend">${legendHTML}</div>
+          ${buildPieChart(displayItems, 80)}
+          <div class="step-legend">${buildLegend(displayItems)}</div>
         </div>
       </div>`;
     }).join('');
-
-    return `
-      <div class="meal-section">
-        <div class="meal-section-label" style="background:${labelColor}">
-          ${label}
-        </div>
-        ${stepsHTML}
-      </div>`;
   }
 
-  // Salad toss note
-  const saladTossHTML = () => {
-    if (!meal.saladBase) return '';
-    return `
-      <div class="meal-section">
-        <div class="meal-section-label" style="background:#2D6A4F">
-          🥗 Toss Salad
+  // ── Section colour by sauce_type ────────────────────────────────────────────
+  const sauceColor = isMarinade ? '#5D4037'
+                   : sauce.sauceType === 'dressing' ? '#1B5E20'
+                   : '#4A0072';
+  const sauceLabel = `${meta.sauceWord} — ${sauce.name}`;
+
+  // ── Item prep section (one card describing how to cook the chosen item) ────
+  const itemPrepLabel = item.category === 'salad'
+    ? `🥗 Toss ${item.name}`
+    : `${item.emoji} ${item.category === 'protein' ? 'Cook' : 'Prep'} ${item.name}${prep ? ` — ${prep.name}` : ''}`;
+  const itemColor = item.category === 'protein' ? '#C94E02'
+                 : item.category === 'salad'   ? '#2D6A4F'
+                 : '#1565C0';
+  const itemInstructions = prep?.instructions
+                        || item.instructions
+                        || (item.category === 'salad'
+                            ? `Toss ${item.name} with ${sauce.name} right before serving`
+                            : `Cook ${item.name} per packet instructions`);
+  const itemCard = `
+    <div class="meal-section">
+      <div class="meal-section-label" style="background:${itemColor}">${itemPrepLabel}</div>
+      <div class="step-card">
+        <div class="step-header-row">
+          <div class="step-number">${item.category === 'protein' ? 'Cook' : item.category === 'salad' ? 'Assemble' : 'Boil / prep'}</div>
+          ${itemCookTime ? `<div class="step-time">~${itemCookTime}m</div>` : ''}
         </div>
-        <div class="step-card">
-          <div class="step-title">Toss ${meal.saladBase.name} with dressing right before serving</div>
-        </div>
-      </div>`;
-  };
+        <div class="step-title">${itemInstructions}</div>
+      </div>
+    </div>`;
 
   const servingsHTML = `
     <div class="recipe-controls">
@@ -187,51 +158,26 @@ function renderMealRecipe() {
       </button>
     </div>`;
 
-  const { emoji, title, cuisine } = mealTitleParts();
+  const title = `${prep?.name || item.name} with ${sauce.name}`;
+
+  // For marinades, show marinade BEFORE cooking; otherwise item prep first.
+  const sauceSection = `
+    <div class="meal-section">
+      <div class="meal-section-label" style="background:${sauceColor}">${sauceLabel}</div>
+      ${sauceStepsHTML(sauce)}
+    </div>`;
 
   return `
     <div class="status-bar"></div>
     <div class="app-header">
       <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo"><span>${emoji}</span>${title}</div>
-      <div class="subtitle">${cuisine || 'Full recipe'}</div>
+      <div class="logo"><span>${item.emoji}</span>${title}</div>
+      <div class="subtitle">${sauce.cuisine || 'Full recipe'}</div>
     </div>
     <div class="scroll-body">
       ${timingBanner}
       ${servingsHTML}
-      ${sectionHTML(`🔥 Marinade — ${meal.marinade?.name || ''}`, '#5D4037', meal.marinade)}
-      ${meal.carb ? `
-        <div class="meal-section">
-          <div class="meal-section-label" style="background:#1565C0">
-            🍝 Prep ${meal.carb.name}${meal.prep ? ` — ${meal.prep.name}` : ''}
-          </div>
-          <div class="step-card">
-            <div class="step-header-row">
-              <div class="step-number">Boil / prep</div>
-              <div class="step-time">~${(meal.prep?.cookTimeMinutes ?? meal.carb.cookTimeMinutes) ?? CARB_COOK_TIMES[meal.carb.id]?.minutes ?? 0} min</div>
-            </div>
-            <div class="step-title">${meal.prep ? meal.prep.instructions || `Cook ${meal.prep.name}` : `Cook ${meal.carb.name} per packet instructions`}</div>
-          </div>
-        </div>` : ''}
-      ${sectionHTML(`🍲 Sauce — ${meal.sauce?.name || ''}`, '#4A0072', meal.sauce)}
-      ${meal.protein ? `
-        <div class="meal-section">
-          <div class="meal-section-label" style="background:#C94E02">
-            ${meal.protein.emoji} Cook ${meal.protein.name}${marineAhead ? ' (after marinating)' : ''}
-          </div>
-          <div class="addon-card">
-            <div class="addon-card-header">
-              <span class="addon-emoji">${meal.protein.emoji}</span>
-              <div class="addon-info">
-                <div class="addon-name">${meal.protein.name}</div>
-                <div class="addon-time">~${meal.protein.estimatedTime} min</div>
-              </div>
-            </div>
-            <div class="addon-instructions">${meal.protein.instructions}</div>
-          </div>
-        </div>` : ''}
-      ${sectionHTML(`🥗 Dressing — ${meal.dressing?.name || ''}`, '#1B5E20', meal.dressing)}
-      ${saladTossHTML()}
+      ${isMarinade ? sauceSection + itemCard : itemCard + sauceSection}
     </div>
   `;
 }

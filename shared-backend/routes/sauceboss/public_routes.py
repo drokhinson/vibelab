@@ -49,9 +49,10 @@ async def list_substitutions():
 async def create_sauce(body: CreateSauceRequest):
     """Create a user-submitted sauce with steps, ingredients, and item pairings.
 
-    The ``carbIds`` field is a list of Type-row item ids (kept as ``carbIds``
-    for backward compat — the builder UI only creates sauces, which link to
-    carbs). The DB trigger on sauceboss_sauce_items rejects any mismatch.
+    ``sauceType`` selects which dish category this sauce pairs with
+    ('sauce'→carb, 'marinade'→protein, 'dressing'→salad). ``itemIds`` lists
+    Type-row item ids of that category. The DB trigger on
+    sauceboss_sauce_items rejects any sauce_type ↔ item.category mismatch.
     """
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sauce_id = f"user-{slug}-{secrets.token_hex(2)}"
@@ -63,7 +64,8 @@ async def create_sauce(body: CreateSauceRequest):
         "cuisineEmoji": body.cuisineEmoji,
         "color": body.color,
         "description": body.description,
-        "carbIds": body.carbIds,
+        "sauceType": body.sauceType,
+        "itemIds": body.itemIds,
         "steps": [
             {
                 "title": step.title,
