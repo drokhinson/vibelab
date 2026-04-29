@@ -84,6 +84,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const appEl = document.getElementById('app');
 
+  installSwipeHandlers(appEl);
+
   // Ingredient chip toggles
   appEl.addEventListener('click', e => {
     const chip = e.target.closest('.chip[data-ingredient]');
