@@ -8,7 +8,8 @@ async function selectCarb(id) {
   state.selectedPrep = null;
   state.preparations = [];
   state.saucesForCurrentCarb = [];
-  state.loading = 'Loading sauces…';
+  const carbName = state.selectedCarb?.name || 'options';
+  state.loading = `Loading ${carbName.toLowerCase()} options…`;
   // Show the loading state on a fresh selector screen so the spinner appears immediately.
   navigate('sauce-selector', { replace: true });
 

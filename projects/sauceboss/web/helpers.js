@@ -378,13 +378,13 @@ function render() {
     case 'settings':               app.innerHTML = renderSettings(); break;
     case 'admin':                  app.innerHTML = renderAdmin(); break;
   }
-  // Show inline loading spinner inside the current screen's body
+  // Show inline animated pot logo inside the current screen's body
   if (state.loading) {
     const scrollBody = app.querySelector('.scroll-body');
     if (scrollBody) {
       scrollBody.innerHTML = `
         <div class="loading-inline">
-          <div class="spinner"></div>
+          <div class="loading-pot">${potSVG()}</div>
           <p class="loading-text">${state.loading}</p>
         </div>`;
     }
