@@ -98,6 +98,8 @@ let state = {
   adminLoading: false,
   adminError: null,
   sauceManagerTab: 'sauces',                                      // 'sauces' | 'dish'
+  sauceManagerSearch: '',                                          // search query (applies to active tab)
+  sauceManagerTypeFilter: 'all',                                   // 'all' | 'sauce' | 'marinade' | 'dressing'
   itemSections: { carbs: true, proteins: true, salads: true },    // category-level expand
   expandedParents: {},                                             // { [parentId]: true }
   adminItems: { carbs: [], proteins: [], salads: [] },             // parents w/ nested variants
