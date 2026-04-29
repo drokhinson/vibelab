@@ -1726,9 +1726,14 @@ body.splash--exiting .splash-pot-wrap {
   transition: transform 480ms cubic-bezier(0.2, 0.8, 0.2, 1),
               opacity   180ms 360ms ease;
   transform: translate(var(--pot-target-x, 0), var(--pot-target-y, 0))
-             scale(var(--pot-target-scale, 1));
+             scale(var(--pot-target-scale, 1))
+             rotate(0deg);
 }
-body.splash--exiting .splash-pot-wiggle { animation-play-state: paused; }
+body.splash--exiting .splash-pot-wiggle {
+  animation: none;
+  transition: transform 480ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: rotate(0deg);
+}
 body.splash--exiting .splash-text { transition: opacity 200ms ease; opacity: 0; }
 body.splash--exiting .splash      { transition: opacity 200ms 480ms ease; opacity: 0; }
 
