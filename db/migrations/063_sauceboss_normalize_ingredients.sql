@@ -117,25 +117,42 @@ BEGIN
   $sql$;
 
   -- 4b. Wire up food_id, unit_id, original_text, quantity, canonical fields.
+  -- Postgres forbids referencing the UPDATE target table from a JOIN's ON
+  -- clause, so we pre-resolve foods + units in a subquery and the UPDATE
+  -- only joins the resolved rows back by id.
   EXECUTE $sql$
     UPDATE public.sauceboss_step_ingredients si
     SET
-      food_id  = f.id,
-      unit_id  = u.id,
+      food_id       = src.food_id,
+      unit_id       = src.unit_id,
       original_text = COALESCE(si.original_text,
         TRIM(BOTH ' ' FROM CONCAT_WS(' ', si.amount::text, NULLIF(si.unit, ''), si.name))),
-      quantity = COALESCE(si.quantity, si.amount::numeric),
+      quantity      = COALESCE(si.quantity, si.amount::numeric),
       quantity_canonical_ml = COALESCE(
         si.quantity_canonical_ml,
-        CASE WHEN u.dimension = 'volume' THEN si.amount::double precision * u.ml_per_unit ELSE NULL END
+        CASE WHEN src.dimension = 'volume' THEN si.amount::double precision * src.ml_per_unit END
       ),
       quantity_canonical_g = COALESCE(
         si.quantity_canonical_g,
-        CASE WHEN u.dimension = 'mass' THEN si.amount::double precision * u.g_per_unit ELSE NULL END
+        CASE WHEN src.dimension = 'mass'   THEN si.amount::double precision * src.g_per_unit END
       )
-    FROM public.sauceboss_foods f
-    LEFT JOIN public.sauceboss_units u ON LOWER(TRIM(si.unit)) = ANY(SELECT LOWER(a) FROM UNNEST(u.aliases) a)
-    WHERE f.name_normalized = LOWER(TRIM(si.name))
+    FROM (
+      SELECT
+        si2.id,
+        f.id  AS food_id,
+        u.id  AS unit_id,
+        u.dimension,
+        u.ml_per_unit,
+        u.g_per_unit
+      FROM public.sauceboss_step_ingredients si2
+      LEFT JOIN public.sauceboss_foods f
+        ON f.name_normalized = LOWER(TRIM(si2.name))
+      LEFT JOIN public.sauceboss_units u
+        ON LOWER(TRIM(si2.unit)) = ANY (
+          SELECT LOWER(a) FROM UNNEST(u.aliases) a
+        )
+    ) src
+    WHERE src.id = si.id
   $sql$;
 END $$;
 
