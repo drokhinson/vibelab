@@ -10,7 +10,7 @@ const CUISINES = [
   { name: 'French', emoji: '🇫🇷' },
   { name: 'Indian', emoji: '🇮🇳' },
 ];
-const UNITS = ['tsp', 'tbsp', 'cup', 'oz', 'g', 'clove', 'cloves', 'piece', 'pinch'];
+const UNITS = ['tsp', 'tbsp', 'cup', 'oz', 'g', 'clove', 'cloves', 'piece', 'pinch', 'to taste'];
 const COLOR_SWATCHES = ['#E85D04','#DC2626','#22C55E','#3B1F0A','#FBBF24','#457B9D','#7C3AED','#EA580C','#15803D','#B91C1C'];
 
 const SAUCE_TYPES = [
@@ -56,7 +56,7 @@ const VOLUME_TO_ML = { tsp: 5, tbsp: 15, cup: 240, oz: 30 };
 const WEIGHT_TO_G  = { oz: 28 };
 const COUNT_UNITS  = new Set(['clove', 'cloves', 'piece', 'pieces', 'pinch']);
 
-const CATEGORY_ORDER = ['Produce', 'Dairy', 'Oils & Fats', 'Sauces & Condiments', 'Spices', 'Sweeteners', 'Nuts & Seeds', 'Pantry Staples'];
+const CATEGORY_ORDER = ['Produce', 'Dairy', 'Oils & Fats', 'Sauces & Condiments', 'Broths', 'Spices', 'Sweeteners', 'Nuts & Seeds', 'Pantry Staples'];
 
 // ─── Global state ─────────────────────────────────────────────────────────────
 let state = {
@@ -97,18 +97,23 @@ let state = {
   adminSauces: [],
   adminLoading: false,
   adminError: null,
-  sauceManagerTab: 'sauces',                                      // 'sauces' | 'dish'
+  sauceManagerTab: 'sauces',                                      // 'sauces' | 'dish' | 'ingredients'
   sauceManagerSearch: '',                                          // search query (applies to active tab)
   sauceManagerTypeFilter: 'all',                                   // 'all' | 'sauce' | 'marinade' | 'dressing'
   itemSections: { carbs: true, proteins: true, salads: true },    // category-level expand
   expandedParents: {},                                             // { [parentId]: true }
   adminItems: { carbs: [], proteins: [], salads: [] },             // parents w/ nested variants
   itemForm: null,                                                  // shared add/edit form
+
+  // ── Ingredients tab ────────────────────────────────────────────────────────
+  adminFoods: [],                                                  // [{ id, name, plural, usageCount, sauceCount }]
+  foodForm: null,                                                  // { mode: 'add' | 'edit', id?, name, error?, saving? }
+  foodMerge: null,                                                 // { keepId, mergeIds: Set<string>, error?, saving? }
 };
 
 function defaultBuilder() {
   return {
-    name: '', cuisine: '', cuisineEmoji: '', color: '#E85D04', description: '',
+    name: '', cuisine: '', cuisineEmoji: '', color: '#E85D04', description: '', sourceUrl: '',
     sauceType: 'sauce',          // 'sauce' | 'marinade' | 'dressing'
     steps: [{ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
     itemIds: [], saving: false, error: null,
