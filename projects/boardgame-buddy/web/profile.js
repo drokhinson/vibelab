@@ -1,6 +1,11 @@
 // profile.js — Account page: tab bar (Account | Buddies) and account-tab content.
 // Buddies tab is rendered by buddies.js (renderBuddiesTab).
 
+// Cached BGG sync status for the current account-tab render. Reset on tab open.
+let bggStatus = null;
+let bggSyncing = false;
+let bggPollTimer = null;
+
 function renderProfile() {
   const container = document.getElementById("profile-content");
   if (!currentUser) {
@@ -38,9 +43,12 @@ function switchProfileTab(tab) {
   document.getElementById("profile-tab-account")?.classList.toggle("tab-active", tab === "account");
   document.getElementById("profile-tab-buddies")?.classList.toggle("tab-active", tab === "buddies");
   if (tab === "buddies") {
+    stopBggPolling();
     renderBuddiesTab();
   } else {
     renderAccountTab();
+    // Fire-and-forget; the card re-renders itself when the status comes back.
+    refreshBggStatus();
   }
   if (window.lucide) window.lucide.createIcons();
 }
@@ -84,14 +92,8 @@ function renderAccountTab() {
       </div>
     `}
 
-    <div class="card bg-base-200 mb-3 opacity-70">
-      <div class="card-body p-4">
-        <h3 class="font-semibold flex items-center gap-2">
-          <i data-lucide="link" class="w-4 h-4"></i> BoardGameGeek account
-          <span class="badge badge-xs badge-ghost">coming soon</span>
-        </h3>
-        <p class="text-xs text-base-content/60">Link your BGG account to sync your collection and see your geek score.</p>
-      </div>
+    <div class="card bg-base-200 mb-3" id="profile-bgg-card">
+      ${renderBggCard()}
     </div>
 
     <div class="card bg-base-200 border border-error/30">
@@ -129,6 +131,180 @@ async function handleBecomeAdmin() {
     renderAccountTab();
   } catch (err) {
     showToast(err.message || "Could not verify admin key.", "error");
+  }
+}
+
+// ── BoardGameGeek account linking ────────────────────────────────────────────
+
+function renderBggCard() {
+  const status = bggStatus;
+  const linked = !!status?.bgg_username;
+  const pending = status?.pending_count || 0;
+  const errored = status?.errored_count || 0;
+  const lastAt = status?.last_completed_at;
+
+  if (!status) {
+    return `
+      <div class="card-body p-4">
+        <h3 class="font-semibold flex items-center gap-2">
+          <i data-lucide="link" class="w-4 h-4"></i> BoardGameGeek account
+        </h3>
+        <p class="text-xs text-base-content/60">Loading…</p>
+      </div>
+    `;
+  }
+
+  if (!linked) {
+    return `
+      <div class="card-body p-4">
+        <h3 class="font-semibold flex items-center gap-2">
+          <i data-lucide="link" class="w-4 h-4"></i> BoardGameGeek account
+        </h3>
+        <p class="text-xs text-base-content/60">
+          Link your BGG account to import your collection (owned + wishlist) and play history.
+        </p>
+        <div class="flex gap-2 mt-2">
+          <input type="text" id="profile-bgg-username" class="input input-bordered input-sm flex-1"
+            placeholder="BGG username" autocomplete="off" />
+          <button class="btn btn-primary btn-sm" onclick="handleLinkBgg()">Link</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const syncing = bggSyncing || pending > 0;
+  const lastLine = lastAt
+    ? `Last imported: ${new Date(lastAt).toLocaleString()}`
+    : "Click sync to import your collection and plays.";
+  const progressLine = syncing && pending > 0
+    ? `<div class="text-xs text-info mt-1">Importing ${pending} missing game${pending === 1 ? "" : "s"} from BGG…</div>`
+    : "";
+  const errorLine = errored > 0
+    ? `<div class="text-xs text-error mt-1 flex items-center gap-1">
+         <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+         ${errored} import${errored === 1 ? "" : "s"} failed.
+         <button class="link link-hover" onclick="handleRetryPending()">Retry</button>
+       </div>`
+    : "";
+
+  return `
+    <div class="card-body p-4">
+      <h3 class="font-semibold flex items-center gap-2">
+        <i data-lucide="link" class="w-4 h-4"></i> BoardGameGeek account
+        <span class="badge badge-xs badge-success">linked</span>
+      </h3>
+      <div class="flex items-center justify-between mt-1">
+        <div class="text-sm font-mono">${escapeHtml(status.bgg_username)}</div>
+        <button class="btn btn-ghost btn-xs" onclick="handleUnlinkBgg()" ${syncing ? "disabled" : ""}>
+          Unlink
+        </button>
+      </div>
+      <p class="text-xs text-base-content/60 mt-1">${escapeHtml(lastLine)}</p>
+      ${progressLine}
+      ${errorLine}
+      <button class="btn btn-primary btn-sm mt-2 self-start" onclick="handleSyncBgg()" ${syncing ? "disabled" : ""}>
+        ${syncing
+          ? `<span class="loading loading-spinner loading-xs"></span> Syncing…`
+          : `<i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync from BGG`}
+      </button>
+    </div>
+  `;
+}
+
+function rerenderBggCard() {
+  const card = document.getElementById("profile-bgg-card");
+  if (!card) return;
+  card.innerHTML = renderBggCard();
+  if (window.lucide) window.lucide.createIcons();
+}
+
+async function refreshBggStatus() {
+  try {
+    bggStatus = await apiFetch("/bgg/sync/status");
+  } catch (err) {
+    bggStatus = { bgg_username: null, pending_count: 0, errored_count: 0 };
+  }
+  rerenderBggCard();
+  // Auto-poll while imports are draining so the user sees "Importing N…" tick down.
+  if (bggStatus?.pending_count > 0) {
+    startBggPolling();
+  } else {
+    stopBggPolling();
+  }
+}
+
+function startBggPolling() {
+  if (bggPollTimer) return;
+  bggPollTimer = setInterval(refreshBggStatus, 3000);
+}
+
+function stopBggPolling() {
+  if (bggPollTimer) {
+    clearInterval(bggPollTimer);
+    bggPollTimer = null;
+  }
+}
+
+async function handleLinkBgg() {
+  const input = document.getElementById("profile-bgg-username");
+  const username = input?.value.trim();
+  if (!username) {
+    showToast("Enter your BGG username first.", "warning");
+    return;
+  }
+  try {
+    await apiFetch("/bgg/link", { method: "POST", body: { username } });
+    showToast(`Linked BGG account: ${username}`, "success");
+    await refreshBggStatus();
+  } catch (err) {
+    showToast(err.message || "Could not link BGG account.", "error");
+  }
+}
+
+async function handleUnlinkBgg() {
+  if (!confirm("Unlink this BGG account? Already-imported games and plays will stay.")) {
+    return;
+  }
+  try {
+    await apiFetch("/bgg/link", { method: "DELETE" });
+    showToast("BGG account unlinked.", "info");
+    bggStatus = { bgg_username: null, pending_count: 0, errored_count: 0 };
+    rerenderBggCard();
+  } catch (err) {
+    showToast(err.message || "Could not unlink.", "error");
+  }
+}
+
+async function handleSyncBgg() {
+  bggSyncing = true;
+  rerenderBggCard();
+  try {
+    const summary = await apiFetch("/bgg/sync", { method: "POST" });
+    const importedTotal = summary.collection_imported + summary.plays_imported;
+    const pendingTotal = summary.collection_pending + summary.plays_pending;
+    if (pendingTotal > 0) {
+      showToast(
+        `Imported ${importedTotal}. Importing ${pendingTotal} missing game${pendingTotal === 1 ? "" : "s"}…`,
+        "info",
+      );
+    } else {
+      showToast(`Imported ${importedTotal} item${importedTotal === 1 ? "" : "s"} from BGG.`, "success");
+    }
+  } catch (err) {
+    showToast(err.message || "BGG sync failed.", "error");
+  } finally {
+    bggSyncing = false;
+    await refreshBggStatus();
+  }
+}
+
+async function handleRetryPending() {
+  try {
+    await apiFetch("/bgg/sync/process-pending", { method: "POST" });
+    showToast("Retried pending imports.", "info");
+    await refreshBggStatus();
+  } catch (err) {
+    showToast(err.message || "Retry failed.", "error");
   }
 }
 

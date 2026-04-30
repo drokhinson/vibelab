@@ -1,7 +1,6 @@
 """Game catalog endpoints — browse, search, detail, BGG proxy."""
 
 import logging
-import os
 import xml.etree.ElementTree as ET
 from typing import Optional
 
@@ -14,26 +13,19 @@ from db import get_supabase
 from shared_models import HealthResponse
 
 from . import router
+from .bgg_client import (
+    BGG_USER_AGENT,
+    fetch_bgg,
+    normalize_image_url,
+    parse_bgg_xml,
+)
 from .constants import EXPANSION_COLOR_PALETTE
 from .dependencies import CurrentUser, get_current_admin, maybe_supabase_user
 from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
 
 logger = logging.getLogger(__name__)
 
-BGG_API_BASE = "https://boardgamegeek.com/xmlapi2"
-BGG_USER_AGENT = "vibelab-boardgame-buddy/1.0"
-BGG_API_TOKEN = os.getenv("BGG_API_TOKEN")
 STORAGE_BUCKET = "boardgamebuddy-games"
-
-
-def _normalize_image_url(url: str | None) -> str | None:
-    """Ensure BGG image URLs have an explicit https: scheme (BGG returns protocol-relative URLs)."""
-    if not url:
-        return None
-    url = url.strip()
-    if url.startswith("//"):
-        return "https:" + url
-    return url
 
 
 async def _upload_to_storage(sb: Client, bgg_id: int, url: str | None, kind: str) -> str | None:
@@ -62,57 +54,6 @@ async def _upload_to_storage(sb: Client, bgg_id: int, url: str | None, kind: str
     except Exception as exc:
         logger.warning("Storage upload failed %s: %s", path, exc)
         return url
-
-
-async def _fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
-    """GET an XML document from the BGG API with consistent error mapping."""
-    headers = {"User-Agent": BGG_USER_AGENT}
-    if BGG_API_TOKEN:
-        headers["Authorization"] = f"Bearer {BGG_API_TOKEN}"
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=timeout,
-            headers=headers,
-        ) as client:
-            resp = await client.get(f"{BGG_API_BASE}{path}", params=params)
-    except httpx.HTTPError as exc:
-        logger.warning("BGG network error on %s %s: %s", path, params, exc)
-        raise HTTPException(
-            status_code=503,
-            detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
-        )
-
-    if resp.status_code == 401:
-        logger.error("BGG 401 — BGG_API_TOKEN missing or invalid")
-        raise HTTPException(
-            status_code=502,
-            detail="BoardGameGeek authentication failed. Ensure BGG_API_TOKEN is set in Railway.",
-        )
-    if resp.status_code == 202:
-        # BGG returns 202 when the result is being generated (cold cache).
-        logger.info("BGG 202 (warming up) for %s %s", path, params)
-        raise HTTPException(
-            status_code=503,
-            detail="BoardGameGeek is warming up this result. Retry in a few seconds.",
-        )
-    if resp.status_code == 429:
-        logger.warning("BGG 429 rate limit for %s %s", path, params)
-        raise HTTPException(
-            status_code=429,
-            detail="BoardGameGeek rate-limited us. Wait a few seconds and try again.",
-        )
-    if resp.status_code != 200:
-        logger.warning(
-            "BGG returned %s for %s %s: %s",
-            resp.status_code, path, params, resp.text[:200],
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=f"BoardGameGeek returned HTTP {resp.status_code}.",
-        )
-
-    return resp.text
 
 
 def _extract_expansion_meta(item: ET.Element) -> tuple[bool, int | None]:
@@ -149,21 +90,6 @@ def _next_expansion_color(sb: Client, base_game_bgg_id: int | None) -> str:
     )
     idx = (existing.count or 0) % len(EXPANSION_COLOR_PALETTE)
     return EXPANSION_COLOR_PALETTE[idx]
-
-
-def _parse_bgg_xml(body: str, *, context: str) -> ET.Element:
-    """Parse a BGG XML payload; map parse errors to a 502."""
-    try:
-        return ET.fromstring(body)
-    except ET.ParseError as exc:
-        logger.warning(
-            "BGG XML parse error (%s): %s\nbody[:300]=%r",
-            context, exc, body[:300],
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="Could not parse BoardGameGeek response.",
-        )
 
 
 @router.get(
@@ -258,12 +184,12 @@ async def search_bgg(
     query: str = Query(..., min_length=2, description="Search query"),
 ) -> list[BggSearchResult]:
     """Proxy search to BGG XML API for games not yet in our database."""
-    body = await _fetch_bgg(
+    body = await fetch_bgg(
         "/search",
         {"query": query, "type": "boardgame"},
         timeout=10.0,
     )
-    root = _parse_bgg_xml(body, context=f"search query={query!r}")
+    root = parse_bgg_xml(body, context=f"search query={query!r}")
 
     results: list[BggSearchResult] = []
     bgg_ids: list[int] = []
@@ -349,19 +275,15 @@ async def get_game(
     return GameDetail(**result.data[0])
 
 
-@router.post(
-    "/games/import-bgg/{bgg_id}",
-    response_model=GameSummary,
-    status_code=201,
-    summary="Import game from BGG",
-)
-async def import_bgg_game(
-    bgg_id: int = Path(..., description="BoardGameGeek game ID"),
-) -> GameSummary:
-    """Fetch a game from BGG API and add it to our database."""
-    sb = get_supabase()
+async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
+    """Fetch a single game from BGG and insert it into boardgamebuddy_games.
 
-    # Check if already exists
+    Returns the inserted (or pre-existing) row as a dict — callers can wrap it
+    in `GameSummary(**row)` when they need a response model. Pulled out as a
+    standalone helper so the BGG account-linking worker can import missing
+    games without going through HTTP. Idempotent: returns the existing row if
+    the bgg_id is already in the catalog.
+    """
     existing = (
         sb.table("boardgamebuddy_games")
         .select("*")
@@ -369,15 +291,14 @@ async def import_bgg_game(
         .execute()
     )
     if existing.data:
-        return GameSummary(**existing.data[0])
+        return existing.data[0]
 
-    # Fetch from BGG
-    body = await _fetch_bgg(
+    body = await fetch_bgg(
         "/thing",
         {"id": bgg_id, "stats": 1},
         timeout=15.0,
     )
-    root = _parse_bgg_xml(body, context=f"thing id={bgg_id}")
+    root = parse_bgg_xml(body, context=f"thing id={bgg_id}")
     item = root.find("item")
     if item is None:
         raise HTTPException(status_code=404, detail="Game not found on BGG")
@@ -392,7 +313,6 @@ async def import_bgg_game(
     img_el = item.find("image")
     thumb_el = item.find("thumbnail")
 
-    # Extract categories and mechanics
     categories = [
         link.get("value", "")
         for link in item.findall("link[@type='boardgamecategory']")
@@ -413,10 +333,10 @@ async def import_bgg_game(
         "max_players": int(max_el.get("value", "0")) if max_el is not None else None,
         "playing_time": int(time_el.get("value", "0")) if time_el is not None else None,
         "image_url": await _upload_to_storage(
-            sb, bgg_id, _normalize_image_url(img_el.text if img_el is not None else None), "image"
+            sb, bgg_id, normalize_image_url(img_el.text if img_el is not None else None), "image"
         ),
         "thumbnail_url": await _upload_to_storage(
-            sb, bgg_id, _normalize_image_url(thumb_el.text if thumb_el is not None else None), "thumb"
+            sb, bgg_id, normalize_image_url(thumb_el.text if thumb_el is not None else None), "thumb"
         ),
         "categories": categories,
         "mechanics": mechanics,
@@ -430,8 +350,22 @@ async def import_bgg_game(
         .insert(game_data)
         .execute()
     )
+    return result.data[0]
 
-    return GameSummary(**result.data[0])
+
+@router.post(
+    "/games/import-bgg/{bgg_id}",
+    response_model=GameSummary,
+    status_code=201,
+    summary="Import game from BGG",
+)
+async def import_bgg_game(
+    bgg_id: int = Path(..., description="BoardGameGeek game ID"),
+) -> GameSummary:
+    """Fetch a game from BGG API and add it to our database."""
+    sb = get_supabase()
+    row = await import_game_from_bgg(sb, bgg_id)
+    return GameSummary(**row)
 
 
 @router.post(
@@ -457,15 +391,15 @@ async def refresh_game_images(
         if not needs_update or not game["bgg_id"]:
             continue
         try:
-            body = await _fetch_bgg("/thing", {"id": game["bgg_id"], "stats": 0}, timeout=10.0)
-            root = _parse_bgg_xml(body, context=f"refresh bgg_id={game['bgg_id']}")
+            body = await fetch_bgg("/thing", {"id": game["bgg_id"], "stats": 0}, timeout=10.0)
+            root = parse_bgg_xml(body, context=f"refresh bgg_id={game['bgg_id']}")
             item = root.find("item")
             if item is None:
                 continue
             img_el = item.find("image")
             thumb_el = item.find("thumbnail")
-            raw_img = _normalize_image_url(img_el.text if img_el is not None else None)
-            raw_thumb = _normalize_image_url(thumb_el.text if thumb_el is not None else None)
+            raw_img = normalize_image_url(img_el.text if img_el is not None else None)
+            raw_thumb = normalize_image_url(thumb_el.text if thumb_el is not None else None)
             sb.table("boardgamebuddy_games").update({
                 "image_url": await _upload_to_storage(sb, game["bgg_id"], raw_img, "image"),
                 "thumbnail_url": await _upload_to_storage(sb, game["bgg_id"], raw_thumb, "thumb"),
@@ -492,16 +426,16 @@ async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Non
     success (admin refresh) can surface the error; the import flow wraps this
     in try/except so a flaky BGG call doesn't block approval.
     """
-    body = await _fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
-    root = _parse_bgg_xml(body, context=f"hydrate images bgg_id={bgg_id}")
+    body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
+    root = parse_bgg_xml(body, context=f"hydrate images bgg_id={bgg_id}")
     item = root.find("item")
     if item is None:
         raise HTTPException(status_code=404, detail="Game not found on BGG")
 
     img_el = item.find("image")
     thumb_el = item.find("thumbnail")
-    raw_img = _normalize_image_url(img_el.text if img_el is not None else None)
-    raw_thumb = _normalize_image_url(thumb_el.text if thumb_el is not None else None)
+    raw_img = normalize_image_url(img_el.text if img_el is not None else None)
+    raw_thumb = normalize_image_url(thumb_el.text if thumb_el is not None else None)
 
     sb.table("boardgamebuddy_games").update({
         "image_url": await _upload_to_storage(sb, bgg_id, raw_img, "image"),

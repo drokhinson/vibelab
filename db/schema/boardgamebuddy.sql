@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 048
+-- Last updated: migration 062
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   display_name TEXT NOT NULL,
   avatar_url TEXT,
   is_admin BOOLEAN NOT NULL DEFAULT false,
+  -- Linked BoardGameGeek username for collection/plays sync (migration 062).
+  -- Unique only when non-null so multiple unlinked profiles can coexist.
+  bgg_username TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_profiles ENABLE ROW LEVEL SECURITY;
@@ -89,6 +92,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
   played_at DATE NOT NULL DEFAULT CURRENT_DATE,
   notes TEXT,
+  -- BGG play_id when this row was imported from BoardGameGeek (migration 062).
+  -- Unique per (user_id, bgg_play_id) so resync is idempotent.
+  bgg_play_id BIGINT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
@@ -164,6 +170,25 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_expansions (
 );
 ALTER TABLE public.boardgamebuddy_user_expansions ENABLE ROW LEVEL SECURITY;
 
+-- BGG-import staging (migration 062). When a user runs "Sync from BGG" and we
+-- encounter a bgg_id we don't yet have in boardgamebuddy_games, we drop the
+-- intended collection-status / play-record here and a background worker drains
+-- the queue after fetching each missing game from the BGG XML API.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_pending_imports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  bgg_id INTEGER NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('collection', 'play')),
+  payload JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'done', 'error')),
+  error_message TEXT,
+  attempts INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ
+);
+ALTER TABLE public.boardgamebuddy_bgg_pending_imports ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_selections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -209,3 +234,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_buddies_owner_linked
 CREATE INDEX IF NOT EXISTS idx_bgb_buddies_linked_user
   ON public.boardgamebuddy_buddies (linked_user_id)
   WHERE linked_user_id IS NOT NULL;
+-- BGG link (migration 062): unique linked username + dedup on imported plays
+-- + queue indices on the pending-imports table.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_profiles_bgg_username
+  ON public.boardgamebuddy_profiles (bgg_username)
+  WHERE bgg_username IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bgg_play
+  ON public.boardgamebuddy_plays (user_id, bgg_play_id)
+  WHERE bgg_play_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_bgb_bgg_pending_user_status
+  ON public.boardgamebuddy_bgg_pending_imports (user_id, status)
+  WHERE status = 'pending';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_bgg_pending_unique
+  ON public.boardgamebuddy_bgg_pending_imports (user_id, bgg_id, kind)
+  WHERE status = 'pending';
