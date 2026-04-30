@@ -48,6 +48,7 @@ Linked to Supabase Auth `auth.users`.
 | display_name | TEXT | |
 | avatar_url | TEXT | nullable |
 | is_admin | BOOLEAN | default false; granted via `POST /profile/become-admin` with the shared admin key |
+| bgg_username | TEXT | nullable; linked BoardGameGeek username (migration 062). Unique when non-null. |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_pending_guides
@@ -100,6 +101,7 @@ a second buddy of yours to the same account merges into the first.
 | game_id | UUID FK | → games |
 | played_at | DATE | |
 | notes | TEXT | nullable |
+| bgg_play_id | BIGINT | nullable; set when the row was imported from BGG (migration 062). Unique per (user_id, bgg_play_id) — re-running BGG sync is idempotent. |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_play_players
@@ -169,6 +171,24 @@ user's reference guide.
 Flat guide table from the initial prototype. Retained temporarily during rollout
 of the chunk system; will be dropped in a follow-up migration.
 
+### boardgamebuddy_bgg_pending_imports
+Staging queue for BGG syncs (migration 062). When a user's collection or play
+references a `bgg_id` we don't yet have in `boardgamebuddy_games`, the desired
+write is persisted here and a background worker drains the queue after fetching
+each missing game from the BGG XML API.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| user_id | UUID FK | → profiles |
+| bgg_id | INTEGER | the missing BGG game id |
+| kind | TEXT | `collection` or `play` |
+| payload | JSONB | collection: `{status}`. play: `{bgg_play_id, played_at, notes, players[]}`. |
+| status | TEXT | `pending` / `done` / `error` |
+| error_message | TEXT | populated when status='error' |
+| attempts | INT | retry count; promotes to `error` after 3 |
+| created_at / completed_at | TIMESTAMPTZ | |
+| UNIQUE(user_id, bgg_id, kind) WHERE status='pending' | | one pending row per (user, game, kind) |
+
 ## API Endpoints
 
 ### Public
@@ -199,6 +219,11 @@ of the chunk system; will be dropped in a follow-up migration.
 - `DELETE /api/v1/boardgame_buddy/plays/draft` — discard the in-progress play session
 - `GET /api/v1/boardgame_buddy/buddies` — alphabetical list with `linked_display_name` and `play_count`
 - `POST /api/v1/boardgame_buddy/buddies/{buddy_id}/link` — body `{user_id}`; one-way link, merges any of the owner's other buddies that already linked to (or have the display name of) the target
+- `POST /api/v1/boardgame_buddy/bgg/link` — body `{username}`; verify the BGG account exists (looks up `<user id="...">` via BGG XMLAPI) and store on profile. Returns `{bgg_username}`.
+- `DELETE /api/v1/boardgame_buddy/bgg/link` — clear `bgg_username`. Already-imported collection/plays remain in place.
+- `POST /api/v1/boardgame_buddy/bgg/sync` — pull collection (`own=1`, `wishlist=1`, `wanttoplay=1`) and plays (paginated) from BGG. BGG `own→owned`; `wishlist` and `wanttoplay` both map to `'wishlist'`. Games we already have are written immediately (collections upsert on `(user_id, game_id)`; plays dedup on `(user_id, bgg_play_id)`). Games we don't have go into `boardgamebuddy_bgg_pending_imports` and a `BackgroundTasks` worker drains the queue (~1.5s between BGG calls). Returns `{bgg_username, collection_imported, collection_pending, plays_imported, plays_pending}`. Players from BGG plays are upserted as buddies on `(owner_id, name)` using the same path as `POST /plays`.
+- `POST /api/v1/boardgame_buddy/bgg/sync/process-pending` — manual fallback to drain the pending queue (e.g. after a process restart cut a BackgroundTask short). Idempotent.
+- `GET /api/v1/boardgame_buddy/bgg/sync/status` — `{bgg_username, pending_count, errored_count, last_completed_at}`. The Account tab polls this every 3s while `pending_count > 0`.
 - `POST /api/v1/boardgame_buddy/games/{game_id}/chunks` — contribute a new chunk
 - `PATCH /api/v1/boardgame_buddy/chunks/{chunk_id}` — edit own chunk
 - `DELETE /api/v1/boardgame_buddy/chunks/{chunk_id}` — delete own chunk

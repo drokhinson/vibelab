@@ -40,6 +40,38 @@ class AdminKeyBody(BaseModel):
     admin_key: str
 
 
+# ── BGG account linking ───────────────────────────────────────────────────────
+
+class BggLinkBody(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+
+
+class BggLinkResponse(BaseModel):
+    bgg_username: Optional[str] = None
+
+
+class BggSyncSummary(BaseModel):
+    """Result of POST /bgg/sync.
+
+    Counts that landed in their respective tables synchronously plus the
+    pending counts that the background worker will drain after importing
+    the missing games from BGG.
+    """
+    bgg_username: str
+    collection_imported: int
+    collection_pending: int
+    plays_imported: int
+    plays_pending: int
+
+
+class BggSyncStatus(BaseModel):
+    """Result of GET /bgg/sync/status. Used by the FE to poll progress."""
+    bgg_username: Optional[str] = None
+    pending_count: int = 0
+    errored_count: int = 0
+    last_completed_at: Optional[datetime] = None
+
+
 # ── Games ─────────────────────────────────────────────────────────────────────
 
 class GameSummary(BaseModel):
