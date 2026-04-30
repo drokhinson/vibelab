@@ -107,20 +107,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
 );
 ALTER TABLE public.boardgamebuddy_play_players ENABLE ROW LEVEL SECURITY;
 
--- In-progress play session (migration 042). One row per user (PK = user_id).
--- Per-round scores live here as JSONB while the user is mid-game; on save
--- the draft is deleted and only the winner is persisted to play_players.
-CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_drafts (
-  user_id     UUID PRIMARY KEY REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
-  game_id     UUID REFERENCES public.boardgamebuddy_games(id) ON DELETE SET NULL,
-  played_at   DATE,
-  notes       TEXT,
-  players     JSONB NOT NULL DEFAULT '[]'::jsonb,
-  round_count INT   NOT NULL DEFAULT 1,
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-ALTER TABLE public.boardgamebuddy_play_drafts ENABLE ROW LEVEL SECURITY;
-
 -- Legacy single-row guide table. Retained during rollout of the chunk system
 -- (migration 034); will be dropped in a follow-up migration.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guides (

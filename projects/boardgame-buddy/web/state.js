@@ -59,10 +59,9 @@ let gamesFilterOwnedOnly = false;
 // Profile (account page tab state — survives re-renders)
 let profileTab = "account"; // account | buddies
 
-// Active in-progress play session (mirrors the server draft row).
-let activeSession = null;          // PlayDraftResponse | null
+// Active in-progress play session (in-memory only; reload discards it).
+let activeSession = null;          // plain object | null
 let sessionExpanded = false;       // bubble visible vs. collapsed into FAB
-let sessionSaveTimer = null;       // debounce handle for PUT /plays/draft
 let sessionDirty = false;          // true once the user has actually mutated the session
 let sessionShowingGuide = false;   // true when the session bubble is overlaid by the in-place guide
 
