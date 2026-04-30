@@ -1227,12 +1227,15 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 .swipe-action-delete { right: 0; background: #FEF2F2; color: #B91C1C; }
 
 /* ── Floating action button ── */
-/* Anchored inside the #app phone shell (position: relative, max-width: 390px)
-   so the FAB sits at the bottom-right of the visible app on every viewport
-   instead of the viewport's right edge (which on desktop is in the dark gutter). */
+/* Pinned to the viewport's bottom-right so it stays reachable while the
+   recipe list scrolls. On desktop the phone shell (#app, max-width: 390px) is
+   centered, so we clamp the right offset with a calc() to keep the FAB inside
+   the shell instead of drifting into the dark gutter:
+     - viewport ≤ 390px: right = 20px (mobile)
+     - viewport >  390px: right = 50vw - 175px (20px inside the shell's right edge) */
 .fab {
-  position: absolute;
-  right: 20px;
+  position: fixed;
+  right: max(20px, calc(50vw - 175px));
   bottom: 20px;
   width: 56px;
   height: 56px;
