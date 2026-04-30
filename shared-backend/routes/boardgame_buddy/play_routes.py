@@ -1,6 +1,5 @@
 """Play logging and game buddies endpoints."""
 
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, Path, Query, HTTPException
@@ -14,8 +13,6 @@ from .models import (
     MessageResponse,
     PlayCountResponse,
     PlayCreate,
-    PlayDraftBody,
-    PlayDraftResponse,
     PlayFilterOption,
     PlayFilterOptions,
     PlayListResponse,
@@ -612,105 +609,3 @@ async def link_buddy(
     }).eq("id", buddy_id).execute()
 
     return MessageResponse(message="Buddy linked to user account")
-
-
-# ── Play session drafts ──────────────────────────────────────────────────────
-
-
-def _draft_with_game(row: dict) -> PlayDraftResponse:
-    """Hydrate a draft row into a PlayDraftResponse, including game name/thumb."""
-    game = row.get("boardgamebuddy_games") or {}
-    return PlayDraftResponse(
-        game_id=row.get("game_id"),
-        played_at=row.get("played_at"),
-        notes=row.get("notes"),
-        players=row.get("players") or [],
-        round_count=row.get("round_count") or 1,
-        game_name=game.get("name"),
-        game_thumbnail=game.get("thumbnail_url"),
-        updated_at=row["updated_at"],
-    )
-
-
-@router.get(
-    "/plays/draft",
-    response_model=Optional[PlayDraftResponse],
-    status_code=200,
-    summary="Get the current user's in-progress play session",
-)
-async def get_play_draft(
-    user: CurrentUser = Depends(get_current_user),
-) -> Optional[PlayDraftResponse]:
-    """Return the current user's draft session, or null if none is active."""
-    sb = get_supabase()
-    result = (
-        sb.table("boardgamebuddy_play_drafts")
-        .select(
-            "game_id, played_at, notes, players, round_count, updated_at, "
-            "boardgamebuddy_games(name, thumbnail_url)"
-        )
-        .eq("user_id", user.user_id)
-        .execute()
-    )
-    if not result.data:
-        return None
-    return _draft_with_game(result.data[0])
-
-
-@router.put(
-    "/plays/draft",
-    response_model=PlayDraftResponse,
-    status_code=200,
-    summary="Save the current user's in-progress play session",
-)
-async def upsert_play_draft(
-    body: PlayDraftBody,
-    user: CurrentUser = Depends(get_current_user),
-) -> PlayDraftResponse:
-    """Upsert the user's single active draft. Called debounced from the FE."""
-    sb = get_supabase()
-
-    payload = {
-        "user_id": user.user_id,
-        "game_id": body.game_id,
-        "played_at": body.played_at.isoformat() if body.played_at else None,
-        "notes": body.notes,
-        "players": [p.model_dump() for p in body.players],
-        "round_count": body.round_count,
-        # The DEFAULT only fires on INSERT, so set this explicitly so updates
-        # bump the timestamp too.
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    sb.table("boardgamebuddy_play_drafts").upsert(
-        payload, on_conflict="user_id"
-    ).execute()
-
-    # Re-fetch with the game join so the FE gets game_name/thumbnail back.
-    result = (
-        sb.table("boardgamebuddy_play_drafts")
-        .select(
-            "game_id, played_at, notes, players, round_count, updated_at, "
-            "boardgamebuddy_games(name, thumbnail_url)"
-        )
-        .eq("user_id", user.user_id)
-        .execute()
-    )
-    return _draft_with_game(result.data[0])
-
-
-@router.delete(
-    "/plays/draft",
-    response_model=MessageResponse,
-    status_code=200,
-    summary="Discard the current user's in-progress play session",
-)
-async def delete_play_draft(
-    user: CurrentUser = Depends(get_current_user),
-) -> MessageResponse:
-    """Delete the user's draft session (called after Save or Discard)."""
-    sb = get_supabase()
-    sb.table("boardgamebuddy_play_drafts").delete().eq(
-        "user_id", user.user_id
-    ).execute()
-    return MessageResponse(message="Draft discarded")

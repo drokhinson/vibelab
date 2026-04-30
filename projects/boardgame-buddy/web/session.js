@@ -1,9 +1,9 @@
 // session.js — Floating "Log a Play" session bubble
 //
-// Replaces the old standalone Log a Play view. Tapping the global "+" FAB
-// opens a floating panel that tracks game + players + per-round scores +
-// notes; the panel can be minimized back into the FAB while the session
-// stays alive on the server (boardgamebuddy_play_drafts).
+// Tapping the global "+" FAB opens a floating panel that tracks game +
+// players + per-round scores + notes. The session lives entirely in browser
+// memory; reloading the page discards any in-progress play. Only the
+// explicit Save action writes to the database (POST /plays).
 //
 // The bubble's "Reference" button overlays an in-place Quick Reference
 // guide on top of the scoreboard so a player can look up a rule mid-game
@@ -48,42 +48,14 @@ function padScores(arr, len) {
   return out;
 }
 
-function normalizeSession(s) {
-  s.notes = s.notes || "";
-  s.played_at = s.played_at || TODAY();
-  s.round_count = Math.max(0, Number(s.round_count) || 0);
-  s.players = (s.players || []).map(p => {
-    const name = p.name || "";
-    return {
-      name,
-      initials: (p.initials || (name ? computeInitials(name) : "")).toUpperCase().slice(0, 3),
-      is_winner_override: p.is_winner_override ?? null,
-      round_scores: padScores(p.round_scores, s.round_count),
-    };
-  });
-  if (!s.players.length) {
-    const seedName = currentUser?.display_name || "";
-    s.players.push({
-      name: seedName,
-      initials: seedName ? computeInitials(seedName) : "",
-      round_scores: padScores([], s.round_count),
-      is_winner_override: null,
-    });
-  }
-}
-
 // ── Bootstrap & FAB state ────────────────────────────────────────────────────
 
+// No draft restore — sessions are in-memory only. We still preload the
+// buddies list so the player-name autocomplete inside the bubble works.
 async function initSession() {
-  try {
-    activeSession = await apiFetch("/plays/draft");
-    if (activeSession) normalizeSession(activeSession);
-  } catch {
-    activeSession = null;
-  }
+  activeSession = null;
   sessionDirty = false;
   refreshSessionFab();
-  // Buddies list is used by the player-name autocomplete inside the bubble.
   if (!buddies.length) {
     try { buddies = await apiFetch("/buddies"); } catch { /* ignore */ }
   }
@@ -120,8 +92,8 @@ function openSession({ gameId, gameName, gameThumb } = {}) {
   if (!activeSession) activeSession = emptySession();
 
   if (gameId && !activeSession.game_id) {
-    // Seed the game in memory only — don't persist a draft until the user
-    // actually does something. Closing without changes leaves no trace.
+    // Seed the game in memory. Closing without further changes leaves no
+    // trace because sessionDirty stays false.
     activeSession.game_id = gameId;
     activeSession.game_name = gameName || null;
     activeSession.game_thumbnail = gameThumb || null;
@@ -131,7 +103,7 @@ function openSession({ gameId, gameName, gameThumb } = {}) {
       activeSession.game_id = gameId;
       activeSession.game_name = gameName || null;
       activeSession.game_thumbnail = gameThumb || null;
-      scheduleDraftSave();
+      markDirty();
     }
   }
 
@@ -147,48 +119,18 @@ function minimizeSession() {
   document.getElementById("session-backdrop").classList.add("hidden");
   document.getElementById("session-panel").classList.add("hidden");
   // If the user opened the bubble but never made a real change, drop the
-  // in-memory session so closing leaves no trace (no server draft was created).
-  if (!sessionDirty && activeSession && !activeSession.updated_at) {
+  // in-memory session so closing leaves no trace.
+  if (!sessionDirty && activeSession) {
     activeSession = null;
   }
   refreshSessionFab();
 }
 
-// ── Debounced draft sync ─────────────────────────────────────────────────────
-
-function scheduleDraftSave() {
+// Flag the session as touched so the FAB shows the "active" icon. Replaces
+// the previous debounced server-draft sync — sessions are now in-memory only.
+function markDirty() {
   sessionDirty = true;
   refreshSessionFab();
-  if (sessionSaveTimer) clearTimeout(sessionSaveTimer);
-  sessionSaveTimer = setTimeout(saveDraftNow, 600);
-}
-
-async function saveDraftNow() {
-  if (!session || !activeSession) return;
-  if (!sessionDirty) return;
-  const body = {
-    game_id: activeSession.game_id,
-    played_at: activeSession.played_at,
-    notes: activeSession.notes || null,
-    players: activeSession.players.map(p => ({
-      name: p.name,
-      initials: p.initials || null,
-      is_winner_override: p.is_winner_override,
-      round_scores: p.round_scores,
-    })),
-    round_count: activeSession.round_count,
-  };
-  try {
-    const updated = await apiFetch("/plays/draft", { method: "PUT", body });
-    // The user may have hit Save (which nulls activeSession) while this PUT
-    // was in flight — drop the response in that case.
-    if (!activeSession) return;
-    activeSession.updated_at = updated.updated_at;
-    if (updated.game_name)      activeSession.game_name = updated.game_name;
-    if (updated.game_thumbnail) activeSession.game_thumbnail = updated.game_thumbnail;
-  } catch (err) {
-    showToast("Couldn't save draft: " + err.message, "error");
-  }
 }
 
 // ── Mutations ────────────────────────────────────────────────────────────────
@@ -200,7 +142,7 @@ function addPlayer(name = "", initials = "") {
     is_winner_override: null,
     round_scores: padScores([], activeSession.round_count),
   });
-  scheduleDraftSave();
+  markDirty();
   renderSessionPanel();
 }
 
@@ -214,14 +156,14 @@ function removePlayer(idx) {
       round_scores: padScores([], activeSession.round_count),
     });
   }
-  scheduleDraftSave();
+  markDirty();
   renderSessionPanel();
 }
 
 function addRound() {
   activeSession.round_count += 1;
   for (const p of activeSession.players) p.round_scores.push(0);
-  scheduleDraftSave();
+  markDirty();
   renderSessionPanel();
 }
 
@@ -229,7 +171,7 @@ function removeRound(idx) {
   if (activeSession.round_count <= 0) return;
   activeSession.round_count -= 1;
   for (const p of activeSession.players) p.round_scores.splice(idx, 1);
-  scheduleDraftSave();
+  markDirty();
   renderSessionPanel();
 }
 
@@ -238,12 +180,12 @@ function setScore(playerIdx, roundIdx, value) {
   activeSession.players[playerIdx].round_scores[roundIdx] = isNaN(v) ? 0 : v;
   // Re-render only the totals so the input keeps focus.
   renderTotalsRow();
-  scheduleDraftSave();
+  markDirty();
 }
 
 function setPlayerName(idx, name) {
   activeSession.players[idx].name = name;
-  scheduleDraftSave();
+  markDirty();
 }
 
 // Append "2", "3", ... if `base` collides with another player's initials.
@@ -449,7 +391,7 @@ function confirmAddPlayer() {
     const p = activeSession.players[editingPlayerIdx];
     p.name = name;
     p.initials = initials;
-    scheduleDraftSave();
+    markDirty();
     renderSessionPanel();
   }
   cancelAddPlayer();
@@ -462,25 +404,25 @@ function setWinnerOverride(idx) {
   // Clear all overrides first so we model "single override = winner".
   for (const p of activeSession.players) p.is_winner_override = null;
   activeSession.players[idx].is_winner_override = (cur === true) ? null : true;
-  scheduleDraftSave();
+  markDirty();
   renderTotalsRow();
 }
 
 function setNotes(text) {
   activeSession.notes = text;
-  scheduleDraftSave();
+  markDirty();
 }
 
 function setPlayedAt(date) {
   activeSession.played_at = date;
-  scheduleDraftSave();
+  markDirty();
 }
 
 function setGameFromSearch(id, name, thumb) {
   activeSession.game_id = id;
   activeSession.game_name = name;
   activeSession.game_thumbnail = thumb || null;
-  scheduleDraftSave();
+  markDirty();
   renderSessionPanel();
 }
 
@@ -488,7 +430,7 @@ function clearSessionGame() {
   activeSession.game_id = null;
   activeSession.game_name = null;
   activeSession.game_thumbnail = null;
-  scheduleDraftSave();
+  markDirty();
   renderSessionPanel();
 }
 
@@ -543,21 +485,10 @@ async function saveSession() {
     })),
   };
 
-  // Cancel any pending debounced draft save so it can't race the cleanup
-  // below (and resurrect a draft we're about to delete).
-  if (sessionSaveTimer) { clearTimeout(sessionSaveTimer); sessionSaveTimer = null; }
-
   const btn = document.getElementById("session-save-btn");
   if (btn) { btn.classList.add("loading"); btn.disabled = true; }
   try {
     await apiFetch("/plays", { method: "POST", body });
-    try {
-      await apiFetch("/plays/draft", { method: "DELETE" });
-    } catch (err) {
-      // Don't block the cleanup — the play is already logged. But surface
-      // the failure so a stuck server draft doesn't silently resurrect.
-      console.warn("Failed to delete play draft after save:", err);
-    }
     activeSession = null;
     sessionDirty = false;
     sessionExpanded = false;
@@ -575,7 +506,6 @@ async function saveSession() {
 
 async function discardSession() {
   if (!confirm("Discard this in-progress session?")) return;
-  try { await apiFetch("/plays/draft", { method: "DELETE" }); } catch { /* ignore */ }
   activeSession = null;
   sessionDirty = false;
   sessionExpanded = false;

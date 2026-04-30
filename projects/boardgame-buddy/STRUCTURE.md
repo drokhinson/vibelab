@@ -112,20 +112,6 @@ a second buddy of yours to the same account merges into the first.
 | buddy_id | UUID FK | → buddies |
 | is_winner | BOOLEAN | |
 
-### boardgamebuddy_play_drafts
-In-progress (unsaved) play session. One row per user (PK = user_id). Per-round
-scores live here as JSONB while the user is mid-game; on save the draft row is
-deleted and only the winner is persisted to `boardgamebuddy_play_players`.
-| Column | Type | Notes |
-|--------|------|-------|
-| user_id | UUID PK | → profiles |
-| game_id | UUID FK | nullable → games |
-| played_at | DATE | nullable |
-| notes | TEXT | nullable |
-| players | JSONB | `[{name, is_winner_override, round_scores:[num,...]}]` |
-| round_count | INT | default 1 |
-| updated_at | TIMESTAMPTZ | |
-
 ### boardgamebuddy_chunk_types (lookup)
 | Column | Type | Notes |
 |--------|------|-------|
@@ -214,9 +200,6 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/plays` — own plays plus shared plays (where the current user is a linked buddy). Each play includes `is_own`, `logged_by_id`, `logged_by_name`.
 - `POST /api/v1/boardgame_buddy/plays`
 - `DELETE /api/v1/boardgame_buddy/plays/{play_id}` — only the original logger can delete
-- `GET /api/v1/boardgame_buddy/plays/draft` — current user's in-progress play session (or `null`)
-- `PUT /api/v1/boardgame_buddy/plays/draft` — upsert in-progress play session (debounced from FE)
-- `DELETE /api/v1/boardgame_buddy/plays/draft` — discard the in-progress play session
 - `GET /api/v1/boardgame_buddy/buddies` — alphabetical list with `linked_display_name` and `play_count`
 - `POST /api/v1/boardgame_buddy/buddies/{buddy_id}/link` — body `{user_id}`; one-way link, merges any of the owner's other buddies that already linked to (or have the display name of) the target
 - `POST /api/v1/boardgame_buddy/bgg/link` — body `{username}`; verify the BGG account exists (looks up `<user id="...">` via BGG XMLAPI) and store on profile. Returns `{bgg_username}`.
@@ -283,7 +266,7 @@ Bottom nav has three tabs: **Browse**, **Closet**, **Play Log**.
 
 1. Auth (login/signup) → 2. **Closet** (home): list view of Owned/Played (toggleable to shelf/book-spine view), plus a Wishlist tab. In-closet search filters your games. → 3. Tap a row/spine → Game detail (themed, with Log Play + guide).
 4. **Browse** tab: list of available games (BGG top 1000 + search). "Import games" button opens the Import screen.
-5. **Play Log** tab: history of plays. The global floating "+" button (visible on every authed view) opens a live **session bubble** with game + players + per-round score grid + notes. The bubble can be minimized back into the FAB while the session keeps running on the server (`boardgamebuddy_play_drafts`), so the user can flip to the Quick Reference guide for the game and come back. On Save, the winner is computed (highest total, or manual override) and persisted to `boardgamebuddy_play_players`; the draft row and per-round scores are discarded.
+5. **Play Log** tab: history of plays. The global floating "+" button (visible on every authed view) opens a live **session bubble** with game + players + per-round score grid + notes. The bubble can be minimized back into the FAB while the session stays alive in browser memory, so the user can flip to the Quick Reference guide for the game and come back. Reloading the page discards any in-progress session — only the explicit Save action writes to the database. On Save, the winner is computed (highest total, or manual override) and persisted to `boardgamebuddy_play_players`; per-round scores are not stored.
 6. **Import** screen: *Import from BoardGameGeek* (live BGG API search + add), *Import from file* (upload a GuideBundle JSON — admins import directly, others queue for review), *Review pending additions* (admin only), *Download Guide Builder instructions* (downloads `guide-from-rulebook.md` so users can feed the prompt into their own AI).
 7. **Profile** (click username in header): two tabs.
    - **Account:** display name, email, become-admin, delete account.
