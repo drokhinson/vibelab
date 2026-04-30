@@ -53,21 +53,6 @@ _WORKER_MAX_ATTEMPTS = 3
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-async def _bgg_user_exists(username: str) -> bool:
-    """Verify the BGG account exists by looking up its numeric user id.
-
-    BGG returns `<user id="0" ...>` for unknown handles and `<user id="<n>">`
-    for real ones, so a non-zero id is our existence signal.
-    """
-    body = await fetch_bgg("/user", {"name": username}, timeout=10.0)
-    root = parse_bgg_xml(body, context=f"user name={username!r}")
-    user_id = root.get("id")
-    try:
-        return bool(user_id) and int(user_id) > 0
-    except (TypeError, ValueError):
-        return False
-
-
 def _existing_game_map(sb: Client, bgg_ids: list[int]) -> dict[int, str]:
     """Bulk-resolve {bgg_id → game_id} for games already in our catalog."""
     if not bgg_ids:
@@ -193,8 +178,19 @@ def _derive_collection_status(item) -> Optional[str]:
 
 
 def _parse_collection(body: str, *, username: str) -> list[tuple[int, str]]:
-    """Parse a BGG /collection response into [(bgg_id, status), ...]."""
+    """Parse a BGG /collection response into [(bgg_id, status), ...].
+
+    BGG returns `<errors><error><message>...</message></error></errors>` (root
+    tag = `errors`) for unknown usernames; surface that as a 404 so the link
+    UI can prompt the user to fix their handle.
+    """
     root = parse_bgg_xml(body, context=f"collection user={username!r}")
+    if root.tag == "errors":
+        msg_el = root.find("error/message")
+        detail = msg_el.text if (msg_el is not None and msg_el.text) else (
+            f"BoardGameGeek account '{username}' not found."
+        )
+        raise HTTPException(status_code=404, detail=detail)
     out: list[tuple[int, str]] = []
     for item in root.findall("item"):
         try:
@@ -461,17 +457,17 @@ async def link_bgg(
     body: BggLinkBody,
     user: CurrentUser = Depends(get_current_user),
 ) -> BggLinkResponse:
-    """Verify the BGG account exists and store its handle on the profile."""
+    """Store a BGG handle on the profile.
+
+    Does NOT call BoardGameGeek. BGG rate-limits unauthenticated apps that
+    fetch other users' data, so we save the round-trip until the user
+    actually clicks Sync — which has to call BGG anyway. An invalid handle
+    surfaces as a 404 from /bgg/sync.
+    """
     sb = get_supabase()
     username = body.username.strip()
     if not username:
         raise HTTPException(status_code=400, detail="Username is required")
-
-    if not await _bgg_user_exists(username):
-        raise HTTPException(
-            status_code=404,
-            detail=f"BoardGameGeek account '{username}' not found.",
-        )
 
     sb.table("boardgamebuddy_profiles").update(
         {"bgg_username": username}
