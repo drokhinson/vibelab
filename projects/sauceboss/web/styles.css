@@ -894,6 +894,23 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   margin-top: 8px;
 }
 
+/* Import-from-URL panel inside builder */
+.builder-import-panel {
+  margin: 8px 0 4px;
+  padding: 10px;
+  background: #FFF3E0;
+  border: 1px dashed #F4B183;
+  border-radius: 12px;
+}
+.builder-import-row { display: flex; gap: 8px; align-items: stretch; }
+.builder-import-url { flex: 1; }
+.builder-import-btn {
+  width: auto;
+  margin-top: 0;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
 /* Carb checkbox overlay */
 .carb-card-check { position: relative; }
 .carb-card-check.selected { border-color: #E85D04; background: #FFF3E0; }

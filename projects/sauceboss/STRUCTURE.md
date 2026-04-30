@@ -74,7 +74,9 @@ All tables prefixed `sauceboss_` in the shared Supabase project.
 - **sauceboss_sauces** — All recipes (sauces, dressings, marinades). Columns: `id`, `name`, `cuisine`, `cuisine_emoji`, `color` (hex), `description`, `sauce_type` ('sauce'|'dressing'|'marinade').
 - **sauceboss_sauce_items** — Unified junction: sauces ↔ items. A trigger enforces `sauce_type ↔ item.category` (sauce→carb, marinade→protein, dressing→salad) and that links target Type rows only (not Variants). Columns: `sauce_id`, `item_id`.
 - **sauceboss_sauce_steps** — Ordered cooking steps per recipe. Columns: `id` (bigserial), `sauce_id`, `step_order` (int), `title`, `estimated_time` (minutes), `input_from_step` (nullable int).
-- **sauceboss_step_ingredients** — Ingredients per step. Columns: `id` (bigserial), `step_id`, `name`, `amount` (real), `unit`.
+- **sauceboss_step_ingredients** — Ingredients per step. Mealie-inspired normalized shape (migration 063). Columns: `id`, `step_id`, `food_id` (FK→sauceboss_foods), `unit_id` (FK→sauceboss_units), `original_text`, `quantity` (numeric), `quantity_canonical_ml`, `quantity_canonical_g`. Legacy freeform `name`/`amount`/`unit` columns were dropped — joins emit them at read time for backwards-compat.
+- **sauceboss_units** — Unit registry (migration 063). One row per supported unit with `id`, `name`, `plural`, `abbreviation`, `dimension` ('volume'|'mass'|'count'), `ml_per_unit`, `g_per_unit`, `aliases` (text[]). The Python module `routes/sauceboss/units.py` mirrors this table for in-process parsing — keep the two in sync.
+- **sauceboss_foods** — One row per distinct ingredient food (migration 063). Auto-populated by `create_sauceboss_sauce` via `INSERT ... ON CONFLICT (name_normalized)`. Columns: `id`, `name`, `plural`, `name_normalized`, `aliases`. **No density column for v1** — see `routes/sauceboss/units.py::DENSITY_TODO` for the wet↔dry conversion follow-up.
 - **sauceboss_ingredient_categories** — Maps ingredient names to filter panel categories.
 - **sauceboss_ingredient_substitutions** — Substitution suggestions shown when an ingredient is marked unavailable.
 
@@ -94,6 +96,9 @@ All served by `shared-backend/routes/sauceboss/` at prefix `/api/v1/sauceboss`.
 | GET | `/api/v1/sauceboss/health` | None | Health check |
 | GET | `/api/v1/sauceboss/initial-load` | None | Carbs, proteins, and salad bases for the home screen |
 | GET | `/api/v1/sauceboss/items/{item_id}/load` | None | Variants, sauces, and ingredients for any item |
+| POST | `/api/v1/sauceboss/import` | None | Mealie-style URL → recipe parser. Body `{url}`; returns a draft (does not persist). |
+| GET | `/api/v1/sauceboss/units` | None | Unit registry — id/name/plural/abbreviation/dimension/conversion factors. |
+| GET | `/api/v1/sauceboss/foods` | None | Foods typeahead (`?q=`, `?limit=`) for the builder ingredient field. |
 
 ## Screen / Page Flow
 ```

@@ -88,6 +88,36 @@ async function fetchSubstitutions() {
   return res.json();
 }
 
+async function fetchUnits() {
+  const data = await _loggedJson(`${API}/api/v1/sauceboss/units`);
+  return data.units || [];
+}
+
+async function fetchFoods(query, limit = 20) {
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  params.set('limit', String(limit));
+  const data = await _loggedJson(`${API}/api/v1/sauceboss/foods?${params.toString()}`);
+  return data.foods || [];
+}
+
+async function importRecipeFromUrl(url) {
+  const res = await fetch(`${API}/api/v1/sauceboss/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const body = await res.json();
+      detail = (body.detail && body.detail.message) || body.detail || '';
+    } catch { /* ignore */ }
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 async function createSauce(data) {
   const res = await fetch(`${API}/api/v1/sauceboss/sauces`, {
     method: 'POST',
@@ -181,9 +211,17 @@ async function deleteAdminSauce(id, key) {
 // ─── Unit conversion ──────────────────────────────────────────────────────────
 function toTsp(amount, unit) { return amount * (TO_TSP[unit] || 1); }
 
-function convertUnit(amount, unit, system) {
+// `item` is optional. When passed and metric mode is on, server-supplied
+// canonicalMl / canonicalG (set by the Mealie-inspired ingredient migration)
+// take precedence over the in-JS lookup tables — this keeps display numbers
+// consistent with what the backend stores.
+function convertUnit(amount, unit, system, item) {
   if (system === 'imperial') return { amount, unit };
-  const lower = unit.toLowerCase();
+  if (item) {
+    if (item.canonicalMl != null) return { amount: item.canonicalMl, unit: 'ml' };
+    if (item.canonicalG  != null) return { amount: item.canonicalG,  unit: 'g'  };
+  }
+  const lower = (unit || '').toLowerCase();
   if (COUNT_UNITS.has(lower)) return { amount, unit };
   if (VOLUME_TO_ML[lower]) return { amount: amount * VOLUME_TO_ML[lower], unit: 'ml' };
   if (WEIGHT_TO_G[lower])  return { amount: amount * WEIGHT_TO_G[lower], unit: 'g' };
@@ -363,7 +401,7 @@ function buildLegend(items) {
   return items.map((item, idx) => {
     const pct = Math.round((toTsp(item.amount, item.unit) / total) * 100);
     const color = ingColor(item.name, idx);
-    const converted = convertUnit(item.amount, item.unit, state.unitSystem);
+    const converted = convertUnit(item.amount, item.unit, state.unitSystem, item);
     const isDisabled = state.disabledIngredients.has(item.name);
     const sub = isDisabled ? getSubstitutionText(item.name) : '';
     return `<div class="legend-item${isDisabled ? ' legend-disabled' : ''}">
@@ -379,10 +417,23 @@ function buildLegend(items) {
 }
 
 function prepareItems(items) {
+  const factor = state.servings / 2;        // base recipes are for 2 people
   return items.map(item => {
     const scaled = scaleAmount(item.amount, state.servings);
-    const converted = convertUnit(scaled, item.unit, state.unitSystem);
-    return { name: item.name, amount: converted.amount, unit: converted.unit };
+    const scaledItem = {
+      ...item,
+      amount: scaled,
+      canonicalMl: item.canonicalMl != null ? item.canonicalMl * factor : null,
+      canonicalG:  item.canonicalG  != null ? item.canonicalG  * factor : null,
+    };
+    const converted = convertUnit(scaled, item.unit, state.unitSystem, scaledItem);
+    return {
+      name: item.name,
+      amount: converted.amount,
+      unit: converted.unit,
+      canonicalMl: scaledItem.canonicalMl,
+      canonicalG: scaledItem.canonicalG,
+    };
   });
 }
 
