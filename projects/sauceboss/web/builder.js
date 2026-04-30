@@ -344,19 +344,21 @@ async function builderImport() {
 }
 
 // Maps a /import response into the existing builder form. Strategy:
-//   - Top-level fields (name, description) overwrite if currently empty.
-//   - Ingredients become a single step (titled from the URL host) so the user
-//     can manually re-group into multiple steps if they want. We don't try to
-//     auto-segment instructions today — keeps the import deterministic.
-//   - For each parsed ingredient: drop ones with no usable food name, and
-//     map (foodRaw, quantity, unitRaw, originalText, canonicals) onto the
-//     builder's ingredient schema.
+//   - Top-level fields (name, description) fill if currently empty.
+//   - Each scraped instruction becomes its own builder step. Each parsed
+//     ingredient is assigned to the earliest step whose instruction text
+//     mentions its name; later mentions get the same row with a blank amount
+//     so the user can split the quantity manually.
+//   - Ingredients not mentioned in any instruction (e.g. "salt to taste")
+//     land in a final "Other ingredients" step with their full quantity.
+//   - If the scrape returned no instructions, fall back to a single
+//     "Imported from <host>" step containing every ingredient.
 function _builderApplyParsedRecipe(parsed) {
   const b = state.builder;
   if (!b.name) b.name = parsed.name || b.name;
   if (parsed.description && !b.description) b.description = parsed.description;
 
-  const ings = (parsed.ingredients || [])
+  const allIngs = (parsed.ingredients || [])
     .map(p => {
       const food = (p.foodRaw || '').trim();
       if (!food) return null;
@@ -370,17 +372,86 @@ function _builderApplyParsedRecipe(parsed) {
       };
     })
     .filter(Boolean);
-  if (ings.length === 0) {
+  if (allIngs.length === 0) {
     b.importError = 'No ingredients parsed — try a different URL.';
     return;
   }
 
-  let stepTitle = 'Imported';
-  try {
-    stepTitle = `Imported from ${new URL(parsed.sourceUrl).hostname.replace(/^www\./, '')}`;
-  } catch { /* ignore */ }
+  const instructions = (parsed.instructions || [])
+    .map(s => (s || '').trim())
+    .filter(Boolean);
 
-  b.steps = [{ title: stepTitle, inputFromStep: null, ingredients: ings }];
+  if (instructions.length === 0) {
+    let stepTitle = 'Imported';
+    try {
+      stepTitle = `Imported from ${new URL(parsed.sourceUrl).hostname.replace(/^www\./, '')}`;
+    } catch { /* ignore */ }
+    b.steps = [{ title: stepTitle, inputFromStep: null, ingredients: allIngs }];
+    return;
+  }
+
+  const steps = instructions.map(text => ({
+    title: _truncateInstructionTitle(text),
+    inputFromStep: null,
+    ingredients: [],
+    _instr: text.toLowerCase(),
+  }));
+
+  const unmatched = [];
+  for (const ing of allIngs) {
+    const hits = [];
+    for (let si = 0; si < steps.length; si++) {
+      if (_ingNameInInstruction(ing.name, steps[si]._instr)) hits.push(si);
+    }
+    if (hits.length === 0) {
+      unmatched.push(ing);
+      continue;
+    }
+    steps[hits[0]].ingredients.push(ing);
+    for (let i = 1; i < hits.length; i++) {
+      steps[hits[i]].ingredients.push({
+        name: ing.name,
+        amount: '',
+        unit: ing.unit,
+        originalText: '',
+        canonicalMl: null,
+        canonicalG: null,
+      });
+    }
+  }
+
+  for (const s of steps) {
+    delete s._instr;
+    if (s.ingredients.length === 0) {
+      s.ingredients.push({ name: '', amount: '', unit: 'tsp' });
+    }
+  }
+
+  if (unmatched.length > 0) {
+    steps.push({ title: 'Other ingredients', inputFromStep: null, ingredients: unmatched });
+  }
+
+  b.steps = steps;
+}
+
+// First sentence of an instruction, capped so it fits the step-title input.
+function _truncateInstructionTitle(text) {
+  const trimmed = text.trim();
+  const periodIdx = trimmed.indexOf('.');
+  if (periodIdx > 0 && periodIdx <= 80) return trimmed.slice(0, periodIdx);
+  if (trimmed.length <= 80) return trimmed;
+  return trimmed.slice(0, 77) + '…';
+}
+
+// Substring match plus a single-letter plural stem so "tomatoes" matches
+// "tomato" and vice versa. Cheaper and more predictable than fuzzy matching.
+function _ingNameInInstruction(name, instrLower) {
+  const n = (name || '').toLowerCase().trim();
+  if (!n) return false;
+  if (instrLower.includes(n)) return true;
+  if (n.endsWith('s') && n.length > 3 && instrLower.includes(n.slice(0, -1))) return true;
+  if (!n.endsWith('s') && instrLower.includes(n + 's')) return true;
+  return false;
 }
 
 // Picks the unit string the builder UI should show for a parsed ingredient.
