@@ -45,6 +45,7 @@ body {
   min-height: 100vh;
   font-family: var(--font-sans);
   background: oklch(var(--b1));
+  overflow-x: hidden;
 }
 
 .font-display {
@@ -214,7 +215,7 @@ body {
 /* ── Sticky guide sub-header (back / search / chunk-type pills) ─────────── */
 /* Always-on-screen affordances for one-handed lookup — sits inside
    #game-detail-content above the scroll-panel and rides scroll. */
-.guide-sticky {
+.guide-controls {
   position: sticky;
   top: 0;
   z-index: 12;
@@ -225,13 +226,13 @@ body {
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(201, 146, 42, 0.25);
 }
-.guide-sticky__row {
+.guide-controls__row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.4rem;
 }
-.guide-sticky__back {
+.guide-controls__back {
   flex-shrink: 0;
   width: 40px;
   height: 40px;
@@ -245,12 +246,12 @@ body {
   border: none;
   transition: background 120ms ease;
 }
-.guide-sticky__back:hover  { background: rgba(0, 0, 0, 0.55); }
-.guide-sticky__back:focus-visible {
+.guide-controls__back:hover  { background: rgba(0, 0, 0, 0.55); }
+.guide-controls__back:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.guide-sticky__title {
+.guide-controls__title {
   flex: 1;
   font-family: var(--font-display);
   font-size: 1rem;
@@ -262,7 +263,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.guide-sticky__expand-all {
+.guide-controls__expand-all {
   flex-shrink: 0;
   font-size: 0.7rem;
   font-weight: 600;
