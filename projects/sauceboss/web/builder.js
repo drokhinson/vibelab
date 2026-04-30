@@ -98,8 +98,8 @@ function renderBuilder() {
     </div>
     <div class="scroll-body">
       <div class="builder-sticky-header">
-        <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
         ${importPanel}
+        <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
         <p class="builder-label">Type</p>
         <div class="cuisine-chips">${sauceTypeChips}</div>
         <p class="builder-label">Cuisine</p>
