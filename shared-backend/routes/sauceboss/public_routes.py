@@ -13,6 +13,7 @@ from .models import (
     CreateSauceRequest,
     FoodRow,
     FoodsListResponse,
+    FoodsWithUsageResponse,
     ImportRecipeRequest,
     IngredientCategoryInput,
     InitialLoadResponse,
@@ -79,6 +80,7 @@ async def create_sauce(body: CreateSauceRequest):
         "cuisineEmoji": body.cuisineEmoji,
         "color": body.color,
         "description": body.description,
+        "sourceUrl": body.sourceUrl,
         "sauceType": body.sauceType,
         "itemIds": body.itemIds,
         "steps": [
@@ -304,3 +306,14 @@ async def list_foods(
     rows = result.data or []
     foods = [FoodRow(id=r["id"], name=r["name"], plural=r.get("plural")) for r in rows]
     return FoodsListResponse(foods=foods)
+
+
+@router.get(
+    "/foods-with-usage",
+    response_model=FoodsWithUsageResponse,
+    summary="All foods with recipe usage counts (Sauce Manager → Ingredients tab)",
+)
+async def list_foods_with_usage() -> FoodsWithUsageResponse:
+    """Returns every food with usageCount (step rows referencing it) and sauceCount (distinct sauces)."""
+    rows = _rpc_or_500("list_sauceboss_foods_with_usage", {}, "foods-with-usage")
+    return FoodsWithUsageResponse(foods=rows or [])

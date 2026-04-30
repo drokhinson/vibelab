@@ -38,9 +38,14 @@ function renderAdmin() {
     <div class="sauce-manager-tabs">
       <button class="sm-tab ${tab === 'sauces' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('sauces')">Sauces</button>
       <button class="sm-tab ${tab === 'dish' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('dish')">Dish</button>
+      <button class="sm-tab ${tab === 'ingredients' ? 'sm-tab-active' : ''}" onclick="setSauceManagerTab('ingredients')">Ingredients</button>
     </div>`;
 
-  const searchPlaceholder = tab === 'sauces' ? 'Search sauces, cuisine, ingredients…' : 'Search items…';
+  const searchPlaceholder = tab === 'sauces'
+    ? 'Search sauces, cuisine, ingredients…'
+    : tab === 'ingredients'
+      ? 'Search ingredients…'
+      : 'Search items…';
   const searchBar = `
     <div class="sm-search-wrap">
       <span class="sm-search-icon"><i data-lucide="search"></i></span>
@@ -65,6 +70,7 @@ function renderAdmin() {
 
   let bodyHTML = '';
   if (tab === 'sauces') bodyHTML = renderSaucesTab(isAdmin);
+  else if (tab === 'ingredients') bodyHTML = renderIngredientsTab(isAdmin);
   else bodyHTML = renderDishTab(isAdmin);
 
   return `
@@ -84,6 +90,11 @@ function renderAdmin() {
     </div>
     ${tab === 'sauces' ? `
       <button class="fab" aria-label="Add a sauce" onclick="openBuilder()">
+        <i data-lucide="plus"></i>
+      </button>
+    ` : ''}
+    ${tab === 'ingredients' && isAdmin && !state.foodMerge && !state.foodForm ? `
+      <button class="fab" aria-label="Add ingredient" onclick="openFoodForm()">
         <i data-lucide="plus"></i>
       </button>
     ` : ''}
@@ -349,9 +360,13 @@ function openSettings() {
 function setSauceManagerTab(tab) {
   state.sauceManagerTab = tab;
   state.itemForm = null;
+  state.foodForm = null;
+  state.foodMerge = null;
   render();
   if (tab === 'dish') {
     refreshAdminItems();
+  } else if (tab === 'ingredients') {
+    refreshAdminFoods();
   }
 }
 
@@ -604,6 +619,218 @@ async function adminDeleteItemAction(id, name, hasVariants) {
     await refreshAdminItems();
   } catch (err) {
     state.adminError = `Failed to delete: ${err.message}`;
+    render();
+  }
+}
+
+// ─── Ingredients tab ─────────────────────────────────────────────────────────
+function renderIngredientsTab(isAdmin) {
+  const foods = state.adminFoods || [];
+  const q = (state.sauceManagerSearch || '').trim().toLowerCase();
+  const merge = state.foodMerge;
+  const form = state.foodForm;
+  const filtered = q ? foods.filter(f => (f.name || '').toLowerCase().includes(q)) : foods;
+
+  const formHTML = isAdmin && form ? renderFoodForm() : '';
+  const mergeHTML = isAdmin && merge ? renderMergePanel() : '';
+
+  if (foods.length === 0) {
+    return `${formHTML}<p style="padding:16px;color:#888">No ingredients yet.</p>`;
+  }
+  if (filtered.length === 0) {
+    return `${formHTML}<p style="padding:16px;color:#888">No ingredients match your search.</p>`;
+  }
+
+  const rowsHTML = filtered.map(f => renderFoodRow(f, isAdmin, merge)).join('');
+  const mergeBar = isAdmin && merge && merge.mergeIds.size > 0 ? `
+    <div class="food-merge-bar">
+      <span>${merge.mergeIds.size} selected to merge into <strong>${(foods.find(x => x.id === merge.keepId) || {}).name || '?'}</strong></span>
+      <div style="display:flex;gap:6px">
+        <button class="builder-secondary-btn" onclick="cancelFoodMerge()">Cancel</button>
+        <button class="builder-primary-btn" onclick="submitFoodMerge()" ${merge.saving ? 'disabled' : ''}>
+          ${merge.saving ? '<span class="spinner-sm"></span> Merging…' : 'Merge'}
+        </button>
+      </div>
+      ${merge.error ? `<div class="settings-error" style="flex-basis:100%">${merge.error}</div>` : ''}
+    </div>` : '';
+
+  return `
+    ${formHTML}
+    ${mergeHTML}
+    <div class="food-list">${rowsHTML}</div>
+    ${mergeBar}`;
+}
+
+function renderFoodRow(f, isAdmin, merge) {
+  const safeName = (f.name || '').replace(/'/g, "\\'");
+  const usage = f.usageCount || 0;
+  const sauces = f.sauceCount || 0;
+  const sub = usage === 0
+    ? '<span style="color:#888">unused</span>'
+    : `${usage} step row${usage !== 1 ? 's' : ''} · ${sauces} sauce${sauces !== 1 ? 's' : ''}`;
+  const mergeMode = !!merge;
+  const isKeep = merge && merge.keepId === f.id;
+  const isPicked = merge && merge.mergeIds.has(f.id);
+  const inner = `
+    <div class="admin-sauce-info" style="flex:1">
+      <div class="admin-sauce-name">${f.name}</div>
+      <div class="admin-sauce-carbs">${sub}</div>
+    </div>
+    ${mergeMode ? `
+      ${isKeep ? '<span class="food-merge-tag food-merge-tag-keep">keep</span>'
+              : isPicked ? '<span class="food-merge-tag food-merge-tag-merge">will merge</span>'
+              : ''}
+    ` : ''}`;
+  if (mergeMode) {
+    return `<div class="food-row${isKeep ? ' food-row-keep' : ''}${isPicked ? ' food-row-picked' : ''}"
+                 onclick="toggleFoodMergePick('${f.id}')">${inner}</div>`;
+  }
+  if (!isAdmin) {
+    return `<div class="food-row">${inner}</div>`;
+  }
+  return `
+    <div class="swipe-row" data-swipe
+         data-edit-action="openFoodForm('${f.id}')"
+         data-delete-action="adminDeleteFoodAction('${f.id}','${safeName}',${usage})">
+      <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
+      <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
+      <div class="swipe-content food-row">
+        ${inner}
+        <button class="food-merge-start" title="Merge other ingredients into this one"
+                onclick="event.stopPropagation(); startFoodMerge('${f.id}')">Merge…</button>
+      </div>
+    </div>`;
+}
+
+function renderFoodForm() {
+  const f = state.foodForm;
+  const esc = s => (s || '').replace(/"/g, '&quot;');
+  const titleAction = f.mode === 'edit' ? 'Edit' : 'New';
+  return `
+    <div class="sm-add-form">
+      <div class="sm-add-form-title">${titleAction} Ingredient</div>
+      <input class="builder-input" placeholder="Name (e.g. tomato)" value="${esc(f.name)}" oninput="state.foodForm.name=this.value">
+      <input class="builder-input" placeholder="Plural (optional, e.g. tomatoes)" value="${esc(f.plural)}" oninput="state.foodForm.plural=this.value">
+      ${f.error ? `<div class="settings-error">${f.error}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="builder-primary-btn" style="flex:1" onclick="submitFoodForm()" ${f.saving ? 'disabled' : ''}>
+          ${f.saving ? '<span class="spinner-sm"></span> Saving…' : (f.mode === 'edit' ? 'Save' : 'Add Ingredient')}
+        </button>
+        <button class="builder-secondary-btn" onclick="closeFoodForm()">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function renderMergePanel() {
+  const merge = state.foodMerge;
+  const keep = (state.adminFoods || []).find(f => f.id === merge.keepId);
+  return `
+    <div class="food-merge-panel">
+      <strong>Merging into: ${keep ? keep.name : '(unknown)'}</strong>
+      <div style="font-size:12px;color:#555;margin-top:4px">
+        Tap other ingredients in the list to mark them as duplicates of this one.
+        All recipes pointing at the duplicates will be repointed at <em>${keep ? keep.name : ''}</em>.
+      </div>
+    </div>`;
+}
+
+async function refreshAdminFoods() {
+  try {
+    state.adminFoods = await fetchFoodsWithUsage();
+    render();
+  } catch (err) {
+    state.adminError = `Failed to load ingredients: ${err.message}`;
+    render();
+  }
+}
+
+function openFoodForm(id) {
+  const food = id ? (state.adminFoods || []).find(f => f.id === id) : null;
+  state.foodMerge = null;
+  state.foodForm = food
+    ? { mode: 'edit', id: food.id, name: food.name || '', plural: food.plural || '', error: null, saving: false }
+    : { mode: 'add', name: '', plural: '', error: null, saving: false };
+  render();
+}
+
+function closeFoodForm() {
+  state.foodForm = null;
+  render();
+}
+
+async function submitFoodForm() {
+  const f = state.foodForm;
+  if (!f) return;
+  const name = (f.name || '').trim();
+  if (!name) {
+    f.error = 'Name is required.';
+    render();
+    return;
+  }
+  f.saving = true;
+  f.error = null;
+  render();
+  try {
+    const payload = { name, plural: (f.plural || '').trim() || null };
+    if (f.mode === 'edit') await adminUpdateFood(f.id, payload, state.adminKey);
+    else await adminCreateFood(payload, state.adminKey);
+    state.foodForm = null;
+    await refreshAdminFoods();
+  } catch (err) {
+    f.saving = false;
+    f.error = err.message;
+    render();
+  }
+}
+
+async function adminDeleteFoodAction(id, name, usage) {
+  if (usage > 0) {
+    alert(`Cannot delete "${name}" — it's used by ${usage} recipe step row(s). Merge it into another ingredient first.`);
+    return;
+  }
+  if (!confirm(`Delete ingredient "${name}"? This cannot be undone.`)) return;
+  try {
+    await adminDeleteFood(id, state.adminKey);
+    await refreshAdminFoods();
+  } catch (err) {
+    state.adminError = `Failed to delete: ${err.message}`;
+    render();
+  }
+}
+
+function startFoodMerge(keepId) {
+  state.foodForm = null;
+  state.foodMerge = { keepId, mergeIds: new Set(), error: null, saving: false };
+  render();
+}
+
+function toggleFoodMergePick(id) {
+  const merge = state.foodMerge;
+  if (!merge) return;
+  if (id === merge.keepId) return; // can't merge the keeper into itself
+  if (merge.mergeIds.has(id)) merge.mergeIds.delete(id);
+  else merge.mergeIds.add(id);
+  render();
+}
+
+function cancelFoodMerge() {
+  state.foodMerge = null;
+  render();
+}
+
+async function submitFoodMerge() {
+  const merge = state.foodMerge;
+  if (!merge || merge.mergeIds.size === 0) return;
+  merge.saving = true;
+  merge.error = null;
+  render();
+  try {
+    await adminMergeFoods(merge.keepId, [...merge.mergeIds], state.adminKey);
+    state.foodMerge = null;
+    await refreshAdminFoods();
+  } catch (err) {
+    merge.saving = false;
+    merge.error = err.message;
     render();
   }
 }

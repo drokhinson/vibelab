@@ -30,9 +30,13 @@ class IngredientInput(BaseModel):
     string — abbreviation or alias). The backend resolves these to ``food_id``
     and ``unit_id`` via the foods/units lookup tables before persisting; rows
     that don't resolve (e.g. typos) keep ``original_text`` for cleanup.
+
+    ``amount`` accepts 0 so qualitative rows ("to taste") can save without a
+    numeric quantity — the unit registry resolves "to taste" to its unit_id
+    and the recipe view renders the originalText instead of "0 to taste".
     """
     name: str = Field(min_length=1)
-    amount: float = Field(gt=0)
+    amount: float = Field(ge=0)
     unit: str = Field(min_length=1)
     originalText: Optional[str] = None
 
@@ -49,6 +53,7 @@ class CreateSauceRequest(BaseModel):
     cuisineEmoji: str = ""
     color: str = Field(pattern=r'^#[0-9A-Fa-f]{6}$')
     description: str = ""
+    sourceUrl: Optional[str] = None
     sauceType: SauceType = SauceType.SAUCE
     itemIds: List[str] = Field(min_length=1)
     steps: List[StepInput] = Field(min_length=1)
@@ -128,6 +133,36 @@ class FoodsListResponse(BaseModel):
 class IngredientCategoryInput(BaseModel):
     ingredientName: str = Field(min_length=1)
     category: str = Field(min_length=1)
+
+
+# ── Foods (ingredient admin) ─────────────────────────────────────────────────
+
+class FoodWithUsageRow(BaseModel):
+    id: str
+    name: str
+    plural: Optional[str] = None
+    usageCount: int
+    sauceCount: int
+    createdAt: Optional[str] = None
+
+
+class FoodsWithUsageResponse(BaseModel):
+    foods: List[FoodWithUsageRow]
+
+
+class CreateFoodRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    plural: Optional[str] = Field(default=None, max_length=80)
+
+
+class UpdateFoodRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    plural: Optional[str] = Field(default=None, max_length=80)
+
+
+class MergeFoodsRequest(BaseModel):
+    keepId: str = Field(min_length=1)
+    mergeIds: List[str] = Field(min_length=1)
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
