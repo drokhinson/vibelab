@@ -64,7 +64,14 @@ class ParsedRecipe:
 # ── recipe-scrapers + ingredient_parser are heavy deps; import lazily. ──────
 
 def _scrape_html(url: str):
-    """Wrap recipe_scrapers.scrape_me; map common failures to ScrapeError."""
+    """Wrap recipe_scrapers.scrape_me; map common failures to ScrapeError.
+
+    The library's old ``wild_mode`` kwarg (best-effort scrape on unsupported
+    sites) was removed in 15.x — sites must now be on the supported-sites
+    list, which today covers ~500+ recipe domains. See
+    https://docs.recipe-scrapers.com/getting-started/supported-sites/ or run
+    ``from recipe_scrapers import SCRAPERS; sorted(SCRAPERS.keys())``.
+    """
     try:
         from recipe_scrapers import scrape_me
         from recipe_scrapers._exceptions import (
@@ -76,7 +83,7 @@ def _scrape_html(url: str):
         raise ScrapeError(ScrapeErrorKind.UNKNOWN, f"recipe-scrapers not installed: {e}")
 
     try:
-        return scrape_me(url, wild_mode=True)
+        return scrape_me(url)
     except WebsiteNotImplementedError as e:
         raise ScrapeError(ScrapeErrorKind.UNSUPPORTED_SITE, str(e))
     except NoSchemaFoundInWildMode as e:
