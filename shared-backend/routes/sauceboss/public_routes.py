@@ -4,19 +4,28 @@ import logging
 import re
 import secrets
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 
 from db import get_supabase
 from shared_models import HealthResponse
 from . import router
 from .models import (
     CreateSauceRequest,
+    FoodRow,
+    FoodsListResponse,
+    ImportRecipeRequest,
     IngredientCategoryInput,
     InitialLoadResponse,
     ItemLoadResponse,
     ItemsGroupedResponse,
+    ParsedIngredientResponse,
+    ParsedRecipeResponse,
+    UnitRow,
+    UnitsListResponse,
     _shape_items_grouped,
 )
+from .parser import ScrapeError, ScrapeErrorKind, scrape_recipe
+from .units import UNIT_REGISTRY, parse_unit, to_canonical
 
 logger = logging.getLogger("sauceboss")
 
@@ -55,6 +64,10 @@ async def create_sauce(body: CreateSauceRequest):
     ('sauce'→carb, 'marinade'→protein, 'dressing'→salad). ``itemIds`` lists
     Type-row item ids of that category. The DB trigger on
     sauceboss_sauce_items rejects any sauce_type ↔ item.category mismatch.
+
+    Each ingredient's raw ``unit`` string is resolved against the unit registry
+    here and emitted to the RPC as ``unitId`` + canonical quantities; foods are
+    upserted by the RPC keyed on lower(name).
     """
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sauce_id = f"user-{slug}-{secrets.token_hex(2)}"
@@ -73,10 +86,7 @@ async def create_sauce(body: CreateSauceRequest):
                 "title": step.title,
                 "stepOrder": idx + 1,
                 "inputFromStep": step.inputFromStep,
-                "ingredients": [
-                    {"name": ing.name, "amount": ing.amount, "unit": ing.unit}
-                    for ing in step.ingredients
-                ],
+                "ingredients": [_resolve_ingredient_for_save(ing) for ing in step.ingredients],
             }
             for idx, step in enumerate(body.steps)
         ],
@@ -90,6 +100,26 @@ async def create_sauce(body: CreateSauceRequest):
     if result.data is None:
         raise HTTPException(500, "Failed to create sauce — RPC returned null")
     return {"id": result.data, "status": "created"}
+
+
+def _resolve_ingredient_for_save(ing) -> dict:
+    """Resolve a builder ingredient row to the structured RPC payload.
+
+    Looks up the unit by alias, computes canonical quantities, and falls back
+    to ``unitId=None`` when the raw unit is unknown so the row still saves
+    (the freeform string lives on in ``originalText``).
+    """
+    unit_def = parse_unit(ing.unit)
+    canonical_ml, canonical_g = to_canonical(ing.amount, unit_def)
+    return {
+        "name": ing.name.strip(),
+        "amount": ing.amount,
+        "unit": ing.unit,
+        "unitId": unit_def.id if unit_def else None,
+        "originalText": (ing.originalText or f"{ing.amount} {ing.unit} {ing.name}").strip(),
+        "canonicalMl": canonical_ml,
+        "canonicalG": canonical_g,
+    }
 
 
 @router.get("/sauces")
@@ -175,3 +205,102 @@ async def item_load(item_id: str) -> ItemLoadResponse:
     marinades / dressings based on the calling screen.
     """
     return _rpc_or_500("get_sauceboss_item_load", {"p_item_id": item_id}, f"item-load:{item_id}")
+
+
+# ── URL import + units/foods registry ────────────────────────────────────────
+
+_SCRAPE_ERROR_STATUS: dict[ScrapeErrorKind, int] = {
+    ScrapeErrorKind.INVALID_URL: 422,
+    ScrapeErrorKind.NETWORK: 502,
+    ScrapeErrorKind.NO_STRUCTURED_DATA: 422,
+    ScrapeErrorKind.UNSUPPORTED_SITE: 422,
+    ScrapeErrorKind.UNKNOWN: 500,
+}
+
+
+@router.post(
+    "/import",
+    response_model=ParsedRecipeResponse,
+    status_code=200,
+    summary="Parse a recipe URL into a draft (does not persist)",
+)
+async def import_recipe(body: ImportRecipeRequest) -> ParsedRecipeResponse:
+    """Fetch ``url``, run schema.org JSON-LD extraction, return a draft.
+
+    The draft is shaped for the builder UI to populate its existing form. The
+    user reviews / edits the parsed ingredients and submits via ``POST
+    /sauces`` to persist. Failures map to 422 (bad URL / no structured data /
+    unsupported site) or 502 (network).
+    """
+    try:
+        parsed = scrape_recipe(str(body.url))
+    except ScrapeError as e:
+        status = _SCRAPE_ERROR_STATUS.get(e.kind, 500)
+        raise HTTPException(status, {"kind": str(e.kind), "message": e.message})
+
+    return ParsedRecipeResponse(
+        name=parsed.name,
+        description=parsed.description,
+        totalTimeMinutes=parsed.total_time_minutes,
+        yieldServings=parsed.yield_servings,
+        instructions=parsed.instructions,
+        ingredients=[
+            ParsedIngredientResponse(
+                originalText=ing.original_text,
+                quantity=ing.quantity,
+                unitRaw=ing.unit_raw,
+                unitId=(parse_unit(ing.unit_raw).id if parse_unit(ing.unit_raw) else None),
+                foodRaw=ing.food_raw,
+                canonicalMl=ing.canonical_ml,
+                canonicalG=ing.canonical_g,
+                note=ing.note,
+            )
+            for ing in parsed.ingredients
+        ],
+        sourceUrl=parsed.source_url,
+        canonicalUrl=parsed.canonical_url,
+    )
+
+
+@router.get(
+    "/units",
+    response_model=UnitsListResponse,
+    summary="Registry of supported units (for builder dropdown + frontend formatter)",
+)
+async def list_units() -> UnitsListResponse:
+    """Returns every unit the backend can resolve, with canonical conversion factors."""
+    rows = [
+        UnitRow(
+            id=u.id,
+            name=u.name,
+            plural=u.plural,
+            abbreviation=u.abbreviation,
+            pluralAbbreviation=u.plural_abbreviation,
+            dimension=u.dimension,
+            mlPerUnit=u.ml_per_unit,
+            gPerUnit=u.g_per_unit,
+        )
+        for u in UNIT_REGISTRY.values()
+    ]
+    return UnitsListResponse(units=rows)
+
+
+@router.get(
+    "/foods",
+    response_model=FoodsListResponse,
+    summary="Foods typeahead — substring match on name",
+)
+async def list_foods(
+    q: str = Query("", description="Substring to match (case-insensitive). Empty returns the first 50 foods alphabetically."),
+    limit: int = Query(20, ge=1, le=100, description="Max foods to return."),
+) -> FoodsListResponse:
+    """Foods typeahead for the recipe builder's ingredient name field."""
+    sb = get_supabase()
+    query = sb.table("sauceboss_foods").select("id,name,plural")
+    needle = q.strip().lower()
+    if needle:
+        query = query.ilike("name_normalized", f"%{needle}%")
+    result = query.order("name").limit(limit).execute()
+    rows = result.data or []
+    foods = [FoodRow(id=r["id"], name=r["name"], plural=r.get("plural")) for r in rows]
+    return FoodsListResponse(foods=foods)

@@ -4,7 +4,7 @@ import logging
 from enum import StrEnum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 
 logger = logging.getLogger("sauceboss")
 
@@ -24,9 +24,17 @@ class SauceType(StrEnum):
 # ── Sauce creation ────────────────────────────────────────────────────────────
 
 class IngredientInput(BaseModel):
+    """One ingredient row.
+
+    The frontend sends ``name`` (food display string) and ``unit`` (raw unit
+    string — abbreviation or alias). The backend resolves these to ``food_id``
+    and ``unit_id`` via the foods/units lookup tables before persisting; rows
+    that don't resolve (e.g. typos) keep ``original_text`` for cleanup.
+    """
     name: str = Field(min_length=1)
     amount: float = Field(gt=0)
     unit: str = Field(min_length=1)
+    originalText: Optional[str] = None
 
 
 class StepInput(BaseModel):
@@ -44,6 +52,75 @@ class CreateSauceRequest(BaseModel):
     sauceType: SauceType = SauceType.SAUCE
     itemIds: List[str] = Field(min_length=1)
     steps: List[StepInput] = Field(min_length=1)
+
+
+# ── URL import ────────────────────────────────────────────────────────────────
+
+class ImportRecipeRequest(BaseModel):
+    """Recipe-import request body — a single URL pointing at a recipe page."""
+    url: HttpUrl
+
+
+class ParsedIngredientResponse(BaseModel):
+    """One ingredient row in an import preview."""
+    originalText: str
+    quantity: Optional[float] = None
+    unitRaw: Optional[str] = None
+    unitId: Optional[str] = None
+    foodRaw: str
+    canonicalMl: Optional[float] = None
+    canonicalG: Optional[float] = None
+    note: Optional[str] = None
+
+
+class ParsedRecipeResponse(BaseModel):
+    """Import preview returned by ``POST /import``.
+
+    Shape mirrors :class:`CreateSauceRequest` partially so the frontend can map
+    the preview into the existing builder form fields. We do NOT persist this
+    — the user reviews + edits, then submits via ``POST /sauces``.
+    """
+    name: str
+    description: str = ""
+    totalTimeMinutes: Optional[int] = None
+    yieldServings: Optional[int] = None
+    instructions: List[str] = Field(default_factory=list)
+    ingredients: List[ParsedIngredientResponse] = Field(default_factory=list)
+    sourceUrl: str
+    canonicalUrl: Optional[str] = None
+
+
+# ── Units / foods registry ────────────────────────────────────────────────────
+
+class UnitDimensionEnum(StrEnum):
+    VOLUME = "volume"
+    MASS = "mass"
+    COUNT = "count"
+
+
+class UnitRow(BaseModel):
+    id: str
+    name: str
+    plural: str
+    abbreviation: str
+    pluralAbbreviation: str
+    dimension: UnitDimensionEnum
+    mlPerUnit: Optional[float] = None
+    gPerUnit: Optional[float] = None
+
+
+class UnitsListResponse(BaseModel):
+    units: List[UnitRow]
+
+
+class FoodRow(BaseModel):
+    id: str
+    name: str
+    plural: Optional[str] = None
+
+
+class FoodsListResponse(BaseModel):
+    foods: List[FoodRow]
 
 
 # ── Ingredient categories ────────────────────────────────────────────────────

@@ -114,5 +114,6 @@ function defaultBuilder() {
     itemIds: [], saving: false, error: null,
     acStep: null, acIng: null, acResults: [], acSelected: -1,
     pendingCategories: [],
+    importUrl: '', importing: false, importError: null,
   };
 }

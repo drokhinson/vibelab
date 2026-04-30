@@ -77,6 +77,19 @@ function renderBuilder() {
 
   const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && i.amount));
 
+  const importErr = b.importError ? `<div class="builder-error">${esc(b.importError)}</div>` : '';
+  const importPanel = `
+    <div class="builder-import-panel">
+      <p class="builder-label">Import from URL</p>
+      <div class="builder-import-row">
+        <input class="builder-input builder-import-url" type="url" placeholder="https://… (recipe page)" value="${esc(b.importUrl || '')}" data-builder-field="import-url">
+        <button class="builder-secondary-btn builder-import-btn" onclick="builderImport()" ${b.importing ? 'disabled' : ''}>
+          ${b.importing ? '<span class="spinner-sm"></span> Importing…' : 'Import'}
+        </button>
+      </div>
+      ${importErr}
+    </div>`;
+
   return `
     <div class="status-bar"></div>
     <div class="app-header">
@@ -86,6 +99,7 @@ function renderBuilder() {
     <div class="scroll-body">
       <div class="builder-sticky-header">
         <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
+        ${importPanel}
         <p class="builder-label">Type</p>
         <div class="cuisine-chips">${sauceTypeChips}</div>
         <p class="builder-label">Cuisine</p>
@@ -241,6 +255,7 @@ function builderHandleInput(el) {
   const b = state.builder;
   switch (field) {
     case 'name': b.name = el.value; break;
+    case 'import-url': b.importUrl = el.value; break;
     case 'step-title': b.steps[si].title = el.value; break;
     case 'ing-name': {
       b.steps[si].ingredients[ii].name = el.value;
@@ -304,6 +319,89 @@ function builderClassifyIngredient(si, ii, category) {
   }
 }
 
+// ─── Import-from-URL ──────────────────────────────────────────────────────────
+async function builderImport() {
+  const b = state.builder;
+  const url = (b.importUrl || '').trim();
+  if (!url) {
+    b.importError = 'Paste a recipe URL first.';
+    render();
+    return;
+  }
+  b.importing = true;
+  b.importError = null;
+  render();
+  try {
+    const parsed = await importRecipeFromUrl(url);
+    _builderApplyParsedRecipe(parsed);
+    b.importing = false;
+    render();
+  } catch (err) {
+    b.importing = false;
+    b.importError = err.message || 'Import failed.';
+    render();
+  }
+}
+
+// Maps a /import response into the existing builder form. Strategy:
+//   - Top-level fields (name, description) overwrite if currently empty.
+//   - Ingredients become a single step (titled from the URL host) so the user
+//     can manually re-group into multiple steps if they want. We don't try to
+//     auto-segment instructions today — keeps the import deterministic.
+//   - For each parsed ingredient: drop ones with no usable food name, and
+//     map (foodRaw, quantity, unitRaw, originalText, canonicals) onto the
+//     builder's ingredient schema.
+function _builderApplyParsedRecipe(parsed) {
+  const b = state.builder;
+  if (!b.name) b.name = parsed.name || b.name;
+  if (parsed.description && !b.description) b.description = parsed.description;
+
+  const ings = (parsed.ingredients || [])
+    .map(p => {
+      const food = (p.foodRaw || '').trim();
+      if (!food) return null;
+      return {
+        name: food,
+        amount: p.quantity != null ? p.quantity : '',
+        unit: _unitDisplayFromParsed(p),
+        originalText: p.originalText || '',
+        canonicalMl: p.canonicalMl != null ? p.canonicalMl : null,
+        canonicalG:  p.canonicalG  != null ? p.canonicalG  : null,
+      };
+    })
+    .filter(Boolean);
+  if (ings.length === 0) {
+    b.importError = 'No ingredients parsed — try a different URL.';
+    return;
+  }
+
+  let stepTitle = 'Imported';
+  try {
+    stepTitle = `Imported from ${new URL(parsed.sourceUrl).hostname.replace(/^www\./, '')}`;
+  } catch { /* ignore */ }
+
+  b.steps = [{ title: stepTitle, inputFromStep: null, ingredients: ings }];
+}
+
+// Picks the unit string the builder UI should show for a parsed ingredient.
+// Prefers a recognised unit alias from UNITS (so the existing select reflects
+// it correctly); otherwise falls back to the raw scraper text or 'tsp'.
+function _unitDisplayFromParsed(parsed) {
+  const raw = (parsed.unitRaw || '').toLowerCase().trim();
+  if (!raw) return 'tsp';
+  const exact = UNITS.find(u => u.toLowerCase() === raw);
+  if (exact) return exact;
+  // Match common pluralisations / abbreviations to known UNITS.
+  const map = {
+    teaspoon: 'tsp', teaspoons: 'tsp', tsps: 'tsp',
+    tablespoon: 'tbsp', tablespoons: 'tbsp', tbsps: 'tbsp',
+    cups: 'cup', grams: 'g', kg: 'g', kilogram: 'g', kilograms: 'g',
+    ounce: 'oz', ounces: 'oz', pound: 'oz', pounds: 'oz',
+    cloves: 'clove', pieces: 'piece',
+  };
+  return map[raw] || raw;
+}
+
 async function builderSave() {
   const b = state.builder;
   b.saving = true;
@@ -325,7 +423,12 @@ async function builderSave() {
           inputFromStep: s.inputFromStep || null,
           ingredients: s.ingredients
             .filter(i => i.name.trim() && parseFloat(i.amount) > 0)
-            .map(i => ({ name: i.name.trim(), amount: parseFloat(i.amount), unit: i.unit })),
+            .map(i => ({
+              name: i.name.trim(),
+              amount: parseFloat(i.amount),
+              unit: i.unit,
+              originalText: i.originalText || `${i.amount} ${i.unit} ${i.name}`.trim(),
+            })),
         }))
         .filter(s => s.ingredients.length > 0),
     };
