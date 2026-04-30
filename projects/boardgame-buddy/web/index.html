@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app" class="max-w-lg mx-auto min-h-screen flex flex-col pb-20">
+  <div id="app" class="max-w-[480px] mx-auto min-h-screen flex flex-col pb-20">
 
     <!-- Top bar -->
     <header class="hidden sticky top-0 z-30 bg-base-100/95 backdrop-blur px-4 py-3 flex items-center justify-between border-b border-base-300" data-auth-only>
@@ -84,7 +84,7 @@
       </div>
       <!-- Collection controls (hidden on wishlist tab) -->
       <div class="flex items-center gap-2 mb-3" id="closet-controls">
-        <input type="text" id="closet-search" class="input input-bordered input-sm flex-1" placeholder="Search your games..." />
+        <input type="text" id="closet-search" class="input input-bordered input-sm flex-1 min-w-0" placeholder="Search your games..." />
         <select id="closet-sort" class="select select-bordered select-sm">
           <option value="alphabetical">A → Z</option>
           <option value="last_played">Last Played</option>
@@ -153,33 +153,37 @@
       <form method="dialog" class="modal-backdrop"><button>close</button></form>
     </dialog>
 
-    <!-- Bottom Navigation: Browse | Closet | Play Log -->
-    <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
-      <button data-nav="browse">
-        <i data-lucide="search" class="w-5 h-5"></i>
-        <span class="btm-nav-label text-xs">Browse</span>
-      </button>
-      <button data-nav="closet" class="active">
-        <i data-lucide="library-big" class="w-5 h-5"></i>
-        <span class="btm-nav-label text-xs">Closet</span>
-      </button>
-      <button data-nav="history">
-        <i data-lucide="history" class="w-5 h-5"></i>
-        <span class="btm-nav-label text-xs">Play Log</span>
-      </button>
-    </nav>
-
-    <!-- Global Log-a-Play bubble: FAB + expandable session panel -->
-    <!-- Panel + backdrop are toggled by session.js via sessionExpanded; the
-         FAB itself uses data-auth-only so it appears on every authed view. -->
-    <div id="session-backdrop" class="session-backdrop hidden"
-         onclick="minimizeSession()"></div>
-    <div id="session-panel" class="session-panel hidden"></div>
-    <button id="session-fab" class="fab-log-play hidden" data-auth-only
-            aria-label="Log a play" onclick="toggleSessionBubble()">
-      <i data-lucide="plus" class="w-6 h-6"></i>
-    </button>
   </div>
+
+  <!-- Bottom Navigation: Browse | Closet | Play Log
+       Lives outside #app so its fixed positioning is relative to the viewport
+       regardless of #app's max-width / centering. -->
+  <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
+    <button data-nav="browse">
+      <i data-lucide="search" class="w-5 h-5"></i>
+      <span class="btm-nav-label text-xs">Browse</span>
+    </button>
+    <button data-nav="closet" class="active">
+      <i data-lucide="library-big" class="w-5 h-5"></i>
+      <span class="btm-nav-label text-xs">Closet</span>
+    </button>
+    <button data-nav="history">
+      <i data-lucide="history" class="w-5 h-5"></i>
+      <span class="btm-nav-label text-xs">Play Log</span>
+    </button>
+  </nav>
+
+  <!-- Global Log-a-Play bubble: FAB + expandable session panel.
+       Panel + backdrop are toggled by session.js via sessionExpanded; the
+       FAB itself uses data-auth-only so it appears on every authed view.
+       All three sit at body root so fixed positioning anchors to the viewport. -->
+  <div id="session-backdrop" class="session-backdrop hidden"
+       onclick="minimizeSession()"></div>
+  <div id="session-panel" class="session-panel hidden"></div>
+  <button id="session-fab" class="fab-log-play hidden" data-auth-only
+          aria-label="Log a play" onclick="toggleSessionBubble()">
+    <i data-lucide="plus" class="w-6 h-6"></i>
+  </button>
 
   <!-- Scripts: load order matters -->
   <script src="config.js"></script>
