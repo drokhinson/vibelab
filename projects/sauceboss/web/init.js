@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Category classification: click chip
   appEl.addEventListener('click', e => {
-    const catChip = e.target.closest('.category-chip[data-classify-cat]');
+    const catChip = e.target.closest('.builder-chip[data-classify-cat]');
     if (catChip) {
       const si = parseInt(catChip.dataset.step);
       const ii = parseInt(catChip.dataset.ing);
@@ -144,9 +144,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           div.className = 'category-classify';
           div.innerHTML = `
             <span class="category-classify-label">Classify "${ing.name.trim()}":</span>
-            <div class="category-chips">
+            <div class="builder-chip-row">
               ${CATEGORY_ORDER.map(cat =>
-                `<button class="category-chip" data-classify-cat="${cat}" data-step="${si}" data-ing="${ii}">${cat}</button>`
+                `<button class="builder-chip" data-classify-cat="${cat}" data-step="${si}" data-ing="${ii}">${cat}</button>`
               ).join('')}
             </div>`;
           wrap.appendChild(div);

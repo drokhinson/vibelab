@@ -6,8 +6,8 @@ function renderBuilder() {
   const esc = s => (s || '').replace(/"/g, '&quot;');
 
   const cuisineChips = availableCuisines().map(c =>
-    `<button class="cuisine-chip ${!b.cuisineDraftMode && b.cuisine === c.name ? 'selected' : ''}" onclick="builderSetCuisine('${c.name.replace(/'/g, "\\'")}','${c.emoji}')">${renderEmoji(c.emoji)} ${c.name}</button>`
-  ).join('') + `<button class="cuisine-chip ${b.cuisineDraftMode ? 'selected' : ''}" onclick="builderStartNewCuisine()">+ New cuisine…</button>`;
+    `<button class="builder-chip ${!b.cuisineDraftMode && b.cuisine === c.name ? 'selected' : ''}" onclick="builderSetCuisine('${c.name.replace(/'/g, "\\'")}','${c.emoji}')">${renderEmoji(c.emoji)} ${c.name}</button>`
+  ).join('') + `<button class="builder-chip ${b.cuisineDraftMode ? 'selected' : ''}" onclick="builderStartNewCuisine()">+ New cuisine…</button>`;
 
   const newCuisineInputs = b.cuisineDraftMode ? `
     <div class="new-cuisine-row">
@@ -25,7 +25,7 @@ function renderBuilder() {
   ).join('');
 
   const sauceTypeChips = SAUCE_TYPES.map(t =>
-    `<button class="cuisine-chip ${b.sauceType === t.value ? 'selected' : ''}" onclick="builderSetSauceType('${t.value}')">${t.label}</button>`
+    `<button class="builder-chip ${b.sauceType === t.value ? 'selected' : ''}" onclick="builderSetSauceType('${t.value}')">${t.label}</button>`
   ).join('');
 
   const stepsHTML = b.steps.map((step, si) => {
@@ -53,9 +53,9 @@ function renderBuilder() {
       const categoryChips = needsCategory ? `
         <div class="category-classify">
           <span class="category-classify-label">Classify "${ing.name.trim()}":</span>
-          <div class="category-chips">
+          <div class="builder-chip-row">
             ${CATEGORY_ORDER.map(cat =>
-              `<button class="category-chip" data-classify-cat="${cat}" data-step="${si}" data-ing="${ii}">${cat}</button>`
+              `<button class="builder-chip" data-classify-cat="${cat}" data-step="${si}" data-ing="${ii}">${cat}</button>`
             ).join('')}
           </div>
         </div>` : '';
@@ -119,9 +119,9 @@ function renderBuilder() {
         <textarea class="builder-input builder-description-input" placeholder="Description (optional)" data-builder-field="description">${esc(b.description || '')}</textarea>
         <input class="builder-input" type="url" placeholder="Source URL (optional)" value="${esc(b.sourceUrl || '')}" data-builder-field="source-url">
         <p class="builder-label">Type</p>
-        <div class="cuisine-chips">${sauceTypeChips}</div>
+        <div class="builder-chip-row">${sauceTypeChips}</div>
         <p class="builder-label">Cuisine</p>
-        <div class="cuisine-chips">${cuisineChips}</div>
+        <div class="builder-chip-row">${cuisineChips}</div>
         ${newCuisineInputs}
         <p class="builder-label">Color</p>
         <div class="color-swatches">${colorDots}</div>
