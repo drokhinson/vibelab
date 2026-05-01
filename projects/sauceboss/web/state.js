@@ -58,6 +58,11 @@ const COUNT_UNITS  = new Set(['clove', 'cloves', 'piece', 'pieces', 'pinch']);
 
 const CATEGORY_ORDER = ['Produce', 'Dairy', 'Oils & Fats', 'Sauces & Condiments', 'Broths', 'Spices', 'Sweeteners', 'Nuts & Seeds', 'Pantry Staples'];
 
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+let supabaseClient = null;
+let session = null;          // Supabase auth session (full JWT) or null
+let currentUser = null;      // { user_id, display_name, is_admin } or null
+
 // ─── Global state ─────────────────────────────────────────────────────────────
 let state = {
   // ── Current screen ──────────────────────────────────────────────────────────
@@ -91,11 +96,19 @@ let state = {
     sauce: null,                // the chosen sauce (sauce / marinade / dressing)
   },
 
+  // ── Favorites (set populated on sign-in) ───────────────────────────────────
+  favorites: new Set(),         // sauce ids the current user has favorited
+  favoritesOnly: false,         // toggle for the sauce-selector "❤️ Favorites only" filter
+  authModalOpen: false,         // sign-in modal visibility
+  authMode: 'login',            // 'login' | 'signup'
+  authBusy: false,
+  authError: null,
+  becomeAdminBusy: false,
+  becomeAdminError: null,
+
   // ── Admin / builder ─────────────────────────────────────────────────────────
   builder: null,
-  adminKey: null,
   adminSauces: [],
-  adminLoading: false,
   adminError: null,
   adminSaucesLoading: false,                                       // tab-scoped loaders for sauce manager
   adminItemsLoading: false,
@@ -127,5 +140,6 @@ function defaultBuilder() {
     pendingCategories: [],
     importUrl: '', importing: false, importError: null,
     cuisineDraftMode: false, cuisineDraftName: '', cuisineDraftEmoji: '',
+    editingId: null,             // when set, builderSave PATCHes instead of POSTing
   };
 }

@@ -1,7 +1,7 @@
 # SauceBoss — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-03-17
+> Last updated: 2026-05-01
 
 ## What This App Does
 SauceBoss is a recipe companion for sauces, dressings, and marinades. The app has three tabs:
@@ -25,7 +25,7 @@ All paths share the same recipe experience: step-by-step cooking cards with pie 
 | Backend | Python FastAPI (shared service) | `shared-backend/routes/sauceboss.py` |
 | Database | Supabase (shared project) | Tables prefixed `sauceboss_` |
 | Native app | React Native 0.74 / Expo 51 | `projects/sauceboss/app/` |
-| Auth | None | Not required — read-only app |
+| Auth | Supabase Auth (email + Google + Apple) | Optional — app is read-only without sign-in. Signed-in users can add sauces / ingredients, mark favorites, edit their own sauces. Admins (single-time `ADMIN_API_KEY` claim) can edit anything. |
 | Storage | None | Not required |
 
 ## Directory Layout
@@ -78,14 +78,20 @@ All tables prefixed `sauceboss_` in the shared Supabase project.
 - **sauceboss_foods** — One row per distinct ingredient food (migration 063). Auto-populated by `create_sauceboss_sauce` via `INSERT ... ON CONFLICT (name_normalized)`. Columns: `id`, `name`, `plural`, `name_normalized`, `aliases`. **No density column for v1** — see `routes/sauceboss/units.py::DENSITY_TODO` for the wet↔dry conversion follow-up.
 - **sauceboss_ingredient_categories** — Maps ingredient names to filter panel categories.
 - **sauceboss_ingredient_substitutions** — Substitution suggestions shown when an ingredient is marked unavailable.
+- **sauceboss_profiles** (migration 003) — Supabase-Auth-backed user profiles. Columns: `id` (UUID FK→auth.users), `display_name`, `avatar_url`, `is_admin`, `created_at`. Mirrors the boardgamebuddy_profiles pattern.
+- **sauceboss_favorites** (migration 003) — Per-user sauce favorites (composite PK `user_id`+`sauce_id`).
+- `sauceboss_sauces.created_by` (migration 003) — UUID FK→auth.users, set when a user submits a sauce. Never displayed; powers the owner-only edit gate.
 
-**RPCs** (defined in `db/migrations/sauceboss/001_baseline.sql`):
+**RPCs** (defined in `db/migrations/sauceboss/001_baseline.sql`, with migration 003 amending the sauce-related ones):
 - `get_sauceboss_initial_load()` — `{ carbs, proteins, saladBases }` for the home screen (one round-trip).
 - `get_sauceboss_item_load(p_item_id text)` — `{ item, variants, sauces, ingredients }` for any selection screen (one round-trip).
 - `get_sauceboss_items_by_category(p_category text)` — Type rows for one category, with sauce count. Used by `initial_load`.
-- `get_sauceboss_sauces_for_item(p_item_id text)` — Fully assembled sauces linked to an item.
+- `get_sauceboss_sauces_for_item(p_item_id text)` — Fully assembled sauces linked to an item. Emits `createdBy` (003).
 - `get_sauceboss_variants_for_item(p_item_id text)` — Child rows (parent_id = p_item_id).
 - `get_sauceboss_ingredients_for_item(p_item_id text)` — Sorted unique ingredient names across linked sauces.
+- `get_sauceboss_all_sauces[ _full ]()` — Sauce manager listings. Emit `createdBy` (003).
+- `create_sauceboss_sauce(p_data)` — Now accepts `p_data->>'createdBy'` (003).
+- `update_sauceboss_sauce(p_data)` (003) — Atomic full-replace of a sauce's scalar fields, item links, steps, and step ingredients. Preserves `created_by`. Authorization is enforced upstream.
 
 ## API Endpoints
 All served by `shared-backend/routes/sauceboss/` at prefix `/api/v1/sauceboss`.
@@ -95,9 +101,21 @@ All served by `shared-backend/routes/sauceboss/` at prefix `/api/v1/sauceboss`.
 | GET | `/api/v1/sauceboss/health` | None | Health check |
 | GET | `/api/v1/sauceboss/initial-load` | None | Carbs, proteins, and salad bases for the home screen |
 | GET | `/api/v1/sauceboss/items/{item_id}/load` | None | Variants, sauces, and ingredients for any item |
+| GET | `/api/v1/sauceboss/sauces` | None | All sauces with steps + ingredients (sauce manager). |
+| POST | `/api/v1/sauceboss/sauces` | JWT | Create a sauce. Stores `created_by = current user`. |
+| PATCH | `/api/v1/sauceboss/sauces/{sauce_id}` | JWT (owner OR admin) | Atomic full replace of an existing sauce. |
 | POST | `/api/v1/sauceboss/import` | None | Mealie-style URL → recipe parser. Body `{url}`; returns a draft (does not persist). |
 | GET | `/api/v1/sauceboss/units` | None | Unit registry — id/name/plural/abbreviation/dimension/conversion factors. |
 | GET | `/api/v1/sauceboss/foods` | None | Foods typeahead (`?q=`, `?limit=`) for the builder ingredient field. |
+| GET | `/api/v1/sauceboss/profile` | JWT | Current user's profile (404 if missing). |
+| POST | `/api/v1/sauceboss/profile` | JWT | Upsert `display_name` (auto-called on first login). |
+| POST | `/api/v1/sauceboss/profile/become-admin` | JWT | Body `{admin_key}`. Compared to env `ADMIN_API_KEY`; sets `is_admin=true`. |
+| DELETE | `/api/v1/sauceboss/profile` | JWT | Delete current user's profile. Cascades to favorites; sauces' `created_by` becomes NULL. |
+| GET | `/api/v1/sauceboss/favorites` | JWT | List the user's favorited sauce IDs. |
+| PUT | `/api/v1/sauceboss/favorites/{sauce_id}` | JWT | Idempotently mark a sauce as favorite. |
+| DELETE | `/api/v1/sauceboss/favorites/{sauce_id}` | JWT | Idempotently remove a favorite. |
+| POST | `/api/v1/sauceboss/admin/foods` | JWT | Add an ingredient (any logged-in user). |
+| * | `/api/v1/sauceboss/admin/*` | JWT + `is_admin` | Item / sauce / food management (rename, delete, merge). |
 
 ## Screen / Page Flow
 ```
@@ -128,9 +146,10 @@ index.html
 ## Environment Variables
 | Variable | Used In | Purpose |
 |---|---|---|
-| `SUPABASE_URL` | shared-backend (Railway) | Supabase project URL |
+| `SUPABASE_URL` | shared-backend (Railway) | Supabase project URL — also used by `jwt_auth.py` to verify Supabase-issued JWTs via JWKS. |
 | `SUPABASE_SERVICE_ROLE_KEY` | shared-backend (Railway) | Server-side DB access |
-| `SUPABASE_ANON_KEY` | web/config.js (Vercel) | Client-side access (if needed) |
+| `VIBELAB_SUPABASE_URL` / `VIBELAB_SUPABASE_ANON_KEY` | web `build.sh` (GitHub Secrets) | Injected into `web/config.js` at deploy time so the Supabase JS client can sign users in. |
+| `ADMIN_API_KEY` | shared-backend (Railway) | Single-time admin-claim secret. Compared in `POST /profile/become-admin`. |
 | `ALLOWED_ORIGINS` | shared-backend (Railway) | Comma-separated CORS origins (add Vercel URL here) |
 | `EXPO_PUBLIC_API_URL` | app/.env | Railway backend URL for React Native |
 
@@ -161,6 +180,7 @@ npx expo start
 ## Active Development Notes
 - 2026-03-13 — Retrofitted into vibelab monorepo. Files moved: HtmlPrototype/ → web/, App/ → app/.
 - 2026-05-01 — Consolidated 29 sequential migrations into `db/migrations/sauceboss/001_baseline.sql` + `002_seed.sql`. Legacy carbs/addons/salad_bases tables and the `scripts/generate_seed_sql.js` pipeline are no longer used; populate the sauce/item catalog from a production data dump or via the in-app Sauce Manager.
+- 2026-05-01 — Added user accounts (migration 003). Supabase Auth (email/Google/Apple) gates the write surface; signed-in users can add sauces / ingredients, mark favorites, and edit their own sauces. Admins (claim via `ADMIN_API_KEY`) can edit/delete anything. The legacy bearer-key admin flow is removed — every `/admin/*` endpoint now uses the `get_current_admin()` dependency, except `POST /admin/foods` which is open to any logged-in user. Sauce ownership lives in `sauceboss_sauces.created_by` and is never displayed.
 - TODO: Create Supabase project, run `db/migrations/sauceboss/001_baseline.sql` then `002_seed.sql`, then `db/migrations/_shared/*` (see `db/migrations/README.md`)
 - TODO: Create Railway service, set env vars, deploy shared-backend
 - TODO: Update `web/app.js` to use fetch() instead of window.SAUCE_DATA (remove saucedata.js)

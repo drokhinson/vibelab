@@ -110,7 +110,7 @@ function renderBuilder() {
     <div class="status-bar"></div>
     <div class="app-header">
       <button class="back-btn" onclick="navigate('admin')">‹ Back</button>
-      <div class="logo"><span>🍲</span>Create a Sauce</div>
+      <div class="logo"><span>🍲</span>${b.editingId ? 'Edit Sauce' : 'Create a Sauce'}</div>
     </div>
     <div class="scroll-body">
       <div class="builder-sticky-header">
@@ -213,6 +213,7 @@ function renderBuilderReview() {
 
 // ─── Builder Actions ──────────────────────────────────────────────────────────
 function openBuilder() {
+  if (!currentUser) { openAuthModal(); return; }
   state.builder = defaultBuilder();
   navigate('builder');
 }
@@ -577,7 +578,11 @@ async function builderSave() {
         }))
         .filter(s => s.ingredients.length > 0),
     };
-    await createSauce(payload);
+    if (b.editingId) {
+      await updateSauce(b.editingId, payload);
+    } else {
+      await createSauce(payload);
+    }
     state.builder = null;
     await openSauceManager();
   } catch (err) {

@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauces (
   color         TEXT NOT NULL,
   description   TEXT NOT NULL,
   source_url    TEXT,                    -- optional URL the sauce was imported from (migration 066)
-  sauce_type    TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade'))
+  sauce_type    TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade')),
+  created_by    UUID REFERENCES auth.users(id) ON DELETE SET NULL  -- migration 003: author of user-submitted sauces
 );
 ALTER TABLE public.sauceboss_sauces ENABLE ROW LEVEL SECURITY;
 
@@ -145,3 +146,32 @@ ALTER TABLE public.sauceboss_ingredient_substitutions ENABLE ROW LEVEL SECURITY;
 --   list_sauceboss_foods_with_usage()         → foods with recipe usage counts
 --   merge_sauceboss_foods(keep, merge_ids[])  → atomic merge + repoint
 --   delete_sauceboss_food_safe(id)            → returns usage count, refuses if >0
+
+-- ── User accounts (migration 003) ───────────────────────────────────────────
+-- Supabase-Auth-backed profiles, per-user favorites, and sauce ownership.
+-- Mirrors the boardgamebuddy_profiles pattern; a single global ADMIN_API_KEY
+-- promotes a profile to admin via POST /api/v1/sauceboss/profile/become-admin.
+CREATE TABLE IF NOT EXISTS public.sauceboss_profiles (
+  id           UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
+  avatar_url   TEXT,
+  is_admin     BOOLEAN NOT NULL DEFAULT false,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.sauceboss_profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.sauceboss_favorites (
+  user_id    UUID NOT NULL REFERENCES public.sauceboss_profiles(id) ON DELETE CASCADE,
+  sauce_id   TEXT NOT NULL REFERENCES public.sauceboss_sauces(id)   ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, sauce_id)
+);
+ALTER TABLE public.sauceboss_favorites ENABLE ROW LEVEL SECURITY;
+
+-- ── Sauce edit RPC (migration 003) ──────────────────────────────────────────
+--   update_sauceboss_sauce(p_data)  → atomic full-replace of scalar fields,
+--                                     item links, steps, and step ingredients
+--                                     (preserves created_by). Authorization
+--                                     (owner or admin) enforced upstream.
+-- Read RPCs (get_sauceboss_sauces_for_item, get_sauceboss_all_sauces,
+-- get_sauceboss_all_sauces_full) now emit `createdBy` in their JSON output.

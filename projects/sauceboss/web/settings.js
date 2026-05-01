@@ -17,26 +17,57 @@ function scrollFormIntoView() {
 
 // ─── Settings / Admin Screens ─────────────────────────────────────────────────
 function renderSettings() {
+  if (!currentUser) {
+    return `
+      <div class="status-bar"></div>
+      <div class="app-header">
+        <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
+        <div class="logo"><span><i data-lucide="key-round"></i></span>Become Admin</div>
+        <div class="subtitle">Sign in first to claim admin rights</div>
+      </div>
+      <div class="scroll-body">
+        <div class="settings-form">
+          <p>You need to sign in before you can become an admin.</p>
+          <button class="builder-primary-btn" onclick="openAuthModal()">Sign in</button>
+        </div>
+      </div>
+    `;
+  }
+  if (currentUser.is_admin) {
+    return `
+      <div class="status-bar"></div>
+      <div class="app-header">
+        <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
+        <div class="logo"><span><i data-lucide="shield-check"></i></span>You're an admin</div>
+      </div>
+      <div class="scroll-body">
+        <div class="settings-form">
+          <p>You already have admin rights — open the Sauce Manager to edit anything.</p>
+          <button class="builder-primary-btn" onclick="navigate('admin')">Open Sauce Manager</button>
+        </div>
+      </div>
+    `;
+  }
   return `
     <div class="status-bar"></div>
     <div class="app-header">
       <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo"><span><i data-lucide="settings-2"></i></span>Admin Login</div>
-      <div class="subtitle">Enter the admin password to manage sauces</div>
+      <div class="logo"><span><i data-lucide="key-round"></i></span>Become Admin</div>
+      <div class="subtitle">Enter the shared admin key to unlock full edit rights</div>
     </div>
     <div class="scroll-body">
       <div class="settings-form">
         <input
-          id="admin-password-input"
+          id="admin-key-input"
           type="password"
           class="builder-input settings-password-input"
-          placeholder="Admin password"
-          autocomplete="current-password"
-          onkeydown="if(event.key==='Enter') submitAdminPassword()"
+          placeholder="Admin key"
+          autocomplete="off"
+          onkeydown="if(event.key==='Enter') submitBecomeAdmin()"
         >
-        ${state.adminError ? `<div class="settings-error">${state.adminError}</div>` : ''}
-        <button class="builder-primary-btn" onclick="submitAdminPassword()" id="settings-submit-btn">
-          ${state.adminLoading ? '<span class="spinner-sm"></span> Verifying…' : 'Enter'}
+        ${state.becomeAdminError ? `<div class="settings-error">${state.becomeAdminError}</div>` : ''}
+        <button class="builder-primary-btn" onclick="submitBecomeAdmin()" id="settings-submit-btn">
+          ${state.becomeAdminBusy ? '<span class="spinner-sm"></span> Promoting…' : 'Become admin'}
         </button>
       </div>
     </div>
@@ -44,7 +75,8 @@ function renderSettings() {
 }
 
 function renderAdmin() {
-  const isAdmin = !!state.adminKey;
+  const isAdmin = !!(currentUser && currentUser.is_admin);
+  const isLoggedIn = !!currentUser;
   const tab = state.sauceManagerTab || 'sauces';
   const search = state.sauceManagerSearch || '';
   const typeFilter = state.sauceManagerTypeFilter || 'all';
@@ -84,8 +116,8 @@ function renderAdmin() {
     </div>` : '';
 
   let bodyHTML = '';
-  if (tab === 'sauces') bodyHTML = renderSaucesTab(isAdmin);
-  else if (tab === 'ingredients') bodyHTML = renderIngredientsTab(isAdmin);
+  if (tab === 'sauces') bodyHTML = renderSaucesTab(isAdmin, isLoggedIn);
+  else if (tab === 'ingredients') bodyHTML = renderIngredientsTab(isAdmin, isLoggedIn);
   else bodyHTML = renderDishTab(isAdmin);
 
   return `
@@ -93,8 +125,9 @@ function renderAdmin() {
     <div class="app-header">
       <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span><i data-lucide="settings-2"></i></span>Sauce Manager</div>
-      <div class="subtitle">${isAdmin ? 'Admin mode' : ''}</div>
-      ${!isAdmin ? `<button class="settings-btn" onclick="openSettings()" title="Admin login"><i data-lucide="key-round"></i></button>` : ''}
+      <div class="subtitle">${isAdmin ? 'Admin mode' : (isLoggedIn ? 'Signed in' : '')}</div>
+      ${renderHeaderAuthSlot()}
+      ${isLoggedIn && !isAdmin ? `<button class="settings-btn" onclick="openSettings()" title="Become admin"><i data-lucide="key-round"></i></button>` : ''}
     </div>
     ${state.adminError ? `<div class="settings-error" style="margin:8px 16px">${state.adminError}</div>` : ''}
     ${tabBar}
@@ -103,12 +136,12 @@ function renderAdmin() {
     <div class="scroll-body">
       ${bodyHTML}
     </div>
-    ${tab === 'sauces' ? `
+    ${tab === 'sauces' && isLoggedIn ? `
       <button class="fab" aria-label="Add a sauce" onclick="openBuilder()">
         <i data-lucide="plus"></i>
       </button>
     ` : ''}
-    ${tab === 'ingredients' && isAdmin && !state.foodMerge && !state.foodForm ? `
+    ${tab === 'ingredients' && isLoggedIn && !state.foodMerge && !state.foodForm ? `
       <button class="fab" aria-label="Add ingredient" onclick="openFoodForm()">
         <i data-lucide="plus"></i>
       </button>
@@ -116,7 +149,7 @@ function renderAdmin() {
   `;
 }
 
-function renderSaucesTab(isAdmin) {
+function renderSaucesTab(isAdmin, isLoggedIn) {
   if (state.adminSaucesLoading) return tabLoadingHTML('Loading sauces…');
 
   const typeFilter = state.sauceManagerTypeFilter || 'all';
@@ -155,6 +188,9 @@ function renderSaucesTab(isAdmin) {
       const safeName = s.name.replace(/'/g, "\\'");
       const typeValue = s.sauceType || 'sauce';
       const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
+      const isOwner = !!(currentUser && s.createdBy === currentUser.user_id);
+      const canEdit = isAdmin || isOwner;
+      const canDelete = isAdmin;  // delete remains admin-only
       const inner = `
         <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
         <div class="admin-sauce-info">
@@ -162,16 +198,16 @@ function renderSaucesTab(isAdmin) {
           <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
         </div>
         <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>`;
-      if (!isAdmin) {
+      if (!canEdit && !canDelete) {
         return `<div class="admin-sauce-row" onclick="selectSauceFromManager('${s.id}')">${inner}</div>`;
       }
       return `
         <div class="swipe-row" data-swipe
              data-tap-action="selectSauceFromManager('${s.id}')"
-             data-edit-action="openBuilderEdit('${s.id}')"
-             data-delete-action="adminDeleteSauce('${s.id}', '${safeName}')">
-          <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
-          <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
+             ${canEdit ? `data-edit-action="openBuilderEdit('${s.id}')"` : ''}
+             ${canDelete ? `data-delete-action="adminDeleteSauce('${s.id}', '${safeName}')"` : ''}>
+          ${canEdit ? '<div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>' : ''}
+          ${canDelete ? '<div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>' : ''}
           <div class="swipe-content admin-sauce-row">${inner}</div>
         </div>`;
     }).join('') : '';
@@ -472,15 +508,19 @@ function selectSauceFromManager(id) {
 }
 
 function openBuilderEdit(id) {
-  const sauce = state.adminSauces.find(s => s.id === id);
+  if (!currentUser) { openAuthModal(); return; }
+  const sauce = (state.adminSauces || []).find(s => s.id === id)
+             || (state.saucesForCurrentItem || []).find(s => s.id === id);
   if (!sauce) return;
   state.builder = {
     ...defaultBuilder(),
+    editingId: sauce.id,
     name: sauce.name,
     cuisine: sauce.cuisine,
     cuisineEmoji: sauce.cuisineEmoji || '',
     color: sauce.color || '#E85D04',
     description: sauce.description || '',
+    sourceUrl: sauce.sourceUrl || '',
     sauceType: sauce.sauceType || 'sauce',
     itemIds: sauce.compatibleItems || [],
     steps: (sauce.steps || []).map(s => ({
@@ -494,24 +534,29 @@ function openBuilderEdit(id) {
   navigate('builder');
 }
 
-// ─── Admin Auth ───────────────────────────────────────────────────────────────
-async function submitAdminPassword() {
-  const input = document.getElementById('admin-password-input');
+// ─── Become Admin ─────────────────────────────────────────────────────────────
+async function submitBecomeAdmin() {
+  if (!currentUser) { openAuthModal(); return; }
+  const input = document.getElementById('admin-key-input');
   if (!input || !input.value.trim()) return;
   const key = input.value.trim();
-  state.adminLoading = true;
-  state.adminError = null;
+  state.becomeAdminBusy = true;
+  state.becomeAdminError = null;
   render();
   try {
-    await fetchAdminSauces(key); // verify the key
-    state.adminKey = key;
-    state.adminLoading = false;
-    state.adminError = null;
+    const profile = await becomeAdmin(key);
+    currentUser = {
+      user_id: profile.id,
+      display_name: profile.display_name,
+      is_admin: !!profile.is_admin,
+    };
+    state.becomeAdminBusy = false;
+    state.becomeAdminError = null;
     navigate('admin');
   } catch (err) {
-    state.adminLoading = false;
-    state.adminError = err.message.includes('403') || err.message.includes('401')
-      ? 'Incorrect password. Try again.'
+    state.becomeAdminBusy = false;
+    state.becomeAdminError = err.message.includes('403') || err.message.includes('401')
+      ? 'Incorrect admin key. Try again.'
       : `Error: ${err.message}`;
     render();
   }
@@ -521,7 +566,7 @@ async function submitAdminPassword() {
 async function adminDeleteSauce(id, name) {
   if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
   try {
-    await deleteAdminSauce(id, state.adminKey);
+    await deleteAdminSauce(id);
     state.adminSauces = state.adminSauces.filter(s => s.id !== id);
     state.adminError = null;
     render();
@@ -639,11 +684,11 @@ async function adminSaveItemAction() {
   }
   try {
     if (f.mode === 'edit') {
-      await adminUpdateItem(f.id, payload, state.adminKey);
+      await adminUpdateItem(f.id, payload);
     } else {
       payload.category = f.category;
       payload.parentId = f.parentId || null;
-      await adminCreateItem(payload, state.adminKey);
+      await adminCreateItem(payload);
     }
     await refreshAdminItems();
     state.itemForm = null;
@@ -661,7 +706,7 @@ async function adminDeleteItemAction(id, name, hasVariants) {
     : `Delete "${name}"? This cannot be undone.`;
   if (!confirm(warn)) return;
   try {
-    await adminDeleteItem(id, state.adminKey);
+    await adminDeleteItem(id);
     if (state.itemForm && state.itemForm.id === id) state.itemForm = null;
     delete state.expandedParents[id];
     await refreshAdminItems();
@@ -672,14 +717,16 @@ async function adminDeleteItemAction(id, name, hasVariants) {
 }
 
 // ─── Ingredients tab ─────────────────────────────────────────────────────────
-function renderIngredientsTab(isAdmin) {
+function renderIngredientsTab(isAdmin, isLoggedIn) {
   const foods = state.adminFoods || [];
   const q = (state.sauceManagerSearch || '').trim().toLowerCase();
   const merge = state.foodMerge;
   const form = state.foodForm;
   const filtered = q ? foods.filter(f => (f.name || '').toLowerCase().includes(q)) : foods;
 
-  const formHTML = isAdmin && form ? renderFoodForm() : '';
+  // Add form is available to any logged-in user. Edit form (rename) is admin-only.
+  const formVisible = form && (form.mode === 'add' ? isLoggedIn : isAdmin);
+  const formHTML = formVisible ? renderFoodForm() : '';
   const mergeHTML = isAdmin && merge ? renderMergePanel() : '';
 
   if (state.adminFoodsLoading) {
@@ -948,8 +995,8 @@ async function submitFoodForm() {
   render();
   try {
     const payload = { name, plural: (f.plural || '').trim() || null };
-    if (f.mode === 'edit') await adminUpdateFood(f.id, payload, state.adminKey);
-    else await adminCreateFood(payload, state.adminKey);
+    if (f.mode === 'edit') await adminUpdateFood(f.id, payload);
+    else await adminCreateFood(payload);
     if (resolvedCategory) {
       await classifyIngredient(name, resolvedCategory);
     }
@@ -969,7 +1016,7 @@ async function adminDeleteFoodAction(id, name, usage) {
   }
   if (!confirm(`Delete ingredient "${name}"? This cannot be undone.`)) return;
   try {
-    await adminDeleteFood(id, state.adminKey);
+    await adminDeleteFood(id);
     await refreshAdminFoods();
   } catch (err) {
     state.adminError = `Failed to delete: ${err.message}`;
@@ -1013,7 +1060,7 @@ async function submitFoodMerge() {
   merge.error = null;
   render();
   try {
-    await adminMergeFoods(merge.keepId, [...merge.mergeIds], state.adminKey);
+    await adminMergeFoods(merge.keepId, [...merge.mergeIds]);
     state.foodMerge = null;
     await refreshAdminFoods();
   } catch (err) {

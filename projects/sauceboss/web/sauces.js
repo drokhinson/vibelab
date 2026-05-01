@@ -14,10 +14,16 @@ function getSauceScreenContext() {
 
 function renderSauceSelector() {
   const ctx = getSauceScreenContext();
-  const { sauces } = ctx;
+  const allSauces = ctx.sauces;
+  const sauces = state.favoritesOnly && currentUser
+    ? allSauces.filter(s => state.favorites.has(s.id))
+    : allSauces;
   const cuisines = [...new Set(sauces.map(s => s.cuisine))];
   const missingCount = state.disabledIngredients.size;
   const categoryGroups = groupIngredientsByCategory();
+  const favCount = currentUser
+    ? allSauces.filter(s => state.favorites.has(s.id)).length
+    : 0;
 
   const chipHTML = (items) => items.map(({ name }) => {
     const has = !state.disabledIngredients.has(name);
@@ -56,6 +62,22 @@ function renderSauceSelector() {
         return sub ? `${m} (try ${sub})` : m;
       }).join(', ');
       const compatText = (sauce.compatibleItems || []).join(' · ');
+      const isFav = currentUser && state.favorites.has(sauce.id);
+      const canEdit = currentUser && (currentUser.is_admin || sauce.createdBy === currentUser.user_id);
+      const heartBtn = currentUser
+        ? `<button class="heart-btn ${isFav ? 'heart-btn--active' : ''}" data-auth-only
+                   onclick="event.stopPropagation(); toggleFavorite('${sauce.id}')"
+                   aria-label="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+             <i data-lucide="${isFav ? 'heart' : 'heart'}"></i>
+           </button>`
+        : '';
+      const editBtn = canEdit
+        ? `<button class="sauce-edit-btn"
+                   onclick="event.stopPropagation(); openBuilderEdit('${sauce.id}')"
+                   aria-label="Edit sauce">
+             <i data-lucide="pencil"></i>
+           </button>`
+        : '';
       return `<div class="sauce-item ${available ? '' : 'unavailable'}" onclick="selectSauce('${sauce.id}')">
         <span class="sauce-dot" style="background:${sauce.color}"></span>
         <div class="sauce-info">
@@ -63,6 +85,8 @@ function renderSauceSelector() {
           <div class="sauce-item-tags">${compatText}${missing.length ? ' · missing: '+missingText : ''}</div>
         </div>
         ${!available ? `<span class="sauce-missing-badge">-${missing.length}</span>` : ''}
+        ${heartBtn}
+        ${editBtn}
         <span class="sauce-arrow"><i data-lucide="chevron-right"></i></span>
       </div>`;
     }).join('') : '';
@@ -86,6 +110,17 @@ function renderSauceSelector() {
       <div class="subtitle">${sauces.length} options · select your style</div>
     </div>
     <div class="scroll-body">
+      ${currentUser ? `
+        <div class="favorites-pill-row" data-auth-only>
+          <button class="favorites-pill ${state.favoritesOnly ? 'favorites-pill--active' : ''}"
+                  onclick="toggleFavoritesOnly()"
+                  ${favCount === 0 && !state.favoritesOnly ? 'disabled' : ''}>
+            <i data-lucide="heart"></i>
+            ${state.favoritesOnly ? 'Favorites only' : 'Show favorites only'}
+            <span class="favorites-pill-count">${favCount}</span>
+          </button>
+        </div>
+      ` : ''}
       <p class="section-label">Ingredient filter</p>
       <div class="filter-panel">
         <button class="filter-header" onclick="toggleFilter()">
@@ -95,7 +130,7 @@ function renderSauceSelector() {
         ${filterBody}
       </div>
       <p class="section-label">Pick a recipe</p>
-      ${accordionHTML}
+      ${accordionHTML || '<p class="empty-hint">No sauces match this filter yet.</p>'}
     </div>
   `;
 }
@@ -122,5 +157,11 @@ function toggleIngredient(name) {
 function toggleCuisine(name) {
   if (state.expandedCuisines.has(name)) state.expandedCuisines.delete(name);
   else state.expandedCuisines.add(name);
+  render();
+}
+
+function toggleFavoritesOnly() {
+  if (!currentUser) { openAuthModal(); return; }
+  state.favoritesOnly = !state.favoritesOnly;
   render();
 }

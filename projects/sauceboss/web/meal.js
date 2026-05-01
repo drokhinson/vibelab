@@ -47,6 +47,7 @@ function renderMealBuilder() {
     <div class="app-header">
       <div class="logo"><span>🍲</span>SauceBoss</div>
       <div class="subtitle">What are you cooking with?</div>
+      ${renderHeaderAuthSlot()}
       <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager"><i data-lucide="settings-2"></i></button>
     </div>
     <div class="scroll-body">

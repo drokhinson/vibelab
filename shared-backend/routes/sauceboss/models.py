@@ -1,12 +1,39 @@
 """Pydantic request/response models for SauceBoss."""
 
 import logging
+from datetime import datetime
 from enum import StrEnum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
 logger = logging.getLogger("sauceboss")
+
+
+# ── User accounts (migration 003) ─────────────────────────────────────────────
+
+class ProfileCreate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=60)
+
+
+class ProfileResponse(BaseModel):
+    id: str
+    display_name: str
+    avatar_url: Optional[str] = None
+    is_admin: bool = False
+    created_at: Optional[datetime] = None
+
+
+class AdminKeyBody(BaseModel):
+    admin_key: str = Field(min_length=1)
+
+
+class FavoriteListResponse(BaseModel):
+    favorites: List[str]
+
+
+class MessageResponse(BaseModel):
+    message: str
 
 
 class ItemCategory(StrEnum):
@@ -57,6 +84,11 @@ class CreateSauceRequest(BaseModel):
     sauceType: SauceType = SauceType.SAUCE
     itemIds: List[str] = Field(min_length=1)
     steps: List[StepInput] = Field(min_length=1)
+
+
+class UpdateSauceRequest(CreateSauceRequest):
+    """Same shape as CreateSauceRequest; the path param identifies the sauce."""
+    pass
 
 
 # ── URL import ────────────────────────────────────────────────────────────────
