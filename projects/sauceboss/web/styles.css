@@ -1471,6 +1471,42 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 
 /* ─── Ingredients tab ──────────────────────────────────────────────── */
 .food-list { padding-bottom: 96px; }
+.ingredient-category-group { margin-top: 8px; }
+.ingredient-category-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #FFF7ED;
+  border-top: 1px solid #FED7AA;
+  border-bottom: 1px solid #FED7AA;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #92400E;
+}
+.ingredient-category-header:hover { background: #FFEDD5; }
+.ingredient-category-chevron {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  color: #C2410C;
+}
+.ingredient-category-name { flex: 1; }
+.ingredient-category-count {
+  background: #FED7AA;
+  color: #9A3412;
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ingredient-category-body { /* rows already have their own padding/borders */ }
 .food-row {
   padding: 10px 16px;
   border-top: 1px solid #f0e6d6;

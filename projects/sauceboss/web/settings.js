@@ -641,7 +641,9 @@ function renderIngredientsTab(isAdmin) {
     return `${formHTML}<p style="padding:16px;color:#888">No ingredients match your search.</p>`;
   }
 
-  const rowsHTML = filtered.map(f => renderFoodRow(f, isAdmin, merge)).join('');
+  const groups = groupFoodsByCategory(filtered);
+  const groupsHTML = groups.map(g => renderIngredientCategoryGroup(g, isAdmin, merge, !!q)).join('');
+
   const mergeBar = isAdmin && merge && merge.mergeIds.size > 0 ? `
     <div class="food-merge-bar">
       <span>${merge.mergeIds.size} selected to merge into <strong>${(foods.find(x => x.id === merge.keepId) || {}).name || '?'}</strong></span>
@@ -657,8 +659,53 @@ function renderIngredientsTab(isAdmin) {
   return `
     ${formHTML}
     ${mergeHTML}
-    <div class="food-list">${rowsHTML}</div>
+    <div class="food-list">${groupsHTML}</div>
     ${mergeBar}`;
+}
+
+function groupFoodsByCategory(foods) {
+  const UNCATEGORIZED = 'Uncategorized';
+  const buckets = {};
+  for (const f of foods) {
+    const cat = state.ingredientCategories[(f.name || '').toLowerCase()] || UNCATEGORIZED;
+    if (!buckets[cat]) buckets[cat] = [];
+    buckets[cat].push(f);
+  }
+
+  const ordered = [];
+  for (const c of CATEGORY_ORDER) {
+    if (buckets[c]) { ordered.push({ category: c, items: buckets[c] }); delete buckets[c]; }
+  }
+  const userDefined = Object.keys(buckets)
+    .filter(c => c !== UNCATEGORIZED)
+    .sort((a, b) => a.localeCompare(b));
+  for (const c of userDefined) ordered.push({ category: c, items: buckets[c] });
+  if (buckets[UNCATEGORIZED]) ordered.push({ category: UNCATEGORIZED, items: buckets[UNCATEGORIZED] });
+  return ordered;
+}
+
+function renderIngredientCategoryGroup(group, isAdmin, merge, forceOpen) {
+  const { category, items } = group;
+  const explicitlyClosed = state.ingredientSections[category] === false;
+  const open = forceOpen || !explicitlyClosed;
+  const chevron = open ? '▾' : '▸';
+  const safeCat = category.replace(/'/g, "\\'");
+  const rowsHTML = open ? items.map(f => renderFoodRow(f, isAdmin, merge)).join('') : '';
+  return `
+    <div class="ingredient-category-group">
+      <div class="ingredient-category-header" onclick="toggleIngredientSection('${safeCat}')">
+        <span class="ingredient-category-chevron">${chevron}</span>
+        <span class="ingredient-category-name">${category}</span>
+        <span class="ingredient-category-count">${items.length}</span>
+      </div>
+      ${open ? `<div class="ingredient-category-body">${rowsHTML}</div>` : ''}
+    </div>`;
+}
+
+function toggleIngredientSection(category) {
+  const current = state.ingredientSections[category];
+  state.ingredientSections[category] = current === false ? true : false;
+  render();
 }
 
 function renderFoodRow(f, isAdmin, merge) {
@@ -706,9 +753,29 @@ function renderFoodForm() {
   const f = state.foodForm;
   const esc = s => (s || '').replace(/"/g, '&quot;');
   const titleAction = f.mode === 'edit' ? 'Edit' : 'New';
+
+  const userCats = new Set(Object.values(state.ingredientCategories || {}));
+  for (const c of CATEGORY_ORDER) userCats.delete(c);
+  const extraCats = [...userCats].sort((a, b) => a.localeCompare(b));
+  const allCats = [...CATEGORY_ORDER, ...extraCats];
+  const sel = f.category || '';
+  const optHTML = allCats.map(c =>
+    `<option value="${esc(c)}" ${sel === c ? 'selected' : ''}>${c}</option>`
+  ).join('');
+
   return `
     <div class="sm-add-form">
       <div class="sm-add-form-title">${titleAction} Ingredient</div>
+      <select class="builder-input" onchange="onFoodFormCategoryChange(this.value)">
+        <option value="" ${sel === '' ? 'selected' : ''}>— Select category —</option>
+        ${optHTML}
+        <option value="__new__" ${sel === '__new__' ? 'selected' : ''}>+ New category…</option>
+      </select>
+      ${sel === '__new__' ? `
+        <input class="builder-input" placeholder="New category name"
+               value="${esc(f.categoryDraft)}"
+               oninput="state.foodForm.categoryDraft=this.value">
+      ` : ''}
       <input class="builder-input" placeholder="Name (e.g. tomato)" value="${esc(f.name)}" oninput="state.foodForm.name=this.value">
       <input class="builder-input" placeholder="Plural (optional, e.g. tomatoes)" value="${esc(f.plural)}" oninput="state.foodForm.plural=this.value">
       ${f.error ? `<div class="settings-error">${f.error}</div>` : ''}
@@ -719,6 +786,13 @@ function renderFoodForm() {
         <button class="builder-secondary-btn" onclick="closeFoodForm()">Cancel</button>
       </div>
     </div>`;
+}
+
+function onFoodFormCategoryChange(value) {
+  if (!state.foodForm) return;
+  state.foodForm.category = value;
+  if (value !== '__new__') state.foodForm.categoryDraft = '';
+  render();
 }
 
 function renderMergePanel() {
@@ -747,9 +821,12 @@ async function refreshAdminFoods() {
 function openFoodForm(id) {
   const food = id ? (state.adminFoods || []).find(f => f.id === id) : null;
   state.foodMerge = null;
+  const existingCat = food
+    ? (state.ingredientCategories[(food.name || '').toLowerCase()] || '')
+    : '';
   state.foodForm = food
-    ? { mode: 'edit', id: food.id, name: food.name || '', plural: food.plural || '', error: null, saving: false }
-    : { mode: 'add', name: '', plural: '', error: null, saving: false };
+    ? { mode: 'edit', id: food.id, name: food.name || '', plural: food.plural || '', category: existingCat, categoryDraft: '', error: null, saving: false }
+    : { mode: 'add', name: '', plural: '', category: '', categoryDraft: '', error: null, saving: false };
   render();
 }
 
@@ -767,6 +844,20 @@ async function submitFoodForm() {
     render();
     return;
   }
+  let resolvedCategory = (f.category || '').trim();
+  if (resolvedCategory === '__new__') {
+    resolvedCategory = (f.categoryDraft || '').trim();
+    if (!resolvedCategory) {
+      f.error = 'New category name is required.';
+      render();
+      return;
+    }
+  }
+  if (f.mode === 'add' && !resolvedCategory) {
+    f.error = 'Category is required.';
+    render();
+    return;
+  }
   f.saving = true;
   f.error = null;
   render();
@@ -774,6 +865,9 @@ async function submitFoodForm() {
     const payload = { name, plural: (f.plural || '').trim() || null };
     if (f.mode === 'edit') await adminUpdateFood(f.id, payload, state.adminKey);
     else await adminCreateFood(payload, state.adminKey);
+    if (resolvedCategory) {
+      await classifyIngredient(name, resolvedCategory);
+    }
     state.foodForm = null;
     await refreshAdminFoods();
   } catch (err) {
