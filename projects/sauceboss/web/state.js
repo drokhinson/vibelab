@@ -97,6 +97,9 @@ let state = {
   adminSauces: [],
   adminLoading: false,
   adminError: null,
+  adminSaucesLoading: false,                                       // tab-scoped loaders for sauce manager
+  adminItemsLoading: false,
+  adminFoodsLoading: false,
   sauceManagerTab: 'sauces',                                      // 'sauces' | 'dish' | 'ingredients'
   sauceManagerSearch: '',                                          // search query (applies to active tab)
   sauceManagerTypeFilter: 'all',                                   // 'all' | 'sauce' | 'marinade' | 'dressing'
