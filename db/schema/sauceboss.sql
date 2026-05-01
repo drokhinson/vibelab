@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SauceBoss — current schema snapshot
--- Last updated: migration 063 (Mealie-inspired ingredient normalization)
+-- Last updated: post-consolidation (matches db/migrations/sauceboss/001_baseline.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
