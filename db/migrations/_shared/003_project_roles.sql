@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 061_project_roles.sql
+-- _shared/003_project_roles.sql (formerly 061_project_roles.sql)
 -- Per-project read-only Postgres LOGIN roles.
+--
+-- Run this AFTER all per-app baselines (each app's 001_baseline.sql creates
+-- its own role idempotently for fresh-DB GRANTs). This file rotates passwords
+-- and grants SELECT on whatever <prefix>_* tables exist at runtime.
 --
 -- Creates one role per project (e.g. sauceboss_role) that can SELECT only the
 -- tables matching its prefix (sauceboss_*) plus the shared analytics_events
