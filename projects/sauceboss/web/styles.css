@@ -639,40 +639,40 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 .builder-input:focus { outline: none; border-color: #E85D04; }
 .builder-name-input { font-size: 18px; font-weight: 700; padding: 12px 14px; }
+.builder-sticky-header > .builder-input { margin-bottom: 8px; }
 
-/* Cuisine chips */
-.cuisine-chips {
+/* Unified chip selectors (cuisine, sauce type, ingredient category) */
+.builder-chip-row {
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 4px 0;
-  -webkit-overflow-scrolling: touch;
 }
-.cuisine-chips::-webkit-scrollbar { display: none; }
-.cuisine-chip {
-  flex-shrink: 0;
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 2px solid #E5E7EB;
+.builder-chip {
+  padding: 5px 12px;
+  border-radius: 16px;
+  border: 1.5px solid #E5E7EB;
   background: white;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  color: #374151;
   cursor: pointer;
-  white-space: nowrap;
+  transition: all 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.cuisine-chip.selected { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
+.builder-chip:hover { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
+.builder-chip.selected { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
 
 /* New cuisine inline form (builder) */
 .new-cuisine-row {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 6px;
   align-items: center;
 }
-.new-cuisine-name { flex: 1; min-width: 0; }
-.new-cuisine-emoji { width: 64px; flex-shrink: 0; text-align: center; }
-.new-cuisine-cancel { flex-shrink: 0; padding: 6px 12px; }
+.new-cuisine-name { flex: 1; min-width: 0; padding: 8px 10px; font-size: 13px; }
+.new-cuisine-emoji { width: 56px; flex-shrink: 0; text-align: center; padding: 8px; font-size: 13px; }
+.new-cuisine-cancel { flex-shrink: 0; padding: 6px 12px; margin-top: 0; width: auto; font-size: 12px; }
 
 /* Color swatches */
 .color-swatches { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
@@ -806,28 +806,6 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   color: #6B7280;
   display: block;
   margin-bottom: 6px;
-}
-.category-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-.category-chip {
-  padding: 4px 10px;
-  border-radius: 14px;
-  border: 1.5px solid #E5E7EB;
-  background: white;
-  font-size: 11px;
-  font-weight: 600;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-.category-chip:hover {
-  border-color: #E85D04;
-  background: #FFF3E0;
-  color: #E85D04;
 }
 .ingredient-row .ing-unit {
   flex: 0.8;
