@@ -103,7 +103,8 @@ let state = {
   sauceManagerTab: 'sauces',                                      // 'sauces' | 'dish' | 'ingredients'
   sauceManagerSearch: '',                                          // search query (applies to active tab)
   sauceManagerTypeFilter: 'all',                                   // 'all' | 'sauce' | 'marinade' | 'dressing'
-  itemSections: { carbs: true, proteins: true, salads: true },    // category-level expand
+  itemSections: { carbs: false, proteins: false, salads: false }, // category-level expand (default collapsed)
+  cuisineSections: {},                                             // { [cuisine]: true } — open only when explicitly true
   expandedParents: {},                                             // { [parentId]: true }
   adminItems: { carbs: [], proteins: [], salads: [] },             // parents w/ nested variants
   itemForm: null,                                                  // shared add/edit form
@@ -112,7 +113,7 @@ let state = {
   adminFoods: [],                                                  // [{ id, name, plural, usageCount, sauceCount }]
   foodForm: null,                                                  // { mode: 'add' | 'edit', id?, name, category, categoryDraft, error?, saving? }
   foodMerge: null,                                                 // { keepId, mergeIds: Set<string>, error?, saving? }
-  ingredientSections: {},                                          // { [category]: false } — collapsed when explicitly false; open by default
+  ingredientSections: {},                                          // { [category]: true } — open only when explicitly true
 };
 
 function defaultBuilder() {
@@ -124,5 +125,6 @@ function defaultBuilder() {
     acStep: null, acIng: null, acResults: [], acSelected: -1,
     pendingCategories: [],
     importUrl: '', importing: false, importError: null,
+    cuisineDraftMode: false, cuisineDraftName: '', cuisineDraftEmoji: '',
   };
 }

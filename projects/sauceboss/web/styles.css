@@ -357,35 +357,9 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   color: #9CA3AF;
 }
 
-/* Cuisine accordion */
-.cuisine-group { margin-bottom: 10px; }
-.cuisine-header {
-  background: white;
-  border-radius: 14px;
-  padding: 13px 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  border: none;
-  width: 100%;
-  text-align: left;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-  transition: border-radius 0.2s;
-}
-.cuisine-group.open .cuisine-header {
-  border-radius: 14px 14px 0 0;
-  box-shadow: 0 2px 0 rgba(0,0,0,0.04);
-}
-.cuisine-flag { font-size: 20px; margin-right: 8px; display: flex; align-items: center; }
-.flag-img { height: 16px; width: auto; vertical-align: middle; }
-.cuisine-name { font-size: 15px; font-weight: 700; color: #1A1A2E; flex: 1; }
-.cuisine-count { font-size: 12px; color: #9CA3AF; margin-right: 8px; }
-.cuisine-chevron { font-size: 12px; color: #9CA3AF; transition: transform 0.25s; }
-.cuisine-group.open .cuisine-chevron { transform: rotate(180deg); }
-
-.sauce-list { display: none; background: white; border-radius: 0 0 14px 14px; padding: 2px 0 8px; overflow: hidden; }
-.cuisine-group.open .sauce-list { display: block; }
+/* Cuisine accordion — uses .ingredient-category-* classes for visual consistency */
+.cuisine-flag-emoji { font-size: 16px; line-height: 1; }
+.flag-img { height: 14px; width: auto; vertical-align: middle; }
 
 .sauce-item {
   display: flex;
@@ -688,6 +662,17 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   -webkit-tap-highlight-color: transparent;
 }
 .cuisine-chip.selected { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
+
+/* New cuisine inline form (builder) */
+.new-cuisine-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.new-cuisine-name { flex: 1; min-width: 0; }
+.new-cuisine-emoji { width: 64px; flex-shrink: 0; text-align: center; }
+.new-cuisine-cancel { flex-shrink: 0; padding: 6px 12px; }
 
 /* Color swatches */
 .color-swatches { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
@@ -1171,25 +1156,6 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 
 /* ── Admin Sauce List ── */
-.admin-cuisine-group { margin-bottom: 20px; }
-.admin-cuisine-header {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6B7280;
-  padding: 0 0 8px;
-  border-bottom: 1px solid #E5E7EB;
-  margin-bottom: 8px;
-}
-.admin-count {
-  background: #F3F4F6;
-  color: #374151;
-  border-radius: 10px;
-  padding: 1px 8px;
-  font-size: 11px;
-  margin-left: 6px;
-}
 .admin-sauce-row {
   display: flex;
   align-items: center;
@@ -1626,9 +1592,7 @@ body, button, input, select, textarea {
 .settings-btn [data-lucide]       { width: 20px; height: 20px; }
 .meal-slot-clear [data-lucide]    { width: 15px; height: 15px; }
 .meal-slot-plus [data-lucide]     { width: 22px; height: 22px; }
-.cuisine-chevron [data-lucide],
 .filter-chevron [data-lucide]     { width: 14px; height: 14px; transition: transform 0.25s; }
-.cuisine-group.open .cuisine-chevron [data-lucide],
 .filter-chevron.open [data-lucide] { transform: rotate(180deg); }
 .sauce-arrow [data-lucide]        { width: 16px; height: 16px; }
 .chip [data-lucide]               { width: 11px; height: 11px; }

@@ -5,9 +5,20 @@ function renderBuilder() {
   const b = state.builder;
   const esc = s => (s || '').replace(/"/g, '&quot;');
 
-  const cuisineChips = CUISINES.map(c =>
-    `<button class="cuisine-chip ${b.cuisine === c.name ? 'selected' : ''}" onclick="builderSetCuisine('${c.name}','${c.emoji}')">${renderEmoji(c.emoji)} ${c.name}</button>`
-  ).join('');
+  const cuisineChips = availableCuisines().map(c =>
+    `<button class="cuisine-chip ${!b.cuisineDraftMode && b.cuisine === c.name ? 'selected' : ''}" onclick="builderSetCuisine('${c.name.replace(/'/g, "\\'")}','${c.emoji}')">${renderEmoji(c.emoji)} ${c.name}</button>`
+  ).join('') + `<button class="cuisine-chip ${b.cuisineDraftMode ? 'selected' : ''}" onclick="builderStartNewCuisine()">+ New cuisine…</button>`;
+
+  const newCuisineInputs = b.cuisineDraftMode ? `
+    <div class="new-cuisine-row">
+      <input class="builder-input new-cuisine-name" placeholder="Cuisine name (e.g. Thai)"
+             value="${esc(b.cuisineDraftName)}"
+             oninput="state.builder.cuisineDraftName=this.value">
+      <input class="builder-input new-cuisine-emoji" placeholder="🌮" maxlength="4"
+             value="${esc(b.cuisineDraftEmoji)}"
+             oninput="state.builder.cuisineDraftEmoji=this.value">
+      <button class="builder-secondary-btn new-cuisine-cancel" onclick="builderCancelNewCuisine()">Cancel</button>
+    </div>` : '';
 
   const colorDots = COLOR_SWATCHES.map(hex =>
     `<button class="color-swatch ${b.color === hex ? 'selected' : ''}" style="background:${hex}" onclick="builderSetColor('${hex}')"></button>`
@@ -77,7 +88,10 @@ function renderBuilder() {
   }).join('');
 
   const ingHasQuantity = i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste');
-  const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity));
+  const hasCuisine = b.cuisineDraftMode
+    ? !!(b.cuisineDraftName.trim() && b.cuisineDraftEmoji.trim())
+    : !!b.cuisine;
+  const canContinue = b.name.trim() && hasCuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity));
 
   const importErr = b.importError ? `<div class="builder-error">${esc(b.importError)}</div>` : '';
   const importPanel = `
@@ -108,6 +122,7 @@ function renderBuilder() {
         <div class="cuisine-chips">${sauceTypeChips}</div>
         <p class="builder-label">Cuisine</p>
         <div class="cuisine-chips">${cuisineChips}</div>
+        ${newCuisineInputs}
         <p class="builder-label">Color</p>
         <div class="color-swatches">${colorDots}</div>
       </div>
@@ -205,6 +220,23 @@ function openBuilder() {
 function builderSetCuisine(name, emoji) {
   state.builder.cuisine = name;
   state.builder.cuisineEmoji = emoji;
+  state.builder.cuisineDraftMode = false;
+  state.builder.cuisineDraftName = '';
+  state.builder.cuisineDraftEmoji = '';
+  render();
+}
+
+function builderStartNewCuisine() {
+  state.builder.cuisineDraftMode = true;
+  state.builder.cuisine = '';
+  state.builder.cuisineEmoji = '';
+  render();
+}
+
+function builderCancelNewCuisine() {
+  state.builder.cuisineDraftMode = false;
+  state.builder.cuisineDraftName = '';
+  state.builder.cuisineDraftEmoji = '';
   render();
 }
 
@@ -494,6 +526,18 @@ function _unitDisplayFromParsed(parsed) {
 
 async function builderSave() {
   const b = state.builder;
+  if (b.cuisineDraftMode) {
+    const draftName = (b.cuisineDraftName || '').trim();
+    const draftEmoji = (b.cuisineDraftEmoji || '').trim();
+    if (!draftName || !draftEmoji) {
+      b.error = 'New cuisine needs a name and emoji.';
+      render();
+      return;
+    }
+    b.cuisine = draftName;
+    b.cuisineEmoji = draftEmoji;
+    b.cuisineDraftMode = false;
+  }
   b.saving = true;
   b.error = null;
   render();
