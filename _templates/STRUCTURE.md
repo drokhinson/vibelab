@@ -38,7 +38,7 @@ projects/{{PROJECT_ID}}/
 └── STRUCTURE.md      — this file
 
 shared-backend/routes/{{PROJECT_ID}}.py  — FastAPI routes for this project
-db/migrations/NNN_{{PROJECT_ID}}_*.sql   — Supabase migrations
+db/migrations/{{PROJECT_ID}}/001_baseline.sql + optional 002_seed.sql — Supabase migrations
 ```
 
 ## Data Model

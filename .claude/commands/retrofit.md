@@ -16,7 +16,7 @@ Project to retrofit: $ARGUMENTS
    ├── web/          ← exists? uses fetch() or inline data?
    └── app/          ← exists? uses local DB or API?
    shared-backend/routes/$ARGUMENTS.py  ← exists?
-   db/migrations/*_$ARGUMENTS_*.sql     ← exists?
+   db/migrations/$ARGUMENTS/*.sql       ← exists?
    registry.json entry                  ← exists?
    ```
 

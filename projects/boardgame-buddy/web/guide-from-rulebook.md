@@ -54,7 +54,7 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 >   {"chunk_type": "<your type>", "title": "...", "content": "markdown...", "confidence": "high|low", "missing": []}
 > ]
 > ```
-> Content rules: markdown only. Use `##`/`###` headers, GitHub-style pipe tables, bullets. Match the style of `db/migrations/035_boardgamebuddy_sevenwonders_guide.sql`. No HTML. No code fences around the content itself.
+> Content rules: markdown only. Use `##`/`###` headers, GitHub-style pipe tables, bullets. Match the style of the seeded boardgamebuddy guides in `db/migrations/boardgamebuddy/002_seed.sql`. No HTML. No code fences around the content itself.
 
 **The seven specialist prompts** (append each to the shared header):
 
@@ -108,7 +108,7 @@ Spawn all seven in a single message with multiple `Agent` tool calls (`subagent_
 }
 ```
 
-Every chunk object must have: `chunk_type`, `title`, `content`, `layout: "text"`. `chunk_type` must be one of the seven IDs from `db/migrations/034_boardgamebuddy_guide_chunks.sql`: `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant`, `rulebook`.
+Every chunk object must have: `chunk_type`, `title`, `content`, `layout: "text"`. `chunk_type` must be one of the seven IDs seeded into `boardgamebuddy_chunk_types` in `db/migrations/boardgamebuddy/001_baseline.sql`: `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant`, `rulebook`.
 
 8. Print a summary to the user:
 ```

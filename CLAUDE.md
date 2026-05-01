@@ -28,7 +28,7 @@ Ask the user clarifying questions about the idea. The STRUCTURE.md is the source
 ### Stage 2 — Scaffold
 Run `bash scaffold.sh [name] "[Title]" "[Description]"` from repo root.
 This creates `projects/[name]/` from `_templates/` and adds a route stub in `shared-backend/routes/`.
-Then fill in STRUCTURE.md and write `db/migrations/NNN_[name]_schema.sql`.
+Then fill in STRUCTURE.md and write `db/migrations/[name]/001_baseline.sql` (+ `002_seed.sql` if there's reference data). Each app gets its own subdirectory; numbering restarts from 001 inside.
 
 ### Stage 3 — Prototype (Web)
 Implement `shared-backend/routes/[name].py` (FastAPI) and `projects/[name]/web/` (HTML/JS) together.
@@ -57,7 +57,10 @@ vibelab/
 │   ├── auth.py                ← shared bcrypt + JWT + admin auth helpers
 │   ├── shared_models.py       ← shared Pydantic response models (HealthResponse, etc.)
 │   └── routes/[project]/     ← one package per project
-├── db/migrations/             ← all Supabase SQL migrations (ONE shared DB)
+├── db/migrations/             ← Supabase SQL migrations (ONE shared DB)
+│   ├── README.md              ← layout + execution order
+│   ├── _shared/               ← cross-app: analytics, admin RPCs, project roles
+│   └── <app>/                 ← per-app: 001_baseline.sql + optional 002_seed.sql
 ├── db/schema/                 ← current-state schema snapshots, one file per project
 ├── _templates/                ← scaffold source, not deployed
 ├── .github/workflows/         ← CI/CD

@@ -34,11 +34,8 @@ projects/wealthmate/
 ├── app/              — React Native / Expo (future)
 └── STRUCTURE.md      — this file
 
-shared-backend/routes/wealthmate.py  — FastAPI routes
-db/migrations/004_wealthmate_schema.sql  — table creation
-db/migrations/005_wealthmate_seed.sql    — Adam & Eve test data
-db/migrations/006_wealthmate_account_types.sql — expanded account types
-db/migrations/007_wealthmate_recurring_expenses.sql — recurring expenses table
+shared-backend/routes/wealthmate.py        — FastAPI routes
+db/migrations/wealthmate/001_baseline.sql  — full schema (tables, RLS, GRANT, indexes)
 ```
 
 ---

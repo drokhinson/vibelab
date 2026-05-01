@@ -41,7 +41,7 @@ projects/plant-planner/
 └── STRUCTURE.md      — this file
 
 shared-backend/routes/plant_planner/  — FastAPI route package
-db/migrations/007_plant_planner_*.sql — Supabase migrations
+db/migrations/plantplanner/001_baseline.sql + 002_seed.sql — Supabase migrations
 ```
 
 ## Data Model

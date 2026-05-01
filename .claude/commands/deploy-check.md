@@ -21,8 +21,8 @@ Check deployment status for project: $ARGUMENTS
    - List all routes defined
    - Verify they match what STRUCTURE.md says
 
-6. **Check `db/migrations/`**:
-   - List migration files for this project
+6. **Check `db/migrations/$ARGUMENTS/`** (and `db/migrations/_shared/` for cross-app changes):
+   - List migration files for this project (001_baseline.sql, optional 002_seed.sql, plus any later per-app migrations)
    - Note any that are present but not yet run (if you can tell from context)
 
 7. **Check `.github/workflows/`**:
