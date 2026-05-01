@@ -11,10 +11,10 @@ Build the web prototype for project: $ARGUMENTS
    - Register the router in `shared-backend/main.py` if not already there
    - Follow the sauceboss routes as the reference implementation
 
-3. **Write Supabase migrations** if not already done:
-   - Schema: `db/migrations/NNN_<project>_schema.sql`
-   - Seed data: `db/migrations/NNN_<project>_seed.sql` (if applicable)
-   - RPCs: `db/migrations/NNN_<project>_rpcs.sql` (for complex queries)
+3. **Write Supabase migrations** if not already done (per-app counter, in `db/migrations/<project>/`):
+   - Schema + RPCs: `db/migrations/<project>/001_baseline.sql`
+   - Seed data: `db/migrations/<project>/002_seed.sql` (if applicable)
+   - Subsequent changes: `db/migrations/<project>/003_<description>.sql`, etc.
 
 4. **Implement the web prototype** (`projects/<project>/web/`):
    - `config.js` — sets `window.APP_CONFIG.apiBase` (already from template)

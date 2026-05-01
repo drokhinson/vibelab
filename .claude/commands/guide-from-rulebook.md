@@ -57,7 +57,7 @@ Spawn all six in a single message with multiple `Agent` tool calls (`subagent_ty
 >   {"chunk_type": "<your type>", "title": "...", "content": "markdown...", "confidence": "high|low", "missing": []}
 > ]
 > ```
-> Content rules: markdown only. Use `##`/`###` headers, GitHub-style pipe tables, bullets. Match the style of `db/migrations/035_boardgamebuddy_sevenwonders_guide.sql`. No HTML. No code fences around the content itself.
+> Content rules: markdown only. Use `##`/`###` headers, GitHub-style pipe tables, bullets. Match the style of the seeded boardgamebuddy guides in `db/migrations/boardgamebuddy/002_seed.sql`. No HTML. No code fences around the content itself.
 
 **The six specialist prompts** (append each to the shared header):
 
