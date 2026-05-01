@@ -1,5 +1,20 @@
 'use strict';
 
+function tabLoadingHTML(text) {
+  return `
+    <div class="loading-inline">
+      <div class="loading-pot">${potSVG()}</div>
+      <p class="loading-text">${text || 'Loading…'}</p>
+    </div>`;
+}
+
+function scrollFormIntoView() {
+  requestAnimationFrame(() => {
+    const formEl = document.querySelector('.scroll-body .sm-add-form');
+    if (formEl) formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
 // ─── Settings / Admin Screens ─────────────────────────────────────────────────
 function renderSettings() {
   return `
@@ -102,6 +117,8 @@ function renderAdmin() {
 }
 
 function renderSaucesTab(isAdmin) {
+  if (state.adminSaucesLoading) return tabLoadingHTML('Loading sauces…');
+
   const typeFilter = state.sauceManagerTypeFilter || 'all';
   const q = (state.sauceManagerSearch || '').trim().toLowerCase();
 
@@ -169,6 +186,8 @@ const SECTION_META = [
 ];
 
 function renderDishTab(isAdmin) {
+  if (state.adminItemsLoading) return tabLoadingHTML('Loading dishes…');
+
   const items = state.adminItems || { carbs: [], proteins: [], salads: [] };
   const q = (state.sauceManagerSearch || '').trim().toLowerCase();
   const matches = name => (name || '').toLowerCase().includes(q);
@@ -332,24 +351,30 @@ function renderItemForm() {
 }
 
 // ─── Sauce Manager Lifecycle ──────────────────────────────────────────────────
-async function openSauceManager() {
+function openSauceManager() {
   state.adminError = null;
   state.sauceManagerTab = 'sauces';
   state.sauceManagerSearch = '';
   state.sauceManagerTypeFilter = 'all';
   state.itemForm = null;
-  try {
-    const [sauces, items] = await Promise.all([
-      fetchAllSauces(),
-      fetchItems().catch(() => null),
-    ]);
-    state.adminSauces = sauces;
-    if (items) state.adminItems = { carbs: items.carbs || [], proteins: items.proteins || [], salads: items.salads || [] };
-  } catch (err) {
-    state.adminSauces = [];
-    state.adminError = `Failed to load sauces: ${err.message}`;
-  }
+  state.foodForm = null;
+  state.foodMerge = null;
+  state.adminSauces = [];
+  state.adminSaucesLoading = true;
+  state.adminItemsLoading = true;
   navigate('admin');
+
+  fetchAllSauces()
+    .then(sauces => { state.adminSauces = sauces; })
+    .catch(err => { state.adminError = `Failed to load sauces: ${err.message}`; })
+    .finally(() => { state.adminSaucesLoading = false; render(); });
+
+  fetchItems()
+    .then(items => {
+      state.adminItems = { carbs: items.carbs || [], proteins: items.proteins || [], salads: items.salads || [] };
+    })
+    .catch(() => {})
+    .finally(() => { state.adminItemsLoading = false; render(); });
 }
 
 function openSettings() {
@@ -362,11 +387,16 @@ function setSauceManagerTab(tab) {
   state.itemForm = null;
   state.foodForm = null;
   state.foodMerge = null;
-  render();
   if (tab === 'dish') {
+    state.adminItemsLoading = true;
+    render();
     refreshAdminItems();
   } else if (tab === 'ingredients') {
+    state.adminFoodsLoading = true;
+    render();
     refreshAdminFoods();
+  } else {
+    render();
   }
 }
 
@@ -395,9 +425,10 @@ async function refreshAdminItems() {
   try {
     const items = await fetchItems();
     state.adminItems = { carbs: items.carbs || [], proteins: items.proteins || [], salads: items.salads || [] };
-    render();
   } catch (err) {
     state.adminError = `Failed to load items: ${err.message}`;
+  } finally {
+    state.adminItemsLoading = false;
     render();
   }
 }
@@ -531,6 +562,7 @@ function openAddItemForm(category, parentId) {
   };
   if (parentId) state.expandedParents[parentId] = true;
   render();
+  scrollFormIntoView();
 }
 
 function openEditItemFormById(id) {
@@ -556,6 +588,7 @@ function openEditItemFormById(id) {
   };
   if (ctx.parent) state.expandedParents[ctx.parent.id] = true;
   render();
+  scrollFormIntoView();
 }
 
 function closeItemForm() {
@@ -633,6 +666,10 @@ function renderIngredientsTab(isAdmin) {
 
   const formHTML = isAdmin && form ? renderFoodForm() : '';
   const mergeHTML = isAdmin && merge ? renderMergePanel() : '';
+
+  if (state.adminFoodsLoading) {
+    return `${formHTML}${mergeHTML}${tabLoadingHTML('Loading ingredients…')}`;
+  }
 
   if (foods.length === 0) {
     return `${formHTML}<p style="padding:16px;color:#888">No ingredients yet.</p>`;
@@ -811,9 +848,10 @@ function renderMergePanel() {
 async function refreshAdminFoods() {
   try {
     state.adminFoods = await fetchFoodsWithUsage();
-    render();
   } catch (err) {
     state.adminError = `Failed to load ingredients: ${err.message}`;
+  } finally {
+    state.adminFoodsLoading = false;
     render();
   }
 }
@@ -828,6 +866,7 @@ function openFoodForm(id) {
     ? { mode: 'edit', id: food.id, name: food.name || '', plural: food.plural || '', category: existingCat, categoryDraft: '', error: null, saving: false }
     : { mode: 'add', name: '', plural: '', category: '', categoryDraft: '', error: null, saving: false };
   render();
+  scrollFormIntoView();
 }
 
 function closeFoodForm() {
