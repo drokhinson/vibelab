@@ -28,12 +28,39 @@ function renderEmoji(emoji) {
 
 // ─── API fetch helpers ────────────────────────────────────────────────────────
 const API = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || 'http://localhost:8000';
+const PREFIX = '/api/v1/sauceboss';
 
 fetch(`${API}/api/v1/analytics/track`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ app: window.APP_CONFIG?.project || 'sauceboss', event: 'app_open' })
 }).catch(() => {});
+
+// Auth-aware fetch wrapper. Adds Authorization header when a Supabase session
+// is active. Body is JSON-stringified if it's a plain object. Throws an Error
+// with the backend's `detail` field on non-2xx responses.
+async function apiFetch(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+  let body = opts.body;
+  if (body && typeof body === 'object' && !(body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify(body);
+  }
+  const url = `${API}${PREFIX}${path}`;
+  const res = await fetch(url, { ...opts, headers, body });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const j = await res.json();
+      detail = (j.detail && j.detail.message) || j.detail || '';
+    } catch { /* ignore */ }
+    const msg = detail ? `${res.status} ${detail}` : `HTTP ${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
 
 function _withIngredientNames(sauce) {
   return { ...sauce, ingredientNames: new Set(sauce.ingredients.map(i => i.name)) };
@@ -128,150 +155,110 @@ async function importRecipeFromUrl(url) {
 }
 
 async function createSauce(data) {
-  const res = await fetch(`${API}/api/v1/sauceboss/sauces`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
+  return apiFetch('/sauces', { method: 'POST', body: data });
+}
+
+async function updateSauce(id, data) {
+  return apiFetch(`/sauces/${encodeURIComponent(id)}`, { method: 'PATCH', body: data });
 }
 
 async function fetchAllSauces() {
-  const res = await fetch(`${API}/api/v1/sauceboss/sauces`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const sauces = await res.json();
+  const sauces = await apiFetch('/sauces');
   return sauces.map(sauce => ({
     ...sauce,
     ingredientNames: new Set(sauce.ingredients.map(i => i.name)),
   }));
 }
 
-async function fetchAdminSauces(key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/sauces`, {
-    headers: { 'Authorization': `Bearer ${key}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
+async function fetchAdminSauces() {
+  return apiFetch('/admin/sauces');
 }
 
-async function adminCreateItem(data, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/items`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
+async function adminCreateItem(data) {
+  return apiFetch('/admin/items', { method: 'POST', body: data });
 }
 
 async function fetchItems() {
-  const res = await fetch(`${API}/api/v1/sauceboss/items`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiFetch('/items');
 }
 
-async function adminUpdateItem(id, data, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/items/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
+async function adminUpdateItem(id, data) {
+  return apiFetch(`/admin/items/${encodeURIComponent(id)}`, { method: 'PATCH', body: data });
 }
 
-async function adminDeleteItem(id, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/items/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${key}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
+async function adminDeleteItem(id) {
+  return apiFetch(`/admin/items/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
-async function deleteAdminSauce(id, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/sauces/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${key}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
+async function deleteAdminSauce(id) {
+  return apiFetch(`/admin/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 // ─── Ingredient (food) admin ─────────────────────────────────────────────────
 async function fetchFoodsWithUsage() {
-  const data = await _loggedJson(`${API}/api/v1/sauceboss/foods-with-usage`);
+  const data = await apiFetch('/foods-with-usage');
   return data.foods || [];
 }
 
-async function adminCreateFood(payload, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/foods`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
+async function adminCreateFood(payload) {
+  return apiFetch('/admin/foods', { method: 'POST', body: payload });
 }
 
-async function adminUpdateFood(id, payload, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/foods/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
+async function adminUpdateFood(id, payload) {
+  return apiFetch(`/admin/foods/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload });
 }
 
-async function adminDeleteFood(id, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/foods/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${key}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
+async function adminDeleteFood(id) {
+  return apiFetch(`/admin/foods/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
-async function adminMergeFoods(keepId, mergeIds, key) {
-  const res = await fetch(`${API}/api/v1/sauceboss/admin/foods/merge`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-    body: JSON.stringify({ keepId, mergeIds }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+async function adminMergeFoods(keepId, mergeIds) {
+  return apiFetch('/admin/foods/merge', { method: 'POST', body: { keepId, mergeIds } });
+}
+
+// ─── Favorites + profile (auth required) ─────────────────────────────────────
+async function fetchProfile() {
+  return apiFetch('/profile');
+}
+
+async function createProfile(displayName) {
+  return apiFetch('/profile', { method: 'POST', body: { display_name: displayName } });
+}
+
+async function becomeAdmin(adminKey) {
+  return apiFetch('/profile/become-admin', { method: 'POST', body: { admin_key: adminKey } });
+}
+
+async function fetchFavorites() {
+  const data = await apiFetch('/favorites');
+  return new Set(data.favorites || []);
+}
+
+async function addFavorite(sauceId) {
+  return apiFetch(`/favorites/${encodeURIComponent(sauceId)}`, { method: 'PUT' });
+}
+
+async function removeFavorite(sauceId) {
+  return apiFetch(`/favorites/${encodeURIComponent(sauceId)}`, { method: 'DELETE' });
+}
+
+// Optimistic favorite toggle. Updates state immediately, syncs in the background,
+// reverts on failure and re-renders.
+async function toggleFavorite(sauceId) {
+  if (!currentUser) { openAuthModal(); return; }
+  const wasFavorited = state.favorites.has(sauceId);
+  if (wasFavorited) state.favorites.delete(sauceId);
+  else state.favorites.add(sauceId);
+  render();
+  try {
+    if (wasFavorited) await removeFavorite(sauceId);
+    else await addFavorite(sauceId);
+  } catch (e) {
+    console.error('[sauceboss] favorite toggle failed:', e);
+    if (wasFavorited) state.favorites.add(sauceId);
+    else state.favorites.delete(sauceId);
+    render();
   }
-  return res.json();
 }
 
 // ─── Unit conversion ──────────────────────────────────────────────────────────
@@ -555,4 +542,28 @@ function navigate(screen, opts = {}) {
 
 function _initIcons() {
   if (window.lucide) requestAnimationFrame(() => lucide.createIcons());
+}
+
+// Top-right slot in the app header. Shows "Sign in" when logged out, an
+// avatar pill with display-name initials when logged in.
+function renderHeaderAuthSlot() {
+  if (!supabaseClient) return '';
+  if (!currentUser) {
+    return `<button class="auth-signin-btn" onclick="openAuthModal()"><i data-lucide="log-in"></i> Sign in</button>`;
+  }
+  const name = currentUser.display_name || 'Saucier';
+  const initials = name.trim().split(/\s+/).map(p => p[0] || '').join('').slice(0, 2).toUpperCase() || 'S';
+  return `
+    <details class="auth-pill">
+      <summary class="auth-pill__summary" title="${name}">
+        <span class="auth-pill__initials">${initials}</span>
+        ${currentUser.is_admin ? '<span class="auth-pill__badge" title="Admin">★</span>' : ''}
+      </summary>
+      <div class="auth-pill__menu" role="menu">
+        <p class="auth-pill__name">${name}</p>
+        ${!currentUser.is_admin ? `<button class="auth-pill__item" onclick="navigate('settings')">Become admin</button>` : ''}
+        <button class="auth-pill__item" onclick="handleLogout()">Sign out</button>
+      </div>
+    </details>
+  `;
 }

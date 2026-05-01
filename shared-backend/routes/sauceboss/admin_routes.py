@@ -1,14 +1,18 @@
-"""Admin SauceBoss API routes — requires admin API key."""
+"""Admin SauceBoss API routes — guarded by Supabase JWT + is_admin flag.
+
+POST /admin/foods is intentionally relaxed to ``get_current_user`` so any
+logged-in user can register an ingredient (the user-add-ingredient flow).
+Every other admin route requires ``get_current_admin``.
+"""
 
 import hashlib
 import re
-from typing import Optional
 
-from fastapi import HTTPException, Header
+from fastapi import Depends, HTTPException
 
-from auth import require_admin
 from db import get_supabase
 from . import router
+from .dependencies import CurrentUser, get_current_admin, get_current_user
 from .models import (
     CreateFoodRequest,
     CreateItemRequest,
@@ -26,10 +30,9 @@ def _food_id_for(name: str) -> str:
     return f"{slug}-{digest}"
 
 
-@router.get("/admin/sauces")
-async def admin_list_sauces(authorization: Optional[str] = Header(None)):
-    """Return all sauces with their compatible carbs. Requires admin key."""
-    require_admin(authorization)
+@router.get("/admin/sauces", summary="List all sauces with compatible items (admin)")
+async def admin_list_sauces(_: CurrentUser = Depends(get_current_admin)):
+    """Return all sauces with their compatible items."""
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_all_sauces", {}).execute()
     if result.data is None:
@@ -37,10 +40,12 @@ async def admin_list_sauces(authorization: Optional[str] = Header(None)):
     return result.data
 
 
-@router.post("/admin/items")
-async def admin_create_item(body: CreateItemRequest, authorization: Optional[str] = Header(None)):
-    """Add a new item (carb / protein / salad base, optionally a variant). Requires admin key."""
-    require_admin(authorization)
+@router.post("/admin/items", status_code=201, summary="Create an item (admin)")
+async def admin_create_item(
+    body: CreateItemRequest,
+    _: CurrentUser = Depends(get_current_admin),
+):
+    """Add a new item (carb / protein / salad base, optionally a variant)."""
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sb = get_supabase()
     try:
@@ -63,14 +68,13 @@ async def admin_create_item(body: CreateItemRequest, authorization: Optional[str
     return {"id": slug, "status": "created"}
 
 
-@router.patch("/admin/items/{item_id}")
+@router.patch("/admin/items/{item_id}", summary="Update an item (admin)")
 async def admin_update_item(
     item_id: str,
     body: UpdateItemRequest,
-    authorization: Optional[str] = Header(None),
+    _: CurrentUser = Depends(get_current_admin),
 ):
-    """Update an existing carb / protein / salad item. Requires admin key."""
-    require_admin(authorization)
+    """Update an existing carb / protein / salad item."""
     payload = {k: v for k, v in {
         "name": body.name,
         "emoji": body.emoji,
@@ -92,10 +96,12 @@ async def admin_update_item(
     return {"id": item_id, "status": "updated"}
 
 
-@router.delete("/admin/items/{item_id}")
-async def admin_delete_item(item_id: str, authorization: Optional[str] = Header(None)):
+@router.delete("/admin/items/{item_id}", summary="Delete an item (admin)")
+async def admin_delete_item(
+    item_id: str,
+    _: CurrentUser = Depends(get_current_admin),
+):
     """Delete an item; child variants and sauce_items rows cascade via FK."""
-    require_admin(authorization)
     try:
         get_supabase().table("sauceboss_items").delete().eq("id", item_id).execute()
     except Exception as e:
@@ -103,10 +109,12 @@ async def admin_delete_item(item_id: str, authorization: Optional[str] = Header(
     return {"id": item_id, "status": "deleted"}
 
 
-@router.delete("/admin/sauces/{sauce_id}")
-async def admin_delete_sauce(sauce_id: str, authorization: Optional[str] = Header(None)):
+@router.delete("/admin/sauces/{sauce_id}", summary="Delete a sauce (admin)")
+async def admin_delete_sauce(
+    sauce_id: str,
+    _: CurrentUser = Depends(get_current_admin),
+):
     """Delete a sauce; steps, ingredients, and sauce_items rows cascade via FK."""
-    require_admin(authorization)
     try:
         get_supabase().table("sauceboss_sauces").delete().eq("id", sauce_id).execute()
     except Exception as e:
@@ -116,10 +124,16 @@ async def admin_delete_sauce(sauce_id: str, authorization: Optional[str] = Heade
 
 # ── Foods (ingredient admin) ────────────────────────────────────────────────
 
-@router.post("/admin/foods")
-async def admin_create_food(body: CreateFoodRequest, authorization: Optional[str] = Header(None)):
+@router.post(
+    "/admin/foods",
+    status_code=201,
+    summary="Create an ingredient (any logged-in user)",
+)
+async def admin_create_food(
+    body: CreateFoodRequest,
+    _: CurrentUser = Depends(get_current_user),
+):
     """Insert a new food row. Conflicts on the normalized name return 409."""
-    require_admin(authorization)
     name = body.name.strip()
     norm = name.lower()
     sb = get_supabase()
@@ -139,16 +153,15 @@ async def admin_create_food(body: CreateFoodRequest, authorization: Optional[str
     return {"id": food_id, "name": name, "status": "created"}
 
 
-@router.patch("/admin/foods/{food_id}")
+@router.patch("/admin/foods/{food_id}", summary="Rename an ingredient (admin)")
 async def admin_update_food(
     food_id: str,
     body: UpdateFoodRequest,
-    authorization: Optional[str] = Header(None),
+    _: CurrentUser = Depends(get_current_admin),
 ):
     """Rename a food. If the new name normalizes to another existing food, the
     caller should use the merge endpoint instead — this route returns 409 in
     that case rather than silently merging."""
-    require_admin(authorization)
     new_name = body.name.strip()
     new_norm = new_name.lower()
     sb = get_supabase()
@@ -176,11 +189,13 @@ async def admin_update_food(
     return {"id": food_id, "name": new_name, "status": "updated"}
 
 
-@router.delete("/admin/foods/{food_id}")
-async def admin_delete_food(food_id: str, authorization: Optional[str] = Header(None)):
+@router.delete("/admin/foods/{food_id}", summary="Delete an unused ingredient (admin)")
+async def admin_delete_food(
+    food_id: str,
+    _: CurrentUser = Depends(get_current_admin),
+):
     """Delete a food only if no recipe step references it. Returns 409 with
     usage count otherwise — caller can merge the food into another first."""
-    require_admin(authorization)
     sb = get_supabase()
     try:
         result = sb.rpc("delete_sauceboss_food_safe", {"p_id": food_id}).execute()
@@ -192,11 +207,13 @@ async def admin_delete_food(food_id: str, authorization: Optional[str] = Header(
     return {"id": food_id, "status": "deleted"}
 
 
-@router.post("/admin/foods/merge")
-async def admin_merge_foods(body: MergeFoodsRequest, authorization: Optional[str] = Header(None)):
+@router.post("/admin/foods/merge", summary="Merge ingredients (admin)")
+async def admin_merge_foods(
+    body: MergeFoodsRequest,
+    _: CurrentUser = Depends(get_current_admin),
+):
     """Repoint every step ingredient on ``mergeIds`` to ``keepId`` and delete
     the merged food rows. Atomic at the DB level."""
-    require_admin(authorization)
     if body.keepId in body.mergeIds:
         raise HTTPException(400, "keepId cannot also appear in mergeIds")
     sb = get_supabase()

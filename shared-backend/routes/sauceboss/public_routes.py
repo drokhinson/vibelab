@@ -4,11 +4,12 @@ import logging
 import re
 import secrets
 
-from fastapi import HTTPException, Query
+from fastapi import Depends, HTTPException, Path, Query
 
 from db import get_supabase
 from shared_models import HealthResponse
 from . import router
+from .dependencies import CurrentUser, get_current_user
 from .models import (
     CreateSauceRequest,
     FoodRow,
@@ -19,10 +20,12 @@ from .models import (
     InitialLoadResponse,
     ItemLoadResponse,
     ItemsGroupedResponse,
+    MessageResponse,
     ParsedIngredientResponse,
     ParsedRecipeResponse,
     UnitRow,
     UnitsListResponse,
+    UpdateSauceRequest,
     _shape_items_grouped,
 )
 from .parser import ScrapeError, ScrapeErrorKind, scrape_recipe
@@ -57,8 +60,11 @@ async def list_substitutions():
     return result.data
 
 
-@router.post("/sauces")
-async def create_sauce(body: CreateSauceRequest):
+@router.post("/sauces", status_code=201, summary="Create a user-submitted sauce")
+async def create_sauce(
+    body: CreateSauceRequest,
+    user: CurrentUser = Depends(get_current_user),
+):
     """Create a user-submitted sauce with steps, ingredients, and item pairings.
 
     ``sauceType`` selects which dish category this sauce pairs with
@@ -68,12 +74,59 @@ async def create_sauce(body: CreateSauceRequest):
 
     Each ingredient's raw ``unit`` string is resolved against the unit registry
     here and emitted to the RPC as ``unitId`` + canonical quantities; foods are
-    upserted by the RPC keyed on lower(name).
+    upserted by the RPC keyed on lower(name). The RPC also persists the
+    authenticated user's id as ``created_by``.
     """
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sauce_id = f"user-{slug}-{secrets.token_hex(2)}"
 
-    payload = {
+    payload = _build_sauce_payload(sauce_id, body, created_by=user.user_id)
+
+    sb = get_supabase()
+    try:
+        result = sb.rpc("create_sauceboss_sauce", {"p_data": payload}).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+    if result.data is None:
+        raise HTTPException(500, "Failed to create sauce — RPC returned null")
+    return {"id": result.data, "status": "created"}
+
+
+@router.patch(
+    "/sauces/{sauce_id}",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Update a sauce (owner or admin only)",
+)
+async def update_sauce(
+    body: UpdateSauceRequest,
+    sauce_id: str = Path(..., description="Target sauce id"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Replace a sauce's scalar fields, item links, and steps. Owner or admin only."""
+    sb = get_supabase()
+    existing = (
+        sb.table("sauceboss_sauces").select("id, created_by").eq("id", sauce_id).execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Sauce not found")
+    row = existing.data[0]
+    if not user.is_admin and row.get("created_by") != user.user_id:
+        raise HTTPException(status_code=403, detail="You can only edit your own sauces")
+
+    payload = _build_sauce_payload(sauce_id, body, created_by=None)
+    try:
+        result = sb.rpc("update_sauceboss_sauce", {"p_data": payload}).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+    if result.data is None:
+        raise HTTPException(500, "Failed to update sauce — RPC returned null")
+    return MessageResponse(message="Sauce updated")
+
+
+def _build_sauce_payload(sauce_id: str, body: CreateSauceRequest, created_by: str | None) -> dict:
+    """Shape a CreateSauce/UpdateSauce body into the RPC payload dict."""
+    payload: dict = {
         "id": sauce_id,
         "name": body.name,
         "cuisine": body.cuisine,
@@ -93,15 +146,9 @@ async def create_sauce(body: CreateSauceRequest):
             for idx, step in enumerate(body.steps)
         ],
     }
-
-    sb = get_supabase()
-    try:
-        result = sb.rpc("create_sauceboss_sauce", {"p_data": payload}).execute()
-    except Exception as e:
-        raise HTTPException(500, f"Database error: {str(e)}")
-    if result.data is None:
-        raise HTTPException(500, "Failed to create sauce — RPC returned null")
-    return {"id": result.data, "status": "created"}
+    if created_by is not None:
+        payload["createdBy"] = created_by
+    return payload
 
 
 def _resolve_ingredient_for_save(ing) -> dict:

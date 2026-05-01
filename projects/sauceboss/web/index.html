@@ -9,10 +9,13 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <!-- Lucide Icons (SVG icon set) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <!-- Supabase JS client (for email / Google / Apple sign-in) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app"></div>
+  <div id="auth-modal" class="auth-modal hidden"></div>
   <div class="splash" id="splash-screen">
     <div class="splash-pot-wrap" id="splash-pot">
       <div class="splash-pot-wiggle">
@@ -38,6 +41,7 @@
   <script src="config.js"></script>
   <script src="state.js"></script>
   <script src="helpers.js"></script>
+  <script src="auth.js"></script>
   <script src="items.js"></script>
   <script src="preps.js"></script>
   <script src="sauces.js"></script>

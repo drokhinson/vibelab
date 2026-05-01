@@ -4,6 +4,9 @@
 document.addEventListener('DOMContentLoaded', async () => {
   document.body.classList.add('splash--loading');
 
+  // Wire up Supabase Auth (email / Google / Apple). No-op when not configured.
+  initSupabase();
+
   try {
     const { carbs, proteins, saladBases } = await fetchInitialLoad();
     state.carbs = carbs;

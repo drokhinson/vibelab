@@ -59,7 +59,7 @@ function onPointerDown(e) {
   if (e.button !== undefined && e.button !== 0) return;
   const row = e.target.closest('.swipe-row[data-swipe]');
   if (!row) return;
-  if (typeof state !== 'undefined' && !state.adminKey) return;
+  if (typeof currentUser === 'undefined' || !currentUser) return;
   const contentEl = row.querySelector('.swipe-content');
   if (!contentEl) return;
 
