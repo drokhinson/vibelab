@@ -17,7 +17,7 @@ function renderBuilder() {
       <input class="builder-input new-cuisine-emoji" placeholder="🌮" maxlength="4"
              value="${esc(b.cuisineDraftEmoji)}"
              oninput="state.builder.cuisineDraftEmoji=this.value">
-      <button class="builder-secondary-btn new-cuisine-cancel" onclick="builderCancelNewCuisine()">Cancel</button>
+      <button class="new-cuisine-cancel" onclick="builderCancelNewCuisine()">Cancel</button>
     </div>` : '';
 
   const colorDots = COLOR_SWATCHES.map(hex =>
@@ -25,7 +25,7 @@ function renderBuilder() {
   ).join('');
 
   const sauceTypeChips = SAUCE_TYPES.map(t =>
-    `<button class="builder-chip ${b.sauceType === t.value ? 'selected' : ''}" onclick="builderSetSauceType('${t.value}')">${t.label}</button>`
+    `<button class="builder-chip builder-chip-lg ${b.sauceType === t.value ? 'selected' : ''}" onclick="builderSetSauceType('${t.value}')">${t.label}</button>`
   ).join('');
 
   const stepsHTML = b.steps.map((step, si) => {

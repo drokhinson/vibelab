@@ -662,17 +662,31 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 .builder-chip:hover { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
 .builder-chip.selected { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
+.builder-chip-lg { padding: 10px 18px; font-size: 14px; border-radius: 20px; }
 
 /* New cuisine inline form (builder) */
 .new-cuisine-row {
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
-  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: stretch;
 }
-.new-cuisine-name { flex: 1; min-width: 0; padding: 8px 10px; font-size: 13px; }
-.new-cuisine-emoji { width: 56px; flex-shrink: 0; text-align: center; padding: 8px; font-size: 13px; }
-.new-cuisine-cancel { flex-shrink: 0; padding: 6px 12px; margin-top: 0; width: auto; font-size: 12px; }
+.new-cuisine-name { flex: 1; min-width: 0; }
+.new-cuisine-emoji { width: 64px; flex-shrink: 0; text-align: center; }
+.new-cuisine-cancel {
+  flex-shrink: 0;
+  padding: 0 14px;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 10px;
+  background: white;
+  color: #6B7280;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.new-cuisine-cancel:hover { border-color: #E85D04; color: #E85D04; }
 
 /* Color swatches */
 .color-swatches { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
