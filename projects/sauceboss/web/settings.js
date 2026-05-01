@@ -762,12 +762,13 @@ function renderFoodRow(f, isAdmin, merge) {
   const safeName = (f.name || '').replace(/'/g, "\\'");
   const usage = f.usageCount || 0;
   const sauces = f.sauceCount || 0;
-  const sub = usage === 0
+  const sub = sauces === 0
     ? '<span style="color:#888">unused</span>'
-    : `${usage} step row${usage !== 1 ? 's' : ''} · ${sauces} sauce${sauces !== 1 ? 's' : ''}`;
+    : `${sauces} sauce${sauces !== 1 ? 's' : ''}`;
   const mergeMode = !!merge;
   const isKeep = merge && merge.keepId === f.id;
   const isPicked = merge && merge.mergeIds.has(f.id);
+  const expanded = !mergeMode && state.expandedFoodIds && state.expandedFoodIds.has(f.id);
   const inner = `
     <div class="admin-sauce-info" style="flex:1">
       <div class="admin-sauce-name">${f.name}</div>
@@ -778,25 +779,57 @@ function renderFoodRow(f, isAdmin, merge) {
               : isPicked ? '<span class="food-merge-tag food-merge-tag-merge">will merge</span>'
               : ''}
     ` : ''}`;
+
   if (mergeMode) {
     return `<div class="food-row${isKeep ? ' food-row-keep' : ''}${isPicked ? ' food-row-picked' : ''}"
                  onclick="toggleFoodMergePick('${f.id}')">${inner}</div>`;
   }
+
+  const panelHTML = expanded ? renderFoodSaucesPanel(f.id) : '';
+
   if (!isAdmin) {
-    return `<div class="food-row">${inner}</div>`;
+    return `
+      <div class="food-row" onclick="toggleFoodExpand('${f.id}')">${inner}</div>
+      ${panelHTML}`;
   }
   return `
     <div class="swipe-row" data-swipe
+         data-tap-action="toggleFoodExpand('${f.id}')"
+         data-longpress-action="startFoodMerge('${f.id}')"
          data-edit-action="openFoodForm('${f.id}')"
          data-delete-action="adminDeleteFoodAction('${f.id}','${safeName}',${usage})">
       <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
       <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
-      <div class="swipe-content food-row">
-        ${inner}
-        <button class="food-merge-start" title="Merge other ingredients into this one"
-                onclick="event.stopPropagation(); startFoodMerge('${f.id}')">Merge…</button>
-      </div>
-    </div>`;
+      <div class="swipe-content food-row">${inner}</div>
+    </div>
+    ${panelHTML}`;
+}
+
+function renderFoodSaucesPanel(foodId) {
+  const sauces = saucesUsingFood(foodId);
+  if (sauces.length === 0) {
+    return `<div class="food-sauces-panel"><span class="food-sauces-empty">No sauces use this yet.</span></div>`;
+  }
+  const chips = sauces.map(s => {
+    const color = (s.color || '#E85D04').replace(/"/g, '');
+    return `<button class="food-sauce-chip" style="border-left-color:${color}"
+              onclick="event.stopPropagation(); selectSauceFromManager('${s.id}')">${s.name}</button>`;
+  }).join('');
+  return `<div class="food-sauces-panel">${chips}</div>`;
+}
+
+function saucesUsingFood(foodId) {
+  const out = [];
+  const seen = new Set();
+  for (const s of state.adminSauces || []) {
+    if (seen.has(s.id)) continue;
+    const hit = (s.steps || []).some(st =>
+      (st.ingredients || []).some(i => i.foodId === foodId)
+    );
+    if (hit) { out.push({ id: s.id, name: s.name, color: s.color }); seen.add(s.id); }
+  }
+  out.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  return out;
 }
 
 function renderFoodForm() {
@@ -944,8 +977,17 @@ async function adminDeleteFoodAction(id, name, usage) {
   }
 }
 
+function toggleFoodExpand(id) {
+  if (state.foodMerge) return;
+  if (!state.expandedFoodIds) state.expandedFoodIds = new Set();
+  const set = state.expandedFoodIds;
+  if (set.has(id)) set.delete(id); else set.add(id);
+  render();
+}
+
 function startFoodMerge(keepId) {
   state.foodForm = null;
+  state.expandedFoodIds = new Set();
   state.foodMerge = { keepId, mergeIds: new Set(), error: null, saving: false };
   render();
 }

@@ -9,8 +9,27 @@ const SWIPE_TAP_MAX     = 8;    // px of movement still treated as a tap
 const SWIPE_AXIS_LOCK   = 6;    // px before we decide horizontal vs vertical
 const SWIPE_COMMIT_PX   = 60;   // past this, release commits the action
 const SWIPE_MAX_REVEAL  = 120;  // hard clamp on translateX
+const LONG_PRESS_MS     = 500;  // hold duration that fires data-longpress-action
 
 let active = null;
+
+function clearLongPress() {
+  if (!active) return;
+  if (active.longPressTimer) {
+    clearTimeout(active.longPressTimer);
+    active.longPressTimer = null;
+  }
+  active.row.classList.remove('is-pressing');
+}
+
+function fireLongPress() {
+  if (!active) return;
+  const row = active.row;
+  active.longPressTimer = null;
+  active.longPressFired = true;
+  row.classList.remove('is-pressing');
+  runAction(row.dataset.longpressAction);
+}
 
 function runAction(str) {
   if (!str) return;
@@ -49,8 +68,14 @@ function onPointerDown(e) {
     pointerId: e.pointerId,
     startX: e.clientX, startY: e.clientY,
     dx: 0, axis: null,
+    longPressTimer: null, longPressFired: false,
   };
   try { row.setPointerCapture(e.pointerId); } catch (_) {}
+
+  if (row.dataset.longpressAction) {
+    row.classList.add('is-pressing');
+    active.longPressTimer = setTimeout(fireLongPress, LONG_PRESS_MS);
+  }
 }
 
 function onPointerMove(e) {
@@ -58,9 +83,14 @@ function onPointerMove(e) {
   const dx = e.clientX - active.startX;
   const dy = e.clientY - active.startY;
 
+  if (active.longPressTimer && (Math.abs(dx) > SWIPE_TAP_MAX || Math.abs(dy) > SWIPE_TAP_MAX)) {
+    clearLongPress();
+  }
+
   if (active.axis === null) {
     if (Math.abs(dy) > SWIPE_AXIS_LOCK && Math.abs(dy) > Math.abs(dx)) {
       // Vertical scroll wins — release the row.
+      clearLongPress();
       active.row.releasePointerCapture?.(active.pointerId);
       active = null;
       return;
@@ -82,6 +112,14 @@ function onPointerMove(e) {
 function onPointerUp(e) {
   if (!active || e.pointerId !== active.pointerId) return;
 
+  if (active.longPressFired) {
+    // Long-press already fired its action; swallow the tap/swipe outcome.
+    active.row.releasePointerCapture?.(active.pointerId);
+    active = null;
+    return;
+  }
+  clearLongPress();
+
   if (active.axis === null) {
     // Never moved enough to lock — treat as tap.
     const row = active.row;
@@ -95,6 +133,7 @@ function onPointerUp(e) {
 
 function onPointerCancel(e) {
   if (!active || e.pointerId !== active.pointerId) return;
+  clearLongPress();
   endDrag(false);
 }
 

@@ -114,6 +114,7 @@ let state = {
   foodForm: null,                                                  // { mode: 'add' | 'edit', id?, name, category, categoryDraft, error?, saving? }
   foodMerge: null,                                                 // { keepId, mergeIds: Set<string>, error?, saving? }
   ingredientSections: {},                                          // { [category]: true } — open only when explicitly true
+  expandedFoodIds: new Set(),                                      // food ids whose sauces panel is open
 };
 
 function defaultBuilder() {
