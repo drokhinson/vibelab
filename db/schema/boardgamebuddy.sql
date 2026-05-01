@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 062
+-- Last updated: post-consolidation (matches db/migrations/boardgamebuddy/001_baseline.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: status='played' on boardgamebuddy_collections is no longer written by
