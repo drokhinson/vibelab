@@ -49,13 +49,14 @@ function renderBuilder() {
           </div>
         </div>` : '';
 
+      const isQualitative = ing.unit === 'to taste';
       return `<div class="ingredient-row-wrap">
         <div class="ingredient-row">
           <div class="ing-name-wrap">
             <input class="builder-input ing-name" placeholder="Ingredient" value="${esc(ing.name)}" data-builder-field="ing-name" data-step="${si}" data-ing="${ii}" autocomplete="off">
             ${acDropdown}
           </div>
-          <input class="builder-input ing-amount" type="number" step="0.1" min="0" placeholder="Qty" value="${ing.amount}" data-builder-field="ing-amount" data-step="${si}" data-ing="${ii}">
+          <input class="builder-input ing-amount" type="number" step="0.1" min="0" placeholder="${isQualitative ? '—' : 'Qty'}" value="${isQualitative ? '' : ing.amount}" data-builder-field="ing-amount" data-step="${si}" data-ing="${ii}" ${isQualitative ? 'disabled' : ''}>
           <select class="ing-unit" data-builder-field="ing-unit" data-step="${si}" data-ing="${ii}">
             ${UNITS.map(u => `<option ${ing.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
           </select>
@@ -75,7 +76,8 @@ function renderBuilder() {
     </div>`;
   }).join('');
 
-  const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && i.amount));
+  const ingHasQuantity = i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste');
+  const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity));
 
   const importErr = b.importError ? `<div class="builder-error">${esc(b.importError)}</div>` : '';
   const importPanel = `
@@ -100,6 +102,8 @@ function renderBuilder() {
       <div class="builder-sticky-header">
         ${importPanel}
         <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
+        <textarea class="builder-input builder-description-input" placeholder="Description (optional)" data-builder-field="description">${esc(b.description || '')}</textarea>
+        <input class="builder-input" type="url" placeholder="Source URL (optional)" value="${esc(b.sourceUrl || '')}" data-builder-field="source-url">
         <p class="builder-label">Type</p>
         <div class="cuisine-chips">${sauceTypeChips}</div>
         <p class="builder-label">Cuisine</p>
@@ -165,7 +169,7 @@ function renderBuilderReview() {
       ${step.inputFromStep ? `<div class="step-ref-badge">⤶ Combines Step ${step.inputFromStep} output</div>` : ''}
       <div class="review-ing-list">
         ${step.ingredients.filter(i => i.name.trim()).map(i =>
-          `<div class="review-ing-item">${i.amount} ${i.unit} ${i.name}</div>`
+          `<div class="review-ing-item">${i.unit === 'to taste' ? 'to taste' : `${i.amount} ${i.unit}`} ${i.name}</div>`
         ).join('')}
       </div>
     </div>
@@ -253,8 +257,11 @@ function builderHandleInput(el) {
   const si = parseInt(el.dataset.step);
   const ii = parseInt(el.dataset.ing);
   const b = state.builder;
+  let needsRender = false;
   switch (field) {
     case 'name': b.name = el.value; break;
+    case 'description': b.description = el.value; break;
+    case 'source-url': b.sourceUrl = el.value; break;
     case 'import-url': b.importUrl = el.value; break;
     case 'step-title': b.steps[si].title = el.value; break;
     case 'ing-name': {
@@ -268,15 +275,26 @@ function builderHandleInput(el) {
       break;
     }
     case 'ing-amount': b.steps[si].ingredients[ii].amount = el.value; break;
-    case 'ing-unit': b.steps[si].ingredients[ii].unit = el.value; break;
+    case 'ing-unit': {
+      const prev = b.steps[si].ingredients[ii].unit;
+      b.steps[si].ingredients[ii].unit = el.value;
+      // Toggling in/out of "to taste" changes whether the amount input is
+      // disabled — re-render so the row reflects the new state.
+      if ((prev === 'to taste') !== (el.value === 'to taste')) needsRender = true;
+      break;
+    }
     case 'input-from-step': {
       b.steps[si].inputFromStep = el.value ? parseInt(el.value) : null;
       break;
     }
   }
+  if (needsRender) {
+    render();
+    return;
+  }
   const btn = document.querySelector('.builder-primary-btn');
   if (btn && state.screen === 'builder') {
-    const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && i.amount));
+    const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste')));
     btn.disabled = !canContinue;
   }
 }
@@ -357,6 +375,7 @@ function _builderApplyParsedRecipe(parsed) {
   const b = state.builder;
   if (!b.name) b.name = parsed.name || b.name;
   if (parsed.description && !b.description) b.description = parsed.description;
+  if (parsed.sourceUrl && !b.sourceUrl) b.sourceUrl = parsed.sourceUrl;
 
   const allIngs = (parsed.ingredients || [])
     .map(p => {
@@ -484,7 +503,8 @@ async function builderSave() {
       cuisine: b.cuisine,
       cuisineEmoji: b.cuisineEmoji,
       color: b.color,
-      description: b.description,
+      description: b.description || '',
+      sourceUrl: (b.sourceUrl || '').trim() || null,
       sauceType: b.sauceType,
       itemIds: b.itemIds,
       steps: b.steps
@@ -493,19 +513,24 @@ async function builderSave() {
           title: s.title.trim(),
           inputFromStep: s.inputFromStep || null,
           ingredients: s.ingredients
-            .filter(i => i.name.trim() && parseFloat(i.amount) > 0)
-            .map(i => ({
-              name: i.name.trim(),
-              amount: parseFloat(i.amount),
-              unit: i.unit,
-              originalText: i.originalText || `${i.amount} ${i.unit} ${i.name}`.trim(),
-            })),
+            .filter(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste'))
+            .map(i => {
+              const isQualitative = i.unit === 'to taste';
+              return {
+                name: i.name.trim(),
+                amount: isQualitative ? 0 : parseFloat(i.amount),
+                unit: i.unit,
+                originalText: i.originalText || (isQualitative
+                  ? `to taste ${i.name}`.trim()
+                  : `${i.amount} ${i.unit} ${i.name}`.trim()),
+              };
+            }),
         }))
         .filter(s => s.ingredients.length > 0),
     };
     await createSauce(payload);
     state.builder = null;
-    navigate('admin');
+    await openSauceManager();
   } catch (err) {
     b.saving = false;
     b.error = err.message;

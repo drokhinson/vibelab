@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauces (
   cuisine_emoji TEXT NOT NULL,
   color         TEXT NOT NULL,
   description   TEXT NOT NULL,
+  source_url    TEXT,                    -- optional URL the sauce was imported from (migration 066)
   sauce_type    TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade'))
 );
 ALTER TABLE public.sauceboss_sauces ENABLE ROW LEVEL SECURITY;
@@ -129,8 +130,8 @@ ALTER TABLE public.sauceboss_ingredient_substitutions ENABLE ROW LEVEL SECURITY;
 --
 -- ── Recipe import (migration 063) ──────────────────────────────────────────
 -- create_sauceboss_sauce now accepts:
---   { id, name, cuisine, cuisineEmoji, color, description, sauceType,
---     itemIds: [...],
+--   { id, name, cuisine, cuisineEmoji, color, description, sourceUrl,
+--     sauceType, itemIds: [...],
 --     steps: [
 --       { stepOrder, title, inputFromStep,
 --         ingredients: [{ name, amount, unit, unitId, originalText,
@@ -138,3 +139,9 @@ ALTER TABLE public.sauceboss_ingredient_substitutions ENABLE ROW LEVEL SECURITY;
 --     ] }
 -- The backend resolves unitId + canonical fields from the unit registry; the
 -- RPC upserts foods by lower(trim(name)) and writes the normalized row.
+-- amount=0 + unit_id='to_taste' represents a qualitative ingredient.
+--
+-- ── Ingredient admin RPCs (migration 067) ───────────────────────────────────
+--   list_sauceboss_foods_with_usage()         → foods with recipe usage counts
+--   merge_sauceboss_foods(keep, merge_ids[])  → atomic merge + repoint
+--   delete_sauceboss_food_safe(id)            → returns usage count, refuses if >0

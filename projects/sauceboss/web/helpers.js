@@ -208,6 +208,63 @@ async function deleteAdminSauce(id, key) {
   return res.json();
 }
 
+// ─── Ingredient (food) admin ─────────────────────────────────────────────────
+async function fetchFoodsWithUsage() {
+  const data = await _loggedJson(`${API}/api/v1/sauceboss/foods-with-usage`);
+  return data.foods || [];
+}
+
+async function adminCreateFood(payload, key) {
+  const res = await fetch(`${API}/api/v1/sauceboss/admin/foods`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function adminUpdateFood(id, payload, key) {
+  const res = await fetch(`${API}/api/v1/sauceboss/admin/foods/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function adminDeleteFood(id, key) {
+  const res = await fetch(`${API}/api/v1/sauceboss/admin/foods/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function adminMergeFoods(keepId, mergeIds, key) {
+  const res = await fetch(`${API}/api/v1/sauceboss/admin/foods/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify({ keepId, mergeIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 // ─── Unit conversion ──────────────────────────────────────────────────────────
 function toTsp(amount, unit) { return amount * (TO_TSP[unit] || 1); }
 
@@ -399,19 +456,27 @@ function buildPieChart(items, size = 160) {
 function buildLegend(items) {
   const total = items.reduce((s, i) => s + toTsp(i.amount, i.unit), 0);
   return items.map((item, idx) => {
-    const pct = Math.round((toTsp(item.amount, item.unit) / total) * 100);
+    const isQualitative = item.unit === 'to taste';
     const color = ingColor(item.name, idx);
-    const converted = convertUnit(item.amount, item.unit, state.unitSystem, item);
     const isDisabled = state.disabledIngredients.has(item.name);
     const sub = isDisabled ? getSubstitutionText(item.name) : '';
+    const amountCell = isQualitative
+      ? '<span class="legend-amount legend-amount-qualitative">to taste</span>'
+      : (() => {
+          const converted = convertUnit(item.amount, item.unit, state.unitSystem, item);
+          return `<span class="legend-amount">${formatAmount(converted.amount)} ${converted.unit}</span>`;
+        })();
+    const pctCell = isQualitative
+      ? '<span class="legend-pct"></span>'
+      : `<span class="legend-pct">${Math.round((toTsp(item.amount, item.unit) / total) * 100)}%</span>`;
     return `<div class="legend-item${isDisabled ? ' legend-disabled' : ''}">
       <span class="legend-swatch" style="background:${color}"></span>
       <div class="legend-name-wrap">
         <span class="legend-name">${item.name}</span>
         ${sub ? `<span class="sub-hint">try ${sub}</span>` : ''}
       </div>
-      <span class="legend-amount">${formatAmount(converted.amount)} ${converted.unit}</span>
-      <span class="legend-pct">${pct}%</span>
+      ${amountCell}
+      ${pctCell}
     </div>`;
   }).join('');
 }
