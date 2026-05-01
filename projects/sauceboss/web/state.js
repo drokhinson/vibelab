@@ -107,8 +107,9 @@ let state = {
 
   // ── Ingredients tab ────────────────────────────────────────────────────────
   adminFoods: [],                                                  // [{ id, name, plural, usageCount, sauceCount }]
-  foodForm: null,                                                  // { mode: 'add' | 'edit', id?, name, error?, saving? }
+  foodForm: null,                                                  // { mode: 'add' | 'edit', id?, name, category, categoryDraft, error?, saving? }
   foodMerge: null,                                                 // { keepId, mergeIds: Set<string>, error?, saving? }
+  ingredientSections: {},                                          // { [category]: false } — collapsed when explicitly false; open by default
 };
 
 function defaultBuilder() {
