@@ -13,10 +13,10 @@ function renderBuilder() {
     <div class="new-cuisine-row">
       <input class="builder-input new-cuisine-name" placeholder="Cuisine name (e.g. Thai)"
              value="${esc(b.cuisineDraftName)}"
-             oninput="state.builder.cuisineDraftName=this.value">
+             data-builder-field="cuisine-draft-name">
       <input class="builder-input new-cuisine-emoji" placeholder="🌮" maxlength="4"
              value="${esc(b.cuisineDraftEmoji)}"
-             oninput="state.builder.cuisineDraftEmoji=this.value">
+             data-builder-field="cuisine-draft-emoji">
       <button class="new-cuisine-cancel" onclick="builderCancelNewCuisine()">Cancel</button>
     </div>` : '';
 
@@ -295,6 +295,8 @@ function builderHandleInput(el) {
     case 'description': b.description = el.value; break;
     case 'source-url': b.sourceUrl = el.value; break;
     case 'import-url': b.importUrl = el.value; break;
+    case 'cuisine-draft-name': b.cuisineDraftName = el.value; break;
+    case 'cuisine-draft-emoji': b.cuisineDraftEmoji = el.value; break;
     case 'step-title': b.steps[si].title = el.value; break;
     case 'ing-name': {
       b.steps[si].ingredients[ii].name = el.value;
@@ -326,7 +328,10 @@ function builderHandleInput(el) {
   }
   const btn = document.querySelector('.builder-primary-btn');
   if (btn && state.screen === 'builder') {
-    const canContinue = b.name.trim() && b.cuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste')));
+    const hasCuisine = b.cuisineDraftMode
+      ? !!(b.cuisineDraftName.trim() && b.cuisineDraftEmoji.trim())
+      : !!b.cuisine;
+    const canContinue = b.name.trim() && hasCuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste')));
     btn.disabled = !canContinue;
   }
 }
