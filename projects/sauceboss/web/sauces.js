@@ -46,8 +46,9 @@ function renderSauceSelector() {
     const emoji = renderEmoji(cuisineSauces[0]?.cuisineEmoji || '🍽️');
     const isOpen = state.expandedCuisines.has(cuisine);
     const availCount = cuisineSauces.filter(isSauceAvailable).length;
+    const safeCuisine = cuisine.replace(/'/g, "\\'");
 
-    const saucesHTML = cuisineSauces.map(sauce => {
+    const saucesHTML = isOpen ? cuisineSauces.map(sauce => {
       const available = isSauceAvailable(sauce);
       const missing = missingSauceIngredients(sauce);
       const missingText = missing.map(m => {
@@ -64,16 +65,16 @@ function renderSauceSelector() {
         ${!available ? `<span class="sauce-missing-badge">-${missing.length}</span>` : ''}
         <span class="sauce-arrow"><i data-lucide="chevron-right"></i></span>
       </div>`;
-    }).join('');
+    }).join('') : '';
 
-    return `<div class="cuisine-group ${isOpen ? 'open' : ''}" id="cg-${cuisine}">
-      <button class="cuisine-header" onclick="toggleCuisine('${cuisine}')">
-        <span class="cuisine-flag">${emoji}</span>
-        <span class="cuisine-name">${cuisine}</span>
-        <span class="cuisine-count">${availCount}/${cuisineSauces.length}</span>
-        <span class="cuisine-chevron"><i data-lucide="chevron-down"></i></span>
-      </button>
-      <div class="sauce-list">${saucesHTML}</div>
+    return `<div class="ingredient-category-group" id="cg-${cuisine}">
+      <div class="ingredient-category-header" onclick="toggleCuisine('${safeCuisine}')">
+        <span class="ingredient-category-chevron">${isOpen ? '▾' : '▸'}</span>
+        <span class="cuisine-flag-emoji">${emoji}</span>
+        <span class="ingredient-category-name">${cuisine}</span>
+        <span class="ingredient-category-count">${availCount}/${cuisineSauces.length}</span>
+      </div>
+      ${isOpen ? `<div class="ingredient-category-body">${saucesHTML}</div>` : ''}
     </div>`;
   }).join('');
 

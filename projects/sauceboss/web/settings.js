@@ -147,24 +147,25 @@ function renderSaucesTab(isAdmin) {
   }
   const cuisines = Object.keys(grouped).sort();
 
-  return cuisines.map(cuisine => `
-    <div class="admin-cuisine-group">
-      <div class="admin-cuisine-header">${cuisine} <span class="admin-count">${grouped[cuisine].length}</span></div>
-      ${grouped[cuisine].map(s => {
-        const safeName = s.name.replace(/'/g, "\\'");
-        const typeValue = s.sauceType || 'sauce';
-        const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
-        const inner = `
-          <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
-          <div class="admin-sauce-info">
-            <div class="admin-sauce-name">${s.name}</div>
-            <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
-          </div>
-          <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>`;
-        if (!isAdmin) {
-          return `<div class="admin-sauce-row" onclick="selectSauceFromManager('${s.id}')">${inner}</div>`;
-        }
-        return `
+  return cuisines.map(cuisine => {
+    const safeCuisine = cuisine.replace(/'/g, "\\'");
+    const open = state.cuisineSections[cuisine] === true;
+    const chevron = open ? '▾' : '▸';
+    const rowsHTML = open ? grouped[cuisine].map(s => {
+      const safeName = s.name.replace(/'/g, "\\'");
+      const typeValue = s.sauceType || 'sauce';
+      const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
+      const inner = `
+        <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
+        <div class="admin-sauce-info">
+          <div class="admin-sauce-name">${s.name}</div>
+          <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
+        </div>
+        <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>`;
+      if (!isAdmin) {
+        return `<div class="admin-sauce-row" onclick="selectSauceFromManager('${s.id}')">${inner}</div>`;
+      }
+      return `
         <div class="swipe-row" data-swipe
              data-tap-action="selectSauceFromManager('${s.id}')"
              data-edit-action="openBuilderEdit('${s.id}')"
@@ -173,9 +174,22 @@ function renderSaucesTab(isAdmin) {
           <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
           <div class="swipe-content admin-sauce-row">${inner}</div>
         </div>`;
-      }).join('')}
-    </div>
-  `).join('');
+    }).join('') : '';
+    return `
+      <div class="ingredient-category-group">
+        <div class="ingredient-category-header" onclick="toggleCuisineSection('${safeCuisine}')">
+          <span class="ingredient-category-chevron">${chevron}</span>
+          <span class="ingredient-category-name">${cuisine}</span>
+          <span class="ingredient-category-count">${grouped[cuisine].length}</span>
+        </div>
+        ${open ? `<div class="ingredient-category-body">${rowsHTML}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function toggleCuisineSection(cuisine) {
+  state.cuisineSections[cuisine] = state.cuisineSections[cuisine] === true ? false : true;
+  render();
 }
 
 // ─── Dish Tab (carbs / proteins / salads as parents with variants) ───────────
@@ -238,12 +252,13 @@ function renderDishSection(sec, parents, isAdmin) {
       ` : ''}
     ` : '';
   return `
-    <div class="admin-cuisine-group">
-      <div class="admin-cuisine-header" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between" onclick="toggleItemSection('${sec.key}')">
-        <span>${sec.label} <span class="admin-count">${totalCount}</span></span>
-        <i data-lucide="${open ? 'chevron-down' : 'chevron-right'}"></i>
+    <div class="ingredient-category-group">
+      <div class="ingredient-category-header" onclick="toggleItemSection('${sec.key}')">
+        <span class="ingredient-category-chevron">${open ? '▾' : '▸'}</span>
+        <span class="ingredient-category-name">${sec.label}</span>
+        <span class="ingredient-category-count">${totalCount}</span>
       </div>
-      ${body}
+      ${open ? `<div class="ingredient-category-body">${body}</div>` : ''}
     </div>`;
 }
 
@@ -723,8 +738,7 @@ function groupFoodsByCategory(foods) {
 
 function renderIngredientCategoryGroup(group, isAdmin, merge, forceOpen) {
   const { category, items } = group;
-  const explicitlyClosed = state.ingredientSections[category] === false;
-  const open = forceOpen || !explicitlyClosed;
+  const open = forceOpen || state.ingredientSections[category] === true;
   const chevron = open ? '▾' : '▸';
   const safeCat = category.replace(/'/g, "\\'");
   const rowsHTML = open ? items.map(f => renderFoodRow(f, isAdmin, merge)).join('') : '';
@@ -740,8 +754,7 @@ function renderIngredientCategoryGroup(group, isAdmin, merge, forceOpen) {
 }
 
 function toggleIngredientSection(category) {
-  const current = state.ingredientSections[category];
-  state.ingredientSections[category] = current === false ? true : false;
+  state.ingredientSections[category] = state.ingredientSections[category] === true ? false : true;
   render();
 }
 

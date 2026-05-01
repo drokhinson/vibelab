@@ -82,6 +82,15 @@ async function fetchIngredientCategories() {
   return res.json();
 }
 
+function availableCuisines() {
+  const seen = new Map();
+  for (const c of CUISINES) seen.set(c.name, c.emoji);
+  for (const s of (state.adminSauces || [])) {
+    if (s.cuisine && !seen.has(s.cuisine)) seen.set(s.cuisine, s.cuisineEmoji || '🍽');
+  }
+  return [...seen].map(([name, emoji]) => ({ name, emoji }));
+}
+
 async function fetchSubstitutions() {
   const res = await fetch(`${API}/api/v1/sauceboss/substitutions`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
