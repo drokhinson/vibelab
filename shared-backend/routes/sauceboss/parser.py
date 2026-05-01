@@ -64,16 +64,20 @@ class ParsedRecipe:
 # ── recipe-scrapers + ingredient_parser are heavy deps; import lazily. ──────
 
 def _scrape_html(url: str):
-    """Wrap recipe_scrapers.scrape_me; map common failures to ScrapeError.
+    """Fetch ``url`` with a browser User-Agent, then hand off to scrape_html.
 
-    The library's old ``wild_mode`` kwarg (best-effort scrape on unsupported
-    sites) was removed in 15.x — sites must now be on the supported-sites
-    list, which today covers ~500+ recipe domains. See
-    https://docs.recipe-scrapers.com/getting-started/supported-sites/ or run
-    ``from recipe_scrapers import SCRAPERS; sorted(SCRAPERS.keys())``.
+    recipe-scrapers' built-in ``scrape_me(url)`` uses ``urllib.request`` and
+    sends a default UA that Cloudflare-protected sites (Allrecipes, NYT, Bon
+    Appétit, etc.) reject with HTTP 403. The library's docs explicitly
+    recommend fetching HTML yourself, which is what we do here so we can set
+    a realistic UA + ``Accept-Language``.
+
+    Sites must still be on the supported-sites list (~500 domains). Run
+    ``from recipe_scrapers import SCRAPERS; sorted(SCRAPERS.keys())`` to see
+    them.
     """
     try:
-        from recipe_scrapers import scrape_me
+        from recipe_scrapers import scrape_html
         from recipe_scrapers._exceptions import (
             NoSchemaFoundInWildMode,
             SchemaOrgException,
@@ -82,8 +86,34 @@ def _scrape_html(url: str):
     except ImportError as e:
         raise ScrapeError(ScrapeErrorKind.UNKNOWN, f"recipe-scrapers not installed: {e}")
 
+    import httpx
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
     try:
-        return scrape_me(url)
+        resp = httpx.get(url, headers=headers, follow_redirects=True, timeout=15.0)
+        resp.raise_for_status()
+        html = resp.text
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status in (401, 403):
+            raise ScrapeError(
+                ScrapeErrorKind.UNSUPPORTED_SITE,
+                f"Site blocked the request (HTTP {status}). Try a different recipe URL.",
+            )
+        raise ScrapeError(ScrapeErrorKind.NETWORK, f"HTTP {status} from {url}")
+    except (httpx.RequestError, OSError) as e:
+        raise ScrapeError(ScrapeErrorKind.NETWORK, f"{type(e).__name__}: {e}")
+
+    try:
+        return scrape_html(html, org_url=url)
     except WebsiteNotImplementedError as e:
         raise ScrapeError(ScrapeErrorKind.UNSUPPORTED_SITE, str(e))
     except NoSchemaFoundInWildMode as e:
@@ -91,10 +121,6 @@ def _scrape_html(url: str):
     except SchemaOrgException as e:
         raise ScrapeError(ScrapeErrorKind.NO_STRUCTURED_DATA, str(e))
     except Exception as e:
-        # recipe-scrapers can raise raw urllib/httpx errors for network issues.
-        msg = str(e).lower()
-        if any(s in msg for s in ("timed out", "connection", "name or service", "ssl", "dns")):
-            raise ScrapeError(ScrapeErrorKind.NETWORK, str(e))
         raise ScrapeError(ScrapeErrorKind.UNKNOWN, f"{type(e).__name__}: {e}")
 
 
