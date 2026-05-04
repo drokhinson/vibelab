@@ -168,7 +168,7 @@ async function handleOAuthSignIn(provider) {
   try {
     const { error } = await supabaseClient.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: window.location.origin + window.location.pathname },
+      options: { redirectTo: window.location.origin },
     });
     if (error) throw error;
   } catch (e) {
