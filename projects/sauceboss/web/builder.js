@@ -111,6 +111,7 @@ function renderBuilder() {
     <div class="app-header">
       <button class="back-btn" onclick="navigate('admin')">‹ Back</button>
       <div class="logo"><span>🍲</span>${b.editingId ? 'Edit Sauce' : 'Create a Sauce'}</div>
+      ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
       <div class="builder-sticky-header">
@@ -162,6 +163,7 @@ function renderBuilderItems() {
       <button class="back-btn" onclick="navigate('builder')">‹ Back</button>
       <div class="logo"><span class="color-dot-header" style="background:${b.color}"></span>${b.name || 'New Sauce'}</div>
       <div class="subtitle">${b.cuisine ? renderEmoji(b.cuisineEmoji) + ' ' + b.cuisine : `Select ${t?.pairLabel?.toLowerCase() || 'items'}`}</div>
+      ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
       <p class="section-label">Which ${t?.pairLabel?.toLowerCase() || 'dishes'} go with this ${t?.label?.toLowerCase() || 'sauce'}?</p>
@@ -196,6 +198,7 @@ function renderBuilderReview() {
       <button class="back-btn" onclick="navigate('builder-items')">‹ Back</button>
       <div class="logo"><span class="color-dot-header" style="background:${b.color}"></span>${b.name}</div>
       <div class="subtitle">${renderEmoji(b.cuisineEmoji)} ${b.cuisine} · ${b.steps.length} step${b.steps.length > 1 ? 's' : ''} · ${totalIngs} ingredients</div>
+      ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
       <div class="review-summary">

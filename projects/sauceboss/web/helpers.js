@@ -557,7 +557,7 @@ function computeInitials(name) {
 function renderHeaderAuthSlot() {
   if (!supabaseClient) return '';
   if (!currentUser) {
-    return `<button class="auth-signin-btn" onclick="openAuthModal()"><i data-lucide="log-in"></i> Sign in</button>`;
+    return `<button class="auth-signin-btn" onclick="openAuthModal()" title="Sign in" aria-label="Sign in"><i data-lucide="log-in"></i></button>`;
   }
   const name = currentUser.display_name || 'Saucier';
   const initials = computeInitials(name);

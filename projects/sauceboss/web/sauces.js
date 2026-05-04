@@ -108,6 +108,7 @@ function renderSauceSelector() {
       <button class="back-btn" onclick="navigate('${ctx.backScreen}')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>${ctx.emoji}</span>${ctx.title}</div>
       <div class="subtitle">${sauces.length} options · select your style</div>
+      ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
       ${currentUser ? `

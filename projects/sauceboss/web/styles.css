@@ -1110,7 +1110,7 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 .settings-btn {
   position: absolute;
   top: 8px;
-  right: 16px;
+  right: 60px;
   background: rgba(255,255,255,0.15);
   border: none;
   color: white;
@@ -2017,29 +2017,27 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 
 .auth-signin-btn {
   position: absolute;
-  top: 12px;
-  right: 60px;
+  top: 10px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  justify-content: center;
   border: 1px solid rgba(255,255,255,0.4);
   border-radius: 999px;
   background: rgba(255,255,255,0.15);
   color: #fff;
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
   z-index: 5;
 }
 .auth-signin-btn:hover { background: rgba(255,255,255,0.25); }
-.auth-signin-btn i { width: 14px; height: 14px; }
+.auth-signin-btn i { width: 16px; height: 16px; }
 
 .auth-pill {
   position: absolute;
   top: 10px;
-  right: 60px;
+  right: 12px;
   z-index: 5;
 }
 .auth-pill__summary {
