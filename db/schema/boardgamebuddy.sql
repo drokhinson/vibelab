@@ -256,5 +256,4 @@ CREATE INDEX IF NOT EXISTS idx_bgb_bgg_pending_user_status
   ON public.boardgamebuddy_bgg_pending_imports (user_id, status)
   WHERE status = 'pending';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_bgg_pending_unique
-  ON public.boardgamebuddy_bgg_pending_imports (user_id, bgg_id, kind)
-  WHERE status = 'pending';
+  ON public.boardgamebuddy_bgg_pending_imports (user_id, bgg_id, kind);
