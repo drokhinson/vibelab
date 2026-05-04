@@ -1,14 +1,21 @@
 """BoardGameGeek account linking + collection/plays import.
 
 Flow:
-  1. User links a BGG username (POST /bgg/link), stored on their profile.
-  2. POST /bgg/sync fetches the user's collection and plays from BGG's public
-     XMLAPI (no API key required for read-only user data).
-  3. Rows referencing games we already have are upserted immediately.
+  1. User links a BGG account (POST /bgg/link with username + password). The
+     backend POSTs to BGG's /login/api/v1, captures the SessionID + bgg
+     cookies, stores them and a Fernet-encrypted copy of the password on the
+     profile (see bgg_credentials.py).
+  2. POST /bgg/sync calls /collection?showprivate=1 and /plays AS that user
+     via fetch_bgg_as_user, which transparently re-logs in when the cookies
+     expire. Public catalog calls (search, /thing) keep going through
+     fetch_bgg with just the shared bearer token.
+  3. Rows referencing games we already have are upserted immediately, including
+     the private fields (purchase price, private comments, …).
   4. Rows referencing games we don't have are persisted as pending imports;
      a BackgroundTask drains the queue by calling import_game_from_bgg() and
      materializing the deferred collection / play rows.
-  5. The FE polls GET /bgg/sync/status until pending_count hits zero.
+  5. The FE polls GET /bgg/sync/status until pending_count hits zero, and uses
+     auth_state to decide between "Link", "Re-link required", and "Linked".
 
 Idempotent: collection rows upsert on (user_id, game_id); plays dedup on
 (user_id, bgg_play_id). Re-running sync is always safe.
@@ -25,7 +32,15 @@ from supabase import Client
 from db import get_supabase
 
 from . import router
-from .bgg_client import fetch_bgg, parse_bgg_xml
+from .bgg_client import (
+    clear_user_session,
+    fetch_bgg_as_user,
+    has_stored_credentials,
+    parse_bgg_xml,
+    store_user_credentials,
+)
+from .bgg_credentials import login_to_bgg
+from .constants import BggAuthState
 from .dependencies import CurrentUser, get_current_user
 from .game_routes import import_game_from_bgg
 from .models import (
@@ -53,21 +68,6 @@ _WORKER_MAX_ATTEMPTS = 3
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-async def _bgg_user_exists(username: str) -> bool:
-    """Verify the BGG account exists by looking up its numeric user id.
-
-    BGG returns `<user id="0" ...>` for unknown handles and `<user id="<n>">`
-    for real ones, so a non-zero id is our existence signal.
-    """
-    body = await fetch_bgg("/user", {"name": username}, timeout=10.0)
-    root = parse_bgg_xml(body, context=f"user name={username!r}")
-    user_id = root.get("id")
-    try:
-        return bool(user_id) and int(user_id) > 0
-    except (TypeError, ValueError):
-        return False
-
-
 def _existing_game_map(sb: Client, bgg_ids: list[int]) -> dict[int, str]:
     """Bulk-resolve {bgg_id → game_id} for games already in our catalog."""
     if not bgg_ids:
@@ -81,10 +81,32 @@ def _existing_game_map(sb: Client, bgg_ids: list[int]) -> dict[int, str]:
     return {r["bgg_id"]: r["id"] for r in (rows.data or []) if r.get("bgg_id")}
 
 
-def _upsert_collection_row(sb: Client, user_id: str, game_id: str, status: str) -> None:
-    """Upsert one collection row using the existing (user_id, game_id) UNIQUE."""
+def _upsert_collection_row(
+    sb: Client,
+    user_id: str,
+    game_id: str,
+    status: str,
+    private: Optional[dict] = None,
+) -> None:
+    """Upsert one collection row using the existing (user_id, game_id) UNIQUE.
+
+    `private` is the dict produced by _parse_collection (private fields from
+    BGG's <privateinfo>). Keys missing from BGG come through as None so
+    re-syncing after BGG-side deletion still nulls our copy.
+    """
+    payload: dict = {"user_id": user_id, "game_id": game_id, "status": status}
+    if private is not None:
+        payload.update({
+            "bgg_private_comment": private.get("private_comment"),
+            "bgg_acquired_from": private.get("acquired_from"),
+            "bgg_acquisition_date": private.get("acquisition_date"),
+            "bgg_purchase_price": private.get("purchase_price"),
+            "bgg_purchase_currency": private.get("purchase_currency"),
+            "bgg_inventory_location": private.get("inventory_location"),
+            "bgg_quantity": private.get("quantity"),
+        })
     sb.table("boardgamebuddy_collections").upsert(
-        {"user_id": user_id, "game_id": game_id, "status": status},
+        payload,
         on_conflict="user_id,game_id",
     ).execute()
 
@@ -192,10 +214,65 @@ def _derive_collection_status(item) -> Optional[str]:
     return None
 
 
-def _parse_collection(body: str, *, username: str) -> list[tuple[int, str]]:
-    """Parse a BGG /collection response into [(bgg_id, status), ...]."""
+def _parse_private_info(item) -> Optional[dict]:
+    """Extract <privateinfo .../> attributes (only present with showprivate=1).
+
+    Returns None when the element is absent — callers should treat that as
+    "no private fields to write" rather than nulling existing rows.
+    """
+    pi = item.find("privateinfo")
+    if pi is None:
+        return None
+
+    def _num(name: str) -> Optional[float]:
+        val = pi.get(name)
+        if val in (None, "", "0", "0.0", "0.00"):
+            return None
+        try:
+            return float(val)
+        except ValueError:
+            return None
+
+    def _int(name: str) -> Optional[int]:
+        val = pi.get(name)
+        if val in (None, "", "0"):
+            return None
+        try:
+            return int(val)
+        except ValueError:
+            return None
+
+    acq_date = pi.get("acquisitiondate") or None
+    if acq_date == "0000-00-00":
+        acq_date = None
+
+    private_comment_el = pi.find("privatecomment")
+    private_comment = (
+        private_comment_el.text.strip()
+        if private_comment_el is not None and private_comment_el.text
+        else None
+    )
+
+    return {
+        "private_comment": private_comment,
+        "acquired_from": (pi.get("acquiredfrom") or None) or None,
+        "acquisition_date": acq_date,
+        "purchase_price": _num("pricepaid"),
+        "purchase_currency": (pi.get("pricepaidcurrency") or None) or None,
+        "inventory_location": (pi.get("inventorylocation") or None) or None,
+        "quantity": _int("quantity"),
+    }
+
+
+def _parse_collection(body: str, *, username: str) -> list[tuple[int, str, Optional[dict]]]:
+    """Parse a BGG /collection?showprivate=1 response.
+
+    Returns a list of (bgg_id, status, private_fields_or_None). The third
+    element is None for items that don't carry a <privateinfo> block (the
+    response was unauthenticated or the user has no private data on them).
+    """
     root = parse_bgg_xml(body, context=f"collection user={username!r}")
-    out: list[tuple[int, str]] = []
+    out: list[tuple[int, str, Optional[dict]]] = []
     for item in root.findall("item"):
         try:
             bgg_id = int(item.get("objectid", "0"))
@@ -206,7 +283,7 @@ def _parse_collection(body: str, *, username: str) -> list[tuple[int, str]]:
         status = _derive_collection_status(item)
         if status is None:
             continue
-        out.append((bgg_id, status))
+        out.append((bgg_id, status, _parse_private_info(item)))
     return out
 
 
@@ -330,7 +407,11 @@ async def _process_pending_imports(user_id: str) -> None:
                 try:
                     if row["kind"] == "collection":
                         _upsert_collection_row(
-                            sb, user_id, game_id, row["payload"]["status"]
+                            sb,
+                            user_id,
+                            game_id,
+                            row["payload"]["status"],
+                            row["payload"].get("private"),
                         )
                     elif row["kind"] == "play":
                         _materialize_play(sb, user_id, game_id, row["payload"])
@@ -360,9 +441,17 @@ async def _process_pending_imports(user_id: str) -> None:
 # ── Sync core ────────────────────────────────────────────────────────────────
 
 
-async def _fetch_collection(username: str) -> list[tuple[int, str]]:
-    """Fetch + parse the user's BGG collection. Pulls own + wishlist + wanttoplay."""
-    body = await fetch_bgg(
+async def _fetch_collection(
+    user_id: str, username: str,
+) -> list[tuple[int, str, Optional[dict]]]:
+    """Fetch the linked user's collection authenticated as that user.
+
+    `showprivate=1` is what makes <privateinfo> show up; it requires the
+    request to be authenticated as the same BGG user, which fetch_bgg_as_user
+    handles via the stored cookies.
+    """
+    body = await fetch_bgg_as_user(
+        user_id,
         "/collection",
         {
             "username": username,
@@ -370,18 +459,24 @@ async def _fetch_collection(username: str) -> list[tuple[int, str]]:
             "wishlist": 1,
             "wanttoplay": 1,
             "stats": 1,
+            "showprivate": 1,
         },
         timeout=20.0,
     )
     return _parse_collection(body, username=username)
 
 
-async def _fetch_all_plays(username: str) -> list[dict]:
-    """Pull every page of /plays for a user (BGG returns 100 per page)."""
+async def _fetch_all_plays(user_id: str, username: str) -> list[dict]:
+    """Pull every page of /plays for a user (BGG returns 100 per page).
+
+    Uses cookie auth so private plays — and any future write actions — are
+    available, mirroring the collection sync.
+    """
     page = 1
     out: list[dict] = []
     while True:
-        body = await fetch_bgg(
+        body = await fetch_bgg_as_user(
+            user_id,
             "/plays",
             {"username": username, "page": page},
             timeout=20.0,
@@ -403,22 +498,25 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
     """Pull collection + plays from BGG, materialize knowns, queue unknowns."""
     sb = get_supabase()
 
-    collection_rows = await _fetch_collection(username)
-    play_rows = await _fetch_all_plays(username)
+    collection_rows = await _fetch_collection(user_id, username)
+    play_rows = await _fetch_all_plays(user_id, username)
 
     # Resolve known bgg_ids in two batched queries.
-    all_bgg_ids = {bid for bid, _ in collection_rows} | {p["bgg_id"] for p in play_rows}
+    all_bgg_ids = {bid for bid, _, _ in collection_rows} | {p["bgg_id"] for p in play_rows}
     known = _existing_game_map(sb, sorted(all_bgg_ids))
 
     # Materialize collection.
     coll_imported = 0
     coll_pending = 0
-    for bgg_id, status in collection_rows:
+    for bgg_id, status, private in collection_rows:
         if bgg_id in known:
-            _upsert_collection_row(sb, user_id, known[bgg_id], status)
+            _upsert_collection_row(sb, user_id, known[bgg_id], status, private)
             coll_imported += 1
         else:
-            _queue_pending(sb, user_id, bgg_id, "collection", {"status": status})
+            _queue_pending(
+                sb, user_id, bgg_id, "collection",
+                {"status": status, "private": private},
+            )
             coll_pending += 1
 
     # Materialize plays.
@@ -455,27 +553,27 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
     "/bgg/link",
     response_model=BggLinkResponse,
     status_code=200,
-    summary="Link a BoardGameGeek username",
+    summary="Link a BoardGameGeek account (username + password)",
 )
 async def link_bgg(
     body: BggLinkBody,
     user: CurrentUser = Depends(get_current_user),
 ) -> BggLinkResponse:
-    """Verify the BGG account exists and store its handle on the profile."""
+    """Authenticate against BGG, then store the username + encrypted password.
+
+    A successful login is also our existence check — BGG returns 401 for
+    unknown accounts and bad passwords alike, which we surface as a 400. On
+    success we keep the SessionID + cookies so subsequent xmlapi2 calls can
+    be made AS this user (unlocking showprivate=1 and future write actions).
+    """
     sb = get_supabase()
     username = body.username.strip()
     if not username:
         raise HTTPException(status_code=400, detail="Username is required")
 
-    if not await _bgg_user_exists(username):
-        raise HTTPException(
-            status_code=404,
-            detail=f"BoardGameGeek account '{username}' not found.",
-        )
-
-    sb.table("boardgamebuddy_profiles").update(
-        {"bgg_username": username}
-    ).eq("id", user.user_id).execute()
+    plain_password = body.password.get_secret_value()
+    session = await login_to_bgg(username, plain_password)
+    store_user_credentials(sb, user.user_id, username, plain_password, session)
 
     return BggLinkResponse(bgg_username=username)
 
@@ -489,28 +587,37 @@ async def link_bgg(
 async def unlink_bgg(
     user: CurrentUser = Depends(get_current_user),
 ) -> BggLinkResponse:
-    """Clear bgg_username on the profile. Imported data stays — it's normal BB data now."""
+    """Clear all BGG credentials/cookies. Imported games and plays stay."""
     sb = get_supabase()
-    sb.table("boardgamebuddy_profiles").update(
-        {"bgg_username": None}
-    ).eq("id", user.user_id).execute()
+    clear_user_session(sb, user.user_id)
     return BggLinkResponse(bgg_username=None)
 
 
 def _require_linked_username(sb: Client, user_id: str) -> str:
-    """Read the linked BGG handle off the profile, 400 if not linked."""
+    """Read the linked BGG handle off the profile.
+
+    Returns 400 when nothing is linked. Returns 409 ("re-link required") when
+    the username is set but no encrypted password exists — i.e. a legacy
+    public-only link from before per-user auth was added.
+    """
     row = (
         sb.table("boardgamebuddy_profiles")
-        .select("bgg_username")
+        .select("bgg_username, bgg_password_enc")
         .eq("id", user_id)
         .execute()
     )
-    if not row.data or not row.data[0].get("bgg_username"):
+    profile = (row.data or [None])[0]
+    if not profile or not profile.get("bgg_username"):
         raise HTTPException(
             status_code=400,
             detail="No BoardGameGeek account linked. Link one first.",
         )
-    return row.data[0]["bgg_username"]
+    if not profile.get("bgg_password_enc"):
+        raise HTTPException(
+            status_code=409,
+            detail="BGG re-link required: please re-enter your BGG password.",
+        )
+    return profile["bgg_username"]
 
 
 @router.post(
@@ -565,21 +672,28 @@ async def process_pending(
     "/bgg/sync/status",
     response_model=BggSyncStatus,
     status_code=200,
-    summary="BGG sync status (linked username + queue counts)",
+    summary="BGG sync status (linked username + auth state + queue counts)",
 )
 async def get_sync_status(
     user: CurrentUser = Depends(get_current_user),
 ) -> BggSyncStatus:
-    """Return linked BGG username and pending/errored counts for FE polling."""
+    """Return linked username, auth_state, and pending/errored counts for FE polling."""
     sb = get_supabase()
 
     profile = (
         sb.table("boardgamebuddy_profiles")
-        .select("bgg_username")
+        .select("bgg_username, bgg_password_enc")
         .eq("id", user.user_id)
         .execute()
     )
-    bgg_username = (profile.data[0].get("bgg_username") if profile.data else None)
+    profile_row = (profile.data or [None])[0] or {}
+    bgg_username = profile_row.get("bgg_username")
+    if not bgg_username:
+        auth_state = BggAuthState.UNLINKED
+    elif has_stored_credentials(profile_row):
+        auth_state = BggAuthState.LINKED
+    else:
+        auth_state = BggAuthState.RELINK_REQUIRED
 
     pending_q = (
         sb.table("boardgamebuddy_bgg_pending_imports")
@@ -611,6 +725,7 @@ async def get_sync_status(
 
     return BggSyncStatus(
         bgg_username=bgg_username,
+        auth_state=auth_state,
         pending_count=pending_q.count or 0,
         errored_count=errored_q.count or 0,
         last_completed_at=last_completed_at,

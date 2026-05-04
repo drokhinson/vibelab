@@ -46,6 +46,20 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- Linked BoardGameGeek username for collection/plays sync (migration 062).
   -- Unique only when non-null so multiple unlinked profiles can coexist.
   bgg_username TEXT,
+  -- Per-user BGG authentication (migration 003). The user logs in with their
+  -- BGG password at link time; we store it Fernet-encrypted with
+  -- BGG_CREDENTIAL_KEY and exchange it via POST /login/api/v1 for a SessionID
+  -- cookie. Subsequent xmlapi2 calls are authenticated AS that user (instead
+  -- of using the shared BGG_API_TOKEN), which is the only way to read private
+  -- collection fields (showprivate=1) and to act on the user's behalf.
+  -- bgg_password_enc null + bgg_username set = legacy public-only link;
+  -- backend surfaces auth_state="relink_required" and the FE re-prompts.
+  bgg_password_enc TEXT,
+  bgg_session_id TEXT,
+  bgg_session_expires_at TIMESTAMPTZ,
+  bgg_session_user_cookie TEXT,
+  bgg_session_pass_cookie TEXT,
+  bgg_last_login_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_profiles ENABLE ROW LEVEL SECURITY;
@@ -72,6 +86,16 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
   status TEXT NOT NULL CHECK (status IN ('owned', 'played', 'wishlist')),
   added_at TIMESTAMPTZ DEFAULT now(),
+  -- Private fields from BGG /collection?showprivate=1 (migration 003).
+  -- Populated only when the BGG sync request was authenticated as the
+  -- collection's owner via the user's per-account session cookies.
+  bgg_private_comment TEXT,
+  bgg_acquired_from TEXT,
+  bgg_acquisition_date DATE,
+  bgg_purchase_price NUMERIC(10, 2),
+  bgg_purchase_currency TEXT,
+  bgg_inventory_location TEXT,
+  bgg_quantity INTEGER,
   UNIQUE(user_id, game_id)
 );
 ALTER TABLE public.boardgamebuddy_collections ENABLE ROW LEVEL SECURITY;

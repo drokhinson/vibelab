@@ -138,3 +138,5 @@ All vars are in Railway (backend) and Vercel (frontend) dashboards. Never commit
 | `EXPO_PUBLIC_API_URL` | `app/.env` | Railway backend URL for React Native |
 | `ADMIN_API_KEY` | Railway | Admin dashboard authentication key |
 | `WEALTHMATE_JWT_SECRET` | Railway | WealthMate JWT signing secret |
+| `BGG_API_TOKEN` | Railway | BoardGameGeek app-registration token (rate-limit accounting; not user-scoped) |
+| `BGG_CREDENTIAL_KEY` | Railway | Fernet key (urlsafe base64) used to encrypt linked users' BGG passwords. Generate via `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Rotating it forces every BGG-linked user to re-link. |

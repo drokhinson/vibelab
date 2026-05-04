@@ -202,11 +202,11 @@ each missing game from the BGG XML API.
 - `DELETE /api/v1/boardgame_buddy/plays/{play_id}` — only the original logger can delete
 - `GET /api/v1/boardgame_buddy/buddies` — alphabetical list with `linked_display_name` and `play_count`
 - `POST /api/v1/boardgame_buddy/buddies/{buddy_id}/link` — body `{user_id}`; one-way link, merges any of the owner's other buddies that already linked to (or have the display name of) the target
-- `POST /api/v1/boardgame_buddy/bgg/link` — body `{username}`; verify the BGG account exists (looks up `<user id="...">` via BGG XMLAPI) and store on profile. Returns `{bgg_username}`.
-- `DELETE /api/v1/boardgame_buddy/bgg/link` — clear `bgg_username`. Already-imported collection/plays remain in place.
-- `POST /api/v1/boardgame_buddy/bgg/sync` — pull collection (`own=1`, `wishlist=1`, `wanttoplay=1`) and plays (paginated) from BGG. BGG `own→owned`; `wishlist` and `wanttoplay` both map to `'wishlist'`. Games we already have are written immediately (collections upsert on `(user_id, game_id)`; plays dedup on `(user_id, bgg_play_id)`). Games we don't have go into `boardgamebuddy_bgg_pending_imports` and a `BackgroundTasks` worker drains the queue (~1.5s between BGG calls). Returns `{bgg_username, collection_imported, collection_pending, plays_imported, plays_pending}`. Players from BGG plays are upserted as buddies on `(owner_id, name)` using the same path as `POST /plays`.
+- `POST /api/v1/boardgame_buddy/bgg/link` — body `{username, password}`; logs into BGG via `POST /login/api/v1`, stores the username + Fernet-encrypted password (`BGG_CREDENTIAL_KEY`) and the returned SessionID/bggusername/bggpassword cookies on the profile. A successful login is also our existence check (BGG returns 401 for both bad passwords and unknown handles, surfaced as a 400 to the client). Returns `{bgg_username}`.
+- `DELETE /api/v1/boardgame_buddy/bgg/link` — clear `bgg_username` plus all stored credentials/cookies. Already-imported collection/plays remain in place.
+- `POST /api/v1/boardgame_buddy/bgg/sync` — pull collection (`own=1`, `wishlist=1`, `wanttoplay=1`, `showprivate=1`) and plays (paginated) from BGG. Per-user calls go through `fetch_bgg_as_user`, which sends the stored cookies so BGG evaluates the request AS the linked user — that's what unlocks the `<privateinfo>` block (purchase price, private comment, acquisition date, …) which we mirror onto `boardgamebuddy_collections.bgg_*` columns. BGG `own→owned`; `wishlist` and `wanttoplay` both map to `'wishlist'`. Games we already have are written immediately (collections upsert on `(user_id, game_id)`; plays dedup on `(user_id, bgg_play_id)`). Games we don't have go into `boardgamebuddy_bgg_pending_imports` (the `payload.private` carries the private fields through to materialization) and a `BackgroundTasks` worker drains the queue (~1.5s between BGG calls). Returns `{bgg_username, collection_imported, collection_pending, plays_imported, plays_pending}`. Players from BGG plays are upserted as buddies on `(owner_id, name)` using the same path as `POST /plays`. If the stored password no longer works, returns 409 — the FE surfaces a "re-link required" banner.
 - `POST /api/v1/boardgame_buddy/bgg/sync/process-pending` — manual fallback to drain the pending queue (e.g. after a process restart cut a BackgroundTask short). Idempotent.
-- `GET /api/v1/boardgame_buddy/bgg/sync/status` — `{bgg_username, pending_count, errored_count, last_completed_at}`. The Account tab polls this every 3s while `pending_count > 0`.
+- `GET /api/v1/boardgame_buddy/bgg/sync/status` — `{bgg_username, auth_state, pending_count, errored_count, last_completed_at}`. `auth_state` is `unlinked` / `linked` / `relink_required`; the Account tab polls this every 3s while `pending_count > 0` and uses `auth_state` to choose between the link form, the re-link prompt, and the synced view.
 - `POST /api/v1/boardgame_buddy/games/{game_id}/chunks` — contribute a new chunk
 - `PATCH /api/v1/boardgame_buddy/chunks/{chunk_id}` — edit own chunk
 - `DELETE /api/v1/boardgame_buddy/chunks/{chunk_id}` — delete own chunk
@@ -281,6 +281,8 @@ Bottom nav has three tabs: **Browse**, **Closet**, **Play Log**.
 | SUPABASE_JWT_SECRET | Railway | Verify Supabase JWTs in backend |
 | ALLOWED_ORIGINS | Railway | CORS |
 | ADMIN_API_KEY | Railway | Protects `POST /guides/import` (admin guide upload) |
+| BGG_API_TOKEN | Railway | BoardGameGeek app-registration bearer token (rate-limit accounting; not user-scoped) |
+| BGG_CREDENTIAL_KEY | Railway | Fernet key (urlsafe base64) used to encrypt linked users' BGG passwords. Generate via `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Rotating it forces every BGG-linked user to re-link. |
 
 ## Active Development Notes
 - Pilot project for Supabase Auth across the monorepo

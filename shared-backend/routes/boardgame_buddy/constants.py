@@ -14,6 +14,14 @@ class CollectionSort(StrEnum):
     LAST_PLAYED = "last_played"
 
 
+class BggAuthState(StrEnum):
+    """Surfaced on /bgg/sync/status so the FE knows which card to render."""
+
+    UNLINKED = "unlinked"            # No bgg_username on profile
+    LINKED = "linked"                # Username + encrypted password present
+    RELINK_REQUIRED = "relink_required"  # Username only (legacy public link)
+
+
 # Default theme colors by primary category (fallback when game has no theme_color)
 CATEGORY_COLORS: dict[str, str] = {
     "Strategy": "#8B6914",
