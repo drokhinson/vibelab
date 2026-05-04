@@ -174,6 +174,7 @@ function renderMealRecipe() {
       <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>${item.emoji}</span>${title}</div>
       <div class="subtitle">${sauce.cuisine || 'Full recipe'}</div>
+      ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
       ${timingBanner}

@@ -11,6 +11,7 @@ function renderPrepSelector() {
       <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>${item.emoji}</span>${item.name}</div>
       <div class="subtitle">How are you preparing it?</div>
+      ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
       <div class="carb-grid">

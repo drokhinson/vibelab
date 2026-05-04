@@ -24,6 +24,7 @@ function renderSettings() {
         <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
         <div class="logo"><span><i data-lucide="key-round"></i></span>Become Admin</div>
         <div class="subtitle">Sign in first to claim admin rights</div>
+        ${renderHeaderAuthSlot()}
       </div>
       <div class="scroll-body">
         <div class="settings-form">
@@ -39,6 +40,7 @@ function renderSettings() {
       <div class="app-header">
         <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
         <div class="logo"><span><i data-lucide="shield-check"></i></span>You're an admin</div>
+        ${renderHeaderAuthSlot()}
       </div>
       <div class="scroll-body">
         <div class="settings-form">
@@ -54,6 +56,7 @@ function renderSettings() {
       <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span><i data-lucide="key-round"></i></span>Become Admin</div>
       <div class="subtitle">Enter the shared admin key to unlock full edit rights</div>
+      ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
       <div class="settings-form">
