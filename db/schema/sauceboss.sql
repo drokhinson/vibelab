@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_steps (
   sauce_id        TEXT    NOT NULL REFERENCES public.sauceboss_sauces(id) ON DELETE CASCADE,
   step_order      INTEGER NOT NULL,
   title           TEXT    NOT NULL,
+  instructions    TEXT,                 -- optional paragraph (migration 004)
   input_from_step INT     DEFAULT NULL,
   estimated_time  INT                   -- minutes, nullable
 );

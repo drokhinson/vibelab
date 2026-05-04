@@ -82,6 +82,7 @@ function renderBuilder() {
       <div class="step-number">Step ${si + 1}</div>
       ${stepRefHTML}
       <input class="builder-input" placeholder="Step title (e.g., Sauté the base)" value="${esc(step.title)}" data-builder-field="step-title" data-step="${si}">
+      <textarea class="builder-input builder-step-instructions" placeholder="Instructions (optional)" data-builder-field="step-instructions" data-step="${si}">${esc(step.instructions || '')}</textarea>
       <div class="builder-ings-list">${ingsHTML}</div>
       <button class="add-ing-btn" onclick="builderAddIngredient(${si})">+ Ingredient</button>
     </div>`;
@@ -175,6 +176,7 @@ function renderBuilderItems() {
 
 function renderBuilderReview() {
   const b = state.builder;
+  const esc = s => (s || '').replace(/"/g, '&quot;');
   const pool = _builderItemPool();
   const pairedItems = pool.filter(c => b.itemIds.includes(c.id));
   const totalIngs = b.steps.reduce((sum, s) => sum + s.ingredients.filter(i => i.name.trim()).length, 0);
@@ -183,6 +185,7 @@ function renderBuilderReview() {
     <div class="review-step-card">
       <div class="step-number">Step ${si + 1}</div>
       <div class="step-title">${step.title || '(untitled)'}</div>
+      ${step.instructions ? `<div class="review-step-instructions">${esc(step.instructions)}</div>` : ''}
       ${step.inputFromStep ? `<div class="step-ref-badge">⤶ Combines Step ${step.inputFromStep} output</div>` : ''}
       <div class="review-ing-list">
         ${step.ingredients.filter(i => i.name.trim()).map(i =>
@@ -250,7 +253,7 @@ function builderSetColor(hex) {
 }
 
 function builderAddStep() {
-  state.builder.steps.push({ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
+  state.builder.steps.push({ title: '', instructions: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
   render();
 }
 
@@ -302,6 +305,7 @@ function builderHandleInput(el) {
     case 'cuisine-draft-name': b.cuisineDraftName = el.value; break;
     case 'cuisine-draft-emoji': b.cuisineDraftEmoji = el.value; break;
     case 'step-title': b.steps[si].title = el.value; break;
+    case 'step-instructions': b.steps[si].instructions = el.value; break;
     case 'ing-name': {
       b.steps[si].ingredients[ii].name = el.value;
       const matches = fuzzyMatchIngredients(el.value);
@@ -446,12 +450,16 @@ function _builderApplyParsedRecipe(parsed) {
     try {
       stepTitle = `Imported from ${new URL(parsed.sourceUrl).hostname.replace(/^www\./, '')}`;
     } catch { /* ignore */ }
-    b.steps = [{ title: stepTitle, inputFromStep: null, ingredients: allIngs }];
+    b.steps = [{ title: stepTitle, instructions: '', inputFromStep: null, ingredients: allIngs }];
     return;
   }
 
+  // Title is left blank — the user must name each step before saving. The full
+  // scraped paragraph lives in `instructions` and renders as a collapsible
+  // toggle in the recipe view.
   const steps = instructions.map(text => ({
-    title: _truncateInstructionTitle(text),
+    title: '',
+    instructions: text,
     inputFromStep: null,
     ingredients: [],
     _instr: text.toLowerCase(),
@@ -488,19 +496,10 @@ function _builderApplyParsedRecipe(parsed) {
   }
 
   if (unmatched.length > 0) {
-    steps.push({ title: 'Other ingredients', inputFromStep: null, ingredients: unmatched });
+    steps.push({ title: 'Other ingredients', instructions: '', inputFromStep: null, ingredients: unmatched });
   }
 
   b.steps = steps;
-}
-
-// First sentence of an instruction, capped so it fits the step-title input.
-function _truncateInstructionTitle(text) {
-  const trimmed = text.trim();
-  const periodIdx = trimmed.indexOf('.');
-  if (periodIdx > 0 && periodIdx <= 80) return trimmed.slice(0, periodIdx);
-  if (trimmed.length <= 80) return trimmed;
-  return trimmed.slice(0, 77) + '…';
 }
 
 // Substring match plus a single-letter plural stem so "tomatoes" matches
@@ -564,6 +563,7 @@ async function builderSave() {
         .filter(s => s.title.trim())
         .map(s => ({
           title: s.title.trim(),
+          instructions: (s.instructions || '').trim() || null,
           inputFromStep: s.inputFromStep || null,
           ingredients: s.ingredients
             .filter(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste'))
