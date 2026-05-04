@@ -6,12 +6,6 @@ let buddyLinkTargetId = null;
 let buddyLinkTargetName = null;
 let addBuddySearchTimer = null;
 
-function computeInitials(name) {
-  const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return (parts[0] || "?").slice(0, 2).toUpperCase();
-}
-
 async function renderBuddiesTab() {
   const container = document.getElementById("profile-tab-content");
   container.innerHTML = `<div class="flex justify-center py-8"><span class="loading loading-spinner loading-md"></span></div>`;
