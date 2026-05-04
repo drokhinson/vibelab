@@ -758,6 +758,76 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 
 .builder-ings-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 
+/* Unassigned ingredient staging tray (post-import; must be empty to save) */
+.builder-unassigned-card {
+  background: #FFF7ED;
+  border: 1.5px solid #FB923C;
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(251,146,60,0.15);
+}
+.builder-unassigned-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.builder-unassigned-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #9A3412;
+}
+.builder-unassigned-hint {
+  font-size: 12px;
+  color: #B45309;
+}
+.unassigned-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid #FED7AA;
+}
+.unassigned-row:first-of-type { border-top: none; }
+.unassigned-ing {
+  flex: 1;
+  font-size: 13px;
+  color: #1A1A2E;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.unassigned-qty {
+  color: #6B7280;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.unassigned-target {
+  flex: 0 0 auto;
+  max-width: 50%;
+  padding: 6px 8px;
+  border: 1.5px solid #FB923C;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  background: white;
+  color: #1A1A2E;
+}
+.unassigned-target:focus { outline: none; border-color: #C2410C; }
+.unassigned-delete-btn {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: #FEE2E2;
+  color: #991B1B;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+}
+
 .remove-step-btn {
   position: absolute;
   top: 10px; right: 10px;

@@ -92,7 +92,33 @@ function renderBuilder() {
   const hasCuisine = b.cuisineDraftMode
     ? !!(b.cuisineDraftName.trim() && b.cuisineDraftEmoji.trim())
     : !!b.cuisine;
-  const canContinue = b.name.trim() && hasCuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity));
+  const trayEmpty = (b.unassignedIngredients || []).length === 0;
+  const canContinue = b.name.trim() && hasCuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity)) && trayEmpty;
+
+  const unassignedHTML = (b.unassignedIngredients && b.unassignedIngredients.length > 0) ? `
+    <div class="builder-unassigned-card">
+      <div class="builder-unassigned-header">
+        <span class="builder-unassigned-title">⚠ Unassigned ingredients (${b.unassignedIngredients.length})</span>
+        <span class="builder-unassigned-hint">Move each to a step or delete before saving.</span>
+      </div>
+      ${b.unassignedIngredients.map((ing, ui) => {
+        const qty = ing.unit === 'to taste'
+          ? 'to taste'
+          : `${ing.amount !== '' && ing.amount != null ? ing.amount : ''} ${ing.unit || ''}`.trim();
+        const stepOpts = b.steps.map((s, si) => {
+          const label = `Step ${si + 1}${s.title ? ' — ' + s.title.slice(0, 25) : ''}`;
+          return `<option value="${si}">${label}</option>`;
+        }).join('');
+        return `<div class="unassigned-row">
+          <span class="unassigned-ing"><strong>${esc(ing.name)}</strong>${qty ? ` <span class="unassigned-qty">${esc(qty)}</span>` : ''}</span>
+          <select class="unassigned-target" data-builder-field="unassigned-target" data-uidx="${ui}">
+            <option value="">Move to step…</option>
+            ${stepOpts}
+          </select>
+          <button class="unassigned-delete-btn" onclick="builderDeleteUnassigned(${ui})" title="Delete ingredient">✕</button>
+        </div>`;
+      }).join('')}
+    </div>` : '';
 
   const importErr = b.importError ? `<div class="builder-error">${esc(b.importError)}</div>` : '';
   const importPanel = `
@@ -130,8 +156,9 @@ function renderBuilder() {
       </div>
       <p class="builder-label" style="margin-top:16px">Steps</p>
       ${stepsHTML}
+      ${unassignedHTML}
       <button class="add-step-btn" onclick="builderAddStep()">+ Add Step</button>
-      <button class="builder-primary-btn" onclick="navigate('builder-items')" ${canContinue ? '' : 'disabled'}>Continue — Pair with ${SAUCE_TYPES.find(t => t.value === b.sauceType)?.pairLabel || 'Items'}</button>
+      <button class="builder-primary-btn" onclick="navigate('builder-items')" ${canContinue ? '' : 'disabled'}${!trayEmpty ? ' title="Resolve unassigned ingredients first"' : ''}>Continue — Pair with ${SAUCE_TYPES.find(t => t.value === b.sauceType)?.pairLabel || 'Items'}</button>
     </div>
   `;
 }
@@ -277,6 +304,33 @@ function builderRemoveIngredient(si, ii) {
   render();
 }
 
+// Move an ingredient out of the unassigned tray and into the chosen step's
+// ingredient list. Strips internal helper fields the step rows don't use so
+// the row matches the shape produced by `defaultBuilder()`.
+function builderMoveUnassignedToStep(uidx, si) {
+  const b = state.builder;
+  if (uidx < 0 || uidx >= b.unassignedIngredients.length) return;
+  if (si < 0 || si >= b.steps.length) return;
+  const ing = b.unassignedIngredients[uidx];
+  b.steps[si].ingredients.push({
+    name: ing.name || '',
+    amount: ing.amount != null ? ing.amount : '',
+    unit: ing.unit || 'tsp',
+    originalText: ing.originalText || '',
+    canonicalMl: ing.canonicalMl != null ? ing.canonicalMl : null,
+    canonicalG:  ing.canonicalG  != null ? ing.canonicalG  : null,
+  });
+  b.unassignedIngredients.splice(uidx, 1);
+  render();
+}
+
+function builderDeleteUnassigned(uidx) {
+  const list = state.builder.unassignedIngredients;
+  if (uidx < 0 || uidx >= list.length) return;
+  list.splice(uidx, 1);
+  render();
+}
+
 function builderSetSauceType(value) {
   if (state.builder.sauceType === value) return;
   state.builder.sauceType = value;
@@ -329,6 +383,13 @@ function builderHandleInput(el) {
       b.steps[si].inputFromStep = el.value ? parseInt(el.value) : null;
       break;
     }
+    case 'unassigned-target': {
+      if (el.value === '') break;
+      const uidx = parseInt(el.dataset.uidx);
+      const targetSi = parseInt(el.value);
+      builderMoveUnassignedToStep(uidx, targetSi);
+      return;
+    }
   }
   if (needsRender) {
     render();
@@ -339,7 +400,8 @@ function builderHandleInput(el) {
     const hasCuisine = b.cuisineDraftMode
       ? !!(b.cuisineDraftName.trim() && b.cuisineDraftEmoji.trim())
       : !!b.cuisine;
-    const canContinue = b.name.trim() && hasCuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste')));
+    const trayEmpty = (b.unassignedIngredients || []).length === 0;
+    const canContinue = b.name.trim() && hasCuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste'))) && trayEmpty;
     btn.disabled = !canContinue;
   }
 }
@@ -413,11 +475,14 @@ async function builderImport() {
 //     mentions its name; later mentions get the same row with a blank amount
 //     so the user can split the quantity manually.
 //   - Ingredients not mentioned in any instruction (e.g. "salt to taste")
-//     land in a final "Other ingredients" step with their full quantity.
+//     land in b.unassignedIngredients — a staging tray the user must drain
+//     (move each into a step, or delete it) before the recipe can save.
 //   - If the scrape returned no instructions, fall back to a single
 //     "Imported from <host>" step containing every ingredient.
 function _builderApplyParsedRecipe(parsed) {
   const b = state.builder;
+  // Re-importing should replace, not accumulate.
+  b.unassignedIngredients = [];
   if (!b.name) b.name = parsed.name || b.name;
   if (parsed.description && !b.description) b.description = parsed.description;
   if (parsed.sourceUrl && !b.sourceUrl) b.sourceUrl = parsed.sourceUrl;
@@ -495,10 +560,7 @@ function _builderApplyParsedRecipe(parsed) {
     }
   }
 
-  if (unmatched.length > 0) {
-    steps.push({ title: 'Other ingredients', instructions: '', inputFromStep: null, ingredients: unmatched });
-  }
-
+  b.unassignedIngredients = unmatched;
   b.steps = steps;
 }
 
@@ -534,6 +596,11 @@ function _unitDisplayFromParsed(parsed) {
 
 async function builderSave() {
   const b = state.builder;
+  if ((b.unassignedIngredients || []).length > 0) {
+    b.error = 'Move or delete every unassigned ingredient before saving.';
+    render();
+    return;
+  }
   if (b.cuisineDraftMode) {
     const draftName = (b.cuisineDraftName || '').trim();
     const draftEmoji = (b.cuisineDraftEmoji || '').trim();
