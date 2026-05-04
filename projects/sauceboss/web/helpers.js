@@ -544,6 +544,14 @@ function _initIcons() {
   if (window.lucide) requestAnimationFrame(() => lucide.createIcons());
 }
 
+// Initials helper — kept in sync with boardgame-buddy/web/helpers.js so any
+// avatar bubble across vibelab apps derives "JS" / "Mary" the same way.
+function computeInitials(name) {
+  const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return (parts[0] || "?").slice(0, 2).toUpperCase();
+}
+
 // Top-right slot in the app header. Shows "Sign in" when logged out, an
 // avatar pill with display-name initials when logged in.
 function renderHeaderAuthSlot() {
@@ -552,7 +560,7 @@ function renderHeaderAuthSlot() {
     return `<button class="auth-signin-btn" onclick="openAuthModal()"><i data-lucide="log-in"></i> Sign in</button>`;
   }
   const name = currentUser.display_name || 'Saucier';
-  const initials = name.trim().split(/\s+/).map(p => p[0] || '').join('').slice(0, 2).toUpperCase() || 'S';
+  const initials = computeInitials(name);
   return `
     <details class="auth-pill">
       <summary class="auth-pill__summary" title="${name}">
