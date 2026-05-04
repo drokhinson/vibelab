@@ -2,9 +2,9 @@
 
 from datetime import date, datetime
 from typing import Any, Optional
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, SecretStr, computed_field
 
-from .constants import CollectionStatus
+from .constants import BggAuthState, CollectionStatus
 
 
 # ── Shared ────────────────────────────────────────────────────────────────────
@@ -43,7 +43,14 @@ class AdminKeyBody(BaseModel):
 # ── BGG account linking ───────────────────────────────────────────────────────
 
 class BggLinkBody(BaseModel):
+    """Credentials for POST /bgg/link.
+
+    BGG requires the *web* login flow (username + password) to mint a SessionID
+    cookie; we exchange the password at link time, store it Fernet-encrypted,
+    and use the resulting cookies on subsequent xmlapi2 calls.
+    """
     username: str = Field(..., min_length=1, max_length=64)
+    password: SecretStr = Field(..., min_length=1, max_length=256)
 
 
 class BggLinkResponse(BaseModel):
@@ -67,6 +74,7 @@ class BggSyncSummary(BaseModel):
 class BggSyncStatus(BaseModel):
     """Result of GET /bgg/sync/status. Used by the FE to poll progress."""
     bgg_username: Optional[str] = None
+    auth_state: BggAuthState = BggAuthState.UNLINKED
     pending_count: int = 0
     errored_count: int = 0
     last_completed_at: Optional[datetime] = None

@@ -138,7 +138,9 @@ async function handleBecomeAdmin() {
 
 function renderBggCard() {
   const status = bggStatus;
-  const linked = !!status?.bgg_username;
+  const authState = status?.auth_state || (status?.bgg_username ? "linked" : "unlinked");
+  const linked = authState === "linked";
+  const relinkRequired = authState === "relink_required";
   const pending = status?.pending_count || 0;
   const errored = status?.errored_count || 0;
   const lastAt = status?.last_completed_at;
@@ -155,18 +157,30 @@ function renderBggCard() {
   }
 
   if (!linked) {
+    // Two cases share this layout: no link yet, OR an old username-only link
+    // that needs the user to enter a password before sync can run.
+    const heading = relinkRequired
+      ? `BoardGameGeek account <span class="badge badge-xs badge-warning">re-link required</span>`
+      : `BoardGameGeek account`;
+    const helper = relinkRequired
+      ? `BGG now requires a password to sync your collection. Re-enter your BGG credentials below — we'll keep them encrypted so future syncs are seamless.`
+      : `Link your BGG account to import your collection (owned + wishlist) and play history. Your password is encrypted and only used to authenticate to BoardGameGeek.`;
+    const usernameValue = relinkRequired ? escapeHtml(status.bgg_username || "") : "";
+    const usernameDisabled = relinkRequired ? "readonly" : "";
     return `
       <div class="card-body p-4">
         <h3 class="font-semibold flex items-center gap-2">
-          <i data-lucide="link" class="w-4 h-4"></i> BoardGameGeek account
+          <i data-lucide="link" class="w-4 h-4"></i> ${heading}
         </h3>
-        <p class="text-xs text-base-content/60">
-          Link your BGG account to import your collection (owned + wishlist) and play history.
-        </p>
-        <div class="flex gap-2 mt-2">
-          <input type="text" id="profile-bgg-username" class="input input-bordered input-sm flex-1"
-            placeholder="BGG username" autocomplete="off" />
-          <button class="btn btn-primary btn-sm" onclick="handleLinkBgg()">Link</button>
+        <p class="text-xs text-base-content/60">${helper}</p>
+        <div class="flex flex-col gap-2 mt-2">
+          <input type="text" id="profile-bgg-username" class="input input-bordered input-sm"
+            placeholder="BGG username" autocomplete="username" value="${usernameValue}" ${usernameDisabled} />
+          <input type="password" id="profile-bgg-password" class="input input-bordered input-sm"
+            placeholder="BGG password" autocomplete="current-password" />
+          <button class="btn btn-primary btn-sm self-start" onclick="handleLinkBgg()">
+            ${relinkRequired ? "Re-link" : "Link"}
+          </button>
         </div>
       </div>
     `;
@@ -222,7 +236,7 @@ async function refreshBggStatus() {
   try {
     bggStatus = await apiFetch("/bgg/sync/status");
   } catch (err) {
-    bggStatus = { bgg_username: null, pending_count: 0, errored_count: 0 };
+    bggStatus = { bgg_username: null, auth_state: "unlinked", pending_count: 0, errored_count: 0 };
   }
   rerenderBggCard();
   // Auto-poll while imports are draining so the user sees "Importing N…" tick down.
@@ -246,14 +260,21 @@ function stopBggPolling() {
 }
 
 async function handleLinkBgg() {
-  const input = document.getElementById("profile-bgg-username");
-  const username = input?.value.trim();
+  const usernameInput = document.getElementById("profile-bgg-username");
+  const passwordInput = document.getElementById("profile-bgg-password");
+  const username = usernameInput?.value.trim();
+  const password = passwordInput?.value || "";
   if (!username) {
     showToast("Enter your BGG username first.", "warning");
     return;
   }
+  if (!password) {
+    showToast("Enter your BGG password to authorize syncing.", "warning");
+    return;
+  }
   try {
-    await apiFetch("/bgg/link", { method: "POST", body: { username } });
+    await apiFetch("/bgg/link", { method: "POST", body: { username, password } });
+    if (passwordInput) passwordInput.value = "";
     showToast(`Linked BGG account: ${username}`, "success");
     await refreshBggStatus();
   } catch (err) {
@@ -268,7 +289,7 @@ async function handleUnlinkBgg() {
   try {
     await apiFetch("/bgg/link", { method: "DELETE" });
     showToast("BGG account unlinked.", "info");
-    bggStatus = { bgg_username: null, pending_count: 0, errored_count: 0 };
+    bggStatus = { bgg_username: null, auth_state: "unlinked", pending_count: 0, errored_count: 0 };
     rerenderBggCard();
   } catch (err) {
     showToast(err.message || "Could not unlink.", "error");
