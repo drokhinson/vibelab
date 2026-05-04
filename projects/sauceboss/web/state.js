@@ -134,7 +134,7 @@ function defaultBuilder() {
   return {
     name: '', cuisine: '', cuisineEmoji: '', color: '#E85D04', description: '', sourceUrl: '',
     sauceType: 'sauce',          // 'sauce' | 'marinade' | 'dressing'
-    steps: [{ title: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
+    steps: [{ title: '', instructions: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
     itemIds: [], saving: false, error: null,
     acStep: null, acIng: null, acResults: [], acSelected: -1,
     pendingCategories: [],

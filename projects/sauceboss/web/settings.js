@@ -528,6 +528,7 @@ function openBuilderEdit(id) {
     itemIds: sauce.compatibleItems || [],
     steps: (sauce.steps || []).map(s => ({
       title: s.title,
+      instructions: s.instructions || '',
       inputFromStep: s.inputFromStep || null,
       ingredients: (s.ingredients || []).map(i => ({
         name: i.name, amount: i.amount, unit: i.unit,

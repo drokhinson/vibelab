@@ -54,6 +54,11 @@ function renderRecipe() {
         <div class="step-time">~${stepTime}m</div>
       </div>
       <div class="step-title">${step.title}</div>
+      ${step.instructions ? `
+        <details class="step-instructions-toggle">
+          <summary>Instructions</summary>
+          <p class="step-instructions-body">${escapeHtml(step.instructions)}</p>
+        </details>` : ''}
       ${refBadge}
       <div class="pie-container">
         ${buildPieChart(displayItems, 170)}

@@ -70,6 +70,7 @@ class IngredientInput(BaseModel):
 
 class StepInput(BaseModel):
     title: str = Field(min_length=1)
+    instructions: Optional[str] = None
     ingredients: List[IngredientInput] = Field(min_length=1)
     inputFromStep: int | None = None
 
