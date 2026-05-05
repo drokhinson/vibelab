@@ -16,12 +16,111 @@ async function loadGames() {
     gamesFilterMechanics.forEach(m => params.append("mechanics", m));
     if (gamesFilterOwnedOnly && currentUser) params.set("owned_only", "true");
 
-    const data = await apiFetch(`/games?${params}`);
+    const [data] = await Promise.all([
+      apiFetch(`/games?${params}`),
+      refreshUserCollectionStatus(),
+    ]);
     gamesCache = data.games;
     gamesTotalCount = data.total;
     renderGamesGrid();
   } catch (err) {
     container.innerHTML = `<div class="text-error text-center py-8">Failed to load games: ${err.message}</div>`;
+  }
+}
+
+async function refreshUserCollectionStatus() {
+  if (!currentUser) {
+    userCollectionStatus = {};
+    return;
+  }
+  try {
+    const items = await apiFetch("/collection");
+    const next = {};
+    for (const it of items) {
+      if (it.status === "owned" || it.status === "wishlist") {
+        next[it.game_id] = it.status;
+      }
+    }
+    userCollectionStatus = next;
+  } catch {
+    // Leave the previous map in place on transient failures.
+  }
+}
+
+function browseBookmarkHtml(gameId) {
+  if (!currentUser) return "";
+  const status = userCollectionStatus[gameId] || null;
+  const icon = status === "owned" ? "package"
+             : status === "wishlist" ? "star"
+             : "bookmark-plus";
+  const iconClass = status ? "w-4 h-4 text-primary" : "w-4 h-4";
+  const items = [
+    { key: "owned",    label: "Owned",    icon: "package" },
+    { key: "wishlist", label: "Wishlist", icon: "star" },
+  ];
+  return `
+    <div class="dropdown dropdown-end dropdown-top absolute bottom-1 right-4"
+         data-browse-bookmark="${gameId}"
+         onclick="event.stopPropagation()">
+      <button tabindex="0" class="btn btn-circle btn-ghost btn-sm bg-base-100/80 shadow"
+              aria-label="${status ? `In ${status}` : "Add to collection"}">
+        <i data-lucide="${icon}" class="${iconClass}"></i>
+      </button>
+      <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-30 w-40 p-2 shadow">
+        ${items.map(opt => {
+          const active = status === opt.key;
+          return `
+            <li>
+              <a class="${active ? "active" : ""}"
+                 onclick="quickSetCollection('${gameId}', '${opt.key}')">
+                <i data-lucide="${opt.icon}" class="w-4 h-4"></i>
+                <span class="flex-1">${opt.label}</span>
+                ${active ? '<i data-lucide="check" class="w-4 h-4"></i>' : ""}
+              </a>
+            </li>`;
+        }).join("")}
+        <li class="${status ? "" : "menu-disabled"}">
+          <a ${status ? `onclick="quickSetCollection('${gameId}', null)"` : ""}>
+            <i data-lucide="x" class="w-4 h-4"></i>
+            <span>Remove</span>
+          </a>
+        </li>
+      </ul>
+    </div>`;
+}
+
+async function quickSetCollection(gameId, status) {
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  const current = userCollectionStatus[gameId] || null;
+  try {
+    if (status === null || status === current) {
+      await apiFetch(`/collection/${gameId}`, { method: "DELETE" });
+      delete userCollectionStatus[gameId];
+      showToast("Removed from collection", "info");
+    } else if (current) {
+      await apiFetch(`/collection/${gameId}`, { method: "PATCH", body: { status } });
+      userCollectionStatus[gameId] = status;
+      showToast(`Moved to ${status}`, "success");
+    } else {
+      await apiFetch("/collection", { method: "POST", body: { game_id: gameId, status } });
+      userCollectionStatus[gameId] = status;
+      showToast(`Added to ${status}!`, "success");
+    }
+    refreshBrowseBookmark(gameId);
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
+function refreshBrowseBookmark(gameId) {
+  const wrapper = document.querySelector(`[data-browse-bookmark="${gameId}"]`);
+  if (!wrapper) return;
+  const tmp = document.createElement("div");
+  tmp.innerHTML = browseBookmarkHtml(gameId).trim();
+  const replacement = tmp.firstElementChild;
+  if (replacement) {
+    wrapper.replaceWith(replacement);
+    if (window.lucide) window.lucide.createIcons();
   }
 }
 
@@ -44,10 +143,11 @@ function renderGamesGrid() {
       ${gamesCache.map((g, i) => `
         <div class="card bg-base-200 cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeUp"
              style="--i:${i}" onclick="openGameDetail('${g.id}')">
-          <figure class="px-3 pt-3">
+          <figure class="relative px-3 pt-3 overflow-visible">
             <img src="${bggImg(g.thumbnail_url) || IMG_PLACEHOLDER}"
                  onerror="this.onerror=null;this.src=IMG_PLACEHOLDER"
                  alt="${g.name}" class="rounded-lg w-full h-32 object-cover bg-base-300" loading="lazy" />
+            ${browseBookmarkHtml(g.id)}
           </figure>
           <div class="card-body p-3 pt-2">
             <h3 class="font-semibold text-sm leading-tight line-clamp-2">${g.name}</h3>
