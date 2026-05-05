@@ -233,17 +233,25 @@ function rerenderBggCard() {
 }
 
 async function refreshBggStatus() {
+  const previousPending = bggStatus?.pending_count ?? 0;
   try {
     bggStatus = await apiFetch("/bgg/sync/status");
   } catch (err) {
     bggStatus = { bgg_username: null, auth_state: "unlinked", pending_count: 0, errored_count: 0 };
   }
   rerenderBggCard();
+  const currentPending = bggStatus?.pending_count ?? 0;
   // Auto-poll while imports are draining so the user sees "Importing N…" tick down.
-  if (bggStatus?.pending_count > 0) {
+  if (currentPending > 0) {
     startBggPolling();
   } else {
     stopBggPolling();
+    // Worker just finished draining — refresh the closet so the games it
+    // pulled into our catalog and the matching collection rows show up
+    // without forcing the user to navigate.
+    if (previousPending > 0 && typeof loadCloset === "function") {
+      loadCloset().catch(() => {});
+    }
   }
 }
 
@@ -301,7 +309,7 @@ async function handleSyncBgg() {
   rerenderBggCard();
   try {
     const summary = await apiFetch("/bgg/sync", { method: "POST" });
-    const importedTotal = summary.collection_imported + summary.plays_imported;
+    const syncedTotal = summary.collection_imported + summary.plays_imported;
     const pendingTotal = summary.collection_pending + summary.plays_pending;
     if (summary.warm_up_retry_pending) {
       showToast(
@@ -310,17 +318,23 @@ async function handleSyncBgg() {
       );
     } else if (pendingTotal > 0) {
       showToast(
-        `Imported ${importedTotal}. Importing ${pendingTotal} missing game${pendingTotal === 1 ? "" : "s"}…`,
+        `Synced ${syncedTotal} from BGG. Importing ${pendingTotal} missing game${pendingTotal === 1 ? "" : "s"}…`,
         "info",
       );
     } else {
-      showToast(`Imported ${importedTotal} item${importedTotal === 1 ? "" : "s"} from BGG.`, "success");
+      showToast(`Synced ${syncedTotal} item${syncedTotal === 1 ? "" : "s"} from BGG.`, "success");
     }
   } catch (err) {
     showToast(err.message || "BGG sync failed.", "error");
   } finally {
     bggSyncing = false;
     await refreshBggStatus();
+    // Refresh the closet so games synced just now appear without forcing
+    // the user to navigate. Plays are skipped here — loadPlays() resets
+    // filter state, so we let the next nav re-trigger it instead.
+    if (typeof loadCloset === "function") {
+      loadCloset().catch(() => {});
+    }
   }
 }
 
