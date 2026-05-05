@@ -32,9 +32,9 @@ function renderImport() {
           <i data-lucide="globe" class="w-4 h-4"></i> Import from BoardGameGeek
         </h3>
         <p class="text-xs text-base-content/60">Search BGG and add games with their metadata.</p>
-        <div class="flex gap-2 mt-2">
-          <input type="text" id="bgg-search-input" class="input input-bordered input-sm flex-1" placeholder="Search BGG..." />
-          <button class="btn btn-sm btn-primary" onclick="searchBGG()">Search</button>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <input type="text" id="bgg-search-input" class="input input-bordered input-sm flex-1 min-w-0" placeholder="Search BGG..." />
+          <button class="btn btn-sm btn-primary shrink-0 whitespace-nowrap" onclick="searchBGG()">Search</button>
         </div>
         <div id="bgg-results" class="mt-2"></div>
       </div>
