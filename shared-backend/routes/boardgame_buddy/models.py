@@ -69,6 +69,10 @@ class BggSyncSummary(BaseModel):
     collection_pending: int
     plays_imported: int
     plays_pending: int
+    # True when BGG kept returning "still preparing" for every batch and the
+    # sync ended up with nothing to import. The FE shows a "try again shortly"
+    # toast instead of "Imported 0".
+    warm_up_retry_pending: bool = False
 
 
 class BggSyncStatus(BaseModel):
