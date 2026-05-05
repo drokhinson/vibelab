@@ -35,13 +35,9 @@ function renderRecipe() {
 
     const refStep = step.inputFromStep ? sauce.steps[step.inputFromStep - 1] : null;
     if (refStep) {
-      const refTspTotal = refStep.ingredients.reduce((s, it) =>
-        s + toTsp(scaleAmount(it.amount, state.servings), it.unit), 0
-      );
-      let dispAmt = refTspTotal, dispUnit = 'tsp';
-      if (refTspTotal >= 48) { dispAmt = +(refTspTotal / 48).toFixed(1); dispUnit = 'cup'; }
-      else if (refTspTotal >= 3) { dispAmt = +(refTspTotal / 3).toFixed(1); dispUnit = 'tbsp'; }
-      displayItems.unshift({ name: `Step ${step.inputFromStep} combined`, amount: dispAmt, unit: dispUnit });
+      const refTspTotal = cumulativeStepTsp(sauce.steps, step.inputFromStep - 1, state.servings);
+      const disp = tspToDisplay(refTspTotal);
+      displayItems.unshift({ name: `Step ${step.inputFromStep} combined`, amount: disp.amount, unit: disp.unit });
     }
 
     const refBadge = refStep

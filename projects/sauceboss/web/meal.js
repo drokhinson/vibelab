@@ -92,12 +92,9 @@ function renderMealRecipe() {
 
       const refStep = step.inputFromStep ? sauceObj.steps[step.inputFromStep - 1] : null;
       if (refStep) {
-        const refTsp = refStep.ingredients.reduce((s, it) =>
-          s + toTsp(scaleAmount(it.amount, state.servings), it.unit), 0);
-        let dAmt = refTsp, dUnit = 'tsp';
-        if (refTsp >= 48) { dAmt = +(refTsp / 48).toFixed(1); dUnit = 'cup'; }
-        else if (refTsp >= 3) { dAmt = +(refTsp / 3).toFixed(1); dUnit = 'tbsp'; }
-        displayItems.unshift({ name: `Step ${step.inputFromStep} combined`, amount: dAmt, unit: dUnit });
+        const refTsp = cumulativeStepTsp(sauceObj.steps, step.inputFromStep - 1, state.servings);
+        const disp = tspToDisplay(refTsp);
+        displayItems.unshift({ name: `Step ${step.inputFromStep} combined`, amount: disp.amount, unit: disp.unit });
       }
       const refBadge = refStep
         ? `<div class="step-ref-badge"><i data-lucide="corner-down-right"></i> Combine all of Step ${step.inputFromStep} into this bowl</div>` : '';
