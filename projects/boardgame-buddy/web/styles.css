@@ -540,6 +540,13 @@ body {
 /* ── Toast positioning ───────────────────────────────────────────────────────── */
 .toast {
   z-index: 100;
+  max-width: calc(100vw - 1rem);
+  white-space: normal;
+}
+.toast .alert {
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* ── Closet: shelves + book spines ──────────────────────────────────────────── */
