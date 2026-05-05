@@ -83,6 +83,7 @@ Domain-specific conventions (backend, frontend, database, native, performance) a
 - Commit format: `[project-name] description` or `[infra] description`
 - Examples: `[sauceboss] add carbs endpoint`, `[landing] update registry`, `[infra] add deploy workflow`
 - One logical change per commit. Do not batch unrelated projects.
+- **After a PR merges, rebase any follow-up branches onto main before continuing work.** The user squash/rebase-merges, so commits land on main with new SHAs. A normal `git rebase main` will usually auto-skip the equivalent commits, but occasionally git fails to detect the dedup and shows spurious conflicts on a commit that's already in main — `git rebase --skip` in that case (do NOT try to resolve the conflict by hand). Then force-push with `--force-with-lease` so the open PR updates cleanly.
 
 ### Modular File Structure
 Keep individual files under ~300 lines. When a file grows beyond that, split it by domain. This reduces AI token usage — Claude only reads the relevant module instead of a full monolith.
