@@ -287,7 +287,7 @@ function renderGameStatusBanner(bundle, info) {
   if (info.state === "loading") {
     return `
       <div class="alert alert-sm py-2 text-xs mb-2">
-        <span class="loading loading-spinner loading-xs"></span>
+        ${buddyLoader('xs')}
         Checking catalog…
       </div>`;
   }
@@ -439,7 +439,7 @@ async function renderPendingGuides() {
         <i data-lucide="inbox" class="w-5 h-5"></i> Pending guide submissions
       </h2>
     </div>
-    <div id="pending-guides-list"><div class="flex justify-center py-8"><span class="loading loading-spinner loading-md"></span></div></div>
+    <div id="pending-guides-list"><div class="flex justify-center py-8">${buddyLoader('md')}</div></div>
   `;
   if (window.lucide) window.lucide.createIcons();
 
@@ -618,7 +618,7 @@ async function renderMissingImages() {
       Each refresh hits the BoardGameGeek API. BGG enforces a daily request quota — refresh in moderation.
     </p>
     <div id="missing-images-list">
-      <div class="flex justify-center py-8"><span class="loading loading-spinner loading-md"></span></div>
+      <div class="flex justify-center py-8">${buddyLoader('md')}</div>
     </div>
   `;
   if (window.lucide) window.lucide.createIcons();

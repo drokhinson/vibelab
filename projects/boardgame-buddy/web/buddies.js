@@ -8,7 +8,7 @@ let addBuddySearchTimer = null;
 
 async function renderBuddiesTab() {
   const container = document.getElementById("profile-tab-content");
-  container.innerHTML = `<div class="flex justify-center py-8"><span class="loading loading-spinner loading-md"></span></div>`;
+  container.innerHTML = `<div class="flex justify-center py-8">${buddyLoader('md')}</div>`;
 
   try {
     buddies = await apiFetch("/buddies");
@@ -130,7 +130,7 @@ function onBuddySearchInput(q) {
 
 async function doBuddySearch(q) {
   const out = document.getElementById("link-buddy-results");
-  out.innerHTML = `<div class="flex justify-center py-3"><span class="loading loading-spinner loading-sm"></span></div>`;
+  out.innerHTML = `<div class="flex justify-center py-3">${buddyLoader('sm')}</div>`;
   let results = [];
   try {
     results = await apiFetch(`/profiles/search?q=${encodeURIComponent(q)}`);
@@ -230,7 +230,7 @@ function onAddBuddySearchInput(q) {
 
 async function doAddBuddySearch(q) {
   const out = document.getElementById("add-buddy-results");
-  out.innerHTML = `<div class="flex justify-center py-3"><span class="loading loading-spinner loading-sm"></span></div>`;
+  out.innerHTML = `<div class="flex justify-center py-3">${buddyLoader('sm')}</div>`;
   let results = [];
   try {
     results = await apiFetch(`/profiles/search?q=${encodeURIComponent(q)}`);

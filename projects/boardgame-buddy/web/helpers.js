@@ -104,3 +104,12 @@ function trackEvent(event) {
     body: JSON.stringify({ app: "boardgame-buddy", event }),
   }).catch(() => {});
 }
+
+// Loading indicator. Returns an animated buddy <img>, sized to roughly match
+// the visual weight of DaisyUI's loading-{xs,sm,md,lg} spinners. Pass a number
+// to override with an exact pixel size.
+function buddyLoader(size = 'md') {
+  const map = { xs: 20, sm: 32, md: 56, lg: 88 };
+  const px = typeof size === 'number' ? size : (map[size] || map.md);
+  return `<img src="assets/bgbuddy-loading.svg" alt="Loading" class="buddy-loader" style="width:${px}px;height:${px}px;display:inline-block;vertical-align:middle;">`;
+}

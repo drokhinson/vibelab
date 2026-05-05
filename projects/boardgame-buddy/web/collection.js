@@ -156,7 +156,7 @@ async function switchClosetTab(tab) {
   applyClosetControls();
   if (tab === "wishlist") {
     const el = document.getElementById("closet-wishlist");
-    if (el) el.innerHTML = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
+    if (el) el.innerHTML = `<div class="flex justify-center py-12">${buddyLoader('lg')}</div>`;
     await loadWishlist();
   }
   renderCloset();

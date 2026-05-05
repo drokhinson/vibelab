@@ -2,7 +2,7 @@
 
 async function loadGames() {
   const container = document.getElementById("games-grid");
-  container.innerHTML = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
+  container.innerHTML = `<div class="flex justify-center py-12">${buddyLoader('lg')}</div>`;
 
   try {
     const params = new URLSearchParams({
@@ -438,7 +438,7 @@ async function searchBGG() {
   if (query.length < 2) return;
 
   const container = document.getElementById("bgg-results");
-  container.innerHTML = '<span class="loading loading-spinner loading-sm"></span>';
+  container.innerHTML = buddyLoader('sm');
 
   try {
     bggSearchResults = await apiFetch(`/games/search-bgg?query=${encodeURIComponent(query)}`);
