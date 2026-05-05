@@ -1053,39 +1053,36 @@ body {
   }
 }
 
-/* ── BGG attribution: sticky header sub-row ─────────────────────────────────
-   Required by BGG XML API Terms of Use. Sits inside the sticky <header>
-   beneath the brand+avatar row, so it's visible on every authed view. */
-.bgg-attribution {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 4px 12px;
-  border-top: 1px solid oklch(var(--b3) / 0.6);
-  background: oklch(var(--b1) / 0.94);
-  font-size: 0.8125rem; /* 13px — legible per BGG terms */
-}
-.bgg-attribution a {
+/* ── BGG attribution: header corner logo ────────────────────────────────────
+   Required by BGG XML API Terms of Use. Sits in the top-right of the sticky
+   header beneath the profile + logout controls. Logo-only — the official
+   BGG mark contains its own legible "Powered by BGG" text. */
+.bgg-attribution-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: oklch(var(--bc) / 0.65);
-  text-decoration: none;
-  padding: 2px 8px;
-  min-height: 24px;
+  padding: 2px 4px;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
 }
-.bgg-attribution a:hover,
-.bgg-attribution a:focus-visible {
-  color: var(--accent);
+.bgg-attribution-link:hover,
+.bgg-attribution-link:focus-visible {
+  opacity: 1;
 }
-.bgg-attribution img {
+.bgg-attribution-link img {
   display: block;
   height: 18px;
   width: auto;
-  opacity: 0.85;
 }
-.bgg-attribution a:hover img {
-  opacity: 1;
+.bgg-attribution-fallback {
+  display: inline-block;
+  font-size: 0.6875rem; /* 11px — fallback only; real logo carries the text */
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.7);
+  white-space: nowrap;
+}
+.bgg-attribution-link:hover .bgg-attribution-fallback,
+.bgg-attribution-link:focus-visible .bgg-attribution-fallback {
+  color: var(--accent);
 }
 
 /* ── BGG attribution: profile "Data Sources" card ───────────────────────── */
