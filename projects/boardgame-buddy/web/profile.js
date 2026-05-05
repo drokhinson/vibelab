@@ -303,7 +303,12 @@ async function handleSyncBgg() {
     const summary = await apiFetch("/bgg/sync", { method: "POST" });
     const importedTotal = summary.collection_imported + summary.plays_imported;
     const pendingTotal = summary.collection_pending + summary.plays_pending;
-    if (pendingTotal > 0) {
+    if (summary.warm_up_retry_pending) {
+      showToast(
+        "BoardGameGeek is still preparing your collection. Try syncing again in ~30 seconds.",
+        "warning",
+      );
+    } else if (pendingTotal > 0) {
       showToast(
         `Imported ${importedTotal}. Importing ${pendingTotal} missing game${pendingTotal === 1 ? "" : "s"}…`,
         "info",

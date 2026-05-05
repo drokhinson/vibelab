@@ -33,6 +33,7 @@ from db import get_supabase
 
 from . import router
 from .bgg_client import (
+    BggWarmUpError,
     clear_user_session,
     fetch_bgg_as_user,
     has_stored_credentials,
@@ -57,6 +58,12 @@ logger = logging.getLogger(__name__)
 # preordered, …) is ignored for now; users can curate those flags on BGG and
 # they won't pollute the BoardgameBuddy closet.
 _BGG_STATUSES = {"own": "owned", "wishlist": "wishlist", "wanttoplay": "wishlist"}
+
+# Subtypes we sweep when batching the /collection request. Each (subtype,
+# status) pair is its own xmlapi2 call so BGG can serve a smaller, more
+# cacheable subset — large combined requests are what trigger the warm-up
+# placeholder response that returns zero items.
+_COLLECTION_SUBTYPES: tuple[str, ...] = ("boardgame", "boardgameexpansion")
 
 # Throttle between BGG calls inside the worker. BGG's public limit is loose
 # (a few req/sec) but they 429 aggressively if you blast them.
@@ -441,29 +448,81 @@ async def _process_pending_imports(user_id: str) -> None:
 # ── Sync core ────────────────────────────────────────────────────────────────
 
 
-async def _fetch_collection(
-    user_id: str, username: str,
-) -> list[tuple[int, str, Optional[dict]]]:
-    """Fetch the linked user's collection authenticated as that user.
+def _status_priority(status: str) -> int:
+    """Higher means stronger — used to pick a winner when one game shows up
+    in multiple per-status batches (e.g. owned AND wishlisted)."""
+    return {"owned": 2, "wishlist": 1}.get(status, 0)
 
-    `showprivate=1` is what makes <privateinfo> show up; it requires the
-    request to be authenticated as the same BGG user, which fetch_bgg_as_user
-    handles via the stored cookies.
+
+def _merge_collection_row(
+    existing: tuple[int, str, Optional[dict]],
+    incoming: tuple[int, str, Optional[dict]],
+) -> tuple[int, str, Optional[dict]]:
+    bgg_id, ex_status, ex_private = existing
+    _, in_status, in_private = incoming
+    if _status_priority(in_status) > _status_priority(ex_status):
+        ex_status = in_status
+    if in_private is not None:
+        if ex_private is None:
+            ex_private = in_private
+        else:
+            merged = dict(ex_private)
+            for key, value in in_private.items():
+                if value is not None:
+                    merged[key] = value
+            ex_private = merged
+    return (bgg_id, ex_status, ex_private)
+
+
+async def _fetch_collection_batched(
+    user_id: str, username: str,
+) -> tuple[list[tuple[int, str, Optional[dict]]], bool]:
+    """Pull the linked user's collection as N small (subtype, status) requests.
+
+    BGG's xmlapi2 has no page/limit pagination on /collection; the only way
+    to subdivide a huge collection so each request is small enough to be
+    served from cache (rather than triggering the warm-up placeholder) is to
+    filter by subtype and a single status flag at a time. We sweep the
+    matrix _COLLECTION_SUBTYPES × _BGG_STATUSES and dedupe the results.
+
+    Returns (rows, warm_up_failed). `warm_up_failed` is True iff at least one
+    batch exhausted its warm-up retries — _run_sync uses it together with the
+    final imported+pending counts to decide whether to surface a "try again"
+    flag to the FE.
     """
-    body = await fetch_bgg_as_user(
-        user_id,
-        "/collection",
-        {
-            "username": username,
-            "own": 1,
-            "wishlist": 1,
-            "wanttoplay": 1,
-            "stats": 1,
-            "showprivate": 1,
-        },
-        timeout=20.0,
-    )
-    return _parse_collection(body, username=username)
+    merged: dict[int, tuple[int, str, Optional[dict]]] = {}
+    warm_up_failed = False
+    first = True
+    for subtype in _COLLECTION_SUBTYPES:
+        for status_flag in _BGG_STATUSES.keys():
+            if not first:
+                await asyncio.sleep(_WORKER_THROTTLE_SECONDS)
+            first = False
+            params = {
+                "username": username,
+                status_flag: 1,
+                "subtype": subtype,
+                "stats": 1,
+                "showprivate": 1,
+            }
+            try:
+                body = await fetch_bgg_as_user(
+                    user_id, "/collection", params, timeout=20.0,
+                )
+            except BggWarmUpError:
+                logger.warning(
+                    "BGG collection batch warm-up exhausted user=%s subtype=%s status=%s",
+                    user_id, subtype, status_flag,
+                )
+                warm_up_failed = True
+                continue
+            for row in _parse_collection(body, username=username):
+                bgg_id = row[0]
+                if bgg_id in merged:
+                    merged[bgg_id] = _merge_collection_row(merged[bgg_id], row)
+                else:
+                    merged[bgg_id] = row
+    return list(merged.values()), warm_up_failed
 
 
 async def _fetch_all_plays(user_id: str, username: str) -> list[dict]:
@@ -498,8 +557,15 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
     """Pull collection + plays from BGG, materialize knowns, queue unknowns."""
     sb = get_supabase()
 
-    collection_rows = await _fetch_collection(user_id, username)
-    play_rows = await _fetch_all_plays(user_id, username)
+    collection_rows, coll_warm_up = await _fetch_collection_batched(user_id, username)
+
+    plays_warm_up = False
+    try:
+        play_rows = await _fetch_all_plays(user_id, username)
+    except BggWarmUpError:
+        logger.warning("BGG plays fetch warm-up exhausted user=%s", user_id)
+        play_rows = []
+        plays_warm_up = True
 
     # Resolve known bgg_ids in two batched queries.
     all_bgg_ids = {bid for bid, _, _ in collection_rows} | {p["bgg_id"] for p in play_rows}
@@ -537,12 +603,16 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
             _queue_pending(sb, user_id, bgg_id, "play", play_payload)
             plays_pending += 1
 
+    total = coll_imported + coll_pending + plays_imported + plays_pending
+    warm_up_retry_pending = (coll_warm_up or plays_warm_up) and total == 0
+
     return BggSyncSummary(
         bgg_username=username,
         collection_imported=coll_imported,
         collection_pending=coll_pending,
         plays_imported=plays_imported,
         plays_pending=plays_pending,
+        warm_up_retry_pending=warm_up_retry_pending,
     )
 
 

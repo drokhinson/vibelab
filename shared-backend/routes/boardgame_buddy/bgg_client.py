@@ -16,10 +16,12 @@ Two entry points:
 Both paths share the same 202/429/non-200 mapping below.
 """
 
+import asyncio
 import logging
 import os
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
+from typing import Awaitable, Callable
 
 import httpx
 from fastapi import HTTPException
@@ -51,6 +53,74 @@ def _default_headers() -> dict[str, str]:
     return headers
 
 
+class BggWarmUpError(HTTPException):
+    """BGG signalled the result is still being prepared and our retries gave up.
+
+    Raised by `_fetch_with_warmup_retry` after exhausting attempts on either
+    HTTP 202 or HTTP 200 with a top-level <message> element. Callers (notably
+    `_run_sync`) catch this distinctly to surface a clearer FE message instead
+    of treating it as a generic 503/502.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=503,
+            detail="BoardGameGeek is still preparing this collection. Try again in ~30 seconds.",
+        )
+
+
+def _is_warm_up_response(body: str) -> bool:
+    """True when a BGG xmlapi2 200 body is the 'request accepted, retry shortly' placeholder.
+
+    Conservative: only fires when a top-level <message> element is present.
+    A legit empty subtype (`<items totalitems="0"/>` with no <message>) is NOT
+    a warm-up — we must not retry users who genuinely own no expansions.
+    """
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError:
+        return False
+    return root.find("message") is not None
+
+
+async def _fetch_with_warmup_retry(
+    do_get: Callable[[], Awaitable[httpx.Response]],
+    *,
+    path: str,
+    params: dict,
+    attempts: int = 3,
+    delays: tuple[float, ...] = (5.0, 10.0, 20.0),
+) -> httpx.Response:
+    """Call do_get() with retries when BGG signals it's still computing the result.
+
+    Two warm-up signals are retriable: HTTP 202 (documented but rare in the
+    wild) and HTTP 200 with a top-level <message> element (the common case for
+    large /collection requests on first hit). All other responses are returned
+    as-is so the caller's `_map_bgg_status` handles them.
+    """
+    for attempt in range(attempts):
+        resp = await do_get()
+        warming_up = (
+            resp.status_code == 202
+            or (resp.status_code == 200 and _is_warm_up_response(resp.text))
+        )
+        if not warming_up:
+            return resp
+        if attempt + 1 >= attempts:
+            break
+        delay = delays[min(attempt, len(delays) - 1)]
+        logger.info(
+            "BGG warm-up on %s %s — sleeping %.1fs (attempt %d/%d)",
+            path, params, delay, attempt + 1, attempts,
+        )
+        await asyncio.sleep(delay)
+    logger.warning(
+        "BGG warm-up exhausted on %s %s after %d attempts",
+        path, params, attempts,
+    )
+    raise BggWarmUpError()
+
+
 def _map_bgg_status(resp: httpx.Response, *, path: str, params: dict) -> None:
     """Translate BGG-specific status codes into HTTPException. 200 returns silently."""
     if resp.status_code == 200:
@@ -62,11 +132,9 @@ def _map_bgg_status(resp: httpx.Response, *, path: str, params: dict) -> None:
             detail="BoardGameGeek authentication failed. Ensure BGG_API_TOKEN is set in Railway.",
         )
     if resp.status_code == 202:
-        logger.info("BGG 202 (warming up) for %s %s", path, params)
-        raise HTTPException(
-            status_code=503,
-            detail="BoardGameGeek is warming up this result. Retry in a few seconds.",
-        )
+        # Warm-up retries happen in _fetch_with_warmup_retry; reaching this
+        # branch means we somehow bypassed the wrapper. Treat the same.
+        raise BggWarmUpError()
     if resp.status_code == 429:
         logger.warning("BGG 429 rate limit for %s %s", path, params)
         raise HTTPException(
@@ -89,9 +157,12 @@ async def fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
     Anonymous request — used for catalog endpoints (search, /thing). Sends the
     shared bearer token only.
     """
-    try:
+    async def _do_get() -> httpx.Response:
         async with httpx.AsyncClient(timeout=timeout, headers=_default_headers()) as client:
-            resp = await client.get(f"{BGG_API_BASE}{path}", params=params)
+            return await client.get(f"{BGG_API_BASE}{path}", params=params)
+
+    try:
+        resp = await _fetch_with_warmup_retry(_do_get, path=path, params=params)
     except httpx.HTTPError as exc:
         logger.warning("BGG network error on %s %s: %s", path, params, exc)
         raise HTTPException(
@@ -196,19 +267,23 @@ async def fetch_bgg_as_user(
     profile_row = _load_profile_session(sb, user_id)
     profile_row = await _ensure_session(sb, user_id, profile_row)
 
-    async def _do_get(row: dict) -> httpx.Response:
-        cookies = {
-            "SessionID": row["bgg_session_id"],
-            "bggusername": row["bgg_session_user_cookie"] or row["bgg_username"],
-            "bggpassword": row["bgg_session_pass_cookie"] or "",
-        }
-        async with httpx.AsyncClient(
-            timeout=timeout, headers=_default_headers(), cookies=cookies,
-        ) as client:
-            return await client.get(f"{BGG_API_BASE}{path}", params=params)
+    def _make_do_get(row: dict) -> Callable[[], Awaitable[httpx.Response]]:
+        async def _do_get() -> httpx.Response:
+            cookies = {
+                "SessionID": row["bgg_session_id"],
+                "bggusername": row["bgg_session_user_cookie"] or row["bgg_username"],
+                "bggpassword": row["bgg_session_pass_cookie"] or "",
+            }
+            async with httpx.AsyncClient(
+                timeout=timeout, headers=_default_headers(), cookies=cookies,
+            ) as client:
+                return await client.get(f"{BGG_API_BASE}{path}", params=params)
+        return _do_get
 
     try:
-        resp = await _do_get(profile_row)
+        resp = await _fetch_with_warmup_retry(
+            _make_do_get(profile_row), path=path, params=params,
+        )
     except httpx.HTTPError as exc:
         logger.warning("BGG network error on %s %s: %s", path, params, exc)
         raise HTTPException(
@@ -230,7 +305,9 @@ async def fetch_bgg_as_user(
             "bgg_session_pass_cookie": session.pass_cookie,
         }
         try:
-            resp = await _do_get(retry_row)
+            resp = await _fetch_with_warmup_retry(
+                _make_do_get(retry_row), path=path, params=params,
+            )
         except httpx.HTTPError as exc:
             logger.warning("BGG retry network error on %s %s: %s", path, params, exc)
             raise HTTPException(
@@ -289,6 +366,7 @@ __all__ = [
     "BGG_API_BASE",
     "BGG_API_TOKEN",
     "BGG_USER_AGENT",
+    "BggWarmUpError",
     "clear_user_session",
     "fetch_bgg",
     "fetch_bgg_as_user",
