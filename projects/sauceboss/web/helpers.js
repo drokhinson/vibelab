@@ -272,6 +272,28 @@ async function toggleFavorite(sauceId) {
 // ─── Unit conversion ──────────────────────────────────────────────────────────
 function toTsp(amount, unit) { return amount * (TO_TSP[unit] || 1); }
 
+// Total tsp produced by a step's bowl, including everything inherited from
+// upstream steps it combines in. Walks `inputFromStep` recursively so a chain
+// like 1→2→3 carries the contents of step 1 forward into step 3's total.
+function cumulativeStepTsp(steps, idx, servings) {
+  const step = steps[idx];
+  if (!step) return 0;
+  let total = step.ingredients.reduce(
+    (s, it) => s + toTsp(scaleAmount(it.amount, servings), it.unit), 0
+  );
+  if (step.inputFromStep) {
+    total += cumulativeStepTsp(steps, step.inputFromStep - 1, servings);
+  }
+  return total;
+}
+
+// Pick a friendly display unit for a tsp total (cup ≥ 48, tbsp ≥ 3, else tsp).
+function tspToDisplay(tspTotal) {
+  if (tspTotal >= 48) return { amount: +(tspTotal / 48).toFixed(1), unit: 'cup' };
+  if (tspTotal >= 3)  return { amount: +(tspTotal / 3).toFixed(1),  unit: 'tbsp' };
+  return { amount: +tspTotal.toFixed(1), unit: 'tsp' };
+}
+
 // `item` is optional. When passed and metric mode is on, server-supplied
 // canonicalMl / canonicalG (set by the Mealie-inspired ingredient migration)
 // take precedence over the in-JS lookup tables — this keeps display numbers
