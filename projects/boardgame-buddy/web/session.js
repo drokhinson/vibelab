@@ -783,7 +783,7 @@ async function openSessionGuide() {
     </div>
     <div id="session-guide-sticky"></div>
     <div id="session-guide-content" class="scroll-panel">
-      <div class="text-center py-4"><span class="loading loading-spinner loading-sm"></span></div>
+      <div class="text-center py-4">${buddyLoader('sm')}</div>
     </div>`;
   if (window.lucide) window.lucide.createIcons();
 

@@ -10,7 +10,7 @@ function startLogPlay(gameId, gameName, gameThumb) {
 
 async function loadPlays() {
   const container = document.getElementById("history-content");
-  container.innerHTML = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
+  container.innerHTML = `<div class="flex justify-center py-12">${buddyLoader('lg')}</div>`;
 
   // Reset filters and page on fresh load
   playsPage = 1;
@@ -38,7 +38,7 @@ async function loadPlays() {
 
 async function fetchPlays() {
   const container = document.getElementById("history-content");
-  container.innerHTML = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
+  container.innerHTML = `<div class="flex justify-center py-12">${buddyLoader('lg')}</div>`;
   try {
     const params = new URLSearchParams({ page: playsPage, per_page: PLAYS_PER_PAGE });
     if (playsFilterGameId) params.set("game_id", playsFilterGameId);

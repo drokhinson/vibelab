@@ -3,7 +3,7 @@
 async function openGameDetail(gameId) {
   showView("game-detail");
   const container = document.getElementById("game-detail-content");
-  container.innerHTML = '<div class="flex justify-center py-12"><span class="loading loading-spinner loading-lg"></span></div>';
+  container.innerHTML = `<div class="flex justify-center py-12">${buddyLoader('lg')}</div>`;
 
   try {
     currentGame = await apiFetch(`/games/${gameId}`);
@@ -116,7 +116,7 @@ function renderGameDetail() {
       <div id="guide-controls"></div>
       <div id="expansions-panel" class="mb-2"></div>
       <div id="guide-content" class="scroll-panel">
-        <span class="loading loading-spinner loading-sm"></span>
+        ${buddyLoader('sm')}
       </div>
       <!-- New chunk / Hidden — moved below the scroll (rendered by guide.js) -->
       <div id="guide-toolbar" class="mt-3"></div>

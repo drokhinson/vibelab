@@ -218,7 +218,7 @@ function renderBggCard() {
       ${errorLine}
       <button class="btn btn-primary btn-sm mt-2 self-start" onclick="handleSyncBgg()" ${syncing ? "disabled" : ""}>
         ${syncing
-          ? `<span class="loading loading-spinner loading-xs"></span> Syncing…`
+          ? `${buddyLoader('xs')} Syncing…`
           : `<i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync from BGG`}
       </button>
     </div>

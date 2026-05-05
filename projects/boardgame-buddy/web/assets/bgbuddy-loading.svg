@@ -29,32 +29,35 @@
       keySplines="0.42 0 0.58 1; 0.42 0 0.58 1"
     />
 
-    <!-- Head -->
-    <rect x="176" y="120" width="160" height="160" rx="32" fill="url(#accent)" />
-
-    <!-- Eyes (grouped for blink) -->
-    <g id="eyes">
-      <circle cx="220" cy="190" r="10" fill="#1a0f0b"/>
-      <circle cx="292" cy="190" r="10" fill="#1a0f0b"/>
-
-      <!-- Blink animation (scale Y squash) -->
+    <!-- Head group: bobs side-to-side around the neck pivot at (256, 280) -->
+    <g id="head">
       <animateTransform
         attributeName="transform"
-        type="scale"
-        values="1,1; 1,0.1; 1,1"
+        type="rotate"
+        values="-6 256 280; 6 256 280; -6 256 280"
         keyTimes="0; 0.5; 1"
-        dur="0.15s"
-        begin="2.5s"
+        dur="2.4s"
         repeatCount="indefinite"
+        calcMode="spline"
+        keySplines="0.42 0 0.58 1; 0.42 0 0.58 1"
       />
-    </g>
 
-    <!-- Smile -->
-    <path d="M220 230 Q256 260 292 230"
-          stroke="#1a0f0b"
-          stroke-width="6"
-          fill="none"
-          stroke-linecap="round"/>
+      <!-- Head -->
+      <rect x="176" y="120" width="160" height="160" rx="32" fill="url(#accent)" />
+
+      <!-- Eyes (static — no blink) -->
+      <g id="eyes">
+        <circle cx="220" cy="190" r="10" fill="#1a0f0b"/>
+        <circle cx="292" cy="190" r="10" fill="#1a0f0b"/>
+      </g>
+
+      <!-- Smile -->
+      <path d="M220 230 Q256 260 292 230"
+            stroke="#1a0f0b"
+            stroke-width="6"
+            fill="none"
+            stroke-linecap="round"/>
+    </g>
 
     <!-- Body -->
     <g fill="url(#accent)">
