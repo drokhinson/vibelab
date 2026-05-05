@@ -84,9 +84,9 @@ function renderAccountTab() {
             <i data-lucide="shield" class="w-4 h-4"></i> Become admin
           </h3>
           <p class="text-xs text-base-content/60">Enter the shared admin key to unlock direct guide imports and the review queue.</p>
-          <div class="flex gap-2 mt-2">
-            <input type="password" id="profile-admin-key" class="input input-bordered input-sm flex-1" placeholder="Admin key" />
-            <button class="btn btn-primary btn-sm" onclick="handleBecomeAdmin()">Promote</button>
+          <div class="flex flex-wrap gap-2 mt-2">
+            <input type="password" id="profile-admin-key" class="input input-bordered input-sm flex-1 min-w-0" placeholder="Admin key" />
+            <button class="btn btn-primary btn-sm shrink-0 whitespace-nowrap" onclick="handleBecomeAdmin()">Promote</button>
           </div>
         </div>
       </div>
