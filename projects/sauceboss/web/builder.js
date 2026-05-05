@@ -1,5 +1,34 @@
 'use strict';
 
+// ─── Builder Validation ───────────────────────────────────────────────────────
+// Single source of truth for what blocks the Continue button. Used by the full
+// renderer (to draw the validation card) and by the keystroke-level updater
+// (which can't re-render without dropping input focus).
+function _builderValidate(b) {
+  const ingHasQuantity = i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste');
+  const hasCuisine = b.cuisineDraftMode
+    ? !!(b.cuisineDraftName.trim() && b.cuisineDraftEmoji.trim())
+    : !!b.cuisine;
+  const trayEmpty = (b.unassignedIngredients || []).length === 0;
+  const untitledStepIdxs = b.steps
+    .map((s, i) => s.title.trim() ? -1 : i)
+    .filter(i => i >= 0);
+  const hasUsableStep = b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity));
+
+  const issues = [];
+  if (!b.name.trim())          issues.push('Add a sauce name');
+  if (!b.sauceType)            issues.push('Select a type (Sauce / Marinade / Dressing)');
+  if (!hasCuisine)             issues.push('Select a cuisine');
+  if (!b.color)                issues.push('Pick a color');
+  if (untitledStepIdxs.length) {
+    const labels = untitledStepIdxs.map(i => i + 1).join(', ');
+    issues.push(`Add a title to step ${labels}`);
+  }
+  if (!hasUsableStep)          issues.push('Add at least one ingredient with a quantity to a titled step');
+
+  return { issues, canContinue: issues.length === 0 && trayEmpty, trayEmpty };
+}
+
 // ─── Builder Screens ──────────────────────────────────────────────────────────
 function renderBuilder() {
   const b = state.builder;
@@ -88,12 +117,17 @@ function renderBuilder() {
     </div>`;
   }).join('');
 
-  const ingHasQuantity = i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste');
-  const hasCuisine = b.cuisineDraftMode
-    ? !!(b.cuisineDraftName.trim() && b.cuisineDraftEmoji.trim())
-    : !!b.cuisine;
-  const trayEmpty = (b.unassignedIngredients || []).length === 0;
-  const canContinue = b.name.trim() && hasCuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity)) && trayEmpty;
+  const { issues, canContinue, trayEmpty } = _builderValidate(b);
+
+  const validationHTML = issues.length > 0 ? `
+    <div class="builder-validation-card">
+      <div class="builder-validation-header">
+        <span class="builder-validation-title">⚠ Finish these before continuing</span>
+      </div>
+      <ul class="builder-validation-list">
+        ${issues.map(msg => `<li>${esc(msg)}</li>`).join('')}
+      </ul>
+    </div>` : '';
 
   const unassignedHTML = (b.unassignedIngredients && b.unassignedIngredients.length > 0) ? `
     <div class="builder-unassigned-card">
@@ -156,9 +190,10 @@ function renderBuilder() {
       </div>
       <p class="builder-label" style="margin-top:16px">Steps</p>
       ${stepsHTML}
-      ${unassignedHTML}
       <button class="add-step-btn" onclick="builderAddStep()">+ Add Step</button>
-      <button class="builder-primary-btn" onclick="navigate('builder-items')" ${canContinue ? '' : 'disabled'}${!trayEmpty ? ' title="Resolve unassigned ingredients first"' : ''}>Continue — Pair with ${SAUCE_TYPES.find(t => t.value === b.sauceType)?.pairLabel || 'Items'}</button>
+      ${validationHTML}
+      ${unassignedHTML}
+      <button class="builder-primary-btn" onclick="navigate('builder-items')" ${canContinue ? '' : 'disabled'}${!canContinue ? ' title="Resolve the issues above to continue"' : ''}>Continue — Pair with ${SAUCE_TYPES.find(t => t.value === b.sauceType)?.pairLabel || 'Items'}</button>
     </div>
   `;
 }
@@ -395,15 +430,40 @@ function builderHandleInput(el) {
     render();
     return;
   }
+  if (state.screen === 'builder') _builderRefreshValidation();
+}
+
+// Update the disabled state of Continue and the contents of the validation card
+// without re-rendering — keystroke handlers call this to keep warnings live
+// while preserving input focus.
+function _builderRefreshValidation() {
+  const b = state.builder;
+  const { issues, canContinue } = _builderValidate(b);
+
   const btn = document.querySelector('.builder-primary-btn');
-  if (btn && state.screen === 'builder') {
-    const hasCuisine = b.cuisineDraftMode
-      ? !!(b.cuisineDraftName.trim() && b.cuisineDraftEmoji.trim())
-      : !!b.cuisine;
-    const trayEmpty = (b.unassignedIngredients || []).length === 0;
-    const canContinue = b.name.trim() && hasCuisine && b.steps.some(s => s.title.trim() && s.ingredients.some(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste'))) && trayEmpty;
+  if (btn) {
     btn.disabled = !canContinue;
+    if (canContinue) btn.removeAttribute('title');
+    else btn.setAttribute('title', 'Resolve the issues above to continue');
   }
+
+  const esc = s => (s || '').replace(/"/g, '&quot;');
+  const card = document.querySelector('.builder-validation-card');
+  if (issues.length === 0) {
+    if (card) card.remove();
+    return;
+  }
+  const listHTML = issues.map(msg => `<li>${esc(msg)}</li>`).join('');
+  if (card) {
+    const list = card.querySelector('.builder-validation-list');
+    if (list) list.innerHTML = listHTML;
+    return;
+  }
+  // Card doesn't exist yet (issues just appeared) — full re-render is the
+  // simplest way to insert it in the right spot. Acceptable here because the
+  // input that triggered this almost always still has a valid issue against
+  // it; focus loss is rare in practice.
+  render();
 }
 
 function updateAutocompleteDropdown(si, ii, matches) {
@@ -601,6 +661,26 @@ async function builderSave() {
     render();
     return;
   }
+  if (!b.name.trim()) {
+    b.error = 'Sauce name is required.';
+    render();
+    return;
+  }
+  if (!b.sauceType) {
+    b.error = 'Select a type before saving.';
+    render();
+    return;
+  }
+  if (!b.color) {
+    b.error = 'Pick a color before saving.';
+    render();
+    return;
+  }
+  if (b.steps.some(s => !s.title.trim())) {
+    b.error = 'Every step needs a title.';
+    render();
+    return;
+  }
   if (b.cuisineDraftMode) {
     const draftName = (b.cuisineDraftName || '').trim();
     const draftEmoji = (b.cuisineDraftEmoji || '').trim();
@@ -612,6 +692,11 @@ async function builderSave() {
     b.cuisine = draftName;
     b.cuisineEmoji = draftEmoji;
     b.cuisineDraftMode = false;
+  }
+  if (!b.cuisine) {
+    b.error = 'Select a cuisine before saving.';
+    render();
+    return;
   }
   b.saving = true;
   b.error = null;
@@ -627,7 +712,6 @@ async function builderSave() {
       sauceType: b.sauceType,
       itemIds: b.itemIds,
       steps: b.steps
-        .filter(s => s.title.trim())
         .map(s => ({
           title: s.title.trim(),
           instructions: (s.instructions || '').trim() || null,
