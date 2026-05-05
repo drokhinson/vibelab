@@ -48,6 +48,11 @@ let playsFilterGameId = null;
 let playsFilterBuddyId = null;
 let playsFilterOptions = null;  // { games: [{id, name}], buddies: [{id, name}] }
 
+// Browse: per-game collection status for the bookmark button on each card.
+// Keyed by game_id; values are "owned" | "wishlist". Played-only rows are
+// excluded since they're auto-derived from play history.
+let userCollectionStatus = {};
+
 // Browse filters
 let gamesFilterPlayers = null;
 let gamesFilterPlaytimeMin = null;
