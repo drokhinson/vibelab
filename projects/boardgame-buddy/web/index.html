@@ -26,15 +26,27 @@
   <div id="app" class="max-w-[480px] mx-auto min-h-screen flex flex-col pb-20">
 
     <!-- Top bar -->
-    <header class="hidden sticky top-0 z-30 bg-base-100/95 backdrop-blur px-4 py-3 flex items-center justify-between border-b border-base-300" data-auth-only>
-      <h1 class="text-lg font-bold font-display flex items-center gap-2"><i data-lucide="dice-6" class="w-5 h-5"></i> BoardgameBuddy</h1>
-      <div class="flex items-center gap-2">
-        <button id="profile-chip" class="btn btn-ghost btn-sm btn-circle" onclick="showView('profile'); renderProfile();" title="Account">
-          <div id="profile-avatar" class="avatar-bubble"></div>
-        </button>
-        <button class="btn btn-ghost btn-sm btn-circle" onclick="handleLogout()" title="Log out">
-          <i data-lucide="log-out" class="w-4 h-4"></i>
-        </button>
+    <header class="hidden sticky top-0 z-30 bg-base-100/95 backdrop-blur border-b border-base-300" data-auth-only>
+      <div class="px-4 py-3 flex items-center justify-between">
+        <h1 class="text-lg font-bold font-display flex items-center gap-2"><i data-lucide="dice-6" class="w-5 h-5"></i> BoardgameBuddy</h1>
+        <div class="flex items-center gap-2">
+          <button id="profile-chip" class="btn btn-ghost btn-sm btn-circle" onclick="showView('profile'); renderProfile();" title="Account">
+            <div id="profile-avatar" class="avatar-bubble"></div>
+          </button>
+          <button class="btn btn-ghost btn-sm btn-circle" onclick="handleLogout()" title="Log out">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+      <!-- BGG attribution row — required by BGG XML API Terms of Use.
+           Visible on every public-facing view. Do not remove without a compliant replacement.
+           TODO(app): mirror this attribution in the React Native app once any screen
+           renders BGG data. See web/index.html header + profile Data Sources card. -->
+      <div id="bgg-attribution-header" class="bgg-attribution">
+        <a href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer">
+          <img src="assets/bgg-logo.svg" alt="" height="18" onerror="this.remove()" />
+          <span>Powered by <strong>BoardGameGeek</strong></span>
+        </a>
       </div>
     </header>
 
@@ -121,6 +133,19 @@
     <!-- User Profile View -->
     <main data-view="profile" class="hidden flex-1 px-4 py-4">
       <div id="profile-content"></div>
+      <!-- BGG attribution card — primary, prominent attribution surface.
+           Required by BGG XML API Terms of Use. Sibling of #profile-content
+           so renderProfile() can replace its innerHTML without clobbering this. -->
+      <section id="bgg-data-sources" class="bgg-attribution-card">
+        <h3>Data Sources</h3>
+        <p>Game data, box art, and metadata are sourced from
+          <a href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer">BoardGameGeek</a>
+          via the BGG XML API.</p>
+        <a class="bgg-attribution-card__logo"
+           href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer">
+          <img src="assets/bgg-logo.svg" alt="Powered by BoardGameGeek" height="40" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Powered by BoardGameGeek',className:'bgg-attribution-card__fallback'}))" />
+        </a>
+      </section>
     </main>
 
     <!-- Play Log (history) View -->

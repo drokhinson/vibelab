@@ -1053,3 +1053,88 @@ body {
   }
 }
 
+/* ── BGG attribution: sticky header sub-row ─────────────────────────────────
+   Required by BGG XML API Terms of Use. Sits inside the sticky <header>
+   beneath the brand+avatar row, so it's visible on every authed view. */
+.bgg-attribution {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 12px;
+  border-top: 1px solid oklch(var(--b3) / 0.6);
+  background: oklch(var(--b1) / 0.94);
+  font-size: 0.8125rem; /* 13px — legible per BGG terms */
+}
+.bgg-attribution a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: oklch(var(--bc) / 0.65);
+  text-decoration: none;
+  padding: 2px 8px;
+  min-height: 24px;
+}
+.bgg-attribution a:hover,
+.bgg-attribution a:focus-visible {
+  color: var(--accent);
+}
+.bgg-attribution img {
+  display: block;
+  height: 18px;
+  width: auto;
+  opacity: 0.85;
+}
+.bgg-attribution a:hover img {
+  opacity: 1;
+}
+
+/* ── BGG attribution: profile "Data Sources" card ───────────────────────── */
+.bgg-attribution-card {
+  margin-top: 1.25rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.75rem;
+  background: oklch(var(--b1) / 0.6);
+  text-align: center;
+}
+.bgg-attribution-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.bgg-attribution-card p {
+  margin: 0 0 0.875rem;
+  font-size: 0.875rem;
+  color: oklch(var(--bc) / 0.85);
+  line-height: 1.45;
+}
+.bgg-attribution-card p a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bgg-attribution-card__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 0.5rem;
+}
+.bgg-attribution-card__logo:hover {
+  background: oklch(var(--b2) / 0.5);
+}
+.bgg-attribution-card__logo img {
+  height: 40px;
+  width: auto;
+}
+.bgg-attribution-card__fallback {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--accent);
+  padding: 8px 4px;
+}
+
