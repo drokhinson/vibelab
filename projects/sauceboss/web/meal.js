@@ -74,7 +74,7 @@ function renderMealBuilder() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <div class="logo"><span>🍲</span>SauceBoss</div>
+      <div class="logo">SauceBoss</div>
       <div class="subtitle">What are you cooking with?</div>
       ${renderHeaderAuthSlot()}
       <button class="sauce-mgr-btn" onclick="openSauceManager()" aria-label="Sauce manager">
