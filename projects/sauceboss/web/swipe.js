@@ -57,6 +57,10 @@ function endDrag(commit) {
 
 function onPointerDown(e) {
   if (e.button !== undefined && e.button !== 0) return;
+  // Nested interactive controls (heart, edit pencil, etc.) own their own
+  // gesture — bail before pointer capture so the row's tap/longpress/swipe
+  // handlers don't fight with the button's click.
+  if (e.target.closest('button, a, [role="button"]')) return;
   const row = e.target.closest('.swipe-row[data-swipe]');
   if (!row) return;
   if (typeof currentUser === 'undefined' || !currentUser) return;
