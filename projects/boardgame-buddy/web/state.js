@@ -37,6 +37,7 @@ let closetView = localStorage.getItem("bgb_closet_view") || "list";  // list | s
 let closetSort = localStorage.getItem("bgb_closet_sort") || "alphabetical"; // alphabetical | last_played
 let closetSearch = "";
 let closetTab = "collection"; // collection | wishlist
+let expandedExpansionGroups = new Set(); // base game ids currently expanded in the list view
 
 // Plays
 let plays = [];

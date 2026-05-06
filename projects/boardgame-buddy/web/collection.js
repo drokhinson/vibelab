@@ -235,6 +235,7 @@ function renderShelfRow(shelf) {
 
   const shelfDef = SHELVES.find(s => s.key === shelf);
   const visible = filterItems(shelfItems[shelf]);
+  const expansionCounts = countExpansionsByBase(visible);
 
   const total = shelfTotal[shelf];
   const loaded = shelfItems[shelf].length;
@@ -252,7 +253,7 @@ function renderShelfRow(shelf) {
       content = "";
     }
   } else {
-    content = visible.map((it, i) => bookSpineHTML(it, i)).join("");
+    content = visible.map((it, i) => bookSpineHTML(it, i, expansionCounts.get(it.game.bgg_id) || 0)).join("");
   }
 
   row.innerHTML = `
@@ -282,11 +283,17 @@ function renderShelfRow(shelf) {
   attachShelfGestures(shelf);
 }
 
-function bookSpineHTML(item, i) {
+function bookSpineHTML(item, i, expansionCount = 0) {
   const g = item.game;
   const color = g.theme_color || colorFromName(g.name);
   const thumb = g.thumbnail_url || "";
   const plays = item.play_count || 0;
+  const expBadge = expansionCount > 0
+    ? `<div class="book-spine__exp" title="${expansionCount} expansion${expansionCount === 1 ? "" : "s"} in shelf"><i data-lucide="puzzle"></i>${expansionCount}</div>`
+    : "";
+  const expDot = g.is_expansion && g.expansion_color
+    ? `<div class="book-spine__exp-dot" style="background:${g.expansion_color}" title="Expansion"></div>`
+    : "";
   return `
     <div class="book-slot animate-fadeUp"
          style="--book-color:${color}; --i:${i};"
@@ -296,10 +303,69 @@ function bookSpineHTML(item, i) {
       <div class="book-hint book-hint--log"><i data-lucide="plus"></i><span>Log Play</span></div>
       <button type="button" class="book-spine" title="${escapeAttr(g.name)}">
         ${thumb ? `<div class="book-spine__art" style="background-image:url('${thumb}')"></div>` : '<div class="book-spine__art book-spine__art--blank"></div>'}
+        ${expDot}
         <div class="book-spine__title">${escapeHtml(g.name)}</div>
+        ${expBadge}
         ${plays > 0 ? `<div class="book-spine__plays">${plays}×</div>` : ""}
       </button>
     </div>`;
+}
+
+// ── Expansion grouping helpers ───────────────────────────────────────────────
+
+// Map base bgg_id → number of expansions for that base present in `items`.
+function countExpansionsByBase(items) {
+  const counts = new Map();
+  for (const it of items) {
+    const g = it.game;
+    if (g.is_expansion && g.base_game_bgg_id) {
+      counts.set(g.base_game_bgg_id, (counts.get(g.base_game_bgg_id) || 0) + 1);
+    }
+  }
+  return counts;
+}
+
+// Walk items in their original (sorted) order. Bases keep their position;
+// expansions whose base is in the same shelf get folded under that base.
+// Expansions whose base is NOT in the shelf render in-place as orphans.
+function groupItemsForList(items) {
+  const baseBggIds = new Set();
+  for (const it of items) {
+    if (!it.game.is_expansion && it.game.bgg_id) baseBggIds.add(it.game.bgg_id);
+  }
+
+  const expansionsByBase = new Map();
+  for (const it of items) {
+    const g = it.game;
+    if (g.is_expansion && g.base_game_bgg_id && baseBggIds.has(g.base_game_bgg_id)) {
+      const arr = expansionsByBase.get(g.base_game_bgg_id) || [];
+      arr.push(it);
+      expansionsByBase.set(g.base_game_bgg_id, arr);
+    }
+  }
+
+  const out = [];
+  for (const it of items) {
+    const g = it.game;
+    if (g.is_expansion) {
+      if (g.base_game_bgg_id && baseBggIds.has(g.base_game_bgg_id)) continue;
+      out.push({ kind: "orphan", item: it });
+    } else {
+      out.push({ kind: "base", item: it, expansions: expansionsByBase.get(g.bgg_id) || [] });
+    }
+  }
+  return out;
+}
+
+function toggleExpansionGroup(baseId) {
+  if (expandedExpansionGroups.has(baseId)) {
+    expandedExpansionGroups.delete(baseId);
+  } else {
+    expandedExpansionGroups.add(baseId);
+  }
+  renderList();
+  lucide.createIcons();
+  attachAllListSwipes();
 }
 
 // ── List view (owned + played only) ──────────────────────────────────────────
@@ -319,6 +385,7 @@ function renderList() {
     const loaded = shelfItems[shelf.key].length;
     const countLabel = loaded < total ? `${loaded} / ${total}` : String(total);
     if (!total) return "";
+    const groups = groupItemsForList(rows);
     return `
       <section class="mb-5" data-shelf-list="${shelf.key}">
         <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60 mb-2 flex items-center gap-2">
@@ -326,8 +393,8 @@ function renderList() {
           <span class="badge badge-sm badge-ghost">${countLabel}</span>
         </h3>
         <div class="grid grid-cols-1 gap-2">
-          ${rows.length
-            ? rows.map((it, i) => listRowHTML(it, i)).join("")
+          ${groups.length
+            ? groups.map((g, i) => groupListHTML(g, i)).join("")
             : `<div class="text-base-content/50 text-sm italic">No matches in loaded pages.</div>`}
         </div>
         ${shelfHasMore[shelf.key] ? `
@@ -338,6 +405,29 @@ function renderList() {
   }).join("") || `<div class="text-center py-8 text-base-content/50">No games match "${escapeHtml(closetSearch)}"</div>`;
 }
 
+function groupListHTML(group, i) {
+  if (group.kind === "orphan") {
+    return listRowHTML(group.item, i);
+  }
+  const base = group.item;
+  const expansions = group.expansions;
+  if (!expansions.length) return listRowHTML(base, i);
+
+  const baseId = base.game.id;
+  const expanded = expandedExpansionGroups.has(baseId);
+  const baseRow = listRowHTML(base, i, { expansionCount: expansions.length, expanded });
+  const childRows = expansions
+    .map((it, j) => listRowHTML(it, j, { isChild: true }))
+    .join("");
+  return `
+    <div class="closet-group ${expanded ? "is-expanded" : ""}" data-base-id="${baseId}">
+      ${baseRow}
+      <div class="closet-group__children" ${expanded ? "" : "hidden"}>
+        ${childRows}
+      </div>
+    </div>`;
+}
+
 async function loadMoreList(shelf) {
   await loadShelfPage(shelf, shelfPage[shelf] + 1);
   renderList();
@@ -345,12 +435,28 @@ async function loadMoreList(shelf) {
   attachAllListSwipes();
 }
 
-function listRowHTML(item, i) {
+function listRowHTML(item, i, opts = {}) {
+  const { expansionCount = 0, expanded = false, isChild = false } = opts;
   const g = item.game;
   const lastPlayed = item.last_played_at ? `Last played ${formatDate(item.last_played_at)}` : "Never played";
   const plays = item.play_count || 0;
+  const expChip = expansionCount > 0
+    ? `<button type="button" class="closet-exp-toggle ${expanded ? "is-expanded" : ""}"
+              onpointerdown="event.stopPropagation()"
+              onclick="event.stopPropagation(); toggleExpansionGroup('${g.id}')"
+              aria-expanded="${expanded ? "true" : "false"}"
+              aria-label="${expanded ? "Hide" : "Show"} ${expansionCount} expansion${expansionCount === 1 ? "" : "s"}">
+         <i data-lucide="puzzle" class="w-3 h-3"></i>
+         <span>${expansionCount}</span>
+         <i data-lucide="chevron-down" class="w-3 h-3 closet-exp-toggle__chev"></i>
+       </button>`
+    : "";
+  const dot = isChild && g.expansion_color
+    ? `<span class="expansion-dot" style="background:${g.expansion_color}"></span>`
+    : "";
+  const wrapClass = `swipe-wrap animate-fadeUp${isChild ? " closet-row--child" : ""}`;
   return `
-    <div class="swipe-wrap animate-fadeUp" style="--i:${i}"
+    <div class="${wrapClass}" style="--i:${i}"
          data-game-id="${g.id}" data-game-name="${escapeAttr(g.name)}">
       <div class="swipe-hint swipe-hint--log">
         <i data-lucide="plus" class="w-5 h-5"></i><span>Log Play</span>
@@ -358,18 +464,19 @@ function listRowHTML(item, i) {
       <div class="swipe-hint swipe-hint--guide">
         <i data-lucide="book-open" class="w-5 h-5"></i><span>Guide</span>
       </div>
-      <div class="card card-side bg-base-200 h-20 cursor-pointer hover:shadow-md transition-all">
-        <figure class="w-16 flex-shrink-0">
+      <div class="card card-side bg-base-200 ${isChild ? "h-16" : "h-20"} cursor-pointer hover:shadow-md transition-all">
+        <figure class="${isChild ? "w-12" : "w-16"} flex-shrink-0">
           <img src="${bggImg(g.thumbnail_url) || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
         </figure>
-        <div class="card-body p-2 justify-center">
-          <h3 class="font-semibold text-sm leading-tight line-clamp-1">${escapeHtml(g.name)}</h3>
+        <div class="card-body p-2 justify-center min-w-0">
+          <h3 class="font-semibold text-sm leading-tight line-clamp-1 flex items-center gap-1.5 min-w-0">${dot}<span class="truncate">${escapeHtml(g.name)}</span></h3>
           <div class="flex items-center gap-2 text-xs text-base-content/60">
             <span>${lastPlayed}</span>
             ${plays > 0 ? `<span><i data-lucide="dice-5" class="w-3 h-3"></i> ${plays}×</span>` : ""}
             ${g.bgg_rating ? `<span>★ ${formatRating(g.bgg_rating)}</span>` : ""}
           </div>
         </div>
+        ${expChip ? `<div class="flex items-center pr-2 flex-shrink-0">${expChip}</div>` : ""}
       </div>
     </div>`;
 }
