@@ -801,6 +801,90 @@ body {
   box-shadow: inset 0 0 0 1px rgba(139, 115, 85, 0.75);
 }
 
+/* ── Closet: expansion grouping (list view) ─────────────────────────────────── */
+.closet-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.closet-group__children {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-left: 1.25rem;
+  border-left: 2px solid rgba(201, 146, 42, 0.22);
+  margin-left: 0.5rem;
+  animation: fadeIn 160ms ease both;
+}
+
+.closet-row--child .card {
+  background: oklch(var(--b3) / 0.65);
+  border-color: rgba(201, 146, 42, 0.18);
+}
+
+.closet-exp-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 4px 8px;
+  min-height: 32px;
+  border-radius: 999px;
+  background: rgba(201, 146, 42, 0.18);
+  color: var(--accent);
+  border: 1px solid rgba(201, 146, 42, 0.35);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.closet-exp-toggle:hover {
+  background: rgba(201, 146, 42, 0.28);
+  border-color: rgba(201, 146, 42, 0.55);
+}
+.closet-exp-toggle__chev {
+  transition: transform 160ms ease;
+}
+.closet-exp-toggle.is-expanded .closet-exp-toggle__chev {
+  transform: rotate(180deg);
+}
+
+/* ── Closet: shelf badge for base spines with expansions ────────────────────── */
+.book-spine__exp {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #F5E9D0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(201, 146, 42, 0.45);
+}
+.book-spine__exp [data-lucide] {
+  width: 10px;
+  height: 10px;
+}
+.book-spine__exp-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+
 /* ── List view swipe gestures ────────────────────────────────────────────────── */
 .swipe-wrap {
   position: relative;
