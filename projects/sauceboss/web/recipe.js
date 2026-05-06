@@ -63,6 +63,20 @@ function renderRecipe() {
     </div>`;
   }).join('');
 
+  const family = state.selectedSauceFamily || [];
+  const variantSwitcherHTML = family.length > 1 ? `
+    <div class="variant-switcher" role="tablist" aria-label="Switch variant">
+      ${family.map(s => `
+        <button class="variant-chip ${s.id === sauce.id ? 'variant-chip--active' : ''}"
+                role="tab"
+                aria-selected="${s.id === sauce.id}"
+                onclick="selectVariant('${s.id}')">
+          <span class="variant-chip-dot" style="background:${s.color}"></span>
+          ${escapeHtml(s.name)}${!s.parentSauceId ? '<span class="variant-chip-tag">original</span>' : ''}
+        </button>
+      `).join('')}
+    </div>` : '';
+
   return `
     <div class="status-bar"></div>
     <div class="recipe-header">
@@ -70,6 +84,7 @@ function renderRecipe() {
       <div class="recipe-cuisine-badge">${renderEmoji(sauce.cuisineEmoji)} ${sauce.cuisine}</div>
       <div class="recipe-title">${sauce.name}</div>
       <div class="recipe-subtitle">Pair with: ${(sauce.compatibleItems || []).join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
+      ${variantSwitcherHTML}
     </div>
     <div class="recipe-controls">
       <div class="serving-row">

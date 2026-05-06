@@ -57,6 +57,25 @@ function renderBuilder() {
     `<button class="builder-chip builder-chip-lg ${b.sauceType === t.value ? 'selected' : ''}" onclick="builderSetSauceType('${t.value}')">${t.label}</button>`
   ).join('');
 
+  // "Variant of" dropdown — only when creating a new sauce. Re-parenting an
+  // existing sauce is intentionally out of scope; allowing it would let a
+  // user re-pin somebody else's recipe under their family.
+  const parentPool = (state.adminSauces || state.saucesForCurrentItem || [])
+    .filter(s => !s.parentSauceId && s.id !== b.editingId);
+  const parentOptions = parentPool
+    .sort((a, b1) => (a.name || '').localeCompare(b1.name || ''))
+    .map(s => `<option value="${s.id}" ${b.parentSauceId === s.id ? 'selected' : ''}>${esc(s.name)}${s.cuisine ? ` · ${esc(s.cuisine)}` : ''}</option>`)
+    .join('');
+  const variantOfHTML = b.editingId ? '' : `
+    <p class="builder-label">Variant of (optional)</p>
+    <div class="variant-of-row">
+      <select class="builder-input" data-builder-field="parent-sauce">
+        <option value="" ${!b.parentSauceId ? 'selected' : ''}>— Original recipe —</option>
+        ${parentOptions}
+      </select>
+      ${b.parentSauceId ? `<p class="builder-hint">Cuisine, color, type, and pairings copied from the original. Steps stay yours.</p>` : ''}
+    </div>`;
+
   const stepsHTML = b.steps.map((step, si) => {
     const stepRefHTML = si > 0 ? `
       <div class="step-ref-row">
@@ -180,6 +199,7 @@ function renderBuilder() {
         <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
         <textarea class="builder-input builder-description-input" placeholder="Description (optional)" data-builder-field="description">${esc(b.description || '')}</textarea>
         <input class="builder-input" type="url" placeholder="Source URL (optional)" value="${esc(b.sourceUrl || '')}" data-builder-field="source-url">
+        ${variantOfHTML}
         <p class="builder-label">Type</p>
         <div class="builder-chip-row">${sauceTypeChips}</div>
         <p class="builder-label">Cuisine</p>
@@ -425,6 +445,17 @@ function builderHandleInput(el) {
       builderMoveUnassignedToStep(uidx, targetSi);
       return;
     }
+    case 'parent-sauce': {
+      const id = el.value || null;
+      b.parentSauceId = id;
+      if (id) {
+        const pool = state.adminSauces || state.saucesForCurrentItem || [];
+        const parent = pool.find(s => s.id === id);
+        if (parent) _builderPrefillFromParent(parent);
+      }
+      needsRender = true;
+      break;
+    }
   }
   if (needsRender) {
     render();
@@ -502,6 +533,24 @@ function builderClassifyIngredient(si, ii, category) {
     const classify = wrap.querySelector('.category-classify');
     if (classify) classify.remove();
   }
+}
+
+// Copy metadata only from a parent sauce when "Variant of" is set. Steps,
+// ingredients, and any imported source URL are intentionally untouched so a
+// user can import a recipe and *then* mark it as a variant of an existing
+// sauce without losing the imported recipe content.
+function _builderPrefillFromParent(parent) {
+  const b = state.builder;
+  b.cuisine        = parent.cuisine || b.cuisine;
+  b.cuisineEmoji   = parent.cuisineEmoji || b.cuisineEmoji;
+  b.color          = parent.color || b.color;
+  b.sauceType      = parent.sauceType || b.sauceType;
+  // Clone itemIds so later edits to the variant don't mutate the cached
+  // parent object in state.adminSauces.
+  b.itemIds        = Array.isArray(parent.compatibleItems) ? [...parent.compatibleItems] : [];
+  // Description is the only field that can be a real authored field on the
+  // variant — only fill it when the user hasn't typed anything yet.
+  if (!b.description) b.description = parent.description || '';
 }
 
 // ─── Import-from-URL ──────────────────────────────────────────────────────────
@@ -710,6 +759,7 @@ async function builderSave() {
       description: b.description || '',
       sourceUrl: (b.sourceUrl || '').trim() || null,
       sauceType: b.sauceType,
+      parentSauceId: b.parentSauceId || null,
       itemIds: b.itemIds,
       steps: b.steps
         .map(s => ({

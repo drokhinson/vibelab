@@ -28,8 +28,19 @@ class AdminKeyBody(BaseModel):
     admin_key: str = Field(min_length=1)
 
 
+class FavoriteEntry(BaseModel):
+    """One entry in the user's favorites list.
+
+    ``createdAt`` is the ISO timestamp the favorite was added; the frontend
+    uses it to pick the most-recently-favorited sibling as the displayed
+    default for a sauce family.
+    """
+    sauceId: str
+    createdAt: Optional[str] = None
+
+
 class FavoriteListResponse(BaseModel):
-    favorites: List[str]
+    favorites: List[FavoriteEntry]
 
 
 class MessageResponse(BaseModel):
@@ -83,6 +94,7 @@ class CreateSauceRequest(BaseModel):
     description: str = ""
     sourceUrl: Optional[str] = None
     sauceType: SauceType = SauceType.SAUCE
+    parentSauceId: Optional[str] = None
     itemIds: List[str] = Field(min_length=1)
     steps: List[StepInput] = Field(min_length=1)
 

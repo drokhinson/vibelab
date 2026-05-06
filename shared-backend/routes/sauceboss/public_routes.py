@@ -80,6 +80,9 @@ async def create_sauce(
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sauce_id = f"user-{slug}-{secrets.token_hex(2)}"
 
+    if body.parentSauceId:
+        _validate_parent_sauce(body.parentSauceId, sauce_id)
+
     payload = _build_sauce_payload(sauce_id, body, created_by=user.user_id)
 
     sb = get_supabase()
@@ -114,6 +117,9 @@ async def update_sauce(
     if not user.is_admin and row.get("created_by") != user.user_id:
         raise HTTPException(status_code=403, detail="You can only edit your own sauces")
 
+    if body.parentSauceId:
+        _validate_parent_sauce(body.parentSauceId, sauce_id)
+
     payload = _build_sauce_payload(sauce_id, body, created_by=None)
     try:
         result = sb.rpc("update_sauceboss_sauce", {"p_data": payload}).execute()
@@ -135,6 +141,7 @@ def _build_sauce_payload(sauce_id: str, body: CreateSauceRequest, created_by: st
         "description": body.description,
         "sourceUrl": body.sourceUrl,
         "sauceType": body.sauceType,
+        "parentSauceId": body.parentSauceId,
         "itemIds": body.itemIds,
         "steps": [
             {
@@ -150,6 +157,30 @@ def _build_sauce_payload(sauce_id: str, body: CreateSauceRequest, created_by: st
     if created_by is not None:
         payload["createdBy"] = created_by
     return payload
+
+
+def _validate_parent_sauce(parent_id: str, sauce_id: str) -> None:
+    """Reject self-reference and variant-of-variant links with a friendly 400.
+
+    The DB trigger catches both cases too, but raising here gives a cleaner
+    error than surfacing the Postgres exception verbatim.
+    """
+    if parent_id == sauce_id:
+        raise HTTPException(status_code=400, detail="A sauce cannot be a variant of itself")
+    sb = get_supabase()
+    parent = (
+        sb.table("sauceboss_sauces")
+        .select("id, parent_sauce_id")
+        .eq("id", parent_id)
+        .execute()
+    )
+    if not parent.data:
+        raise HTTPException(status_code=400, detail=f"Parent sauce {parent_id} not found")
+    if parent.data[0].get("parent_sauce_id"):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot create a variant of another variant — pick the original sauce instead",
+        )
 
 
 def _resolve_ingredient_for_save(ing) -> dict:

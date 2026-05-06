@@ -6,27 +6,37 @@ from db import get_supabase
 
 from . import router
 from .dependencies import CurrentUser, get_current_user
-from .models import FavoriteListResponse, MessageResponse
+from .models import FavoriteEntry, FavoriteListResponse, MessageResponse
 
 
 @router.get(
     "/favorites",
     response_model=FavoriteListResponse,
     status_code=200,
-    summary="List the current user's favorited sauce IDs",
+    summary="List the current user's favorited sauces",
 )
 async def list_favorites(
     user: CurrentUser = Depends(get_current_user),
 ) -> FavoriteListResponse:
-    """Return every sauce_id the current user has marked as a favorite."""
+    """Return every favorited sauce_id and the timestamp it was favorited at.
+
+    The frontend uses ``createdAt`` to pick the most recently favorited
+    sibling as the displayed default for a sauce family.
+    """
     sb = get_supabase()
     result = (
         sb.table("sauceboss_favorites")
-        .select("sauce_id")
+        .select("sauce_id, created_at")
         .eq("user_id", user.user_id)
         .execute()
     )
-    favorites = [row["sauce_id"] for row in (result.data or [])]
+    favorites = [
+        FavoriteEntry(
+            sauceId=row["sauce_id"],
+            createdAt=row.get("created_at"),
+        )
+        for row in (result.data or [])
+    ]
     return FavoriteListResponse(favorites=favorites)
 
 

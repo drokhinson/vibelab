@@ -81,6 +81,7 @@ let state = {
   saucesForCurrentItem: [],     // sauces/marinades/dressings paired with selectedItem
   allIngredients: [],           // unique ingredient names across saucesForCurrentItem
   selectedSauce: null,
+  selectedSauceFamily: [],      // [root, ...variants] for selectedSauce; powers the recipe-view variant switcher
   servings: 2,
   unitSystem: 'imperial',       // 'imperial' | 'metric'
   ingredientCategories: {},
@@ -96,8 +97,8 @@ let state = {
     sauce: null,                // the chosen sauce (sauce / marinade / dressing)
   },
 
-  // ── Favorites (set populated on sign-in) ───────────────────────────────────
-  favorites: new Set(),         // sauce ids the current user has favorited
+  // ── Favorites (populated on sign-in) ──────────────────────────────────────
+  favorites: new Map(),         // Map<sauceId, createdAtIso> — timestamp drives "most recently favorited" tiebreak for variant family default
   favoritesOnly: false,         // toggle for the sauce-selector "❤️ Favorites only" filter
   authModalOpen: false,         // sign-in modal visibility
   authMode: 'login',            // 'login' | 'signup'
@@ -134,6 +135,7 @@ function defaultBuilder() {
   return {
     name: '', cuisine: '', cuisineEmoji: '', color: '', description: '', sourceUrl: '',
     sauceType: '',               // '' | 'sauce' | 'marinade' | 'dressing' — must be selected by user
+    parentSauceId: null,         // when set, this sauce is a variant of the chosen parent
     steps: [{ title: '', instructions: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
     unassignedIngredients: [],   // imported ingredients not yet placed in a step; recipe cannot save while non-empty
     itemIds: [], saving: false, error: null,
