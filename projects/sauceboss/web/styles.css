@@ -302,13 +302,6 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   color: #E85D04;
   border-bottom-color: #E85D04;
 }
-.cat-section-title {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.3px;
-  color: #1A1A2E;
-  margin: 14px 0 12px;
-}
 
 /* ─────────────────────────────
    SCREEN 2 — Sauce Selector
@@ -1264,25 +1257,28 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 .settings-btn:hover { background: rgba(255,255,255,0.3); }
 .app-header { position: relative; }
 
-/* Labeled "Sauces" pill in the home header (replaces gear icon for sauce manager) */
+/* Labeled "Sauces" pill in the home header — matches auth pill height/alignment */
 .sauce-mgr-btn {
   position: absolute;
   top: 10px;
-  right: 60px;
+  right: 52px;            /* sits left of the 32x32 auth pill at right:12px (12 + 32 + 8 gap) */
+  height: 32px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  background: rgba(255,255,255,0.18);
+  padding: 0 12px;
+  background: rgba(255,255,255,0.2);
   color: white;
   border: none;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.2px;
+  line-height: 1;
   cursor: pointer;
   transition: background 0.15s;
   -webkit-tap-highlight-color: transparent;
+  z-index: 5;
 }
 .sauce-mgr-btn:hover { background: rgba(255,255,255,0.30); }
 .sauce-mgr-btn [data-lucide] { width: 16px; height: 16px; }

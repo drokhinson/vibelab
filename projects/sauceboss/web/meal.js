@@ -24,39 +24,52 @@ function potSVG() {
     </svg>`;
 }
 
-function renderMealBuilder() {
-  const heroSVG = `<div class="hero-illustration" id="hero-illustration">${potSVG()}</div>`;
+const MEAL_TABS = [
+  { id: 'carbs',    label: 'Carbs',    icon: 'wheat'     },
+  { id: 'proteins', label: 'Proteins', icon: 'drumstick' },
+  { id: 'salads',   label: 'Salads',   icon: 'salad'     },
+];
 
-  const itemCard = (item, i) => `
+function mealTabItems(id) {
+  if (id === 'proteins') return state.proteins;
+  if (id === 'salads')   return state.saladBases;
+  return state.carbs;
+}
+
+function mealCategoryItemCard(item, i) {
+  return `
     <button class="carb-card" style="--i:${i}" onclick="selectItem('${item.id}')">
       <span class="carb-emoji">${item.emoji}</span>
       <div class="carb-name">${item.name}</div>
       <div class="carb-desc">${item.description || ''}</div>
     </button>`;
+}
 
-  const tabs = [
-    { id: 'carbs',    label: 'Carbs',    icon: 'wheat',     items: state.carbs },
-    { id: 'proteins', label: 'Proteins', icon: 'drumstick', items: state.proteins },
-    { id: 'salads',   label: 'Salads',   icon: 'salad',     items: state.saladBases },
-  ];
-  const active = tabs.find(t => t.id === state.mealCategory) || tabs[0];
+function mealCategoryContent(id) {
+  const items = mealTabItems(id);
+  if (!items || !items.length) {
+    const label = (MEAL_TABS.find(t => t.id === id) || MEAL_TABS[0]).label.toLowerCase();
+    return `<div class="empty-state">No ${label} yet.</div>`;
+  }
+  return `<div class="carb-grid">${items.map(mealCategoryItemCard).join('')}</div>`;
+}
+
+function renderMealBuilder() {
+  const heroSVG = `<div class="hero-illustration" id="hero-illustration">${potSVG()}</div>`;
+  const activeId = MEAL_TABS.some(t => t.id === state.mealCategory) ? state.mealCategory : 'carbs';
 
   const tabsHTML = `
     <div class="cat-tabs" role="tablist" aria-label="Meal category">
-      ${tabs.map(t => `
-        <button class="cat-tab ${t.id === active.id ? 'cat-tab--active' : ''}"
+      ${MEAL_TABS.map(t => `
+        <button class="cat-tab ${t.id === activeId ? 'cat-tab--active' : ''}"
                 role="tab"
-                aria-selected="${t.id === active.id}"
+                data-tab-id="${t.id}"
+                aria-selected="${t.id === activeId}"
                 onclick="setMealCategory('${t.id}')">
           <i data-lucide="${t.icon}"></i>
           <span>${t.label}</span>
         </button>`).join('')}
     </div>`;
-
-  const cards = (active.items || []).map(itemCard).join('');
-  const gridHTML = active.items && active.items.length
-    ? `<div class="carb-grid">${cards}</div>`
-    : `<div class="empty-state">No ${active.label.toLowerCase()} yet.</div>`;
 
   return `
     <div class="status-bar"></div>
@@ -71,16 +84,31 @@ function renderMealBuilder() {
     <div class="scroll-body">
       ${heroSVG}
       ${tabsHTML}
-      <h2 class="cat-section-title">${active.label}</h2>
-      ${gridHTML}
+      <div id="cat-content">${mealCategoryContent(activeId)}</div>
     </div>
   `;
 }
 
+// Tab switch updates only the tabs' active class and the grid contents —
+// the orange header and the pot illustration aren't touched, so the logo
+// doesn't blink.
 function setMealCategory(id) {
   if (state.mealCategory === id) return;
+  if (!MEAL_TABS.some(t => t.id === id)) return;
   state.mealCategory = id;
-  render();
+
+  const tabButtons = document.querySelectorAll('.cat-tab');
+  if (!tabButtons.length) { render(); return; }
+  tabButtons.forEach(btn => {
+    const isActive = btn.dataset.tabId === id;
+    btn.classList.toggle('cat-tab--active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  const contentEl = document.getElementById('cat-content');
+  if (contentEl) contentEl.innerHTML = mealCategoryContent(id);
+
+  if (window.lucide) requestAnimationFrame(() => lucide.createIcons());
 }
 
 // ─── Unified Meal Recipe screen ───────────────────────────────────────────────
