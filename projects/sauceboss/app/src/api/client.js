@@ -1,42 +1,27 @@
-// src/api/client.js — SauceBoss API client
-// All fetch calls go through this file. Never call fetch() directly in screens.
-// Set EXPO_PUBLIC_API_URL in app/.env to the Railway backend URL.
+// API client — wraps shared/api.js with the native fetch + a token getter that
+// reads from the AppContext after sign-in (Phase 2). For Phase 1 the token
+// getter returns null so all calls go out unauthenticated.
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+import { makeApi } from '#shared/api';
 
-async function apiFetch(path) {
-  const url = `${BASE_URL}/api/v1/sauceboss${path}`;
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`HTTP ${res.status}: ${text}`);
-  }
-  return res.json();
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+
+let _getToken = () => null;
+
+export function setAuthTokenGetter(getter) {
+  _getToken = typeof getter === 'function' ? getter : () => null;
 }
 
-/**
- * Returns all carbs with sauceCount.
- * Shape: [{ id, name, emoji, description, sauceCount }]
- */
-export async function getCarbs() {
-  return apiFetch("/carbs");
-}
+export const api = makeApi({
+  fetchFn: (url, opts) => fetch(url, opts),
+  getAuthToken: async () => {
+    try {
+      return await _getToken();
+    } catch {
+      return null;
+    }
+  },
+  baseUrl: BASE_URL,
+});
 
-/**
- * Returns fully assembled sauce objects for a carb.
- * Shape: [{ id, name, cuisine, cuisineEmoji, color, description,
- *            compatibleCarbs[], ingredients[], steps[{ title, ingredients[] }] }]
- */
-export async function getSaucesForCarb(carbId) {
-  return apiFetch(`/carbs/${carbId}/sauces`);
-}
-
-/**
- * Returns sorted unique ingredient names for the filter panel.
- * Shape: ["garlic", "ginger", ...]
- */
-export async function getIngredientsForCarb(carbId) {
-  return apiFetch(`/carbs/${carbId}/ingredients`);
-}
+export const BASE_API_URL = BASE_URL;

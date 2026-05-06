@@ -1,54 +1,100 @@
-import React from 'react';
+import 'react-native-gesture-handler';
+import React, { useEffect } from 'react';
+import { View, StatusBar as RNStatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { SQLiteProvider } from 'expo-sqlite';
-import CarbSelectorScreen from './src/screens/CarbSelectorScreen';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
+
+import { AppProvider } from './src/store/AppContext';
+import LoadingPot from './src/components/LoadingPot';
+import MealBuilderScreen from './src/screens/MealBuilderScreen';
+import PrepSelectorScreen from './src/screens/PrepSelectorScreen';
 import SauceSelectorScreen from './src/screens/SauceSelectorScreen';
-import RecipeScreen from './src/screens/RecipeScreen';
-import { seedDatabase } from './src/data/database';
+import MealRecipeScreen from './src/screens/MealRecipeScreen';
+import { trackAppOpen } from './src/utils/analytics';
 import { COLORS } from './src/theme';
 
 const Stack = createNativeStackNavigator();
 
-export default function App() {
+function NavRoot() {
   return (
-    <SQLiteProvider databaseName="sauceboss.sqlite" onInit={seedDatabase}>
-      <NavigationContainer>
-        <StatusBar style="light" backgroundColor={COLORS.primary} />
-        <Stack.Navigator
-          initialRouteName="CarbSelector"
-          screenOptions={{
-            headerStyle: { backgroundColor: COLORS.primary },
-            headerTintColor: '#fff',
-            headerTitleStyle: { fontWeight: '800' },
-            headerBackTitleVisible: false,
-            animation: 'slide_from_right',
-            contentStyle: { backgroundColor: COLORS.background },
-          }}
-        >
-          <Stack.Screen
-            name="CarbSelector"
-            component={CarbSelectorScreen}
-            options={{ title: '🍲 SauceBoss', headerLargeTitle: false }}
-          />
-          <Stack.Screen
-            name="SauceSelector"
-            component={SauceSelectorScreen}
-            options={({ route }) => ({
-              title: `${route.params?.carb?.emoji || ''} ${route.params?.carb?.name || ''} Sauces`,
-            })}
-          />
-          <Stack.Screen
-            name="Recipe"
-            component={RecipeScreen}
-            options={({ route }) => ({
-              title: route.params?.sauce?.name || 'Recipe',
-              headerTransparent: false,
-            })}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </SQLiteProvider>
+    <NavigationContainer>
+      <StatusBar style="light" backgroundColor={COLORS.primary} />
+      <Stack.Navigator
+        initialRouteName="MealBuilder"
+        screenOptions={{
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '800' },
+          headerBackTitleVisible: false,
+          animation: 'slide_from_right',
+          contentStyle: { backgroundColor: COLORS.background },
+        }}
+      >
+        <Stack.Screen
+          name="MealBuilder"
+          component={MealBuilderScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="PrepSelector"
+          component={PrepSelectorScreen}
+          options={{ title: 'Choose a variant' }}
+        />
+        <Stack.Screen
+          name="SauceSelector"
+          component={SauceSelectorScreen}
+          options={({ route }) => ({
+            title: 'Pick a sauce',
+          })}
+        />
+        <Stack.Screen
+          name="MealRecipe"
+          component={MealRecipeScreen}
+          options={{ title: 'Your recipe' }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+  });
+
+  useEffect(() => {
+    trackAppOpen();
+  }, []);
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaProvider>
+        <View style={{ flex: 1, backgroundColor: COLORS.background, justifyContent: 'center' }}>
+          <LoadingPot label="Warming up the kitchen…" />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
+  return (
+    <SafeAreaProvider>
+      <AppProvider>
+        <NavRoot />
+      </AppProvider>
+    </SafeAreaProvider>
   );
 }

@@ -1,173 +1,153 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// Sauce / dressing / marinade selector — accordions by cuisine, family-grouped,
+// with the ingredient pantry filter.
+
+import React, { useMemo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, SafeAreaView, ActivityIndicator,
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
 } from 'react-native';
-import { useSQLiteContext } from 'expo-sqlite';
-import { getSaucesForCarb, getIngredientsForCarb } from '../data/database';
 import IngredientFilterPanel from '../components/IngredientFilterPanel';
 import CuisineAccordion from '../components/CuisineAccordion';
+import EmptyState from '../components/EmptyState';
+import LoadingPot from '../components/LoadingPot';
+import { useAppActions, useAppState } from '../store/AppContext';
+import { buildSauceFamilies, pickDisplayedFromFamily, familyHasFavorite } from '#shared/families';
+import { isSauceAvailable } from '#shared/filter';
+import { flowMetaFor } from '#shared/constants';
 import { COLORS } from '../theme';
 
-export default function SauceSelectorScreen({ route, navigation }) {
-  const { carb } = route.params;
-  const db = useSQLiteContext();
+export default function SauceSelectorScreen({ navigation }) {
+  const state = useAppState();
+  const actions = useAppActions();
 
-  const [compatibleSauces, setCompatibleSauces] = useState([]);
-  const [allIngredients, setAllIngredients]     = useState([]);
-  const [loading, setLoading]                   = useState(true);
+  const item = state.selectedItem;
+  const prep = state.selectedPrep;
+  const meta = flowMetaFor(item);
 
-  useEffect(() => {
-    Promise.all([
-      getSaucesForCarb(db, carb.id),
-      getIngredientsForCarb(db, carb.id),
-    ]).then(([sauces, ingredients]) => {
-      setCompatibleSauces(sauces);
-      setAllIngredients(ingredients);
-      setLoading(false);
-    });
-  }, [db, carb.id]);
-
-  const cuisines = [...new Set(compatibleSauces.map(s => s.cuisine))];
-
-  // Ingredient filter state — Set of ingredient names the user does NOT have
-  const [disabledIngredients, setDisabledIngredients] = useState(new Set());
-
-  // Auto-open the first cuisine
-  const [expandedCuisines, setExpandedCuisines] = useState(new Set());
-  useEffect(() => {
-    if (compatibleSauces.length > 0) {
-      setExpandedCuisines(new Set([compatibleSauces[0].cuisine]));
+  // Build families + decide which sauce to show per family, applying the
+  // favorites-only filter when the user has it on. (Phase 2 toggles this on.)
+  const visibleEntries = useMemo(() => {
+    const families = buildSauceFamilies(state.saucesForCurrentItem || []);
+    let famsArr = [...families.values()];
+    if (state.favoritesOnly && state.currentUser) {
+      famsArr = famsArr.filter((f) => familyHasFavorite(f, state.favorites, state.currentUser));
     }
-  }, [compatibleSauces]);
+    return famsArr.map((family) => ({
+      family,
+      displayed: pickDisplayedFromFamily(family, state.favorites, state.currentUser),
+    }));
+  }, [state.saucesForCurrentItem, state.favoritesOnly, state.favorites, state.currentUser]);
 
-  const toggleIngredient = useCallback((name) => {
-    setDisabledIngredients(prev => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  }, []);
+  const cuisines = useMemo(
+    () => [...new Set(visibleEntries.map((e) => e.displayed.cuisine || 'Other'))],
+    [visibleEntries],
+  );
 
-  const toggleCuisine = useCallback((name) => {
-    setExpandedCuisines(prev => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  }, []);
+  const onSelect = (sauce, family) => {
+    const fullFamily = [family.root, ...family.variants];
+    actions.selectSauce(sauce, fullFamily);
+    navigation.navigate('MealRecipe');
+  };
 
-  function isSauceAvailable(sauce) {
-    return sauce.ingredients.every(ing => !disabledIngredients.has(ing.name));
-  }
-
-  const unavailableCount = compatibleSauces.filter(s => !isSauceAvailable(s)).length;
-  const availableCount   = compatibleSauces.length - unavailableCount;
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ActivityIndicator style={styles.loader} size="large" color={COLORS.primary} />
-      </SafeAreaView>
-    );
-  }
+  const totalFamilies = visibleEntries.length;
+  const availableFamilies = visibleEntries.filter(
+    (e) => isSauceAvailable(e.displayed, state.disabledIngredients),
+  ).length;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.screen}>
+      <View style={styles.header}>
+        <Text style={styles.title}>
+          {item ? `${item.emoji} ${item.name}` : 'Sauces'}
+          {prep ? ` — ${prep.name}` : ''}
+        </Text>
+        <Text style={styles.subtitle}>
+          {availableFamilies} of {totalFamilies}{' '}
+          {totalFamilies === 1 ? meta.sauceWord.toLowerCase() : meta.sauceTypeLabel} match your pantry
+        </Text>
+      </View>
+
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={styles.scrollBody}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Summary strip */}
-        <View style={styles.strip}>
-          <Text style={styles.stripText}>
-            <Text style={styles.stripHighlight}>{availableCount}</Text>
-            {' '}of {compatibleSauces.length} sauces available
-          </Text>
-          {unavailableCount > 0 && (
-            <Text style={styles.stripMuted}> · {unavailableCount} hidden</Text>
-          )}
-        </View>
-
-        {/* Ingredient filter */}
-        <Text style={styles.sectionLabel}>PANTRY FILTER</Text>
-        <IngredientFilterPanel
-          ingredients={allIngredients}
-          disabledIngredients={disabledIngredients}
-          onToggle={toggleIngredient}
-          unavailableCount={unavailableCount}
-        />
-
-        {/* Cuisine accordions */}
-        <Text style={styles.sectionLabel}>PICK A SAUCE</Text>
-        {cuisines.map(cuisine => {
-          const saucesInCuisine = compatibleSauces.filter(s => s.cuisine === cuisine);
-          return (
-            <CuisineAccordion
-              key={cuisine}
-              cuisine={cuisine}
-              cuisineEmoji={saucesInCuisine[0]?.cuisineEmoji ?? '🍽️'}
-              sauces={saucesInCuisine}
-              isOpen={expandedCuisines.has(cuisine)}
-              disabledIngredients={disabledIngredients}
-              onToggle={() => toggleCuisine(cuisine)}
-              onSelectSauce={(sauce) => navigation.navigate('Recipe', { sauce, carb })}
+        {state.itemLoading ? (
+          <LoadingPot label={`Loading ${item ? item.name.toLowerCase() : 'options'} ${meta.sauceTypeLabel}…`} />
+        ) : state.itemError ? (
+          <EmptyState
+            title="Couldn't load sauces"
+            body={state.itemError}
+            action="Back to home"
+            onAction={() => navigation.navigate('MealBuilder')}
+          />
+        ) : (
+          <>
+            <IngredientFilterPanel
+              ingredients={state.allIngredients}
+              sauces={state.saucesForCurrentItem}
+              ingredientCategories={state.ingredientCategories}
+              disabledIngredients={state.disabledIngredients}
+              isOpen={state.filterOpen}
+              onToggleOpen={(open) => actions.setFilterOpen(open)}
+              onToggleIngredient={(name) => actions.toggleIngredient(name)}
+              onClear={actions.clearFilter}
             />
-          );
-        })}
 
-        {unavailableCount > 0 && (
-          <Text style={styles.footNote}>
-            {unavailableCount} sauce{unavailableCount > 1 ? 's' : ''} hidden due to missing ingredients.{' '}
-            Tap Pantry Filter above to restore them.
-          </Text>
+            {cuisines.length === 0 ? (
+              <EmptyState
+                title="Nothing matches"
+                body="Try enabling more ingredients in your pantry."
+              />
+            ) : (
+              cuisines.map((cuisine) => {
+                const entries = visibleEntries.filter(
+                  (e) => (e.displayed.cuisine || 'Other') === cuisine,
+                );
+                const cuisineEmoji = entries[0]?.displayed.cuisineEmoji || '🍽️';
+                const isOpen = state.expandedCuisines.has(cuisine);
+                return (
+                  <CuisineAccordion
+                    key={cuisine}
+                    cuisine={cuisine}
+                    cuisineEmoji={cuisineEmoji}
+                    entries={entries}
+                    isOpen={isOpen}
+                    disabledIngredients={state.disabledIngredients}
+                    onToggle={() => actions.toggleCuisine(cuisine)}
+                    onSelectSauce={onSelect}
+                  />
+                );
+              })
+            )}
+          </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  screen: { flex: 1, backgroundColor: COLORS.background },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
-  scroll: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  strip: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 16,
-  },
-  stripText: {
-    fontSize: 15,
-    color: COLORS.text,
-    fontWeight: '600',
-  },
-  stripHighlight: {
-    color: COLORS.primary,
+  title: {
+    fontSize: 18,
     fontWeight: '800',
-    fontSize: 17,
+    color: COLORS.text,
   },
-  stripMuted: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: COLORS.textMuted,
-    marginBottom: 8,
-  },
-  footNote: {
+  subtitle: {
     fontSize: 12,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 18,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  scrollBody: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
   },
 });

@@ -1,96 +1,108 @@
-import React, { useState } from 'react';
+// Ingredient pantry filter. Groups by category — "Key Ingredients" first
+// (those used in ≥30% of sauces), then the rest by category. Tapping a chip
+// toggles whether the user has it. Mirrors web/sauces.js filter panel.
+
+import React from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, LayoutAnimation, Platform, UIManager,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
+import { Star, Check, X, ShoppingCart } from 'lucide-react-native';
+import { groupIngredientsByCategory } from '#shared/filter';
 import { COLORS } from '../theme';
 
-// Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-/**
- * IngredientFilterPanel
- *
- * Shows an accordion panel with toggleable ingredient chips.
- * Checking/unchecking an ingredient calls onToggle(name).
- *
- * Props:
- *   ingredients       string[]          — all available ingredient names
- *   disabledIngredients  Set<string>    — names the user doesn't have
- *   onToggle          (name) => void
- *   unavailableCount  number            — number of hidden sauces
- */
 export default function IngredientFilterPanel({
   ingredients,
+  sauces,
+  ingredientCategories,
   disabledIngredients,
-  onToggle,
-  unavailableCount,
+  isOpen,
+  onToggleOpen,
+  onToggleIngredient,
+  onClear,
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const missingCount = disabledIngredients.size;
 
-  function toggle() {
+  function handleHeaderPress() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setIsOpen(prev => !prev);
+    onToggleOpen(!isOpen);
   }
 
-  const missingCount = disabledIngredients.size;
+  const groups = groupIngredientsByCategory({
+    sauces: sauces || [],
+    allIngredients: ingredients || [],
+    ingredientCategories: ingredientCategories || {},
+  });
 
   return (
     <View style={styles.panel}>
-      {/* Header row */}
-      <TouchableOpacity style={styles.header} onPress={toggle} activeOpacity={0.8}>
-        <Text style={styles.headerIcon}>🛒</Text>
+      <TouchableOpacity style={styles.header} onPress={handleHeaderPress} activeOpacity={0.8}>
+        <ShoppingCart size={18} color={COLORS.primary} />
         <Text style={styles.headerText}>My Pantry</Text>
-        {missingCount > 0 && (
+        {missingCount > 0 ? (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>−{missingCount} missing</Text>
           </View>
-        )}
+        ) : null}
         <Text style={[styles.chevron, isOpen && styles.chevronOpen]}>▾</Text>
       </TouchableOpacity>
 
-      {/* Body */}
-      {isOpen && (
+      {isOpen ? (
         <View style={styles.body}>
           <Text style={styles.hint}>
-            Uncheck ingredients you don't have — sauces update instantly.
+            Uncheck ingredients you don't have — options will update.
           </Text>
-          <View style={styles.chips}>
-            {ingredients.map(name => {
-              const has = !disabledIngredients.has(name);
-              return (
-                <TouchableOpacity
-                  key={name}
-                  style={[styles.chip, has ? styles.chipHas : styles.chipMissing]}
-                  onPress={() => onToggle(name)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.chipIcon, !has && styles.chipIconMissing]}>
-                    {has ? '✓' : '✗'}
-                  </Text>
-                  <Text style={[styles.chipLabel, !has && styles.chipLabelMissing]}>
-                    {name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          {missingCount > 0 && (
-            <TouchableOpacity
-              style={styles.resetBtn}
-              onPress={() => {
-                // Signal parent to clear all disabled
-                ingredients.forEach(name => {
-                  if (disabledIngredients.has(name)) onToggle(name);
-                });
-              }}
-            >
+
+          {groups.map(({ category, items, isKey }) => (
+            <View key={category} style={[styles.section, isKey && styles.keySection]}>
+              <View style={styles.sectionHeader}>
+                {isKey ? <Star size={14} color={COLORS.primary} /> : null}
+                <Text style={styles.sectionLabel}>{category}</Text>
+                {isKey ? (
+                  <Text style={styles.sectionLabelDetail}>— unlock the most options</Text>
+                ) : null}
+              </View>
+              <View style={styles.chips}>
+                {items.map(({ name }) => {
+                  const has = !disabledIngredients.has(name);
+                  return (
+                    <TouchableOpacity
+                      key={name}
+                      style={[styles.chip, has ? styles.chipHas : styles.chipMissing]}
+                      onPress={() => onToggleIngredient(name)}
+                      activeOpacity={0.7}
+                    >
+                      {has ? (
+                        <Check size={11} color="#065F46" />
+                      ) : (
+                        <X size={11} color="#991B1B" />
+                      )}
+                      <Text style={[styles.chipLabel, !has && styles.chipLabelMissing]}>
+                        {' '}{name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+
+          {missingCount > 0 ? (
+            <TouchableOpacity style={styles.resetBtn} onPress={onClear} activeOpacity={0.7}>
               <Text style={styles.resetText}>Reset — I have everything</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -112,11 +124,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
   },
-  headerIcon: {
-    fontSize: 18,
-    marginRight: 8,
-  },
   headerText: {
+    marginLeft: 8,
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.text,
@@ -145,7 +154,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 14,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: COLORS.surfaceSubtle,
   },
   hint: {
     fontSize: 12,
@@ -153,6 +162,34 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 10,
     lineHeight: 16,
+  },
+  section: {
+    marginTop: 6,
+    marginBottom: 4,
+    paddingTop: 6,
+  },
+  keySection: {
+    backgroundColor: COLORS.highlightTint,
+    borderRadius: 12,
+    padding: 10,
+    marginVertical: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+    letterSpacing: 0.4,
+    marginLeft: 4,
+  },
+  sectionLabelDetail: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginLeft: 6,
   },
   chips: {
     flexDirection: 'row',
@@ -166,7 +203,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
     borderWidth: 1.5,
-    marginBottom: 2,
   },
   chipHas: {
     backgroundColor: '#F0FDF4',
@@ -176,15 +212,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
     borderColor: '#FECACA',
     opacity: 0.75,
-  },
-  chipIcon: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#065F46',
-    marginRight: 4,
-  },
-  chipIconMissing: {
-    color: '#991B1B',
   },
   chipLabel: {
     fontSize: 12,
