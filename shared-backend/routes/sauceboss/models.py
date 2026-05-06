@@ -104,6 +104,17 @@ class UpdateSauceRequest(CreateSauceRequest):
     pass
 
 
+class AssignVariantsRequest(BaseModel):
+    """Bulk-assign existing sauces as variants of a single parent.
+
+    Used by the sauce-manager merge UI to retro-link multiple sauces to a
+    parent in one round-trip. Each ``sauceIds`` entry must currently be a
+    root (``parent_sauce_id IS NULL``) and have no variants of its own; the
+    backend validates these before issuing the update.
+    """
+    sauceIds: List[str] = Field(min_length=1)
+
+
 # ── URL import ────────────────────────────────────────────────────────────────
 
 class ImportRecipeRequest(BaseModel):
