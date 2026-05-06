@@ -1253,6 +1253,11 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   padding: 10px 0;
   border-bottom: 1px solid #F3F4F6;
 }
+.admin-sauce-row--variant {
+  padding-left: 22px;
+  border-left: 2px solid #FCD9B6;
+  margin-left: 6px;
+}
 .admin-sauce-info { flex: 1; min-width: 0; }
 .admin-sauce-name {
   font-size: 14px;
@@ -2480,40 +2485,35 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 }
 
 .variant-switcher {
-  display: flex;
-  gap: 6px;
+  display: inline-flex;
+  gap: 4px;
   flex-wrap: wrap;
+  padding: 4px;
   margin-top: 10px;
+  background: #FFF3E6;
+  border-radius: 999px;
 }
 .variant-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  color: #374151;
+  color: #7C3A02;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 .variant-chip:hover {
-  background: #FFF8F0;
-  border-color: #E85D04;
+  color: #1A1A2E;
 }
 .variant-chip--active {
-  background: #E85D04;
-  border-color: #E85D04;
-  color: #FFFFFF;
-}
-.variant-chip-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  display: inline-block;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #FFFFFF;
+  color: #1A1A2E;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 .variant-chip-tag {
   margin-left: 4px;
@@ -2524,9 +2524,6 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-.variant-chip--active .variant-chip-tag {
-  background: rgba(255, 255, 255, 0.25);
 }
 
 /* "Variant of" selector in the builder */
