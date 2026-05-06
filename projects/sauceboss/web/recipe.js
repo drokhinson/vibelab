@@ -71,7 +71,6 @@ function renderRecipe() {
                 role="tab"
                 aria-selected="${s.id === sauce.id}"
                 onclick="selectVariant('${s.id}')">
-          <span class="variant-chip-dot" style="background:${s.color}"></span>
           ${escapeHtml(s.name)}${!s.parentSauceId ? '<span class="variant-chip-tag">original</span>' : ''}
         </button>
       `).join('')}
