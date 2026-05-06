@@ -34,13 +34,29 @@ function renderMealBuilder() {
       <div class="carb-desc">${item.description || ''}</div>
     </button>`;
 
-  const sectionHTML = (label, items) => {
-    if (!items || items.length === 0) return '';
-    const cards = items.map(itemCard).join('');
-    return `
-      <p class="section-label" style="margin-top:18px">${label}</p>
-      <div class="carb-grid">${cards}</div>`;
-  };
+  const tabs = [
+    { id: 'carbs',    label: 'Carbs',    icon: 'wheat',     items: state.carbs },
+    { id: 'proteins', label: 'Proteins', icon: 'drumstick', items: state.proteins },
+    { id: 'salads',   label: 'Salads',   icon: 'salad',     items: state.saladBases },
+  ];
+  const active = tabs.find(t => t.id === state.mealCategory) || tabs[0];
+
+  const tabsHTML = `
+    <div class="cat-tabs" role="tablist" aria-label="Meal category">
+      ${tabs.map(t => `
+        <button class="cat-tab ${t.id === active.id ? 'cat-tab--active' : ''}"
+                role="tab"
+                aria-selected="${t.id === active.id}"
+                onclick="setMealCategory('${t.id}')">
+          <i data-lucide="${t.icon}"></i>
+          <span>${t.label}</span>
+        </button>`).join('')}
+    </div>`;
+
+  const cards = (active.items || []).map(itemCard).join('');
+  const gridHTML = active.items && active.items.length
+    ? `<div class="carb-grid">${cards}</div>`
+    : `<div class="empty-state">No ${active.label.toLowerCase()} yet.</div>`;
 
   return `
     <div class="status-bar"></div>
@@ -48,15 +64,23 @@ function renderMealBuilder() {
       <div class="logo"><span>🍲</span>SauceBoss</div>
       <div class="subtitle">What are you cooking with?</div>
       ${renderHeaderAuthSlot()}
-      <button class="settings-btn" onclick="openSauceManager()" title="Sauce manager"><i data-lucide="settings-2"></i></button>
+      <button class="sauce-mgr-btn" onclick="openSauceManager()" aria-label="Sauce manager">
+        <i data-lucide="chef-hat"></i><span>Sauces</span>
+      </button>
     </div>
     <div class="scroll-body">
       ${heroSVG}
-      ${sectionHTML('Carbs',    state.carbs)}
-      ${sectionHTML('Proteins', state.proteins)}
-      ${sectionHTML('Salads',   state.saladBases)}
+      ${tabsHTML}
+      <h2 class="cat-section-title">${active.label}</h2>
+      ${gridHTML}
     </div>
   `;
+}
+
+function setMealCategory(id) {
+  if (state.mealCategory === id) return;
+  state.mealCategory = id;
+  render();
 }
 
 // ─── Unified Meal Recipe screen ───────────────────────────────────────────────

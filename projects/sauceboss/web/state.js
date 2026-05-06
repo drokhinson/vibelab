@@ -68,6 +68,7 @@ let state = {
   // ── Current screen ──────────────────────────────────────────────────────────
   screen: 'meal-builder',       // home is the meal builder
   loading: null,                // when set, the active screen renders an inline pot loader
+  mealCategory: 'carbs',        // 'carbs' | 'proteins' | 'salads' — active home tab
 
   // ── Initial-load lists (populated once on boot) ────────────────────────────
   carbs: [],

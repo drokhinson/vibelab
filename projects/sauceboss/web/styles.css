@@ -271,6 +271,45 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 .carb-name { font-size: 15px; font-weight: 700; color: #1A1A2E; }
 .carb-desc { font-size: 11px; color: #6B7280; margin-top: 2px; }
 
+/* Category tabs — home meal-builder (icon-above-label, orange underline on active) */
+.cat-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin: 4px 0 8px;
+  border-bottom: 1px solid #F0E5DA;
+}
+.cat-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6B7280;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+  -webkit-tap-highlight-color: transparent;
+}
+.cat-tab [data-lucide] { width: 22px; height: 22px; stroke-width: 2px; }
+.cat-tab:hover { color: #C94E02; }
+.cat-tab--active {
+  color: #E85D04;
+  border-bottom-color: #E85D04;
+}
+.cat-section-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: #1A1A2E;
+  margin: 14px 0 12px;
+}
+
 /* ─────────────────────────────
    SCREEN 2 — Sauce Selector
 ───────────────────────────── */
@@ -1224,6 +1263,29 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 .settings-btn:hover { background: rgba(255,255,255,0.3); }
 .app-header { position: relative; }
+
+/* Labeled "Sauces" pill in the home header (replaces gear icon for sauce manager) */
+.sauce-mgr-btn {
+  position: absolute;
+  top: 10px;
+  right: 60px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.18);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.sauce-mgr-btn:hover { background: rgba(255,255,255,0.30); }
+.sauce-mgr-btn [data-lucide] { width: 16px; height: 16px; }
 
 .settings-form {
   display: flex;
