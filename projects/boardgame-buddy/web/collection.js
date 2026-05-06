@@ -451,9 +451,6 @@ function listRowHTML(item, i, opts = {}) {
          <i data-lucide="chevron-down" class="w-3 h-3 closet-exp-toggle__chev"></i>
        </button>`
     : "";
-  const dot = isChild && g.expansion_color
-    ? `<span class="expansion-dot" style="background:${g.expansion_color}"></span>`
-    : "";
   const wrapClass = `swipe-wrap animate-fadeUp${isChild ? " closet-row--child" : ""}`;
   return `
     <div class="${wrapClass}" style="--i:${i}"
@@ -469,7 +466,7 @@ function listRowHTML(item, i, opts = {}) {
           <img src="${bggImg(g.thumbnail_url) || IMG_PLACEHOLDER}" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" alt="${escapeAttr(g.name)}" class="w-full h-full object-cover" loading="lazy" />
         </figure>
         <div class="card-body p-2 justify-center min-w-0">
-          <h3 class="font-semibold text-sm leading-tight line-clamp-1 flex items-center gap-1.5 min-w-0">${dot}<span class="truncate">${escapeHtml(g.name)}</span></h3>
+          <h3 class="font-semibold text-sm leading-tight line-clamp-1 flex items-center gap-1.5 min-w-0"><span class="truncate">${escapeHtml(g.name)}</span></h3>
           <div class="flex items-center gap-2 text-xs text-base-content/60">
             <span>${lastPlayed}</span>
             ${plays > 0 ? `<span><i data-lucide="dice-5" class="w-3 h-3"></i> ${plays}×</span>` : ""}

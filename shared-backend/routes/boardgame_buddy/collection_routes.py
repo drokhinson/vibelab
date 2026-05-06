@@ -164,18 +164,34 @@ async def get_collection_shelf(
         pairs = [(gid, lp) for gid, lp in last_played.items() if gid not in owned_ids]
         total = len(pairs)
 
+        # Pull `is_expansion` for every game on this shelf so we can push
+        # expansions to the end of the sort — keeps a base game from
+        # paginating later than its expansions.
+        all_ids = [gid for gid, _ in pairs]
         if sort == CollectionSort.LAST_PLAYED:
-            pairs.sort(key=lambda p: p[1], reverse=True)
-        else:  # ALPHABETICAL — need names to sort
-            all_ids = [gid for gid, _ in pairs]
-            names = (
+            meta = (
                 sb.table("boardgamebuddy_games")
-                .select("id, name")
+                .select("id, is_expansion")
                 .in_("id", all_ids)
                 .execute()
             ) if all_ids else None
-            name_by_id = {g["id"]: g["name"] for g in (names.data if names else []) or []}
-            pairs.sort(key=lambda p: (name_by_id.get(p[0]) or "").lower())
+            expansion_by_id = {g["id"]: bool(g.get("is_expansion")) for g in (meta.data if meta else []) or []}
+            # Stable two-pass: last_played desc, then is_expansion asc on top.
+            pairs.sort(key=lambda p: p[1], reverse=True)
+            pairs.sort(key=lambda p: 1 if expansion_by_id.get(p[0]) else 0)
+        else:  # ALPHABETICAL — need names to sort
+            meta = (
+                sb.table("boardgamebuddy_games")
+                .select("id, name, is_expansion")
+                .in_("id", all_ids)
+                .execute()
+            ) if all_ids else None
+            name_by_id = {g["id"]: g["name"] for g in (meta.data if meta else []) or []}
+            expansion_by_id = {g["id"]: bool(g.get("is_expansion")) for g in (meta.data if meta else []) or []}
+            pairs.sort(key=lambda p: (
+                1 if expansion_by_id.get(p[0]) else 0,
+                (name_by_id.get(p[0]) or "").lower(),
+            ))
 
         page_pairs = pairs[offset : offset + per_page]
         page_ids = [gid for gid, _ in page_pairs]
@@ -210,6 +226,8 @@ async def get_collection_shelf(
     # FK ordering. For last_played we need to join against plays and sort
     # globally, so we do a lightweight ids-only fetch first, then page.
     if sort == CollectionSort.ALPHABETICAL:
+        # is_expansion ASC first so bases come before expansions in pagination —
+        # the FE folds expansions under their already-loaded base.
         query = (
             sb.table("boardgamebuddy_collections")
             .select(
@@ -218,6 +236,7 @@ async def get_collection_shelf(
             )
             .eq("user_id", user.user_id)
             .eq("status", status.value)
+            .order("boardgamebuddy_games(is_expansion)", desc=False)
             .order("boardgamebuddy_games(name)", desc=False)
             .range(offset, offset + per_page - 1)
         )
@@ -259,9 +278,11 @@ async def get_collection_shelf(
         return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
 
     # sort == LAST_PLAYED (default)
+    # Embed is_expansion on the lightweight collections fetch so we can push
+    # expansions to the end of pagination without a separate query.
     ids_rows = (
         sb.table("boardgamebuddy_collections")
-        .select("id, game_id, added_at")
+        .select("id, game_id, added_at, boardgamebuddy_games(is_expansion)")
         .eq("user_id", user.user_id)
         .eq("status", status.value)
         .execute()
@@ -294,6 +315,10 @@ async def get_collection_shelf(
             r["added_at"] or "",
         ),
         reverse=True,
+    )
+    # Stable second pass: expansions get bumped after every base.
+    all_rows.sort(
+        key=lambda r: 1 if (r.get("boardgamebuddy_games") or {}).get("is_expansion") else 0
     )
     page_rows = all_rows[offset : offset + per_page]
     page_ids = [r["game_id"] for r in page_rows]
