@@ -118,6 +118,90 @@ async def get_collection(
     return items
 
 
+def _index_plays(plays: list[dict]) -> tuple[dict[str, str], dict[str, int]]:
+    """Build last_played-by-game and play-count-by-game maps from raw play rows."""
+    last_played: dict[str, str] = {}
+    counts: dict[str, int] = {}
+    for p in plays:
+        gid = p["game_id"]
+        counts[gid] = counts.get(gid, 0) + 1
+        if gid not in last_played:
+            last_played[gid] = p["played_at"]
+    return last_played, counts
+
+
+def _build_shelf_items(
+    rows: list[dict],
+    last_played_by_game: dict[str, str],
+    play_counts: dict[str, int],
+    sort: CollectionSort,
+    offset: int,
+    per_page: int,
+) -> tuple[list[CollectionItem], int]:
+    """Partition rows into primaries (bases + orphan expansions) and grouped
+    expansions, sort + paginate the primaries, then embed each base's owned
+    expansions inline. Pagination is over primaries only — expansions never
+    consume a page slot, so the FE always sees a base together with its
+    expansions on the same load.
+
+    Each row must shape like: {id, game_id, status, added_at, boardgamebuddy_games: {GameSummary fields}}.
+    """
+    base_bgg_ids: set[int] = set()
+    for r in rows:
+        g = r.get("boardgamebuddy_games") or {}
+        if not g.get("is_expansion") and g.get("bgg_id") is not None:
+            base_bgg_ids.add(g["bgg_id"])
+
+    primary: list[dict] = []
+    expansions_by_base: dict[int, list[dict]] = {}
+    for r in rows:
+        g = r.get("boardgamebuddy_games") or {}
+        base_bgg = g.get("base_game_bgg_id")
+        if g.get("is_expansion") and base_bgg in base_bgg_ids:
+            expansions_by_base.setdefault(base_bgg, []).append(r)
+            continue
+        primary.append(r)
+
+    if sort == CollectionSort.ALPHABETICAL:
+        primary.sort(key=lambda r: ((r.get("boardgamebuddy_games") or {}).get("name") or "").lower())
+    else:  # LAST_PLAYED — never-played rows fall to bottom, tied by added_at desc
+        primary.sort(
+            key=lambda r: (
+                last_played_by_game.get(r["game_id"]) or "",
+                r["added_at"] or "",
+            ),
+            reverse=True,
+        )
+
+    total = len(primary)
+    page_rows = primary[offset:offset + per_page]
+
+    def to_item(r: dict, embed: bool) -> CollectionItem:
+        g = r.get("boardgamebuddy_games") or {}
+        embedded: list[CollectionItem] = []
+        if embed:
+            base_bgg = g.get("bgg_id")
+            if base_bgg is not None and base_bgg in expansions_by_base:
+                exp_rows = sorted(
+                    expansions_by_base[base_bgg],
+                    key=lambda er: ((er.get("boardgamebuddy_games") or {}).get("name") or "").lower(),
+                )
+                embedded = [to_item(er, embed=False) for er in exp_rows]
+        return CollectionItem(
+            id=r["id"],
+            game_id=r["game_id"],
+            status=r["status"],
+            added_at=r["added_at"],
+            last_played_at=last_played_by_game.get(r["game_id"]),
+            play_count=play_counts.get(r["game_id"], 0),
+            game=GameSummary(**g),
+            expansions=embedded,
+        )
+
+    items = [to_item(r, embed=True) for r in page_rows]
+    return items, total
+
+
 @router.get(
     "/collection/shelf",
     response_model=CollectionPageResponse,
@@ -131,27 +215,24 @@ async def get_collection_shelf(
     sort: CollectionSort = Query(CollectionSort.LAST_PLAYED, description="Sort order"),
     user: CurrentUser = Depends(get_current_user),
 ) -> CollectionPageResponse:
-    """Return one page of the requested shelf for the current user."""
+    """Return one page of the requested shelf for the current user.
+
+    Pagination is over base games + orphan expansions; each base's owned
+    expansions ride inline on its row via `expansions`.
+    """
     sb = get_supabase()
     offset = (page - 1) * per_page
 
-    # Played shelf is derived from boardgamebuddy_plays minus owned game_ids.
-    if status == CollectionStatus.PLAYED:
-        plays = (
-            sb.table("boardgamebuddy_plays")
-            .select("game_id, played_at")
-            .eq("user_id", user.user_id)
-            .order("played_at", desc=True)
-            .execute()
-        )
-        last_played: dict[str, str] = {}
-        play_counts_shelf: dict[str, int] = {}
-        for p in plays.data or []:
-            gid = p["game_id"]
-            play_counts_shelf[gid] = play_counts_shelf.get(gid, 0) + 1
-            if gid not in last_played:
-                last_played[gid] = p["played_at"]
+    plays_result = (
+        sb.table("boardgamebuddy_plays")
+        .select("game_id, played_at")
+        .eq("user_id", user.user_id)
+        .order("played_at", desc=True)
+        .execute()
+    )
+    last_played_by_game, play_counts = _index_plays(plays_result.data or [])
 
+    if status == CollectionStatus.PLAYED:
         owned = (
             sb.table("boardgamebuddy_collections")
             .select("game_id")
@@ -161,193 +242,50 @@ async def get_collection_shelf(
         )
         owned_ids = {row["game_id"] for row in owned.data or []}
 
-        pairs = [(gid, lp) for gid, lp in last_played.items() if gid not in owned_ids]
-        total = len(pairs)
+        played_ids = [gid for gid in last_played_by_game if gid not in owned_ids]
+        if not played_ids:
+            return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
 
-        # Pull `is_expansion` for every game on this shelf so we can push
-        # expansions to the end of the sort — keeps a base game from
-        # paginating later than its expansions.
-        all_ids = [gid for gid, _ in pairs]
-        if sort == CollectionSort.LAST_PLAYED:
-            meta = (
-                sb.table("boardgamebuddy_games")
-                .select("id, is_expansion")
-                .in_("id", all_ids)
-                .execute()
-            ) if all_ids else None
-            expansion_by_id = {g["id"]: bool(g.get("is_expansion")) for g in (meta.data if meta else []) or []}
-            # Stable two-pass: last_played desc, then is_expansion asc on top.
-            pairs.sort(key=lambda p: p[1], reverse=True)
-            pairs.sort(key=lambda p: 1 if expansion_by_id.get(p[0]) else 0)
-        else:  # ALPHABETICAL — need names to sort
-            meta = (
-                sb.table("boardgamebuddy_games")
-                .select("id, name, is_expansion")
-                .in_("id", all_ids)
-                .execute()
-            ) if all_ids else None
-            name_by_id = {g["id"]: g["name"] for g in (meta.data if meta else []) or []}
-            expansion_by_id = {g["id"]: bool(g.get("is_expansion")) for g in (meta.data if meta else []) or []}
-            pairs.sort(key=lambda p: (
-                1 if expansion_by_id.get(p[0]) else 0,
-                (name_by_id.get(p[0]) or "").lower(),
-            ))
-
-        page_pairs = pairs[offset : offset + per_page]
-        page_ids = [gid for gid, _ in page_pairs]
-
-        items: list[CollectionItem] = []
-        if page_ids:
-            games = (
-                sb.table("boardgamebuddy_games")
-                .select(_GAME_FIELDS)
-                .in_("id", page_ids)
-                .execute()
-            )
-            games_by_id = {g["id"]: g for g in games.data or []}
-            for gid, lp in page_pairs:
-                g = games_by_id.get(gid)
-                if not g:
-                    continue
-                items.append(CollectionItem(
-                    id=f"derived-{gid}",
-                    game_id=gid,
-                    status=CollectionStatus.PLAYED.value,
-                    added_at=f"{lp}T00:00:00+00:00",
-                    last_played_at=lp,
-                    play_count=play_counts_shelf.get(gid, 0),
-                    game=GameSummary(**g),
-                ))
-
-        return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
-
-    # Owned / wishlist.
-    # For alphabetical sort we can push it down to PostgREST via embedded
-    # FK ordering. For last_played we need to join against plays and sort
-    # globally, so we do a lightweight ids-only fetch first, then page.
-    if sort == CollectionSort.ALPHABETICAL:
-        # is_expansion ASC first so bases come before expansions in pagination —
-        # the FE folds expansions under their already-loaded base.
-        query = (
-            sb.table("boardgamebuddy_collections")
-            .select(
-                f"id, game_id, status, added_at, boardgamebuddy_games({_GAME_FIELDS})",
-                count="exact",
-            )
-            .eq("user_id", user.user_id)
-            .eq("status", status.value)
-            .order("boardgamebuddy_games(is_expansion)", desc=False)
-            .order("boardgamebuddy_games(name)", desc=False)
-            .range(offset, offset + per_page - 1)
-        )
-        result = query.execute()
-        total = result.count or 0
-        page_game_ids = [row["game_id"] for row in result.data or []]
-
-        last_played_by_game: dict[str, str] = {}
-        play_counts_alpha: dict[str, int] = {}
-        if page_game_ids:
-            plays = (
-                sb.table("boardgamebuddy_plays")
-                .select("game_id, played_at")
-                .eq("user_id", user.user_id)
-                .in_("game_id", page_game_ids)
-                .order("played_at", desc=True)
-                .execute()
-            )
-            for p in plays.data or []:
-                gid = p["game_id"]
-                play_counts_alpha[gid] = play_counts_alpha.get(gid, 0) + 1
-                if gid not in last_played_by_game:
-                    last_played_by_game[gid] = p["played_at"]
-
-        items: list[CollectionItem] = []
-        for row in result.data or []:
-            game_data = row.get("boardgamebuddy_games")
-            if not game_data:
-                continue
-            items.append(CollectionItem(
-                id=row["id"],
-                game_id=row["game_id"],
-                status=row["status"],
-                added_at=row["added_at"],
-                last_played_at=last_played_by_game.get(row["game_id"]),
-                play_count=play_counts_alpha.get(row["game_id"], 0),
-                game=GameSummary(**game_data),
-            ))
-        return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
-
-    # sort == LAST_PLAYED (default)
-    # Embed is_expansion on the lightweight collections fetch so we can push
-    # expansions to the end of pagination without a separate query.
-    ids_rows = (
-        sb.table("boardgamebuddy_collections")
-        .select("id, game_id, added_at, boardgamebuddy_games(is_expansion)")
-        .eq("user_id", user.user_id)
-        .eq("status", status.value)
-        .execute()
-    )
-    all_rows = ids_rows.data or []
-    total = len(all_rows)
-
-    if total == 0:
-        return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
-
-    plays = (
-        sb.table("boardgamebuddy_plays")
-        .select("game_id, played_at")
-        .eq("user_id", user.user_id)
-        .order("played_at", desc=True)
-        .execute()
-    )
-    last_played_by_game: dict[str, str] = {}
-    play_counts_lp: dict[str, int] = {}
-    for p in plays.data or []:
-        gid = p["game_id"]
-        play_counts_lp[gid] = play_counts_lp.get(gid, 0) + 1
-        if gid not in last_played_by_game:
-            last_played_by_game[gid] = p["played_at"]
-
-    # Never-played rows fall to the bottom; ties broken by added_at desc.
-    all_rows.sort(
-        key=lambda r: (
-            last_played_by_game.get(r["game_id"]) or "",
-            r["added_at"] or "",
-        ),
-        reverse=True,
-    )
-    # Stable second pass: expansions get bumped after every base.
-    all_rows.sort(
-        key=lambda r: 1 if (r.get("boardgamebuddy_games") or {}).get("is_expansion") else 0
-    )
-    page_rows = all_rows[offset : offset + per_page]
-    page_ids = [r["game_id"] for r in page_rows]
-
-    games_by_id: dict[str, dict] = {}
-    if page_ids:
         games = (
             sb.table("boardgamebuddy_games")
             .select(_GAME_FIELDS)
-            .in_("id", page_ids)
+            .in_("id", played_ids)
             .execute()
         )
         games_by_id = {g["id"]: g for g in games.data or []}
 
-    items: list[CollectionItem] = []
-    for r in page_rows:
-        g = games_by_id.get(r["game_id"])
-        if not g:
-            continue
-        items.append(CollectionItem(
-            id=r["id"],
-            game_id=r["game_id"],
-            status=status.value,
-            added_at=r["added_at"],
-            last_played_at=last_played_by_game.get(r["game_id"]),
-            play_count=play_counts_lp.get(r["game_id"], 0),
-            game=GameSummary(**g),
-        ))
+        # Reshape derived plays into the same row shape as a collections row
+        # so _build_shelf_items can treat both code paths uniformly.
+        rows: list[dict] = []
+        for gid in played_ids:
+            g = games_by_id.get(gid)
+            if not g:
+                continue
+            lp = last_played_by_game[gid]
+            rows.append({
+                "id": f"derived-{gid}",
+                "game_id": gid,
+                "status": CollectionStatus.PLAYED.value,
+                "added_at": f"{lp}T00:00:00+00:00",
+                "boardgamebuddy_games": g,
+            })
 
+        items, total = _build_shelf_items(rows, last_played_by_game, play_counts, sort, offset, per_page)
+        return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
+
+    # Owned / wishlist — fetch every row once with embedded game data, then
+    # let _build_shelf_items handle partitioning, sort, pagination, and
+    # expansion-embedding. We trade DB-side pagination for one upfront query
+    # so expansions can be bundled with their base regardless of page size.
+    rows = (
+        sb.table("boardgamebuddy_collections")
+        .select(f"id, game_id, status, added_at, boardgamebuddy_games({_GAME_FIELDS})")
+        .eq("user_id", user.user_id)
+        .eq("status", status.value)
+        .execute()
+    ).data or []
+
+    items, total = _build_shelf_items(rows, last_played_by_game, play_counts, sort, offset, per_page)
     return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
 
 
