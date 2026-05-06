@@ -196,7 +196,10 @@ function renderCloset() {
 function filterItems(items) {
   const q = closetSearch.trim().toLowerCase();
   if (!q) return items;
-  return items.filter(it => (it.game?.name || "").toLowerCase().includes(q));
+  return items.filter(it => {
+    if ((it.game?.name || "").toLowerCase().includes(q)) return true;
+    return (it.expansions || []).some(exp => (exp.game?.name || "").toLowerCase().includes(q));
+  });
 }
 
 // ── Shelf view (owned + played only) ─────────────────────────────────────────
@@ -235,7 +238,6 @@ function renderShelfRow(shelf) {
 
   const shelfDef = SHELVES.find(s => s.key === shelf);
   const visible = filterItems(shelfItems[shelf]);
-  const expansionCounts = countExpansionsByBase(visible);
 
   const total = shelfTotal[shelf];
   const loaded = shelfItems[shelf].length;
@@ -253,7 +255,7 @@ function renderShelfRow(shelf) {
       content = "";
     }
   } else {
-    content = visible.map((it, i) => bookSpineHTML(it, i, expansionCounts.get(it.game.bgg_id) || 0)).join("");
+    content = visible.map((it, i) => bookSpineHTML(it, i, (it.expansions || []).length)).join("");
   }
 
   row.innerHTML = `
@@ -288,73 +290,28 @@ function bookSpineHTML(item, i, expansionCount = 0) {
   const color = g.theme_color || colorFromName(g.name);
   const thumb = g.thumbnail_url || "";
   const plays = item.play_count || 0;
+  const isExpansion = !!g.is_expansion;
   const expBadge = expansionCount > 0
     ? `<div class="book-spine__exp" title="${expansionCount} expansion${expansionCount === 1 ? "" : "s"} in shelf"><i data-lucide="puzzle"></i>${expansionCount}</div>`
     : "";
-  const expDot = g.is_expansion && g.expansion_color
+  const expDot = isExpansion && g.expansion_color
     ? `<div class="book-spine__exp-dot" style="background:${g.expansion_color}" title="Expansion"></div>`
     : "";
   return `
-    <div class="book-slot animate-fadeUp"
+    <div class="book-slot animate-fadeUp${isExpansion ? " book-slot--no-log" : ""}"
          style="--book-color:${color}; --i:${i};"
          data-game-id="${g.id}"
          data-game-name="${escapeAttr(g.name)}">
       <div class="book-hint book-hint--guide"><i data-lucide="book-open"></i><span>Guide</span></div>
-      <div class="book-hint book-hint--log"><i data-lucide="plus"></i><span>Log Play</span></div>
+      ${isExpansion ? "" : `<div class="book-hint book-hint--log"><i data-lucide="plus"></i><span>Log Play</span></div>`}
       <button type="button" class="book-spine" title="${escapeAttr(g.name)}">
         ${thumb ? `<div class="book-spine__art" style="background-image:url('${thumb}')"></div>` : '<div class="book-spine__art book-spine__art--blank"></div>'}
         ${expDot}
         <div class="book-spine__title">${escapeHtml(g.name)}</div>
         ${expBadge}
-        ${plays > 0 ? `<div class="book-spine__plays">${plays}×</div>` : ""}
+        ${(!isExpansion && plays > 0) ? `<div class="book-spine__plays">${plays}×</div>` : ""}
       </button>
     </div>`;
-}
-
-// ── Expansion grouping helpers ───────────────────────────────────────────────
-
-// Map base bgg_id → number of expansions for that base present in `items`.
-function countExpansionsByBase(items) {
-  const counts = new Map();
-  for (const it of items) {
-    const g = it.game;
-    if (g.is_expansion && g.base_game_bgg_id) {
-      counts.set(g.base_game_bgg_id, (counts.get(g.base_game_bgg_id) || 0) + 1);
-    }
-  }
-  return counts;
-}
-
-// Walk items in their original (sorted) order. Bases keep their position;
-// expansions whose base is in the same shelf get folded under that base.
-// Expansions whose base is NOT in the shelf render in-place as orphans.
-function groupItemsForList(items) {
-  const baseBggIds = new Set();
-  for (const it of items) {
-    if (!it.game.is_expansion && it.game.bgg_id) baseBggIds.add(it.game.bgg_id);
-  }
-
-  const expansionsByBase = new Map();
-  for (const it of items) {
-    const g = it.game;
-    if (g.is_expansion && g.base_game_bgg_id && baseBggIds.has(g.base_game_bgg_id)) {
-      const arr = expansionsByBase.get(g.base_game_bgg_id) || [];
-      arr.push(it);
-      expansionsByBase.set(g.base_game_bgg_id, arr);
-    }
-  }
-
-  const out = [];
-  for (const it of items) {
-    const g = it.game;
-    if (g.is_expansion) {
-      if (g.base_game_bgg_id && baseBggIds.has(g.base_game_bgg_id)) continue;
-      out.push({ kind: "orphan", item: it });
-    } else {
-      out.push({ kind: "base", item: it, expansions: expansionsByBase.get(g.bgg_id) || [] });
-    }
-  }
-  return out;
 }
 
 function toggleExpansionGroup(baseId) {
@@ -380,12 +337,11 @@ function renderList() {
   }
 
   container.innerHTML = SHELVES.map(shelf => {
-    const rows = filterItems(shelfItems[shelf.key]);
+    const items = filterItems(shelfItems[shelf.key]);
     const total = shelfTotal[shelf.key];
     const loaded = shelfItems[shelf.key].length;
     const countLabel = loaded < total ? `${loaded} / ${total}` : String(total);
     if (!total) return "";
-    const groups = groupItemsForList(rows);
     return `
       <section class="mb-5" data-shelf-list="${shelf.key}">
         <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60 mb-2 flex items-center gap-2">
@@ -393,8 +349,8 @@ function renderList() {
           <span class="badge badge-sm badge-ghost">${countLabel}</span>
         </h3>
         <div class="grid grid-cols-1 gap-2">
-          ${groups.length
-            ? groups.map((g, i) => groupListHTML(g, i)).join("")
+          ${items.length
+            ? items.map((it, i) => groupListHTML(it, i)).join("")
             : `<div class="text-base-content/50 text-sm italic">No matches in loaded pages.</div>`}
         </div>
         ${shelfHasMore[shelf.key] ? `
@@ -405,17 +361,13 @@ function renderList() {
   }).join("") || `<div class="text-center py-8 text-base-content/50">No games match "${escapeHtml(closetSearch)}"</div>`;
 }
 
-function groupListHTML(group, i) {
-  if (group.kind === "orphan") {
-    return listRowHTML(group.item, i);
-  }
-  const base = group.item;
-  const expansions = group.expansions;
-  if (!expansions.length) return listRowHTML(base, i);
+function groupListHTML(item, i) {
+  const expansions = item.expansions || [];
+  if (!expansions.length) return listRowHTML(item, i);
 
-  const baseId = base.game.id;
+  const baseId = item.game.id;
   const expanded = expandedExpansionGroups.has(baseId);
-  const baseRow = listRowHTML(base, i, { expansionCount: expansions.length, expanded });
+  const baseRow = listRowHTML(item, i, { expansionCount: expansions.length, expanded });
   const childRows = expansions
     .map((it, j) => listRowHTML(it, j, { isChild: true }))
     .join("");
@@ -438,6 +390,9 @@ async function loadMoreList(shelf) {
 function listRowHTML(item, i, opts = {}) {
   const { expansionCount = 0, expanded = false, isChild = false } = opts;
   const g = item.game;
+  const isExpansion = !!g.is_expansion;
+  // Expansions are played with their base game — no separate play stats or
+  // Log Play swipe; just guide access.
   const lastPlayed = item.last_played_at ? `Last played ${formatDate(item.last_played_at)}` : "Never played";
   const plays = item.play_count || 0;
   const expChip = expansionCount > 0
@@ -451,13 +406,20 @@ function listRowHTML(item, i, opts = {}) {
          <i data-lucide="chevron-down" class="w-3 h-3 closet-exp-toggle__chev"></i>
        </button>`
     : "";
-  const wrapClass = `swipe-wrap animate-fadeUp${isChild ? " closet-row--child" : ""}`;
+  const wrapClass = `swipe-wrap animate-fadeUp${isChild ? " closet-row--child" : ""}${isExpansion ? " swipe-wrap--no-log" : ""}`;
+  const metaRow = isExpansion
+    ? `<div class="text-xs text-base-content/55 italic">Played with base game</div>`
+    : `<div class="flex items-center gap-2 text-xs text-base-content/60">
+        <span>${lastPlayed}</span>
+        ${plays > 0 ? `<span><i data-lucide="dice-5" class="w-3 h-3"></i> ${plays}×</span>` : ""}
+        ${g.bgg_rating ? `<span>★ ${formatRating(g.bgg_rating)}</span>` : ""}
+      </div>`;
   return `
     <div class="${wrapClass}" style="--i:${i}"
          data-game-id="${g.id}" data-game-name="${escapeAttr(g.name)}">
-      <div class="swipe-hint swipe-hint--log">
+      ${isExpansion ? "" : `<div class="swipe-hint swipe-hint--log">
         <i data-lucide="plus" class="w-5 h-5"></i><span>Log Play</span>
-      </div>
+      </div>`}
       <div class="swipe-hint swipe-hint--guide">
         <i data-lucide="book-open" class="w-5 h-5"></i><span>Guide</span>
       </div>
@@ -467,11 +429,7 @@ function listRowHTML(item, i, opts = {}) {
         </figure>
         <div class="card-body p-2 justify-center min-w-0">
           <h3 class="font-semibold text-sm leading-tight line-clamp-1 flex items-center gap-1.5 min-w-0"><span class="truncate">${escapeHtml(g.name)}</span></h3>
-          <div class="flex items-center gap-2 text-xs text-base-content/60">
-            <span>${lastPlayed}</span>
-            ${plays > 0 ? `<span><i data-lucide="dice-5" class="w-3 h-3"></i> ${plays}×</span>` : ""}
-            ${g.bgg_rating ? `<span>★ ${formatRating(g.bgg_rating)}</span>` : ""}
-          </div>
+          ${metaRow}
         </div>
         ${expChip ? `<div class="flex items-center pr-2 flex-shrink-0">${expChip}</div>` : ""}
       </div>
@@ -583,6 +541,8 @@ const BOOK_TAP_MAX_MS = 300;
 function attachBookGesture(slot, gameId, gameName) {
   const spine = slot.querySelector(".book-spine");
   if (!spine) return;
+  // Expansions are played with the base game — block the up-pull (Log Play).
+  const noLog = slot.classList.contains("book-slot--no-log");
 
   let startX = 0, startY = 0, t0 = 0;
   let axis = null;       // null | "v" | "h"
@@ -663,9 +623,10 @@ function attachBookGesture(slot, gameId, gameName) {
 
     if (axis === "v") {
       e.preventDefault();
-      dy = Math.max(-BOOK_DRAG_MAX, Math.min(BOOK_DRAG_MAX, dyRaw));
+      const limited = noLog ? Math.max(0, dyRaw) : dyRaw;
+      dy = Math.max(-BOOK_DRAG_MAX, Math.min(BOOK_DRAG_MAX, limited));
       spine.style.transform = `translateY(${dy}px)`;
-      slot.classList.toggle("armed-up", dy < -BOOK_TRIGGER_PX);
+      slot.classList.toggle("armed-up", !noLog && dy < -BOOK_TRIGGER_PX);
       slot.classList.toggle("armed-down", dy > BOOK_TRIGGER_PX);
     }
   });
@@ -682,7 +643,7 @@ function attachBookGesture(slot, gameId, gameName) {
     axis = null;
 
     if (finalAxis === "v" && wasDragging) {
-      if (dyRaw < -BOOK_TRIGGER_PX) {
+      if (!noLog && dyRaw < -BOOK_TRIGGER_PX) {
         completeAndTrigger("up", () => startLogPlay(gameId, gameName));
         clearArmed();
         return;
@@ -727,6 +688,9 @@ function attachListSwipe(wrapEl) {
   const card = wrapEl.querySelector(".card");
   const gameId = wrapEl.dataset.gameId;
   const gameName = wrapEl.dataset.gameName;
+  // Expansions are played with the base game — block the right-swipe (Log
+  // Play) drag and action; left-swipe (Guide) still works.
+  const noLog = wrapEl.classList.contains("swipe-wrap--no-log");
   let startX = null, isDragging = false;
 
   wrapEl.addEventListener("pointerdown", (e) => {
@@ -742,7 +706,8 @@ function attachListSwipe(wrapEl) {
       wrapEl.setPointerCapture(e.pointerId);
     }
     if (isDragging) {
-      const clamped = Math.sign(dx) * Math.min(Math.abs(dx), 110);
+      const limited = noLog ? Math.min(0, dx) : dx;
+      const clamped = Math.sign(limited) * Math.min(Math.abs(limited), 110);
       card.style.cssText = `transform: translateX(${clamped}px); transition: none;`;
     }
   });
@@ -754,7 +719,7 @@ function attachListSwipe(wrapEl) {
     if (!isDragging) { openGameDetail(gameId); return; }
     isDragging = false;
     card.style.cssText = "transform: translateX(0); transition: transform 200ms ease;";
-    if (dx > 70) setTimeout(() => startLogPlay(gameId, gameName), 150);
+    if (!noLog && dx > 70) setTimeout(() => startLogPlay(gameId, gameName), 150);
     else if (dx < -70) setTimeout(() => openGameGuide(gameId), 150);
   });
 

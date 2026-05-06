@@ -153,6 +153,13 @@ class CollectionItem(BaseModel):
     last_played_at: Optional[date] = None
     play_count: int = 0
     game: GameSummary
+    # When this row is a base game and the user owns/has-wishlisted/has-played
+    # one or more of its expansions on the same shelf, those expansion rows
+    # ride along here so the FE can show them nested without a follow-up call.
+    expansions: list["CollectionItem"] = Field(default_factory=list)
+
+
+CollectionItem.model_rebuild()
 
 
 class CollectionPageResponse(BaseModel):
