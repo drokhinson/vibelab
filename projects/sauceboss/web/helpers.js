@@ -224,6 +224,13 @@ async function adminMergeFoods(keepId, mergeIds) {
   return apiFetch('/admin/foods/merge', { method: 'POST', body: { keepId, mergeIds } });
 }
 
+async function adminAssignSauceVariants(parentId, sauceIds) {
+  return apiFetch(`/admin/sauces/${encodeURIComponent(parentId)}/variants`, {
+    method: 'POST',
+    body: { sauceIds },
+  });
+}
+
 // ─── Favorites + profile (auth required) ─────────────────────────────────────
 async function fetchProfile() {
   return apiFetch('/profile');

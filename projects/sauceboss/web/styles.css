@@ -2530,3 +2530,19 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   color: #6B7280;
   line-height: 1.4;
 }
+
+/* Highlight admin-sauce-row when participating in a sauce-variant merge.
+   Mirrors the .food-row-keep / .food-row-picked pattern but tinted to match
+   the variant-family theme. */
+.admin-sauce-row.food-row-keep,
+.admin-sauce-row.food-row-picked {
+  border-radius: 6px;
+}
+.admin-sauce-row.food-row-keep    { background: #ECFDF5; border-left: 3px solid #10B981; }
+.admin-sauce-row.food-row-picked  { background: #FFF7ED; border-left: 3px solid #EA580C; }
+
+/* While any merge bar is fixed to the bottom, give the scroll body enough
+   bottom padding so the last row isn't hidden behind it. */
+.scroll-body:has(.food-merge-bar) {
+  padding-bottom: 96px;
+}

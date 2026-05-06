@@ -122,6 +122,7 @@ let state = {
   expandedParents: {},                                             // { [parentId]: true }
   adminItems: { carbs: [], proteins: [], salads: [] },             // parents w/ nested variants
   itemForm: null,                                                  // shared add/edit form
+  sauceMerge: null,                                                // { keepId, mergeIds: Set<id>, saving, error } — long-press a sauce in the manager to enter "assign variants" mode
 
   // ── Ingredients tab ────────────────────────────────────────────────────────
   adminFoods: [],                                                  // [{ id, name, plural, usageCount, sauceCount }]

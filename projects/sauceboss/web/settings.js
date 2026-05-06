@@ -139,7 +139,7 @@ function renderAdmin() {
     <div class="scroll-body">
       ${bodyHTML}
     </div>
-    ${tab === 'sauces' && isLoggedIn ? `
+    ${tab === 'sauces' && isLoggedIn && !state.sauceMerge ? `
       <button class="fab" aria-label="Add a sauce" onclick="openBuilder()">
         <i data-lucide="plus"></i>
       </button>
@@ -157,6 +157,9 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
 
   const typeFilter = state.sauceManagerTypeFilter || 'all';
   const q = (state.sauceManagerSearch || '').trim().toLowerCase();
+  const merge = state.sauceMerge;
+  const mergeMode = !!merge;
+  const mergePanel = mergeMode ? renderSauceMergePanel() : '';
 
   const filtered = state.adminSauces.filter(s => {
     if (typeFilter !== 'all' && (s.sauceType || 'sauce') !== typeFilter) return false;
@@ -170,10 +173,10 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
   });
 
   if (state.adminSauces.length === 0) {
-    return '<p style="padding:16px;color:#888">No sauces found.</p>';
+    return `${mergePanel}<p style="padding:16px;color:#888">No sauces found.</p>`;
   }
   if (filtered.length === 0) {
-    return '<p style="padding:16px;color:#888">No sauces match your filters.</p>';
+    return `${mergePanel}<p style="padding:16px;color:#888">No sauces match your filters.</p>`;
   }
 
   const grouped = {};
@@ -183,37 +186,11 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
   }
   const cuisines = Object.keys(grouped).sort();
 
-  return cuisines.map(cuisine => {
+  const groupsHTML = cuisines.map(cuisine => {
     const safeCuisine = cuisine.replace(/'/g, "\\'");
     const open = state.cuisineSections[cuisine] === true;
     const chevron = open ? '▾' : '▸';
-    const rowsHTML = open ? grouped[cuisine].map(s => {
-      const safeName = s.name.replace(/'/g, "\\'");
-      const typeValue = s.sauceType || 'sauce';
-      const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
-      const isOwner = !!(currentUser && s.createdBy === currentUser.user_id);
-      const canEdit = isAdmin || isOwner;
-      const canDelete = isAdmin;  // delete remains admin-only
-      const inner = `
-        <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
-        <div class="admin-sauce-info">
-          <div class="admin-sauce-name">${s.name}</div>
-          <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
-        </div>
-        <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>`;
-      if (!canEdit && !canDelete) {
-        return `<div class="admin-sauce-row" onclick="selectSauceFromManager('${s.id}')">${inner}</div>`;
-      }
-      return `
-        <div class="swipe-row" data-swipe
-             data-tap-action="selectSauceFromManager('${s.id}')"
-             ${canEdit ? `data-edit-action="openBuilderEdit('${s.id}')"` : ''}
-             ${canDelete ? `data-delete-action="adminDeleteSauce('${s.id}', '${safeName}')"` : ''}>
-          ${canEdit ? '<div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>' : ''}
-          ${canDelete ? '<div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>' : ''}
-          <div class="swipe-content admin-sauce-row">${inner}</div>
-        </div>`;
-    }).join('') : '';
+    const rowsHTML = open ? grouped[cuisine].map(s => renderSauceManagerRow(s, isAdmin, merge)).join('') : '';
     return `
       <div class="ingredient-category-group">
         <div class="ingredient-category-header" onclick="toggleCuisineSection('${safeCuisine}')">
@@ -224,6 +201,150 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
         ${open ? `<div class="ingredient-category-body">${rowsHTML}</div>` : ''}
       </div>`;
   }).join('');
+
+  // Bottom action bar: always visible while in merge mode so the user can
+  // exit even before picking anything (mirrors the food-merge bar).
+  const mergeBar = mergeMode ? renderSauceMergeBar() : '';
+
+  return `${mergePanel}${groupsHTML}${mergeBar}`;
+}
+
+function renderSauceManagerRow(s, isAdmin, merge) {
+  const safeName = s.name.replace(/'/g, "\\'");
+  const typeValue = s.sauceType || 'sauce';
+  const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
+  const isOwner = !!(currentUser && s.createdBy === currentUser.user_id);
+  const canEdit = isAdmin || isOwner;
+  const canDelete = isAdmin;
+  const mergeMode = !!merge;
+  const isKeep = merge && merge.keepId === s.id;
+  const isPicked = merge && merge.mergeIds.has(s.id);
+  const isVariant = !!s.parentSauceId;
+
+  const variantTag = isVariant && !mergeMode
+    ? '<span class="variant-badge" title="Variant of another sauce"><i data-lucide="git-branch"></i></span>'
+    : '';
+  const mergeTag = mergeMode
+    ? (isKeep ? '<span class="food-merge-tag food-merge-tag-keep">parent</span>'
+              : isPicked ? '<span class="food-merge-tag food-merge-tag-merge">will be variant</span>'
+              : '')
+    : '';
+
+  const inner = `
+    <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
+    <div class="admin-sauce-info">
+      <div class="admin-sauce-name">${s.name}${variantTag}</div>
+      <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
+    </div>
+    ${mergeTag}
+    <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>`;
+
+  if (mergeMode) {
+    // While in merge mode the row is purely a tap-target — disable swipe so
+    // the user can't accidentally edit/delete during selection.
+    const cls = `admin-sauce-row${isKeep ? ' food-row-keep' : ''}${isPicked ? ' food-row-picked' : ''}`;
+    return `<div class="${cls}" onclick="toggleSauceMergePick('${s.id}')">${inner}</div>`;
+  }
+
+  if (!canEdit && !canDelete) {
+    return `<div class="admin-sauce-row" onclick="selectSauceFromManager('${s.id}')">${inner}</div>`;
+  }
+  return `
+    <div class="swipe-row" data-swipe
+         data-tap-action="selectSauceFromManager('${s.id}')"
+         ${isAdmin ? `data-longpress-action="startSauceMerge('${s.id}')"` : ''}
+         ${canEdit ? `data-edit-action="openBuilderEdit('${s.id}')"` : ''}
+         ${canDelete ? `data-delete-action="adminDeleteSauce('${s.id}', '${safeName}')"` : ''}>
+      ${canEdit ? '<div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>' : ''}
+      ${canDelete ? '<div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>' : ''}
+      <div class="swipe-content admin-sauce-row">${inner}</div>
+    </div>`;
+}
+
+function renderSauceMergePanel() {
+  const merge = state.sauceMerge;
+  const keep = (state.adminSauces || []).find(s => s.id === merge.keepId);
+  return `
+    <div class="food-merge-panel">
+      <strong>Variant family parent: ${keep ? keep.name : '(unknown)'}</strong>
+      <div style="font-size:12px;color:#555;margin-top:4px">
+        Tap other sauces to mark them as variants of this one. They'll appear together as a single
+        family in the sauce list, with this recipe as the default version.
+      </div>
+    </div>`;
+}
+
+function renderSauceMergeBar() {
+  const merge = state.sauceMerge;
+  const keep = (state.adminSauces || []).find(s => s.id === merge.keepId);
+  const count = merge.mergeIds.size;
+  const summary = count === 0
+    ? `Long-press other sauces to add — parent: <strong>${keep ? keep.name : '?'}</strong>`
+    : `${count} to assign as ${count === 1 ? 'variant' : 'variants'} of <strong>${keep ? keep.name : '?'}</strong>`;
+  return `
+    <div class="food-merge-bar">
+      <span>${summary}</span>
+      <div style="display:flex;gap:6px">
+        <button class="builder-secondary-btn" onclick="cancelSauceMerge()">Cancel</button>
+        <button class="builder-primary-btn" onclick="submitSauceMerge()" ${count === 0 || merge.saving ? 'disabled' : ''}>
+          ${merge.saving ? '<span class="spinner-sm"></span> Saving…' : 'Assign as variants'}
+        </button>
+      </div>
+      ${merge.error ? `<div class="settings-error" style="flex-basis:100%">${merge.error}</div>` : ''}
+    </div>`;
+}
+
+// ─── Sauce-variant merge state actions ───────────────────────────────────────
+function startSauceMerge(keepId) {
+  const sauce = (state.adminSauces || []).find(s => s.id === keepId);
+  if (!sauce) return;
+  if (sauce.parentSauceId) {
+    alert(`"${sauce.name}" is already a variant of another sauce. Pick the original sauce as the family parent instead.`);
+    return;
+  }
+  state.sauceMerge = { keepId, mergeIds: new Set(), error: null, saving: false };
+  render();
+}
+
+function toggleSauceMergePick(id) {
+  const merge = state.sauceMerge;
+  if (!merge) return;
+  if (id === merge.keepId) return;
+  // The backend rejects targets that already have variants of their own; we
+  // also disallow picking an existing variant of a different parent here so
+  // the UX never shows a target it can't actually save.
+  const sauce = (state.adminSauces || []).find(s => s.id === id);
+  if (sauce && sauce.parentSauceId && sauce.parentSauceId !== merge.keepId) {
+    if (!confirm(`"${sauce.name}" is already a variant of another sauce. Re-parent it to "${(state.adminSauces.find(s => s.id === merge.keepId) || {}).name || merge.keepId}"?`)) {
+      return;
+    }
+  }
+  if (merge.mergeIds.has(id)) merge.mergeIds.delete(id);
+  else merge.mergeIds.add(id);
+  render();
+}
+
+function cancelSauceMerge() {
+  state.sauceMerge = null;
+  render();
+}
+
+async function submitSauceMerge() {
+  const merge = state.sauceMerge;
+  if (!merge || merge.mergeIds.size === 0) return;
+  merge.saving = true;
+  merge.error = null;
+  render();
+  try {
+    await adminAssignSauceVariants(merge.keepId, [...merge.mergeIds]);
+    state.sauceMerge = null;
+    state.adminSauces = await fetchAdminSauces();
+    render();
+  } catch (err) {
+    merge.saving = false;
+    merge.error = err.message;
+    render();
+  }
 }
 
 function toggleCuisineSection(cuisine) {
@@ -755,12 +876,17 @@ function renderIngredientsTab(isAdmin, isLoggedIn) {
   const groups = groupFoodsByCategory(filtered);
   const groupsHTML = groups.map(g => renderIngredientCategoryGroup(g, isAdmin, merge, !!q)).join('');
 
-  const mergeBar = isAdmin && merge && merge.mergeIds.size > 0 ? `
+  // Bottom bar is shown for the entire merge mode — even with zero picks —
+  // so the user always has a Cancel affordance. The "Merge" button only
+  // enables once they've picked at least one duplicate.
+  const mergeBar = isAdmin && merge ? `
     <div class="food-merge-bar">
-      <span>${merge.mergeIds.size} selected to merge into <strong>${(foods.find(x => x.id === merge.keepId) || {}).name || '?'}</strong></span>
+      <span>${merge.mergeIds.size === 0
+        ? `Tap duplicates to merge into <strong>${(foods.find(x => x.id === merge.keepId) || {}).name || '?'}</strong>`
+        : `${merge.mergeIds.size} selected to merge into <strong>${(foods.find(x => x.id === merge.keepId) || {}).name || '?'}</strong>`}</span>
       <div style="display:flex;gap:6px">
         <button class="builder-secondary-btn" onclick="cancelFoodMerge()">Cancel</button>
-        <button class="builder-primary-btn" onclick="submitFoodMerge()" ${merge.saving ? 'disabled' : ''}>
+        <button class="builder-primary-btn" onclick="submitFoodMerge()" ${merge.mergeIds.size === 0 || merge.saving ? 'disabled' : ''}>
           ${merge.saving ? '<span class="spinner-sm"></span> Merging…' : 'Merge'}
         </button>
       </div>
