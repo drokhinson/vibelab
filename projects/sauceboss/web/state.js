@@ -117,6 +117,7 @@ let state = {
   sauceManagerTab: 'sauces',                                      // 'sauces' | 'dish' | 'ingredients'
   sauceManagerSearch: '',                                          // search query (applies to active tab)
   sauceManagerTypeFilter: 'all',                                   // 'all' | 'sauce' | 'marinade' | 'dressing'
+  sauceManagerFavoritesOnly: false,                                // sauces-tab fav filter; independent of state.favoritesOnly
   itemSections: { carbs: false, proteins: false, salads: false }, // category-level expand (default collapsed)
   cuisineSections: {},                                             // { [cuisine]: true } — open only when explicitly true
   expandedParents: {},                                             // { [parentId]: true }

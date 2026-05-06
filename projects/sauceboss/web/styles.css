@@ -1438,6 +1438,16 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
   color: white;
   border-color: #E85D04;
 }
+/* Icon-only variant (e.g. the favorites heart pill) — square aspect + tight padding. */
+.sm-type-pill-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 8px;
+  margin-left: auto; /* push to the right edge of the filter row */
+}
+.sm-type-pill-icon i { width: 14px; height: 14px; }
+.sm-type-pill-icon.sm-type-pill-active i { fill: white; }
 
 /* ── Per-row Sauce Type Tag ── */
 .sauce-type-tag {
