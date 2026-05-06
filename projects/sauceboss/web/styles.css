@@ -2449,3 +2449,84 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   line-height: 1.5;
   margin: 4px 0 8px;
 }
+
+/* ── Recipe variants ─────────────────────────────────────────────────────── */
+.variant-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 7px;
+  background: #FFF3E6;
+  color: #E85D04;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.variant-badge i {
+  width: 11px;
+  height: 11px;
+}
+
+.variant-switcher {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.variant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.variant-chip:hover {
+  background: #FFF8F0;
+  border-color: #E85D04;
+}
+.variant-chip--active {
+  background: #E85D04;
+  border-color: #E85D04;
+  color: #FFFFFF;
+}
+.variant-chip-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+.variant-chip-tag {
+  margin-left: 4px;
+  padding: 1px 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.variant-chip--active .variant-chip-tag {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* "Variant of" selector in the builder */
+.variant-of-row {
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+.builder-hint {
+  margin: 6px 2px 0;
+  font-size: 11px;
+  color: #6B7280;
+  line-height: 1.4;
+}

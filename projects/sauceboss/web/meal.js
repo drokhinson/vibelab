@@ -163,6 +163,20 @@ function renderMealRecipe() {
 
   const title = `${prep?.name || item.name} with ${sauce.name}`;
 
+  const family = state.selectedSauceFamily || [];
+  const variantSwitcherHTML = family.length > 1 ? `
+    <div class="variant-switcher" role="tablist" aria-label="Switch variant">
+      ${family.map(s => `
+        <button class="variant-chip ${s.id === sauce.id ? 'variant-chip--active' : ''}"
+                role="tab"
+                aria-selected="${s.id === sauce.id}"
+                onclick="selectVariant('${s.id}')">
+          <span class="variant-chip-dot" style="background:${s.color}"></span>
+          ${escapeHtml(s.name)}${!s.parentSauceId ? '<span class="variant-chip-tag">original</span>' : ''}
+        </button>
+      `).join('')}
+    </div>` : '';
+
   // For marinades, show marinade BEFORE cooking; otherwise item prep first.
   const sauceSection = `
     <div class="meal-section">
@@ -180,6 +194,7 @@ function renderMealRecipe() {
     </div>
     <div class="scroll-body">
       ${timingBanner}
+      ${variantSwitcherHTML}
       ${servingsHTML}
       ${isMarinade ? sauceSection + itemCard : itemCard + sauceSection}
     </div>

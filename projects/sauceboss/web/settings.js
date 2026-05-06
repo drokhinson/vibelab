@@ -503,6 +503,13 @@ function selectSauceFromManager(id) {
   if (!sauce.ingredientNames) {
     sauce.ingredientNames = new Set((sauce.ingredients || []).map(i => i.name));
   }
+  // Reconstruct the family so the recipe-view switcher can flip between
+  // siblings without another fetch. The sauce the user clicked may itself
+  // be either a root or a variant — _buildSauceFamilies handles both.
+  const families = _buildSauceFamilies(state.adminSauces || []);
+  const rootId = sauce.parentSauceId || sauce.id;
+  const family = families.get(rootId);
+  state.selectedSauceFamily = family ? [family.root, ...family.variants] : [sauce];
   state.selectedSauce       = sauce;
   state.selectedItem        = null;
   state.selectedPrep        = null;
@@ -525,6 +532,7 @@ function openBuilderEdit(id) {
     description: sauce.description || '',
     sourceUrl: sauce.sourceUrl || '',
     sauceType: sauce.sauceType || 'sauce',
+    parentSauceId: sauce.parentSauceId || null,
     itemIds: sauce.compatibleItems || [],
     steps: (sauce.steps || []).map(s => ({
       title: s.title,

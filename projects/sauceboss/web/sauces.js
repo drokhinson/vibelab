@@ -12,18 +12,78 @@ function getSauceScreenContext() {
   };
 }
 
+// Group a flat list of sauces into families: { root, variants[] } keyed by
+// root id. A sauce with parentSauceId is attached as a variant to its
+// parent; orphans (parent not in this list) render as their own root so
+// they don't disappear from the list.
+function _buildSauceFamilies(sauces) {
+  const byId = new Map();
+  for (const s of sauces) byId.set(s.id, s);
+
+  const families = new Map();
+  // First pass: every sauce without a present parent becomes a root.
+  for (const s of sauces) {
+    if (!s.parentSauceId || !byId.has(s.parentSauceId)) {
+      if (!families.has(s.id)) families.set(s.id, { root: s, variants: [] });
+    }
+  }
+  // Second pass: attach variants to their root.
+  for (const s of sauces) {
+    if (s.parentSauceId && byId.has(s.parentSauceId)) {
+      const fam = families.get(s.parentSauceId);
+      if (fam) fam.variants.push(s);
+    }
+  }
+  return families;
+}
+
+// Pick which sauce in a family to show in the list / open in the recipe by
+// default. Rule: if the user has favorited any sibling, pick the one with
+// the most recent favorite timestamp; otherwise show the root.
+function _pickDisplayedFromFamily(family) {
+  const all = [family.root, ...family.variants];
+  if (!currentUser) return family.root;
+  let best = null;
+  let bestTime = -Infinity;
+  for (const s of all) {
+    if (!state.favorites.has(s.id)) continue;
+    const ts = state.favorites.get(s.id);
+    const t = ts ? Date.parse(ts) : 0;
+    if (t > bestTime) { bestTime = t; best = s; }
+  }
+  return best || family.root;
+}
+
+function _familyHasFavorite(family) {
+  if (!currentUser) return false;
+  if (state.favorites.has(family.root.id)) return true;
+  return family.variants.some(v => state.favorites.has(v.id));
+}
+
 function renderSauceSelector() {
   const ctx = getSauceScreenContext();
   const allSauces = ctx.sauces;
-  const sauces = state.favoritesOnly && currentUser
-    ? allSauces.filter(s => state.favorites.has(s.id))
-    : allSauces;
-  const cuisines = [...new Set(sauces.map(s => s.cuisine))];
+  const families = _buildSauceFamilies(allSauces);
+
+  // Family-level filtering — favorites pill toggles whether unfavored
+  // families are hidden.
+  const allFamilies = [...families.values()];
+  const visibleFamilies = state.favoritesOnly && currentUser
+    ? allFamilies.filter(_familyHasFavorite)
+    : allFamilies;
+  const favFamilyCount = currentUser
+    ? allFamilies.filter(_familyHasFavorite).length
+    : 0;
+
+  // Each visible family contributes its displayed sauce to the rendered list.
+  const visibleEntries = visibleFamilies.map(family => ({
+    family,
+    displayed: _pickDisplayedFromFamily(family),
+  }));
+
+  const cuisines = [...new Set(visibleEntries.map(e => e.displayed.cuisine))];
   const missingCount = state.disabledIngredients.size;
   const categoryGroups = groupIngredientsByCategory();
-  const favCount = currentUser
-    ? allSauces.filter(s => state.favorites.has(s.id)).length
-    : 0;
 
   const chipHTML = (items) => items.map(({ name }) => {
     const has = !state.disabledIngredients.has(name);
@@ -48,13 +108,15 @@ function renderSauceSelector() {
   `;
 
   const accordionHTML = cuisines.map(cuisine => {
-    const cuisineSauces = sauces.filter(s => s.cuisine === cuisine);
-    const emoji = renderEmoji(cuisineSauces[0]?.cuisineEmoji || '🍽️');
+    const cuisineEntries = visibleEntries.filter(e => e.displayed.cuisine === cuisine);
+    const emoji = renderEmoji(cuisineEntries[0]?.displayed.cuisineEmoji || '🍽️');
     const isOpen = state.expandedCuisines.has(cuisine);
-    const availCount = cuisineSauces.filter(isSauceAvailable).length;
+    const availCount = cuisineEntries.filter(e => isSauceAvailable(e.displayed)).length;
     const safeCuisine = cuisine.replace(/'/g, "\\'");
 
-    const saucesHTML = isOpen ? cuisineSauces.map(sauce => {
+    const saucesHTML = isOpen ? cuisineEntries.map(({ family, displayed }) => {
+      const sauce = displayed;
+      const totalVersions = 1 + family.variants.length;
       const available = isSauceAvailable(sauce);
       const missing = missingSauceIngredients(sauce);
       const missingText = missing.map(m => {
@@ -64,6 +126,9 @@ function renderSauceSelector() {
       const compatText = (sauce.compatibleItems || []).join(' · ');
       const isFav = currentUser && state.favorites.has(sauce.id);
       const canEdit = currentUser && (currentUser.is_admin || sauce.createdBy === currentUser.user_id);
+      const variantBadge = totalVersions >= 2
+        ? `<span class="variant-badge" title="${totalVersions} versions in this family"><i data-lucide="git-branch"></i> ${totalVersions}</span>`
+        : '';
       const heartBtn = currentUser
         ? `<button class="heart-btn ${isFav ? 'heart-btn--active' : ''}" data-auth-only
                    onclick="event.stopPropagation(); toggleFavorite('${sauce.id}')"
@@ -78,10 +143,10 @@ function renderSauceSelector() {
              <i data-lucide="pencil"></i>
            </button>`
         : '';
-      return `<div class="sauce-item ${available ? '' : 'unavailable'}" onclick="selectSauce('${sauce.id}')">
+      return `<div class="sauce-item ${available ? '' : 'unavailable'}" onclick="selectSauce('${family.root.id}','${sauce.id}')">
         <span class="sauce-dot" style="background:${sauce.color}"></span>
         <div class="sauce-info">
-          <div class="sauce-item-name">${sauce.name}</div>
+          <div class="sauce-item-name">${sauce.name}${variantBadge}</div>
           <div class="sauce-item-tags">${compatText}${missing.length ? ' · missing: '+missingText : ''}</div>
         </div>
         ${!available ? `<span class="sauce-missing-badge">-${missing.length}</span>` : ''}
@@ -96,7 +161,7 @@ function renderSauceSelector() {
         <span class="ingredient-category-chevron">${isOpen ? '▾' : '▸'}</span>
         <span class="cuisine-flag-emoji">${emoji}</span>
         <span class="ingredient-category-name">${cuisine}</span>
-        <span class="ingredient-category-count">${availCount}/${cuisineSauces.length}</span>
+        <span class="ingredient-category-count">${availCount}/${cuisineEntries.length}</span>
       </div>
       ${isOpen ? `<div class="ingredient-category-body">${saucesHTML}</div>` : ''}
     </div>`;
@@ -107,7 +172,7 @@ function renderSauceSelector() {
     <div class="app-header">
       <button class="back-btn" onclick="navigate('${ctx.backScreen}')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>${ctx.emoji}</span>${ctx.title}</div>
-      <div class="subtitle">${sauces.length} options · select your style</div>
+      <div class="subtitle">${visibleEntries.length} options · select your style</div>
       ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
@@ -115,10 +180,10 @@ function renderSauceSelector() {
         <div class="favorites-pill-row" data-auth-only>
           <button class="favorites-pill ${state.favoritesOnly ? 'favorites-pill--active' : ''}"
                   onclick="toggleFavoritesOnly()"
-                  ${favCount === 0 && !state.favoritesOnly ? 'disabled' : ''}>
+                  ${favFamilyCount === 0 && !state.favoritesOnly ? 'disabled' : ''}>
             <i data-lucide="heart"></i>
             ${state.favoritesOnly ? 'Favorites only' : 'Show favorites only'}
-            <span class="favorites-pill-count">${favCount}</span>
+            <span class="favorites-pill-count">${favFamilyCount}</span>
           </button>
         </div>
       ` : ''}
@@ -136,12 +201,30 @@ function renderSauceSelector() {
   `;
 }
 
-function selectSauce(id) {
-  state.selectedSauce = state.saucesForCurrentItem.find(s => s.id === id);
+// Selecting a family from the list: rebuild the family from current sauces,
+// pick the displayed sauce, and stash the full sibling list so the
+// recipe-view variant switcher doesn't need another fetch.
+function selectSauce(rootId, displayedId) {
+  const families = _buildSauceFamilies(state.saucesForCurrentItem);
+  const family = families.get(rootId);
+  if (!family) return;
+  const sauce = (displayedId && [family.root, ...family.variants].find(s => s.id === displayedId))
+    || _pickDisplayedFromFamily(family);
+  state.selectedSauce = sauce;
+  state.selectedSauceFamily = [family.root, ...family.variants];
   state.meal.item  = state.selectedItem;
   state.meal.prep  = state.selectedPrep;
   state.meal.sauce = state.selectedSauce;
   navigate('meal-recipe');
+}
+
+// Switch between siblings inside the recipe / meal-recipe view.
+function selectVariant(id) {
+  const next = (state.selectedSauceFamily || []).find(s => s.id === id);
+  if (!next) return;
+  state.selectedSauce = next;
+  if (state.meal && state.meal.sauce) state.meal.sauce = next;
+  render();
 }
 
 function toggleFilter() {

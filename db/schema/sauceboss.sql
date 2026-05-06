@@ -26,15 +26,17 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_items (
 ALTER TABLE public.sauceboss_items ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.sauceboss_sauces (
-  id            TEXT PRIMARY KEY,
-  name          TEXT NOT NULL,
-  cuisine       TEXT NOT NULL,
-  cuisine_emoji TEXT NOT NULL,
-  color         TEXT NOT NULL,
-  description   TEXT NOT NULL,
-  source_url    TEXT,                    -- optional URL the sauce was imported from (migration 066)
-  sauce_type    TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade')),
-  created_by    UUID REFERENCES auth.users(id) ON DELETE SET NULL  -- migration 003: author of user-submitted sauces
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  cuisine         TEXT NOT NULL,
+  cuisine_emoji   TEXT NOT NULL,
+  color           TEXT NOT NULL,
+  description     TEXT NOT NULL,
+  source_url      TEXT,                    -- optional URL the sauce was imported from (migration 066)
+  sauce_type      TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade')),
+  created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,           -- migration 003: author of user-submitted sauces
+  parent_sauce_id TEXT REFERENCES public.sauceboss_sauces(id) ON DELETE SET NULL,  -- migration 005: variant link (one level deep, enforced by trigger)
+  CONSTRAINT sauceboss_sauces_parent_self_chk CHECK (parent_sauce_id IS NULL OR parent_sauce_id <> id)
 );
 ALTER TABLE public.sauceboss_sauces ENABLE ROW LEVEL SECURITY;
 
@@ -176,3 +178,13 @@ ALTER TABLE public.sauceboss_favorites ENABLE ROW LEVEL SECURITY;
 --                                     (owner or admin) enforced upstream.
 -- Read RPCs (get_sauceboss_sauces_for_item, get_sauceboss_all_sauces,
 -- get_sauceboss_all_sauces_full) now emit `createdBy` in their JSON output.
+
+-- ── Recipe variants (migration 005) ─────────────────────────────────────────
+-- sauceboss_sauces.parent_sauce_id links a variant to its family root. NULL
+-- means standalone or root. ON DELETE SET NULL preserves authored variants
+-- when a parent is removed. The sauceboss_sauces_variant_check trigger
+-- enforces one level of depth (a variant cannot itself be a parent),
+-- mirroring the parent_id pattern on sauceboss_items. Read RPCs
+-- (get_sauceboss_sauces_for_item, get_sauceboss_all_sauces,
+-- get_sauceboss_all_sauces_full) emit `parentSauceId` so frontends can
+-- group sauces into families.

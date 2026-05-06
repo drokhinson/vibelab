@@ -24,7 +24,7 @@ function initSupabase() {
       loadProfile();
     } else {
       currentUser = null;
-      state.favorites = new Set();
+      state.favorites = new Map();
       document.body.classList.remove('is-auth');
       render();
     }
@@ -54,7 +54,7 @@ async function loadProfile() {
       state.favorites = await fetchFavorites();
     } catch (e) {
       console.warn('[sauceboss] failed to load favorites:', e);
-      state.favorites = new Set();
+      state.favorites = new Map();
     }
     document.body.classList.add('is-auth');
     closeAuthModal();
@@ -73,7 +73,7 @@ async function handleLogout() {
   }
   session = null;
   currentUser = null;
-  state.favorites = new Set();
+  state.favorites = new Map();
   state.favoritesOnly = false;
   document.body.classList.remove('is-auth');
   render();

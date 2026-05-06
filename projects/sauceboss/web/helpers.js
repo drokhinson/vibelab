@@ -239,7 +239,11 @@ async function becomeAdmin(adminKey) {
 
 async function fetchFavorites() {
   const data = await apiFetch('/favorites');
-  return new Set(data.favorites || []);
+  const map = new Map();
+  for (const entry of (data.favorites || [])) {
+    map.set(entry.sauceId, entry.createdAt || null);
+  }
+  return map;
 }
 
 async function addFavorite(sauceId) {
@@ -255,15 +259,16 @@ async function removeFavorite(sauceId) {
 async function toggleFavorite(sauceId) {
   if (!currentUser) { openAuthModal(); return; }
   const wasFavorited = state.favorites.has(sauceId);
+  const previousTimestamp = state.favorites.get(sauceId);
   if (wasFavorited) state.favorites.delete(sauceId);
-  else state.favorites.add(sauceId);
+  else state.favorites.set(sauceId, new Date().toISOString());
   render();
   try {
     if (wasFavorited) await removeFavorite(sauceId);
     else await addFavorite(sauceId);
   } catch (e) {
     console.error('[sauceboss] favorite toggle failed:', e);
-    if (wasFavorited) state.favorites.add(sauceId);
+    if (wasFavorited) state.favorites.set(sauceId, previousTimestamp || null);
     else state.favorites.delete(sauceId);
     render();
   }
