@@ -248,6 +248,10 @@ export default function SauceManagerScreen({ navigation }) {
                         isLast={i === entries.length - 1}
                         currentUser={state.currentUser}
                         isAdmin={isAdmin}
+                        // Show the type tag only when the user is browsing
+                        // every type at once. Once they've filtered to a
+                        // single type the tag is redundant noise.
+                        showTypeTag={typeFilter === 'all'}
                         onTap={() => openSauceRecipe(displayed, family)}
                         onEdit={() => openBuilderFor(displayed.id)}
                         onDelete={() => confirmDelete(displayed)}
@@ -274,7 +278,7 @@ export default function SauceManagerScreen({ navigation }) {
   );
 }
 
-function ManagerRow({ sauce, family, isLast, currentUser, isAdmin, onTap, onEdit, onDelete }) {
+function ManagerRow({ sauce, family, isLast, currentUser, isAdmin, showTypeTag, onTap, onEdit, onDelete }) {
   const isOwner = !!(currentUser && sauce.createdBy === currentUser.user_id);
   const canEdit = isAdmin || isOwner;
   const canDelete = isAdmin || isOwner;
@@ -299,7 +303,7 @@ function ManagerRow({ sauce, family, isLast, currentUser, isAdmin, onTap, onEdit
             <Text style={styles.rowDesc} numberOfLines={1}>{sauce.description}</Text>
           ) : null}
         </View>
-        <SauceTypeTag value={sauce.sauceType || 'sauce'} />
+        {showTypeTag ? <SauceTypeTag value={sauce.sauceType || 'sauce'} /> : null}
         {currentUser ? <HeartButton sauceId={sauce.id} size={20} /> : null}
         <ChevronRight size={16} color={COLORS.textMuted} />
       </TouchableOpacity>
