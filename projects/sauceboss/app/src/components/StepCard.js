@@ -73,7 +73,9 @@ export default function StepCard({
       ) : null}
 
       <View style={styles.viz}>
-        <PieChart items={displayItems} size={140} />
+        <View style={styles.chartWrap}>
+          <PieChart items={displayItems} size={110} />
+        </View>
         <View style={styles.legend}>
           {displayItems.map((it, i) => {
             const color = ingColor(it.name, i);
@@ -177,14 +179,19 @@ const styles = StyleSheet.create({
   },
   viz: {
     marginTop: 8,
-    alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  chartWrap: {
+    width: 110,
+    height: 110,
+    marginRight: 12,
+    flexShrink: 0,
   },
   legend: {
-    width: '100%',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.surfaceSubtle,
+    flex: 1,
+    paddingLeft: 4,
+    paddingTop: 0,
   },
   legendRow: {
     flexDirection: 'row',
