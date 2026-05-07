@@ -1,0 +1,68 @@
+<!-- Play Store feature graphic (1024×500). Sits at the top of the
+     SauceBoss listing on phone + tablet store pages. Layout:
+       left third  — pot illustration mirroring app icon
+       middle      — SauceBoss wordmark + tagline
+       right edge  — small donut hint, telegraphs the visual-recipe pitch.
+     Critical text stays in the upper 70% — Play overlays the install
+     button + dev name on the bottom 30% on some surfaces. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F48C06"/>
+      <stop offset="1" stop-color="#C94E02"/>
+    </linearGradient>
+    <radialGradient id="hi" cx="32%" cy="36%" r="55%">
+      <stop offset="0" stop-color="#FAA307" stop-opacity="0.50"/>
+      <stop offset="1" stop-color="#E85D04" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <rect width="1024" height="500" fill="url(#hi)"/>
+
+  <!-- ─── LEFT: pot illustration (~280px wide) ────────────────────────── -->
+  <g transform="translate(40 95)">
+    <g stroke="#FFF3E6" stroke-width="10" stroke-linecap="round" fill="none" opacity="0.55">
+      <path d="M75 168 Q88 122 75 78 Q62 32 75 -4"/>
+      <path d="M150 156 Q163 110 150 66 Q137 20 150 -16"/>
+      <path d="M225 168 Q238 122 225 78 Q212 32 225 -4"/>
+    </g>
+    <ellipse cx="150" cy="312" rx="140" ry="12" fill="#1A1A2E" opacity="0.10"/>
+    <path d="M28 198 Q28 300 150 300 Q272 300 272 198 Z" fill="#FFF3E6"/>
+    <path d="M28 198 Q28 300 150 300 Q272 300 272 198" stroke="#3D1100" stroke-width="6" fill="none"/>
+    <ellipse cx="150" cy="226" rx="100" ry="20" fill="#E85D04" opacity="0.55"/>
+    <circle cx="106" cy="218" r="20" fill="#FFFFFF" opacity="0.92"/>
+    <circle cx="150" cy="202" r="16" fill="#FFFFFF" opacity="0.95"/>
+    <circle cx="194" cy="222" r="18" fill="#FFFFFF" opacity="0.90"/>
+    <circle cx="132" cy="246" r="12" fill="#FFFFFF" opacity="0.95"/>
+    <rect x="10" y="184" width="280" height="28" rx="14" fill="#3D1100"/>
+  </g>
+
+  <!-- ─── CENTER: wordmark + tagline ──────────────────────────────────── -->
+  <!-- Wordmark sized to fit between the pot (~330) and the donut hint
+       (~860). 76pt SauceBoss is roughly 420px wide at this letter-spacing,
+       leaving margin on both sides. -->
+  <g transform="translate(360 0)">
+    <text x="0" y="222"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif"
+          font-size="76" font-weight="800" fill="#FFFFFF" letter-spacing="1.5">
+      SauceBoss
+    </text>
+    <text x="0" y="270"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif"
+          font-size="22" font-weight="600" fill="#FFFFFF" opacity="0.92" letter-spacing="0.4">
+      Visual sauce recipes.
+    </text>
+    <rect x="0" y="288" width="64" height="3" rx="1.5" fill="#FFFFFF" opacity="0.6"/>
+  </g>
+
+  <!-- ─── RIGHT: pie-chart hint (small, tucked into the corner) ───────── -->
+  <g transform="translate(920 250)" opacity="0.85">
+    <path d="M0 0 L0 -68 A68 68 0 0 1 59 -34 Z" fill="#FBBF24"/>
+    <path d="M0 0 L59 -34 A68 68 0 0 1 59 34 Z" fill="#3B1F0A"/>
+    <path d="M0 0 L59 34 A68 68 0 0 1 -34 59 Z" fill="#F48C06"/>
+    <path d="M0 0 L-34 59 A68 68 0 0 1 -68 0 Z" fill="#65A30D"/>
+    <path d="M0 0 L-68 0 A68 68 0 0 1 0 -68 Z" fill="#FFF3E6"/>
+    <circle r="26" fill="#E85D04"/>
+    <circle r="68" fill="none" stroke="#FFFFFF" stroke-width="2.5" opacity="0.4"/>
+  </g>
+</svg>

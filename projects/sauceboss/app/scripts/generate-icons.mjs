@@ -21,10 +21,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const assets = resolve(__dirname, '..', 'assets');
 
 const targets = [
-  { src: 'icon.svg',          out: 'icon.png',          width: 1024, height: 1024 },
-  { src: 'adaptive-icon.svg', out: 'adaptive-icon.png', width: 1024, height: 1024 },
-  { src: 'splash.svg',        out: 'splash.png',        width: 1284, height: 2778 },
-  { src: 'favicon.svg',       out: 'favicon.png',       width: 64,   height: 64   },
+  { src: 'icon.svg',             out: 'icon.png',             width: 1024, height: 1024 },
+  { src: 'adaptive-icon.svg',    out: 'adaptive-icon.png',    width: 1024, height: 1024 },
+  { src: 'splash.svg',           out: 'splash.png',           width: 1284, height: 2778 },
+  { src: 'favicon.svg',          out: 'favicon.png',          width: 64,   height: 64   },
+  { src: 'feature-graphic.svg',  out: 'feature-graphic.png',  width: 1024, height: 500  },
 ];
 
 mkdirSync(assets, { recursive: true });
