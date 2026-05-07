@@ -161,8 +161,8 @@ const styles = StyleSheet.create({
   managerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    height: 36,
     borderRadius: 999,
     backgroundColor: 'rgba(0,0,0,0.18)',
   },
