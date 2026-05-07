@@ -23,6 +23,8 @@ build/
 *.log
 npm-debug.log*
 package-lock.json
+# Native apps need a committed lock file so EAS Build / expo-doctor can run.
+!projects/*/app/package-lock.json
 
 # Database
 *.sqlite
