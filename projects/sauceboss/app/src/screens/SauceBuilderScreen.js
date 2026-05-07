@@ -25,6 +25,8 @@ import {
   Link2,
   Save,
   X,
+  CornerDownRight,
+  ArrowRight,
 } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import { api } from '../api/client';
@@ -168,7 +170,30 @@ export default function SauceBuilderScreen({ navigation, route }) {
   function removeStep(idx) {
     setBuilder((prev) => {
       if (prev.steps.length <= 1) return prev;
-      return { ...prev, steps: prev.steps.filter((_, i) => i !== idx) };
+      const removedOrder = idx + 1;
+      const steps = prev.steps
+        .filter((_, i) => i !== idx)
+        // Any step that was combining the removed one's output loses the link.
+        // Steps that pointed at a later index get their pointer shifted down.
+        .map((s) => {
+          if (s.inputFromStep == null) return s;
+          if (s.inputFromStep === removedOrder) return { ...s, inputFromStep: null };
+          if (s.inputFromStep > removedOrder) return { ...s, inputFromStep: s.inputFromStep - 1 };
+          return s;
+        });
+      return { ...prev, steps };
+    });
+  }
+
+  function setInputFromStep(stepIdx, value) {
+    setBuilder((prev) => {
+      const next = prev.steps.slice();
+      // Refuse self-references and forward references.
+      if (value != null && (value <= 0 || value > stepIdx)) {
+        return prev;
+      }
+      next[stepIdx] = { ...next[stepIdx], inputFromStep: value };
+      return { ...prev, steps: next };
     });
   }
 
@@ -201,6 +226,45 @@ export default function SauceBuilderScreen({ navigation, route }) {
         itemIds: has ? prev.itemIds.filter((id) => id !== itemId) : [...prev.itemIds, itemId],
       };
     });
+  }
+
+  // Move an ingredient out of the unassigned tray and into the chosen step.
+  // Strips internal helper fields so the row matches an emptyStep() ingredient.
+  function moveUnassignedToStep(uIdx, stepIdx) {
+    setBuilder((prev) => {
+      if (uIdx < 0 || uIdx >= prev.unassignedIngredients.length) return prev;
+      if (stepIdx < 0 || stepIdx >= prev.steps.length) return prev;
+      const ing = prev.unassignedIngredients[uIdx];
+      const steps = prev.steps.slice();
+      // If the target step still has a single empty placeholder row, replace
+      // it instead of stacking on top so we don't end up with a blank line.
+      const targetIngs = steps[stepIdx].ingredients;
+      const onlyHasEmptyPlaceholder =
+        targetIngs.length === 1 &&
+        !targetIngs[0].name &&
+        !targetIngs[0].amount;
+      const newIng = {
+        name: ing.name || '',
+        amount: ing.amount != null ? String(ing.amount) : '',
+        unit: ing.unit || 'tsp',
+        originalText: ing.originalText || '',
+        canonicalMl: ing.canonicalMl != null ? ing.canonicalMl : null,
+        canonicalG: ing.canonicalG != null ? ing.canonicalG : null,
+      };
+      steps[stepIdx] = {
+        ...steps[stepIdx],
+        ingredients: onlyHasEmptyPlaceholder ? [newIng] : [...targetIngs, newIng],
+      };
+      const unassigned = prev.unassignedIngredients.filter((_, i) => i !== uIdx);
+      return { ...prev, steps, unassignedIngredients: unassigned };
+    });
+  }
+
+  function deleteUnassigned(uIdx) {
+    setBuilder((prev) => ({
+      ...prev,
+      unassignedIngredients: prev.unassignedIngredients.filter((_, i) => i !== uIdx),
+    }));
   }
 
   function pickCuisine(c) {
@@ -486,6 +550,51 @@ export default function SauceBuilderScreen({ navigation, route }) {
                   </TouchableOpacity>
                 ) : null}
               </View>
+
+              {/* Combine output from a previous step. Only meaningful from
+                  Step 2 onward; the first step has no upstream. */}
+              {idx > 0 ? (
+                <>
+                  <Text style={styles.label}>Combine output from</Text>
+                  <View style={styles.pillRow}>
+                    <TouchableOpacity
+                      onPress={() => setInputFromStep(idx, null)}
+                      style={[styles.pill, step.inputFromStep == null && styles.pillActive]}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.pillLabel, step.inputFromStep == null && styles.pillLabelActive]}>
+                        None
+                      </Text>
+                    </TouchableOpacity>
+                    {builder.steps.slice(0, idx).map((upstream, uidx) => {
+                      const order = uidx + 1;
+                      const active = step.inputFromStep === order;
+                      const tail = upstream.title ? ` — ${upstream.title.slice(0, 18)}` : '';
+                      return (
+                        <TouchableOpacity
+                          key={uidx}
+                          onPress={() => setInputFromStep(idx, order)}
+                          style={[styles.pill, active && styles.pillActive]}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
+                            Step {order}{tail}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {step.inputFromStep ? (
+                    <View style={styles.refBadge}>
+                      <CornerDownRight size={12} color={COLORS.primaryDark} />
+                      <Text style={styles.refBadgeText}>
+                        Combines all of Step {step.inputFromStep} into this bowl
+                      </Text>
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
+
               <Text style={styles.label}>Title</Text>
               <TextInput
                 style={styles.input}
@@ -552,27 +661,50 @@ export default function SauceBuilderScreen({ navigation, route }) {
         {/* Unassigned ingredients (from URL import) */}
         {builder.unassignedIngredients.length > 0 ? (
           <View style={[styles.card, { borderColor: COLORS.warningText, borderWidth: 1 }]}>
-            <Text style={styles.sectionLabel}>Unassigned ingredients</Text>
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionLabel}>
+                ⚠ Unassigned ingredients ({builder.unassignedIngredients.length})
+              </Text>
+            </View>
             <Text style={styles.help}>
-              These came from the import but couldn't be matched to a step. Drag-add isn't supported on
-              mobile yet — pick the ingredients you want and re-add them under the right step, then remove from this list.
+              These came from the import but couldn't be matched to a step. Tap a step to move
+              an ingredient into it, or × to delete. The recipe can't save while this list is non-empty.
             </Text>
             {builder.unassignedIngredients.map((u, i) => (
-              <View key={i} style={styles.unassignedRow}>
-                <Text style={styles.unassignedText}>
-                  {u.name}{u.amount ? ` · ${u.amount} ${u.unit}` : ''}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setBuilder((prev) => ({
-                      ...prev,
-                      unassignedIngredients: prev.unassignedIngredients.filter((_, j) => j !== i),
-                    }));
-                  }}
-                  hitSlop={6}
-                >
-                  <X size={14} color={COLORS.dangerText} />
-                </TouchableOpacity>
+              <View key={i} style={styles.unassignedCard}>
+                <View style={styles.unassignedHeader}>
+                  <Text style={styles.unassignedName} numberOfLines={1}>
+                    {u.name}
+                  </Text>
+                  {u.amount ? (
+                    <Text style={styles.unassignedQty}>
+                      {u.amount}{u.unit ? ` ${u.unit}` : ''}
+                    </Text>
+                  ) : null}
+                  <TouchableOpacity
+                    onPress={() => deleteUnassigned(i)}
+                    hitSlop={6}
+                    style={styles.unassignedDelete}
+                  >
+                    <X size={14} color={COLORS.dangerText} />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.unassignedTargets}>
+                  <ArrowRight size={12} color={COLORS.textSecondary} />
+                  {builder.steps.map((s, si) => {
+                    const tail = s.title ? ` — ${s.title.slice(0, 14)}` : '';
+                    return (
+                      <TouchableOpacity
+                        key={si}
+                        onPress={() => moveUnassignedToStep(i, si)}
+                        style={styles.targetPill}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.targetPillLabel}>Step {si + 1}{tail}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
             ))}
           </View>
@@ -857,15 +989,71 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     marginLeft: 6,
   },
-  unassignedRow: {
+  sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 6,
   },
-  unassignedText: {
+  refBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.highlightTint,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  refBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primaryDark,
+    marginLeft: 4,
+    flex: 1,
+  },
+  unassignedCard: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+  },
+  unassignedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  unassignedName: {
+    flex: 1,
     fontSize: 13,
+    fontWeight: '700',
     color: COLORS.text,
+  },
+  unassignedQty: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginRight: 8,
+  },
+  unassignedDelete: {
+    padding: 4,
+  },
+  unassignedTargets: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  targetPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.card,
+  },
+  targetPillLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   errorBlock: {
     backgroundColor: COLORS.danger,
