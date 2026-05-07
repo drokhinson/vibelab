@@ -16,16 +16,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   LayoutAnimation,
-  Platform,
-  UIManager,
 } from 'react-native';
 import { ChevronRight, GitBranch } from 'lucide-react-native';
 import { isSauceAvailable, missingSauceIngredients } from '#shared/filter';
 import { COLORS } from '../theme';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 export default function CuisineAccordion({
   cuisine,

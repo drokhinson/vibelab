@@ -9,16 +9,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   LayoutAnimation,
-  Platform,
-  UIManager,
 } from 'react-native';
 import { Star, Check, X, ShoppingCart } from 'lucide-react-native';
 import { groupIngredientsByCategory } from '#shared/filter';
 import { COLORS } from '../theme';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 export default function IngredientFilterPanel({
   ingredients,
