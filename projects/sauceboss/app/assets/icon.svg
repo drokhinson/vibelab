@@ -1,9 +1,21 @@
 <!-- SauceBoss app icon — full-bleed orange with the pot mark centered.
-     Used as the master for icon.png (iOS / generic) and as the source of
+     Used as the master for icon.png (iOS + generic Android) and as the source of
      truth for the adaptive-icon foreground. Edit this file when you want
      to tweak the design; re-run scripts/generate-icons.mjs to bake fresh
      PNGs. Pot geometry mirrors web/meal.js::potSVG so all three surfaces
-     (web splash, native pot, app icon) use the same shapes. -->
+     (web splash, native pot, app icon) use the same shapes.
+
+     Layer order (back → front):
+       1. background gradient
+       2. steam trails (behind everything)
+       3. floor shadow
+       4. cream pot body
+       5. dark outline stroke around the bowl
+       6. sauce ellipse inside the pot
+       7. white "ingredient pearls" floating in the sauce
+       8. dark rim sitting on top, clipping the upper edge of any bubble
+          that pokes above the bowl line — reads as "the bubbles are
+          inside the bowl, not in front of it" -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -24,16 +36,16 @@
   <!-- Floor shadow under the pot, almost invisible to give it grounding. -->
   <ellipse cx="512" cy="900" rx="380" ry="40" fill="#1A1A2E" opacity="0.10"/>
 
-  <!-- Pot body — cream interior, dark cream rim outline. -->
+  <!-- Pot body — cream interior. -->
   <path d="M170 540 Q170 850 512 850 Q854 850 854 540 Z" fill="#FFF3E6"/>
+
+  <!-- Outline stroke around the bowl curve so the cream interior reads
+       crisply against the orange background. Drawn before the rim so the
+       upper portion is hidden by it. -->
+  <path d="M170 540 Q170 850 512 850 Q854 850 854 540" stroke="#3D1100" stroke-width="14" fill="none"/>
 
   <!-- Sauce inside, peeking above the lip ring. -->
   <ellipse cx="512" cy="640" rx="270" ry="55" fill="#E85D04" opacity="0.55"/>
-
-  <!-- Pot rim — solid orange band that reads as the "lid" silhouette. -->
-  <rect x="120" y="500" width="784" height="80" rx="40" fill="#E85D04"/>
-  <!-- Slight darker stroke so the rim still has edge definition on white BGs -->
-  <path d="M170 540 Q170 850 512 850 Q854 850 854 540" stroke="#9B3700" stroke-width="14" fill="none"/>
 
   <!-- Steam pearls — bigger here than in the on-screen illustration so the
        silhouette stays legible when the OS clips to a 1024 / 432dp circle. -->
@@ -41,4 +53,9 @@
   <circle cx="520" cy="560" r="44" fill="#FFFFFF" opacity="0.95"/>
   <circle cx="640" cy="610" r="50" fill="#FFFFFF" opacity="0.90"/>
   <circle cx="460" cy="680" r="32" fill="#FFFFFF" opacity="0.95"/>
+
+  <!-- Pot rim — dark brown, sits on top of every other layer so the
+       bubbles get clipped where they would otherwise spill over the bowl
+       lip. Strong contrast against the orange gradient. -->
+  <rect x="120" y="500" width="784" height="80" rx="40" fill="#3D1100"/>
 </svg>
