@@ -100,8 +100,35 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       };
     },
 
-    ingredientCategories: () => call('/ingredient-categories'),
-    substitutions: () => call('/substitutions'),
+    // Normalize the array response into the dict shape every consumer expects:
+    //   `{ "tomato": "Produce", "olive oil": "Oils & Fats", ... }`
+    // The backend returns `[{ ingredientName, category }, ...]` so without this
+    // step `cats[name]` lookups silently fall back to "Uncategorized" (and the
+    // ingredient filter panel falls back to "Pantry Staples" for everything).
+    ingredientCategories: async () => {
+      const data = await call('/ingredient-categories');
+      if (!Array.isArray(data)) return data || {};
+      const out = {};
+      for (const c of data) {
+        if (c && c.ingredientName) out[c.ingredientName] = c.category;
+      }
+      return out;
+    },
+    // Same shape problem as ingredient-categories: backend returns
+    //   `[{ ingredientName, substituteName, notes }, ...]`
+    // but consumers (StepCard, the recipe view) expect
+    //   `{ "<name>": [{ substituteName, notes }, ...] }`
+    substitutions: async () => {
+      const data = await call('/substitutions');
+      if (!Array.isArray(data)) return data || {};
+      const out = {};
+      for (const s of data) {
+        if (!s || !s.ingredientName) continue;
+        if (!out[s.ingredientName]) out[s.ingredientName] = [];
+        out[s.ingredientName].push({ substituteName: s.substituteName, notes: s.notes });
+      }
+      return out;
+    },
 
     units: async () => {
       const data = await call('/units');
