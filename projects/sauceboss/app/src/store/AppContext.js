@@ -89,6 +89,7 @@ const A = {
   BOOT_LOADED: 'BOOT_LOADED',
   BOOT_ERROR: 'BOOT_ERROR',
   SET_INGREDIENT_CATEGORIES: 'SET_INGREDIENT_CATEGORIES',
+  SET_INGREDIENT_CATEGORY: 'SET_INGREDIENT_CATEGORY',
   SET_SUBSTITUTIONS: 'SET_SUBSTITUTIONS',
   SET_MEAL_CATEGORY: 'SET_MEAL_CATEGORY',
 
@@ -171,6 +172,12 @@ function reducer(state, action) {
 
     case A.SET_INGREDIENT_CATEGORIES:
       return { ...state, ingredientCategories: action.payload || {} };
+
+    case A.SET_INGREDIENT_CATEGORY: {
+      const next = { ...(state.ingredientCategories || {}) };
+      next[action.name] = action.category;
+      return { ...state, ingredientCategories: next };
+    }
 
     case A.SET_SUBSTITUTIONS:
       return { ...state, substitutions: action.payload || {} };
@@ -717,6 +724,21 @@ export function AppProvider({ children }) {
         try {
           await api.createFood(payload);
           await actions._refreshFoods();
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      // Upserts an ingredient → category mapping. Updates local state
+      // immediately and fires the API call in the background; failures get
+      // returned to the caller (FoodFormModal surfaces them as the form error).
+      classifyIngredient: async (name, category) => {
+        const trimmed = (name || '').trim();
+        const cat = (category || '').trim();
+        if (!trimmed || !cat) return { ok: false, error: 'Name and category are required.' };
+        dispatch({ type: A.SET_INGREDIENT_CATEGORY, name: trimmed.toLowerCase(), category: cat });
+        try {
+          await api.classifyIngredient(trimmed, cat);
           return { ok: true };
         } catch (e) {
           return { ok: false, error: e.message || String(e) };

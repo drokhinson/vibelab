@@ -1,7 +1,12 @@
 // Add / edit form for a sauceboss_foods row. Used from the Ingredients tab.
 // Add: any logged-in user. Edit: admin only (but the modal itself is the same).
+//
+// Mirrors the web's renderFoodForm: name + plural + category picker. Existing
+// categories are pulled from `state.ingredientCategories`; "+ New category…"
+// expands a draft input. Saving the form calls createFood / updateFood, then
+// (if a category is set or changed) classifyIngredient to upsert the mapping.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   View,
@@ -16,27 +21,48 @@ import {
   ScrollView,
 } from 'react-native';
 import { X } from 'lucide-react-native';
-import { useAppActions } from '../../store/AppContext';
+import { useAppActions, useAppState } from '../../store/AppContext';
+import { CATEGORY_ORDER } from '#shared/constants';
 import { COLORS, SHADOWS } from '../../theme';
 
+const NEW_CATEGORY = '__new__';
+
 export default function FoodFormModal({ visible, mode, food, onClose }) {
+  const state = useAppState();
   const actions = useAppActions();
+
   const [name, setName] = useState('');
   const [plural, setPlural] = useState('');
+  const [category, setCategory] = useState('');           // '' | category | NEW_CATEGORY
+  const [categoryDraft, setCategoryDraft] = useState(''); // populated when category === NEW_CATEGORY
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  // Compose the picker options: shared CATEGORY_ORDER first, then any user-
+  // defined categories present in state, sorted alphabetically. Mirrors
+  // renderFoodForm in web/settings.js.
+  const allCategories = useMemo(() => {
+    const userCats = new Set(Object.values(state.ingredientCategories || {}));
+    for (const c of CATEGORY_ORDER) userCats.delete(c);
+    const extras = [...userCats].filter(Boolean).sort((a, b) => a.localeCompare(b));
+    return [...CATEGORY_ORDER, ...extras];
+  }, [state.ingredientCategories]);
 
   useEffect(() => {
     if (!visible) return;
     if (mode === 'edit' && food) {
       setName(food.name || '');
       setPlural(food.plural || '');
+      const existing = (food.name || '').toLowerCase();
+      setCategory(state.ingredientCategories?.[existing] || '');
     } else {
       setName('');
       setPlural('');
+      setCategory('');
     }
+    setCategoryDraft('');
     setError(null);
-  }, [visible, mode, food]);
+  }, [visible, mode, food, state.ingredientCategories]);
 
   async function handleSubmit() {
     const n = name.trim();
@@ -44,6 +70,19 @@ export default function FoodFormModal({ visible, mode, food, onClose }) {
       setError('Name is required.');
       return;
     }
+    let resolvedCategory = category;
+    if (resolvedCategory === NEW_CATEGORY) {
+      resolvedCategory = categoryDraft.trim();
+      if (!resolvedCategory) {
+        setError('New category name is required.');
+        return;
+      }
+    }
+    if (mode === 'add' && !resolvedCategory) {
+      setError('Category is required.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -51,8 +90,22 @@ export default function FoodFormModal({ visible, mode, food, onClose }) {
       const res = mode === 'edit' && food
         ? await actions.updateFood(food.id, payload)
         : await actions.createFood(payload);
-      if (!res.ok) setError(res.error || 'Could not save');
-      else onClose();
+      if (!res.ok) {
+        setError(res.error || 'Could not save');
+        return;
+      }
+      // Even on edit (where category may be unchanged) the classify call is
+      // idempotent on the server, so call it whenever a category is set.
+      if (resolvedCategory) {
+        const c = await actions.classifyIngredient(n, resolvedCategory);
+        if (!c.ok) {
+          // The food row saved fine but the category mapping failed —
+          // surface a soft warning instead of leaving the user wondering.
+          setError(`Saved, but category didn't apply: ${c.error}`);
+          return;
+        }
+      }
+      onClose();
     } finally {
       setSaving(false);
     }
@@ -70,11 +123,53 @@ export default function FoodFormModal({ visible, mode, food, onClose }) {
               <TouchableWithoutFeedback>
                 <View style={styles.card}>
                   <View style={styles.headerRow}>
-                    <Text style={styles.title}>{mode === 'edit' ? 'Edit ingredient' : 'New ingredient'}</Text>
+                    <Text style={styles.title}>
+                      {mode === 'edit' ? 'Edit ingredient' : 'New ingredient'}
+                    </Text>
                     <TouchableOpacity onPress={onClose} hitSlop={12}>
                       <X size={20} color={COLORS.textSecondary} />
                     </TouchableOpacity>
                   </View>
+
+                  <Text style={styles.label}>Category</Text>
+                  <View style={styles.categoryRow}>
+                    {allCategories.map((c) => {
+                      const active = category === c;
+                      return (
+                        <TouchableOpacity
+                          key={c}
+                          onPress={() => {
+                            setCategory(c);
+                            setCategoryDraft('');
+                          }}
+                          style={[styles.pill, active && styles.pillActive]}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>{c}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    <TouchableOpacity
+                      onPress={() => setCategory(NEW_CATEGORY)}
+                      style={[styles.pill, category === NEW_CATEGORY && styles.pillActive]}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.pillLabel, category === NEW_CATEGORY && styles.pillLabelActive]}>
+                        + New category…
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {category === NEW_CATEGORY ? (
+                    <TextInput
+                      style={[styles.input, { marginTop: 8 }]}
+                      value={categoryDraft}
+                      onChangeText={setCategoryDraft}
+                      placeholder="New category name"
+                      placeholderTextColor={COLORS.textMuted}
+                      autoCapitalize="words"
+                    />
+                  ) : null}
 
                   <Text style={styles.label}>Name</Text>
                   <TextInput
@@ -152,6 +247,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text,
   },
+  categoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  pillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  pillLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary },
+  pillLabelActive: { color: '#fff' },
   errorText: {
     color: COLORS.dangerText,
     backgroundColor: COLORS.danger,

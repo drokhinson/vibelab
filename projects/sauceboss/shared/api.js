@@ -173,6 +173,14 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     // Owner-or-admin delete. Backend enforces created_by match unless caller is_admin.
     deleteSauce: (id) => call(`/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+    // POST upserts an ingredient → category mapping. Used by the Food form
+    // when the admin / authoring user classifies a freshly added or renamed
+    // ingredient. Mirrors the web's classifyIngredient.
+    classifyIngredient: (ingredientName, category) => call('/ingredient-categories', {
+      method: 'POST',
+      body: { ingredientName, category },
+    }),
+
     // ── Sauce-manager Dish tab (admin CRUD) ─────────────────────────────────
     createItem: (payload) => call('/admin/items', { method: 'POST', body: payload }),
     updateItem: (id, payload) => call(`/admin/items/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }),

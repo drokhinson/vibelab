@@ -257,9 +257,9 @@ function FoodRow({ food, isLast, isAdmin, merge, onEdit, onDelete, onLongPress, 
   const isPicked = merge?.mergeIds?.has(food.id);
   const usage = food.usageCount || 0;
   const sauceCount = food.sauceCount || 0;
-  const subtitle = usage === 0
+  const subtitle = sauceCount === 0
     ? 'unused'
-    : `${sauceCount} sauce${sauceCount === 1 ? '' : 's'} · ${usage} step row${usage === 1 ? '' : 's'}`;
+    : `${sauceCount} sauce${sauceCount === 1 ? '' : 's'}`;
 
   const rowStyle = [
     styles.row,
