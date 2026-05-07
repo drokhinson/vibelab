@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Wheat, Drumstick, Salad } from 'lucide-react-native';
+import { Wheat, Drumstick, Salad, ChefHat } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import PotIllustration from '../components/PotIllustration';
 import LoadingPot from '../components/LoadingPot';
@@ -90,7 +90,17 @@ export default function MealBuilderScreen({ navigation }) {
             <Text style={styles.logo}>SauceBoss</Text>
             <Text style={styles.subtitle}>What are you cooking with?</Text>
           </View>
-          <HeaderAuthSlot navigation={navigation} />
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.managerBtn}
+              onPress={() => navigation.navigate('SauceManager')}
+              activeOpacity={0.8}
+            >
+              <ChefHat size={14} color="#fff" />
+              <Text style={styles.managerBtnLabel}>Sauces</Text>
+            </TouchableOpacity>
+            <HeaderAuthSlot navigation={navigation} />
+          </View>
         </View>
       </View>
 
@@ -145,6 +155,25 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  managerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  managerBtnLabel: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
+    marginLeft: 4,
   },
   logo: {
     fontSize: 26,

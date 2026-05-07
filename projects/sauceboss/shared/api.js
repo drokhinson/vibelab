@@ -66,6 +66,17 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       };
     },
 
+    // All items grouped by category — parents only with nested variants. Used
+    // by the Sauce Builder's "pair with" picker.
+    allItems: async () => {
+      const data = await call('/items');
+      return {
+        carbs: data.carbs || [],
+        proteins: data.proteins || [],
+        salads: data.salads || [],
+      };
+    },
+
     ingredientCategories: () => call('/ingredient-categories'),
     substitutions: () => call('/substitutions'),
 
@@ -109,6 +120,8 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     // ── Authoring (auth required) ────────────────────────────────────────────
     createSauce: (data) => call('/sauces', { method: 'POST', body: data }),
     updateSauce: (id, data) => call(`/sauces/${encodeURIComponent(id)}`, { method: 'PATCH', body: data }),
+    // Owner-or-admin delete. Backend enforces created_by match unless caller is_admin.
+    deleteSauce: (id) => call(`/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     createFood: (payload) => call('/admin/foods', { method: 'POST', body: payload }),
   };
 }

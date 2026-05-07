@@ -23,6 +23,9 @@ import MealBuilderScreen from './screens/MealBuilderScreen';
 import PrepSelectorScreen from './screens/PrepSelectorScreen';
 import SauceSelectorScreen from './screens/SauceSelectorScreen';
 import MealRecipeScreen from './screens/MealRecipeScreen';
+import SauceManagerScreen from './screens/SauceManagerScreen';
+import SauceBuilderScreen from './screens/SauceBuilderScreen';
+import RecipeScreen from './screens/RecipeScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { trackAppOpen } from './utils/analytics';
 import { COLORS } from './theme';
@@ -63,6 +66,21 @@ function NavRoot() {
           name="MealRecipe"
           component={MealRecipeScreen}
           options={{ title: 'Your recipe' }}
+        />
+        <Stack.Screen
+          name="SauceManager"
+          component={SauceManagerScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="SauceBuilder"
+          component={SauceBuilderScreen}
+          options={{ headerShown: false, presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="Recipe"
+          component={RecipeScreen}
+          options={({ route }) => ({ title: 'Sauce' })}
         />
         <Stack.Screen
           name="Settings"

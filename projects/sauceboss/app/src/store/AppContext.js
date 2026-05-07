@@ -47,6 +47,15 @@ export const initialState = {
   // Final meal (set when sauce is picked)
   meal: { item: null, prep: null, sauce: null },
 
+  // Sauce Manager (browse-all view; independent of the meal flow)
+  managerSauces: [],
+  managerLoading: false,
+  managerError: null,
+  managerSearch: '',
+  managerTypeFilter: 'all',          // 'all' | 'sauce' | 'marinade' | 'dressing'
+  managerFavoritesOnly: false,
+  managerExpandedCuisines: new Set(),
+
   // Auth (Phase 2 hooks; unused in Phase 1)
   authReady: false,             // false until we've checked supabase for an existing session
   authBusy: false,              // true while a sign-in / sign-up is in flight
@@ -83,6 +92,17 @@ const A = {
   SET_SERVINGS: 'SET_SERVINGS',
   SET_UNIT_SYSTEM: 'SET_UNIT_SYSTEM',
   SELECT_VARIANT: 'SELECT_VARIANT',
+
+  // Sauce Manager — browse-all view
+  MANAGER_LOAD_START: 'MANAGER_LOAD_START',
+  MANAGER_LOADED: 'MANAGER_LOADED',
+  MANAGER_LOAD_ERROR: 'MANAGER_LOAD_ERROR',
+  MANAGER_SET_SEARCH: 'MANAGER_SET_SEARCH',
+  MANAGER_SET_TYPE_FILTER: 'MANAGER_SET_TYPE_FILTER',
+  MANAGER_SET_FAVORITES_ONLY: 'MANAGER_SET_FAVORITES_ONLY',
+  MANAGER_TOGGLE_CUISINE: 'MANAGER_TOGGLE_CUISINE',
+  MANAGER_REMOVE_SAUCE: 'MANAGER_REMOVE_SAUCE',
+  MANAGER_UPSERT_SAUCE: 'MANAGER_UPSERT_SAUCE',
 
   // Phase 2 hooks (auth + favorites). Not used in Phase 1 but reducer handles them so wiring later is trivial.
   SET_AUTH_READY: 'SET_AUTH_READY',
@@ -216,6 +236,42 @@ function reducer(state, action) {
 
     case A.SET_UNIT_SYSTEM:
       return { ...state, unitSystem: action.value === 'metric' ? 'metric' : 'imperial' };
+
+    case A.MANAGER_LOAD_START:
+      return { ...state, managerLoading: true, managerError: null };
+
+    case A.MANAGER_LOADED:
+      return { ...state, managerSauces: action.sauces || [], managerLoading: false, managerError: null };
+
+    case A.MANAGER_LOAD_ERROR:
+      return { ...state, managerLoading: false, managerError: action.error };
+
+    case A.MANAGER_SET_SEARCH:
+      return { ...state, managerSearch: action.value || '' };
+
+    case A.MANAGER_SET_TYPE_FILTER:
+      return { ...state, managerTypeFilter: action.value || 'all' };
+
+    case A.MANAGER_SET_FAVORITES_ONLY:
+      return { ...state, managerFavoritesOnly: !!action.value };
+
+    case A.MANAGER_TOGGLE_CUISINE: {
+      const next = new Set(state.managerExpandedCuisines);
+      if (next.has(action.cuisine)) next.delete(action.cuisine);
+      else next.add(action.cuisine);
+      return { ...state, managerExpandedCuisines: next };
+    }
+
+    case A.MANAGER_REMOVE_SAUCE:
+      return { ...state, managerSauces: state.managerSauces.filter((s) => s.id !== action.sauceId) };
+
+    case A.MANAGER_UPSERT_SAUCE: {
+      const idx = state.managerSauces.findIndex((s) => s.id === action.sauce.id);
+      const next = state.managerSauces.slice();
+      if (idx >= 0) next[idx] = action.sauce;
+      else next.unshift(action.sauce);
+      return { ...state, managerSauces: next };
+    }
 
     case A.SET_AUTH_READY:
       return { ...state, authReady: !!action.value };
@@ -439,6 +495,34 @@ export function AppProvider({ children }) {
       selectVariant: (sauce) => dispatch({ type: A.SELECT_VARIANT, sauce }),
       setServings: (value) => dispatch({ type: A.SET_SERVINGS, value }),
       setUnitSystem: (value) => dispatch({ type: A.SET_UNIT_SYSTEM, value }),
+
+      // ── Sauce Manager (browse-all) ──────────────────────────────────────────
+      loadAllSauces: async () => {
+        dispatch({ type: A.MANAGER_LOAD_START });
+        try {
+          const sauces = await api.allSauces();
+          dispatch({ type: A.MANAGER_LOADED, sauces });
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.MANAGER_LOAD_ERROR, error: e.message || String(e) });
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      setManagerSearch: (value) => dispatch({ type: A.MANAGER_SET_SEARCH, value }),
+      setManagerTypeFilter: (value) => dispatch({ type: A.MANAGER_SET_TYPE_FILTER, value }),
+      setManagerFavoritesOnly: (value) => dispatch({ type: A.MANAGER_SET_FAVORITES_ONLY, value }),
+      toggleManagerCuisine: (cuisine) => dispatch({ type: A.MANAGER_TOGGLE_CUISINE, cuisine }),
+      // Owner-or-admin delete. Returns { ok, error } and optimistically removes
+      // from the manager list on success.
+      deleteSauce: async (sauceId) => {
+        try {
+          await api.deleteSauce(sauceId);
+          dispatch({ type: A.MANAGER_REMOVE_SAUCE, sauceId });
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
 
       // ── Auth actions ────────────────────────────────────────────────────────
       signIn: async (email, password) => {
