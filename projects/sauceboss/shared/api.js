@@ -145,6 +145,24 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     updateSauce: (id, data) => call(`/sauces/${encodeURIComponent(id)}`, { method: 'PATCH', body: data }),
     // Owner-or-admin delete. Backend enforces created_by match unless caller is_admin.
     deleteSauce: (id) => call(`/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+    // ── Sauce-manager Dish tab (admin CRUD) ─────────────────────────────────
+    createItem: (payload) => call('/admin/items', { method: 'POST', body: payload }),
+    updateItem: (id, payload) => call(`/admin/items/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }),
+    deleteItem: (id) => call(`/admin/items/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+    // ── Sauce-manager Ingredients tab (mostly admin) ─────────────────────────
+    listFoodsWithUsage: async () => {
+      const data = await call('/foods-with-usage');
+      return data.foods || [];
+    },
     createFood: (payload) => call('/admin/foods', { method: 'POST', body: payload }),
+    updateFood: (id, payload) => call(`/admin/foods/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }),
+    // 409 if usageCount > 0 — caller must merge first.
+    deleteFood: (id) => call(`/admin/foods/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    mergeFoods: (keepId, mergeIds) => call('/admin/foods/merge', {
+      method: 'POST',
+      body: { keepId, mergeIds },
+    }),
   };
 }
