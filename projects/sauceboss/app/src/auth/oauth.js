@@ -75,9 +75,6 @@ export async function signInWithGoogleOAuth() {
   const nativeUri = getNativeRedirectUri();
   const redirectTo = getSupabaseRedirectUri(nativeUri);
 
-  // eslint-disable-next-line no-console
-  console.log('[sauceboss/oauth] redirect URLs:', { nativeUri, redirectTo });
-
   let url;
   try {
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -103,12 +100,6 @@ export async function signInWithGoogleOAuth() {
   } catch (e) {
     return { ok: false, error: e.message || String(e), redirectTo };
   }
-
-  // eslint-disable-next-line no-console
-  console.log('[sauceboss/oauth] WebBrowser result:', {
-    type: result?.type,
-    url: result?.url,
-  });
 
   if (result.type === 'cancel' || result.type === 'dismiss') {
     return { ok: false, cancelled: true, redirectTo };
