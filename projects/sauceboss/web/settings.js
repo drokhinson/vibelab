@@ -247,7 +247,7 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
   const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
   const isOwner = !!(currentUser && s.createdBy === currentUser.user_id);
   const canEdit = isAdmin || isOwner;
-  const canDelete = isAdmin;
+  const canDelete = isAdmin || isOwner;
   const mergeMode = !!merge;
   const isKeep = merge && merge.keepId === s.id;
   const isPicked = merge && merge.mergeIds.has(s.id);
@@ -748,10 +748,21 @@ async function submitBecomeAdmin() {
 }
 
 // ─── Sauce Delete ─────────────────────────────────────────────────────────────
+// Routes to the admin or owner-scoped endpoint based on who's signed in. Both
+// have the same shape; the backend enforces ownership on the public route.
 async function adminDeleteSauce(id, name) {
   if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  const sauce = (state.adminSauces || []).find(s => s.id === id);
+  const isAdmin = !!(currentUser && currentUser.is_admin);
+  const isOwner = !!(currentUser && sauce && sauce.createdBy === currentUser.user_id);
   try {
-    await deleteAdminSauce(id);
+    if (isAdmin) {
+      await deleteAdminSauce(id);
+    } else if (isOwner) {
+      await deleteSauceOwned(id);
+    } else {
+      throw new Error('You can only delete sauces you created.');
+    }
     state.adminSauces = state.adminSauces.filter(s => s.id !== id);
     state.adminError = null;
     render();
