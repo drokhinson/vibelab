@@ -1,52 +1,110 @@
-// URL polyfill must be imported before anything that touches WHATWG URL.
-// Hermes ships a URL impl whose `protocol` is getter-only, which breaks
-// expo-asset's getManifestBaseUrl on Expo Go SDK 54. The polyfill replaces
-// it with a fully-spec-compliant URL.
+// SauceBoss App entry point. URL polyfill must come first — Hermes' built-in
+// URL has a getter-only `protocol` setter that breaks expo-asset's
+// getManifestBaseUrl on Expo Go SDK 54.
+
 import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 
-import React from 'react';
-import { ScrollView, Text, View } from 'react-native';
-import { registerRootComponent } from 'expo';
+import React, { useEffect } from 'react';
+import { View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
 
-// Defer the rest of the app to a require() inside try/catch so any
-// module-load failure surfaces a real stack trace on the phone instead
-// of the cryptic "main has not been registered" Invariant Violation.
-let RealApp = null;
-let bootError = null;
+import { AppProvider } from './src/store/AppContext';
+import LoadingPot from './src/components/LoadingPot';
+import MealBuilderScreen from './src/screens/MealBuilderScreen';
+import PrepSelectorScreen from './src/screens/PrepSelectorScreen';
+import SauceSelectorScreen from './src/screens/SauceSelectorScreen';
+import MealRecipeScreen from './src/screens/MealRecipeScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import { trackAppOpen } from './src/utils/analytics';
+import { COLORS } from './src/theme';
 
-try {
-  RealApp = require('./src/MainApp').default;
-} catch (e) {
-  bootError = e;
-}
+const Stack = createNativeStackNavigator();
 
-function BootErrorScreen({ error }) {
-  const message = error?.message || String(error);
-  const stack = error?.stack || '(no stack)';
+function NavRoot() {
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFF8F0', paddingTop: 56, paddingHorizontal: 16 }}>
-      <Text style={{ fontSize: 18, fontWeight: '800', color: '#991B1B', marginBottom: 8 }}>
-        Boot error
-      </Text>
-      <Text style={{ fontSize: 13, color: '#1A1A2E', marginBottom: 12 }}>
-        {message}
-      </Text>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 60 }}>
-        <Text selectable style={{ fontSize: 11, color: '#374151', fontFamily: 'monospace' }}>
-          {stack}
-        </Text>
-      </ScrollView>
-    </View>
+    <NavigationContainer>
+      <StatusBar style="light" backgroundColor={COLORS.primary} />
+      <Stack.Navigator
+        initialRouteName="MealBuilder"
+        screenOptions={{
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '800' },
+          headerBackTitleVisible: false,
+          animation: 'slide_from_right',
+          contentStyle: { backgroundColor: COLORS.background },
+        }}
+      >
+        <Stack.Screen
+          name="MealBuilder"
+          component={MealBuilderScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="PrepSelector"
+          component={PrepSelectorScreen}
+          options={{ title: 'Choose a variant' }}
+        />
+        <Stack.Screen
+          name="SauceSelector"
+          component={SauceSelectorScreen}
+          options={{ title: 'Pick a sauce' }}
+        />
+        <Stack.Screen
+          name="MealRecipe"
+          component={MealRecipeScreen}
+          options={{ title: 'Your recipe' }}
+        />
+        <Stack.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ title: 'Settings' }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
 
-function App() {
-  if (bootError) return <BootErrorScreen error={bootError} />;
-  if (!RealApp) return <BootErrorScreen error={new Error('MainApp is null with no recorded error')} />;
-  return <RealApp />;
+export default function App() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+  });
+
+  useEffect(() => {
+    trackAppOpen();
+  }, []);
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaProvider>
+        <View style={{ flex: 1, backgroundColor: COLORS.background, justifyContent: 'center' }}>
+          <LoadingPot label="Warming up the kitchen…" />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
+  return (
+    <SafeAreaProvider>
+      <AppProvider>
+        <NavRoot />
+      </AppProvider>
+    </SafeAreaProvider>
+  );
 }
-
-registerRootComponent(App);
-
-export default App;
