@@ -469,9 +469,13 @@ export function AppProvider({ children }) {
         dispatch({ type: A.SET_AUTH_BUSY, value: true });
         dispatch({ type: A.SET_AUTH_ERROR, error: null });
         try {
-          const { error } = await supabase.auth.signUp({ email, password });
+          const { data, error } = await supabase.auth.signUp({ email, password });
           if (error) throw error;
-          return { ok: true };
+          // Supabase returns a session immediately when "Confirm email" is OFF
+          // in the project's Auth provider settings. When ON, session is null
+          // and the user has to click the email link before they can sign in.
+          const needsConfirmation = !data?.session;
+          return { ok: true, needsConfirmation };
         } catch (e) {
           dispatch({ type: A.SET_AUTH_ERROR, error: e.message || String(e) });
           return { ok: false };

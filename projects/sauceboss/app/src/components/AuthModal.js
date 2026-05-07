@@ -48,10 +48,15 @@ export default function AuthModal({ visible, onClose }) {
       const { ok } = await actions.signIn(email.trim(), password);
       if (ok) handleClose();
     } else {
-      const { ok } = await actions.signUp(email.trim(), password);
-      if (ok) {
+      const { ok, needsConfirmation } = await actions.signUp(email.trim(), password);
+      if (ok && !needsConfirmation) {
+        // Email confirmation is OFF in Supabase — Supabase already signed
+        // them in. Close the modal and let onAuthStateChange wire the rest.
+        handleClose();
+      } else if (ok && needsConfirmation) {
         setSignupNotice(
-          'Account created. Check your email if confirmation is required, then sign in.',
+          "Account created. Click the link in your email to confirm, then sign in. " +
+            "If no email arrives within a minute, ask the app owner to disable email confirmation in Supabase Auth settings.",
         );
       }
     }
