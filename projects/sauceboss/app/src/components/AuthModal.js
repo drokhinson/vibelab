@@ -19,6 +19,7 @@ import {
 import { X } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import { isAuthConfigured } from '../auth/supabase';
+import GoogleIcon from './GoogleIcon';
 import { COLORS, SHADOWS } from '../theme';
 
 export default function AuthModal({ visible, onClose }) {
@@ -167,8 +168,8 @@ export default function AuthModal({ visible, onClose }) {
                     disabled={state.authBusy}
                     activeOpacity={0.85}
                   >
-                    <View style={styles.googleIcon}>
-                      <Text style={styles.googleIconLabel}>G</Text>
+                    <View style={styles.googleIconWrap}>
+                      <GoogleIcon size={18} />
                     </View>
                     <Text style={styles.googleLabel}>Continue with Google</Text>
                   </TouchableOpacity>
@@ -304,36 +305,31 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     letterSpacing: 0.5,
   },
+  // Light variant of Google's official sign-in button
+  // (https://developers.google.com/identity/branding-guidelines):
+  // white surface, soft gray rule, 1.5dp icon spacing, dark label.
   googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
     paddingVertical: 11,
   },
-  googleIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: '#4285F4',
+  googleIconWrap: {
+    width: 18,
+    height: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
-  },
-  googleIconLabel: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#4285F4',
+    marginRight: 12,
   },
   googleLabel: {
-    color: COLORS.text,
+    color: '#3C4043',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   toggle: {
     marginTop: 12,
