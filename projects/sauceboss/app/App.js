@@ -1,3 +1,8 @@
+// URL polyfill must be imported before anything that touches WHATWG URL.
+// Hermes ships a URL impl whose `protocol` is getter-only, which breaks
+// expo-asset's getManifestBaseUrl on Expo Go SDK 54. The polyfill replaces
+// it with a fully-spec-compliant URL.
+import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
 import { View, StatusBar as RNStatusBar } from 'react-native';
