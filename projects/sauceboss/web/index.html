@@ -38,18 +38,22 @@
     </div>
     <p class="splash-text">Saucing<span class="splash-dots"><span>.</span><span>.</span><span>.</span></span></p>
   </div>
-  <script src="config.js"></script>
-  <script src="state.js"></script>
-  <script src="helpers.js"></script>
-  <script src="auth.js"></script>
-  <script src="items.js"></script>
-  <script src="preps.js"></script>
-  <script src="sauces.js"></script>
-  <script src="meal.js"></script>
-  <script src="recipe.js"></script>
-  <script src="builder.js"></script>
-  <script src="settings.js"></script>
-  <script src="swipe.js"></script>
-  <script src="init.js"></script>
+  <!-- Module bridge — imports shared/ ESM exports and assigns them to window.
+       Module scripts and deferred classic scripts both run after parsing in
+       document order, so the globals exist before any classic script below. -->
+  <script type="module" src="shared-bridge.js"></script>
+  <script defer src="config.js"></script>
+  <script defer src="state.js"></script>
+  <script defer src="helpers.js"></script>
+  <script defer src="auth.js"></script>
+  <script defer src="items.js"></script>
+  <script defer src="preps.js"></script>
+  <script defer src="sauces.js"></script>
+  <script defer src="meal.js"></script>
+  <script defer src="recipe.js"></script>
+  <script defer src="builder.js"></script>
+  <script defer src="settings.js"></script>
+  <script defer src="swipe.js"></script>
+  <script defer src="init.js"></script>
 </body>
 </html>

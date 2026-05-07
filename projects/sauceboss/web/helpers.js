@@ -288,57 +288,11 @@ async function toggleFavorite(sauceId) {
   }
 }
 
-// ─── Unit conversion ──────────────────────────────────────────────────────────
-function toTsp(amount, unit) { return amount * (TO_TSP[unit] || 1); }
-
-// Total tsp produced by a step's bowl, including everything inherited from
-// upstream steps it combines in. Walks `inputFromStep` recursively so a chain
-// like 1→2→3 carries the contents of step 1 forward into step 3's total.
-function cumulativeStepTsp(steps, idx, servings) {
-  const step = steps[idx];
-  if (!step) return 0;
-  let total = step.ingredients.reduce(
-    (s, it) => s + toTsp(scaleAmount(it.amount, servings), it.unit), 0
-  );
-  if (step.inputFromStep) {
-    total += cumulativeStepTsp(steps, step.inputFromStep - 1, servings);
-  }
-  return total;
-}
-
-// Pick a friendly display unit for a tsp total (cup ≥ 48, tbsp ≥ 3, else tsp).
-function tspToDisplay(tspTotal) {
-  if (tspTotal >= 48) return { amount: +(tspTotal / 48).toFixed(1), unit: 'cup' };
-  if (tspTotal >= 3)  return { amount: +(tspTotal / 3).toFixed(1),  unit: 'tbsp' };
-  return { amount: +tspTotal.toFixed(1), unit: 'tsp' };
-}
-
-// `item` is optional. When passed and metric mode is on, server-supplied
-// canonicalMl / canonicalG (set by the Mealie-inspired ingredient migration)
-// take precedence over the in-JS lookup tables — this keeps display numbers
-// consistent with what the backend stores.
-function convertUnit(amount, unit, system, item) {
-  if (system === 'imperial') return { amount, unit };
-  if (item) {
-    if (item.canonicalMl != null) return { amount: item.canonicalMl, unit: 'ml' };
-    if (item.canonicalG  != null) return { amount: item.canonicalG,  unit: 'g'  };
-  }
-  const lower = (unit || '').toLowerCase();
-  if (COUNT_UNITS.has(lower)) return { amount, unit };
-  if (VOLUME_TO_ML[lower]) return { amount: amount * VOLUME_TO_ML[lower], unit: 'ml' };
-  if (WEIGHT_TO_G[lower])  return { amount: amount * WEIGHT_TO_G[lower], unit: 'g' };
-  return { amount, unit };
-}
-
-function formatAmount(num) {
-  if (num >= 10) return Math.round(num).toString();
-  const rounded = Math.round(num * 10) / 10;
-  return rounded === Math.floor(rounded) ? rounded.toFixed(0) : rounded.toFixed(1);
-}
-
-function scaleAmount(amount, servings) {
-  return amount * (servings / 2); // base recipes are for 2 people
-}
+// Unit conversion (toTsp, cumulativeStepTsp, tspToDisplay, convertUnit,
+// formatAmount, scaleAmount) lives in shared/units.js and is published to
+// `window` by shared-bridge.js. The web-only `prepareItems` below stays in
+// this file because it pulls servings + unitSystem off the global state,
+// while the shared version takes them as parameters.
 
 function ingColor(name, idx) {
   if (name.toLowerCase().startsWith('step ') && name.toLowerCase().includes('combined')) return STEP_OUTPUT_COLOR;
