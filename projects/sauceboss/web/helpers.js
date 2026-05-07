@@ -294,122 +294,47 @@ async function toggleFavorite(sauceId) {
 // this file because it pulls servings + unitSystem off the global state,
 // while the shared version takes them as parameters.
 
-function ingColor(name, idx) {
-  if (name.toLowerCase().startsWith('step ') && name.toLowerCase().includes('combined')) return STEP_OUTPUT_COLOR;
-  return ING_COLOR[name.toLowerCase()] || PALETTE[idx % PALETTE.length];
-}
+// Pure logic lives in shared/ and reaches us via shared-bridge.js. Functions
+// below are state-injecting shims: their only job is to pass the relevant
+// slice of the global `state` (or `currentUser`) into the shared helper.
+// Identical-signature helpers (ingColor, polarToCartesian, arcPath,
+// levenshtein, buildSauceFamilies, withIngredientNames) are exposed directly
+// on `window` by the bridge — call sites use them unchanged.
 
-// ─── Sauce filter helpers ─────────────────────────────────────────────────────
 function isSauceAvailable(sauce) {
-  for (const name of sauce.ingredientNames) {
-    if (state.disabledIngredients.has(name)) return false;
-  }
-  return true;
+  return SBShared.filter.isSauceAvailable(sauce, state.disabledIngredients);
 }
 
 function missingSauceIngredients(sauce) {
-  const missing = [];
-  for (const name of sauce.ingredientNames) {
-    if (state.disabledIngredients.has(name)) missing.push(name);
-  }
-  return missing;
+  return SBShared.filter.missingSauceIngredients(sauce, state.disabledIngredients);
 }
 
 function getSubstitutionText(ingredientName) {
-  const subs = state.substitutions[ingredientName];
-  if (!subs || subs.length === 0) return '';
-  return subs[0].substituteName;
+  return SBShared.filter.getSubstitutionText(ingredientName, state.substitutions);
 }
 
-// Returns the sauce list + ingredient list for the currently selected item.
 function getCurrentSauceContext() {
   return { sauces: state.saucesForCurrentItem, allIngredients: state.allIngredients };
 }
 
 function getIngredientFrequencies() {
-  const { sauces } = getCurrentSauceContext();
-  const freq = {};
-  for (const sauce of sauces) {
-    for (const name of sauce.ingredientNames) {
-      freq[name] = (freq[name] || 0) + 1;
-    }
-  }
-  return freq;
+  return SBShared.filter.getIngredientFrequencies(state.saucesForCurrentItem);
 }
 
 function groupIngredientsByCategory() {
-  const { sauces, allIngredients } = getCurrentSauceContext();
-  const freq = getIngredientFrequencies();
-  const totalSauces = sauces.length;
-  const threshold = Math.max(2, Math.ceil(totalSauces * 0.3));
-
-  const keySet = new Set();
-  const keyItems = [];
-  for (const name of allIngredients) {
-    if ((freq[name] || 0) >= threshold) {
-      keySet.add(name);
-      keyItems.push({ name, count: freq[name] });
-    }
-  }
-  keyItems.sort((a, b) => b.count - a.count);
-
-  const groups = {};
-  for (const name of allIngredients) {
-    if (keySet.has(name)) continue;
-    const category = state.ingredientCategories[name] || 'Pantry Staples';
-    if (!groups[category]) groups[category] = [];
-    groups[category].push({ name, count: freq[name] || 0 });
-  }
-
-  const result = [];
-  if (keyItems.length > 0) result.push({ category: 'Key Ingredients', items: keyItems, isKey: true });
-  for (const c of CATEGORY_ORDER) {
-    if (groups[c]) result.push({ category: c, items: groups[c] });
-  }
-  return result;
-}
-
-// ─── Fuzzy matching helpers ───────────────────────────────────────────────────
-function levenshtein(a, b) {
-  const m = a.length, n = b.length;
-  if (m === 0) return n;
-  if (n === 0) return m;
-  let prev = Array.from({ length: n + 1 }, (_, i) => i);
-  for (let i = 1; i <= m; i++) {
-    const curr = [i];
-    for (let j = 1; j <= n; j++) {
-      curr[j] = a[i - 1] === b[j - 1]
-        ? prev[j - 1]
-        : 1 + Math.min(prev[j - 1], prev[j], curr[j - 1]);
-    }
-    prev = curr;
-  }
-  return prev[n];
+  return SBShared.filter.groupIngredientsByCategory({
+    sauces: state.saucesForCurrentItem,
+    allIngredients: state.allIngredients,
+    ingredientCategories: state.ingredientCategories,
+  });
 }
 
 function fuzzyMatchIngredients(query) {
-  query = query.toLowerCase().trim();
-  if (query.length < 2) return [];
-  const known = Object.keys(state.ingredientCategories);
-  return known
-    .map(name => {
-      const lower = name.toLowerCase();
-      if (lower === query) return { name, score: 10 };
-      if (lower.startsWith(query)) return { name, score: 5 };
-      if (lower.includes(query)) return { name, score: 3 };
-      const dist = levenshtein(query, lower);
-      if (dist <= 2) return { name, score: 2 - dist * 0.5 };
-      return null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 6)
-    .map(m => m.name);
+  return SBShared.fuzzy.fuzzyMatchIngredients(query, state.ingredientCategories);
 }
 
 function isKnownIngredient(name) {
-  return name.trim().toLowerCase() in state.ingredientCategories
-    || Object.keys(state.ingredientCategories).some(k => k.toLowerCase() === name.trim().toLowerCase());
+  return SBShared.fuzzy.isKnownIngredient(name, state.ingredientCategories);
 }
 
 async function classifyIngredient(name, category) {
@@ -419,20 +344,6 @@ async function classifyIngredient(name, category) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ingredientName: name.trim(), category }),
   }).catch(() => {});
-}
-
-// ─── Pie chart SVG ────────────────────────────────────────────────────────────
-function polarToCartesian(cx, cy, r, deg) {
-  const rad = ((deg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-function arcPath(cx, cy, r, startDeg, endDeg) {
-  if (endDeg - startDeg >= 360) endDeg = startDeg + 359.99;
-  const s = polarToCartesian(cx, cy, r, startDeg);
-  const e = polarToCartesian(cx, cy, r, endDeg);
-  const large = endDeg - startDeg > 180 ? 1 : 0;
-  return `M${cx} ${cy} L${s.x.toFixed(2)} ${s.y.toFixed(2)} A${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}Z`;
 }
 
 function buildPieChart(items, size = 160) {

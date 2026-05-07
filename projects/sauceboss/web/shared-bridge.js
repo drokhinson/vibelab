@@ -3,28 +3,46 @@
 // The web/ prototype uses vanilla <script> tags and globals (no bundler). The
 // shared/ folder is consumed directly by the React Native app via Metro, but
 // can also be loaded by browsers as native ES modules. This file imports the
-// pieces of shared/ that the web globals used to declare locally and
-// re-publishes them on `window` so existing call sites in state.js,
-// helpers.js, builder.js, etc. keep working unchanged.
+// shared modules and re-publishes them on `window` so existing call sites in
+// state.js, helpers.js, builder.js, etc. keep working.
 //
 // Loaded as <script type="module" src="shared-bridge.js"></script> at the top
 // of index.html, BEFORE the deferred classic <script> tags. Module scripts
 // and deferred classic scripts both run after parsing, in document order, so
 // these globals are guaranteed to exist by the time state.js executes.
 //
-// Scope (intentionally narrow for the first pass):
-//   • shared/constants.js — CUISINES, UNITS, COLOR_SWATCHES, SAUCE_TYPES,
-//     PALETTE, ING_COLOR, STEP_OUTPUT_COLOR, TO_TSP, VOLUME_TO_ML, WEIGHT_TO_G,
-//     COUNT_UNITS, CATEGORY_ORDER, ITEM_FLOW_META, flowMetaFor
-//   • shared/units.js — toTsp, cumulativeStepTsp, tspToDisplay, convertUnit,
-//     formatAmount, scaleAmount
-//
-// Future passes will bridge colors, families, filter, fuzzy, pieMath, and
-// validation. prepareItems intentionally stays in helpers.js — the web
-// version reads servings/unitSystem from `state` directly, while the shared
-// version takes them as parameters.
+// Exposure strategy:
+//   • Functions with identical signatures across web and native land as flat
+//     globals (e.g. `ingColor`, `arcPath`, `levenshtein`, `buildSauceFamilies`)
+//     — web's duplicate copies were deleted and call sites use the bridged
+//     globals directly.
+//   • Functions whose web version reads from the global `state`/`currentUser`
+//     while the shared version takes them as parameters live under
+//     `window.SBShared.<module>.<name>` (e.g. `SBShared.filter.isSauceAvailable`).
+//     web/helpers.js then keeps a one-line shim that injects the right state
+//     slice — the wrapper's only job is to bind state, the logic lives in
+//     shared/.
 
 import * as constants from './shared/constants.js';
 import * as units from './shared/units.js';
+import * as colors from './shared/colors.js';
+import * as families from './shared/families.js';
+import * as filter from './shared/filter.js';
+import * as fuzzy from './shared/fuzzy.js';
+import * as pieMath from './shared/pieMath.js';
+import * as builderHelpers from './shared/builder.js';
 
-Object.assign(window, constants, units);
+// Flat globals — exact same signature as web's old versions.
+Object.assign(window, constants, units, colors, pieMath);
+window.buildSauceFamilies = families.buildSauceFamilies;
+window.withIngredientNames = filter.withIngredientNames;
+window.levenshtein = fuzzy.levenshtein;
+
+// Namespaced — web wrappers in helpers.js / sauces.js / builder.js call these
+// after binding the relevant state slice.
+window.SBShared = {
+  families,
+  filter,
+  fuzzy,
+  builder: builderHelpers,
+};

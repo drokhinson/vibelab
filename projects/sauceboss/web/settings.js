@@ -203,7 +203,7 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
       grouped[sauce.cuisine].count += 1;
     }
   } else {
-    const families = _buildSauceFamilies(filtered);
+    const families = buildSauceFamilies(filtered);
     for (const fam of families.values()) {
       const cuisine = fam.root.cuisine || '';
       if (!grouped[cuisine]) grouped[cuisine] = { rows: [], count: 0 };
@@ -678,8 +678,8 @@ function selectSauceFromManager(id) {
   }
   // Reconstruct the family so the recipe-view switcher can flip between
   // siblings without another fetch. The sauce the user clicked may itself
-  // be either a root or a variant — _buildSauceFamilies handles both.
-  const families = _buildSauceFamilies(state.adminSauces || []);
+  // be either a root or a variant — buildSauceFamilies handles both.
+  const families = buildSauceFamilies(state.adminSauces || []);
   const rootId = sauce.parentSauceId || sauce.id;
   const family = families.get(rootId);
   state.selectedSauceFamily = family ? [family.root, ...family.variants] : [sauce];
