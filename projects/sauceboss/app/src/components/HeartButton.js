@@ -30,7 +30,7 @@ export default function HeartButton({ sauceId, size = 22, onUnauthenticated }) {
   }
 
   return (
-    <TouchableOpacity onPress={onPress} hitSlop={10} activeOpacity={0.7}>
+    <TouchableOpacity onPress={onPress} hitSlop={14} activeOpacity={0.7}>
       <Animated.View style={[styles.wrap, { transform: [{ scale }] }]}>
         <Heart
           size={size}

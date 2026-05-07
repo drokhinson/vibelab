@@ -9,7 +9,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Wheat, Drumstick, Salad, ChefHat } from 'lucide-react-native';
@@ -127,9 +126,7 @@ export default function MealBuilderScreen({ navigation }) {
         </View>
 
         {state.itemLoading ? (
-          <View style={styles.inlineLoader}>
-            <ActivityIndicator color={COLORS.primary} />
-          </View>
+          <LoadingPot label="Loading…" />
         ) : (
           content
         )}
@@ -167,7 +164,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
   managerBtnLabel: {
     color: '#fff',
@@ -252,9 +249,5 @@ const styles = StyleSheet.create({
     marginTop: 3,
     textAlign: 'center',
     lineHeight: 14,
-  },
-  inlineLoader: {
-    paddingVertical: 32,
-    alignItems: 'center',
   },
 });

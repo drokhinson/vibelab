@@ -47,6 +47,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.border,
     marginRight: 6,
+    maxWidth: 220,
   },
   chipActive: {
     backgroundColor: COLORS.primary,
@@ -56,6 +57,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.text,
+    flexShrink: 1,
   },
   labelActive: {
     color: '#fff',

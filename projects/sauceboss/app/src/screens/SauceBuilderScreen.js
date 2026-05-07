@@ -418,7 +418,10 @@ export default function SauceBuilderScreen({ navigation, route }) {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollBody}
+        contentContainerStyle={[
+          styles.scrollBody,
+          { paddingBottom: Math.max(60, insets.bottom + 24) },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -821,7 +824,13 @@ function ReviewScreen({ builder, items, editingId, saving, saveError, insets, on
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollBody,
+          { paddingBottom: Math.max(60, insets.bottom + 24) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Summary card */}
         <View style={styles.card}>
           <View style={styles.reviewHeader}>
