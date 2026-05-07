@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SauceBoss — Delete your account</title>
+  <style>
+    :root {
+      --orange: #E85D04;
+      --orange-dark: #C44B00;
+      --bg: #FFF8F0;
+      --card: #FFFFFF;
+      --text: #1A1A2E;
+      --muted: #6B7280;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
+      line-height: 1.6;
+    }
+    .header {
+      background: var(--orange);
+      color: #fff;
+      padding: 32px 24px 28px;
+      text-align: center;
+    }
+    .header h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 0.5px; }
+    .header .subtitle { margin: 4px 0 0; opacity: 0.9; font-size: 13px; }
+    .back {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.85);
+      text-decoration: none;
+    }
+    .back:hover { color: #fff; }
+    .container { max-width: 680px; margin: 0 auto; padding: 24px 20px 80px; }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      margin-bottom: 16px;
+    }
+    h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--orange-dark);
+      margin: 0 0 6px;
+    }
+    p, li { font-size: 14px; color: var(--text); margin: 6px 0; }
+    ul { padding-left: 22px; margin: 6px 0 12px; }
+    .pill {
+      display: inline-block;
+      padding: 11px 20px;
+      border-radius: 999px;
+      background: var(--orange);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    .pill:hover { background: var(--orange-dark); }
+    .meta { color: var(--muted); font-size: 12px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      background: #F3F4F6;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .footer { text-align: center; color: var(--muted); font-size: 12px; padding: 12px 20px 32px; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>Delete your SauceBoss account</h1>
+    <div class="subtitle">Two paths — pick whichever applies.</div>
+    <a class="back" href="/">← Back to SauceBoss</a>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>If you can sign in</h2>
+      <p>
+        The fastest path is to delete your account from inside the app:
+      </p>
+      <ul>
+        <li>Open SauceBoss on your phone or in the web app.</li>
+        <li>Sign in.</li>
+        <li>Tap the avatar pill in the top-right of the home screen → <strong>Settings</strong>.</li>
+        <li>Scroll to the bottom and tap <strong>Delete account</strong>.</li>
+        <li>Confirm. Your profile and all your favorites are removed immediately.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>If you can't sign in</h2>
+      <p>
+        Email us from the address tied to the account and we'll delete it manually,
+        normally within 30 days (typically the same day).
+      </p>
+      <a class="pill" href="mailto:privacy@sauceboss.app?subject=Delete%20my%20SauceBoss%20account&body=Please%20delete%20the%20SauceBoss%20account%20associated%20with%20this%20email%20address.%0A%0AThanks.">
+        Email a deletion request
+      </a>
+      <p class="meta" style="margin-top: 14px">
+        Email: <code>privacy@sauceboss.app</code>
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>What gets deleted</h2>
+      <ul>
+        <li>Your profile row (display name, admin flag, sign-in metadata).</li>
+        <li>Every favorite you've saved.</li>
+        <li>Your Supabase Auth identity (so you can't sign back in with the same address
+            without creating a new account).</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>What stays</h2>
+      <ul>
+        <li>
+          <strong>Recipes you authored</strong> stay in the public catalog so they don't
+          disappear from other users mid-meal — but they lose their owner attribution
+          and become unowned. Only an admin can edit or delete them after that.
+        </li>
+        <li>
+          If you'd prefer your authored recipes deleted as well, mention that in the
+          deletion request email and we'll handle it manually.
+        </li>
+        <li>
+          Database backups — Supabase keeps automated backups for 7 days. Your data is
+          purged from those backups within 7 days of account deletion as the backups roll
+          over.
+        </li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Questions?</h2>
+      <p>
+        Read the full <a href="/privacy.html">privacy policy</a> for details about what we
+        collect and why, or email <code>privacy@sauceboss.app</code>.
+      </p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    SauceBoss · A vibelab project
+  </footer>
+</body>
+</html>
