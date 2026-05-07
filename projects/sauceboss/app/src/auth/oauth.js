@@ -217,13 +217,43 @@ async function setSessionFromTokens(accessToken, refreshToken) {
   }
 }
 
+// Dedup table: when both WebBrowser.openAuthSessionAsync and the OS-level
+// deep-link listener fire for the same `?code=…` URL, only one of them can
+// successfully exchange the code — the second one fails with "PKCE code
+// verifier not found in storage" because the verifier is one-shot. Track
+// promises by their auth artifact so concurrent callers share the result.
+const inflightExchanges = new Map();
+
+function dedupKey(params) {
+  if (params.code) return `code:${params.code}`;
+  if (params.access_token) return `token:${params.access_token}`;
+  return null;
+}
+
 // Convenience helper for the Linking listener: takes a deep link URL and,
 // if it carries auth artifacts (code OR tokens), completes the handshake.
+// Concurrent calls with the same code/token return the same in-flight
+// promise; the second caller doesn't re-issue the request.
 export async function handleAuthDeepLink(url) {
   const params = parseAuthParamsFromUrl(url);
-  if (params.code) return exchangeCodeForSession(params.code);
-  if (params.access_token && params.refresh_token) {
+  const key = dedupKey(params);
+  if (!key) return { ok: false, ignored: true };
+
+  const existing = inflightExchanges.get(key);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    if (params.code) return exchangeCodeForSession(params.code);
     return setSessionFromTokens(params.access_token, params.refresh_token);
+  })();
+  inflightExchanges.set(key, promise);
+
+  try {
+    return await promise;
+  } finally {
+    // Keep the entry around so the OS firing the listener after we've
+    // already settled doesn't trigger a re-exchange. Bounded growth in
+    // practice (one entry per OAuth attempt per app session); not worth
+    // a cleanup pass.
   }
-  return { ok: false, ignored: true };
 }
