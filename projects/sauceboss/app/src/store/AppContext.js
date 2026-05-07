@@ -56,6 +56,8 @@ export const initialState = {
   managerTypeFilter: 'all',          // 'all' | 'sauce' | 'marinade' | 'dressing'
   managerFavoritesOnly: false,
   managerExpandedCuisines: new Set(),
+  // Admin "long-press a sauce → mark others as variants of it" merge mode.
+  sauceMerge: null,                   // { keepId, mergeIds: Set, error, saving } when admin is merging
 
   // Manager → Dish tab
   managerItems: { carbs: [], proteins: [], salads: [] },
@@ -121,6 +123,10 @@ const A = {
   MANAGER_REMOVE_SAUCE: 'MANAGER_REMOVE_SAUCE',
   MANAGER_UPSERT_SAUCE: 'MANAGER_UPSERT_SAUCE',
   MANAGER_SET_TAB: 'MANAGER_SET_TAB',
+  SAUCE_MERGE_START: 'SAUCE_MERGE_START',
+  SAUCE_MERGE_TOGGLE_PICK: 'SAUCE_MERGE_TOGGLE_PICK',
+  SAUCE_MERGE_CANCEL: 'SAUCE_MERGE_CANCEL',
+  SAUCE_MERGE_SET_ERROR: 'SAUCE_MERGE_SET_ERROR',
 
   // Manager → Dish tab
   ITEMS_LOAD_START: 'ITEMS_LOAD_START',
@@ -318,6 +324,28 @@ function reducer(state, action) {
 
     case A.MANAGER_SET_TAB:
       return { ...state, managerTab: action.value, managerSearch: '' };
+
+    case A.SAUCE_MERGE_START:
+      return {
+        ...state,
+        sauceMerge: { keepId: action.keepId, mergeIds: new Set(), error: null, saving: false },
+      };
+
+    case A.SAUCE_MERGE_TOGGLE_PICK: {
+      if (!state.sauceMerge) return state;
+      const next = new Set(state.sauceMerge.mergeIds);
+      if (next.has(action.sauceId)) next.delete(action.sauceId);
+      else next.add(action.sauceId);
+      return { ...state, sauceMerge: { ...state.sauceMerge, mergeIds: next, error: null } };
+    }
+
+    case A.SAUCE_MERGE_CANCEL:
+      return { ...state, sauceMerge: null };
+
+    case A.SAUCE_MERGE_SET_ERROR:
+      return state.sauceMerge
+        ? { ...state, sauceMerge: { ...state.sauceMerge, error: action.error, saving: !!action.saving } }
+        : state;
 
     case A.ITEMS_LOAD_START:
       return { ...state, managerItemsLoading: true, managerItemsError: null };
@@ -648,6 +676,29 @@ export function AppProvider({ children }) {
           dispatch({ type: A.MANAGER_REMOVE_SAUCE, sauceId });
           return { ok: true };
         } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+
+      // Sauce variant merge — admin only. Long-press a sauce row to start;
+      // tap others to mark them as variants; commit assigns
+      // parent_sauce_id = keepId on every picked row.
+      startSauceMerge: (keepId) => dispatch({ type: A.SAUCE_MERGE_START, keepId }),
+      toggleSauceMergePick: (sauceId) => dispatch({ type: A.SAUCE_MERGE_TOGGLE_PICK, sauceId }),
+      cancelSauceMerge: () => dispatch({ type: A.SAUCE_MERGE_CANCEL }),
+      commitSauceMerge: async () => {
+        const merge = stateRef.current.sauceMerge;
+        if (!merge || merge.mergeIds.size === 0) {
+          return { ok: false, error: 'Pick at least one sauce to merge.' };
+        }
+        dispatch({ type: A.SAUCE_MERGE_SET_ERROR, error: null, saving: true });
+        try {
+          await api.assignSauceVariants(merge.keepId, [...merge.mergeIds]);
+          await actions.loadAllSauces();
+          dispatch({ type: A.SAUCE_MERGE_CANCEL });
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.SAUCE_MERGE_SET_ERROR, error: e.message || String(e), saving: false });
           return { ok: false, error: e.message || String(e) };
         }
       },

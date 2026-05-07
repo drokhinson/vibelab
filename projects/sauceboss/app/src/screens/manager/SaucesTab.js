@@ -15,6 +15,7 @@ import {
 import {
   ChevronRight,
   GitBranch,
+  GitMerge,
   Heart,
   Pencil,
   Plus,
@@ -111,8 +112,31 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
     actions.toggleManagerCuisine(cuisine);
   }
 
+  async function commitMerge() {
+    const res = await actions.commitSauceMerge();
+    if (!res.ok && res.error) Alert.alert('Could not merge', res.error);
+  }
+
+  const merge = state.sauceMerge;
+  const isMerging = !!merge;
+  const keepSauce = isMerging
+    ? (state.managerSauces || []).find((s) => s.id === merge.keepId)
+    : null;
+
   return (
     <>
+      {isMerging ? (
+        <View style={styles.mergePanel}>
+          <Text style={styles.mergePanelTitle}>
+            Variant family parent: <Text style={{ fontWeight: '900' }}>{keepSauce?.name || '?'}</Text>
+          </Text>
+          <Text style={styles.mergePanelHelp}>
+            Tap other sauces to mark them as variants of this one. They'll appear as a single
+            family in the sauce list, with this recipe as the default version.
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.typeFilterWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeRow}>
           {TYPE_FILTERS.map((t) => {
@@ -200,9 +224,23 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
                         currentUser={state.currentUser}
                         isAdmin={isAdmin}
                         showTypeTag={typeFilter === 'all'}
-                        onTap={() => openSauceRecipe(displayed, family)}
+                        merge={merge}
+                        onTap={() => {
+                          if (isMerging) actions.toggleSauceMergePick(displayed.id);
+                          else openSauceRecipe(displayed, family);
+                        }}
+                        onLongPress={() => {
+                          // Variant rows already belong to a family — long-press
+                          // is reserved for root rows so we don't accidentally
+                          // re-parent a variant.
+                          const isRoot = !displayed.parentSauceId;
+                          if (isAdmin && !isMerging && isRoot) {
+                            actions.startSauceMerge(displayed.id);
+                          }
+                        }}
                         onEdit={() => openBuilderFor(displayed.id)}
                         onDelete={() => confirmDelete(displayed)}
+                        onStartMerge={() => actions.startSauceMerge(displayed.id)}
                       />
                     ))}
                   </View>
@@ -213,7 +251,35 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
         )}
       </ScrollView>
 
-      {isLoggedIn ? (
+      {isMerging ? (
+        <View style={[styles.mergeBar, { paddingBottom: Math.max(12, fabBottom - 32) }]}>
+          <Text style={styles.mergeBarText}>
+            {merge.mergeIds.size === 0
+              ? 'Tap rows to mark as variants'
+              : `${merge.mergeIds.size} to assign as variant${merge.mergeIds.size === 1 ? '' : 's'} of ${keepSauce?.name || '?'}`}
+          </Text>
+          <View style={styles.mergeBarActions}>
+            <TouchableOpacity
+              style={styles.mergeCancelBtn}
+              onPress={() => actions.cancelSauceMerge()}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.mergeCancelLabel}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.mergeCommitBtn,
+                (merge.mergeIds.size === 0 || merge.saving) && styles.mergeCommitDisabled,
+              ]}
+              onPress={commitMerge}
+              disabled={merge.mergeIds.size === 0 || merge.saving}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.mergeCommitLabel}>{merge.saving ? 'Merging…' : 'Merge'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : isLoggedIn ? (
         <TouchableOpacity
           style={[styles.fab, { bottom: fabBottom }]}
           onPress={() => openBuilderFor(null)}
@@ -233,19 +299,40 @@ function ManagerSauceRow({
   currentUser,
   isAdmin,
   showTypeTag,
+  merge,
   onTap,
+  onLongPress,
   onEdit,
   onDelete,
+  onStartMerge,
 }) {
   const isOwner = !!(currentUser && sauce.createdBy === currentUser.user_id);
   const canEdit = isAdmin || isOwner;
   const canDelete = isAdmin || isOwner;
   const variants = (family?.variants || []).length;
   const totalVersions = 1 + variants;
+  const isVariantRow = !!sauce.parentSauceId;
+
+  const isMerging = !!merge;
+  const isKeep = merge?.keepId === sauce.id;
+  const isPicked = merge?.mergeIds?.has(sauce.id);
+
+  const containerStyle = [
+    styles.row,
+    !isLast && styles.rowBorder,
+    isKeep && styles.rowKeep,
+    isPicked && styles.rowPicked,
+  ];
 
   return (
-    <View style={[styles.row, !isLast && styles.rowBorder]}>
-      <TouchableOpacity style={styles.rowMain} onPress={onTap} activeOpacity={0.7}>
+    <View style={containerStyle}>
+      <TouchableOpacity
+        style={styles.rowMain}
+        onPress={onTap}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+        activeOpacity={0.7}
+      >
         <View style={[styles.dot, { backgroundColor: sauce.color || COLORS.primary }]} />
         <View style={styles.rowInfo}>
           <View style={styles.rowNameRow}>
@@ -261,11 +348,26 @@ function ManagerSauceRow({
             <Text style={styles.rowDesc} numberOfLines={1}>{sauce.description}</Text>
           ) : null}
         </View>
-        {showTypeTag ? <SauceTypeTag value={sauce.sauceType || 'sauce'} /> : null}
-        {currentUser ? <HeartButton sauceId={sauce.id} size={20} /> : null}
-        <ChevronRight size={16} color={COLORS.textMuted} />
+        {isMerging ? (
+          isKeep ? (
+            <View style={[styles.mergeTag, styles.mergeTagKeep]}>
+              <Text style={styles.mergeTagLabel}>parent</Text>
+            </View>
+          ) : isPicked ? (
+            <View style={[styles.mergeTag, styles.mergeTagPicked]}>
+              <Text style={styles.mergeTagLabel}>will be variant</Text>
+            </View>
+          ) : null
+        ) : (
+          <>
+            {showTypeTag ? <SauceTypeTag value={sauce.sauceType || 'sauce'} /> : null}
+            {currentUser ? <HeartButton sauceId={sauce.id} size={20} /> : null}
+            <ChevronRight size={16} color={COLORS.textMuted} />
+          </>
+        )}
       </TouchableOpacity>
-      {canEdit || canDelete ? (
+
+      {!isMerging && (canEdit || canDelete || (isAdmin && !isVariantRow)) ? (
         <View style={styles.rowActions}>
           {canEdit ? (
             <TouchableOpacity onPress={onEdit} style={styles.actionBtn} hitSlop={6}>
@@ -277,6 +379,14 @@ function ManagerSauceRow({
             <TouchableOpacity onPress={onDelete} style={styles.actionBtn} hitSlop={6}>
               <Trash2 size={14} color={COLORS.dangerText} />
               <Text style={[styles.actionLabel, { color: COLORS.dangerText }]}>Delete</Text>
+            </TouchableOpacity>
+          ) : null}
+          {isAdmin && !isVariantRow ? (
+            <TouchableOpacity onPress={onStartMerge} style={styles.actionBtn} hitSlop={6}>
+              <GitMerge size={14} color={COLORS.textSecondary} />
+              <Text style={[styles.actionLabel, { color: COLORS.textSecondary }]}>
+                Make parent…
+              </Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -415,4 +525,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...SHADOWS.lg,
   },
+
+  // Merge mode (admin sauce-variant assignment) — orange callout up top,
+  // sticky action bar at the bottom that replaces the FAB while active.
+  mergePanel: {
+    backgroundColor: COLORS.warning,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.warningText,
+  },
+  mergePanelTitle: { fontSize: 13, fontWeight: '800', color: COLORS.warningText },
+  mergePanelHelp: { fontSize: 11, color: COLORS.warningText, marginTop: 2 },
+  rowKeep: { backgroundColor: '#FFF3E0' },
+  rowPicked: { backgroundColor: '#FEF9C3' },
+  mergeTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginLeft: 6 },
+  mergeTagKeep: { backgroundColor: COLORS.primary },
+  mergeTagPicked: { backgroundColor: '#FBBF24' },
+  mergeTagLabel: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
+  mergeBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.card,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mergeBarText: { flex: 1, fontSize: 12, fontWeight: '700', color: COLORS.text },
+  mergeBarActions: { flexDirection: 'row', gap: 8 },
+  mergeCancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  mergeCancelLabel: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary },
+  mergeCommitBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+  },
+  mergeCommitDisabled: { opacity: 0.5 },
+  mergeCommitLabel: { fontSize: 13, fontWeight: '800', color: '#fff' },
 });

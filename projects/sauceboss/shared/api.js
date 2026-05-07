@@ -199,5 +199,14 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       method: 'POST',
       body: { keepId, mergeIds },
     }),
+
+    // Bulk-assign sauces as variants of a parent. Admin only — sets
+    // parent_sauce_id = parentId on every sauce in sauceIds. Backend rejects
+    // parents that are themselves variants, self-references, or targets that
+    // already have variants of their own.
+    assignSauceVariants: (parentId, sauceIds) => call(
+      `/admin/sauces/${encodeURIComponent(parentId)}/variants`,
+      { method: 'POST', body: { sauceIds } },
+    ),
   };
 }
