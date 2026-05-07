@@ -31,6 +31,7 @@ import * as filter from './shared/filter.js';
 import * as fuzzy from './shared/fuzzy.js';
 import * as pieMath from './shared/pieMath.js';
 import * as builderHelpers from './shared/builder.js';
+import * as apiFactory from './shared/api.js';
 
 // Flat globals — exact same signature as web's old versions.
 Object.assign(window, constants, units, colors, pieMath);
@@ -39,10 +40,12 @@ window.withIngredientNames = filter.withIngredientNames;
 window.levenshtein = fuzzy.levenshtein;
 
 // Namespaced — web wrappers in helpers.js / sauces.js / builder.js call these
-// after binding the relevant state slice.
+// after binding the relevant state slice (favorites, currentUser, etc.) or
+// API config (auth token getter, base URL).
 window.SBShared = {
   families,
   filter,
   fuzzy,
   builder: builderHelpers,
+  api: apiFactory,
 };

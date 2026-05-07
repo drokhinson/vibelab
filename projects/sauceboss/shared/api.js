@@ -186,6 +186,13 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     updateItem: (id, payload) => call(`/admin/items/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }),
     deleteItem: (id) => call(`/admin/items/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+    // ── Sauce-manager Sauces tab (admin) ────────────────────────────────────
+    // Admin-scoped variant of /sauces. Returns every sauce regardless of pairings,
+    // including unpaired roots, so the manager can edit/merge/delete.
+    adminListSauces: () => call('/admin/sauces'),
+    // Admin force-delete (bypasses owner check). Owners can use deleteSauce above.
+    adminDeleteSauce: (id) => call(`/admin/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
     // ── Sauce-manager Ingredients tab (mostly admin) ─────────────────────────
     listFoodsWithUsage: async () => {
       const data = await call('/foods-with-usage');

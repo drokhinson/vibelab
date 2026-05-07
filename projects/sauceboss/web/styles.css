@@ -549,16 +549,22 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 }
 .step-title { font-size: 16px; font-weight: 700; color: #1A1A2E; margin-bottom: 12px; }
 
+/* Pie chart on the left, ingredient legend on the right — matches the
+   native MealRecipeScreen layout so the visual information density is the
+   same on web and mobile. The legend wraps under on narrow phones. */
 .pie-container {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
 }
+.pie-container > .pie-chart,
+.pie-container > .pie-chart-wrap { flex-shrink: 0; }
 .pie-chart-wrap { position: relative; }
 .pie-chart { display: block; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.12)); }
 
-.legend { width: 100%; }
+.legend { flex: 1; min-width: 180px; }
 .legend-item {
   display: flex;
   align-items: center;
