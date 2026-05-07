@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Wheat, Drumstick, Salad } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import PotIllustration from '../components/PotIllustration';
@@ -33,6 +34,7 @@ function itemsForTab(state, id) {
 export default function MealBuilderScreen({ navigation }) {
   const state = useAppState();
   const actions = useAppActions();
+  const insets = useSafeAreaInsets();
   const items = itemsForTab(state, state.mealCategory);
 
   const onPickItem = async (item) => {
@@ -81,7 +83,7 @@ export default function MealBuilderScreen({ navigation }) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.logo}>SauceBoss</Text>
         <Text style={styles.subtitle}>What are you cooking with?</Text>
       </View>
@@ -127,7 +129,6 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: COLORS.primary,
-    paddingTop: 14,
     paddingBottom: 18,
     paddingHorizontal: 20,
   },
