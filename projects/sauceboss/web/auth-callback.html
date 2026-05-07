@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SauceBoss — finishing sign-in…</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+      background: #FFF8F0;
+      color: #1A1A2E;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      max-width: 380px;
+      text-align: center;
+      background: #fff;
+      border-radius: 18px;
+      padding: 28px 24px;
+      box-shadow: 0 4px 14px rgba(232, 93, 4, 0.18);
+    }
+    h1 { font-size: 18px; margin: 0 0 8px; color: #E85D04; }
+    p { font-size: 14px; line-height: 20px; color: #6B7280; margin: 0 0 14px; }
+    .pill {
+      display: inline-block;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: #E85D04;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .err { color: #991B1B; background: #FEE2E2; padding: 10px; border-radius: 8px; font-size: 13px; }
+    code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #F3F4F6; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card" id="card">
+    <h1>Almost there…</h1>
+    <p id="status">Returning you to SauceBoss.</p>
+    <div id="cta-wrap" style="display:none">
+      <a id="cta" class="pill" href="#">Open SauceBoss</a>
+    </div>
+  </div>
+  <script>
+    // Bridge: Supabase OAuth lands here with `?code=...` in the URL. Forward
+    // that code to the native app via a deep link. Supports both Expo Go
+    // (exp://...) and EAS / production builds (sauceboss://...).
+    //
+    // The native app passes its own deep-link target as the URL fragment
+    // (#native_url=...) when it kicks off the OAuth flow. If that's missing
+    // we fall back to sauceboss://auth-callback (the EAS build scheme).
+    (function () {
+      function getParam(name) {
+        var search = new URLSearchParams(location.search || '');
+        if (search.has(name)) return search.get(name);
+        var hash = (location.hash || '').replace(/^#/, '');
+        var hashParams = new URLSearchParams(hash);
+        return hashParams.get(name);
+      }
+
+      function getFragmentParam(name) {
+        var hash = (location.hash || '').replace(/^#/, '');
+        var params = new URLSearchParams(hash);
+        return params.get(name);
+      }
+
+      var statusEl = document.getElementById('status');
+      var ctaWrap = document.getElementById('cta-wrap');
+      var ctaEl = document.getElementById('cta');
+
+      var code = getParam('code');
+      var errorDesc = getParam('error_description') || getParam('error');
+      var nativeUrlEncoded = getFragmentParam('native_url');
+      var nativeUrl = nativeUrlEncoded ? decodeURIComponent(nativeUrlEncoded) : 'sauceboss://auth-callback';
+
+      if (errorDesc) {
+        statusEl.innerHTML = '<span class="err">Sign-in failed: ' + String(errorDesc).replace(/[<>]/g, '') + '</span>';
+        return;
+      }
+      if (!code) {
+        statusEl.innerHTML = '<span class="err">No auth code returned. Try signing in again from the app.</span>';
+        return;
+      }
+
+      // Append the code to the native deep-link URL.
+      var sep = nativeUrl.indexOf('?') >= 0 ? '&' : '?';
+      var deepLink = nativeUrl + sep + 'code=' + encodeURIComponent(code);
+
+      // Auto-redirect, but show a fallback button in case the OS doesn't open
+      // the app (most common on iOS when the user has both Expo Go + an EAS
+      // build installed and the OS asks which to use).
+      try {
+        window.location.replace(deepLink);
+      } catch (e) {
+        // ignore — fall through to the button
+      }
+      setTimeout(function () {
+        statusEl.textContent = 'If SauceBoss didn\'t open automatically, tap the button below.';
+        ctaEl.setAttribute('href', deepLink);
+        ctaWrap.style.display = 'block';
+      }, 1200);
+    })();
+  </script>
+</body>
+</html>
