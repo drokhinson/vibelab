@@ -19,6 +19,8 @@ import {
 } from 'react-native';
 import { ChevronRight, GitBranch } from 'lucide-react-native';
 import { isSauceAvailable, missingSauceIngredients } from '#shared/filter';
+import HeartButton from './HeartButton';
+import { useAppState } from '../store/AppContext';
 import { COLORS } from '../theme';
 
 export default function CuisineAccordion({
@@ -29,7 +31,9 @@ export default function CuisineAccordion({
   disabledIngredients,
   onToggle,
   onSelectSauce,
+  onUnauthenticatedFavorite,
 }) {
+  const state = useAppState();
   const availableCount = entries.filter((e) => isSauceAvailable(e.displayed, disabledIngredients)).length;
 
   function handleToggle() {
@@ -95,6 +99,10 @@ export default function CuisineAccordion({
                     </Text>
                   ) : null}
                 </View>
+
+                {state.currentUser ? (
+                  <HeartButton sauceId={sauce.id} size={20} onUnauthenticated={onUnauthenticatedFavorite} />
+                ) : null}
 
                 {available ? (
                   <ChevronRight size={18} color={COLORS.textMuted} />

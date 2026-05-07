@@ -5,9 +5,11 @@ import React, { useMemo } from 'react';
 import {
   View,
   Text,
+  TouchableOpacity,
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import { Heart } from 'lucide-react-native';
 import IngredientFilterPanel from '../components/IngredientFilterPanel';
 import CuisineAccordion from '../components/CuisineAccordion';
 import EmptyState from '../components/EmptyState';
@@ -56,17 +58,40 @@ export default function SauceSelectorScreen({ navigation }) {
     (e) => isSauceAvailable(e.displayed, state.disabledIngredients),
   ).length;
 
+  const showFavPill = !!state.currentUser;
+
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>
-          {item ? `${item.emoji} ${item.name}` : 'Sauces'}
-          {prep ? ` — ${prep.name}` : ''}
-        </Text>
-        <Text style={styles.subtitle}>
-          {availableFamilies} of {totalFamilies}{' '}
-          {totalFamilies === 1 ? meta.sauceWord.toLowerCase() : meta.sauceTypeLabel} match your pantry
-        </Text>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>
+              {item ? `${item.emoji} ${item.name}` : 'Sauces'}
+              {prep ? ` — ${prep.name}` : ''}
+            </Text>
+            <Text style={styles.subtitle}>
+              {availableFamilies} of {totalFamilies}{' '}
+              {totalFamilies === 1 ? meta.sauceWord.toLowerCase() : meta.sauceTypeLabel} match your pantry
+            </Text>
+          </View>
+          {showFavPill ? (
+            <TouchableOpacity
+              style={[styles.favPill, state.favoritesOnly && styles.favPillActive]}
+              onPress={() => actions.setFavoritesOnly(!state.favoritesOnly)}
+              activeOpacity={0.7}
+            >
+              <Heart
+                size={14}
+                color={state.favoritesOnly ? '#fff' : COLORS.primary}
+                fill={state.favoritesOnly ? '#fff' : 'transparent'}
+                strokeWidth={2}
+              />
+              <Text style={[styles.favPillLabel, state.favoritesOnly && styles.favPillLabelActive]}>
+                Favorites
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       <ScrollView
@@ -118,6 +143,7 @@ export default function SauceSelectorScreen({ navigation }) {
                     disabledIngredients={state.disabledIngredients}
                     onToggle={() => actions.toggleCuisine(cuisine)}
                     onSelectSauce={onSelect}
+                    onUnauthenticatedFavorite={() => navigation.navigate('MealBuilder')}
                   />
                 );
               })
@@ -135,6 +161,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  favPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.card,
+    marginLeft: 12,
+  },
+  favPillActive: {
+    backgroundColor: COLORS.primary,
+  },
+  favPillLabel: {
+    marginLeft: 4,
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  favPillLabelActive: {
+    color: '#fff',
   },
   title: {
     fontSize: 18,
