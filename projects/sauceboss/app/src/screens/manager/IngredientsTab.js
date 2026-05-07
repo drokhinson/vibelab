@@ -58,15 +58,15 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
 
   // Group foods by their ingredient category. Foods that don't have a mapping
   // in `state.ingredientCategories` end up under "Uncategorized" so admins can
-  // still find them and tag them via the web (mobile doesn't expose the
-  // classify-ingredient endpoint yet — it's a single-shot side effect with
-  // no manager UI on web either).
+  // still find them and tag them via the web. Lookup is lowercased because
+  // the categories table stores names in lowercase.
   const grouped = useMemo(() => {
     const cats = state.ingredientCategories || {};
     const groups = {};
     for (const food of state.managerFoods || []) {
       if (search && !(food.name || '').toLowerCase().includes(search)) continue;
-      const category = cats[food.name] || UNCATEGORIZED;
+      const key = (food.name || '').toLowerCase();
+      const category = cats[key] || cats[food.name] || UNCATEGORIZED;
       if (!groups[category]) groups[category] = [];
       groups[category].push(food);
     }
