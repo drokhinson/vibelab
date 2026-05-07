@@ -1,6 +1,7 @@
 <!-- Splash image. Full-bleed orange with the pot at ~40% width centered
      vertically. Sized for iPhone Pro Max + Android phablets; Expo
-     auto-scales for narrower / shorter devices via `resizeMode: "contain"`. -->
+     auto-scales for narrower / shorter devices via `resizeMode: "contain"`.
+     Same layer order as icon.svg — rim on top of bubbles. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1284" height="2778" viewBox="0 0 1284 2778">
   <rect width="1284" height="2778" fill="#E85D04"/>
 
@@ -15,17 +16,19 @@
 
     <!-- Pot body -->
     <path d="M100 354 Q100 510 300 510 Q500 510 500 354 Z" fill="#FFF3E6"/>
+    <!-- Outline (under rim) -->
+    <path d="M100 354 Q100 510 300 510 Q500 510 500 354" stroke="#3D1100" stroke-width="9" fill="none"/>
     <!-- Sauce -->
     <ellipse cx="300" cy="402" rx="156" ry="32" fill="#E85D04" opacity="0.55"/>
-    <!-- Rim -->
-    <rect x="76" y="332" width="448" height="46" rx="23" fill="#E85D04"/>
-    <path d="M100 354 Q100 510 300 510 Q500 510 500 354" stroke="#9B3700" stroke-width="9" fill="none"/>
 
     <!-- Steam pearls -->
     <circle cx="220" cy="404" r="32" fill="#FFFFFF" opacity="0.92"/>
     <circle cx="304" cy="380" r="26" fill="#FFFFFF" opacity="0.95"/>
     <circle cx="384" cy="408" r="29" fill="#FFFFFF" opacity="0.90"/>
     <circle cx="262" cy="444" r="19" fill="#FFFFFF" opacity="0.95"/>
+
+    <!-- Rim on top -->
+    <rect x="76" y="332" width="448" height="46" rx="23" fill="#3D1100"/>
   </g>
 
   <!-- Wordmark -->
