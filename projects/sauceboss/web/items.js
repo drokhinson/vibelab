@@ -3,18 +3,8 @@
 // ─── Unified item selection (carb / protein / salad) ─────────────────────────
 // One handler for all three categories. The category-specific labels (sauces
 // vs marinades vs dressings, "options" vs "marinades" loading text) come from
-// itemFlowMeta below, derived from the item's category.
-
-const ITEM_FLOW_META = {
-  carb:    { sauceTypeLabel: 'sauces',     sauceWord: 'Sauce'    },
-  protein: { sauceTypeLabel: 'marinades',  sauceWord: 'Marinade' },
-  salad:   { sauceTypeLabel: 'dressings',  sauceWord: 'Dressing' },
-};
-
-function flowMetaFor(item) {
-  if (!item) return ITEM_FLOW_META.carb;
-  return ITEM_FLOW_META[item.category] || ITEM_FLOW_META.carb;
-}
+// `flowMetaFor(item)` in shared/constants.js, exposed as a global by
+// shared-bridge.js.
 
 function _findItemById(id) {
   return (state.carbs.find(c => c.id === id))

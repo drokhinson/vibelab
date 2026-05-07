@@ -26,6 +26,10 @@ package-lock.json
 # Native apps need a committed lock file so EAS Build / expo-doctor can run.
 !projects/*/app/package-lock.json
 
+# Web prototypes copy ../shared/ into web/shared/ at build time (see web/build.sh).
+# The source of truth lives in projects/<name>/shared/.
+projects/*/web/shared/
+
 # Database
 *.sqlite
 *.sqlite3
