@@ -48,10 +48,15 @@ export function getNativeRedirectUri() {
 }
 
 // The URL we hand to Supabase. Has to be https — that's what Supabase will
-// accept for OAuth redirects on the shared vibelab project.
+// accept for OAuth redirects on the shared vibelab project. native_url goes
+// in the query string so Supabase's `URL.searchParams.set('code', …)` can
+// append cleanly. (Originally we used a `#native_url=…` fragment, but
+// Supabase's redirect-URL builder doesn't merge query params into URLs
+// with existing fragments — `?code=xxx` got swallowed and the bridge
+// landed without any auth params.)
 export function getSupabaseRedirectUri(nativeUri) {
   const encoded = encodeURIComponent(nativeUri);
-  return `${WEB_BRIDGE_URL}#native_url=${encoded}`;
+  return `${WEB_BRIDGE_URL}?native_url=${encoded}`;
 }
 
 function makeAllowlistHint(redirectTo) {
