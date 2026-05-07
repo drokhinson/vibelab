@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SauceBoss — Privacy Policy</title>
+  <style>
+    :root {
+      --orange: #E85D04;
+      --orange-dark: #C44B00;
+      --bg: #FFF8F0;
+      --card: #FFFFFF;
+      --text: #1A1A2E;
+      --muted: #6B7280;
+      --border: #E5E7EB;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
+      line-height: 1.6;
+    }
+    .header {
+      background: var(--orange);
+      color: #fff;
+      padding: 32px 24px 28px;
+      text-align: center;
+    }
+    .header h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: 0.5px; }
+    .header .subtitle { margin: 4px 0 0; opacity: 0.9; font-size: 13px; }
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 24px 20px 80px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 28px 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      margin-bottom: 16px;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      margin: -6px 0 18px;
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--orange-dark);
+      margin: 24px 0 6px;
+      letter-spacing: 0.2px;
+    }
+    h2:first-child { margin-top: 0; }
+    h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 16px 0 4px;
+    }
+    p, li { font-size: 14px; color: var(--text); margin: 6px 0; }
+    p.lead { font-size: 15px; }
+    ul { padding-left: 22px; margin: 6px 0 14px; }
+    li { margin: 4px 0; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      background: #F3F4F6;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    a { color: var(--orange); }
+    .back {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.85);
+      text-decoration: none;
+    }
+    .back:hover { color: #fff; }
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 12px 20px 32px;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>SauceBoss — Privacy Policy</h1>
+    <div class="subtitle">What we collect, where it lives, and how to delete it.</div>
+    <a class="back" href="/">← Back to SauceBoss</a>
+  </header>
+
+  <main class="container">
+    <p class="meta">Last updated: 2026-05-07</p>
+
+    <section class="card">
+      <h2>The short version</h2>
+      <p class="lead">
+        SauceBoss is a recipe app. We collect the minimum needed to let you sign in, save
+        favorites, and contribute recipes. We don't sell your data, run ads, or share what
+        you do in the app with anyone outside the small set of infrastructure providers
+        that store and serve it. Delete your account from <strong>Settings → Delete
+        account</strong> at any time and we wipe your profile and favorites immediately.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>What we collect</h2>
+
+      <h3>If you sign in</h3>
+      <ul>
+        <li><strong>Email address</strong> — required for account creation. Used to identify
+          your account and (if you sign in with Google) supplied by Google to our
+          authentication provider.</li>
+        <li><strong>Display name</strong> — defaults to the part of your email before the
+          <code>@</code>. Editable from Settings. Never displayed to other users; only
+          shown to you.</li>
+        <li><strong>Favorite recipes</strong> — the list of sauce IDs you've hearted.</li>
+        <li><strong>Recipes you author</strong> — sauces you create through the in-app
+          builder. The recipe content is public to other users; your association as the
+          author is stored privately and used only to show edit/delete controls on the
+          recipes you own.</li>
+        <li><strong>Authentication tokens</strong> — issued by Supabase Auth so you stay
+          signed in. Stored on your device in Apple Keychain (iOS) or the Android
+          Keystore.</li>
+      </ul>
+
+      <h3>If you sign in with Google</h3>
+      <p>
+        We receive your email address and your account's basic profile info (name,
+        avatar URL) from Google. We don't request any additional Google scopes — no Drive,
+        no Calendar, no contacts.
+      </p>
+
+      <h3>If you don't sign in</h3>
+      <p>
+        We collect <strong>no personal data</strong>. Browsing recipes, filtering by
+        ingredients, viewing the pie charts — all of that works anonymously.
+      </p>
+
+      <h3>Anonymous app-open ping</h3>
+      <p>
+        Each time the app opens, it sends a single anonymous request to our backend
+        recording that an "app_open" event happened. No user identifier, no device
+        fingerprint, no IP address logging beyond the standard server access logs that
+        our hosting provider rotates and discards.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Where it lives</h2>
+      <p>SauceBoss data is stored across three providers, all in the United States and EU:</p>
+      <ul>
+        <li><strong>Supabase</strong> — authentication, account profiles, favorites, sauces.
+          Encrypted in transit (TLS) and at rest. Backed up daily by Supabase.</li>
+        <li><strong>Railway</strong> — the API server that brokers requests to Supabase. No
+          user data is persisted on Railway; requests pass through.</li>
+        <li><strong>Vercel</strong> — hosts the web version of SauceBoss and this privacy
+          policy. No user data is sent to Vercel.</li>
+      </ul>
+      <p>
+        We don't share your data with anyone besides these three providers, and we don't
+        use third-party analytics, tracking pixels, or advertising SDKs.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>What we don't collect</h2>
+      <ul>
+        <li>No location data.</li>
+        <li>No contacts, calendar, photos, or other device data.</li>
+        <li>No device identifiers (no IDFA, no Android Advertising ID).</li>
+        <li>No analytics beyond the anonymous app-open ping above.</li>
+        <li>No payment information — SauceBoss is free with no in-app purchases.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Your rights</h2>
+      <h3>Edit</h3>
+      <p>Change your display name from <strong>Settings → Display name</strong>.</p>
+
+      <h3>Delete</h3>
+      <p>
+        From <strong>Settings → Delete account</strong>. This immediately removes your
+        profile row and every favorite associated with it. Recipes you authored stay in
+        the catalog (so they don't disappear from other users mid-meal) but lose their
+        owner attribution — they become unowned and can't be edited by anyone other than
+        an admin.
+      </p>
+      <p>
+        If you'd prefer your authored recipes deleted as well, email us before deleting
+        the account and we'll handle it manually.
+      </p>
+
+      <h3>Export</h3>
+      <p>
+        Email us at the address below and we'll send you a JSON dump of everything
+        associated with your account, normally within 30 days.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Children</h2>
+      <p>
+        SauceBoss is not directed at children under 13. We don't knowingly collect personal
+        data from anyone under 13. If you believe a child has signed up, email us and
+        we'll remove the account.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Cookies and storage</h2>
+      <p>
+        The native app stores authentication tokens in your device's secure storage
+        (Keychain / Keystore) and caches reference data (cuisine categories, ingredient
+        substitutions) in memory for the session. The web version does the same via
+        browser localStorage rather than cookies. We don't set any third-party tracking
+        cookies.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Encryption and export</h2>
+      <p>
+        SauceBoss uses standard, generally available cryptography (HTTPS / TLS for
+        transport, JWT for sessions, OS-provided secure storage for tokens). It does not
+        contain or use any non-mass-market encryption. The app is classified under
+        ECCN 5D992.c and qualifies for License Exception ENC under §740.17(b)(1) of the
+        US Export Administration Regulations.
+      </p>
+      <p>
+        SauceBoss is not distributed to countries embargoed by the United States.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Changes to this policy</h2>
+      <p>
+        If this policy changes materially, we'll bump the "Last updated" date at the top
+        and surface a notice the next time you open the app. Minor wording fixes won't
+        get a notice.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Contact</h2>
+      <p>
+        Questions, deletion requests, data export requests, or anything else:
+      </p>
+      <p>
+        <strong>Email:</strong> <a href="mailto:privacy@sauceboss.app">privacy@sauceboss.app</a>
+      </p>
+      <p class="meta">
+        (Replace this with a real inbox you check before submitting the app to the Play
+        Store. Google's review will email this address if anything's flagged.)
+      </p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    SauceBoss · A vibelab project
+  </footer>
+</body>
+</html>

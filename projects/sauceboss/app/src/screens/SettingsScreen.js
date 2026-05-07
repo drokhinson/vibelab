@@ -14,9 +14,10 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Star, LogOut, Trash2, Save } from 'lucide-react-native';
+import { Star, LogOut, Trash2, Save, Shield } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import EmptyState from '../components/EmptyState';
 import { COLORS, SHADOWS } from '../theme';
@@ -204,6 +205,18 @@ export default function SettingsScreen({ navigation }) {
         <TouchableOpacity style={styles.row} onPress={confirmDelete} activeOpacity={0.7}>
           <Trash2 size={18} color={COLORS.dangerText} />
           <Text style={[styles.rowLabel, { color: COLORS.dangerText }]}>Delete account</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Privacy + legal */}
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => Linking.openURL('https://sauceboss-omega.vercel.app/privacy.html')}
+          activeOpacity={0.7}
+        >
+          <Shield size={18} color={COLORS.textSecondary} />
+          <Text style={[styles.rowLabel, { color: COLORS.textSecondary }]}>Privacy policy</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
