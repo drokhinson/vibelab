@@ -99,19 +99,50 @@ export async function signInWithGoogleOAuth() {
     return { ok: false, error: e.message || String(e), redirectTo };
   }
 
+  // eslint-disable-next-line no-console
+  console.log('[sauceboss/oauth] WebBrowser result:', {
+    type: result?.type,
+    url: result?.url,
+  });
+
   if (result.type === 'cancel' || result.type === 'dismiss') {
     return { ok: false, cancelled: true, redirectTo };
   }
   if (result.type !== 'success' || !result.url) {
-    return { ok: false, error: makeAllowlistHint(redirectTo), redirectTo };
+    return {
+      ok: false,
+      error: `Sign-in flow ended unexpectedly (type=${result?.type}). ` +
+        `If this happens repeatedly, open the bridge URL in a regular ` +
+        `browser to confirm it's deployed:\n\n` +
+        `https://sauceboss-omega.vercel.app/auth-callback.html`,
+      redirectTo,
+    };
   }
 
   const handled = await handleAuthDeepLink(result.url);
   if (handled.ok) return { ok: true };
   if (handled.ignored) {
-    return { ok: false, error: makeAllowlistHint(redirectTo), redirectTo };
+    // Bridge ran (we got a URL back) but didn't include a code or tokens.
+    // That means the bridge's JS didn't reach the redirect step — most
+    // commonly because the bridge HTML isn't actually deployed yet (Vercel
+    // returned a 404 page that doesn't contain our script).
+    return {
+      ok: false,
+      error:
+        `The bridge URL didn't return an auth code or tokens.\n\n` +
+        `Returned URL:\n  ${result.url}\n\n` +
+        `Most common cause: the auth-callback.html bridge isn't deployed ` +
+        `yet on Vercel — merge the feature branch to main and wait for ` +
+        `Vercel to redeploy. Verify by opening the bridge URL in a normal ` +
+        `browser; you should see "No auth response in URL" rather than 404.`,
+      redirectTo,
+    };
   }
-  return { ok: false, error: handled.error || 'Sign-in failed.', redirectTo };
+  return {
+    ok: false,
+    error: handled.error || 'Sign-in failed.',
+    redirectTo,
+  };
 }
 
 // Helper used by both signInWithGoogleOAuth and the Linking deep-link
