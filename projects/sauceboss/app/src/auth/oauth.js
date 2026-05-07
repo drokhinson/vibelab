@@ -101,6 +101,12 @@ export async function signInWithGoogleOAuth() {
     return { ok: false, error: e.message || String(e), redirectTo };
   }
 
+  // eslint-disable-next-line no-console
+  console.log('[sauceboss/oauth] WebBrowser result:', {
+    type: result?.type,
+    url: result?.url,
+  });
+
   if (result.type === 'cancel' || result.type === 'dismiss') {
     return { ok: false, cancelled: true, redirectTo };
   }
