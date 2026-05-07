@@ -125,11 +125,20 @@ function renderBuilder() {
       </div>`;
     }).join('');
 
+    const timeValue = step.estimatedTime != null && step.estimatedTime !== '' ? step.estimatedTime : '';
     return `<div class="builder-step-card">
       ${b.steps.length > 1 ? `<button class="remove-step-btn" onclick="builderRemoveStep(${si})">✕</button>` : ''}
       <div class="step-number">Step ${si + 1}</div>
       ${stepRefHTML}
-      <input class="builder-input" placeholder="Step title (e.g., Sauté the base)" value="${esc(step.title)}" data-builder-field="step-title" data-step="${si}">
+      <div class="builder-step-headline">
+        <input class="builder-input builder-step-title" placeholder="Step title (e.g., Sauté the base)" value="${esc(step.title)}" data-builder-field="step-title" data-step="${si}">
+        <label class="builder-step-time">
+          <input class="builder-input builder-step-time-input" type="number" min="0" max="600" inputmode="numeric"
+                 placeholder="5" value="${esc(String(timeValue))}"
+                 data-builder-field="step-time" data-step="${si}">
+          <span class="builder-step-time-suffix">min</span>
+        </label>
+      </div>
       <textarea class="builder-input builder-step-instructions" placeholder="Instructions (optional)" data-builder-field="step-instructions" data-step="${si}">${esc(step.instructions || '')}</textarea>
       <div class="builder-ings-list">${ingsHTML}</div>
       <button class="add-ing-btn" onclick="builderAddIngredient(${si})">+ Ingredient</button>
@@ -335,7 +344,7 @@ function builderSetColor(hex) {
 }
 
 function builderAddStep() {
-  state.builder.steps.push({ title: '', instructions: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
+  state.builder.steps.push({ title: '', instructions: '', inputFromStep: null, estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
   render();
 }
 
@@ -415,6 +424,13 @@ function builderHandleInput(el) {
     case 'cuisine-draft-emoji': b.cuisineDraftEmoji = el.value; break;
     case 'step-title': b.steps[si].title = el.value; break;
     case 'step-instructions': b.steps[si].instructions = el.value; break;
+    case 'step-time': {
+      // Empty string clears the explicit value so the read paths fall back
+      // to the legacy 5-minute default.
+      const v = el.value.trim();
+      b.steps[si].estimatedTime = v === '' ? null : Math.max(0, Math.min(600, parseInt(v, 10) || 0));
+      break;
+    }
     case 'ing-name': {
       b.steps[si].ingredients[ii].name = el.value;
       const matches = fuzzyMatchIngredients(el.value);
@@ -766,6 +782,7 @@ async function builderSave() {
           title: s.title.trim(),
           instructions: (s.instructions || '').trim() || null,
           inputFromStep: s.inputFromStep || null,
+          estimatedTime: s.estimatedTime != null && s.estimatedTime !== '' ? s.estimatedTime : null,
           ingredients: s.ingredients
             .filter(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste'))
             .map(i => {
