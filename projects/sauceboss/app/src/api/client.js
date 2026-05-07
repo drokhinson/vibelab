@@ -4,7 +4,12 @@
 
 import { makeApi } from '#shared/api';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+// Default to the deployed Railway backend. EXPO_PUBLIC_API_URL in app/.env
+// overrides for local dev (e.g. http://localhost:8000 with `uvicorn main:app
+// --reload` running). Defaulting to the live URL means a fresh `git clone`
+// on a teammate's machine works without any .env setup.
+const DEFAULT_API_URL = 'https://vibelab-production-2119.up.railway.app';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL;
 
 let _getToken = () => null;
 
