@@ -1,0 +1,11 @@
+<!-- Web favicon. Small square version of the icon. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#E85D04"/>
+  <ellipse cx="32" cy="56" rx="22" ry="3" fill="#1A1A2E" opacity="0.12"/>
+  <path d="M11 34 Q11 53 32 53 Q53 53 53 34 Z" fill="#FFF3E6"/>
+  <ellipse cx="32" cy="40" rx="16" ry="3.5" fill="#E85D04" opacity="0.55"/>
+  <rect x="8" y="32" width="48" height="5" rx="2.5" fill="#E85D04"/>
+  <circle cx="25" cy="38" r="3.5" fill="#FFFFFF" opacity="0.95"/>
+  <circle cx="32" cy="36" r="2.8" fill="#FFFFFF" opacity="0.95"/>
+  <circle cx="40" cy="38" r="3.2" fill="#FFFFFF" opacity="0.92"/>
+</svg>

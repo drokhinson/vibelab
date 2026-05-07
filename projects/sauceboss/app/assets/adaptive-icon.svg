@@ -1,0 +1,31 @@
+<!-- Android adaptive-icon foreground. Drawn on a 1024x1024 square with a
+     transparent background; Android renders it composited over the
+     `adaptiveIcon.backgroundColor` field in app.json (#E85D04). The OS
+     can mask this to a circle, squircle, or rounded square depending
+     on the launcher, so the actual safe content area is the inner
+     ~660x660. Pot is intentionally smaller than icon.svg's so it
+     doesn't get clipped by the most aggressive masks. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Steam trails — same cream lines, slightly thinner. -->
+  <g stroke="#FFF3E6" stroke-width="20" stroke-linecap="round" fill="none" opacity="0.6">
+    <path d="M408 540 Q432 460 408 380 Q384 305 408 230"/>
+    <path d="M512 524 Q536 444 512 364 Q488 289 512 214"/>
+    <path d="M616 540 Q640 460 616 380 Q592 305 616 230"/>
+  </g>
+
+  <!-- Pot body. -->
+  <path d="M236 596 Q236 836 512 836 Q788 836 788 596 Z" fill="#FFF3E6"/>
+
+  <!-- Sauce. -->
+  <ellipse cx="512" cy="676" rx="216" ry="46" fill="#E85D04" opacity="0.55"/>
+
+  <!-- Rim. -->
+  <rect x="200" y="568" width="624" height="64" rx="32" fill="#E85D04"/>
+  <path d="M236 596 Q236 836 512 836 Q788 836 788 596" stroke="#9B3700" stroke-width="12" fill="none"/>
+
+  <!-- Steam pearls. -->
+  <circle cx="416" cy="680" r="44" fill="#FFFFFF" opacity="0.92"/>
+  <circle cx="520" cy="648" r="36" fill="#FFFFFF" opacity="0.95"/>
+  <circle cx="616" cy="688" r="40" fill="#FFFFFF" opacity="0.90"/>
+  <circle cx="476" cy="744" r="26" fill="#FFFFFF" opacity="0.95"/>
+</svg>

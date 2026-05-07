@@ -1,0 +1,44 @@
+<!-- SauceBoss app icon — full-bleed orange with the pot mark centered.
+     Used as the master for icon.png (iOS / generic) and as the source of
+     truth for the adaptive-icon foreground. Edit this file when you want
+     to tweak the design; re-run scripts/generate-icons.mjs to bake fresh
+     PNGs. Pot geometry mirrors web/meal.js::potSVG so all three surfaces
+     (web splash, native pot, app icon) use the same shapes. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F48C06"/>
+      <stop offset="1" stop-color="#C94E02"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Steam trails — soft cream lines rising over the pot. Heavier strokes
+       and lighter opacity so they read at small sizes too. -->
+  <g stroke="#FFF3E6" stroke-width="22" stroke-linecap="round" fill="none" opacity="0.55">
+    <path d="M380 470 Q410 365 380 270 Q350 185 380 100"/>
+    <path d="M512 450 Q542 350 512 250 Q482 165 512 80"/>
+    <path d="M644 470 Q674 365 644 270 Q614 185 644 100"/>
+  </g>
+
+  <!-- Floor shadow under the pot, almost invisible to give it grounding. -->
+  <ellipse cx="512" cy="900" rx="380" ry="40" fill="#1A1A2E" opacity="0.10"/>
+
+  <!-- Pot body — cream interior, dark cream rim outline. -->
+  <path d="M170 540 Q170 850 512 850 Q854 850 854 540 Z" fill="#FFF3E6"/>
+
+  <!-- Sauce inside, peeking above the lip ring. -->
+  <ellipse cx="512" cy="640" rx="270" ry="55" fill="#E85D04" opacity="0.55"/>
+
+  <!-- Pot rim — solid orange band that reads as the "lid" silhouette. -->
+  <rect x="120" y="500" width="784" height="80" rx="40" fill="#E85D04"/>
+  <!-- Slight darker stroke so the rim still has edge definition on white BGs -->
+  <path d="M170 540 Q170 850 512 850 Q854 850 854 540" stroke="#9B3700" stroke-width="14" fill="none"/>
+
+  <!-- Steam pearls — bigger here than in the on-screen illustration so the
+       silhouette stays legible when the OS clips to a 1024 / 432dp circle. -->
+  <circle cx="392" cy="600" r="56" fill="#FFFFFF" opacity="0.92"/>
+  <circle cx="520" cy="560" r="44" fill="#FFFFFF" opacity="0.95"/>
+  <circle cx="640" cy="610" r="50" fill="#FFFFFF" opacity="0.90"/>
+  <circle cx="460" cy="680" r="32" fill="#FFFFFF" opacity="0.95"/>
+</svg>
