@@ -58,8 +58,6 @@ export default function PotIllustration({ width = 180, height = 140, animated = 
         <Ellipse cx="90" cy="130" rx="62" ry="8" fill="#1A1A2E" opacity="0.06" />
         {/* Pot body */}
         <Path d="M28 68 Q28 112 90 112 Q152 112 152 68 Z" fill="#FFF3E6" />
-        {/* Lip */}
-        <Rect x="20" y="60" width="140" height="14" rx="7" fill="#E85D04" />
         <Path d="M28 68 Q28 112 90 112 Q152 112 152 68" stroke="#C94E02" strokeWidth="2" fill="none" />
         {/* Inner sauce */}
         <Ellipse cx="90" cy="96" rx="40" ry="10" fill="#E85D04" opacity="0.1" />
@@ -120,6 +118,12 @@ export default function PotIllustration({ width = 180, height = 140, animated = 
           <Circle cx="82" cy="103" r="5" fill="#FAA307" />
         </Svg>
       </Animated.View>
+      {/* Rim renders on top of the animated bubbles to match the icon. */}
+      <View style={{ position: 'absolute', left: 0, top: 0, width, height }} pointerEvents="none">
+        <Svg width={width} height={height} viewBox="0 0 180 140">
+          <Rect x="20" y="60" width="140" height="14" rx="7" fill="#3D1100" />
+        </Svg>
+      </View>
     </View>
   );
 }
