@@ -4,6 +4,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import { api, setAuthTokenGetter } from '../api/client';
+import { supabase, isAuthConfigured } from '../auth/supabase';
 import { withIngredientNames } from '#shared/filter';
 
 // ── Initial state ───────────────────────────────────────────────────────────
@@ -47,6 +48,11 @@ export const initialState = {
   meal: { item: null, prep: null, sauce: null },
 
   // Auth (Phase 2 hooks; unused in Phase 1)
+  authReady: false,             // false until we've checked supabase for an existing session
+  authBusy: false,              // true while a sign-in / sign-up is in flight
+  authError: null,
+  becomeAdminBusy: false,
+  becomeAdminError: null,
   session: null,
   currentUser: null,
   favorites: new Map(),
@@ -79,11 +85,17 @@ const A = {
   SELECT_VARIANT: 'SELECT_VARIANT',
 
   // Phase 2 hooks (auth + favorites). Not used in Phase 1 but reducer handles them so wiring later is trivial.
+  SET_AUTH_READY: 'SET_AUTH_READY',
+  SET_AUTH_BUSY: 'SET_AUTH_BUSY',
+  SET_AUTH_ERROR: 'SET_AUTH_ERROR',
   SET_SESSION: 'SET_SESSION',
   SET_CURRENT_USER: 'SET_CURRENT_USER',
   SET_FAVORITES: 'SET_FAVORITES',
   SET_FAVORITE: 'SET_FAVORITE',
   SET_FAVORITES_ONLY: 'SET_FAVORITES_ONLY',
+  SET_BECOME_ADMIN_BUSY: 'SET_BECOME_ADMIN_BUSY',
+  SET_BECOME_ADMIN_ERROR: 'SET_BECOME_ADMIN_ERROR',
+  CLEAR_AUTH: 'CLEAR_AUTH',
 };
 
 // ── Reducer ─────────────────────────────────────────────────────────────────
@@ -205,6 +217,15 @@ function reducer(state, action) {
     case A.SET_UNIT_SYSTEM:
       return { ...state, unitSystem: action.value === 'metric' ? 'metric' : 'imperial' };
 
+    case A.SET_AUTH_READY:
+      return { ...state, authReady: !!action.value };
+
+    case A.SET_AUTH_BUSY:
+      return { ...state, authBusy: !!action.value };
+
+    case A.SET_AUTH_ERROR:
+      return { ...state, authError: action.error || null };
+
     case A.SET_SESSION:
       return { ...state, session: action.session };
 
@@ -223,6 +244,23 @@ function reducer(state, action) {
 
     case A.SET_FAVORITES_ONLY:
       return { ...state, favoritesOnly: !!action.value };
+
+    case A.SET_BECOME_ADMIN_BUSY:
+      return { ...state, becomeAdminBusy: !!action.value };
+
+    case A.SET_BECOME_ADMIN_ERROR:
+      return { ...state, becomeAdminError: action.error || null };
+
+    case A.CLEAR_AUTH:
+      return {
+        ...state,
+        session: null,
+        currentUser: null,
+        favorites: new Map(),
+        favoritesOnly: false,
+        authError: null,
+        becomeAdminError: null,
+      };
 
     default:
       return state;
@@ -253,6 +291,78 @@ export function AppProvider({ children }) {
   // Wire the API client to read the auth token from this context.
   useEffect(() => {
     setAuthTokenGetter(() => stateRef.current.session?.access_token || null);
+  }, []);
+
+  // Auth bootstrap: subscribe to Supabase session changes. On sign-in, fetch
+  // profile (auto-create on 404) + favorites. On sign-out, clear them.
+  useEffect(() => {
+    if (!isAuthConfigured || !supabase) {
+      // No Supabase config — auth is not available; mark ready so UI doesn't hang.
+      dispatch({ type: A.SET_AUTH_READY, value: true });
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function hydrateUserState(session) {
+      if (!session) {
+        dispatch({ type: A.CLEAR_AUTH });
+        return;
+      }
+      // Profile: 404 means auto-create.
+      try {
+        const profile = await api.getProfile();
+        if (!cancelled) {
+          dispatch({
+            type: A.SET_CURRENT_USER,
+            user: { user_id: profile.id, display_name: profile.display_name, is_admin: !!profile.is_admin },
+          });
+        }
+      } catch (e) {
+        if (e.status === 404) {
+          try {
+            const created = await api.upsertProfile(session.user?.email?.split('@')[0] || 'Saucier');
+            if (!cancelled) {
+              dispatch({
+                type: A.SET_CURRENT_USER,
+                user: { user_id: created.id, display_name: created.display_name, is_admin: !!created.is_admin },
+              });
+            }
+          } catch {
+            // ignore — non-fatal, user is signed in but profile creation failed
+          }
+        }
+      }
+
+      // Favorites — non-blocking.
+      try {
+        const favs = await api.listFavorites();
+        if (!cancelled) dispatch({ type: A.SET_FAVORITES, favorites: favs });
+      } catch {
+        // ignore
+      }
+    }
+
+    // Initial session check (rehydrated from SecureStore).
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      const session = data?.session || null;
+      dispatch({ type: A.SET_SESSION, session });
+      hydrateUserState(session).finally(() => {
+        if (!cancelled) dispatch({ type: A.SET_AUTH_READY, value: true });
+      });
+    });
+
+    // Live updates — sign-in / sign-out / token refresh.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      dispatch({ type: A.SET_SESSION, session });
+      hydrateUserState(session);
+    });
+
+    return () => {
+      cancelled = true;
+      sub?.subscription?.unsubscribe();
+    };
   }, []);
 
   // Bootstrap: initial-load + lazy-load ingredient categories + substitutions.
@@ -330,12 +440,125 @@ export function AppProvider({ children }) {
       setServings: (value) => dispatch({ type: A.SET_SERVINGS, value }),
       setUnitSystem: (value) => dispatch({ type: A.SET_UNIT_SYSTEM, value }),
 
-      // Phase 2 hooks (no-ops in Phase 1 — auth UI not wired yet)
-      setSession: (session) => dispatch({ type: A.SET_SESSION, session }),
-      setCurrentUser: (user) => dispatch({ type: A.SET_CURRENT_USER, user }),
-      setFavorites: (favorites) => dispatch({ type: A.SET_FAVORITES, favorites }),
-      setFavorite: (sauceId, favorited, timestamp) =>
-        dispatch({ type: A.SET_FAVORITE, sauceId, favorited, timestamp }),
+      // ── Auth actions ────────────────────────────────────────────────────────
+      signIn: async (email, password) => {
+        if (!isAuthConfigured || !supabase) {
+          dispatch({ type: A.SET_AUTH_ERROR, error: 'Sign-in is not configured for this build.' });
+          return { ok: false };
+        }
+        dispatch({ type: A.SET_AUTH_BUSY, value: true });
+        dispatch({ type: A.SET_AUTH_ERROR, error: null });
+        try {
+          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          // onAuthStateChange will populate session + currentUser + favorites.
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.SET_AUTH_ERROR, error: e.message || String(e) });
+          return { ok: false };
+        } finally {
+          dispatch({ type: A.SET_AUTH_BUSY, value: false });
+        }
+      },
+
+      signUp: async (email, password) => {
+        if (!isAuthConfigured || !supabase) {
+          dispatch({ type: A.SET_AUTH_ERROR, error: 'Sign-up is not configured for this build.' });
+          return { ok: false };
+        }
+        dispatch({ type: A.SET_AUTH_BUSY, value: true });
+        dispatch({ type: A.SET_AUTH_ERROR, error: null });
+        try {
+          const { error } = await supabase.auth.signUp({ email, password });
+          if (error) throw error;
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.SET_AUTH_ERROR, error: e.message || String(e) });
+          return { ok: false };
+        } finally {
+          dispatch({ type: A.SET_AUTH_BUSY, value: false });
+        }
+      },
+
+      signOut: async () => {
+        if (!supabase) {
+          dispatch({ type: A.CLEAR_AUTH });
+          return;
+        }
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // ignore — local state will clear on auth state change anyway
+        }
+        dispatch({ type: A.CLEAR_AUTH });
+      },
+
+      clearAuthError: () => dispatch({ type: A.SET_AUTH_ERROR, error: null }),
+
+      becomeAdmin: async (adminKey) => {
+        dispatch({ type: A.SET_BECOME_ADMIN_BUSY, value: true });
+        dispatch({ type: A.SET_BECOME_ADMIN_ERROR, error: null });
+        try {
+          const profile = await api.becomeAdmin(adminKey);
+          dispatch({
+            type: A.SET_CURRENT_USER,
+            user: { user_id: profile.id, display_name: profile.display_name, is_admin: !!profile.is_admin },
+          });
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.SET_BECOME_ADMIN_ERROR, error: e.message || String(e) });
+          return { ok: false };
+        } finally {
+          dispatch({ type: A.SET_BECOME_ADMIN_BUSY, value: false });
+        }
+      },
+
+      updateDisplayName: async (displayName) => {
+        try {
+          const profile = await api.upsertProfile(displayName);
+          dispatch({
+            type: A.SET_CURRENT_USER,
+            user: { user_id: profile.id, display_name: profile.display_name, is_admin: !!profile.is_admin },
+          });
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+
+      deleteAccount: async () => {
+        try {
+          await api.deleteProfile();
+        } catch {
+          // even if the server delete fails, signing out locally is still useful
+        }
+        if (supabase) {
+          try { await supabase.auth.signOut(); } catch {}
+        }
+        dispatch({ type: A.CLEAR_AUTH });
+      },
+
+      // ── Favorites ───────────────────────────────────────────────────────────
+      // Optimistic toggle. Updates UI immediately, syncs in the background,
+      // reverts on failure. If the user isn't signed in, returns false so
+      // the caller can prompt sign-in.
+      toggleFavorite: async (sauceId) => {
+        const cur = stateRef.current;
+        if (!cur.currentUser) return { ok: false, reason: 'unauthenticated' };
+        const wasFavorited = cur.favorites.has(sauceId);
+        const previousTimestamp = cur.favorites.get(sauceId);
+        dispatch({ type: A.SET_FAVORITE, sauceId, favorited: !wasFavorited });
+        try {
+          if (wasFavorited) await api.removeFavorite(sauceId);
+          else await api.addFavorite(sauceId);
+          return { ok: true };
+        } catch (e) {
+          // revert
+          dispatch({ type: A.SET_FAVORITE, sauceId, favorited: wasFavorited, timestamp: previousTimestamp });
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+
       setFavoritesOnly: (value) => dispatch({ type: A.SET_FAVORITES_ONLY, value }),
     }),
     [],

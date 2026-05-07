@@ -17,6 +17,7 @@ import { useAppActions, useAppState } from '../store/AppContext';
 import PotIllustration from '../components/PotIllustration';
 import LoadingPot from '../components/LoadingPot';
 import EmptyState from '../components/EmptyState';
+import HeaderAuthSlot from '../components/HeaderAuthSlot';
 import { COLORS, SHADOWS } from '../theme';
 
 const TABS = [
@@ -84,8 +85,13 @@ export default function MealBuilderScreen({ navigation }) {
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={styles.logo}>SauceBoss</Text>
-        <Text style={styles.subtitle}>What are you cooking with?</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerText}>
+            <Text style={styles.logo}>SauceBoss</Text>
+            <Text style={styles.subtitle}>What are you cooking with?</Text>
+          </View>
+          <HeaderAuthSlot navigation={navigation} />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
@@ -131,6 +137,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingBottom: 18,
     paddingHorizontal: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerText: {
+    flex: 1,
   },
   logo: {
     fontSize: 26,
