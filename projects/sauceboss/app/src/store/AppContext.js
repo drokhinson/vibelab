@@ -48,6 +48,7 @@ export const initialState = {
   meal: { item: null, prep: null, sauce: null },
 
   // Sauce Manager (browse-all view; independent of the meal flow)
+  managerTab: 'sauces',              // 'sauces' | 'dish' | 'ingredients'
   managerSauces: [],
   managerLoading: false,
   managerError: null,
@@ -55,6 +56,21 @@ export const initialState = {
   managerTypeFilter: 'all',          // 'all' | 'sauce' | 'marinade' | 'dressing'
   managerFavoritesOnly: false,
   managerExpandedCuisines: new Set(),
+
+  // Manager → Dish tab
+  managerItems: { carbs: [], proteins: [], salads: [] },
+  managerItemsLoading: false,
+  managerItemsError: null,
+  expandedItemSections: new Set(),    // 'carbs' | 'proteins' | 'salads'
+  expandedItemParents: new Set(),     // item ids whose variant list is open
+
+  // Manager → Ingredients tab
+  managerFoods: [],                   // [{ id, name, plural, usageCount, sauceCount }]
+  managerFoodsLoading: false,
+  managerFoodsError: null,
+  expandedIngredientSections: new Set(), // category names
+  expandedFoodIds: new Set(),         // food ids whose sauces panel is open
+  foodMerge: null,                    // { keepId, mergeIds: Set, error, saving } when admin is in merge mode
 
   // Auth (Phase 2 hooks; unused in Phase 1)
   authReady: false,             // false until we've checked supabase for an existing session
@@ -103,6 +119,26 @@ const A = {
   MANAGER_TOGGLE_CUISINE: 'MANAGER_TOGGLE_CUISINE',
   MANAGER_REMOVE_SAUCE: 'MANAGER_REMOVE_SAUCE',
   MANAGER_UPSERT_SAUCE: 'MANAGER_UPSERT_SAUCE',
+  MANAGER_SET_TAB: 'MANAGER_SET_TAB',
+
+  // Manager → Dish tab
+  ITEMS_LOAD_START: 'ITEMS_LOAD_START',
+  ITEMS_LOADED: 'ITEMS_LOADED',
+  ITEMS_LOAD_ERROR: 'ITEMS_LOAD_ERROR',
+  ITEMS_TOGGLE_SECTION: 'ITEMS_TOGGLE_SECTION',
+  ITEMS_TOGGLE_PARENT: 'ITEMS_TOGGLE_PARENT',
+
+  // Manager → Ingredients tab
+  FOODS_LOAD_START: 'FOODS_LOAD_START',
+  FOODS_LOADED: 'FOODS_LOADED',
+  FOODS_LOAD_ERROR: 'FOODS_LOAD_ERROR',
+  FOODS_TOGGLE_SECTION: 'FOODS_TOGGLE_SECTION',
+  FOODS_TOGGLE_EXPAND: 'FOODS_TOGGLE_EXPAND',
+  FOODS_REMOVE: 'FOODS_REMOVE',
+  FOOD_MERGE_START: 'FOOD_MERGE_START',
+  FOOD_MERGE_TOGGLE_PICK: 'FOOD_MERGE_TOGGLE_PICK',
+  FOOD_MERGE_CANCEL: 'FOOD_MERGE_CANCEL',
+  FOOD_MERGE_SET_ERROR: 'FOOD_MERGE_SET_ERROR',
 
   // Phase 2 hooks (auth + favorites). Not used in Phase 1 but reducer handles them so wiring later is trivial.
   SET_AUTH_READY: 'SET_AUTH_READY',
@@ -272,6 +308,90 @@ function reducer(state, action) {
       else next.unshift(action.sauce);
       return { ...state, managerSauces: next };
     }
+
+    case A.MANAGER_SET_TAB:
+      return { ...state, managerTab: action.value, managerSearch: '' };
+
+    case A.ITEMS_LOAD_START:
+      return { ...state, managerItemsLoading: true, managerItemsError: null };
+
+    case A.ITEMS_LOADED:
+      return {
+        ...state,
+        managerItems: action.items || { carbs: [], proteins: [], salads: [] },
+        managerItemsLoading: false,
+        managerItemsError: null,
+      };
+
+    case A.ITEMS_LOAD_ERROR:
+      return { ...state, managerItemsLoading: false, managerItemsError: action.error };
+
+    case A.ITEMS_TOGGLE_SECTION: {
+      const next = new Set(state.expandedItemSections);
+      if (next.has(action.category)) next.delete(action.category);
+      else next.add(action.category);
+      return { ...state, expandedItemSections: next };
+    }
+
+    case A.ITEMS_TOGGLE_PARENT: {
+      const next = new Set(state.expandedItemParents);
+      if (next.has(action.parentId)) next.delete(action.parentId);
+      else next.add(action.parentId);
+      return { ...state, expandedItemParents: next };
+    }
+
+    case A.FOODS_LOAD_START:
+      return { ...state, managerFoodsLoading: true, managerFoodsError: null };
+
+    case A.FOODS_LOADED:
+      return {
+        ...state,
+        managerFoods: action.foods || [],
+        managerFoodsLoading: false,
+        managerFoodsError: null,
+      };
+
+    case A.FOODS_LOAD_ERROR:
+      return { ...state, managerFoodsLoading: false, managerFoodsError: action.error };
+
+    case A.FOODS_TOGGLE_SECTION: {
+      const next = new Set(state.expandedIngredientSections);
+      if (next.has(action.category)) next.delete(action.category);
+      else next.add(action.category);
+      return { ...state, expandedIngredientSections: next };
+    }
+
+    case A.FOODS_TOGGLE_EXPAND: {
+      const next = new Set(state.expandedFoodIds);
+      if (next.has(action.foodId)) next.delete(action.foodId);
+      else next.add(action.foodId);
+      return { ...state, expandedFoodIds: next };
+    }
+
+    case A.FOODS_REMOVE:
+      return { ...state, managerFoods: state.managerFoods.filter((f) => f.id !== action.foodId) };
+
+    case A.FOOD_MERGE_START:
+      return {
+        ...state,
+        foodMerge: { keepId: action.keepId, mergeIds: new Set(), error: null, saving: false },
+      };
+
+    case A.FOOD_MERGE_TOGGLE_PICK: {
+      if (!state.foodMerge) return state;
+      const next = new Set(state.foodMerge.mergeIds);
+      if (next.has(action.foodId)) next.delete(action.foodId);
+      else next.add(action.foodId);
+      return { ...state, foodMerge: { ...state.foodMerge, mergeIds: next, error: null } };
+    }
+
+    case A.FOOD_MERGE_CANCEL:
+      return { ...state, foodMerge: null };
+
+    case A.FOOD_MERGE_SET_ERROR:
+      return state.foodMerge
+        ? { ...state, foodMerge: { ...state.foodMerge, error: action.error, saving: !!action.saving } }
+        : state;
 
     case A.SET_AUTH_READY:
       return { ...state, authReady: !!action.value };
@@ -512,6 +632,7 @@ export function AppProvider({ children }) {
       setManagerTypeFilter: (value) => dispatch({ type: A.MANAGER_SET_TYPE_FILTER, value }),
       setManagerFavoritesOnly: (value) => dispatch({ type: A.MANAGER_SET_FAVORITES_ONLY, value }),
       toggleManagerCuisine: (cuisine) => dispatch({ type: A.MANAGER_TOGGLE_CUISINE, cuisine }),
+      setManagerTab: (tab) => dispatch({ type: A.MANAGER_SET_TAB, value: tab }),
       // Owner-or-admin delete. Returns { ok, error } and optimistically removes
       // from the manager list on success.
       deleteSauce: async (sauceId) => {
@@ -520,6 +641,132 @@ export function AppProvider({ children }) {
           dispatch({ type: A.MANAGER_REMOVE_SAUCE, sauceId });
           return { ok: true };
         } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+
+      // ── Manager → Dish tab ──────────────────────────────────────────────────
+      loadAllItems: async () => {
+        dispatch({ type: A.ITEMS_LOAD_START });
+        try {
+          const items = await api.allItems();
+          dispatch({ type: A.ITEMS_LOADED, items });
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.ITEMS_LOAD_ERROR, error: e.message || String(e) });
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      toggleItemSection: (category) => dispatch({ type: A.ITEMS_TOGGLE_SECTION, category }),
+      toggleItemParent: (parentId) => dispatch({ type: A.ITEMS_TOGGLE_PARENT, parentId }),
+      // Admin CRUD for dishes (carbs / proteins / salads / variants). Each
+      // action refreshes the list on success so nested variant data stays in
+      // sync without an in-place patch.
+      createItem: async (payload) => {
+        try {
+          await api.createItem(payload);
+          await actions._refreshItems();
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      updateItem: async (id, payload) => {
+        try {
+          await api.updateItem(id, payload);
+          await actions._refreshItems();
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      deleteItem: async (id) => {
+        try {
+          await api.deleteItem(id);
+          await actions._refreshItems();
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      _refreshItems: async () => {
+        try {
+          const items = await api.allItems();
+          dispatch({ type: A.ITEMS_LOADED, items });
+        } catch {
+          // ignore — keep the previous list
+        }
+      },
+
+      // ── Manager → Ingredients tab ───────────────────────────────────────────
+      loadAllFoods: async () => {
+        dispatch({ type: A.FOODS_LOAD_START });
+        try {
+          const foods = await api.listFoodsWithUsage();
+          dispatch({ type: A.FOODS_LOADED, foods });
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.FOODS_LOAD_ERROR, error: e.message || String(e) });
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      toggleIngredientSection: (category) => dispatch({ type: A.FOODS_TOGGLE_SECTION, category }),
+      toggleFoodExpansion: (foodId) => dispatch({ type: A.FOODS_TOGGLE_EXPAND, foodId }),
+      // Any logged-in user (not admin-gated). Returns { ok } and refreshes.
+      createFood: async (payload) => {
+        try {
+          await api.createFood(payload);
+          await actions._refreshFoods();
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      updateFood: async (id, payload) => {
+        try {
+          await api.updateFood(id, payload);
+          await actions._refreshFoods();
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      // Backend returns 409 if the food is in use — caller surfaces the message.
+      deleteFood: async (id) => {
+        try {
+          await api.deleteFood(id);
+          dispatch({ type: A.FOODS_REMOVE, foodId: id });
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      _refreshFoods: async () => {
+        try {
+          const foods = await api.listFoodsWithUsage();
+          dispatch({ type: A.FOODS_LOADED, foods });
+        } catch {
+          // ignore — keep the previous list
+        }
+      },
+
+      // ── Manager → Ingredients merge mode ────────────────────────────────────
+      startFoodMerge: (keepId) => dispatch({ type: A.FOOD_MERGE_START, keepId }),
+      toggleFoodMergePick: (foodId) => dispatch({ type: A.FOOD_MERGE_TOGGLE_PICK, foodId }),
+      cancelFoodMerge: () => dispatch({ type: A.FOOD_MERGE_CANCEL }),
+      // Commit: repoints all step ingredients from mergeIds → keepId and
+      // deletes the merged food rows. Refreshes on success.
+      commitFoodMerge: async () => {
+        const merge = stateRef.current.foodMerge;
+        if (!merge || merge.mergeIds.size === 0) return { ok: false, error: 'Pick at least one ingredient to merge.' };
+        dispatch({ type: A.FOOD_MERGE_SET_ERROR, error: null, saving: true });
+        try {
+          await api.mergeFoods(merge.keepId, [...merge.mergeIds]);
+          await actions._refreshFoods();
+          dispatch({ type: A.FOOD_MERGE_CANCEL });
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.FOOD_MERGE_SET_ERROR, error: e.message || String(e), saving: false });
           return { ok: false, error: e.message || String(e) };
         }
       },
