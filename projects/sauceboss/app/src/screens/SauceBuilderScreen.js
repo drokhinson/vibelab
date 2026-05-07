@@ -102,6 +102,10 @@ export default function SauceBuilderScreen({ navigation, route }) {
   const [importError, setImportError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  // Two-step flow: edit form → review screen → save. Tapping "Review" sends
+  // you to a read-only summary; tapping "Confirm and save" from there fires
+  // the actual create/update request.
+  const [reviewing, setReviewing] = useState(false);
 
   // Items list — for the "pair with" picker. Backend's /items returns
   // {carbs, proteins, salads}. We flatten parents only (variants get linked
@@ -294,15 +298,19 @@ export default function SauceBuilderScreen({ navigation, route }) {
     setSaving(true);
     setSaveError(null);
     try {
+      // Backend models: `description` and `cuisineEmoji` are non-Optional
+      // strings (default ""); sending null fails with 422. `sourceUrl` is
+      // Optional[str] so null is fine. `parentSauceId` is Optional[str] —
+      // empty string would also pass but null is cleaner.
       const payload = {
         name: builder.name.trim(),
         cuisine: builder.cuisine.trim(),
         cuisineEmoji: builder.cuisineEmoji || '',
         color: builder.color,
-        description: (builder.description || '').trim() || null,
+        description: (builder.description || '').trim(),
         sourceUrl: (builder.sourceUrl || '').trim() || null,
         sauceType: builder.sauceType,
-        parentSauceId: builder.parentSauceId,
+        parentSauceId: builder.parentSauceId || null,
         itemIds: builder.itemIds,
         steps: builder.steps.map((s, i) => {
           // Empty input -> null so the recipe view falls back to the
@@ -361,11 +369,29 @@ export default function SauceBuilderScreen({ navigation, route }) {
     );
   }
 
-  const allItems = [
-    { label: 'Carbs', list: items.carbs },
-    { label: 'Proteins', list: items.proteins },
-    { label: 'Salads', list: items.salads },
-  ];
+  // The backend enforces sauce↔category pairing (sauce/carb, marinade/protein,
+  // dressing/salad). Mirror that constraint here so the picker only shows the
+  // group that matches the current sauceType — same logic as web's flowMetaFor.
+  const typeMeta = SAUCE_TYPES.find((t) => t.value === builder.sauceType) || SAUCE_TYPES[0];
+  const allowedItems = typeMeta.category === 'protein' ? items.proteins
+    : typeMeta.category === 'salad' ? items.salads
+    : items.carbs;
+  const pairLabel = typeMeta.pairLabel;
+
+  if (reviewing) {
+    return (
+      <ReviewScreen
+        builder={builder}
+        items={items}
+        editingId={editingId}
+        saving={saving}
+        saveError={saveError}
+        insets={insets}
+        onBack={() => setReviewing(false)}
+        onConfirm={handleSave}
+      />
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -438,7 +464,7 @@ export default function SauceBuilderScreen({ navigation, route }) {
               return (
                 <TouchableOpacity
                   key={t.value}
-                  onPress={() => patch({ sauceType: t.value })}
+                  onPress={() => patch({ sauceType: t.value, itemIds: [] })}
                   style={[styles.pill, active && styles.pillActive]}
                   activeOpacity={0.8}
                 >
@@ -507,38 +533,33 @@ export default function SauceBuilderScreen({ navigation, route }) {
           />
         </View>
 
-        {/* Pair with items */}
+        {/* Pair with items — filtered to the category that matches sauceType */}
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Pair with</Text>
+          <Text style={styles.sectionLabel}>Pair with {pairLabel.toLowerCase()}</Text>
           <Text style={styles.help}>
-            Sauces show up under the dish (carb / protein / salad) you pair them with on the home screen.
+            {typeMeta.label}s pair with {pairLabel.toLowerCase()}. Change the type above to pair with a different group.
           </Text>
-          {allItems.map((group) => (
-            <View key={group.label} style={{ marginTop: 10 }}>
-              <Text style={styles.label}>{group.label}</Text>
-              <View style={styles.pillRow}>
-                {group.list.length === 0 ? (
-                  <Text style={styles.help}>(none)</Text>
-                ) : (
-                  group.list.map((item) => {
-                    const active = builder.itemIds.includes(item.id);
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        onPress={() => toggleItemPair(item.id)}
-                        style={[styles.pill, active && styles.pillActive]}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
-                          {item.emoji} {item.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })
-                )}
-              </View>
-            </View>
-          ))}
+          <View style={[styles.pillRow, { marginTop: 8 }]}>
+            {allowedItems.length === 0 ? (
+              <Text style={styles.help}>No {pairLabel.toLowerCase()} in the catalog yet.</Text>
+            ) : (
+              allowedItems.map((item) => {
+                const active = builder.itemIds.includes(item.id);
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    onPress={() => toggleItemPair(item.id)}
+                    style={[styles.pill, active && styles.pillActive]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
+                      {item.emoji} {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
         </View>
 
         {/* Steps */}
@@ -737,11 +758,11 @@ export default function SauceBuilderScreen({ navigation, route }) {
           </View>
         ) : null}
 
-        {/* Validation + Save */}
+        {/* Validation + Continue to review */}
         <View style={styles.card}>
           {!validation.ok ? (
             <View style={styles.errorBlock}>
-              <Text style={styles.errorTitle}>Fix before saving</Text>
+              <Text style={styles.errorTitle}>Fix before continuing</Text>
               {validation.errors.map((e, i) => (
                 <Text key={i} style={styles.errorBullet}>• {e}</Text>
               ))}
@@ -749,9 +770,134 @@ export default function SauceBuilderScreen({ navigation, route }) {
           ) : null}
           {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
           <TouchableOpacity
-            style={[styles.saveBtn, (!validation.ok || saving) && styles.btnDisabled]}
-            onPress={handleSave}
-            disabled={!validation.ok || saving}
+            style={[styles.saveBtn, !validation.ok && styles.btnDisabled]}
+            onPress={() => { setSaveError(null); setReviewing(true); }}
+            disabled={!validation.ok}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.saveBtnLabel}>Continue to review</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+// Read-only summary shown after the user finishes editing. Two paths out:
+// "Back to edit" returns to the form; "Confirm and save" fires the API.
+function ReviewScreen({ builder, items, editingId, saving, saveError, insets, onBack, onConfirm }) {
+  const typeMeta = SAUCE_TYPES.find((t) => t.value === builder.sauceType) || SAUCE_TYPES[0];
+  const allItemsFlat = [
+    ...(items.carbs || []),
+    ...(items.proteins || []),
+    ...(items.salads || []),
+  ];
+  const pairedItems = builder.itemIds
+    .map((id) => allItemsFlat.find((it) => it.id === id))
+    .filter(Boolean);
+  const totalTime = builder.steps.reduce((sum, s) => {
+    const t = parseInt((s.estimatedTime ?? '').toString(), 10);
+    return sum + (Number.isFinite(t) && t > 0 ? t : 5);
+  }, 0);
+
+  return (
+    <View style={styles.screen}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={onBack} hitSlop={10} disabled={saving}>
+            <ChevronLeft size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Review</Text>
+          <View style={{ width: 22 }} />
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
+        {/* Summary card */}
+        <View style={styles.card}>
+          <View style={styles.reviewHeader}>
+            <View style={[styles.reviewSwatch, { backgroundColor: builder.color }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reviewName} numberOfLines={2}>{builder.name}</Text>
+              <Text style={styles.reviewMeta}>
+                {typeMeta.label}{builder.cuisine ? ` · ${builder.cuisineEmoji ? `${builder.cuisineEmoji} ` : ''}${builder.cuisine}` : ''}
+              </Text>
+            </View>
+          </View>
+          {builder.description ? (
+            <Text style={styles.reviewDescription}>{builder.description}</Text>
+          ) : null}
+          <View style={styles.reviewMetaRow}>
+            <Text style={styles.reviewMetaLabel}>~{totalTime} min · {builder.steps.length} step{builder.steps.length === 1 ? '' : 's'}</Text>
+          </View>
+        </View>
+
+        {/* Pairing */}
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Paired with</Text>
+          {pairedItems.length === 0 ? (
+            <Text style={styles.help}>Nothing paired.</Text>
+          ) : (
+            <View style={styles.pillRow}>
+              {pairedItems.map((item) => (
+                <View key={item.id} style={[styles.pill, styles.pillActive]}>
+                  <Text style={[styles.pillLabel, styles.pillLabelActive]}>
+                    {item.emoji} {item.name}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Steps */}
+        {builder.steps.map((step, idx) => {
+          const stepTime = (() => {
+            const t = parseInt((step.estimatedTime ?? '').toString(), 10);
+            return Number.isFinite(t) && t > 0 ? t : 5;
+          })();
+          const visibleIngs = step.ingredients.filter((i) => i.name && i.name.trim());
+          return (
+            <View key={idx} style={styles.card}>
+              <View style={styles.reviewStepHeader}>
+                <Text style={styles.reviewStepNumber}>STEP {idx + 1}</Text>
+                <Text style={styles.reviewStepTime}>~{stepTime}m</Text>
+              </View>
+              {step.title ? <Text style={styles.reviewStepTitle}>{step.title}</Text> : null}
+              {step.inputFromStep ? (
+                <View style={styles.refBadge}>
+                  <CornerDownRight size={12} color={COLORS.primaryDark} />
+                  <Text style={styles.refBadgeText}>
+                    Combines all of Step {step.inputFromStep} into this bowl
+                  </Text>
+                </View>
+              ) : null}
+              {step.instructions ? (
+                <Text style={styles.reviewStepInstructions}>{step.instructions}</Text>
+              ) : null}
+              {visibleIngs.length > 0 ? (
+                <View style={styles.reviewIngList}>
+                  {visibleIngs.map((ing, ii) => (
+                    <View key={ii} style={styles.reviewIngRow}>
+                      <Text style={styles.reviewIngName} numberOfLines={1}>{ing.name}</Text>
+                      <Text style={styles.reviewIngQty}>
+                        {ing.unit === 'to taste' ? 'to taste' : `${ing.amount || '0'} ${ing.unit}`}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+
+        {/* Confirm */}
+        <View style={styles.card}>
+          {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && styles.btnDisabled]}
+            onPress={onConfirm}
+            disabled={saving}
             activeOpacity={0.85}
           >
             {saving ? (
@@ -763,9 +909,17 @@ export default function SauceBuilderScreen({ navigation, route }) {
               </>
             )}
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.backToEditBtn}
+            onPress={onBack}
+            disabled={saving}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.backToEditLabel}>Back to edit</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -1152,5 +1306,104 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 14,
     marginLeft: 6,
+  },
+  backToEditBtn: {
+    marginTop: 10,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  backToEditLabel: {
+    color: COLORS.textSecondary,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewSwatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 12,
+  },
+  reviewName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  reviewMeta: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  reviewDescription: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  reviewMetaRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewMetaLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+    letterSpacing: 0.4,
+  },
+  reviewStepHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  reviewStepNumber: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+    letterSpacing: 0.6,
+  },
+  reviewStepTime: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  reviewStepTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  reviewStepInstructions: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    marginVertical: 4,
+  },
+  reviewIngList: {
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceSubtle,
+  },
+  reviewIngRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  reviewIngName: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.text,
+    marginRight: 8,
+  },
+  reviewIngQty: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
   },
 });

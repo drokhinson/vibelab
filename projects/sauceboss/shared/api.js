@@ -9,6 +9,29 @@ import { withIngredientNames } from './filter.js';
 
 const PREFIX = '/api/v1/sauceboss';
 
+// Coerce FastAPI's `detail` (string | object | list of validation errors)
+// into a single readable line. Without this, Pydantic 422s render as
+// "[object Object]" because Array.toString returns "[object Object]" on RN.
+function formatErrorDetail(detail) {
+  if (!detail) return '';
+  if (typeof detail === 'string') return detail;
+  if (typeof detail === 'object' && detail.message) return detail.message;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => {
+        const loc = Array.isArray(d?.loc) ? d.loc.filter((p) => p !== 'body').join('.') : '';
+        const msg = d?.msg || d?.message || JSON.stringify(d);
+        return loc ? `${loc}: ${msg}` : msg;
+      })
+      .join('; ');
+  }
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return String(detail);
+  }
+}
+
 export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
   const _fetch = fetchFn || (typeof fetch !== 'undefined' ? fetch.bind(globalThis) : null);
   if (!_fetch) throw new Error('makeApi requires a fetchFn');
@@ -30,9 +53,9 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       let detail = '';
       try {
         const j = await res.json();
-        detail = (j.detail && j.detail.message) || j.detail || '';
+        detail = formatErrorDetail(j.detail);
       } catch {
-        // ignore
+        // ignore — fall through to status text
       }
       const msg = detail ? `${res.status} ${detail}` : `HTTP ${res.status} ${res.statusText}`;
       const err = new Error(msg);
