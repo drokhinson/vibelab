@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Star, LogOut, Trash2, Save } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import EmptyState from '../components/EmptyState';
@@ -29,6 +30,7 @@ function computeInitials(name) {
 export default function SettingsScreen({ navigation }) {
   const state = useAppState();
   const actions = useAppActions();
+  const insets = useSafeAreaInsets();
   const user = state.currentUser;
 
   const [displayName, setDisplayName] = useState(user?.display_name || '');
@@ -102,7 +104,13 @@ export default function SettingsScreen({ navigation }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      contentContainerStyle={[
+        styles.scroll,
+        { paddingBottom: Math.max(32, insets.bottom + 16) },
+      ]}
+      keyboardShouldPersistTaps="handled"
+    >
       {/* Profile card */}
       <View style={styles.card}>
         <View style={styles.profileRow}>

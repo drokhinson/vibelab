@@ -9,6 +9,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -69,16 +70,21 @@ export default function AuthModal({ visible, onClose }) {
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <View style={styles.backdrop}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.kav}
-        >
-          <ScrollView
-            contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
+      {/* Backdrop tap closes the modal — onRequestClose only fires on Android
+          back-button. TouchableWithoutFeedback on the card swallows taps so
+          we don't dismiss when the user is interacting with the form. */}
+      <TouchableWithoutFeedback onPress={handleClose}>
+        <View style={styles.backdrop}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.kav}
           >
-            <View style={styles.card}>
+            <ScrollView
+              contentContainerStyle={styles.scroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              <TouchableWithoutFeedback>
+                <View style={styles.card}>
               <View style={styles.headerRow}>
                 <Text style={styles.title}>
                   {mode === 'login' ? 'Sign in' : 'Create account'}
@@ -163,10 +169,12 @@ export default function AuthModal({ visible, onClose }) {
                   </TouchableOpacity>
                 </>
               )}
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }

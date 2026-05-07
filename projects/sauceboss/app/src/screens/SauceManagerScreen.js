@@ -197,7 +197,11 @@ export default function SauceManagerScreen({ navigation }) {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollBody}
+        contentContainerStyle={[
+          styles.scrollBody,
+          // Keep the bottom padding clear of the FAB plus the iOS home indicator.
+          { paddingBottom: Math.max(100, insets.bottom + 80) },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -267,7 +271,8 @@ export default function SauceManagerScreen({ navigation }) {
 
       {isLoggedIn ? (
         <TouchableOpacity
-          style={styles.fab}
+          // Bottom inset + 20 keeps the FAB clear of the iOS home indicator.
+          style={[styles.fab, { bottom: Math.max(26, insets.bottom + 20) }]}
           onPress={() => openBuilderFor(null)}
           activeOpacity={0.8}
         >
