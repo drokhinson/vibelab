@@ -1,68 +1,141 @@
-// Sauce builder helpers — used by Phase 3.
-// Pure transformations on builder state. No side effects, no globals.
+// Sauce builder helpers — pure transformations on builder state. No side
+// effects, no globals. The shape they assume matches the backend's
+// `/api/v1/sauceboss/import` response (ParsedRecipeResponse): top-level
+// `name`, `description`, `instructions[]` (strings), `ingredients[]` with
+// `foodRaw`, `quantity`, `unitRaw`, `originalText`, `canonicalMl`, `canonicalG`,
+// and `sourceUrl`.
 
-// Test if an ingredient name appears in a step's instruction text.
-// Used to auto-route imported ingredients to the step that mentions them.
-export function ingNameInInstruction(name, instruction) {
-  if (!name || !instruction) return false;
-  const needle = name.toLowerCase().trim();
-  if (!needle) return false;
-  return instruction.toLowerCase().includes(needle);
+import { UNITS } from './constants.js';
+
+// Substring match plus a single-letter plural stem so "tomatoes" matches
+// "tomato" and vice versa. Cheaper and more predictable than fuzzy matching.
+export function ingNameInInstruction(name, instructionLower) {
+  const n = (name || '').toLowerCase().trim();
+  if (!n) return false;
+  if (instructionLower.includes(n)) return true;
+  if (n.endsWith('s') && n.length > 3 && instructionLower.includes(n.slice(0, -1))) return true;
+  if (!n.endsWith('s') && instructionLower.includes(n + 's')) return true;
+  return false;
 }
 
-// Best-effort unit normalization from a recipe-scrapers parse.
-// "1 tablespoon olive oil" → { amount: 1, unit: 'tbsp' }.
-export function unitDisplayFromParsed(unit) {
-  const u = (unit || '').toLowerCase().trim();
-  if (!u) return '';
-  if (u === 'teaspoon' || u === 'teaspoons' || u === 't') return 'tsp';
-  if (u === 'tablespoon' || u === 'tablespoons' || u === 'tbl' || u === 'T') return 'tbsp';
-  if (u === 'cup' || u === 'cups' || u === 'c') return 'cup';
-  if (u === 'ounce' || u === 'ounces') return 'oz';
-  if (u === 'gram' || u === 'grams') return 'g';
-  if (u === 'clove' || u === 'cloves') return 'cloves';
-  if (u === 'pinch' || u === 'pinches') return 'pinch';
-  if (u === 'piece' || u === 'pieces') return 'piece';
-  return u;
+// Picks the unit string the builder UI should show for a parsed ingredient.
+// Prefers an exact match in UNITS (so the existing select reflects it
+// correctly); otherwise maps common pluralisations / abbreviations.
+export function unitDisplayFromParsed(parsedIng) {
+  const raw = (parsedIng?.unitRaw || '').toLowerCase().trim();
+  if (!raw) return 'tsp';
+  const exact = UNITS.find((u) => u.toLowerCase() === raw);
+  if (exact) return exact;
+  const map = {
+    teaspoon: 'tsp', teaspoons: 'tsp', tsps: 'tsp',
+    tablespoon: 'tbsp', tablespoons: 'tbsp', tbsps: 'tbsp',
+    cups: 'cup',
+    gram: 'g', grams: 'g', kg: 'g', kilogram: 'g', kilograms: 'g',
+    ounce: 'oz', ounces: 'oz', pound: 'oz', pounds: 'oz',
+    cloves: 'clove', pieces: 'piece',
+  };
+  return map[raw] || raw;
 }
 
-// Apply a parsed-recipe payload onto a fresh builder. Routes ingredients
-// into steps by matching the ingredient name against each step's instruction.
-// Anything unmatched lands in `unassignedIngredients` so the user can drain
-// them into the right step before saving.
+// Apply a parsed-recipe payload (from /import) onto a builder. Strategy:
+//   - Top-level fields (name, description, sourceUrl) fill if currently empty.
+//   - Each scraped instruction becomes its own builder step (title blank so
+//     the user names them; the full paragraph lives in `instructions` and
+//     renders as a collapsible toggle in the recipe view).
+//   - Each parsed ingredient is assigned to the earliest step whose
+//     instruction text mentions its name; later mentions get the same row
+//     with a blank amount so the user can split the quantity manually.
+//   - Ingredients not mentioned in any instruction (e.g. "salt to taste")
+//     land in `unassignedIngredients` — a staging tray the user must drain
+//     (move into a step or delete) before save.
+//   - If the scrape returned no instructions, fall back to a single
+//     "Imported from <host>" step containing every ingredient.
 export function applyParsedRecipe(builder, parsed) {
-  const next = { ...builder };
-  next.name = parsed.name || next.name || '';
-  next.description = parsed.description || next.description || '';
-  next.sourceUrl = parsed.sourceUrl || next.sourceUrl || '';
+  const next = { ...builder, unassignedIngredients: [] };
 
-  const steps = (parsed.steps || []).map((s, idx) => ({
-    title: s.title || `Step ${idx + 1}`,
-    instructions: s.instructions || s.text || '',
-    inputFromStep: null,
-    ingredients: [],
-  }));
-  if (steps.length === 0) {
-    steps.push({ title: 'Step 1', instructions: '', inputFromStep: null, ingredients: [] });
+  if (!next.name) next.name = parsed.name || next.name || '';
+  if (parsed.description && !next.description) next.description = parsed.description;
+  if (parsed.sourceUrl && !next.sourceUrl) next.sourceUrl = parsed.sourceUrl;
+
+  const allIngs = (parsed.ingredients || [])
+    .map((p) => {
+      const food = (p.foodRaw || '').trim();
+      if (!food) return null;
+      return {
+        name: food,
+        amount: p.quantity != null ? String(p.quantity) : '',
+        unit: unitDisplayFromParsed(p),
+        originalText: p.originalText || '',
+        canonicalMl: p.canonicalMl != null ? p.canonicalMl : null,
+        canonicalG: p.canonicalG != null ? p.canonicalG : null,
+      };
+    })
+    .filter(Boolean);
+
+  const instructions = (parsed.instructions || [])
+    .map((s) => (typeof s === 'string' ? s : s?.text || ''))
+    .map((s) => (s || '').trim())
+    .filter(Boolean);
+
+  // Fallback: no scraped instructions — single dump step with everything.
+  if (instructions.length === 0) {
+    let stepTitle = 'Imported';
+    try {
+      stepTitle = `Imported from ${new URL(parsed.sourceUrl).hostname.replace(/^www\./, '')}`;
+    } catch {
+      // ignore — sourceUrl might be missing
+    }
+    next.steps = [{
+      title: stepTitle,
+      instructions: '',
+      inputFromStep: null,
+      ingredients: allIngs.length > 0 ? allIngs : [{ name: '', amount: '', unit: 'tsp' }],
+    }];
+    return next;
   }
 
-  const unassigned = [];
-  for (const ing of parsed.ingredients || []) {
-    const item = {
-      name: (ing.name || '').trim(),
-      amount: ing.amount != null ? ing.amount : '',
-      unit: unitDisplayFromParsed(ing.unit) || 'tsp',
-    };
-    if (!item.name) continue;
-    const target = steps.find((s) => ingNameInInstruction(item.name, s.instructions));
-    if (target) {
-      target.ingredients.push(item);
-    } else {
-      unassigned.push(item);
+  // Build empty steps from instructions; route ingredients into them.
+  const steps = instructions.map((text) => ({
+    title: '',
+    instructions: text,
+    inputFromStep: null,
+    ingredients: [],
+    _instr: text.toLowerCase(),
+  }));
+
+  const unmatched = [];
+  for (const ing of allIngs) {
+    const hits = [];
+    for (let i = 0; i < steps.length; i++) {
+      if (ingNameInInstruction(ing.name, steps[i]._instr)) hits.push(i);
+    }
+    if (hits.length === 0) {
+      unmatched.push(ing);
+      continue;
+    }
+    steps[hits[0]].ingredients.push(ing);
+    // Subsequent hits get a blank-amount row so the user can split quantities.
+    for (let i = 1; i < hits.length; i++) {
+      steps[hits[i]].ingredients.push({
+        name: ing.name,
+        amount: '',
+        unit: ing.unit,
+        originalText: '',
+        canonicalMl: null,
+        canonicalG: null,
+      });
     }
   }
 
+  // Drop the lowercased helper, ensure every step has at least one row.
+  for (const s of steps) {
+    delete s._instr;
+    if (s.ingredients.length === 0) {
+      s.ingredients.push({ name: '', amount: '', unit: 'tsp' });
+    }
+  }
+
+  next.unassignedIngredients = unmatched;
   next.steps = steps;
-  next.unassignedIngredients = unassigned;
   return next;
 }
