@@ -270,6 +270,19 @@ function render() {
   _initIcons();
 }
 
+function toggleEditMode() {
+  if (!currentUser) return;
+  state.editMode = !state.editMode;
+  try { sessionStorage.setItem('sb_edit_mode', state.editMode ? '1' : '0'); } catch (_) {}
+  render();
+}
+
+function setEditMode(on) {
+  state.editMode = !!on && !!currentUser;
+  try { sessionStorage.setItem('sb_edit_mode', state.editMode ? '1' : '0'); } catch (_) {}
+  render();
+}
+
 function navigate(screen, opts = {}) {
   const { push = true, replace = false } = opts;
   state.screen = screen;

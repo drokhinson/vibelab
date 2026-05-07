@@ -2647,3 +2647,100 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 .scroll-body:has(.food-merge-bar) {
   padding-bottom: 96px;
 }
+
+/* ── Edit-mode toggle + import/export UI ─────────────────────────────────── */
+
+/* Pencil-style header toggle. Shares geometry with .settings-btn but sits to
+   its left so both buttons fit alongside the auth pill. */
+.edit-mode-toggle {
+  position: absolute;
+  top: 8px;
+  right: 104px;           /* settings-btn at 60 + 36 width + 8 gap */
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.15s;
+}
+.edit-mode-toggle:hover { background: rgba(255,255,255,0.3); }
+.edit-mode-toggle.edit-mode-on {
+  background: #E85D04;
+  color: white;
+  box-shadow: 0 0 0 2px rgba(232, 93, 4, 0.35);
+}
+.edit-mode-toggle [data-lucide] { width: 18px; height: 18px; }
+
+/* If the user-isn't-an-admin "Become admin" key button is also rendered the
+   edit toggle still needs space — push it further left. */
+.app-header:has(.settings-btn) .edit-mode-toggle { right: 104px; }
+.app-header:not(:has(.settings-btn)) .edit-mode-toggle { right: 60px; }
+
+/* Import / bulk-export toolbar in the Sauce Manager. */
+.sm-import-export-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #F3F0E8;
+  background: #FFFCF5;
+}
+.sm-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #E5E7EB;
+  background: white;
+  color: #1A1A2E;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.sm-tool-btn:hover { background: #FFF3E6; border-color: #E85D04; }
+.sm-tool-btn [data-lucide] { width: 14px; height: 14px; }
+
+/* Per-recipe export buttons (JSON + Markdown) in the recipe header. */
+.recipe-export-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.recipe-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.recipe-export-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+.recipe-export-btn [data-lucide] { width: 14px; height: 14px; }
+/* When the recipe header is on a light background (meal flow), invert. */
+.scroll-body > .recipe-export-row .recipe-export-btn {
+  border-color: #E5E7EB;
+  background: white;
+  color: #1A1A2E;
+}
+.scroll-body > .recipe-export-row .recipe-export-btn:hover {
+  background: #FFF3E6;
+  border-color: #E85D04;
+}

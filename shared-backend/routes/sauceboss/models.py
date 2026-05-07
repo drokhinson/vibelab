@@ -273,6 +273,32 @@ class ItemsGroupedResponse(BaseModel):
     salads: List[Dict[str, Any]]
 
 
+# ── Import / Export ──────────────────────────────────────────────────────────
+
+class SauceExportEnvelope(BaseModel):
+    """Single-sauce export envelope. Inner mirrors CreateSauceRequest plus the
+    read-only fields populated by the RPC (id, createdBy, compatibleItems)."""
+    version: int = 1
+    exportedAt: str
+    sauce: Dict[str, Any]
+
+
+class BulkSauceExportEnvelope(BaseModel):
+    """All-sauces export envelope (admin only). Bulk import is unsupported."""
+    version: int = 1
+    exportedAt: str
+    count: int
+    sauces: List[Dict[str, Any]]
+
+
+class ImportResultResponse(BaseModel):
+    """Result of POST /sauces/import — id of the new sauce + any non-fatal warnings."""
+    id: str
+    name: str
+    warnings: List[str] = Field(default_factory=list)
+    status: str = "created"
+
+
 def _shape_items_grouped(rows: list[dict]) -> dict:
     """Group raw sauceboss_items rows into {carbs, proteins, salads} with nested variants."""
     def shape(r: dict) -> dict:

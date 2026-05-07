@@ -55,6 +55,11 @@ let state = {
   becomeAdminBusy: false,
   becomeAdminError: null,
 
+  // ── Edit mode ──────────────────────────────────────────────────────────────
+  // Toggle that gates editorial UI (FABs, edit/delete buttons, import/export).
+  // Visible only to logged-in users; anonymous users never see editing chrome.
+  editMode: false,
+
   // ── Admin / builder ─────────────────────────────────────────────────────────
   builder: null,
   adminSauces: [],
