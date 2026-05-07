@@ -1,0 +1,37 @@
+<!-- Splash image. Full-bleed orange with the pot at ~40% width centered
+     vertically. Sized for iPhone Pro Max + Android phablets; Expo
+     auto-scales for narrower / shorter devices via `resizeMode: "contain"`. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1284" height="2778" viewBox="0 0 1284 2778">
+  <rect width="1284" height="2778" fill="#E85D04"/>
+
+  <!-- Center the pot art inside a 600x600 region, vertically centered. -->
+  <g transform="translate(342 1089)">
+    <!-- Steam trails -->
+    <g stroke="#FFF3E6" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.55">
+      <path d="M222 280 Q240 215 222 154 Q204 100 222 50"/>
+      <path d="M300 268 Q318 203 300 142 Q282 88 300 38"/>
+      <path d="M378 280 Q396 215 378 154 Q360 100 378 50"/>
+    </g>
+
+    <!-- Pot body -->
+    <path d="M100 354 Q100 510 300 510 Q500 510 500 354 Z" fill="#FFF3E6"/>
+    <!-- Sauce -->
+    <ellipse cx="300" cy="402" rx="156" ry="32" fill="#E85D04" opacity="0.55"/>
+    <!-- Rim -->
+    <rect x="76" y="332" width="448" height="46" rx="23" fill="#E85D04"/>
+    <path d="M100 354 Q100 510 300 510 Q500 510 500 354" stroke="#9B3700" stroke-width="9" fill="none"/>
+
+    <!-- Steam pearls -->
+    <circle cx="220" cy="404" r="32" fill="#FFFFFF" opacity="0.92"/>
+    <circle cx="304" cy="380" r="26" fill="#FFFFFF" opacity="0.95"/>
+    <circle cx="384" cy="408" r="29" fill="#FFFFFF" opacity="0.90"/>
+    <circle cx="262" cy="444" r="19" fill="#FFFFFF" opacity="0.95"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="642" y="1900" text-anchor="middle"
+        font-family="'Inter', -apple-system, system-ui, sans-serif"
+        font-size="120" font-weight="800" fill="#FFFFFF" letter-spacing="2">
+    SauceBoss
+  </text>
+</svg>
