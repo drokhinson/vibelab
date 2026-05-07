@@ -5,9 +5,6 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import Svg, { Ellipse, Path, Rect, Circle } from 'react-native-svg';
 
-const AnimatedG = Animated.createAnimatedComponent(View);
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
 export default function PotIllustration({ width = 180, height = 140, animated = true }) {
   const steam1 = useRef(new Animated.Value(0)).current;
   const steam2 = useRef(new Animated.Value(0)).current;
@@ -103,26 +100,26 @@ export default function PotIllustration({ width = 180, height = 140, animated = 
       </Svg>
       {/* Animated steam circles overlaid on the SVG. We use absolute positioning so
           opacity + translateY can be interpolated without re-rendering the static SVG. */}
-      <AnimatedG style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ translateY: dy1 }], opacity: op1 }}>
+      <Animated.View style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ translateY: dy1 }], opacity: op1 }}>
         <Svg width={width} height={height} viewBox="0 0 180 140">
           <Circle cx="70" cy="91" r="9" fill="#E85D04" />
         </Svg>
-      </AnimatedG>
-      <AnimatedG style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ translateY: dy2 }], opacity: op2 }}>
+      </Animated.View>
+      <Animated.View style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ translateY: dy2 }], opacity: op2 }}>
         <Svg width={width} height={height} viewBox="0 0 180 140">
           <Circle cx="93" cy="84" r="7" fill="#F48C06" />
         </Svg>
-      </AnimatedG>
-      <AnimatedG style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ translateY: dy3 }], opacity: op3 }}>
+      </Animated.View>
+      <Animated.View style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ translateY: dy3 }], opacity: op3 }}>
         <Svg width={width} height={height} viewBox="0 0 180 140">
           <Circle cx="114" cy="93" r="8" fill="#C94E02" />
         </Svg>
-      </AnimatedG>
-      <AnimatedG style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ translateY: dy4 }], opacity: op4 }}>
+      </Animated.View>
+      <Animated.View style={{ position: 'absolute', left: 0, top: 0, width, height, transform: [{ translateY: dy4 }], opacity: op4 }}>
         <Svg width={width} height={height} viewBox="0 0 180 140">
           <Circle cx="82" cy="103" r="5" fill="#FAA307" />
         </Svg>
-      </AnimatedG>
+      </Animated.View>
     </View>
   );
 }
