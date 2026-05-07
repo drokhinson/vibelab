@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
@@ -189,6 +190,17 @@ export default function AuthModal({ visible, onClose }) {
                         : 'Already have one? Sign in'}
                     </Text>
                   </TouchableOpacity>
+
+                  <Text style={styles.legal}>
+                    By signing in you agree to our{' '}
+                    <Text
+                      style={styles.legalLink}
+                      onPress={() => Linking.openURL('https://sauceboss-omega.vercel.app/privacy.html')}
+                    >
+                      privacy policy
+                    </Text>
+                    .
+                  </Text>
                 </>
               )}
                 </View>
@@ -334,6 +346,18 @@ const styles = StyleSheet.create({
   toggle: {
     marginTop: 12,
     alignItems: 'center',
+  },
+  legal: {
+    marginTop: 14,
+    textAlign: 'center',
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 16,
+  },
+  legalLink: {
+    color: COLORS.primary,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   toggleText: {
     color: COLORS.primary,
