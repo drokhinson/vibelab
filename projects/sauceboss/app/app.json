@@ -5,20 +5,37 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "scheme": "sauceboss",
     "splash": {
       "backgroundColor": "#E85D04",
       "resizeMode": "contain"
     },
     "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.sauceboss.app"
+      "bundleIdentifier": "com.sauceboss.app",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          { "CFBundleURLSchemes": ["sauceboss"] }
+        ]
+      }
     },
     "android": {
+      "package": "com.sauceboss.app",
       "adaptiveIcon": {
         "backgroundColor": "#E85D04"
       },
-      "package": "com.sauceboss.app"
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT", "BROWSABLE"],
+          "data": [{ "scheme": "sauceboss" }]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
