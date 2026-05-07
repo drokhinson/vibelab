@@ -8,6 +8,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as Linking from 'expo-linking';
 import {
   useFonts,
   Inter_400Regular,
@@ -28,6 +29,7 @@ import SauceBuilderScreen from './screens/SauceBuilderScreen';
 import RecipeScreen from './screens/RecipeScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { trackAppOpen } from './utils/analytics';
+import { handleAuthDeepLink } from './auth/oauth';
 import { COLORS } from './theme';
 
 const Stack = createNativeStackNavigator();
@@ -103,6 +105,26 @@ export default function MainApp() {
 
   useEffect(() => {
     trackAppOpen();
+  }, []);
+
+  // Catch the OAuth deep link from the web bridge whenever the OS hands a
+  // URL off to the app — covers both initial launches (Linking.getInitialURL)
+  // and resumes while the app is in the background (Linking.addEventListener).
+  // The Supabase JS client also listens for the same event internally to
+  // populate the session; this handler is a belt-and-suspenders fallback in
+  // case the WebBrowser session was already dismissed when the bridge fired.
+  useEffect(() => {
+    let active = true;
+    Linking.getInitialURL().then((url) => {
+      if (active && url) handleAuthDeepLink(url).catch(() => {});
+    });
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      if (url) handleAuthDeepLink(url).catch(() => {});
+    });
+    return () => {
+      active = false;
+      sub?.remove?.();
+    };
   }, []);
 
   if (!fontsLoaded) {

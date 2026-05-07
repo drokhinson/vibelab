@@ -1,44 +1,82 @@
 # Google Sign-In setup
 
-The "Continue with Google" button in the AuthModal needs configuration in **Google Cloud Console** + **Supabase Auth** before it works end-to-end. Here's the order of operations.
+The native app's "Continue with Google" button uses a **web-bridge** flow because
+the vibelab Supabase project is shared across multiple apps. Supabase's OAuth
+callback rejects non-https `redirectTo` values like `exp://...` even when
+they're in the allowlist — falling back to the project's Site URL (which is
+currently boardgame buddy). Routing through `https://sauceboss-omega.vercel.app/auth-callback.html`
+sidesteps that entirely.
+
+## How the flow works
+
+1. Native app → asks Supabase for an OAuth URL with
+   `redirectTo = https://sauceboss-omega.vercel.app/auth-callback.html#native_url=<encoded sauceboss:// or exp:// URL>`.
+2. Supabase → opens Google's consent screen.
+3. Google → redirects to Supabase's OAuth callback.
+4. Supabase → redirects browser to the bridge with `?code=...`.
+5. Bridge JS → reads `code` from query, `native_url` from fragment, redirects browser to
+   `<native_url>?code=...`.
+6. OS → opens SauceBoss app via `sauceboss://` deep link (or Expo Go via `exp://`).
+7. App's Linking listener → catches the URL, parses `code`, calls
+   `supabase.auth.exchangeCodeForSession(code)`. Session lands.
 
 ## 1. Create OAuth credentials in Google Cloud Console
 
-1. <https://console.cloud.google.com/> → make a project (or pick an existing one)
-2. **APIs & Services → OAuth consent screen**
-   - User Type: **External**
-   - App name, support email, dev contact email — fill in
-   - Add scopes: `userinfo.email`, `userinfo.profile`, `openid`
-   - Add yourself as a test user while it's in "Testing" mode
-3. **APIs & Services → Credentials → + Create Credentials → OAuth client ID**
-   - Application type: **Web application** (yes — even for native; Supabase brokers the flow on its own domain)
-   - Name: `SauceBoss web`
-   - **Authorized redirect URIs**: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+1. <https://console.cloud.google.com/> → make a project (or pick an existing one).
+2. **APIs & Services → OAuth consent screen**:
+   - User Type: **External**.
+   - App name, support email, dev contact email — fill in.
+   - Add scopes: `userinfo.email`, `userinfo.profile`, `openid`.
+   - Add yourself as a test user while it's in "Testing" mode.
+3. **APIs & Services → Credentials → + Create Credentials → OAuth client ID**:
+   - Application type: **Web application**.
+   - Name: `SauceBoss web`.
+   - **Authorized redirect URIs**: `https://<your-project-ref>.supabase.co/auth/v1/callback`.
    - Click Create. Copy the **Client ID** + **Client secret**.
 
 ## 2. Wire the credentials into Supabase
 
-1. Supabase Dashboard → your project → **Authentication → Providers → Google**
-2. Toggle **Enable**
-3. Paste the **Client ID** and **Client Secret** from step 1
-4. The "Callback URL" Supabase shows you must match the redirect URI you added to Google Cloud (one round-trip — the values must be identical)
-5. Save
+1. Supabase Dashboard → your project → **Authentication → Providers → Google**.
+2. Toggle **Enable**.
+3. Paste the **Client ID** and **Client Secret**.
+4. Save.
 
-## 3. Allowlist the app's redirect URI
+## 3. Allowlist the bridge URL
 
-This is the URL Google redirects to *after* Supabase finishes its leg of the OAuth dance — i.e. the URL that opens our app.
+Supabase Dashboard → **Authentication → URL Configuration → Redirect URLs**.
+Add:
 
-1. Supabase Dashboard → **Authentication → URL Configuration → Redirect URLs**
-2. Add **all** of these:
-   - `sauceboss://auth-callback` — used by EAS dev/preview/production builds
-   - `exp://**.exp.direct/**` — used by Expo Go's tunnel mode (the one `npx expo start --tunnel` opens)
-   - `exp://192.168.*.*:*` — used by Expo Go on a LAN
+```
+https://sauceboss-omega.vercel.app/**
+```
 
-   The wildcards are intentional; Supabase supports them.
+That single entry covers both the bridge page (`/auth-callback.html`) and any
+future https-served helpers. You don't need any `exp://...` or `sauceboss://...`
+entries — those targets are handled client-side by the bridge JS, never seen by
+Supabase's allowlist.
 
-## 4. Test it
+## 4. Deploy the bridge HTML
 
-### From Expo Go
+The bridge page lives at `projects/sauceboss/web/auth-callback.html`. The
+SauceBoss web app deploys via `bash projects/sauceboss/web/build.sh` and the
+Vercel auto-deploy on `main`. So:
+
+1. Merge the branch to `main`.
+2. Vercel redeploys `https://sauceboss-omega.vercel.app/`.
+3. The bridge becomes live at `https://sauceboss-omega.vercel.app/auth-callback.html`.
+
+You can verify the bridge is live by opening the URL with a fake code:
+
+```
+https://sauceboss-omega.vercel.app/auth-callback.html?code=test#native_url=sauceboss%3A%2F%2Fauth-callback
+```
+
+The page should briefly show "Returning you to SauceBoss" and then offer the
+fallback button.
+
+## 5. Test
+
+### Expo Go
 
 ```powershell
 cd C:\CodeProjects\vibelab\projects\sauceboss\app
@@ -47,28 +85,34 @@ npm install
 npx expo start --tunnel
 ```
 
-Tap "Continue with Google" in the AuthModal. The system browser opens, picks your Google account, and redirects back to Expo Go. The avatar pill should replace the Sign-in button on the home header.
+Tap "Continue with Google" → Google consent screen → bridge appears for ~1
+second → app reopens with the avatar pill replacing the Sign-in button.
 
-If the redirect fails: re-check that `exp://**.exp.direct/**` is in Supabase's allowlist and that the project's "Site URL" (also under URL Configuration) is set to one of your allowed redirects.
+If Expo Go shows a "How do you want to open this link?" dialog — pick **Expo Go**.
 
-### From an EAS build
+### EAS dev / preview builds
 
-```powershell
-npm install -g eas-cli
-eas login
-eas build:configure
-eas build --profile preview --platform android
-```
-
-The preview APK uses `sauceboss://auth-callback` as the redirect — that one is already in your allowlist after step 3.
+The bridge sets `native_url` to `sauceboss://auth-callback`, which is registered
+via the `scheme` + `intentFilters` in `app.json`. Once you build with EAS, the
+flow works the same way; the only difference is the bridge sends the user to
+`sauceboss://...` instead of `exp://...`.
 
 ## Common issues
 
-- **"Invalid redirect URL"** in the browser after Google returns: the URL the browser ended up at isn't in Supabase's allowlist. Open the URL in the error message and add it (or its wildcard form) to Authentication → URL Configuration.
-- **"Provider is not enabled"**: forgot to toggle Google on in Authentication → Providers.
-- **Redirect succeeds but signs me out immediately**: the Supabase session is stored in `expo-secure-store`, which fails silently on iOS Simulator without a Keychain passcode. Either set a passcode in the simulator's settings or run on a real device. (Our `secureStorage` adapter falls back to AsyncStorage but the failure mode there can confuse Supabase's session validator.)
-- **Hangs in "Sign-in is not configured for this build"**: `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` aren't set in `app/.env`, or have stray quotes/whitespace.
+- **"Couldn't reach the kitchen" right after sign-in**: the session is in,
+  but the API client retried the initial-load before the auth token was
+  attached. Pull-to-refresh or restart the app.
+- **Bridge page shows "No auth code returned"**: Supabase didn't append `code`
+  to the redirect — usually means Google redirect URI in step 1 doesn't match
+  the project's `https://<project>.supabase.co/auth/v1/callback`.
+- **Bridge page never opens, browser stays on Supabase**: the bridge URL isn't
+  allowlisted (step 3). Add `https://sauceboss-omega.vercel.app/**`.
+- **"Open with…" dialog every time on Android**: tap the option to set as
+  default for `sauceboss://` URLs and it'll stop prompting.
 
-## Apple Sign-In note
+## Apple Sign-In
 
-If/when you ship this on the App Store and Google Sign-In is offered, **App Store Review Guideline 4.8 requires Apple Sign-In to be offered alongside.** Apple sign-in needs `expo-apple-authentication` (different package, different setup) and only works on a real device or EAS build. We haven't wired it yet — open a follow-up when you're ready to submit to TestFlight.
+If/when you ship to the App Store with Google Sign-In offered, **App Store
+Review Guideline 4.8 requires Apple Sign-In as well.** That needs
+`expo-apple-authentication` (different package, real device or EAS build only).
+Open a follow-up before TestFlight.
