@@ -11,7 +11,8 @@ module.exports = function (api) {
           },
         },
       ],
-      'react-native-reanimated/plugin',
+      // Reanimated 4 — plugin moved into react-native-worklets. Must remain last.
+      'react-native-worklets/plugin',
     ],
   };
 };
