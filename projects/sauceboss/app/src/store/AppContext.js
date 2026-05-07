@@ -5,6 +5,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import { api, setAuthTokenGetter } from '../api/client';
 import { supabase, isAuthConfigured } from '../auth/supabase';
+import { signInWithGoogleOAuth } from '../auth/oauth';
 import { withIngredientNames } from '#shared/filter';
 
 // ── Initial state ───────────────────────────────────────────────────────────
@@ -845,6 +846,30 @@ export function AppProvider({ children }) {
       },
 
       // ── Auth actions ────────────────────────────────────────────────────────
+
+      // Opens Google's OAuth flow in a system WebBrowser, then exchanges the
+      // returned code for a Supabase session. onAuthStateChange in the
+      // provider hydrates profile + favorites once the session lands.
+      signInWithGoogle: async () => {
+        if (!isAuthConfigured || !supabase) {
+          dispatch({ type: A.SET_AUTH_ERROR, error: 'Sign-in is not configured for this build.' });
+          return { ok: false };
+        }
+        dispatch({ type: A.SET_AUTH_BUSY, value: true });
+        dispatch({ type: A.SET_AUTH_ERROR, error: null });
+        try {
+          const res = await signInWithGoogleOAuth();
+          if (res.cancelled) return { ok: false, cancelled: true };
+          if (!res.ok) {
+            dispatch({ type: A.SET_AUTH_ERROR, error: res.error || 'Could not sign in with Google.' });
+            return { ok: false };
+          }
+          return { ok: true };
+        } finally {
+          dispatch({ type: A.SET_AUTH_BUSY, value: false });
+        }
+      },
+
       signIn: async (email, password) => {
         if (!isAuthConfigured || !supabase) {
           dispatch({ type: A.SET_AUTH_ERROR, error: 'Sign-in is not configured for this build.' });

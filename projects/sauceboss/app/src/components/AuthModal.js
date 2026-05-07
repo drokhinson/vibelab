@@ -152,6 +152,27 @@ export default function AuthModal({ visible, onClose }) {
                     )}
                   </TouchableOpacity>
 
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerLabel}>or</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.googleBtn, state.authBusy && styles.submitDisabled]}
+                    onPress={async () => {
+                      const res = await actions.signInWithGoogle();
+                      if (res.ok) handleClose();
+                    }}
+                    disabled={state.authBusy}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.googleIcon}>
+                      <Text style={styles.googleIconLabel}>G</Text>
+                    </View>
+                    <Text style={styles.googleLabel}>Continue with Google</Text>
+                  </TouchableOpacity>
+
                   <TouchableOpacity
                     onPress={() => {
                       setMode((m) => (m === 'login' ? 'signup' : 'login'));
@@ -264,6 +285,54 @@ const styles = StyleSheet.create({
   submitLabel: {
     color: '#fff',
     fontSize: 15,
+    fontWeight: '700',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 14,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  dividerLabel: {
+    marginHorizontal: 10,
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
+  },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    paddingVertical: 11,
+  },
+  googleIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#4285F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  googleIconLabel: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#4285F4',
+  },
+  googleLabel: {
+    color: COLORS.text,
+    fontSize: 14,
     fontWeight: '700',
   },
   toggle: {
