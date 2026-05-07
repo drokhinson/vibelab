@@ -593,130 +593,21 @@ async function builderImport() {
   }
 }
 
-// Maps a /import response into the existing builder form. Strategy:
-//   - Top-level fields (name, description) fill if currently empty.
-//   - Each scraped instruction becomes its own builder step. Each parsed
-//     ingredient is assigned to the earliest step whose instruction text
-//     mentions its name; later mentions get the same row with a blank amount
-//     so the user can split the quantity manually.
-//   - Ingredients not mentioned in any instruction (e.g. "salt to taste")
-//     land in b.unassignedIngredients — a staging tray the user must drain
-//     (move each into a step, or delete it) before the recipe can save.
-//   - If the scrape returned no instructions, fall back to a single
-//     "Imported from <host>" step containing every ingredient.
+// Maps a /import response into the existing builder form. The actual logic
+// (parsing rules, step-matching, plural stem, unit normalisation) lives in
+// shared/builder.js so native uses identical behaviour. This wrapper keeps
+// the web-specific concern: stamping the result onto state.builder and
+// surfacing the "no ingredients parsed" import error.
 function _builderApplyParsedRecipe(parsed) {
   const b = state.builder;
-  // Re-importing should replace, not accumulate.
-  b.unassignedIngredients = [];
-  if (!b.name) b.name = parsed.name || b.name;
-  if (parsed.description && !b.description) b.description = parsed.description;
-  if (parsed.sourceUrl && !b.sourceUrl) b.sourceUrl = parsed.sourceUrl;
-
-  const allIngs = (parsed.ingredients || [])
-    .map(p => {
-      const food = (p.foodRaw || '').trim();
-      if (!food) return null;
-      return {
-        name: food,
-        amount: p.quantity != null ? p.quantity : '',
-        unit: _unitDisplayFromParsed(p),
-        originalText: p.originalText || '',
-        canonicalMl: p.canonicalMl != null ? p.canonicalMl : null,
-        canonicalG:  p.canonicalG  != null ? p.canonicalG  : null,
-      };
-    })
-    .filter(Boolean);
-  if (allIngs.length === 0) {
+  const hasIngs = (parsed?.ingredients || []).some((p) => (p?.foodRaw || '').trim());
+  if (!hasIngs) {
+    b.unassignedIngredients = [];
     b.importError = 'No ingredients parsed — try a different URL.';
     return;
   }
-
-  const instructions = (parsed.instructions || [])
-    .map(s => (s || '').trim())
-    .filter(Boolean);
-
-  if (instructions.length === 0) {
-    let stepTitle = 'Imported';
-    try {
-      stepTitle = `Imported from ${new URL(parsed.sourceUrl).hostname.replace(/^www\./, '')}`;
-    } catch { /* ignore */ }
-    b.steps = [{ title: stepTitle, instructions: '', inputFromStep: null, ingredients: allIngs }];
-    return;
-  }
-
-  // Title is left blank — the user must name each step before saving. The full
-  // scraped paragraph lives in `instructions` and renders as a collapsible
-  // toggle in the recipe view.
-  const steps = instructions.map(text => ({
-    title: '',
-    instructions: text,
-    inputFromStep: null,
-    ingredients: [],
-    _instr: text.toLowerCase(),
-  }));
-
-  const unmatched = [];
-  for (const ing of allIngs) {
-    const hits = [];
-    for (let si = 0; si < steps.length; si++) {
-      if (_ingNameInInstruction(ing.name, steps[si]._instr)) hits.push(si);
-    }
-    if (hits.length === 0) {
-      unmatched.push(ing);
-      continue;
-    }
-    steps[hits[0]].ingredients.push(ing);
-    for (let i = 1; i < hits.length; i++) {
-      steps[hits[i]].ingredients.push({
-        name: ing.name,
-        amount: '',
-        unit: ing.unit,
-        originalText: '',
-        canonicalMl: null,
-        canonicalG: null,
-      });
-    }
-  }
-
-  for (const s of steps) {
-    delete s._instr;
-    if (s.ingredients.length === 0) {
-      s.ingredients.push({ name: '', amount: '', unit: 'tsp' });
-    }
-  }
-
-  b.unassignedIngredients = unmatched;
-  b.steps = steps;
-}
-
-// Substring match plus a single-letter plural stem so "tomatoes" matches
-// "tomato" and vice versa. Cheaper and more predictable than fuzzy matching.
-function _ingNameInInstruction(name, instrLower) {
-  const n = (name || '').toLowerCase().trim();
-  if (!n) return false;
-  if (instrLower.includes(n)) return true;
-  if (n.endsWith('s') && n.length > 3 && instrLower.includes(n.slice(0, -1))) return true;
-  if (!n.endsWith('s') && instrLower.includes(n + 's')) return true;
-  return false;
-}
-
-// Picks the unit string the builder UI should show for a parsed ingredient.
-// Prefers a recognised unit alias from UNITS (so the existing select reflects
-// it correctly); otherwise falls back to the raw scraper text or 'tsp'.
-function _unitDisplayFromParsed(parsed) {
-  const raw = (parsed.unitRaw || '').toLowerCase().trim();
-  if (!raw) return 'tsp';
-  const exact = UNITS.find(u => u.toLowerCase() === raw);
-  if (exact) return exact;
-  // Match common pluralisations / abbreviations to known UNITS.
-  const map = {
-    teaspoon: 'tsp', teaspoons: 'tsp', tsps: 'tsp',
-    tablespoon: 'tbsp', tablespoons: 'tbsp', tbsps: 'tbsp',
-    cups: 'cup', grams: 'g', kg: 'g', kilogram: 'g', kilograms: 'g',
-    ounce: 'oz', ounces: 'oz', pound: 'oz', pounds: 'oz',
-    cloves: 'clove', pieces: 'piece',
-  };
-  return map[raw] || raw;
+  const next = SBShared.builder.applyParsedRecipe(b, parsed);
+  Object.assign(b, next);
 }
 
 async function builderSave() {
