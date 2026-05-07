@@ -130,6 +130,34 @@ async def update_sauce(
     return MessageResponse(message="Sauce updated")
 
 
+@router.delete(
+    "/sauces/{sauce_id}",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Delete a sauce (owner or admin only)",
+)
+async def delete_sauce(
+    sauce_id: str = Path(..., description="Target sauce id"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Delete a sauce; steps, ingredients, and sauce_items rows cascade via FK."""
+    sb = get_supabase()
+    existing = (
+        sb.table("sauceboss_sauces").select("id, created_by").eq("id", sauce_id).execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Sauce not found")
+    row = existing.data[0]
+    if not user.is_admin and row.get("created_by") != user.user_id:
+        raise HTTPException(status_code=403, detail="You can only delete your own sauces")
+
+    try:
+        sb.table("sauceboss_sauces").delete().eq("id", sauce_id).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+    return MessageResponse(message="Sauce deleted")
+
+
 def _build_sauce_payload(sauce_id: str, body: CreateSauceRequest, created_by: str | None) -> dict:
     """Shape a CreateSauce/UpdateSauce body into the RPC payload dict."""
     payload: dict = {

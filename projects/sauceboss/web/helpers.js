@@ -202,6 +202,13 @@ async function deleteAdminSauce(id) {
   return apiFetch(`/admin/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+// Owner-or-admin delete. Backend validates `created_by == current user OR is_admin`.
+// Used from the sauce manager so a logged-in user can remove a recipe they
+// authored without needing the admin claim.
+async function deleteSauceOwned(id) {
+  return apiFetch(`/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 // ─── Ingredient (food) admin ─────────────────────────────────────────────────
 async function fetchFoodsWithUsage() {
   const data = await apiFetch('/foods-with-usage');
