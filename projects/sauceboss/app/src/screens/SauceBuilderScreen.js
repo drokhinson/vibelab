@@ -64,6 +64,13 @@ function emptyBuilder() {
 }
 
 function builderFromSauce(sauce) {
+  // Backend (`get_sauceboss_all_sauces_full`) emits `compatibleItems` as a
+  // JSON array of item IDs — same name the web's openBuilderEdit reads.
+  // Earlier this code looked for `compatibleItemIds`/`itemIds`, neither of
+  // which exists, so paired items always loaded empty in edit mode.
+  const itemIds = Array.isArray(sauce.compatibleItems)
+    ? sauce.compatibleItems.slice()
+    : Array.isArray(sauce.itemIds) ? sauce.itemIds.slice() : [];
   return {
     name: sauce.name || '',
     cuisine: sauce.cuisine || '',
@@ -73,7 +80,7 @@ function builderFromSauce(sauce) {
     sourceUrl: sauce.sourceUrl || '',
     sauceType: sauce.sauceType || 'sauce',
     parentSauceId: sauce.parentSauceId || null,
-    itemIds: (sauce.compatibleItemIds || sauce.itemIds || []).slice(),
+    itemIds,
     steps: (sauce.steps || []).map((s) => ({
       title: s.title || '',
       instructions: s.instructions || '',
@@ -123,15 +130,17 @@ export default function SauceBuilderScreen({ navigation, route }) {
       }
 
       if (editingId) {
-        // Find the sauce in the manager-loaded list, or fetch fresh
-        let sauce = state.managerSauces.find((s) => s.id === editingId);
-        if (!sauce) {
-          try {
-            const all = await api.allSauces();
-            sauce = all.find((s) => s.id === editingId);
-          } catch {
-            // ignore
-          }
+        // Always fetch fresh on edit. Using state.managerSauces as a cache
+        // bites when the user just saved this sauce a moment ago — the
+        // manager refresh on focus may not have raced ahead of the
+        // re-open, so the row could be stale. /sauces is one round-trip.
+        let sauce = null;
+        try {
+          const all = await api.allSauces();
+          sauce = all.find((s) => s.id === editingId);
+        } catch {
+          // Fall back to the cached row if the network request fails.
+          sauce = state.managerSauces.find((s) => s.id === editingId) || null;
         }
         if (!cancelled && sauce) {
           setBuilder(builderFromSauce(sauce));
