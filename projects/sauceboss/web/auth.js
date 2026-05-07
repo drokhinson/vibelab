@@ -25,6 +25,7 @@ function initSupabase() {
     } else {
       currentUser = null;
       state.favorites = new Map();
+      state.editMode = false;
       document.body.classList.remove('is-auth');
       render();
     }
@@ -57,6 +58,9 @@ async function loadProfile() {
       state.favorites = new Map();
     }
     document.body.classList.add('is-auth');
+    try {
+      state.editMode = sessionStorage.getItem('sb_edit_mode') === '1';
+    } catch (_) { state.editMode = false; }
     closeAuthModal();
     render();
   } finally {
@@ -75,6 +79,8 @@ async function handleLogout() {
   currentUser = null;
   state.favorites = new Map();
   state.favoritesOnly = false;
+  state.editMode = false;
+  try { sessionStorage.removeItem('sb_edit_mode'); } catch (_) {}
   document.body.classList.remove('is-auth');
   render();
 }

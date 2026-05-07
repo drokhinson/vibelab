@@ -76,6 +76,23 @@ function renderRecipe() {
       `).join('')}
     </div>` : '';
 
+  // Export buttons live alongside the other edit affordances — gated on edit
+  // mode (logged-in users only). Anonymous visitors can still hit the public
+  // export URLs directly via shared links.
+  const exportButtonsHTML = (currentUser && state.editMode) ? `
+    <div class="recipe-export-row">
+      <a class="recipe-export-btn"
+         href="${API}/api/v1/sauceboss/sauces/${encodeURIComponent(sauce.id)}/export.json"
+         download>
+        <i data-lucide="file-json-2"></i> Export JSON
+      </a>
+      <a class="recipe-export-btn"
+         href="${API}/api/v1/sauceboss/sauces/${encodeURIComponent(sauce.id)}/export.md"
+         download>
+        <i data-lucide="file-text"></i> Export Markdown
+      </a>
+    </div>` : '';
+
   return `
     <div class="status-bar"></div>
     <div class="recipe-header">
@@ -84,6 +101,7 @@ function renderRecipe() {
       <div class="recipe-title">${sauce.name}</div>
       <div class="recipe-subtitle">Pair with: ${(sauce.compatibleItems || []).join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
       ${variantSwitcherHTML}
+      ${exportButtonsHTML}
     </div>
     <div class="recipe-controls">
       <div class="serving-row">

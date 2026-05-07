@@ -131,13 +131,22 @@ function renderAdmin() {
   else if (tab === 'ingredients') bodyHTML = renderIngredientsTab(isAdmin, isLoggedIn);
   else bodyHTML = renderDishTab(isAdmin);
 
+  const editToggle = isLoggedIn ? `
+    <button class="edit-mode-toggle ${state.editMode ? 'edit-mode-on' : ''}"
+            onclick="toggleEditMode()"
+            aria-pressed="${state.editMode}"
+            title="${state.editMode ? 'Exit edit mode' : 'Enter edit mode'}">
+      <i data-lucide="${state.editMode ? 'pencil-off' : 'pencil'}"></i>
+    </button>` : '';
+
   return `
     <div class="status-bar"></div>
     <div class="app-header">
       <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span><i data-lucide="settings-2"></i></span>Sauce Manager</div>
-      <div class="subtitle">${isAdmin ? 'Admin mode' : (isLoggedIn ? 'Signed in' : '')}</div>
+      <div class="subtitle">${state.editMode ? 'Edit mode' : (isAdmin ? 'Admin' : (isLoggedIn ? 'Signed in' : ''))}</div>
       ${renderHeaderAuthSlot()}
+      ${editToggle}
       ${isLoggedIn && !isAdmin ? `<button class="settings-btn" onclick="openSettings()" title="Become admin"><i data-lucide="key-round"></i></button>` : ''}
     </div>
     ${state.adminError ? `<div class="settings-error" style="margin:8px 16px">${state.adminError}</div>` : ''}
@@ -147,12 +156,12 @@ function renderAdmin() {
     <div class="scroll-body">
       ${bodyHTML}
     </div>
-    ${tab === 'sauces' && isLoggedIn && !state.sauceMerge ? `
+    ${tab === 'sauces' && isLoggedIn && state.editMode && !state.sauceMerge ? `
       <button class="fab" aria-label="Add a sauce" onclick="openBuilder()">
         <i data-lucide="plus"></i>
       </button>
     ` : ''}
-    ${tab === 'ingredients' && isLoggedIn && !state.foodMerge && !state.foodForm ? `
+    ${tab === 'ingredients' && isLoggedIn && state.editMode && !state.foodMerge && !state.foodForm ? `
       <button class="fab" aria-label="Add ingredient" onclick="openFoodForm()">
         <i data-lucide="plus"></i>
       </button>
@@ -169,6 +178,22 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
   const mergeMode = !!merge;
   const mergePanel = mergeMode ? renderSauceMergePanel() : '';
 
+  const toolbarHTML = (!mergeMode && state.editMode && (isLoggedIn || isAdmin)) ? `
+    <div class="sm-import-export-row">
+      ${isLoggedIn ? `
+        <button class="sm-tool-btn" onclick="openImportSaucePicker()">
+          <i data-lucide="upload"></i> Import sauce…
+        </button>` : ''}
+      ${isAdmin ? `
+        <button class="sm-tool-btn" onclick="downloadBulkSauceExport()">
+          <i data-lucide="download"></i> Export all (JSON)
+        </button>` : ''}
+      <input type="file" id="sm-import-file"
+             accept="application/json,.json"
+             style="display:none"
+             onchange="handleImportSauceFile(event)">
+    </div>` : '';
+
   const favOnly = !!state.sauceManagerFavoritesOnly;
   const filtered = state.adminSauces.filter(s => {
     if (typeFilter !== 'all' && (s.sauceType || 'sauce') !== typeFilter) return false;
@@ -183,13 +208,13 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
   });
 
   if (state.adminSauces.length === 0) {
-    return `${mergePanel}<p style="padding:16px;color:#888">No sauces found.</p>`;
+    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:#888">No sauces found.</p>`;
   }
   if (filtered.length === 0) {
     const emptyMsg = favOnly
       ? "You haven't favorited any sauces yet."
       : 'No sauces match your filters.';
-    return `${mergePanel}<p style="padding:16px;color:#888">${emptyMsg}</p>`;
+    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:#888">${emptyMsg}</p>`;
   }
 
   // Merge mode renders flat — every row is a candidate target so nesting
@@ -238,7 +263,7 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
   // exit even before picking anything (mirrors the food-merge bar).
   const mergeBar = mergeMode ? renderSauceMergeBar() : '';
 
-  return `${mergePanel}${groupsHTML}${mergeBar}`;
+  return `${mergePanel}${toolbarHTML}${groupsHTML}${mergeBar}`;
 }
 
 function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
@@ -246,8 +271,9 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
   const typeValue = s.sauceType || 'sauce';
   const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
   const isOwner = !!(currentUser && s.createdBy === currentUser.user_id);
-  const canEdit = isAdmin || isOwner;
-  const canDelete = isAdmin || isOwner;
+  // Edit mode gates all editorial swipe actions; merge/sauce-merge mode is its own UX.
+  const canEdit = state.editMode && (isAdmin || isOwner);
+  const canDelete = state.editMode && (isAdmin || isOwner);
   const mergeMode = !!merge;
   const isKeep = merge && merge.keepId === s.id;
   const isPicked = merge && merge.mergeIds.has(s.id);
@@ -294,7 +320,7 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
     return `<div class="admin-sauce-row${variantRowCls}" onclick="selectSauceFromManager('${s.id}')">${inner}</div>`;
   }
   // Variant rows skip long-press merge (already a child of a family).
-  const longPressAttr = isAdmin && !isVariantRow ? `data-longpress-action="startSauceMerge('${s.id}')"` : '';
+  const longPressAttr = isAdmin && state.editMode && !isVariantRow ? `data-longpress-action="startSauceMerge('${s.id}')"` : '';
   return `
     <div class="swipe-row" data-swipe
          data-tap-action="selectSauceFromManager('${s.id}')"
@@ -492,7 +518,8 @@ function renderParent(parent, sec, isAdmin) {
         <div class="admin-sauce-name">${parent.name}</div>
         <div class="admin-sauce-carbs">${sub}</div>
       </div>`;
-  const parentRow = !isAdmin
+  const showSwipe = isAdmin && state.editMode;
+  const parentRow = !showSwipe
     ? `<div class="admin-parent-row" style="${parentRowStyle}" ${canExpand ? `onclick="toggleParentExpansion('${parent.id}')"` : ''}>${parentInner}</div>`
     : `<div class="swipe-row" data-swipe
            ${canExpand ? `data-tap-action="toggleParentExpansion('${parent.id}')"` : ''}
@@ -508,7 +535,7 @@ function renderParent(parent, sec, isAdmin) {
       <div style="padding-left:12px">
         ${showAddVariantForm ? `<div style="padding:0 16px">${renderItemForm()}</div>` : ''}
         ${variants.map(v => renderVariantRow(v, sec, isAdmin)).join('')}
-        ${isAdmin && !showAddVariantForm ? `
+        ${isAdmin && state.editMode && !showAddVariantForm ? `
           <button class="add-step-btn" style="margin:8px 16px" onclick="event.stopPropagation(); openAddItemForm('${sec.category}','${parent.id}')">+ Add Variant</button>
         ` : ''}
       </div>
@@ -526,7 +553,7 @@ function renderVariantRow(v, sec, isAdmin) {
         <div class="admin-sauce-name">${v.name}</div>
         <div class="admin-sauce-carbs">${sub}</div>
       </div>`;
-  if (!isAdmin) {
+  if (!isAdmin || !state.editMode) {
     return `<div class="admin-sauce-row" style="padding-left:38px">${inner}</div>`;
   }
   return `
@@ -1036,7 +1063,7 @@ function renderFoodRow(f, isAdmin, merge) {
 
   const panelHTML = expanded ? renderFoodSaucesPanel(f.id) : '';
 
-  if (!isAdmin) {
+  if (!isAdmin || !state.editMode) {
     return `
       <div class="food-row" onclick="toggleFoodExpand('${f.id}')">${inner}</div>
       ${panelHTML}`;
@@ -1269,5 +1296,68 @@ async function submitFoodMerge() {
     merge.saving = false;
     merge.error = err.message;
     render();
+  }
+}
+
+// ─── Import / Export ────────────────────────────────────────────────────────
+
+function openImportSaucePicker() {
+  const input = document.getElementById('sm-import-file');
+  if (input) input.click();
+}
+
+async function handleImportSauceFile(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = ''; // allow re-picking the same file
+  if (!file) return;
+  if (!session || !session.access_token) { openAuthModal(); return; }
+
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch(`${API}/api/v1/sauceboss/sauces/import`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const detail = err.detail
+        ? (typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail))
+        : res.statusText;
+      alert(`Import failed: ${detail}`);
+      return;
+    }
+    const result = await res.json();
+    state.adminSauces = await fetchAllSauces();
+    render();
+    let msg = `Imported "${result.name}".`;
+    if (result.warnings && result.warnings.length) {
+      msg += `\n\nNotes:\n• ${result.warnings.join('\n• ')}`;
+    }
+    alert(msg);
+  } catch (e) {
+    alert(`Import failed: ${e.message}`);
+  }
+}
+
+async function downloadBulkSauceExport() {
+  if (!session || !session.access_token) { openAuthModal(); return; }
+  try {
+    const res = await fetch(`${API}/api/v1/sauceboss/admin/sauces/export.json`, {
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) { alert(`Export failed: ${res.statusText}`); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sauceboss-sauces-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(`Export failed: ${e.message}`);
   }
 }
