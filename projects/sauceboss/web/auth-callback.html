@@ -37,7 +37,6 @@
       font-size: 14px;
     }
     .err { color: #991B1B; background: #FEE2E2; padding: 10px; border-radius: 8px; font-size: 13px; }
-    code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #F3F4F6; padding: 2px 6px; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -49,57 +48,85 @@
     </div>
   </div>
   <script>
-    // Bridge: Supabase OAuth lands here with `?code=...` in the URL. Forward
-    // that code to the native app via a deep link. Supports both Expo Go
-    // (exp://...) and EAS / production builds (sauceboss://...).
+    // Bridge between Supabase OAuth and the SauceBoss native app.
     //
-    // The native app passes its own deep-link target as the URL fragment
-    // (#native_url=...) when it kicks off the OAuth flow. If that's missing
-    // we fall back to sauceboss://auth-callback (the EAS build scheme).
+    // Two response shapes can land here:
+    //   PKCE     — `?code=…` in the query string (what we configure the
+    //              native client to request).
+    //   Implicit — `#access_token=…&refresh_token=…` in the fragment
+    //              (Supabase's default if PKCE config didn't take).
+    //
+    // Either way we forward every interesting param through to a deep
+    // link the native app can pick up. The native app's URL was passed
+    // here as `#native_url=<encoded>` when the OAuth flow began; if
+    // Supabase used the implicit flow it appended its own params to the
+    // existing fragment, producing two `#` symbols. We split on every
+    // `#` and merge the params.
     (function () {
-      function getParam(name) {
-        var search = new URLSearchParams(location.search || '');
-        if (search.has(name)) return search.get(name);
-        var hash = (location.hash || '').replace(/^#/, '');
-        var hashParams = new URLSearchParams(hash);
-        return hashParams.get(name);
-      }
-
-      function getFragmentParam(name) {
-        var hash = (location.hash || '').replace(/^#/, '');
-        var params = new URLSearchParams(hash);
-        return params.get(name);
-      }
-
       var statusEl = document.getElementById('status');
       var ctaWrap = document.getElementById('cta-wrap');
       var ctaEl = document.getElementById('cta');
 
-      var code = getParam('code');
-      var errorDesc = getParam('error_description') || getParam('error');
-      var nativeUrlEncoded = getFragmentParam('native_url');
-      var nativeUrl = nativeUrlEncoded ? decodeURIComponent(nativeUrlEncoded) : 'sauceboss://auth-callback';
-
-      if (errorDesc) {
-        statusEl.innerHTML = '<span class="err">Sign-in failed: ' + String(errorDesc).replace(/[<>]/g, '') + '</span>';
-        return;
-      }
-      if (!code) {
-        statusEl.innerHTML = '<span class="err">No auth code returned. Try signing in again from the app.</span>';
-        return;
+      function fail(msg) {
+        statusEl.innerHTML = '<span class="err">' +
+          String(msg).replace(/[<>]/g, '') + '</span>';
       }
 
-      // Append the code to the native deep-link URL.
+      function readAll() {
+        var bag = {};
+        var qs = (location.search || '').replace(/^\?/, '');
+        if (qs) {
+          new URLSearchParams(qs).forEach(function (v, k) { bag[k] = v; });
+        }
+        var hash = (location.hash || '').replace(/^#/, '');
+        if (hash) {
+          hash.split('#').forEach(function (chunk) {
+            new URLSearchParams(chunk).forEach(function (v, k) {
+              if (bag[k] == null) bag[k] = v;
+            });
+          });
+        }
+        return bag;
+      }
+
+      var params = readAll();
+
+      if (params.error_description || params.error) {
+        fail('Sign-in failed: ' + (params.error_description || params.error));
+        return;
+      }
+
+      var nativeUrl = params.native_url
+        ? decodeURIComponent(params.native_url)
+        : 'sauceboss://auth-callback';
+      delete params.native_url;
+
+      // Forward whichever auth params are present. The native side handles
+      // both shapes — `code` via exchangeCodeForSession, tokens via setSession.
+      var keep = ['code', 'access_token', 'refresh_token', 'expires_at',
+                  'expires_in', 'token_type', 'provider_token',
+                  'provider_refresh_token'];
+      var forwarded = new URLSearchParams();
+      var hasAny = false;
+      for (var i = 0; i < keep.length; i++) {
+        var k = keep[i];
+        if (params[k] != null) {
+          forwarded.set(k, params[k]);
+          hasAny = true;
+        }
+      }
+      if (!hasAny) {
+        fail('No auth response in URL. Try signing in from the app again.');
+        return;
+      }
+
       var sep = nativeUrl.indexOf('?') >= 0 ? '&' : '?';
-      var deepLink = nativeUrl + sep + 'code=' + encodeURIComponent(code);
+      var deepLink = nativeUrl + sep + forwarded.toString();
 
-      // Auto-redirect, but show a fallback button in case the OS doesn't open
-      // the app (most common on iOS when the user has both Expo Go + an EAS
-      // build installed and the OS asks which to use).
       try {
         window.location.replace(deepLink);
       } catch (e) {
-        // ignore — fall through to the button
+        // ignore — fall through to manual button
       }
       setTimeout(function () {
         statusEl.textContent = 'If SauceBoss didn\'t open automatically, tap the button below.';

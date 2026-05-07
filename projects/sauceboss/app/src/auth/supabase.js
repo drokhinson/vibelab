@@ -64,6 +64,12 @@ export const supabase = isAuthConfigured
         persistSession: true,
         // RN doesn't expose a URL bar, so no detection needed.
         detectSessionInUrl: false,
+        // Use the PKCE flow for OAuth so the redirect carries `?code=…`
+        // instead of `#access_token=…`. The web bridge expects the code
+        // form so it can forward it to the native runtime cleanly. PKCE
+        // also works better with the WebBrowser session pattern because
+        // the verifier stays on-device.
+        flowType: 'pkce',
       },
     })
   : null;

@@ -106,30 +106,54 @@ export async function signInWithGoogleOAuth() {
     return { ok: false, error: makeAllowlistHint(redirectTo), redirectTo };
   }
 
-  const code = parseCodeFromUrl(result.url);
-  if (!code) {
+  const handled = await handleAuthDeepLink(result.url);
+  if (handled.ok) return { ok: true };
+  if (handled.ignored) {
     return { ok: false, error: makeAllowlistHint(redirectTo), redirectTo };
   }
-
-  return exchangeCodeForSession(code);
+  return { ok: false, error: handled.error || 'Sign-in failed.', redirectTo };
 }
 
 // Helper used by both signInWithGoogleOAuth and the Linking deep-link
 // listener in App.js. The deep-link path fires when the OS hands the URL
 // off to the app *outside* of WebBrowser.openAuthSessionAsync (e.g. when
 // the user taps the bridge's "Open SauceBoss" fallback button).
-export function parseCodeFromUrl(url) {
-  if (!url) return null;
+//
+// Returns the auth params extracted from the URL, regardless of whether
+// the bridge forwarded a PKCE `code` or implicit-flow tokens.
+export function parseAuthParamsFromUrl(url) {
+  if (!url) return {};
+  const out = {};
+  // 1. Query string (PKCE: `?code=…`).
   try {
     const u = new URL(url);
-    const fromQuery = u.searchParams.get('code');
-    if (fromQuery) return fromQuery;
+    u.searchParams.forEach((v, k) => { out[k] = v; });
   } catch {
-    // ignore — try the hash form below
+    // Fall through — the URL polyfill mostly handles `exp://` but be defensive.
+    const queryIdx = url.indexOf('?');
+    const hashIdx = url.indexOf('#');
+    if (queryIdx >= 0) {
+      const queryEnd = hashIdx > queryIdx ? hashIdx : url.length;
+      const qs = url.slice(queryIdx + 1, queryEnd);
+      new URLSearchParams(qs).forEach((v, k) => { out[k] = v; });
+    }
   }
-  const hash = (url.split('#')[1] || '');
-  const hashParams = new URLSearchParams(hash);
-  return hashParams.get('code');
+  // 2. Fragment (implicit: `#access_token=…`).
+  const hashIdx = url.indexOf('#');
+  if (hashIdx >= 0) {
+    const hash = url.slice(hashIdx + 1);
+    hash.split('#').forEach((chunk) => {
+      new URLSearchParams(chunk).forEach((v, k) => {
+        if (out[k] == null) out[k] = v;
+      });
+    });
+  }
+  return out;
+}
+
+// Backwards-compat shim — older callers expect just the code.
+export function parseCodeFromUrl(url) {
+  return parseAuthParamsFromUrl(url).code || null;
 }
 
 export async function exchangeCodeForSession(code) {
@@ -143,10 +167,27 @@ export async function exchangeCodeForSession(code) {
   }
 }
 
+async function setSessionFromTokens(accessToken, refreshToken) {
+  if (!supabase) return { ok: false, error: 'Sign-in is not configured for this build.' };
+  try {
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
+}
+
 // Convenience helper for the Linking listener: takes a deep link URL and,
-// if it carries an auth code, exchanges it.
+// if it carries auth artifacts (code OR tokens), completes the handshake.
 export async function handleAuthDeepLink(url) {
-  const code = parseCodeFromUrl(url);
-  if (!code) return { ok: false, ignored: true };
-  return exchangeCodeForSession(code);
+  const params = parseAuthParamsFromUrl(url);
+  if (params.code) return exchangeCodeForSession(params.code);
+  if (params.access_token && params.refresh_token) {
+    return setSessionFromTokens(params.access_token, params.refresh_token);
+  }
+  return { ok: false, ignored: true };
 }
