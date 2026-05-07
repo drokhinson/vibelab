@@ -42,6 +42,7 @@ function emptyStep() {
     title: '',
     instructions: '',
     inputFromStep: null,
+    estimatedTime: '',
     ingredients: [{ name: '', amount: '', unit: 'tsp' }],
   };
 }
@@ -77,6 +78,7 @@ function builderFromSauce(sauce) {
       title: s.title || '',
       instructions: s.instructions || '',
       inputFromStep: s.inputFromStep || null,
+      estimatedTime: s.estimatedTime != null ? String(s.estimatedTime) : '',
       ingredients: (s.ingredients || []).map((i) => ({
         name: i.name || '',
         amount: i.amount != null ? String(i.amount) : '',
@@ -302,20 +304,26 @@ export default function SauceBuilderScreen({ navigation, route }) {
         sauceType: builder.sauceType,
         parentSauceId: builder.parentSauceId,
         itemIds: builder.itemIds,
-        steps: builder.steps.map((s, i) => ({
-          stepOrder: i + 1,
-          title: s.title.trim(),
-          instructions: (s.instructions || '').trim() || null,
-          inputFromStep: s.inputFromStep,
-          estimatedTime: 5,
-          ingredients: s.ingredients
-            .filter((ing) => ing.name && ing.name.trim())
-            .map((ing) => ({
-              name: ing.name.trim(),
-              amount: ing.unit === 'to taste' ? 0 : parseFloat(ing.amount) || 0,
-              unit: ing.unit,
-            })),
-        })),
+        steps: builder.steps.map((s, i) => {
+          // Empty input -> null so the recipe view falls back to the
+          // legacy 5-min default. Cap at 600 to keep the int small.
+          const rawTime = (s.estimatedTime ?? '').toString().trim();
+          const parsedTime = rawTime === '' ? null : Math.max(0, Math.min(600, parseInt(rawTime, 10) || 0));
+          return {
+            stepOrder: i + 1,
+            title: s.title.trim(),
+            instructions: (s.instructions || '').trim() || null,
+            inputFromStep: s.inputFromStep,
+            estimatedTime: parsedTime,
+            ingredients: s.ingredients
+              .filter((ing) => ing.name && ing.name.trim())
+              .map((ing) => ({
+                name: ing.name.trim(),
+                amount: ing.unit === 'to taste' ? 0 : parseFloat(ing.amount) || 0,
+                unit: ing.unit,
+              })),
+          };
+        }),
       };
       if (editingId) {
         await api.updateSauce(editingId, payload);
@@ -595,14 +603,33 @@ export default function SauceBuilderScreen({ navigation, route }) {
                 </>
               ) : null}
 
-              <Text style={styles.label}>Title</Text>
-              <TextInput
-                style={styles.input}
-                value={step.title}
-                onChangeText={(v) => patchStep(idx, { title: v })}
-                placeholder="Whisk everything together"
-                placeholderTextColor={COLORS.textMuted}
-              />
+              <View style={styles.titleRow}>
+                <View style={styles.titleCol}>
+                  <Text style={styles.label}>Title</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={step.title}
+                    onChangeText={(v) => patchStep(idx, { title: v })}
+                    placeholder="Whisk everything together"
+                    placeholderTextColor={COLORS.textMuted}
+                  />
+                </View>
+                <View style={styles.timeCol}>
+                  <Text style={styles.label}>Time</Text>
+                  <View style={styles.timeWrap}>
+                    <TextInput
+                      style={styles.timeInput}
+                      value={step.estimatedTime ?? ''}
+                      onChangeText={(v) => patchStep(idx, { estimatedTime: v.replace(/[^0-9]/g, '') })}
+                      placeholder="5"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="number-pad"
+                      maxLength={3}
+                    />
+                    <Text style={styles.timeSuffix}>min</Text>
+                  </View>
+                </View>
+              </View>
               <Text style={styles.label}>Instructions (optional)</Text>
               <TextInput
                 style={[styles.input, styles.multiline]}
@@ -832,6 +859,39 @@ const styles = StyleSheet.create({
   multiline: {
     minHeight: 60,
     textAlignVertical: 'top',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  titleCol: {
+    flex: 1,
+  },
+  timeCol: {
+    width: 84,
+  },
+  timeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    paddingRight: 10,
+  },
+  timeInput: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: COLORS.text,
+    textAlign: 'right',
+  },
+  timeSuffix: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginLeft: 4,
   },
   pillRow: {
     flexDirection: 'row',

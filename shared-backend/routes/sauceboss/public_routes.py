@@ -177,6 +177,7 @@ def _build_sauce_payload(sauce_id: str, body: CreateSauceRequest, created_by: st
                 "instructions": (step.instructions or "").strip() or None,
                 "stepOrder": idx + 1,
                 "inputFromStep": step.inputFromStep,
+                "estimatedTime": step.estimatedTime,
                 "ingredients": [_resolve_ingredient_for_save(ing) for ing in step.ingredients],
             }
             for idx, step in enumerate(body.steps)

@@ -84,6 +84,7 @@ class StepInput(BaseModel):
     instructions: Optional[str] = None
     ingredients: List[IngredientInput] = Field(min_length=1)
     inputFromStep: int | None = None
+    estimatedTime: int | None = Field(default=None, ge=0, le=600)
 
 
 class CreateSauceRequest(BaseModel):

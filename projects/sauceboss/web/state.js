@@ -139,7 +139,7 @@ function defaultBuilder() {
     name: '', cuisine: '', cuisineEmoji: '', color: '', description: '', sourceUrl: '',
     sauceType: '',               // '' | 'sauce' | 'marinade' | 'dressing' — must be selected by user
     parentSauceId: null,         // when set, this sauce is a variant of the chosen parent
-    steps: [{ title: '', instructions: '', inputFromStep: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
+    steps: [{ title: '', instructions: '', inputFromStep: null, estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
     unassignedIngredients: [],   // imported ingredients not yet placed in a step; recipe cannot save while non-empty
     itemIds: [], saving: false, error: null,
     acStep: null, acIng: null, acResults: [], acSelected: -1,

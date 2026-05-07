@@ -711,6 +711,7 @@ function openBuilderEdit(id) {
       title: s.title,
       instructions: s.instructions || '',
       inputFromStep: s.inputFromStep || null,
+      estimatedTime: s.estimatedTime != null ? s.estimatedTime : null,
       ingredients: (s.ingredients || []).map(i => ({
         name: i.name, amount: i.amount, unit: i.unit,
       })),
