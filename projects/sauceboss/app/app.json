@@ -12,7 +12,9 @@
       "backgroundColor": "#E85D04",
       "resizeMode": "contain"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
       "expo-secure-store",
       "expo-web-browser"
@@ -22,7 +24,11 @@
       "bundleIdentifier": "com.sauceboss.app",
       "infoPlist": {
         "CFBundleURLTypes": [
-          { "CFBundleURLSchemes": ["sauceboss"] }
+          {
+            "CFBundleURLSchemes": [
+              "sauceboss"
+            ]
+          }
         ]
       }
     },
@@ -36,8 +42,15 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "category": ["DEFAULT", "BROWSABLE"],
-          "data": [{ "scheme": "sauceboss" }]
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ],
+          "data": [
+            {
+              "scheme": "sauceboss"
+            }
+          ]
         }
       ]
     },
@@ -47,8 +60,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "27b0ec02-f79d-4ac2-abac-17c140025c55"
       }
-    }
+    },
+    "owner": "drokhinson"
   }
 }
