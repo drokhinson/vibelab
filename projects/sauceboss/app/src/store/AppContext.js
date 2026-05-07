@@ -500,9 +500,27 @@ export function AppProvider({ children }) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Wire the API client to read the auth token from this context.
+  // Wire the API client to read the auth token directly from the Supabase
+  // client (not from React state). Going through stateRef.current.session
+  // raced the SET_SESSION dispatch — onAuthStateChange fires, dispatches
+  // SET_SESSION, then synchronously kicks off hydrateUserState → api.getProfile,
+  // but stateRef only updates after the next render commits. The first
+  // profile fetch went out unauthenticated, currentUser never got set, and
+  // the user had to re-sign-in for the followup attempt to land on a
+  // populated stateRef.
+  //
+  // supabase.auth.getSession() is in-memory after the first call, so this
+  // adds no measurable latency to authenticated requests.
   useEffect(() => {
-    setAuthTokenGetter(() => stateRef.current.session?.access_token || null);
+    setAuthTokenGetter(async () => {
+      if (!supabase) return null;
+      try {
+        const { data } = await supabase.auth.getSession();
+        return data?.session?.access_token || null;
+      } catch {
+        return null;
+      }
+    });
   }, []);
 
   // Auth bootstrap: subscribe to Supabase session changes. On sign-in, fetch
