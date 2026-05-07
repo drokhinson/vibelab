@@ -36,7 +36,6 @@ function renderEmoji(emoji) {
 
 // ─── API fetch helpers ────────────────────────────────────────────────────────
 const API = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || 'http://localhost:8000';
-const PREFIX = '/api/v1/sauceboss';
 
 fetch(`${API}/api/v1/analytics/track`, {
   method: 'POST',
@@ -44,78 +43,50 @@ fetch(`${API}/api/v1/analytics/track`, {
   body: JSON.stringify({ app: window.APP_CONFIG?.project || 'sauceboss', event: 'app_open' })
 }).catch(() => {});
 
-// Auth-aware fetch wrapper. Adds Authorization header when a Supabase session
-// is active. Body is JSON-stringified if it's a plain object. Throws an Error
-// with the backend's `detail` field on non-2xx responses.
-async function apiFetch(path, opts = {}) {
-  const headers = { ...(opts.headers || {}) };
-  if (session?.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
-  let body = opts.body;
-  if (body && typeof body === 'object' && !(body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
-    body = JSON.stringify(body);
-  }
-  const url = `${API}${PREFIX}${path}`;
-  const res = await fetch(url, { ...opts, headers, body });
-  if (!res.ok) {
-    let detail = '';
-    try {
-      const j = await res.json();
-      detail = (j.detail && j.detail.message) || j.detail || '';
-    } catch { /* ignore */ }
-    const msg = detail ? `${res.status} ${detail}` : `HTTP ${res.status} ${res.statusText}`;
-    throw new Error(msg);
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
+// One API client for the whole web app, sourced from shared/api.js so native
+// and web hit the same endpoints with the same auth + error-shape handling.
+// The `getAuthToken` arrow reads `session` on each call so it picks up the
+// latest Supabase session without needing to rebuild the client on sign-in.
+const api = SBShared.api.makeApi({
+  fetchFn: window.fetch.bind(window),
+  getAuthToken: () => session?.access_token || null,
+  baseUrl: API,
+});
 
-function _withIngredientNames(sauce) {
-  return { ...sauce, ingredientNames: new Set(sauce.ingredients.map(i => i.name)) };
-}
-
-async function _loggedJson(url) {
-  console.log('[sauceboss] fetch →', url);
-  let res;
-  try {
-    res = await fetch(url);
-  } catch (e) {
-    console.error('[sauceboss] network error on', url, e);
-    throw new Error(`Network error reaching ${url}: ${e.message}`);
-  }
-  console.log('[sauceboss] fetch ←', url, res.status, res.statusText);
-  if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json()).detail || ''; } catch { /* ignore */ }
-    throw new Error(`HTTP ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''} (${url})`);
-  }
-  return res.json();
-}
-
-async function fetchInitialLoad() {
-  const data = await _loggedJson(`${API}/api/v1/sauceboss/initial-load`);
-  return {
-    carbs: data.carbs || [],
-    proteins: data.proteins || [],
-    saladBases: data.saladBases || [],
-  };
-}
-
-async function fetchItemLoad(itemId) {
-  const data = await _loggedJson(`${API}/api/v1/sauceboss/items/${encodeURIComponent(itemId)}/load`);
-  return {
-    item: data.item || null,
-    variants: data.variants || [],
-    sauces: (data.sauces || []).map(_withIngredientNames),
-    ingredients: data.ingredients || [],
-  };
-}
-
-async function fetchIngredientCategories() {
-  const res = await fetch(`${API}/api/v1/sauceboss/ingredient-categories`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
+// Existing call sites use these names; the bodies just delegate to `api` now.
+// Keeping the shims means no churn across the 60-odd callers in init.js,
+// settings.js, items.js, builder.js, sauces.js, and auth.js.
+const fetchInitialLoad         = () => api.initialLoad();
+const fetchItemLoad            = (id) => api.itemLoad(id);
+const fetchIngredientCategories = () => api.ingredientCategories();
+const fetchSubstitutions       = () => api.substitutions();
+const fetchUnits               = () => api.units();
+const fetchFoods               = (q, limit) => api.foods(q, limit);
+const importRecipeFromUrl      = (url) => api.importRecipeFromUrl(url);
+const createSauce              = (data) => api.createSauce(data);
+const updateSauce              = (id, data) => api.updateSauce(id, data);
+const fetchAllSauces           = () => api.allSauces();
+const fetchAdminSauces         = () => api.adminListSauces();
+const fetchItems               = () => api.allItems();
+const adminCreateItem          = (data) => api.createItem(data);
+const adminUpdateItem          = (id, data) => api.updateItem(id, data);
+const adminDeleteItem          = (id) => api.deleteItem(id);
+const deleteAdminSauce         = (id) => api.adminDeleteSauce(id);
+// Backend validates `created_by == current user OR is_admin` — same endpoint
+// used by the manager when a logged-in non-admin removes their own recipe.
+const deleteSauceOwned         = (id) => api.deleteSauce(id);
+const fetchFoodsWithUsage      = () => api.listFoodsWithUsage();
+const adminCreateFood          = (payload) => api.createFood(payload);
+const adminUpdateFood          = (id, payload) => api.updateFood(id, payload);
+const adminDeleteFood          = (id) => api.deleteFood(id);
+const adminMergeFoods          = (keepId, mergeIds) => api.mergeFoods(keepId, mergeIds);
+const adminAssignSauceVariants = (parentId, sauceIds) => api.assignSauceVariants(parentId, sauceIds);
+const fetchProfile             = () => api.getProfile();
+const createProfile            = (displayName) => api.upsertProfile(displayName);
+const becomeAdmin              = (adminKey) => api.becomeAdmin(adminKey);
+const fetchFavorites           = () => api.listFavorites();
+const addFavorite              = (sauceId) => api.addFavorite(sauceId);
+const removeFavorite           = (sauceId) => api.removeFavorite(sauceId);
 
 function availableCuisines() {
   const seen = new Map();
@@ -124,148 +95,6 @@ function availableCuisines() {
     if (s.cuisine && !seen.has(s.cuisine)) seen.set(s.cuisine, s.cuisineEmoji || '🍽');
   }
   return [...seen].map(([name, emoji]) => ({ name, emoji }));
-}
-
-async function fetchSubstitutions() {
-  const res = await fetch(`${API}/api/v1/sauceboss/substitutions`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-async function fetchUnits() {
-  const data = await _loggedJson(`${API}/api/v1/sauceboss/units`);
-  return data.units || [];
-}
-
-async function fetchFoods(query, limit = 20) {
-  const params = new URLSearchParams();
-  if (query) params.set('q', query);
-  params.set('limit', String(limit));
-  const data = await _loggedJson(`${API}/api/v1/sauceboss/foods?${params.toString()}`);
-  return data.foods || [];
-}
-
-async function importRecipeFromUrl(url) {
-  const res = await fetch(`${API}/api/v1/sauceboss/import`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
-  });
-  if (!res.ok) {
-    let detail = '';
-    try {
-      const body = await res.json();
-      detail = (body.detail && body.detail.message) || body.detail || '';
-    } catch { /* ignore */ }
-    throw new Error(detail || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-async function createSauce(data) {
-  return apiFetch('/sauces', { method: 'POST', body: data });
-}
-
-async function updateSauce(id, data) {
-  return apiFetch(`/sauces/${encodeURIComponent(id)}`, { method: 'PATCH', body: data });
-}
-
-async function fetchAllSauces() {
-  const sauces = await apiFetch('/sauces');
-  return sauces.map(sauce => ({
-    ...sauce,
-    ingredientNames: new Set(sauce.ingredients.map(i => i.name)),
-  }));
-}
-
-async function fetchAdminSauces() {
-  return apiFetch('/admin/sauces');
-}
-
-async function adminCreateItem(data) {
-  return apiFetch('/admin/items', { method: 'POST', body: data });
-}
-
-async function fetchItems() {
-  return apiFetch('/items');
-}
-
-async function adminUpdateItem(id, data) {
-  return apiFetch(`/admin/items/${encodeURIComponent(id)}`, { method: 'PATCH', body: data });
-}
-
-async function adminDeleteItem(id) {
-  return apiFetch(`/admin/items/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
-
-async function deleteAdminSauce(id) {
-  return apiFetch(`/admin/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
-
-// Owner-or-admin delete. Backend validates `created_by == current user OR is_admin`.
-// Used from the sauce manager so a logged-in user can remove a recipe they
-// authored without needing the admin claim.
-async function deleteSauceOwned(id) {
-  return apiFetch(`/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
-
-// ─── Ingredient (food) admin ─────────────────────────────────────────────────
-async function fetchFoodsWithUsage() {
-  const data = await apiFetch('/foods-with-usage');
-  return data.foods || [];
-}
-
-async function adminCreateFood(payload) {
-  return apiFetch('/admin/foods', { method: 'POST', body: payload });
-}
-
-async function adminUpdateFood(id, payload) {
-  return apiFetch(`/admin/foods/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload });
-}
-
-async function adminDeleteFood(id) {
-  return apiFetch(`/admin/foods/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
-
-async function adminMergeFoods(keepId, mergeIds) {
-  return apiFetch('/admin/foods/merge', { method: 'POST', body: { keepId, mergeIds } });
-}
-
-async function adminAssignSauceVariants(parentId, sauceIds) {
-  return apiFetch(`/admin/sauces/${encodeURIComponent(parentId)}/variants`, {
-    method: 'POST',
-    body: { sauceIds },
-  });
-}
-
-// ─── Favorites + profile (auth required) ─────────────────────────────────────
-async function fetchProfile() {
-  return apiFetch('/profile');
-}
-
-async function createProfile(displayName) {
-  return apiFetch('/profile', { method: 'POST', body: { display_name: displayName } });
-}
-
-async function becomeAdmin(adminKey) {
-  return apiFetch('/profile/become-admin', { method: 'POST', body: { admin_key: adminKey } });
-}
-
-async function fetchFavorites() {
-  const data = await apiFetch('/favorites');
-  const map = new Map();
-  for (const entry of (data.favorites || [])) {
-    map.set(entry.sauceId, entry.createdAt || null);
-  }
-  return map;
-}
-
-async function addFavorite(sauceId) {
-  return apiFetch(`/favorites/${encodeURIComponent(sauceId)}`, { method: 'PUT' });
-}
-
-async function removeFavorite(sauceId) {
-  return apiFetch(`/favorites/${encodeURIComponent(sauceId)}`, { method: 'DELETE' });
 }
 
 // Optimistic favorite toggle. Updates state immediately, syncs in the background,
