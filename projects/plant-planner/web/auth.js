@@ -52,6 +52,7 @@ async function loadProfileAndBoot() {
     } catch (e) {
       console.warn("[plant-planner] loadPlants failed:", e);
     }
+    try { await loadCompanions(); } catch (e) { console.warn('[plant-planner] loadCompanions failed:', e); }
     try { preloadThumbnails(plants, renderStyle); } catch (_) {}
     showView("gardens");
   } finally {

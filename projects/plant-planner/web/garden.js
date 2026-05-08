@@ -35,6 +35,7 @@ function renderBuilder() {
   html += '<span class="render3d-label"><i data-lucide="box"></i> Drag from catalog to place &nbsp;·&nbsp; hold to move &nbsp;·&nbsp; tap to remove</span>';
   html += '</div>';
   html += '<div id="render3d-container"></div>';
+  html += '<div id="companion-chips" class="companion-chips-layer"></div>';
   html += '</div>';
   html += '</div>'; // .builder-main
   html += '</div>'; // .builder-layout
@@ -65,6 +66,8 @@ function init3DScene(g) {
         bind3DDragDrop();
         bind3DClick();
         bindPlantDrag(scene3DHandle);
+        renderCompanionChips();
+        refreshCatalogList();
       }
     });
   });
@@ -82,6 +85,8 @@ function bind3DDragDrop() {
       if (draggedPlant) {
         gridPlacements[gx + "," + gy] = draggedPlant;
         sync3DView();
+        renderCompanionChips();
+        refreshCatalogList();
       }
       catalogDropHandled = true;
       draggedPlant = null;
@@ -119,7 +124,14 @@ function bind3DClick() {
       while (obj && !obj.userData.gridKey) obj = obj.parent;
       if (obj && obj.userData.gridKey) {
         delete gridPlacements[obj.userData.gridKey];
+        if (companionPopoverCellKey === obj.userData.gridKey) {
+          companionPopoverCellKey = null;
+          var existingPop = document.getElementById('companion-popover');
+          if (existingPop) existingPop.remove();
+        }
         sync3DView();
+        renderCompanionChips();
+        refreshCatalogList();
       }
     }
   });
@@ -250,6 +262,15 @@ async function saveGarden() {
       method: "PUT",
       body: { plants: placements }
     });
+    // Persist dismissed companion warnings; non-fatal on failure.
+    try {
+      await apiFetch("/gardens/" + currentGarden.id, {
+        method: "PUT",
+        body: { settings_json: { dismissed_companion_warnings: Array.from(dismissedCompanionWarnings) } }
+      });
+    } catch (e) {
+      console.warn('[plant-planner] persist dismissed companion warnings failed:', e);
+    }
     btn.textContent = "Saved!";
     setTimeout(function() { btn.innerHTML = '<i data-lucide="save"></i> Save'; _initIcons(); }, 1500);
   } catch (err) {

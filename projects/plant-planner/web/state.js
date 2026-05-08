@@ -22,3 +22,8 @@ var catalogSearch = '';      // free-text search query (debounced)
 var catalogChips = {};       // active filter chip ids → true; e.g. { native: true, sun: true }
 var detailPanelPlantId = null; // id of plant currently shown in the detail panel, or null
 var currentTheme = localStorage.getItem("pp_theme") || "pastel";
+
+var companions = [];
+var companionsByPlantId = {};
+var dismissedCompanionWarnings = new Set();
+var companionPopoverCellKey = null;

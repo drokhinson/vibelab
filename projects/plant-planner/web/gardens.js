@@ -178,6 +178,12 @@ async function openGarden(id) {
   try {
     var data = await apiFetch("/gardens/" + id);
     currentGarden = data;
+    dismissedCompanionWarnings = new Set(
+      (currentGarden && currentGarden.settings_json && Array.isArray(currentGarden.settings_json.dismissed_companion_warnings))
+        ? currentGarden.settings_json.dismissed_companion_warnings
+        : []
+    );
+    companionPopoverCellKey = null;
     gridPlacements = {};
     if (data.plants) {
       for (var i = 0; i < data.plants.length; i++) {

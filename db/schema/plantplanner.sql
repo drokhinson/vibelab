@@ -1,10 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: post-005_seed_enriched (catalog enriched with native / USDA-zone /
--- bloom-month / pollinator / water-need / care-summary fields; gardens gained a
--- per-garden usda_zone column).
+-- Last updated: post-006_companions (added plantplanner_companions table for
+-- companion-planting relationships and a settings_json bag on
+-- plantplanner_gardens).
 -- Migrations applied: 001_baseline, 002_seed, 003_supabase_auth,
---                     004_enrich_plants, 005_seed_enriched.
+--                     004_enrich_plants, 005_seed_enriched, 006_companions.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -58,10 +58,26 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
   shade_level     TEXT        NOT NULL DEFAULT 'full_sun',    -- full_sun | partial | shade
   planting_season TEXT        NOT NULL DEFAULT 'spring',      -- spring | summer | fall | winter
   usda_zone       TEXT,                                        -- per-garden USDA hardiness zone (e.g. "6b")
+  settings_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
   created_at      TIMESTAMPTZ DEFAULT now(),
   updated_at      TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.plantplanner_gardens ENABLE ROW LEVEL SECURITY;
+
+-- Companion-planting relationships (ordered pairs: plant_a_id < plant_b_id; clients expand bidirectionally)
+CREATE TABLE IF NOT EXISTS public.plantplanner_companions (
+  id           BIGSERIAL  PRIMARY KEY,
+  plant_a_id   UUID       NOT NULL REFERENCES public.plantplanner_plants(id) ON DELETE CASCADE,
+  plant_b_id   UUID       NOT NULL REFERENCES public.plantplanner_plants(id) ON DELETE CASCADE,
+  relationship TEXT       NOT NULL CHECK (relationship IN ('good','bad','neutral')),
+  reason       TEXT       NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT plantplanner_companions_ordered CHECK (plant_a_id < plant_b_id),
+  CONSTRAINT plantplanner_companions_unique  UNIQUE (plant_a_id, plant_b_id)
+);
+CREATE INDEX IF NOT EXISTS plantplanner_companions_a_idx ON public.plantplanner_companions(plant_a_id);
+CREATE INDEX IF NOT EXISTS plantplanner_companions_b_idx ON public.plantplanner_companions(plant_b_id);
+ALTER TABLE public.plantplanner_companions ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.plantplanner_garden_plants (
   id        UUID    PRIMARY KEY DEFAULT gen_random_uuid(),

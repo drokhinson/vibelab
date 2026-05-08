@@ -35,6 +35,7 @@ class UpdateGardenBody(BaseModel):
     shade_level: Optional[ShadeLevel] = None
     planting_season: Optional[PlantingSeason] = None
     usda_zone: Optional[str] = None
+    settings_json: Optional[dict] = None
 
 
 class GardenResponse(BaseModel):
@@ -81,3 +82,10 @@ class PlantPlacement(BaseModel):
 
 class SavePlantsBody(BaseModel):
     plants: List[PlantPlacement]
+
+
+class CompanionResponse(BaseModel):
+    plant_a_id: str
+    plant_b_id: str
+    relationship: str
+    reason: str
