@@ -4,7 +4,7 @@
       "id": "sauceboss",
       "name": "SauceBoss",
       "description": "Pick a carb, filter by ingredients, get step-by-step visual sauce recipes.",
-      "status": "wip",
+      "status": "live",
       "tags": [
         "food",
         "recipes",
@@ -13,9 +13,44 @@
       "webUrl": "https://sauceboss-omega.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": true,
+      "nativeBeta": true,
       "expoSlug": "sauceboss",
       "createdAt": "2026-03-13",
-      "icon": "🍲"
+      "icon": "🍲",
+      "featured": true
+    },
+    {
+      "id": "boardgame-buddy",
+      "name": "BoardgameBuddy",
+      "description": "Build your board game closet, track plays, and quick-reference game guides.",
+      "status": "live",
+      "tags": ["games", "hobbies", "social"],
+      "webUrl": "https://vibelab-boardgamebuddy.vercel.app",
+      "backendUrl": "https://vibelab-production-2119.up.railway.app",
+      "hasNativeApp": false,
+      "expoSlug": null,
+      "createdAt": "2026-03-27",
+      "icon": "🎲",
+      "featured": true
+    },
+    {
+      "id": "daywordplay",
+      "name": "Day Word Play",
+      "description": "Daily vocabulary challenge with friends — learn a new word, write a sentence, vote for the best.",
+      "status": "live",
+      "tags": [
+        "vocabulary",
+        "social",
+        "groups",
+        "games"
+      ],
+      "webUrl": "https://vibelab-daywordplay.vercel.app",
+      "backendUrl": "https://vibelab-production-2119.up.railway.app",
+      "hasNativeApp": false,
+      "expoSlug": null,
+      "createdAt": "2026-03-17",
+      "icon": "📖",
+      "featured": true
     },
     {
       "id": "spotme",
@@ -53,44 +88,9 @@
       "icon": "💰"
     },
     {
-      "id": "admin",
-      "name": "Vibelab Admin",
-      "description": "Owner dashboard for monitoring app usage, managing users, and tracking database storage.",
-      "status": "wip",
-      "tags": [
-        "admin",
-        "monitoring",
-        "internal"
-      ],
-      "webUrl": "https://vibelab-admintool.vercel.app",
-      "backendUrl": "https://vibelab-production-2119.up.railway.app",
-      "hasNativeApp": false,
-      "expoSlug": null,
-      "createdAt": "2026-03-15",
-      "icon": "🛠️"
-    },
-    {
-      "id": "daywordplay",
-      "name": "Day Word Play",
-      "description": "Daily vocabulary challenge with friends — learn a new word, write a sentence, vote for the best.",
-      "status": "wip",
-      "tags": [
-        "vocabulary",
-        "social",
-        "groups",
-        "games"
-      ],
-      "webUrl": "https://vibelab-daywordplay.vercel.app",
-      "backendUrl": "https://vibelab-production-2119.up.railway.app",
-      "hasNativeApp": false,
-      "expoSlug": null,
-      "createdAt": "2026-03-17",
-      "icon": "📖"
-    },
-    {
       "id": "plant-planner",
       "name": "PlantPlanner",
-      "description": "Virtual garden and planter box builder with drag-and-drop plant placement",
+      "description": "Virtual garden and planter box builder with drag-and-drop plant placement.",
       "status": "wip",
       "tags": [
         "garden",
@@ -105,17 +105,22 @@
       "icon": "🌱"
     },
     {
-      "id": "boardgame-buddy",
-      "name": "BoardgameBuddy",
-      "description": "Build your board game closet, track plays, and quick-reference game guides",
+      "id": "admin",
+      "name": "Vibelab Admin",
+      "description": "Owner dashboard for monitoring app usage, managing users, and tracking database storage.",
       "status": "live",
-      "tags": ["games", "hobbies", "social"],
-      "webUrl": "https://vibelab-boardgamebuddy.vercel.app",
+      "tags": [
+        "admin",
+        "monitoring",
+        "internal"
+      ],
+      "webUrl": "https://vibelab-admintool.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": false,
       "expoSlug": null,
-      "createdAt": "2026-03-27",
-      "icon": "🎲"
+      "createdAt": "2026-03-15",
+      "icon": "🛠️",
+      "isAdminTool": true
     }
   ]
 }

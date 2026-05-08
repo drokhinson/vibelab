@@ -6,7 +6,7 @@
   <title>vibelab</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Crimson+Text:wght@600;700&family=Poppins:wght@500;600;700&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -14,11 +14,15 @@
     <div class="header-inner">
       <div class="wordmark">⚗️ vibelab</div>
       <p class="tagline">Ideas → prototypes → native apps</p>
+      <div id="admin-slot" class="admin-slot"></div>
     </div>
   </header>
 
   <main>
+    <section id="featured" class="featured-grid"></section>
+
     <section class="filters" id="filters">
+      <h2 class="section-heading">In progress</h2>
       <div class="filter-row">
         <button class="filter-btn active" data-filter="all">All</button>
         <button class="filter-btn" data-filter="live">Live</button>
@@ -32,7 +36,7 @@
   </main>
 
   <footer>
-    <small>Built in vibelab. Powered by Supabase, Railway & Vercel.</small>
+    <small>Built in vibelab. Powered by Supabase, Railway &amp; Vercel.</small>
   </footer>
 
   <script src="app.js"></script>
