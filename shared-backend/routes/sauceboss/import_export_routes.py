@@ -1,33 +1,38 @@
-"""SauceBoss recipe import / export — JSON + Markdown downloads, JSON upload."""
+"""SauceBoss recipe export — JSON + Markdown downloads.
+
+Single-sauce import is handled client-side: the web UI parses the uploaded
+JSON, populates the builder draft, and routes through the normal review +
+``POST /sauces`` save path so users always confirm before persisting. There
+is no server-side import endpoint.
+"""
 
 import datetime
 import io
 import json
 import logging
 import re
-import secrets
 from typing import Any
 
-from fastapi import Depends, File, HTTPException, Path, UploadFile
+from fastapi import Depends, HTTPException, Path
 from fastapi.responses import StreamingResponse
-from pydantic import ValidationError
 
 from db import get_supabase
 
 from . import router
-from .dependencies import CurrentUser, get_current_admin, get_current_user
-from .models import (
-    BulkSauceExportEnvelope,
-    CreateSauceRequest,
-    ImportResultResponse,
-    SauceExportEnvelope,
-)
-from .public_routes import _build_sauce_payload, _validate_parent_sauce
+from .dependencies import CurrentUser, get_current_admin
+from .models import BulkSauceExportEnvelope, SauceExportEnvelope
 
 logger = logging.getLogger("sauceboss")
 
-_MAX_IMPORT_BYTES = 1_000_000
 _SUPPORTED_VERSION = 1
+
+# Per-ingredient fields we omit from JSON exports — all are derived server-side
+# on save (``_resolve_ingredient_for_save`` rebuilds ``originalText`` from
+# amount/unit/name; foodId/unitId/canonical* come from the registry lookup).
+# Keeping them in the export bloats files and rots when ids drift between
+# Supabase projects. The Markdown formatter still uses ``originalText`` (it
+# reads the raw RPC payload, not the stripped one) for qualitative rows.
+_INGREDIENT_DROP_FIELDS = ("originalText", "foodId", "unitId", "canonicalMl", "canonicalG")
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,8 +62,35 @@ def _load_sauce_or_404(sauce_id: str) -> dict:
     raise HTTPException(status_code=404, detail=f"Sauce {sauce_id!r} not found")
 
 
+def _strip_ing(ing: dict) -> dict:
+    cleaned = dict(ing)
+    for f in _INGREDIENT_DROP_FIELDS:
+        cleaned.pop(f, None)
+    return cleaned
+
+
+def _strip_export_only_fields(sauce: dict) -> dict:
+    """Return a shallow copy of the sauce with derived ingredient fields removed.
+
+    Keeps the JSON export shape symmetric with what the import unwrapper
+    accepts and what the builder edit flow already discards: ``originalText``
+    is rebuilt server-side from ``amount + unit + name`` on save, and
+    ``foodId``/``unitId``/``canonical*`` are looked up against this
+    installation's registry.
+    """
+    out = dict(sauce)
+    out["ingredients"] = [_strip_ing(i) for i in (sauce.get("ingredients") or [])]
+    new_steps: list[dict] = []
+    for step in sauce.get("steps") or []:
+        s = dict(step)
+        s["ingredients"] = [_strip_ing(i) for i in (step.get("ingredients") or [])]
+        new_steps.append(s)
+    out["steps"] = new_steps
+    return out
+
+
 def _fmt_amount(amount: Any, unit: str, original: str | None) -> str:
-    """Format ``"<amount> <unit> <name>"``-style ingredient quantities.
+    """Format ``"<amount> <unit>"``-style ingredient quantities for Markdown.
 
     Falls back to ``originalText`` for qualitative rows (amount=0 with a unit
     like "to taste") so the markdown reads naturally.
@@ -152,85 +184,6 @@ def _render_sauce_markdown(s: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _unwrap_import_payload(raw: dict) -> dict:
-    """Validate the envelope and strip read-only fields. Returns a CreateSauceRequest-shaped dict.
-
-    Accepts:
-      • ``{"version": 1, "sauce": {...}}`` — single export envelope.
-      • Bare sauce dict (with ``name`` + ``steps``) — hand-authored.
-    Rejects:
-      • Bulk envelope (``"sauces"`` list).
-      • Unknown / future ``version``.
-    """
-    if not isinstance(raw, dict):
-        raise HTTPException(status_code=422, detail="Top-level JSON must be an object")
-
-    version = raw.get("version")
-    if version is not None and version != _SUPPORTED_VERSION:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Unsupported export version: {version}",
-        )
-
-    if isinstance(raw.get("sauces"), list):
-        raise HTTPException(
-            status_code=422,
-            detail="Bulk imports not supported — split the file into per-sauce JSONs",
-        )
-
-    inner = raw.get("sauce") if isinstance(raw.get("sauce"), dict) else raw
-    if not isinstance(inner, dict) or "name" not in inner or "steps" not in inner:
-        raise HTTPException(
-            status_code=422,
-            detail="Could not locate sauce payload (expected an object with `name` and `steps`)",
-        )
-
-    cleaned = dict(inner)
-    cleaned.pop("id", None)
-    cleaned.pop("createdBy", None)
-    if "itemIds" not in cleaned:
-        cleaned["itemIds"] = cleaned.pop("compatibleItems", []) or []
-    else:
-        cleaned.pop("compatibleItems", None)
-
-    cleaned_steps: list[dict] = []
-    for step in cleaned.get("steps") or []:
-        if not isinstance(step, dict):
-            continue
-        ings = []
-        for ing in step.get("ingredients") or []:
-            if not isinstance(ing, dict):
-                continue
-            ing = dict(ing)
-            for derived in ("foodId", "unitId", "canonicalMl", "canonicalG"):
-                ing.pop(derived, None)
-            ings.append(ing)
-        new_step = dict(step)
-        new_step["ingredients"] = ings
-        cleaned_steps.append(new_step)
-    cleaned["steps"] = cleaned_steps
-
-    return cleaned
-
-
-def _resolve_parent(parent_id: str | None, new_id: str, warnings: list[str]) -> str | None:
-    """Validate ``parentSauceId`` from an imported file. Drops it (with warning) if not found locally."""
-    if not parent_id:
-        return None
-    sb = get_supabase()
-    parent = (
-        sb.table("sauceboss_sauces")
-        .select("id, parent_sauce_id")
-        .eq("id", parent_id)
-        .execute()
-    )
-    if not parent.data:
-        warnings.append(f"Parent sauce {parent_id!r} not found in this catalog — link dropped.")
-        return None
-    _validate_parent_sauce(parent_id, new_id)
-    return parent_id
-
-
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.get(
@@ -242,7 +195,11 @@ async def export_sauce_json(
 ) -> StreamingResponse:
     """Return one sauce wrapped in a versioned envelope as a JSON download."""
     sauce = _load_sauce_or_404(sauce_id)
-    envelope = SauceExportEnvelope(version=_SUPPORTED_VERSION, exportedAt=_now_iso(), sauce=sauce)
+    envelope = SauceExportEnvelope(
+        version=_SUPPORTED_VERSION,
+        exportedAt=_now_iso(),
+        sauce=_strip_export_only_fields(sauce),
+    )
     body = json.dumps(envelope.model_dump(), indent=2, ensure_ascii=False).encode("utf-8")
     filename = f"{_slugify(sauce.get('name') or sauce_id)}.sauce.json"
     return StreamingResponse(
@@ -278,7 +235,7 @@ async def admin_export_all_sauces(
     _admin: CurrentUser = Depends(get_current_admin),
 ) -> StreamingResponse:
     """Bundle every sauce in the catalog into one versioned JSON download."""
-    sauces = _all_sauces()
+    sauces = [_strip_export_only_fields(s) for s in _all_sauces()]
     envelope = BulkSauceExportEnvelope(
         version=_SUPPORTED_VERSION,
         exportedAt=_now_iso(),
@@ -292,53 +249,3 @@ async def admin_export_all_sauces(
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
-
-@router.post(
-    "/sauces/import",
-    response_model=ImportResultResponse,
-    status_code=201,
-    summary="Import a single sauce from a JSON file (logged-in)",
-)
-async def import_sauce(
-    file: UploadFile = File(..., description="JSON export of one sauce."),
-    user: CurrentUser = Depends(get_current_user),
-) -> ImportResultResponse:
-    """Create a sauce owned by the current user from an uploaded JSON file."""
-    contents = await file.read()
-    if len(contents) > _MAX_IMPORT_BYTES:
-        raise HTTPException(status_code=400, detail="File too large (max 1 MB)")
-
-    try:
-        text = contents.decode("utf-8-sig")
-    except UnicodeDecodeError as e:
-        raise HTTPException(status_code=422, detail=f"File is not UTF-8 text: {e}")
-
-    try:
-        raw = json.loads(text)
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=422, detail=f"File is not valid JSON: {e}")
-
-    inner = _unwrap_import_payload(raw)
-
-    warnings: list[str] = []
-    new_id = f"user-{_slugify(str(inner.get('name') or 'sauce'))}-{secrets.token_hex(2)}"
-    inner["parentSauceId"] = _resolve_parent(inner.get("parentSauceId"), new_id, warnings)
-
-    try:
-        body = CreateSauceRequest.model_validate(inner)
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=e.errors())
-
-    payload = _build_sauce_payload(new_id, body, created_by=user.user_id)
-
-    sb = get_supabase()
-    try:
-        result = sb.rpc("create_sauceboss_sauce", {"p_data": payload}).execute()
-    except Exception as e:
-        logger.exception("import_sauce: create RPC failed")
-        raise HTTPException(500, f"Database error: {e}")
-    if result.data is None:
-        raise HTTPException(500, "Failed to create sauce — RPC returned null")
-
-    return ImportResultResponse(id=new_id, name=body.name, warnings=warnings, status="created")

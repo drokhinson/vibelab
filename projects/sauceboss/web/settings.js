@@ -156,7 +156,7 @@ function renderAdmin() {
     <div class="scroll-body">
       ${bodyHTML}
     </div>
-    ${tab === 'sauces' && isLoggedIn && state.editMode && !state.sauceMerge ? `
+    ${tab === 'sauces' && isLoggedIn && !state.sauceMerge ? `
       <button class="fab" aria-label="Add a sauce" onclick="openBuilder()">
         <i data-lucide="plus"></i>
       </button>
@@ -1310,35 +1310,71 @@ async function handleImportSauceFile(event) {
   const file = event.target.files && event.target.files[0];
   event.target.value = ''; // allow re-picking the same file
   if (!file) return;
-  if (!session || !session.access_token) { openAuthModal(); return; }
+  if (!currentUser) { openAuthModal(); return; }
 
-  const fd = new FormData();
-  fd.append('file', file);
+  let raw;
   try {
-    const res = await fetch(`${API}/api/v1/sauceboss/sauces/import`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${session.access_token}` },
-      body: fd,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      const detail = err.detail
-        ? (typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail))
-        : res.statusText;
-      alert(`Import failed: ${detail}`);
-      return;
-    }
-    const result = await res.json();
-    state.adminSauces = await fetchAllSauces();
-    render();
-    let msg = `Imported "${result.name}".`;
-    if (result.warnings && result.warnings.length) {
-      msg += `\n\nNotes:\n• ${result.warnings.join('\n• ')}`;
-    }
-    alert(msg);
+    raw = JSON.parse(await file.text());
   } catch (e) {
-    alert(`Import failed: ${e.message}`);
+    alert(`File is not valid JSON: ${e.message}`);
+    return;
   }
+
+  if (raw && typeof raw === 'object' && Array.isArray(raw.sauces)) {
+    alert("Bulk imports aren't supported — split the file into per-sauce JSONs.");
+    return;
+  }
+  if (raw && raw.version != null && raw.version !== 1) {
+    alert(`Unsupported export version: ${raw.version}`);
+    return;
+  }
+
+  const inner = (raw && typeof raw.sauce === 'object' && raw.sauce !== null) ? raw.sauce : raw;
+  if (!inner || typeof inner !== 'object' || !inner.name || !Array.isArray(inner.steps)) {
+    alert("Could not locate sauce payload (expected an object with `name` and `steps`).");
+    return;
+  }
+
+  // Drop a parent reference that doesn't resolve in this catalog so the
+  // builder lands on a saveable draft rather than a phantom-parent option.
+  let parentSauceId = inner.parentSauceId || null;
+  if (parentSauceId) {
+    const known = (state.adminSauces || []).some(s => s.id === parentSauceId);
+    if (!known) {
+      alert(`Parent sauce "${parentSauceId}" not found in this catalog — link dropped.`);
+      parentSauceId = null;
+    }
+  }
+
+  const itemIds = Array.isArray(inner.itemIds) && inner.itemIds.length
+    ? inner.itemIds
+    : (Array.isArray(inner.compatibleItems) ? inner.compatibleItems : []);
+
+  // Mirror openBuilderEdit's shape mapping (settings.js:720) minus editingId —
+  // this is a brand-new sauce that will create via POST /sauces on save.
+  state.builder = {
+    ...defaultBuilder(),
+    editingId: null,
+    name: inner.name,
+    cuisine: inner.cuisine || '',
+    cuisineEmoji: inner.cuisineEmoji || '',
+    color: inner.color || '#E85D04',
+    description: inner.description || '',
+    sourceUrl: inner.sourceUrl || '',
+    sauceType: inner.sauceType || 'sauce',
+    parentSauceId,
+    itemIds,
+    steps: (inner.steps || []).map(s => ({
+      title: s.title || '',
+      instructions: s.instructions || '',
+      inputFromStep: s.inputFromStep || null,
+      estimatedTime: s.estimatedTime != null ? s.estimatedTime : null,
+      ingredients: (s.ingredients || []).map(i => ({
+        name: i.name || '', amount: i.amount, unit: i.unit || 'tsp',
+      })),
+    })),
+  };
+  navigate('builder');
 }
 
 async function downloadBulkSauceExport() {
