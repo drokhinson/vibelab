@@ -128,15 +128,14 @@ async def admin_list_proposed_words(
 
     proposals_result = sb.table("daywordplay_proposed_words").select(
         "id, word, part_of_speech, definition, etymology, status, created_at, "
-        "daywordplay_users(username, display_name)"
+        "daywordplay_profiles(display_name)"
     ).eq("status", "pending").order("created_at", desc=True).execute()
 
     proposals = []
     for p in (proposals_result.data or []):
-        user_info = p.pop("daywordplay_users", None) or {}
+        user_info = p.pop("daywordplay_profiles", None) or {}
         proposals.append({
             **p,
-            "proposer_username": user_info.get("username", ""),
             "proposer_display_name": user_info.get("display_name", ""),
         })
 

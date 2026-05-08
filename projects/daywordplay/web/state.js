@@ -4,7 +4,14 @@
 const API = window.APP_CONFIG?.apiBase ?? 'http://localhost:8000';
 const BASE = '/api/v1/daywordplay';
 
-// ── Auth state ────────────────────────────────────────────────────────────────
+// ── Supabase Auth state ───────────────────────────────────────────────────────
+let supabaseClient = null;
+let session = null;          // populated by supabaseClient.auth.onAuthStateChange
+let authConfigError = null;  // surfaced in the auth screen if Supabase config is missing
+let authMode = 'login';      // 'login' | 'signup'
+let authBusy = false;
+
+// ── App user (Day Word Play profile row) ──────────────────────────────────────
 let currentUser = null;
 
 // ── Group state ───────────────────────────────────────────────────────────────
@@ -25,7 +32,7 @@ let bookmarks = [];            // saved/bookmarked words
 let leaderboardData = null;    // { group_name, group_code, leaderboard[] }
 
 // ── Join request state ────────────────────────────────────────────────────────
-let pendingJoinRequests = [];   // [{group, requests: [{id, username, display_name}]}]
+let pendingJoinRequests = [];   // [{group, requests: [{id, display_name}]}]
 
 // ── UI state ──────────────────────────────────────────────────────────────────
 let currentView = 'home';      // home | dictionary | profile | leaderboard | admin

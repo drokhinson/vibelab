@@ -103,7 +103,7 @@ async function loadAdminGroups() {
 }
 
 function renderAdminProposalRow(p) {
-  const proposer = escHtml(p.proposer_display_name || p.proposer_username || 'unknown');
+  const proposer = escHtml(p.proposer_display_name || 'unknown');
   return `
     <div class="card" style="margin-bottom:10px;" data-admin-proposal-id="${escHtml(p.id)}">
       <div style="display:flex; align-items:flex-start; gap:8px;">

@@ -10,7 +10,7 @@ from db import get_supabase
 
 from . import router
 from .models import CreateGroupBody, JoinGroupBody, ReviewJoinRequestBody
-from .dependencies import get_current_user
+from .dependencies import CurrentUser, get_current_user
 
 
 def _generate_code(sb) -> str:
@@ -27,7 +27,7 @@ def _generate_code(sb) -> str:
 @router.get("/groups")
 async def list_groups(
     q: str = Query(default="", description="Search query"),
-    current_user: dict = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     """List all groups, optionally filtered by name search."""
     sb = get_supabase()
@@ -48,14 +48,14 @@ async def list_groups(
         user_groups = set()
         for m in members_data:
             counts[m["group_id"]] = counts.get(m["group_id"], 0) + 1
-            if m["user_id"] == current_user["user_id"]:
+            if m["user_id"] == current_user.user_id:
                 user_groups.add(m["group_id"])
 
         # Check for pending join requests from current user
         pending_requests = (
             sb.table("daywordplay_join_requests")
             .select("group_id")
-            .eq("user_id", current_user["user_id"])
+            .eq("user_id", current_user.user_id)
             .eq("status", "pending")
             .in_("group_id", group_ids)
             .execute()
@@ -71,7 +71,7 @@ async def list_groups(
 
 
 @router.post("/groups")
-async def create_group(body: CreateGroupBody, current_user: dict = Depends(get_current_user)):
+async def create_group(body: CreateGroupBody, current_user: CurrentUser = Depends(get_current_user)):
     """Create a new group. Creator is automatically joined."""
     name = body.name.strip()
     if len(name) < 2:
@@ -83,21 +83,21 @@ async def create_group(body: CreateGroupBody, current_user: dict = Depends(get_c
     group_result = sb.table("daywordplay_groups").insert({
         "name": name,
         "code": code,
-        "created_by": current_user["user_id"],
+        "created_by": current_user.user_id,
     }).execute()
     group = group_result.data[0]
 
     # Auto-join creator
     sb.table("daywordplay_group_members").insert({
         "group_id": group["id"],
-        "user_id": current_user["user_id"],
+        "user_id": current_user.user_id,
     }).execute()
 
     return {"group": group}
 
 
 @router.post("/groups/join")
-async def join_group(body: JoinGroupBody, current_user: dict = Depends(get_current_user)):
+async def join_group(body: JoinGroupBody, current_user: CurrentUser = Depends(get_current_user)):
     """Join a group by its 4-character code."""
     code = body.code.strip().upper()
     if len(code) != 4:
@@ -111,23 +111,23 @@ async def join_group(body: JoinGroupBody, current_user: dict = Depends(get_curre
     group = group_result.data[0]
 
     # Check already a member
-    existing = sb.table("daywordplay_group_members").select("id").eq("group_id", group["id"]).eq("user_id", current_user["user_id"]).execute()
+    existing = sb.table("daywordplay_group_members").select("id").eq("group_id", group["id"]).eq("user_id", current_user.user_id).execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="Already a member of this group.")
 
     sb.table("daywordplay_group_members").insert({
         "group_id": group["id"],
-        "user_id": current_user["user_id"],
+        "user_id": current_user.user_id,
     }).execute()
 
     return {"group": group}
 
 
 @router.get("/groups/mine")
-async def my_groups(current_user: dict = Depends(get_current_user)):
+async def my_groups(current_user: CurrentUser = Depends(get_current_user)):
     """List groups the current user belongs to."""
     sb = get_supabase()
-    membership = sb.table("daywordplay_group_members").select("group_id").eq("user_id", current_user["user_id"]).execute()
+    membership = sb.table("daywordplay_group_members").select("group_id").eq("user_id", current_user.user_id).execute()
     group_ids = [m["group_id"] for m in (membership.data or [])]
     if not group_ids:
         return {"groups": []}
@@ -137,7 +137,7 @@ async def my_groups(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/groups/{group_id}")
-async def get_group(group_id: str, current_user: dict = Depends(get_current_user)):
+async def get_group(group_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Get group details and member list."""
     sb = get_supabase()
     group_result = sb.table("daywordplay_groups").select("id, name, code, created_at, created_by").eq("id", group_id).execute()
@@ -147,37 +147,36 @@ async def get_group(group_id: str, current_user: dict = Depends(get_current_user
     group = group_result.data[0]
 
     # Verify current user is a member
-    membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user["user_id"]).execute()
+    membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if not membership.data:
         raise HTTPException(status_code=403, detail="You are not a member of this group.")
 
     # Get members with display names
     members_result = sb.table("daywordplay_group_members").select(
-        "user_id, joined_at, daywordplay_users(username, display_name)"
+        "user_id, joined_at, daywordplay_profiles(display_name)"
     ).eq("group_id", group_id).execute()
 
     members = []
     for m in (members_result.data or []):
-        user_info = m.get("daywordplay_users") or {}
+        user_info = m.get("daywordplay_profiles") or {}
         members.append({
             "user_id": m["user_id"],
-            "username": user_info.get("username", ""),
             "display_name": user_info.get("display_name", ""),
             "joined_at": m["joined_at"],
         })
 
     group["members"] = members
-    group["is_creator"] = group["created_by"] == current_user["user_id"]
+    group["is_creator"] = group["created_by"] == current_user.user_id
     return {"group": group}
 
 
 @router.get("/groups/{group_id}/leaderboard")
-async def get_leaderboard(group_id: str, current_user: dict = Depends(get_current_user)):
+async def get_leaderboard(group_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """All-time vote leaderboard for a group."""
     sb = get_supabase()
 
     # Verify membership
-    membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user["user_id"]).execute()
+    membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if not membership.data:
         raise HTTPException(status_code=403, detail="You are not a member of this group.")
 
@@ -203,16 +202,15 @@ async def get_leaderboard(group_id: str, current_user: dict = Depends(get_curren
 
     # Get member info
     members_result = sb.table("daywordplay_group_members").select(
-        "user_id, daywordplay_users(username, display_name)"
+        "user_id, daywordplay_profiles(display_name)"
     ).eq("group_id", group_id).execute()
 
     leaderboard = []
     for m in (members_result.data or []):
         uid = m["user_id"]
-        user_info = m.get("daywordplay_users") or {}
+        user_info = m.get("daywordplay_profiles") or {}
         leaderboard.append({
             "user_id": uid,
-            "username": user_info.get("username", ""),
             "display_name": user_info.get("display_name", ""),
             "total_votes": user_vote_totals.get(uid, 0),
             "sentences_submitted": user_sentence_counts.get(uid, 0),
@@ -229,10 +227,10 @@ async def get_leaderboard(group_id: str, current_user: dict = Depends(get_curren
 
 
 @router.get("/leaderboards/bulk")
-async def get_bulk_leaderboards(current_user: dict = Depends(get_current_user)):
+async def get_bulk_leaderboards(current_user: CurrentUser = Depends(get_current_user)):
     """All-time leaderboards for all groups the current user belongs to, in one request."""
     sb = get_supabase()
-    user_id = current_user["user_id"]
+    user_id = current_user.user_id
 
     # 1. Get all user's group memberships + group name/code
     memberships = sb.table("daywordplay_group_members").select(
@@ -265,7 +263,7 @@ async def get_bulk_leaderboards(current_user: dict = Depends(get_current_user)):
 
     # 4. Get all members + user info for those groups
     members_result = sb.table("daywordplay_group_members").select(
-        "group_id, user_id, daywordplay_users(username, display_name)"
+        "group_id, user_id, daywordplay_profiles(display_name)"
     ).in_("group_id", group_ids).execute()
 
     # Aggregate votes and sentence counts per user per group
@@ -295,10 +293,9 @@ async def get_bulk_leaderboards(current_user: dict = Depends(get_current_user)):
         leaderboard = []
         for m in members:
             uid = m["user_id"]
-            user_info = m.get("daywordplay_users") or {}
+            user_info = m.get("daywordplay_profiles") or {}
             leaderboard.append({
                 "user_id": uid,
-                "username": user_info.get("username", ""),
                 "display_name": user_info.get("display_name", ""),
                 "total_votes": g_votes.get(uid, 0),
                 "sentences_submitted": g_sentences.get(uid, 0),
@@ -318,10 +315,10 @@ async def get_bulk_leaderboards(current_user: dict = Depends(get_current_user)):
 
 
 @router.delete("/groups/{group_id}/leave")
-async def leave_group(group_id: str, current_user: dict = Depends(get_current_user)):
+async def leave_group(group_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Leave a group."""
     sb = get_supabase()
-    result = sb.table("daywordplay_group_members").delete().eq("group_id", group_id).eq("user_id", current_user["user_id"]).execute()
+    result = sb.table("daywordplay_group_members").delete().eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="You are not a member of this group.")
     return {"left": True}
@@ -331,7 +328,7 @@ async def leave_group(group_id: str, current_user: dict = Depends(get_current_us
 
 
 @router.post("/groups/{group_id}/request-join")
-async def request_join(group_id: str, current_user: dict = Depends(get_current_user)):
+async def request_join(group_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Request to join a group (requires approval from a member)."""
     sb = get_supabase()
 
@@ -341,7 +338,7 @@ async def request_join(group_id: str, current_user: dict = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Group not found.")
 
     # Check already a member
-    existing = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user["user_id"]).execute()
+    existing = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="You are already a member of this group.")
 
@@ -350,7 +347,7 @@ async def request_join(group_id: str, current_user: dict = Depends(get_current_u
         sb.table("daywordplay_join_requests")
         .select("id, status")
         .eq("group_id", group_id)
-        .eq("user_id", current_user["user_id"])
+        .eq("user_id", current_user.user_id)
         .execute()
     )
     if pending.data:
@@ -368,25 +365,25 @@ async def request_join(group_id: str, current_user: dict = Depends(get_current_u
 
     sb.table("daywordplay_join_requests").insert({
         "group_id": group_id,
-        "user_id": current_user["user_id"],
+        "user_id": current_user.user_id,
     }).execute()
 
     return {"request": {"group_id": group_id, "status": "pending"}}
 
 
 @router.get("/groups/{group_id}/join-requests")
-async def list_join_requests(group_id: str, current_user: dict = Depends(get_current_user)):
+async def list_join_requests(group_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """List pending join requests for a group (must be a member)."""
     sb = get_supabase()
 
     # Verify membership
-    membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user["user_id"]).execute()
+    membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if not membership.data:
         raise HTTPException(status_code=403, detail="You are not a member of this group.")
 
     requests = (
         sb.table("daywordplay_join_requests")
-        .select("id, user_id, status, created_at, daywordplay_users(username, display_name)")
+        .select("id, user_id, status, created_at, daywordplay_profiles(display_name)")
         .eq("group_id", group_id)
         .eq("status", "pending")
         .order("created_at")
@@ -395,11 +392,10 @@ async def list_join_requests(group_id: str, current_user: dict = Depends(get_cur
 
     results = []
     for r in (requests.data or []):
-        user_info = r.get("daywordplay_users") or {}
+        user_info = r.get("daywordplay_profiles") or {}
         results.append({
             "id": r["id"],
             "user_id": r["user_id"],
-            "username": user_info.get("username", ""),
             "display_name": user_info.get("display_name", ""),
             "created_at": r["created_at"],
         })
@@ -412,7 +408,7 @@ async def review_join_request(
     group_id: str,
     request_id: str,
     body: ReviewJoinRequestBody,
-    current_user: dict = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     """Approve or deny a join request (must be a group member)."""
     sb = get_supabase()
@@ -421,7 +417,7 @@ async def review_join_request(
         raise HTTPException(status_code=400, detail="Action must be 'approve' or 'deny'.")
 
     # Verify reviewer is a member
-    membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user["user_id"]).execute()
+    membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if not membership.data:
         raise HTTPException(status_code=403, detail="You are not a member of this group.")
 
@@ -443,7 +439,7 @@ async def review_join_request(
 
     sb.table("daywordplay_join_requests").update({
         "status": new_status,
-        "reviewed_by": current_user["user_id"],
+        "reviewed_by": current_user.user_id,
         "updated_at": "now()",
     }).eq("id", request_id).execute()
 
@@ -458,14 +454,14 @@ async def review_join_request(
 
 
 @router.get("/groups/my-requests")
-async def my_join_requests(current_user: dict = Depends(get_current_user)):
+async def my_join_requests(current_user: CurrentUser = Depends(get_current_user)):
     """List the current user's pending join requests."""
     sb = get_supabase()
 
     requests = (
         sb.table("daywordplay_join_requests")
         .select("id, group_id, status, created_at, daywordplay_groups(name)")
-        .eq("user_id", current_user["user_id"])
+        .eq("user_id", current_user.user_id)
         .eq("status", "pending")
         .order("created_at", desc=True)
         .execute()

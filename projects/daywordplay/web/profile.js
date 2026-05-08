@@ -3,14 +3,15 @@
 function renderProfileView() {
   if (!currentUser) return '';
 
-  const displayName = currentUser.display_name || currentUser.username;
+  const displayName = currentUser.display_name || 'Player';
   const initial = displayName[0]?.toUpperCase() || '?';
+  const email = session?.user?.email || '';
 
   return `
     <div class="profile-header">
       <div class="profile-avatar">${initial}</div>
       <div class="profile-name">${escHtml(displayName)}</div>
-      <div class="profile-username">@${escHtml(currentUser.username)}</div>
+      ${email ? `<div class="profile-username">${escHtml(email)}</div>` : ''}
     </div>
     <div class="stats-row">
       <div class="stat-card">
@@ -84,16 +85,7 @@ function initProfileListeners() {
 
   document.getElementById('logout-btn')?.addEventListener('click', () => {
     if (!confirm('Log out of Day Word Play?')) return;
-    clearToken();
-    dwpCache.clear();
-    currentUser = null;
-    myGroups = [];
-    activeGroupId = null;
-    todayData = null;
-    yesterdayData = null;
-    bookmarks = [];
-    currentView = 'home';
-    renderApp();
+    handleLogout();
   });
 
   // Join group button
@@ -336,7 +328,7 @@ async function loadAllJoinRequests() {
     if (!requests.length) { slot.innerHTML = ''; continue; }
     slot.innerHTML = requests.map(req => `
       <div class="join-req-bubble" data-req-id="${req.id}" data-group-id="${group.id}">
-        <span class="join-req-name"><strong>${escHtml(req.display_name || req.username)}</strong> wants to join</span>
+        <span class="join-req-name"><strong>${escHtml(req.display_name || 'Someone')}</strong> wants to join</span>
         <div class="join-req-actions">
           <button class="approve-btn-sm" data-approve="${req.id}" data-group="${group.id}" title="Approve">${icons.check}</button>
           <button class="deny-btn-sm" data-deny="${req.id}" data-group="${group.id}" title="Reject">&times;</button>

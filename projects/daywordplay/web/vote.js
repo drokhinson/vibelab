@@ -53,7 +53,7 @@ function renderSentenceCard(s, has_voted, maxVotes, wordText) {
 
   // Anonymous until user votes: hide author names and vote counts
   const authorHtml = has_voted
-    ? `${escHtml(s.display_name || s.username)}${s.is_mine ? ' <span style="color:var(--text-muted)">(you)</span>' : ''}`
+    ? `${escHtml(s.display_name || 'Player')}${s.is_mine ? ' <span style="color:var(--text-muted)">(you)</span>' : ''}`
     : s.is_mine ? '<span style="color:var(--text-muted)">Your sentence</span>' : '';
 
   return `

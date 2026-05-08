@@ -1,28 +1,26 @@
 'use strict';
 
-// ── Auth token ────────────────────────────────────────────────────────────────
-function getToken() { return localStorage.getItem('dwp_token'); }
-function setToken(t) { localStorage.setItem('dwp_token', t); }
-function clearToken() { localStorage.removeItem('dwp_token'); localStorage.removeItem('dwp_user'); }
-
+// ── Active-group persistence (localStorage) ───────────────────────────────────
 function getStoredActiveGroup() { return localStorage.getItem('dwp_active_group'); }
-function setStoredActiveGroup(id) { localStorage.setItem('dwp_active_group', id); }
+function setStoredActiveGroup(id) {
+  if (id) localStorage.setItem('dwp_active_group', id);
+  else localStorage.removeItem('dwp_active_group');
+}
 
 // ── API Fetch ─────────────────────────────────────────────────────────────────
+// Reads the JWT from the live Supabase session (managed by auth.js).
 async function apiFetch(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-  const token = getToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
 
   const res = await fetch(`${API}${BASE}${path}`, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
 
   if (res.status === 401) {
-    clearToken();
-    dwpCache.clear();
-    currentUser = null;
-    renderApp();
-    throw new Error('Session expired. Please log in again.');
+    if (supabaseClient) {
+      try { await supabaseClient.auth.signOut(); } catch (_) {}
+    }
+    throw new Error('Session expired. Please sign in again.');
   }
   if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
   return data;

@@ -1,7 +1,7 @@
 # Day Word Play — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-03-17
+> Last updated: 2026-05-08
 
 ## What This App Does
 
@@ -19,7 +19,7 @@ Day Word Play is a daily vocabulary challenge with friends. Every day, all membe
 | Web frontend | Vanilla HTML/CSS/JS + Pico.css | Warm beige theme, deployed to Vercel |
 | Backend | Python FastAPI (shared service) | Routes at `/api/v1/daywordplay/...` |
 | Database | Supabase (shared project) | Tables prefixed `daywordplay_` |
-| Auth | Custom JWT + bcrypt | Uses shared `auth.py` helpers |
+| Auth | Supabase Auth (email + Google + Apple) | JWT verified via shared `jwt_auth.py`; profile row in `daywordplay_profiles` keyed off `auth.users.id` |
 | Native app | React Native / Expo | Not started |
 
 ## Directory Layout
@@ -43,21 +43,23 @@ projects/daywordplay/
 
 shared-backend/routes/daywordplay/
 ├── __init__.py         — Router + imports
-├── models.py           — Pydantic request bodies
-├── constants.py        — JWT_SECRET
-├── dependencies.py     — get_current_user()
-├── auth_routes.py      — register, login, me, delete
+├── models.py           — Pydantic request/response models
+├── constants.py        — (placeholder; auth handled by shared jwt_auth.py)
+├── dependencies.py     — CurrentUser + get_current_user (resolves Supabase JWT → profile)
+├── profile_routes.py   — health + get/upsert/delete profile + become-admin
 ├── group_routes.py     — list, create, join, leaderboard, leave
-└── word_routes.py      — today, yesterday, sentences, votes, bookmarks
+├── word_routes.py      — today, yesterday, sentences, votes, bookmarks
+└── admin_routes.py     — admin-key gated word/group/proposal management
 
-db/migrations/
-├── 017_daywordplay_schema.sql   — All tables + indexes
-└── 018_daywordplay_words_seed.sql — ~90 vocabulary words
+db/migrations/daywordplay/
+├── 001_baseline.sql        — Legacy custom-auth tables (superseded by 003)
+├── 002_seed.sql            — ~90 vocabulary words (preserved across 003)
+└── 003_supabase_auth.sql   — Drops daywordplay_users + dependents, recreates everything against auth.users via daywordplay_profiles
 ```
 
 ## Data Model
 
-- **daywordplay_users** — id, username (unique), display_name, email, password_hash, recovery_hash, created_at
+- **daywordplay_profiles** — id (= auth.users.id), display_name, avatar_url, is_admin, created_at — auto-created on first authenticated request
 - **daywordplay_groups** — id, name, code CHAR(4) UNIQUE, created_by→users, created_at
 - **daywordplay_group_members** — id, group_id, user_id, joined_at — UNIQUE(group_id, user_id)
 - **daywordplay_words** — id, word, part_of_speech, definition, pronunciation, etymology
@@ -68,14 +70,14 @@ db/migrations/
 
 ## API Endpoints
 
-All routes at `/api/v1/daywordplay/...`. JWT Bearer token required unless noted.
+All routes at `/api/v1/daywordplay/...`. Supabase Auth Bearer token required unless noted.
 
-### Auth
+### Profile
 - `GET /health` — Health check. No auth.
-- `POST /auth/register` — Register user. Body: `{username, password, display_name?, email?}`
-- `POST /auth/login` — Login. Body: `{username, password}`
-- `GET /auth/me` — Current user info.
-- `DELETE /auth/me` — Delete account.
+- `GET /profile` — Current user's Day Word Play profile.
+- `POST /profile` — Upsert current user's profile. Body: `{display_name, avatar_url?}` (auto-called by the frontend on first sign-in).
+- `DELETE /profile` — Delete the current user's account; ON DELETE CASCADE wipes group memberships, sentences, votes, bookmarks, etc.
+- `POST /profile/become-admin` — Promote the current user to admin. Body: `{admin_key}` (must match Railway `ADMIN_API_KEY`).
 
 ### Groups
 - `GET /groups?q=` — List/search all groups (annotated with member_count, is_member).
@@ -131,9 +133,11 @@ App Shell (logged in)
 ## Environment Variables
 | Variable | Used In | Purpose |
 |---|---|---|
-| `SUPABASE_URL` | shared-backend | Supabase project URL (Railway) |
+| `SUPABASE_URL` | shared-backend | Supabase project URL (Railway). Also used by `jwt_auth.py` to fetch the JWKS for token verification. |
 | `SUPABASE_SERVICE_ROLE_KEY` | shared-backend | Server-side DB access (Railway) |
-| `DAYWORDPLAY_JWT_SECRET` | shared-backend | JWT signing secret (Railway) |
+| `ADMIN_API_KEY` | shared-backend | Shared admin bearer token; also accepted by `POST /profile/become-admin`. |
+| `VIBELAB_SUPABASE_URL` | GitHub Secrets | Injected into `web/config.js` at deploy time. |
+| `VIBELAB_SUPABASE_ANON_KEY` | GitHub Secrets | Injected into `web/config.js` at deploy time. |
 
 ## Development Setup
 ```bash
@@ -151,3 +155,4 @@ uvicorn main:app --reload --port 8000
 ## Active Development Notes
 
 - 2026-03-17 — Stage 3 complete. Backend + web prototype built. Pending: deploy to Vercel + Railway, add DAYWORDPLAY_JWT_SECRET env var in Railway, run migrations in Supabase, update webUrl in registry.json.
+- 2026-05-08 — Switched auth to Supabase (email + Google + Apple), matching sauceboss/boardgame-buddy. Replaced `daywordplay_users` with `daywordplay_profiles` keyed off `auth.users(id)`. Manual steps before deploy: enable email/Google/Apple in Supabase, add `https://vibelab-daywordplay.vercel.app` and `/**` to redirect URLs, run `db/migrations/daywordplay/003_supabase_auth.sql`, remove the now-unused `DAYWORDPLAY_JWT_SECRET` from Railway.
