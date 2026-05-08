@@ -96,6 +96,10 @@ const newEntry = {
   webUrl: null,
   backendUrl: null,
   hasNativeApp: false,
+  androidStatus: 'not-started',
+  androidUrl: null,
+  iosStatus: 'not-started',
+  iosUrl: null,
   expoSlug: null,
   createdAt: '$TODAY',
   icon: '🔧'
