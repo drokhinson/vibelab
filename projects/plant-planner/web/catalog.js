@@ -118,11 +118,20 @@ function bindCatalogDrag() {
     tile.ondragstart = function(e) {
       var pid = tile.dataset.plantId;
       draggedPlant = plants.find(function(p) { return p.id === pid; });
+      catalogDropHandled = false;
       e.dataTransfer.setData("text/plain", pid);
       e.dataTransfer.effectAllowed = "copy";
     };
-    tile.ondragend = function() {
+    tile.ondragend = function(e) {
+      // Drops over the 3D canvas are handled by setup3DDragDrop's onDrop /
+      // onMiss callbacks (which set catalogDropHandled). If we get here
+      // without that flag set, the drop landed off-canvas (sidebar, etc.) —
+      // toss the plant to the ground from wherever the cursor was released.
+      if (!catalogDropHandled && draggedPlant && scene3DHandle) {
+        tossNewPlantToGround(draggedPlant, e.clientX, e.clientY, scene3DHandle);
+      }
       draggedPlant = null;
+      catalogDropHandled = false;
     };
   });
   bindCatalogTouch();

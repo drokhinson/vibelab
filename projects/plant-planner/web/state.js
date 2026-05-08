@@ -17,6 +17,7 @@ var gridPlacements = {}; // "x,y" → plant object
 var scene3DHandle = null;  // active Three.js scene handle
 var renderStyle = localStorage.getItem("pp_render_style") || "realistic"; // "realistic" | "natural"
 var draggedPlant = null; // plant being dragged from catalog
+var catalogDropHandled = false; // set true when a catalog drag has either been placed in the grid or already tossed; tile ondragend checks this to avoid double-handling
 var catalogFilter = "all";         // sunlight filter: all | full_sun | partial | shade
 var catalogFilterSeason = "all";   // bloom season: all | spring | summer | fall | winter
 var catalogFilterCategory = "all"; // category: all | vegetable | herb | flower | fruit

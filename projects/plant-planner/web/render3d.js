@@ -535,6 +535,7 @@ function setup3DDragDrop(handle, callbacks) {
     hideCellHighlight(handle);
     unlockCamera(handle);
     if (cell) callbacks.onDrop(cell.gx, cell.gy);
+    else if (callbacks.onMiss) callbacks.onMiss(e.clientX, e.clientY);
     else callbacks.onLeave();
   });
 
