@@ -61,7 +61,7 @@ function sauceBossPotSVG() {
 }
 
 function buddySVG() {
-  // Distilled from projects/boardgame-buddy/web/assets/bgbuddy-logo.svg —
+  // Distilled from projects/boardgame-buddy/web/assets/brand/bgb-logo.svg —
   // just the buddy face + speech bubble (no dark plate; the card itself is
   // the dark warm-brown background).
   return `
