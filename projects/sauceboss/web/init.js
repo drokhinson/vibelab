@@ -28,20 +28,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Lazy-load reference data needed only inside the recipe builder.
   // Fire and forget — failures are non-fatal.
   Promise.all([
-    fetchIngredientCategories().catch(() => []),
-    fetchSubstitutions().catch(() => []),
-  ]).then(([categoriesRaw, subsRaw]) => {
-    state.ingredientCategories = {};
-    if (Array.isArray(categoriesRaw)) {
-      for (const c of categoriesRaw) state.ingredientCategories[c.ingredientName] = c.category;
-    }
-    state.substitutions = {};
-    if (Array.isArray(subsRaw)) {
-      for (const s of subsRaw) {
-        if (!state.substitutions[s.ingredientName]) state.substitutions[s.ingredientName] = [];
-        state.substitutions[s.ingredientName].push({ substituteName: s.substituteName, notes: s.notes });
-      }
-    }
+    fetchIngredientCategories().catch(() => ({})),
+    fetchSubstitutions().catch(() => ({})),
+  ]).then(([categories, subs]) => {
+    state.ingredientCategories = categories && typeof categories === 'object' ? categories : {};
+    state.substitutions = subs && typeof subs === 'object' ? subs : {};
   });
 
   // Render the meal-builder behind the splash, then animate the handoff:
