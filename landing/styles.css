@@ -110,20 +110,24 @@ body {
 }
 
 .featured-card {
-  display: grid;
-  grid-template-columns: 180px 1fr;
-  align-items: stretch;
+  display: flex;
+  flex-direction: column;
   border-radius: 18px;
   border: 1px solid var(--pico-card-border-color);
-  text-decoration: none;
   color: #fff;
   overflow: hidden;
   transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
-  min-height: 180px;
 }
 .featured-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+}
+
+.featured-top {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: stretch;
+  min-height: 180px;
 }
 
 .featured-art {
@@ -147,8 +151,7 @@ body {
   justify-content: center;
   gap: 0.5rem;
   /* Grid items default to min-width: auto, which prevents this column from
-     shrinking smaller than its longest line on narrow viewports — letting
-     the description + action row spill past the card's right edge. */
+     shrinking smaller than its longest line on narrow viewports. */
   min-width: 0;
 }
 
@@ -170,35 +173,54 @@ body {
   opacity: 0.9;
   overflow-wrap: anywhere;
 }
-.featured-meta {
+
+/* ── Three-pill action row (Google / Apple / Web) ────────────────────────── */
+.featured-pills {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0 1.25rem 1.25rem;
+}
+.featured-pill {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-.featured-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-left: auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  min-width: 0;
-}
-.featured-cta {
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 999px;
   font-size: 0.85rem;
   font-weight: 600;
-  padding: 0.3rem 0.8rem;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.18);
-  border: 1px solid rgba(255,255,255,0.28);
-  transition: background 0.15s;
+  text-decoration: none;
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.24);
+  color: inherit;
+  min-width: 0;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
-.featured-card:hover .featured-cta { background: rgba(255,255,255,0.32); }
+.featured-pill:hover:not(.featured-pill--disabled) {
+  background: rgba(255,255,255,0.28);
+  border-color: rgba(255,255,255,0.45);
+}
+.featured-pill:active:not(.featured-pill--disabled) { transform: translateY(1px); }
+.featured-pill--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.featured-pill__icon { width: 16px; height: 16px; flex-shrink: 0; }
+.featured-pill__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 480px) {
+  .featured-pills { padding: 0 0.75rem 0.75rem; gap: 0.35rem; }
+  .featured-pill { padding: 0.5rem 0.5rem; font-size: 0.78rem; gap: 0.3rem; }
+}
 
 @media (max-width: 600px) {
-  .featured-card { grid-template-columns: 110px 1fr; min-height: 0; }
+  .featured-top { grid-template-columns: 110px 1fr; min-height: 0; }
   .featured-art { padding: 0.5rem; }
   .hero-art { max-width: 100px; max-height: 100px; }
   .featured-body { padding: 1rem 1rem 1rem 0.25rem; }
@@ -213,7 +235,15 @@ body {
 }
 .brand-sauceboss .featured-name { color: #FFF8EE; text-shadow: 0 1px 0 rgba(0,0,0,0.18); }
 .brand-sauceboss .featured-desc { color: rgba(255, 248, 238, 0.92); }
-.brand-sauceboss .featured-cta { background: rgba(0,0,0,0.18); border-color: rgba(255,255,255,0.4); }
+.brand-sauceboss .featured-pill {
+  background: rgba(0,0,0,0.18);
+  border-color: rgba(255,255,255,0.32);
+  color: #FFF8EE;
+}
+.brand-sauceboss .featured-pill:hover:not(.featured-pill--disabled) {
+  background: rgba(0,0,0,0.32);
+  border-color: rgba(255,255,255,0.5);
+}
 .brand-sauceboss .platform-badge--beta {
   background: #1A1A2E;
   color: #3DDC84;
@@ -241,12 +271,25 @@ body {
   background: rgba(245, 158, 11, 0.18);
   color: #F59E0B;
 }
-.brand-bgb .featured-cta {
+.brand-bgb .featured-pill {
+  background: rgba(245, 225, 184, 0.10);
+  border-color: rgba(245, 225, 184, 0.32);
+  color: #F5E1B8;
+}
+.brand-bgb .featured-pill:hover:not(.featured-pill--disabled) {
+  background: rgba(245, 225, 184, 0.20);
+  border-color: rgba(245, 225, 184, 0.55);
+}
+.brand-bgb .featured-pill--web {
   background: linear-gradient(135deg, #f59e0b, #f97316);
   border-color: transparent;
   color: #1a0f0b;
 }
-.brand-bgb:hover .featured-cta { filter: brightness(1.1); }
+.brand-bgb .featured-pill--web:hover:not(.featured-pill--disabled) {
+  filter: brightness(1.1);
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  border-color: transparent;
+}
 
 /* ── Day Word Play brand (cream paper + muted teal) ──────────────────────── */
 .brand-dwp {
@@ -263,12 +306,24 @@ body {
   background: rgba(74, 124, 124, 0.18);
   color: #3A6A6A;
 }
-.brand-dwp .featured-cta {
+.brand-dwp .featured-pill {
+  background: rgba(28, 28, 30, 0.05);
+  border-color: rgba(74, 124, 124, 0.35);
+  color: #1C1C1E;
+}
+.brand-dwp .featured-pill:hover:not(.featured-pill--disabled) {
+  background: rgba(28, 28, 30, 0.10);
+  border-color: rgba(74, 124, 124, 0.55);
+}
+.brand-dwp .featured-pill--web {
   background: #4A7C7C;
   color: #F0EDE8;
   border-color: transparent;
 }
-.brand-dwp:hover .featured-cta { background: #3A6A6A; }
+.brand-dwp .featured-pill--web:hover:not(.featured-pill--disabled) {
+  background: #3A6A6A;
+  border-color: transparent;
+}
 
 /* ── PlantPlanner brand (cream paper + sage / coral / lavender) ──────────── */
 .brand-pp {
@@ -288,12 +343,24 @@ body {
   background: rgba(232, 133, 108, 0.18);
   color: #C76854;
 }
-.brand-pp .featured-cta {
+.brand-pp .featured-pill {
+  background: rgba(42, 63, 44, 0.06);
+  border-color: rgba(123, 174, 127, 0.42);
+  color: #2A3F2C;
+}
+.brand-pp .featured-pill:hover:not(.featured-pill--disabled) {
+  background: rgba(42, 63, 44, 0.12);
+  border-color: rgba(123, 174, 127, 0.65);
+}
+.brand-pp .featured-pill--web {
   background: #E8856C;
   color: #FBF8F3;
   border-color: transparent;
 }
-.brand-pp:hover .featured-cta { background: #C76854; }
+.brand-pp .featured-pill--web:hover:not(.featured-pill--disabled) {
+  background: #C76854;
+  border-color: transparent;
+}
 
 /* ── Project grid (compact / WIP cards) ──────────────────────────────────── */
 .projects-grid {
