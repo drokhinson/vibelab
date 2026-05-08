@@ -11,14 +11,18 @@
 * { box-sizing: border-box; }
 
 body {
-  max-width: 900px;
+  max-width: 980px;
   margin: 0 auto;
   padding: 0 1rem 4rem;
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────────── */
 .site-header {
-  padding: 3rem 0 2rem;
+  padding: 2.5rem 0 1.5rem;
+}
+
+.header-inner {
+  position: relative;
   text-align: center;
 }
 
@@ -36,8 +40,51 @@ body {
   margin: 0;
 }
 
+.admin-slot {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  color: #cfd0d6;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.admin-btn:hover {
+  border-color: var(--pico-primary);
+  background: rgba(108,99,255,0.10);
+  color: #fff;
+}
+.admin-btn-icon { font-size: 1rem; line-height: 1; }
+.admin-btn-label { letter-spacing: 0.02em; }
+
+@media (max-width: 600px) {
+  .admin-btn-label { display: none; }
+  .admin-btn { padding: 0.4rem 0.55rem; }
+}
+
+/* ── Section heading ─────────────────────────────────────────────────────── */
+.section-heading {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pico-muted-color);
+  margin: 2.25rem 0 0.75rem;
+}
+
 /* ── Filters ─────────────────────────────────────────────────────────────────── */
-.filters { margin-bottom: 1.5rem; }
+.filters { margin-bottom: 1.25rem; }
 .filter-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .filter-btn {
   border: 1px solid var(--pico-card-border-color);
@@ -56,14 +103,180 @@ body {
   color: #fff;
 }
 
-/* ── Project grid ────────────────────────────────────────────────────────────── */
+/* ── Featured (hero) tier ─────────────────────────────────────────────────── */
+.featured-grid {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.featured-card {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: stretch;
+  border-radius: 18px;
+  border: 1px solid var(--pico-card-border-color);
+  text-decoration: none;
+  color: #fff;
+  overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+  min-height: 180px;
+}
+.featured-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+}
+
+.featured-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.hero-art { width: 100%; height: 100%; max-width: 160px; max-height: 160px; }
+.hero-art--emoji {
+  font-size: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.featured-body {
+  padding: 1.25rem 1.5rem 1.25rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.featured-headline {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.featured-name {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.featured-desc {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0;
+  opacity: 0.9;
+}
+.featured-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.featured-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+.featured-cta {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.28);
+  transition: background 0.15s;
+}
+.featured-card:hover .featured-cta { background: rgba(255,255,255,0.32); }
+
+@media (max-width: 600px) {
+  .featured-card { grid-template-columns: 110px 1fr; min-height: 0; }
+  .featured-art { padding: 0.5rem; }
+  .hero-art { max-width: 100px; max-height: 100px; }
+  .featured-body { padding: 1rem 1rem 1rem 0.25rem; }
+  .featured-name { font-size: 1.2rem; }
+  .featured-desc { font-size: 0.875rem; }
+}
+
+/* ── SauceBoss brand (warm orange, off-white wordmark) ────────────────────── */
+.brand-sauceboss {
+  background: linear-gradient(135deg, #E85D04 0%, #C94E02 60%, #8C3700 100%);
+  border-color: rgba(255, 215, 170, 0.22);
+}
+.brand-sauceboss .featured-name { color: #FFF8EE; text-shadow: 0 1px 0 rgba(0,0,0,0.18); }
+.brand-sauceboss .featured-desc { color: rgba(255, 248, 238, 0.92); }
+.brand-sauceboss .tag {
+  background: rgba(255, 255, 255, 0.18);
+  color: #FFF1DD;
+}
+.brand-sauceboss .featured-cta { background: rgba(0,0,0,0.18); border-color: rgba(255,255,255,0.4); }
+.brand-sauceboss .native-badge--beta {
+  background: #1A1A2E;
+  color: #FAA307;
+  border: 1px solid rgba(250, 163, 7, 0.6);
+}
+
+/* ── BoardgameBuddy brand (dark warm-brown w/ brass accent) ──────────────── */
+.brand-bgb {
+  background: linear-gradient(135deg, #2a1812 0%, #1a0f0b 100%);
+  border-color: rgba(201, 146, 42, 0.35);
+  font-family: 'Poppins', var(--pico-font-family);
+}
+.brand-bgb .featured-name {
+  font-family: 'Crimson Text', Georgia, serif;
+  color: #F5E1B8;
+  letter-spacing: 0;
+}
+.brand-bgb .featured-desc { color: rgba(245, 225, 184, 0.78); }
+.brand-bgb .tag {
+  background: rgba(201, 146, 42, 0.18);
+  color: #E0B463;
+}
+.brand-bgb .status-live {
+  background: rgba(245, 158, 11, 0.18);
+  color: #F59E0B;
+}
+.brand-bgb .featured-cta {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  border-color: transparent;
+  color: #1a0f0b;
+}
+.brand-bgb:hover .featured-cta { filter: brightness(1.1); }
+
+/* ── Day Word Play brand (cream paper + muted teal) ──────────────────────── */
+.brand-dwp {
+  background: linear-gradient(135deg, #F0EDE8 0%, #E8E5DF 60%, #DAD6CD 100%);
+  border-color: rgba(74, 124, 124, 0.35);
+  color: #1C1C1E;
+}
+.brand-dwp .featured-name {
+  color: #1C1C1E;
+  font-weight: 800;
+}
+.brand-dwp .featured-desc { color: #4A4A4A; }
+.brand-dwp .tag {
+  background: rgba(74, 124, 124, 0.14);
+  color: #2D5959;
+}
+.brand-dwp .status-live {
+  background: rgba(74, 124, 124, 0.18);
+  color: #3A6A6A;
+}
+.brand-dwp .featured-cta {
+  background: #4A7C7C;
+  color: #F0EDE8;
+  border-color: transparent;
+}
+.brand-dwp:hover .featured-cta { background: #3A6A6A; }
+
+/* ── Project grid (compact / WIP cards) ──────────────────────────────────── */
 .projects-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 1rem;
 }
 
-/* ── Project card ────────────────────────────────────────────────────────────── */
 .project-card {
   background: var(--pico-card-background-color);
   border: 1px solid var(--pico-card-border-color);
@@ -122,6 +335,7 @@ body {
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
   font-weight: 500;
+  white-space: nowrap;
 }
 .status-live    { background: rgba(40,167,69,0.15); color: #4caf71; }
 .status-wip     { background: rgba(255,193,7,0.12); color: #ffc107; }
@@ -138,7 +352,17 @@ body {
 
 .native-badge {
   font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
   color: var(--pico-muted-color);
+  white-space: nowrap;
+}
+.native-badge--beta {
+  background: rgba(250, 163, 7, 0.16);
+  color: #FAA307;
+  border: 1px solid rgba(250, 163, 7, 0.35);
+  font-weight: 600;
 }
 
 /* ── Loading / empty ────────────────────────────────────────────────────────── */
