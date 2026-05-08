@@ -936,7 +936,8 @@ body {
   align-items: center;
   justify-content: center;
 }
-.auth-logo svg { width: 100%; height: 100%; }
+.auth-logo svg,
+.auth-logo img { width: 100%; height: 100%; display: block; }
 .auth-title {
   font-family: 'Playfair Display', Georgia, serif;
   font-size: 2rem;
