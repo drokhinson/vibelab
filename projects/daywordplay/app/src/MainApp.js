@@ -18,11 +18,12 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
-import { Bookmark, BookOpen, Trophy, Settings as SettingsIcon, Users } from 'lucide-react-native';
+import { Bookmark, Trophy, Settings as SettingsIcon, Users } from 'lucide-react-native';
 
 import { AppProvider, useAppActions, useAppState } from './store/AppContext';
 import { trackAppOpen } from './utils/analytics';
 import LoadingState from './components/LoadingState';
+import DwpMark from './components/DwpMark';
 import AuthScreen from './screens/AuthScreen';
 import HomeScreen from './screens/HomeScreen';
 import VoteScreen from './screens/VoteScreen';
@@ -82,7 +83,7 @@ function MainTabs({ navigation }) {
       <Tabs.Screen
         name="Word"
         component={HomeScreen}
-        options={{ tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} /> }}
+        options={{ tabBarIcon: ({ color, size }) => <DwpMark size={size} color={color} /> }}
       />
       <Tabs.Screen
         name="Stats"

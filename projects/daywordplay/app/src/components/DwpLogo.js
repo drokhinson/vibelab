@@ -1,42 +1,52 @@
-// Native re-implementation of web/assets/brand/dwp-logo.svg.
+// Native re-implementation of web/assets/brand/dwp-logo.svg — three diagonally
+// stacked tiles spelling D / W / P (bottom to top, top tile in front).
 
 import React from 'react';
-import Svg, { Circle, Path, Rect, Text as SvgText, Line } from 'react-native-svg';
+import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { COLORS } from '../theme';
 
 export default function DwpLogo({ size = 64 }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64">
       <Rect width={64} height={64} rx={14} fill={COLORS.surfaceSubtle} />
-      <Path
-        d="M8 18 Q22 12 32 18 Q42 12 56 18 L56 50 Q42 44 32 50 Q22 44 8 50 Z"
-        fill="#FFFFFF"
-        stroke={COLORS.primary}
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <Line x1={32} y1={18} x2={32} y2={50} stroke={COLORS.primary} strokeWidth={2} strokeLinecap="round" />
-      <Circle cx={20} cy={34} r={6} fill={COLORS.primary} />
+      {/* Bottom tile (D) — drawn first, visually behind */}
+      <Rect x={10} y={36} width={22} height={22} rx={3} fill="#FFFFFF" stroke={COLORS.primary} strokeWidth={2} />
       <SvgText
-        x={20}
-        y={37}
+        x={21}
+        y={52}
         textAnchor="middle"
-        fontSize={8}
+        fontFamily="Georgia"
+        fontSize={13}
         fontWeight="700"
-        fill={COLORS.surfaceSubtle}
+        fill={COLORS.primary}
       >
-        A
+        D
       </SvgText>
-      <Circle cx={44} cy={34} r={6} fill={COLORS.primaryDark} />
+      {/* Middle tile (W) */}
+      <Rect x={21} y={21} width={22} height={22} rx={3} fill="#FFFFFF" stroke={COLORS.primary} strokeWidth={2} />
       <SvgText
-        x={44}
+        x={32}
         y={37}
         textAnchor="middle"
-        fontSize={8}
+        fontFamily="Georgia"
+        fontSize={13}
         fontWeight="700"
-        fill={COLORS.surfaceSubtle}
+        fill={COLORS.primary}
       >
-        Z
+        W
+      </SvgText>
+      {/* Top tile (P) — drawn last, visually in front */}
+      <Rect x={32} y={6} width={22} height={22} rx={3} fill="#FFFFFF" stroke={COLORS.primary} strokeWidth={2} />
+      <SvgText
+        x={43}
+        y={22}
+        textAnchor="middle"
+        fontFamily="Georgia"
+        fontSize={13}
+        fontWeight="700"
+        fill={COLORS.primary}
+      >
+        P
       </SvgText>
     </Svg>
   );
