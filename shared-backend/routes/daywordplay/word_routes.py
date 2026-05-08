@@ -10,7 +10,7 @@ from db import get_supabase
 
 from . import router
 from .models import BulkYesterdayGroupEntry, BulkYesterdayResponse, ProposeWordBody, ReusableSentencesResponse, SubmitSentenceBody, VoteCountItem, VoteCountsResponse
-from .dependencies import get_current_user
+from .dependencies import CurrentUser, get_current_user
 
 
 # Module-level cache: same word for all groups on a given date.
@@ -130,14 +130,14 @@ def _build_today_response(sb, group_id: str, user_id: str, today: date, word: di
 
 
 @router.get("/groups/{group_id}/today")
-async def get_today(group_id: str, current_user: dict = Depends(get_current_user)):
+async def get_today(group_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Today's word for a group + current user's submission status."""
     sb = get_supabase()
-    _verify_member(sb, group_id, current_user["user_id"])
+    _verify_member(sb, group_id, current_user.user_id)
 
     today = date.today()
     word = _get_or_assign_word(sb, group_id, today)
-    return _build_today_response(sb, group_id, current_user["user_id"], today, word)
+    return _build_today_response(sb, group_id, current_user.user_id, today, word)
 
 
 @router.get(
@@ -148,16 +148,16 @@ async def get_today(group_id: str, current_user: dict = Depends(get_current_user
 )
 async def get_reusable_sentences(
     group_id: str = Path(..., description="Group ID to check reusable sentences for"),
-    current_user: dict = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> ReusableSentencesResponse:
     """Return sentences the user already submitted today in other groups for the same word."""
     sb = get_supabase()
-    _verify_member(sb, group_id, current_user["user_id"])
+    _verify_member(sb, group_id, current_user.user_id)
     today = date.today()
     word = _get_or_assign_word(sb, group_id, today)
     result = sb.table("daywordplay_sentences").select(
         "id, sentence, group_id"
-    ).eq("user_id", current_user["user_id"]).eq("word_id", word["id"]).eq(
+    ).eq("user_id", current_user.user_id).eq("word_id", word["id"]).eq(
         "assigned_date", today.isoformat()
     ).neq("group_id", group_id).execute()
     return ReusableSentencesResponse(reusable_sentences=result.data or [])
@@ -167,7 +167,7 @@ async def get_reusable_sentences(
 async def submit_sentence(
     group_id: str,
     body: SubmitSentenceBody,
-    current_user: dict = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     """Submit a sentence for today's word. One submission per user per day."""
     sentence_text = body.sentence.strip()
@@ -175,7 +175,7 @@ async def submit_sentence(
         raise HTTPException(status_code=400, detail="Sentence is too short.")
 
     sb = get_supabase()
-    _verify_member(sb, group_id, current_user["user_id"])
+    _verify_member(sb, group_id, current_user.user_id)
 
     today = date.today()
     word = _get_or_assign_word(sb, group_id, today)
@@ -187,19 +187,19 @@ async def submit_sentence(
         )
 
     # Check for existing submission
-    existing = sb.table("daywordplay_sentences").select("id").eq("group_id", group_id).eq("user_id", current_user["user_id"]).eq("assigned_date", today.isoformat()).execute()
+    existing = sb.table("daywordplay_sentences").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).eq("assigned_date", today.isoformat()).execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="You already submitted a sentence for today.")
 
     sb.table("daywordplay_sentences").insert({
         "group_id": group_id,
         "word_id": word["id"],
-        "user_id": current_user["user_id"],
+        "user_id": current_user.user_id,
         "sentence": sentence_text,
         "assigned_date": today.isoformat(),
     }).execute()
 
-    return _build_today_response(sb, group_id, current_user["user_id"], today, word)
+    return _build_today_response(sb, group_id, current_user.user_id, today, word)
 
 
 @router.get(
@@ -209,11 +209,11 @@ async def submit_sentence(
     summary="All groups' yesterday data in one request",
 )
 async def get_bulk_yesterday(
-    current_user: dict = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> BulkYesterdayResponse:
     """Return yesterday's word, sentences, and vote status for every group the user belongs to."""
     sb = get_supabase()
-    user_id: str = current_user["user_id"]
+    user_id: str = current_user.user_id
     yesterday = date.today() - timedelta(days=1)
     yesterday_str = yesterday.isoformat()
 
@@ -241,7 +241,7 @@ async def get_bulk_yesterday(
 
     # 3. All sentences across all groups for yesterday
     sentences_result = sb.table("daywordplay_sentences").select(
-        "id, sentence, user_id, group_id, created_at, daywordplay_users(username, display_name)"
+        "id, sentence, user_id, group_id, created_at, daywordplay_profiles(display_name)"
     ).in_("group_id", group_ids).eq("assigned_date", yesterday_str).execute()
     sentences = sentences_result.data or []
     sentence_ids: list[str] = [s["id"] for s in sentences]
@@ -265,12 +265,11 @@ async def get_bulk_yesterday(
     # 6. Group sentences by group_id and build per-group responses
     groups_map: dict[str, list[dict]] = {gid: [] for gid in group_ids}
     for s in sentences:
-        user_info = s.get("daywordplay_users") or {}
+        user_info = s.get("daywordplay_profiles") or {}
         groups_map[s["group_id"]].append({
             "id": s["id"],
             "sentence": s["sentence"],
             "user_id": s["user_id"],
-            "username": user_info.get("username", ""),
             "display_name": user_info.get("display_name", ""),
             "vote_count": vote_counts.get(s["id"], 0),
             "i_voted": s["id"] in my_votes,
@@ -292,10 +291,10 @@ async def get_bulk_yesterday(
 
 
 @router.get("/groups/{group_id}/yesterday")
-async def get_yesterday(group_id: str, current_user: dict = Depends(get_current_user)):
+async def get_yesterday(group_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Yesterday's word + all sentences + vote counts. Ready for voting."""
     sb = get_supabase()
-    _verify_member(sb, group_id, current_user["user_id"])
+    _verify_member(sb, group_id, current_user.user_id)
 
     yesterday = date.today() - timedelta(days=1)
     word = _get_or_assign_word(sb, group_id, yesterday)
@@ -305,7 +304,7 @@ async def get_yesterday(group_id: str, current_user: dict = Depends(get_current_
 
     # Get all sentences from yesterday with author names
     sentences_result = sb.table("daywordplay_sentences").select(
-        "id, sentence, user_id, created_at, daywordplay_users(username, display_name)"
+        "id, sentence, user_id, created_at, daywordplay_profiles(display_name)"
     ).eq("group_id", group_id).eq("assigned_date", yesterday.isoformat()).execute()
 
     sentences = sentences_result.data or []
@@ -322,22 +321,21 @@ async def get_yesterday(group_id: str, current_user: dict = Depends(get_current_
     # Check which sentence(s) the current user voted for
     my_votes: set[str] = set()
     if sentence_ids:
-        my_vote_result = sb.table("daywordplay_votes").select("sentence_id").eq("voter_user_id", current_user["user_id"]).in_("sentence_id", sentence_ids).execute()
+        my_vote_result = sb.table("daywordplay_votes").select("sentence_id").eq("voter_user_id", current_user.user_id).in_("sentence_id", sentence_ids).execute()
         my_votes = {v["sentence_id"] for v in (my_vote_result.data or [])}
 
     # Annotate sentences
     enriched = []
     for s in sentences:
-        user_info = s.get("daywordplay_users") or {}
+        user_info = s.get("daywordplay_profiles") or {}
         enriched.append({
             "id": s["id"],
             "sentence": s["sentence"],
             "user_id": s["user_id"],
-            "username": user_info.get("username", ""),
             "display_name": user_info.get("display_name", ""),
             "vote_count": vote_counts.get(s["id"], 0),
             "i_voted": s["id"] in my_votes,
-            "is_mine": s["user_id"] == current_user["user_id"],
+            "is_mine": s["user_id"] == current_user.user_id,
         })
 
     # Sort by votes desc
@@ -362,11 +360,11 @@ async def get_yesterday(group_id: str, current_user: dict = Depends(get_current_
 )
 async def get_vote_counts(
     group_id: str = Path(..., description="Group ID"),
-    current_user: dict = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> VoteCountsResponse:
     """Return only vote counts and i_voted flags for yesterday's sentences. No sentence text or author info."""
     sb = get_supabase()
-    _verify_member(sb, group_id, current_user["user_id"])
+    _verify_member(sb, group_id, current_user.user_id)
 
     yesterday = (date.today() - timedelta(days=1)).isoformat()
 
@@ -386,7 +384,7 @@ async def get_vote_counts(
         vote_counts[sid] = vote_counts.get(sid, 0) + 1
 
     my_vote_result = sb.table("daywordplay_votes").select("sentence_id").eq(
-        "voter_user_id", current_user["user_id"]
+        "voter_user_id", current_user.user_id
     ).in_("sentence_id", sentence_ids).execute()
     my_votes = {v["sentence_id"] for v in (my_vote_result.data or [])}
 
@@ -403,7 +401,7 @@ async def get_vote_counts(
 
 
 @router.post("/sentences/{sentence_id}/vote")
-async def vote_for_sentence(sentence_id: str, current_user: dict = Depends(get_current_user)):
+async def vote_for_sentence(sentence_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Vote for a sentence. One vote per user per group per day. Cannot vote for own sentence."""
     sb = get_supabase()
 
@@ -417,10 +415,10 @@ async def vote_for_sentence(sentence_id: str, current_user: dict = Depends(get_c
     sentence = sentence_result.data[0]
 
     # Must be a member of the group
-    _verify_member(sb, sentence["group_id"], current_user["user_id"])
+    _verify_member(sb, sentence["group_id"], current_user.user_id)
 
     # Cannot vote for own sentence
-    if sentence["user_id"] == current_user["user_id"]:
+    if sentence["user_id"] == current_user.user_id:
         raise HTTPException(status_code=400, detail="You cannot vote for your own sentence.")
 
     # Can only vote for yesterday's sentences
@@ -433,23 +431,23 @@ async def vote_for_sentence(sentence_id: str, current_user: dict = Depends(get_c
     yesterday_sentence_ids = [s["id"] for s in (all_sentences_yesterday.data or [])]
 
     if yesterday_sentence_ids:
-        existing_vote = sb.table("daywordplay_votes").select("id").eq("voter_user_id", current_user["user_id"]).in_("sentence_id", yesterday_sentence_ids).execute()
+        existing_vote = sb.table("daywordplay_votes").select("id").eq("voter_user_id", current_user.user_id).in_("sentence_id", yesterday_sentence_ids).execute()
         if existing_vote.data:
             raise HTTPException(status_code=409, detail="You already voted today.")
 
     sb.table("daywordplay_votes").insert({
         "sentence_id": sentence_id,
-        "voter_user_id": current_user["user_id"],
+        "voter_user_id": current_user.user_id,
     }).execute()
 
     return {"voted": True, "sentence_id": sentence_id}
 
 
 @router.get("/words/history", summary="Get all past words from user's groups with winning sentences")
-async def get_word_history(current_user: dict = Depends(get_current_user)) -> dict:
+async def get_word_history(current_user: CurrentUser = Depends(get_current_user)) -> dict:
     """Return all past daily words from user's groups, sorted alphabetically, with winning sentence."""
     sb = get_supabase()
-    user_id = current_user["user_id"]
+    user_id = current_user.user_id
     today = date.today().isoformat()
 
     # Get user's group IDs
@@ -475,7 +473,7 @@ async def get_word_history(current_user: dict = Depends(get_current_user)) -> di
 
     # Get all sentences from those groups for past dates
     sentences_result = sb.table("daywordplay_sentences").select(
-        "id, sentence, word_id, user_id, daywordplay_users(display_name, username)"
+        "id, sentence, word_id, user_id, daywordplay_profiles(display_name)"
     ).in_("group_id", group_ids).lt("assigned_date", today).execute()
 
     sentences_by_word: dict[str, list] = {}
@@ -507,8 +505,8 @@ async def get_word_history(current_user: dict = Depends(get_current_user)) -> di
             best = max(word_sentences, key=lambda s: vote_counts.get(s["id"], 0))
             if vote_counts.get(best["id"], 0) > 0:
                 winning_sentence = best["sentence"]
-                user_info = best.get("daywordplay_users") or {}
-                winning_author = user_info.get("display_name") or user_info.get("username", "")
+                user_info = best.get("daywordplay_profiles") or {}
+                winning_author = user_info.get("display_name", "")
                 winning_user_id = best.get("user_id")
 
         result.append({
@@ -523,12 +521,12 @@ async def get_word_history(current_user: dict = Depends(get_current_user)) -> di
 
 
 @router.get("/words/bookmarks")
-async def get_bookmarks(current_user: dict = Depends(get_current_user)):
+async def get_bookmarks(current_user: CurrentUser = Depends(get_current_user)):
     """Get current user's bookmarked words (friend dictionary)."""
     sb = get_supabase()
     result = sb.table("daywordplay_bookmarks").select(
         "id, created_at, daywordplay_words(id, word, part_of_speech, definition, etymology)"
-    ).eq("user_id", current_user["user_id"]).order("created_at", desc=True).execute()
+    ).eq("user_id", current_user.user_id).order("created_at", desc=True).execute()
 
     bookmarks = []
     for b in (result.data or []):
@@ -543,7 +541,7 @@ async def get_bookmarks(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/words/{word_id}/bookmark")
-async def add_bookmark(word_id: str, current_user: dict = Depends(get_current_user)):
+async def add_bookmark(word_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Bookmark a word."""
     sb = get_supabase()
 
@@ -551,12 +549,12 @@ async def add_bookmark(word_id: str, current_user: dict = Depends(get_current_us
     if not word_check.data:
         raise HTTPException(status_code=404, detail="Word not found.")
 
-    existing = sb.table("daywordplay_bookmarks").select("id").eq("user_id", current_user["user_id"]).eq("word_id", word_id).execute()
+    existing = sb.table("daywordplay_bookmarks").select("id").eq("user_id", current_user.user_id).eq("word_id", word_id).execute()
     if existing.data:
         return {"bookmarked": True}  # Already bookmarked — idempotent
 
     sb.table("daywordplay_bookmarks").insert({
-        "user_id": current_user["user_id"],
+        "user_id": current_user.user_id,
         "word_id": word_id,
     }).execute()
 
@@ -564,18 +562,18 @@ async def add_bookmark(word_id: str, current_user: dict = Depends(get_current_us
 
 
 @router.delete("/words/{word_id}/bookmark")
-async def remove_bookmark(word_id: str, current_user: dict = Depends(get_current_user)):
+async def remove_bookmark(word_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Remove a bookmark."""
     sb = get_supabase()
-    sb.table("daywordplay_bookmarks").delete().eq("user_id", current_user["user_id"]).eq("word_id", word_id).execute()
+    sb.table("daywordplay_bookmarks").delete().eq("user_id", current_user.user_id).eq("word_id", word_id).execute()
     return {"bookmarked": False}
 
 
 @router.get("/words/all", summary="Get all words in the dictionary with play/bookmark metadata")
-async def get_all_words(current_user: dict = Depends(get_current_user)) -> dict:
+async def get_all_words(current_user: CurrentUser = Depends(get_current_user)) -> dict:
     """Return every word in the word bank, annotated with is_played, my_sentence, winning_sentence, and is_bookmarked."""
     sb = get_supabase()
-    user_id = current_user["user_id"]
+    user_id = current_user.user_id
     today = date.today().isoformat()
 
     # All words in the word bank
@@ -599,7 +597,7 @@ async def get_all_words(current_user: dict = Depends(get_current_user)) -> dict:
 
     # Winning sentences (most votes) for each word across all groups
     past_sentences_result = sb.table("daywordplay_sentences").select(
-        "id, sentence, word_id, user_id, daywordplay_users(display_name, username)"
+        "id, sentence, word_id, user_id, daywordplay_profiles(display_name)"
     ).lt("assigned_date", today).execute()
     sentences_by_word: dict[str, list] = {}
     all_sentence_ids: list[str] = []
@@ -633,8 +631,8 @@ async def get_all_words(current_user: dict = Depends(get_current_user)) -> dict:
             best = max(word_sentences, key=lambda s: vote_counts.get(s["id"], 0))
             if vote_counts.get(best["id"], 0) > 0:
                 winning_sentence = best["sentence"]
-                user_info = best.get("daywordplay_users") or {}
-                winning_author = user_info.get("display_name") or user_info.get("username", "")
+                user_info = best.get("daywordplay_profiles") or {}
+                winning_author = user_info.get("display_name", "")
                 winning_user_id = best.get("user_id")
 
         result.append({
@@ -651,10 +649,10 @@ async def get_all_words(current_user: dict = Depends(get_current_user)) -> dict:
 
 
 @router.get("/words/played", summary="Get only words the current user has played")
-async def get_played_words(current_user: dict = Depends(get_current_user)) -> dict:
+async def get_played_words(current_user: CurrentUser = Depends(get_current_user)) -> dict:
     """Return words the current user has submitted a sentence for, with my_sentence, winning_sentence, and is_bookmarked."""
     sb = get_supabase()
-    user_id = current_user["user_id"]
+    user_id = current_user.user_id
     today = date.today().isoformat()
 
     # Words this user has played (submitted a sentence for, past days only)
@@ -679,7 +677,7 @@ async def get_played_words(current_user: dict = Depends(get_current_user)) -> di
 
     # Winning sentences for played words only
     past_sentences_result = sb.table("daywordplay_sentences").select(
-        "id, sentence, word_id, user_id, daywordplay_users(display_name, username)"
+        "id, sentence, word_id, user_id, daywordplay_profiles(display_name)"
     ).in_("word_id", played_word_ids).lt("assigned_date", today).execute()
 
     sentences_by_word: dict[str, list] = {}
@@ -713,8 +711,8 @@ async def get_played_words(current_user: dict = Depends(get_current_user)) -> di
             best = max(word_sentences, key=lambda s: vote_counts.get(s["id"], 0))
             if vote_counts.get(best["id"], 0) > 0:
                 winning_sentence = best["sentence"]
-                user_info = best.get("daywordplay_users") or {}
-                winning_author = user_info.get("display_name") or user_info.get("username", "")
+                user_info = best.get("daywordplay_profiles") or {}
+                winning_author = user_info.get("display_name", "")
                 winning_user_id = best.get("user_id")
 
         result.append({
@@ -733,7 +731,7 @@ async def get_played_words(current_user: dict = Depends(get_current_user)) -> di
 @router.post("/words/propose", status_code=201, summary="Propose a new word for the dictionary")
 async def propose_word(
     body: ProposeWordBody,
-    current_user: dict = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """Submit a word proposal for admin review. Rejects duplicates of existing or pending words."""
     sb = get_supabase()
@@ -756,7 +754,7 @@ async def propose_word(
         "part_of_speech": body.part_of_speech.strip(),
         "definition": body.definition.strip(),
         "etymology": body.etymology.strip() if body.etymology else None,
-        "proposed_by": current_user["user_id"],
+        "proposed_by": current_user.user_id,
         "status": "pending",
     }).execute()
 

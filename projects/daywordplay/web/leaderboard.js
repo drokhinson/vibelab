@@ -62,9 +62,8 @@ function renderLeaderboardEntry(entry) {
     <div class="leaderboard-entry ${rankClass}">
       <div class="rank-badge rank-${entry.rank <= 3 ? entry.rank : 'other'}">${rankEmoji}</div>
       <div class="lb-name">
-        ${escHtml(entry.display_name || entry.username)}
+        ${escHtml(entry.display_name || 'Player')}
         ${isMe ? ' <span style="font-size:11px; color:var(--accent)">(you)</span>' : ''}
-        <div class="lb-username">@${escHtml(entry.username)}</div>
       </div>
       <div class="lb-votes">
         <strong>${entry.total_votes}</strong>

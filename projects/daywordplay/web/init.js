@@ -13,32 +13,11 @@ async function _fetchAndCacheToday(groupId) {
   }
 }
 
+// Loads the user's groups and the active group's today word. Called from
+// auth.js loadProfileAndBoot() after the profile row is in hand.
 async function loadEagerData() {
-  // Try cached user first, fall back to /auth/me
-  const cachedUser = localStorage.getItem('dwp_user');
-  let userData;
-  if (cachedUser) {
-    try { userData = JSON.parse(cachedUser); } catch (_) { userData = null; }
-  }
-
-  if (userData) {
-    currentUser = userData;
-    const groupsData = await apiFetch('/groups/mine');
-    myGroups = groupsData.groups || [];
-    // Refresh user profile in background (catches display_name changes, etc.)
-    apiFetch('/auth/me').then(fresh => {
-      currentUser = fresh;
-      localStorage.setItem('dwp_user', JSON.stringify(fresh));
-    }).catch(() => {});
-  } else {
-    const [freshUser, groupsData] = await Promise.all([
-      apiFetch('/auth/me'),
-      apiFetch('/groups/mine'),
-    ]);
-    currentUser = freshUser;
-    localStorage.setItem('dwp_user', JSON.stringify(freshUser));
-    myGroups = groupsData.groups || [];
-  }
+  const groupsData = await apiFetch('/groups/mine');
+  myGroups = groupsData.groups || [];
 
   // Restore or pick active group
   const stored = getStoredActiveGroup();
@@ -107,37 +86,15 @@ function initPageListeners() {
 }
 
 // ── DOMContentLoaded ──────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-  const token = getToken();
-
-  if (!token) {
-    // Not logged in — show auth screen
-    renderApp();
-    initAuthListeners();
-    return;
-  }
-
-  // Load only critical data before first render
-  try {
-    await loadEagerData();
-  } catch (err) {
-    // Token expired or invalid
-    clearToken();
-    currentUser = null;
-  }
-
-  renderApp();
-
-  if (!currentUser) {
-    initAuthListeners();
-    return;
-  }
-
-  initShellListeners();
-  initPageListeners();
-
-  // Load remaining data in background (no await)
-  _loadDeferredData();
+// Boot is driven by Supabase: initSupabase() registers onAuthStateChange,
+// which fires once on load with the persisted session (if any) and either
+// invokes loadProfileAndBoot() (signed in) or renders the auth screen (signed out).
+document.addEventListener('DOMContentLoaded', () => {
+  initSupabase();
+  // If Supabase isn't configured at all, initSupabase() rendered the auth
+  // screen with the misconfig banner; wire its (disabled) listeners so the
+  // tab toggles still work.
+  if (!supabaseClient) initAuthListeners();
 });
 
 // ── Shell listeners (tabs, header buttons) ───────────────────────────────────

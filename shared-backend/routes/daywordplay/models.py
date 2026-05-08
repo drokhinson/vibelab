@@ -2,21 +2,35 @@
 routes/daywordplay/models.py
 Pydantic request/response models for Day Word Play.
 """
+from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
-class RegisterBody(BaseModel):
-    username: str
-    password: str
-    display_name: Optional[str] = None
-    email: Optional[str] = None
+# ── User profile (Supabase Auth-backed) ──────────────────────────────────────
+
+class ProfileCreate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=60)
+    avatar_url: Optional[str] = None
 
 
-class LoginBody(BaseModel):
-    username: str
-    password: str
+class ProfileResponse(BaseModel):
+    id: str
+    display_name: str
+    avatar_url: Optional[str] = None
+    is_admin: bool = False
+    created_at: Optional[datetime] = None
 
+
+class AdminKeyBody(BaseModel):
+    admin_key: str = Field(min_length=1)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+# ── Groups & gameplay ────────────────────────────────────────────────────────
 
 class CreateGroupBody(BaseModel):
     name: str
@@ -67,7 +81,6 @@ class BulkSentenceItem(BaseModel):
     id: str
     sentence: str
     user_id: str
-    username: str
     display_name: str
     vote_count: int
     i_voted: bool
