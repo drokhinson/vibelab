@@ -99,9 +99,9 @@ Wildflower unmet: year 1/2/3 growth preview (last remaining need — queued for 
 Food unmet: height-aware shading/occlusion for dense beds (last remaining need — queued for iter 6).
 Notes: Pure-frontend feature, no DB or backend churn — `bloom_months` was already in place since iter 1. The combined-shape (aggregate header + per-plant rows) was chosen so the strip works as both a quick "where are my bloom gaps" scanner AND a per-plant timeline. The strip is always visible (not hidden in the detail panel) per Wildflower's spec — that's the key change vs iter 1's mini-strip.
 
-## Iteration 5 — Year-by-Year Growth Preview — pending
+## Iteration 5 — Year-by-Year Growth Preview — 3783128
 Persona ratings (pre): hobby=5/5 (satisfied), wildflower=4/5, food=4/5
-Persona ratings (post): pending — Phase G re-poll
+Persona ratings (post): hobby=5/5, wildflower=5/5 (satisfied), food=4/5
 Shipped:
   - Migration 009 adds `lifecycle text` (annual|biennial|perennial, default 'perennial') and `years_to_maturity int` (1–5, default 3) to `plantplanner_plants`. Additive — `ADD COLUMN IF NOT EXISTS` so re-runnable.
   - Catalog seeded for all ~40 plants: 9 annuals (tomato, pepper, lettuce, carrot, basil, kale, bush bean, zucchini, marigold) at ytm=1; bulbs (tulip, daffodil) and strawberry at ytm=2; slow perennials (baptisia, peony, joe pye weed, hydrangea, blueberry) at ytm=5; rest perennials at ytm=3.
@@ -111,7 +111,7 @@ Shipped:
   - `syncSceneWithPlacements` applies `s = yearScale(plant, previewYear)` per placement: `mesh.scale.set(s, s, s)` on the plant group AND rebuilds the translucent disk geometry at `radius_feet * s`. Spread + height handled in one knob.
   - Companion warnings + crowded chips re-evaluate at the selected year (multiplied radii). Bloom calendar untouched (year-independent).
   - Drag-drop preview disk and placement bounds-validation always use mature radius — preview is view-only; saves are never year-aware.
-Hobby unmet: pending re-poll. Default Y3+ matches existing behavior — no regression expected.
-Wildflower unmet: pending re-poll. This addresses their LAST remaining unmet need.
-Food unmet: pending re-poll. Height-aware shading still queued for iter 6 (cap iteration).
+Hobby unmet: SATISFIED. Default Y3+ preserves prior visual; scrubber is unobtrusive opt-in chrome.
+Wildflower unmet: SATISFIED. Last remaining need (multi-year growth preview) fully delivered. Joe Pye Weed at ytm=5 / Y3 = 0.6× scale — visibly smaller, matches reality.
+Food unmet: height-aware shading/occlusion (LAST remaining need — queued for iter 6, the cap iteration).
 Notes: Chose lifecycle + years_to_maturity (option C from the design) over per-year explicit columns — cleaner data model with sensible defaults and a deterministic curve. Preview is intentionally view-only so users can scrub years without affecting placement validation or saved state. Annuals stay full-size every year (would look broken otherwise). Tooltip on the scrubber clarifies "Preview only — placement is saved at mature size."
