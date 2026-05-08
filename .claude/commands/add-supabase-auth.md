@@ -20,6 +20,7 @@ Add Supabase Auth to project: $ARGUMENTS
    - Add login/signup form to `index.html`
    - Add auth state management to `app.js` using `supabase.auth.onAuthStateChange()`
    - Add the JWT to fetch requests: `Authorization: Bearer <token>` header
+   - **OAuth button visuals:** if Google / Apple sign-in is enabled, follow `.claude/rules/auth-ui.md` for the canonical inline-SVG provider logos, full-width pill buttons (`.auth-oauth-btn` + `.auth-oauth-google` / `.auth-oauth-apple`), and the "or use email" hairline divider. Reference implementation: `projects/daywordplay/web/auth.js` + `styles.css`. Do **not** use Lucide icons or emoji for provider marks.
 
 4. **FastAPI auth middleware** (`shared-backend/`):
    - Add `PyJWT` and `httpx` to requirements.txt

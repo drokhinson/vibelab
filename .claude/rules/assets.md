@@ -19,15 +19,18 @@ Subdirectories are created on demand. A project that has only a logo just needs 
 
 Files inside any project's `web/assets/` are **project-prefixed kebab-case**:
 
-| Project          | Prefix | Example                     |
-|------------------|--------|------------------------------|
-| boardgame-buddy  | `bgb`  | `bgb-logo.svg`               |
-| plant-planner    | `pp`   | `pp-logo.svg`, `pp-empty-garden.svg` |
-| sauceboss        | `sb`   | `sb-logo.svg`                |
-| daywordplay      | `dwp`  | `dwp-logo.svg`               |
-| wealthmate       | `wm`   | `wm-logo.svg`                |
-| spotme           | `spotme` | `spotme-logo.svg`          |
-| admin            | `admin`| `admin-logo.svg`             |
+| Project          | Prefix    | Example                     |
+|------------------|-----------|------------------------------|
+| landing          | `vibelab` | `vibelab-logo.svg`           |
+| boardgame-buddy  | `bgb`     | `bgb-logo.svg`               |
+| plant-planner    | `pp`      | `pp-logo.svg`, `pp-empty-garden.svg` |
+| sauceboss        | `sb`      | `sb-logo.svg`                |
+| daywordplay      | `dwp`     | `dwp-logo.svg`               |
+| wealthmate       | `wm`      | `wm-logo.svg`                |
+| spotme           | `spotme`  | `spotme-logo.svg`            |
+| admin            | `admin`   | `admin-logo.svg`             |
+
+For **new** projects, the prefix matches `{{PROJECT_ID}}` (the kebab-cased project ID). The historical short prefixes above are grandfathered. `scaffold.sh` automatically drops a placeholder `<project-id>-logo.svg` at `web/assets/brand/` and the template's favicon link picks it up.
 
 Why prefixed even though the path already namespaces? So files survive being copied into the native bundle, the landing page, or any other shared location without colliding.
 
