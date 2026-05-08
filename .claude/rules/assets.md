@@ -64,7 +64,13 @@ App-store-required icons (`icon.png`, `splash.png`, `adaptive-icon.png`, `featur
 
 ## Landing Page
 
-The landing page (`landing/`) maintains its own asset copies under `landing/assets/illustrations/`. Hero illustrations on featured cards are tuned for the dark theme and may differ visually from the in-app logo; that is expected. When the source-of-truth in a project changes, the landing copy must be re-synced manually.
+Each project's `web/assets/illustrations/<prefix>-hero.svg` is the source-of-truth for the landing page's featured-card hero illustration. The landing page deploys separately and bundles its own copy under `landing/assets/illustrations/<prefix>-hero.svg`. When the source-of-truth in a project changes:
+
+```
+cp projects/<name>/web/assets/illustrations/<prefix>-hero.svg landing/assets/illustrations/
+```
+
+There is no automated sync — the duplication is intentional so landing has no cross-domain runtime dependency on each project's deployment.
 
 ## Migration Checklist (when adding assets to an existing project)
 
