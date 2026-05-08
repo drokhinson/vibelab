@@ -85,6 +85,13 @@ export const initialState = {
   currentUser: null,
   favorites: new Map(),
   favoritesOnly: false,
+
+  // Edit mode — gates editorial UI in the Sauce Manager (Edit / Delete /
+  // Download / Merge per-row actions, the `+` FAB, the admin bulk-export
+  // button at the bottom of the list). Mirrors the web's `state.editMode`.
+  // Defaults to false; flipped by the pencil toggle in the manager header
+  // (visible only to logged-in users); reset to false on sign-out.
+  editMode: false,
 };
 
 // ── Action types ────────────────────────────────────────────────────────────
@@ -160,6 +167,8 @@ const A = {
   SET_BECOME_ADMIN_BUSY: 'SET_BECOME_ADMIN_BUSY',
   SET_BECOME_ADMIN_ERROR: 'SET_BECOME_ADMIN_ERROR',
   CLEAR_AUTH: 'CLEAR_AUTH',
+
+  TOGGLE_EDIT_MODE: 'TOGGLE_EDIT_MODE',
 };
 
 // ── Reducer ─────────────────────────────────────────────────────────────────
@@ -442,7 +451,16 @@ function reducer(state, action) {
       return { ...state, session: action.session };
 
     case A.SET_CURRENT_USER:
-      return { ...state, currentUser: action.user };
+      // Sign-out path also clears edit mode so the next sign-in starts in
+      // the read-only browse view.
+      return action.user
+        ? { ...state, currentUser: action.user }
+        : { ...state, currentUser: null, editMode: false };
+
+    case A.TOGGLE_EDIT_MODE:
+      // Anonymous users never see the toggle, but guard here in case the
+      // action is dispatched after a sign-out racy edge case.
+      return state.currentUser ? { ...state, editMode: !state.editMode } : state;
 
     case A.SET_FAVORITES:
       return { ...state, favorites: action.favorites || new Map() };
@@ -472,6 +490,7 @@ function reducer(state, action) {
         favoritesOnly: false,
         authError: null,
         becomeAdminError: null,
+        editMode: false,
       };
 
     default:
@@ -669,6 +688,8 @@ export function AppProvider({ children }) {
       selectVariant: (sauce) => dispatch({ type: A.SELECT_VARIANT, sauce }),
       setServings: (value) => dispatch({ type: A.SET_SERVINGS, value }),
       setUnitSystem: (value) => dispatch({ type: A.SET_UNIT_SYSTEM, value }),
+
+      toggleEditMode: () => dispatch({ type: A.TOGGLE_EDIT_MODE }),
 
       // ── Sauce Manager (browse-all) ──────────────────────────────────────────
       loadAllSauces: async () => {
