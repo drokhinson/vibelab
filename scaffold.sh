@@ -49,6 +49,18 @@ find "$PROJECT_DIR" -type f | while read -r file; do
     "$file"
 done
 
+# ── Drop a starter brand logo so the favicon link in index.html resolves ──────
+# This is the vibelab pipeline mark; the team replaces it with their own
+# brand asset before launch. See .claude/rules/assets.md.
+mkdir -p "$PROJECT_DIR/web/assets/brand"
+cat > "$PROJECT_DIR/web/assets/brand/${PROJECT_ID}-logo.svg" <<'SVGEOF'
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <rect x="4"  y="7"  width="24" height="5" rx="2.5" fill="#a78bfa"/>
+  <rect x="8"  y="14" width="20" height="5" rx="2.5" fill="#8c83ff"/>
+  <rect x="12" y="21" width="16" height="5" rx="2.5" fill="#6c63ff"/>
+</svg>
+SVGEOF
+
 # ── Add route stub to shared-backend ─────────────────────────────────────────
 ROUTE_FILE="$REPO_ROOT/shared-backend/routes/${PROJECT_ID//-/_}.py"
 if [[ ! -f "$ROUTE_FILE" ]]; then
