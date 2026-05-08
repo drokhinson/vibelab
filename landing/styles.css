@@ -226,10 +226,15 @@ body {
 .brand-sauceboss .featured-name { color: #FFF8EE; text-shadow: 0 1px 0 rgba(0,0,0,0.18); }
 .brand-sauceboss .featured-desc { color: rgba(255, 248, 238, 0.92); }
 .brand-sauceboss .featured-cta { background: rgba(0,0,0,0.18); border-color: rgba(255,255,255,0.4); }
-.brand-sauceboss .native-badge--beta {
+.brand-sauceboss .platform-badge--beta {
   background: #1A1A2E;
-  color: #FAA307;
-  border: 1px solid rgba(250, 163, 7, 0.6);
+  color: #3DDC84;
+  border: 1px solid rgba(61, 220, 132, 0.6);
+}
+.brand-sauceboss .platform-badge--not-started {
+  background: rgba(26, 26, 46, 0.55);
+  color: rgba(255, 248, 238, 0.6);
+  border: 1px dashed rgba(255, 248, 238, 0.3);
 }
 
 /* ── BoardgameBuddy brand (dark warm-brown w/ brass accent) ──────────────── */
@@ -370,19 +375,42 @@ body {
 }
 .card-link:hover { text-decoration: underline; }
 
-.native-badge {
+.platform-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.7rem;
-  padding: 0.15rem 0.5rem;
+  padding: 0.2rem 0.55rem;
   border-radius: 999px;
   background: rgba(255,255,255,0.06);
   color: var(--pico-muted-color);
   white-space: nowrap;
+  margin-right: 0.4rem;
 }
-.native-badge--beta {
-  background: rgba(250, 163, 7, 0.16);
-  color: #FAA307;
-  border: 1px solid rgba(250, 163, 7, 0.35);
+.platform-badge:last-child { margin-right: 0; }
+.platform-badge__icon { width: 14px; height: 14px; flex-shrink: 0; }
+
+.platform-badge--beta {
+  background: rgba(61, 220, 132, 0.16);
+  color: #3DDC84;
+  border: 1px solid rgba(61, 220, 132, 0.35);
   font-weight: 600;
+}
+.platform-badge--live {
+  background: rgba(56, 161, 105, 0.18);
+  color: #38A169;
+  border: 1px solid rgba(56, 161, 105, 0.4);
+  font-weight: 600;
+}
+.platform-badge--not-started {
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.4);
+  border: 1px dashed rgba(255,255,255,0.18);
+}
+.platform-badge--wip {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.2);
 }
 
 /* ── Loading / empty ────────────────────────────────────────────────────────── */
