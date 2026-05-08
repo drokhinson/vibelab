@@ -106,8 +106,10 @@ function renderAuthScreen() {
     </svg>`;
   return `
     <div class="auth-screen">
-      <div class="auth-logo"><img src="assets/brand/dwp-logo.svg" alt="" /></div>
-      <h1 class="auth-title">Day Word Play</h1>
+      <div class="auth-brand">
+        <div class="auth-logo"><img src="assets/brand/dwp-logo.svg" alt="" /></div>
+        <h1 class="auth-title">Day Word Play</h1>
+      </div>
       <p class="auth-subtitle">A new word every day. Your sentence. Your group's vote.</p>
       <div class="auth-card">
         ${errorBanner}
