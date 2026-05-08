@@ -67,13 +67,18 @@ function bindCatalogTouch() {
       if (!_touchDragState) return;
 
       var touch = e.changedTouches[0];
+      var plant = _touchDragState.plant;
       if (scene3DHandle) {
         var cell = getRaycastCell(scene3DHandle, touch.clientX, touch.clientY);
         hideCellHighlight(scene3DHandle);
         unlockCamera(scene3DHandle);
         if (cell) {
-          gridPlacements[cell.gx + "," + cell.gy] = _touchDragState.plant;
+          gridPlacements[cell.gx + "," + cell.gy] = plant;
           sync3DView();
+        } else {
+          // Released outside the grid — toss the plant onto the ground so it
+          // matches the desktop behavior and the picked-up-plant toss arc.
+          tossNewPlantToGround(plant, touch.clientX, touch.clientY, scene3DHandle);
         }
       }
       _removeGhost();

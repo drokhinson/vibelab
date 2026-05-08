@@ -75,13 +75,24 @@ function bind3DDragDrop() {
     onDrop: function(gx, gy) {
       if (draggedPlant) {
         gridPlacements[gx + "," + gy] = draggedPlant;
-        draggedPlant = null;
         sync3DView();
       }
-    },
-    onLeave: function() {
+      catalogDropHandled = true;
       draggedPlant = null;
-    }
+    },
+    onMiss: function(clientX, clientY) {
+      // Drop landed on the canvas but outside the grid — toss the plant onto
+      // the ground at the drop location.
+      if (draggedPlant && scene3DHandle) {
+        tossNewPlantToGround(draggedPlant, clientX, clientY, scene3DHandle);
+      }
+      catalogDropHandled = true;
+      draggedPlant = null;
+    },
+    // dragleave just clears the cell highlight; keep draggedPlant so the user
+    // can leave + re-enter the canvas during a single drag, and so a
+    // follow-up dragend off-canvas can still trigger the toss animation.
+    onLeave: function() {}
   });
 }
 

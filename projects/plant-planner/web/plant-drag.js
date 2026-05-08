@@ -301,6 +301,35 @@ function _animateArc(mesh, startPos, landX, landZ, isToss, handle) {
   requestAnimationFrame(frame);
 }
 
+// ── New-plant toss (catalog drag dropped outside the grid) ───────────────────
+// Mirrors the toss arc applied to picked-up plants: builds a fresh mesh from
+// the catalog plant data, drops it from carry height onto the ground at the
+// drop coordinates, and parks it in groundPlantsGroup so it is visible until
+// the next view re-init (session-only, like other ground plants).
+function tossNewPlantToGround(plant, clientX, clientY, handle) {
+  if (!handle || !plant) return;
+  var mesh = buildPlantMesh(plant, renderStyle);
+
+  var pt = _raycastCarryPlane(clientX, clientY, handle);
+  var landX, landZ;
+  if (pt) {
+    landX = pt.x;
+    landZ = pt.z;
+  } else {
+    // Off-canvas drop — drop just past the front edge of the garden bed.
+    var gh = handle.garden.grid_height;
+    landX = 0;
+    landZ = gh / 2 + 1.2;
+  }
+
+  var carryY = (handle._carryY != null) ? handle._carryY : 1.0;
+  var startPos = new THREE.Vector3(landX, carryY, landZ);
+  mesh.position.copy(startPos);
+  handle.scene.add(mesh);
+
+  _animateArc(mesh, startPos, landX, landZ, false, handle);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function _raycastCarryPlane(clientX, clientY, handle) {
