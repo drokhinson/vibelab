@@ -27,7 +27,7 @@ function renderLeaderboardView() {
   return `
     ${renderGroupSwitcher()}
     <div class="section-header">
-      <span class="section-title">🏆 Leaderboard</span>
+      <span class="section-title">Leaderboard</span>
     </div>
     ${!leaderboardData
       ? `<div class="loading-screen" style="height:40vh"><div class="loading-spinner"></div></div>`

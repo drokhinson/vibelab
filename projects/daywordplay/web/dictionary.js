@@ -25,7 +25,7 @@ function renderDictionaryView() {
   return `
     <div class="dict-sticky-header">
       <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; padding-right:16px;">
-        <span class="section-title">📚 Dictionary</span>
+        <span class="section-title">Dictionary</span>
         <button class="propose-word-btn" id="propose-word-btn">+ Propose word</button>
       </div>
       <div class="dict-filter-row">
