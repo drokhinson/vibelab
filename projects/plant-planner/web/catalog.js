@@ -103,29 +103,63 @@ function _companionBadgesForTile(plantId) {
 
 function renderCatalogList() {
   var q = catalogSearch || '';
-  var filtered = plants.filter(function(p) {
-    return plantMatchesSearch(p, q) && plantMatchesFilters(p);
-  });
+  var srcPlants = Array.isArray(plants) ? plants : [];
+
+  // Filter with a guard around plantMatchesFilters — one malformed plant
+  // record shouldn't blank out the entire grid.
+  var filtered = [];
+  for (var fi = 0; fi < srcPlants.length; fi++) {
+    var pp = srcPlants[fi];
+    try {
+      if (plantMatchesSearch(pp, q) && plantMatchesFilters(pp)) filtered.push(pp);
+    } catch (e) {
+      console.warn('[plant-planner] filter threw on plant', pp && pp.name, e);
+    }
+  }
 
   // Match-count summary so users see the impact of their filters.
-  var html = '<div class="catalog-count">' + filtered.length + ' of ' + plants.length + ' plants</div>';
+  var html = '<div class="catalog-count">' + filtered.length + ' of ' + srcPlants.length + ' plants</div>';
+
+  // Empty-state self-fix: when matchGarden is on and zero plants pass, give
+  // the user a one-tap escape hatch instead of a dead-end empty grid.
+  if (filtered.length === 0) {
+    if (catalogFilters.matchGarden && currentGarden) {
+      html += '<div class="catalog-empty-banner">'
+           +   '<p><strong>0 plants</strong> match this planter\'s conditions.</p>'
+           +   '<button type="button" class="btn btn-sm btn-primary mt-2" id="catalog-show-all">Show all plants</button>'
+           + '</div>';
+    } else {
+      html += '<div class="catalog-empty-banner">'
+           +   '<p>No plants match these filters.</p>'
+           +   (srcPlants.length === 0
+               ? '<p class="text-xs opacity-60 mt-1">Plant catalog hasn\'t loaded yet — try refreshing.</p>'
+               : '')
+           + '</div>';
+    }
+    // Keep the .catalog-list wrapper present (with min-height in CSS) so
+    // future re-renders have a stable mount point.
+    html += '<div class="catalog-list"></div>';
+    return html;
+  }
+
   html += '<div class="catalog-list">';
   for (var k = 0; k < filtered.length; k++) {
     var p = filtered[k];
-    var pngUrl = (typeof _getPlantImageUrl === 'function') ? _getPlantImageUrl(p) : '';
-    var fallbackUrl = 'assets/sprites/plants/_' + (p.category || 'flower') + '.png';
-    var safeFallback = fallbackUrl.replace(/'/g, "\\'");
-    html += '<div class="catalog-tile" draggable="true" data-plant-id="' + p.id + '" style="--i:' + k + '">';
-    html += _companionBadgesForTile(p.id);
-    if (p.native === true) html += _nativeBadgeHtml();
-    html += '<img class="catalog-thumbnail" src="' + pngUrl + '" alt="' + escapeHtml(p.name) + '" draggable="false"'
-         + ' onerror="this.onerror=null;this.src=\'' + safeFallback + '\'" />';
-    html += '<span class="catalog-name">' + escapeHtml(p.name) + '</span>';
-    html += _pollinatorIconsHtml(p.pollinator_attracts);
-    html += '</div>';
-  }
-  if (filtered.length === 0) {
-    html += '<div class="text-center text-sm py-4 opacity-50">No plants match filters</div>';
+    try {
+      var pngUrl = (typeof _getPlantImageUrl === 'function') ? _getPlantImageUrl(p) : '';
+      var fallbackUrl = 'assets/sprites/plants/_' + (p.category || 'flower') + '.png';
+      var safeFallback = fallbackUrl.replace(/'/g, "\\'");
+      html += '<div class="catalog-tile" draggable="true" data-plant-id="' + p.id + '" style="--i:' + k + '">';
+      html += _companionBadgesForTile(p.id);
+      if (p.native === true) html += _nativeBadgeHtml();
+      html += '<img class="catalog-thumbnail" src="' + pngUrl + '" alt="' + escapeHtml(p.name) + '" draggable="false"'
+           + ' onerror="this.onerror=null;this.src=\'' + safeFallback + '\'" />';
+      html += '<span class="catalog-name">' + escapeHtml(p.name) + '</span>';
+      html += _pollinatorIconsHtml(p.pollinator_attracts);
+      html += '</div>';
+    } catch (e) {
+      console.warn('[plant-planner] tile render threw on', p && p.name, e);
+    }
   }
   html += '</div>';
   return html;
@@ -150,6 +184,15 @@ function bindCatalogEvents() {
   if (matchEl) {
     matchEl.onchange = function(e) {
       catalogFilters.matchGarden = !!e.target.checked;
+      refreshCatalog();
+    };
+  }
+
+  // Empty-state self-fix button — flips matchGarden off so the user sees the full catalog.
+  var showAllBtn = document.getElementById('catalog-show-all');
+  if (showAllBtn) {
+    showAllBtn.onclick = function() {
+      catalogFilters.matchGarden = false;
       refreshCatalog();
     };
   }

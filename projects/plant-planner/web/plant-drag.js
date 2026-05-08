@@ -16,7 +16,7 @@ var CARRY_LIFT = 0.8;         // units above soil top while carrying
 function bindPlantDrag(handle) {
   if (!handle) return;
   var garden = handle.garden;
-  var soilTop = garden.garden_type === "planter" ? 0.36 : 0.12;
+  var soilTop = (typeof _soilTopFor === 'function') ? _soilTopFor(garden.garden_type) : 0.12;
   var carryY = soilTop + CARRY_LIFT;
 
   // Invisible plane at carry height — raycasting target while dragging
