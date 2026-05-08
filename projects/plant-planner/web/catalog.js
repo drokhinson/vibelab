@@ -45,6 +45,22 @@ function _nativeBadgeHtml() {
   return '<span class="native-badge" title="Native"><i data-lucide="leaf" style="width:14px;height:14px"></i></span>';
 }
 
+function _companionBadgesForTile(plantId) {
+  if (!gridPlacements || Object.keys(gridPlacements).length === 0) return '';
+  var goodNames = [], badNames = [];
+  for (var key in gridPlacements) {
+    var placed = gridPlacements[key];
+    if (!placed || placed.id === plantId) continue;
+    var rel = getCompanionRelationship(plantId, placed.id);
+    if (rel === 'good' && goodNames.indexOf(placed.name) === -1) goodNames.push(placed.name);
+    if (rel === 'bad'  && badNames.indexOf(placed.name)  === -1) badNames.push(placed.name);
+  }
+  var html = '';
+  if (goodNames.length) html += '<span class="tile-companion-badge good" aria-label="Good with: ' + escapeHtml(goodNames.join(', ')) + '"><i data-lucide="leaf" style="width:10px;height:10px"></i></span>';
+  if (badNames.length)  html += '<span class="tile-companion-badge bad"  aria-label="Avoid near: ' + escapeHtml(badNames.join(', '))  + '"><i data-lucide="alert-circle" style="width:10px;height:10px"></i></span>';
+  return html;
+}
+
 function renderCatalogList() {
   var q = catalogSearch || '';
   var filtered = plants.filter(function(p) {
@@ -56,6 +72,7 @@ function renderCatalogList() {
     var p = filtered[k];
     var catThumb = getPlantThumbnail(p, renderStyle);
     html += '<div class="catalog-tile" draggable="true" data-plant-id="' + p.id + '" style="--i:' + k + '">';
+    html += _companionBadgesForTile(p.id);
     if (p.native === true) html += _nativeBadgeHtml();
     html += '<img class="catalog-thumbnail" src="' + catThumb + '" alt="' + escapeHtml(p.name) + '" draggable="false" />';
     html += '<span class="catalog-name">' + escapeHtml(p.name) + '</span>';
@@ -208,6 +225,34 @@ function _bloomStripHtml(months) {
          '</div>';
 }
 
+function _companionsSectionHtml(plantId) {
+  var entries = companionsByPlantId[plantId] || [];
+  var goods = entries.filter(function(e) { return e.relationship === 'good'; }).slice(0, 6);
+  var bads  = entries.filter(function(e) { return e.relationship === 'bad';  }).slice(0, 6);
+  if (goods.length === 0 && bads.length === 0) return '';
+  var html = '<div class="detail-companions">';
+  if (goods.length) {
+    html += '<div class="detail-companion-row"><div class="detail-companion-label">Grows well with</div><div class="detail-companion-chips">';
+    goods.forEach(function(e) {
+      var partner = getPlantById(e.otherId);
+      if (!partner) return;
+      html += '<button class="detail-companion-chip good" data-partner-id="' + partner.id + '"><img src="' + getPlantThumbnail(partner, renderStyle) + '" alt="" />' + escapeHtml(partner.name) + '</button>';
+    });
+    html += '</div></div>';
+  }
+  if (bads.length) {
+    html += '<div class="detail-companion-row"><div class="detail-companion-label">Avoid planting near</div><div class="detail-companion-chips">';
+    bads.forEach(function(e) {
+      var partner = getPlantById(e.otherId);
+      if (!partner) return;
+      html += '<button class="detail-companion-chip bad" data-partner-id="' + partner.id + '"><img src="' + getPlantThumbnail(partner, renderStyle) + '" alt="" />' + escapeHtml(partner.name) + '</button>';
+    });
+    html += '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
 function _pollinatorRowHtml(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return '';
   var icons = '';
@@ -260,6 +305,9 @@ function renderPlantDetailPanel() {
   // Pollinators
   html += _pollinatorRowHtml(p.pollinator_attracts);
 
+  // Companions (Iteration 2)
+  html += _companionsSectionHtml(p.id);
+
   // Hardiness range
   var zr = zoneRangeString(p.usda_zones);
   if (zr) html += '<p class="detail-zones">' + escapeHtml(zr) + '</p>';
@@ -278,6 +326,11 @@ function renderPlantDetailPanel() {
   if (closeBtn) closeBtn.onclick = closePlantDetailPanel;
   var backdrop = document.getElementById("plant-detail-backdrop");
   if (backdrop) backdrop.onclick = closePlantDetailPanel;
+
+  // Companion partner chips swap the panel to the partner plant
+  Array.prototype.forEach.call(panel.querySelectorAll('.detail-companion-chip'), function(btn) {
+    btn.onclick = function() { detailPanelPlantId = btn.dataset.partnerId; renderPlantDetailPanel(); };
+  });
 }
 
 // Esc-key handler — wired once on script load

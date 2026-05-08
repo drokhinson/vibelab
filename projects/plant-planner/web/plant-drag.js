@@ -231,6 +231,10 @@ function _onRelease(clientX, clientY, handle) {
       landZ = pt ? pt.z : startPos.z;
     }
     _animateArc(mesh, startPos, landX, landZ, isToss, handle);
+    // Plant has already been removed from gridPlacements at pickup; refresh
+    // companion chips + catalog badges to reflect the now-gone neighbor.
+    if (typeof renderCompanionChips === 'function') renderCompanionChips();
+    if (typeof refreshCatalogList === 'function') refreshCatalogList();
   }
 }
 
@@ -263,6 +267,8 @@ function _dropIntoGrid(mesh, plant, gx, gy, handle) {
   handle.scene.remove(mesh);
   disposeObject(mesh);
   sync3DView();
+  if (typeof renderCompanionChips === 'function') renderCompanionChips();
+  if (typeof refreshCatalogList === 'function') refreshCatalogList();
 }
 
 // ── Arc animation ─────────────────────────────────────────────────────────────

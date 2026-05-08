@@ -115,6 +115,7 @@ function init3DView(containerId, garden, placements) {
   plantsGroup.name = "plants";
   scene.add(plantsGroup);
 
+  var soilTop = garden.garden_type === "planter" ? 0.36 : 0.12;
   var handle = {
     scene: scene,
     camera: camera,
@@ -123,7 +124,11 @@ function init3DView(containerId, garden, placements) {
     container: container,
     plantsGroup: plantsGroup,
     garden: garden,
-    animId: null
+    animId: null,
+    cellSize: 1,
+    gridOriginX: -gw / 2 + 0.5,
+    gridOriginZ: -gh / 2 + 0.5,
+    soilTop: soilTop
   };
 
   // Populate plants
@@ -441,6 +446,19 @@ function disposeObject(obj) {
 }
 
 // ── 3D Drag-and-Drop Interaction ───────────────────────────────────────────
+
+// Returns a THREE.Vector3 at the visual top-center of the cell (world coords).
+// Used by overlays (e.g. companion warning chips) to project cell positions to screen.
+function sceneCellWorldPosition(handle, gx, gy) {
+  if (!handle) return null;
+  var cellSize = handle.cellSize || 1;
+  var ox = (handle.gridOriginX != null) ? handle.gridOriginX : (-handle.garden.grid_width / 2 + 0.5);
+  var oz = (handle.gridOriginZ != null) ? handle.gridOriginZ : (-handle.garden.grid_height / 2 + 0.5);
+  var top = (handle.soilTop != null)
+    ? handle.soilTop
+    : (handle.garden && handle.garden.garden_type === "planter" ? 0.36 : 0.12);
+  return new THREE.Vector3(ox + gx * cellSize, top, oz + gy * cellSize);
+}
 
 function getRaycastCell(handle, clientX, clientY) {
   if (!handle || !handle.hitPlane) return null;

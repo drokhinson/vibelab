@@ -50,8 +50,9 @@ db/migrations/plantplanner/001_baseline.sql + 002_seed.sql — Supabase migratio
 - **plantplanner_profiles** — id (uuid PK, = `auth.users.id` ON DELETE CASCADE), display_name (text), avatar_url (text, nullable), is_admin (bool default false), created_at (timestamptz default now())
 - **plantplanner_renders** — key (text PK), label (text), params (jsonb — 3D geometry), colors (jsonb — color map), created_at (timestamptz default now())
 - **plantplanner_plants** — id (uuid PK default gen_random_uuid()), name (text), height_inches (int), sunlight (text: full_sun/partial/shade), bloom_season (text[]), spread_inches (int), description (text), sort_order (int), category (text), render_key (text FK→renders), bloom_months (int[] 1–12), native (bool), usda_zones (jsonb `{min:int, max:int}`), pollinator_attracts (text[] subset of `bees`/`butterflies`/`hummingbirds`/`moths`/`beneficial_insects`), water_need (text: low/medium/high), care_summary (text, nullable)
-- **plantplanner_gardens** — id (uuid PK default gen_random_uuid()), user_id (uuid FK→profiles ON DELETE CASCADE), name (text), grid_width (int), grid_height (int), garden_type (text), shade_level (text), planting_season (text), usda_zone (text, nullable — e.g. `"6b"`), created_at (timestamptz default now()), updated_at (timestamptz default now())
+- **plantplanner_gardens** — id (uuid PK default gen_random_uuid()), user_id (uuid FK→profiles ON DELETE CASCADE), name (text), grid_width (int), grid_height (int), garden_type (text), shade_level (text), planting_season (text), usda_zone (text, nullable — e.g. `"6b"`), settings_json (jsonb default `{}` — per-garden client-side preferences such as `dismissed_companion_warnings: ["<minId>:<maxId>", ...]`), created_at (timestamptz default now()), updated_at (timestamptz default now())
 - **plantplanner_garden_plants** — id (uuid PK default gen_random_uuid()), garden_id (uuid FK→gardens ON DELETE CASCADE), plant_id (uuid FK→plants), grid_x (int), grid_y (int)
+- **plantplanner_companions** — id (uuid PK default gen_random_uuid()), plant_a_id (uuid FK→plants, with `a < b` ordering), plant_b_id (uuid FK→plants), relationship (text: `good`/`bad`/`neutral`), reason (text). Indexed on both `plant_a_id` and `plant_b_id`.
 
 ## API Endpoints
 
@@ -60,10 +61,11 @@ db/migrations/plantplanner/001_baseline.sql + 002_seed.sql — Supabase migratio
 - `GET  /api/v1/plant_planner/plants` — List all plants in catalog (includes Iteration-1 fields: `bloom_months`, `native`, `usda_zones` `{min,max}`, `pollinator_attracts`, `water_need`, `care_summary`)
 - `GET  /api/v1/plant_planner/gardens` — List user's gardens (auth required)
 - `POST /api/v1/plant_planner/gardens` — Create new garden (auth required; accepts optional `usda_zone`)
-- `GET  /api/v1/plant_planner/gardens/{id}` — Get garden with placed plants (auth required)
-- `PUT  /api/v1/plant_planner/gardens/{id}` — Update garden name/size/`usda_zone` (auth required)
+- `GET  /api/v1/plant_planner/gardens/{id}` — Get garden with placed plants + `settings_json` (auth required)
+- `PUT  /api/v1/plant_planner/gardens/{id}` — Update garden name/size/`usda_zone`/`settings_json` (auth required; `settings_json` is used for per-garden `dismissed_companion_warnings`)
 - `DELETE /api/v1/plant_planner/gardens/{id}` — Delete garden (auth required)
 - `PUT  /api/v1/plant_planner/gardens/{id}/plants` — Save all plant placements (auth required, full replace)
+- `GET  /api/v1/plant_planner/companions` — List companion-planting relationships `[{plant_a_id, plant_b_id, relationship, reason}]` (symmetric pairs; client stores both directions)
 
 ## Screen / Page Flow
 
@@ -90,6 +92,17 @@ Garden Builder View
 - Garden save: sends full grid state (all plant placements) to the API in one PUT.
 - Plant catalog is loaded from DB once on page load and cached in JS state.
 
+### Companion Warnings (Iteration 2)
+
+- After every placement, removal, and garden load, the client recomputes companion-planting warnings from `gridPlacements` + the cached `/companions` lookup. 4-connected (up/down/left/right; no diagonals) neighbors with a `good` or `bad` relationship surface a small floating chip on the 3D scene cell:
+  - **Yellow `alert-triangle` chip** — cell has at least one undismissed `bad` neighbor.
+  - **Green `sparkles` chip** — cell has a `good` neighbor and no undismissed `bad`.
+- Tapping a chip opens a popover anchored to it, listing each conflicting/helpful neighbor (thumbnail + name + relationship pill + reason). `Bad` rows offer a "Dismiss for this garden" button that adds the canonical `<minId>:<maxId>` pair key to `dismissedCompanionWarnings`. Esc / outside-click / close button dismiss the popover.
+- Dismissals persist in `gardens.settings_json.dismissed_companion_warnings` (PUT'd to `/gardens/{id}` whenever the user saves). Failure to persist is non-fatal (logged + continue).
+- Catalog tile badges: tiny green-leaf badge (top-left, ~12px) when the tile's plant is a good companion of any placed plant; tiny red dot when it's a bad companion. Sidebar height is unchanged — badges sit on top of the existing tile.
+- Plant detail panel "Companions" section appears under Pollinators with two horizontal mini-rows ("Grows well with" up to 6 chips, "Avoid planting near" up to 6). Each chip swaps the detail panel to that partner.
+- Placement is never blocked. UI is fail-soft: if `/companions` fetch fails, no chips are drawn, the Companions section is hidden, and placement still works.
+
 ## Environment Variables
 | Variable | Used In | Purpose |
 |---|---|---|
@@ -103,3 +116,4 @@ Garden Builder View
 - 2026-03-17 — Project scaffolded. Building web prototype + backend.
 - 2026-05-08 — Iteration 1 (agentic): compressed catalog + rich plant knowledge — see ITERATIONS.md. Added `bloom_months`, `native`, `usda_zones`, `pollinator_attracts`, `water_need`, `care_summary` to `plantplanner_plants`; added `usda_zone` to `plantplanner_gardens`. Catalog sidebar header switched from 3 stacked dropdowns to one search input + horizontally-scrolling chip row. Plant tiles now show a native badge + pollinator icons. Tile click opens a slide-in Plant Detail Panel. Garden header gets a USDA-zone chip → picker, persisted via PUT /gardens/{id}.
 - 2026-05-08 — Switched auth from custom bcrypt + JWT to Supabase Auth (Google + Apple OAuth + email/password). Migration `db/migrations/plantplanner/003_supabase_auth.sql` drops `plantplanner_users` and recreates `plantplanner_gardens` / `plantplanner_garden_plants` keyed off `plantplanner_profiles(id) = auth.users.id`. Backend uses shared `jwt_auth.get_current_supabase_user`; profile rows are auto-created on first sign-in. `PLANTPLANNER_JWT_SECRET` env var is no longer used. **One-time setup before deploying:** enable Google + Apple providers in Supabase dashboard, add `https://vibelab-plant-planner.vercel.app` + `/**` to Authentication → URL Configuration → Redirect URLs, run the 003 migration in SQL Editor.
+- 2026-05-08 — Iteration 2 (agentic): companion-planting warnings — see ITERATIONS.md. New `plantplanner_companions` table + `GET /companions`. `plantplanner_gardens` gains `settings_json jsonb` for per-garden `dismissed_companion_warnings`. UI: floating yellow/green chips on 3D cells, tap-to-popover with dismiss-for-this-garden, catalog tile good/bad badges, detail-panel Companions section.
