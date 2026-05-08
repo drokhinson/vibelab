@@ -115,6 +115,11 @@ function init3DView(containerId, garden, placements) {
   plantsGroup.name = "plants";
   scene.add(plantsGroup);
 
+  // Shadow disks group (iter 6: shading warnings — translucent ground shadows)
+  var shadowsGroup = new THREE.Group();
+  shadowsGroup.name = "shadows";
+  scene.add(shadowsGroup);
+
   var soilTop = garden.garden_type === "planter" ? 0.36 : 0.12;
   var handle = {
     scene: scene,
@@ -123,6 +128,7 @@ function init3DView(containerId, garden, placements) {
     controls: controls,
     container: container,
     plantsGroup: plantsGroup,
+    shadowsGroup: shadowsGroup,
     garden: garden,
     animId: null,
     cellSize: 1,
@@ -385,6 +391,59 @@ function syncSceneWithPlacements(handle, placementsArr) {
 
     pg.add(group);
   }
+
+  // iter 6: refresh ground-shadow disks for shading warnings
+  updateShadowMeshes(handle, placementsArr, previewYear);
+}
+
+function updateShadowMeshes(handle, placementsArr, year) {
+  if (!handle) return;
+  // Lazy-create the shadows group (e.g. after a setRenderStyle that wiped it)
+  if (!handle.shadowsGroup || !handle.shadowsGroup.parent) {
+    var sg = new THREE.Group();
+    sg.name = "shadows";
+    handle.scene.add(sg);
+    handle.shadowsGroup = sg;
+  }
+  var shg = handle.shadowsGroup;
+  // Clear existing shadow meshes
+  while (shg.children.length > 0) {
+    var sChild = shg.children[0];
+    shg.remove(sChild);
+    disposeObject(sChild);
+  }
+  if (!placementsArr || placementsArr.length === 0) return;
+  if (typeof shadowZoneFor !== 'function') return;
+  var garden = handle.garden;
+  var gw = garden.grid_width;
+  var gh = garden.grid_height;
+  var soilTop = (handle.soilTop != null) ? handle.soilTop : (garden.garden_type === "planter" ? 0.36 : 0.12);
+
+  for (var i = 0; i < placementsArr.length; i++) {
+    var placement = placementsArr[i];
+    var zone = shadowZoneFor(placement, year);
+    if (!zone) continue;
+    if (zone.heightFt < 0.5) continue; // skip noise from very short plants
+    var planeGeom = new THREE.PlaneGeometry(1, 1);
+    var planeMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.18,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    var plane = new THREE.Mesh(planeGeom, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    var scaleX = Math.max(0.001, zone.halfWidth * 2);
+    var scaleZ = Math.max(0.001, zone.heightFt * 0.7);
+    plane.scale.set(scaleX, scaleZ, 1);
+    plane.position.set(
+      zone.cx - gw / 2,
+      soilTop + 0.008,
+      zone.yNorth - gh / 2 - zone.heightFt * 0.35
+    );
+    shg.add(plane);
+  }
 }
 
 function setRenderStyle(handle, newStyle) {
@@ -399,12 +458,14 @@ function setRenderStyle(handle, newStyle) {
   var toRemove = [];
   handle.scene.children.forEach(function(child) {
     if (child !== handle.plantsGroup &&
+        child !== handle.shadowsGroup &&
         child.type !== "AmbientLight" &&
         child.type !== "DirectionalLight" &&
         child.name !== "hitPlane" &&
         child.name !== "_previewDisk" &&
         child.name !== "_carryPlane" &&
-        child.name !== "groundPlants") {
+        child.name !== "groundPlants" &&
+        child.name !== "shadows") {
       toRemove.push(child);
     }
   });
@@ -437,6 +498,9 @@ function dispose3DView(handle) {
   if (handle.controls) handle.controls.dispose();
   if (handle.groundPlantsGroup) {
     handle.groundPlantsGroup.children.slice().forEach(function(c) { disposeObject(c); });
+  }
+  if (handle.shadowsGroup) {
+    handle.shadowsGroup.children.slice().forEach(function(c) { disposeObject(c); });
   }
 
   // Dispose all scene objects

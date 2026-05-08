@@ -964,3 +964,9 @@ dialog .dialog-header {
   box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 .year-pill:hover:not(.active) { color: var(--text, #111); }
+
+/* === iter 6: shade warning pill === */
+.companion-popover-pill.shade {
+  background: #fed7aa; /* orange-200 */
+  color: #9a3412;     /* orange-800 */
+}
