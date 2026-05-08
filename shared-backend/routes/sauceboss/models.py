@@ -291,14 +291,6 @@ class BulkSauceExportEnvelope(BaseModel):
     sauces: List[Dict[str, Any]]
 
 
-class ImportResultResponse(BaseModel):
-    """Result of POST /sauces/import — id of the new sauce + any non-fatal warnings."""
-    id: str
-    name: str
-    warnings: List[str] = Field(default_factory=list)
-    status: str = "created"
-
-
 def _shape_items_grouped(rows: list[dict]) -> dict:
     """Group raw sauceboss_items rows into {carbs, proteins, salads} with nested variants."""
     def shape(r: dict) -> dict:
