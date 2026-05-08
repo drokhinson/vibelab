@@ -17,12 +17,14 @@ from .models import (
     FoodsWithUsageResponse,
     ImportRecipeRequest,
     IngredientCategoryInput,
+    IngredientCategoryRow,
     InitialLoadResponse,
     ItemLoadResponse,
     ItemsGroupedResponse,
     MessageResponse,
     ParsedIngredientResponse,
     ParsedRecipeResponse,
+    SubstitutionRow,
     UnitRow,
     UnitsListResponse,
     UpdateSauceRequest,
@@ -40,24 +42,30 @@ async def health():
     return {"project": "sauceboss", "status": "ok"}
 
 
-@router.get("/ingredient-categories")
-async def list_ingredient_categories():
+@router.get(
+    "/ingredient-categories",
+    response_model=list[IngredientCategoryRow],
+    status_code=200,
+    summary="List ingredient → category classifications",
+)
+async def list_ingredient_categories() -> list[dict]:
     """Returns ingredient → category mappings for grouping in the filter panel."""
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_ingredient_categories", {}).execute()
-    if result.data is None:
-        return []
-    return result.data
+    return result.data or []
 
 
-@router.get("/substitutions")
-async def list_substitutions():
+@router.get(
+    "/substitutions",
+    response_model=list[SubstitutionRow],
+    status_code=200,
+    summary="List ingredient substitution suggestions",
+)
+async def list_substitutions() -> list[dict]:
     """Returns ingredient substitution suggestions."""
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_substitutions", {}).execute()
-    if result.data is None:
-        return []
-    return result.data
+    return result.data or []
 
 
 @router.post("/sauces", status_code=201, summary="Create a user-submitted sauce")
@@ -232,14 +240,23 @@ def _resolve_ingredient_for_save(ing) -> dict:
     }
 
 
-@router.get("/sauces")
-async def list_all_sauces():
-    """Public endpoint: all sauces with full steps, ingredients, and compatible carbs."""
+@router.get(
+    "/sauces",
+    response_model=list[dict],
+    status_code=200,
+    summary="List all sauces with full steps, ingredients, and compatible items",
+)
+async def list_all_sauces() -> list[dict]:
+    """Public endpoint: all sauces with full steps, ingredients, and compatible carbs.
+
+    The RPC return shape mirrors the per-sauce envelope built by
+    ``get_sauceboss_all_sauces_full`` and consumed directly by the web /
+    native clients; the OpenAPI shape is left as ``list[dict]`` to match the
+    existing convention used by ``InitialLoadResponse`` and friends.
+    """
     sb = get_supabase()
     result = sb.rpc("get_sauceboss_all_sauces_full", {}).execute()
-    if result.data is None:
-        return []
-    return result.data
+    return result.data or []
 
 
 @router.get(
@@ -258,15 +275,20 @@ async def list_items() -> dict:
     return _shape_items_grouped(result.data or [])
 
 
-@router.post("/ingredient-categories")
-async def upsert_ingredient_category(body: IngredientCategoryInput):
+@router.post(
+    "/ingredient-categories",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Add or update an ingredient's category classification",
+)
+async def upsert_ingredient_category(body: IngredientCategoryInput) -> MessageResponse:
     """Add or update an ingredient's category classification."""
     sb = get_supabase()
     sb.rpc("upsert_sauceboss_ingredient_category", {
         "p_ingredient_name": body.ingredientName.strip().lower(),
         "p_category": body.category,
     }).execute()
-    return {"status": "ok"}
+    return MessageResponse(message="ok")
 
 
 # ── Combined-load endpoints (one round-trip per user action) ─────────────────

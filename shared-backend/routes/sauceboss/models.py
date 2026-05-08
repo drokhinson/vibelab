@@ -192,6 +192,27 @@ class IngredientCategoryInput(BaseModel):
     category: str = Field(min_length=1)
 
 
+class IngredientCategoryRow(BaseModel):
+    """One row from the sauceboss_ingredient_categories table.
+
+    The shared JS client at projects/sauceboss/shared/api.js normalizes a list
+    of these rows into a dict {ingredientName: category}; the row shape lives
+    here so the OpenAPI schema matches what the RPC actually returns.
+    """
+    ingredientName: str
+    category: str
+
+
+class SubstitutionRow(BaseModel):
+    """One row from the sauceboss_ingredient_substitutions table.
+
+    See IngredientCategoryRow for the same shape-contract rationale.
+    """
+    ingredientName: str
+    substituteName: str
+    notes: Optional[str] = None
+
+
 # ── Foods (ingredient admin) ─────────────────────────────────────────────────
 
 class FoodWithUsageRow(BaseModel):

@@ -1,4 +1,7 @@
 'use strict';
+// @ts-check
+// Globals + cross-file contracts are declared in ./types.d.ts. See
+// .claude/rules/typed-js.md for the editor-only type-check convention.
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {

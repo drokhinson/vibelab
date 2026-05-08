@@ -1,11 +1,52 @@
+// @ts-check
 // API client factory — platform-agnostic. Native passes Expo's `fetch` and a
 // Supabase token getter; future web can pass `window.fetch` and a Supabase JS
 // session getter. Endpoint paths are defined here once.
 //
 // Backend returns sauces with `ingredients[]`. We attach an `ingredientNames`
 // Set so screens can do O(1) lookups in the filter — same shape the web app uses.
+//
+// Type contracts (see .claude/rules/typed-js.md): every method that reshapes
+// the backend response into a different shape declares an `@returns` JSDoc
+// tag below, so consumers can't drift away from the post-normalization shape.
 
 import { withIngredientNames } from './filter.js';
+
+/**
+ * @typedef {Object<string, string>} IngredientCategoryMap
+ *   Lowercased ingredient name → category label.
+ *   e.g. `{ "garlic": "Produce", "olive oil": "Oils & Fats" }`.
+ *   The backend returns this as an array of `{ ingredientName, category }`
+ *   rows; `api.ingredientCategories()` reshapes it into this dict.
+ *
+ * @typedef {Object} SubstitutionEntry
+ * @property {string} substituteName
+ * @property {(string|null)=} notes
+ *
+ * @typedef {Object<string, SubstitutionEntry[]>} SubstitutionMap
+ *   Ingredient name → list of substitutes. Backend returns a flat array of
+ *   `{ ingredientName, substituteName, notes }` rows; `api.substitutions()`
+ *   groups them under their ingredient name.
+ *
+ * @typedef {Object} FoodRow
+ * @property {string} id
+ * @property {string} name
+ * @property {(string|null)=} plural
+ * @property {number=} usageCount
+ * @property {number=} sauceCount
+ * @property {(string|null)=} createdAt
+ *
+ * @typedef {Object} UnitRow
+ * @property {string} id
+ * @property {string} singular
+ * @property {string} plural
+ * @property {string} abbrev
+ * @property {string} abbrevPlural
+ * @property {string} dimension
+ * @property {(number|null)=} canonicalMl
+ * @property {(number|null)=} canonicalG
+ * @property {string[]=} aliases
+ */
 
 const PREFIX = '/api/v1/sauceboss';
 
@@ -123,9 +164,11 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     // The backend returns `[{ ingredientName, category }, ...]` so without this
     // step `cats[name]` lookups silently fall back to "Uncategorized" (and the
     // ingredient filter panel falls back to "Pantry Staples" for everything).
+    /** @returns {Promise<IngredientCategoryMap>} */
     ingredientCategories: async () => {
       const data = await call('/ingredient-categories');
       if (!Array.isArray(data)) return data || {};
+      /** @type {IngredientCategoryMap} */
       const out = {};
       for (const c of data) {
         if (c && c.ingredientName) out[c.ingredientName] = c.category;
@@ -136,9 +179,11 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     //   `[{ ingredientName, substituteName, notes }, ...]`
     // but consumers (StepCard, the recipe view) expect
     //   `{ "<name>": [{ substituteName, notes }, ...] }`
+    /** @returns {Promise<SubstitutionMap>} */
     substitutions: async () => {
       const data = await call('/substitutions');
       if (!Array.isArray(data)) return data || {};
+      /** @type {SubstitutionMap} */
       const out = {};
       for (const s of data) {
         if (!s || !s.ingredientName) continue;
@@ -224,6 +269,7 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     adminDeleteSauce: (id) => call(`/admin/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
     // ── Sauce-manager Ingredients tab (mostly admin) ─────────────────────────
+    /** @returns {Promise<FoodRow[]>} */
     listFoodsWithUsage: async () => {
       const data = await call('/foods-with-usage');
       return data.foods || [];
