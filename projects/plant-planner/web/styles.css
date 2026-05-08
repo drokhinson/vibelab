@@ -498,7 +498,6 @@ dialog .dialog-header {
   .catalog-sidebar {
     width: 100%;
     min-width: 0;
-    max-height: 30vh;
   }
   .catalog-list {
     grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
