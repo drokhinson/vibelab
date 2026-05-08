@@ -1,0 +1,22 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="14" fill="#F0EDE8"/>
+  <!-- Sun above the spine -->
+  <circle cx="32" cy="9" r="3" fill="#4A7C7C"/>
+  <g stroke="#4A7C7C" stroke-width="1.4" stroke-linecap="round">
+    <line x1="32" y1="2" x2="32" y2="4.5"/>
+    <line x1="25" y1="9" x2="27.5" y2="9"/>
+    <line x1="36.5" y1="9" x2="39" y2="9"/>
+    <line x1="27" y1="4" x2="28.5" y2="6"/>
+    <line x1="37" y1="4" x2="35.5" y2="6"/>
+  </g>
+  <!-- Open book -->
+  <path d="M8 22 Q22 16 32 22 Q42 16 56 22 L56 50 Q42 44 32 50 Q22 44 8 50 Z"
+        fill="#FFFFFF" stroke="#4A7C7C" stroke-width="2" stroke-linejoin="round"/>
+  <line x1="32" y1="22" x2="32" y2="50" stroke="#4A7C7C" stroke-width="2" stroke-linecap="round"/>
+  <!-- Speech bubble (left page) -->
+  <ellipse cx="20" cy="33" rx="6" ry="4" fill="#4A7C7C"/>
+  <path d="M19 36 L17 39.5 L21 37 Z" fill="#4A7C7C"/>
+  <!-- Speech bubble (right page) -->
+  <ellipse cx="44" cy="36" rx="6" ry="4" fill="#3A6A6A"/>
+  <path d="M45 39 L47 42.5 L43 40 Z" fill="#3A6A6A"/>
+</svg>
