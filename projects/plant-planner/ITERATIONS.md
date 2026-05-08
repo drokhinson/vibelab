@@ -46,9 +46,9 @@ Wildflower unmet: full 12-month bloom calendar strip aligned under the 3D render
 Food unmet: companion-planting rules with adjacency warnings (iter 2); real-radius placement with spread-circle rendering (iter 3).
 Notes: UI/UX picked the bundle that touched the most personas at once — the filter compression (hobby+wildflower) and the data-model enrichment (all three) both centered on the catalog sidebar surface. Companion rules and radius placement explicitly deferred since each is a self-contained feature that warrants its own iteration. Filter sidebar constraint honored: ~80px header < the 144px legacy stack. Existing user data was wiped per the disposability decision.
 
-## Iteration 2 — Companion Planting Warnings — pending
+## Iteration 2 — Companion Planting Warnings — 30b369f
 Persona ratings (pre): hobby=4/5, wildflower=2/5, food=2/5
-Persona ratings (post): pending — Phase G re-poll
+Persona ratings (post): hobby=5/5 (satisfied), wildflower=2/5, food=3/5
 Shipped:
   - New table `plantplanner_companions(id, plant_a_id<plant_b_id, relationship, reason)` with unique-pair + ordering constraints; ~30 high-confidence pairs seeded (tomato↔basil good, tomato↔fennel-replacement-sage bad, marigold↔most-vegetables good, etc.).
   - New backend route `GET /api/v1/plant_planner/companions` returns the symmetric-stored rows; client expands bidirectionally.
@@ -58,7 +58,7 @@ Shipped:
   - Catalog tile gets ~12px badges (top-left): green leaf if good companion to anything placed; red dot if bad. `aria-label` lists the affected plants. Filter sidebar HEIGHT is unchanged — no new chip in the filter row.
   - Plant detail panel adds a Companions section under Pollinators: "Grows well with" + "Avoid planting near" rows (≤6 chips each). Tapping a chip swaps the detail panel to that partner.
   - Placement is never blocked. UI is fail-soft: if `/companions` errors, no chips render and detail Companions section hides.
-Hobby unmet: pending re-poll.
-Wildflower unmet: pending re-poll. (Iter 2 didn't move the needle — full Jan-Dec calendar strip + year 1/2/3 still queued for iters 4 / 5+.)
-Food unmet: pending re-poll. Real-radius placement still queued for iter 3.
+Hobby unmet: SATISFIED. Hobby gardener is no longer driving iterations.
+Wildflower unmet: full Jan–Dec bloom calendar strip aligned under 3D render; year 1/2/3 growth preview. (Iter 2 didn't touch wildflower — queued for iters 4 / 5+.)
+Food unmet: real-radius placement (spread-circle, not 1×1 grid) — iter 3; height-aware shading — later.
 Notes: UI/UX paired food's #1 (companion rules) with hobby's only remaining ask (companion warnings) into one bundle. Wildflower deliberately not advanced — their next ask (full bloom calendar) is queued for iter 4. New companions table is symmetric-stored (one row per pair, `plant_a_id < plant_b_id`) so the unique constraint actually enforces uniqueness and the API returns half the rows it would otherwise; client expands. Dismissals live per-garden (not per-user) so dismissing in Garden A doesn't mute the warning in Garden B.
