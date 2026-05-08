@@ -2,6 +2,123 @@
 // Shared geometry templates let multiple plants reuse the same shape with different colors.
 // Per-plant entries reference a template via _template and supply color overrides.
 
+// ── Catalog filter chips (Iteration 1) ──────────────────────────────────────
+var CHIP_DEFS = [
+  { id: 'native', label: 'Native' },
+  { id: 'pollinators', label: 'Pollinators' },
+  { id: 'sun', label: 'Sun' },
+  { id: 'shade', label: 'Shade' },
+  { id: 'spring', label: 'Spring' },
+  { id: 'summer', label: 'Summer' },
+  { id: 'fall', label: 'Fall' },
+  { id: 'edible', label: 'Edible' },
+  { id: 'flower', label: 'Flower' },
+  { id: 'herb', label: 'Herb' }
+];
+
+var POLLINATOR_ICONS = {
+  bees: 'bug',
+  butterflies: 'bird',
+  hummingbirds: 'bird',
+  moths: 'moon',
+  beneficial_insects: 'sparkles'
+};
+
+var POLLINATOR_LABELS = {
+  bees: 'Bees',
+  butterflies: 'Butterflies',
+  hummingbirds: 'Hummingbirds',
+  moths: 'Moths',
+  beneficial_insects: 'Beneficial insects'
+};
+
+var MONTH_LETTERS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+var MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ── Filter helpers ─────────────────────────────────────────────────────────
+function zoneNumber(zoneStr) {
+  if (!zoneStr) return null;
+  var m = String(zoneStr).match(/^(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function plantMatchesSearch(p, q) {
+  if (!q) return true;
+  var needle = String(q).toLowerCase().trim();
+  if (!needle) return true;
+  var name = (p.name || '').toLowerCase();
+  var desc = (p.description || '').toLowerCase();
+  return name.indexOf(needle) !== -1 || desc.indexOf(needle) !== -1;
+}
+
+function plantMatchesChips(p) {
+  // No chips active → match everything
+  var anyActive = false;
+  for (var k in catalogChips) { if (catalogChips[k]) { anyActive = true; break; } }
+  if (!anyActive) return true;
+
+  // Native: native === true AND (if garden zone known) zone within usda_zones range
+  if (catalogChips.native) {
+    if (p.native !== true) return false;
+    var zn = currentGarden && zoneNumber(currentGarden.usda_zone);
+    if (zn != null && p.usda_zones && typeof p.usda_zones.min === 'number' && typeof p.usda_zones.max === 'number') {
+      if (zn < p.usda_zones.min || zn > p.usda_zones.max) return false;
+    }
+  }
+
+  if (catalogChips.pollinators) {
+    if (!Array.isArray(p.pollinator_attracts) || p.pollinator_attracts.length === 0) return false;
+  }
+
+  // Sun + Shade: OR within sunlight category if both set
+  if (catalogChips.sun || catalogChips.shade) {
+    var sunOk = catalogChips.sun && p.sunlight === 'full_sun';
+    var shadeOk = catalogChips.shade && p.sunlight === 'shade';
+    if (!sunOk && !shadeOk) return false;
+  }
+
+  // Seasons (Spring/Summer/Fall): OR within season category
+  var seasonChips = ['spring','summer','fall'].filter(function(s) { return catalogChips[s]; });
+  if (seasonChips.length > 0) {
+    var bs = Array.isArray(p.bloom_season) ? p.bloom_season : [];
+    var anySeason = seasonChips.some(function(s) { return bs.indexOf(s) !== -1; });
+    if (!anySeason) return false;
+  }
+
+  // Categories (Edible/Flower/Herb): OR within category category
+  var catChips = [];
+  if (catalogChips.edible) catChips.push('vegetable', 'fruit');
+  if (catalogChips.flower) catChips.push('flower');
+  if (catalogChips.herb) catChips.push('herb');
+  if (catChips.length > 0) {
+    if (catChips.indexOf(p.category) === -1) return false;
+  }
+
+  return true;
+}
+
+function bloomMonthsString(months) {
+  if (!Array.isArray(months) || months.length === 0) return '';
+  var sorted = months.slice().filter(function(m) { return m >= 1 && m <= 12; }).sort(function(a, b) { return a - b; });
+  if (sorted.length === 0) return '';
+  // Detect contiguous run
+  var contiguous = true;
+  for (var i = 1; i < sorted.length; i++) {
+    if (sorted[i] !== sorted[i-1] + 1) { contiguous = false; break; }
+  }
+  if (contiguous && sorted.length > 1) {
+    return MONTH_NAMES_SHORT[sorted[0]-1] + '–' + MONTH_NAMES_SHORT[sorted[sorted.length-1]-1];
+  }
+  if (sorted.length === 1) return MONTH_NAMES_SHORT[sorted[0]-1];
+  return sorted.map(function(m) { return MONTH_NAMES_SHORT[m-1]; }).join(', ');
+}
+
+function zoneRangeString(zones) {
+  if (!zones || typeof zones.min !== 'number' || typeof zones.max !== 'number') return '';
+  if (zones.min === zones.max) return 'Hardy in zone ' + zones.min;
+  return 'Hardy in zones ' + zones.min + '–' + zones.max;
+}
+
 var MODEL_TEMPLATES = {
   // Sunflower: tall stem, small leaf pairs, large flower head + center
   sunflower: {

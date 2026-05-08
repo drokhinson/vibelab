@@ -537,3 +537,304 @@ dialog .dialog-header {
 .auth-submit:hover:not(:disabled) { opacity: 0.92; }
 .auth-submit:active:not(:disabled) { transform: translateY(1px); }
 .auth-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Compressed catalog header (Iteration 1) ─────────────────────────────── */
+.catalog-search {
+  width: 100%;
+  height: 36px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--pp-warm-border);
+  border-radius: 10px;
+  background: oklch(var(--b1));
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.catalog-search:focus {
+  border-color: oklch(var(--p));
+  box-shadow: 0 0 0 3px oklch(var(--p) / 0.15);
+}
+.catalog-chips {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 32px;
+  align-items: center;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.catalog-chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border: 1px solid var(--pp-warm-border);
+  border-radius: 999px;
+  background: oklch(var(--b1));
+  color: oklch(var(--bc) / 0.75);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  line-height: 1;
+}
+.chip:hover {
+  border-color: oklch(var(--p) / 0.4);
+  color: oklch(var(--p));
+}
+.chip.active {
+  background: oklch(var(--p) / 0.15);
+  border-color: oklch(var(--p));
+  color: oklch(var(--p));
+  font-weight: 600;
+}
+
+/* Native badge + pollinator icons on tile */
+.catalog-tile { position: relative; }
+.catalog-tile .native-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: oklch(var(--su) / 0.18);
+  color: oklch(var(--su));
+  pointer-events: none;
+}
+.catalog-tile .pollinator-icons {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  background: oklch(var(--b1) / 0.7);
+  padding: 1px 3px;
+  border-radius: 6px;
+  color: oklch(var(--bc) / 0.7);
+  pointer-events: none;
+}
+
+/* ── Plant detail panel ──────────────────────────────────────────────────── */
+.plant-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  z-index: 80;
+  animation: fadeIn 160ms ease both;
+}
+.plant-detail-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 320px;
+  max-width: 90vw;
+  background: oklch(var(--b1));
+  border-left: 1px solid var(--pp-warm-border);
+  box-shadow: var(--pp-shadow-lg);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  animation: slideInRight 220ms ease both;
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.plant-detail-panel .detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--pp-warm-border);
+}
+.plant-detail-panel .detail-title {
+  margin: 0;
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  word-break: break-word;
+}
+.plant-detail-panel .close-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  color: oklch(var(--bc) / 0.6);
+}
+.plant-detail-panel .close-btn:hover {
+  background: oklch(var(--b2));
+  color: oklch(var(--bc));
+}
+.plant-detail-panel .detail-body {
+  padding: 0.9rem 1rem 1.2rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  color: oklch(var(--bc) / 0.85);
+}
+.plant-detail-panel .detail-native-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: oklch(var(--su) / 0.15);
+  color: oklch(var(--su));
+}
+.plant-detail-panel .detail-care {
+  margin: 0;
+  font-size: 0.85rem;
+  color: oklch(var(--bc) / 0.7);
+  font-style: italic;
+}
+.plant-detail-panel .detail-zones,
+.plant-detail-panel .detail-description {
+  margin: 0;
+  line-height: 1.5;
+}
+.plant-detail-panel .detail-description {
+  font-size: 0.85rem;
+  color: oklch(var(--bc) / 0.75);
+}
+
+/* Bloom strip */
+.plant-detail-panel .bloom-strip {
+  width: 100%;
+  max-width: 200px;
+}
+.plant-detail-panel .bloom-dots {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+.plant-detail-panel .bloom-labels {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 2px;
+}
+.plant-detail-panel .bloom-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid oklch(var(--bc) / 0.25);
+  background: transparent;
+  flex: 1 1 9px;
+  max-width: 12px;
+}
+.plant-detail-panel .bloom-dot.on {
+  background: oklch(var(--p));
+  border-color: oklch(var(--p));
+}
+.plant-detail-panel .bloom-label {
+  flex: 1 1 9px;
+  max-width: 12px;
+  text-align: center;
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: oklch(var(--bc) / 0.5);
+}
+
+/* Pollinator detail row */
+.plant-detail-panel .detail-pollinators {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.plant-detail-panel .detail-pollinator-icons {
+  display: flex;
+  flex-direction: row;
+  gap: 0.35rem;
+  color: oklch(var(--p));
+}
+.plant-detail-panel .detail-pollinator-labels {
+  font-size: 0.78rem;
+  color: oklch(var(--bc) / 0.7);
+}
+
+/* ── Garden zone chip + picker ───────────────────────────────────────────── */
+.garden-zone-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--pp-warm-border);
+  border-radius: 999px;
+  background: oklch(var(--b1));
+  color: oklch(var(--bc) / 0.8);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.garden-zone-chip:hover {
+  border-color: oklch(var(--p) / 0.5);
+  color: oklch(var(--p));
+}
+.zone-picker-menu {
+  z-index: 200;
+  background: oklch(var(--b1));
+  border: 1px solid var(--pp-warm-border);
+  border-radius: 12px;
+  box-shadow: var(--pp-shadow-lg);
+  padding: 0.4rem;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.25rem;
+  width: 200px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.zone-picker-item {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: oklch(var(--bc) / 0.8);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.zone-picker-item:hover {
+  background: oklch(var(--p) / 0.1);
+  color: oklch(var(--p));
+}
+.zone-picker-item.active {
+  background: oklch(var(--p) / 0.18);
+  color: oklch(var(--p));
+  border-color: oklch(var(--p) / 0.5);
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .plant-detail-panel {
+    width: 100vw;
+    max-width: 100vw;
+  }
+}

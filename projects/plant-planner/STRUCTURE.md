@@ -49,19 +49,19 @@ db/migrations/plantplanner/001_baseline.sql + 002_seed.sql — Supabase migratio
 
 - **plantplanner_profiles** — id (uuid PK, = `auth.users.id` ON DELETE CASCADE), display_name (text), avatar_url (text, nullable), is_admin (bool default false), created_at (timestamptz default now())
 - **plantplanner_renders** — key (text PK), label (text), params (jsonb — 3D geometry), colors (jsonb — color map), created_at (timestamptz default now())
-- **plantplanner_plants** — id (uuid PK default gen_random_uuid()), name (text), height_inches (int), sunlight (text: full_sun/partial/shade), bloom_season (text[]), spread_inches (int), description (text), sort_order (int), category (text), render_key (text FK→renders)
-- **plantplanner_gardens** — id (uuid PK default gen_random_uuid()), user_id (uuid FK→profiles ON DELETE CASCADE), name (text), grid_width (int), grid_height (int), garden_type (text), shade_level (text), planting_season (text), created_at (timestamptz default now()), updated_at (timestamptz default now())
+- **plantplanner_plants** — id (uuid PK default gen_random_uuid()), name (text), height_inches (int), sunlight (text: full_sun/partial/shade), bloom_season (text[]), spread_inches (int), description (text), sort_order (int), category (text), render_key (text FK→renders), bloom_months (int[] 1–12), native (bool), usda_zones (jsonb `{min:int, max:int}`), pollinator_attracts (text[] subset of `bees`/`butterflies`/`hummingbirds`/`moths`/`beneficial_insects`), water_need (text: low/medium/high), care_summary (text, nullable)
+- **plantplanner_gardens** — id (uuid PK default gen_random_uuid()), user_id (uuid FK→profiles ON DELETE CASCADE), name (text), grid_width (int), grid_height (int), garden_type (text), shade_level (text), planting_season (text), usda_zone (text, nullable — e.g. `"6b"`), created_at (timestamptz default now()), updated_at (timestamptz default now())
 - **plantplanner_garden_plants** — id (uuid PK default gen_random_uuid()), garden_id (uuid FK→gardens ON DELETE CASCADE), plant_id (uuid FK→plants), grid_x (int), grid_y (int)
 
 ## API Endpoints
 
 - `GET  /api/v1/plant_planner/health` — Health check
 - `GET  /api/v1/plant_planner/auth/me` — Get current user (auth required; auto-creates profile row on first call)
-- `GET  /api/v1/plant_planner/plants` — List all plants in catalog
+- `GET  /api/v1/plant_planner/plants` — List all plants in catalog (includes Iteration-1 fields: `bloom_months`, `native`, `usda_zones` `{min,max}`, `pollinator_attracts`, `water_need`, `care_summary`)
 - `GET  /api/v1/plant_planner/gardens` — List user's gardens (auth required)
-- `POST /api/v1/plant_planner/gardens` — Create new garden (auth required)
+- `POST /api/v1/plant_planner/gardens` — Create new garden (auth required; accepts optional `usda_zone`)
 - `GET  /api/v1/plant_planner/gardens/{id}` — Get garden with placed plants (auth required)
-- `PUT  /api/v1/plant_planner/gardens/{id}` — Update garden name/size (auth required)
+- `PUT  /api/v1/plant_planner/gardens/{id}` — Update garden name/size/`usda_zone` (auth required)
 - `DELETE /api/v1/plant_planner/gardens/{id}` — Delete garden (auth required)
 - `PUT  /api/v1/plant_planner/gardens/{id}/plants` — Save all plant placements (auth required, full replace)
 
@@ -73,17 +73,19 @@ Auth View (login/register)
 My Gardens View (list saved gardens, create new)
     ↓ (select or create garden)
 Garden Builder View
-  ├── Plant Catalog Sidebar (draggable plant tiles)
-  ├── Split Pane:
-  │   ├── 2D Grid (bird's-eye or side view, toggle)
-  │   └── 3D Render (rotatable Three.js, render style selector)
+  ├── Header (garden name + size + USDA-zone chip + Save/Reseed)
+  ├── Plant Catalog Sidebar (search input + horizontally-scrolling chip row + draggable plant tiles)
+  │     ↳ Tile click → slide-in Plant Detail Panel (care summary, 12-dot bloom strip,
+  │       pollinators, hardiness range, description). Tile drag still places onto the grid.
+  ├── 3D Render (rotatable Three.js, drag from catalog to place)
   └── Save button
 ```
 
 ## Key Business Logic
 
 - Grid is always measured in square feet. Preset sizes: 4x4, 4x8, 8x8. Custom allows any width×height.
-- Drag and drop: pick plant from catalog sidebar, drop onto grid cell. Multiple plants can't occupy same cell.
+- Catalog filtering uses one search input + a single horizontally-scrolling chip row (replaces the legacy 3 stacked dropdowns). Chips combine AND across categories, OR within a category. The `Native` chip additionally restricts to plants whose `usda_zones` range covers the garden's `usda_zone` (when set).
+- Drag and drop: pick plant from catalog sidebar, drop onto grid cell. Multiple plants can't occupy same cell. Click (movement < 5px AND mouseup within 300ms) opens the Plant Detail Panel instead of starting a drag.
 - Side view: renders plants as vertical bars proportional to their height_inches.
 - Garden save: sends full grid state (all plant placements) to the API in one PUT.
 - Plant catalog is loaded from DB once on page load and cached in JS state.
@@ -99,4 +101,5 @@ Garden Builder View
 ## Active Development Notes
 
 - 2026-03-17 — Project scaffolded. Building web prototype + backend.
+- 2026-05-08 — Iteration 1 (agentic): compressed catalog + rich plant knowledge — see ITERATIONS.md. Added `bloom_months`, `native`, `usda_zones`, `pollinator_attracts`, `water_need`, `care_summary` to `plantplanner_plants`; added `usda_zone` to `plantplanner_gardens`. Catalog sidebar header switched from 3 stacked dropdowns to one search input + horizontally-scrolling chip row. Plant tiles now show a native badge + pollinator icons. Tile click opens a slide-in Plant Detail Panel. Garden header gets a USDA-zone chip → picker, persisted via PUT /gardens/{id}.
 - 2026-05-08 — Switched auth from custom bcrypt + JWT to Supabase Auth (Google + Apple OAuth + email/password). Migration `db/migrations/plantplanner/003_supabase_auth.sql` drops `plantplanner_users` and recreates `plantplanner_gardens` / `plantplanner_garden_plants` keyed off `plantplanner_profiles(id) = auth.users.id`. Backend uses shared `jwt_auth.get_current_supabase_user`; profile rows are auto-created on first sign-in. `PLANTPLANNER_JWT_SECRET` env var is no longer used. **One-time setup before deploying:** enable Google + Apple providers in Supabase dashboard, add `https://vibelab-plant-planner.vercel.app` + `/**` to Authentication → URL Configuration → Redirect URLs, run the 003 migration in SQL Editor.
