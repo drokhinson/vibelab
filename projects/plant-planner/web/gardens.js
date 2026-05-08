@@ -1,14 +1,13 @@
-// gardens.js — My Gardens list view + 6-step New-Garden wizard.
+// gardens.js — My Gardens list view + 5-step New-Garden wizard.
 //
 // Wizard flow:
-//   1. Planter type    — indoor | outdoor | garden_bed | raised_bed | greenhouse
-//   2. Size + name     — width × height (ft) for outdoor; pot inches for indoor
-//   3. Light           — full_sun | partial | shade
-//   4. Location → zone — geolocation + ZIP fallback (skipped for indoor/greenhouse)
-//   5. Water plan      — regular | occasional | rain_only
-//   6. Review          — read-only summary, live match-count, Edit links, Confirm
+//   1. Type + size     — pick a planter type, then resize with a live mini 3D preview
+//   2. Light           — full_sun | partial | shade
+//   3. Location → zone — geolocation + ZIP fallback (skipped for indoor/greenhouse)
+//   4. Water plan      — regular | occasional | rain_only
+//   5. Review          — editable Name (auto-prefilled "<type> #<n>"), summary, Confirm
 //
-// Nothing is written to the DB until step 6's Confirm. wizardDraft holds the
+// Nothing is written to the DB until step 5's Confirm. wizardDraft holds the
 // in-flight values; cancel discards them.
 
 // ── My Gardens list ─────────────────────────────────────────────────────────
@@ -130,12 +129,29 @@ function sizeLabelFor(g) {
 
 // ── Wizard entry / dispatch ─────────────────────────────────────────────────
 
+// Default name: "<Planter type> #<n>" where n is one more than the count of
+// existing gardens of the same type. Falls back to "<Planter type> #1" if
+// `gardens` hasn't loaded yet (cold start).
+function _autoGardenName(gardenType) {
+  var label = plantertypeLabel(gardenType);
+  var n = 1;
+  if (Array.isArray(gardens)) {
+    for (var i = 0; i < gardens.length; i++) {
+      if (gardens[i] && gardens[i].garden_type === gardenType) n += 1;
+    }
+  }
+  return label + ' #' + n;
+}
+
 function startGardenWizard() {
   // Defaults — pulled from the user's most recent garden where reasonable.
   var prev = (gardens && gardens[0]) || null;
+  var initialType = prev ? prev.garden_type : 'garden_bed';
   wizardDraft = {
-    name: 'My Garden',
-    garden_type: prev ? prev.garden_type : 'garden_bed',
+    // Name is auto-generated until the user types something custom on review.
+    name: _autoGardenName(initialType),
+    name_was_auto: true,
+    garden_type: initialType,
     grid_width:  prev && prev.garden_type !== 'indoor' ? prev.grid_width  : 4,
     grid_height: prev && prev.garden_type !== 'indoor' ? prev.grid_height : 4,
     shade_level: prev ? (prev.shade_level || 'full_sun') : 'full_sun',
@@ -151,17 +167,18 @@ function startGardenWizard() {
 
 function renderGardenWizard() {
   if (!wizardDraft) { showView('gardens'); return; }
-  if      (wizardStep === 1) renderWizardStepType();
-  else if (wizardStep === 2) renderWizardStepSize();
-  else if (wizardStep === 3) renderWizardStepLight();
-  else if (wizardStep === 4) renderWizardStepLocation();
-  else if (wizardStep === 5) renderWizardStepWater();
+  // Tear down any previous mini-preview when leaving the type+size step.
+  if (wizardStep !== 1) _disposeWizardPreview();
+  if      (wizardStep === 1) renderWizardStepTypeSize();
+  else if (wizardStep === 2) renderWizardStepLight();
+  else if (wizardStep === 3) renderWizardStepLocation();
+  else if (wizardStep === 4) renderWizardStepWater();
   else                       renderWizardStepReview();
 }
 
 // Indoor and greenhouse planters skip the Location step (climate-controlled).
 function _wizardStepsTotal() {
-  return _wizardSkipsLocation() ? 5 : 6;
+  return _wizardSkipsLocation() ? 4 : 5;
 }
 function _wizardSkipsLocation() {
   return wizardDraft && (wizardDraft.garden_type === 'indoor' || wizardDraft.garden_type === 'greenhouse');
@@ -171,7 +188,7 @@ function _wizardStepLabel() {
   // Compute "Step N of M" label, accounting for the skipped Location step.
   var total = _wizardStepsTotal();
   var displayed = wizardStep;
-  if (_wizardSkipsLocation() && wizardStep > 4) displayed = wizardStep - 1;
+  if (_wizardSkipsLocation() && wizardStep > 3) displayed = wizardStep - 1;
   return 'Step ' + displayed + ' of ' + total;
 }
 
@@ -193,7 +210,7 @@ function _wizardHeader(title, subtitle) {
 function _wizardProgressDots() {
   var total = _wizardStepsTotal();
   var displayed = wizardStep;
-  if (_wizardSkipsLocation() && wizardStep > 4) displayed = wizardStep - 1;
+  if (_wizardSkipsLocation() && wizardStep > 3) displayed = wizardStep - 1;
   var html = '';
   for (var i = 1; i <= total; i++) {
     var cls = 'wizard-dot' + (i < displayed ? ' done' : (i === displayed ? ' active' : ''));
@@ -221,6 +238,7 @@ function _wizardBindCommon() {
   var cancelBtn = document.getElementById('wizard-cancel');
   if (cancelBtn) cancelBtn.onclick = function() {
     if (confirm('Discard this new garden?')) {
+      _disposeWizardPreview();
       wizardDraft = null;
       wizardStep = 1;
       wizardEditReturnTo = null;
@@ -232,11 +250,11 @@ function _wizardBindCommon() {
     if (wizardEditReturnTo) {
       // Editing from review — Back returns to review without saving the change.
       wizardEditReturnTo = null;
-      wizardStep = _wizardSkipsLocation() ? 5 : 6;
+      wizardStep = _wizardSkipsLocation() ? 4 : 5;
     } else {
       wizardStep = Math.max(1, wizardStep - 1);
       // Re-skip Location when stepping back into it.
-      if (wizardStep === 4 && _wizardSkipsLocation()) wizardStep = 3;
+      if (wizardStep === 3 && _wizardSkipsLocation()) wizardStep = 2;
     }
     renderGardenWizard();
     _initIcons();
@@ -247,16 +265,16 @@ function _wizardAdvance() {
   if (wizardEditReturnTo) {
     // Returning to review after an edit.
     wizardEditReturnTo = null;
-    wizardStep = _wizardSkipsLocation() ? 5 : 6;
+    wizardStep = _wizardSkipsLocation() ? 4 : 5;
   } else {
     wizardStep += 1;
-    if (wizardStep === 4 && _wizardSkipsLocation()) wizardStep = 5;
+    if (wizardStep === 3 && _wizardSkipsLocation()) wizardStep = 4;
   }
   renderGardenWizard();
   _initIcons();
 }
 
-// ── Step 1: Planter type ────────────────────────────────────────────────────
+// ── Step 1: Planter type + size + live preview ──────────────────────────────
 
 var PLANTER_TYPE_OPTIONS = [
   { id: 'garden_bed', label: 'Garden bed',     icon: '🌱', desc: 'In-ground bed; outdoor; uses your local hardiness zone.' },
@@ -266,9 +284,49 @@ var PLANTER_TYPE_OPTIONS = [
   { id: 'greenhouse', label: 'Greenhouse',     icon: '🏠', desc: 'Climate-controlled; no zone needed.' }
 ];
 
-function renderWizardStepType() {
+// Mini-preview state: a Three.js handle reused on each rebuild + a debounce id.
+var _wizardPreviewHandle = null;
+var _wizardPreviewRebuildId = null;
+
+function _disposeWizardPreview() {
+  if (_wizardPreviewHandle && typeof dispose3DView === 'function') {
+    try { dispose3DView(_wizardPreviewHandle); } catch (_) {}
+  }
+  _wizardPreviewHandle = null;
+  if (_wizardPreviewRebuildId) {
+    clearTimeout(_wizardPreviewRebuildId);
+    _wizardPreviewRebuildId = null;
+  }
+}
+
+function _rebuildWizardPreview() {
+  // Tear down → re-init. Debounced so dragging a number input doesn't thrash.
+  if (_wizardPreviewRebuildId) clearTimeout(_wizardPreviewRebuildId);
+  _wizardPreviewRebuildId = setTimeout(function() {
+    _wizardPreviewRebuildId = null;
+    var container = document.getElementById('wz-preview');
+    if (!container) return;
+    if (_wizardPreviewHandle && typeof dispose3DView === 'function') {
+      try { dispose3DView(_wizardPreviewHandle); } catch (_) {}
+      _wizardPreviewHandle = null;
+    }
+    var fakeGarden = {
+      grid_width:  wizardDraft.grid_width  || 4,
+      grid_height: wizardDraft.grid_height || 4,
+      garden_type: wizardDraft.garden_type
+    };
+    if (typeof init3DView === 'function') {
+      _wizardPreviewHandle = init3DView('wz-preview', fakeGarden, []);
+    }
+  }, 120);
+}
+
+function renderWizardStepTypeSize() {
+  var prevType = wizardDraft.garden_type;
   var html = '<div class="wizard-page">';
-  html += _wizardHeader('What kind of planter?', 'This shapes the rest of the questions.');
+  html += _wizardHeader('What kind of planter — and how big?', 'Pick a planter type, then size it. The 3D preview updates live.');
+
+  // Type cards
   html += '<div class="wizard-options">';
   for (var i = 0; i < PLANTER_TYPE_OPTIONS.length; i++) {
     var o = PLANTER_TYPE_OPTIONS[i];
@@ -283,52 +341,68 @@ function renderWizardStepType() {
       + '</button>';
   }
   html += '</div>';
+
+  // Size + preview row (revealed once a type is picked).
+  if (wizardDraft.garden_type) {
+    html += '<div class="wizard-size-block">';
+    html +=   '<div class="wizard-size-controls">';
+    html +=     '<div class="wizard-field-label">' + (wizardDraft.garden_type === 'indoor' ? 'Pot dimensions (in)' : 'Bed dimensions (ft)') + '</div>';
+    html +=     _renderSizeControls();
+    html +=   '</div>';
+    html +=   '<div class="wizard-preview-wrap">';
+    html +=     '<div class="wizard-preview-label">Live preview</div>';
+    html +=     '<div id="wz-preview" class="wizard-preview-canvas"></div>';
+    html +=     '<div id="wz-preview-cap" class="wizard-preview-caption">' + escapeHtml(sizeLabelFor(wizardDraft)) + '</div>';
+    html +=   '</div>';
+    html += '</div>';
+  }
+
   html += _wizardFooter({ nextDisabled: !wizardDraft.garden_type });
   html += '</div>';
   app.innerHTML = html;
 
+  // Type clicks. We do a soft re-render of just the size block + preview so
+  // we don't lose focus/scroll position; on first pick (prevType==null) we
+  // fall back to a full re-render to reveal the size block.
   document.querySelectorAll('.wizard-option').forEach(function(btn) {
     btn.onclick = function() {
-      var prevType = wizardDraft.garden_type;
       var newType = btn.dataset.type;
+      var wasType = wizardDraft.garden_type;
       wizardDraft.garden_type = newType;
-      // Switching to/from indoor changes the size unit; reset to a sensible default.
-      if (prevType !== newType) {
+      // Switching to/from indoor changes the size unit; reset to a sane default.
+      if (wasType !== newType) {
         if (newType === 'indoor') {
-          wizardDraft.grid_width  = 12;  // 12-inch pot diameter
-          wizardDraft.grid_height = 10;  // 10-inch depth
-        } else if (prevType === 'indoor') {
+          wizardDraft.grid_width  = 12;
+          wizardDraft.grid_height = 10;
+        } else if (wasType === 'indoor') {
           wizardDraft.grid_width  = 4;
           wizardDraft.grid_height = 4;
         }
+        // Auto-name follows the type unless the user has typed something custom.
+        if (wizardDraft.name_was_auto) {
+          wizardDraft.name = _autoGardenName(newType);
+        }
       }
-      renderGardenWizard();
+      // Re-render this step in place. (Cheaper than the dispatcher.)
+      renderWizardStepTypeSize();
       _initIcons();
     };
   });
+
   _wizardBindCommon();
   document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
+  _bindSizeControls();
+
+  // Build / rebuild the live mini-preview, but only after the type is chosen.
+  if (wizardDraft.garden_type) _rebuildWizardPreview();
+
   _initIcons();
 }
 
-// ── Step 2: Size + name ─────────────────────────────────────────────────────
-
-function renderWizardStepSize() {
+// Markup for the size controls — same widget as before, minus the name field.
+function _renderSizeControls() {
   var isIndoor = wizardDraft.garden_type === 'indoor';
-  var subtitle = isIndoor
-    ? 'Tell us the pot size in inches.'
-    : 'Pick a preset or enter custom dimensions in feet.';
-
-  var html = '<div class="wizard-page">';
-  html += _wizardHeader('Size & name', subtitle);
-
-  html += '<div class="wizard-form">';
-  // Name
-  html += '<label class="wizard-field">'
-       +   '<span class="wizard-field-label">Name</span>'
-       +   '<input id="wz-name" type="text" class="input input-bordered input-sm" value="' + escapeHtml(wizardDraft.name) + '" />'
-       + '</label>';
-
+  var html = '';
   if (isIndoor) {
     html += '<div class="wizard-field-row">'
          +   '<label class="wizard-field flex-1">'
@@ -342,9 +416,9 @@ function renderWizardStepSize() {
          + '</div>';
   } else {
     var presets = [
-      { v: '4x4',   label: '4×4 ft' },
-      { v: '4x8',   label: '4×8 ft' },
-      { v: '8x8',   label: '8×8 ft' },
+      { v: '4x4',    label: '4×4 ft' },
+      { v: '4x8',    label: '4×8 ft' },
+      { v: '8x8',    label: '8×8 ft' },
       { v: 'custom', label: 'Custom' }
     ];
     var current = wizardDraft.grid_width + 'x' + wizardDraft.grid_height;
@@ -366,49 +440,57 @@ function renderWizardStepSize() {
          +   '</label>'
          + '</div>';
   }
-  html += '</div>';
+  return html;
+}
 
-  html += _wizardFooter({});
-  html += '</div>';
-  app.innerHTML = html;
-
-  // Wire inputs into the draft on change.
-  document.getElementById('wz-name').oninput = function(e) {
-    wizardDraft.name = e.target.value;
-  };
-
-  if (isIndoor) {
-    document.getElementById('wz-diam').oninput = function(e) {
-      wizardDraft.grid_width = Math.max(1, parseInt(e.target.value) || 12);
-    };
-    document.getElementById('wz-depth').oninput = function(e) {
-      wizardDraft.grid_height = Math.max(1, parseInt(e.target.value) || 10);
-    };
-  } else {
-    document.querySelectorAll('.wizard-preset').forEach(function(btn) {
-      btn.onclick = function() {
-        var v = btn.dataset.preset;
-        document.querySelectorAll('.wizard-preset').forEach(function(b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        if (v === 'custom') {
-          document.getElementById('wz-custom').style.display = '';
-        } else {
-          document.getElementById('wz-custom').style.display = 'none';
-          var p = v.split('x');
-          wizardDraft.grid_width  = parseInt(p[0]);
-          wizardDraft.grid_height = parseInt(p[1]);
-        }
-      };
-    });
-    var w = document.getElementById('wz-w');
-    var h = document.getElementById('wz-h');
-    if (w) w.oninput = function(e) { wizardDraft.grid_width  = Math.max(1, parseInt(e.target.value) || 4); };
-    if (h) h.oninput = function(e) { wizardDraft.grid_height = Math.max(1, parseInt(e.target.value) || 4); };
+function _bindSizeControls() {
+  function afterChange() {
+    var cap = document.getElementById('wz-preview-cap');
+    if (cap) cap.textContent = sizeLabelFor(wizardDraft);
+    _rebuildWizardPreview();
   }
-
-  _wizardBindCommon();
-  document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
-  _initIcons();
+  var diam = document.getElementById('wz-diam');
+  if (diam) diam.oninput = function(e) {
+    wizardDraft.grid_width = Math.max(1, parseInt(e.target.value) || 12);
+    afterChange();
+  };
+  var depth = document.getElementById('wz-depth');
+  if (depth) depth.oninput = function(e) {
+    wizardDraft.grid_height = Math.max(1, parseInt(e.target.value) || 10);
+    afterChange();
+  };
+  document.querySelectorAll('.wizard-preset').forEach(function(btn) {
+    btn.onclick = function() {
+      var v = btn.dataset.preset;
+      document.querySelectorAll('.wizard-preset').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      var customRow = document.getElementById('wz-custom');
+      if (v === 'custom') {
+        if (customRow) customRow.style.display = '';
+      } else {
+        if (customRow) customRow.style.display = 'none';
+        var p = v.split('x');
+        wizardDraft.grid_width  = parseInt(p[0]);
+        wizardDraft.grid_height = parseInt(p[1]);
+        // Sync the custom inputs so toggling back to Custom shows the preset.
+        var w = document.getElementById('wz-w');
+        var h = document.getElementById('wz-h');
+        if (w) w.value = wizardDraft.grid_width;
+        if (h) h.value = wizardDraft.grid_height;
+        afterChange();
+      }
+    };
+  });
+  var w = document.getElementById('wz-w');
+  var h = document.getElementById('wz-h');
+  if (w) w.oninput = function(e) {
+    wizardDraft.grid_width  = Math.max(1, parseInt(e.target.value) || 4);
+    afterChange();
+  };
+  if (h) h.oninput = function(e) {
+    wizardDraft.grid_height = Math.max(1, parseInt(e.target.value) || 4);
+    afterChange();
+  };
 }
 
 // ── Step 3: Light ───────────────────────────────────────────────────────────
@@ -562,7 +644,7 @@ function renderWizardStepWater() {
   _initIcons();
 }
 
-// ── Step 6: Review & confirm ────────────────────────────────────────────────
+// ── Step 5: Review & confirm ────────────────────────────────────────────────
 
 function _matchCount(draft) {
   // How many plants in the catalog match this planter? Used as a sanity preview.
@@ -587,22 +669,33 @@ function renderWizardStepReview() {
     ? '<div class="wizard-match-pill"><strong>' + counts.match + '</strong> of ' + counts.total + ' plants are a great fit for this planter.</div>'
     : '';
 
+  // Edit jumps target the new step numbers: type+size = 1, light = 2,
+  // location = 3, water = 4. Name lives on the review page itself.
   var rows = [
     { step: 1, label: 'Planter type', value: plantertypeIcon(d.garden_type) + ' ' + plantertypeLabel(d.garden_type) },
-    { step: 2, label: 'Name',         value: d.name },
-    { step: 2, label: 'Size',         value: sizeLabelFor(d) },
-    { step: 3, label: 'Light',        value: sunlightIcon(d.shade_level) + ' ' + sunlightLabel(d.shade_level) },
+    { step: 1, label: 'Size',         value: sizeLabelFor(d) },
+    { step: 2, label: 'Light',        value: sunlightIcon(d.shade_level) + ' ' + sunlightLabel(d.shade_level) }
   ];
   if (!_wizardSkipsLocation()) {
-    rows.push({ step: 4, label: 'Location', value: '📍 ' + (d.location_label || ('Zone ' + d.usda_zone)) });
+    rows.push({ step: 3, label: 'Location', value: '📍 ' + (d.location_label || ('Zone ' + d.usda_zone)) });
   } else {
-    rows.push({ step: 4, label: 'Location', value: 'Not needed (climate-controlled)', noEdit: true });
+    rows.push({ step: 3, label: 'Location', value: 'Not needed (climate-controlled)', noEdit: true });
   }
-  rows.push({ step: 5, label: 'Watering', value: '💧 ' + waterPlanLabel(d.water_plan) });
+  rows.push({ step: 4, label: 'Watering', value: '💧 ' + waterPlanLabel(d.water_plan) });
 
   var html = '<div class="wizard-page">';
-  html += _wizardHeader('Review your planter', 'Double-check the details. Nothing is saved until you confirm.');
+  html += _wizardHeader('Review your planter', 'Name your garden, then confirm. Nothing is saved until you do.');
   html += matchHtml;
+
+  // Editable name field — prefilled with "<Type> #<n>"; manual edits persist.
+  html += '<div class="wizard-review-name">'
+       +   '<label class="wizard-field">'
+       +     '<span class="wizard-field-label">Garden name</span>'
+       +     '<input id="wz-name" type="text" class="input input-bordered input-sm" '
+       +       'value="' + escapeHtml(d.name) + '" placeholder="' + escapeHtml(_autoGardenName(d.garden_type)) + '" />'
+       +   '</label>'
+       + '</div>';
+
   html += '<div class="wizard-review">';
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
@@ -622,6 +715,18 @@ function renderWizardStepReview() {
   html += '</div>';
   app.innerHTML = html;
 
+  // Name field — once the user types, stop auto-updating from the type.
+  var nameEl = document.getElementById('wz-name');
+  if (nameEl) {
+    nameEl.oninput = function(e) {
+      var v = e.target.value;
+      wizardDraft.name = v;
+      // Treat an empty field as "still auto" so it re-syncs if they later
+      // change planter type, and so submit falls back to the placeholder.
+      wizardDraft.name_was_auto = (v.trim().length === 0);
+    };
+  }
+
   // Edit links jump back to the relevant step, then return to review on Next.
   document.querySelectorAll('.wizard-review-edit').forEach(function(btn) {
     btn.onclick = function() {
@@ -634,6 +739,7 @@ function renderWizardStepReview() {
 
   document.getElementById('wizard-cancel').onclick = function() {
     if (confirm('Discard this new garden?')) {
+      _disposeWizardPreview();
       wizardDraft = null;
       wizardStep = 1;
       wizardEditReturnTo = null;
@@ -641,7 +747,7 @@ function renderWizardStepReview() {
     }
   };
   document.getElementById('wizard-back-to-water').onclick = function() {
-    wizardStep = 5;
+    wizardStep = 4;
     renderGardenWizard();
     _initIcons();
   };
@@ -658,8 +764,10 @@ async function submitGardenWizard() {
     btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Creating…';
   }
   try {
+    // Empty name → fall back to the auto-generated "<Type> #<n>" placeholder.
+    var resolvedName = (d.name && d.name.trim()) ? d.name.trim() : _autoGardenName(d.garden_type);
     var body = {
-      name: d.name || 'My Garden',
+      name: resolvedName,
       grid_width:  d.grid_width  || 4,
       grid_height: d.grid_height || 4,
       garden_type: d.garden_type,
@@ -670,7 +778,8 @@ async function submitGardenWizard() {
     if (d.usda_zone)      body.usda_zone      = d.usda_zone;
     if (d.location_label) body.location_label = d.location_label;
     var created = await apiFetch('/gardens', { method: 'POST', body: body });
-    wizardDraft = null;
+    _disposeWizardPreview();
+      wizardDraft = null;
     wizardStep = 1;
     wizardEditReturnTo = null;
     if (created && created.id) {
