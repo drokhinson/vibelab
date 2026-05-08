@@ -116,9 +116,9 @@ Wildflower unmet: SATISFIED. Last remaining need (multi-year growth preview) ful
 Food unmet: height-aware shading/occlusion (LAST remaining need — queued for iter 6, the cap iteration).
 Notes: Chose lifecycle + years_to_maturity (option C from the design) over per-year explicit columns — cleaner data model with sensible defaults and a deterministic curve. Preview is intentionally view-only so users can scrub years without affecting placement validation or saved state. Annuals stay full-size every year (would look broken otherwise). Tooltip on the scrubber clarifies "Preview only — placement is saved at mature size."
 
-## Iteration 6 — Height-Aware Shading Warnings — pending
+## Iteration 6 — Height-Aware Shading Warnings — 8c44ad0
 Persona ratings (pre): hobby=5/5 (satisfied), wildflower=5/5 (satisfied), food=4/5
-Persona ratings (post): pending — Phase G re-poll
+Persona ratings (post): hobby=5/5, wildflower=5/5, food=5/5  **— CONVERGED**
 Shipped:
   - New `projects/plant-planner/web/shading.js` (no schema, no backend changes — `height_inches` and `sunlight` already existed since iter 0).
   - Coordinate convention frozen: **+y = north** (northern hemisphere default). Solar-noon shadows extend in the −y / south direction.
@@ -129,7 +129,7 @@ Shipped:
   - Popover row: thumbnail + name + orange "Shaded" pill + reason text quoting `height_inches` of the shading plant; per-pair "It's fine, dismiss" stored as `shade:<shadedId>:<shadingId>` in `dismissedCompanionWarnings`. Reuses `canonicalPairKey` and `_isDismissed` plumbing from iter 2/3 unchanged.
   - Year-aware: shrinks with the year scrubber automatically (heights × `yearScale`).
   - Sunlight-aware: only `full_sun` plants get warned. Hosta/Coral Bells/Wild Columbine (partial-sun natives) shaded by tall neighbors → no chip. Wildflower 5/5 preserved.
-Hobby unmet: pending re-poll. Default behavior preserved at Y3+; chip only fires for `full_sun` conflicts; ground shadows are subtle.
-Wildflower unmet: pending re-poll. Sunlight-aware filter means no new noise for partial/shade-loving wildflowers.
-Food unmet: pending re-poll. This was the LAST food unmet need — should converge to 5/5.
+Hobby unmet: SATISFIED. Ground shadows subtle, no new sidebar controls.
+Wildflower unmet: SATISFIED. Partial/shade-loving natives (Wild Columbine, Cardinal Flower, Coral Bells, Hosta) explicitly NOT warned because they have `sunlight='partial'|'shade'`.
+Food unmet: SATISFIED. Full-sun veggies (tomato, pepper, zucchini, strawberry, blueberry, carrot, bush bean) WILL get shade warnings when overhead by a tall neighbor; lettuce/kale (partial) correctly skipped per horticulture.
 Notes: Cap iteration. The shading model is single-shadow (solar noon, mid-latitude, +y=north); intentionally no time-of-day animation, no hemisphere toggle, no per-month seasonality. The shadow disk is informational (shown unconditionally for tall plants) while the chip is conditional (only on shading-vs-sunlight conflict). The shared chip/popover infrastructure from iter 2 has now absorbed three warning sources (companion + crowd + shade) under one precedence rule with one popover.
