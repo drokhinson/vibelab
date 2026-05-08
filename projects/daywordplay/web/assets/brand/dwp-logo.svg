@@ -1,4 +1,4 @@
-<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <rect width="64" height="64" rx="14" fill="#F0EDE8"/>
   <!-- Bottom tile (D) — drawn first, visually behind -->
   <rect x="10" y="36" width="22" height="22" rx="3" fill="#FFFFFF" stroke="#4A7C7C" stroke-width="2"/>
