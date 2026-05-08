@@ -11,14 +11,16 @@ function renderBuilder() {
   html += '<span class="builder-size">' + escapeHtml(sizeLabelFor(g)) + '</span>';
   html += '</div>';
   html += '<div class="builder-actions">';
-  html +=   '<details class="dropdown dropdown-end builder-kebab">';
-  html +=     '<summary class="btn btn-ghost btn-sm btn-circle" aria-label="Garden options"><i data-lucide="more-vertical" style="width:1.1em;height:1.1em"></i></summary>';
-  html +=     '<ul class="menu dropdown-content rounded-box bg-base-100 shadow-lg z-50 w-52 p-2 mt-1">';
+  html +=   '<div class="dropdown dropdown-end builder-kebab">';
+  html +=     '<button type="button" tabindex="0" class="btn btn-ghost btn-sm btn-circle" aria-label="Garden options" id="builder-kebab-trigger">';
+  html +=       '<i data-lucide="more-vertical" style="width:1.1em;height:1.1em"></i>';
+  html +=     '</button>';
+  html +=     '<ul tabindex="0" class="menu dropdown-content rounded-box bg-base-100 shadow-lg w-52 p-2 mt-1">';
   html +=       '<li><a id="kebab-save"><i data-lucide="save" style="width:1em;height:1em"></i> Save garden</a></li>';
   html +=       '<li><a id="kebab-reseed"><i data-lucide="refresh-cw" style="width:1em;height:1em"></i> Reseed</a></li>';
   html +=       '<li><a id="kebab-edit-zone"><i data-lucide="map-pin" style="width:1em;height:1em"></i> Change zone</a></li>';
   html +=     '</ul>';
-  html +=   '</details>';
+  html +=   '</div>';
   html += '</div>';
   html += '</div>';
 
@@ -196,9 +198,12 @@ function hideTooltip() {
 }
 
 function bindBuilderButtons() {
+  // DaisyUI div-based dropdown: closing means blurring the focused trigger.
   function closeKebab() {
     var kebab = document.querySelector('.builder-kebab');
-    if (kebab) kebab.removeAttribute('open');
+    if (!kebab) return;
+    var active = document.activeElement;
+    if (active && kebab.contains(active)) active.blur();
   }
 
   var saveItem = document.getElementById('kebab-save');

@@ -53,15 +53,10 @@ function updateNav() {
   if (session && currentUser) {
     navRight.innerHTML =
       '<button class="btn btn-ghost btn-sm gap-1" id="nav-gardens"><i data-lucide="layout-grid" style="width:1em;height:1em"></i> My Gardens</button>' +
-      '<button class="btn btn-ghost btn-sm gap-1" id="nav-logout"><i data-lucide="log-out" style="width:1em;height:1em"></i> Logout</button>' +
       '<button class="btn btn-ghost btn-sm btn-circle" id="nav-settings" title="Settings"><i data-lucide="settings" style="width:1.1em;height:1.1em"></i></button>';
     document.getElementById("nav-gardens").onclick = function(e) {
       e.preventDefault();
       showView("gardens");
-    };
-    document.getElementById("nav-logout").onclick = function(e) {
-      e.preventDefault();
-      logout();
     };
   } else {
     navRight.innerHTML =
@@ -98,6 +93,16 @@ function showThemeSettings() {
       '</label>';
   }).join("");
 
+  var showAccount = !!(session && currentUser);
+  var accountHtml = showAccount
+    ? '<fieldset class="space-y-2 mt-3 settings-account">' +
+        '<legend class="text-sm font-medium mb-2">Account</legend>' +
+        '<button type="button" id="settings-logout" class="btn btn-sm btn-outline btn-error w-full gap-1">' +
+          '<i data-lucide="log-out" style="width:1em;height:1em"></i> Log out' +
+        '</button>' +
+      '</fieldset>'
+    : '';
+
   dialog.innerHTML =
     '<div class="dialog-body">' +
       '<div class="dialog-header"><i data-lucide="settings"></i> Settings</div>' +
@@ -109,6 +114,7 @@ function showThemeSettings() {
         '<legend class="text-sm font-medium mb-2">Draw Style</legend>' +
         styleHtml +
       '</fieldset>' +
+      accountHtml +
       '<div class="mt-4"><button id="settings-close" class="btn btn-sm btn-primary w-full">Close</button></div>' +
     '</div>';
 
@@ -140,6 +146,12 @@ function showThemeSettings() {
       }
     };
   });
+  var logoutBtn = document.getElementById("settings-logout");
+  if (logoutBtn) logoutBtn.onclick = function() {
+    dialog.close();
+    dialog.remove();
+    logout();
+  };
   document.getElementById("settings-close").onclick = function() {
     dialog.close();
     dialog.remove();

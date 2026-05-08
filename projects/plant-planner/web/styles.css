@@ -120,14 +120,15 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   gap: 0.4rem;
   flex-shrink: 0;
 }
-.builder-kebab > summary {
-  list-style: none;
-  cursor: pointer;
-}
-.builder-kebab > summary::-webkit-details-marker { display: none; }
 .builder-kebab .menu li > a {
   cursor: pointer;
   font-size: 0.85rem;
+}
+/* Pin the menu so it sits below the trigger; DaisyUI handles visibility on focus-within. */
+.builder-kebab .dropdown-content {
+  right: 0;
+  top: 100%;
+  z-index: 50;
 }
 
 /* Conditions strip (row 2 of the toolbar) */
@@ -256,7 +257,19 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 0.4rem;
+  /* Reserve space so an empty grid still gets a visible mount point. */
+  min-height: 80px;
 }
+.catalog-empty-banner {
+  padding: 1rem 0.85rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+  background: oklch(var(--p) / 0.08);
+  border: 1px dashed oklch(var(--p) / 0.3);
+  border-radius: 12px;
+  font-size: 0.85rem;
+}
+.catalog-empty-banner p { margin: 0; }
 .catalog-tile {
   display: flex;
   flex-direction: column;
@@ -1403,3 +1416,124 @@ dialog .dialog-header {
   font-weight: 600;
   font-size: 1rem;
 }
+
+/* ─────────────────────────────────────────────────────────────────────── */
+/* Round-2 additions                                                       */
+/* ─────────────────────────────────────────────────────────────────────── */
+
+/* Wizard note (e.g. "Rain isn't an option for indoor planters") */
+.wizard-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: oklch(var(--bc) / 0.6);
+  font-style: italic;
+}
+
+/* Settings dialog account fieldset */
+.settings-account legend { color: oklch(var(--er) / 0.85); }
+.settings-account .btn-error.btn-outline {
+  color: oklch(var(--er));
+  border-color: oklch(var(--er) / 0.4);
+}
+
+/* Zone picker — US tile-grid map + descriptive list */
+.pp-us-map {
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  grid-template-columns: repeat(14, 1fr);
+  gap: 3px;
+  margin-top: 0.6rem;
+  padding: 0.4rem;
+  background: oklch(var(--b2));
+  border-radius: 10px;
+}
+.pp-state {
+  aspect-ratio: 1;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.95);
+  text-shadow: 0 1px 1px rgba(0,0,0,0.35);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s, border-color 0.1s;
+  padding: 0;
+  font-family: inherit;
+}
+.pp-state:hover {
+  transform: translateY(-1px) scale(1.06);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  border-color: rgba(0,0,0,0.4);
+}
+.pp-state.selected {
+  outline: 3px solid oklch(var(--p));
+  outline-offset: 1px;
+  transform: scale(1.1);
+  z-index: 1;
+}
+
+.pp-zone-callout {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  margin-top: 0.6rem;
+  background: oklch(var(--b1));
+  border: 1px solid var(--pp-warm-border);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+.pp-zone-callout.show { display: flex; }
+.pp-zone-callout strong { font-weight: 600; }
+
+.pp-zone-confirm-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.6rem;
+}
+
+.pp-zone-list-details { margin-top: 1rem; }
+.pp-zone-list-summary {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: oklch(var(--bc) / 0.7);
+  cursor: pointer;
+  padding: 0.3rem 0;
+}
+.pp-zone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.4rem;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--pp-warm-border);
+  border-radius: 8px;
+  padding: 0.3rem;
+}
+.pp-zone-row {
+  display: grid;
+  grid-template-columns: 18px 60px 88px 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.78rem;
+  color: oklch(var(--bc));
+  text-align: left;
+}
+.pp-zone-row:hover { background: oklch(var(--p) / 0.08); }
+.pp-zone-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+.pp-zone-row-code  { font-weight: 600; }
+.pp-zone-row-temp  { color: oklch(var(--bc) / 0.65); }
+.pp-zone-row-label { color: oklch(var(--bc) / 0.7); }

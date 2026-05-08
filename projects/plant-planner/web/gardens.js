@@ -510,12 +510,28 @@ var WATER_OPTIONS = [
   { id: 'rain_only',  label: 'Rain only',          icon: '☔',     desc: 'No supplemental watering; only low-water plants survive.' }
 ];
 
+// Indoor planters and greenhouses are sheltered — rain isn't a real option.
+function _wizardWaterOptions() {
+  if (wizardDraft && (wizardDraft.garden_type === 'indoor' || wizardDraft.garden_type === 'greenhouse')) {
+    return WATER_OPTIONS.filter(function(o) { return o.id !== 'rain_only'; });
+  }
+  return WATER_OPTIONS;
+}
+
 function renderWizardStepWater() {
+  // If the user came back to this step after switching to indoor/greenhouse,
+  // a previously-selected 'rain_only' is no longer valid — reset.
+  var isSheltered = wizardDraft.garden_type === 'indoor' || wizardDraft.garden_type === 'greenhouse';
+  if (isSheltered && wizardDraft.water_plan === 'rain_only') {
+    wizardDraft.water_plan = 'regular';
+  }
+  var visibleOptions = _wizardWaterOptions();
+
   var html = '<div class="wizard-page">';
   html += _wizardHeader('How will you water it?', 'Plants are filtered to ones that thrive at this watering level.');
   html += '<div class="wizard-options">';
-  for (var i = 0; i < WATER_OPTIONS.length; i++) {
-    var o = WATER_OPTIONS[i];
+  for (var i = 0; i < visibleOptions.length; i++) {
+    var o = visibleOptions[i];
     var active = wizardDraft.water_plan === o.id ? ' active' : '';
     html += ''
       + '<button type="button" class="wizard-option' + active + '" data-water="' + o.id + '">'
@@ -527,6 +543,9 @@ function renderWizardStepWater() {
       + '</button>';
   }
   html += '</div>';
+  if (isSheltered) {
+    html += '<p class="wizard-note">Rain isn\'t an option — sheltered planters depend on you to water them.</p>';
+  }
   html += _wizardFooter({ nextLabel: wizardEditReturnTo ? 'Save & review' : 'Review' });
   html += '</div>';
   app.innerHTML = html;
