@@ -66,6 +66,24 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     return res.json();
   }
 
+  // Same plumbing as `call`, but returns the raw response body as text.
+  // Used by the export endpoints (which return `application/json` or
+  // `text/markdown` files via `Content-Disposition: attachment`) where the
+  // caller wants the bytes verbatim to write to disk + share, not parsed.
+  async function callText(path, opts = {}) {
+    const headers = { ...(opts.headers || {}) };
+    const token = await _getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const url = `${base}${PREFIX}${path}`;
+    const res = await _fetch(url, { ...opts, headers });
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status} ${res.statusText}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.text();
+  }
+
   return {
     // ── Public ────────────────────────────────────────────────────────────────
     health: () => call('/health'),
@@ -144,6 +162,14 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     },
 
     importRecipeFromUrl: (url) => call('/import', { method: 'POST', body: { url } }),
+
+    // ── Single-sauce export (public) ─────────────────────────────────────────
+    // Both return the raw response body as a string so the caller can write
+    // it to disk and hand it to the platform's share sheet. JSON returns the
+    // versioned single-sauce envelope; MD returns the human-readable
+    // markdown the backend renders via `_render_sauce_markdown`.
+    exportSauceJson: (id) => callText(`/sauces/${encodeURIComponent(id)}/export.json`),
+    exportSauceMd:   (id) => callText(`/sauces/${encodeURIComponent(id)}/export.md`),
 
     allSauces: async () => {
       const sauces = await call('/sauces');
