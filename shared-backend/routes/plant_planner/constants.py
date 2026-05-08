@@ -1,10 +1,6 @@
 """Shared constants for PlantPlanner API."""
 
-import os
 from enum import StrEnum
-
-JWT_SECRET = os.environ.get("PLANTPLANNER_JWT_SECRET", "dev-secret-change-me")
-JWT_ALGORITHM = "HS256"
 
 
 class GardenType(StrEnum):

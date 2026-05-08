@@ -1,11 +1,11 @@
 # PlantPlanner — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-03-17
+> Last updated: 2026-05-08
 
 ## What This App Does
 
-PlantPlanner is a virtual garden and planter box builder. Users create a bird's-eye grid (preset or custom sizes, each cell = 1 sq ft), then drag and drop plants from a catalog onto the grid to plan their garden layout. A side-view toggle shows plant heights as an elevation profile. A split-pane 3D render (Three.js with toon shading) shows the planter with plants in a rotatable Cubirds-style low-poly view, with toggleable render styles (Cubirds/Natural/Blueprint). Users can register accounts to save and load multiple garden designs. The plant catalog (~50 plants) is stored in the database with sunlight, height, bloom season, and 3D render parameter data.
+PlantPlanner is a virtual garden and planter box builder. Users create a bird's-eye grid (preset or custom sizes, each cell = 1 sq ft), then drag and drop plants from a catalog onto the grid to plan their garden layout. A side-view toggle shows plant heights as an elevation profile. A split-pane 3D render (Three.js with toon shading) shows the planter with plants in a rotatable Cubirds-style low-poly view, with toggleable render styles (Cubirds/Natural/Blueprint). Users sign in with Google, Apple, or email/password (Supabase Auth) to save and load multiple garden designs. The plant catalog (~50 plants) is stored in the database with sunlight, height, bloom season, and 3D render parameter data.
 
 ## Current Status
 - Stage: Prototype
@@ -20,7 +20,7 @@ PlantPlanner is a virtual garden and planter box builder. Users create a bird's-
 | Backend | Python FastAPI (shared service) | Routes at `/api/v1/plant_planner/...` |
 | Database | Supabase (shared project) | Tables prefixed `plantplanner_` |
 | Native app | React Native / Expo | Not started |
-| Auth | Shared auth.py (bcrypt + JWT) | Username/password registration |
+| Auth | Supabase Auth | Google + Apple OAuth + email/password; backend verifies JWT via shared `jwt_auth.py` |
 | Storage | Supabase Storage | Not used |
 
 ## Directory Layout
@@ -31,13 +31,14 @@ projects/plant-planner/
 │   ├── styles.css    — App-specific styles
 │   ├── config.js     — Sets window.APP_CONFIG.apiBase
 │   ├── state.js      — Global state variables
-│   ├── helpers.js    — apiFetch, auth, nav helpers
+│   ├── helpers.js    — apiFetch (Supabase bearer token), nav helpers, logout
 │   ├── catalog.js    — Plant catalog sidebar
 │   ├── garden.js     — Grid builder + drag-drop + side view + 3D split pane
 │   ├── render3d.js   — Three.js 3D planter scene (toon/natural/wireframe)
-│   ├── auth.js       — Login/register views
+│   ├── auth.js       — Supabase Auth screen (Google/Apple OAuth + email)
 │   ├── gardens.js    — My gardens list (save/load)
-│   └── init.js       — DOMContentLoaded, event listeners
+│   ├── build.sh      — Generates config.js from SUPABASE_URL/SUPABASE_ANON_KEY at deploy
+│   └── init.js       — DOMContentLoaded, initSupabase, event listeners
 └── STRUCTURE.md      — this file
 
 shared-backend/routes/plant_planner/  — FastAPI route package
@@ -46,17 +47,16 @@ db/migrations/plantplanner/001_baseline.sql + 002_seed.sql — Supabase migratio
 
 ## Data Model
 
-- **plantplanner_users** — id (uuid PK default gen_random_uuid()), username (text unique), display_name (text), password_hash (text), created_at (timestamptz default now())
-- **plantplanner_plants** — id (uuid PK default gen_random_uuid()), name (text), emoji (text), height_inches (int), sunlight (text: full_sun/partial/shade), bloom_season (text[]), spread_inches (int), description (text), sort_order (int), render_params (jsonb, nullable — procedural 3D geometry descriptors for Three.js)
-- **plantplanner_gardens** — id (uuid PK default gen_random_uuid()), user_id (uuid FK→users), name (text), grid_width (int), grid_height (int), created_at (timestamptz default now()), updated_at (timestamptz default now())
+- **plantplanner_profiles** — id (uuid PK, = `auth.users.id` ON DELETE CASCADE), display_name (text), avatar_url (text, nullable), is_admin (bool default false), created_at (timestamptz default now())
+- **plantplanner_renders** — key (text PK), label (text), params (jsonb — 3D geometry), colors (jsonb — color map), created_at (timestamptz default now())
+- **plantplanner_plants** — id (uuid PK default gen_random_uuid()), name (text), height_inches (int), sunlight (text: full_sun/partial/shade), bloom_season (text[]), spread_inches (int), description (text), sort_order (int), category (text), render_key (text FK→renders)
+- **plantplanner_gardens** — id (uuid PK default gen_random_uuid()), user_id (uuid FK→profiles ON DELETE CASCADE), name (text), grid_width (int), grid_height (int), garden_type (text), shade_level (text), planting_season (text), created_at (timestamptz default now()), updated_at (timestamptz default now())
 - **plantplanner_garden_plants** — id (uuid PK default gen_random_uuid()), garden_id (uuid FK→gardens ON DELETE CASCADE), plant_id (uuid FK→plants), grid_x (int), grid_y (int)
 
 ## API Endpoints
 
 - `GET  /api/v1/plant_planner/health` — Health check
-- `POST /api/v1/plant_planner/auth/register` — Register user
-- `POST /api/v1/plant_planner/auth/login` — Login
-- `GET  /api/v1/plant_planner/auth/me` — Get current user (auth required)
+- `GET  /api/v1/plant_planner/auth/me` — Get current user (auth required; auto-creates profile row on first call)
 - `GET  /api/v1/plant_planner/plants` — List all plants in catalog
 - `GET  /api/v1/plant_planner/gardens` — List user's gardens (auth required)
 - `POST /api/v1/plant_planner/gardens` — Create new garden (auth required)
@@ -91,10 +91,12 @@ Garden Builder View
 ## Environment Variables
 | Variable | Used In | Purpose |
 |---|---|---|
-| `SUPABASE_URL` | shared-backend | Supabase project URL (set in Railway) |
-| `SUPABASE_SERVICE_ROLE_KEY` | shared-backend | Server-side DB access (set in Railway) |
-| `PLANTPLANNER_JWT_SECRET` | shared-backend | JWT signing secret |
+| `SUPABASE_URL` | shared-backend (Railway) | Supabase project URL — also used by `jwt_auth.py` to fetch the JWKS for Supabase token verification |
+| `SUPABASE_SERVICE_ROLE_KEY` | shared-backend (Railway) | Server-side DB access (bypasses RLS) |
+| `VIBELAB_SUPABASE_URL` | GitHub Actions secret | Injected into `web/config.js` at deploy time by `build.sh` |
+| `VIBELAB_SUPABASE_ANON_KEY` | GitHub Actions secret | Public anon key used by the Supabase JS client in the browser |
 
 ## Active Development Notes
 
 - 2026-03-17 — Project scaffolded. Building web prototype + backend.
+- 2026-05-08 — Switched auth from custom bcrypt + JWT to Supabase Auth (Google + Apple OAuth + email/password). Migration `db/migrations/plantplanner/003_supabase_auth.sql` drops `plantplanner_users` and recreates `plantplanner_gardens` / `plantplanner_garden_plants` keyed off `plantplanner_profiles(id) = auth.users.id`. Backend uses shared `jwt_auth.get_current_supabase_user`; profile rows are auto-created on first sign-in. `PLANTPLANNER_JWT_SECRET` env var is no longer used. **One-time setup before deploying:** enable Google + Apple providers in Supabase dashboard, add `https://vibelab-plant-planner.vercel.app` + `/**` to Authentication → URL Configuration → Redirect URLs, run the 003 migration in SQL Editor.

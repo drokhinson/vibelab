@@ -1,11 +1,26 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- PlantPlanner — current schema snapshot
--- Last updated: post-003_supabase_auth (Supabase Auth-backed identity).
--- FOR REFERENCE ONLY — apply changes via db/migrations/
+-- plantplanner — switch user identity to Supabase Auth.
+--
+-- Drops the legacy plantplanner_users table (custom JWT + bcrypt) and every
+-- user-FK'd table CASCADE, then recreates them pointing at
+-- public.plantplanner_profiles (PK = auth.users.id).
+--
+-- Plant catalog (plantplanner_plants, plantplanner_renders) is preserved —
+-- those tables have no user FK.
+--
+-- WIPES all user-owned gardens. Production has not deployed users yet.
+-- Run after 001_baseline.sql + 002_seed.sql.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Supabase Auth-backed profiles. id == auth.users.id.
-CREATE TABLE IF NOT EXISTS public.plantplanner_profiles (
+BEGIN;
+
+DROP TABLE IF EXISTS public.plantplanner_garden_plants CASCADE;
+DROP TABLE IF EXISTS public.plantplanner_gardens       CASCADE;
+DROP TABLE IF EXISTS public.plantplanner_users         CASCADE;
+
+
+-- ── Profiles (Supabase Auth-backed) ──────────────────────────────────────────
+CREATE TABLE public.plantplanner_profiles (
   id           UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   display_name TEXT        NOT NULL,
   avatar_url   TEXT,
@@ -13,32 +28,11 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_profiles (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE public.plantplanner_profiles ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.plantplanner_profiles TO plantplanner_role;
 
--- Reusable 3D render templates keyed by human-readable string
-CREATE TABLE IF NOT EXISTS public.plantplanner_renders (
-  key        TEXT        PRIMARY KEY,
-  label      TEXT        NOT NULL DEFAULT '',
-  params     JSONB       NOT NULL DEFAULT '{}',   -- geometry: stem, foliage, accents (no colors)
-  colors     JSONB       NOT NULL DEFAULT '{}',   -- color map: { stem, foliage: [...], accents: [...] }
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-ALTER TABLE public.plantplanner_renders ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS public.plantplanner_plants (
-  id            UUID     PRIMARY KEY DEFAULT gen_random_uuid(),
-  name          TEXT     NOT NULL,
-  height_inches INT      NOT NULL DEFAULT 12,
-  sunlight      TEXT     NOT NULL DEFAULT 'full_sun',  -- full_sun | partial | shade
-  bloom_season  TEXT[]   NOT NULL DEFAULT '{}',         -- spring | summer | fall | winter
-  spread_inches INT      NOT NULL DEFAULT 12,
-  description   TEXT,
-  sort_order    INT      NOT NULL DEFAULT 0,
-  category      TEXT     NOT NULL DEFAULT 'other',      -- vegetable | herb | flower | fruit | other
-  render_key    TEXT     REFERENCES public.plantplanner_renders(key)
-);
-ALTER TABLE public.plantplanner_plants ENABLE ROW LEVEL SECURITY;
-
-CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
+-- ── Saved gardens (per-user) ─────────────────────────────────────────────────
+CREATE TABLE public.plantplanner_gardens (
   id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID        NOT NULL REFERENCES public.plantplanner_profiles(id) ON DELETE CASCADE,
   name            TEXT        NOT NULL DEFAULT 'My Garden',
@@ -50,9 +44,14 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
   created_at      TIMESTAMPTZ DEFAULT now(),
   updated_at      TIMESTAMPTZ DEFAULT now()
 );
+CREATE INDEX idx_plantplanner_gardens_user
+  ON public.plantplanner_gardens(user_id);
 ALTER TABLE public.plantplanner_gardens ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.plantplanner_gardens TO plantplanner_role;
 
-CREATE TABLE IF NOT EXISTS public.plantplanner_garden_plants (
+
+-- ── Plants placed in a garden ────────────────────────────────────────────────
+CREATE TABLE public.plantplanner_garden_plants (
   id        UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   garden_id UUID    NOT NULL REFERENCES public.plantplanner_gardens(id) ON DELETE CASCADE,
   plant_id  UUID    NOT NULL REFERENCES public.plantplanner_plants(id),
@@ -60,4 +59,9 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_garden_plants (
   grid_y    INT     NOT NULL,
   UNIQUE(garden_id, grid_x, grid_y)
 );
+CREATE INDEX idx_plantplanner_garden_plants_garden
+  ON public.plantplanner_garden_plants(garden_id);
 ALTER TABLE public.plantplanner_garden_plants ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.plantplanner_garden_plants TO plantplanner_role;
+
+COMMIT;
