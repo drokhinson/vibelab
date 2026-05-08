@@ -15,7 +15,7 @@ Create a new vibelab project. Arguments: $ARGUMENTS
    ```bash
    bash scaffold.sh <project-id> "<Project Title>" "<One sentence description>"
    ```
-   This creates `projects/<project-id>/`, adds a route stub to `shared-backend/routes/`, and updates `registry.json`.
+   This creates `projects/<project-id>/`, adds a route stub to `shared-backend/routes/`, updates `registry.json`, and drops a placeholder vibelab-pipeline brand mark at `projects/<project-id>/web/assets/brand/<project-id>-logo.svg` (the `<link rel="icon">` in the template already points at it). Replace this placeholder with the project's real logo before launch — see `.claude/rules/assets.md` for the asset convention.
 
 4. **Fill in STRUCTURE.md** — Open `projects/<project-id>/STRUCTURE.md` and fill in ALL sections:
    - What This App Does
