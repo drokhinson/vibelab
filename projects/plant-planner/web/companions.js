@@ -100,11 +100,19 @@ function renderCompanionChips() {
   var layer = document.getElementById('companion-chips');
   if (!layer || !scene3DHandle) return;
   var warnings = computeWarningsForPlacements(placements);
+  var shadeWarnings = (typeof computeShadeConflicts === 'function')
+    ? computeShadeConflicts(placements, previewYear)
+    : {};
   var html = '';
+  // Build a unified set of placement ids that have any kind of warning/good
+  var allIds = {};
+  for (var k in warnings) { if (warnings.hasOwnProperty(k)) allIds[k] = true; }
+  for (var k2 in shadeWarnings) { if (shadeWarnings.hasOwnProperty(k2)) allIds[k2] = true; }
   for (var i = 0; i < placements.length; i++) {
     var placement = placements[i];
-    var rows = warnings[placement.id];
-    if (!rows || rows.length === 0) continue;
+    if (!allIds[placement.id]) continue;
+    var rows = warnings[placement.id] || [];
+    var shadeRows = shadeWarnings[placement.id] || [];
     var selfPlantId = placement.plantId;
     var hasBadCompanion = rows.some(function(w) {
       return w.type === 'companion' && w.relationship === 'bad' &&
@@ -113,10 +121,13 @@ function renderCompanionChips() {
     var hasCrowd = rows.some(function(w) {
       return w.type === 'crowd' && !_isDismissed('crowd', placement.id, w.neighborPlacementId);
     });
+    var hasShade = shadeRows.some(function(w) {
+      return !_isDismissed('shade', placement.id, w.shadingPlacementId);
+    });
     var hasGood = rows.some(function(w) {
       return w.type === 'companion' && w.relationship === 'good';
     });
-    var type = (hasBadCompanion || hasCrowd) ? 'warning' : (hasGood ? 'good' : null);
+    var type = (hasBadCompanion || hasCrowd || hasShade) ? 'warning' : (hasGood ? 'good' : null);
     if (!type) continue;
     var pos = projectPlacementToScreen(placement.id);
     if (!pos) continue;
@@ -185,6 +196,13 @@ function renderCompanionPopover() {
   if (!self) { companionPopoverCellKey = null; return; }
   var warnings = computeWarningsForPlacements(placements);
   var rows = warnings[self.id] || [];
+  var shadeWarnings = (typeof computeShadeConflicts === 'function')
+    ? computeShadeConflicts(placements, previewYear)
+    : {};
+  var shadeRowsRaw = shadeWarnings[self.id] || [];
+  var visibleShadeRows = shadeRowsRaw.filter(function(w) {
+    return !_isDismissed('shade', self.id, w.shadingPlacementId);
+  });
   // Filter dismissed rows
   var visibleRows = rows.filter(function(w) {
     if (w.type === 'companion' && w.relationship === 'bad') {
@@ -195,7 +213,7 @@ function renderCompanionPopover() {
     }
     return true;
   });
-  if (visibleRows.length === 0) { companionPopoverCellKey = null; return; }
+  if (visibleRows.length === 0 && visibleShadeRows.length === 0) { companionPopoverCellKey = null; return; }
 
   var pos = projectPlacementToScreen(self.id);
   if (!pos) return;
@@ -243,6 +261,26 @@ function renderCompanionPopover() {
       html += '</div>';
     }
   });
+  visibleShadeRows.forEach(function(w) {
+    var shading = placements.find(function(p) { return p.id === w.shadingPlacementId; });
+    var splant = shading && shading.plant;
+    if (!splant) return;
+    var sthumb = getPlantThumbnail(splant, renderStyle);
+    var heightInches = splant.height_inches || 12;
+    var selfName = (self.plant && self.plant.name) || 'This plant';
+    var reason = 'Tall ' + escapeHtml(splant.name) + ' (' + heightInches + '") to the north blocks midday sun. ' +
+                 escapeHtml(selfName) + ' needs full sun.';
+    html += '<div class="companion-popover-row">';
+    html +=   '<img class="companion-popover-thumb" src="' + sthumb + '" alt="" />';
+    html +=   '<div class="companion-popover-text">';
+    html +=     '<div class="companion-popover-name">' + escapeHtml(splant.name) + ' is shading this spot' +
+                ' <span class="companion-popover-pill shade">Shaded</span></div>';
+    html +=     '<div class="companion-popover-reason">' + reason + '</div>';
+    html +=     '<button class="companion-popover-dismiss" data-action="dismiss-shade" data-shading-placement-id="' +
+                shading.id + '">It\'s fine, dismiss</button>';
+    html +=   '</div>';
+    html += '</div>';
+  });
   pop.innerHTML = html;
 
   var layer = document.getElementById('companion-chips');
@@ -267,6 +305,11 @@ function renderCompanionPopover() {
     } else if (action === 'dismiss-crowd') {
       var otherPlacementId = btn.dataset.otherPlacementId;
       dismissedCompanionWarnings.add(canonicalPairKey('crowd', self.id, otherPlacementId));
+      renderCompanionChips();
+      renderCompanionPopover();
+    } else if (action === 'dismiss-shade') {
+      var shadingPlacementId = btn.dataset.shadingPlacementId;
+      dismissedCompanionWarnings.add(canonicalPairKey('shade', self.id, shadingPlacementId));
       renderCompanionChips();
       renderCompanionPopover();
     }
