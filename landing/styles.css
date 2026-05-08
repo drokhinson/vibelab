@@ -102,26 +102,6 @@ body {
   margin: 2.25rem 0 0.75rem;
 }
 
-/* ── Filters ─────────────────────────────────────────────────────────────────── */
-.filters { margin-bottom: 1.25rem; }
-.filter-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.filter-btn {
-  border: 1px solid var(--pico-card-border-color);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--pico-muted-color);
-  padding: 0.3rem 0.9rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.filter-btn:hover { border-color: var(--pico-primary); color: var(--pico-primary); }
-.filter-btn.active {
-  background: var(--pico-primary);
-  border-color: var(--pico-primary);
-  color: #fff;
-}
-
 /* ── Featured (hero) tier ─────────────────────────────────────────────────── */
 .featured-grid {
   display: grid;
@@ -166,6 +146,10 @@ body {
   flex-direction: column;
   justify-content: center;
   gap: 0.5rem;
+  /* Grid items default to min-width: auto, which prevents this column from
+     shrinking smaller than its longest line on narrow viewports — letting
+     the description + action row spill past the card's right edge. */
+  min-width: 0;
 }
 
 .featured-headline {
@@ -184,6 +168,7 @@ body {
   line-height: 1.5;
   margin: 0;
   opacity: 0.9;
+  overflow-wrap: anywhere;
 }
 .featured-meta {
   display: flex;
@@ -197,6 +182,9 @@ body {
   align-items: center;
   gap: 0.6rem;
   margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 .featured-cta {
   font-size: 0.85rem;

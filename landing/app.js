@@ -7,11 +7,9 @@
 const grid = document.getElementById("projects-grid");
 const featuredEl = document.getElementById("featured");
 const adminSlot = document.getElementById("admin-slot");
-const filterBtns = document.querySelectorAll(".filter-btn");
-const filtersSection = document.getElementById("filters");
+const deferredHeading = document.getElementById("deferred-heading");
 
 let allProjects = [];
-let activeFilter = "all";
 
 // ── Load registry ─────────────────────────────────────────────────────────────
 async function loadRegistry() {
@@ -25,16 +23,6 @@ async function loadRegistry() {
     grid.innerHTML = `<div class="empty">⚠ Failed to load projects: ${err.message}</div>`;
   }
 }
-
-// ── Filter ────────────────────────────────────────────────────────────────────
-filterBtns.forEach(btn => {
-  btn.addEventListener("click", () => {
-    filterBtns.forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    activeFilter = btn.dataset.filter;
-    render();
-  });
-});
 
 // ── Brand glyphs (inline SVG) ─────────────────────────────────────────────────
 // Each featured card uses its project's signature illustration so the
@@ -110,7 +98,7 @@ function nativeBadges(p) {
 
 function openLink(url, klass = "card-link") {
   return url
-    ? `<a class="${klass}" href="${url}" target="_blank" rel="noopener">Open ↗</a>`
+    ? `<a class="${klass}" href="${url}" target="_blank" rel="noopener">Web ↗</a>`
     : `<span class="${klass}" style="opacity:0.3">Not deployed</span>`;
 }
 
@@ -132,7 +120,7 @@ function featuredCard(p) {
         <div class="featured-meta">
           <div class="featured-actions">
             ${nativeBadges(p)}
-            <span class="featured-cta">Open ↗</span>
+            <span class="featured-cta">Web ↗</span>
           </div>
         </div>
       </div>
@@ -191,29 +179,16 @@ function render() {
   const featured = sorted.filter(p => p.featured);
   const others   = sorted.filter(p => !p.featured);
 
-  // Filter applies to BOTH tiers consistently — clicking "In Progress"
-  // shows only WIP entries (in either tier), etc.
-  const matches = (p) => activeFilter === "all" || p.status === activeFilter;
-  const featuredVisible = featured.filter(matches);
-  const othersVisible   = others.filter(matches);
+  featuredEl.innerHTML = featured.map(featuredCard).join("");
+  featuredEl.style.display = featured.length ? "" : "none";
 
-  featuredEl.innerHTML = featuredVisible.map(featuredCard).join("");
-  featuredEl.style.display = featuredVisible.length ? "" : "none";
+  if (deferredHeading) deferredHeading.style.display = others.length ? "" : "none";
 
-  // Hide the "In progress" heading + filter pills if there's nothing below
-  // the featured tier to filter (e.g. when "Live" is selected).
-  const showLowerSection = othersVisible.length > 0 || activeFilter === "wip" || activeFilter === "all";
-  filtersSection.style.display = showLowerSection ? "" : "none";
-
-  if (othersVisible.length === 0 && featuredVisible.length === 0) {
+  if (others.length === 0 && featured.length === 0) {
     grid.innerHTML = `<div class="empty">No projects found.</div>`;
     return;
   }
-  if (othersVisible.length === 0) {
-    grid.innerHTML = "";
-    return;
-  }
-  grid.innerHTML = othersVisible.map(projectCard).join("");
+  grid.innerHTML = others.map(projectCard).join("");
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
