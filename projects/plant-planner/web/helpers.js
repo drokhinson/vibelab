@@ -178,6 +178,7 @@ function render() {
   updateNav();
   if (currentView === "auth") renderAuth();
   else if (currentView === "gardens") renderGardens();
+  else if (currentView === "wizard") renderGardenWizard();
   else if (currentView === "builder") renderBuilder();
   _initIcons();
 }

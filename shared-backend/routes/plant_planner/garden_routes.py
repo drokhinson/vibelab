@@ -32,9 +32,12 @@ async def create_garden(body: CreateGardenBody, user: CurrentUser = Depends(get_
         "garden_type": body.garden_type,
         "shade_level": body.shade_level,
         "planting_season": body.planting_season,
+        "water_plan": body.water_plan,
     }
     if body.usda_zone is not None:
         insert_row["usda_zone"] = body.usda_zone
+    if body.location_label is not None:
+        insert_row["location_label"] = body.location_label
     result = (
         sb.table("plantplanner_gardens")
         .insert(insert_row)

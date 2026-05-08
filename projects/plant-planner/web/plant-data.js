@@ -2,19 +2,56 @@
 // Shared geometry templates let multiple plants reuse the same shape with different colors.
 // Per-plant entries reference a template via _template and supply color overrides.
 
-// ── Catalog filter chips (Iteration 1) ──────────────────────────────────────
-var CHIP_DEFS = [
-  { id: 'native', label: 'Native' },
-  { id: 'pollinators', label: 'Pollinators' },
-  { id: 'sun', label: 'Sun' },
-  { id: 'shade', label: 'Shade' },
+// ── Catalog refinement filters (post-redesign) ──────────────────────────────
+// Primary filtering happens via the garden's planter conditions (lighting,
+// water_plan, hardiness, planter_type) when catalogFilters.matchGarden is on.
+// These two groups are user-driven refinements layered on top.
+var FILTER_SEASONS = [
   { id: 'spring', label: 'Spring' },
   { id: 'summer', label: 'Summer' },
-  { id: 'fall', label: 'Fall' },
-  { id: 'edible', label: 'Edible' },
-  { id: 'flower', label: 'Flower' },
-  { id: 'herb', label: 'Herb' }
+  { id: 'fall',   label: 'Fall'   },
+  { id: 'winter', label: 'Winter' }
 ];
+var FILTER_TYPES = [
+  { id: 'flower',    label: 'Flower'    },
+  { id: 'herb',      label: 'Herb'      },
+  { id: 'vegetable', label: 'Vegetable' },
+  { id: 'fruit',     label: 'Fruit'     }
+];
+
+// ── Garden-conditions → plant-attribute mappings ────────────────────────────
+// Garden's shade_level uses one of three values; plant's sunlight uses the same
+// three values today, so the mapping is identity. Kept as a function so
+// future expansions (e.g. partial_sun vs partial_shade) have one place to fan out.
+function gardenLightingMatches(plant, gardenShadeLevel) {
+  if (!gardenShadeLevel) return true;
+  return plant.sunlight === gardenShadeLevel;
+}
+
+// water_plan ('regular' | 'occasional' | 'rain_only') → which water_need
+// values are acceptable on a plant.
+function waterPlanAllowsPlant(plant, waterPlan) {
+  if (!waterPlan || waterPlan === 'regular') return true; // anything goes
+  var need = plant.water_need || 'medium';
+  if (waterPlan === 'occasional') return need === 'low' || need === 'medium';
+  if (waterPlan === 'rain_only')  return need === 'low';
+  return true;
+}
+
+// Indoor / greenhouse planters are climate-controlled; outdoor types must
+// honour the garden's USDA zone.
+function gardenIsClimateExposed(g) {
+  if (!g) return false;
+  var t = g.garden_type;
+  return t === 'outdoor' || t === 'garden_bed' || t === 'raised_bed';
+}
+
+// Indoor planters can't host plants that grow taller than ~3 ft at maturity.
+function gardenAllowsHeight(g, plant) {
+  if (!g) return true;
+  if (g.garden_type !== 'indoor') return true;
+  return (plant.height_inches || 0) <= 36;
+}
 
 var POLLINATOR_ICONS = {
   bees: 'bug',
@@ -51,51 +88,63 @@ function plantMatchesSearch(p, q) {
   return name.indexOf(needle) !== -1 || desc.indexOf(needle) !== -1;
 }
 
-function plantMatchesChips(p) {
-  // No chips active → match everything
-  var anyActive = false;
-  for (var k in catalogChips) { if (catalogChips[k]) { anyActive = true; break; } }
-  if (!anyActive) return true;
+// Match a plant against the active filter state. Used by the catalog list
+// AND by the wizard review step ("X of Y plants match this planter").
+//
+// Optional `gardenOverride` lets the wizard pass a draft garden before the
+// row is persisted. When omitted, currentGarden is used.
+function plantMatchesFilters(p, gardenOverride) {
+  var f = catalogFilters || {};
+  var g = gardenOverride !== undefined ? gardenOverride : currentGarden;
 
-  // Native: native === true AND (if garden zone known) zone within usda_zones range
-  if (catalogChips.native) {
-    if (p.native !== true) return false;
-    var zn = currentGarden && zoneNumber(currentGarden.usda_zone);
-    if (zn != null && p.usda_zones && typeof p.usda_zones.min === 'number' && typeof p.usda_zones.max === 'number') {
-      if (zn < p.usda_zones.min || zn > p.usda_zones.max) return false;
+  // Primary: garden-derived auto-filters
+  if (f.matchGarden && g) {
+    if (!gardenLightingMatches(p, g.shade_level)) return false;
+    if (!waterPlanAllowsPlant(p, g.water_plan))   return false;
+    if (!gardenAllowsHeight(g, p))                return false;
+    if (gardenIsClimateExposed(g) && g.usda_zone) {
+      var zn = zoneNumber(g.usda_zone);
+      if (zn != null && p.usda_zones &&
+          typeof p.usda_zones.min === 'number' &&
+          typeof p.usda_zones.max === 'number') {
+        if (zn < p.usda_zones.min || zn > p.usda_zones.max) return false;
+      }
     }
   }
 
-  if (catalogChips.pollinators) {
+  // Secondary: user toggles
+  if (f.native) {
+    if (p.native !== true) return false;
+    var zNative = g && zoneNumber(g.usda_zone);
+    if (zNative != null && p.usda_zones &&
+        typeof p.usda_zones.min === 'number' &&
+        typeof p.usda_zones.max === 'number') {
+      if (zNative < p.usda_zones.min || zNative > p.usda_zones.max) return false;
+    }
+  }
+  if (f.pollinators) {
     if (!Array.isArray(p.pollinator_attracts) || p.pollinator_attracts.length === 0) return false;
   }
 
-  // Sun + Shade: OR within sunlight category if both set
-  if (catalogChips.sun || catalogChips.shade) {
-    var sunOk = catalogChips.sun && p.sunlight === 'full_sun';
-    var shadeOk = catalogChips.shade && p.sunlight === 'shade';
-    if (!sunOk && !shadeOk) return false;
-  }
-
-  // Seasons (Spring/Summer/Fall): OR within season category
-  var seasonChips = ['spring','summer','fall'].filter(function(s) { return catalogChips[s]; });
-  if (seasonChips.length > 0) {
+  // Refinement chips: bloom season (multi, OR within group)
+  var seasonsActive = Object.keys(f.seasons || {}).filter(function(k) { return f.seasons[k]; });
+  if (seasonsActive.length > 0) {
     var bs = Array.isArray(p.bloom_season) ? p.bloom_season : [];
-    var anySeason = seasonChips.some(function(s) { return bs.indexOf(s) !== -1; });
+    var anySeason = seasonsActive.some(function(s) { return bs.indexOf(s) !== -1; });
     if (!anySeason) return false;
   }
 
-  // Categories (Edible/Flower/Herb): OR within category category
-  var catChips = [];
-  if (catalogChips.edible) catChips.push('vegetable', 'fruit');
-  if (catalogChips.flower) catChips.push('flower');
-  if (catalogChips.herb) catChips.push('herb');
-  if (catChips.length > 0) {
-    if (catChips.indexOf(p.category) === -1) return false;
+  // Refinement chips: type (multi, OR within group)
+  var typesActive = Object.keys(f.types || {}).filter(function(k) { return f.types[k]; });
+  if (typesActive.length > 0) {
+    if (typesActive.indexOf(p.category) === -1) return false;
   }
 
   return true;
 }
+
+// Backwards-compat shim — older modules call plantMatchesChips.
+function plantMatchesChips(p) { return plantMatchesFilters(p); }
 
 function bloomMonthsString(months) {
   if (!Array.isArray(months) || months.length === 0) return '';

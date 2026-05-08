@@ -4,20 +4,35 @@ function renderBuilder() {
   if (!currentGarden) { showView("gardens"); return; }
   var g = currentGarden;
 
+  // Row 1: name + size + kebab menu
   var html = '<div class="builder-header">';
   html += '<div class="builder-title">';
   html += '<h4>' + escapeHtml(g.name) + '</h4>';
-  html += '<span class="text-sm opacity-50">' + g.grid_width + '×' + g.grid_height + ' ft</span>';
+  html += '<span class="builder-size">' + escapeHtml(sizeLabelFor(g)) + '</span>';
   html += '</div>';
   html += '<div class="builder-actions">';
-  html += '<button id="garden-zone-chip" class="garden-zone-chip" type="button" title="USDA hardiness zone">';
-  html +=   '<i data-lucide="map-pin" style="width:0.9em;height:0.9em"></i> Zone: ' +
-            escapeHtml(g.usda_zone || '—') +
-            ' <i data-lucide="chevron-down" style="width:0.9em;height:0.9em"></i>';
-  html += '</button>';
-  html += '<button id="save-garden" class="btn btn-sm btn-primary gap-1"><i data-lucide="save"></i> Save</button>';
-  html += '<button id="reseed-garden" class="btn btn-sm btn-outline gap-1"><i data-lucide="refresh-cw"></i> Reseed</button>';
-  html += '</div></div>';
+  html +=   '<details class="dropdown dropdown-end builder-kebab">';
+  html +=     '<summary class="btn btn-ghost btn-sm btn-circle" aria-label="Garden options"><i data-lucide="more-vertical" style="width:1.1em;height:1.1em"></i></summary>';
+  html +=     '<ul class="menu dropdown-content rounded-box bg-base-100 shadow-lg z-50 w-52 p-2 mt-1">';
+  html +=       '<li><a id="kebab-save"><i data-lucide="save" style="width:1em;height:1em"></i> Save garden</a></li>';
+  html +=       '<li><a id="kebab-reseed"><i data-lucide="refresh-cw" style="width:1em;height:1em"></i> Reseed</a></li>';
+  html +=       '<li><a id="kebab-edit-zone"><i data-lucide="map-pin" style="width:1em;height:1em"></i> Change zone</a></li>';
+  html +=     '</ul>';
+  html +=   '</details>';
+  html += '</div>';
+  html += '</div>';
+
+  // Row 2: conditions strip — read-only chips summarising the planter
+  html += '<div class="builder-conditions">';
+  html += '<span class="cond-chip">' + sunlightIcon(g.shade_level || 'full_sun') + ' ' + escapeHtml(sunlightLabel(g.shade_level || 'full_sun')) + '</span>';
+  html += '<span class="cond-chip">💧 ' + escapeHtml(waterPlanLabel(g.water_plan || 'regular')) + '</span>';
+  if (g.usda_zone) {
+    html += '<button type="button" id="builder-zone-chip" class="cond-chip cond-chip-btn" title="Change zone">📍 ' + escapeHtml(g.location_label || ('Zone ' + g.usda_zone)) + '</button>';
+  } else if (g.garden_type !== 'indoor' && g.garden_type !== 'greenhouse') {
+    html += '<button type="button" id="builder-zone-chip" class="cond-chip cond-chip-btn cond-chip-warn" title="Set location">📍 Set location</button>';
+  }
+  html += '<span class="cond-chip">' + plantertypeIcon(g.garden_type || 'garden_bed') + ' ' + escapeHtml(plantertypeLabel(g.garden_type || 'garden_bed')) + '</span>';
+  html += '</div>';
 
   html += '<div class="builder-layout">';
 
@@ -181,10 +196,21 @@ function hideTooltip() {
 }
 
 function bindBuilderButtons() {
-  document.getElementById("save-garden").onclick = saveGarden;
-  document.getElementById("reseed-garden").onclick = reseedGarden;
-  var zoneBtn = document.getElementById("garden-zone-chip");
-  if (zoneBtn) zoneBtn.onclick = openZonePicker;
+  function closeKebab() {
+    var kebab = document.querySelector('.builder-kebab');
+    if (kebab) kebab.removeAttribute('open');
+  }
+
+  var saveItem = document.getElementById('kebab-save');
+  if (saveItem) saveItem.onclick = function(e) { e.preventDefault(); closeKebab(); saveGarden(); };
+  var reseedItem = document.getElementById('kebab-reseed');
+  if (reseedItem) reseedItem.onclick = function(e) { e.preventDefault(); closeKebab(); reseedGarden(); };
+  var zoneItem = document.getElementById('kebab-edit-zone');
+  if (zoneItem) zoneItem.onclick = function(e) { e.preventDefault(); closeKebab(); openZoneEditor(); };
+
+  // Toolbar zone chip — same destination as the kebab "Change zone" item.
+  var zoneChip = document.getElementById('builder-zone-chip');
+  if (zoneChip) zoneChip.onclick = openZoneEditor;
 
   // Year-preview scrubber
   var pills = document.querySelectorAll('.year-scrubber .year-pill');
@@ -218,84 +244,65 @@ var USDA_ZONES = (function() {
   return out;
 })();
 
-function openZonePicker() {
-  var existing = document.getElementById("zone-picker-menu");
-  if (existing) { existing.remove(); return; }
-  var btn = document.getElementById("garden-zone-chip");
-  if (!btn) return;
-  var rect = btn.getBoundingClientRect();
-  var menu = document.createElement("div");
-  menu.id = "zone-picker-menu";
-  menu.className = "zone-picker-menu";
-  menu.style.position = "fixed";
-  menu.style.top = (rect.bottom + 4) + "px";
-  menu.style.left = rect.left + "px";
-  var current = (currentGarden && currentGarden.usda_zone) || '';
-  var html = '';
-  for (var i = 0; i < USDA_ZONES.length; i++) {
-    var z = USDA_ZONES[i];
-    html += '<button type="button" class="zone-picker-item' + (z === current ? ' active' : '') +
-            '" data-zone="' + z + '">' + z + '</button>';
-  }
-  menu.innerHTML = html;
-  document.body.appendChild(menu);
-
-  function close() {
-    menu.remove();
-    document.removeEventListener("mousedown", onDocClick, true);
-  }
-  function onDocClick(e) {
-    if (!menu.contains(e.target) && e.target !== btn) close();
-  }
-  setTimeout(function() {
-    document.addEventListener("mousedown", onDocClick, true);
-  }, 0);
-  menu.onclick = async function(e) {
-    var item = e.target.closest(".zone-picker-item");
-    if (!item) return;
-    var zone = item.dataset.zone;
-    close();
-    await setGardenZone(zone);
-  };
+// openZoneEditor opens the location picker (geolocation + ZIP + manual)
+// from location.js. On resolve, saves zone + label back to the garden via PUT
+// and re-renders the toolbar so the new zone shows in the conditions strip.
+function openZoneEditor() {
+  if (!currentGarden) return;
+  if (typeof openLocationPicker !== 'function') return;
+  openLocationPicker({
+    onResolve: async function(loc) {
+      await setGardenLocation(loc.zone, loc.label);
+    }
+  });
 }
 
-async function setGardenZone(zone) {
+// Kept as openZonePicker so any older call sites still work.
+var openZonePicker = openZoneEditor;
+
+async function setGardenLocation(zone, label) {
   if (!currentGarden) return;
-  var prev = currentGarden.usda_zone;
-  currentGarden.usda_zone = zone;
-  // Optimistic header update
-  var btn = document.getElementById("garden-zone-chip");
-  if (btn) {
-    btn.innerHTML =
-      '<i data-lucide="map-pin" style="width:0.9em;height:0.9em"></i> Zone: ' +
-      escapeHtml(zone || '—') +
-      ' <i data-lucide="chevron-down" style="width:0.9em;height:0.9em"></i>';
-    _initIcons();
-  }
-  refreshCatalogList();
+  var prevZone  = currentGarden.usda_zone;
+  var prevLabel = currentGarden.location_label;
+  currentGarden.usda_zone     = zone;
+  currentGarden.location_label = label;
+  // Re-render the toolbar/conditions strip with the new value.
+  renderBuilder();
   try {
     await apiFetch("/gardens/" + currentGarden.id, {
       method: "PUT",
-      body: { usda_zone: zone }
+      body: { usda_zone: zone, location_label: label }
     });
   } catch (err) {
-    currentGarden.usda_zone = prev;
-    if (btn) {
-      btn.innerHTML =
-        '<i data-lucide="map-pin" style="width:0.9em;height:0.9em"></i> Zone: ' +
-        escapeHtml(prev || '—') +
-        ' <i data-lucide="chevron-down" style="width:0.9em;height:0.9em"></i>';
-      _initIcons();
-    }
-    refreshCatalogList();
+    currentGarden.usda_zone     = prevZone;
+    currentGarden.location_label = prevLabel;
+    renderBuilder();
     alert("Could not update zone: " + err.message);
   }
 }
 
+// Backwards-compat — older modules call setGardenZone(zone).
+async function setGardenZone(zone) {
+  return setGardenLocation(zone, 'Zone ' + zone);
+}
+
+function _showBuilderToast(msg) {
+  var existing = document.getElementById('builder-toast');
+  if (existing) existing.remove();
+  var t = document.createElement('div');
+  t.id = 'builder-toast';
+  t.className = 'builder-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function() { t.classList.add('show'); }, 0);
+  setTimeout(function() {
+    t.classList.remove('show');
+    setTimeout(function() { t.remove(); }, 200);
+  }, 1600);
+}
+
 async function saveGarden() {
-  var btn = document.getElementById("save-garden");
-  btn.classList.add("loading");
-  btn.disabled = true;
+  if (!currentGarden) return;
   var payload = placements.map(function(p) {
     return { plant_id: p.plantId, pos_x: p.pos_x, pos_y: p.pos_y, radius_feet: p.radius_feet };
   });
@@ -313,21 +320,15 @@ async function saveGarden() {
     } catch (e) {
       console.warn('[plant-planner] persist dismissed companion warnings failed:', e);
     }
-    btn.textContent = "Saved!";
-    setTimeout(function() { btn.innerHTML = '<i data-lucide="save"></i> Save'; _initIcons(); }, 1500);
+    _showBuilderToast('Saved');
   } catch (err) {
     alert("Save failed: " + err.message);
-  } finally {
-    btn.classList.remove("loading");
-    btn.disabled = false;
   }
 }
 
 async function reseedGarden() {
+  if (!currentGarden) return;
   if (!confirm("Reseed for next season? This will clear all current plants and save an empty garden.")) return;
-  var btn = document.getElementById("reseed-garden");
-  btn.classList.add("loading");
-  btn.disabled = true;
   try {
     await apiFetch("/gardens/" + currentGarden.id + "/plants", {
       method: "PUT",
@@ -338,16 +339,8 @@ async function reseedGarden() {
     renderCompanionChips();
     refreshCatalogList();
     if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
-    btn.textContent = "Reseeded!";
-    setTimeout(function() {
-      btn.innerHTML = '<i data-lucide="refresh-cw"></i> Reseed';
-      _initIcons();
-      renderBuilder();
-    }, 1200);
+    _showBuilderToast('Reseeded');
   } catch (err) {
     alert("Reseed failed: " + err.message);
-  } finally {
-    btn.classList.remove("loading");
-    btn.disabled = false;
   }
 }

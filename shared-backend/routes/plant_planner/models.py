@@ -3,7 +3,7 @@
 from typing import Any, List, Optional
 from pydantic import BaseModel
 
-from .constants import GardenType, ShadeLevel, PlantingSeason
+from .constants import GardenType, ShadeLevel, PlantingSeason, WaterPlan
 
 
 class MeResponse(BaseModel):
@@ -24,7 +24,9 @@ class CreateGardenBody(BaseModel):
     garden_type: GardenType = GardenType.GARDEN_BED
     shade_level: ShadeLevel = ShadeLevel.FULL_SUN
     planting_season: PlantingSeason = PlantingSeason.SPRING
+    water_plan: WaterPlan = WaterPlan.REGULAR
     usda_zone: Optional[str] = None
+    location_label: Optional[str] = None
 
 
 class UpdateGardenBody(BaseModel):
@@ -34,7 +36,9 @@ class UpdateGardenBody(BaseModel):
     garden_type: Optional[GardenType] = None
     shade_level: Optional[ShadeLevel] = None
     planting_season: Optional[PlantingSeason] = None
+    water_plan: Optional[WaterPlan] = None
     usda_zone: Optional[str] = None
+    location_label: Optional[str] = None
     settings_json: Optional[dict] = None
 
 
@@ -47,9 +51,24 @@ class GardenResponse(BaseModel):
     garden_type: GardenType
     shade_level: ShadeLevel
     planting_season: PlantingSeason
+    water_plan: WaterPlan = WaterPlan.REGULAR
     usda_zone: Optional[str] = None
+    location_label: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+
+
+class LocationLookupBody(BaseModel):
+    zip: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+class LocationLookupResponse(BaseModel):
+    zone: str               # e.g. "6a"
+    zone_number: int        # numeric prefix, e.g. 6
+    label: str              # display label, e.g. "02139" or "Zone 6a (lat,lng)"
+    source: str             # "zip" | "geolocation"
 
 
 class PlantResponse(BaseModel):

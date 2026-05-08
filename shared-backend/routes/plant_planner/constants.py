@@ -4,14 +4,23 @@ from enum import StrEnum
 
 
 class GardenType(StrEnum):
+    INDOOR = "indoor"
+    OUTDOOR = "outdoor"
     GARDEN_BED = "garden_bed"
-    PLANTER = "planter"
+    RAISED_BED = "raised_bed"
+    GREENHOUSE = "greenhouse"
 
 
 class ShadeLevel(StrEnum):
     FULL_SUN = "full_sun"
     PARTIAL = "partial"
     SHADE = "shade"
+
+
+class WaterPlan(StrEnum):
+    REGULAR = "regular"
+    OCCASIONAL = "occasional"
+    RAIN_ONLY = "rain_only"
 
 
 class PlantingSeason(StrEnum):

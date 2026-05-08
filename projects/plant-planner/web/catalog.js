@@ -9,19 +9,59 @@ var CLICK_MAX_PX = 5;
 var CLICK_MAX_MS = 300;
 
 function renderCatalogFilters() {
-  var html = '<div class="catalog-filters-title"><i data-lucide="leaf" style="width:0.9em;height:0.9em"></i> Plants</div>';
+  var g = currentGarden || {};
+  var hasGarden = !!currentGarden;
 
-  // Search input
+  // Header: title + match-toggle
+  var html = '<div class="catalog-filters-title">'
+           +   '<span><i data-lucide="leaf" style="width:0.9em;height:0.9em"></i> Plants</span>'
+           +   (hasGarden
+               ? '<label class="catalog-match-toggle">'
+                 +   '<input type="checkbox" id="catalog-match-toggle"' + (catalogFilters.matchGarden ? ' checked' : '') + ' />'
+                 +   '<span>Match my garden</span>'
+                 + '</label>'
+               : '')
+           + '</div>';
+
+  // Read-only conditions strip showing what "Match my garden" filters by.
+  if (hasGarden) {
+    var dim = catalogFilters.matchGarden ? '' : ' dim';
+    html += '<div class="catalog-conditions' + dim + '">';
+    html += '<span class="cond-chip">' + sunlightIcon(g.shade_level || 'full_sun') + ' ' + escapeHtml(sunlightLabel(g.shade_level || 'full_sun')) + '</span>';
+    html += '<span class="cond-chip">💧 ' + escapeHtml(waterPlanLabel(g.water_plan || 'regular')) + '</span>';
+    if (g.usda_zone) {
+      html += '<span class="cond-chip">📍 ' + escapeHtml(g.location_label || ('Zone ' + g.usda_zone)) + '</span>';
+    }
+    html += '<span class="cond-chip">' + plantertypeIcon(g.garden_type || 'garden_bed') + ' ' + escapeHtml(plantertypeLabel(g.garden_type || 'garden_bed')) + '</span>';
+    html += '</div>';
+  }
+
+  // Search
   var q = escapeHtml(catalogSearch || '');
   html += '<input id="catalog-search" class="catalog-search" type="search" autocomplete="off" placeholder="Search plants..." value="' + q + '" />';
 
-  // Chip row (single horizontally-scrolling row)
-  html += '<div class="catalog-chips" id="catalog-chips">';
-  for (var i = 0; i < CHIP_DEFS.length; i++) {
-    var c = CHIP_DEFS[i];
-    var active = catalogChips[c.id] === true;
-    html += '<button type="button" class="chip' + (active ? ' active' : '') + '" data-chip-id="' + c.id + '">' + escapeHtml(c.label) + '</button>';
+  // Refinement: bloom season (multi)
+  html += '<div class="filter-group"><div class="filter-group-label">Bloom season</div><div class="filter-row" id="filter-row-seasons">';
+  for (var s = 0; s < FILTER_SEASONS.length; s++) {
+    var so = FILTER_SEASONS[s];
+    var active = !!(catalogFilters.seasons && catalogFilters.seasons[so.id]);
+    html += '<button type="button" class="chip' + (active ? ' active' : '') + '" data-group="seasons" data-id="' + so.id + '">' + escapeHtml(so.label) + '</button>';
   }
+  html += '</div></div>';
+
+  // Refinement: type (multi)
+  html += '<div class="filter-group"><div class="filter-group-label">Type</div><div class="filter-row" id="filter-row-types">';
+  for (var t = 0; t < FILTER_TYPES.length; t++) {
+    var to = FILTER_TYPES[t];
+    var actT = !!(catalogFilters.types && catalogFilters.types[to.id]);
+    html += '<button type="button" class="chip' + (actT ? ' active' : '') + '" data-group="types" data-id="' + to.id + '">' + escapeHtml(to.label) + '</button>';
+  }
+  html += '</div></div>';
+
+  // Toggles row
+  html += '<div class="filter-toggles">';
+  html += '<button type="button" class="chip toggle' + (catalogFilters.native ? ' active' : '') + '" data-toggle="native"><i data-lucide="leaf" style="width:0.85em;height:0.85em"></i> Native to my region</button>';
+  html += '<button type="button" class="chip toggle' + (catalogFilters.pollinators ? ' active' : '') + '" data-toggle="pollinators"><i data-lucide="bug" style="width:0.85em;height:0.85em"></i> Pollinators</button>';
   html += '</div>';
 
   return html;
@@ -64,17 +104,22 @@ function _companionBadgesForTile(plantId) {
 function renderCatalogList() {
   var q = catalogSearch || '';
   var filtered = plants.filter(function(p) {
-    return plantMatchesSearch(p, q) && plantMatchesChips(p);
+    return plantMatchesSearch(p, q) && plantMatchesFilters(p);
   });
 
-  var html = '<div class="catalog-list">';
+  // Match-count summary so users see the impact of their filters.
+  var html = '<div class="catalog-count">' + filtered.length + ' of ' + plants.length + ' plants</div>';
+  html += '<div class="catalog-list">';
   for (var k = 0; k < filtered.length; k++) {
     var p = filtered[k];
-    var catThumb = getPlantThumbnail(p, renderStyle);
+    var pngUrl = (typeof _getPlantImageUrl === 'function') ? _getPlantImageUrl(p) : '';
+    var fallbackUrl = 'assets/sprites/plants/_' + (p.category || 'flower') + '.png';
+    var safeFallback = fallbackUrl.replace(/'/g, "\\'");
     html += '<div class="catalog-tile" draggable="true" data-plant-id="' + p.id + '" style="--i:' + k + '">';
     html += _companionBadgesForTile(p.id);
     if (p.native === true) html += _nativeBadgeHtml();
-    html += '<img class="catalog-thumbnail" src="' + catThumb + '" alt="' + escapeHtml(p.name) + '" draggable="false" />';
+    html += '<img class="catalog-thumbnail" src="' + pngUrl + '" alt="' + escapeHtml(p.name) + '" draggable="false"'
+         + ' onerror="this.onerror=null;this.src=\'' + safeFallback + '\'" />';
     html += '<span class="catalog-name">' + escapeHtml(p.name) + '</span>';
     html += _pollinatorIconsHtml(p.pollinator_attracts);
     html += '</div>';
@@ -100,18 +145,67 @@ function bindCatalogEvents() {
     };
   }
 
-  // Chip row — event delegation
-  var chipsEl = document.getElementById("catalog-chips");
-  if (chipsEl) {
-    chipsEl.onclick = function(e) {
-      var btn = e.target.closest('.chip');
-      if (!btn) return;
-      var id = btn.dataset.chipId;
-      catalogChips[id] = !catalogChips[id];
-      btn.classList.toggle('active', catalogChips[id]);
-      refreshCatalogList();
+  // "Match my garden" toggle
+  var matchEl = document.getElementById('catalog-match-toggle');
+  if (matchEl) {
+    matchEl.onchange = function(e) {
+      catalogFilters.matchGarden = !!e.target.checked;
+      refreshCatalog();
     };
   }
+
+  // Refinement chip rows (seasons, types) — event delegation per group
+  ['filter-row-seasons', 'filter-row-types'].forEach(function(rowId) {
+    var row = document.getElementById(rowId);
+    if (!row) return;
+    row.onclick = function(e) {
+      var btn = e.target.closest('.chip');
+      if (!btn) return;
+      var group = btn.dataset.group;
+      var id = btn.dataset.id;
+      if (!group || !id) return;
+      if (!catalogFilters[group]) catalogFilters[group] = {};
+      catalogFilters[group][id] = !catalogFilters[group][id];
+      btn.classList.toggle('active', !!catalogFilters[group][id]);
+      refreshCatalogList();
+    };
+  });
+
+  // Toggle chips: Native / Pollinators
+  document.querySelectorAll('.chip.toggle').forEach(function(btn) {
+    btn.onclick = function() {
+      var key = btn.dataset.toggle;
+      if (key === 'native' && !catalogFilters.native) {
+        // Activating Native without a garden zone — open the location picker.
+        if (!currentGarden || !currentGarden.usda_zone) {
+          if (typeof openLocationPicker === 'function') {
+            openLocationPicker({
+              onResolve: async function(loc) {
+                if (currentGarden && currentGarden.id) {
+                  try {
+                    await apiFetch('/gardens/' + currentGarden.id, {
+                      method: 'PUT',
+                      body: { usda_zone: loc.zone, location_label: loc.label }
+                    });
+                    currentGarden.usda_zone = loc.zone;
+                    currentGarden.location_label = loc.label;
+                  } catch (e) { console.warn('Save garden zone failed:', e); }
+                }
+                catalogFilters.native = true;
+                refreshCatalog();
+              }
+            });
+            return;
+          }
+        }
+      }
+      catalogFilters[key] = !catalogFilters[key];
+      btn.classList.toggle('active', !!catalogFilters[key]);
+      refreshCatalogList();
+      // The conditions strip dim-state depends on matchGarden, but Native
+      // doesn't change it. No full re-render needed.
+    };
+  });
 
   bindCatalogDrag();
 }
