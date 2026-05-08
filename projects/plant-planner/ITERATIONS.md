@@ -79,3 +79,22 @@ Hobby unmet: SATISFIED. Disk realism actually nudged the "looks pretty" criterio
 Wildflower unmet: full Jan–Dec bloom calendar strip; year 1/2/3 growth preview. (Iter 3 didn't address wildflower needs — disk realism gave a marginal visual win for spreading natives.) Iter 4 target: bloom calendar.
 Food unmet: height-aware shading/occlusion. (Real-radius — their #1 — fully delivered; +1 to satisfaction.)
 Notes: Single-agent ownership of the 8-file frontend slice was correct — the `gridPlacements` → `placements` migration touched scene rendering, drag plumbing, save flow, hydration on garden open, and companion warning geometry simultaneously. Backend validation is 422 on out-of-bounds; overlap is never rejected by the server. The `_isDismissed` helper in companions.js handles the legacy → prefixed dismissal-key migration so iter 2 dismissals carry over cleanly.
+
+## Iteration 4 — Garden-Wide Bloom Calendar Strip — pending
+Persona ratings (pre): hobby=5/5 (satisfied), wildflower=2/5, food=4/5
+Persona ratings (post): pending — Phase G re-poll
+Shipped:
+  - New full-width `<section id="bloom-calendar-strip">` directly under the 3D pane in `.builder-main`. Always visible whenever the builder view is open.
+  - **Aggregate header row** (always visible, ~40px): chevron toggle + "Bloom Calendar" title + count chip ("3 plants · 7 mo") + 12 month columns (J F M A M J J A S O N D) with opacity-scaled intensity bars (more plants blooming that month → more opaque).
+  - **Body** (collapsible, default open on desktop / collapsed on mobile): one row per unique placed plant (duplicates grouped: "Black-Eyed Susan ×2"), with thumbnail + name + 12 dot cells filled per `bloom_months`. Plants with empty `bloom_months` (most veggies/herbs) are omitted from rows.
+  - Empty placements: header shows outline-only aggregate cells with "Add plants to see their bloom calendar" message.
+  - All-empty bloom_months: body shows "None of the placed plants have bloom data — try adding a flowering plant from the catalog."
+  - Reactive: `renderBloomCalendar()` called from `init3DScene` / `bind3DDragDrop.onDrop` / `bind3DClick` (remove) / `reseedGarden`. No drag-to-move hook needed (move doesn't change which plants are present).
+  - Mobile (<600px): horizontally scrollable strip with sticky-left plant-name column; default collapsed.
+  - Reuses iter 1's `MONTH_LETTERS` and the `.bloom-dot` visual idiom (scoped via new `.bloom-calendar .bloom-dot` rules so the detail-panel mini-strip is untouched).
+  - NO data model or backend changes — `bloom_months int[]` was already added in iter 1's enrichment migration; `GET /plants` already returns it.
+  - Filter sidebar pixel height is unchanged (no edits to `.catalog-sidebar` rules); detail-panel mini bloom strip is visually identical.
+Hobby unmet: pending re-poll — calendar adds vertical content but lives below the 3D pane and collapses on mobile, so should not regress.
+Wildflower unmet: pending re-poll. Year 1/2/3 growth preview still queued for iter 5.
+Food unmet: pending re-poll. Height-aware shading still queued; food's last unmet need.
+Notes: Pure-frontend feature, no DB or backend churn — `bloom_months` was already in place since iter 1. The combined-shape (aggregate header + per-plant rows) was chosen so the strip works as both a quick "where are my bloom gaps" scanner AND a per-plant timeline. The strip is always visible (not hidden in the detail panel) per Wildflower's spec — that's the key change vs iter 1's mini-strip.
