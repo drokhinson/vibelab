@@ -1,7 +1,10 @@
-// Optional preparation-variant picker (e.g. basmati vs jasmine rice).
-// Only shown when state.preparations is non-empty.
+// Preparation-variant picker (e.g. basmati vs jasmine rice). Hosts the
+// item-load loading state under the "choose variant" header so tapping a
+// dish on MealBuilder navigates here immediately — no flicker on the
+// previous screen. If the load resolves with no variants, we replace
+// ourselves with SauceSelector so the user never sees an empty grid.
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +14,7 @@ import {
 } from 'react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import EmptyState from '../components/EmptyState';
+import LoadingPot from '../components/LoadingPot';
 import { flowMetaFor } from '#shared/constants';
 import { COLORS, SHADOWS } from '../theme';
 
@@ -19,6 +23,18 @@ export default function PrepSelectorScreen({ navigation }) {
   const actions = useAppActions();
   const item = state.selectedItem;
   const meta = flowMetaFor(item);
+  const prepCount = (state.preparations || []).length;
+
+  // After the item-load completes, skip past the variant picker if there are
+  // no variants to choose from. `replace` (not `navigate`) so back-tapping
+  // returns to MealBuilder instead of an empty screen.
+  useEffect(() => {
+    if (!item) return;
+    if (state.itemLoading) return;
+    if (state.itemError) return;
+    if (prepCount > 0) return;
+    navigation.replace('SauceSelector');
+  }, [item, state.itemLoading, state.itemError, prepCount, navigation]);
 
   if (!item) {
     return (
@@ -43,37 +59,41 @@ export default function PrepSelectorScreen({ navigation }) {
           Pick a variant — we'll match it with the right {meta.sauceTypeLabel}.
         </Text>
       </View>
-      <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
-        <View style={styles.grid}>
-          {state.preparations.map((prep) => (
-            <TouchableOpacity
-              key={prep.id}
-              style={styles.card}
-              onPress={() => onPick(prep)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.emoji}>{prep.emoji || item.emoji}</Text>
-              <Text style={styles.name} numberOfLines={1}>{prep.name}</Text>
-              {prep.description ? (
-                <Text style={styles.desc} numberOfLines={2}>
-                  {prep.description}
-                </Text>
-              ) : null}
-              {prep.cookTimeMinutes ? (
-                <Text style={styles.time}>~{prep.cookTimeMinutes} min</Text>
-              ) : null}
-            </TouchableOpacity>
-          ))}
-        </View>
+      {state.itemLoading ? (
+        <LoadingPot label={`Loading ${item.name.toLowerCase()} variants…`} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
+          <View style={styles.grid}>
+            {state.preparations.map((prep) => (
+              <TouchableOpacity
+                key={prep.id}
+                style={styles.card}
+                onPress={() => onPick(prep)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.emoji}>{prep.emoji || item.emoji}</Text>
+                <Text style={styles.name} numberOfLines={1}>{prep.name}</Text>
+                {prep.description ? (
+                  <Text style={styles.desc} numberOfLines={2}>
+                    {prep.description}
+                  </Text>
+                ) : null}
+                {prep.cookTimeMinutes ? (
+                  <Text style={styles.time}>~{prep.cookTimeMinutes} min</Text>
+                ) : null}
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <TouchableOpacity
-          style={styles.skipBtn}
-          onPress={() => navigation.navigate('SauceSelector')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.skipLabel}>Skip — show me everything</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <TouchableOpacity
+            style={styles.skipBtn}
+            onPress={() => navigation.navigate('SauceSelector')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.skipLabel}>Skip — show me everything</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
     </View>
   );
 }
