@@ -2367,6 +2367,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   padding: 10px 14px;
   margin-bottom: 8px;
   border-radius: 10px;
@@ -2380,6 +2381,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 .auth-modal__oauth--google { color: #1F2937; }
 .auth-modal__oauth--apple  { color: #fff; background: #111827; border-color: #111827; }
 .auth-modal__oauth--apple:hover { background: #1F2937; }
+.auth-modal__oauth-logo { width: 18px; height: 18px; flex-shrink: 0; }
 .auth-modal__divider {
   display: flex;
   align-items: center;
