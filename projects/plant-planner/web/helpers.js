@@ -6,7 +6,8 @@ var app = document.getElementById("app");
 
 async function apiFetch(path, opts = {}) {
   var headers = opts.headers || {};
-  if (token) headers["Authorization"] = "Bearer " + token;
+  var accessToken = session && session.access_token;
+  if (accessToken) headers["Authorization"] = "Bearer " + accessToken;
   if (opts.body && typeof opts.body === "object") {
     headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(opts.body);
@@ -30,14 +31,16 @@ function showView(view) {
   render();
 }
 
-function setToken(t) {
-  token = t;
-  if (t) localStorage.setItem("pp_token", t);
-  else localStorage.removeItem("pp_token");
-}
-
-function logout() {
-  setToken(null);
+async function logout() {
+  if (supabaseClient) {
+    try { await supabaseClient.auth.signOut(); } catch (e) {
+      console.error("[plant-planner] signOut error:", e);
+    }
+    // onAuthStateChange (SIGNED_OUT) handles state reset + view switch.
+    return;
+  }
+  // No Supabase configured — local cleanup fallback.
+  session = null;
   currentUser = null;
   currentGarden = null;
   gridPlacements = {};
@@ -47,7 +50,7 @@ function logout() {
 function updateNav() {
   var navRight = document.getElementById("nav-right");
   if (!navRight) return;
-  if (token && currentUser) {
+  if (session && currentUser) {
     navRight.innerHTML =
       '<button class="btn btn-ghost btn-sm gap-1" id="nav-gardens"><i data-lucide="layout-grid" style="width:1em;height:1em"></i> My Gardens</button>' +
       '<button class="btn btn-ghost btn-sm gap-1" id="nav-logout"><i data-lucide="log-out" style="width:1em;height:1em"></i> Logout</button>' +

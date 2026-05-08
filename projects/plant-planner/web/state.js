@@ -1,7 +1,14 @@
 // state.js — All global state variables
 
 var currentView = "auth"; // auth | gardens | builder
-var token = localStorage.getItem("pp_token") || null;
+
+// ── Supabase Auth state ──────────────────────────────────────────────────────
+var supabaseClient = null;
+var session = null;          // populated by supabaseClient.auth.onAuthStateChange
+var authConfigError = null;  // surfaced in the auth screen if Supabase config is missing
+var authMode = "login";      // "login" | "signup"
+var authBusy = false;
+
 var currentUser = null;
 var plants = [];         // plant catalog from API
 var gardens = [];        // user's saved gardens

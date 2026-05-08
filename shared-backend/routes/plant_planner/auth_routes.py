@@ -1,91 +1,24 @@
-"""Auth routes: register, login, me, health."""
+"""Auth routes: health + current user (Supabase Auth-backed)."""
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 
-from auth import hash_password, verify_password
-from db import get_supabase
 from shared_models import HealthResponse
 from . import router
-from .dependencies import get_current_user, create_app_token
-from .models import RegisterBody, LoginBody
+from .dependencies import CurrentUser, get_current_user
+from .models import MeResponse
 
 
 @router.get("/health", response_model=HealthResponse, summary="Plant Planner health check")
-async def health():
+async def health() -> dict:
     """Health check."""
     return {"project": "plant-planner", "status": "ok"}
 
 
-@router.post("/auth/register")
-async def register(body: RegisterBody):
-    sb = get_supabase()
-    existing = (
-        sb.table("plantplanner_users")
-        .select("id")
-        .eq("username", body.username)
-        .execute()
+@router.get("/auth/me", response_model=MeResponse, summary="Current user profile")
+async def me(user: CurrentUser = Depends(get_current_user)) -> MeResponse:
+    """Return the authenticated user's profile (auto-created on first sign-in)."""
+    return MeResponse(
+        user_id=user.user_id,
+        display_name=user.display_name,
+        is_admin=user.is_admin,
     )
-    if existing.data:
-        raise HTTPException(status_code=409, detail="Username already taken")
-
-    password_hash = hash_password(body.password)
-    user_data = {
-        "username": body.username,
-        "display_name": body.display_name or body.username,
-        "password_hash": password_hash,
-    }
-    result = sb.table("plantplanner_users").insert(user_data).execute()
-    if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to create user")
-
-    user = result.data[0]
-    token = create_app_token(user["id"], user["username"])
-    return {
-        "token": token,
-        "user": {
-            "id": user["id"],
-            "username": user["username"],
-            "display_name": user["display_name"],
-        },
-    }
-
-
-@router.post("/auth/login")
-async def login(body: LoginBody):
-    sb = get_supabase()
-    result = (
-        sb.table("plantplanner_users")
-        .select("*")
-        .eq("username", body.username)
-        .execute()
-    )
-    if not result.data:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-
-    user = result.data[0]
-    if not verify_password(body.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-
-    token = create_app_token(user["id"], user["username"])
-    return {
-        "token": token,
-        "user": {
-            "id": user["id"],
-            "username": user["username"],
-            "display_name": user["display_name"],
-        },
-    }
-
-
-@router.get("/auth/me")
-async def me(user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    result = (
-        sb.table("plantplanner_users")
-        .select("id, username, display_name, created_at")
-        .eq("id", user["user_id"])
-        .execute()
-    )
-    if not result.data:
-        raise HTTPException(status_code=404, detail="User not found")
-    return result.data[0]
