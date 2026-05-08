@@ -15,7 +15,8 @@ from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/v1/plant_planner", tags=["plant-planner"])
 
-from . import auth_routes      # noqa: F401, E402
-from . import plant_routes     # noqa: F401, E402
-from . import garden_routes    # noqa: F401, E402
+from . import auth_routes       # noqa: F401, E402
+from . import plant_routes      # noqa: F401, E402
+from . import garden_routes     # noqa: F401, E402
 from . import companion_routes  # noqa: F401, E402
+from . import location_routes   # noqa: F401, E402

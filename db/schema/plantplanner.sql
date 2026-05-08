@@ -1,11 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: post-009_growth_lifecycle (plantplanner_plants now carries
--- lifecycle + years_to_maturity for the year 1/2/3+ growth-preview feature).
+-- Last updated: post-010_garden_conditions (gardens now persist the wizard's
+-- planter conditions: garden_type expanded to 5 values, water_plan + location_label added).
 -- Migrations applied: 001_baseline, 002_seed, 003_supabase_auth,
 --                     004_enrich_plants, 005_seed_enriched, 006_companions,
 --                     007_companions_seed, 008_real_radius_placement,
---                     009_growth_lifecycle.
+--                     009_growth_lifecycle, 010_garden_conditions.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -57,10 +57,14 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
   name            TEXT        NOT NULL DEFAULT 'My Garden',
   grid_width      INT         NOT NULL DEFAULT 4,
   grid_height     INT         NOT NULL DEFAULT 4,
-  garden_type     TEXT        NOT NULL DEFAULT 'garden_bed',  -- garden_bed | planter
+  garden_type     TEXT        NOT NULL DEFAULT 'garden_bed'
+                  CHECK (garden_type IN ('indoor', 'outdoor', 'garden_bed', 'raised_bed', 'greenhouse')),
   shade_level     TEXT        NOT NULL DEFAULT 'full_sun',    -- full_sun | partial | shade
   planting_season TEXT        NOT NULL DEFAULT 'spring',      -- spring | summer | fall | winter
+  water_plan      TEXT        NOT NULL DEFAULT 'regular'
+                  CHECK (water_plan IN ('regular', 'occasional', 'rain_only')),
   usda_zone       TEXT,                                        -- per-garden USDA hardiness zone (e.g. "6b")
+  location_label  TEXT,                                        -- display label for the conditions strip (e.g. "Boston, MA" or "02139")
   settings_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
   created_at      TIMESTAMPTZ DEFAULT now(),
   updated_at      TIMESTAMPTZ DEFAULT now()

@@ -1,6 +1,6 @@
 // state.js — All global state variables
 
-var currentView = "auth"; // auth | gardens | builder
+var currentView = "auth"; // auth | gardens | wizard | builder
 
 // ── Supabase Auth state ──────────────────────────────────────────────────────
 var supabaseClient = null;
@@ -20,7 +20,24 @@ var renderStyle = localStorage.getItem("pp_render_style") || "realistic"; // "re
 var draggedPlant = null; // plant being dragged from catalog
 var catalogDropHandled = false; // set true when a catalog drag has either been placed in the grid or already tossed; tile ondragend checks this to avoid double-handling
 var catalogSearch = '';      // free-text search query (debounced)
-var catalogChips = {};       // active filter chip ids → true; e.g. { native: true, sun: true }
+
+// Plant-catalog filter state (replaces the old flat catalogChips map).
+// Primary control is matchGarden — when true, the catalog auto-filters using
+// currentGarden's lighting, water_plan, hardiness zone, and planter type.
+var catalogFilters = {
+  matchGarden: true,
+  seasons: {},          // { spring:true, summer:true, ... }
+  types: {},            // { flower:true, herb:true, vegetable:true, fruit:true }
+  native: false,
+  pollinators: false
+};
+
+// Garden-creation wizard draft (only populated while currentView === "wizard").
+// Shape mirrors CreateGardenBody on the backend; null on every other view.
+var wizardDraft = null;
+var wizardStep = 1;        // 1..6
+var wizardEditReturnTo = null;  // null | step number; when set, "Next" jumps back to review
+
 var detailPanelPlantId = null; // id of plant currently shown in the detail panel, or null
 var currentTheme = localStorage.getItem("pp_theme") || "pastel";
 
