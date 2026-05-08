@@ -127,17 +127,4 @@ Format: `https://project.vercel.app,http://localhost:5500` (comma-separated, no 
 
 ## Environment Variables
 
-All vars are in Railway (backend) and Vercel (frontend) dashboards. Never committed.
-
-| Variable | Where | Purpose |
-|---|---|---|
-| `SUPABASE_URL` | Railway | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Railway | Server-side DB access (bypasses RLS) |
-| `VIBELAB_SUPABASE_URL` | GitHub Secrets | Shared Supabase URL injected into every app's `config.js` at deploy time |
-| `VIBELAB_SUPABASE_ANON_KEY` | GitHub Secrets | Shared Supabase anon key for all frontends (one auth system across the monorepo) |
-| `ALLOWED_ORIGINS` | Railway | Comma-separated CORS origins |
-| `EXPO_PUBLIC_API_URL` | `app/.env` | Railway backend URL for React Native |
-| `ADMIN_API_KEY` | Railway | Admin dashboard authentication key |
-| `WEALTHMATE_JWT_SECRET` | Railway | WealthMate JWT signing secret |
-| `BGG_API_TOKEN` | Railway | BoardGameGeek app-registration token (rate-limit accounting; not user-scoped) |
-| `BGG_CREDENTIAL_KEY` | Railway | Fernet key (urlsafe base64) used to encrypt linked users' BGG passwords. Generate via `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Rotating it forces every BGG-linked user to re-link. |
+See `ENV.md` for the canonical inventory of every env var across Railway, GitHub Secrets, Vercel, Supabase, and local `.env` files — including each variable's source (where to rotate it) and which files read it. Update `ENV.md` in the same commit whenever you add or rename a variable.
