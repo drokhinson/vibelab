@@ -35,3 +35,7 @@ No ES modules — use `<script>` tags sharing global scope. Load order matters: 
 Add `<script>` tags to `index.html` in the order above. All functions remain global.
 
 **When to split:** Start with a single file during initial prototyping. Split once any file exceeds ~300 lines or has 3+ distinct feature areas. Small apps (under 300 lines total) can stay as a single file.
+
+## Type Contracts (editor-only)
+
+When a file in `shared/` or `web/` reshapes a backend response or has a non-obvious return shape, document it with JSDoc `@typedef` + `// @ts-check`. See `.claude/rules/typed-js.md` for the convention — no build step, no npm, surfaced as squiggles in VS Code / Cursor / Claude.
