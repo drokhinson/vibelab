@@ -10,6 +10,11 @@ function renderBuilder() {
   html += '<span class="text-sm opacity-50">' + g.grid_width + '×' + g.grid_height + ' ft</span>';
   html += '</div>';
   html += '<div class="builder-actions">';
+  html += '<button id="garden-zone-chip" class="garden-zone-chip" type="button" title="USDA hardiness zone">';
+  html +=   '<i data-lucide="map-pin" style="width:0.9em;height:0.9em"></i> Zone: ' +
+            escapeHtml(g.usda_zone || '—') +
+            ' <i data-lucide="chevron-down" style="width:0.9em;height:0.9em"></i>';
+  html += '</button>';
   html += '<button id="save-garden" class="btn btn-sm btn-primary gap-1"><i data-lucide="save"></i> Save</button>';
   html += '<button id="reseed-garden" class="btn btn-sm btn-outline gap-1"><i data-lucide="refresh-cw"></i> Reseed</button>';
   html += '</div></div>';
@@ -20,6 +25,7 @@ function renderBuilder() {
   html += '<div id="catalog-sidebar" class="catalog-sidebar">';
   html += '<div class="catalog-filters">' + renderCatalogFilters() + '</div>';
   html += '<div class="catalog-list-wrapper" id="catalog-list-wrapper">' + renderCatalogList() + '</div>';
+  html += '<div id="plant-detail-panel"></div>';
   html += '</div>';
 
   // 3D view (full width — drag catalog plants directly onto scene)
@@ -141,6 +147,89 @@ function hideTooltip() {
 function bindBuilderButtons() {
   document.getElementById("save-garden").onclick = saveGarden;
   document.getElementById("reseed-garden").onclick = reseedGarden;
+  var zoneBtn = document.getElementById("garden-zone-chip");
+  if (zoneBtn) zoneBtn.onclick = openZonePicker;
+}
+
+// USDA zones 1a..13b
+var USDA_ZONES = (function() {
+  var out = [];
+  for (var i = 1; i <= 13; i++) { out.push(i + 'a'); out.push(i + 'b'); }
+  return out;
+})();
+
+function openZonePicker() {
+  var existing = document.getElementById("zone-picker-menu");
+  if (existing) { existing.remove(); return; }
+  var btn = document.getElementById("garden-zone-chip");
+  if (!btn) return;
+  var rect = btn.getBoundingClientRect();
+  var menu = document.createElement("div");
+  menu.id = "zone-picker-menu";
+  menu.className = "zone-picker-menu";
+  menu.style.position = "fixed";
+  menu.style.top = (rect.bottom + 4) + "px";
+  menu.style.left = rect.left + "px";
+  var current = (currentGarden && currentGarden.usda_zone) || '';
+  var html = '';
+  for (var i = 0; i < USDA_ZONES.length; i++) {
+    var z = USDA_ZONES[i];
+    html += '<button type="button" class="zone-picker-item' + (z === current ? ' active' : '') +
+            '" data-zone="' + z + '">' + z + '</button>';
+  }
+  menu.innerHTML = html;
+  document.body.appendChild(menu);
+
+  function close() {
+    menu.remove();
+    document.removeEventListener("mousedown", onDocClick, true);
+  }
+  function onDocClick(e) {
+    if (!menu.contains(e.target) && e.target !== btn) close();
+  }
+  setTimeout(function() {
+    document.addEventListener("mousedown", onDocClick, true);
+  }, 0);
+  menu.onclick = async function(e) {
+    var item = e.target.closest(".zone-picker-item");
+    if (!item) return;
+    var zone = item.dataset.zone;
+    close();
+    await setGardenZone(zone);
+  };
+}
+
+async function setGardenZone(zone) {
+  if (!currentGarden) return;
+  var prev = currentGarden.usda_zone;
+  currentGarden.usda_zone = zone;
+  // Optimistic header update
+  var btn = document.getElementById("garden-zone-chip");
+  if (btn) {
+    btn.innerHTML =
+      '<i data-lucide="map-pin" style="width:0.9em;height:0.9em"></i> Zone: ' +
+      escapeHtml(zone || '—') +
+      ' <i data-lucide="chevron-down" style="width:0.9em;height:0.9em"></i>';
+    _initIcons();
+  }
+  refreshCatalogList();
+  try {
+    await apiFetch("/gardens/" + currentGarden.id, {
+      method: "PUT",
+      body: { usda_zone: zone }
+    });
+  } catch (err) {
+    currentGarden.usda_zone = prev;
+    if (btn) {
+      btn.innerHTML =
+        '<i data-lucide="map-pin" style="width:0.9em;height:0.9em"></i> Zone: ' +
+        escapeHtml(prev || '—') +
+        ' <i data-lucide="chevron-down" style="width:0.9em;height:0.9em"></i>';
+      _initIcons();
+    }
+    refreshCatalogList();
+    alert("Could not update zone: " + err.message);
+  }
 }
 
 async function saveGarden() {

@@ -24,17 +24,20 @@ async def list_gardens(user: CurrentUser = Depends(get_current_user)):
 @router.post("/gardens")
 async def create_garden(body: CreateGardenBody, user: CurrentUser = Depends(get_current_user)):
     sb = get_supabase()
+    insert_row = {
+        "user_id": user.user_id,
+        "name": body.name,
+        "grid_width": body.grid_width,
+        "grid_height": body.grid_height,
+        "garden_type": body.garden_type,
+        "shade_level": body.shade_level,
+        "planting_season": body.planting_season,
+    }
+    if body.usda_zone is not None:
+        insert_row["usda_zone"] = body.usda_zone
     result = (
         sb.table("plantplanner_gardens")
-        .insert({
-            "user_id": user.user_id,
-            "name": body.name,
-            "grid_width": body.grid_width,
-            "grid_height": body.grid_height,
-            "garden_type": body.garden_type,
-            "shade_level": body.shade_level,
-            "planting_season": body.planting_season,
-        })
+        .insert(insert_row)
         .execute()
     )
     if not result.data:
