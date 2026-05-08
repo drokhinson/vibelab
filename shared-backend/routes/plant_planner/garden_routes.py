@@ -129,13 +129,24 @@ async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: Current
     sb = get_supabase()
     existing = (
         sb.table("plantplanner_gardens")
-        .select("id")
+        .select("id, grid_width, grid_height")
         .eq("id", garden_id)
         .eq("user_id", user.user_id)
         .execute()
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Garden not found")
+
+    grid_width = existing.data[0]["grid_width"]
+    grid_height = existing.data[0]["grid_height"]
+
+    for p in body.plants:
+        if not (0 <= p.pos_x <= grid_width):
+            raise HTTPException(status_code=422, detail=f"Placement out of bounds: pos_x={p.pos_x} not in [0, {grid_width}]")
+        if not (0 <= p.pos_y <= grid_height):
+            raise HTTPException(status_code=422, detail=f"Placement out of bounds: pos_y={p.pos_y} not in [0, {grid_height}]")
+        if p.radius_feet <= 0:
+            raise HTTPException(status_code=422, detail=f"Invalid radius_feet: {p.radius_feet}")
 
     # Delete all existing placements, then insert new ones
     sb.table("plantplanner_garden_plants").delete().eq("garden_id", garden_id).execute()
@@ -145,8 +156,9 @@ async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: Current
             {
                 "garden_id": garden_id,
                 "plant_id": p.plant_id,
-                "grid_x": p.grid_x,
-                "grid_y": p.grid_y,
+                "pos_x": p.pos_x,
+                "pos_y": p.pos_y,
+                "radius_feet": p.radius_feet,
             }
             for p in body.plants
         ]

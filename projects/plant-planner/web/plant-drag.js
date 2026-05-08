@@ -1,6 +1,6 @@
 // plant-drag.js — Long-hold drag and toss mechanics for placed plants in the 3D scene
 
-var _pickedPlant = null;      // { mesh, gridKey, plant }
+var _pickedPlant = null;      // { mesh, placement, plant }
 var _holdTimer = null;
 var _holdStartX = 0;
 var _holdStartY = 0;
@@ -30,7 +30,7 @@ function bindPlantDrag(handle) {
   handle._carryPlane = carryPlane;
   handle._carryY = carryY;
 
-  // Group for session-only ground plants (not in gridPlacements → gone on reload)
+  // Group for session-only ground plants (not in placements → gone on reload)
   var gpg = new THREE.Group();
   gpg.name = "groundPlants";
   handle.scene.add(gpg);
@@ -132,15 +132,17 @@ function _tryPickup(clientX, clientY, handle) {
   if (hits.length === 0) return;
 
   var obj = hits[0].object;
-  while (obj && !obj.userData.gridKey) obj = obj.parent;
-  if (!obj || !obj.userData.gridKey) return;
+  while (obj && !obj.userData.placementId) obj = obj.parent;
+  if (!obj || !obj.userData.placementId) return;
 
-  var gridKey = obj.userData.gridKey;
-  var plant = gridPlacements[gridKey];
-  if (!plant) return;
+  var placementId = obj.userData.placementId;
+  var idx = placements.findIndex(function(p) { return p.id === placementId; });
+  if (idx < 0) return;
+  var placement = placements[idx];
+  var plant = placement.plant;
 
-  // Detach from grid
-  delete gridPlacements[gridKey];
+  // Detach from placements array (will be re-added on drop or cancel)
+  placements.splice(idx, 1);
   handle.plantsGroup.remove(obj);
   handle.scene.add(obj);
 
@@ -149,7 +151,7 @@ function _tryPickup(clientX, clientY, handle) {
   obj.rotation.x = -0.15;
   obj.scale.multiplyScalar(1.1);
 
-  _pickedPlant = { mesh: obj, gridKey: gridKey, plant: plant };
+  _pickedPlant = { mesh: obj, placement: placement, plant: plant };
   _pointerHistory = [];
   _dragHandle = handle;
 
@@ -172,13 +174,20 @@ function _onMove(clientX, clientY, handle) {
 
   var gw = handle.garden.grid_width;
   var gh = handle.garden.grid_height;
-  var gx = Math.floor(pt.x + gw / 2);
-  var gy = Math.floor(pt.z + gh / 2);
-  if (gx >= 0 && gx < gw && gy >= 0 && gy < gh) {
-    showCellHighlight(handle, gx, gy);
-  } else {
-    hideCellHighlight(handle);
+  var posX = pt.x + gw / 2;
+  var posY = pt.z + gh / 2;
+  var r = _pickedPlant.placement.radius_feet;
+  var oob = posX < 0 || posX > gw || posY < 0 || posY > gh;
+  var overlaps = false;
+  if (!oob && Array.isArray(placements)) {
+    for (var i = 0; i < placements.length; i++) {
+      var p = placements[i];
+      var dx = posX - p.pos_x, dy = posY - p.pos_y;
+      if (Math.hypot(dx, dy) < r + p.radius_feet) { overlaps = true; break; }
+    }
   }
+  var valid = oob ? 'oob' : (overlaps ? 'overlap' : 'ok');
+  showPreviewDisk(handle, posX, posY, r, valid);
 }
 
 // ── Release / drop / toss ─────────────────────────────────────────────────────
@@ -187,9 +196,10 @@ function _onRelease(clientX, clientY, handle) {
   if (!_pickedPlant) return;
 
   var mesh = _pickedPlant.mesh;
-  var plant = _pickedPlant.plant;
+  var placement = _pickedPlant.placement;
 
   _lastPickupEndTime = Date.now();
+  var picked = _pickedPlant;
   _pickedPlant = null;
   _dragHandle = null;
 
@@ -198,18 +208,18 @@ function _onRelease(clientX, clientY, handle) {
   mesh.scale.divideScalar(1.1);
 
   handle.controls.enabled = true;
-  hideCellHighlight(handle);
+  hidePreviewDisk(handle);
 
   var pt = _raycastCarryPlane(clientX, clientY, handle);
   var gw = handle.garden.grid_width;
   var gh = handle.garden.grid_height;
 
-  var gx = -1, gy = -1;
+  var posX = -1, posY = -1;
   var isInside = false;
   if (pt) {
-    gx = Math.floor(pt.x + gw / 2);
-    gy = Math.floor(pt.z + gh / 2);
-    isInside = gx >= 0 && gx < gw && gy >= 0 && gy < gh;
+    posX = pt.x + gw / 2;
+    posY = pt.z + gh / 2;
+    isInside = posX >= 0 && posX <= gw && posY >= 0 && posY <= gh;
   }
 
   var vel = _calcVelocity();
@@ -219,7 +229,7 @@ function _onRelease(clientX, clientY, handle) {
   _pointerHistory = [];
 
   if (isInside && !isToss) {
-    _dropIntoGrid(mesh, plant, gx, gy, handle);
+    _dropIntoGrid(mesh, placement, posX, posY, handle);
   } else {
     var startPos = mesh.position.clone();
     var landX, landZ;
@@ -231,7 +241,7 @@ function _onRelease(clientX, clientY, handle) {
       landZ = pt ? pt.z : startPos.z;
     }
     _animateArc(mesh, startPos, landX, landZ, isToss, handle);
-    // Plant has already been removed from gridPlacements at pickup; refresh
+    // Placement has already been spliced out at pickup; refresh
     // companion chips + catalog badges to reflect the now-gone neighbor.
     if (typeof renderCompanionChips === 'function') renderCompanionChips();
     if (typeof refreshCatalogList === 'function') refreshCatalogList();
@@ -241,30 +251,31 @@ function _onRelease(clientX, clientY, handle) {
 function _cancelDrag(handle) {
   if (!_pickedPlant) return;
   var mesh = _pickedPlant.mesh;
-  var plant = _pickedPlant.plant;
-  var gridKey = _pickedPlant.gridKey;
+  var placement = _pickedPlant.placement;
 
   mesh.rotation.x = 0;
   mesh.scale.divideScalar(1.1);
 
-  // Return to original grid cell
+  // Return to original position
   handle.scene.remove(mesh);
   disposeObject(mesh);
-  gridPlacements[gridKey] = plant;
+  placements.push(placement);
   sync3DView();
 
   _pickedPlant = null;
   _dragHandle = null;
   _pointerHistory = [];
   handle.controls.enabled = true;
-  hideCellHighlight(handle);
+  hidePreviewDisk(handle);
 }
 
 // ── Grid drop ─────────────────────────────────────────────────────────────────
 
-function _dropIntoGrid(mesh, plant, gx, gy, handle) {
-  gridPlacements[gx + "," + gy] = plant;
-  handle.scene.remove(mesh);
+function _dropIntoGrid(mesh, placement, pos_x, pos_y, handle) {
+  placement.pos_x = pos_x;
+  placement.pos_y = pos_y;
+  placements.push(placement);
+  if (mesh && mesh.parent) mesh.parent.remove(mesh);
   disposeObject(mesh);
   sync3DView();
   if (typeof renderCompanionChips === 'function') renderCompanionChips();

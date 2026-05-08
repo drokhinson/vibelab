@@ -76,8 +76,9 @@ class PlantResponse(BaseModel):
 
 class PlantPlacement(BaseModel):
     plant_id: str
-    grid_x: int
-    grid_y: int
+    pos_x: float
+    pos_y: float
+    radius_feet: float
 
 
 class SavePlantsBody(BaseModel):
