@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import {
   ChevronRight,
+  Download,
   GitBranch,
   GitMerge,
   Heart,
@@ -21,7 +22,10 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { useAppActions, useAppState } from '../../store/AppContext';
+import { api } from '../../api/client';
 import { buildSauceFamilies, pickDisplayedFromFamily, familyHasFavorite } from '#shared/families';
 import { SAUCE_TYPES } from '#shared/constants';
 import HeartButton from '../../components/HeartButton';
@@ -103,6 +107,18 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
             if (!res.ok) Alert.alert('Could not delete', res.error || 'Unknown error');
           },
         },
+      ],
+    );
+  }
+
+  function pickExportFormat(sauce) {
+    Alert.alert(
+      `Export "${sauce.name}"`,
+      'Choose a format. Markdown is human-readable; JSON is the round-trip format you can re-import in the builder.',
+      [
+        { text: 'JSON', onPress: () => exportSauce(sauce, 'json') },
+        { text: 'Markdown', onPress: () => exportSauce(sauce, 'md') },
+        { text: 'Cancel', style: 'cancel' },
       ],
     );
   }
@@ -240,6 +256,7 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
                         }}
                         onEdit={() => openBuilderFor(displayed.id)}
                         onDelete={() => confirmDelete(displayed)}
+                        onDownload={() => pickExportFormat(displayed)}
                         onStartMerge={() => actions.startSauceMerge(displayed.id)}
                       />
                     ))}
@@ -292,6 +309,43 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
   );
 }
 
+function slugifySauceName(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'sauce';
+}
+
+// Fetch a sauce export, write it to the cache directory, then hand the URI to
+// the platform share sheet. Cache files are auto-purged by the OS so we don't
+// need to clean up. Both export endpoints are public; the API client still
+// passes the JWT when one is set.
+async function exportSauce(sauce, format /* 'json' | 'md' */) {
+  try {
+    const text = format === 'json'
+      ? await api.exportSauceJson(sauce.id)
+      : await api.exportSauceMd(sauce.id);
+
+    const filename = `${slugifySauceName(sauce.name || sauce.id)}.sauce.${format}`;
+    const uri = FileSystem.cacheDirectory + filename;
+    await FileSystem.writeAsStringAsync(uri, text, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+
+    if (!(await Sharing.isAvailableAsync())) {
+      Alert.alert('Sharing unavailable', 'This device does not support the share sheet.');
+      return;
+    }
+    await Sharing.shareAsync(uri, {
+      mimeType: format === 'json' ? 'application/json' : 'text/markdown',
+      dialogTitle: `Export ${sauce.name}`,
+      UTI: format === 'json' ? 'public.json' : 'net.daringfireball.markdown',
+    });
+  } catch (e) {
+    Alert.alert('Export failed', e?.message || 'Could not download recipe.');
+  }
+}
+
 function ManagerSauceRow({
   sauce,
   family,
@@ -304,6 +358,7 @@ function ManagerSauceRow({
   onLongPress,
   onEdit,
   onDelete,
+  onDownload,
   onStartMerge,
 }) {
   const isOwner = !!(currentUser && sauce.createdBy === currentUser.user_id);
@@ -375,6 +430,10 @@ function ManagerSauceRow({
               <Text style={styles.actionLabel}>Edit</Text>
             </TouchableOpacity>
           ) : null}
+          <TouchableOpacity onPress={onDownload} style={styles.actionBtn} hitSlop={6}>
+            <Download size={14} color={COLORS.textSecondary} />
+            <Text style={[styles.actionLabel, { color: COLORS.textSecondary }]}>Download</Text>
+          </TouchableOpacity>
           {canDelete ? (
             <TouchableOpacity onPress={onDelete} style={styles.actionBtn} hitSlop={6}>
               <Trash2 size={14} color={COLORS.dangerText} />

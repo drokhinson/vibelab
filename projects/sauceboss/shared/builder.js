@@ -139,3 +139,42 @@ export function applyParsedRecipe(builder, parsed) {
   next.steps = steps;
   return next;
 }
+
+// Map a sauce dict (RPC shape from `get_sauceboss_all_sauces_full`, or a
+// `.sauce.json` export's inner `sauce` payload) into a fresh builder draft.
+// Used by:
+//   • web's `openBuilderEdit` (settings.js) for editing an existing sauce.
+//   • web's `handleImportSauceFile` (settings.js) for file-import.
+//   • native's `SauceBuilderScreen` (edit + file-import).
+// Numeric step/ingredient fields are stringified because the builder TextInputs
+// bind to strings. Pass `defaults.color` to choose a fallback when the sauce
+// has no color set (web defaults to "#E85D04", native picks the first swatch).
+export function builderFromSauce(sauce, defaults = {}) {
+  const fallbackColor = defaults.color || '#E85D04';
+  const itemIds = Array.isArray(sauce.compatibleItems)
+    ? sauce.compatibleItems.slice()
+    : Array.isArray(sauce.itemIds) ? sauce.itemIds.slice() : [];
+  return {
+    name: sauce.name || '',
+    cuisine: sauce.cuisine || '',
+    cuisineEmoji: sauce.cuisineEmoji || '',
+    color: sauce.color || fallbackColor,
+    description: sauce.description || '',
+    sourceUrl: sauce.sourceUrl || '',
+    sauceType: sauce.sauceType || 'sauce',
+    parentSauceId: sauce.parentSauceId || null,
+    itemIds,
+    steps: (sauce.steps || []).map((s) => ({
+      title: s.title || '',
+      instructions: s.instructions || '',
+      inputFromStep: s.inputFromStep || null,
+      estimatedTime: s.estimatedTime != null ? String(s.estimatedTime) : '',
+      ingredients: (s.ingredients || []).map((i) => ({
+        name: i.name || '',
+        amount: i.amount != null ? String(i.amount) : '',
+        unit: i.unit || 'tsp',
+      })),
+    })),
+    unassignedIngredients: [],
+  };
+}

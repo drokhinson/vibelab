@@ -23,16 +23,19 @@ import {
   Minus,
   Trash2,
   Link2,
+  FileUp,
   Save,
   X,
   CornerDownRight,
   ArrowRight,
 } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAppActions, useAppState } from '../store/AppContext';
 import { api } from '../api/client';
 import { CUISINES, UNITS, COLOR_SWATCHES, SAUCE_TYPES } from '#shared/constants';
 import { validateBuilder } from '#shared/validation';
-import { applyParsedRecipe } from '#shared/builder';
+import { applyParsedRecipe, builderFromSauce } from '#shared/builder';
 import FoodAutocomplete from '../components/FoodAutocomplete';
 import EmptyState from '../components/EmptyState';
 import { COLORS, SHADOWS } from '../theme';
@@ -59,39 +62,6 @@ function emptyBuilder() {
     parentSauceId: null,
     itemIds: [],
     steps: [emptyStep()],
-    unassignedIngredients: [],
-  };
-}
-
-function builderFromSauce(sauce) {
-  // Backend (`get_sauceboss_all_sauces_full`) emits `compatibleItems` as a
-  // JSON array of item IDs — same name the web's openBuilderEdit reads.
-  // Earlier this code looked for `compatibleItemIds`/`itemIds`, neither of
-  // which exists, so paired items always loaded empty in edit mode.
-  const itemIds = Array.isArray(sauce.compatibleItems)
-    ? sauce.compatibleItems.slice()
-    : Array.isArray(sauce.itemIds) ? sauce.itemIds.slice() : [];
-  return {
-    name: sauce.name || '',
-    cuisine: sauce.cuisine || '',
-    cuisineEmoji: sauce.cuisineEmoji || '',
-    color: sauce.color || COLOR_SWATCHES[0],
-    description: sauce.description || '',
-    sourceUrl: sauce.sourceUrl || '',
-    sauceType: sauce.sauceType || 'sauce',
-    parentSauceId: sauce.parentSauceId || null,
-    itemIds,
-    steps: (sauce.steps || []).map((s) => ({
-      title: s.title || '',
-      instructions: s.instructions || '',
-      inputFromStep: s.inputFromStep || null,
-      estimatedTime: s.estimatedTime != null ? String(s.estimatedTime) : '',
-      ingredients: (s.ingredients || []).map((i) => ({
-        name: i.name || '',
-        amount: i.amount != null ? String(i.amount) : '',
-        unit: i.unit || 'tsp',
-      })),
-    })),
     unassignedIngredients: [],
   };
 }
@@ -302,6 +272,74 @@ export default function SauceBuilderScreen({ navigation, route }) {
     }
   }
 
+  // File-import counterpart to handleImport: parse a `.sauce.json` (the same
+  // shape produced by the export endpoints) into a fresh builder draft, then
+  // route through the existing review + save flow. Mirrors the web's
+  // handleImportSauceFile (settings.js).
+  async function handleImportFromFile() {
+    setImporting(true);
+    setImportError(null);
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['application/json', 'public.json', '*/*'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (res.canceled) return;
+      const file = res.assets?.[0];
+      if (!file?.uri) return;
+
+      const text = await FileSystem.readAsStringAsync(file.uri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      let raw;
+      try {
+        raw = JSON.parse(text);
+      } catch (e) {
+        Alert.alert('Import failed', `File is not valid JSON: ${e.message}`);
+        return;
+      }
+
+      if (raw && Array.isArray(raw.sauces)) {
+        Alert.alert(
+          'Bulk imports not supported',
+          'Split the file into per-sauce JSONs and try again.',
+        );
+        return;
+      }
+      if (raw && raw.version != null && raw.version !== 1) {
+        Alert.alert('Unsupported version', `Export version: ${raw.version}`);
+        return;
+      }
+
+      const inner = (raw && typeof raw.sauce === 'object' && raw.sauce !== null) ? raw.sauce : raw;
+      if (!inner || typeof inner !== 'object' || !inner.name || !Array.isArray(inner.steps)) {
+        Alert.alert(
+          'Could not locate sauce payload',
+          'Expected an object with `name` and `steps`.',
+        );
+        return;
+      }
+
+      // Drop a parentSauceId that doesn't resolve in this catalog so the
+      // builder's parent dropdown doesn't show a phantom selection.
+      let parent = inner.parentSauceId || null;
+      if (parent) {
+        const known = (state.managerSauces || []).some((s) => s.id === parent);
+        if (!known) {
+          Alert.alert('Parent sauce dropped', `"${parent}" not found in this catalog.`);
+          parent = null;
+        }
+      }
+
+      setBuilder(builderFromSauce({ ...inner, parentSauceId: parent }));
+    } catch (e) {
+      setImportError(e.message || 'Could not read file.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function handleSave() {
     if (!validation.ok) return;
     setSaving(true);
@@ -425,10 +463,10 @@ export default function SauceBuilderScreen({ navigation, route }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Import from URL */}
+        {/* Import from URL or .sauce.json file */}
         {!editingId ? (
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Import from URL</Text>
+            <Text style={styles.sectionLabel}>Import recipe</Text>
             <View style={styles.importRow}>
               <Link2 size={16} color={COLORS.textMuted} style={{ marginRight: 6 }} />
               <TextInput
@@ -447,6 +485,18 @@ export default function SauceBuilderScreen({ navigation, route }) {
                 activeOpacity={0.8}
               >
                 {importing ? <ActivityIndicator color="#fff" /> : <Text style={styles.smallBtnLabel}>Import</Text>}
+              </TouchableOpacity>
+            </View>
+            <View style={styles.importFileRow}>
+              <Text style={styles.help}>Or pick a .sauce.json file you exported earlier.</Text>
+              <TouchableOpacity
+                style={[styles.smallBtnSecondary, importing && styles.btnDisabled]}
+                onPress={handleImportFromFile}
+                disabled={importing}
+                activeOpacity={0.8}
+              >
+                <FileUp size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.smallBtnSecondaryLabel}>From file</Text>
               </TouchableOpacity>
             </View>
             {importError ? <Text style={styles.error}>{importError}</Text> : null}
@@ -1121,6 +1171,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '800',
     fontSize: 12,
+  },
+  smallBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginLeft: 8,
+  },
+  smallBtnSecondaryLabel: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  importFileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   btnDisabled: {
     opacity: 0.45,
