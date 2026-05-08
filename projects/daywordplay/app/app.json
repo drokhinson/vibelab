@@ -4,29 +4,45 @@
     "slug": "daywordplay",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
+    "scheme": "daywordplay",
     "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0d0d14"
+      "backgroundColor": "#F5EFE6",
+      "resizeMode": "contain"
     },
+    "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.vibelab.daywordplay"
+      "bundleIdentifier": "com.vibelab.daywordplay",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          { "CFBundleURLSchemes": ["daywordplay"] }
+        ]
+      }
     },
     "android": {
+      "package": "com.vibelab.daywordplay",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0d0d14"
+        "backgroundColor": "#F5EFE6"
       },
-      "package": "com.vibelab.daywordplay"
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT", "BROWSABLE"],
+          "data": [{ "scheme": "daywordplay" }]
+        }
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "bundler": "metro"
     },
     "extra": {
-      "apiUrl": "http://localhost:8000"
+      "eas": {}
     }
   }
 }
