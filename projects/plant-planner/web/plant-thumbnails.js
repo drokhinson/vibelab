@@ -91,7 +91,7 @@ function getPlantThumbnail(plant, style) {
   // Realistic mode: use the plant image directly as thumbnail
   if ((style || renderStyle) === "realistic") {
     var slug = plantNameToSlug(plant.name);
-    var imgUrl = "assets/plants/" + slug + ".png";
+    var imgUrl = "assets/sprites/plants/" + slug + ".png";
     plantThumbnailCache[key] = imgUrl;
     return imgUrl;
   }
@@ -114,7 +114,7 @@ function preloadThumbnails(plantList, style) {
       var rKey = plantList[j].id + "_" + style;
       if (!plantThumbnailCache[rKey]) {
         var slug = plantNameToSlug(plantList[j].name);
-        plantThumbnailCache[rKey] = "assets/plants/" + slug + ".png";
+        plantThumbnailCache[rKey] = "assets/sprites/plants/" + slug + ".png";
       }
     }
     return;

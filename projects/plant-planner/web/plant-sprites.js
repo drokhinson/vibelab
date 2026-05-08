@@ -19,13 +19,13 @@ function plantNameToSlug(name) {
 
 function _getPlantImageUrl(plant) {
   var slug = plantNameToSlug(plant.name);
-  return "assets/plants/" + slug + ".png";
+  return "assets/sprites/plants/" + slug + ".png";
 }
 
 function _getCategoryFallbackUrl(plant) {
   var cat = plant.category || "other";
   var file = CATEGORY_FALLBACK_IMAGES[cat] || CATEGORY_FALLBACK_IMAGES.other;
-  return "assets/plants/" + file;
+  return "assets/sprites/plants/" + file;
 }
 
 function loadPlantTexture(plant) {
