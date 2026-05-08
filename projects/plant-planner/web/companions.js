@@ -41,7 +41,12 @@ function computeWarningsForPlacements(placementsArr) {
       var a = placementsArr[i], b = placementsArr[j];
       var dx = a.pos_x - b.pos_x, dy = a.pos_y - b.pos_y;
       var d = Math.sqrt(dx * dx + dy * dy);
-      var adj = a.radius_feet + b.radius_feet + 0.5;
+      // Year-preview: re-evaluate radii at the current scrubber year.
+      var sa = (typeof yearScale === 'function') ? yearScale(a.plant, previewYear) : 1.0;
+      var sb = (typeof yearScale === 'function') ? yearScale(b.plant, previewYear) : 1.0;
+      var ra = a.radius_feet * sa;
+      var rb = b.radius_feet * sb;
+      var adj = ra + rb + 0.5;
       if (d > adj) continue;
       var rel = getCompanionRelationship(a.plantId, b.plantId);
       if (rel === 'good' || rel === 'bad') {
@@ -60,7 +65,7 @@ function computeWarningsForPlacements(placementsArr) {
         });
       }
       // Crowd: disks overlap by more than 6 inches (0.5 ft)
-      var crowd = a.radius_feet + b.radius_feet - 0.5;
+      var crowd = ra + rb - 0.5;
       if (d < crowd) {
         (result[a.id] = result[a.id] || []).push({
           type: 'crowd', neighborPlacementId: b.id, neighborPlantId: b.plantId

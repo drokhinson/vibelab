@@ -1,11 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: post-008_real_radius_placement (plantplanner_garden_plants now
--- uses pos_x/pos_y/radius_feet floats; grid_x/grid_y unique-cell model
--- removed; overlap allowed).
+-- Last updated: post-009_growth_lifecycle (plantplanner_plants now carries
+-- lifecycle + years_to_maturity for the year 1/2/3+ growth-preview feature).
 -- Migrations applied: 001_baseline, 002_seed, 003_supabase_auth,
 --                     004_enrich_plants, 005_seed_enriched, 006_companions,
---                     007_companions_seed, 008_real_radius_placement.
+--                     007_companions_seed, 008_real_radius_placement,
+--                     009_growth_lifecycle.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_plants (
   water_need          TEXT       NOT NULL DEFAULT 'medium' CHECK (water_need IN ('low','medium','high')),
   care_summary        TEXT,                                      -- one short plain-language sentence
   description         TEXT,
+  lifecycle           TEXT       NOT NULL DEFAULT 'perennial' CHECK (lifecycle IN ('annual','biennial','perennial')),
+  years_to_maturity   INT        NOT NULL DEFAULT 3 CHECK (years_to_maturity BETWEEN 1 AND 5),
   render_key          TEXT       REFERENCES public.plantplanner_renders(key),
   sort_order          INT        NOT NULL DEFAULT 0
 );
