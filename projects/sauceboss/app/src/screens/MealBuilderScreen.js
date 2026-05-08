@@ -37,10 +37,14 @@ export default function MealBuilderScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const items = itemsForTab(state, state.mealCategory);
 
-  const onPickItem = async (item) => {
-    const { hasVariants, error } = await actions.selectItem(item);
-    if (error) return;
-    navigation.navigate(hasVariants ? 'PrepSelector' : 'SauceSelector');
+  // Navigate immediately so the loading state lives on the destination screen
+  // (the "choose variant" header) instead of overlaying the dish grid the user
+  // just tapped. We don't yet know whether the item has variants — we always
+  // route through PrepSelector, which auto-redirects to SauceSelector once the
+  // load resolves with an empty preparations list.
+  const onPickItem = (item) => {
+    navigation.navigate('PrepSelector');
+    actions.selectItem(item);
   };
 
   const content = useMemo(() => {
@@ -125,11 +129,7 @@ export default function MealBuilderScreen({ navigation }) {
           })}
         </View>
 
-        {state.itemLoading ? (
-          <LoadingPot label="Loading…" />
-        ) : (
-          content
-        )}
+        {content}
       </ScrollView>
     </View>
   );
