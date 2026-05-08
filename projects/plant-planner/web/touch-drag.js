@@ -52,12 +52,29 @@ function bindCatalogTouch() {
       var touch = e.touches[0];
       _positionGhost(_touchDragState.ghost, touch.clientX, touch.clientY);
 
-      // Highlight cell under finger via 3D raycasting
+      // Preview disk under finger via 3D raycasting
       if (scene3DHandle) {
         lockBirdsEye(scene3DHandle);
-        var cell = getRaycastCell(scene3DHandle, touch.clientX, touch.clientY);
-        if (cell) showCellHighlight(scene3DHandle, cell.gx, cell.gy);
-        else hideCellHighlight(scene3DHandle);
+        var pt = getRaycastPoint(scene3DHandle, touch.clientX, touch.clientY);
+        if (pt) {
+          var plantTouch = _touchDragState.plant;
+          var rTouch = (plantTouch.spread_inches || 12) / 24;
+          var gw = scene3DHandle.gridWidth;
+          var gh = scene3DHandle.gridHeight;
+          var oob = pt.x < 0 || pt.x > gw || pt.y < 0 || pt.y > gh;
+          var overlaps = false;
+          if (!oob && Array.isArray(placements)) {
+            for (var i = 0; i < placements.length; i++) {
+              var pp = placements[i];
+              var dx = pt.x - pp.pos_x, dy = pt.y - pp.pos_y;
+              if (Math.hypot(dx, dy) < rTouch + pp.radius_feet) { overlaps = true; break; }
+            }
+          }
+          var valid = oob ? 'oob' : (overlaps ? 'overlap' : 'ok');
+          showPreviewDisk(scene3DHandle, pt.x, pt.y, rTouch, valid);
+        } else {
+          hidePreviewDisk(scene3DHandle);
+        }
       }
     }, { passive: false });
 
@@ -69,14 +86,30 @@ function bindCatalogTouch() {
       var touch = e.changedTouches[0];
       var plant = _touchDragState.plant;
       if (scene3DHandle) {
-        var cell = getRaycastCell(scene3DHandle, touch.clientX, touch.clientY);
-        hideCellHighlight(scene3DHandle);
+        var pt = getRaycastPoint(scene3DHandle, touch.clientX, touch.clientY);
+        hidePreviewDisk(scene3DHandle);
         unlockCamera(scene3DHandle);
-        if (cell) {
-          gridPlacements[cell.gx + "," + cell.gy] = plant;
+        var gw = scene3DHandle.gridWidth;
+        var gh = scene3DHandle.gridHeight;
+        var inBounds = pt && pt.x >= 0 && pt.x <= gw && pt.y >= 0 && pt.y <= gh;
+        if (inBounds) {
+          var r = (plant.spread_inches || 12) / 24;
+          var newId = (window.crypto && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : ('p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
+          placements.push({
+            id: newId,
+            plantId: plant.id,
+            plant: plant,
+            pos_x: pt.x,
+            pos_y: pt.y,
+            radius_feet: r
+          });
           sync3DView();
+          if (typeof renderCompanionChips === 'function') renderCompanionChips();
+          if (typeof refreshCatalogList === 'function') refreshCatalogList();
         } else {
-          // Released outside the grid — toss the plant onto the ground so it
+          // Released outside the bed — toss the plant onto the ground so it
           // matches the desktop behavior and the picked-up-plant toss arc.
           tossNewPlantToGround(plant, touch.clientX, touch.clientY, scene3DHandle);
         }
@@ -89,7 +122,7 @@ function bindCatalogTouch() {
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
       tile.classList.remove("dragging");
       if (scene3DHandle) {
-        hideCellHighlight(scene3DHandle);
+        hidePreviewDisk(scene3DHandle);
         unlockCamera(scene3DHandle);
       }
       _removeGhost();

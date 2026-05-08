@@ -128,6 +128,8 @@ function init3DView(containerId, garden, placements) {
     cellSize: 1,
     gridOriginX: -gw / 2 + 0.5,
     gridOriginZ: -gh / 2 + 0.5,
+    gridWidth: gw,
+    gridHeight: gh,
     soilTop: soilTop
   };
 
@@ -324,7 +326,7 @@ function buildPlanterBox(gw, gh, isPlanter) {
   return group;
 }
 
-function syncSceneWithPlacements(handle, placements) {
+function syncSceneWithPlacements(handle, placementsArr) {
   if (!handle) return;
   var pg = handle.plantsGroup;
   var garden = handle.garden;
@@ -341,20 +343,41 @@ function syncSceneWithPlacements(handle, placements) {
     disposeObject(child);
   }
 
-  // Add plants from placements
-  for (var key in placements) {
-    var parts = key.split(",");
-    var gx = parseInt(parts[0]);
-    var gy = parseInt(parts[1]);
-    var plant = placements[key];
+  if (!placementsArr || placementsArr.length === 0) return;
+
+  // Add plants from placements array
+  for (var i = 0; i < placementsArr.length; i++) {
+    var placement = placementsArr[i];
+    var plant = placement.plant;
+    if (!plant) continue;
+
+    var group = new THREE.Group();
+    group.position.set(placement.pos_x - gw / 2, soilTop, placement.pos_y - gh / 2);
+    group.userData = { placementId: placement.id, plantId: placement.plantId };
 
     var mesh = buildPlantMesh(plant, style);
-    // Position: grid cell center, offset so grid is centered at origin
-    mesh.position.x = gx - gw / 2 + 0.5;
-    mesh.position.z = gy - gh / 2 + 0.5;
-    mesh.position.y = soilTop;
-    mesh.userData = { gridKey: key, plantId: plant.id };
-    pg.add(mesh);
+    mesh.position.set(0, 0, 0);
+    if (mesh.userData) mesh.userData.placementId = placement.id;
+    else mesh.userData = { placementId: placement.id };
+    group.add(mesh);
+
+    // Translucent soil disk for the plant's spread
+    var diskColor = (plant.render_colors && plant.render_colors.foliage && plant.render_colors.foliage[0]) || '#7BAE7F';
+    var diskGeom = new THREE.CircleGeometry(placement.radius_feet, 32);
+    var diskMat = new THREE.MeshBasicMaterial({
+      color: diskColor,
+      transparent: true,
+      opacity: 0.25,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    var disk = new THREE.Mesh(diskGeom, diskMat);
+    disk.rotation.x = -Math.PI / 2;
+    disk.position.y = 0.005;
+    disk.userData = { placementId: placement.id };
+    group.add(disk);
+
+    pg.add(group);
   }
 }
 
@@ -373,7 +396,7 @@ function setRenderStyle(handle, newStyle) {
         child.type !== "AmbientLight" &&
         child.type !== "DirectionalLight" &&
         child.name !== "hitPlane" &&
-        child.name !== "cellHighlight" &&
+        child.name !== "_previewDisk" &&
         child.name !== "_carryPlane" &&
         child.name !== "groundPlants") {
       toRemove.push(child);
@@ -398,7 +421,7 @@ function setRenderStyle(handle, newStyle) {
   handle.scene.add(newBox);
 
   // Rebuild all plants with new material (after box so plants are on top)
-  syncSceneWithPlacements(handle, gridPlacements);
+  syncSceneWithPlacements(handle, placements);
 }
 
 function dispose3DView(handle) {
@@ -447,20 +470,21 @@ function disposeObject(obj) {
 
 // ── 3D Drag-and-Drop Interaction ───────────────────────────────────────────
 
-// Returns a THREE.Vector3 at the visual top-center of the cell (world coords).
-// Used by overlays (e.g. companion warning chips) to project cell positions to screen.
-function sceneCellWorldPosition(handle, gx, gy) {
-  if (!handle) return null;
-  var cellSize = handle.cellSize || 1;
-  var ox = (handle.gridOriginX != null) ? handle.gridOriginX : (-handle.garden.grid_width / 2 + 0.5);
-  var oz = (handle.gridOriginZ != null) ? handle.gridOriginZ : (-handle.garden.grid_height / 2 + 0.5);
+// Returns a THREE.Vector3 at soil level for a placement's continuous (pos_x, pos_y) feet.
+// Used by overlays (e.g. companion warning chips) to project placements to screen.
+function scenePlacementWorldPosition(handle, placement) {
+  if (!handle || !placement) return null;
+  var gw = handle.gridWidth != null ? handle.gridWidth : handle.garden.grid_width;
+  var gh = handle.gridHeight != null ? handle.gridHeight : handle.garden.grid_height;
   var top = (handle.soilTop != null)
     ? handle.soilTop
     : (handle.garden && handle.garden.garden_type === "planter" ? 0.36 : 0.12);
-  return new THREE.Vector3(ox + gx * cellSize, top, oz + gy * cellSize);
+  return new THREE.Vector3(placement.pos_x - gw / 2, top, placement.pos_y - gh / 2);
 }
 
-function getRaycastCell(handle, clientX, clientY) {
+// Raycast against the soil hit-plane and return the intersection in feet
+// (pos_x, pos_y) coordinates without clamping. Returns null if ray misses.
+function getRaycastPoint(handle, clientX, clientY) {
   if (!handle || !handle.hitPlane) return null;
   var canvas = handle.renderer.domElement;
   var rect = canvas.getBoundingClientRect();
@@ -473,26 +497,38 @@ function getRaycastCell(handle, clientX, clientY) {
   var hits = raycaster.intersectObject(handle.hitPlane);
   if (hits.length === 0) return null;
   var pt = hits[0].point;
-  var gw = handle.garden.grid_width;
-  var gh = handle.garden.grid_height;
-  var gx = Math.floor(pt.x + gw / 2);
-  var gy = Math.floor(pt.z + gh / 2);
-  if (gx < 0 || gx >= gw || gy < 0 || gy >= gh) return null;
-  return { gx: gx, gy: gy };
+  var gw = handle.gridWidth != null ? handle.gridWidth : handle.garden.grid_width;
+  var gh = handle.gridHeight != null ? handle.gridHeight : handle.garden.grid_height;
+  return { x: pt.x + gw / 2, y: pt.z + gh / 2 };
 }
 
-function showCellHighlight(handle, gx, gy) {
-  if (!handle || !handle.cellHighlight) return;
-  var gw = handle.garden.grid_width;
-  var gh = handle.garden.grid_height;
-  handle.cellHighlight.position.x = gx - gw / 2 + 0.5;
-  handle.cellHighlight.position.z = gy - gh / 2 + 0.5;
-  handle.cellHighlight.visible = true;
+function ensurePreviewDisk(handle) {
+  if (handle._previewDisk) return handle._previewDisk;
+  var geom = new THREE.CircleGeometry(1, 32);
+  var mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+  var mesh = new THREE.Mesh(geom, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.visible = false;
+  mesh.name = "_previewDisk";
+  handle.scene.add(mesh);
+  handle._previewDisk = mesh;
+  return mesh;
 }
 
-function hideCellHighlight(handle) {
-  if (!handle || !handle.cellHighlight) return;
-  handle.cellHighlight.visible = false;
+function showPreviewDisk(handle, pos_x, pos_y, radius_feet, valid) {
+  if (!handle) return;
+  var d = ensurePreviewDisk(handle);
+  var gw = handle.gridWidth != null ? handle.gridWidth : handle.garden.grid_width;
+  var gh = handle.gridHeight != null ? handle.gridHeight : handle.garden.grid_height;
+  var top = (handle.soilTop != null) ? handle.soilTop : (handle.garden.garden_type === "planter" ? 0.36 : 0.12);
+  d.position.set(pos_x - gw / 2, top + 0.012, pos_y - gh / 2);
+  d.scale.setScalar(radius_feet > 0 ? radius_feet : 0.01);
+  d.material.color.set(valid === 'ok' ? '#4ade80' : valid === 'overlap' ? '#fbbf24' : '#ef4444');
+  d.visible = true;
+}
+
+function hidePreviewDisk(handle) {
+  if (handle && handle._previewDisk) handle._previewDisk.visible = false;
 }
 
 function lockBirdsEye(handle) {
@@ -524,16 +560,7 @@ function setup3DDragDrop(handle, callbacks) {
   handle.scene.add(hitPlane);
   handle.hitPlane = hitPlane;
 
-  // Semi-transparent cell highlight at soil level
-  var hlGeom = new THREE.PlaneGeometry(0.92, 0.92);
-  var hlMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthTest: false });
-  var highlight = new THREE.Mesh(hlGeom, hlMat);
-  highlight.rotation.x = -Math.PI / 2;
-  highlight.position.y = soilTop + 0.01;
-  highlight.name = "cellHighlight";
-  highlight.visible = false;
-  handle.scene.add(highlight);
-  handle.cellHighlight = highlight;
+  ensurePreviewDisk(handle);
 
   var canvas = handle.renderer.domElement;
 
@@ -542,23 +569,35 @@ function setup3DDragDrop(handle, callbacks) {
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
     lockBirdsEye(handle);
-    var cell = getRaycastCell(handle, e.clientX, e.clientY);
-    if (cell) showCellHighlight(handle, cell.gx, cell.gy);
-    else hideCellHighlight(handle);
+    var pt = getRaycastPoint(handle, e.clientX, e.clientY);
+    if (!pt) { hidePreviewDisk(handle); return; }
+    var r = (draggedPlant.spread_inches || 12) / 24;
+    var oob = pt.x < 0 || pt.x > gw || pt.y < 0 || pt.y > gh;
+    var overlaps = false;
+    if (!oob && Array.isArray(placements)) {
+      for (var i = 0; i < placements.length; i++) {
+        var p = placements[i];
+        var dx = pt.x - p.pos_x, dy = pt.y - p.pos_y;
+        if (Math.hypot(dx, dy) < r + p.radius_feet) { overlaps = true; break; }
+      }
+    }
+    var valid = oob ? 'oob' : (overlaps ? 'overlap' : 'ok');
+    showPreviewDisk(handle, pt.x, pt.y, r, valid);
   });
 
   canvas.addEventListener("drop", function(e) {
     e.preventDefault();
-    var cell = getRaycastCell(handle, e.clientX, e.clientY);
-    hideCellHighlight(handle);
+    hidePreviewDisk(handle);
     unlockCamera(handle);
-    if (cell) callbacks.onDrop(cell.gx, cell.gy);
+    var pt = getRaycastPoint(handle, e.clientX, e.clientY);
+    var inBounds = pt && pt.x >= 0 && pt.x <= gw && pt.y >= 0 && pt.y <= gh;
+    if (pt && inBounds) callbacks.onDrop(pt.x, pt.y);
     else if (callbacks.onMiss) callbacks.onMiss(e.clientX, e.clientY);
     else callbacks.onLeave();
   });
 
   canvas.addEventListener("dragleave", function() {
-    hideCellHighlight(handle);
+    hidePreviewDisk(handle);
     unlockCamera(handle);
     callbacks.onLeave();
   });

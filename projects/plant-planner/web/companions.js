@@ -33,42 +33,60 @@ function getCompanionRelationship(aId, bId) {
   return null;
 }
 
-function computeWarningsForGrid(placements) {
+function computeWarningsForPlacements(placementsArr) {
   var result = {};
-  if (!placements) return result;
-  Object.keys(placements).forEach(function(cellKey) {
-    var self = placements[cellKey];
-    if (!self) return;
-    var parts = cellKey.split(',');
-    var x = parseInt(parts[0], 10), y = parseInt(parts[1], 10);
-    var neighbors = [[x-1,y],[x+1,y],[x,y-1],[x,y+1]];
-    neighbors.forEach(function(nb) {
-      var nbKey = nb[0] + ',' + nb[1];
-      var other = placements[nbKey];
-      if (!other) return;
-      var rel = getCompanionRelationship(self.id, other.id);
+  if (!placementsArr || placementsArr.length === 0) return result;
+  for (var i = 0; i < placementsArr.length; i++) {
+    for (var j = i + 1; j < placementsArr.length; j++) {
+      var a = placementsArr[i], b = placementsArr[j];
+      var dx = a.pos_x - b.pos_x, dy = a.pos_y - b.pos_y;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      var adj = a.radius_feet + b.radius_feet + 0.5;
+      if (d > adj) continue;
+      var rel = getCompanionRelationship(a.plantId, b.plantId);
       if (rel === 'good' || rel === 'bad') {
-        (result[cellKey] = result[cellKey] || []).push({
-          neighborCellKey: nbKey, neighborPlantId: other.id, relationship: rel, reason: ''
+        var reasonAB = '';
+        var entriesA = companionsByPlantId[a.plantId] || [];
+        for (var k = 0; k < entriesA.length; k++) {
+          if (entriesA[k].otherId === b.plantId) { reasonAB = entriesA[k].reason; break; }
+        }
+        (result[a.id] = result[a.id] || []).push({
+          type: 'companion', neighborPlacementId: b.id, neighborPlantId: b.plantId,
+          relationship: rel, reason: reasonAB
+        });
+        (result[b.id] = result[b.id] || []).push({
+          type: 'companion', neighborPlacementId: a.id, neighborPlantId: a.plantId,
+          relationship: rel, reason: reasonAB
         });
       }
-    });
-  });
-  // Attach reason text from companions rows (we lost it above to keep the inner loop clean — re-attach):
-  Object.keys(result).forEach(function(cellKey) {
-    var self = placements[cellKey];
-    result[cellKey].forEach(function(w) {
-      var entries = companionsByPlantId[self.id] || [];
-      for (var i = 0; i < entries.length; i++) {
-        if (entries[i].otherId === w.neighborPlantId) { w.reason = entries[i].reason; break; }
+      // Crowd: disks overlap by more than 6 inches (0.5 ft)
+      var crowd = a.radius_feet + b.radius_feet - 0.5;
+      if (d < crowd) {
+        (result[a.id] = result[a.id] || []).push({
+          type: 'crowd', neighborPlacementId: b.id, neighborPlantId: b.plantId
+        });
+        (result[b.id] = result[b.id] || []).push({
+          type: 'crowd', neighborPlacementId: a.id, neighborPlantId: a.plantId
+        });
       }
-    });
-  });
+    }
+  }
   return result;
 }
 
-function canonicalPairKey(aId, bId) {
-  return aId < bId ? aId + ':' + bId : bId + ':' + aId;
+function canonicalPairKey(prefix, aId, bId) {
+  var ordered = aId < bId ? aId + ':' + bId : bId + ':' + aId;
+  return prefix + ':' + ordered;
+}
+
+function _isDismissed(prefix, aId, bId) {
+  if (dismissedCompanionWarnings.has(canonicalPairKey(prefix, aId, bId))) return true;
+  // Legacy: pre-iter-3 entries had no prefix and used plant-id ordering
+  if (prefix === 'companion') {
+    var ordered = aId < bId ? aId + ':' + bId : bId + ':' + aId;
+    if (dismissedCompanionWarnings.has(ordered)) return true;
+  }
+  return false;
 }
 
 // ── DOM-touching companion-warning UI (chips + popover) ────────────────────
@@ -76,48 +94,54 @@ function canonicalPairKey(aId, bId) {
 function renderCompanionChips() {
   var layer = document.getElementById('companion-chips');
   if (!layer || !scene3DHandle) return;
-  var warnings = computeWarningsForGrid(gridPlacements);
+  var warnings = computeWarningsForPlacements(placements);
   var html = '';
-  Object.keys(warnings).forEach(function(cellKey) {
-    var rows = warnings[cellKey];
-    var selfId = gridPlacements[cellKey] && gridPlacements[cellKey].id;
-    var hasBad = rows.some(function(w) {
-      return w.relationship === 'bad' && !dismissedCompanionWarnings.has(canonicalPairKey(selfId, w.neighborPlantId));
+  for (var i = 0; i < placements.length; i++) {
+    var placement = placements[i];
+    var rows = warnings[placement.id];
+    if (!rows || rows.length === 0) continue;
+    var selfPlantId = placement.plantId;
+    var hasBadCompanion = rows.some(function(w) {
+      return w.type === 'companion' && w.relationship === 'bad' &&
+             !_isDismissed('companion', selfPlantId, w.neighborPlantId);
     });
-    var hasGood = rows.some(function(w) { return w.relationship === 'good'; });
-    var type = hasBad ? 'warning' : (hasGood ? 'good' : null);
-    if (!type) return;
-    var pos = projectCellToScreen(cellKey);
-    if (!pos) return;
+    var hasCrowd = rows.some(function(w) {
+      return w.type === 'crowd' && !_isDismissed('crowd', placement.id, w.neighborPlacementId);
+    });
+    var hasGood = rows.some(function(w) {
+      return w.type === 'companion' && w.relationship === 'good';
+    });
+    var type = (hasBadCompanion || hasCrowd) ? 'warning' : (hasGood ? 'good' : null);
+    if (!type) continue;
+    var pos = projectPlacementToScreen(placement.id);
+    if (!pos) continue;
     var icon = type === 'warning' ? 'alert-triangle' : 'sparkles';
-    html += '<button class="companion-chip-' + type + '" data-cell-key="' + cellKey +
-            '" style="left:' + pos.x + 'px;top:' + pos.y + 'px"><i data-lucide="' + icon + '"></i></button>';
-  });
+    html += '<button class="companion-chip-' + type + '" data-placement-id="' + placement.id + '"' +
+            ' style="left:' + pos.x + 'px;top:' + pos.y + 'px"><i data-lucide="' + icon + '"></i></button>';
+  }
   layer.innerHTML = html;
   if (window.lucide) window.lucide.createIcons({ icons: layer });
   Array.prototype.forEach.call(layer.querySelectorAll('button'), function(btn) {
     btn.onclick = function(e) {
       e.stopPropagation();
-      companionPopoverCellKey = btn.dataset.cellKey;
+      companionPopoverCellKey = btn.dataset.placementId;
       renderCompanionPopover();
     };
   });
   if (companionPopoverCellKey) renderCompanionPopover();
   // Schedule re-positioning on the next frame while builder is mounted.
-  // Bail out of the rAF loop when #companion-chips is no longer in the DOM.
   if (!_companionRafScheduled) {
     _companionRafScheduled = true;
     requestAnimationFrame(function step() {
       var layer2 = document.getElementById('companion-chips');
       if (!layer2) { _companionRafScheduled = false; return; }
       Array.prototype.forEach.call(layer2.querySelectorAll('button'), function(btn) {
-        var pos = projectCellToScreen(btn.dataset.cellKey);
+        var pos = projectPlacementToScreen(btn.dataset.placementId);
         if (pos) { btn.style.left = pos.x + 'px'; btn.style.top = pos.y + 'px'; }
       });
-      // Keep popover anchored too
       var pop = document.getElementById('companion-popover');
       if (pop && companionPopoverCellKey) {
-        var p = projectCellToScreen(companionPopoverCellKey);
+        var p = projectPlacementToScreen(companionPopoverCellKey);
         if (p) {
           pop.style.left = (p.x + 14) + 'px';
           pop.style.top = (p.y + 14) + 'px';
@@ -130,12 +154,11 @@ function renderCompanionChips() {
 
 var _companionRafScheduled = false;
 
-function projectCellToScreen(cellKey) {
+function projectPlacementToScreen(placementId) {
   if (!scene3DHandle || !scene3DHandle.renderer || !scene3DHandle.camera) return null;
-  var parts = cellKey.split(',');
-  var gx = parseInt(parts[0], 10);
-  var gy = parseInt(parts[1], 10);
-  var v = sceneCellWorldPosition(scene3DHandle, gx, gy);
+  var placement = placements.find(function(p) { return p.id === placementId; });
+  if (!placement) return null;
+  var v = scenePlacementWorldPosition(scene3DHandle, placement);
   if (!v) return null;
   var canvas = scene3DHandle.renderer.domElement;
   var rect = canvas.getBoundingClientRect();
@@ -153,21 +176,23 @@ function renderCompanionPopover() {
   var existing = document.getElementById('companion-popover');
   if (existing) existing.remove();
   if (!companionPopoverCellKey) return;
-  var cellKey = companionPopoverCellKey;
-  var self = gridPlacements[cellKey];
+  var self = placements.find(function(p) { return p.id === companionPopoverCellKey; });
   if (!self) { companionPopoverCellKey = null; return; }
-  var warnings = computeWarningsForGrid(gridPlacements);
-  var rows = warnings[cellKey] || [];
-  // Filter out dismissed bad pairs (still show good rows)
+  var warnings = computeWarningsForPlacements(placements);
+  var rows = warnings[self.id] || [];
+  // Filter dismissed rows
   var visibleRows = rows.filter(function(w) {
-    if (w.relationship === 'bad') {
-      return !dismissedCompanionWarnings.has(canonicalPairKey(self.id, w.neighborPlantId));
+    if (w.type === 'companion' && w.relationship === 'bad') {
+      return !_isDismissed('companion', self.plantId, w.neighborPlantId);
+    }
+    if (w.type === 'crowd') {
+      return !_isDismissed('crowd', self.id, w.neighborPlacementId);
     }
     return true;
   });
   if (visibleRows.length === 0) { companionPopoverCellKey = null; return; }
 
-  var pos = projectCellToScreen(cellKey);
+  var pos = projectPlacementToScreen(self.id);
   if (!pos) return;
 
   var pop = document.createElement('div');
@@ -179,23 +204,39 @@ function renderCompanionPopover() {
 
   var html = '<button class="companion-popover-close" aria-label="Close" data-action="close"><i data-lucide="x" style="width:14px;height:14px"></i></button>';
   visibleRows.forEach(function(w) {
-    var partner = getPlantById(w.neighborPlantId);
-    if (!partner) return;
-    var thumb = getPlantThumbnail(partner, renderStyle);
-    var pillClass = w.relationship === 'good' ? 'good' : 'bad';
-    var pillText = w.relationship === 'good' ? 'Good' : 'Avoid';
-    html += '<div class="companion-popover-row">';
-    html +=   '<img class="companion-popover-thumb" src="' + thumb + '" alt="" />';
-    html +=   '<div class="companion-popover-text">';
-    html +=     '<div class="companion-popover-name">' + escapeHtml(partner.name) +
-                ' <span class="companion-popover-pill ' + pillClass + '">' + pillText + '</span></div>';
-    if (w.reason) html += '<div class="companion-popover-reason">' + escapeHtml(w.reason) + '</div>';
-    if (w.relationship === 'bad') {
-      html += '<button class="companion-popover-dismiss" data-action="dismiss" data-other-id="' +
-              partner.id + '">Dismiss for this garden</button>';
+    if (w.type === 'companion') {
+      var partner = getPlantById(w.neighborPlantId);
+      if (!partner) return;
+      var thumb = getPlantThumbnail(partner, renderStyle);
+      var pillClass = w.relationship === 'good' ? 'good' : 'bad';
+      var pillText = w.relationship === 'good' ? 'Good' : 'Avoid';
+      html += '<div class="companion-popover-row">';
+      html +=   '<img class="companion-popover-thumb" src="' + thumb + '" alt="" />';
+      html +=   '<div class="companion-popover-text">';
+      html +=     '<div class="companion-popover-name">' + escapeHtml(partner.name) +
+                  ' <span class="companion-popover-pill ' + pillClass + '">' + pillText + '</span></div>';
+      if (w.reason) html += '<div class="companion-popover-reason">' + escapeHtml(w.reason) + '</div>';
+      if (w.relationship === 'bad') {
+        html += '<button class="companion-popover-dismiss" data-action="dismiss-companion" data-other-plant-id="' +
+                partner.id + '">Dismiss for this garden</button>';
+      }
+      html +=   '</div>';
+      html += '</div>';
+    } else if (w.type === 'crowd') {
+      var neighbor = placements.find(function(p) { return p.id === w.neighborPlacementId; });
+      var nplant = neighbor && neighbor.plant;
+      if (!nplant) return;
+      var nthumb = getPlantThumbnail(nplant, renderStyle);
+      html += '<div class="companion-popover-row">';
+      html +=   '<img class="companion-popover-thumb" src="' + nthumb + '" alt="" />';
+      html +=   '<div class="companion-popover-text">';
+      html +=     '<div class="companion-popover-name">' + escapeHtml(nplant.name) + ' is crowding this spot' +
+                  ' <span class="companion-popover-pill crowd">Crowded</span></div>';
+      html +=     '<button class="companion-popover-dismiss" data-action="dismiss-crowd" data-other-placement-id="' +
+                  neighbor.id + '">It\'s fine, dismiss</button>';
+      html +=   '</div>';
+      html += '</div>';
     }
-    html +=   '</div>';
-    html += '</div>';
   });
   pop.innerHTML = html;
 
@@ -213,9 +254,14 @@ function renderCompanionPopover() {
     if (action === 'close') {
       companionPopoverCellKey = null;
       pop.remove();
-    } else if (action === 'dismiss') {
-      var otherId = btn.dataset.otherId;
-      dismissedCompanionWarnings.add(canonicalPairKey(self.id, otherId));
+    } else if (action === 'dismiss-companion') {
+      var otherPlantId = btn.dataset.otherPlantId;
+      dismissedCompanionWarnings.add(canonicalPairKey('companion', self.plantId, otherPlantId));
+      renderCompanionChips();
+      renderCompanionPopover();
+    } else if (action === 'dismiss-crowd') {
+      var otherPlacementId = btn.dataset.otherPlacementId;
+      dismissedCompanionWarnings.add(canonicalPairKey('crowd', self.id, otherPlacementId));
       renderCompanionChips();
       renderCompanionPopover();
     }

@@ -27,7 +27,7 @@ function initSupabase() {
     } else {
       currentUser = null;
       currentGarden = null;
-      gridPlacements = {};
+      placements = [];
       gardens = [];
       plants = [];
       showView("auth");

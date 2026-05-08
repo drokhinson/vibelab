@@ -184,12 +184,23 @@ async function openGarden(id) {
         : []
     );
     companionPopoverCellKey = null;
-    gridPlacements = {};
+    placements = [];
     if (data.plants) {
       for (var i = 0; i < data.plants.length; i++) {
-        var p = data.plants[i];
-        var key = p.grid_x + "," + p.grid_y;
-        gridPlacements[key] = p.plantplanner_plants || p;
+        var row = data.plants[i];
+        var plantObj = row.plantplanner_plants || row;
+        var pid = row.id ||
+          ((window.crypto && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : ('p_' + i + '_' + Date.now()));
+        placements.push({
+          id: pid,
+          plantId: plantObj.id || row.plant_id,
+          plant: plantObj,
+          pos_x: row.pos_x,
+          pos_y: row.pos_y,
+          radius_feet: (row.radius_feet != null) ? row.radius_feet : ((plantObj.spread_inches || 12) / 24)
+        });
       }
     }
     viewMode = "top";

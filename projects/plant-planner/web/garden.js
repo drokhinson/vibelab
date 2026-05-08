@@ -61,7 +61,7 @@ function init3DScene(g) {
   // Double RAF ensures CSS layout is fully committed before reading container dimensions
   requestAnimationFrame(function() {
     requestAnimationFrame(function() {
-      scene3DHandle = init3DView("render3d-container", g, gridPlacements);
+      scene3DHandle = init3DView("render3d-container", g, placements);
       if (scene3DHandle) {
         bind3DDragDrop();
         bind3DClick();
@@ -75,15 +75,28 @@ function init3DScene(g) {
 
 function sync3DView() {
   if (scene3DHandle) {
-    syncSceneWithPlacements(scene3DHandle, gridPlacements);
+    syncSceneWithPlacements(scene3DHandle, placements);
   }
+}
+
+function _newPlacementId() {
+  if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 }
 
 function bind3DDragDrop() {
   setup3DDragDrop(scene3DHandle, {
-    onDrop: function(gx, gy) {
+    onDrop: function(pos_x, pos_y) {
       if (draggedPlant) {
-        gridPlacements[gx + "," + gy] = draggedPlant;
+        var r = (draggedPlant.spread_inches || 12) / 24;
+        placements.push({
+          id: _newPlacementId(),
+          plantId: draggedPlant.id,
+          plant: draggedPlant,
+          pos_x: pos_x,
+          pos_y: pos_y,
+          radius_feet: r
+        });
         sync3DView();
         renderCompanionChips();
         refreshCatalogList();
@@ -121,10 +134,12 @@ function bind3DClick() {
     var hits = raycaster.intersectObjects(scene3DHandle.plantsGroup.children, true);
     if (hits.length > 0) {
       var obj = hits[0].object;
-      while (obj && !obj.userData.gridKey) obj = obj.parent;
-      if (obj && obj.userData.gridKey) {
-        delete gridPlacements[obj.userData.gridKey];
-        if (companionPopoverCellKey === obj.userData.gridKey) {
+      while (obj && !obj.userData.placementId) obj = obj.parent;
+      if (obj && obj.userData.placementId) {
+        var pid = obj.userData.placementId;
+        var idx = placements.findIndex(function(p) { return p.id === pid; });
+        if (idx >= 0) placements.splice(idx, 1);
+        if (companionPopoverCellKey === pid) {
           companionPopoverCellKey = null;
           var existingPop = document.getElementById('companion-popover');
           if (existingPop) existingPop.remove();
@@ -248,19 +263,13 @@ async function saveGarden() {
   var btn = document.getElementById("save-garden");
   btn.classList.add("loading");
   btn.disabled = true;
-  var placements = [];
-  for (var key in gridPlacements) {
-    var parts = key.split(",");
-    placements.push({
-      plant_id: gridPlacements[key].id,
-      grid_x: parseInt(parts[0]),
-      grid_y: parseInt(parts[1])
-    });
-  }
+  var payload = placements.map(function(p) {
+    return { plant_id: p.plantId, pos_x: p.pos_x, pos_y: p.pos_y, radius_feet: p.radius_feet };
+  });
   try {
     await apiFetch("/gardens/" + currentGarden.id + "/plants", {
       method: "PUT",
-      body: { plants: placements }
+      body: { plants: payload }
     });
     // Persist dismissed companion warnings; non-fatal on failure.
     try {
@@ -291,7 +300,10 @@ async function reseedGarden() {
       method: "PUT",
       body: { plants: [] }
     });
-    gridPlacements = {};
+    placements = [];
+    sync3DView();
+    renderCompanionChips();
+    refreshCatalogList();
     btn.textContent = "Reseeded!";
     setTimeout(function() {
       btn.innerHTML = '<i data-lucide="refresh-cw"></i> Reseed';

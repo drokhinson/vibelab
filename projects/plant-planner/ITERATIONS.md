@@ -62,3 +62,20 @@ Hobby unmet: SATISFIED. Hobby gardener is no longer driving iterations.
 Wildflower unmet: full Jan–Dec bloom calendar strip aligned under 3D render; year 1/2/3 growth preview. (Iter 2 didn't touch wildflower — queued for iters 4 / 5+.)
 Food unmet: real-radius placement (spread-circle, not 1×1 grid) — iter 3; height-aware shading — later.
 Notes: UI/UX paired food's #1 (companion rules) with hobby's only remaining ask (companion warnings) into one bundle. Wildflower deliberately not advanced — their next ask (full bloom calendar) is queued for iter 4. New companions table is symmetric-stored (one row per pair, `plant_a_id < plant_b_id`) so the unique constraint actually enforces uniqueness and the API returns half the rows it would otherwise; client expands. Dismissals live per-garden (not per-user) so dismissing in Garden A doesn't mute the warning in Garden B.
+
+## Iteration 3 — Real-Radius Placement — pending
+Persona ratings (pre): hobby=5/5 (satisfied), wildflower=2/5, food=3/5
+Persona ratings (post): pending — Phase G re-poll
+Shipped:
+  - Migration 008 dropped+recreated `plantplanner_garden_plants` with `(pos_x REAL, pos_y REAL, radius_feet REAL)` floats. The grid_x/grid_y INT + UNIQUE(garden_id, grid_x, grid_y) cell model is gone; overlap is now allowed.
+  - Backend: `PlantPlacement` Pydantic model uses `pos_x/pos_y/radius_feet` floats; `save_garden_plants` validates 0 ≤ pos ≤ grid bounds with HTTP 422.
+  - Frontend state: `gridPlacements` map → `placements` array of `{id, plantId, plant, pos_x, pos_y, radius_feet}`. Touched 8 web files (state, render3d, plant-drag, garden, gardens, catalog, companions, touch-drag, plus auth/helpers cleanup) + STRUCTURE.md.
+  - Drag-from-catalog: a translucent disk preview (radius = `spread_inches/24` ft) follows the cursor at soil level. Green = ok; amber = overlaps another plant; red = outside bed (oob). Out-of-bed drop falls back to the existing toss-to-ground animation; in-bed drop is never blocked even on overlap.
+  - Each placed plant renders a permanent 25%-opacity disk on the soil at `radius_feet`, plant-tinted. Plant mesh sits at disk center.
+  - Companion adjacency rule changed from "4-connected grid neighbor" to "disk centers within `r_a + r_b + 0.5 ft`". Iter 2's chips, popover, and detail-panel Companions section all keep working with the new geometric definition.
+  - New "crowded" yellow chip fires when disks overlap by more than 6 inches. Per-pair "It's fine, dismiss" button stores `crowd:<placementA>:<placementB>` alongside companion dismissals. Companion dismissal keys now use a `companion:<plantA>:<plantB>` prefix; legacy unprefixed entries are treated as `companion:` for grace.
+  - Long-hold pickup, drag-to-move, click-to-remove, and reseed all preserved with continuous coordinates.
+Hobby unmet: pending re-poll (no regression expected — hobby is still satisfied).
+Wildflower unmet: pending re-poll. Iter 4 target: full Jan–Dec bloom calendar strip.
+Food unmet: pending re-poll. Likely satisfied at 4–5 (real-radius was their #1 unmet); height-aware shading and succession remain as nice-to-haves.
+Notes: Single-agent ownership of the 8-file frontend slice was correct — the `gridPlacements` → `placements` migration touched scene rendering, drag plumbing, save flow, hydration on garden open, and companion warning geometry simultaneously. Backend validation is 422 on out-of-bounds; overlap is never rejected by the server. The `_isDismissed` helper in companions.js handles the legacy → prefixed dismissal-key migration so iter 2 dismissals carry over cleanly.

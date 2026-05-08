@@ -46,10 +46,10 @@ function _nativeBadgeHtml() {
 }
 
 function _companionBadgesForTile(plantId) {
-  if (!gridPlacements || Object.keys(gridPlacements).length === 0) return '';
+  if (!placements || placements.length === 0) return '';
   var goodNames = [], badNames = [];
-  for (var key in gridPlacements) {
-    var placed = gridPlacements[key];
+  for (var i = 0; i < placements.length; i++) {
+    var placed = placements[i].plant;
     if (!placed || placed.id === plantId) continue;
     var rel = getCompanionRelationship(plantId, placed.id);
     if (rel === 'good' && goodNames.indexOf(placed.name) === -1) goodNames.push(placed.name);

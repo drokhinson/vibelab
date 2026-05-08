@@ -43,7 +43,7 @@ async function logout() {
   session = null;
   currentUser = null;
   currentGarden = null;
-  gridPlacements = {};
+  placements = [];
   showView("auth");
 }
 

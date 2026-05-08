@@ -1,10 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: post-006_companions (added plantplanner_companions table for
--- companion-planting relationships and a settings_json bag on
--- plantplanner_gardens).
+-- Last updated: post-008_real_radius_placement (plantplanner_garden_plants now
+-- uses pos_x/pos_y/radius_feet floats; grid_x/grid_y unique-cell model
+-- removed; overlap allowed).
 -- Migrations applied: 001_baseline, 002_seed, 003_supabase_auth,
---                     004_enrich_plants, 005_seed_enriched, 006_companions.
+--                     004_enrich_plants, 005_seed_enriched, 006_companions,
+--                     007_companions_seed, 008_real_radius_placement.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -80,12 +81,14 @@ CREATE INDEX IF NOT EXISTS plantplanner_companions_b_idx ON public.plantplanner_
 ALTER TABLE public.plantplanner_companions ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.plantplanner_garden_plants (
-  id        UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  garden_id UUID    NOT NULL REFERENCES public.plantplanner_gardens(id) ON DELETE CASCADE,
-  plant_id  UUID    NOT NULL REFERENCES public.plantplanner_plants(id),
-  grid_x    INT     NOT NULL,
-  grid_y    INT     NOT NULL,
-  UNIQUE(garden_id, grid_x, grid_y)
+  id           UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+  garden_id    UUID    NOT NULL REFERENCES public.plantplanner_gardens(id) ON DELETE CASCADE,
+  plant_id     UUID    NOT NULL REFERENCES public.plantplanner_plants(id),
+  pos_x        REAL    NOT NULL,
+  pos_y        REAL    NOT NULL,
+  radius_feet  REAL    NOT NULL DEFAULT 0.5,
+  CHECK (pos_x >= 0 AND pos_y >= 0),
+  CHECK (radius_feet > 0)
 );
 CREATE INDEX IF NOT EXISTS idx_plantplanner_garden_plants_garden
   ON public.plantplanner_garden_plants(garden_id);
