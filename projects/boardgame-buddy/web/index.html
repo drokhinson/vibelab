@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BoardgameBuddy</title>
-  <link rel="icon" type="image/svg+xml" href="assets/bgbuddy-logo.svg" />
+  <link rel="icon" type="image/svg+xml" href="assets/brand/bgb-logo.svg" />
 
   <!-- DaisyUI v4 + Tailwind CSS (no build step) -->
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
@@ -32,7 +32,7 @@
            screen renders BGG data. See header logo + profile Data Sources card. -->
       <div class="flex items-stretch justify-between gap-3">
         <h1 class="flex-1 text-2xl font-bold font-display flex items-center gap-2 leading-tight">
-          <img src="assets/bgbuddy-logo.svg" alt="" class="w-10 h-10 rounded-lg" /> BoardgameBuddy
+          <img src="assets/brand/bgb-logo.svg" alt="" class="w-10 h-10 rounded-lg" /> BoardgameBuddy
         </h1>
         <div class="flex flex-col items-end justify-between gap-1">
           <div class="flex items-center gap-2">
@@ -49,7 +49,7 @@
           <a id="bgg-attribution-header" class="bgg-attribution-link"
              href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer"
              aria-label="Powered by BoardGameGeek">
-            <img src="assets/bgg-logo.svg" alt="Powered by BoardGameGeek" height="18"
+            <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek" height="18"
                  onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Powered by BoardGameGeek',className:'bgg-attribution-fallback'}))" />
           </a>
         </div>
@@ -60,7 +60,7 @@
          Animated buddy SVG conveys "loading" via its bounce + blink loop — no separate
          loading-dots indicator needed. -->
     <main data-view="splash" id="splash-view" class="flex-1 px-4 py-4 flex flex-col items-center justify-center min-h-[60vh]">
-      <img src="assets/bgbuddy-loading.svg" alt="Loading" style="width:176px;height:176px;" class="rounded-2xl" />
+      <img src="assets/illustrations/bgb-loading.svg" alt="Loading" style="width:176px;height:176px;" class="rounded-2xl" />
     </main>
 
     <!-- Auth View -->
@@ -150,7 +150,7 @@
           via the BGG XML API.</p>
         <a class="bgg-attribution-card__logo"
            href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer">
-          <img src="assets/bgg-logo.svg" alt="Powered by BoardGameGeek" height="40" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Powered by BoardGameGeek',className:'bgg-attribution-card__fallback'}))" />
+          <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek" height="40" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Powered by BoardGameGeek',className:'bgg-attribution-card__fallback'}))" />
         </a>
       </section>
     </main>
