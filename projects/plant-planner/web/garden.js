@@ -37,6 +37,7 @@ function renderBuilder() {
   html += '<div id="render3d-container"></div>';
   html += '<div id="companion-chips" class="companion-chips-layer"></div>';
   html += '</div>';
+  html += '<section id="bloom-calendar-strip" class="bloom-calendar"></section>';
   html += '</div>'; // .builder-main
   html += '</div>'; // .builder-layout
 
@@ -68,6 +69,7 @@ function init3DScene(g) {
         bindPlantDrag(scene3DHandle);
         renderCompanionChips();
         refreshCatalogList();
+        if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
       }
     });
   });
@@ -100,6 +102,7 @@ function bind3DDragDrop() {
         sync3DView();
         renderCompanionChips();
         refreshCatalogList();
+        if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
       }
       catalogDropHandled = true;
       draggedPlant = null;
@@ -147,6 +150,7 @@ function bind3DClick() {
         sync3DView();
         renderCompanionChips();
         refreshCatalogList();
+        if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
       }
     }
   });
@@ -304,6 +308,7 @@ async function reseedGarden() {
     sync3DView();
     renderCompanionChips();
     refreshCatalogList();
+    if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
     btn.textContent = "Reseeded!";
     setTimeout(function() {
       btn.innerHTML = '<i data-lucide="refresh-cw"></i> Reseed';

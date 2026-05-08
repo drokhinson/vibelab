@@ -872,3 +872,68 @@ dialog .dialog-header {
 .detail-companion-chip img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
 .detail-companion-chip.good { border-color: #86efac; }
 .detail-companion-chip.bad  { border-color: #fca5a5; }
+
+/* === iter 4: bloom calendar strip === */
+.bloom-calendar {
+  width: 100%;
+  border-top: 1px solid var(--border, #e5e7eb);
+  background: var(--bg-card, #fff);
+  margin-top: 12px;
+  font-size: 13px;
+}
+.bloom-calendar-header {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(12, minmax(20px, 1fr));
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+}
+.bloom-calendar-header > .bloom-calendar-aggregate { display: contents; }
+.bloom-calendar-toggle { background: transparent; border: 0; cursor: pointer; padding: 2px; margin-right: 4px; vertical-align: middle; }
+.bloom-calendar-title { font-weight: 600; }
+.bloom-calendar-count { color: var(--text-muted, #6b7280); font-size: 11px; margin-left: 6px; }
+.bloom-calendar-month-label { text-align: center; font-size: 10px; color: var(--text-muted, #6b7280); }
+.bloom-calendar-aggregate-cell {
+  height: 12px; border-radius: 3px;
+  background: #16a34a; /* same primary as .bloom-dot.on */
+  border: 1px solid rgba(22,163,74,0.25);
+  margin: 2px;
+}
+.bloom-calendar-aggregate-cell[data-intensity="0"] { background: transparent; }
+.bloom-calendar-body {
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--border, #f0f0f0);
+  padding: 4px 12px 8px;
+}
+.bloom-calendar-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(12, minmax(20px, 1fr));
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}
+.bloom-calendar-row-label {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bloom-calendar-row-label img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.bloom-calendar .bloom-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid oklch(var(--bc) / 0.25);
+  background: transparent;
+  margin: 0 auto;
+}
+.bloom-calendar .bloom-dot.on {
+  background: oklch(var(--p));
+  border-color: oklch(var(--p));
+}
+.bloom-calendar-empty { padding: 12px; color: var(--text-muted, #6b7280); font-style: italic; }
+
+@media (max-width: 600px) {
+  .bloom-calendar-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .bloom-calendar-row { min-width: 480px; }
+  .bloom-calendar-row-label { position: sticky; left: 0; background: var(--bg-card, #fff); z-index: 1; }
+  .bloom-calendar-header { min-width: 480px; overflow-x: auto; }
+}
