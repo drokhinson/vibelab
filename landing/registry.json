@@ -53,10 +53,28 @@
       "featured": true
     },
     {
+      "id": "plant-planner",
+      "name": "PlantPlanner",
+      "description": "Virtual garden and planter box builder with drag-and-drop plant placement.",
+      "status": "wip",
+      "tags": [
+        "garden",
+        "planning",
+        "drag-drop"
+      ],
+      "webUrl": "https://vibelab-plantplanner.vercel.app",
+      "backendUrl": "https://vibelab-production-2119.up.railway.app",
+      "hasNativeApp": false,
+      "expoSlug": null,
+      "createdAt": "2026-03-17",
+      "icon": "🌱",
+      "featured": true
+    },
+    {
       "id": "spotme",
       "name": "SpotMe",
       "description": "Your personal hobby record — track hobbies, proficiency, discover nearby adventurers with shared interests.",
-      "status": "wip",
+      "status": "deferred",
       "tags": [
         "hobbies",
         "social",
@@ -74,7 +92,7 @@
       "id": "wealthmate",
       "name": "WealthMate",
       "description": "Couples wealth tracking — do periodic check-ins to snapshot account values and watch your net worth grow together.",
-      "status": "wip",
+      "status": "deferred",
       "tags": [
         "finance",
         "couples",
@@ -86,23 +104,6 @@
       "expoSlug": null,
       "createdAt": "2026-03-14",
       "icon": "💰"
-    },
-    {
-      "id": "plant-planner",
-      "name": "PlantPlanner",
-      "description": "Virtual garden and planter box builder with drag-and-drop plant placement.",
-      "status": "wip",
-      "tags": [
-        "garden",
-        "planning",
-        "drag-drop"
-      ],
-      "webUrl": "https://vibelab-plantplanner.vercel.app",
-      "backendUrl": "https://vibelab-production-2119.up.railway.app",
-      "hasNativeApp": false,
-      "expoSlug": null,
-      "createdAt": "2026-03-17",
-      "icon": "🌱"
     },
     {
       "id": "admin",

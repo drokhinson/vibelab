@@ -102,6 +102,36 @@ function buddySVG() {
     </svg>`;
 }
 
+function plantPlannerSVG() {
+  // PlantPlanner has no logo asset — its app header just uses Lucide
+  // "sprout" with the Quicksand wordmark. We render a potted-sprout
+  // illustration in the project's coral / sage / lavender palette.
+  return `
+    <svg class="hero-art hero-art--sprout" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse cx="100" cy="170" rx="62" ry="6" fill="#1A1A2E" opacity="0.08"/>
+      <!-- Leaves -->
+      <g>
+        <path d="M100 90 Q70 64 56 84 Q66 102 100 96 Z" fill="#7BAE7F"/>
+        <path d="M100 90 Q66 78 56 84 Q72 92 100 96 Z" fill="#6A9D6E" opacity="0.6"/>
+        <path d="M100 90 Q130 60 146 80 Q134 100 100 96 Z" fill="#7BAE7F"/>
+        <path d="M100 90 Q132 76 146 80 Q128 92 100 96 Z" fill="#6A9D6E" opacity="0.6"/>
+        <path d="M100 88 Q92 56 100 36 Q108 56 100 88 Z" fill="#7BAE7F"/>
+        <line x1="100" y1="40" x2="100" y2="118" stroke="#5E8C62" stroke-width="3" stroke-linecap="round"/>
+      </g>
+      <!-- Lavender flower bud -->
+      <circle cx="100" cy="34" r="7" fill="#B8A9D4"/>
+      <circle cx="100" cy="30" r="4" fill="#CDC0E0"/>
+      <!-- Pot -->
+      <path d="M58 116 L142 116 L132 162 Q132 168 124 168 L76 168 Q68 168 68 162 Z"
+            fill="#E8856C" stroke="#C76854" stroke-width="2"/>
+      <rect x="56" y="112" width="88" height="10" rx="3" fill="#D26F58"/>
+      <!-- Pot highlight -->
+      <path d="M76 124 L80 158" stroke="#FBF8F3" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+      <!-- Soil -->
+      <ellipse cx="100" cy="118" rx="40" ry="3" fill="#5E3A2A" opacity="0.6"/>
+    </svg>`;
+}
+
 function dwpBookSVG() {
   // Day Word Play has no logo character — render an open-book SVG using
   // the project's teal accent on cream paper.
@@ -134,17 +164,25 @@ const FEATURED_THEMES = {
   "sauceboss":       { brandClass: "brand-sauceboss", art: sauceBossPotSVG },
   "boardgame-buddy": { brandClass: "brand-bgb",       art: buddySVG },
   "daywordplay":     { brandClass: "brand-dwp",       art: dwpBookSVG },
+  "plant-planner":   { brandClass: "brand-pp",        art: plantPlannerSVG },
 };
+
+// Status sort order — live first, then in-progress, then deferred. Within
+// each bucket we preserve the registry's declared order so editors stay in
+// control of the lineup.
+const STATUS_RANK = { live: 0, wip: 1, prototype: 1, deferred: 2, archived: 3 };
+function statusRank(p) { return STATUS_RANK[p.status] ?? 9; }
 
 // ── Render helpers ────────────────────────────────────────────────────────────
 function statusLabel(status) {
-  const map = { live: "Live", wip: "In Progress", prototype: "Prototype", archived: "Archived" };
+  const map = {
+    live: "Live",
+    wip: "In Progress",
+    prototype: "Prototype",
+    deferred: "Deferred",
+    archived: "Archived",
+  };
   return map[status] ?? status;
-}
-
-function tagsHTML(tags) {
-  if (!tags || tags.length === 0) return "";
-  return `<div class="card-tags">${tags.map(t => `<span class="tag">${t}</span>`).join("")}</div>`;
 }
 
 function nativeBadge(p) {
@@ -177,7 +215,6 @@ function featuredCard(p) {
         </div>
         <p class="featured-desc">${p.description}</p>
         <div class="featured-meta">
-          ${tagsHTML(p.tags)}
           <div class="featured-actions">
             ${nativeBadge(p)}
             <span class="featured-cta">Open ↗</span>
@@ -195,7 +232,6 @@ function projectCard(p) {
       <div class="card-icon">${p.icon ?? "🔧"}</div>
       <p class="card-name">${p.name}</p>
       <p class="card-desc">${p.description}</p>
-      ${tagsHTML(p.tags)}
       <div class="card-footer">
         <span class="status-badge status-${p.status}">${statusLabel(p.status)}</span>
         ${nativeBadge(p)}
@@ -226,11 +262,22 @@ function render() {
   const projects = allProjects.filter(p => !p.isAdminTool);
   renderAdminSlot(admin);
 
-  const featured = projects.filter(p => p.featured);
-  const others   = projects.filter(p => !p.featured);
+  // Stable status-rank sort: live → wip → deferred → archived. Featured
+  // entries jump to the top within their status bucket so the lineup reads
+  // sauceboss → bgb → dwp (all live, all featured) → plant-planner (wip,
+  // featured) → spotme/wealthmate (deferred, compact).
+  const sorted = [...projects].sort((a, b) => {
+    const r = statusRank(a) - statusRank(b);
+    if (r !== 0) return r;
+    if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
+    return 0;
+  });
+
+  const featured = sorted.filter(p => p.featured);
+  const others   = sorted.filter(p => !p.featured);
 
   // Filter applies to BOTH tiers consistently — clicking "In Progress"
-  // hides featured (all live) and shows only WIP, etc.
+  // shows only WIP entries (in either tier), etc.
   const matches = (p) => activeFilter === "all" || p.status === activeFilter;
   const featuredVisible = featured.filter(matches);
   const othersVisible   = others.filter(matches);
