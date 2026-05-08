@@ -146,6 +146,16 @@ function showThemeSettings() {
   };
 }
 
+function yearScale(plant, year) {
+  if (!plant) return 1.0;
+  if (plant.lifecycle === 'annual') return 1.0;
+  if (plant.lifecycle === 'biennial') return year >= 2 ? 1.0 : 0.5;
+  // perennial: ramp to 1.0 at years_to_maturity; floor 0.4 at year 1
+  var ytm = plant.years_to_maturity || 3;
+  if (year >= ytm) return 1.0;
+  return Math.max(0.4, year / ytm);
+}
+
 function sunlightLabel(s) {
   if (s === "full_sun") return "Full Sun";
   if (s === "partial") return "Partial";

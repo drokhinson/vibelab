@@ -33,6 +33,11 @@ function renderBuilder() {
   html += '<div class="render3d-pane">';
   html += '<div class="render3d-header">';
   html += '<span class="render3d-label"><i data-lucide="box"></i> Drag from catalog to place &nbsp;·&nbsp; hold to move &nbsp;·&nbsp; tap to remove</span>';
+  html += '<div class="year-scrubber" role="group" aria-label="Growth preview year" title="Preview only — placement is saved at mature size.">';
+  html +=   '<button type="button" class="year-pill" data-year="1">Y1</button>';
+  html +=   '<button type="button" class="year-pill" data-year="2">Y2</button>';
+  html +=   '<button type="button" class="year-pill" data-year="3">Y3+</button>';
+  html += '</div>';
   html += '</div>';
   html += '<div id="render3d-container"></div>';
   html += '<div id="companion-chips" class="companion-chips-layer"></div>';
@@ -180,6 +185,30 @@ function bindBuilderButtons() {
   document.getElementById("reseed-garden").onclick = reseedGarden;
   var zoneBtn = document.getElementById("garden-zone-chip");
   if (zoneBtn) zoneBtn.onclick = openZonePicker;
+
+  // Year-preview scrubber
+  var pills = document.querySelectorAll('.year-scrubber .year-pill');
+  Array.prototype.forEach.call(pills, function(btn) {
+    btn.onclick = function() {
+      var y = parseInt(btn.dataset.year, 10);
+      if (![1, 2, 3].includes(y)) return;
+      previewYear = y;
+      localStorage.setItem('pp_preview_year', String(previewYear));
+      updateYearPills();
+      sync3DView();
+      renderCompanionChips();
+    };
+  });
+  updateYearPills();
+}
+
+function updateYearPills() {
+  var pills = document.querySelectorAll('.year-scrubber .year-pill');
+  Array.prototype.forEach.call(pills, function(btn) {
+    var y = parseInt(btn.dataset.year, 10);
+    if (y === previewYear) btn.classList.add('active');
+    else btn.classList.remove('active');
+  });
 }
 
 // USDA zones 1a..13b

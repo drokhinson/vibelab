@@ -28,3 +28,6 @@ var companions = [];
 var companionsByPlantId = {};
 var dismissedCompanionWarnings = new Set();
 var companionPopoverCellKey = null;
+
+var previewYear = parseInt(localStorage.getItem('pp_preview_year') || '3', 10);
+if (![1, 2, 3].includes(previewYear)) previewYear = 3;

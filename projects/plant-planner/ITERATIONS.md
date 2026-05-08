@@ -80,9 +80,9 @@ Wildflower unmet: full Jan–Dec bloom calendar strip; year 1/2/3 growth preview
 Food unmet: height-aware shading/occlusion. (Real-radius — their #1 — fully delivered; +1 to satisfaction.)
 Notes: Single-agent ownership of the 8-file frontend slice was correct — the `gridPlacements` → `placements` migration touched scene rendering, drag plumbing, save flow, hydration on garden open, and companion warning geometry simultaneously. Backend validation is 422 on out-of-bounds; overlap is never rejected by the server. The `_isDismissed` helper in companions.js handles the legacy → prefixed dismissal-key migration so iter 2 dismissals carry over cleanly.
 
-## Iteration 4 — Garden-Wide Bloom Calendar Strip — pending
+## Iteration 4 — Garden-Wide Bloom Calendar Strip — c8fb9f2
 Persona ratings (pre): hobby=5/5 (satisfied), wildflower=2/5, food=4/5
-Persona ratings (post): pending — Phase G re-poll
+Persona ratings (post): hobby=5/5, wildflower=4/5, food=4/5
 Shipped:
   - New full-width `<section id="bloom-calendar-strip">` directly under the 3D pane in `.builder-main`. Always visible whenever the builder view is open.
   - **Aggregate header row** (always visible, ~40px): chevron toggle + "Bloom Calendar" title + count chip ("3 plants · 7 mo") + 12 month columns (J F M A M J J A S O N D) with opacity-scaled intensity bars (more plants blooming that month → more opaque).
@@ -94,7 +94,24 @@ Shipped:
   - Reuses iter 1's `MONTH_LETTERS` and the `.bloom-dot` visual idiom (scoped via new `.bloom-calendar .bloom-dot` rules so the detail-panel mini-strip is untouched).
   - NO data model or backend changes — `bloom_months int[]` was already added in iter 1's enrichment migration; `GET /plants` already returns it.
   - Filter sidebar pixel height is unchanged (no edits to `.catalog-sidebar` rules); detail-panel mini bloom strip is visually identical.
-Hobby unmet: pending re-poll — calendar adds vertical content but lives below the 3D pane and collapses on mobile, so should not regress.
-Wildflower unmet: pending re-poll. Year 1/2/3 growth preview still queued for iter 5.
-Food unmet: pending re-poll. Height-aware shading still queued; food's last unmet need.
+Hobby unmet: SATISFIED. Calendar didn't crowd the 3D pane (lives below, collapses on mobile, sidebar untouched).
+Wildflower unmet: year 1/2/3 growth preview (last remaining need — queued for iter 5).
+Food unmet: height-aware shading/occlusion for dense beds (last remaining need — queued for iter 6).
 Notes: Pure-frontend feature, no DB or backend churn — `bloom_months` was already in place since iter 1. The combined-shape (aggregate header + per-plant rows) was chosen so the strip works as both a quick "where are my bloom gaps" scanner AND a per-plant timeline. The strip is always visible (not hidden in the detail panel) per Wildflower's spec — that's the key change vs iter 1's mini-strip.
+
+## Iteration 5 — Year-by-Year Growth Preview — pending
+Persona ratings (pre): hobby=5/5 (satisfied), wildflower=4/5, food=4/5
+Persona ratings (post): pending — Phase G re-poll
+Shipped:
+  - Migration 009 adds `lifecycle text` (annual|biennial|perennial, default 'perennial') and `years_to_maturity int` (1–5, default 3) to `plantplanner_plants`. Additive — `ADD COLUMN IF NOT EXISTS` so re-runnable.
+  - Catalog seeded for all ~40 plants: 9 annuals (tomato, pepper, lettuce, carrot, basil, kale, bush bean, zucchini, marigold) at ytm=1; bulbs (tulip, daffodil) and strawberry at ytm=2; slow perennials (baptisia, peony, joe pye weed, hydrangea, blueberry) at ytm=5; rest perennials at ytm=3.
+  - Backend: `Lifecycle` StrEnum in constants.py; `PlantResponse` extended with `lifecycle: str = 'perennial'` and `years_to_maturity: int = 3` (defaults so old shape still validates).
+  - Frontend `yearScale(plant, year)` helper in helpers.js: annuals always 1.0; biennials 0.5 at Y1, 1.0 from Y2; perennials ramp from a 0.4 floor at Y1 to 1.0 at maturity.
+  - Year scrubber pills in the 3D pane header (`Y1 | Y2 | Y3+`), right-aligned, default Y3+. Clicking persists `pp_preview_year` to localStorage and triggers `sync3DView` + `renderCompanionChips`.
+  - `syncSceneWithPlacements` applies `s = yearScale(plant, previewYear)` per placement: `mesh.scale.set(s, s, s)` on the plant group AND rebuilds the translucent disk geometry at `radius_feet * s`. Spread + height handled in one knob.
+  - Companion warnings + crowded chips re-evaluate at the selected year (multiplied radii). Bloom calendar untouched (year-independent).
+  - Drag-drop preview disk and placement bounds-validation always use mature radius — preview is view-only; saves are never year-aware.
+Hobby unmet: pending re-poll. Default Y3+ matches existing behavior — no regression expected.
+Wildflower unmet: pending re-poll. This addresses their LAST remaining unmet need.
+Food unmet: pending re-poll. Height-aware shading still queued for iter 6 (cap iteration).
+Notes: Chose lifecycle + years_to_maturity (option C from the design) over per-year explicit columns — cleaner data model with sensible defaults and a deterministic curve. Preview is intentionally view-only so users can scrub years without affecting placement validation or saved state. Annuals stay full-size every year (would look broken otherwise). Tooltip on the scrubber clarifies "Preview only — placement is saved at mature size."

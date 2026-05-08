@@ -65,6 +65,8 @@ class PlantResponse(BaseModel):
     usda_zones: Optional[UsdaZoneRange] = None
     pollinator_attracts: List[str] = []
     water_need: str = "medium"
+    lifecycle: str = "perennial"
+    years_to_maturity: int = 3
     care_summary: Optional[str] = None
     description: Optional[str] = None
     render_key: Optional[str] = None

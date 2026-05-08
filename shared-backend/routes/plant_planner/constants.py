@@ -19,3 +19,9 @@ class PlantingSeason(StrEnum):
     SUMMER = "summer"
     FALL = "fall"
     WINTER = "winter"
+
+
+class Lifecycle(StrEnum):
+    ANNUAL = "annual"
+    BIENNIAL = "biennial"
+    PERENNIAL = "perennial"

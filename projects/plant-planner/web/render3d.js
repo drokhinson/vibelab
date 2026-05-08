@@ -351,19 +351,25 @@ function syncSceneWithPlacements(handle, placementsArr) {
     var plant = placement.plant;
     if (!plant) continue;
 
+    // Year-preview scale: ramps perennials/biennials at earlier years; annuals stay 1.0.
+    var s = (typeof yearScale === 'function') ? yearScale(plant, previewYear) : 1.0;
+
     var group = new THREE.Group();
     group.position.set(placement.pos_x - gw / 2, soilTop, placement.pos_y - gh / 2);
     group.userData = { placementId: placement.id, plantId: placement.plantId };
 
     var mesh = buildPlantMesh(plant, style);
     mesh.position.set(0, 0, 0);
+    // Apply year-preview scale to the entire plant mesh (handles spread + height in one knob).
+    mesh.scale.set(s, s, s);
     if (mesh.userData) mesh.userData.placementId = placement.id;
     else mesh.userData = { placementId: placement.id };
     group.add(mesh);
 
-    // Translucent soil disk for the plant's spread
+    // Translucent soil disk for the plant's spread (scaled to year-preview radius).
     var diskColor = (plant.render_colors && plant.render_colors.foliage && plant.render_colors.foliage[0]) || '#7BAE7F';
-    var diskGeom = new THREE.CircleGeometry(placement.radius_feet, 32);
+    var diskRadius = Math.max(0.001, placement.radius_feet * s);
+    var diskGeom = new THREE.CircleGeometry(diskRadius, 32);
     var diskMat = new THREE.MeshBasicMaterial({
       color: diskColor,
       transparent: true,
