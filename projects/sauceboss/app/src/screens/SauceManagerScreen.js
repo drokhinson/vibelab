@@ -13,7 +13,7 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Search, X } from 'lucide-react-native';
+import { ChevronLeft, Pencil, PencilOff, Search, X } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import SaucesTab from './manager/SaucesTab';
 import DishTab from './manager/DishTab';
@@ -40,6 +40,7 @@ export default function SauceManagerScreen({ navigation }) {
   const isAdmin = !!state.currentUser?.is_admin;
   const isLoggedIn = !!state.currentUser;
   const tab = state.managerTab || 'sauces';
+  const editMode = !!state.editMode;
 
   const scrollPaddingBottom = Math.max(100, insets.bottom + 80);
   const fabBottom = Math.max(26, insets.bottom + 20);
@@ -54,10 +55,31 @@ export default function SauceManagerScreen({ navigation }) {
           <View style={styles.headerCenter}>
             <Text style={styles.title}>Sauce Manager</Text>
             <Text style={styles.subtitle}>
-              {isAdmin ? 'Admin mode' : isLoggedIn ? 'Signed in' : 'Browse the catalog'}
+              {editMode
+                ? 'Edit mode'
+                : isAdmin
+                  ? 'Admin'
+                  : isLoggedIn
+                    ? 'Signed in'
+                    : 'Browse the catalog'}
             </Text>
           </View>
-          <View style={{ width: 22 }} />
+          {isLoggedIn ? (
+            <TouchableOpacity
+              onPress={() => actions.toggleEditMode()}
+              style={[styles.editToggle, editMode && styles.editToggleOn]}
+              hitSlop={10}
+              accessibilityLabel={editMode ? 'Exit edit mode' : 'Enter edit mode'}
+            >
+              {editMode ? (
+                <PencilOff size={16} color="#fff" />
+              ) : (
+                <Pencil size={16} color="#fff" />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 22 }} />
+          )}
         </View>
 
         <View style={styles.tabBar}>
@@ -135,6 +157,17 @@ const styles = StyleSheet.create({
   headerCenter: { flex: 1, alignItems: 'center' },
   title: { color: '#fff', fontSize: 17, fontWeight: '800' },
   subtitle: { color: '#fff', opacity: 0.85, fontSize: 11, marginTop: 1 },
+  editToggle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  editToggleOn: {
+    backgroundColor: 'rgba(0,0,0,0.32)',
+  },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: 'rgba(0,0,0,0.18)',

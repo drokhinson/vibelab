@@ -171,6 +171,10 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     exportSauceJson: (id) => callText(`/sauces/${encodeURIComponent(id)}/export.json`),
     exportSauceMd:   (id) => callText(`/sauces/${encodeURIComponent(id)}/export.md`),
 
+    // Bulk admin export — every sauce in the catalog as a single versioned
+    // JSON envelope. Backend gates on JWT + is_admin (`get_current_admin`).
+    exportAllSaucesJson: () => callText('/admin/sauces/export.json'),
+
     allSauces: async () => {
       const sauces = await call('/sauces');
       return sauces.map(withIngredientNames);

@@ -53,6 +53,7 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
 
   const isAdmin = !!state.currentUser?.is_admin;
   const isLoggedIn = !!state.currentUser;
+  const editMode = !!state.editMode;
   const search = (state.managerSearch || '').toLowerCase().trim();
   const typeFilter = state.managerTypeFilter || 'all';
   const favOnly = state.managerFavoritesOnly && isLoggedIn;
@@ -109,6 +110,31 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
         },
       ],
     );
+  }
+
+  // Admin-only bulk export. Mirrors per-sauce exportSauce: fetch the body,
+  // write to cache, hand the URI to the platform share sheet.
+  async function handleBulkExport() {
+    try {
+      const text = await api.exportAllSaucesJson();
+      const today = new Date().toISOString().slice(0, 10);
+      const filename = `sauceboss-sauces-${today}.json`;
+      const uri = FileSystem.cacheDirectory + filename;
+      await FileSystem.writeAsStringAsync(uri, text, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert('Sharing unavailable', 'This device does not support the share sheet.');
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/json',
+        dialogTitle: 'Export all SauceBoss recipes',
+        UTI: 'public.json',
+      });
+    } catch (e) {
+      Alert.alert('Export failed', e?.message || 'Could not download catalog.');
+    }
   }
 
   function pickExportFormat(sauce) {
@@ -239,6 +265,7 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
                         isLast={i === entries.length - 1}
                         currentUser={state.currentUser}
                         isAdmin={isAdmin}
+                        editMode={editMode}
                         showTypeTag={typeFilter === 'all'}
                         merge={merge}
                         onTap={() => {
@@ -266,6 +293,16 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
             );
           })
         )}
+        {isAdmin && editMode && !isMerging ? (
+          <TouchableOpacity
+            style={styles.bulkExportBtn}
+            onPress={handleBulkExport}
+            activeOpacity={0.85}
+          >
+            <Download size={14} color={COLORS.primary} />
+            <Text style={styles.bulkExportLabel}>Export all sauces (JSON)</Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
 
       {isMerging ? (
@@ -296,7 +333,7 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
             </TouchableOpacity>
           </View>
         </View>
-      ) : isLoggedIn ? (
+      ) : isLoggedIn && editMode ? (
         <TouchableOpacity
           style={[styles.fab, { bottom: fabBottom }]}
           onPress={() => openBuilderFor(null)}
@@ -352,6 +389,7 @@ function ManagerSauceRow({
   isLast,
   currentUser,
   isAdmin,
+  editMode,
   showTypeTag,
   merge,
   onTap,
@@ -362,8 +400,12 @@ function ManagerSauceRow({
   onStartMerge,
 }) {
   const isOwner = !!(currentUser && sauce.createdBy === currentUser.user_id);
-  const canEdit = isAdmin || isOwner;
-  const canDelete = isAdmin || isOwner;
+  // Edit mode (header pencil toggle) gates all editorial affordances. Mirrors
+  // the web's state.editMode behavior so the read-only browse view is the
+  // default for logged-in users; flipping the toggle reveals the full row of
+  // Edit / Download / Delete / Merge actions and the `+` FAB.
+  const canEdit = editMode && (isAdmin || isOwner);
+  const canDelete = editMode && (isAdmin || isOwner);
   const variants = (family?.variants || []).length;
   const totalVersions = 1 + variants;
   const isVariantRow = !!sauce.parentSauceId;
@@ -422,7 +464,7 @@ function ManagerSauceRow({
         )}
       </TouchableOpacity>
 
-      {!isMerging && (canEdit || canDelete || (isAdmin && !isVariantRow)) ? (
+      {!isMerging && editMode && (canEdit || canDelete || (isAdmin && !isVariantRow)) ? (
         <View style={styles.rowActions}>
           {canEdit ? (
             <TouchableOpacity onPress={onEdit} style={styles.actionBtn} hitSlop={6}>
@@ -443,9 +485,7 @@ function ManagerSauceRow({
           {isAdmin && !isVariantRow ? (
             <TouchableOpacity onPress={onStartMerge} style={styles.actionBtn} hitSlop={6}>
               <GitMerge size={14} color={COLORS.textSecondary} />
-              <Text style={[styles.actionLabel, { color: COLORS.textSecondary }]}>
-                Make parent…
-              </Text>
+              <Text style={[styles.actionLabel, { color: COLORS.textSecondary }]}>Merge</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -558,20 +598,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginTop: 6,
     paddingLeft: 20,
-    gap: 14,
+    gap: 8,
+  },
+  bulkExportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(232, 93, 4, 0.06)',
+  },
+  bulkExportLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    marginRight: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    marginRight: 2,
   },
   actionLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.primary,
-    marginLeft: 4,
+    marginLeft: 3,
   },
   fab: {
     position: 'absolute',
