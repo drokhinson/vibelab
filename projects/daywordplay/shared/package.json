@@ -1,0 +1,8 @@
+{
+  "name": "daywordplay-shared",
+  "version": "1.0.0",
+  "description": "Pure logic shared between Day Word Play web and native apps.",
+  "type": "module",
+  "main": "index.js",
+  "private": true
+}

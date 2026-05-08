@@ -49,8 +49,9 @@
       ],
       "webUrl": "https://vibelab-daywordplay.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
-      "hasNativeApp": false,
-      "expoSlug": null,
+      "hasNativeApp": true,
+      "nativeBeta": true,
+      "expoSlug": "daywordplay",
       "createdAt": "2026-03-17",
       "icon": "📖",
       "featured": true
