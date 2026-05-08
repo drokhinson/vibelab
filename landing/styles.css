@@ -152,7 +152,7 @@ body {
   justify-content: center;
   padding: 1rem;
 }
-.hero-art { width: 100%; height: 100%; max-width: 160px; max-height: 160px; }
+.hero-art { width: 100%; height: 100%; max-width: 160px; max-height: 160px; object-fit: contain; }
 .hero-art--emoji {
   font-size: 4rem;
   display: flex;
