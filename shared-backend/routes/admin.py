@@ -5,7 +5,8 @@ Protected by ADMIN_API_KEY (Bearer token).
 """
 
 import secrets
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Header, Query
 
@@ -271,3 +272,103 @@ async def delete_user(
 
     sb = get_supabase()
     return await handler(sb, user_id)
+
+
+# ---------------------------------------------------------------------------
+# API logs (cross-app external API call audit)
+# ---------------------------------------------------------------------------
+
+# How far back each "Clear bodies" preset reaches. "all" means every row.
+_AGE_DELTAS: dict[str, Optional[timedelta]] = {
+    "1w": timedelta(days=7),
+    "1m": timedelta(days=30),
+    "all": None,
+}
+
+
+@router.get("/api-logs")
+async def list_api_logs(
+    app: Optional[str] = Query(None, description="Filter by app, e.g. 'plant-planner'"),
+    api_name: Optional[str] = Query(None, description="Filter by api, e.g. 'trefle'"),
+    limit: int = Query(100, ge=1, le=500),
+    authorization: Optional[str] = Header(None),
+):
+    """List recent external API calls. Newest first."""
+    require_admin(authorization)
+    sb = get_supabase()
+    q = (
+        sb.table("api_logs")
+        .select(
+            "id, app, api_name, method, url, request_params, sent_at, "
+            "response_time_ms, status_code, response_size_bytes, body_excerpt, "
+            "error_message"
+        )
+        .order("sent_at", desc=True)
+        .limit(limit)
+    )
+    if app:
+        q = q.eq("app", app)
+    if api_name:
+        q = q.eq("api_name", api_name)
+    result = q.execute()
+    return {"logs": result.data or []}
+
+
+@router.get("/api-logs/summary")
+async def api_logs_summary(authorization: Optional[str] = Header(None)):
+    """Aggregate counts + total body bytes per (app, api_name) over last 30d."""
+    require_admin(authorization)
+    sb = get_supabase()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    # Pull only the columns needed for summary; aggregation done in Python on
+    # a small slice (admin-only, low volume).
+    result = (
+        sb.table("api_logs")
+        .select("app, api_name, status_code, response_size_bytes, error_message")
+        .gte("sent_at", cutoff)
+        .limit(10000)
+        .execute()
+    )
+    rows = result.data or []
+    summary: dict[str, dict] = {}
+    for r in rows:
+        key = f"{r.get('app') or '?'}::{r.get('api_name') or '?'}"
+        s = summary.setdefault(
+            key,
+            {
+                "app": r.get("app"),
+                "api_name": r.get("api_name"),
+                "calls": 0,
+                "errors": 0,
+                "bytes": 0,
+            },
+        )
+        s["calls"] += 1
+        if r.get("error_message") or (r.get("status_code") or 0) >= 400:
+            s["errors"] += 1
+        s["bytes"] += r.get("response_size_bytes") or 0
+    return {"summary": sorted(summary.values(), key=lambda x: -x["calls"])}
+
+
+@router.post("/api-logs/clear-bodies")
+async def clear_api_log_bodies(
+    older_than: Literal["1w", "1m", "all"] = Query(
+        ..., description="Cutoff: '1w' (>=7d), '1m' (>=30d), or 'all' rows."
+    ),
+    authorization: Optional[str] = Header(None),
+):
+    """Null out body_excerpt on rows older than the cutoff. Keeps timing/error stats."""
+    require_admin(authorization)
+    sb = get_supabase()
+
+    delta = _AGE_DELTAS[older_than]
+    q = sb.table("api_logs").update({"body_excerpt": None})
+    # Only touch rows that still have a body — avoids rewriting already-cleared rows.
+    # Raw PostgREST filter is the most version-stable way to express IS NOT NULL.
+    q = q.filter("body_excerpt", "not.is", "null")
+    if delta is not None:
+        cutoff = (datetime.now(timezone.utc) - delta).isoformat()
+        q = q.lt("sent_at", cutoff)
+    result = q.execute()
+    cleared = len(result.data or [])
+    return {"cleared": cleared, "older_than": older_than}

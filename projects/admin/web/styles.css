@@ -192,3 +192,53 @@ table {
   gap: 0.5rem;
   justify-content: flex-end;
 }
+
+/* ── API logs ──────────────────────────────────────────────────────────────── */
+.api-logs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.api-logs-actions button {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  margin: 0;
+}
+
+.api-logs-actions .muted {
+  margin-right: 0.25rem;
+}
+
+.api-log-row {
+  cursor: pointer;
+}
+
+.api-log-row:hover {
+  background: var(--pico-card-border-color);
+}
+
+.api-log-status-ok    { color: #5dd39e; }
+.api-log-status-warn  { color: #f5b85e; }
+.api-log-status-err   { color: #ff6b6b; }
+
+#api-logs-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  font-size: 0.8rem;
+}
+
+.api-log-summary-pill {
+  display: inline-flex;
+  gap: 0.4rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--pico-card-border-color);
+}
+
+.api-log-summary-pill .err {
+  color: #ff6b6b;
+}

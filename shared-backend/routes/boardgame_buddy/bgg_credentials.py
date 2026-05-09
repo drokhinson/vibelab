@@ -30,6 +30,8 @@ import httpx
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException
 
+from api_logger import log_external_call
+
 logger = logging.getLogger(__name__)
 
 BGG_LOGIN_URL = "https://boardgamegeek.com/login/api/v1"
@@ -139,7 +141,14 @@ async def login_to_bgg(username: str, password: str) -> BggSession:
 
     try:
         async with httpx.AsyncClient(timeout=_LOGIN_TIMEOUT, headers=headers) as client:
-            resp = await client.post(BGG_LOGIN_URL, json=body)
+            async with log_external_call(
+                app="boardgame-buddy", api_name="bgg-login",
+                method="POST", url=BGG_LOGIN_URL,
+                params={"username": username, "password": password},
+                redact_params=("password",),
+            ) as record:
+                resp = await client.post(BGG_LOGIN_URL, json=body)
+                record.attach_response(resp)
     except httpx.HTTPError as exc:
         logger.warning("BGG login network error for %r: %s", username, exc)
         raise HTTPException(

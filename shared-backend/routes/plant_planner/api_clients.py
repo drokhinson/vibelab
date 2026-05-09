@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from api_logger import log_external_call
+
 logger = logging.getLogger(__name__)
 
 TREFLE_BASE = "https://trefle.io/api/v1"
@@ -52,7 +54,12 @@ async def trefle_search(query: str, page: int = 1) -> List[Dict[str, Any]]:
     url = f"{TREFLE_BASE}/plants/search"
     params = {"q": query, "token": token, "page": page}
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        resp = await client.get(url, params=params)
+        async with log_external_call(
+            app="plant-planner", api_name="trefle",
+            method="GET", url=url, params=params, redact_params=("token",),
+        ) as record:
+            resp = await client.get(url, params=params)
+            record.attach_response(resp)
         if resp.status_code != 200:
             logger.warning("Trefle search failed: %s %s", resp.status_code, resp.text[:200])
             return []
@@ -80,7 +87,12 @@ async def trefle_filter(
     if light_min is not None:
         params["filter[light]"] = str(light_min)
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        resp = await client.get(url, params=params)
+        async with log_external_call(
+            app="plant-planner", api_name="trefle",
+            method="GET", url=url, params=params, redact_params=("token",),
+        ) as record:
+            resp = await client.get(url, params=params)
+            record.attach_response(resp)
         if resp.status_code != 200:
             logger.warning("Trefle filter failed: %s %s", resp.status_code, resp.text[:200])
             return []
@@ -94,8 +106,14 @@ async def trefle_get(plant_id: int) -> Optional[Dict[str, Any]]:
     if not token:
         return None
     url = f"{TREFLE_BASE}/plants/{plant_id}"
+    params = {"token": token}
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        resp = await client.get(url, params={"token": token})
+        async with log_external_call(
+            app="plant-planner", api_name="trefle",
+            method="GET", url=url, params=params, redact_params=("token",),
+        ) as record:
+            resp = await client.get(url, params=params)
+            record.attach_response(resp)
         if resp.status_code != 200:
             return None
         return resp.json().get("data")
@@ -109,8 +127,14 @@ async def perenual_search(query: str) -> List[Dict[str, Any]]:
         logger.info("PERENUAL_API_KEY not set — Perenual unavailable")
         return []
     url = f"{PERENUAL_BASE}/species-list"
+    params = {"key": key, "q": query}
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        resp = await client.get(url, params={"key": key, "q": query})
+        async with log_external_call(
+            app="plant-planner", api_name="perenual",
+            method="GET", url=url, params=params, redact_params=("key",),
+        ) as record:
+            resp = await client.get(url, params=params)
+            record.attach_response(resp)
         if resp.status_code != 200:
             return []
         data = resp.json().get("data") or []
@@ -122,8 +146,14 @@ async def perenual_get(plant_id: int) -> Optional[Dict[str, Any]]:
     if not key:
         return None
     url = f"{PERENUAL_BASE}/species/details/{plant_id}"
+    params = {"key": key}
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        resp = await client.get(url, params={"key": key})
+        async with log_external_call(
+            app="plant-planner", api_name="perenual",
+            method="GET", url=url, params=params, redact_params=("key",),
+        ) as record:
+            resp = await client.get(url, params=params)
+            record.attach_response(resp)
         if resp.status_code != 200:
             return None
         return resp.json()
@@ -164,7 +194,12 @@ async def flora_search(query: str) -> List[Dict[str, Any]]:
     url = f"{FLORA_BASE}/plants"
     params = {"search": query, "api_key": key, "limit": SEARCH_RESULT_CAP}
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-        resp = await client.get(url, params=params)
+        async with log_external_call(
+            app="plant-planner", api_name="flora",
+            method="GET", url=url, params=params, redact_params=("api_key",),
+        ) as record:
+            resp = await client.get(url, params=params)
+            record.attach_response(resp)
         if resp.status_code != 200:
             logger.warning("Flora search failed: %s %s", resp.status_code, resp.text[:200])
             return []

@@ -68,8 +68,40 @@
         </div>
       </article>
 
+      <!-- Section 4: External API Logs -->
+      <article>
+        <header class="section-header">
+          <h3>External API Logs</h3>
+          <select id="api-logs-app-filter">
+            <option value="">All apps</option>
+          </select>
+        </header>
+        <div id="api-logs-summary" class="muted" style="margin-bottom:0.75rem;">Loading summary...</div>
+        <div class="api-logs-actions">
+          <span class="muted">Clear stored response bodies:</span>
+          <button class="outline secondary clear-bodies-btn" data-age="1w">Older than 1 week</button>
+          <button class="outline secondary clear-bodies-btn" data-age="1m">Older than 1 month</button>
+          <button class="outline clear-bodies-btn delete-btn" data-age="all">All</button>
+        </div>
+        <div id="api-logs-content">
+          <div class="loading">Loading logs...</div>
+        </div>
+      </article>
+
     </div>
   </main>
+
+  <!-- API log body viewer -->
+  <dialog id="api-log-dialog">
+    <article style="max-width:760px;">
+      <header><h3 id="api-log-dialog-title">Response body</h3></header>
+      <p id="api-log-dialog-meta" class="muted" style="font-size:0.8rem;"></p>
+      <pre id="api-log-dialog-body" style="max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:0.75rem;"></pre>
+      <footer>
+        <button id="api-log-dialog-close">Close</button>
+      </footer>
+    </article>
+  </dialog>
 
   <!-- Reset Code Dialog -->
   <dialog id="reset-dialog">

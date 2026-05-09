@@ -27,6 +27,7 @@ import httpx
 from fastapi import HTTPException
 from supabase import Client
 
+from api_logger import log_external_call
 from db import get_supabase
 
 from .bgg_credentials import (
@@ -157,9 +158,17 @@ async def fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
     Anonymous request — used for catalog endpoints (search, /thing). Sends the
     shared bearer token only.
     """
+    full_url = f"{BGG_API_BASE}{path}"
+
     async def _do_get() -> httpx.Response:
         async with httpx.AsyncClient(timeout=timeout, headers=_default_headers()) as client:
-            return await client.get(f"{BGG_API_BASE}{path}", params=params)
+            async with log_external_call(
+                app="boardgame-buddy", api_name="bgg",
+                method="GET", url=full_url, params=params,
+            ) as record:
+                resp = await client.get(full_url, params=params)
+                record.attach_response(resp)
+                return resp
 
     try:
         resp = await _fetch_with_warmup_retry(_do_get, path=path, params=params)
@@ -267,6 +276,8 @@ async def fetch_bgg_as_user(
     profile_row = _load_profile_session(sb, user_id)
     profile_row = await _ensure_session(sb, user_id, profile_row)
 
+    full_url = f"{BGG_API_BASE}{path}"
+
     def _make_do_get(row: dict) -> Callable[[], Awaitable[httpx.Response]]:
         async def _do_get() -> httpx.Response:
             cookies = {
@@ -277,7 +288,13 @@ async def fetch_bgg_as_user(
             async with httpx.AsyncClient(
                 timeout=timeout, headers=_default_headers(), cookies=cookies,
             ) as client:
-                return await client.get(f"{BGG_API_BASE}{path}", params=params)
+                async with log_external_call(
+                    app="boardgame-buddy", api_name="bgg",
+                    method="GET", url=full_url, params=params,
+                ) as record:
+                    resp = await client.get(full_url, params=params)
+                    record.attach_response(resp)
+                    return resp
         return _do_get
 
     try:
