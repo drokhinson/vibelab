@@ -3,25 +3,42 @@
 // Globals + cross-file contracts are declared in ./types.d.ts. See
 // .claude/rules/typed-js.md for the editor-only type-check convention.
 
+// Update the label inside the splash pill. The trailing animated dots are
+// part of the same paragraph so a textContent swap on the label leaves them
+// in place.
+function setSplashText(text) {
+  const el = document.getElementById('splash-text-label');
+  if (el) el.textContent = text;
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   document.body.classList.add('splash--loading');
+  setSplashText('Authenticating');
 
   // Wire up Supabase Auth (email / Google / Apple). No-op when not configured.
-  // initSupabase also kicks off the initial auth roundtrip that
-  // `awaitInitialAuth()` resolves once it completes (or after a 3s timeout).
+  // initSupabase kicks off the initial auth roundtrip; `awaitInitialAuth()`
+  // resolves once Supabase fires INITIAL_SESSION (or after a 3s safety
+  // timeout). No Sauceboss API calls happen during this phase.
   initSupabase();
 
   try {
-    // Run the public initial-load and the auth roundtrip in parallel. The
-    // splash is gated on BOTH so:
-    //   • a logged-in returning user sees their populated Saucebook the
-    //     moment the splash drops (no empty-state flash);
-    //   • an anon user lands on Browse with the other two tabs locked.
-    const [{ carbs, proteins, saladBases }] = await Promise.all([
-      fetchInitialLoad(),
-      awaitInitialAuth(),
-    ]);
+    // Phase 1 — Authenticating: wait for the Supabase auth roundtrip so we
+    // know whether there's a restored session before any data calls fire.
+    await awaitInitialAuth();
+
+    // Phase 2 — Saucing: now session is known, run all Sauceboss data
+    // loads in parallel. For signed-in users this includes profile +
+    // saucebook + pantry; for anon users it's just the public lists.
+    setSplashText('Saucing');
+    const tasks = [fetchInitialLoad()];
+    if (session) {
+      tasks.push((async () => {
+        await loadProfile();
+        if (currentUser) await loadSaucebookAndPantry();
+      })());
+    }
+    const [{ carbs, proteins, saladBases }] = await Promise.all(tasks);
     state.carbs = carbs;
     state.proteins = proteins;
     state.saladBases = saladBases;
