@@ -1,7 +1,7 @@
 # PlantPlanner — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-05-09 (Phase-2 plant-first refactor: legacy DB cutover)
+> Last updated: 2026-05-09 (Plant Library — top-level "My Plants" view)
 
 ## What This App Does
 
@@ -41,6 +41,7 @@ projects/plant-planner/
 │   ├── location.js      — Geolocation + ZIP picker modal
 │   ├── render2d.js      — SVG-based 2D top-down planter renderer
 │   ├── shopping.js      — Plant-shopping step + builder shortlist sidebar
+│   ├── library.js       — "My Plants" library view (status filter + detail panel)
 │   ├── garden.js        — Builder shell — wires renderer, sidebar, save/reseed
 │   ├── init.js          — DOMContentLoaded, initSupabase, event listeners
 │   ├── styles.css       — App-specific styles
@@ -53,6 +54,7 @@ shared-backend/routes/plant_planner/  — FastAPI route package
   ├── catalog_routes.py  — /catalog/search + /catalog/{id} (cache-first)
   ├── garden_routes.py   — Garden CRUD + cache-only placement save
   ├── garden_units.py    — Per-garden_type unit semantics (mirrors web/garden-units.js)
+  ├── library_routes.py  — /user_plants CRUD + wishlist/current auto-population helpers
   ├── auth_routes.py     — /auth/me
   ├── location_routes.py — ZIP/geolocation → USDA zone
   ├── models.py          — Pydantic request/response models
@@ -60,7 +62,7 @@ shared-backend/routes/plant_planner/  — FastAPI route package
   ├── constants.py       — Enums for garden_type / shade / season / water
   └── data/              — Static lookup tables (e.g. zip3_to_zone.json)
 
-db/migrations/plantplanner/001_baseline.sql … 012_planter_types_redesign.sql
+db/migrations/plantplanner/001_baseline.sql … 013_user_plants.sql
 ```
 
 ## Data Model
@@ -72,6 +74,7 @@ db/migrations/plantplanner/001_baseline.sql … 012_planter_types_redesign.sql
 - **plantplanner_garden_plants** — id (uuid PK), garden_id (uuid FK→gardens ON DELETE CASCADE), plant_id (uuid FK→plants, **nullable**), plant_cache_id (uuid FK→plant_cache, **nullable**), pos_x/pos_y (real, feet), radius_feet (real). CHECK constraint requires exactly one of plant_id / plant_cache_id to be set. Phase-1 placements use plant_cache_id; legacy seed-table placements use plant_id.
 - **plantplanner_companions** — id (uuid PK default gen_random_uuid()), plant_a_id (uuid FK→plants, with `a < b` ordering), plant_b_id (uuid FK→plants), relationship (text: `good`/`bad`/`neutral`), reason (text). Indexed on both `plant_a_id` and `plant_b_id`.
 - **plantplanner_plant_cache** — Phase-1 API-backed catalog. id (uuid PK), source (`trefle`/`perenual`/`merged`), source_id (text), scientific_name (text UNIQUE), common_name (text), family (text), emoji (text), hardiness_min/max (int — USDA zone), sunlight (`full_sun`/`part_shade`/`full_shade`), watering (`frequent`/`average`/`minimum`/`none`), cycle (`annual`/`perennial`/`biennial`), indoor (bool), height_min_cm/height_max_cm (int), spread_cm (int), days_to_harvest (int), edible (bool), vegetable (bool), toxicity (text), growth_rate (text), ph_min/ph_max (real), sowing (text), nitrogen_fixation (bool), tags (text[]). **Three image sizes** mirrored to Supabase Storage: image_thumbnail_url/path, image_medium_url/path, image_regular_url/path — all nullable, populated as available from each API source. raw_trefle_json + raw_perenual_json keep the source payloads for forward compat. last_synced_at + last_image_synced_at timestamps.
+- **plantplanner_user_plants** — "My Plants" library. id (uuid PK), user_id (uuid FK→profiles ON DELETE CASCADE), plant_cache_id (uuid FK→plant_cache), status (`current`/`former`/`wishlist`, default `wishlist`), quantity (int, default 0), notes (text), acquired_at (date), created_at + updated_at. UNIQUE on `(user_id, plant_cache_id)` — one row per user-species. Auto-populated: shortlist updates create wishlist rows; placement saves promote/upsert to current with quantity = max(stored, count of placements across all the user's gardens). Demote-to-former is user-driven only via PUT.
 
 ## API Endpoints
 
@@ -83,6 +86,10 @@ db/migrations/plantplanner/001_baseline.sql … 012_planter_types_redesign.sql
 - `POST /api/v1/plant_planner/catalog/fill/perenual` — Step 3. Finds cache plants matching the conditions that lack hardiness/sunlight/watering and enriches them via Perenual. Returns `{ status, fetched, enriched }`.
 - `POST /api/v1/plant_planner/catalog/fill/flora` — Step 4. Cross-references matching cache plants against FloraAPI for supplemental US-flora data. **Requires `FLORA_API_KEY`** — fails the step if not configured. Returns `{ status, fetched, enriched }` or `{ status: 'error', error }`.
 - `POST /api/v1/plant_planner/catalog/fill/compatible` — Step 5. Applies the wizard's full filter against the now-enriched cache and returns `{ status, compatible_plants, total_in_cache }`.
+- `GET  /api/v1/plant_planner/user_plants` — List the current user's library entries (auth required). Optional `?status=current|former|wishlist` filter and `?include_gardens=true` to embed planter membership. Each entry hydrates the cached plant payload + `gardens: [{id, name}]` (computed live by joining `plantplanner_garden_plants`).
+- `POST /api/v1/plant_planner/user_plants` — Add a plant to the library. Idempotent on `(user_id, plant_cache_id)` — if a row exists, returns it without overwriting status.
+- `PUT  /api/v1/plant_planner/user_plants/{id}` — Edit any subset of `status`, `quantity`, `notes`, `acquired_at` on the user's own row.
+- `DELETE /api/v1/plant_planner/user_plants/{id}` — Remove a row from the library (does not affect placements).
 - `GET  /api/v1/plant_planner/gardens` — List user's gardens (auth required)
 - `POST /api/v1/plant_planner/gardens` — Create new garden (auth required; accepts the wizard's full conditions payload: `garden_type`, `shade_level`, `water_plan`, plus optional `usda_zone` + `location_label`)
 - `GET  /api/v1/plant_planner/gardens/{id}` — Get garden with placed plants + `settings_json` (auth required)
@@ -97,6 +104,9 @@ db/migrations/plantplanner/001_baseline.sql … 012_planter_types_redesign.sql
 ```
 Auth View (login/register)
     ↓ (on login)
+Navbar exposes two top-level views: "My Gardens" (default) and "My Plants"
+(library). The flow below is the default; the library is described after.
+
 My Gardens View (list saved gardens, "+ New Garden")
     ↓ ("+ New Garden")
 New-Garden Wizard (state.js → currentView === "wizard")
@@ -132,6 +142,18 @@ Garden Builder View
   │     ↳ Drag from sidebar → preview disk + drop to commit
   │     ↳ Tap placed plant disk → remove
   └── Save button
+
+My Plant Library View (currentView === "library", reachable from the
+"My Plants" navbar button)
+  ├── Status filter tabs: All · Current · Wishlist · Former (with counts)
+  ├── Grid of plant cards (image, name, scientific subline, status pill,
+  │   "In: <Garden Name>" planter chips — or "Unpotted" for `current` rows
+  │   with no placements)
+  └── Detail slide-in (reuses .shopping-detail-panel pattern):
+      - Plant facts (sun, water, hardiness, height)
+      - Editable: status (3-way radio), quantity, acquired_at, notes
+      - Planter chips (each navigates to that planter's builder)
+      - "Remove from library" button
 ```
 
 ## Key Business Logic
@@ -192,6 +214,8 @@ Garden Builder View
 - 2026-05-09 — **Phase-2 cutover: legacy DB integration removed.** All user-facing reads go through `plantplanner_plant_cache`. Backend deletes: `GET /plants` and `GET /companions` routes (and their files). Backend simplifies: `GET /gardens/{id}` no longer joins `plantplanner_plants` / `plantplanner_renders`; `PUT /gardens/{id}/plants` accepts only `plant_cache_id` (XOR + the legacy `plant_id` field on `PlantPlacement` are gone). Frontend deletes from the bundle: `catalog.js`, `plant-data.js`, `companions.js`, `shading.js`, `bloom-calendar.js`. Builder simplifies to a single shortlist sidebar (no fallback catalog branch). Wizard gains step 5 — **Planting season** — and moves Review to step 6/7 (with the location-skip rule preserved). The wizard's review-step "X of Y plants match" preview now hits `/catalog/search` live instead of running `plantMatchesFilters` against the seed pool. `/catalog/search` gains four new query params — `planting_season` (mapped to plant `cycle`), `garden_type` + `grid_width` + `grid_height` (combined into a small/medium/large bucket that drives `max_height_cm` and `max_spread_cm` caps so small pots don't return tree-sized plants), plus `planter_size` as an explicit override. Companion-warning chips, bloom calendar, year scrubber, and shading overlays are gone for now — they were seed-coupled and will be re-introduced in Phase 3 once equivalent data sources exist for cache plants. Tables `plantplanner_plants`, `plantplanner_companions`, and `plantplanner_renders` are still in the database but unused; a future `*_drop_legacy_plant_tables.sql` will retire them once production gardens are confirmed clear.
 
 - 2026-05-09 — **Loading orchestration on plant selection.** Wizard review step drops the live "X plants match" pill and renames its CTA from "Create garden" to "Continue to plant selection". On confirm the planter is POST'd as before, then the shopping view enters a new orchestration phase: a 5-step to-do list overlay shows the API calls in flight (save → Trefle → Perenual → Flora → compatible-count), each with a per-step status pill (pending/running/ok/error) and human-readable detail line ("Fetched 18 plants — 12 new"). Once all steps settle, a "Continue to plant selection" button reveals the plant grid. Backend adds four discrete fill endpoints (`POST /catalog/fill/{trefle, perenual, flora, compatible}`) accepting the same wizard `FillBody`. New `FloraAPI` client lives in `api_clients.py` (`flora_search`, `flora_lookup_by_scientific`, `normalize_flora`) and **requires `FLORA_API_KEY`** — step 4 fails visibly if unset; the user can still proceed to the grid (other steps' data remains usable). Existing planters reopened from the builder ("Add more plants" button) skip the orchestration and go straight to the grid via the existing cache-first `/catalog/search` path.
+
+- 2026-05-09 — **Plant Library — top-level "My Plants".** Migration `013_user_plants.sql` adds `plantplanner_user_plants` keyed on `(user_id, plant_cache_id)` UNIQUE with `status ∈ {current, former, wishlist}`, `quantity`, `notes`, `acquired_at`. New `library_routes.py` exposes 4 routes (`GET/POST/PUT/DELETE /user_plants`) plus two auto-population helpers (`upsert_wishlist_rows` and `promote_to_current`) wired into `garden_routes.update_garden` (shortlist update → wishlist row insert) and `garden_routes.save_garden_plants` (placement save → current row upsert with quantity = max(stored, count of placements across all the user's gardens)). Promotions are write-once-up: they never demote `current` or overwrite `former` rows. Frontend adds a "My Plants" navbar button alongside "My Gardens", a new top-level view at `currentView === 'library'`, status filter tabs (All · Current · Wishlist · Former with counts), card grid mirroring `.garden-card`, and a slide-in detail panel reusing the `.shopping-detail-panel` pattern with editable status / quantity / notes / acquired_at fields plus planter-membership chips that link back to each garden. Planter membership is computed live by joining `plantplanner_garden_plants(plant_cache_id)` — never stored on the user_plants row.
 
 - 2026-05-09 — **Step-one redesign: 7 planter types + units fix.** Migration `012_planter_types_redesign.sql` expands `garden_type` from 5 to 7 values (`indoor_pot`, `indoor_planter_box`, `greenhouse`, `outdoor_pot`, `outdoor_planter_box`, `garden_bed`, `raised_bed`); existing `'indoor'` rows migrate to `'indoor_pot'`, `'outdoor'` to `'outdoor_pot'`. Wizard step 1 redesigns to a two-column picker (Indoor | Outdoor). New shared helper modules — `shared-backend/routes/plant_planner/garden_units.py` and `web/garden-units.js` — codify the storage invariant (pots and planter boxes store inches in grid_width/grid_height; greenhouse + beds store feet; placements always feet). The 2D top-down renderer (`render2d.js`) and `garden_routes.save_garden_plants` bounds check now normalize grid dims to feet via `gridDimToFeet` / `grid_dim_to_feet`, fixing a silent bug where indoor pots rendered as 12-foot soil patches and accepted out-of-bounds placements. Both the wizard-step-1 preview and the builder's render2d pane now span full content width (preview stacked below the size controls; builder collapses sidebar above the render at <900px). All 11 Phase-2-retired web/*.js files (`render3d.js`, `plant-data.js`, `plant-drag.js`, `touch-drag.js`, `plant-models.js`, `plant-sprites.js`, `plant-thumbnails.js`, `companions.js`, `shading.js`, `bloom-calendar.js`, `catalog.js`) are deleted from disk in this commit.
 

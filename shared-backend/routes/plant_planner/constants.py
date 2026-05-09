@@ -38,3 +38,10 @@ class Lifecycle(StrEnum):
     ANNUAL = "annual"
     BIENNIAL = "biennial"
     PERENNIAL = "perennial"
+
+
+class UserPlantStatus(StrEnum):
+    """Status of a row in plantplanner_user_plants — the user's library."""
+    CURRENT = "current"
+    FORMER = "former"
+    WISHLIST = "wishlist"

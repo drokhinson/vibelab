@@ -1,12 +1,13 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: post-012_planter_types_redesign (garden_type expanded from
--- 5 to 7 values; existing 'indoor' / 'outdoor' rows migrated to '*_pot').
+-- Last updated: post-013_user_plants (new plantplanner_user_plants table —
+-- top-level "My Plants" library; auto-populated from shortlist + placements).
 -- Migrations applied: 001_baseline, 002_seed, 003_supabase_auth,
 --                     004_enrich_plants, 005_seed_enriched, 006_companions,
 --                     007_companions_seed, 008_real_radius_placement,
 --                     009_growth_lifecycle, 010_garden_conditions,
---                     011_plant_cache_and_shortlist, 012_planter_types_redesign.
+--                     011_plant_cache_and_shortlist, 012_planter_types_redesign,
+--                     013_user_plants.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Storage invariant: grid_width / grid_height store INCHES when garden_type
@@ -160,3 +161,21 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_plant_cache (
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE public.plantplanner_plant_cache ENABLE ROW LEVEL SECURITY;
+
+-- "My Plants" library (013_user_plants). One row per (user, species).
+-- Auto-populated from shortlist (wishlist) and placement save (current);
+-- demote to former is user-driven only.
+CREATE TABLE IF NOT EXISTS public.plantplanner_user_plants (
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID        NOT NULL REFERENCES public.plantplanner_profiles(id) ON DELETE CASCADE,
+  plant_cache_id  UUID        NOT NULL REFERENCES public.plantplanner_plant_cache(id),
+  status          TEXT        NOT NULL DEFAULT 'wishlist'
+                  CHECK (status IN ('current', 'former', 'wishlist')),
+  quantity        INT         NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+  notes           TEXT,
+  acquired_at     DATE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, plant_cache_id)
+);
+ALTER TABLE public.plantplanner_user_plants ENABLE ROW LEVEL SECURITY;
