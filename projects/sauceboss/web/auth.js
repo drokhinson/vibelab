@@ -1,38 +1,73 @@
 'use strict';
 
 // ─── Supabase Auth wiring ────────────────────────────────────────────────────
-// Pattern mirrors boardgame-buddy/web/auth.js but without the splash gate —
-// SauceBoss stays browsable when signed out.
+// The splash stays up until `awaitInitialAuth()` resolves. That happens either
+// when Supabase fires its first onAuthStateChange (INITIAL_SESSION) AND any
+// resulting loadProfile() finishes, OR when Supabase isn't configured at all,
+// OR after a 3s safety timeout. This guarantees that when the splash drops:
+//   • we know whether the user is signed in (currentUser is set or null);
+//   • if they are, their saucebook + pantry are already hydrated, so the
+//     Saucebook tab doesn't render an empty state for a frame before the
+//     real data arrives.
 
 let _profileLoadInFlight = false;
+let _initialAuthResolve = null;
+let _initialAuthReady = new Promise(resolve => { _initialAuthResolve = resolve; });
+let _initialAuthSettled = false;
+
+function awaitInitialAuth() {
+  return _initialAuthReady;
+}
+
+function _resolveInitialAuth() {
+  if (_initialAuthSettled) return;
+  _initialAuthSettled = true;
+  if (_initialAuthResolve) _initialAuthResolve();
+}
 
 function initSupabase() {
   const cfg = window.APP_CONFIG;
   if (!cfg?.supabaseUrl || !cfg?.supabaseAnonKey) {
     console.warn('[sauceboss] Supabase not configured; sign-in disabled.');
+    _resolveInitialAuth();
     return;
   }
   if (!window.supabase || typeof window.supabase.createClient !== 'function') {
     console.error('[sauceboss] Supabase JS client missing — check the CDN script tag.');
+    _resolveInitialAuth();
     return;
   }
   supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
 
-  supabaseClient.auth.onAuthStateChange((event, sess) => {
+  // Hard cap so a misbehaving auth subscription can't strand the splash.
+  setTimeout(_resolveInitialAuth, 3000);
+
+  supabaseClient.auth.onAuthStateChange(async (event, sess) => {
+    const isFirst = !_initialAuthSettled;
     session = sess;
-    if (sess) {
-      loadProfile();
-    } else {
-      currentUser = null;
-      state.editMode = false;
-      // Reset saucebook + pantry to anon defaults; force the user back to
-      // Browse since the other tabs are locked without an account.
-      state.saucebook = [];
-      state.pantry = { ingredients: [], missing: new Set(), loading: false, error: null };
-      state.disabledIngredients = new Set();
-      state.activeTab = 'browse';
-      document.body.classList.remove('is-auth');
-      render();
+    try {
+      if (sess) {
+        // Await loadProfile fully so the splash doesn't drop until the
+        // saucebook + pantry are hydrated. Subsequent events (token
+        // refresh, etc.) hit the in-flight guard and return immediately.
+        await loadProfile();
+      } else {
+        currentUser = null;
+        state.editMode = false;
+        // Reset saucebook + pantry to anon defaults; force the user back
+        // to Browse since the other tabs are locked without an account.
+        state.saucebook = [];
+        state.pantry = { ingredients: [], missing: new Set(), loading: false, error: null };
+        state.disabledIngredients = new Set();
+        state.activeTab = 'browse';
+        document.body.classList.remove('is-auth');
+        // Skip the render for the first event — init.js owns the first
+        // render after the splash exits, and rendering here would either
+        // be invisible (under splash) or cause a brief flicker.
+        if (!isFirst) render();
+      }
+    } finally {
+      if (isFirst) _resolveInitialAuth();
     }
   });
 }

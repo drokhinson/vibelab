@@ -8,10 +8,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.body.classList.add('splash--loading');
 
   // Wire up Supabase Auth (email / Google / Apple). No-op when not configured.
+  // initSupabase also kicks off the initial auth roundtrip that
+  // `awaitInitialAuth()` resolves once it completes (or after a 3s timeout).
   initSupabase();
 
   try {
-    const { carbs, proteins, saladBases } = await fetchInitialLoad();
+    // Run the public initial-load and the auth roundtrip in parallel. The
+    // splash is gated on BOTH so:
+    //   • a logged-in returning user sees their populated Saucebook the
+    //     moment the splash drops (no empty-state flash);
+    //   • an anon user lands on Browse with the other two tabs locked.
+    const [{ carbs, proteins, saladBases }] = await Promise.all([
+      fetchInitialLoad(),
+      awaitInitialAuth(),
+    ]);
     state.carbs = carbs;
     state.proteins = proteins;
     state.saladBases = saladBases;

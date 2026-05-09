@@ -18,6 +18,7 @@ function renderPantry() {
     return `
       <div class="screen-wrap">
         <div class="tab-screen-header">
+          ${renderHeaderAuthSlot()}
           <h1>Pantry</h1>
           <p class="subtitle">Mark what you're out of</p>
         </div>
@@ -50,6 +51,7 @@ function renderPantry() {
   return `
     <div class="screen-wrap">
       <div class="tab-screen-header">
+        ${renderHeaderAuthSlot()}
         <h1>Pantry</h1>
         <p class="subtitle">${ings.length} ingredient${ings.length === 1 ? '' : 's'} from your saucebook · ${totalMissing} missing</p>
       </div>

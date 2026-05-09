@@ -23,6 +23,7 @@ function renderBrowse() {
   return `
     <div class="screen-wrap">
       <div class="tab-screen-header">
+        ${renderHeaderAuthSlot()}
         <h1>Browse</h1>
         <p class="subtitle">Discover recipes from every cuisine</p>
       </div>

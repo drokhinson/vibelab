@@ -57,6 +57,7 @@ function renderSaucebook() {
   return `
     <div class="screen-wrap">
       <div class="tab-screen-header">
+        ${renderHeaderAuthSlot()}
         <h1>Saucebook</h1>
         <p class="subtitle">Your recipe library</p>
       </div>

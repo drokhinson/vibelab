@@ -2849,17 +2849,27 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   background: #E85D04;
   color: white;
   padding: 16px;
+  /* Anchor for the absolutely-positioned auth pill / sign-in button. */
+  position: relative;
 }
 .tab-screen-header h1 {
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.3px;
+  /* Reserve space on the right so a long title doesn't run under the auth slot. */
+  padding-right: 44px;
 }
 .tab-screen-header .subtitle {
   font-size: 13px;
   color: rgba(255,255,255,0.85);
   margin-top: 2px;
+  padding-right: 44px;
 }
+/* The auth slot already self-positions via .auth-signin-btn / .auth-pill
+   (top: 10px; right: 12px). Boosting top to 12px aligns optically with the
+   tab header's 16px padding. */
+.tab-screen-header .auth-signin-btn,
+.tab-screen-header .auth-pill { top: 12px; }
 .tab-search {
   display: flex;
   align-items: center;
