@@ -35,9 +35,37 @@ function initSupabase() {
   });
 }
 
+function showLoadingScreen() {
+  var svg =
+    '<svg class="pp-loading-plant" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">' +
+      // pot (static)
+      '<rect x="14" y="40" width="36" height="4" rx="1.5" fill="#D26F58"/>' +
+      '<path d="M16 44 L48 44 L44 56 Q44 58 41 58 L23 58 Q20 58 20 56 Z" fill="#E8856C"/>' +
+      // stem + leaves (grow animation)
+      '<g class="pp-stem-leaves">' +
+        '<path d="M32 30 Q21 22 14 30 Q21 38 32 34 Z" fill="#7BAE7F"/>' +
+        '<path d="M32 30 Q43 22 50 30 Q43 38 32 34 Z" fill="#7BAE7F"/>' +
+        '<path d="M32 16 Q28 26 32 36 Q36 26 32 16 Z" fill="#7BAE7F"/>' +
+        '<line x1="32" y1="20" x2="32" y2="42" stroke="#5E8C62" stroke-width="2.5" stroke-linecap="round"/>' +
+      '</g>' +
+      // flower (bloom animation)
+      '<g class="pp-flower">' +
+        '<circle cx="32" cy="16" r="4" fill="#B8A9D4"/>' +
+        '<circle cx="32" cy="13" r="2.2" fill="#CDC0E0"/>' +
+      '</g>' +
+    '</svg>';
+
+  app.innerHTML =
+    '<div class="pp-loading-screen">' +
+      svg +
+      '<p class="pp-loading-text">Growing your garden…</p>' +
+    '</div>';
+}
+
 async function loadProfileAndBoot() {
   if (_profileLoadInFlight || currentUser) return;
   _profileLoadInFlight = true;
+  showLoadingScreen();
   try {
     try {
       currentUser = await apiFetch("/auth/me");
