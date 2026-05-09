@@ -21,7 +21,14 @@
 --                                  balcony, patio)")
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- 1. Migrate legacy values BEFORE replacing the CHECK constraint.
+-- 1. Drop the old CHECK constraint FIRST. Otherwise the UPDATE in step 2
+--    would set values the old constraint forbids and Postgres rejects the
+--    statement (Failed: 23514 on 'indoor_pot' violating the legacy 5-value
+--    constraint).
+ALTER TABLE public.plantplanner_gardens
+  DROP CONSTRAINT IF EXISTS plantplanner_gardens_type_check;
+
+-- 2. Migrate legacy values now that nothing's blocking the new strings.
 UPDATE public.plantplanner_gardens
    SET garden_type = 'indoor_pot'
  WHERE garden_type = 'indoor';
@@ -30,10 +37,9 @@ UPDATE public.plantplanner_gardens
    SET garden_type = 'outdoor_pot'
  WHERE garden_type = 'outdoor';
 
--- 2. Replace the CHECK constraint with the 7-value set.
-ALTER TABLE public.plantplanner_gardens
-  DROP CONSTRAINT IF EXISTS plantplanner_gardens_type_check;
-
+-- 3. Add the new 7-value CHECK constraint. Re-runnable: step 1 dropped any
+--    prior version (whether the old 5-value or a previous attempt of this
+--    one), so this ADD won't collide.
 ALTER TABLE public.plantplanner_gardens
   ADD CONSTRAINT plantplanner_gardens_type_check
     CHECK (garden_type IN (
@@ -46,5 +52,5 @@ ALTER TABLE public.plantplanner_gardens
       'raised_bed'
     ));
 
--- 3. Re-grant on the changed table for the project read-only role.
+-- 4. Re-grant on the changed table for the project read-only role.
 GRANT SELECT ON public.plantplanner_gardens TO plantplanner_role;
