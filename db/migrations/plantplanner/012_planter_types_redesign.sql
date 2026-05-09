@@ -1,0 +1,50 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 012_planter_types_redesign.sql
+-- Expand garden_type from 5 → 7 values to match the new two-column wizard
+-- step 1:
+--   Indoor : indoor_pot · indoor_planter_box · greenhouse
+--   Outdoor: outdoor_pot · outdoor_planter_box · garden_bed · raised_bed
+--
+-- Storage invariant for grid_width / grid_height:
+--   • garden_type IN (indoor_pot, indoor_planter_box, outdoor_pot,
+--     outdoor_planter_box) → values are INCHES
+--   • everything else (greenhouse, garden_bed, raised_bed) → values are FEET
+--   • pos_x, pos_y, radius_feet on plantplanner_garden_plants are ALWAYS feet,
+--     regardless of garden_type. Backend converts grid dims to feet before
+--     bounds-checking placements.
+--
+-- Existing rows are migrated:
+--   • 'indoor'   → 'indoor_pot'   (matches the 010-era comment that the legacy
+--                                  'planter' meant an indoor pot)
+--   • 'outdoor'  → 'outdoor_pot'  (the old 'outdoor' option in the wizard was
+--                                  described as "Container outside (deck,
+--                                  balcony, patio)")
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- 1. Migrate legacy values BEFORE replacing the CHECK constraint.
+UPDATE public.plantplanner_gardens
+   SET garden_type = 'indoor_pot'
+ WHERE garden_type = 'indoor';
+
+UPDATE public.plantplanner_gardens
+   SET garden_type = 'outdoor_pot'
+ WHERE garden_type = 'outdoor';
+
+-- 2. Replace the CHECK constraint with the 7-value set.
+ALTER TABLE public.plantplanner_gardens
+  DROP CONSTRAINT IF EXISTS plantplanner_gardens_type_check;
+
+ALTER TABLE public.plantplanner_gardens
+  ADD CONSTRAINT plantplanner_gardens_type_check
+    CHECK (garden_type IN (
+      'indoor_pot',
+      'indoor_planter_box',
+      'greenhouse',
+      'outdoor_pot',
+      'outdoor_planter_box',
+      'garden_bed',
+      'raised_bed'
+    ));
+
+-- 3. Re-grant on the changed table for the project read-only role.
+GRANT SELECT ON public.plantplanner_gardens TO plantplanner_role;

@@ -4,11 +4,15 @@ from enum import StrEnum
 
 
 class GardenType(StrEnum):
-    INDOOR = "indoor"
-    OUTDOOR = "outdoor"
+    # Indoor (climate-controlled, dimensions in inches except greenhouse)
+    INDOOR_POT = "indoor_pot"
+    INDOOR_PLANTER_BOX = "indoor_planter_box"
+    GREENHOUSE = "greenhouse"
+    # Outdoor (climate-exposed; pots/planter-boxes in inches, beds in feet)
+    OUTDOOR_POT = "outdoor_pot"
+    OUTDOOR_PLANTER_BOX = "outdoor_planter_box"
     GARDEN_BED = "garden_bed"
     RAISED_BED = "raised_bed"
-    GREENHOUSE = "greenhouse"
 
 
 class ShadeLevel(StrEnum):

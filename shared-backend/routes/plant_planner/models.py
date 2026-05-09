@@ -13,6 +13,14 @@ class MeResponse(BaseModel):
 
 
 class CreateGardenBody(BaseModel):
+    """Body for POST /gardens.
+
+    grid_width / grid_height are stored in INCHES when garden_type is one of
+    {indoor_pot, indoor_planter_box, outdoor_pot, outdoor_planter_box} and in
+    FEET otherwise (greenhouse, garden_bed, raised_bed). The frontend feeds
+    raw values; backend normalizes to feet at validation time. See
+    `garden_units.py` for the helpers that enforce this invariant.
+    """
     name: str = "My Garden"
     grid_width: int = 4
     grid_height: int = 4
@@ -68,9 +76,14 @@ class LocationLookupResponse(BaseModel):
 
 
 class PlantPlacement(BaseModel):
-    """Cache-backed placement. The legacy `plant_id` field was removed in
-    Phase 2 of the plant-first refactor — every placement now points at a
-    `plantplanner_plant_cache` row."""
+    """Cache-backed placement.
+
+    pos_x / pos_y / radius_feet are ALWAYS in feet, regardless of the
+    garden's garden_type. The backend converts the garden's stored
+    grid_width / grid_height to feet (via `garden_units.grid_dim_to_feet`)
+    before bounds-checking, since those fields are inches for pot / planter-box
+    types and feet for greenhouse / bed types.
+    """
     plant_cache_id: str
     pos_x: float
     pos_y: float

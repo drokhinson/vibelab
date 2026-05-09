@@ -52,6 +52,15 @@ function init2DView(containerId, garden, initialPlacements) {
   container.innerHTML = '';
   container.classList.add('render2d-container');
 
+  // Normalize stored grid dims to feet — pots and planter boxes store
+  // inches, beds + greenhouses store feet (see web/garden-units.js).
+  var widthFt  = (typeof gridDimToFeet === 'function')
+    ? (gridDimToFeet(garden.grid_width,  garden.garden_type) || 1)
+    : (garden.grid_width  || 1);
+  var heightFt = (typeof gridDimToFeet === 'function')
+    ? (gridDimToFeet(garden.grid_height, garden.garden_type) || 1)
+    : (garden.grid_height || 1);
+
   var rect = container.getBoundingClientRect();
   var W = Math.max(1, rect.width);
   var H = Math.max(1, rect.height);
@@ -59,9 +68,9 @@ function init2DView(containerId, garden, initialPlacements) {
   var margin = 16;
   var availW = Math.max(50, W - margin * 2);
   var availH = Math.max(50, H - margin * 2);
-  var pixelsPerFoot = Math.min(availW / garden.grid_width, availH / garden.grid_height);
-  var soilW = pixelsPerFoot * garden.grid_width;
-  var soilH = pixelsPerFoot * garden.grid_height;
+  var pixelsPerFoot = Math.min(availW / widthFt, availH / heightFt);
+  var soilW = pixelsPerFoot * widthFt;
+  var soilH = pixelsPerFoot * heightFt;
   var soilX = (W - soilW) / 2;
   var soilY = (H - soilH) / 2;
 
@@ -80,14 +89,14 @@ function init2DView(containerId, garden, initialPlacements) {
 
   // Grid lines (one per foot).
   var gridGroup = _newSvgEl('g', { class: 'render2d-grid' });
-  for (var gx = 1; gx < garden.grid_width; gx++) {
+  for (var gx = 1; gx < widthFt; gx++) {
     gridGroup.appendChild(_newSvgEl('line', {
       x1: soilX + gx * pixelsPerFoot, y1: soilY,
       x2: soilX + gx * pixelsPerFoot, y2: soilY + soilH,
       stroke: GRID_STROKE, 'stroke-width': 1
     }));
   }
-  for (var gy = 1; gy < garden.grid_height; gy++) {
+  for (var gy = 1; gy < heightFt; gy++) {
     gridGroup.appendChild(_newSvgEl('line', {
       x1: soilX,          y1: soilY + gy * pixelsPerFoot,
       x2: soilX + soilW,  y2: soilY + gy * pixelsPerFoot,
@@ -126,13 +135,15 @@ function init2DView(containerId, garden, initialPlacements) {
     plantsGroup: plantsGroup,
     previewDisk: previewDisk,
     pixelsPerFoot: pixelsPerFoot,
+    // Effective grid dims in feet (always feet, regardless of garden_type).
+    gridWidthFt: widthFt,
+    gridHeightFt: heightFt,
     soilX: soilX,
     soilY: soilY,
     soilW: soilW,
     soilH: soilH,
     canvasW: W,
     canvasH: H,
-    // Mimic 3D handle for code that reads renderer.domElement.
     renderer: { domElement: svg },
     camera: null,
     placements: initialPlacements || [],
@@ -142,7 +153,7 @@ function init2DView(containerId, garden, initialPlacements) {
     if (!placement) return null;
     return {
       x: handle.soilX + placement.pos_x * handle.pixelsPerFoot,
-      y: handle.soilY + (handle.garden.grid_height - placement.pos_y) * handle.pixelsPerFoot
+      y: handle.soilY + (handle.gridHeightFt - placement.pos_y) * handle.pixelsPerFoot
     };
   };
 
@@ -151,7 +162,7 @@ function init2DView(containerId, garden, initialPlacements) {
     var localX = clientX - r.left;
     var localY = clientY - r.top;
     var pos_x = (localX - handle.soilX) / handle.pixelsPerFoot;
-    var pos_y = handle.garden.grid_height - (localY - handle.soilY) / handle.pixelsPerFoot;
+    var pos_y = handle.gridHeightFt - (localY - handle.soilY) / handle.pixelsPerFoot;
     return { pos_x: pos_x, pos_y: pos_y };
   };
 
@@ -268,7 +279,7 @@ function setup2DDragDrop(handle, callbacks) {
               ? (window.draggedPlant.spread_inches || (window.draggedPlant.spread_cm / 2.54))
               : 12) / 24;
     var valid = (typeof validatePlacement === 'function')
-      ? validatePlacement(pos.pos_x, pos.pos_y, r, handle.garden.grid_width, handle.garden.grid_height, handle.placements)
+      ? validatePlacement(pos.pos_x, pos.pos_y, r, handle.gridWidthFt, handle.gridHeightFt, handle.placements)
       : 'ok';
     showPreviewDisk(handle, pos.pos_x, pos.pos_y, r, valid);
   }

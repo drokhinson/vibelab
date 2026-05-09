@@ -28,6 +28,7 @@ from .api_clients import (
     trefle_filter,
     trefle_search,
 )
+from .garden_units import garden_is_climate_controlled, garden_uses_inches
 from .image_mirror import mirror_all_sizes
 
 logger = logging.getLogger(__name__)
@@ -269,19 +270,18 @@ def _derive_planter_size(
 ) -> Optional[str]:
     """Map (garden_type, dims) to a small/medium/large bucket.
 
-    Indoor pots use inches for grid dims; outdoor types use feet. We treat
-    `width × height` as the relevant area in either unit.
+    Inch-unit types (pots, planter boxes) bucket on the longer side directly
+    in inches. Foot-unit types bucket on area in square feet.
     """
     if not garden_type:
         return None
-    if garden_type in ("indoor",):
-        # Pots: width is diameter in inches.
-        # ≤ 18" diameter → small; 18–30" → medium; > 30" → large.
-        if grid_width is None:
+    if garden_uses_inches(garden_type):
+        if grid_width is None or grid_height is None:
             return "small"
-        if grid_width <= 18:
+        longest = max(grid_width, grid_height)
+        if longest <= 18:
             return "small"
-        if grid_width <= 30:
+        if longest <= 30:
             return "medium"
         return "large"
     if grid_width is None or grid_height is None:
@@ -353,9 +353,10 @@ async def catalog_search(
     effective_zone = zone if zone is not None else _zone_label_to_int(usda_zone)
     effective_cycle = cycle or _planting_season_to_cycle(planting_season)
 
-    # Indoor planters always require indoor-tolerant plants regardless of caller.
+    # Climate-controlled planters require indoor-tolerant plants. Outdoor pots
+    # are exposed to the user's actual zone — they do NOT force indoor=True.
     effective_indoor = indoor
-    if effective_indoor is None and (garden_type in ("indoor", "greenhouse")):
+    if effective_indoor is None and garden_is_climate_controlled(garden_type):
         effective_indoor = True
 
     # Plant-size caps come from explicit planter_size (override) or are derived
