@@ -171,15 +171,29 @@ function renderCompanionChips() {
 var _companionRafScheduled = false;
 
 function projectPlacementToScreen(placementId) {
-  if (!scene3DHandle || !scene3DHandle.renderer || !scene3DHandle.camera) return null;
+  if (!scene3DHandle || !scene3DHandle.renderer) return null;
   var placement = placements.find(function(p) { return p.id === placementId; });
   if (!placement) return null;
-  var v = scenePlacementWorldPosition(scene3DHandle, placement);
-  if (!v) return null;
+
   var canvas = scene3DHandle.renderer.domElement;
   var rect = canvas.getBoundingClientRect();
   var layer = document.getElementById('companion-chips');
   var layerRect = layer ? layer.getBoundingClientRect() : rect;
+
+  // 2D top-down renderer: handle exposes a direct screen-coord projection.
+  if (scene3DHandle.isTwoD && typeof scene3DHandle.projectPlacement === 'function') {
+    var p2d = scene3DHandle.projectPlacement(placement);
+    if (!p2d) return null;
+    return {
+      x: p2d.x + (rect.left - layerRect.left),
+      y: p2d.y + (rect.top - layerRect.top)
+    };
+  }
+
+  // 3D renderer: project via the THREE camera.
+  if (!scene3DHandle.camera) return null;
+  var v = scenePlacementWorldPosition(scene3DHandle, placement);
+  if (!v) return null;
   var projected = v.clone().project(scene3DHandle.camera);
   if (projected.z < -1 || projected.z > 1) return null;
   var x = (projected.x + 1) / 2 * rect.width + (rect.left - layerRect.left);

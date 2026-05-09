@@ -38,20 +38,25 @@ function renderBuilder() {
 
   html += '<div class="builder-layout">';
 
-  // Catalog sidebar
+  // Sidebar — shortlist for new (cache-backed) gardens, legacy catalog otherwise.
+  var hasShortlist = Array.isArray(g.shortlist) && g.shortlist.length > 0;
   html += '<div id="catalog-sidebar" class="catalog-sidebar">';
-  html += '<div class="catalog-filters">' + renderCatalogFilters() + '</div>';
-  html += '<div class="catalog-list-wrapper" id="catalog-list-wrapper">' + renderCatalogList() + '</div>';
-  html += '<div id="plant-detail-panel"></div>';
+  if (hasShortlist) {
+    html += renderShortlistSidebar(g);
+  } else {
+    html += '<div class="catalog-filters">' + renderCatalogFilters() + '</div>';
+    html += '<div class="catalog-list-wrapper" id="catalog-list-wrapper">' + renderCatalogList() + '</div>';
+    html += '<div id="plant-detail-panel"></div>';
+  }
   html += '</div>';
 
-  // 3D view (full width — drag catalog plants directly onto scene)
+  // 2D top-down view (drag from sidebar to place; tap to remove).
   html += '<div class="builder-main">';
-  html += '<div class="render3d-pane">';
-  html += '<div class="render3d-header">';
-  html += '<span class="render3d-label"><i data-lucide="box"></i> Drag from catalog to place &nbsp;·&nbsp; hold to move &nbsp;·&nbsp; tap to remove</span>';
+  html += '<div class="render2d-pane">';
+  html += '<div class="render2d-header">';
+  html += '<span class="render2d-label"><i data-lucide="layout-grid"></i> Drag from your shortlist to place &nbsp;·&nbsp; tap to remove</span>';
   html += '</div>';
-  html += '<div id="render3d-container"></div>';
+  html += '<div id="render2d-container"></div>';
   html += '<div id="companion-chips" class="companion-chips-layer"></div>';
   html += '</div>';
   html += '<section id="bloom-calendar-strip" class="bloom-calendar"></section>';
@@ -63,37 +68,47 @@ function renderBuilder() {
 
   app.innerHTML = html;
 
-  bindCatalogEvents();
+  if (Array.isArray(g.shortlist) && g.shortlist.length > 0) {
+    bindShortlistEvents();
+  } else {
+    bindCatalogEvents();
+  }
   bindBuilderButtons();
   _initIcons();
 
-  // Initialize 3D scene, then wire up drag-drop and click handlers
-  init3DScene(g);
+  // Initialize 2D scene, then wire up drag-drop and click handlers.
+  init2DScene(g);
 }
 
-function init3DScene(g) {
-  if (scene3DHandle) {
-    dispose3DView(scene3DHandle);
-    scene3DHandle = null;
+function init2DScene(g) {
+  if (scene3DHandle && typeof dispose2DView === 'function' && scene3DHandle.isTwoD) {
+    dispose2DView(scene3DHandle);
+  } else if (scene3DHandle && typeof dispose3DView === 'function') {
+    try { dispose3DView(scene3DHandle); } catch (_) {}
   }
-  // Double RAF ensures CSS layout is fully committed before reading container dimensions
+  scene3DHandle = null;
+  // Double RAF ensures CSS layout has committed before we measure the container.
   requestAnimationFrame(function() {
     requestAnimationFrame(function() {
-      scene3DHandle = init3DView("render3d-container", g, placements);
+      scene3DHandle = init2DView("render2d-container", g, placements);
       if (scene3DHandle) {
-        bind3DDragDrop();
-        bind3DClick();
-        bindPlantDrag(scene3DHandle);
+        bind2DDragDrop();
+        bind2DClickHandler();
         renderCompanionChips();
-        refreshCatalogList();
+        if (typeof refreshCatalogList === 'function') refreshCatalogList();
         if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
       }
     });
   });
 }
 
+// Backwards-compat alias for callers that still reference the old name.
+var init3DScene = init2DScene;
+
 function sync3DView() {
-  if (scene3DHandle) {
+  if (scene3DHandle && scene3DHandle.isTwoD) {
+    syncSceneWithPlacements(scene3DHandle, placements);
+  } else if (scene3DHandle && typeof syncSceneWithPlacements === 'function') {
     syncSceneWithPlacements(scene3DHandle, placements);
   }
 }
@@ -103,18 +118,15 @@ function _newPlacementId() {
   return 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 }
 
-function bind3DDragDrop() {
-  setup3DDragDrop(scene3DHandle, {
+function bind2DDragDrop() {
+  setup2DDragDrop(scene3DHandle, {
     onDrop: function(pos_x, pos_y) {
       if (draggedPlant) {
-        var r = (draggedPlant.spread_inches || 12) / 24;
+        var r = _spreadFeetFor(draggedPlant);
         var gw = scene3DHandle.garden.grid_width;
         var gh = scene3DHandle.garden.grid_height;
         var valid = validatePlacement(pos_x, pos_y, r, gw, gh, placements);
         if (valid !== 'ok') {
-          // Reject the drop. Briefly flash the preview disk red so the user
-          // sees why, then hide it. The plant is not committed; the user can
-          // try again from the catalog.
           showPreviewDisk(scene3DHandle, pos_x, pos_y, r, valid);
           setTimeout(function() { hidePreviewDisk(scene3DHandle); }, 350);
         } else {
@@ -122,6 +134,9 @@ function bind3DDragDrop() {
           placements.push({
             id: _newPlacementId(),
             plantId: draggedPlant.id,
+            // Cache-backed placements stash the cache id; legacy placements use
+            // plantId. Save logic checks both.
+            plantCacheId: draggedPlant.__source === 'cache' ? draggedPlant.id : null,
             plant: draggedPlant,
             pos_x: pos_x,
             pos_y: pos_y,
@@ -129,60 +144,41 @@ function bind3DDragDrop() {
           });
           sync3DView();
           renderCompanionChips();
-          refreshCatalogList();
+          if (typeof refreshCatalogList === 'function') refreshCatalogList();
+          if (typeof refreshShortlistSidebar === 'function') refreshShortlistSidebar();
           if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
         }
       }
       catalogDropHandled = true;
       draggedPlant = null;
     },
-    onMiss: function(clientX, clientY) {
-      // Drop landed on the canvas but outside the grid — toss the plant onto
-      // the ground at the drop location.
-      if (draggedPlant && scene3DHandle) {
-        tossNewPlantToGround(draggedPlant, clientX, clientY, scene3DHandle);
-      }
-      catalogDropHandled = true;
-      draggedPlant = null;
-    },
-    // dragleave just clears the cell highlight; keep draggedPlant so the user
-    // can leave + re-enter the canvas during a single drag, and so a
-    // follow-up dragend off-canvas can still trigger the toss animation.
     onLeave: function() {}
   });
 }
 
-function bind3DClick() {
-  var canvas = scene3DHandle.renderer.domElement;
-  canvas.addEventListener("click", function(e) {
-    if (Date.now() - _lastPickupEndTime < 300) return;
-    var rect = canvas.getBoundingClientRect();
-    var mouse = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1
-    );
-    var raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, scene3DHandle.camera);
-    var hits = raycaster.intersectObjects(scene3DHandle.plantsGroup.children, true);
-    if (hits.length > 0) {
-      var obj = hits[0].object;
-      while (obj && !obj.userData.placementId) obj = obj.parent;
-      if (obj && obj.userData.placementId) {
-        var pid = obj.userData.placementId;
-        var idx = placements.findIndex(function(p) { return p.id === pid; });
-        if (idx >= 0) placements.splice(idx, 1);
-        if (companionPopoverCellKey === pid) {
-          companionPopoverCellKey = null;
-          var existingPop = document.getElementById('companion-popover');
-          if (existingPop) existingPop.remove();
-        }
-        sync3DView();
-        renderCompanionChips();
-        refreshCatalogList();
-        if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
-      }
+function bind2DClickHandler() {
+  bind2DClick(scene3DHandle, function(placementId) {
+    var idx = placements.findIndex(function(p) { return p.id === placementId; });
+    if (idx >= 0) placements.splice(idx, 1);
+    if (companionPopoverCellKey === placementId) {
+      companionPopoverCellKey = null;
+      var existingPop = document.getElementById('companion-popover');
+      if (existingPop) existingPop.remove();
     }
+    sync3DView();
+    renderCompanionChips();
+    if (typeof refreshCatalogList === 'function') refreshCatalogList();
+    if (typeof refreshShortlistSidebar === 'function') refreshShortlistSidebar();
+    if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
   });
+}
+
+// Cache plants store spread in cm; legacy seed plants store it in inches.
+function _spreadFeetFor(plant) {
+  if (!plant) return 0.5;
+  if (plant.spread_inches) return plant.spread_inches / 24;
+  if (plant.spread_cm)     return plant.spread_cm / 30.48 / 2;  // diameter cm → radius ft
+  return 0.5;
 }
 
 function showTooltip(el, plant) {
@@ -293,7 +289,10 @@ function _showBuilderToast(msg) {
 async function saveGarden() {
   if (!currentGarden) return;
   var payload = placements.map(function(p) {
-    return { plant_id: p.plantId, pos_x: p.pos_x, pos_y: p.pos_y, radius_feet: p.radius_feet };
+    var row = { pos_x: p.pos_x, pos_y: p.pos_y, radius_feet: p.radius_feet };
+    if (p.plantCacheId) row.plant_cache_id = p.plantCacheId;
+    else                row.plant_id = p.plantId;
+    return row;
   });
   try {
     await apiFetch("/gardens/" + currentGarden.id + "/plants", {
