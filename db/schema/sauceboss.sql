@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauces (
   color           TEXT NOT NULL,
   description     TEXT NOT NULL,
   source_url      TEXT,                    -- optional URL the sauce was imported from (migration 066)
-  sauce_type      TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade', 'dip')),  -- migration 009 added 'dip'
+  sauce_type      TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade', 'dip', 'full_recipe')),  -- migration 009 added 'dip'; 011 added 'full_recipe' (standalone, no dish pairing)
   created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,           -- migration 003: author of user-submitted sauces
   parent_sauce_id TEXT REFERENCES public.sauceboss_sauces(id) ON DELETE SET NULL,  -- migration 005: variant link (one level deep, enforced by trigger)
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),  -- migration 010: latest-first sort key for Browse

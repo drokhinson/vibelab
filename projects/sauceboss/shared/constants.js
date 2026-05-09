@@ -19,11 +19,15 @@ export const COLOR_SWATCHES = [
 ];
 
 export const SAUCE_TYPES = [
-  { value: 'sauce',    label: 'Sauce',         category: 'carb',    pairLabel: 'Carbs'    },
-  { value: 'marinade', label: 'Marinade',      category: 'protein', pairLabel: 'Proteins' },
-  { value: 'dressing', label: 'Dressing',      category: 'salad',   pairLabel: 'Salads'   },
-  // Migration 009: dip-and-spread pairs with carb (bread / crackers / pretzels).
-  { value: 'dip',      label: "Dip n' Spread", category: 'carb',    pairLabel: 'Carbs'    },
+  { value: 'sauce',       label: 'Sauce',       category: 'carb',    pairLabel: 'Carbs'    },
+  { value: 'marinade',    label: 'Marinade',    category: 'protein', pairLabel: 'Proteins' },
+  { value: 'dressing',    label: 'Dressing',    category: 'salad',   pairLabel: 'Salads'   },
+  // Migration 009: dip/spread pairs with carb (bread / crackers / pretzels).
+  { value: 'dip',         label: 'Dip/Spread',  category: 'carb',    pairLabel: 'Carbs'    },
+  // Migration 011: standalone recipe — not paired with any dish category.
+  // `category: null` is the signal for "no pairing step in the builder, no
+  // surface in the meal-builder flow". Filterable by type in Browse + Saucebook.
+  { value: 'full_recipe', label: 'Full Recipe', category: null,      pairLabel: null       },
 ];
 
 export const PALETTE = [

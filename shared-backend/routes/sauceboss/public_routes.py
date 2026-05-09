@@ -224,7 +224,16 @@ async def delete_sauce(
 
 
 def _ensure_attachments(body: CreateSauceRequest) -> None:
-    """Populate `attachments` from the legacy `itemIds` if needed; reject empty."""
+    """Populate `attachments` from the legacy `itemIds` if needed; reject empty.
+
+    Full-recipe sauces are standalone and intentionally have no attachments —
+    the DB trigger (migration 011) rejects any attachment row for them, so
+    we also clear out anything the client may have sent in error.
+    """
+    if str(body.sauceType) == "full_recipe":
+        body.attachments = []
+        body.itemIds = []
+        return
     if not body.attachments:
         if body.itemIds:
             body.attachments = [Attachment(kind="dish", value=v) for v in body.itemIds]

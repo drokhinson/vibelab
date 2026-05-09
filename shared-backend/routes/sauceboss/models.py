@@ -58,6 +58,9 @@ class SauceType(StrEnum):
     DRESSING = "dressing"
     MARINADE = "marinade"
     DIP = "dip"
+    # Standalone recipe — not paired with any dish category. Attachment rows
+    # are rejected by sauceboss_sauce_attachments_check (migration 011).
+    FULL_RECIPE = "full_recipe"
 
 
 class AttachmentKind(StrEnum):

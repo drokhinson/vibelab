@@ -25,22 +25,24 @@ function renderBrowse() {
       <div class="tab-screen-header">
         <h1>Browse</h1>
         <p class="subtitle">Discover recipes from every cuisine</p>
-        <div class="tab-search">
-          <i data-lucide="search"></i>
-          <input
-            type="search"
-            placeholder="Search by name"
-            value="${escapeHtml(b.q)}"
-            oninput="browseSetQuery(this.value)"
-            onkeydown="if(event.key==='Enter')browseRunSearch()"
-          />
-        </div>
       </div>
       <div class="scroll-body">
-        <button class="browse-filters__toggle" onclick="browseToggleFilters()">
-          <span><i data-lucide="sliders-horizontal"></i> Filters</span>
-          <i data-lucide="${b.filtersOpen ? 'chevron-up' : 'chevron-down'}"></i>
-        </button>
+        <div class="tab-filter-row">
+          <button class="browse-filters__toggle" onclick="browseToggleFilters()">
+            <span><i data-lucide="sliders-horizontal"></i> Filters</span>
+            <i data-lucide="${b.filtersOpen ? 'chevron-up' : 'chevron-down'}"></i>
+          </button>
+          <div class="tab-search">
+            <i data-lucide="search"></i>
+            <input
+              type="search"
+              placeholder="Search by name"
+              value="${escapeHtml(b.q)}"
+              oninput="browseSetQuery(this.value)"
+              onkeydown="if(event.key==='Enter')browseRunSearch()"
+            />
+          </div>
+        </div>
 
         ${b.filtersOpen ? `
           <div class="browse-filters">
