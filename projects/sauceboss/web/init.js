@@ -43,6 +43,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // tab to Saucebook if a session is restored.
   state.screen = 'tab-shell';
   state.activeTab = currentUser ? 'saucebook' : 'browse';
+  if (state.activeTab === 'browse' && typeof browseEnsureLoaded === 'function') {
+    browseEnsureLoaded();
+  }
   render();
 
   requestAnimationFrame(() => {

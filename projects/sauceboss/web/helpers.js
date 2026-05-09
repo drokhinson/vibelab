@@ -285,6 +285,21 @@ function sauceMissingCount(sauce) {
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function render() {
   const app = document.getElementById('app');
+
+  // Capture focus state BEFORE the innerHTML rebuild so we can restore it
+  // afterwards. The whole-tree replace on every render would otherwise blur
+  // any input the user is typing into (search bars, author autocomplete).
+  // We key on a stable `data-focus-key` attribute on each input that wants
+  // focus persistence; selection range is captured for inputs/textareas.
+  const focused = document.activeElement;
+  let focusKey = null, selStart = null, selEnd = null;
+  if (focused && focused.dataset && focused.dataset.focusKey && app.contains(focused)) {
+    focusKey = focused.dataset.focusKey;
+    if (typeof focused.selectionStart === 'number') {
+      try { selStart = focused.selectionStart; selEnd = focused.selectionEnd; } catch (_) {}
+    }
+  }
+
   switch (state.screen) {
     case 'tab-shell':              app.innerHTML = renderActiveTab(); break;
     case 'meal-builder':           app.innerHTML = renderMealBuilder(); break;
@@ -314,6 +329,17 @@ function render() {
   // Bottom nav re-renders on every tick so it reflects activeTab + auth state.
   if (typeof renderBottomNav === 'function') renderBottomNav();
   _initIcons();
+
+  // Restore focus + caret on the rebuilt input matching the captured key.
+  if (focusKey) {
+    const next = app.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (next) {
+      try { next.focus(); } catch (_) {}
+      if (selStart != null && typeof next.setSelectionRange === 'function') {
+        try { next.setSelectionRange(selStart, selEnd); } catch (_) {}
+      }
+    }
+  }
 }
 
 // Tab-shell dispatcher. Each tab renderer is defined in its own module

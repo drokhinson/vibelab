@@ -57,6 +57,12 @@ function setActiveTab(name, opts = {}) {
   if (!opts.silent) {
     history.replaceState({ screen: 'tab-shell', tab: name, sb: true }, '', '#' + name);
   }
+  // Browse needs an explicit kick the first time the user lands on it (the
+  // tab is loaded only on demand to avoid hitting the API on every page
+  // load). The fetch is a no-op if the items list is already populated.
+  if (name === 'browse' && typeof browseEnsureLoaded === 'function') {
+    browseEnsureLoaded();
+  }
   render();
 }
 

@@ -37,6 +37,7 @@ function renderBrowse() {
             <input
               type="search"
               placeholder="Search by name"
+              data-focus-key="browse-search"
               value="${escapeHtml(b.q)}"
               oninput="browseSetQuery(this.value)"
               onkeydown="if(event.key==='Enter')browseRunSearch()"
@@ -69,6 +70,7 @@ function renderBrowse() {
               type="text"
               class="browse-filters__author-input"
               placeholder="Type to search authors…"
+              data-focus-key="browse-author"
               value="${escapeHtml(b.authorQuery)}"
               oninput="browseAuthorAutocomplete(this.value)"
             />
@@ -175,6 +177,12 @@ function browseToggleType(value) {
 }
 
 function browseAuthorAutocomplete(q) {
+  // Only stash the query in state — don't re-render on every keystroke. The
+  // recipe list is filtered by `state.browse.authorId`, which is set ONLY
+  // when the user picks an author from the dropdown (browsePickAuthor),
+  // never while typing. The debounced fetch below renders once when fresh
+  // suggestions land. This keeps focus stable in the input and avoids
+  // re-rendering the row list while the user is still typing.
   state.browse.authorQuery = q;
   if (_authorDebounce) clearTimeout(_authorDebounce);
   _authorDebounce = setTimeout(async () => {
@@ -183,7 +191,6 @@ function browseAuthorAutocomplete(q) {
     } catch (_) { state.browse.authorResults = []; }
     render();
   }, 200);
-  render();
 }
 
 function browsePickAuthor(userId, displayName) {
@@ -286,23 +293,14 @@ function browseOpenRecipe(sauceId) {
   });
 }
 
-// Kick off the first fetch when the user lands on the Browse tab. We hook
-// into render via a lazy-load pattern: if items is empty + not loading + tab
-// is active, fire one fetch. This avoids re-fetching on every render tick.
-(function _hookBrowseLazyLoad() {
-  document.addEventListener('DOMContentLoaded', () => {
-    const ensure = () => {
-      if (state.activeTab === 'browse' && state.screen === 'tab-shell'
-          && state.browse.items.length === 0 && !state.browse.loading
-          && state.browse.error === null) {
-        browseFetch();
-      }
-    };
-    // Use a MutationObserver on #app to catch every render. Cheaper than
-    // wrapping render() and good enough for tab visibility detection.
-    const app = document.getElementById('app');
-    if (!app) return;
-    new MutationObserver(ensure).observe(app, { childList: true });
-    ensure();
-  });
-})();
+// Trigger an initial fetch when the user lands on the Browse tab. Called
+// explicitly from setActiveTab + init.js — replaces the previous
+// MutationObserver lazy-load, which fired ensure() on every #app mutation
+// and could loop into repeated browseFetch() calls when a filter happened
+// to return zero items (each empty result triggered another render →
+// observer → ensure → browseFetch cycle, freezing the tab).
+function browseEnsureLoaded() {
+  const b = state.browse;
+  if (!b || b.loading || b.items.length > 0 || b.error) return;
+  browseFetch();
+}

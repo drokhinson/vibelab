@@ -73,6 +73,7 @@ function renderSaucebook() {
               <input
                 type="search"
                 placeholder="Search your saucebook"
+                data-focus-key="saucebook-search"
                 value="${escapeHtml(state.saucebookSearch || '')}"
                 oninput="saucebookSetSearch(this.value)"
               />
