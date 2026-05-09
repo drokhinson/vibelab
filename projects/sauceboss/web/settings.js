@@ -689,7 +689,7 @@ function selectSauceFromManager(id) {
   navigate('recipe');
 }
 
-function openBuilderEdit(id) {
+async function openBuilderEdit(id) {
   if (!currentUser) { openAuthModal(); return; }
   const sauce = (state.adminSauces || []).find(s => s.id === id)
              || (state.saucesForCurrentItem || []).find(s => s.id === id);
@@ -717,6 +717,10 @@ function openBuilderEdit(id) {
     })),
   };
   navigate('builder');
+  // Lazy-load ingredient-categories + substitutions on first builder open.
+  if (!_hasBuilderRefData()) {
+    await withInlineLoader(ensureBuilderRefData());
+  }
 }
 
 // ─── Become Admin ─────────────────────────────────────────────────────────────

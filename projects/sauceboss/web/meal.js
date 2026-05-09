@@ -17,11 +17,19 @@ const MEAL_CATEGORY_OPTIONS = [
   { id: 'salad',   label: 'Salads',   emoji: '🥗', icon: 'salad',     listKey: 'saladBases' },
 ];
 
-function startMealBuilder() {
+async function startMealBuilder() {
   if (!currentUser) { openAuthModal(); return; }
   state.mealFlow = { category: null, dish: null, subtype: null };
   state.expandedParents = {};
   navigate('meal-category');
+  // Lazy-load the dish lists + ref data the moment the meal-builder opens.
+  // They're cached after first load, so re-entering the flow is instant.
+  if (!state.carbs.length || !_hasBuilderRefData()) {
+    await withInlineLoader(Promise.all([
+      ensureItemLists(),
+      ensureBuilderRefData(),
+    ]));
+  }
 }
 
 function renderMealCategory() {

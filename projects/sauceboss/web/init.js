@@ -12,36 +12,32 @@ function setSplashText(text) {
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
+// Initial load fires at most three Sauceboss data queries:
+//   • Phase 1 (blocking) — GET /profile (only when a Supabase session exists;
+//     awaited inside awaitInitialAuth via the auth callback).
+//   • Phase 2 (blocking) — GET /saucebook (only when logged in).
+//   • Background        — GET /browse (always) + GET /pantry (logged in).
+// Meal-builder reference data (initial-load, ingredient-categories,
+// substitutions) loads lazily on first meal-builder / recipe-builder open
+// so the splash drops as fast as possible.
 document.addEventListener('DOMContentLoaded', async () => {
   document.body.classList.add('splash--loading');
   setSplashText('Authenticating');
 
   // Wire up Supabase Auth (email / Google / Apple). No-op when not configured.
-  // initSupabase kicks off the initial auth roundtrip; `awaitInitialAuth()`
-  // resolves once Supabase fires INITIAL_SESSION (or after a 3s safety
-  // timeout). No Sauceboss API calls happen during this phase.
+  // initSupabase kicks off the auth roundtrip and (when there's a restored
+  // session) the /profile fetch — both finish before awaitInitialAuth resolves.
   initSupabase();
 
   try {
-    // Phase 1 — Authenticating: wait for the Supabase auth roundtrip so we
-    // know whether there's a restored session before any data calls fire.
+    // Phase 1 — Authenticating: Supabase roundtrip + (if session) /profile.
     await awaitInitialAuth();
 
-    // Phase 2 — Saucing: now session is known, run all Sauceboss data
-    // loads in parallel. For signed-in users this includes profile +
-    // saucebook + pantry; for anon users it's just the public lists.
-    setSplashText('Saucing');
-    const tasks = [fetchInitialLoad()];
-    if (session) {
-      tasks.push((async () => {
-        await loadProfile();
-        if (currentUser) await loadSaucebookAndPantry();
-      })());
+    // Phase 2 — Saucing: only logged-in users have content to block on.
+    if (currentUser) {
+      setSplashText('Saucing');
+      await loadSaucebook();
     }
-    const [{ carbs, proteins, saladBases }] = await Promise.all(tasks);
-    state.carbs = carbs;
-    state.proteins = proteins;
-    state.saladBases = saladBases;
   } catch (err) {
     console.error('[sauceboss] initial load failed', err);
     document.getElementById('splash-screen')?.remove();
@@ -55,25 +51,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Lazy-load reference data needed only inside the recipe builder.
-  // Fire and forget — failures are non-fatal.
-  Promise.all([
-    fetchIngredientCategories().catch(() => ({})),
-    fetchSubstitutions().catch(() => ({})),
-  ]).then(([categories, subs]) => {
-    state.ingredientCategories = categories && typeof categories === 'object' ? categories : {};
-    state.substitutions = subs && typeof subs === 'object' ? subs : {};
-  });
-
-  // Tab-shell is the default screen. Anonymous users land on Browse; the
-  // first auth-state-change event after initSupabase() will swap the active
-  // tab to Saucebook if a session is restored.
+  // Tab-shell is the default screen. Anonymous users land on Browse;
+  // logged-in users default to Saucebook (already populated by Phase 2).
   state.screen = 'tab-shell';
   state.activeTab = currentUser ? 'saucebook' : 'browse';
-  if (state.activeTab === 'browse' && typeof browseEnsureLoaded === 'function') {
-    browseEnsureLoaded();
-  }
   render();
+
+  // Background loads (non-blocking). browseEnsureLoaded is idempotent — safe
+  // to call here even though setActiveTab('browse') would also fire it.
+  browseEnsureLoaded();
+  if (currentUser) loadPantry();
 
   requestAnimationFrame(() => {
     const splash    = document.getElementById('splash-screen');

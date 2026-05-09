@@ -393,6 +393,7 @@ async function refreshSaucebookAndPantry() {
     state.saucebook = sb;
     state.pantry.ingredients = pantry.ingredients || [];
     state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.foodId));
+    state.pantry._loaded = true;
     syncDisabledFromPantry();
     render();
   } catch (err) {
@@ -436,6 +437,91 @@ async function togglePantryMissing(foodId) {
       if (ing.foodId === foodId) ing.missing = wasMissing;
     }
     syncDisabledFromPantry();
+    render();
+  }
+}
+
+// ─── Lazy reference-data loaders ────────────────────────────────────────────
+// These slices used to fire on every boot. They're now loaded on demand the
+// first time a feature that needs them opens (meal-builder, recipe-builder,
+// Pantry tab). Each helper is idempotent + concurrency-safe via an in-flight
+// promise cache so multiple call sites awaiting it share one fetch.
+
+let _itemListsPromise = null;
+let _builderRefDataPromise = null;
+let _ingredientCategoriesPromise = null;
+
+// /initial-load → state.carbs / state.proteins / state.saladBases.
+// Needed for the meal-builder dish picker.
+function ensureItemLists() {
+  if (state.carbs.length || state.proteins.length || state.saladBases.length) {
+    return Promise.resolve();
+  }
+  if (_itemListsPromise) return _itemListsPromise;
+  _itemListsPromise = fetchInitialLoad()
+    .then(({ carbs, proteins, saladBases }) => {
+      state.carbs = carbs || [];
+      state.proteins = proteins || [];
+      state.saladBases = saladBases || [];
+    })
+    .catch(err => {
+      console.warn('[sauceboss] initial-load failed:', err);
+      _itemListsPromise = null;
+    });
+  return _itemListsPromise;
+}
+
+// /ingredient-categories + /substitutions. Needed by both the meal-builder
+// (filter + substitution hints) and the recipe-builder (autocomplete +
+// classify chip).
+function ensureBuilderRefData() {
+  if (_hasBuilderRefData()) return Promise.resolve();
+  if (_builderRefDataPromise) return _builderRefDataPromise;
+  _builderRefDataPromise = Promise.all([
+    fetchIngredientCategories().catch(() => ({})),
+    fetchSubstitutions().catch(() => ({})),
+  ]).then(([categories, subs]) => {
+    state.ingredientCategories = categories && typeof categories === 'object' ? categories : {};
+    state.substitutions = subs && typeof subs === 'object' ? subs : {};
+  });
+  return _builderRefDataPromise;
+}
+
+function _hasBuilderRefData() {
+  return Object.keys(state.ingredientCategories || {}).length > 0
+      && Object.keys(state.substitutions || {}).length > 0;
+}
+
+// Lazy categories-only load for the Pantry tab (groups ingredients by
+// category). Pantry tolerates rendering with "Uncategorized" while this
+// fetch is in flight, so the caller doesn't have to await.
+function ensureIngredientCategories() {
+  if (Object.keys(state.ingredientCategories || {}).length > 0) {
+    return Promise.resolve();
+  }
+  if (_ingredientCategoriesPromise) return _ingredientCategoriesPromise;
+  _ingredientCategoriesPromise = fetchIngredientCategories()
+    .then(categories => {
+      state.ingredientCategories = categories && typeof categories === 'object' ? categories : {};
+      render();
+    })
+    .catch(err => {
+      console.warn('[sauceboss] ingredient-categories failed:', err);
+      _ingredientCategoriesPromise = null;
+    });
+  return _ingredientCategoriesPromise;
+}
+
+// Show the inline pot loader on the current screen while `task` is in
+// flight. Used by the meal-builder / recipe-builder open paths so the user
+// sees feedback when the lazy reference data hasn't been fetched yet.
+async function withInlineLoader(task, label = 'Saucing') {
+  state.loading = label;
+  render();
+  try {
+    await task;
+  } finally {
+    state.loading = null;
     render();
   }
 }

@@ -321,13 +321,18 @@ function renderBuilderReview() {
 }
 
 // ─── Builder Actions ──────────────────────────────────────────────────────────
-function openBuilder() {
+async function openBuilder() {
   if (!currentUser) { openAuthModal(); return; }
   state.builder = defaultBuilder();
   // Track where to land after save: from the admin sauce manager → admin;
   // from the Saucebook FAB or any other entry point → Saucebook tab.
   state.recipeReturnTo = state.screen === 'admin' ? 'admin' : 'tab-shell';
   navigate('builder');
+  // Builder needs ingredient-categories (autocomplete + classify chip) and
+  // substitutions. Lazy-load on first open; subsequent opens are instant.
+  if (!_hasBuilderRefData()) {
+    await withInlineLoader(ensureBuilderRefData());
+  }
 }
 
 function builderSetCuisine(name, emoji) {
