@@ -17,7 +17,7 @@ function _builderValidate(b) {
 
   const issues = [];
   if (!b.name.trim())          issues.push('Add a sauce name');
-  if (!b.sauceType)            issues.push('Select a type (Sauce / Marinade / Dressing / Dip)');
+  if (!b.sauceType)            issues.push('Select a type (Sauce / Marinade / Dressing / Dip / Full Recipe)');
   if (!hasCuisine)             issues.push('Select a cuisine');
   if (!b.color)                issues.push('Pick a color');
   if (untitledStepIdxs.length) {
@@ -222,7 +222,15 @@ function renderBuilder() {
       <button class="add-step-btn" onclick="builderAddStep()">+ Add Step</button>
       ${validationHTML}
       ${unassignedHTML}
-      <button class="builder-primary-btn" onclick="navigate('builder-items')" ${canContinue ? '' : 'disabled'}${!canContinue ? ' title="Resolve the issues above to continue"' : ''}>Continue — Pair with ${SAUCE_TYPES.find(t => t.value === b.sauceType)?.pairLabel || 'Items'}</button>
+      ${(() => {
+        const meta = SAUCE_TYPES.find(t => t.value === b.sauceType);
+        // Full recipes (and any future un-paired type) skip the items-pool
+        // step and go straight to review.
+        const isStandalone = meta && meta.category === null;
+        const nextScreen = isStandalone ? 'builder-review' : 'builder-items';
+        const nextLabel  = isStandalone ? 'Continue — Review' : `Continue — Pair with ${meta?.pairLabel || 'Items'}`;
+        return `<button class="builder-primary-btn" onclick="navigate('${nextScreen}')" ${canContinue ? '' : 'disabled'}${!canContinue ? ' title="Resolve the issues above to continue"' : ''}>${nextLabel}</button>`;
+      })()}
     </div>
   `;
 }
@@ -268,7 +276,9 @@ function renderBuilderItems() {
 function renderBuilderReview() {
   const b = state.builder;
   const esc = s => (s || '').replace(/"/g, '&quot;');
-  const pool = _builderItemPool();
+  const meta = SAUCE_TYPES.find(t => t.value === b.sauceType);
+  const isStandalone = !!meta && meta.category === null;
+  const pool = isStandalone ? [] : _builderItemPool();
   const pairedItems = pool.filter(c => b.itemIds.includes(c.id));
   const totalIngs = b.steps.reduce((sum, s) => sum + s.ingredients.filter(i => i.name.trim()).length, 0);
 
@@ -289,14 +299,16 @@ function renderBuilderReview() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('builder-items')">‹ Back</button>
+      <button class="back-btn" onclick="navigate('${isStandalone ? 'builder' : 'builder-items'}')">‹ Back</button>
       <div class="logo"><span class="color-dot-header" style="background:${b.color}"></span>${b.name}</div>
       <div class="subtitle">${renderEmoji(b.cuisineEmoji)} ${b.cuisine} · ${b.steps.length} step${b.steps.length > 1 ? 's' : ''} · ${totalIngs} ingredients</div>
       ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
       <div class="review-summary">
-        <div class="review-carbs">Pairs with: ${pairedItems.map(c => c.emoji + ' ' + c.name).join(', ')}</div>
+        <div class="review-carbs">${isStandalone
+          ? 'Standalone recipe — no dish pairing'
+          : 'Pairs with: ' + pairedItems.map(c => c.emoji + ' ' + c.name).join(', ')}</div>
       </div>
       ${stepsPreview}
       ${b.error ? `<div class="builder-error">${b.error}</div>` : ''}
@@ -661,6 +673,11 @@ async function builderSave() {
   b.error = null;
   render();
   try {
+    // Standalone (full_recipe) types ship with no item pairings; the backend
+    // also clears these defensively but stripping client-side keeps the
+    // payload obvious.
+    const typeMeta = SAUCE_TYPES.find(t => t.value === b.sauceType);
+    const isStandalone = !!typeMeta && typeMeta.category === null;
     const payload = {
       name: b.name.trim(),
       cuisine: b.cuisine,
@@ -670,7 +687,8 @@ async function builderSave() {
       sourceUrl: (b.sourceUrl || '').trim() || null,
       sauceType: b.sauceType,
       parentSauceId: b.parentSauceId || null,
-      itemIds: b.itemIds,
+      itemIds: isStandalone ? [] : b.itemIds,
+      attachments: isStandalone ? [] : undefined,
       steps: b.steps
         .map(s => ({
           title: s.title.trim(),

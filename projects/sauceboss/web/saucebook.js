@@ -59,19 +59,27 @@ function renderSaucebook() {
       <div class="tab-screen-header">
         <h1>Saucebook</h1>
         <p class="subtitle">Your recipe library</p>
-        <div class="tab-search">
-          <i data-lucide="search"></i>
-          <input
-            type="search"
-            placeholder="Search your saucebook"
-            value="${escapeHtml(state.saucebookSearch || '')}"
-            oninput="saucebookSetSearch(this.value)"
-          />
-        </div>
       </div>
       <div class="scroll-body">
         ${sauces.length === 0 ? _saucebookEmptyState() : ''}
-        ${sauces.length > 0 ? _saucebookFiltersUI(f, sauces) : ''}
+        ${sauces.length > 0 ? `
+          <div class="tab-filter-row">
+            <button class="browse-filters__toggle" onclick="saucebookToggleFilters()">
+              <span><i data-lucide="sliders-horizontal"></i> Filters</span>
+              <i data-lucide="${f.open ? 'chevron-up' : 'chevron-down'}"></i>
+            </button>
+            <div class="tab-search">
+              <i data-lucide="search"></i>
+              <input
+                type="search"
+                placeholder="Search your saucebook"
+                value="${escapeHtml(state.saucebookSearch || '')}"
+                oninput="saucebookSetSearch(this.value)"
+              />
+            </div>
+          </div>
+          ${_saucebookFiltersPanel(f, sauces)}
+        ` : ''}
         ${sauces.length > 0 && filtered.length === 0
           ? `<div class="empty-state">No recipes match your filters.</div>` : ''}
         ${cuisinesSorted.map(([cuisine, rows]) => _saucebookCuisineGroup(cuisine, rows)).join('')}
@@ -86,7 +94,8 @@ function renderSaucebook() {
 // accordion in the body. The author list is derived locally from the loaded
 // saucebook (small enough — <100 sauces in practice) instead of hitting the
 // /authors endpoint, so this stays a single round-trip from auth.
-function _saucebookFiltersUI(f, sauces) {
+function _saucebookFiltersPanel(f, sauces) {
+  if (!f.open) return '';
   const cuisines = availableCuisines();
   // Distinct authors present in the saucebook (excluding seed sauces with no
   // createdBy — those collapse under the "SauceBoss" pseudo-author).
@@ -100,11 +109,6 @@ function _saucebookFiltersUI(f, sauces) {
   const authors = [...authorMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 
   return `
-    <button class="browse-filters__toggle" onclick="saucebookToggleFilters()">
-      <span><i data-lucide="sliders-horizontal"></i> Filters</span>
-      <i data-lucide="${f.open ? 'chevron-up' : 'chevron-down'}"></i>
-    </button>
-    ${f.open ? `
       <div class="browse-filters">
         <span class="browse-filters__label">Cuisine</span>
         <div class="browse-filters__row">
@@ -137,7 +141,6 @@ function _saucebookFiltersUI(f, sauces) {
           <button class="browse-filters__chip" style="margin-top:10px" onclick="saucebookClearFilters()">Clear filters ✕</button>
         ` : ''}
       </div>
-    ` : ''}
   `;
 }
 
@@ -181,11 +184,26 @@ function _saucebookCuisineGroup(cuisine, rows) {
 function _saucebookRenderRow({ family, displayed }) {
   const totalVersions = 1 + (family.variants ? family.variants.length : 0);
   const missingCount = sauceMissingCount(displayed);
-  return renderRecipeRow(displayed, {
+  // Wrap the shared row in the swipe primitive (web/swipe.js). The row's
+  // own click is dispatched via data-tap-action so the swipe handler can
+  // distinguish between a tap (opens the recipe) and a horizontal drag
+  // past 60px (commits edit on right swipe / remove on left swipe).
+  const safeId = escapeHtml(displayed.id);
+  const inner = renderRecipeRow(displayed, {
     variantCount: totalVersions,
     missingCount,
-    onClick: `saucebookOpenRecipe('${escapeHtml(displayed.id)}')`,
+    onClick: '',
   });
+  return `
+    <div class="swipe-row swipe-row--saucebook" data-swipe
+         data-tap-action="saucebookOpenRecipe('${safeId}')"
+         data-edit-action="openBuilderEdit('${safeId}')"
+         data-delete-action="recipeRemoveFromSaucebook('${safeId}')">
+      <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
+      <div class="swipe-action swipe-action-delete" aria-hidden="true">Remove</div>
+      <div class="swipe-content">${inner}</div>
+    </div>
+  `;
 }
 
 // ── Filter state helpers ─────────────────────────────────────────────────────

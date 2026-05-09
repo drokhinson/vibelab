@@ -1401,6 +1401,14 @@ html, body { height: 100%; background: #1a0a00; font-family: -apple-system, Blin
 .swipe-action-edit   { left: 0;  background: #EFF6FF; color: #0369A1; }
 .swipe-action-delete { right: 0; background: #FEF2F2; color: #B91C1C; }
 
+/* Saucebook variant: keep the same per-row spacing as a bare recipe-row,
+ * and let the inner card's rounded corners show through (the wrapper
+ * itself has overflow:hidden which would otherwise clip the row's
+ * border-radius during a swipe). */
+.swipe-row--saucebook { margin-bottom: 8px; border-radius: 12px; }
+.swipe-row--saucebook .swipe-content { background: transparent; }
+.swipe-row--saucebook .recipe-row { margin-bottom: 0; }
+
 /* ── Floating action button ── */
 /* Pinned to the viewport's bottom-right so it stays reachable while the
    recipe list scrolls. On desktop the phone shell (#app, max-width: 390px) is
@@ -2870,6 +2878,28 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   background: transparent;
   font: inherit;
   color: #1A1A2E;
+  min-width: 0;
+}
+
+/* Filter toggle + search bar on a single row inside the scroll body. The
+ * filter button keeps its natural width on the left; the search bar takes
+ * the remaining space on the right. */
+.tab-filter-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.tab-filter-row .browse-filters__toggle {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+.tab-filter-row .tab-search {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  background: white;
+  border: 1px solid #F1E0CC;
 }
 
 /* Recipe row for Saucebook + Browse list views */
