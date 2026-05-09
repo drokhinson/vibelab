@@ -1,11 +1,14 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: post-010_garden_conditions (gardens now persist the wizard's
--- planter conditions: garden_type expanded to 5 values, water_plan + location_label added).
+-- Last updated: post-011_plant_cache_and_shortlist (Phase-1 plant-first refactor:
+-- new plantplanner_plant_cache table backed by Trefle/Perenual APIs with
+-- mirrored Supabase Storage images in 3 sizes; gardens gain a shortlist column;
+-- garden_plants can now reference either the legacy seed table or the new cache).
 -- Migrations applied: 001_baseline, 002_seed, 003_supabase_auth,
 --                     004_enrich_plants, 005_seed_enriched, 006_companions,
 --                     007_companions_seed, 008_real_radius_placement,
---                     009_growth_lifecycle, 010_garden_conditions.
+--                     009_growth_lifecycle, 010_garden_conditions,
+--                     011_plant_cache_and_shortlist.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -66,6 +69,7 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
   usda_zone       TEXT,                                        -- per-garden USDA hardiness zone (e.g. "6b")
   location_label  TEXT,                                        -- display label for the conditions strip (e.g. "Boston, MA" or "02139")
   settings_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
+  shortlist_plant_cache_ids UUID[] NOT NULL DEFAULT '{}'::uuid[],  -- plant cache rows the user shortlisted in the shopping step
   created_at      TIMESTAMPTZ DEFAULT now(),
   updated_at      TIMESTAMPTZ DEFAULT now()
 );
@@ -87,15 +91,67 @@ CREATE INDEX IF NOT EXISTS plantplanner_companions_b_idx ON public.plantplanner_
 ALTER TABLE public.plantplanner_companions ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.plantplanner_garden_plants (
-  id           UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  garden_id    UUID    NOT NULL REFERENCES public.plantplanner_gardens(id) ON DELETE CASCADE,
-  plant_id     UUID    NOT NULL REFERENCES public.plantplanner_plants(id),
-  pos_x        REAL    NOT NULL,
-  pos_y        REAL    NOT NULL,
-  radius_feet  REAL    NOT NULL DEFAULT 0.5,
+  id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+  garden_id       UUID    NOT NULL REFERENCES public.plantplanner_gardens(id) ON DELETE CASCADE,
+  plant_id        UUID    REFERENCES public.plantplanner_plants(id),                        -- legacy seed-table reference (nullable)
+  plant_cache_id  UUID    REFERENCES public.plantplanner_plant_cache(id),                   -- new API-backed reference (nullable)
+  pos_x           REAL    NOT NULL,
+  pos_y           REAL    NOT NULL,
+  radius_feet     REAL    NOT NULL DEFAULT 0.5,
   CHECK (pos_x >= 0 AND pos_y >= 0),
-  CHECK (radius_feet > 0)
+  CHECK (radius_feet > 0),
+  CONSTRAINT plantplanner_garden_plants_one_plant_ref CHECK (
+    (plant_id IS NOT NULL AND plant_cache_id IS NULL) OR
+    (plant_id IS NULL AND plant_cache_id IS NOT NULL)
+  )
 );
 CREATE INDEX IF NOT EXISTS idx_plantplanner_garden_plants_garden
   ON public.plantplanner_garden_plants(garden_id);
+CREATE INDEX IF NOT EXISTS idx_plantplanner_garden_plants_cache
+  ON public.plantplanner_garden_plants(plant_cache_id);
 ALTER TABLE public.plantplanner_garden_plants ENABLE ROW LEVEL SECURITY;
+
+-- API-backed plant cache (Phase 1, post-011). Source-of-truth for the new
+-- shopping flow. Three image sizes mirrored to Supabase Storage so the UI
+-- never round-trips to third-party CDNs at read time.
+CREATE TABLE IF NOT EXISTS public.plantplanner_plant_cache (
+  id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  source                TEXT        NOT NULL CHECK (source IN ('trefle', 'perenual', 'merged')),
+  source_id             TEXT        NOT NULL,
+  scientific_name       TEXT        NOT NULL UNIQUE,
+  common_name           TEXT,
+  family                TEXT,
+  emoji                 TEXT,
+  hardiness_min         INT,
+  hardiness_max         INT,
+  sunlight              TEXT,                                       -- full_sun | part_shade | full_shade
+  watering              TEXT,                                       -- frequent | average | minimum | none
+  cycle                 TEXT,                                       -- annual | perennial | biennial
+  indoor                BOOLEAN,
+  height_min_cm         INT,
+  height_max_cm         INT,
+  spread_cm             INT,
+  days_to_harvest       INT,
+  edible                BOOLEAN,
+  vegetable             BOOLEAN,
+  toxicity              TEXT,
+  growth_rate           TEXT,
+  ph_min                REAL,
+  ph_max                REAL,
+  sowing                TEXT,
+  nitrogen_fixation     BOOLEAN,
+  tags                  TEXT[]      NOT NULL DEFAULT '{}',
+  image_thumbnail_url   TEXT,
+  image_thumbnail_path  TEXT,
+  image_medium_url      TEXT,
+  image_medium_path     TEXT,
+  image_regular_url     TEXT,
+  image_regular_path    TEXT,
+  last_image_synced_at  TIMESTAMPTZ,
+  raw_trefle_json       JSONB,
+  raw_perenual_json     JSONB,
+  last_synced_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.plantplanner_plant_cache ENABLE ROW LEVEL SECURITY;

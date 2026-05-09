@@ -22,9 +22,13 @@ async function apiFetch(path, opts = {}) {
 }
 
 function showView(view) {
-  // Dispose 3D scene when leaving builder
+  // Dispose any active scene when leaving the builder.
   if (currentView === "builder" && view !== "builder" && scene3DHandle) {
-    dispose3DView(scene3DHandle);
+    if (scene3DHandle.isTwoD && typeof dispose2DView === 'function') {
+      dispose2DView(scene3DHandle);
+    } else if (typeof dispose3DView === 'function') {
+      try { dispose3DView(scene3DHandle); } catch (_) {}
+    }
     scene3DHandle = null;
   }
   currentView = view;
@@ -191,6 +195,11 @@ function render() {
   if (currentView === "auth") renderAuth();
   else if (currentView === "gardens") renderGardens();
   else if (currentView === "wizard") renderGardenWizard();
+  else if (currentView === "shopping") {
+    // Shopping renders itself imperatively via openShoppingForGarden(); on a
+    // direct refresh the gardens list is the safe fallback.
+    if (typeof renderGardens === 'function') renderGardens();
+  }
   else if (currentView === "builder") renderBuilder();
   _initIcons();
 }

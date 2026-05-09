@@ -289,8 +289,8 @@ var _wizardPreviewHandle = null;
 var _wizardPreviewRebuildId = null;
 
 function _disposeWizardPreview() {
-  if (_wizardPreviewHandle && typeof dispose3DView === 'function') {
-    try { dispose3DView(_wizardPreviewHandle); } catch (_) {}
+  if (_wizardPreviewHandle && typeof dispose2DView === 'function') {
+    try { dispose2DView(_wizardPreviewHandle); } catch (_) {}
   }
   _wizardPreviewHandle = null;
   if (_wizardPreviewRebuildId) {
@@ -306,8 +306,8 @@ function _rebuildWizardPreview() {
     _wizardPreviewRebuildId = null;
     var container = document.getElementById('wz-preview');
     if (!container) return;
-    if (_wizardPreviewHandle && typeof dispose3DView === 'function') {
-      try { dispose3DView(_wizardPreviewHandle); } catch (_) {}
+    if (_wizardPreviewHandle && typeof dispose2DView === 'function') {
+      try { dispose2DView(_wizardPreviewHandle); } catch (_) {}
       _wizardPreviewHandle = null;
     }
     var fakeGarden = {
@@ -315,8 +315,8 @@ function _rebuildWizardPreview() {
       grid_height: wizardDraft.grid_height || 4,
       garden_type: wizardDraft.garden_type
     };
-    if (typeof init3DView === 'function') {
-      _wizardPreviewHandle = init3DView('wz-preview', fakeGarden, []);
+    if (typeof init2DView === 'function') {
+      _wizardPreviewHandle = init2DView('wz-preview', fakeGarden, []);
     }
   }, 120);
 }
@@ -783,8 +783,12 @@ async function submitGardenWizard() {
     wizardStep = 1;
     wizardEditReturnTo = null;
     if (created && created.id) {
-      // Open the new garden directly into the builder.
-      openGarden(created.id);
+      // Newly-created planters drop into the shopping step before placement.
+      if (typeof openShoppingForGarden === 'function') {
+        openShoppingForGarden(created.id);
+      } else {
+        openGarden(created.id);
+      }
     } else {
       showView('gardens');
     }
@@ -815,18 +819,27 @@ async function openGarden(id) {
     if (data.plants) {
       for (var i = 0; i < data.plants.length; i++) {
         var row = data.plants[i];
-        var plantObj = row.plantplanner_plants || row;
+        // Each row has either a legacy seed-table join (plantplanner_plants) or
+        // a cache-table join (plantplanner_plant_cache). Pick whichever populated.
+        var cachePlant = row.plantplanner_plant_cache || null;
+        var seedPlant  = row.plantplanner_plants || null;
+        var plantObj   = cachePlant || seedPlant || row;
         var pid = row.id ||
           ((window.crypto && typeof crypto.randomUUID === 'function')
             ? crypto.randomUUID()
             : ('p_' + i + '_' + Date.now()));
+        var radius = (row.radius_feet != null)
+          ? row.radius_feet
+          : (plantObj.spread_inches ? plantObj.spread_inches / 24
+              : plantObj.spread_cm ? plantObj.spread_cm / 30.48 / 2 : 0.5);
         placements.push({
           id: pid,
-          plantId: plantObj.id || row.plant_id,
+          plantId: cachePlant ? null : (seedPlant ? seedPlant.id : row.plant_id),
+          plantCacheId: cachePlant ? cachePlant.id : (row.plant_cache_id || null),
           plant: plantObj,
           pos_x: row.pos_x,
           pos_y: row.pos_y,
-          radius_feet: (row.radius_feet != null) ? row.radius_feet : ((plantObj.spread_inches || 12) / 24)
+          radius_feet: radius
         });
       }
     }

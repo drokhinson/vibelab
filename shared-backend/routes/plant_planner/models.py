@@ -40,6 +40,7 @@ class UpdateGardenBody(BaseModel):
     usda_zone: Optional[str] = None
     location_label: Optional[str] = None
     settings_json: Optional[dict] = None
+    shortlist_plant_cache_ids: Optional[List[str]] = None
 
 
 class GardenResponse(BaseModel):
@@ -96,7 +97,8 @@ class PlantResponse(BaseModel):
 
 
 class PlantPlacement(BaseModel):
-    plant_id: str
+    plant_id: Optional[str] = None         # legacy seed-table placement
+    plant_cache_id: Optional[str] = None   # new cache-backed placement
     pos_x: float
     pos_y: float
     radius_feet: float
