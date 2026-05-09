@@ -177,16 +177,9 @@ function _onMove(clientX, clientY, handle) {
   var posX = pt.x + gw / 2;
   var posY = pt.z + gh / 2;
   var r = _pickedPlant.placement.radius_feet;
-  var oob = posX < 0 || posX > gw || posY < 0 || posY > gh;
-  var overlaps = false;
-  if (!oob && Array.isArray(placements)) {
-    for (var i = 0; i < placements.length; i++) {
-      var p = placements[i];
-      var dx = posX - p.pos_x, dy = posY - p.pos_y;
-      if (Math.hypot(dx, dy) < r + p.radius_feet) { overlaps = true; break; }
-    }
-  }
-  var valid = oob ? 'oob' : (overlaps ? 'overlap' : 'ok');
+  // Skip self in overlap check — the placement was spliced out at pickup so
+  // it isn't in `placements` here, but pass id anyway in case that changes.
+  var valid = validatePlacement(posX, posY, r, gw, gh, placements, _pickedPlant.placement.id);
   showPreviewDisk(handle, posX, posY, r, valid);
 }
 
@@ -215,11 +208,16 @@ function _onRelease(clientX, clientY, handle) {
   var gh = handle.garden.grid_height;
 
   var posX = -1, posY = -1;
-  var isInside = false;
+  var centerInside = false;
+  var dropValid = 'oob';
+  var r = placement.radius_feet;
   if (pt) {
     posX = pt.x + gw / 2;
     posY = pt.z + gh / 2;
-    isInside = posX >= 0 && posX <= gw && posY >= 0 && posY <= gh;
+    centerInside = posX >= 0 && posX <= gw && posY >= 0 && posY <= gh;
+    if (centerInside) {
+      dropValid = validatePlacement(posX, posY, r, gw, gh, placements, placement.id);
+    }
   }
 
   var vel = _calcVelocity();
@@ -228,8 +226,19 @@ function _onRelease(clientX, clientY, handle) {
 
   _pointerHistory = [];
 
-  if (isInside && !isToss) {
+  if (centerInside && dropValid === 'ok' && !isToss) {
     _dropIntoGrid(mesh, placement, posX, posY, handle);
+  } else if (centerInside && !isToss) {
+    // Drop landed inside the bed but at an invalid spot (radius out of
+    // bounds or overlapping another plant). Flash red, then return the
+    // plant to its original placement so the user doesn't lose it.
+    _flashRejection(handle, posX, posY, r, dropValid);
+    handle.scene.remove(mesh);
+    disposeObject(mesh);
+    placements.push(placement);
+    sync3DView();
+    if (typeof renderCompanionChips === 'function') renderCompanionChips();
+    if (typeof refreshCatalogList === 'function') refreshCatalogList();
   } else {
     var startPos = mesh.position.clone();
     var landX, landZ;
@@ -348,6 +357,15 @@ function tossNewPlantToGround(plant, clientX, clientY, handle) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Flashes the preview disk red briefly so the user can see why a drop was
+// rejected (overlap with another plant, or radius extends out of bounds).
+function _flashRejection(handle, posX, posY, r, valid) {
+  if (!handle) return;
+  showPreviewDisk(handle, posX, posY, r, valid);
+  setTimeout(function() { hidePreviewDisk(handle); }, 350);
+  if (navigator.vibrate) navigator.vibrate(20);
+}
 
 function _raycastCarryPlane(clientX, clientY, handle) {
   if (!handle._carryPlane) return null;

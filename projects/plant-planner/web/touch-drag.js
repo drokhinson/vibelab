@@ -12,9 +12,17 @@ function _createGhost(plant) {
   return ghost;
 }
 
+// Offset the floating preview up-and-to-the-left of the touch point so a
+// right-thumb user can see the plant they're carrying without their thumb
+// covering it. Clamp to the viewport so the ghost can never escape off-screen.
+var GHOST_OFFSET_X = 92; // ghost width (80) + 12 px gap
+var GHOST_OFFSET_Y = 92; // ≈ ghost height (img + label + gap) + 12 px gap
+
 function _positionGhost(ghost, x, y) {
-  ghost.style.left = (x - 40) + "px";
-  ghost.style.top = (y - 40) + "px";
+  var left = Math.max(4, x - GHOST_OFFSET_X);
+  var top = Math.max(4, y - GHOST_OFFSET_Y);
+  ghost.style.left = left + "px";
+  ghost.style.top = top + "px";
 }
 
 function _removeGhost() {
@@ -61,16 +69,7 @@ function bindCatalogTouch() {
           var rTouch = (plantTouch.spread_inches || 12) / 24;
           var gw = scene3DHandle.gridWidth;
           var gh = scene3DHandle.gridHeight;
-          var oob = pt.x < 0 || pt.x > gw || pt.y < 0 || pt.y > gh;
-          var overlaps = false;
-          if (!oob && Array.isArray(placements)) {
-            for (var i = 0; i < placements.length; i++) {
-              var pp = placements[i];
-              var dx = pt.x - pp.pos_x, dy = pt.y - pp.pos_y;
-              if (Math.hypot(dx, dy) < rTouch + pp.radius_feet) { overlaps = true; break; }
-            }
-          }
-          var valid = oob ? 'oob' : (overlaps ? 'overlap' : 'ok');
+          var valid = validatePlacement(pt.x, pt.y, rTouch, gw, gh, placements);
           showPreviewDisk(scene3DHandle, pt.x, pt.y, rTouch, valid);
         } else {
           hidePreviewDisk(scene3DHandle);
@@ -87,30 +86,39 @@ function bindCatalogTouch() {
       var plant = _touchDragState.plant;
       if (scene3DHandle) {
         var pt = getRaycastPoint(scene3DHandle, touch.clientX, touch.clientY);
-        hidePreviewDisk(scene3DHandle);
         unlockCamera(scene3DHandle);
         var gw = scene3DHandle.gridWidth;
         var gh = scene3DHandle.gridHeight;
-        var inBounds = pt && pt.x >= 0 && pt.x <= gw && pt.y >= 0 && pt.y <= gh;
-        if (inBounds) {
-          var r = (plant.spread_inches || 12) / 24;
-          var newId = (window.crypto && typeof crypto.randomUUID === 'function')
-            ? crypto.randomUUID()
-            : ('p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
-          placements.push({
-            id: newId,
-            plantId: plant.id,
-            plant: plant,
-            pos_x: pt.x,
-            pos_y: pt.y,
-            radius_feet: r
-          });
-          sync3DView();
-          if (typeof renderCompanionChips === 'function') renderCompanionChips();
-          if (typeof refreshCatalogList === 'function') refreshCatalogList();
+        var r = (plant.spread_inches || 12) / 24;
+        // In-grid drops are validated (overlap / radius-out-of-bounds = reject
+        // with red flash). Off-grid drops on the soil/lawn area still toss to
+        // ground so the user keeps the existing discard affordance.
+        var inGrid = pt && pt.x >= 0 && pt.x <= gw && pt.y >= 0 && pt.y <= gh;
+        if (inGrid) {
+          var valid = validatePlacement(pt.x, pt.y, r, gw, gh, placements);
+          if (valid === 'ok') {
+            hidePreviewDisk(scene3DHandle);
+            var newId = (window.crypto && typeof crypto.randomUUID === 'function')
+              ? crypto.randomUUID()
+              : ('p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
+            placements.push({
+              id: newId,
+              plantId: plant.id,
+              plant: plant,
+              pos_x: pt.x,
+              pos_y: pt.y,
+              radius_feet: r
+            });
+            sync3DView();
+            if (typeof renderCompanionChips === 'function') renderCompanionChips();
+            if (typeof refreshCatalogList === 'function') refreshCatalogList();
+          } else {
+            showPreviewDisk(scene3DHandle, pt.x, pt.y, r, valid);
+            setTimeout(function() { hidePreviewDisk(scene3DHandle); }, 350);
+            if (navigator.vibrate) navigator.vibrate(20);
+          }
         } else {
-          // Released outside the bed — toss the plant onto the ground so it
-          // matches the desktop behavior and the picked-up-plant toss arc.
+          hidePreviewDisk(scene3DHandle);
           tossNewPlantToGround(plant, touch.clientX, touch.clientY, scene3DHandle);
         }
       }

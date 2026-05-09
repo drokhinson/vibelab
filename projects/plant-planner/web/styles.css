@@ -255,7 +255,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
 }
 .catalog-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 0.4rem;
   /* Reserve space so an empty grid still gets a visible mount point. */
   min-height: 80px;
@@ -300,6 +300,8 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   border-radius: 8px;
 }
 .catalog-name {
+  display: block;
+  width: 100%;
   font-size: 0.72rem;
   font-weight: 500;
   text-align: center;
@@ -781,7 +783,7 @@ dialog .dialog-header {
 .catalog-tile .native-badge {
   position: absolute;
   top: 4px;
-  left: 4px;
+  right: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -791,18 +793,17 @@ dialog .dialog-header {
   background: oklch(var(--su) / 0.18);
   color: oklch(var(--su));
   pointer-events: none;
+  z-index: 2;
 }
+/* Pollinator icons render in their own inline row below the name so they no
+   longer overlap the plant name text. */
 .catalog-tile .pollinator-icons {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
   display: flex;
   flex-direction: row;
-  gap: 2px;
-  background: oklch(var(--b1) / 0.7);
-  padding: 1px 3px;
-  border-radius: 6px;
-  color: oklch(var(--bc) / 0.7);
+  justify-content: center;
+  gap: 3px;
+  min-height: 16px;
+  color: oklch(var(--bc) / 0.6);
   pointer-events: none;
 }
 
@@ -1042,11 +1043,84 @@ dialog .dialog-header {
 .companion-popover-reason { font-size: 12px; color: var(--text-muted, #6b7280); margin-top: 2px; }
 .companion-popover-dismiss { background: transparent; border: 0; padding: 2px 0; margin-top: 4px; font-size: 11px; color: var(--text-muted, #6b7280); cursor: pointer; text-decoration: underline; }
 
-.tile-companion-badge { position: absolute; top: 4px; left: 4px; width: 12px; height: 12px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; z-index: 2; box-shadow: 0 0 0 2px white; }
+.tile-companion-badge { position: absolute; top: 4px; left: 4px; width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; z-index: 2; box-shadow: 0 0 0 2px white; pointer-events: none; }
 .tile-companion-badge.good { background: #16a34a; color: white; left: 4px; }
-.tile-companion-badge.bad  { background: #dc2626; color: white; left: 20px; }
+.tile-companion-badge.bad  { background: #dc2626; color: white; left: 22px; }
 .tile-companion-badge i { width: 10px; height: 10px; }
 .catalog-tile { position: relative; }
+
+/* Catalog legend (?) trigger + popover */
+.catalog-legend-btn {
+  background: transparent;
+  border: 0;
+  padding: 0 0 0 0.25rem;
+  cursor: pointer;
+  color: oklch(var(--bc) / 0.5);
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  line-height: 1;
+}
+.catalog-legend-btn:hover { color: oklch(var(--p)); }
+.catalog-legend-panel .legend-section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0.85rem 0 0.4rem;
+}
+.catalog-legend-panel .legend-section-title:first-child { margin-top: 0; }
+.catalog-legend-panel .legend-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.35rem 0;
+}
+.catalog-legend-panel .legend-icon {
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: oklch(var(--bc) / 0.7);
+}
+.catalog-legend-panel .legend-icon i { width: 18px; height: 18px; }
+.catalog-legend-panel .legend-text { flex: 1; min-width: 0; }
+.catalog-legend-panel .legend-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: oklch(var(--bc));
+}
+.catalog-legend-panel .legend-desc {
+  font-size: 0.78rem;
+  color: oklch(var(--bc) / 0.7);
+  line-height: 1.35;
+}
+.catalog-legend-panel .legend-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+.catalog-legend-panel .legend-badge i { width: 12px; height: 12px; }
+.catalog-legend-panel .legend-badge-good { background: #16a34a; }
+.catalog-legend-panel .legend-badge-bad { background: #dc2626; }
+.catalog-legend-panel .legend-badge-native {
+  background: oklch(var(--su) / 0.18);
+  color: oklch(var(--su));
+}
+.catalog-legend-panel .legend-disk {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-block;
+  opacity: 0.55;
+}
+.catalog-legend-panel .legend-disk-ok  { background: #4ade80; }
+.catalog-legend-panel .legend-disk-bad { background: #ef4444; }
 
 .detail-companions { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
 .detail-companion-row .detail-companion-label { font-size: 12px; font-weight: 600; color: var(--text-muted, #6b7280); margin-bottom: 4px; }

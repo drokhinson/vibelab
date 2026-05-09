@@ -12,9 +12,11 @@ function renderCatalogFilters() {
   var g = currentGarden || {};
   var hasGarden = !!currentGarden;
 
-  // Header: title + match-toggle
+  // Header: title + legend button + match-toggle
   var html = '<div class="catalog-filters-title">'
-           +   '<span><i data-lucide="leaf" style="width:0.9em;height:0.9em"></i> Plants</span>'
+           +   '<span><i data-lucide="leaf" style="width:0.9em;height:0.9em"></i> Plants'
+           +     ' <button type="button" class="catalog-legend-btn" id="catalog-legend-btn" aria-label="What do these symbols mean?" title="What do these symbols mean?"><i data-lucide="help-circle" style="width:1em;height:1em"></i></button>'
+           +   '</span>'
            +   (hasGarden
                ? '<label class="catalog-match-toggle">'
                  +   '<input type="checkbox" id="catalog-match-toggle"' + (catalogFilters.matchGarden ? ' checked' : '') + ' />'
@@ -74,7 +76,8 @@ function _pollinatorIconsHtml(arr) {
   for (var i = 0; i < n; i++) {
     var key = arr[i];
     var iconName = POLLINATOR_ICONS[key] || 'sparkles';
-    html += '<i data-lucide="' + iconName + '" style="width:14px;height:14px"></i>';
+    var label = POLLINATOR_LABELS[key] || key;
+    html += '<i data-lucide="' + iconName + '" style="width:14px;height:14px" title="Attracts ' + escapeHtml(label.toLowerCase()) + '"></i>';
   }
   html += '</div>';
   return html;
@@ -82,7 +85,7 @@ function _pollinatorIconsHtml(arr) {
 
 function _nativeBadgeHtml() {
   // Tiny inline Lucide-style leaf
-  return '<span class="native-badge" title="Native"><i data-lucide="leaf" style="width:14px;height:14px"></i></span>';
+  return '<span class="native-badge" title="Native to your zone"><i data-lucide="leaf" style="width:14px;height:14px"></i></span>';
 }
 
 function _companionBadgesForTile(plantId) {
@@ -96,8 +99,14 @@ function _companionBadgesForTile(plantId) {
     if (rel === 'bad'  && badNames.indexOf(placed.name)  === -1) badNames.push(placed.name);
   }
   var html = '';
-  if (goodNames.length) html += '<span class="tile-companion-badge good" aria-label="Good with: ' + escapeHtml(goodNames.join(', ')) + '"><i data-lucide="leaf" style="width:10px;height:10px"></i></span>';
-  if (badNames.length)  html += '<span class="tile-companion-badge bad"  aria-label="Avoid near: ' + escapeHtml(badNames.join(', '))  + '"><i data-lucide="alert-circle" style="width:10px;height:10px"></i></span>';
+  if (goodNames.length) {
+    var goodTitle = 'Good companion with: ' + goodNames.join(', ');
+    html += '<span class="tile-companion-badge good" title="' + escapeHtml(goodTitle) + '" aria-label="' + escapeHtml(goodTitle) + '"><i data-lucide="leaf" style="width:10px;height:10px"></i></span>';
+  }
+  if (badNames.length) {
+    var badTitle = 'Avoid planting near: ' + badNames.join(', ');
+    html += '<span class="tile-companion-badge bad" title="' + escapeHtml(badTitle) + '" aria-label="' + escapeHtml(badTitle) + '"><i data-lucide="alert-circle" style="width:10px;height:10px"></i></span>';
+  }
   return html;
 }
 
@@ -250,7 +259,87 @@ function bindCatalogEvents() {
     };
   });
 
+  // Legend popover trigger — explains the catalog tile symbols.
+  var legendBtn = document.getElementById('catalog-legend-btn');
+  if (legendBtn) legendBtn.onclick = function(e) {
+    e.stopPropagation();
+    openCatalogLegend();
+  };
+
   bindCatalogDrag();
+}
+
+// Renders a modal explaining every catalog tile symbol. Reuses the
+// plant-detail-panel backdrop pattern so behavior matches the rest of the app.
+function openCatalogLegend() {
+  // Avoid duplicate panels.
+  closeCatalogLegend();
+
+  var html = '<div class="plant-detail-backdrop" id="catalog-legend-backdrop"></div>';
+  html += '<aside class="plant-detail-panel catalog-legend-panel" role="dialog" aria-label="Catalog legend">';
+  html += '<div class="detail-header">';
+  html += '<h3 class="detail-title">What the symbols mean</h3>';
+  html += '<button class="close-btn" id="catalog-legend-close" aria-label="Close"><i data-lucide="x"></i></button>';
+  html += '</div>';
+  html += '<div class="detail-body">';
+
+  function row(iconHtml, label, desc) {
+    return '<div class="legend-row">'
+         +   '<div class="legend-icon">' + iconHtml + '</div>'
+         +   '<div class="legend-text"><div class="legend-label">' + label + '</div>'
+         +     '<div class="legend-desc">' + desc + '</div></div>'
+         + '</div>';
+  }
+
+  html += '<div class="legend-section-title">Pollinators</div>';
+  html += row('<i data-lucide="bug"></i>', 'Bug', 'Attracts bees.');
+  html += row('<i data-lucide="bird"></i>', 'Bird', 'Attracts butterflies and hummingbirds.');
+  html += row('<i data-lucide="moon"></i>', 'Moon', 'Attracts moths (night-blooming).');
+  html += row('<i data-lucide="sparkles"></i>', 'Sparkles', 'Attracts beneficial insects.');
+
+  html += '<div class="legend-section-title">Companions</div>';
+  html += row('<span class="legend-badge legend-badge-good"><i data-lucide="leaf"></i></span>',
+              'Good companion',
+              'This plant grows well next to one of the plants already in your garden. Hover the badge for the partner name.');
+  html += row('<span class="legend-badge legend-badge-bad"><i data-lucide="alert-circle"></i></span>',
+              'Avoid planting near',
+              'This plant clashes with one of the plants already in your garden — they compete or attract the same pests.');
+
+  html += '<div class="legend-section-title">Other</div>';
+  html += row('<span class="legend-badge legend-badge-native"><i data-lucide="leaf"></i></span>',
+              'Native',
+              'This plant is native to your USDA zone — easier to grow and better for local pollinators.');
+
+  html += '<div class="legend-section-title">Placement preview</div>';
+  html += row('<span class="legend-disk legend-disk-ok"></span>',
+              'Green disk',
+              'You can drop the plant here.');
+  html += row('<span class="legend-disk legend-disk-bad"></span>',
+              'Red disk',
+              'Can\'t drop here — it overlaps another plant or extends outside the planter.');
+
+  html += '</div>'; // .detail-body
+  html += '</aside>';
+
+  var mount = document.getElementById('plant-detail-panel');
+  if (!mount) return;
+  // Stash any open detail panel so we can restore it on close.
+  mount.dataset.legendActive = '1';
+  mount.innerHTML = html;
+  _initIcons();
+
+  var closeBtn = document.getElementById('catalog-legend-close');
+  if (closeBtn) closeBtn.onclick = closeCatalogLegend;
+  var backdrop = document.getElementById('catalog-legend-backdrop');
+  if (backdrop) backdrop.onclick = closeCatalogLegend;
+}
+
+function closeCatalogLegend() {
+  var mount = document.getElementById('plant-detail-panel');
+  if (mount && mount.dataset.legendActive) {
+    mount.innerHTML = '';
+    delete mount.dataset.legendActive;
+  }
 }
 
 function refreshCatalogList() {
@@ -473,6 +562,9 @@ function renderPlantDetailPanel() {
 // Esc-key handler — wired once on script load
 (function bindDetailPanelEsc() {
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && detailPanelPlantId) closePlantDetailPanel();
+    if (e.key !== 'Escape') return;
+    var mount = document.getElementById('plant-detail-panel');
+    if (mount && mount.dataset.legendActive) { closeCatalogLegend(); return; }
+    if (detailPanelPlantId) closePlantDetailPanel();
   });
 })();
