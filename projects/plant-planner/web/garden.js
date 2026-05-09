@@ -113,18 +113,30 @@ function bind3DDragDrop() {
     onDrop: function(pos_x, pos_y) {
       if (draggedPlant) {
         var r = (draggedPlant.spread_inches || 12) / 24;
-        placements.push({
-          id: _newPlacementId(),
-          plantId: draggedPlant.id,
-          plant: draggedPlant,
-          pos_x: pos_x,
-          pos_y: pos_y,
-          radius_feet: r
-        });
-        sync3DView();
-        renderCompanionChips();
-        refreshCatalogList();
-        if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
+        var gw = scene3DHandle.garden.grid_width;
+        var gh = scene3DHandle.garden.grid_height;
+        var valid = validatePlacement(pos_x, pos_y, r, gw, gh, placements);
+        if (valid !== 'ok') {
+          // Reject the drop. Briefly flash the preview disk red so the user
+          // sees why, then hide it. The plant is not committed; the user can
+          // try again from the catalog.
+          showPreviewDisk(scene3DHandle, pos_x, pos_y, r, valid);
+          setTimeout(function() { hidePreviewDisk(scene3DHandle); }, 350);
+        } else {
+          hidePreviewDisk(scene3DHandle);
+          placements.push({
+            id: _newPlacementId(),
+            plantId: draggedPlant.id,
+            plant: draggedPlant,
+            pos_x: pos_x,
+            pos_y: pos_y,
+            radius_feet: r
+          });
+          sync3DView();
+          renderCompanionChips();
+          refreshCatalogList();
+          if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
+        }
       }
       catalogDropHandled = true;
       draggedPlant = null;

@@ -194,3 +194,21 @@ function render() {
   else if (currentView === "builder") renderBuilder();
   _initIcons();
 }
+
+// Returns 'ok' | 'overlap' | 'oob'. Single source of truth used by every drag
+// path (desktop tile drag, picked-up plant move, mobile touch drag) to keep
+// preview state and commit-time validation in lockstep — the bug they fix is
+// drops being committed even when the preview disk shows an invalid spot.
+// `ignoreId` lets a picked-up placement skip its own row in the overlap check.
+function validatePlacement(posX, posY, r, gw, gh, existingPlacements, ignoreId) {
+  if ((posX - r) < 0 || (posX + r) > gw || (posY - r) < 0 || (posY + r) > gh) return 'oob';
+  if (Array.isArray(existingPlacements)) {
+    for (var i = 0; i < existingPlacements.length; i++) {
+      var p = existingPlacements[i];
+      if (ignoreId && p.id === ignoreId) continue;
+      var dx = posX - p.pos_x, dy = posY - p.pos_y;
+      if (Math.hypot(dx, dy) < r + p.radius_feet) return 'overlap';
+    }
+  }
+  return 'ok';
+}

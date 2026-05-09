@@ -819,28 +819,25 @@ function setup3DDragDrop(handle, callbacks) {
     var pt = getRaycastPoint(handle, e.clientX, e.clientY);
     if (!pt) { hidePreviewDisk(handle); return; }
     var r = (draggedPlant.spread_inches || 12) / 24;
-    var oob = pt.x < 0 || pt.x > gw || pt.y < 0 || pt.y > gh;
-    var overlaps = false;
-    if (!oob && Array.isArray(placements)) {
-      for (var i = 0; i < placements.length; i++) {
-        var p = placements[i];
-        var dx = pt.x - p.pos_x, dy = pt.y - p.pos_y;
-        if (Math.hypot(dx, dy) < r + p.radius_feet) { overlaps = true; break; }
-      }
-    }
-    var valid = oob ? 'oob' : (overlaps ? 'overlap' : 'ok');
+    var valid = validatePlacement(pt.x, pt.y, r, gw, gh, placements);
     showPreviewDisk(handle, pt.x, pt.y, r, valid);
   });
 
   canvas.addEventListener("drop", function(e) {
     e.preventDefault();
-    hidePreviewDisk(handle);
     unlockCamera(handle);
     var pt = getRaycastPoint(handle, e.clientX, e.clientY);
-    var inBounds = pt && pt.x >= 0 && pt.x <= gw && pt.y >= 0 && pt.y <= gh;
-    if (pt && inBounds) callbacks.onDrop(pt.x, pt.y);
-    else if (callbacks.onMiss) callbacks.onMiss(e.clientX, e.clientY);
-    else callbacks.onLeave();
+    // In-grid drops go through onDrop which re-validates with the radius-aware
+    // helper. Drops on the canvas but outside the grid stay as toss-to-ground
+    // (existing affordance for discarding a plant onto the soil/lawn area).
+    var inGrid = pt && pt.x >= 0 && pt.x <= gw && pt.y >= 0 && pt.y <= gh;
+    if (inGrid) {
+      callbacks.onDrop(pt.x, pt.y);
+    } else {
+      hidePreviewDisk(handle);
+      if (callbacks.onMiss) callbacks.onMiss(e.clientX, e.clientY);
+      else callbacks.onLeave();
+    }
   });
 
   canvas.addEventListener("dragleave", function() {
