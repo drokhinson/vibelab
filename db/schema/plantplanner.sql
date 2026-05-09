@@ -1,18 +1,21 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: post-013_user_plants (new plantplanner_user_plants table —
--- top-level "My Plants" library; auto-populated from shortlist + placements).
+-- Last updated: post-014_planter_geometry (per-type planter geometry: pots
+-- store radius + height; boxes / raised bed / greenhouse add dim_height).
 -- Migrations applied: 001_baseline, 002_seed, 003_supabase_auth,
 --                     004_enrich_plants, 005_seed_enriched, 006_companions,
 --                     007_companions_seed, 008_real_radius_placement,
 --                     009_growth_lifecycle, 010_garden_conditions,
 --                     011_plant_cache_and_shortlist, 012_planter_types_redesign,
---                     013_user_plants.
+--                     013_user_plants, 014_planter_geometry.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
--- Storage invariant: grid_width / grid_height store INCHES when garden_type
--- is one of {indoor_pot, indoor_planter_box, outdoor_pot, outdoor_planter_box}
--- and FEET otherwise. pos_x / pos_y / radius_feet are ALWAYS feet.
+-- Storage invariant:
+--   • grid_width / grid_height store INCHES for pot/box types, FEET otherwise.
+--   • Pots: grid_width = RADIUS, grid_height = HEIGHT.
+--   • Boxes/beds/greenhouse: grid_width = WIDTH, grid_height = LENGTH,
+--     dim_height = vertical height (same unit; NULL for pots and garden_bed).
+--   • pos_x / pos_y / radius_feet on garden_plants are ALWAYS feet.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Supabase Auth-backed profiles. id == auth.users.id.
@@ -76,6 +79,7 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
   location_label  TEXT,                                        -- display label for the conditions strip (e.g. "Boston, MA" or "02139")
   settings_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
   shortlist_plant_cache_ids UUID[] NOT NULL DEFAULT '{}'::uuid[],  -- plant cache rows the user shortlisted in the shopping step
+  dim_height      REAL        CHECK (dim_height IS NULL OR dim_height > 0),  -- vertical height for box/bed/greenhouse; same unit as grid_*; NULL for pots (which store height in grid_height) and garden_bed (flat)
   created_at      TIMESTAMPTZ DEFAULT now(),
   updated_at      TIMESTAMPTZ DEFAULT now()
 );

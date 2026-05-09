@@ -52,14 +52,15 @@ function init2DView(containerId, garden, initialPlacements) {
   container.innerHTML = '';
   container.classList.add('render2d-container');
 
-  // Normalize stored grid dims to feet — pots and planter boxes store
-  // inches, beds + greenhouses store feet (see web/garden-units.js).
-  var widthFt  = (typeof gridDimToFeet === 'function')
-    ? (gridDimToFeet(garden.grid_width,  garden.garden_type) || 1)
-    : (garden.grid_width  || 1);
-  var heightFt = (typeof gridDimToFeet === 'function')
-    ? (gridDimToFeet(garden.grid_height, garden.garden_type) || 1)
-    : (garden.grid_height || 1);
+  // Resolve the placement floor in feet. For pots, this is the 2r × 2r
+  // bounding square of the circular soil (grid_width is the radius); for
+  // every other type it's grid_width × grid_height in the type's unit.
+  var dims = (typeof floorDimsFeet === 'function')
+    ? floorDimsFeet(garden.grid_width, garden.grid_height, garden.garden_type)
+    : { width: garden.grid_width || 1, length: garden.grid_height || 1 };
+  var widthFt  = dims.width  || 1;
+  var heightFt = dims.length || 1;
+  var isPot = (typeof gardenTypeIsPot === 'function') && gardenTypeIsPot(garden.garden_type);
 
   var rect = container.getBoundingClientRect();
   var W = Math.max(1, rect.width);
@@ -80,28 +81,40 @@ function init2DView(containerId, garden, initialPlacements) {
     style: 'width:100%;height:100%;display:block;'
   });
 
-  // Soil background.
-  var soil = _newSvgEl('rect', {
-    x: soilX, y: soilY, width: soilW, height: soilH,
-    rx: 6, ry: 6, fill: SOIL_FILL, stroke: SOIL_STROKE, 'stroke-width': 2
-  });
-  svg.appendChild(soil);
-
-  // Grid lines (one per foot).
-  var gridGroup = _newSvgEl('g', { class: 'render2d-grid' });
-  for (var gx = 1; gx < widthFt; gx++) {
-    gridGroup.appendChild(_newSvgEl('line', {
-      x1: soilX + gx * pixelsPerFoot, y1: soilY,
-      x2: soilX + gx * pixelsPerFoot, y2: soilY + soilH,
-      stroke: GRID_STROKE, 'stroke-width': 1
+  // Soil background. Pots are circular; everything else is rectangular.
+  if (isPot) {
+    var cx = soilX + soilW / 2;
+    var cy = soilY + soilH / 2;
+    var rPx = Math.min(soilW, soilH) / 2;
+    svg.appendChild(_newSvgEl('circle', {
+      cx: cx, cy: cy, r: rPx,
+      fill: SOIL_FILL, stroke: SOIL_STROKE, 'stroke-width': 2
+    }));
+  } else {
+    svg.appendChild(_newSvgEl('rect', {
+      x: soilX, y: soilY, width: soilW, height: soilH,
+      rx: 6, ry: 6, fill: SOIL_FILL, stroke: SOIL_STROKE, 'stroke-width': 2
     }));
   }
-  for (var gy = 1; gy < heightFt; gy++) {
-    gridGroup.appendChild(_newSvgEl('line', {
-      x1: soilX,          y1: soilY + gy * pixelsPerFoot,
-      x2: soilX + soilW,  y2: soilY + gy * pixelsPerFoot,
-      stroke: GRID_STROKE, 'stroke-width': 1
-    }));
+
+  // Grid lines (one per foot). Skipped for pots — a circular grid would be
+  // misleading and the foot-grid math doesn't fit a sub-foot pot anyway.
+  var gridGroup = _newSvgEl('g', { class: 'render2d-grid' });
+  if (!isPot) {
+    for (var gx = 1; gx < widthFt; gx++) {
+      gridGroup.appendChild(_newSvgEl('line', {
+        x1: soilX + gx * pixelsPerFoot, y1: soilY,
+        x2: soilX + gx * pixelsPerFoot, y2: soilY + soilH,
+        stroke: GRID_STROKE, 'stroke-width': 1
+      }));
+    }
+    for (var gy = 1; gy < heightFt; gy++) {
+      gridGroup.appendChild(_newSvgEl('line', {
+        x1: soilX,          y1: soilY + gy * pixelsPerFoot,
+        x2: soilX + soilW,  y2: soilY + gy * pixelsPerFoot,
+        stroke: GRID_STROKE, 'stroke-width': 1
+      }));
+    }
   }
   svg.appendChild(gridGroup);
 

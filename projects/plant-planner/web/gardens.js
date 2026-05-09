@@ -124,10 +124,19 @@ function waterPlanLabel(w) {
 }
 
 function sizeLabelFor(g) {
-  // Pots and planter-boxes store inches; greenhouse / beds store feet.
-  if (gardenTypeUsesInches(g.garden_type)) {
-    return g.grid_width + '" × ' + g.grid_height + '"';
+  var t = g.garden_type;
+  var inUnit  = gardenTypeUsesInches(t);
+  var unitSym = inUnit ? '"' : ' ft';
+  // Pots: radius × height.
+  if (t === 'indoor_pot' || t === 'outdoor_pot') {
+    return 'r ' + g.grid_width + unitSym + ' × h ' + g.grid_height + unitSym;
   }
+  // Box-shape types: width × length × height.
+  if (typeof _gardenTypeHasHeightField === 'function' && _gardenTypeHasHeightField(t)) {
+    var dh = (g.dim_height != null) ? g.dim_height : '?';
+    return g.grid_width + unitSym + ' × ' + g.grid_height + unitSym + ' × ' + dh + unitSym;
+  }
+  // Garden bed (flat).
   return g.grid_width + '×' + g.grid_height + ' ft';
 }
 
@@ -156,8 +165,9 @@ function startGardenWizard() {
     name: _autoGardenName(initialType),
     name_was_auto: true,
     garden_type: initialType,
-    grid_width:  prev && !gardenTypeUsesInches(prev.garden_type) ? prev.grid_width  : _defaultGridFor(initialType).w,
-    grid_height: prev && !gardenTypeUsesInches(prev.garden_type) ? prev.grid_height : _defaultGridFor(initialType).h,
+    grid_width:  _defaultGridFor(initialType).w,
+    grid_height: _defaultGridFor(initialType).h,
+    dim_height:  _defaultGridFor(initialType).dh,
     shade_level: prev ? (prev.shade_level || 'full_sun') : 'full_sun',
     water_plan:  prev ? (prev.water_plan  || 'regular')  : 'regular',
     planting_season: prev ? (prev.planting_season || 'spring') : 'spring',
@@ -305,20 +315,28 @@ var PLANTER_TYPE_COLUMNS = {
   ]
 };
 
-// Default grid_width / grid_height when the user picks each type. Inch-unit
-// types use realistic small sizes; bed types start at 4 ft × 4 ft.
+// Default geometry when the user picks each type. Per the migration-014 model:
+//   • Pots: w = RADIUS, h = HEIGHT (in). dh unused.
+//   • Planter boxes / raised bed / greenhouse: w = WIDTH, h = LENGTH, dh = HEIGHT.
+//   • Garden bed: w × h footprint only; dh unused.
 var _DEFAULT_GRID_BY_TYPE = {
-  indoor_pot:          { w: 12, h: 12 },
-  indoor_planter_box:  { w: 24, h: 12 },
-  greenhouse:          { w: 8,  h: 8  },
-  outdoor_pot:         { w: 16, h: 16 },
-  outdoor_planter_box: { w: 36, h: 12 },
-  garden_bed:          { w: 4,  h: 4  },
-  raised_bed:          { w: 4,  h: 4  }
+  indoor_pot:          { w: 6,  h: 8,  dh: null },   // 6-in radius (12-in dia), 8-in tall
+  outdoor_pot:         { w: 8,  h: 10, dh: null },   // 8-in radius (16-in dia), 10-in tall
+  indoor_planter_box:  { w: 24, h: 12, dh: 8  },     // 24×12-in box, 8 in tall
+  outdoor_planter_box: { w: 36, h: 12, dh: 10 },     // 36×12-in trough, 10 in tall
+  raised_bed:          { w: 4,  h: 4,  dh: 1  },     // 4×4 ft, 1 ft wall
+  greenhouse:          { w: 8,  h: 8,  dh: 8  },     // 8×8 ft, 8 ft tall
+  garden_bed:          { w: 4,  h: 4,  dh: null }    // 4×4 ft flat
 };
 
 function _defaultGridFor(t) {
-  return _DEFAULT_GRID_BY_TYPE[t] || { w: 4, h: 4 };
+  return _DEFAULT_GRID_BY_TYPE[t] || { w: 4, h: 4, dh: null };
+}
+
+// Which types carry a vertical-height field separate from grid_height.
+function _gardenTypeHasHeightField(t) {
+  return t === 'indoor_planter_box' || t === 'outdoor_planter_box'
+      || t === 'raised_bed' || t === 'greenhouse';
 }
 
 // Flat list helper for any code that still needs to iterate every option.
@@ -331,8 +349,8 @@ var _wizardPreviewHandle = null;
 var _wizardPreviewRebuildId = null;
 
 function _disposeWizardPreview() {
-  if (_wizardPreviewHandle && typeof dispose2DView === 'function') {
-    try { dispose2DView(_wizardPreviewHandle); } catch (_) {}
+  if (_wizardPreviewHandle && typeof disposePreview3D === 'function') {
+    try { disposePreview3D(_wizardPreviewHandle); } catch (_) {}
   }
   _wizardPreviewHandle = null;
   if (_wizardPreviewRebuildId) {
@@ -348,17 +366,18 @@ function _rebuildWizardPreview() {
     _wizardPreviewRebuildId = null;
     var container = document.getElementById('wz-preview');
     if (!container) return;
-    if (_wizardPreviewHandle && typeof dispose2DView === 'function') {
-      try { dispose2DView(_wizardPreviewHandle); } catch (_) {}
+    if (_wizardPreviewHandle && typeof disposePreview3D === 'function') {
+      try { disposePreview3D(_wizardPreviewHandle); } catch (_) {}
       _wizardPreviewHandle = null;
     }
     var fakeGarden = {
       grid_width:  wizardDraft.grid_width  || 4,
       grid_height: wizardDraft.grid_height || 4,
+      dim_height:  wizardDraft.dim_height,
       garden_type: wizardDraft.garden_type
     };
-    if (typeof init2DView === 'function') {
-      _wizardPreviewHandle = init2DView('wz-preview', fakeGarden, []);
+    if (typeof initPreview3D === 'function') {
+      _wizardPreviewHandle = initPreview3D('wz-preview', fakeGarden);
     }
   }, 120);
 }
@@ -421,14 +440,13 @@ function renderWizardStepTypeSize() {
       var newType = btn.dataset.type;
       var wasType = wizardDraft.garden_type;
       wizardDraft.garden_type = newType;
-      // Switching unit family OR planter category resets to a sensible default.
+      // Each type has its own geometry model (radius vs width×length, with or
+      // without dim_height) so always reset to that type's defaults on switch.
       if (wasType !== newType) {
-        var changedUnits = gardenTypeUsesInches(wasType) !== gardenTypeUsesInches(newType);
-        if (changedUnits || !wasType) {
-          var d = _defaultGridFor(newType);
-          wizardDraft.grid_width  = d.w;
-          wizardDraft.grid_height = d.h;
-        }
+        var d = _defaultGridFor(newType);
+        wizardDraft.grid_width  = d.w;
+        wizardDraft.grid_height = d.h;
+        wizardDraft.dim_height  = d.dh;
         if (wizardDraft.name_was_auto) {
           wizardDraft.name = _autoGardenName(newType);
         }
@@ -447,50 +465,78 @@ function renderWizardStepTypeSize() {
   _initIcons();
 }
 
-// Markup for the size controls — same widget as before, minus the name field.
+// Markup for the size controls. Layout depends on the planter type's
+// geometry (migration 014):
+//   • Pots         — Radius (in) + Height (in)
+//   • Planter box  — Width × Length × Height (in)
+//   • Raised bed   — Width × Length × Height (ft)
+//   • Greenhouse   — Width × Length × Height (ft)
+//   • Garden bed   — Width × Length (ft) preset chips
 function _renderSizeControls() {
-  var usesInches = gardenTypeUsesInches(wizardDraft.garden_type);
-  var html = '';
-  if (usesInches) {
-    // Pots and planter boxes — width × length in inches. Bigger range than
-    // the old indoor-only widget so outdoor planter boxes (typically 24-48")
-    // still fit. Same `wz-diam` / `wz-depth` IDs to reuse the bind handlers.
-    html += '<div class="wizard-field-row">'
+  var t = wizardDraft.garden_type;
+  var unit = gardenTypeUnitLabel(t);
+
+  // Pots: 2 inputs — radius + height.
+  if (t === 'indoor_pot' || t === 'outdoor_pot') {
+    return '<div class="wizard-field-row">'
          +   '<label class="wizard-field flex-1">'
-         +     '<span class="wizard-field-label">Width (in)</span>'
-         +     '<input id="wz-diam" type="number" min="4" max="72" class="input input-bordered input-sm" value="' + wizardDraft.grid_width + '" />'
+         +     '<span class="wizard-field-label">Radius (' + unit + ')</span>'
+         +     '<input id="wz-w" type="number" min="2" max="48" class="input input-bordered input-sm" value="' + wizardDraft.grid_width + '" />'
          +   '</label>'
          +   '<label class="wizard-field flex-1">'
-         +     '<span class="wizard-field-label">Length (in)</span>'
-         +     '<input id="wz-depth" type="number" min="4" max="72" class="input input-bordered input-sm" value="' + wizardDraft.grid_height + '" />'
-         +   '</label>'
-         + '</div>';
-  } else {
-    var presets = [
-      { v: '4x4',    label: '4×4 ft' },
-      { v: '4x8',    label: '4×8 ft' },
-      { v: '8x8',    label: '8×8 ft' },
-      { v: 'custom', label: 'Custom' }
-    ];
-    var current = wizardDraft.grid_width + 'x' + wizardDraft.grid_height;
-    if (current !== '4x4' && current !== '4x8' && current !== '8x8') current = 'custom';
-    html += '<div class="wizard-presets">';
-    for (var i = 0; i < presets.length; i++) {
-      var active = presets[i].v === current ? ' active' : '';
-      html += '<button type="button" class="wizard-preset' + active + '" data-preset="' + presets[i].v + '">' + presets[i].label + '</button>';
-    }
-    html += '</div>';
-    html += '<div id="wz-custom" class="wizard-field-row" style="' + (current === 'custom' ? '' : 'display:none') + '">'
-         +   '<label class="wizard-field flex-1">'
-         +     '<span class="wizard-field-label">Width (ft)</span>'
-         +     '<input id="wz-w" type="number" min="1" max="20" class="input input-bordered input-sm" value="' + wizardDraft.grid_width + '" />'
-         +   '</label>'
-         +   '<label class="wizard-field flex-1">'
-         +     '<span class="wizard-field-label">Depth (ft)</span>'
-         +     '<input id="wz-h" type="number" min="1" max="20" class="input input-bordered input-sm" value="' + wizardDraft.grid_height + '" />'
+         +     '<span class="wizard-field-label">Height (' + unit + ')</span>'
+         +     '<input id="wz-h" type="number" min="2" max="60" class="input input-bordered input-sm" value="' + wizardDraft.grid_height + '" />'
          +   '</label>'
          + '</div>';
   }
+
+  // 3D-box types (planter boxes, raised bed, greenhouse): width × length × height.
+  if (_gardenTypeHasHeightField(t)) {
+    var inchType = gardenTypeUsesInches(t);
+    var maxWL = inchType ? 96 : 30;
+    var maxH  = inchType ? 60 : 20;
+    var dh = wizardDraft.dim_height != null ? wizardDraft.dim_height : (_defaultGridFor(t).dh || 1);
+    return '<div class="wizard-field-row">'
+         +   '<label class="wizard-field flex-1">'
+         +     '<span class="wizard-field-label">Width (' + unit + ')</span>'
+         +     '<input id="wz-w" type="number" min="1" max="' + maxWL + '" class="input input-bordered input-sm" value="' + wizardDraft.grid_width + '" />'
+         +   '</label>'
+         +   '<label class="wizard-field flex-1">'
+         +     '<span class="wizard-field-label">Length (' + unit + ')</span>'
+         +     '<input id="wz-h" type="number" min="1" max="' + maxWL + '" class="input input-bordered input-sm" value="' + wizardDraft.grid_height + '" />'
+         +   '</label>'
+         +   '<label class="wizard-field flex-1">'
+         +     '<span class="wizard-field-label">Height (' + unit + ')</span>'
+         +     '<input id="wz-dh" type="number" min="0.5" max="' + maxH + '" step="' + (inchType ? '1' : '0.5') + '" class="input input-bordered input-sm" value="' + dh + '" />'
+         +   '</label>'
+         + '</div>';
+  }
+
+  // Garden bed (flat) — preset chips + custom width × length in feet.
+  var presets = [
+    { v: '4x4',    label: '4×4 ft' },
+    { v: '4x8',    label: '4×8 ft' },
+    { v: '8x8',    label: '8×8 ft' },
+    { v: 'custom', label: 'Custom' }
+  ];
+  var current = wizardDraft.grid_width + 'x' + wizardDraft.grid_height;
+  if (current !== '4x4' && current !== '4x8' && current !== '8x8') current = 'custom';
+  var html = '<div class="wizard-presets">';
+  for (var i = 0; i < presets.length; i++) {
+    var active = presets[i].v === current ? ' active' : '';
+    html += '<button type="button" class="wizard-preset' + active + '" data-preset="' + presets[i].v + '">' + presets[i].label + '</button>';
+  }
+  html += '</div>';
+  html += '<div id="wz-custom" class="wizard-field-row" style="' + (current === 'custom' ? '' : 'display:none') + '">'
+       +   '<label class="wizard-field flex-1">'
+       +     '<span class="wizard-field-label">Width (ft)</span>'
+       +     '<input id="wz-w" type="number" min="1" max="30" class="input input-bordered input-sm" value="' + wizardDraft.grid_width + '" />'
+       +   '</label>'
+       +   '<label class="wizard-field flex-1">'
+       +     '<span class="wizard-field-label">Length (ft)</span>'
+       +     '<input id="wz-h" type="number" min="1" max="30" class="input input-bordered input-sm" value="' + wizardDraft.grid_height + '" />'
+       +   '</label>'
+       + '</div>';
   return html;
 }
 
@@ -500,16 +546,6 @@ function _bindSizeControls() {
     if (cap) cap.textContent = sizeLabelFor(wizardDraft);
     _rebuildWizardPreview();
   }
-  var diam = document.getElementById('wz-diam');
-  if (diam) diam.oninput = function(e) {
-    wizardDraft.grid_width = Math.max(1, parseInt(e.target.value) || 12);
-    afterChange();
-  };
-  var depth = document.getElementById('wz-depth');
-  if (depth) depth.oninput = function(e) {
-    wizardDraft.grid_height = Math.max(1, parseInt(e.target.value) || 10);
-    afterChange();
-  };
   document.querySelectorAll('.wizard-preset').forEach(function(btn) {
     btn.onclick = function() {
       var v = btn.dataset.preset;
@@ -523,7 +559,6 @@ function _bindSizeControls() {
         var p = v.split('x');
         wizardDraft.grid_width  = parseInt(p[0]);
         wizardDraft.grid_height = parseInt(p[1]);
-        // Sync the custom inputs so toggling back to Custom shows the preset.
         var w = document.getElementById('wz-w');
         var h = document.getElementById('wz-h');
         if (w) w.value = wizardDraft.grid_width;
@@ -532,14 +567,20 @@ function _bindSizeControls() {
       }
     };
   });
-  var w = document.getElementById('wz-w');
-  var h = document.getElementById('wz-h');
-  if (w) w.oninput = function(e) {
-    wizardDraft.grid_width  = Math.max(1, parseInt(e.target.value) || 4);
+  var wEl  = document.getElementById('wz-w');
+  var hEl  = document.getElementById('wz-h');
+  var dhEl = document.getElementById('wz-dh');
+  if (wEl) wEl.oninput = function(e) {
+    wizardDraft.grid_width  = Math.max(1, parseInt(e.target.value) || 1);
     afterChange();
   };
-  if (h) h.oninput = function(e) {
-    wizardDraft.grid_height = Math.max(1, parseInt(e.target.value) || 4);
+  if (hEl) hEl.oninput = function(e) {
+    wizardDraft.grid_height = Math.max(1, parseInt(e.target.value) || 1);
+    afterChange();
+  };
+  if (dhEl) dhEl.oninput = function(e) {
+    var v = parseFloat(e.target.value);
+    wizardDraft.dim_height = (Number.isFinite(v) && v > 0) ? v : null;
     afterChange();
   };
 }
@@ -589,46 +630,31 @@ function renderWizardStepLight() {
   _initIcons();
 }
 
-// ── Step 4: Location ────────────────────────────────────────────────────────
+// ── Step 4: Location (hardiness zone) ───────────────────────────────────────
 
 function renderWizardStepLocation() {
   var html = '<div class="wizard-page">';
-  html += _wizardHeader('Where is this planter?', 'We use this to determine your USDA hardiness zone and which plants are native to your area.');
+  html += _wizardHeader('Where is this planter?', 'Pick your USDA hardiness zone — we use it to filter the plant catalog to species that survive your winter.');
 
-  html += '<div class="wizard-form">';
-  if (wizardDraft.usda_zone) {
-    html += '<div class="wizard-location-set">'
-         +   '<div class="wizard-location-set-label"><i data-lucide="check-circle-2" style="width:1.1em;height:1.1em;color:#3a8a3e"></i> Location set</div>'
-         +   '<div class="wizard-location-set-value">' + escapeHtml(wizardDraft.location_label || ('Zone ' + wizardDraft.usda_zone)) + '</div>'
-         +   '<button type="button" class="btn btn-ghost btn-sm gap-1" id="wz-loc-change"><i data-lucide="edit-2" style="width:0.9em;height:0.9em"></i> Change</button>'
-         + '</div>';
-  } else {
-    html += '<div class="wizard-location-empty">'
-         +   '<i data-lucide="map-pin" style="width:2em;height:2em;color:rgba(0,0,0,0.3)"></i>'
-         +   '<p class="text-sm opacity-70" style="margin:0.5rem 0">No location set yet.</p>'
-         +   '<button type="button" class="btn btn-primary btn-sm gap-1" id="wz-loc-set"><i data-lucide="locate" style="width:0.9em;height:0.9em"></i> Set location</button>'
-         + '</div>';
-  }
-  html += '</div>';
+  html += '<div class="wizard-zone-picker" id="wz-zone-picker"></div>';
 
   html += _wizardFooter({ nextDisabled: !wizardDraft.usda_zone });
   html += '</div>';
   app.innerHTML = html;
 
-  function openPicker() {
-    openLocationPicker({
-      onResolve: function(loc) {
+  // Render the inline zone picker straight into the step.
+  if (typeof renderInlineZonePicker === 'function') {
+    renderInlineZonePicker('wz-zone-picker', {
+      selectedZone: wizardDraft.usda_zone,
+      onPick: function(loc) {
         wizardDraft.usda_zone = loc.zone;
         wizardDraft.location_label = loc.label;
-        renderGardenWizard();
-        _initIcons();
+        // Auto-advance — the user has just confirmed; no need to make them
+        // tap Next afterward.
+        _wizardAdvance();
       }
     });
   }
-  var setBtn = document.getElementById('wz-loc-set');
-  if (setBtn) setBtn.onclick = openPicker;
-  var changeBtn = document.getElementById('wz-loc-change');
-  if (changeBtn) changeBtn.onclick = openPicker;
 
   _wizardBindCommon();
   document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
@@ -855,6 +881,7 @@ async function submitGardenWizard() {
     };
     if (d.usda_zone)      body.usda_zone      = d.usda_zone;
     if (d.location_label) body.location_label = d.location_label;
+    if (d.dim_height != null) body.dim_height = d.dim_height;
     var created = await apiFetch('/gardens', { method: 'POST', body: body });
     _disposeWizardPreview();
       wizardDraft = null;

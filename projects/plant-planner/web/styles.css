@@ -2276,3 +2276,17 @@ button.library-planter-chip { font-family: inherit; color: inherit; }
   gap: 0.35rem;
   margin-top: 0.3rem;
 }
+
+/* Inline zone picker on wizard step 4. The picker emits its own classes
+   (.pp-us-map, .pp-zone-list, etc.) — these are the wizard-step adjustments. */
+.wizard-zone-picker {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.wizard-zone-picker .zone-picker-intro {
+  margin: 0;
+  font-size: 0.85rem;
+  color: oklch(var(--bc) / 0.65);
+}

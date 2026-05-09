@@ -40,3 +40,22 @@ function gridDimToFeet(value, gardenType) {
 function gardenTypeUnitLabel(t) {
   return gardenTypeUsesInches(t) ? 'in' : 'ft';
 }
+
+// Pot rows store grid_width = RADIUS and grid_height = HEIGHT (vertical).
+// The placement floor's planar footprint is 2r × 2r (the circle's bounding
+// square) — NOT (grid_width, grid_height). Mirrors backend `floor_dims_feet`.
+var POT_GARDEN_TYPES = { indoor_pot: true, outdoor_pot: true };
+
+function gardenTypeIsPot(t) { return !!(t && POT_GARDEN_TYPES[t]); }
+
+function floorDimsFeet(gridWidth, gridHeight, gardenType) {
+  if (gardenTypeIsPot(gardenType)) {
+    var radiusFt = gridDimToFeet(gridWidth, gardenType) || 0;
+    var diameterFt = Math.max(0, 2 * radiusFt);
+    return { width: diameterFt, length: diameterFt };
+  }
+  return {
+    width:  gridDimToFeet(gridWidth,  gardenType) || 0,
+    length: gridDimToFeet(gridHeight, gardenType) || 0
+  };
+}
