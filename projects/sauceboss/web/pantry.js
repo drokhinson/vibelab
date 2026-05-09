@@ -14,6 +14,25 @@
 
 function renderPantry() {
   const ings = state.pantry.ingredients || [];
+  // Pantry is loaded in the background after the splash drops. Render the
+  // inline pot animation if the user reaches this tab before the fetch
+  // resolves, so the empty-state ("Your pantry is empty") only shows for
+  // users who genuinely have no saucebook ingredients.
+  const isHydrating = currentUser && (state.pantry.loading || !state.pantry._loaded);
+  if (isHydrating && ings.length === 0) {
+    return `
+      <div class="screen-wrap">
+        <div class="tab-screen-header">
+          ${renderHeaderAuthSlot()}
+          <h1>Pantry</h1>
+          <p class="subtitle">Mark what you're out of</p>
+        </div>
+        <div class="scroll-body">
+          <div class="loading-inline"><div class="loading-pot">${potSVG()}</div><p class="loading-text">Saucing…</p></div>
+        </div>
+      </div>
+    `;
+  }
   if (ings.length === 0) {
     return `
       <div class="screen-wrap">

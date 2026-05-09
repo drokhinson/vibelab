@@ -63,6 +63,12 @@ function setActiveTab(name, opts = {}) {
   if (name === 'browse' && typeof browseEnsureLoaded === 'function') {
     browseEnsureLoaded();
   }
+  // Pantry groups ingredients by category. ingredient-categories is no
+  // longer fetched on boot — load it lazily the first time the tab is
+  // opened. The helper re-renders when the fetch resolves.
+  if (name === 'pantry' && typeof ensureIngredientCategories === 'function') {
+    ensureIngredientCategories();
+  }
   render();
 }
 

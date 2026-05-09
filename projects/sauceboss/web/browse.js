@@ -101,7 +101,7 @@ function renderBrowse() {
         ${b.error ? `<p style="color:#DC2626;padding:8px 0">${escapeHtml(b.error)}</p>` : ''}
 
         ${b.loading && b.items.length === 0
-          ? `<div class="empty-state">Loading recipes…</div>`
+          ? `<div class="loading-inline"><div class="loading-pot">${potSVG()}</div><p class="loading-text">Saucing…</p></div>`
           : b.items.map(_renderBrowseRow).join('')
         }
 
