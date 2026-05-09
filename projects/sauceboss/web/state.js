@@ -12,8 +12,17 @@ let currentUser = null;      // { user_id, display_name, is_admin } or null
 
 // ─── Global state ─────────────────────────────────────────────────────────────
 let state = {
+  // ── Tab-bar navigation (added by the saucebook redesign) ───────────────────
+  // Three primary tabs in the bottom nav: 'browse' | 'saucebook' | 'pantry'.
+  // Anonymous users land on 'browse'; the others render lock badges and route
+  // to the auth modal on tap (see tabs.js setActiveTab).
+  activeTab: 'browse',
+
   // ── Current screen ──────────────────────────────────────────────────────────
-  screen: 'meal-builder',       // home is the meal builder
+  // 'tab-shell' = the tab content (saucebook / browse / pantry); other values
+  // are screens that appear on top of the tab shell (meal builder steps,
+  // recipe view, recipe builder, admin).
+  screen: 'tab-shell',
   loading: null,                // when set, the active screen renders an inline pot loader
   mealCategory: 'carbs',        // 'carbs' | 'proteins' | 'salads' — active home tab
 
@@ -22,7 +31,48 @@ let state = {
   proteins: [],
   saladBases: [],
 
-  // ── Current selection (one item flow) ───────────────────────────────────────
+  // ── Saucebook (per-user library; references — not copies). Populated by
+  // api.listSaucebook() on login; cleared on logout. Each row is a full sauce
+  // envelope (matches all-sauces-full shape) plus addedAt + authorName +
+  // variantCount. Used by the Saucebook tab + meal-builder filter + Pantry.
+  saucebook: [],
+  saucebookLoading: false,
+  saucebookSearch: '',
+
+  // ── Browse tab state ──────────────────────────────────────────────────────
+  browse: {
+    items: [],                  // current page of lightweight rows
+    total: 0,
+    q: '',
+    cuisines: new Set(),        // multi-select cuisine filter
+    types: new Set(),           // multi-select type filter (sauce/marinade/dressing/dip)
+    authorId: null,             // selected author (uuid) or null
+    authorQuery: '',            // current author autocomplete query
+    authorResults: [],          // [{ userId, displayName, sauceCount }]
+    page: 0,
+    pageSize: 20,
+    loading: false,
+    hasMore: true,
+    filtersOpen: false,
+    error: null,
+  },
+
+  // ── Pantry tab state (negative list — rows here are foods the user is OUT of) ─
+  pantry: {
+    ingredients: [],            // [{ foodId, name, missing }]
+    missing: new Set(),         // Set<foodId> — synced to /pantry on every change
+    loading: false,
+    error: null,
+  },
+
+  // ── Meal-builder flow (category → dish/subtype → sauce → recipe) ─────────
+  mealFlow: {
+    category: null,             // 'carb' | 'protein' | 'salad'
+    dish: null,                 // sauceboss_items row at dish_level='dish'
+    subtype: null,              // optional sauceboss_items row at dish_level='subtype'
+  },
+
+  // ── Current selection (legacy — kept for the recipe-view path) ──────────────
   selectedItem: null,           // a parent item (carb / protein / salad)
   selectedPrep: null,           // optional variant of selectedItem
   preparations: [],             // variants for selectedItem (may be empty)
@@ -34,7 +84,6 @@ let state = {
   unitSystem: 'imperial',       // 'imperial' | 'metric'
   ingredientCategories: {},
   substitutions: {},
-  disabledIngredients: new Set(),
   filterOpen: false,
   expandedCuisines: new Set(),
 
@@ -85,6 +134,13 @@ let state = {
   ingredientSections: {},                                          // { [category]: true } — open only when explicitly true
   expandedFoodIds: new Set(),                                      // food ids whose sauces panel is open
 };
+
+// disabledIngredients: Set<ingredientName> — kept as a real mutable Set so
+// existing filter helpers (`isSauceAvailable`, `missingSauceIngredients`,
+// `getSubstitutionText`) work unchanged. For logged-in users, `auth.js`
+// mirrors `state.pantry.missing` (Set<foodId>) into this set after each
+// pantry hydration, and `togglePantryMissing` keeps the two in sync.
+state.disabledIngredients = new Set();
 
 function defaultBuilder() {
   return {

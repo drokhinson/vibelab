@@ -291,5 +291,56 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       `/admin/sauces/${encodeURIComponent(parentId)}/variants`,
       { method: 'POST', body: { sauceIds } },
     ),
+
+    // ── Saucebook (auth required) ────────────────────────────────────────────
+    // Reference-based: sauces here are owned by their authors. Editing a
+    // non-owned sauce server-side returns `{ forkedId }` (a new variant under
+    // the family root, owned by the caller); the caller's saucebook row is
+    // repointed to the new variant atomically.
+    listSaucebook: async () => {
+      const data = await call('/saucebook');
+      return (data?.sauces || []).map(withIngredientNames);
+    },
+    addToSaucebook:    (id) => call(`/saucebook/${encodeURIComponent(id)}`, { method: 'POST' }),
+    removeFromSaucebook: (id) => call(`/saucebook/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+    // ── Browse (auth optional; richer when signed in) ────────────────────────
+    // Returns lightweight rows (no steps / ingredients) for a paginated
+    // family-roots-only listing. Filters: q (name substring), cuisines[],
+    // types[], author (uuid). Sorted latest-first.
+    browseSauces: async ({ q = '', cuisines = [], types = [], author = null, limit = 20, offset = 0 } = {}) => {
+      const params = new URLSearchParams();
+      if (q) params.set('q', q);
+      for (const c of cuisines) params.append('cuisine', c);
+      for (const t of types) params.append('type', t);
+      if (author) params.set('author', author);
+      params.set('limit', String(limit));
+      params.set('offset', String(offset));
+      const data = await call(`/browse?${params.toString()}`);
+      return { total: data?.total || 0, items: data?.items || [] };
+    },
+    listAuthors: async (q = '') => {
+      const params = q ? `?q=${encodeURIComponent(q)}` : '';
+      return (await call(`/authors${params}`)) || [];
+    },
+
+    // ── Pantry (auth required) ───────────────────────────────────────────────
+    // Negative list: rows in `missingFoodIds` are foods the user is OUT of.
+    // The Pantry tab + the meal-builder ingredient filter both write here so
+    // the two views two-way-sync.
+    getPantry: async () => {
+      const data = await call('/pantry');
+      return {
+        ingredients: data?.ingredients || [],
+        saucebookSauceIds: data?.saucebookSauceIds || [],
+      };
+    },
+    setPantryMissing: async (missingFoodIds) => {
+      const data = await call('/pantry', { method: 'PUT', body: { missingFoodIds } });
+      return {
+        ingredients: data?.ingredients || [],
+        saucebookSauceIds: data?.saucebookSauceIds || [],
+      };
+    },
   };
 }

@@ -57,6 +57,32 @@ class SauceType(StrEnum):
     SAUCE = "sauce"
     DRESSING = "dressing"
     MARINADE = "marinade"
+    DIP = "dip"
+
+
+class AttachmentKind(StrEnum):
+    CATEGORY = "category"
+    DISH = "dish"
+    SUBTYPE = "subtype"
+
+
+class Attachment(BaseModel):
+    """One attachment row on a sauce.
+
+    `kind='category'` → `value` is one of carb/protein/salad. The sauce applies
+    to every dish + subtype in that category.
+    `kind='dish'` → `value` is a sauceboss_items.id at dish_level='dish'.
+    Applies to that dish + its subtypes.
+    `kind='subtype'` → `value` is a sauceboss_items.id at dish_level='subtype'.
+    Applies to that subtype only.
+    """
+    kind: AttachmentKind
+    value: str = Field(min_length=1)
+
+
+class DishLevel(StrEnum):
+    DISH = "dish"
+    SUBTYPE = "subtype"
 
 
 # ── Sauce creation ────────────────────────────────────────────────────────────
@@ -88,6 +114,14 @@ class StepInput(BaseModel):
 
 
 class CreateSauceRequest(BaseModel):
+    """Sauce create/update payload.
+
+    Targeting: send `attachments` (preferred) — a list of {kind, value} rows
+    pointing at category, dish, or subtype targets. The legacy `itemIds`
+    field is still accepted for one release: each entry is treated as a
+    dish-level attachment. The route validates that at least one of the two
+    is non-empty.
+    """
     name: str = Field(min_length=1, max_length=80)
     cuisine: str = Field(min_length=1)
     cuisineEmoji: str = ""
@@ -96,13 +130,25 @@ class CreateSauceRequest(BaseModel):
     sourceUrl: Optional[str] = None
     sauceType: SauceType = SauceType.SAUCE
     parentSauceId: Optional[str] = None
-    itemIds: List[str] = Field(min_length=1)
+    attachments: List[Attachment] = Field(default_factory=list)
+    itemIds: List[str] = Field(default_factory=list)
     steps: List[StepInput] = Field(min_length=1)
 
 
 class UpdateSauceRequest(CreateSauceRequest):
     """Same shape as CreateSauceRequest; the path param identifies the sauce."""
     pass
+
+
+class ForkResponse(BaseModel):
+    """Returned from PATCH /sauces/{id} when the editor is not the owner.
+
+    The original sauce is unchanged; a new variant was created under the
+    family root with `created_by = caller`, and the caller's saucebook row
+    was repointed from the original sauce id to `forkedId`.
+    """
+    message: str
+    forkedId: str
 
 
 class AssignVariantsRequest(BaseModel):
@@ -312,13 +358,63 @@ class BulkSauceExportEnvelope(BaseModel):
     sauces: List[Dict[str, Any]]
 
 
+# ── Saucebook + Browse + Pantry (migration 010) ──────────────────────────────
+
+class SaucebookResponse(BaseModel):
+    """The current user's saucebook — full sauce envelopes mirroring the shape
+    used by `get_sauceboss_all_sauces_full`, plus `addedAt`, `authorName`,
+    `attachments`, and `variantCount`."""
+    sauces: List[Dict[str, Any]]
+
+
+class BrowseResponse(BaseModel):
+    """Paginated Browse-tab listing.
+
+    `total` is the unfiltered family-root count for the current filter set;
+    `items` is the current page of lightweight rows (no steps / ingredients
+    — fetch the full envelope from the per-sauce detail endpoint when the
+    user opens one).
+    """
+    total: int
+    items: List[Dict[str, Any]]
+
+
+class AuthorSummary(BaseModel):
+    userId: str
+    displayName: str
+    sauceCount: int
+
+
+class PantryEntry(BaseModel):
+    foodId: str
+    name: str
+    missing: bool
+
+
+class PantryResponse(BaseModel):
+    ingredients: List[PantryEntry]
+    saucebookSauceIds: List[str]
+
+
+class SetPantryMissingRequest(BaseModel):
+    """Replace the user's pantry-missing set in one round-trip."""
+    missingFoodIds: List[str] = Field(default_factory=list)
+
+
 def _shape_items_grouped(rows: list[dict]) -> dict:
-    """Group raw sauceboss_items rows into {carbs, proteins, salads} with nested variants."""
+    """Group raw sauceboss_items rows into {carbs, proteins, salads} with nested variants.
+
+    Output shape preserves the legacy `variants` array name used by the admin
+    UI; each row also carries `dishLevel` (migration 007) so callers can tell
+    a `dish` from a `subtype` regardless of nesting. The `variants` array on
+    a dish row contains its subtypes.
+    """
     def shape(r: dict) -> dict:
         return {
             "id": r["id"],
             "category": r["category"],
             "parentId": r.get("parent_id"),
+            "dishLevel": r.get("dish_level") or ("subtype" if r.get("parent_id") else "dish"),
             "name": r["name"],
             "emoji": r.get("emoji") or "",
             "description": r.get("description") or "",

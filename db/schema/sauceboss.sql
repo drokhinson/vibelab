@@ -8,10 +8,16 @@
 -- (e.g. basmati rice as a prep variant of rice) point at their Type via
 -- parent_id. Replaces the legacy sauceboss_carbs / sauceboss_addons /
 -- sauceboss_salad_bases / sauceboss_carb_preparations tables.
+-- 3-level dish hierarchy (migration 007): category → dish → subtype.
+-- dish_level='dish' rows have parent_id IS NULL (e.g. Rice, Bread, Chicken,
+-- Romaine). dish_level='subtype' rows point at a 'dish' parent (e.g. Basmati
+-- under Rice, Pretzel under Bread). The sauceboss_items_dish_level_check
+-- trigger enforces this two-tier shape.
 CREATE TABLE IF NOT EXISTS public.sauceboss_items (
   id                 TEXT PRIMARY KEY,
   category           TEXT NOT NULL CHECK (category IN ('carb', 'protein', 'salad')),
   parent_id          TEXT REFERENCES public.sauceboss_items(id) ON DELETE CASCADE,
+  dish_level         TEXT NOT NULL DEFAULT 'dish' CHECK (dish_level IN ('dish', 'subtype')),  -- migration 007
   name               TEXT NOT NULL,
   emoji              TEXT NOT NULL DEFAULT '',
   description        TEXT NOT NULL DEFAULT '',
@@ -33,22 +39,44 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauces (
   color           TEXT NOT NULL,
   description     TEXT NOT NULL,
   source_url      TEXT,                    -- optional URL the sauce was imported from (migration 066)
-  sauce_type      TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade')),
+  sauce_type      TEXT NOT NULL DEFAULT 'sauce' CHECK (sauce_type IN ('sauce', 'dressing', 'marinade', 'dip')),  -- migration 009 added 'dip'
   created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,           -- migration 003: author of user-submitted sauces
   parent_sauce_id TEXT REFERENCES public.sauceboss_sauces(id) ON DELETE SET NULL,  -- migration 005: variant link (one level deep, enforced by trigger)
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),  -- migration 010: latest-first sort key for Browse
   CONSTRAINT sauceboss_sauces_parent_self_chk CHECK (parent_sauce_id IS NULL OR parent_sauce_id <> id)
 );
 ALTER TABLE public.sauceboss_sauces ENABLE ROW LEVEL SECURITY;
 
--- Unified sauce↔item junction. Replaces sauceboss_sauce_carbs /
--- sauceboss_sauce_proteins / sauceboss_sauce_salad_bases. A trigger enforces
--- sauce_type ↔ item.category alignment and rejects links to Variant rows.
+-- Legacy junction (migration 051). DEPRECATED as of migration 008 — replaced
+-- by sauceboss_sauce_attachments below. Kept for one release as a read-only
+-- mirror so the Native app keeps working; the writers in
+-- create_sauceboss_sauce / update_sauceboss_sauce / fork_sauceboss_sauce
+-- dual-write dish-level attachments into this table. The legacy
+-- sauceboss_sauce_items_check trigger was dropped in migration 009.
 CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_items (
   sauce_id TEXT NOT NULL REFERENCES public.sauceboss_sauces(id) ON DELETE CASCADE,
   item_id  TEXT NOT NULL REFERENCES public.sauceboss_items(id)  ON DELETE CASCADE,
   PRIMARY KEY (sauce_id, item_id)
 );
 ALTER TABLE public.sauceboss_sauce_items ENABLE ROW LEVEL SECURITY;
+
+-- Sauce attachment table (migration 008). Source of truth for sauce↔dish
+-- targeting. A sauce can attach at category level (applies to every dish +
+-- subtype in that category), at dish level (the dish + its subtypes), or at
+-- subtype level (one specific subtype). The
+-- sauceboss_sauce_attachments_check trigger validates that:
+--   * category targets are one of carb/protein/salad and match the sauce's
+--     type-category map (sauce + dip → carb, marinade → protein,
+--     dressing → salad — see sauceboss_type_to_category()).
+--   * dish/subtype targets resolve to an item with the matching dish_level
+--     and a category matching the type-category map.
+CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_attachments (
+  sauce_id     TEXT NOT NULL REFERENCES public.sauceboss_sauces(id) ON DELETE CASCADE,
+  target_kind  TEXT NOT NULL CHECK (target_kind IN ('category','dish','subtype')),
+  target_value TEXT NOT NULL,
+  PRIMARY KEY (sauce_id, target_kind, target_value)
+);
+ALTER TABLE public.sauceboss_sauce_attachments ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_steps (
   id              BIGSERIAL PRIMARY KEY,
@@ -188,3 +216,45 @@ ALTER TABLE public.sauceboss_favorites ENABLE ROW LEVEL SECURITY;
 -- (get_sauceboss_sauces_for_item, get_sauceboss_all_sauces,
 -- get_sauceboss_all_sauces_full) emit `parentSauceId` so frontends can
 -- group sauces into families.
+
+
+-- ── Saucebook + Pantry (migration 010) ──────────────────────────────────────
+-- Per-user library (references, not copies). Editing a non-owned sauce
+-- triggers fork_sauceboss_sauce(), which creates a new variant under the
+-- family root, owned by the editing user, and repoints the user's
+-- sauceboss_saucebook row to the new variant.
+CREATE TABLE IF NOT EXISTS public.sauceboss_saucebook (
+  user_id  UUID NOT NULL REFERENCES public.sauceboss_profiles(id) ON DELETE CASCADE,
+  sauce_id TEXT NOT NULL REFERENCES public.sauceboss_sauces(id)   ON DELETE CASCADE,
+  added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, sauce_id)
+);
+ALTER TABLE public.sauceboss_saucebook ENABLE ROW LEVEL SECURITY;
+
+-- Negative pantry list. A row means the user is OUT of that food. Default
+-- (empty) = "have everything". Keyed by food_id so merge_sauceboss_foods
+-- keeps the pantry consistent.
+CREATE TABLE IF NOT EXISTS public.sauceboss_pantry_missing (
+  user_id UUID NOT NULL REFERENCES public.sauceboss_profiles(id) ON DELETE CASCADE,
+  food_id TEXT NOT NULL REFERENCES public.sauceboss_foods(id)    ON DELETE CASCADE,
+  PRIMARY KEY (user_id, food_id)
+);
+ALTER TABLE public.sauceboss_pantry_missing ENABLE ROW LEVEL SECURITY;
+
+
+-- ── Resolver / library RPCs (migrations 008 + 010) ─────────────────────────
+--   get_sauceboss_sauces_for_target(p_category, p_dish_id, p_subtype_id)
+--     → union of sauces attached at category, dish, subtype, and the
+--       subtype's parent dish. Used by the meal-builder flow.
+--   get_sauceboss_saucebook(p_user_id) → the user's library, full envelopes.
+--   get_sauceboss_browse(p_user_id, p_q, p_cuisines, p_types, p_author,
+--                        p_limit, p_offset)
+--     → paginated lightweight rows + variant count + inSaucebook flag.
+--     Sorted by created_at DESC, family roots only.
+--   get_sauceboss_browse_authors(p_q) → author autocomplete.
+--   get_sauceboss_pantry_for_user(p_user_id) → ingredients in saucebook +
+--     missing flag from sauceboss_pantry_missing.
+--   set_sauceboss_pantry_missing(p_user_id, p_food_ids[]) → replace user's
+--     missing set in one round-trip.
+--   fork_sauceboss_sauce(p_source_id, p_user, p_data) → atomic copy +
+--     parent_sauce_id wire-up + saucebook repoint.

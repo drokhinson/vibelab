@@ -26,7 +26,11 @@ function renderRecipe() {
   const itemTime  = item
     ? ((state.selectedPrep?.cookTimeMinutes ?? item.cookTimeMinutes) ?? 0)
     : 0;
-  const backScreen = item ? 'sauce-selector' : 'admin';
+  // backScreen priority: meal flow > explicit override (saucebook/browse) > admin.
+  const backScreen = item
+    ? 'sauce-selector'
+    : (state.recipeReturnTo || 'admin');
+  const isTabShellBack = backScreen === 'tab-shell';
   const totalTime  = sauceTime + itemTime;
 
   const stepsHTML = sauce.steps.map((step, i) => {
@@ -96,7 +100,7 @@ function renderRecipe() {
   return `
     <div class="status-bar"></div>
     <div class="recipe-header">
-      <button class="back-btn" onclick="navigate('${backScreen}')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="${isTabShellBack ? `setActiveTab('${state.activeTab}')` : `navigate('${backScreen}')`}"><i data-lucide="chevron-left"></i> Back</button>
       <div class="recipe-cuisine-badge">${renderEmoji(sauce.cuisineEmoji)} ${sauce.cuisine}</div>
       <div class="recipe-title">${sauce.name}</div>
       <div class="recipe-subtitle">Pair with: ${(sauce.compatibleItems || []).join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>

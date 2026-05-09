@@ -38,11 +38,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     state.substitutions = subs && typeof subs === 'object' ? subs : {};
   });
 
-  // Render the meal-builder behind the splash, then animate the handoff:
-  // measure where the hero illustration will sit, slide the splash pot to
-  // that position, drop the orange header in from the top, and stagger the
-  // section cards. Once the slide ends, drop the splash from the DOM and
-  // the meal-builder's own hero pot becomes visible (visually identical).
+  // Tab-shell is the default screen. Anonymous users land on Browse; the
+  // first auth-state-change event after initSupabase() will swap the active
+  // tab to Saucebook if a session is restored.
+  state.screen = 'tab-shell';
+  state.activeTab = currentUser ? 'saucebook' : 'browse';
   render();
 
   requestAnimationFrame(() => {
@@ -71,10 +71,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 750);
   });
 
-  history.replaceState({ screen: state.screen, sb: true }, '', '#' + state.screen);
+  // Replace-state with the tab id when on the tab-shell, so reload + back
+  // restore the right tab. Otherwise use the screen name (existing behavior).
+  history.replaceState(
+    { screen: state.screen, tab: state.activeTab, sb: true },
+    '',
+    state.screen === 'tab-shell' ? '#' + state.activeTab : '#' + state.screen,
+  );
 
   window.addEventListener('popstate', (e) => {
-    if (e.state && e.state.sb && e.state.screen) {
+    if (!e.state || !e.state.sb) return;
+    if (e.state.screen === 'tab-shell' && e.state.tab) {
+      setActiveTab(e.state.tab, { silent: true });
+    } else if (e.state.screen) {
       navigate(e.state.screen, { push: false });
     }
   });

@@ -4,9 +4,20 @@
 function getSauceScreenContext() {
   const item = state.selectedItem;
   const meta = flowMetaFor(item);
+  // The new saucebook-driven flow goes category → meal-dish → sauce-selector,
+  // so back from the sauce list returns to the dish picker. Legacy meal-
+  // builder home is the fallback for any unmigrated entry point.
+  let backScreen;
+  if (state.mealFlow && state.mealFlow.dish) {
+    backScreen = 'meal-dish';
+  } else if (state.preparations.length > 0) {
+    backScreen = 'prep-selector';
+  } else {
+    backScreen = 'meal-builder';
+  }
   return {
     sauces:      state.saucesForCurrentItem,
-    backScreen:  state.preparations.length > 0 ? 'prep-selector' : 'meal-builder',
+    backScreen,
     emoji:       item ? item.emoji : '🍲',
     title:       item ? `${item.name} ${meta.sauceTypeLabel.charAt(0).toUpperCase() + meta.sauceTypeLabel.slice(1)}` : 'Sauces',
   };
@@ -198,9 +209,37 @@ function toggleFilter() {
 }
 
 function toggleIngredient(name) {
-  if (state.disabledIngredients.has(name)) state.disabledIngredients.delete(name);
-  else state.disabledIngredients.add(name);
-  render();
+  // Anon users: session-only toggle (pantry persistence requires auth).
+  if (!currentUser) {
+    if (state.disabledIngredients.has(name)) state.disabledIngredients.delete(name);
+    else state.disabledIngredients.add(name);
+    render();
+    return;
+  }
+  // Logged-in: route through the pantry. Find the foodId for this name in
+  // either the saucebook ingredient surface (most authoritative) or the
+  // current sauce list (fallback for sauces not yet in saucebook).
+  let foodId = null;
+  for (const ing of state.pantry.ingredients || []) {
+    if (ing.name === name) { foodId = ing.foodId; break; }
+  }
+  if (!foodId) {
+    for (const s of state.saucesForCurrentItem || []) {
+      for (const ing of s.ingredients || []) {
+        if (ing.name === name && ing.foodId) { foodId = ing.foodId; break; }
+      }
+      if (foodId) break;
+    }
+  }
+  if (foodId) {
+    togglePantryMissing(foodId);
+  } else {
+    // Unknown ingredient (no foodId resolution) — degrade to session-only
+    // toggle so the chip still feels responsive.
+    if (state.disabledIngredients.has(name)) state.disabledIngredients.delete(name);
+    else state.disabledIngredients.add(name);
+    render();
+  }
 }
 
 function toggleCuisine(name) {

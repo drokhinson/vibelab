@@ -1,0 +1,288 @@
+'use strict';
+// @ts-check
+//
+// Browse tab — read-only paginated listing of every sauce family root in the
+// catalog. Anon users land here on first load; logged-in users use it to add
+// recipes from other authors (or seeds) to their saucebook.
+//
+// Data source: api.browseSauces() / state.browse. Filters: cuisine multi,
+// type multi, author autocomplete. Sort: created_at DESC (DB-side).
+
+let _browseDebounce = null;
+let _authorDebounce = null;
+
+function renderBrowse() {
+  const b = state.browse;
+  const cuisines = availableCuisines();
+  return `
+    <div class="screen-wrap">
+      <div class="tab-screen-header">
+        <h1>Browse</h1>
+        <p class="subtitle">Discover recipes from every cuisine</p>
+        <div class="tab-search">
+          <i data-lucide="search"></i>
+          <input
+            type="search"
+            placeholder="Search by name"
+            value="${escapeHtml(b.q)}"
+            oninput="browseSetQuery(this.value)"
+            onkeydown="if(event.key==='Enter')browseRunSearch()"
+          />
+        </div>
+      </div>
+      <div class="scroll-body">
+        <button class="browse-filters__toggle" onclick="browseToggleFilters()">
+          <span><i data-lucide="sliders-horizontal"></i> Filters</span>
+          <i data-lucide="${b.filtersOpen ? 'chevron-up' : 'chevron-down'}"></i>
+        </button>
+
+        ${b.filtersOpen ? `
+          <div class="browse-filters">
+            <span class="browse-filters__label">Cuisine</span>
+            <div class="browse-filters__row">
+              ${cuisines.map(c => `
+                <button
+                  class="browse-filters__chip ${b.cuisines.has(c.name) ? 'browse-filters__chip--active' : ''}"
+                  onclick="browseToggleCuisine('${escapeHtml(c.name)}')">${renderEmoji(c.emoji)} ${escapeHtml(c.name)}</button>
+              `).join('')}
+            </div>
+
+            <span class="browse-filters__label" style="margin-top:10px;display:block">Type</span>
+            <div class="browse-filters__row">
+              ${SAUCE_TYPES.map(t => `
+                <button
+                  class="browse-filters__chip ${b.types.has(t.value) ? 'browse-filters__chip--active' : ''}"
+                  onclick="browseToggleType('${t.value}')">${escapeHtml(t.label)}</button>
+              `).join('')}
+            </div>
+
+            <span class="browse-filters__label" style="margin-top:10px;display:block">Author</span>
+            <input
+              type="text"
+              class="browse-filters__author-input"
+              placeholder="Type to search authors…"
+              value="${escapeHtml(b.authorQuery)}"
+              oninput="browseAuthorAutocomplete(this.value)"
+            />
+            ${b.authorId ? `
+              <button class="browse-filters__chip browse-filters__chip--active" style="margin-top:6px" onclick="browseClearAuthor()">
+                ${escapeHtml(_browseAuthorName())} ✕
+              </button>
+            ` : ''}
+            ${(!b.authorId && b.authorResults.length) ? `
+              <div class="browse-filters__author-suggest">
+                ${b.authorResults.map(a => `
+                  <button onclick="browsePickAuthor('${escapeHtml(a.userId)}', '${escapeHtml(a.displayName)}')">
+                    ${escapeHtml(a.displayName)} <span style="color:#9CA3AF">· ${a.sauceCount}</span>
+                  </button>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        ${b.error ? `<p style="color:#DC2626;padding:8px 0">${escapeHtml(b.error)}</p>` : ''}
+
+        ${b.loading && b.items.length === 0
+          ? `<div class="empty-state">Loading recipes…</div>`
+          : b.items.length === 0
+            ? `<div class="empty-state">No recipes match your filters.</div>`
+            : b.items.map(_renderBrowseRow).join('')
+        }
+
+        ${b.hasMore && b.items.length > 0 ? `
+          <button class="browse-loadmore" onclick="browseLoadMore()" ${b.loading ? 'disabled' : ''}>
+            ${b.loading ? 'Loading…' : 'Load more'}
+          </button>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function _browseAuthorName() {
+  // Surface the active author's display name; we cache it on the chip click.
+  return state.browse._authorName || 'Author';
+}
+
+function _renderBrowseRow(row) {
+  const type = SAUCE_TYPES.find(t => t.value === row.sauceType);
+  const typeLabel = type ? type.label : row.sauceType;
+  const author = row.authorName || (row.createdBy ? 'Unknown' : 'SauceBoss');
+  const variantTag = (row.variantCount || 0) > 0 ? `<span class="recipe-row__variants">${row.variantCount + 1} variants</span>` : '';
+  const isAdded = !!row.inSaucebook;
+  return `
+    <div class="recipe-row" onclick="browseOpenRecipe('${escapeHtml(row.id)}')">
+      <span class="recipe-row__color" style="background:${row.color || '#E85D04'}"></span>
+      <div class="recipe-row__main">
+        <div class="recipe-row__name">${escapeHtml(row.name)}</div>
+        <div class="recipe-row__meta">
+          <span class="recipe-row__type">${escapeHtml(typeLabel)}</span>
+          <span class="recipe-row__author">by ${escapeHtml(author)}</span>
+          ${variantTag}
+        </div>
+      </div>
+      ${currentUser ? `
+        <button
+          class="recipe-row__action ${isAdded ? 'recipe-row__action--added' : ''}"
+          onclick="event.stopPropagation(); browseAddToSaucebook('${escapeHtml(row.id)}', this)"
+          ${isAdded ? 'disabled' : ''}
+        >${isAdded ? 'Added ✓' : '+ Saucebook'}</button>
+      ` : ''}
+    </div>
+  `;
+}
+
+// ── Mutations ────────────────────────────────────────────────────────────────
+
+function browseSetQuery(q) {
+  state.browse.q = q;
+  if (_browseDebounce) clearTimeout(_browseDebounce);
+  _browseDebounce = setTimeout(() => browseRunSearch(), 300);
+}
+
+function browseRunSearch() {
+  state.browse.page = 0;
+  state.browse.items = [];
+  state.browse.hasMore = true;
+  browseFetch();
+}
+
+function browseToggleFilters() {
+  state.browse.filtersOpen = !state.browse.filtersOpen;
+  render();
+}
+
+function browseToggleCuisine(name) {
+  if (state.browse.cuisines.has(name)) state.browse.cuisines.delete(name);
+  else state.browse.cuisines.add(name);
+  browseRunSearch();
+}
+
+function browseToggleType(value) {
+  if (state.browse.types.has(value)) state.browse.types.delete(value);
+  else state.browse.types.add(value);
+  browseRunSearch();
+}
+
+function browseAuthorAutocomplete(q) {
+  state.browse.authorQuery = q;
+  if (_authorDebounce) clearTimeout(_authorDebounce);
+  _authorDebounce = setTimeout(async () => {
+    try {
+      state.browse.authorResults = await api.listAuthors(q);
+    } catch (_) { state.browse.authorResults = []; }
+    render();
+  }, 200);
+  render();
+}
+
+function browsePickAuthor(userId, displayName) {
+  state.browse.authorId = userId;
+  state.browse._authorName = displayName;
+  state.browse.authorResults = [];
+  state.browse.authorQuery = '';
+  browseRunSearch();
+}
+
+function browseClearAuthor() {
+  state.browse.authorId = null;
+  state.browse._authorName = null;
+  browseRunSearch();
+}
+
+async function browseLoadMore() {
+  state.browse.page += 1;
+  await browseFetch({ append: true });
+}
+
+async function browseFetch({ append = false } = {}) {
+  const b = state.browse;
+  b.loading = true;
+  b.error = null;
+  if (!append) render();
+  try {
+    const params = {
+      q: b.q,
+      cuisines: [...b.cuisines],
+      types: [...b.types],
+      author: b.authorId,
+      limit: b.pageSize,
+      offset: b.page * b.pageSize,
+    };
+    const res = await api.browseSauces(params);
+    if (append) b.items = b.items.concat(res.items);
+    else b.items = res.items;
+    b.total = res.total;
+    b.hasMore = b.items.length < res.total;
+  } catch (err) {
+    b.error = err?.message || 'Browse fetch failed';
+  } finally {
+    b.loading = false;
+    render();
+  }
+}
+
+async function browseAddToSaucebook(sauceId, btnEl) {
+  if (!currentUser) { openAuthModal(); return; }
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Adding…'; }
+  try {
+    await api.addToSaucebook(sauceId);
+    // Mark the row in-place so the user sees the success state without a
+    // full re-render flicker; refresh the saucebook in the background.
+    const row = state.browse.items.find(i => i.id === sauceId);
+    if (row) row.inSaucebook = true;
+    api.listSaucebook().then((sb) => { state.saucebook = sb; }).catch(() => {});
+    render();
+  } catch (err) {
+    console.error('[sauceboss] addToSaucebook failed:', err);
+    state.browse.error = err?.message || 'Add failed';
+    render();
+  }
+}
+
+function browseOpenRecipe(sauceId) {
+  // Reuse the standalone recipe view: stash the family in state and navigate.
+  const row = state.browse.items.find(i => i.id === sauceId);
+  if (!row) return;
+  // Browse rows are lightweight (no steps/ingredients). Defer to the existing
+  // all-sauces path: load the full envelope, then navigate to the recipe view.
+  state.loading = 'Loading recipe…';
+  render();
+  api.allSauces().then(all => {
+    state.loading = null;
+    const family = all.filter(s => s.id === sauceId || s.parentSauceId === sauceId);
+    const found = family.find(s => s.id === sauceId) || all.find(s => s.id === sauceId);
+    if (!found) { state.loading = null; render(); return; }
+    state.selectedSauce = found;
+    state.selectedSauceFamily = family.length ? family : [found];
+    state.selectedItem = null;
+    state.recipeReturnTo = 'tab-shell';
+    navigate('recipe');
+  }).catch(err => {
+    state.loading = null;
+    state.browse.error = err?.message || 'Recipe load failed';
+    render();
+  });
+}
+
+// Kick off the first fetch when the user lands on the Browse tab. We hook
+// into render via a lazy-load pattern: if items is empty + not loading + tab
+// is active, fire one fetch. This avoids re-fetching on every render tick.
+(function _hookBrowseLazyLoad() {
+  document.addEventListener('DOMContentLoaded', () => {
+    const ensure = () => {
+      if (state.activeTab === 'browse' && state.screen === 'tab-shell'
+          && state.browse.items.length === 0 && !state.browse.loading
+          && state.browse.error === null) {
+        browseFetch();
+      }
+    };
+    // Use a MutationObserver on #app to catch every render. Cheaper than
+    // wrapping render() and good enough for tab visibility detection.
+    const app = document.getElementById('app');
+    if (!app) return;
+    new MutationObserver(ensure).observe(app, { childList: true });
+    ensure();
+  });
+})();
