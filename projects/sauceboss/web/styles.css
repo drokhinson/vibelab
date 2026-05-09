@@ -3068,30 +3068,102 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   margin-bottom: 10px;
 }
 .browse-filters__toggle [data-lucide] { width: 16px; height: 16px; color: #6B7280; }
-.browse-loadmore {
-  display: block;
-  margin: 16px auto 4px;
+.browse-pageinfo {
+  font-size: 12px;
+  color: #6B7280;
+  margin: 6px 0 12px;
+}
+.browse-pageinfo strong { color: #1A1A2E; font-weight: 700; }
+
+.browse-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 16px 0 6px;
+}
+.browse-pager__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: white;
   border: 1px solid #E85D04;
   color: #E85D04;
   border-radius: 999px;
-  padding: 8px 22px;
+  padding: 8px 14px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
 }
-.browse-loadmore:hover:not(:disabled) { background: #FFF3E6; }
-.browse-loadmore:disabled { opacity: 0.5; cursor: default; }
+.browse-pager__btn:hover:not(:disabled) { background: #FFF3E6; }
+.browse-pager__btn:disabled { opacity: 0.4; cursor: default; }
+.browse-pager__btn [data-lucide] { width: 14px; height: 14px; }
+.browse-pager__label {
+  font-size: 13px;
+  color: #6B7280;
+  font-weight: 600;
+}
+.browse-pager__label strong { color: #1A1A2E; font-weight: 700; }
+
+/* Missing-ingredient badge on recipe rows (Saucebook). */
+.recipe-row__missing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #FEF2F2;
+  color: #B91C1C;
+  border: 1px solid #FCA5A5;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.recipe-row__missing [data-lucide] { width: 11px; height: 11px; }
 
 /* Pantry list */
-.pantry-section { margin-bottom: 18px; }
-.pantry-section__title {
+.pantry-section { margin-bottom: 10px; }
+.pantry-section__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: #F1E0CC;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.pantry-section__header:hover { background: #E8D5BC; }
+.pantry-section__chevron {
+  color: #6B7280;
   font-size: 12px;
+  width: 12px;
+  display: inline-flex;
+  justify-content: center;
+}
+.pantry-section__title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1A1A2E;
+}
+.pantry-section__count {
+  font-size: 11px;
   font-weight: 700;
   color: #6B7280;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  margin-bottom: 6px;
+  background: rgba(26,10,0,0.08);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.pantry-section__count--missing {
+  color: white;
+  background: #DC2626;
+}
+.pantry-section__body {
+  margin-top: 6px;
+  padding: 0 2px;
 }
 .pantry-row {
   display: flex;

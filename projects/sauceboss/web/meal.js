@@ -163,6 +163,10 @@ function _proceedToSauceSelector(dish, subtype) {
   for (const s of matches) for (const i of (s.ingredients || [])) if (i.name) seen.add(i.name);
   state.allIngredients = [...seen].sort();
   state.recipeReturnTo = 'tab-shell';
+  // Open the pantry filter by default in the meal flow so the user sees
+  // their pantry-missing items pre-toggled and can flip any of them
+  // without a hidden interaction.
+  state.filterOpen = true;
   navigate('sauce-selector');
 }
 

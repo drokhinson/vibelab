@@ -696,22 +696,12 @@ async function builderSave() {
     let result;
     if (b.editingId) {
       result = await updateSauce(b.editingId, payload);
-      // Server returns { message, forkedId } when the editor isn't the owner.
-      // The user's saucebook entry has already been repointed server-side; we
-      // just need to sync the local mirror so the next render shows the variant.
-      if (result && result.forkedId) {
-        try {
-          state.saucebook = await api.listSaucebook();
-        } catch (_) {}
-      }
     } else {
       result = await createSauce(payload);
-      // Backend auto-adds the new sauce to the author's saucebook; mirror that
-      // locally so the Saucebook tab shows it without a re-fetch.
-      try {
-        state.saucebook = await api.listSaucebook();
-      } catch (_) {}
     }
+    // Whether we created, edited in place, or forked, the saucebook may have
+    // changed and the pantry is derived from it. One refresh covers both.
+    await refreshSaucebookAndPantry();
     state.builder = null;
     // Default landing after save is the Saucebook tab; admins coming from the
     // sauce manager keep the legacy admin landing if that's where they began.

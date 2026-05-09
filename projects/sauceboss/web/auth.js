@@ -24,7 +24,6 @@ function initSupabase() {
       loadProfile();
     } else {
       currentUser = null;
-      state.favorites = new Map();
       state.editMode = false;
       // Reset saucebook + pantry to anon defaults; force the user back to
       // Browse since the other tabs are locked without an account.
@@ -56,12 +55,6 @@ async function loadProfile() {
       const displayName = email.split('@')[0] || 'Saucier';
       await createProfile(displayName);
       currentUser = await fetchProfile();
-    }
-    try {
-      state.favorites = await fetchFavorites();
-    } catch (e) {
-      console.warn('[sauceboss] failed to load favorites:', e);
-      state.favorites = new Map();
     }
     // Hydrate saucebook + pantry in parallel; failures are non-fatal (the
     // tab renders an empty state). Mirror pantry.missing into the
@@ -99,8 +92,6 @@ async function handleLogout() {
   }
   session = null;
   currentUser = null;
-  state.favorites = new Map();
-  state.favoritesOnly = false;
   state.editMode = false;
   state.saucebook = [];
   state.pantry = { ingredients: [], missing: new Set(), loading: false, error: null };
@@ -152,7 +143,7 @@ function renderAuthModal() {
     <div class="auth-modal__card" role="dialog" aria-modal="true" aria-label="Sign in">
       <button class="auth-modal__close" onclick="closeAuthModal()" aria-label="Close">×</button>
       <h2 class="auth-modal__title">${isLogin ? 'Sign in to SauceBoss' : 'Create your account'}</h2>
-      <p class="auth-modal__subtitle">Add your own sauces, save favorites, and edit your recipes.</p>
+      <p class="auth-modal__subtitle">Add your own sauces, build your saucebook, and edit your recipes.</p>
 
       <button class="auth-modal__oauth auth-modal__oauth--google" onclick="handleOAuthSignIn('google')" ${state.authBusy ? 'disabled' : ''}>
         <svg class="auth-modal__oauth-logo" viewBox="0 0 24 24" aria-hidden="true">

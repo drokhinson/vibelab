@@ -94,9 +94,6 @@ let state = {
     sauce: null,                // the chosen sauce (sauce / marinade / dressing)
   },
 
-  // ── Favorites (populated on sign-in) ──────────────────────────────────────
-  favorites: new Map(),         // Map<sauceId, createdAtIso> — timestamp drives "most recently favorited" tiebreak for variant family default
-  favoritesOnly: false,         // toggle for the sauce-selector "❤️ Favorites only" filter
   authModalOpen: false,         // sign-in modal visibility
   authMode: 'login',            // 'login' | 'signup'
   authBusy: false,
@@ -119,7 +116,6 @@ let state = {
   sauceManagerTab: 'sauces',                                      // 'sauces' | 'dish' | 'ingredients'
   sauceManagerSearch: '',                                          // search query (applies to active tab)
   sauceManagerTypeFilter: 'all',                                   // 'all' | 'sauce' | 'marinade' | 'dressing'
-  sauceManagerFavoritesOnly: false,                                // sauces-tab fav filter; independent of state.favoritesOnly
   itemSections: { carbs: false, proteins: false, salads: false }, // category-level expand (default collapsed)
   cuisineSections: {},                                             // { [cuisine]: true } — open only when explicitly true
   expandedParents: {},                                             // { [parentId]: true }

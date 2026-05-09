@@ -14,6 +14,12 @@ let _authorDebounce = null;
 function renderBrowse() {
   const b = state.browse;
   const cuisines = availableCuisines();
+  const pageSize = b.pageSize || 20;
+  const totalPages = Math.max(1, Math.ceil((b.total || 0) / pageSize));
+  const currentPage = (b.page || 0) + 1; // 1-indexed for display
+  const fromIdx = b.total === 0 ? 0 : (b.page * pageSize) + 1;
+  const toIdx = Math.min(b.total, (b.page + 1) * pageSize);
+
   return `
     <div class="screen-wrap">
       <div class="tab-screen-header">
@@ -81,19 +87,33 @@ function renderBrowse() {
           </div>
         ` : ''}
 
+        <div class="browse-pageinfo">
+          ${b.total > 0
+            ? `Showing <strong>${fromIdx}–${toIdx}</strong> of <strong>${b.total}</strong> recipe${b.total === 1 ? '' : 's'}`
+            : (b.loading ? 'Loading…' : 'No recipes match your filters.')}
+        </div>
+
         ${b.error ? `<p style="color:#DC2626;padding:8px 0">${escapeHtml(b.error)}</p>` : ''}
 
         ${b.loading && b.items.length === 0
           ? `<div class="empty-state">Loading recipes…</div>`
-          : b.items.length === 0
-            ? `<div class="empty-state">No recipes match your filters.</div>`
-            : b.items.map(_renderBrowseRow).join('')
+          : b.items.map(_renderBrowseRow).join('')
         }
 
-        ${b.hasMore && b.items.length > 0 ? `
-          <button class="browse-loadmore" onclick="browseLoadMore()" ${b.loading ? 'disabled' : ''}>
-            ${b.loading ? 'Loading…' : 'Load more'}
-          </button>
+        ${b.total > pageSize ? `
+          <div class="browse-pager">
+            <button class="browse-pager__btn"
+                    onclick="browseGoToPage(${b.page - 1})"
+                    ${b.page <= 0 || b.loading ? 'disabled' : ''}>
+              <i data-lucide="chevron-left"></i> Prev
+            </button>
+            <span class="browse-pager__label">Page <strong>${currentPage}</strong> of <strong>${totalPages}</strong></span>
+            <button class="browse-pager__btn"
+                    onclick="browseGoToPage(${b.page + 1})"
+                    ${currentPage >= totalPages || b.loading ? 'disabled' : ''}>
+              Next <i data-lucide="chevron-right"></i>
+            </button>
+          </div>
         ` : ''}
       </div>
     </div>
@@ -106,31 +126,19 @@ function _browseAuthorName() {
 }
 
 function _renderBrowseRow(row) {
-  const type = SAUCE_TYPES.find(t => t.value === row.sauceType);
-  const typeLabel = type ? type.label : row.sauceType;
-  const author = row.authorName || (row.createdBy ? 'Unknown' : 'SauceBoss');
-  const variantTag = (row.variantCount || 0) > 0 ? `<span class="recipe-row__variants">${row.variantCount + 1} variants</span>` : '';
+  // Browse rows are lightweight (no ingredients), so the missing-ingredient
+  // count surfaces only in Saucebook. variantCount on the backend is the
+  // number of variants under the family root, so the displayed count is
+  // root + variants.
+  const variantCount = (row.variantCount || 0) > 0 ? (row.variantCount + 1) : 0;
   const isAdded = !!row.inSaucebook;
-  return `
-    <div class="recipe-row" onclick="browseOpenRecipe('${escapeHtml(row.id)}')">
-      <span class="recipe-row__color" style="background:${row.color || '#E85D04'}"></span>
-      <div class="recipe-row__main">
-        <div class="recipe-row__name">${escapeHtml(row.name)}</div>
-        <div class="recipe-row__meta">
-          <span class="recipe-row__type">${escapeHtml(typeLabel)}</span>
-          <span class="recipe-row__author">by ${escapeHtml(author)}</span>
-          ${variantTag}
-        </div>
-      </div>
-      ${currentUser ? `
-        <button
-          class="recipe-row__action ${isAdded ? 'recipe-row__action--added' : ''}"
-          onclick="event.stopPropagation(); browseAddToSaucebook('${escapeHtml(row.id)}', this)"
-          ${isAdded ? 'disabled' : ''}
-        >${isAdded ? 'Added ✓' : '+ Saucebook'}</button>
-      ` : ''}
-    </div>
-  `;
+  return renderRecipeRow(row, {
+    variantCount,
+    onClick: `browseOpenRecipe('${escapeHtml(row.id)}')`,
+    actionLabel: currentUser ? (isAdded ? 'Added ✓' : '+ Saucebook') : null,
+    actionHandler: `event.stopPropagation(); browseAddToSaucebook('${escapeHtml(row.id)}', this)`,
+    actionDisabled: isAdded,
+  });
 }
 
 // ── Mutations ────────────────────────────────────────────────────────────────
@@ -144,7 +152,6 @@ function browseSetQuery(q) {
 function browseRunSearch() {
   state.browse.page = 0;
   state.browse.items = [];
-  state.browse.hasMore = true;
   browseFetch();
 }
 
@@ -191,16 +198,28 @@ function browseClearAuthor() {
   browseRunSearch();
 }
 
-async function browseLoadMore() {
-  state.browse.page += 1;
-  await browseFetch({ append: true });
+// Discrete page navigation. The Browse view used to grow a single list with
+// "Load more"; the user feedback is that page-by-page navigation is clearer
+// once there are dozens of recipes (and the total-count chip above tells
+// you how many pages there are total).
+async function browseGoToPage(page) {
+  const pageSize = state.browse.pageSize || 20;
+  const totalPages = Math.max(1, Math.ceil((state.browse.total || 0) / pageSize));
+  const clamped = Math.max(0, Math.min(page, totalPages - 1));
+  if (clamped === state.browse.page && state.browse.items.length > 0) return;
+  state.browse.page = clamped;
+  await browseFetch();
+  // Scroll the list back to the top when changing pages so the user sees
+  // page 1 of the new chunk, not the bottom of the previous page's tail.
+  const body = document.querySelector('#app .scroll-body');
+  if (body) body.scrollTop = 0;
 }
 
-async function browseFetch({ append = false } = {}) {
+async function browseFetch() {
   const b = state.browse;
   b.loading = true;
   b.error = null;
-  if (!append) render();
+  render();
   try {
     const params = {
       q: b.q,
@@ -211,10 +230,8 @@ async function browseFetch({ append = false } = {}) {
       offset: b.page * b.pageSize,
     };
     const res = await api.browseSauces(params);
-    if (append) b.items = b.items.concat(res.items);
-    else b.items = res.items;
+    b.items = res.items;
     b.total = res.total;
-    b.hasMore = b.items.length < res.total;
   } catch (err) {
     b.error = err?.message || 'Browse fetch failed';
   } finally {
@@ -229,10 +246,11 @@ async function browseAddToSaucebook(sauceId, btnEl) {
   try {
     await api.addToSaucebook(sauceId);
     // Mark the row in-place so the user sees the success state without a
-    // full re-render flicker; refresh the saucebook in the background.
+    // full re-render flicker; refresh saucebook + pantry in the background
+    // (pantry is derived from saucebook ingredients).
     const row = state.browse.items.find(i => i.id === sauceId);
     if (row) row.inSaucebook = true;
-    api.listSaucebook().then((sb) => { state.saucebook = sb; }).catch(() => {});
+    refreshSaucebookAndPantry();
     render();
   } catch (err) {
     console.error('[sauceboss] addToSaucebook failed:', err);
