@@ -18,6 +18,56 @@
 body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
 /* ── Loading & error states ──────────────────────────────────────────────── */
+
+/* Post-login plant loading animation */
+.pp-loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 1.5rem;
+}
+.pp-loading-plant {
+  width: 120px;
+  height: 120px;
+}
+.pp-stem-leaves {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: pp-plant-grow 2.8s ease-in-out infinite;
+}
+.pp-flower {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: pp-flower-bloom 2.8s ease-in-out infinite;
+}
+@keyframes pp-plant-grow {
+  0%   { transform: scaleY(0); opacity: 0; }
+  22%  { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+@keyframes pp-flower-bloom {
+  0%, 22%  { transform: scale(0); opacity: 0; }
+  38%      { transform: scale(1.25); opacity: 1; }
+  48%      { transform: scale(1);   opacity: 1; }
+  58%      { transform: scale(0.05); opacity: 0; }
+  66%      { transform: scale(0.05); opacity: 0; }
+  79%      { transform: scale(1.25); opacity: 1; }
+  89%      { transform: scale(1);   opacity: 1; }
+  100%     { transform: scale(0.05); opacity: 0; }
+}
+.pp-loading-text {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 0.9rem;
+  color: oklch(var(--bc) / 0.5);
+  animation: pp-text-pulse 2.8s ease-in-out infinite;
+}
+@keyframes pp-text-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
 .error-banner {
   background: oklch(var(--er) / 0.1);
   border: 1px solid oklch(var(--er) / 0.3);
@@ -740,7 +790,7 @@ dialog .dialog-header {
 }
 .filter-toggles {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.3rem;
   margin-top: 0.35rem;
 }
@@ -776,6 +826,7 @@ dialog .dialog-header {
 .chip.toggle {
   font-size: 0.7rem;
   padding: 0 0.6rem;
+  justify-content: flex-start;
 }
 
 /* Native badge + pollinator icons on tile */
