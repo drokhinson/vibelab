@@ -740,45 +740,9 @@ function renderWizardStepPlantingSeason() {
 
 // ── Step 6: Review & confirm ────────────────────────────────────────────────
 
-function _wizardSearchParams(draft) {
-  // Build the same query the shopping step will use, so the review count is
-  // honest. Includes the new planter_size + planting_season filters.
-  var p = {};
-  if (draft.shade_level)  p.shade_level   = draft.shade_level;
-  if (draft.water_plan)   p.water_plan    = draft.water_plan;
-  if (draft.usda_zone)    p.usda_zone     = draft.usda_zone;
-  if (draft.planting_season) p.planting_season = draft.planting_season;
-  if (draft.garden_type)  p.garden_type   = draft.garden_type;
-  if (draft.grid_width)   p.grid_width    = draft.grid_width;
-  if (draft.grid_height)  p.grid_height   = draft.grid_height;
-  return p;
-}
-
-async function _refreshWizardMatchCount() {
-  // Live count from /catalog/search. Updates the .wizard-match-pill in place
-  // once results come back; failure is non-fatal and just hides the pill.
-  var pill = document.getElementById('wizard-match-pill');
-  if (!pill || !wizardDraft) return;
-  try {
-    var params = _wizardSearchParams(wizardDraft);
-    params.limit = 50;
-    var qs = Object.keys(params).map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
-    var data = await apiFetch('/catalog/search' + (qs ? '?' + qs : ''));
-    var n = (data && data.plants) ? data.plants.length : 0;
-    if (n === 0 && data && data.fill_triggered) {
-      pill.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Looking up plants for these conditions…';
-    } else {
-      pill.innerHTML = '<strong>' + n + '</strong> plants match these conditions in your catalog so far.';
-    }
-  } catch (err) {
-    pill.style.display = 'none';
-  }
-}
-
 function renderWizardStepReview() {
   var d = wizardDraft;
-  // Empty pill renders immediately; _refreshWizardMatchCount fills it async.
-  var matchHtml = '<div id="wizard-match-pill" class="wizard-match-pill"><span class="loading loading-spinner loading-xs"></span> Counting matches…</div>';
+  var matchHtml = '';
 
   // Edit jumps target the new step numbers: type+size = 1, light = 2,
   // location = 3, water = 4, season = 5. Name lives on the review page itself.
@@ -822,7 +786,7 @@ function renderWizardStepReview() {
 
   html += '<div class="wizard-footer">'
        +   '<button type="button" class="btn btn-ghost btn-sm" id="wizard-back-to-water"><i data-lucide="arrow-left" style="width:1em;height:1em"></i> Back</button>'
-       +   '<button type="button" class="btn btn-primary btn-sm gap-1" id="wizard-confirm"><i data-lucide="check" style="width:1em;height:1em"></i> Create garden</button>'
+       +   '<button type="button" class="btn btn-primary btn-sm gap-1" id="wizard-confirm">Continue to plant selection <i data-lucide="arrow-right" style="width:1em;height:1em"></i></button>'
        + '</div>';
   html += '</div>';
   app.innerHTML = html;
@@ -875,7 +839,7 @@ async function submitGardenWizard() {
   var btn = document.getElementById('wizard-confirm');
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Creating…';
+    btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Continuing…';
   }
   try {
     // Empty name → fall back to the auto-generated "<Type> #<n>" placeholder.
@@ -897,9 +861,10 @@ async function submitGardenWizard() {
     wizardStep = 1;
     wizardEditReturnTo = null;
     if (created && created.id) {
-      // Newly-created planters drop into the shopping step before placement.
+      // Newly-created planters land in the shopping step with a 5-step API
+      // fill orchestration BEFORE the grid renders.
       if (typeof openShoppingForGarden === 'function') {
-        openShoppingForGarden(created.id);
+        openShoppingForGarden(created.id, { runFillSequence: true });
       } else {
         openGarden(created.id);
       }
@@ -909,7 +874,7 @@ async function submitGardenWizard() {
   } catch (err) {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="check" style="width:1em;height:1em"></i> Create garden';
+      btn.innerHTML = 'Continue to plant selection <i data-lucide="arrow-right" style="width:1em;height:1em"></i>';
       _initIcons();
     }
     alert('Could not create garden: ' + (err.message || err));
