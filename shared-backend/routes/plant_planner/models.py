@@ -1,9 +1,9 @@
 """Pydantic request/response models for PlantPlanner API."""
 
-from typing import List, Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel
 
-from .constants import GardenType, ShadeLevel, PlantingSeason, WaterPlan
+from .constants import GardenType, ShadeLevel, PlantingSeason, UserPlantStatus, WaterPlan
 
 
 class MeResponse(BaseModel):
@@ -92,3 +92,48 @@ class PlantPlacement(BaseModel):
 
 class SavePlantsBody(BaseModel):
     plants: List[PlantPlacement]
+
+
+# ── Plant Library (My Plants) ───────────────────────────────────────────────
+
+class GardenStub(BaseModel):
+    """Minimal garden reference for embedding in user_plants list responses."""
+    id: str
+    name: str
+
+
+class CreateUserPlantBody(BaseModel):
+    """POST /user_plants — initial library row.
+
+    Idempotent on (user_id, plant_cache_id): if a row already exists, the
+    backend returns it without overwriting status. Use PUT to change status.
+    """
+    plant_cache_id: str
+    status: UserPlantStatus = UserPlantStatus.WISHLIST
+    quantity: int = 0
+    notes: Optional[str] = None
+    acquired_at: Optional[str] = None  # ISO date string
+
+
+class UpdateUserPlantBody(BaseModel):
+    """PUT /user_plants/{id} — edit any subset of fields."""
+    status: Optional[UserPlantStatus] = None
+    quantity: Optional[int] = None
+    notes: Optional[str] = None
+    acquired_at: Optional[str] = None
+
+
+class UserPlantResponse(BaseModel):
+    id: str
+    user_id: str
+    plant_cache_id: str
+    status: UserPlantStatus
+    quantity: int
+    notes: Optional[str] = None
+    acquired_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    # Hydrated from joins on the list endpoint; flat dicts so the model stays
+    # decoupled from CatalogPlant (which lives in catalog_routes).
+    plant: Optional[dict[str, Any]] = None
+    gardens: List[GardenStub] = []

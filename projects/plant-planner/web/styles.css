@@ -2122,3 +2122,157 @@ dialog .dialog-header {
   font-size: 0.82rem;
   color: oklch(var(--wa));
 }
+
+/* ── My Plants Library ────────────────────────────────────────────────── */
+.library-view { display: flex; flex-direction: column; gap: 0.6rem; }
+.library-total {
+  font-size: 0.78rem;
+  color: oklch(var(--bc) / 0.55);
+}
+
+.library-status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.library-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.85rem;
+  background: oklch(var(--b1));
+  border: 1px solid var(--pp-warm-border, oklch(var(--b3)));
+  border-radius: 999px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.library-tab:hover { border-color: oklch(var(--p) / 0.5); }
+.library-tab.active {
+  background: oklch(var(--p) / 0.12);
+  border-color: oklch(var(--p));
+  color: oklch(var(--p));
+  font-weight: 600;
+}
+.library-tab-count {
+  font-size: 0.72rem;
+  color: oklch(var(--bc) / 0.55);
+  background: oklch(var(--bc) / 0.06);
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+}
+.library-tab.active .library-tab-count {
+  background: oklch(var(--p) / 0.18);
+  color: oklch(var(--p));
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.85rem;
+}
+.library-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.library-card-media {
+  aspect-ratio: 16 / 9;
+  background: oklch(var(--b2));
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.library-card-media img,
+.library-card-img { width: 100%; height: 100%; object-fit: cover; }
+.library-card-img-placeholder { font-size: 2rem; }
+.library-card-body { display: flex; flex-direction: column; gap: 0.3rem; }
+.library-card-sub { font-size: 0.78rem; color: oklch(var(--bc) / 0.6); }
+.library-card-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.library-card-planters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+}
+
+.library-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.library-pill-current  { background: oklch(var(--su) / 0.15); color: oklch(var(--su)); border-color: oklch(var(--su) / 0.35); }
+.library-pill-wishlist { background: oklch(var(--p) / 0.13);  color: oklch(var(--p));  border-color: oklch(var(--p) / 0.35); }
+.library-pill-former   { background: oklch(var(--bc) / 0.08); color: oklch(var(--bc) / 0.7); border-color: oklch(var(--bc) / 0.18); }
+
+.library-planter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  background: oklch(var(--b2));
+  border: 1px solid var(--pp-warm-border, oklch(var(--b3)));
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+button.library-planter-chip { font-family: inherit; color: inherit; }
+.library-planter-chip:hover { border-color: oklch(var(--p) / 0.5); background: oklch(var(--p) / 0.08); }
+.library-planter-chip-warn {
+  background: oklch(var(--wa) / 0.13);
+  border-color: oklch(var(--wa) / 0.4);
+  color: oklch(var(--wa));
+  cursor: default;
+}
+
+/* Detail panel additions (reuses .shopping-detail-* base) */
+.library-detail-section { margin-top: 1rem; }
+.library-detail-section:first-of-type { margin-top: 0.6rem; }
+.library-detail-row { display: flex; gap: 0.6rem; }
+.library-detail-row .library-detail-field { flex: 1; min-width: 0; }
+.library-detail-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.library-detail-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: oklch(var(--bc) / 0.55);
+}
+.library-detail-status {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.library-status-btn {
+  flex: 1 1 calc(33.333% - 0.25rem);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.45rem 0.6rem;
+  background: oklch(var(--b1));
+  border: 1.5px solid var(--pp-warm-border, oklch(var(--b3)));
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.library-status-btn:hover { border-color: oklch(var(--p) / 0.5); }
+.library-status-btn.active { border-color: oklch(var(--p)); background: oklch(var(--p) / 0.1); color: oklch(var(--p)); font-weight: 600; }
+.library-detail-planters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}

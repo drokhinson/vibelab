@@ -1,11 +1,14 @@
 """Garden CRUD routes."""
 
+from collections import Counter
+
 from fastapi import Depends, HTTPException
 
 from db import get_supabase
 from . import router
 from .dependencies import CurrentUser, get_current_user
 from .garden_units import grid_dim_to_feet
+from .library_routes import promote_to_current, upsert_wishlist_rows
 from .models import CreateGardenBody, UpdateGardenBody, SavePlantsBody
 
 
@@ -94,7 +97,7 @@ async def update_garden(garden_id: str, body: UpdateGardenBody, user: CurrentUse
     sb = get_supabase()
     existing = (
         sb.table("plantplanner_gardens")
-        .select("id")
+        .select("id, shortlist_plant_cache_ids")
         .eq("id", garden_id)
         .eq("user_id", user.user_id)
         .execute()
@@ -113,6 +116,15 @@ async def update_garden(garden_id: str, body: UpdateGardenBody, user: CurrentUse
         .eq("id", garden_id)
         .execute()
     )
+
+    # Auto-create wishlist rows in My Plants for any new shortlist entries.
+    new_shortlist = body.shortlist_plant_cache_ids
+    if new_shortlist is not None:
+        prev_set = set(existing.data[0].get("shortlist_plant_cache_ids") or [])
+        added = [pid for pid in new_shortlist if pid and pid not in prev_set]
+        if added:
+            await upsert_wishlist_rows(user.user_id, added)
+
     return result.data[0]
 
 
@@ -179,5 +191,35 @@ async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: Current
 
     # Update timestamp
     sb.table("plantplanner_gardens").update({"updated_at": "now()"}).eq("id", garden_id).execute()
+
+    # Promote each placed species to 'current' in My Plants. Count placements
+    # across ALL the user's gardens (not just this one) so quantity reflects
+    # total ownership. Cheap: one query, group in Python.
+    if body.plants:
+        user_gardens = (
+            sb.table("plantplanner_gardens")
+            .select("id")
+            .eq("user_id", user.user_id)
+            .execute()
+            .data
+            or []
+        )
+        garden_ids = [g["id"] for g in user_gardens]
+        if garden_ids:
+            all_placements = (
+                sb.table("plantplanner_garden_plants")
+                .select("plant_cache_id")
+                .in_("garden_id", garden_ids)
+                .execute()
+                .data
+                or []
+            )
+            counts = Counter(
+                row["plant_cache_id"] for row in all_placements if row.get("plant_cache_id")
+            )
+            placed_ids = {p.plant_cache_id for p in body.plants}
+            relevant = {pid: counts[pid] for pid in placed_ids if pid in counts}
+            if relevant:
+                await promote_to_current(user.user_id, relevant)
 
     return {"status": "saved", "count": len(body.plants)}
