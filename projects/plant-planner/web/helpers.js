@@ -85,17 +85,8 @@ function showThemeSettings() {
       '</label>';
   }).join("");
 
-  // Draw style options
-  var styleOptions = [
-    { id: "realistic", label: "Realistic" },
-    { id: "natural", label: "Cublants" }
-  ];
-  var styleHtml = styleOptions.map(function(s) {
-    return '<label class="theme-option">' +
-      '<input type="radio" name="pp-style" value="' + s.id + '"' + (renderStyle === s.id ? ' checked' : '') + ' class="radio radio-sm radio-primary">' +
-      '<span class="text-sm">' + s.label + '</span>' +
-      '</label>';
-  }).join("");
+  // Draw-style options retired alongside the legacy 3D renderer.
+  var styleHtml = '';
 
   var showAccount = !!(session && currentUser);
   var accountHtml = showAccount
@@ -114,8 +105,7 @@ function showThemeSettings() {
         '<legend class="text-sm font-medium mb-2">Color Theme</legend>' +
         optionsHtml +
       '</fieldset>' +
-      '<fieldset class="space-y-2 mt-3">' +
-        '<legend class="text-sm font-medium mb-2">Draw Style</legend>' +
+      '<fieldset class="space-y-2 mt-3" hidden>' +
         styleHtml +
       '</fieldset>' +
       accountHtml +
@@ -129,27 +119,7 @@ function showThemeSettings() {
   dialog.querySelectorAll('input[name="pp-theme"]').forEach(function(radio) {
     radio.onchange = function() { applyTheme(this.value); };
   });
-  dialog.querySelectorAll('input[name="pp-style"]').forEach(function(radio) {
-    radio.onchange = function() {
-      renderStyle = this.value;
-      localStorage.setItem("pp_render_style", renderStyle);
-      // Update 3D view if active
-      if (scene3DHandle) setRenderStyle(scene3DHandle, renderStyle);
-      // Regenerate 2D thumbnails
-      invalidateThumbnailCache();
-      preloadThumbnails(plants, renderStyle);
-      // Re-render grid/catalog to update thumbnails
-      if (currentView === "builder") {
-        var gridArea = document.querySelector(".grid-area");
-        if (gridArea) {
-          gridArea.innerHTML = viewMode === "top" ? renderTopGrid(currentGarden) : renderSideView(currentGarden);
-          bindGridEvents(currentGarden);
-          if (viewMode === "side") bindCompassButtons();
-        }
-        refreshCatalogList();
-      }
-    };
-  });
+  // 3D render-style selector retired with the legacy renderer; intentionally left empty.
   var logoutBtn = document.getElementById("settings-logout");
   if (logoutBtn) logoutBtn.onclick = function() {
     dialog.close();

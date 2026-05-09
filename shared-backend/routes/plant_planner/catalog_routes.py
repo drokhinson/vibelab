@@ -183,6 +183,9 @@ def _build_cache_query(
     indoor: Optional[bool],
     zone: Optional[int],
     edible: Optional[bool],
+    cycle: Optional[str],
+    max_height_cm: Optional[int],
+    max_spread_cm: Optional[int],
     query: Optional[str],
 ):
     q = sb.table("plantplanner_plant_cache").select("*")
@@ -196,6 +199,13 @@ def _build_cache_query(
         q = q.lte("hardiness_min", zone).gte("hardiness_max", zone)
     if edible is True:
         q = q.eq("edible", True)
+    if cycle:
+        q = q.eq("cycle", cycle)
+    if max_height_cm is not None:
+        # Allow rows whose height is unknown OR within the cap.
+        q = q.or_(f"height_max_cm.is.null,height_max_cm.lte.{max_height_cm}")
+    if max_spread_cm is not None:
+        q = q.or_(f"spread_cm.is.null,spread_cm.lte.{max_spread_cm}")
     if query:
         ilike = f"%{query.lower()}%"
         q = q.or_(f"common_name.ilike.{ilike},scientific_name.ilike.{ilike}")
@@ -226,6 +236,62 @@ def _zone_label_to_int(zone_label: Optional[str]) -> Optional[int]:
         return int(digits) if digits else None
     except ValueError:
         return None
+
+
+def _planting_season_to_cycle(season: Optional[str]) -> Optional[str]:
+    """Map the wizard's planting_season to a plant `cycle` filter.
+
+    Plants started in spring/summer are dominated by annuals (single-season
+    crops). Fall-planted is heavily perennial (bulbs, shrubs, garlic). Winter
+    planting is rare in temperate zones — leave unfiltered.
+    """
+    return {
+        "spring": "annual",
+        "summer": "annual",
+        "fall":   "perennial",
+    }.get((season or "").lower())
+
+
+# Plant-size buckets keyed off the wizard's grid dims + garden_type. The cap
+# cells stop a 4-inch pot from showing 10ft tomatoes.
+PLANTER_SIZE_CAPS = {
+    "small":  {"max_height_cm": 90,  "max_spread_cm": 60},
+    "medium": {"max_height_cm": 200, "max_spread_cm": 150},
+    "large":  {"max_height_cm": None, "max_spread_cm": None},
+}
+
+
+def _derive_planter_size(
+    *,
+    garden_type: Optional[str],
+    grid_width: Optional[int],
+    grid_height: Optional[int],
+) -> Optional[str]:
+    """Map (garden_type, dims) to a small/medium/large bucket.
+
+    Indoor pots use inches for grid dims; outdoor types use feet. We treat
+    `width × height` as the relevant area in either unit.
+    """
+    if not garden_type:
+        return None
+    if garden_type in ("indoor",):
+        # Pots: width is diameter in inches.
+        # ≤ 18" diameter → small; 18–30" → medium; > 30" → large.
+        if grid_width is None:
+            return "small"
+        if grid_width <= 18:
+            return "small"
+        if grid_width <= 30:
+            return "medium"
+        return "large"
+    if grid_width is None or grid_height is None:
+        return "medium"
+    sq_ft = grid_width * grid_height
+    if sq_ft <= 16:
+        return "small"
+    if sq_ft <= 50:
+        return "medium"
+    return "large"
 
 
 async def _trigger_lazy_fill(
@@ -268,28 +334,57 @@ async def catalog_search(
     indoor: Optional[bool] = Query(None, description="True to require indoor-tolerant plants"),
     zone: Optional[int] = Query(None, description="USDA zone number (e.g. 6)"),
     edible: Optional[bool] = Query(None, description="True to require edible"),
+    cycle: Optional[str] = Query(None, description="annual | perennial | biennial"),
+    max_height_cm: Optional[int] = Query(None, ge=1, description="Cap on height_max_cm; null heights pass."),
+    max_spread_cm: Optional[int] = Query(None, ge=1, description="Cap on spread_cm; null spreads pass."),
     shade_level: Optional[str] = Query(None, description="Wizard's shade_level — auto-maps to sunlight"),
     water_plan: Optional[str] = Query(None, description="Wizard's water_plan — auto-maps to watering"),
     usda_zone: Optional[str] = Query(None, description="Wizard's usda_zone label (e.g. 6b)"),
+    planting_season: Optional[str] = Query(None, description="Wizard's planting_season — auto-maps to cycle"),
+    garden_type: Optional[str] = Query(None, description="Wizard's garden_type — combined with grid dims to derive size caps"),
+    grid_width: Optional[int] = Query(None, ge=1, description="Wizard grid_width; ft for outdoor types, in for indoor"),
+    grid_height: Optional[int] = Query(None, ge=1, description="Wizard grid_height; ft for outdoor types, in for indoor"),
+    planter_size: Optional[str] = Query(None, description="Override the derived bucket: small | medium | large"),
     limit: int = Query(SEARCH_RESULT_CAP, ge=1, le=50),
 ) -> CatalogSearchResponse:
     """List cache plants matching the wizard's planter conditions; lazy-fill on miss."""
     effective_sunlight = sunlight or _shade_to_sunlight(shade_level)
     effective_watering = watering or _water_plan_to_watering(water_plan)
     effective_zone = zone if zone is not None else _zone_label_to_int(usda_zone)
+    effective_cycle = cycle or _planting_season_to_cycle(planting_season)
+
+    # Indoor planters always require indoor-tolerant plants regardless of caller.
+    effective_indoor = indoor
+    if effective_indoor is None and (garden_type in ("indoor", "greenhouse")):
+        effective_indoor = True
+
+    # Plant-size caps come from explicit planter_size (override) or are derived
+    # from garden_type + grid dims. max_height_cm / max_spread_cm overrides win.
+    bucket = planter_size or _derive_planter_size(
+        garden_type=garden_type,
+        grid_width=grid_width,
+        grid_height=grid_height,
+    )
+    caps = PLANTER_SIZE_CAPS.get(bucket or "", {}) if bucket else {}
+    effective_max_height = max_height_cm if max_height_cm is not None else caps.get("max_height_cm")
+    effective_max_spread = max_spread_cm if max_spread_cm is not None else caps.get("max_spread_cm")
 
     sb = get_supabase()
-    q = _build_cache_query(
-        sb,
-        sunlight=effective_sunlight,
-        watering=effective_watering,
-        indoor=indoor,
-        zone=effective_zone,
-        edible=edible,
-        query=query,
-    ).limit(limit)
-    result = q.execute()
-    rows: List[Dict[str, Any]] = result.data or []
+    def _q():
+        return _build_cache_query(
+            sb,
+            sunlight=effective_sunlight,
+            watering=effective_watering,
+            indoor=effective_indoor,
+            zone=effective_zone,
+            edible=edible,
+            cycle=effective_cycle,
+            max_height_cm=effective_max_height,
+            max_spread_cm=effective_max_spread,
+            query=query,
+        ).limit(limit)
+
+    rows: List[Dict[str, Any]] = (_q().execute().data or [])
 
     fill_triggered = False
     if len(rows) < LAZY_FILL_THRESHOLD:
@@ -300,16 +395,7 @@ async def catalog_search(
             edible=edible,
         )
         if added:
-            q2 = _build_cache_query(
-                sb,
-                sunlight=effective_sunlight,
-                watering=effective_watering,
-                indoor=indoor,
-                zone=effective_zone,
-                edible=edible,
-                query=query,
-            ).limit(limit)
-            rows = (q2.execute().data or [])
+            rows = (_q().execute().data or [])
 
     return CatalogSearchResponse(
         plants=[_row_to_catalog_plant(r) for r in rows],
