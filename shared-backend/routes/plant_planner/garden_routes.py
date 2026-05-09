@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException
 from db import get_supabase
 from . import router
 from .dependencies import CurrentUser, get_current_user
-from .garden_units import grid_dim_to_feet
+from .garden_units import floor_dims_feet
 from .library_routes import promote_to_current, upsert_wishlist_rows
 from .models import CreateGardenBody, UpdateGardenBody, SavePlantsBody
 
@@ -42,6 +42,8 @@ async def create_garden(body: CreateGardenBody, user: CurrentUser = Depends(get_
         insert_row["usda_zone"] = body.usda_zone
     if body.location_label is not None:
         insert_row["location_label"] = body.location_label
+    if body.dim_height is not None:
+        insert_row["dim_height"] = body.dim_height
     result = (
         sb.table("plantplanner_gardens")
         .insert(insert_row)
@@ -159,11 +161,14 @@ async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: Current
         raise HTTPException(status_code=404, detail="Garden not found")
 
     garden_type = existing.data[0].get("garden_type")
-    # Placements (pos_x / pos_y / radius_feet) are always in feet, so normalize
-    # the grid dims into feet before bounds-checking. For inch-unit types
-    # (pots, planter boxes), grid_width=12 means 12 inches → 1 foot.
-    width_ft  = grid_dim_to_feet(existing.data[0]["grid_width"],  garden_type) or 0.0
-    height_ft = grid_dim_to_feet(existing.data[0]["grid_height"], garden_type) or 0.0
+    # Placements (pos_x / pos_y / radius_feet) are always in feet. floor_dims_feet
+    # handles each shape: pots collapse to a 2r × 2r bounding square (since pot
+    # grid_width = radius); everything else is rectangular grid_width × grid_height.
+    width_ft, height_ft = floor_dims_feet(
+        existing.data[0]["grid_width"],
+        existing.data[0]["grid_height"],
+        garden_type,
+    )
 
     for p in body.plants:
         if not (0 <= p.pos_x <= width_ft):

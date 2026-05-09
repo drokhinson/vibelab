@@ -46,3 +46,29 @@ def grid_dim_to_feet(value: Optional[int], garden_type: Optional[str]) -> Option
     if garden_uses_inches(garden_type):
         return value / 12.0
     return float(value)
+
+
+# Pot rows store grid_width = RADIUS and grid_height = HEIGHT (vertical),
+# so the planar floor footprint is 2r × 2r (the bounding square of the
+# circular soil) — NOT (grid_width, grid_height).
+POT_TYPES = frozenset({"indoor_pot", "outdoor_pot"})
+
+
+def floor_dims_feet(
+    grid_width: Optional[int],
+    grid_height: Optional[int],
+    garden_type: Optional[str],
+) -> tuple[float, float]:
+    """Return the placement floor's bounding (width_ft, length_ft) in feet.
+
+    For pots: 2r × 2r (where r = grid_width / 12).
+    For everything else: (grid_width, grid_height) normalized to feet via
+    `grid_dim_to_feet`.
+    """
+    if (garden_type or "") in POT_TYPES:
+        radius_ft = grid_dim_to_feet(grid_width, garden_type) or 0.0
+        diameter_ft = max(0.0, 2 * radius_ft)
+        return (diameter_ft, diameter_ft)
+    width_ft  = grid_dim_to_feet(grid_width,  garden_type) or 0.0
+    length_ft = grid_dim_to_feet(grid_height, garden_type) or 0.0
+    return (width_ft, length_ft)

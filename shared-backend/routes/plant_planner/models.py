@@ -15,11 +15,18 @@ class MeResponse(BaseModel):
 class CreateGardenBody(BaseModel):
     """Body for POST /gardens.
 
-    grid_width / grid_height are stored in INCHES when garden_type is one of
-    {indoor_pot, indoor_planter_box, outdoor_pot, outdoor_planter_box} and in
-    FEET otherwise (greenhouse, garden_bed, raised_bed). The frontend feeds
-    raw values; backend normalizes to feet at validation time. See
-    `garden_units.py` for the helpers that enforce this invariant.
+    Geometry per garden_type (migrations 012 + 014):
+      • Pots          — grid_width = RADIUS,  grid_height = HEIGHT (inches);
+                        dim_height unused.
+      • Planter boxes — grid_width = WIDTH,   grid_height = LENGTH (inches),
+                        dim_height = HEIGHT  (inches).
+      • Raised bed    — grid_width = WIDTH,   grid_height = LENGTH (feet),
+                        dim_height = HEIGHT  (feet).
+      • Greenhouse    — grid_width = WIDTH,   grid_height = LENGTH (feet),
+                        dim_height = HEIGHT  (feet).
+      • Garden bed    — grid_width × grid_height (feet); dim_height unused.
+
+    pos_x / pos_y / radius_feet on placements are ALWAYS feet.
     """
     name: str = "My Garden"
     grid_width: int = 4
@@ -30,6 +37,7 @@ class CreateGardenBody(BaseModel):
     water_plan: WaterPlan = WaterPlan.REGULAR
     usda_zone: Optional[str] = None
     location_label: Optional[str] = None
+    dim_height: Optional[float] = None
 
 
 class UpdateGardenBody(BaseModel):
@@ -44,6 +52,7 @@ class UpdateGardenBody(BaseModel):
     location_label: Optional[str] = None
     settings_json: Optional[dict] = None
     shortlist_plant_cache_ids: Optional[List[str]] = None
+    dim_height: Optional[float] = None
 
 
 class GardenResponse(BaseModel):
@@ -58,6 +67,7 @@ class GardenResponse(BaseModel):
     water_plan: WaterPlan = WaterPlan.REGULAR
     usda_zone: Optional[str] = None
     location_label: Optional[str] = None
+    dim_height: Optional[float] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
