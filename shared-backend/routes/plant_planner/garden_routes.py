@@ -63,22 +63,10 @@ async def get_garden(garden_id: str, user: CurrentUser = Depends(get_current_use
 
     plants = (
         sb.table("plantplanner_garden_plants")
-        .select(
-            "*, plantplanner_plants(*, plantplanner_renders(*)), "
-            "plantplanner_plant_cache(*)"
-        )
+        .select("*, plantplanner_plant_cache(*)")
         .eq("garden_id", garden_id)
         .execute()
     )
-
-    # Flatten render data onto the nested seed-plant object (legacy placements)
-    for row in plants.data:
-        plant = row.get("plantplanner_plants")
-        if plant:
-            render = plant.pop("plantplanner_renders", None)
-            if render:
-                plant["render_params"] = render.get("params")
-                plant["render_colors"] = render.get("colors")
 
     # Hydrate the shortlist into full cache rows so the builder sidebar can render
     # without an extra round-trip.
@@ -167,11 +155,6 @@ async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: Current
             raise HTTPException(status_code=422, detail=f"Placement out of bounds: pos_y={p.pos_y} not in [0, {grid_height}]")
         if p.radius_feet <= 0:
             raise HTTPException(status_code=422, detail=f"Invalid radius_feet: {p.radius_feet}")
-        if bool(p.plant_id) == bool(p.plant_cache_id):
-            raise HTTPException(
-                status_code=422,
-                detail="Each placement must set exactly one of plant_id or plant_cache_id",
-            )
 
     # Delete all existing placements, then insert new ones
     sb.table("plantplanner_garden_plants").delete().eq("garden_id", garden_id).execute()
@@ -180,7 +163,6 @@ async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: Current
         rows = [
             {
                 "garden_id": garden_id,
-                "plant_id": p.plant_id,
                 "plant_cache_id": p.plant_cache_id,
                 "pos_x": p.pos_x,
                 "pos_y": p.pos_y,

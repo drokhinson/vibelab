@@ -1,6 +1,6 @@
 """Pydantic request/response models for PlantPlanner API."""
 
-from typing import Any, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel
 
 from .constants import GardenType, ShadeLevel, PlantingSeason, WaterPlan
@@ -10,11 +10,6 @@ class MeResponse(BaseModel):
     user_id: str
     display_name: str
     is_admin: bool = False
-
-
-class UsdaZoneRange(BaseModel):
-    min: int
-    max: int
 
 
 class CreateGardenBody(BaseModel):
@@ -68,37 +63,15 @@ class LocationLookupBody(BaseModel):
 class LocationLookupResponse(BaseModel):
     zone: str               # e.g. "6a"
     zone_number: int        # numeric prefix, e.g. 6
-    label: str              # display label, e.g. "02139" or "Zone 6a (lat,lng)"
+    label: str              # display label
     source: str             # "zip" | "geolocation"
 
 
-class PlantResponse(BaseModel):
-    id: str
-    name: str
-    category: str
-    height_inches: int
-    spread_inches: int
-    sunlight: str
-    bloom_season: List[str] = []
-    bloom_months: List[int] = []
-    native: bool = False
-    usda_zones: Optional[UsdaZoneRange] = None
-    pollinator_attracts: List[str] = []
-    water_need: str = "medium"
-    lifecycle: str = "perennial"
-    years_to_maturity: int = 3
-    care_summary: Optional[str] = None
-    description: Optional[str] = None
-    render_key: Optional[str] = None
-    sort_order: int = 0
-    render_params: Optional[Any] = None
-    render_colors: Optional[Any] = None
-    render_label: Optional[str] = None
-
-
 class PlantPlacement(BaseModel):
-    plant_id: Optional[str] = None         # legacy seed-table placement
-    plant_cache_id: Optional[str] = None   # new cache-backed placement
+    """Cache-backed placement. The legacy `plant_id` field was removed in
+    Phase 2 of the plant-first refactor — every placement now points at a
+    `plantplanner_plant_cache` row."""
+    plant_cache_id: str
     pos_x: float
     pos_y: float
     radius_feet: float
@@ -106,10 +79,3 @@ class PlantPlacement(BaseModel):
 
 class SavePlantsBody(BaseModel):
     plants: List[PlantPlacement]
-
-
-class CompanionResponse(BaseModel):
-    plant_a_id: str
-    plant_b_id: str
-    relationship: str
-    reason: str

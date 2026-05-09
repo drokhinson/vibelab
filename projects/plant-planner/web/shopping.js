@@ -51,10 +51,13 @@ function _shoppingQueryParams() {
   var g = shoppingState.garden;
   if (!g) return {};
   var params = {};
-  if (g.shade_level) params.shade_level = g.shade_level;
-  if (g.water_plan)  params.water_plan  = g.water_plan;
-  if (g.usda_zone)   params.usda_zone   = g.usda_zone;
-  if (g.garden_type === 'indoor' || g.garden_type === 'greenhouse') params.indoor = true;
+  if (g.shade_level)      params.shade_level      = g.shade_level;
+  if (g.water_plan)       params.water_plan       = g.water_plan;
+  if (g.usda_zone)        params.usda_zone        = g.usda_zone;
+  if (g.planting_season)  params.planting_season  = g.planting_season;
+  if (g.garden_type)      params.garden_type      = g.garden_type;
+  if (g.grid_width)       params.grid_width       = g.grid_width;
+  if (g.grid_height)      params.grid_height      = g.grid_height;
   if (shoppingState.query) params.query = shoppingState.query;
   return params;
 }

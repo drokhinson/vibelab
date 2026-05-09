@@ -173,12 +173,13 @@ function renderGardenWizard() {
   else if (wizardStep === 2) renderWizardStepLight();
   else if (wizardStep === 3) renderWizardStepLocation();
   else if (wizardStep === 4) renderWizardStepWater();
+  else if (wizardStep === 5) renderWizardStepPlantingSeason();
   else                       renderWizardStepReview();
 }
 
 // Indoor and greenhouse planters skip the Location step (climate-controlled).
 function _wizardStepsTotal() {
-  return _wizardSkipsLocation() ? 4 : 5;
+  return _wizardSkipsLocation() ? 5 : 6;
 }
 function _wizardSkipsLocation() {
   return wizardDraft && (wizardDraft.garden_type === 'indoor' || wizardDraft.garden_type === 'greenhouse');
@@ -190,6 +191,13 @@ function _wizardStepLabel() {
   var displayed = wizardStep;
   if (_wizardSkipsLocation() && wizardStep > 3) displayed = wizardStep - 1;
   return 'Step ' + displayed + ' of ' + total;
+}
+
+function _seasonLabel(s) {
+  return ({ spring: 'Spring', summer: 'Summer', fall: 'Fall', winter: 'Winter' })[s] || 'Spring';
+}
+function _seasonIcon(s) {
+  return ({ spring: '🌷', summer: '☀️', fall: '🍂', winter: '❄️' })[s] || '🌷';
 }
 
 function _wizardHeader(title, subtitle) {
@@ -250,7 +258,7 @@ function _wizardBindCommon() {
     if (wizardEditReturnTo) {
       // Editing from review — Back returns to review without saving the change.
       wizardEditReturnTo = null;
-      wizardStep = _wizardSkipsLocation() ? 4 : 5;
+      wizardStep = _wizardSkipsLocation() ? 5 : 6;
     } else {
       wizardStep = Math.max(1, wizardStep - 1);
       // Re-skip Location when stepping back into it.
@@ -265,7 +273,7 @@ function _wizardAdvance() {
   if (wizardEditReturnTo) {
     // Returning to review after an edit.
     wizardEditReturnTo = null;
-    wizardStep = _wizardSkipsLocation() ? 4 : 5;
+    wizardStep = _wizardSkipsLocation() ? 5 : 6;
   } else {
     wizardStep += 1;
     if (wizardStep === 3 && _wizardSkipsLocation()) wizardStep = 4;
@@ -644,33 +652,93 @@ function renderWizardStepWater() {
   _initIcons();
 }
 
-// ── Step 5: Review & confirm ────────────────────────────────────────────────
+// ── Step 5 (Planting season) ────────────────────────────────────────────────
 
-function _matchCount(draft) {
-  // How many plants in the catalog match this planter? Used as a sanity preview.
-  if (!Array.isArray(plants) || plants.length === 0) return null;
-  var prevFilters = catalogFilters;
-  catalogFilters = { matchGarden: true, seasons: {}, types: {}, native: false, pollinators: false };
+var PLANTING_SEASON_OPTIONS = [
+  { id: 'spring', label: 'Spring',  icon: '🌷', desc: 'Most annuals + warm-season crops start here.' },
+  { id: 'summer', label: 'Summer',  icon: '☀️', desc: 'Quick-growing annuals; succession plantings.' },
+  { id: 'fall',   label: 'Fall',    icon: '🍂', desc: 'Cool-season crops, perennials, bulbs.' },
+  { id: 'winter', label: 'Winter',  icon: '❄️', desc: 'Indoor / greenhouse only in most zones.' }
+];
+
+function renderWizardStepPlantingSeason() {
+  var html = '<div class="wizard-page">';
+  html += _wizardHeader('When are you planting?', 'We\'ll show plants that suit this season for your conditions.');
+  html += '<div class="wizard-options">';
+  for (var i = 0; i < PLANTING_SEASON_OPTIONS.length; i++) {
+    var o = PLANTING_SEASON_OPTIONS[i];
+    var active = wizardDraft.planting_season === o.id ? ' active' : '';
+    html += ''
+      + '<button type="button" class="wizard-option' + active + '" data-season="' + o.id + '">'
+      +   '<span class="wizard-option-icon">' + o.icon + '</span>'
+      +   '<span class="wizard-option-body">'
+      +     '<span class="wizard-option-label">' + escapeHtml(o.label) + '</span>'
+      +     '<span class="wizard-option-desc">' + escapeHtml(o.desc) + '</span>'
+      +   '</span>'
+      + '</button>';
+  }
+  html += '</div>';
+  html += _wizardFooter({ nextLabel: wizardEditReturnTo ? 'Save & review' : 'Review' });
+  html += '</div>';
+  app.innerHTML = html;
+
+  document.querySelectorAll('.wizard-option').forEach(function(btn) {
+    btn.onclick = function() {
+      wizardDraft.planting_season = btn.dataset.season;
+      renderGardenWizard();
+      _initIcons();
+    };
+  });
+  _wizardBindCommon();
+  document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
+  _initIcons();
+}
+
+
+// ── Step 6: Review & confirm ────────────────────────────────────────────────
+
+function _wizardSearchParams(draft) {
+  // Build the same query the shopping step will use, so the review count is
+  // honest. Includes the new planter_size + planting_season filters.
+  var p = {};
+  if (draft.shade_level)  p.shade_level   = draft.shade_level;
+  if (draft.water_plan)   p.water_plan    = draft.water_plan;
+  if (draft.usda_zone)    p.usda_zone     = draft.usda_zone;
+  if (draft.planting_season) p.planting_season = draft.planting_season;
+  if (draft.garden_type)  p.garden_type   = draft.garden_type;
+  if (draft.grid_width)   p.grid_width    = draft.grid_width;
+  if (draft.grid_height)  p.grid_height   = draft.grid_height;
+  return p;
+}
+
+async function _refreshWizardMatchCount() {
+  // Live count from /catalog/search. Updates the .wizard-match-pill in place
+  // once results come back; failure is non-fatal and just hides the pill.
+  var pill = document.getElementById('wizard-match-pill');
+  if (!pill || !wizardDraft) return;
   try {
-    var match = 0;
-    for (var i = 0; i < plants.length; i++) {
-      if (plantMatchesFilters(plants[i], draft)) match++;
+    var params = _wizardSearchParams(wizardDraft);
+    params.limit = 50;
+    var qs = Object.keys(params).map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+    var data = await apiFetch('/catalog/search' + (qs ? '?' + qs : ''));
+    var n = (data && data.plants) ? data.plants.length : 0;
+    if (n === 0 && data && data.fill_triggered) {
+      pill.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Looking up plants for these conditions…';
+    } else {
+      pill.innerHTML = '<strong>' + n + '</strong> plants match these conditions in your catalog so far.';
     }
-    return { match: match, total: plants.length };
-  } finally {
-    catalogFilters = prevFilters;
+  } catch (err) {
+    pill.style.display = 'none';
   }
 }
 
 function renderWizardStepReview() {
   var d = wizardDraft;
-  var counts = _matchCount(d);
-  var matchHtml = counts
-    ? '<div class="wizard-match-pill"><strong>' + counts.match + '</strong> of ' + counts.total + ' plants are a great fit for this planter.</div>'
-    : '';
+  // Empty pill renders immediately; _refreshWizardMatchCount fills it async.
+  var matchHtml = '<div id="wizard-match-pill" class="wizard-match-pill"><span class="loading loading-spinner loading-xs"></span> Counting matches…</div>';
 
   // Edit jumps target the new step numbers: type+size = 1, light = 2,
-  // location = 3, water = 4. Name lives on the review page itself.
+  // location = 3, water = 4, season = 5. Name lives on the review page itself.
   var rows = [
     { step: 1, label: 'Planter type', value: plantertypeIcon(d.garden_type) + ' ' + plantertypeLabel(d.garden_type) },
     { step: 1, label: 'Size',         value: sizeLabelFor(d) },
@@ -682,6 +750,7 @@ function renderWizardStepReview() {
     rows.push({ step: 3, label: 'Location', value: 'Not needed (climate-controlled)', noEdit: true });
   }
   rows.push({ step: 4, label: 'Watering', value: '💧 ' + waterPlanLabel(d.water_plan) });
+  rows.push({ step: 5, label: 'Planting season', value: _seasonIcon(d.planting_season) + ' ' + _seasonLabel(d.planting_season) });
 
   var html = '<div class="wizard-page">';
   html += _wizardHeader('Review your planter', 'Name your garden, then confirm. Nothing is saved until you do.');
@@ -747,11 +816,13 @@ function renderWizardStepReview() {
     }
   };
   document.getElementById('wizard-back-to-water').onclick = function() {
-    wizardStep = 4;
+    wizardStep = 5;
     renderGardenWizard();
     _initIcons();
   };
   document.getElementById('wizard-confirm').onclick = submitGardenWizard;
+  // Async live count from /catalog/search.
+  _refreshWizardMatchCount();
   _initIcons();
 }
 
@@ -809,41 +880,29 @@ async function openGarden(id) {
   try {
     var data = await apiFetch("/gardens/" + id);
     currentGarden = data;
-    dismissedCompanionWarnings = new Set(
-      (currentGarden && currentGarden.settings_json && Array.isArray(currentGarden.settings_json.dismissed_companion_warnings))
-        ? currentGarden.settings_json.dismissed_companion_warnings
-        : []
-    );
-    companionPopoverCellKey = null;
     placements = [];
     if (data.plants) {
       for (var i = 0; i < data.plants.length; i++) {
         var row = data.plants[i];
-        // Each row has either a legacy seed-table join (plantplanner_plants) or
-        // a cache-table join (plantplanner_plant_cache). Pick whichever populated.
         var cachePlant = row.plantplanner_plant_cache || null;
-        var seedPlant  = row.plantplanner_plants || null;
-        var plantObj   = cachePlant || seedPlant || row;
+        if (!cachePlant) continue;  // post-Phase-2 placements always reference the cache
         var pid = row.id ||
           ((window.crypto && typeof crypto.randomUUID === 'function')
             ? crypto.randomUUID()
             : ('p_' + i + '_' + Date.now()));
         var radius = (row.radius_feet != null)
           ? row.radius_feet
-          : (plantObj.spread_inches ? plantObj.spread_inches / 24
-              : plantObj.spread_cm ? plantObj.spread_cm / 30.48 / 2 : 0.5);
+          : (cachePlant.spread_cm ? cachePlant.spread_cm / 30.48 / 2 : 0.5);
         placements.push({
           id: pid,
-          plantId: cachePlant ? null : (seedPlant ? seedPlant.id : row.plant_id),
-          plantCacheId: cachePlant ? cachePlant.id : (row.plant_cache_id || null),
-          plant: plantObj,
+          plantCacheId: cachePlant.id,
+          plant: cachePlant,
           pos_x: row.pos_x,
           pos_y: row.pos_y,
           radius_feet: radius
         });
       }
     }
-    viewMode = "top";
     showView("builder");
   } catch (err) {
     app.innerHTML = '<div class="error-banner">' + err.message + '</div>';

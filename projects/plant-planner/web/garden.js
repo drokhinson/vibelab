@@ -1,4 +1,6 @@
-// garden.js — 3D grid builder with direct drag-and-drop onto the Three.js scene
+// garden.js — 2D top-down planter builder. Sidebar is always the user's
+// shortlist of cache-backed plants; the legacy seed-table catalog has been
+// retired in the Phase-2 cutover.
 
 function renderBuilder() {
   if (!currentGarden) { showView("gardens"); return; }
@@ -38,16 +40,9 @@ function renderBuilder() {
 
   html += '<div class="builder-layout">';
 
-  // Sidebar — shortlist for new (cache-backed) gardens, legacy catalog otherwise.
-  var hasShortlist = Array.isArray(g.shortlist) && g.shortlist.length > 0;
+  // Sidebar — always the user's shortlist.
   html += '<div id="catalog-sidebar" class="catalog-sidebar">';
-  if (hasShortlist) {
-    html += renderShortlistSidebar(g);
-  } else {
-    html += '<div class="catalog-filters">' + renderCatalogFilters() + '</div>';
-    html += '<div class="catalog-list-wrapper" id="catalog-list-wrapper">' + renderCatalogList() + '</div>';
-    html += '<div id="plant-detail-panel"></div>';
-  }
+  html += renderShortlistSidebar(g);
   html += '</div>';
 
   // 2D top-down view (drag from sidebar to place; tap to remove).
@@ -57,34 +52,22 @@ function renderBuilder() {
   html += '<span class="render2d-label"><i data-lucide="layout-grid"></i> Drag from your shortlist to place &nbsp;·&nbsp; tap to remove</span>';
   html += '</div>';
   html += '<div id="render2d-container"></div>';
-  html += '<div id="companion-chips" class="companion-chips-layer"></div>';
   html += '</div>';
-  html += '<section id="bloom-calendar-strip" class="bloom-calendar"></section>';
   html += '</div>'; // .builder-main
   html += '</div>'; // .builder-layout
 
-  // Plant info tooltip
-  html += '<div id="plant-tooltip" class="plant-tooltip" style="display:none"></div>';
-
   app.innerHTML = html;
 
-  if (Array.isArray(g.shortlist) && g.shortlist.length > 0) {
-    bindShortlistEvents();
-  } else {
-    bindCatalogEvents();
-  }
+  bindShortlistEvents();
   bindBuilderButtons();
   _initIcons();
 
-  // Initialize 2D scene, then wire up drag-drop and click handlers.
   init2DScene(g);
 }
 
 function init2DScene(g) {
-  if (scene3DHandle && typeof dispose2DView === 'function' && scene3DHandle.isTwoD) {
+  if (scene3DHandle && typeof dispose2DView === 'function') {
     dispose2DView(scene3DHandle);
-  } else if (scene3DHandle && typeof dispose3DView === 'function') {
-    try { dispose3DView(scene3DHandle); } catch (_) {}
   }
   scene3DHandle = null;
   // Double RAF ensures CSS layout has committed before we measure the container.
@@ -94,21 +77,14 @@ function init2DScene(g) {
       if (scene3DHandle) {
         bind2DDragDrop();
         bind2DClickHandler();
-        renderCompanionChips();
-        if (typeof refreshCatalogList === 'function') refreshCatalogList();
-        if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
+        if (typeof refreshShortlistSidebar === 'function') refreshShortlistSidebar();
       }
     });
   });
 }
 
-// Backwards-compat alias for callers that still reference the old name.
-var init3DScene = init2DScene;
-
 function sync3DView() {
-  if (scene3DHandle && scene3DHandle.isTwoD) {
-    syncSceneWithPlacements(scene3DHandle, placements);
-  } else if (scene3DHandle && typeof syncSceneWithPlacements === 'function') {
+  if (scene3DHandle && typeof syncSceneWithPlacements === 'function') {
     syncSceneWithPlacements(scene3DHandle, placements);
   }
 }
@@ -133,20 +109,14 @@ function bind2DDragDrop() {
           hidePreviewDisk(scene3DHandle);
           placements.push({
             id: _newPlacementId(),
-            plantId: draggedPlant.id,
-            // Cache-backed placements stash the cache id; legacy placements use
-            // plantId. Save logic checks both.
-            plantCacheId: draggedPlant.__source === 'cache' ? draggedPlant.id : null,
+            plantCacheId: draggedPlant.id,
             plant: draggedPlant,
             pos_x: pos_x,
             pos_y: pos_y,
             radius_feet: r
           });
           sync3DView();
-          renderCompanionChips();
-          if (typeof refreshCatalogList === 'function') refreshCatalogList();
           if (typeof refreshShortlistSidebar === 'function') refreshShortlistSidebar();
-          if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
         }
       }
       catalogDropHandled = true;
@@ -160,24 +130,16 @@ function bind2DClickHandler() {
   bind2DClick(scene3DHandle, function(placementId) {
     var idx = placements.findIndex(function(p) { return p.id === placementId; });
     if (idx >= 0) placements.splice(idx, 1);
-    if (companionPopoverCellKey === placementId) {
-      companionPopoverCellKey = null;
-      var existingPop = document.getElementById('companion-popover');
-      if (existingPop) existingPop.remove();
-    }
     sync3DView();
-    renderCompanionChips();
-    if (typeof refreshCatalogList === 'function') refreshCatalogList();
     if (typeof refreshShortlistSidebar === 'function') refreshShortlistSidebar();
-    if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
   });
 }
 
-// Cache plants store spread in cm; legacy seed plants store it in inches.
+// Cache plants store spread in cm; convert to a radius in feet.
 function _spreadFeetFor(plant) {
   if (!plant) return 0.5;
-  if (plant.spread_inches) return plant.spread_inches / 24;
   if (plant.spread_cm)     return plant.spread_cm / 30.48 / 2;  // diameter cm → radius ft
+  if (plant.spread_inches) return plant.spread_inches / 24;     // legacy seed-table compat
   return 0.5;
 }
 
@@ -288,26 +250,21 @@ function _showBuilderToast(msg) {
 
 async function saveGarden() {
   if (!currentGarden) return;
-  var payload = placements.map(function(p) {
-    var row = { pos_x: p.pos_x, pos_y: p.pos_y, radius_feet: p.radius_feet };
-    if (p.plantCacheId) row.plant_cache_id = p.plantCacheId;
-    else                row.plant_id = p.plantId;
-    return row;
-  });
+  var payload = placements
+    .filter(function(p) { return p.plantCacheId; })
+    .map(function(p) {
+      return {
+        plant_cache_id: p.plantCacheId,
+        pos_x: p.pos_x,
+        pos_y: p.pos_y,
+        radius_feet: p.radius_feet
+      };
+    });
   try {
     await apiFetch("/gardens/" + currentGarden.id + "/plants", {
       method: "PUT",
       body: { plants: payload }
     });
-    // Persist dismissed companion warnings; non-fatal on failure.
-    try {
-      await apiFetch("/gardens/" + currentGarden.id, {
-        method: "PUT",
-        body: { settings_json: { dismissed_companion_warnings: Array.from(dismissedCompanionWarnings) } }
-      });
-    } catch (e) {
-      console.warn('[plant-planner] persist dismissed companion warnings failed:', e);
-    }
     _showBuilderToast('Saved');
   } catch (err) {
     alert("Save failed: " + err.message);
@@ -324,9 +281,7 @@ async function reseedGarden() {
     });
     placements = [];
     sync3DView();
-    renderCompanionChips();
-    refreshCatalogList();
-    if (typeof renderBloomCalendar === 'function') renderBloomCalendar();
+    if (typeof refreshShortlistSidebar === 'function') refreshShortlistSidebar();
     _showBuilderToast('Reseeded');
   } catch (err) {
     alert("Reseed failed: " + err.message);
