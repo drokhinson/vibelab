@@ -21,18 +21,39 @@ var shoppingState = {
   fillPending: false,              // True while the API is filling the cache for this query.
   shortlist: new Set(),            // Cache plant ids the user has heart'd.
   detailPlant: null,               // Plant whose detail panel is open (null = closed).
+  // Loading-orchestration state for new planters. Each step reports its own
+  // status / counts / error so the to-do list can render incrementally.
+  fillSteps: null,                 // Array<FillStep> | null when not running.
+  fillFinished: false,             // True once all 5 steps have settled.
 };
 
+// Step blueprints — order matches the user-facing to-do list. `key` matches
+// what `_runFillStep` updates so the renderer can look up state.
+var FILL_STEP_BLUEPRINTS = [
+  { key: 'save',       label: 'Saving planter to your library' },
+  { key: 'trefle',     label: 'Requesting filtered list of viable plants from Trefle' },
+  { key: 'perenual',   label: 'Filling supplementary data from Perenual (image, hardiness, water…)' },
+  { key: 'flora',      label: 'Updating supplemental info from FloraAPI' },
+  { key: 'compatible', label: 'Gathering plants compatible with your planter' }
+];
 
-// ── Wizard step 7 (entry from the wizard's review step) ─────────────────────
 
-async function openShoppingForGarden(gardenId) {
+// ── Wizard exit (from the review step) + reopen-from-builder ────────────────
+//
+// `opts.runFillSequence` flips the loading-orchestration on. Pass it for
+// freshly-created planters so the user sees the API to-do list. Existing
+// planters reopened via "Add more plants" skip straight to the grid.
+
+async function openShoppingForGarden(gardenId, opts) {
+  opts = opts || {};
   shoppingState.gardenId = gardenId;
   shoppingState.query = '';
   shoppingState.plants = [];
   shoppingState.loading = true;
   shoppingState.shortlist = new Set();
   shoppingState.detailPlant = null;
+  shoppingState.fillSteps = null;
+  shoppingState.fillFinished = false;
   currentView = 'shopping';
 
   app.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-base-content/50 gap-3"><span class="loading loading-spinner loading-md text-primary"></span>Loading planter…</div>';
@@ -40,10 +61,142 @@ async function openShoppingForGarden(gardenId) {
     var garden = await apiFetch('/gardens/' + gardenId);
     shoppingState.garden = garden;
     shoppingState.shortlist = new Set(garden.shortlist_plant_cache_ids || []);
+    if (opts.runFillSequence) {
+      // Render the to-do list and run the API orchestration. The user's
+      // "Continue" click on completion drives the rest of the flow via
+      // `_finishFillAndShowGrid`; we return early here.
+      _runFillSequence();
+      return;
+    }
     await _refreshShoppingResults();
     _renderShoppingView();
   } catch (err) {
     app.innerHTML = '<div class="error-banner">Could not load planter: ' + escapeHtml(err.message || String(err)) + '</div>';
+  }
+}
+
+async function _finishFillAndShowGrid() {
+  shoppingState.fillSteps = null;
+  shoppingState.fillFinished = false;
+  app.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-base-content/50 gap-3"><span class="loading loading-spinner loading-md text-primary"></span>Loading plants…</div>';
+  try {
+    await _refreshShoppingResults();
+    _renderShoppingView();
+  } catch (err) {
+    app.innerHTML = '<div class="error-banner">Could not load plants: ' + escapeHtml(err.message || String(err)) + '</div>';
+  }
+}
+
+
+// ── Loading orchestration ───────────────────────────────────────────────────
+
+async function _runFillSequence() {
+  // Initialize each step with status="pending" so the renderer has something
+  // to draw while we wait for the first network call.
+  shoppingState.fillSteps = FILL_STEP_BLUEPRINTS.map(function(s) {
+    return { key: s.key, label: s.label, status: 'pending', detail: '' };
+  });
+  shoppingState.fillFinished = false;
+  _renderFillProgress();
+
+  // Step 1 (save) is implicit — the planter was POST'd before we got here.
+  _setFillStep('save', { status: 'ok', detail: 'Saved to your planters.' });
+
+  var body = _shoppingQueryParams();
+  // /catalog/fill/* ignores the `query` param the search uses; pass everything
+  // else through unchanged.
+  delete body.query;
+
+  await _runFillStep('trefle', '/catalog/fill/trefle', body, function(data) {
+    var lines = [];
+    if (data.fetched != null) lines.push('Fetched ' + data.fetched + ' plants from Trefle.');
+    if (data.new_plants)      lines.push(data.new_plants + ' new plant(s) added to the catalog.');
+    return lines.join(' ');
+  });
+  await _runFillStep('perenual', '/catalog/fill/perenual', body, function(data) {
+    if (!data.fetched && !data.enriched) return 'No plants needed Perenual enrichment.';
+    return 'Enriched ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Perenual data.';
+  });
+  await _runFillStep('flora', '/catalog/fill/flora', body, function(data) {
+    if (!data.fetched && !data.enriched) return 'No matching plants in Flora.';
+    return 'Cross-referenced ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Flora.';
+  });
+  await _runFillStep('compatible', '/catalog/fill/compatible', body, function(data) {
+    return data.compatible_plants + ' plant(s) compatible with your planter.';
+  });
+
+  shoppingState.fillFinished = true;
+  _renderFillProgress();
+}
+
+async function _runFillStep(key, path, body, formatDetail) {
+  _setFillStep(key, { status: 'running' });
+  try {
+    var data = await apiFetch(path, { method: 'POST', body: body });
+    if (data && data.status === 'error') {
+      _setFillStep(key, { status: 'error', detail: data.error || 'Unknown error.' });
+      return;
+    }
+    _setFillStep(key, { status: 'ok', detail: formatDetail ? formatDetail(data || {}) : '' });
+  } catch (err) {
+    _setFillStep(key, { status: 'error', detail: (err && err.message) || String(err) });
+  }
+}
+
+function _setFillStep(key, patch) {
+  if (!shoppingState.fillSteps) return;
+  for (var i = 0; i < shoppingState.fillSteps.length; i++) {
+    if (shoppingState.fillSteps[i].key === key) {
+      Object.assign(shoppingState.fillSteps[i], patch);
+      break;
+    }
+  }
+  _renderFillProgress();
+}
+
+function _fillStepIcon(status) {
+  if (status === 'ok')      return '<i data-lucide="check-circle-2" style="color:oklch(var(--su));"></i>';
+  if (status === 'error')   return '<i data-lucide="alert-circle" style="color:oklch(var(--er));"></i>';
+  if (status === 'running') return '<span class="loading loading-spinner loading-xs text-primary"></span>';
+  return '<i data-lucide="circle" style="color:oklch(var(--bc) / 0.35);"></i>';
+}
+
+function _renderFillProgress() {
+  var steps = shoppingState.fillSteps;
+  if (!steps) return;
+  var html = '<div class="shopping-fill-overlay">';
+  html += '<div class="shopping-fill-card">';
+  html += '<h3>Setting up your plant catalog</h3>';
+  html += '<p class="shopping-fill-subtitle">Pulling plant data tailored to this planter\'s conditions.</p>';
+  html += '<ul class="shopping-fill-list">';
+  for (var i = 0; i < steps.length; i++) {
+    var s = steps[i];
+    html += '<li class="shopping-fill-item shopping-fill-item-' + s.status + '">';
+    html +=   '<span class="shopping-fill-icon">' + _fillStepIcon(s.status) + '</span>';
+    html +=   '<span class="shopping-fill-body">';
+    html +=     '<span class="shopping-fill-label">' + escapeHtml(s.label) + '</span>';
+    if (s.detail) {
+      var cls = (s.status === 'error') ? 'shopping-fill-detail shopping-fill-detail-error' : 'shopping-fill-detail';
+      html += '<span class="' + cls + '">' + escapeHtml(s.detail) + '</span>';
+    }
+    html +=   '</span>';
+    html += '</li>';
+  }
+  html += '</ul>';
+  if (shoppingState.fillFinished) {
+    var anyError = steps.some(function(s) { return s.status === 'error'; });
+    html += '<div class="shopping-fill-footer">';
+    if (anyError) html += '<p class="shopping-fill-warn">Some steps had errors — you can still continue.</p>';
+    html += '<button type="button" class="btn btn-primary gap-1" id="shopping-fill-continue">Continue to plant selection <i data-lucide="arrow-right" style="width:1em;height:1em"></i></button>';
+    html += '</div>';
+  }
+  html += '</div></div>';
+  app.innerHTML = html;
+  _initIcons();
+
+  if (shoppingState.fillFinished) {
+    var btn = document.getElementById('shopping-fill-continue');
+    if (btn) btn.onclick = function() { _finishFillAndShowGrid(); };
   }
 }
 

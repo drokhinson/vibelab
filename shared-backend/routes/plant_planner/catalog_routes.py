@@ -21,7 +21,10 @@ from db import get_supabase
 from . import router
 from .api_clients import (
     SEARCH_RESULT_CAP,
+    FloraConfigError,
+    flora_lookup_by_scientific,
     merge_records,
+    normalize_flora,
     normalize_perenual,
     normalize_trefle,
     perenual_lookup_by_scientific,
@@ -447,3 +450,284 @@ async def catalog_detail(cache_id: str) -> CatalogPlant:
         logger.info("Detail image mirror failed: %s", exc)
 
     return _row_to_catalog_plant(row)
+
+
+# ── Cache-fill orchestration ────────────────────────────────────────────────
+#
+# Drive each external API as a discrete, observable step so the frontend's
+# plant-selection screen can render a 5-item to-do list while creating a new
+# planter:
+#   1. (frontend) save planter
+#   2. POST /catalog/fill/trefle      — broad criteria search → upsert
+#   3. POST /catalog/fill/perenual    — fill missing hardiness/sun/water
+#   4. POST /catalog/fill/flora       — supplement with Flora data
+#   5. POST /catalog/fill/compatible  — count plants matching planter conditions
+# Steps 2–5 take the same wizard-conditions body and are independently
+# idempotent. The frontend reports per-step status; the user can continue to
+# the grid even if a step soft-fails.
+
+
+class FillBody(BaseModel):
+    """Wizard conditions used to drive each fill step."""
+    shade_level: Optional[str] = None
+    water_plan: Optional[str] = None
+    usda_zone: Optional[str] = None
+    planting_season: Optional[str] = None
+    garden_type: Optional[str] = None
+    grid_width: Optional[int] = None
+    grid_height: Optional[int] = None
+    edible: Optional[bool] = None
+    query: Optional[str] = None
+
+
+class FillStepResponse(BaseModel):
+    status: str                       # ok | error
+    fetched: int = 0                  # records returned by the upstream API
+    new_plants: int = 0               # rows newly inserted into the cache
+    enriched: int = 0                 # rows updated in place
+    error: Optional[str] = None       # human-readable error if status != ok
+
+
+class CompatibleStepResponse(BaseModel):
+    status: str
+    compatible_plants: int = 0
+    total_in_cache: int = 0
+    error: Optional[str] = None
+
+
+def _build_query_from_body(body: FillBody) -> Dict[str, Any]:
+    """Resolve the wizard payload into the same effective filters /catalog/search uses."""
+    sunlight = _shade_to_sunlight(body.shade_level)
+    watering = _water_plan_to_watering(body.water_plan)
+    zone     = _zone_label_to_int(body.usda_zone)
+    cycle    = _planting_season_to_cycle(body.planting_season)
+    indoor   = True if garden_is_climate_controlled(body.garden_type) else None
+    bucket = _derive_planter_size(
+        garden_type=body.garden_type,
+        grid_width=body.grid_width,
+        grid_height=body.grid_height,
+    )
+    caps = PLANTER_SIZE_CAPS.get(bucket or "", {}) if bucket else {}
+    return {
+        "sunlight":   sunlight,
+        "watering":   watering,
+        "zone":       zone,
+        "cycle":      cycle,
+        "indoor":     indoor,
+        "edible":     body.edible,
+        "max_height_cm": caps.get("max_height_cm"),
+        "max_spread_cm": caps.get("max_spread_cm"),
+        "query":      body.query,
+    }
+
+
+@router.post(
+    "/catalog/fill/trefle",
+    response_model=FillStepResponse,
+    status_code=200,
+    summary="Step 2: pull a filtered list of plants from Trefle for these conditions",
+)
+async def fill_trefle(body: FillBody) -> FillStepResponse:
+    """Run a Trefle search for the planter's conditions and upsert results into the cache."""
+    sb = get_supabase()
+    sunlight = _shade_to_sunlight(body.shade_level)
+    light_min = 7 if sunlight == "full_sun" else 4 if sunlight == "part_shade" else None
+
+    try:
+        if body.query:
+            records = await trefle_search(body.query)
+        else:
+            records = await trefle_filter(edible=body.edible, light_min=light_min)
+    except Exception as exc:
+        logger.exception("Trefle fill failed")
+        return FillStepResponse(status="error", error=f"Trefle request failed: {exc}")
+
+    if not records:
+        return FillStepResponse(status="ok", fetched=0, new_plants=0)
+
+    sci_names = [r.get("scientific_name") for r in records if r.get("scientific_name")]
+    pre_existing: set[str] = set()
+    if sci_names:
+        existing = (
+            sb.table("plantplanner_plant_cache")
+            .select("scientific_name")
+            .in_("scientific_name", sci_names)
+            .execute()
+        )
+        pre_existing = {row["scientific_name"] for row in (existing.data or [])}
+
+    normalized = [normalize_trefle(r) for r in records]
+    written = await _upsert_normalized(normalized)
+    new_plants = sum(1 for row in written if row.get("scientific_name") not in pre_existing)
+
+    # Mirror images in the background — best-effort.
+    try:
+        await _mirror_images_for_rows(written)
+    except Exception as exc:
+        logger.info("Trefle fill image mirror failed: %s", exc)
+
+    return FillStepResponse(status="ok", fetched=len(records), new_plants=new_plants)
+
+
+@router.post(
+    "/catalog/fill/perenual",
+    response_model=FillStepResponse,
+    status_code=200,
+    summary="Step 3: enrich cached plants with Perenual data (hardiness, sun, watering, image)",
+)
+async def fill_perenual(body: FillBody) -> FillStepResponse:
+    """Find cache plants matching these conditions that lack Perenual fields; enrich each."""
+    sb = get_supabase()
+    filters = _build_query_from_body(body)
+    candidates = (
+        _build_cache_query(
+            sb,
+            sunlight=filters["sunlight"],
+            watering=filters["watering"],
+            indoor=filters["indoor"],
+            zone=filters["zone"],
+            edible=filters["edible"],
+            cycle=filters["cycle"],
+            max_height_cm=filters["max_height_cm"],
+            max_spread_cm=filters["max_spread_cm"],
+            query=filters["query"],
+        )
+        .limit(SEARCH_RESULT_CAP)
+        .execute()
+        .data
+    ) or []
+
+    # Enrich rows missing hardiness OR cycle OR watering — Perenual is the
+    # primary source for those fields.
+    targets = [
+        r for r in candidates
+        if r.get("hardiness_min") is None
+        or r.get("cycle") is None
+        or r.get("watering") is None
+    ]
+    if not targets:
+        return FillStepResponse(status="ok", fetched=0, enriched=0)
+
+    enriched_rows: List[Dict[str, Any]] = []
+    fetched = 0
+    try:
+        for row in targets:
+            sci = row.get("scientific_name")
+            if not sci:
+                continue
+            p_record = await perenual_lookup_by_scientific(sci)
+            if p_record is None:
+                continue
+            fetched += 1
+            merged = merge_records(row, normalize_perenual(p_record))
+            enriched_rows.append(merged)
+    except Exception as exc:
+        logger.exception("Perenual fill failed")
+        return FillStepResponse(status="error", fetched=fetched, error=f"Perenual request failed: {exc}")
+
+    written = await _upsert_normalized(enriched_rows) if enriched_rows else []
+    try:
+        await _mirror_images_for_rows(written)
+    except Exception as exc:
+        logger.info("Perenual fill image mirror failed: %s", exc)
+
+    return FillStepResponse(status="ok", fetched=fetched, enriched=len(written))
+
+
+@router.post(
+    "/catalog/fill/flora",
+    response_model=FillStepResponse,
+    status_code=200,
+    summary="Step 4: enrich cached plants with FloraAPI (US-flora supplemental data)",
+)
+async def fill_flora(body: FillBody) -> FillStepResponse:
+    """Cross-check matching cache plants against Flora and merge any new fields."""
+    sb = get_supabase()
+    filters = _build_query_from_body(body)
+    candidates = (
+        _build_cache_query(
+            sb,
+            sunlight=filters["sunlight"],
+            watering=filters["watering"],
+            indoor=filters["indoor"],
+            zone=filters["zone"],
+            edible=filters["edible"],
+            cycle=filters["cycle"],
+            max_height_cm=filters["max_height_cm"],
+            max_spread_cm=filters["max_spread_cm"],
+            query=filters["query"],
+        )
+        .limit(SEARCH_RESULT_CAP)
+        .execute()
+        .data
+    ) or []
+
+    if not candidates:
+        return FillStepResponse(status="ok", fetched=0, enriched=0)
+
+    enriched_rows: List[Dict[str, Any]] = []
+    fetched = 0
+    try:
+        for row in candidates:
+            sci = row.get("scientific_name")
+            if not sci:
+                continue
+            f_record = await flora_lookup_by_scientific(sci)
+            if f_record is None:
+                continue
+            fetched += 1
+            merged = merge_records(row, normalize_flora(f_record))
+            enriched_rows.append(merged)
+    except FloraConfigError:
+        return FillStepResponse(status="error", error="FLORA_API_KEY is not configured on the server")
+    except Exception as exc:
+        logger.exception("Flora fill failed")
+        return FillStepResponse(status="error", fetched=fetched, error=f"Flora request failed: {exc}")
+
+    written = await _upsert_normalized(enriched_rows) if enriched_rows else []
+    return FillStepResponse(status="ok", fetched=fetched, enriched=len(written))
+
+
+@router.post(
+    "/catalog/fill/compatible",
+    response_model=CompatibleStepResponse,
+    status_code=200,
+    summary="Step 5: count cache plants compatible with the planter's conditions",
+)
+async def fill_compatible(body: FillBody) -> CompatibleStepResponse:
+    """Apply the wizard's full filter set against the enriched cache; return a count."""
+    sb = get_supabase()
+    filters = _build_query_from_body(body)
+    try:
+        rows = (
+            _build_cache_query(
+                sb,
+                sunlight=filters["sunlight"],
+                watering=filters["watering"],
+                indoor=filters["indoor"],
+                zone=filters["zone"],
+                edible=filters["edible"],
+                cycle=filters["cycle"],
+                max_height_cm=filters["max_height_cm"],
+                max_spread_cm=filters["max_spread_cm"],
+                query=filters["query"],
+            )
+            .limit(SEARCH_RESULT_CAP)
+            .execute()
+            .data
+        ) or []
+        total = (
+            sb.table("plantplanner_plant_cache")
+            .select("id", count="exact")
+            .execute()
+            .count
+        ) or 0
+    except Exception as exc:
+        logger.exception("Compatible-count step failed")
+        return CompatibleStepResponse(status="error", error=str(exc))
+
+    return CompatibleStepResponse(
+        status="ok",
+        compatible_plants=len(rows),
+        total_in_cache=int(total),
+    )

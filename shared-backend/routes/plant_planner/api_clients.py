@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 TREFLE_BASE = "https://trefle.io/api/v1"
 PERENUAL_BASE = "https://perenual.com/api/v2"
+FLORA_BASE = "https://floraapi.com/api"
 
 # Cap external network spend per user query.
 SEARCH_RESULT_CAP = 24
@@ -34,6 +35,10 @@ def _trefle_token() -> Optional[str]:
 
 def _perenual_key() -> Optional[str]:
     return os.environ.get("PERENUAL_API_KEY") or None
+
+
+def _flora_key() -> Optional[str]:
+    return os.environ.get("FLORA_API_KEY") or None
 
 
 # ── Trefle ──────────────────────────────────────────────────────────────────
@@ -133,6 +138,120 @@ async def perenual_lookup_by_scientific(scientific_name: str) -> Optional[Dict[s
         if isinstance(sci, list) and sci and sci[0].strip().lower() == target:
             return c
     return candidates[0] if candidates else None
+
+
+# ── Flora (paid; US-flora-focused) ──────────────────────────────────────────
+#
+# Flora's response shape isn't fully documented publicly; the field names
+# below follow the analysis/api-notes.md notes ("verify against live docs").
+# Keep the normalizer defensive — null any field that doesn't appear.
+
+
+class FloraConfigError(RuntimeError):
+    """Raised when FLORA_API_KEY is required but not configured."""
+
+
+def _require_flora_key() -> str:
+    key = _flora_key()
+    if not key:
+        raise FloraConfigError("FLORA_API_KEY is not configured")
+    return key
+
+
+async def flora_search(query: str) -> List[Dict[str, Any]]:
+    """Search Flora by free-text query. Raises FloraConfigError if no key set."""
+    key = _require_flora_key()
+    url = f"{FLORA_BASE}/plants"
+    params = {"search": query, "api_key": key, "limit": SEARCH_RESULT_CAP}
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+        resp = await client.get(url, params=params)
+        if resp.status_code != 200:
+            logger.warning("Flora search failed: %s %s", resp.status_code, resp.text[:200])
+            return []
+        body = resp.json()
+        # Flora has been observed to return either {"data":[...]} or a bare list.
+        data = body.get("data") if isinstance(body, dict) else body
+        if not isinstance(data, list):
+            return []
+        return data[:SEARCH_RESULT_CAP]
+
+
+async def flora_lookup_by_scientific(scientific_name: str) -> Optional[Dict[str, Any]]:
+    """Find a Flora record by scientific name. Returns the first exact match or None."""
+    candidates = await flora_search(scientific_name)
+    target = scientific_name.strip().lower()
+    for c in candidates:
+        sci = c.get("scientific_name") or c.get("scientificName")
+        if isinstance(sci, str) and sci.strip().lower() == target:
+            return c
+    return candidates[0] if candidates else None
+
+
+def normalize_flora(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a Flora record onto the cache-row shape.
+
+    Flora's strengths (per analysis/api-notes.md): hardiness zones, US-native
+    flags, county-level distribution, sun/water requirements. Field names here
+    follow the documented shape — defensive against schema drift.
+    """
+    sci = record.get("scientific_name") or record.get("scientificName") or ""
+    common = record.get("common_name") or record.get("commonName") or record.get("name")
+
+    sun_raw = (record.get("sun_exposure") or record.get("sunlight") or "").lower()
+    sunlight = None
+    if "full sun" in sun_raw or sun_raw == "full_sun":
+        sunlight = "full_sun"
+    elif "part" in sun_raw or "shade" in sun_raw and "deep" not in sun_raw:
+        sunlight = "part_shade"
+    elif "deep shade" in sun_raw or "full shade" in sun_raw:
+        sunlight = "full_shade"
+
+    water_raw = (record.get("water_needs") or record.get("watering") or "").lower()
+    watering = None
+    if "high" in water_raw or "frequent" in water_raw:
+        watering = "frequent"
+    elif "moderate" in water_raw or "average" in water_raw or "medium" in water_raw:
+        watering = "average"
+    elif "low" in water_raw or "drought" in water_raw or "minimum" in water_raw:
+        watering = "minimum"
+    elif water_raw in ("none", "no water"):
+        watering = "none"
+
+    duration_raw = (record.get("duration") or record.get("lifecycle") or "").lower()
+    cycle = None
+    if "annual" in duration_raw:
+        cycle = "annual"
+    elif "biennial" in duration_raw:
+        cycle = "biennial"
+    elif "perennial" in duration_raw:
+        cycle = "perennial"
+
+    hardiness_raw = record.get("hardiness_zone") or record.get("hardinessZone")
+    hardiness_min: Optional[int] = None
+    hardiness_max: Optional[int] = None
+    if isinstance(hardiness_raw, str) and "-" in hardiness_raw:
+        try:
+            lo, hi = hardiness_raw.split("-", 1)
+            hardiness_min = int("".join(ch for ch in lo if ch.isdigit()) or "0") or None
+            hardiness_max = int("".join(ch for ch in hi if ch.isdigit()) or "0") or None
+        except ValueError:
+            pass
+
+    return {
+        "source": "flora",
+        "source_id": str(record.get("id") or record.get("plant_id") or ""),
+        "scientific_name": sci,
+        "common_name": common,
+        "family": record.get("family"),
+        "hardiness_min": hardiness_min,
+        "hardiness_max": hardiness_max,
+        "sunlight": sunlight,
+        "watering": watering,
+        "cycle": cycle,
+        "edible": record.get("edible"),
+        "toxicity": record.get("toxicity"),
+        "image_regular_url": record.get("image_url") or record.get("imageUrl"),
+    }
 
 
 # ── Normalization to plantplanner_plant_cache row shape ─────────────────────

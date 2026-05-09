@@ -2037,3 +2037,88 @@ dialog .dialog-header {
   position: relative;
 }
 .render2d-svg { display: block; }
+
+/* ── Plant-selection loading orchestration (5-step to-do list) ─────────── */
+.shopping-fill-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  min-height: 60vh;
+}
+.shopping-fill-card {
+  background: oklch(var(--b1));
+  border: 1px solid var(--pp-warm-border, oklch(var(--b3)));
+  border-radius: 16px;
+  padding: 1.5rem 1.4rem;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.06);
+}
+.shopping-fill-card h3 {
+  margin: 0 0 0.3rem;
+  font-family: 'Quicksand', sans-serif;
+  font-weight: 600;
+}
+.shopping-fill-subtitle {
+  margin: 0 0 1.1rem;
+  color: oklch(var(--bc) / 0.65);
+  font-size: 0.9rem;
+}
+.shopping-fill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.shopping-fill-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px dashed var(--pp-warm-border, oklch(var(--b3)));
+}
+.shopping-fill-item:last-child { border-bottom: 0; }
+.shopping-fill-icon {
+  flex: 0 0 auto;
+  width: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.1rem;
+}
+.shopping-fill-icon i { width: 1.2rem; height: 1.2rem; }
+.shopping-fill-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.shopping-fill-label {
+  font-size: 0.92rem;
+  color: oklch(var(--bc));
+}
+.shopping-fill-item-pending .shopping-fill-label { color: oklch(var(--bc) / 0.55); }
+.shopping-fill-item-running .shopping-fill-label { color: oklch(var(--p)); font-weight: 500; }
+.shopping-fill-item-ok .shopping-fill-label      { color: oklch(var(--bc)); }
+.shopping-fill-detail {
+  font-size: 0.8rem;
+  color: oklch(var(--bc) / 0.7);
+}
+.shopping-fill-detail-error {
+  color: oklch(var(--er));
+}
+.shopping-fill-footer {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: stretch;
+}
+.shopping-fill-warn {
+  margin: 0;
+  font-size: 0.82rem;
+  color: oklch(var(--wa));
+}
