@@ -80,6 +80,8 @@ async function loadAllSections() {
   loadUsage();
   loadAppsWithUsers();
   loadStorage();
+  loadApiLogs();
+  loadApiLogsSummary();
 }
 
 // --- Section 1: App Usage ---
@@ -284,6 +286,151 @@ async function loadStorage() {
     el.innerHTML = `<p class="error-text">Failed to load storage: ${esc(err.message)}</p>`;
   }
 }
+
+// --- Section 4: External API Logs ---
+
+let apiLogsCache = [];
+
+async function loadApiLogs() {
+  const el = document.getElementById("api-logs-content");
+  el.innerHTML = '<div class="loading">Loading logs...</div>';
+  const appFilter = document.getElementById("api-logs-app-filter").value;
+  const qs = appFilter ? `?app=${encodeURIComponent(appFilter)}&limit=200` : "?limit=200";
+  try {
+    const data = await apiFetch(`/api/v1/admin/api-logs${qs}`);
+    const logs = data.logs || [];
+    apiLogsCache = logs;
+    populateApiLogsAppFilter(logs);
+    if (logs.length === 0) {
+      el.innerHTML = "<p class='muted'>No API calls logged yet.</p>";
+      return;
+    }
+    let html = `<div class="table-responsive"><table>
+      <thead><tr>
+        <th>Time</th><th>App</th><th>API</th><th>Method</th><th>URL</th>
+        <th>Status</th><th>Latency</th><th>Size</th><th>Error</th>
+      </tr></thead><tbody>`;
+    for (const r of logs) {
+      const status = r.status_code;
+      const cls = !status ? "api-log-status-err"
+                : status >= 500 ? "api-log-status-err"
+                : status >= 400 ? "api-log-status-warn"
+                : "api-log-status-ok";
+      const when = r.sent_at ? new Date(r.sent_at).toLocaleString() : "—";
+      const url = r.url ? (r.url.length > 60 ? r.url.slice(0, 60) + "…" : r.url) : "—";
+      const latency = r.response_time_ms != null ? `${r.response_time_ms} ms` : "—";
+      const size = r.response_size_bytes != null ? formatBytes(r.response_size_bytes) : "—";
+      const err = r.error_message ? esc(r.error_message.slice(0, 60)) : "";
+      html += `<tr class="api-log-row" data-id="${r.id}">
+        <td>${esc(when)}</td>
+        <td>${esc(r.app)}</td>
+        <td>${esc(r.api_name)}</td>
+        <td>${esc(r.method)}</td>
+        <td title="${esc(r.url)}">${esc(url)}</td>
+        <td class="${cls}">${status ?? "—"}</td>
+        <td>${latency}</td>
+        <td>${size}</td>
+        <td class="api-log-status-err">${err}</td>
+      </tr>`;
+    }
+    html += "</tbody></table></div>";
+    el.innerHTML = html;
+    el.querySelectorAll(".api-log-row").forEach((row) => {
+      row.addEventListener("click", () => openApiLogDialog(row.dataset.id));
+    });
+  } catch (err) {
+    el.innerHTML = `<p class="error-text">Failed to load logs: ${esc(err.message)}</p>`;
+  }
+}
+
+function populateApiLogsAppFilter(logs) {
+  const select = document.getElementById("api-logs-app-filter");
+  const current = select.value;
+  const apps = Array.from(new Set(logs.map((l) => l.app).filter(Boolean))).sort();
+  // Preserve any apps already in the dropdown so the option set is stable across reloads.
+  for (const app of apps) {
+    if (![...select.options].some((o) => o.value === app)) {
+      const opt = document.createElement("option");
+      opt.value = app;
+      opt.textContent = app;
+      select.appendChild(opt);
+    }
+  }
+  select.value = current;
+}
+
+async function loadApiLogsSummary() {
+  const el = document.getElementById("api-logs-summary");
+  try {
+    const data = await apiFetch("/api/v1/admin/api-logs/summary");
+    const rows = data.summary || [];
+    if (rows.length === 0) {
+      el.innerHTML = "<span class='muted'>No calls in the last 30 days.</span>";
+      return;
+    }
+    el.innerHTML = rows.map((r) => {
+      const errBadge = r.errors > 0 ? ` <span class="err">${r.errors} err</span>` : "";
+      return `<span class="api-log-summary-pill">
+        <strong>${esc(r.app)} / ${esc(r.api_name)}</strong>
+        ${r.calls} calls · ${formatBytes(r.bytes)}${errBadge}
+      </span>`;
+    }).join("");
+  } catch (err) {
+    el.innerHTML = `<span class="error-text">Summary failed: ${esc(err.message)}</span>`;
+  }
+}
+
+function openApiLogDialog(id) {
+  const r = apiLogsCache.find((x) => String(x.id) === String(id));
+  if (!r) return;
+  document.getElementById("api-log-dialog-title").textContent = `${r.method} ${r.api_name}`;
+  const meta = [
+    `app: ${r.app}`,
+    `status: ${r.status_code ?? "—"}`,
+    `latency: ${r.response_time_ms ?? "—"} ms`,
+    `size: ${r.response_size_bytes != null ? formatBytes(r.response_size_bytes) : "—"}`,
+    `sent: ${r.sent_at ? new Date(r.sent_at).toLocaleString() : "—"}`,
+  ].join(" · ");
+  document.getElementById("api-log-dialog-meta").textContent = meta;
+  const parts = [];
+  parts.push(`URL:\n${r.url}`);
+  if (r.request_params) parts.push(`\nParams:\n${JSON.stringify(r.request_params, null, 2)}`);
+  if (r.error_message) parts.push(`\nError:\n${r.error_message}`);
+  parts.push(`\nResponse body${r.body_excerpt ? " (truncated to 8KB)" : " (cleared)"}:\n${r.body_excerpt ?? "(empty)"}`);
+  document.getElementById("api-log-dialog-body").textContent = parts.join("\n");
+  document.getElementById("api-log-dialog").showModal();
+}
+
+document.getElementById("api-log-dialog-close").addEventListener("click", () => {
+  document.getElementById("api-log-dialog").close();
+});
+
+document.getElementById("api-logs-app-filter").addEventListener("change", () => {
+  loadApiLogs();
+});
+
+document.querySelectorAll(".clear-bodies-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const age = btn.dataset.age;
+    const label = btn.textContent.trim();
+    if (!confirm(`Clear stored response bodies: ${label}? Timing/error stats are preserved.`)) return;
+    btn.setAttribute("aria-busy", "true");
+    btn.disabled = true;
+    try {
+      const data = await apiFetch(`/api/v1/admin/api-logs/clear-bodies?older_than=${encodeURIComponent(age)}`, {
+        method: "POST",
+      });
+      alert(`Cleared ${data.cleared} response body(ies).`);
+      loadApiLogs();
+      loadApiLogsSummary();
+    } catch (err) {
+      alert("Clear failed: " + err.message);
+    } finally {
+      btn.removeAttribute("aria-busy");
+      btn.disabled = false;
+    }
+  });
+});
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 

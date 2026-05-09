@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+from api_logger import log_external_call
 from db import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,18 @@ def _ext_from_url(url: str, default: str = "jpg") -> str:
 async def _download(url: str) -> Optional[tuple[bytes, str]]:
     try:
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
-            resp = await client.get(url)
+            async with log_external_call(
+                app="plant-planner", api_name="image-mirror",
+                method="GET", url=url,
+            ) as record:
+                resp = await client.get(url)
+                # Record status + size, but skip body_excerpt — these are binary
+                # image bytes, not useful as text.
+                record.status_code = resp.status_code
+                try:
+                    record.response_size_bytes = len(resp.content)
+                except Exception:
+                    record.response_size_bytes = None
             if resp.status_code != 200:
                 logger.info("Image fetch %s -> %s", url, resp.status_code)
                 return None
