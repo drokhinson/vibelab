@@ -1,14 +1,14 @@
 'use strict';
 
 // ─── Supabase Auth wiring ────────────────────────────────────────────────────
-// The splash stays up until `awaitInitialAuth()` resolves. That happens either
-// when Supabase fires its first onAuthStateChange (INITIAL_SESSION) AND any
-// resulting loadProfile() finishes, OR when Supabase isn't configured at all,
-// OR after a 3s safety timeout. This guarantees that when the splash drops:
-//   • we know whether the user is signed in (currentUser is set or null);
-//   • if they are, their saucebook + pantry are already hydrated, so the
-//     Saucebook tab doesn't render an empty state for a frame before the
-//     real data arrives.
+// On boot the splash runs in two phases driven by init.js:
+//   Phase 1 — "Authenticating": wait for Supabase to fire its first
+//             onAuthStateChange (INITIAL_SESSION). No Sauceboss API calls
+//             happen here — this phase strictly observes the Supabase
+//             roundtrip so `session` is known by the time it ends.
+//   Phase 2 — "Saucing": init.js fires every Sauceboss API call (profile,
+//             saucebook, pantry, public initial-load) in parallel.
+// `awaitInitialAuth()` resolves the boundary between the two phases.
 
 let _profileLoadInFlight = false;
 let _initialAuthResolve = null;
@@ -45,29 +45,32 @@ function initSupabase() {
   supabaseClient.auth.onAuthStateChange(async (event, sess) => {
     const isFirst = !_initialAuthSettled;
     session = sess;
-    try {
-      if (sess) {
-        // Await loadProfile fully so the splash doesn't drop until the
-        // saucebook + pantry are hydrated. Subsequent events (token
-        // refresh, etc.) hit the in-flight guard and return immediately.
-        await loadProfile();
-      } else {
-        currentUser = null;
-        state.editMode = false;
-        // Reset saucebook + pantry to anon defaults; force the user back
-        // to Browse since the other tabs are locked without an account.
-        state.saucebook = [];
-        state.pantry = { ingredients: [], missing: new Set(), loading: false, error: null };
-        state.disabledIngredients = new Set();
-        state.activeTab = 'browse';
-        document.body.classList.remove('is-auth');
-        // Skip the render for the first event — init.js owns the first
-        // render after the splash exits, and rendering here would either
-        // be invisible (under splash) or cause a brief flicker.
-        if (!isFirst) render();
-      }
-    } finally {
-      if (isFirst) _resolveInitialAuth();
+
+    if (isFirst) {
+      // Hand control back to init.js. It'll fire the data loads (profile,
+      // saucebook, pantry) under the "Saucing" splash text. Running them
+      // here would mean Sauceboss API calls happen during the
+      // "Authenticating" phase — the bug this restructure fixes.
+      _resolveInitialAuth();
+      return;
+    }
+
+    // Subsequent events (modal sign-in, sign-out, token refresh).
+    if (sess) {
+      await loadProfile();
+      if (currentUser) await loadSaucebookAndPantry();
+      render();
+    } else {
+      currentUser = null;
+      state.editMode = false;
+      // Reset saucebook + pantry to anon defaults; force the user back to
+      // Browse since the other tabs are locked without an account.
+      state.saucebook = [];
+      state.pantry = { ingredients: [], missing: new Set(), loading: false, error: null };
+      state.disabledIngredients = new Set();
+      state.activeTab = 'browse';
+      document.body.classList.remove('is-auth');
+      render();
     }
   });
 }
@@ -91,20 +94,6 @@ async function loadProfile() {
       await createProfile(displayName);
       currentUser = await fetchProfile();
     }
-    // Hydrate saucebook + pantry in parallel; failures are non-fatal (the
-    // tab renders an empty state). Mirror pantry.missing into the
-    // ingredient-name disabledIngredients Set so the meal-builder filter
-    // shows missing ingredients pre-checked.
-    try {
-      const [saucebook, pantry] = await Promise.all([
-        api.listSaucebook().catch(e => { console.warn('[sauceboss] saucebook load failed:', e); return []; }),
-        api.getPantry().catch(e => { console.warn('[sauceboss] pantry load failed:', e); return { ingredients: [], saucebookSauceIds: [] }; }),
-      ]);
-      state.saucebook = saucebook;
-      state.pantry.ingredients = pantry.ingredients || [];
-      state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.foodId));
-      syncDisabledFromPantry();
-    } catch (_) {}
     // Default landing tab once a user is signed in is Saucebook.
     state.activeTab = 'saucebook';
     document.body.classList.add('is-auth');
@@ -112,10 +101,27 @@ async function loadProfile() {
       state.editMode = sessionStorage.getItem('sb_edit_mode') === '1';
     } catch (_) { state.editMode = false; }
     closeAuthModal();
-    render();
   } finally {
     _profileLoadInFlight = false;
   }
+}
+
+// Hydrate saucebook + pantry in parallel; failures are non-fatal (the tab
+// renders an empty state). Mirror pantry.missing into the ingredient-name
+// disabledIngredients Set so the meal-builder filter shows missing
+// ingredients pre-checked. Caller is responsible for render().
+async function loadSaucebookAndPantry() {
+  if (!currentUser) return;
+  try {
+    const [saucebook, pantry] = await Promise.all([
+      api.listSaucebook().catch(e => { console.warn('[sauceboss] saucebook load failed:', e); return []; }),
+      api.getPantry().catch(e => { console.warn('[sauceboss] pantry load failed:', e); return { ingredients: [], saucebookSauceIds: [] }; }),
+    ]);
+    state.saucebook = saucebook;
+    state.pantry.ingredients = pantry.ingredients || [];
+    state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.foodId));
+    syncDisabledFromPantry();
+  } catch (_) {}
 }
 
 async function handleLogout() {
