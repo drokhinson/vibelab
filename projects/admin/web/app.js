@@ -291,6 +291,29 @@ async function loadStorage() {
 
 let apiLogsCache = [];
 
+// Two consecutive log rows collapse into one expanding row when these fields
+// match. URL is compared without its query string so signed CDN URLs (each
+// with a fresh signature) still group together.
+function apiLogFingerprint(log) {
+  const url = (log.url || "").split("?")[0];
+  return [log.app, log.api_name, log.method, url, log.status_code ?? "x"].join("|");
+}
+
+function groupConsecutiveLogs(logs) {
+  const groups = [];
+  let current = null;
+  for (const log of logs) {
+    const fp = apiLogFingerprint(log);
+    if (current && current.fp === fp) {
+      current.members.push(log);
+    } else {
+      current = { fp, members: [log] };
+      groups.push(current);
+    }
+  }
+  return groups;
+}
+
 async function loadApiLogs() {
   const el = document.getElementById("api-logs-content");
   el.innerHTML = '<div class="loading">Loading logs...</div>';
@@ -305,42 +328,117 @@ async function loadApiLogs() {
       el.innerHTML = "<p class='muted'>No API calls logged yet.</p>";
       return;
     }
+    const groups = groupConsecutiveLogs(logs);
     let html = `<div class="table-responsive"><table>
       <thead><tr>
+        <th></th>
         <th>Time</th><th>App</th><th>API</th><th>Method</th><th>URL</th>
         <th>Status</th><th>Latency</th><th>Size</th><th>Error</th>
       </tr></thead><tbody>`;
-    for (const r of logs) {
-      const status = r.status_code;
-      const cls = !status ? "api-log-status-err"
-                : status >= 500 ? "api-log-status-err"
-                : status >= 400 ? "api-log-status-warn"
-                : "api-log-status-ok";
-      const when = r.sent_at ? new Date(r.sent_at).toLocaleString() : "—";
-      const url = r.url ? (r.url.length > 60 ? r.url.slice(0, 60) + "…" : r.url) : "—";
-      const latency = r.response_time_ms != null ? `${r.response_time_ms} ms` : "—";
-      const size = r.response_size_bytes != null ? formatBytes(r.response_size_bytes) : "—";
-      const err = r.error_message ? esc(r.error_message.slice(0, 60)) : "";
-      html += `<tr class="api-log-row" data-id="${r.id}">
-        <td>${esc(when)}</td>
-        <td>${esc(r.app)}</td>
-        <td>${esc(r.api_name)}</td>
-        <td>${esc(r.method)}</td>
-        <td title="${esc(r.url)}">${esc(url)}</td>
-        <td class="${cls}">${status ?? "—"}</td>
-        <td>${latency}</td>
-        <td>${size}</td>
-        <td class="api-log-status-err">${err}</td>
-      </tr>`;
-    }
+    groups.forEach((group, gi) => {
+      html += renderLogGroup(group, gi);
+    });
     html += "</tbody></table></div>";
     el.innerHTML = html;
-    el.querySelectorAll(".api-log-row").forEach((row) => {
-      row.addEventListener("click", () => openApiLogDialog(row.dataset.id));
+
+    // Body-viewer: any row with a data-id opens the dialog.
+    el.querySelectorAll("tr[data-id]").forEach((row) => {
+      row.addEventListener("click", (ev) => {
+        // Ignore clicks on the toggle chevron (handled separately).
+        if (ev.target.closest(".api-log-toggle")) return;
+        openApiLogDialog(row.dataset.id);
+      });
+    });
+
+    // Group-toggle: clicking the chevron expands/collapses the children.
+    el.querySelectorAll(".api-log-toggle").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const gi = btn.dataset.gi;
+        const expanded = btn.classList.toggle("expanded");
+        el.querySelectorAll(`tr.api-log-child[data-gi="${gi}"]`).forEach((row) => {
+          row.style.display = expanded ? "" : "none";
+        });
+      });
     });
   } catch (err) {
     el.innerHTML = `<p class="error-text">Failed to load logs: ${esc(err.message)}</p>`;
   }
+}
+
+function renderLogGroup(group, gi) {
+  const lead = group.members[0]; // newest in the group (input is sorted desc)
+  const count = group.members.length;
+  const status = lead.status_code;
+  const cls = !status ? "api-log-status-err"
+            : status >= 500 ? "api-log-status-err"
+            : status >= 400 ? "api-log-status-warn"
+            : "api-log-status-ok";
+  const url = lead.url ? (lead.url.length > 60 ? lead.url.slice(0, 60) + "…" : lead.url) : "—";
+
+  if (count === 1) {
+    return renderLogRow(lead, { toggleCell: '<td></td>' });
+  }
+
+  // Aggregate metrics across the group for the summary row.
+  const latencies = group.members.map((m) => m.response_time_ms).filter((v) => v != null);
+  const sizes = group.members.map((m) => m.response_size_bytes).filter((v) => v != null);
+  const errors = group.members.filter((m) => m.error_message).length;
+  const latencyLabel = latencies.length
+    ? (Math.min(...latencies) === Math.max(...latencies)
+        ? `${latencies[0]} ms`
+        : `${Math.min(...latencies)}–${Math.max(...latencies)} ms`)
+    : "—";
+  const totalSize = sizes.reduce((a, b) => a + b, 0);
+  const sizeLabel = sizes.length ? formatBytes(totalSize) : "—";
+  const when = lead.sent_at ? new Date(lead.sent_at).toLocaleString() : "—";
+  const errLabel = errors > 0 ? `${errors}/${count} failed` : "";
+
+  const summaryRow = `<tr class="api-log-row api-log-summary" data-gi="${gi}">
+    <td><button class="api-log-toggle" data-gi="${gi}" aria-label="Expand"><span class="chev">▸</span></button></td>
+    <td>${esc(when)}</td>
+    <td>${esc(lead.app)}</td>
+    <td>${esc(lead.api_name)} <span class="api-log-count">×${count}</span></td>
+    <td>${esc(lead.method)}</td>
+    <td title="${esc(lead.url)}">${esc(url)}</td>
+    <td class="${cls}">${status ?? "—"}</td>
+    <td>${latencyLabel}</td>
+    <td>${sizeLabel}</td>
+    <td class="api-log-status-err">${esc(errLabel)}</td>
+  </tr>`;
+
+  const childRows = group.members.map((m) =>
+    renderLogRow(m, { toggleCell: '<td></td>', extraClass: "api-log-child", gi })
+  ).join("");
+
+  return summaryRow + childRows;
+}
+
+function renderLogRow(r, { toggleCell = "", extraClass = "", gi = null } = {}) {
+  const status = r.status_code;
+  const cls = !status ? "api-log-status-err"
+            : status >= 500 ? "api-log-status-err"
+            : status >= 400 ? "api-log-status-warn"
+            : "api-log-status-ok";
+  const when = r.sent_at ? new Date(r.sent_at).toLocaleString() : "—";
+  const url = r.url ? (r.url.length > 60 ? r.url.slice(0, 60) + "…" : r.url) : "—";
+  const latency = r.response_time_ms != null ? `${r.response_time_ms} ms` : "—";
+  const size = r.response_size_bytes != null ? formatBytes(r.response_size_bytes) : "—";
+  const err = r.error_message ? esc(r.error_message.slice(0, 60)) : "";
+  const giAttr = gi != null ? ` data-gi="${gi}"` : "";
+  const styleAttr = extraClass.includes("api-log-child") ? ' style="display:none;"' : "";
+  return `<tr class="api-log-row ${extraClass}" data-id="${r.id}"${giAttr}${styleAttr}>
+    ${toggleCell}
+    <td>${esc(when)}</td>
+    <td>${esc(r.app)}</td>
+    <td>${esc(r.api_name)}</td>
+    <td>${esc(r.method)}</td>
+    <td title="${esc(r.url)}">${esc(url)}</td>
+    <td class="${cls}">${status ?? "—"}</td>
+    <td>${latency}</td>
+    <td>${size}</td>
+    <td class="api-log-status-err">${err}</td>
+  </tr>`;
 }
 
 function populateApiLogsAppFilter(logs) {
