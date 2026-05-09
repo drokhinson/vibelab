@@ -84,9 +84,6 @@ const adminAssignSauceVariants = (parentId, sauceIds) => api.assignSauceVariants
 const fetchProfile             = () => api.getProfile();
 const createProfile            = (displayName) => api.upsertProfile(displayName);
 const becomeAdmin              = (adminKey) => api.becomeAdmin(adminKey);
-const fetchFavorites           = () => api.listFavorites();
-const addFavorite              = (sauceId) => api.addFavorite(sauceId);
-const removeFavorite           = (sauceId) => api.removeFavorite(sauceId);
 
 function availableCuisines() {
   const seen = new Map();
@@ -95,26 +92,6 @@ function availableCuisines() {
     if (s.cuisine && !seen.has(s.cuisine)) seen.set(s.cuisine, s.cuisineEmoji || '🍽');
   }
   return [...seen].map(([name, emoji]) => ({ name, emoji }));
-}
-
-// Optimistic favorite toggle. Updates state immediately, syncs in the background,
-// reverts on failure and re-renders.
-async function toggleFavorite(sauceId) {
-  if (!currentUser) { openAuthModal(); return; }
-  const wasFavorited = state.favorites.has(sauceId);
-  const previousTimestamp = state.favorites.get(sauceId);
-  if (wasFavorited) state.favorites.delete(sauceId);
-  else state.favorites.set(sauceId, new Date().toISOString());
-  render();
-  try {
-    if (wasFavorited) await removeFavorite(sauceId);
-    else await addFavorite(sauceId);
-  } catch (e) {
-    console.error('[sauceboss] favorite toggle failed:', e);
-    if (wasFavorited) state.favorites.set(sauceId, previousTimestamp || null);
-    else state.favorites.delete(sauceId);
-    render();
-  }
 }
 
 // Unit conversion (toTsp, cumulativeStepTsp, tspToDisplay, convertUnit,
@@ -241,6 +218,70 @@ function prepareItems(items) {
   });
 }
 
+// ─── Shared recipe-row markup ────────────────────────────────────────────────
+// Used by Browse + Saucebook so the two list views are visually identical.
+// `sauce` is a sauce envelope (ingredients optional — Browse rows are
+// lightweight and skip them); `opts` controls per-tab affordances:
+//   variantCount    — number to render as a "N variants" chip (omit if 0/1)
+//   actionLabel     — text for the right-side action button (e.g. "+ Saucebook").
+//                     If null, the action button is omitted (saucebook rows).
+//   actionHandler   — JS expression for the button's onclick (already escapes
+//                     event.stopPropagation() and any other plumbing).
+//   actionDisabled  — render the button in the green "Added" pill state.
+//   onClick         — JS expression for the row's onclick (e.g. opening the
+//                     recipe view).
+//   missingCount    — number of pantry-missing ingredients in this sauce.
+//                     Renders a "Missing N" badge that does NOT block the click.
+function renderRecipeRow(sauce, opts = {}) {
+  const type = SAUCE_TYPES.find(t => t.value === sauce.sauceType);
+  const typeLabel = type ? type.label : sauce.sauceType;
+  const author = sauce.authorName || (sauce.createdBy ? 'Unknown' : 'SauceBoss');
+  const variantTag = (opts.variantCount && opts.variantCount > 1)
+    ? `<span class="recipe-row__variants">${opts.variantCount} variants</span>`
+    : '';
+  const missingTag = (opts.missingCount && opts.missingCount > 0)
+    ? `<span class="recipe-row__missing" title="${opts.missingCount} ingredient${opts.missingCount === 1 ? '' : 's'} missing from your pantry"><i data-lucide="alert-circle"></i> Missing ${opts.missingCount}</span>`
+    : '';
+  const actionBtn = opts.actionLabel
+    ? `<button class="recipe-row__action ${opts.actionDisabled ? 'recipe-row__action--added' : ''}"
+                ${opts.actionDisabled ? 'disabled' : ''}
+                onclick="${opts.actionHandler || ''}">${opts.actionLabel}</button>`
+    : '';
+  return `
+    <div class="recipe-row" onclick="${opts.onClick || ''}">
+      <span class="recipe-row__color" style="background:${sauce.color || '#E85D04'}"></span>
+      <div class="recipe-row__main">
+        <div class="recipe-row__name">${escapeHtml(sauce.name)}</div>
+        <div class="recipe-row__meta">
+          <span class="recipe-row__type">${escapeHtml(typeLabel)}</span>
+          <span class="recipe-row__author">by ${escapeHtml(author)}</span>
+          ${variantTag}
+          ${missingTag}
+        </div>
+      </div>
+      ${actionBtn}
+    </div>
+  `;
+}
+
+// Count how many of a sauce's ingredients are flagged missing in the user's
+// pantry. Operates on the disabledIngredients name-set so it works the same
+// for sauces in the saucebook (full envelope w/ ingredients) and gracefully
+// returns 0 for the lightweight Browse rows that don't carry ingredients.
+function sauceMissingCount(sauce) {
+  if (!sauce || !Array.isArray(sauce.ingredients)) return 0;
+  if (!state.disabledIngredients || state.disabledIngredients.size === 0) return 0;
+  const seen = new Set();
+  let n = 0;
+  for (const ing of sauce.ingredients) {
+    if (!ing || !ing.name) continue;
+    if (seen.has(ing.name)) continue;
+    seen.add(ing.name);
+    if (state.disabledIngredients.has(ing.name)) n += 1;
+  }
+  return n;
+}
+
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function render() {
   const app = document.getElementById('app');
@@ -308,6 +349,29 @@ function _tabLockedShell(label) {
 
 function _tabPlaceholder(label) {
   return `<div class="screen-wrap"><div class="scroll-body"><p style="padding:2rem;text-align:center;color:#6B7280">${label} loading…</p></div></div>`;
+}
+
+// Re-fetch the saucebook + pantry in parallel and re-render. Called after
+// any change to saucebook membership (add from Browse, save from builder,
+// remove via the recipe view) since the pantry surface is derived from
+// saucebook ingredients — adding a recipe with new ingredients should make
+// them appear in Pantry, removing the last recipe that uses an ingredient
+// should make it disappear, and so on.
+async function refreshSaucebookAndPantry() {
+  if (!currentUser) return;
+  try {
+    const [sb, pantry] = await Promise.all([
+      api.listSaucebook(),
+      api.getPantry(),
+    ]);
+    state.saucebook = sb;
+    state.pantry.ingredients = pantry.ingredients || [];
+    state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.foodId));
+    syncDisabledFromPantry();
+    render();
+  } catch (err) {
+    console.warn('[sauceboss] refreshSaucebookAndPantry failed:', err);
+  }
 }
 
 // Refresh state.disabledIngredients from state.pantry. This is the bridge

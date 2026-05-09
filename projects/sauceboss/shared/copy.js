@@ -12,7 +12,6 @@ export const HOME = {
 
 export const SAUCE_SELECTOR = {
   filterButton: 'Filter ingredients',
-  favoritesOnly: 'Favorites only',
   noResults: 'No options match your filter — try enabling more ingredients.',
   filterHint: "Uncheck ingredients you don't have — options will update.",
   keyHint: '— unlock the most options',

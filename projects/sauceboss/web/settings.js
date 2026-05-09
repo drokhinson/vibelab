@@ -110,20 +110,12 @@ function renderAdmin() {
       ${search ? `<button class="sm-search-clear" onclick="setSauceManagerSearch('')" aria-label="Clear search"><i data-lucide="x"></i></button>` : ''}
     </div>`;
 
-  const favOnly = !!state.sauceManagerFavoritesOnly;
   const typeFilterRow = tab === 'sauces' ? `
     <div class="sm-type-filter">
       <button class="sm-type-pill ${typeFilter === 'all' ? 'sm-type-pill-active' : ''}" onclick="setSauceManagerTypeFilter('all')">All</button>
       ${SAUCE_TYPES.map(t => `
         <button class="sm-type-pill ${typeFilter === t.value ? 'sm-type-pill-active' : ''}" onclick="setSauceManagerTypeFilter('${t.value}')">${t.label}</button>
       `).join('')}
-      ${currentUser ? `
-        <button class="sm-type-pill sm-type-pill-icon ${favOnly ? 'sm-type-pill-active' : ''}"
-                onclick="setSauceManagerFavoritesOnly(${!favOnly})"
-                aria-label="${favOnly ? 'Show all sauces' : 'Show favorites only'}"
-                title="${favOnly ? 'Show all sauces' : 'Show favorites only'}">
-          <i data-lucide="heart"></i>
-        </button>` : ''}
     </div>` : '';
 
   let bodyHTML = '';
@@ -194,10 +186,8 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
              onchange="handleImportSauceFile(event)">
     </div>` : '';
 
-  const favOnly = !!state.sauceManagerFavoritesOnly;
   const filtered = state.adminSauces.filter(s => {
     if (typeFilter !== 'all' && (s.sauceType || 'sauce') !== typeFilter) return false;
-    if (favOnly && !state.favorites.has(s.id)) return false;
     if (!q) return true;
     const haystack = [
       s.name || '',
@@ -211,10 +201,7 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
     return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:#888">No sauces found.</p>`;
   }
   if (filtered.length === 0) {
-    const emptyMsg = favOnly
-      ? "You haven't favorited any sauces yet."
-      : 'No sauces match your filters.';
-    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:#888">${emptyMsg}</p>`;
+    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:#888">No sauces match your filters.</p>`;
   }
 
   // Merge mode renders flat — every row is a candidate target so nesting
@@ -290,15 +277,6 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
               : isPicked ? '<span class="food-merge-tag food-merge-tag-merge">will be variant</span>'
               : '')
     : '';
-  const isFav = currentUser && state.favorites.has(s.id);
-  const heartBtn = (currentUser && !mergeMode)
-    ? `<button class="heart-btn ${isFav ? 'heart-btn--active' : ''}" data-auth-only
-               onclick="event.stopPropagation(); toggleFavorite('${s.id}')"
-               aria-label="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
-         <i data-lucide="heart"></i>
-       </button>`
-    : '';
-
   const inner = `
     <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
     <div class="admin-sauce-info">
@@ -306,8 +284,7 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
       <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
     </div>
     ${mergeTag}
-    <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>
-    ${heartBtn}`;
+    <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>`;
 
   if (mergeMode) {
     // While in merge mode the row is purely a tap-target — disable swipe so
@@ -670,11 +647,6 @@ function setSauceManagerTypeFilter(value) {
   render();
 }
 
-function setSauceManagerFavoritesOnly(value) {
-  state.sauceManagerFavoritesOnly = !!value;
-  render();
-}
-
 async function refreshAdminItems() {
   try {
     const items = await fetchItems();
@@ -793,6 +765,9 @@ async function adminDeleteSauce(id, name) {
     }
     state.adminSauces = state.adminSauces.filter(s => s.id !== id);
     state.adminError = null;
+    // Saucebook FK cascades will have removed any saucebook entries for this
+    // sauce; pantry is derived from saucebook, so refresh both.
+    refreshSaucebookAndPantry();
     render();
   } catch (err) {
     state.adminError = `Failed to delete: ${err.message}`;

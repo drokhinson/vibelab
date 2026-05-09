@@ -1,6 +1,4 @@
-// Sauce family grouping — root + variants. Pure functions; favorites + currentUser
-// are passed in as args (no globals).
-// Ported from web/sauces.js 19-61.
+// Sauce family grouping — root + variants. Pure functions; no globals.
 
 // Group a flat list of sauces into families: { root, variants[] } keyed by root id.
 // A sauce with parentSauceId is attached as a variant to its parent; orphans
@@ -24,31 +22,9 @@ export function buildSauceFamilies(sauces) {
   return families;
 }
 
-// Pick which sauce in a family to show in the list / open in the recipe by default.
-// Rule: if the user has favorited any sibling, pick the one with the most recent
-// favorite timestamp; otherwise show the root.
-//
-// `favorites` is a Map<sauceId, ISOString>. `currentUser` is the auth user object,
-// or null if signed out — when null, we always return the root.
-export function pickDisplayedFromFamily(family, favorites, currentUser) {
-  if (!currentUser) return family.root;
-  const all = [family.root, ...family.variants];
-  let best = null;
-  let bestTime = -Infinity;
-  for (const s of all) {
-    if (!favorites || !favorites.has(s.id)) continue;
-    const ts = favorites.get(s.id);
-    const t = ts ? Date.parse(ts) : 0;
-    if (t > bestTime) {
-      bestTime = t;
-      best = s;
-    }
-  }
-  return best || family.root;
-}
-
-export function familyHasFavorite(family, favorites, currentUser) {
-  if (!currentUser || !favorites) return false;
-  if (favorites.has(family.root.id)) return true;
-  return family.variants.some((v) => favorites.has(v.id));
+// The list / accordion view shows one row per family. Without favorites, the
+// rule is: show the family root. Variants are still reachable from the recipe
+// view's variant switcher.
+export function pickDisplayedFromFamily(family /* {root, variants} */) {
+  return family ? family.root : null;
 }

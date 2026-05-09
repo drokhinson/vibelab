@@ -31,6 +31,18 @@ function renderRecipe() {
     ? 'sauce-selector'
     : (state.recipeReturnTo || 'admin');
   const isTabShellBack = backScreen === 'tab-shell';
+
+  // Show a "Remove from saucebook" affordance when the user is viewing one
+  // of their saucebook entries from the tab UI. Anonymous users + admin
+  // sauce-manager previews don't see this button.
+  const inSaucebook = !!(currentUser && (state.saucebook || []).some(s => s.id === sauce.id));
+  const removeBtnHTML = (currentUser && isTabShellBack && inSaucebook)
+    ? `<button class="recipe-export-btn"
+               onclick="recipeRemoveFromSaucebook('${sauce.id}')"
+               title="Remove from your saucebook">
+         <i data-lucide="bookmark-minus"></i> Remove from saucebook
+       </button>`
+    : '';
   const totalTime  = sauceTime + itemTime;
 
   const stepsHTML = sauce.steps.map((step, i) => {
@@ -106,6 +118,7 @@ function renderRecipe() {
       <div class="recipe-subtitle">Pair with: ${(sauce.compatibleItems || []).join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
       ${variantSwitcherHTML}
       ${exportButtonsHTML}
+      ${removeBtnHTML ? `<div class="recipe-export-row">${removeBtnHTML}</div>` : ''}
     </div>
     <div class="recipe-controls">
       <div class="serving-row">
@@ -162,4 +175,20 @@ function setServings(n) {
 function setUnitSystem(sys) {
   state.unitSystem = sys;
   render();
+}
+
+async function recipeRemoveFromSaucebook(sauceId) {
+  if (!currentUser) return;
+  if (!confirm('Remove this recipe from your saucebook?')) return;
+  try {
+    await api.removeFromSaucebook(sauceId);
+  } catch (err) {
+    alert(`Couldn't remove: ${err.message || err}`);
+    return;
+  }
+  // Drop locally + refresh saucebook + pantry; navigate back to whichever
+  // tab the user came from (saucebook or browse).
+  state.saucebook = (state.saucebook || []).filter(s => s.id !== sauceId);
+  refreshSaucebookAndPantry();
+  setActiveTab(state.activeTab || 'saucebook');
 }

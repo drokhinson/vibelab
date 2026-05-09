@@ -23,17 +23,10 @@ function getSauceScreenContext() {
   };
 }
 
-// Family grouping + display-pick + favorite-check are pure helpers in
-// shared/families.js. `buildSauceFamilies` is identical-signature and lands
-// as a flat global via shared-bridge.js; the other two read state, so we
-// keep tiny shims here that bind state.favorites + currentUser before
-// delegating.
+// Family grouping is a pure helper in shared/families.js (buildSauceFamilies
+// is bridged onto window).
 function _pickDisplayedFromFamily(family) {
-  return SBShared.families.pickDisplayedFromFamily(family, state.favorites, currentUser);
-}
-
-function _familyHasFavorite(family) {
-  return SBShared.families.familyHasFavorite(family, state.favorites, currentUser);
+  return SBShared.families.pickDisplayedFromFamily(family);
 }
 
 function renderSauceSelector() {
@@ -41,18 +34,9 @@ function renderSauceSelector() {
   const allSauces = ctx.sauces;
   const families = buildSauceFamilies(allSauces);
 
-  // Family-level filtering — favorites pill toggles whether unfavored
-  // families are hidden.
-  const allFamilies = [...families.values()];
-  const visibleFamilies = state.favoritesOnly && currentUser
-    ? allFamilies.filter(_familyHasFavorite)
-    : allFamilies;
-  const favFamilyCount = currentUser
-    ? allFamilies.filter(_familyHasFavorite).length
-    : 0;
-
-  // Each visible family contributes its displayed sauce to the rendered list.
-  const visibleEntries = visibleFamilies.map(family => ({
+  // Each family contributes its root to the rendered list; variants are
+  // reachable via the recipe-view variant switcher.
+  const visibleEntries = [...families.values()].map(family => ({
     family,
     displayed: _pickDisplayedFromFamily(family),
   }));
@@ -100,17 +84,9 @@ function renderSauceSelector() {
         return sub ? `${m} (try ${sub})` : m;
       }).join(', ');
       const compatText = (sauce.compatibleItems || []).join(' · ');
-      const isFav = currentUser && state.favorites.has(sauce.id);
       const canEdit = currentUser && (currentUser.is_admin || sauce.createdBy === currentUser.user_id);
       const variantBadge = totalVersions >= 2
         ? `<span class="variant-badge" title="${totalVersions} versions in this family"><i data-lucide="git-branch"></i> ${totalVersions}</span>`
-        : '';
-      const heartBtn = currentUser
-        ? `<button class="heart-btn ${isFav ? 'heart-btn--active' : ''}" data-auth-only
-                   onclick="event.stopPropagation(); toggleFavorite('${sauce.id}')"
-                   aria-label="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
-             <i data-lucide="${isFav ? 'heart' : 'heart'}"></i>
-           </button>`
         : '';
       const editBtn = canEdit
         ? `<button class="sauce-edit-btn"
@@ -126,7 +102,6 @@ function renderSauceSelector() {
           <div class="sauce-item-tags">${compatText}${missing.length ? ' · missing: '+missingText : ''}</div>
         </div>
         ${!available ? `<span class="sauce-missing-badge">-${missing.length}</span>` : ''}
-        ${heartBtn}
         ${editBtn}
         <span class="sauce-arrow"><i data-lucide="chevron-right"></i></span>
       </div>`;
@@ -152,17 +127,6 @@ function renderSauceSelector() {
       ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
-      ${currentUser ? `
-        <div class="favorites-pill-row" data-auth-only>
-          <button class="favorites-pill ${state.favoritesOnly ? 'favorites-pill--active' : ''}"
-                  onclick="toggleFavoritesOnly()"
-                  ${favFamilyCount === 0 && !state.favoritesOnly ? 'disabled' : ''}>
-            <i data-lucide="heart"></i>
-            ${state.favoritesOnly ? 'Favorites only' : 'Show favorites only'}
-            <span class="favorites-pill-count">${favFamilyCount}</span>
-          </button>
-        </div>
-      ` : ''}
       <p class="section-label">Ingredient filter</p>
       <div class="filter-panel">
         <button class="filter-header" onclick="toggleFilter()">
@@ -248,8 +212,3 @@ function toggleCuisine(name) {
   render();
 }
 
-function toggleFavoritesOnly() {
-  if (!currentUser) { openAuthModal(); return; }
-  state.favoritesOnly = !state.favoritesOnly;
-  render();
-}
