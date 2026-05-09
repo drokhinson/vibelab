@@ -32,7 +32,7 @@ function renderBuilder() {
   html += '<span class="cond-chip">💧 ' + escapeHtml(waterPlanLabel(g.water_plan || 'regular')) + '</span>';
   if (g.usda_zone) {
     html += '<button type="button" id="builder-zone-chip" class="cond-chip cond-chip-btn" title="Change zone">📍 ' + escapeHtml(g.location_label || ('Zone ' + g.usda_zone)) + '</button>';
-  } else if (g.garden_type !== 'indoor' && g.garden_type !== 'greenhouse') {
+  } else if (!gardenTypeIsClimateControlled(g.garden_type)) {
     html += '<button type="button" id="builder-zone-chip" class="cond-chip cond-chip-btn cond-chip-warn" title="Set location">📍 Set location</button>';
   }
   html += '<span class="cond-chip">' + plantertypeIcon(g.garden_type || 'garden_bed') + ' ' + escapeHtml(plantertypeLabel(g.garden_type || 'garden_bed')) + '</span>';
@@ -99,8 +99,10 @@ function bind2DDragDrop() {
     onDrop: function(pos_x, pos_y) {
       if (draggedPlant) {
         var r = _spreadFeetFor(draggedPlant);
-        var gw = scene3DHandle.garden.grid_width;
-        var gh = scene3DHandle.garden.grid_height;
+        // The 2D handle exposes effective feet dimensions; use those so
+        // bounds-checking is unit-correct for indoor pots.
+        var gw = scene3DHandle.gridWidthFt;
+        var gh = scene3DHandle.gridHeightFt;
         var valid = validatePlacement(pos_x, pos_y, r, gw, gh, placements);
         if (valid !== 'ok') {
           showPreviewDisk(scene3DHandle, pos_x, pos_y, r, valid);

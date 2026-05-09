@@ -1,4 +1,10 @@
-// state.js — All global state variables
+// state.js — All global state variables.
+//
+// Garden_type values (mirrored in shared-backend/routes/plant_planner/garden_units.py):
+//   indoor_pot, indoor_planter_box, greenhouse,
+//   outdoor_pot, outdoor_planter_box, garden_bed, raised_bed.
+// grid_width / grid_height are inches for indoor_pot / indoor_planter_box /
+// outdoor_pot / outdoor_planter_box and feet for the rest.
 
 var currentView = "auth"; // auth | gardens | wizard | shopping | builder
 

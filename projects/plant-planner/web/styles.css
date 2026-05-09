@@ -246,7 +246,12 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   gap: 1rem;
   align-items: stretch;
 }
-@media (min-width: 768px) {
+.builder-layout .builder-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+@media (min-width: 900px) {
   .builder-layout {
     flex-direction: row;
     align-items: flex-start;
@@ -264,7 +269,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   overflow: hidden;
   max-height: none;
 }
-@media (min-width: 768px) {
+@media (min-width: 900px) {
   .catalog-sidebar {
     width: 280px;
     min-width: 280px;
@@ -1335,6 +1340,33 @@ dialog .dialog-header {
   flex-direction: column;
   gap: 0.5rem;
 }
+
+/* Two-column type picker (wizard step 1). Stacks to single column on
+   narrow viewports. */
+.wizard-options-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  margin-top: 0.6rem;
+}
+.wizard-options-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.wizard-options-col-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: oklch(var(--bc) / 0.55);
+  padding: 0 0.2rem 0.15rem;
+  border-bottom: 1px solid var(--pp-warm-border);
+  margin-bottom: 0.2rem;
+}
+@media (max-width: 600px) {
+  .wizard-options-2col { grid-template-columns: 1fr; }
+}
 .wizard-option {
   display: flex;
   align-items: center;
@@ -1662,15 +1694,14 @@ dialog .dialog-header {
 .pp-zone-row-temp  { color: oklch(var(--bc) / 0.65); }
 .pp-zone-row-label { color: oklch(var(--bc) / 0.7); }
 
-/* Wizard step 1 — type cards above, size + live 3D preview below. */
+/* Wizard step 1 — type cards above, size controls + full-width preview below. */
 .wizard-size-block {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
   margin-top: 1.1rem;
   padding-top: 1.1rem;
   border-top: 1px dashed var(--pp-warm-border);
-  align-items: start;
 }
 .wizard-size-controls { display: flex; flex-direction: column; gap: 0.6rem; }
 .wizard-size-controls > .wizard-field-label {
@@ -1684,6 +1715,7 @@ dialog .dialog-header {
   flex-direction: column;
   gap: 0.35rem;
   align-items: stretch;
+  width: 100%;
 }
 .wizard-preview-label {
   font-size: 0.7rem;
@@ -1694,8 +1726,9 @@ dialog .dialog-header {
 }
 .wizard-preview-canvas {
   width: 100%;
-  aspect-ratio: 4 / 3;
-  min-height: 140px;
+  aspect-ratio: 16 / 9;
+  min-height: 220px;
+  max-height: 60vh;
   border-radius: 12px;
   overflow: hidden;
   background: oklch(var(--b2));
@@ -1708,8 +1741,7 @@ dialog .dialog-header {
 }
 
 @media (max-width: 600px) {
-  .wizard-size-block { grid-template-columns: 1fr; }
-  .wizard-preview-canvas { aspect-ratio: 16 / 9; }
+  .wizard-preview-canvas { aspect-ratio: 4 / 3; min-height: 180px; }
 }
 
 /* Wizard review — editable name input above the summary rows. */
@@ -1990,6 +2022,7 @@ dialog .dialog-header {
   border-radius: 12px;
   border: 1px solid var(--pp-warm-border, oklch(var(--b3)));
   overflow: hidden;
+  width: 100%;
 }
 .render2d-header {
   padding: 0.5rem 0.8rem;
@@ -2000,7 +2033,7 @@ dialog .dialog-header {
 }
 .render2d-container {
   width: 100%;
-  height: clamp(280px, 55vh, 560px);
+  height: clamp(320px, 60vh, 720px);
   position: relative;
 }
 .render2d-svg { display: block; }

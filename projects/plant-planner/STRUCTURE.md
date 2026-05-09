@@ -5,9 +5,11 @@
 
 ## What This App Does
 
-PlantPlanner is a planter-design tool focused on plant selection. Creating a planter walks the user through a **7-step wizard** (`gardens.js → renderGardenWizard*`) that captures every constraint we feed to the catalog API: type, size, light, location → USDA zone, water plan, planting season. After confirming, the user lands in a **plant shopping step** (`shopping.js → openShoppingForGarden`): a Pinterest-style grid of plants matching those conditions, sourced from `plantplanner_plant_cache` (Trefle/Perenual-backed). The user hearts the plants they want; the shortlist persists on the garden. Continuing to placement opens a **2D top-down builder** (`render2d.js`) whose sidebar shows only the shortlisted plants, draggable onto the soil. Users sign in with Google, Apple, or email/password (Supabase Auth) to save multiple planters.
+PlantPlanner is a planter-design tool focused on plant selection. Creating a planter walks the user through a **7-step wizard** (`gardens.js → renderGardenWizard*`) that captures every constraint we feed to the catalog API: type, size, light, location → USDA zone, water plan, planting season. Step 1 presents seven planter types in two columns (Indoor: pot · planter box · greenhouse; Outdoor: pot · planter box · garden bed · raised bed). After confirming, the user lands in a **plant shopping step** (`shopping.js → openShoppingForGarden`): a Pinterest-style grid of plants matching those conditions, sourced from `plantplanner_plant_cache` (Trefle/Perenual-backed). The user hearts the plants they want; the shortlist persists on the garden. Continuing to placement opens a **2D top-down builder** (`render2d.js`) whose sidebar shows only the shortlisted plants, draggable onto the soil. Both the wizard preview and the builder render fill the available viewport width. Users sign in with Google, Apple, or email/password (Supabase Auth) to save multiple planters.
 
-The legacy seed-table catalog (`plantplanner_plants`) and its render templates have been retired from the user-facing flow as of Phase 2 — every browse, filter, and placement now reads from the cache. Companion-planting warnings, bloom-calendar strip, year-scrubber, and shading overlays were also dropped in the cutover (they depended on legacy fields); they will be re-introduced once equivalent data is available for cache plants.
+**Storage invariant for grid dimensions:** `grid_width` / `grid_height` are stored as inches when `garden_type` is one of `indoor_pot`, `indoor_planter_box`, `outdoor_pot`, `outdoor_planter_box`; in feet for `greenhouse`, `garden_bed`, `raised_bed`. Placement coordinates (`pos_x`, `pos_y`, `radius_feet`) are always feet — the backend converts grid dims to feet before bounds-checking. The single-source-of-truth helpers live in `shared-backend/routes/plant_planner/garden_units.py` (mirrored in `web/garden-units.js`).
+
+The legacy seed-table catalog (`plantplanner_plants`) and its render templates have been retired from the user-facing flow — every browse, filter, and placement now reads from the cache. Companion-planting warnings, bloom-calendar strip, year-scrubber, and shading overlays were dropped in the Phase-2 cutover (they depended on legacy fields); they will be re-introduced once equivalent data is available for cache plants.
 
 ## Current Status
 - Stage: Prototype
@@ -29,31 +31,28 @@ The legacy seed-table catalog (`plantplanner_plants`) and its render templates h
 ```
 projects/plant-planner/
 ├── web/              — Static HTML prototype (loaded by index.html)
-│   ├── config.js     — Sets window.APP_CONFIG.apiBase
-│   ├── state.js      — Global state variables
-│   ├── theme.js      — Theme registry
-│   ├── helpers.js    — apiFetch, nav helpers, logout, view dispatcher
-│   ├── auth.js       — Supabase Auth screen
-│   ├── gardens.js    — My-Gardens list + 7-step New-Garden wizard
-│   ├── location.js   — Geolocation + ZIP picker modal
-│   ├── render2d.js   — SVG-based 2D top-down planter renderer
-│   ├── shopping.js   — Plant-shopping step + builder shortlist sidebar
-│   ├── garden.js     — Builder shell — wires renderer, sidebar, save/reseed
-│   ├── init.js       — DOMContentLoaded, initSupabase, event listeners
-│   ├── styles.css    — App-specific styles
-│   └── build.sh      — Generates config.js at deploy
-│
-│   (Retired in Phase-2 cutover — files remain on disk for follow-up cleanup commit:
-│    catalog.js, plant-data.js, companions.js, shading.js, bloom-calendar.js,
-│    plant-models.js, plant-sprites.js, plant-thumbnails.js, plant-drag.js,
-│    touch-drag.js, render3d.js)
-└── STRUCTURE.md      — this file
+│   ├── config.js        — Sets window.APP_CONFIG.apiBase
+│   ├── state.js         — Global state variables
+│   ├── theme.js         — Theme registry
+│   ├── helpers.js       — apiFetch, nav helpers, logout, view dispatcher
+│   ├── garden-units.js  — Per-garden_type unit semantics (inches vs feet)
+│   ├── auth.js          — Supabase Auth screen
+│   ├── gardens.js       — My-Gardens list + 7-step New-Garden wizard
+│   ├── location.js      — Geolocation + ZIP picker modal
+│   ├── render2d.js      — SVG-based 2D top-down planter renderer
+│   ├── shopping.js      — Plant-shopping step + builder shortlist sidebar
+│   ├── garden.js        — Builder shell — wires renderer, sidebar, save/reseed
+│   ├── init.js          — DOMContentLoaded, initSupabase, event listeners
+│   ├── styles.css       — App-specific styles
+│   └── build.sh         — Generates config.js at deploy
+└── STRUCTURE.md         — this file
 
 shared-backend/routes/plant_planner/  — FastAPI route package
   ├── api_clients.py     — Trefle/Perenual fetchers + record normalization
   ├── image_mirror.py    — Supabase Storage upload helper (3 sizes)
   ├── catalog_routes.py  — /catalog/search + /catalog/{id} (cache-first)
   ├── garden_routes.py   — Garden CRUD + cache-only placement save
+  ├── garden_units.py    — Per-garden_type unit semantics (mirrors web/garden-units.js)
   ├── auth_routes.py     — /auth/me
   ├── location_routes.py — ZIP/geolocation → USDA zone
   ├── models.py          — Pydantic request/response models
@@ -61,7 +60,7 @@ shared-backend/routes/plant_planner/  — FastAPI route package
   ├── constants.py       — Enums for garden_type / shade / season / water
   └── data/              — Static lookup tables (e.g. zip3_to_zone.json)
 
-db/migrations/plantplanner/001_baseline.sql … 011_plant_cache_and_shortlist.sql
+db/migrations/plantplanner/001_baseline.sql … 012_planter_types_redesign.sql
 ```
 
 ## Data Model
@@ -178,7 +177,9 @@ Garden Builder View
 
 - 2026-05-09 — **Phase-1 plant-first refactor.** Refocused the tool around plant selection. (1) New `plantplanner_plant_cache` table is the source of truth for all browsing — populated lazily from Trefle (free) with Perenual (freemium) fallback for hardiness zones. Image URLs from each API are mirrored into Supabase Storage in three sizes (thumbnail / medium / regular) and served from there, so the UI never round-trips to third-party CDNs at read time. Migration `011_plant_cache_and_shortlist.sql` adds the cache table, a `shortlist_plant_cache_ids` array on `plantplanner_gardens`, and a nullable `plant_cache_id` on `plantplanner_garden_plants` (XOR with the legacy `plant_id`). (2) New backend routes `GET /catalog/search` and `GET /catalog/{cache_id}` are cache-first; misses trigger a Trefle search (+ Perenual hardiness merge), upsert into the cache, and mirror images. (3) New shopping step (`web/shopping.js → openShoppingForGarden`) lands the user after wizard confirmation in a Pinterest-style grid of cache plants matching the wizard's conditions; the user hearts plants to shortlist, which persists on the garden. (4) The 3D Three.js render is hidden in this iteration — the builder uses an SVG-based 2D top-down renderer (`web/render2d.js`). (5) Builder sidebar switched from the seed-table catalog to a shortlist panel for any garden with a populated shortlist; legacy gardens still saw the old catalog at this point.
 
-- 2026-05-09 — **Phase-2 cutover: legacy DB integration removed.** All user-facing reads go through `plantplanner_plant_cache`. Backend deletes: `GET /plants` and `GET /companions` routes (and their files). Backend simplifies: `GET /gardens/{id}` no longer joins `plantplanner_plants` / `plantplanner_renders`; `PUT /gardens/{id}/plants` accepts only `plant_cache_id` (XOR + the legacy `plant_id` field on `PlantPlacement` are gone). Frontend deletes from the bundle: `catalog.js`, `plant-data.js`, `companions.js`, `shading.js`, `bloom-calendar.js`. Builder simplifies to a single shortlist sidebar (no fallback catalog branch). Wizard gains step 5 — **Planting season** — and moves Review to step 6/7 (with the location-skip rule preserved). The wizard's review-step "X of Y plants match" preview now hits `/catalog/search` live instead of running `plantMatchesFilters` against the seed pool. `/catalog/search` gains four new query params — `planting_season` (mapped to plant `cycle`), `garden_type` + `grid_width` + `grid_height` (combined into a small/medium/large bucket that drives `max_height_cm` and `max_spread_cm` caps so small pots don't return tree-sized plants), plus `planter_size` as an explicit override. Companion-warning chips, bloom calendar, year scrubber, and shading overlays are gone for now — they were seed-coupled and will be re-introduced in Phase 3 once equivalent data sources exist for cache plants. Tables `plantplanner_plants`, `plantplanner_companions`, and `plantplanner_renders` are still in the database but unused; a future `012_drop_legacy_plant_tables.sql` will retire them once production gardens are confirmed clear.
+- 2026-05-09 — **Phase-2 cutover: legacy DB integration removed.** All user-facing reads go through `plantplanner_plant_cache`. Backend deletes: `GET /plants` and `GET /companions` routes (and their files). Backend simplifies: `GET /gardens/{id}` no longer joins `plantplanner_plants` / `plantplanner_renders`; `PUT /gardens/{id}/plants` accepts only `plant_cache_id` (XOR + the legacy `plant_id` field on `PlantPlacement` are gone). Frontend deletes from the bundle: `catalog.js`, `plant-data.js`, `companions.js`, `shading.js`, `bloom-calendar.js`. Builder simplifies to a single shortlist sidebar (no fallback catalog branch). Wizard gains step 5 — **Planting season** — and moves Review to step 6/7 (with the location-skip rule preserved). The wizard's review-step "X of Y plants match" preview now hits `/catalog/search` live instead of running `plantMatchesFilters` against the seed pool. `/catalog/search` gains four new query params — `planting_season` (mapped to plant `cycle`), `garden_type` + `grid_width` + `grid_height` (combined into a small/medium/large bucket that drives `max_height_cm` and `max_spread_cm` caps so small pots don't return tree-sized plants), plus `planter_size` as an explicit override. Companion-warning chips, bloom calendar, year scrubber, and shading overlays are gone for now — they were seed-coupled and will be re-introduced in Phase 3 once equivalent data sources exist for cache plants. Tables `plantplanner_plants`, `plantplanner_companions`, and `plantplanner_renders` are still in the database but unused; a future `*_drop_legacy_plant_tables.sql` will retire them once production gardens are confirmed clear.
+
+- 2026-05-09 — **Step-one redesign: 7 planter types + units fix.** Migration `012_planter_types_redesign.sql` expands `garden_type` from 5 to 7 values (`indoor_pot`, `indoor_planter_box`, `greenhouse`, `outdoor_pot`, `outdoor_planter_box`, `garden_bed`, `raised_bed`); existing `'indoor'` rows migrate to `'indoor_pot'`, `'outdoor'` to `'outdoor_pot'`. Wizard step 1 redesigns to a two-column picker (Indoor | Outdoor). New shared helper modules — `shared-backend/routes/plant_planner/garden_units.py` and `web/garden-units.js` — codify the storage invariant (pots and planter boxes store inches in grid_width/grid_height; greenhouse + beds store feet; placements always feet). The 2D top-down renderer (`render2d.js`) and `garden_routes.save_garden_plants` bounds check now normalize grid dims to feet via `gridDimToFeet` / `grid_dim_to_feet`, fixing a silent bug where indoor pots rendered as 12-foot soil patches and accepted out-of-bounds placements. Both the wizard-step-1 preview and the builder's render2d pane now span full content width (preview stacked below the size controls; builder collapses sidebar above the render at <900px). All 11 Phase-2-retired web/*.js files (`render3d.js`, `plant-data.js`, `plant-drag.js`, `touch-drag.js`, `plant-models.js`, `plant-sprites.js`, `plant-thumbnails.js`, `companions.js`, `shading.js`, `bloom-calendar.js`, `catalog.js`) are deleted from disk in this commit.
 
 ### Coordinate convention
 

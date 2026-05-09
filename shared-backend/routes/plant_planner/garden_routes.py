@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException
 from db import get_supabase
 from . import router
 from .dependencies import CurrentUser, get_current_user
+from .garden_units import grid_dim_to_feet
 from .models import CreateGardenBody, UpdateGardenBody, SavePlantsBody
 
 
@@ -137,7 +138,7 @@ async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: Current
     sb = get_supabase()
     existing = (
         sb.table("plantplanner_gardens")
-        .select("id, grid_width, grid_height")
+        .select("id, grid_width, grid_height, garden_type")
         .eq("id", garden_id)
         .eq("user_id", user.user_id)
         .execute()
@@ -145,14 +146,18 @@ async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: Current
     if not existing.data:
         raise HTTPException(status_code=404, detail="Garden not found")
 
-    grid_width = existing.data[0]["grid_width"]
-    grid_height = existing.data[0]["grid_height"]
+    garden_type = existing.data[0].get("garden_type")
+    # Placements (pos_x / pos_y / radius_feet) are always in feet, so normalize
+    # the grid dims into feet before bounds-checking. For inch-unit types
+    # (pots, planter boxes), grid_width=12 means 12 inches → 1 foot.
+    width_ft  = grid_dim_to_feet(existing.data[0]["grid_width"],  garden_type) or 0.0
+    height_ft = grid_dim_to_feet(existing.data[0]["grid_height"], garden_type) or 0.0
 
     for p in body.plants:
-        if not (0 <= p.pos_x <= grid_width):
-            raise HTTPException(status_code=422, detail=f"Placement out of bounds: pos_x={p.pos_x} not in [0, {grid_width}]")
-        if not (0 <= p.pos_y <= grid_height):
-            raise HTTPException(status_code=422, detail=f"Placement out of bounds: pos_y={p.pos_y} not in [0, {grid_height}]")
+        if not (0 <= p.pos_x <= width_ft):
+            raise HTTPException(status_code=422, detail=f"Placement out of bounds: pos_x={p.pos_x} not in [0, {width_ft}] ft")
+        if not (0 <= p.pos_y <= height_ft):
+            raise HTTPException(status_code=422, detail=f"Placement out of bounds: pos_y={p.pos_y} not in [0, {height_ft}] ft")
         if p.radius_feet <= 0:
             raise HTTPException(status_code=422, detail=f"Invalid radius_feet: {p.radius_feet}")
 

@@ -1,15 +1,17 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: post-011_plant_cache_and_shortlist (Phase-1 plant-first refactor:
--- new plantplanner_plant_cache table backed by Trefle/Perenual APIs with
--- mirrored Supabase Storage images in 3 sizes; gardens gain a shortlist column;
--- garden_plants can now reference either the legacy seed table or the new cache).
+-- Last updated: post-012_planter_types_redesign (garden_type expanded from
+-- 5 to 7 values; existing 'indoor' / 'outdoor' rows migrated to '*_pot').
 -- Migrations applied: 001_baseline, 002_seed, 003_supabase_auth,
 --                     004_enrich_plants, 005_seed_enriched, 006_companions,
 --                     007_companions_seed, 008_real_radius_placement,
 --                     009_growth_lifecycle, 010_garden_conditions,
---                     011_plant_cache_and_shortlist.
+--                     011_plant_cache_and_shortlist, 012_planter_types_redesign.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
+--
+-- Storage invariant: grid_width / grid_height store INCHES when garden_type
+-- is one of {indoor_pot, indoor_planter_box, outdoor_pot, outdoor_planter_box}
+-- and FEET otherwise. pos_x / pos_y / radius_feet are ALWAYS feet.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Supabase Auth-backed profiles. id == auth.users.id.
@@ -61,7 +63,10 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
   grid_width      INT         NOT NULL DEFAULT 4,
   grid_height     INT         NOT NULL DEFAULT 4,
   garden_type     TEXT        NOT NULL DEFAULT 'garden_bed'
-                  CHECK (garden_type IN ('indoor', 'outdoor', 'garden_bed', 'raised_bed', 'greenhouse')),
+                  CHECK (garden_type IN (
+                    'indoor_pot', 'indoor_planter_box', 'greenhouse',
+                    'outdoor_pot', 'outdoor_planter_box', 'garden_bed', 'raised_bed'
+                  )),
   shade_level     TEXT        NOT NULL DEFAULT 'full_sun',    -- full_sun | partial | shade
   planting_season TEXT        NOT NULL DEFAULT 'spring',      -- spring | summer | fall | winter
   water_plan      TEXT        NOT NULL DEFAULT 'regular'

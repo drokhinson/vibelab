@@ -90,23 +90,27 @@ async function renderGardens() {
 
 function plantertypeLabel(t) {
   switch (t) {
-    case 'indoor':     return 'Indoor planter';
-    case 'outdoor':    return 'Outdoor planter';
-    case 'raised_bed': return 'Raised bed';
-    case 'greenhouse': return 'Greenhouse';
+    case 'indoor_pot':          return 'Indoor pot';
+    case 'indoor_planter_box':  return 'Indoor planter box';
+    case 'greenhouse':          return 'Greenhouse';
+    case 'outdoor_pot':         return 'Outdoor pot';
+    case 'outdoor_planter_box': return 'Outdoor planter box';
+    case 'raised_bed':          return 'Raised bed';
     case 'garden_bed':
-    default:           return 'Garden bed';
+    default:                    return 'Garden bed';
   }
 }
 
 function plantertypeIcon(t) {
   switch (t) {
-    case 'indoor':     return '🪴';
-    case 'outdoor':    return '🌿';
-    case 'raised_bed': return '🟫';
-    case 'greenhouse': return '🏠';
+    case 'indoor_pot':          return '🪴';
+    case 'indoor_planter_box':  return '🪟';
+    case 'greenhouse':          return '🏠';
+    case 'outdoor_pot':         return '🌿';
+    case 'outdoor_planter_box': return '🟫';
+    case 'raised_bed':          return '🟫';
     case 'garden_bed':
-    default:           return '🌱';
+    default:                    return '🌱';
   }
 }
 
@@ -120,9 +124,9 @@ function waterPlanLabel(w) {
 }
 
 function sizeLabelFor(g) {
-  if (g.garden_type === 'indoor') {
-    // Indoor planters store inches in grid_width (diameter) and grid_height (depth).
-    return g.grid_width + '" × ' + g.grid_height + '" pot';
+  // Pots and planter-boxes store inches; greenhouse / beds store feet.
+  if (gardenTypeUsesInches(g.garden_type)) {
+    return g.grid_width + '" × ' + g.grid_height + '"';
   }
   return g.grid_width + '×' + g.grid_height + ' ft';
 }
@@ -152,8 +156,8 @@ function startGardenWizard() {
     name: _autoGardenName(initialType),
     name_was_auto: true,
     garden_type: initialType,
-    grid_width:  prev && prev.garden_type !== 'indoor' ? prev.grid_width  : 4,
-    grid_height: prev && prev.garden_type !== 'indoor' ? prev.grid_height : 4,
+    grid_width:  prev && !gardenTypeUsesInches(prev.garden_type) ? prev.grid_width  : _defaultGridFor(initialType).w,
+    grid_height: prev && !gardenTypeUsesInches(prev.garden_type) ? prev.grid_height : _defaultGridFor(initialType).h,
     shade_level: prev ? (prev.shade_level || 'full_sun') : 'full_sun',
     water_plan:  prev ? (prev.water_plan  || 'regular')  : 'regular',
     planting_season: prev ? (prev.planting_season || 'spring') : 'spring',
@@ -182,7 +186,7 @@ function _wizardStepsTotal() {
   return _wizardSkipsLocation() ? 5 : 6;
 }
 function _wizardSkipsLocation() {
-  return wizardDraft && (wizardDraft.garden_type === 'indoor' || wizardDraft.garden_type === 'greenhouse');
+  return wizardDraft && gardenTypeIsClimateControlled(wizardDraft.garden_type);
 }
 
 function _wizardStepLabel() {
@@ -284,13 +288,43 @@ function _wizardAdvance() {
 
 // ── Step 1: Planter type + size + live preview ──────────────────────────────
 
-var PLANTER_TYPE_OPTIONS = [
-  { id: 'garden_bed', label: 'Garden bed',     icon: '🌱', desc: 'In-ground bed; outdoor; uses your local hardiness zone.' },
-  { id: 'raised_bed', label: 'Raised bed',     icon: '🟫', desc: 'Elevated bed with controlled soil; outdoor.' },
-  { id: 'outdoor',    label: 'Outdoor planter', icon: '🌿', desc: 'Container outside (deck, balcony, patio).' },
-  { id: 'indoor',     label: 'Indoor planter', icon: '🪴', desc: 'Container indoors. Climate-controlled; no zone needed.' },
-  { id: 'greenhouse', label: 'Greenhouse',     icon: '🏠', desc: 'Climate-controlled; no zone needed.' }
-];
+// Two-column type picker. Indoor types are climate-controlled (skip the
+// Location step); outdoor types use the user's local hardiness zone — even
+// outdoor pots (a 12" pot on a balcony in zone 4 still freezes).
+var PLANTER_TYPE_COLUMNS = {
+  indoor: [
+    { id: 'indoor_pot',         label: 'Pot',          icon: '🪴', desc: 'Container indoors. Inches.' },
+    { id: 'indoor_planter_box', label: 'Planter box',  icon: '🪟', desc: 'Rectangular indoor planter (window box, sill). Inches.' },
+    { id: 'greenhouse',         label: 'Greenhouse',   icon: '🏠', desc: 'Climate-controlled structure. Feet.' }
+  ],
+  outdoor: [
+    { id: 'outdoor_pot',         label: 'Pot',          icon: '🌿', desc: 'Container outside (deck, balcony, patio). Inches.' },
+    { id: 'outdoor_planter_box', label: 'Planter box',  icon: '🟫', desc: 'Rectangular outdoor planter / trough. Inches.' },
+    { id: 'garden_bed',          label: 'Garden bed',   icon: '🌱', desc: 'In-ground bed. Feet.' },
+    { id: 'raised_bed',          label: 'Raised bed',   icon: '🟫', desc: 'Elevated bed with controlled soil. Feet.' }
+  ]
+};
+
+// Default grid_width / grid_height when the user picks each type. Inch-unit
+// types use realistic small sizes; bed types start at 4 ft × 4 ft.
+var _DEFAULT_GRID_BY_TYPE = {
+  indoor_pot:          { w: 12, h: 12 },
+  indoor_planter_box:  { w: 24, h: 12 },
+  greenhouse:          { w: 8,  h: 8  },
+  outdoor_pot:         { w: 16, h: 16 },
+  outdoor_planter_box: { w: 36, h: 12 },
+  garden_bed:          { w: 4,  h: 4  },
+  raised_bed:          { w: 4,  h: 4  }
+};
+
+function _defaultGridFor(t) {
+  return _DEFAULT_GRID_BY_TYPE[t] || { w: 4, h: 4 };
+}
+
+// Flat list helper for any code that still needs to iterate every option.
+function _allPlanterTypes() {
+  return PLANTER_TYPE_COLUMNS.indoor.concat(PLANTER_TYPE_COLUMNS.outdoor);
+}
 
 // Mini-preview state: a Three.js handle reused on each rebuild + a debounce id.
 var _wizardPreviewHandle = null;
@@ -329,15 +363,11 @@ function _rebuildWizardPreview() {
   }, 120);
 }
 
-function renderWizardStepTypeSize() {
-  var prevType = wizardDraft.garden_type;
-  var html = '<div class="wizard-page">';
-  html += _wizardHeader('What kind of planter — and how big?', 'Pick a planter type, then size it. The 3D preview updates live.');
-
-  // Type cards
-  html += '<div class="wizard-options">';
-  for (var i = 0; i < PLANTER_TYPE_OPTIONS.length; i++) {
-    var o = PLANTER_TYPE_OPTIONS[i];
+function _renderWizardTypeColumn(title, options) {
+  var html = '<div class="wizard-options-col">';
+  html += '<div class="wizard-options-col-header">' + escapeHtml(title) + '</div>';
+  for (var i = 0; i < options.length; i++) {
+    var o = options[i];
     var active = wizardDraft.garden_type === o.id ? ' active' : '';
     html += ''
       + '<button type="button" class="wizard-option' + active + '" data-type="' + o.id + '">'
@@ -349,12 +379,29 @@ function renderWizardStepTypeSize() {
       + '</button>';
   }
   html += '</div>';
+  return html;
+}
 
-  // Size + preview row (revealed once a type is picked).
+function renderWizardStepTypeSize() {
+  var html = '<div class="wizard-page">';
+  html += _wizardHeader('What kind of planter — and how big?', 'Pick a planter type, then size it. The preview updates live.');
+
+  // Two columns — Indoor (climate-controlled) vs Outdoor (uses your zone).
+  html += '<div class="wizard-options-2col">';
+  html += _renderWizardTypeColumn('Indoor',  PLANTER_TYPE_COLUMNS.indoor);
+  html += _renderWizardTypeColumn('Outdoor', PLANTER_TYPE_COLUMNS.outdoor);
+  html += '</div>';
+
+  // Size + preview block (revealed once a type is picked). Stacked: controls
+  // on top, full-width preview canvas below.
   if (wizardDraft.garden_type) {
+    var unit = gardenTypeUnitLabel(wizardDraft.garden_type);
+    var dimsLabel = gardenTypeUsesInches(wizardDraft.garden_type)
+      ? 'Pot / box dimensions (' + unit + ')'
+      : 'Bed dimensions (' + unit + ')';
     html += '<div class="wizard-size-block">';
     html +=   '<div class="wizard-size-controls">';
-    html +=     '<div class="wizard-field-label">' + (wizardDraft.garden_type === 'indoor' ? 'Pot dimensions (in)' : 'Bed dimensions (ft)') + '</div>';
+    html +=     '<div class="wizard-field-label">' + escapeHtml(dimsLabel) + '</div>';
     html +=     _renderSizeControls();
     html +=   '</div>';
     html +=   '<div class="wizard-preview-wrap">';
@@ -369,29 +416,23 @@ function renderWizardStepTypeSize() {
   html += '</div>';
   app.innerHTML = html;
 
-  // Type clicks. We do a soft re-render of just the size block + preview so
-  // we don't lose focus/scroll position; on first pick (prevType==null) we
-  // fall back to a full re-render to reveal the size block.
   document.querySelectorAll('.wizard-option').forEach(function(btn) {
     btn.onclick = function() {
       var newType = btn.dataset.type;
       var wasType = wizardDraft.garden_type;
       wizardDraft.garden_type = newType;
-      // Switching to/from indoor changes the size unit; reset to a sane default.
+      // Switching unit family OR planter category resets to a sensible default.
       if (wasType !== newType) {
-        if (newType === 'indoor') {
-          wizardDraft.grid_width  = 12;
-          wizardDraft.grid_height = 10;
-        } else if (wasType === 'indoor') {
-          wizardDraft.grid_width  = 4;
-          wizardDraft.grid_height = 4;
+        var changedUnits = gardenTypeUsesInches(wasType) !== gardenTypeUsesInches(newType);
+        if (changedUnits || !wasType) {
+          var d = _defaultGridFor(newType);
+          wizardDraft.grid_width  = d.w;
+          wizardDraft.grid_height = d.h;
         }
-        // Auto-name follows the type unless the user has typed something custom.
         if (wizardDraft.name_was_auto) {
           wizardDraft.name = _autoGardenName(newType);
         }
       }
-      // Re-render this step in place. (Cheaper than the dispatcher.)
       renderWizardStepTypeSize();
       _initIcons();
     };
@@ -401,7 +442,6 @@ function renderWizardStepTypeSize() {
   document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
   _bindSizeControls();
 
-  // Build / rebuild the live mini-preview, but only after the type is chosen.
   if (wizardDraft.garden_type) _rebuildWizardPreview();
 
   _initIcons();
@@ -409,17 +449,20 @@ function renderWizardStepTypeSize() {
 
 // Markup for the size controls — same widget as before, minus the name field.
 function _renderSizeControls() {
-  var isIndoor = wizardDraft.garden_type === 'indoor';
+  var usesInches = gardenTypeUsesInches(wizardDraft.garden_type);
   var html = '';
-  if (isIndoor) {
+  if (usesInches) {
+    // Pots and planter boxes — width × length in inches. Bigger range than
+    // the old indoor-only widget so outdoor planter boxes (typically 24-48")
+    // still fit. Same `wz-diam` / `wz-depth` IDs to reuse the bind handlers.
     html += '<div class="wizard-field-row">'
          +   '<label class="wizard-field flex-1">'
-         +     '<span class="wizard-field-label">Diameter (in)</span>'
-         +     '<input id="wz-diam" type="number" min="4" max="48" class="input input-bordered input-sm" value="' + wizardDraft.grid_width + '" />'
+         +     '<span class="wizard-field-label">Width (in)</span>'
+         +     '<input id="wz-diam" type="number" min="4" max="72" class="input input-bordered input-sm" value="' + wizardDraft.grid_width + '" />'
          +   '</label>'
          +   '<label class="wizard-field flex-1">'
-         +     '<span class="wizard-field-label">Depth (in)</span>'
-         +     '<input id="wz-depth" type="number" min="4" max="36" class="input input-bordered input-sm" value="' + wizardDraft.grid_height + '" />'
+         +     '<span class="wizard-field-label">Length (in)</span>'
+         +     '<input id="wz-depth" type="number" min="4" max="72" class="input input-bordered input-sm" value="' + wizardDraft.grid_height + '" />'
          +   '</label>'
          + '</div>';
   } else {
@@ -510,7 +553,7 @@ var LIGHT_OPTIONS = [
 ];
 
 function renderWizardStepLight() {
-  var subtitle = wizardDraft.garden_type === 'indoor'
+  var subtitle = gardenTypeIsClimateControlled(wizardDraft.garden_type)
     ? 'How sunny is the spot for this planter?'
     : 'How much direct sun does this planter get?';
 
@@ -600,18 +643,18 @@ var WATER_OPTIONS = [
   { id: 'rain_only',  label: 'Rain only',          icon: '☔',     desc: 'No supplemental watering; only low-water plants survive.' }
 ];
 
-// Indoor planters and greenhouses are sheltered — rain isn't a real option.
+// Climate-controlled planters are sheltered — rain isn't a real option.
 function _wizardWaterOptions() {
-  if (wizardDraft && (wizardDraft.garden_type === 'indoor' || wizardDraft.garden_type === 'greenhouse')) {
+  if (wizardDraft && gardenTypeIsClimateControlled(wizardDraft.garden_type)) {
     return WATER_OPTIONS.filter(function(o) { return o.id !== 'rain_only'; });
   }
   return WATER_OPTIONS;
 }
 
 function renderWizardStepWater() {
-  // If the user came back to this step after switching to indoor/greenhouse,
-  // a previously-selected 'rain_only' is no longer valid — reset.
-  var isSheltered = wizardDraft.garden_type === 'indoor' || wizardDraft.garden_type === 'greenhouse';
+  // If the user came back here after switching to a sheltered type, a
+  // previously-selected 'rain_only' is no longer valid — reset.
+  var isSheltered = gardenTypeIsClimateControlled(wizardDraft.garden_type);
   if (isSheltered && wizardDraft.water_plan === 'rain_only') {
     wizardDraft.water_plan = 'regular';
   }
