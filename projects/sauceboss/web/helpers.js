@@ -245,7 +245,10 @@ function prepareItems(items) {
 function render() {
   const app = document.getElementById('app');
   switch (state.screen) {
+    case 'tab-shell':              app.innerHTML = renderActiveTab(); break;
     case 'meal-builder':           app.innerHTML = renderMealBuilder(); break;
+    case 'meal-category':          app.innerHTML = renderMealCategory ? renderMealCategory() : renderMealBuilder(); break;
+    case 'meal-dish':              app.innerHTML = renderMealDish ? renderMealDish() : renderMealBuilder(); break;
     case 'meal-recipe':            app.innerHTML = renderMealRecipe(); break;
     case 'prep-selector':          app.innerHTML = renderPrepSelector(); break;
     case 'sauce-selector':         app.innerHTML = renderSauceSelector(); break;
@@ -267,7 +270,84 @@ function render() {
         </div>`;
     }
   }
+  // Bottom nav re-renders on every tick so it reflects activeTab + auth state.
+  if (typeof renderBottomNav === 'function') renderBottomNav();
   _initIcons();
+}
+
+// Tab-shell dispatcher. Each tab renderer is defined in its own module
+// (saucebook.js / browse.js / pantry.js); this is just the switch.
+function renderActiveTab() {
+  switch (state.activeTab) {
+    case 'saucebook':
+      if (!currentUser) return _tabLockedShell('saucebook');
+      return typeof renderSaucebook === 'function' ? renderSaucebook() : _tabPlaceholder('Saucebook');
+    case 'browse':
+      return typeof renderBrowse === 'function' ? renderBrowse() : _tabPlaceholder('Browse');
+    case 'pantry':
+      if (!currentUser) return _tabLockedShell('pantry');
+      return typeof renderPantry === 'function' ? renderPantry() : _tabPlaceholder('Pantry');
+    default:
+      return _tabPlaceholder('Sauceboss');
+  }
+}
+
+function _tabLockedShell(label) {
+  return `
+    <div class="screen-wrap">
+      <div class="scroll-body">
+        <div class="tab-locked">
+          <i data-lucide="lock"></i>
+          <h2>Sign in to use ${label}</h2>
+          <p>Create an account to save recipes to your saucebook and track what's in your pantry.</p>
+          <button class="btn-primary" onclick="openAuthModal()">Sign in</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function _tabPlaceholder(label) {
+  return `<div class="screen-wrap"><div class="scroll-body"><p style="padding:2rem;text-align:center;color:#6B7280">${label} loading…</p></div></div>`;
+}
+
+// Refresh state.disabledIngredients from state.pantry. This is the bridge
+// between the foodId-keyed pantry and the name-keyed filter helpers.
+function syncDisabledFromPantry() {
+  const out = new Set();
+  for (const ing of state.pantry.ingredients || []) {
+    if (ing.missing && ing.name) out.add(ing.name);
+  }
+  state.disabledIngredients = out;
+}
+
+// Toggle a single foodId in the user's pantry-missing set, persist to /pantry
+// in the background, and re-render so the saucebook ingredient filter and the
+// Pantry tab stay in sync. The optimistic update lets the UI feel instant;
+// on error we revert.
+async function togglePantryMissing(foodId) {
+  if (!currentUser || !foodId) return;
+  const missing = state.pantry.missing;
+  const wasMissing = missing.has(foodId);
+  if (wasMissing) missing.delete(foodId);
+  else missing.add(foodId);
+  for (const ing of state.pantry.ingredients) {
+    if (ing.foodId === foodId) ing.missing = !wasMissing;
+  }
+  syncDisabledFromPantry();
+  render();
+  try {
+    const data = await api.setPantryMissing([...missing]);
+    state.pantry.ingredients = data.ingredients;
+    syncDisabledFromPantry();
+  } catch (err) {
+    console.error('[sauceboss] pantry sync failed', err);
+    if (wasMissing) missing.add(foodId); else missing.delete(foodId);
+    for (const ing of state.pantry.ingredients) {
+      if (ing.foodId === foodId) ing.missing = wasMissing;
+    }
+    syncDisabledFromPantry();
+    render();
+  }
 }
 
 function toggleEditMode() {

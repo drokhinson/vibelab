@@ -17,7 +17,7 @@ function _builderValidate(b) {
 
   const issues = [];
   if (!b.name.trim())          issues.push('Add a sauce name');
-  if (!b.sauceType)            issues.push('Select a type (Sauce / Marinade / Dressing)');
+  if (!b.sauceType)            issues.push('Select a type (Sauce / Marinade / Dressing / Dip)');
   if (!hasCuisine)             issues.push('Select a cuisine');
   if (!b.color)                issues.push('Pick a color');
   if (untitledStepIdxs.length) {
@@ -312,6 +312,9 @@ function renderBuilderReview() {
 function openBuilder() {
   if (!currentUser) { openAuthModal(); return; }
   state.builder = defaultBuilder();
+  // Track where to land after save: from the admin sauce manager → admin;
+  // from the Saucebook FAB or any other entry point → Saucebook tab.
+  state.recipeReturnTo = state.screen === 'admin' ? 'admin' : 'tab-shell';
   navigate('builder');
 }
 
@@ -690,13 +693,33 @@ async function builderSave() {
         }))
         .filter(s => s.ingredients.length > 0),
     };
+    let result;
     if (b.editingId) {
-      await updateSauce(b.editingId, payload);
+      result = await updateSauce(b.editingId, payload);
+      // Server returns { message, forkedId } when the editor isn't the owner.
+      // The user's saucebook entry has already been repointed server-side; we
+      // just need to sync the local mirror so the next render shows the variant.
+      if (result && result.forkedId) {
+        try {
+          state.saucebook = await api.listSaucebook();
+        } catch (_) {}
+      }
     } else {
-      await createSauce(payload);
+      result = await createSauce(payload);
+      // Backend auto-adds the new sauce to the author's saucebook; mirror that
+      // locally so the Saucebook tab shows it without a re-fetch.
+      try {
+        state.saucebook = await api.listSaucebook();
+      } catch (_) {}
     }
     state.builder = null;
-    await openSauceManager();
+    // Default landing after save is the Saucebook tab; admins coming from the
+    // sauce manager keep the legacy admin landing if that's where they began.
+    if (state.recipeReturnTo === 'admin') {
+      await openSauceManager();
+    } else {
+      setActiveTab('saucebook');
+    }
   } catch (err) {
     b.saving = false;
     b.error = err.message;

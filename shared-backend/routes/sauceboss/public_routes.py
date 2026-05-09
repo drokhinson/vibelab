@@ -11,7 +11,9 @@ from shared_models import HealthResponse
 from . import router
 from .dependencies import CurrentUser, get_current_user
 from .models import (
+    Attachment,
     CreateSauceRequest,
+    ForkResponse,
     FoodRow,
     FoodsListResponse,
     FoodsWithUsageResponse,
@@ -75,16 +77,15 @@ async def create_sauce(
 ):
     """Create a user-submitted sauce with steps, ingredients, and item pairings.
 
-    ``sauceType`` selects which dish category this sauce pairs with
-    ('sauce'→carb, 'marinade'→protein, 'dressing'→salad). ``itemIds`` lists
-    Type-row item ids of that category. The DB trigger on
-    sauceboss_sauce_items rejects any sauce_type ↔ item.category mismatch.
+    Sauce-to-dish targeting goes through `attachments` (preferred) or the
+    legacy `itemIds` (mapped to dish-level attachments). The sauce_type's
+    pairing rule (sauce + dip → carb, marinade → protein, dressing → salad)
+    is enforced by the sauceboss_sauce_attachments_check trigger.
 
-    Each ingredient's raw ``unit`` string is resolved against the unit registry
-    here and emitted to the RPC as ``unitId`` + canonical quantities; foods are
-    upserted by the RPC keyed on lower(name). The RPC also persists the
-    authenticated user's id as ``created_by``.
+    The new sauce is automatically added to the author's saucebook so it
+    appears in their Saucebook tab without an extra round-trip.
     """
+    _ensure_attachments(body)
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
     sauce_id = f"user-{slug}-{secrets.token_hex(2)}"
 
@@ -100,42 +101,98 @@ async def create_sauce(
         raise HTTPException(500, f"Database error: {str(e)}")
     if result.data is None:
         raise HTTPException(500, "Failed to create sauce — RPC returned null")
+
+    # Auto-add to author's saucebook (idempotent).
+    try:
+        sb.table("sauceboss_saucebook").upsert(
+            {"user_id": user.user_id, "sauce_id": sauce_id},
+            on_conflict="user_id,sauce_id",
+        ).execute()
+    except Exception:
+        logger.exception("create_sauce: failed to auto-add %s to saucebook for %s", sauce_id, user.user_id)
+
     return {"id": result.data, "status": "created"}
 
 
 @router.patch(
     "/sauces/{sauce_id}",
-    response_model=MessageResponse,
+    response_model=MessageResponse | ForkResponse,
     status_code=200,
-    summary="Update a sauce (owner or admin only)",
+    summary="Update a sauce (owner / admin = in-place; non-owner = fork into a variant)",
 )
 async def update_sauce(
     body: UpdateSauceRequest,
     sauce_id: str = Path(..., description="Target sauce id"),
     user: CurrentUser = Depends(get_current_user),
-) -> MessageResponse:
-    """Replace a sauce's scalar fields, item links, and steps. Owner or admin only."""
+):
+    """Edit a sauce.
+
+    Three cases:
+      * Author or admin → in-place edit (existing flow).
+      * Non-owner with a saucebook entry → fork into a variant under the
+        family root, owned by the caller. The caller's saucebook row is
+        repointed to the new variant atomically; response includes the new
+        id as `forkedId`.
+      * Non-owner without a saucebook entry → 403; clients must add to
+        saucebook before editing.
+    """
+    _ensure_attachments(body)
     sb = get_supabase()
     existing = (
-        sb.table("sauceboss_sauces").select("id, created_by").eq("id", sauce_id).execute()
+        sb.table("sauceboss_sauces")
+        .select("id, created_by, parent_sauce_id, sauce_type")
+        .eq("id", sauce_id)
+        .execute()
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Sauce not found")
     row = existing.data[0]
-    if not user.is_admin and row.get("created_by") != user.user_id:
-        raise HTTPException(status_code=403, detail="You can only edit your own sauces")
 
-    if body.parentSauceId:
-        _validate_parent_sauce(body.parentSauceId, sauce_id)
+    is_owner = row.get("created_by") == user.user_id
+    if user.is_admin or is_owner:
+        if body.parentSauceId:
+            _validate_parent_sauce(body.parentSauceId, sauce_id)
+        payload = _build_sauce_payload(sauce_id, body, created_by=None)
+        try:
+            result = sb.rpc("update_sauceboss_sauce", {"p_data": payload}).execute()
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {str(e)}")
+        if result.data is None:
+            raise HTTPException(500, "Failed to update sauce — RPC returned null")
+        return MessageResponse(message="Sauce updated")
 
-    payload = _build_sauce_payload(sauce_id, body, created_by=None)
+    # Non-owner: must have it in their saucebook to edit.
+    sb_row = (
+        sb.table("sauceboss_saucebook")
+        .select("user_id")
+        .eq("user_id", user.user_id)
+        .eq("sauce_id", sauce_id)
+        .execute()
+    )
+    if not sb_row.data:
+        raise HTTPException(
+            status_code=403,
+            detail="Add this recipe to your saucebook before editing — it will be saved as a variant of the original.",
+        )
+
+    # Build a fresh-id payload (the RPC mints one if id is empty/missing).
+    fork_payload = _build_sauce_payload(sauce_id="", body=body, created_by=user.user_id)
+    fork_payload.pop("id", None)
+
     try:
-        result = sb.rpc("update_sauceboss_sauce", {"p_data": payload}).execute()
+        new_id = sb.rpc(
+            "fork_sauceboss_sauce",
+            {
+                "p_source_id": sauce_id,
+                "p_user": user.user_id,
+                "p_data": fork_payload,
+            },
+        ).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
-    if result.data is None:
-        raise HTTPException(500, "Failed to update sauce — RPC returned null")
-    return MessageResponse(message="Sauce updated")
+    if new_id.data is None:
+        raise HTTPException(500, "Fork RPC returned no id")
+    return ForkResponse(message="Forked into your saucebook as a variant", forkedId=new_id.data)
 
 
 @router.delete(
@@ -166,6 +223,18 @@ async def delete_sauce(
     return MessageResponse(message="Sauce deleted")
 
 
+def _ensure_attachments(body: CreateSauceRequest) -> None:
+    """Populate `attachments` from the legacy `itemIds` if needed; reject empty."""
+    if not body.attachments:
+        if body.itemIds:
+            body.attachments = [Attachment(kind="dish", value=v) for v in body.itemIds]
+    if not body.attachments and not body.itemIds:
+        raise HTTPException(
+            status_code=422,
+            detail="Sauce must attach to at least one category, dish, or subtype.",
+        )
+
+
 def _build_sauce_payload(sauce_id: str, body: CreateSauceRequest, created_by: str | None) -> dict:
     """Shape a CreateSauce/UpdateSauce body into the RPC payload dict."""
     payload: dict = {
@@ -178,6 +247,7 @@ def _build_sauce_payload(sauce_id: str, body: CreateSauceRequest, created_by: st
         "sourceUrl": body.sourceUrl,
         "sauceType": body.sauceType,
         "parentSauceId": body.parentSauceId,
+        "attachments": [{"kind": str(a.kind), "value": a.value} for a in body.attachments],
         "itemIds": body.itemIds,
         "steps": [
             {
@@ -269,7 +339,7 @@ async def list_items() -> dict:
     """Public read of carbs/proteins/salads parents with nested variants."""
     sb = get_supabase()
     result = sb.table("sauceboss_items").select(
-        "id,category,parent_id,name,emoji,description,sort_order,"
+        "id,category,parent_id,dish_level,name,emoji,description,sort_order,"
         "cook_time_minutes,instructions,water_ratio,portion_per_person,portion_unit"
     ).order("sort_order").order("name").execute()
     return _shape_items_grouped(result.data or [])

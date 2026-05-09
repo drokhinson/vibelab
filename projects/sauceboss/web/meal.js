@@ -1,5 +1,182 @@
 'use strict';
 
+// ─── New saucebook-driven meal flow ─────────────────────────────────────────
+// Entry point: chef's-hat FAB on the Saucebook tab. Three steps:
+//   1. category (carb / protein / salad)
+//   2. dish + optional subtype (accordion of state.carbs / state.proteins /
+//      state.saladBases — the get_sauceboss_initial_load RPC now nests
+//      `subtypes` under each dish row)
+//   3. sauce — reuses the existing renderSauceSelector, but the sauce list
+//      is the intersection of state.saucebook and sauces matching the
+//      picked target (category-level + dish-level + subtype-level + parent-
+//      dish-level for subtypes, mirroring get_sauceboss_sauces_for_target).
+
+const MEAL_CATEGORY_OPTIONS = [
+  { id: 'carb',    label: 'Carbs',    emoji: '🍚', icon: 'wheat',     listKey: 'carbs'      },
+  { id: 'protein', label: 'Proteins', emoji: '🍗', icon: 'drumstick', listKey: 'proteins'   },
+  { id: 'salad',   label: 'Salads',   emoji: '🥗', icon: 'salad',     listKey: 'saladBases' },
+];
+
+function startMealBuilder() {
+  if (!currentUser) { openAuthModal(); return; }
+  state.mealFlow = { category: null, dish: null, subtype: null };
+  state.expandedParents = {};
+  navigate('meal-category');
+}
+
+function renderMealCategory() {
+  return `
+    <div class="status-bar"></div>
+    <div class="app-header">
+      <button class="back-btn" onclick="setActiveTab('saucebook')"><i data-lucide="chevron-left"></i> Back</button>
+      <div class="logo">Build a Meal</div>
+      <div class="subtitle">What are you cooking?</div>
+    </div>
+    <div class="scroll-body">
+      <div class="carb-grid">
+        ${MEAL_CATEGORY_OPTIONS.map((c, i) => `
+          <button class="carb-card" style="--i:${i}" onclick="mealPickCategory('${c.id}')">
+            <span class="carb-emoji">${c.emoji}</span>
+            <div class="carb-name">${c.label}</div>
+            <div class="carb-desc">Pick a ${c.label.slice(0, -1).toLowerCase()} dish</div>
+          </button>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function mealPickCategory(id) {
+  state.mealFlow.category = id;
+  state.mealFlow.dish = null;
+  state.mealFlow.subtype = null;
+  navigate('meal-dish');
+}
+
+function renderMealDish() {
+  const cat = state.mealFlow.category;
+  const opt = MEAL_CATEGORY_OPTIONS.find(o => o.id === cat) || MEAL_CATEGORY_OPTIONS[0];
+  const dishes = state[opt.listKey] || [];
+  return `
+    <div class="status-bar"></div>
+    <div class="app-header">
+      <button class="back-btn" onclick="navigate('meal-category')"><i data-lucide="chevron-left"></i> Back</button>
+      <div class="logo">${opt.label}</div>
+      <div class="subtitle">Pick a dish (or a subtype) to pair with a sauce.</div>
+    </div>
+    <div class="scroll-body">
+      ${dishes.length === 0
+        ? `<div class="empty-state">No ${opt.label.toLowerCase()} configured.</div>`
+        : dishes.map(_renderMealDishRow).join('')}
+    </div>
+  `;
+}
+
+function _renderMealDishRow(dish) {
+  const subtypes = Array.isArray(dish.subtypes) ? dish.subtypes : (dish.variants || []);
+  const isOpen = !!state.expandedParents[dish.id];
+  const hasSubtypes = subtypes.length > 0;
+  return `
+    <div class="recipe-row" style="display:block;cursor:default">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="recipe-row__color" style="background:#FFF3E6;font-size:24px;display:flex;align-items:center;justify-content:center">${dish.emoji || '🍽'}</span>
+        <div class="recipe-row__main">
+          <div class="recipe-row__name">${escapeHtml(dish.name)}</div>
+          <div class="recipe-row__meta">
+            ${dish.description ? `<span class="recipe-row__author">${escapeHtml(dish.description)}</span>` : ''}
+          </div>
+        </div>
+        <button class="recipe-row__action" onclick="mealPickDish('${escapeHtml(dish.id)}')">Pick</button>
+        ${hasSubtypes ? `
+          <button class="recipe-row__action" style="margin-left:6px" onclick="mealToggleDishExpand('${escapeHtml(dish.id)}')">
+            ${isOpen ? '−' : '+'} ${subtypes.length}
+          </button>
+        ` : ''}
+      </div>
+      ${isOpen && hasSubtypes ? `
+        <div style="margin-top:10px;padding-left:12px;border-left:3px solid #F1E0CC">
+          ${subtypes.map(sub => `
+            <div class="recipe-row" onclick="mealPickSubtype('${escapeHtml(dish.id)}', '${escapeHtml(sub.id)}')" style="margin-bottom:6px">
+              <span class="recipe-row__color" style="background:#FFFBF5;font-size:18px;display:flex;align-items:center;justify-content:center">${sub.emoji || '·'}</span>
+              <div class="recipe-row__main">
+                <div class="recipe-row__name">${escapeHtml(sub.name)}</div>
+              </div>
+              <span class="recipe-row__action recipe-row__action--added">Pick</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function mealToggleDishExpand(dishId) {
+  state.expandedParents[dishId] = !state.expandedParents[dishId];
+  render();
+}
+
+function mealPickDish(dishId) {
+  const cat = state.mealFlow.category;
+  const list = state[(MEAL_CATEGORY_OPTIONS.find(o => o.id === cat) || MEAL_CATEGORY_OPTIONS[0]).listKey] || [];
+  const dish = list.find(d => d.id === dishId);
+  if (!dish) return;
+  state.mealFlow.dish = dish;
+  state.mealFlow.subtype = null;
+  _proceedToSauceSelector(dish, null);
+}
+
+function mealPickSubtype(dishId, subtypeId) {
+  const cat = state.mealFlow.category;
+  const list = state[(MEAL_CATEGORY_OPTIONS.find(o => o.id === cat) || MEAL_CATEGORY_OPTIONS[0]).listKey] || [];
+  const dish = list.find(d => d.id === dishId);
+  if (!dish) return;
+  const subs = Array.isArray(dish.subtypes) ? dish.subtypes : (dish.variants || []);
+  const subtype = subs.find(s => s.id === subtypeId);
+  if (!subtype) return;
+  state.mealFlow.dish = dish;
+  state.mealFlow.subtype = subtype;
+  _proceedToSauceSelector(dish, subtype);
+}
+
+function _proceedToSauceSelector(dish, subtype) {
+  // Set the legacy state shape so the existing sauce-selector + meal-recipe
+  // renderers work without changes:
+  //   selectedItem  = the dish (always — it's the "main" item in the recipe)
+  //   selectedPrep  = the subtype (optional; renderers already treat it as
+  //                   an override for cookTime / instructions)
+  state.selectedItem = dish;
+  state.selectedPrep = subtype || null;
+  state.preparations = Array.isArray(dish.subtypes) ? dish.subtypes : (dish.variants || []);
+
+  // Filter saucebook → sauces compatible with this target. Doing it client-
+  // side avoids an extra round-trip — the saucebook envelopes already carry
+  // `attachments`, and the target spec is small.
+  const target = {
+    category: state.mealFlow.category,
+    dishId: dish.id,
+    subtypeId: subtype ? subtype.id : null,
+    subtypeParentId: subtype ? (subtype.parentId || dish.id) : null,
+  };
+  const matches = (state.saucebook || []).filter(s => _attachmentsMatchTarget(s.attachments || [], target));
+  state.saucesForCurrentItem = matches;
+  // Also seed allIngredients (used by the ingredient filter).
+  const seen = new Set();
+  for (const s of matches) for (const i of (s.ingredients || [])) if (i.name) seen.add(i.name);
+  state.allIngredients = [...seen].sort();
+  state.recipeReturnTo = 'tab-shell';
+  navigate('sauce-selector');
+}
+
+function _attachmentsMatchTarget(attachments, target) {
+  for (const a of attachments) {
+    if (a.kind === 'category' && a.value === target.category) return true;
+    if (a.kind === 'dish'     && a.value === target.dishId) return true;
+    if (a.kind === 'subtype'  && target.subtypeId && a.value === target.subtypeId) return true;
+    if (a.kind === 'dish'     && target.subtypeParentId && a.value === target.subtypeParentId) return true;
+  }
+  return false;
+}
+
+
 // ─── Meal Builder home — single-pick across three sections ──────────────────
 
 // Shared pot illustration. Rendered both on the splash (in index.html) and

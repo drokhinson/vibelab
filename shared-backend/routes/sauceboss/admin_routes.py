@@ -49,12 +49,17 @@ async def admin_create_item(
 ):
     """Add a new item (carb / protein / salad base, optionally a variant)."""
     slug = re.sub(r'[^a-z0-9]+', '-', body.name.lower()).strip('-')
+    # dish_level is derived from parent_id: a row with no parent is a 'dish';
+    # a row with a parent is a 'subtype'. The migration-007 trigger enforces
+    # this two-tier shape (no subtype-of-subtype).
+    dish_level = "subtype" if body.parentId else "dish"
     sb = get_supabase()
     try:
         sb.table("sauceboss_items").insert({
             "id": slug,
             "category": body.category,
             "parent_id": body.parentId,
+            "dish_level": dish_level,
             "name": body.name,
             "emoji": body.emoji,
             "description": body.description,

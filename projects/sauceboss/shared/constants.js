@@ -19,9 +19,11 @@ export const COLOR_SWATCHES = [
 ];
 
 export const SAUCE_TYPES = [
-  { value: 'sauce',    label: 'Sauce',    category: 'carb',    pairLabel: 'Carbs'    },
-  { value: 'marinade', label: 'Marinade', category: 'protein', pairLabel: 'Proteins' },
-  { value: 'dressing', label: 'Dressing', category: 'salad',   pairLabel: 'Salads'   },
+  { value: 'sauce',    label: 'Sauce',         category: 'carb',    pairLabel: 'Carbs'    },
+  { value: 'marinade', label: 'Marinade',      category: 'protein', pairLabel: 'Proteins' },
+  { value: 'dressing', label: 'Dressing',      category: 'salad',   pairLabel: 'Salads'   },
+  // Migration 009: dip-and-spread pairs with carb (bread / crackers / pretzels).
+  { value: 'dip',      label: "Dip n' Spread", category: 'carb',    pairLabel: 'Carbs'    },
 ];
 
 export const PALETTE = [

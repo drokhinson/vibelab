@@ -26,6 +26,12 @@ function initSupabase() {
       currentUser = null;
       state.favorites = new Map();
       state.editMode = false;
+      // Reset saucebook + pantry to anon defaults; force the user back to
+      // Browse since the other tabs are locked without an account.
+      state.saucebook = [];
+      state.pantry = { ingredients: [], missing: new Set(), loading: false, error: null };
+      state.disabledIngredients = new Set();
+      state.activeTab = 'browse';
       document.body.classList.remove('is-auth');
       render();
     }
@@ -57,6 +63,22 @@ async function loadProfile() {
       console.warn('[sauceboss] failed to load favorites:', e);
       state.favorites = new Map();
     }
+    // Hydrate saucebook + pantry in parallel; failures are non-fatal (the
+    // tab renders an empty state). Mirror pantry.missing into the
+    // ingredient-name disabledIngredients Set so the meal-builder filter
+    // shows missing ingredients pre-checked.
+    try {
+      const [saucebook, pantry] = await Promise.all([
+        api.listSaucebook().catch(e => { console.warn('[sauceboss] saucebook load failed:', e); return []; }),
+        api.getPantry().catch(e => { console.warn('[sauceboss] pantry load failed:', e); return { ingredients: [], saucebookSauceIds: [] }; }),
+      ]);
+      state.saucebook = saucebook;
+      state.pantry.ingredients = pantry.ingredients || [];
+      state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.foodId));
+      syncDisabledFromPantry();
+    } catch (_) {}
+    // Default landing tab once a user is signed in is Saucebook.
+    state.activeTab = 'saucebook';
     document.body.classList.add('is-auth');
     try {
       state.editMode = sessionStorage.getItem('sb_edit_mode') === '1';
@@ -80,6 +102,11 @@ async function handleLogout() {
   state.favorites = new Map();
   state.favoritesOnly = false;
   state.editMode = false;
+  state.saucebook = [];
+  state.pantry = { ingredients: [], missing: new Set(), loading: false, error: null };
+  state.disabledIngredients = new Set();
+  state.activeTab = 'browse';
+  state.screen = 'tab-shell';
   try { sessionStorage.removeItem('sb_edit_mode'); } catch (_) {}
   document.body.classList.remove('is-auth');
   render();
