@@ -26,10 +26,12 @@ request; logger failures are swallowed.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Iterable, Optional
 
 import httpx
@@ -42,6 +44,102 @@ logger = logging.getLogger(__name__)
 # the table. Full size is recorded separately in response_size_bytes.
 BODY_EXCERPT_BYTES = 8192
 REDACTED = "***"
+
+# A user's session is a stretch of activity bounded by 30 minutes of idle. The
+# next call after that gap (or the first call from a fresh login) starts a new
+# session row in public.api_sessions.
+SESSION_IDLE_TIMEOUT = timedelta(minutes=30)
+
+# Per-request user context. Populated by api_logger.set_request_user() (called
+# from each app's get_current_user dependency); read by log_external_call when
+# it writes the api_logs row.
+_current_user: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "api_logger_current_user", default=None,
+)
+_current_user_label: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "api_logger_current_user_label", default=None,
+)
+_current_app: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "api_logger_current_app", default=None,
+)
+_current_session_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "api_logger_current_session_id", default=None,
+)
+
+
+def _resolve_or_create_session_sync(
+    app: str, user_id: str, user_label: Optional[str],
+) -> Optional[str]:
+    """Return the active session id for (app, user_id), creating one if needed.
+
+    Synchronous — call via asyncio.to_thread from set_request_user so the event
+    loop isn't blocked.
+    """
+    sb = get_supabase()
+    cutoff = (datetime.now(timezone.utc) - SESSION_IDLE_TIMEOUT).isoformat()
+    existing = (
+        sb.table("api_sessions")
+        .select("id")
+        .eq("app", app)
+        .eq("user_id", user_id)
+        .gte("last_activity_at", cutoff)
+        .order("last_activity_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        return existing.data[0]["id"]
+    try:
+        new_row = (
+            sb.table("api_sessions")
+            .insert({"app": app, "user_id": user_id, "user_label": user_label})
+            .execute()
+        )
+        return (new_row.data or [{}])[0].get("id")
+    except Exception as exc:
+        logger.warning("api_logger session create failed: %s", exc)
+        return None
+
+
+async def set_request_user(
+    *, user_id: Optional[str], user_label: Optional[str], app: str,
+) -> None:
+    """Bind the current request's user context to the api_logger.
+
+    Call once per request from the app's `get_current_user()` dependency, after
+    the user has been authenticated. Subsequent log_external_call() rows in the
+    same request will be tagged with the resolved session_id and user_id.
+
+    For unauthenticated callers, do not call this — log rows will be written
+    with NULL session_id / user_id.
+    """
+    _current_app.set(app)
+    _current_user.set(user_id)
+    _current_user_label.set(user_label)
+    if user_id:
+        sid = await asyncio.to_thread(
+            _resolve_or_create_session_sync, app, user_id, user_label,
+        )
+        _current_session_id.set(sid)
+    else:
+        _current_session_id.set(None)
+
+
+def _bump_session_activity_sync(session_id: str) -> None:
+    """Touch last_activity_at + bump call_count on the given session row."""
+    sb = get_supabase()
+    try:
+        # Read current count (Supabase REST has no atomic increment); the
+        # window for a lost increment under concurrency is tiny and only
+        # affects an admin display, not correctness.
+        cur = sb.table("api_sessions").select("call_count").eq("id", session_id).execute()
+        count = (cur.data or [{}])[0].get("call_count", 0) or 0
+        sb.table("api_sessions").update({
+            "last_activity_at": datetime.now(timezone.utc).isoformat(),
+            "call_count": count + 1,
+        }).eq("id", session_id).execute()
+    except Exception as exc:
+        logger.warning("api_logger session bump failed: %s", exc)
 
 
 @dataclass
@@ -104,24 +202,28 @@ def _insert_row(row: dict[str, Any]) -> None:
         logger.warning("api_logger insert failed: %s", exc)
 
 
-async def _async_insert(row: dict[str, Any]) -> None:
+async def _async_insert(row: dict[str, Any], session_id: Optional[str]) -> None:
     try:
         await asyncio.to_thread(_insert_row, row)
+        if session_id:
+            await asyncio.to_thread(_bump_session_activity_sync, session_id)
     except Exception as exc:
         logger.warning("api_logger async insert failed: %s", exc)
 
 
-def _schedule_insert(row: dict[str, Any]) -> None:
+def _schedule_insert(row: dict[str, Any], session_id: Optional[str]) -> None:
     """Fire-and-forget the DB write so the caller's request doesn't wait on it."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
     if loop is not None:
-        loop.create_task(_async_insert(row))
+        loop.create_task(_async_insert(row, session_id))
     else:
         # Sync caller (rare in this codebase) — fall back to a blocking write.
         _insert_row(row)
+        if session_id:
+            _bump_session_activity_sync(session_id)
 
 
 @asynccontextmanager
@@ -155,6 +257,8 @@ async def log_external_call(
         raise
     finally:
         elapsed_ms = int((time.monotonic() - start) * 1000)
+        session_id = _current_session_id.get()
+        user_id = _current_user.get()
         row = {
             "app": record.app,
             "api_name": record.api_name,
@@ -166,5 +270,7 @@ async def log_external_call(
             "response_size_bytes": record.response_size_bytes,
             "body_excerpt": record.body_excerpt,
             "error_message": record.error_message,
+            "session_id": session_id,
+            "user_id": user_id,
         }
-        _schedule_insert(row)
+        _schedule_insert(row, session_id)

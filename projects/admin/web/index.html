@@ -83,8 +83,11 @@
           <button class="outline secondary clear-bodies-btn" data-age="1m">Older than 1 month</button>
           <button class="outline clear-bodies-btn delete-btn" data-age="all">All</button>
         </div>
-        <div id="api-logs-content">
-          <div class="loading">Loading logs...</div>
+        <p class="muted" style="font-size:0.8rem;margin-bottom:0.5rem;">
+          Grouped by user session (30 min idle = new session). Click a row to load its calls.
+        </p>
+        <div id="api-sessions-content">
+          <div class="loading">Loading sessions...</div>
         </div>
       </article>
 
