@@ -36,6 +36,7 @@ function showLogin(errorMsg) {
   document.getElementById("view-login").style.display = "";
   document.getElementById("view-dashboard").style.display = "none";
   document.getElementById("logout-btn").style.display = "none";
+  document.body.classList.remove("dashboard-fullbleed");
   const errEl = document.getElementById("login-error");
   if (errorMsg) {
     errEl.textContent = errorMsg;
@@ -49,8 +50,31 @@ function showDashboard() {
   document.getElementById("view-login").style.display = "none";
   document.getElementById("view-dashboard").style.display = "";
   document.getElementById("logout-btn").style.display = "";
+  document.body.classList.add("dashboard-fullbleed");
   loadAllSections();
+  setActiveTab(sessionStorage.getItem("admin_tab") || "api");
 }
+
+// ── Tab switching ────────────────────────────────────────────────────────────
+
+function setActiveTab(name) {
+  // Validate against the actual buttons so a stale sessionStorage value can't
+  // leave every panel hidden.
+  const known = [...document.querySelectorAll(".tab-btn")].map((b) => b.dataset.tab);
+  const target = known.includes(name) ? name : known[0];
+  document.querySelectorAll(".tab-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === target);
+  });
+  document.querySelectorAll(".tab-panel").forEach((p) => {
+    p.classList.toggle("active", p.dataset.tab === target);
+  });
+  sessionStorage.setItem("admin_tab", target);
+}
+
+document.querySelector(".tab-bar").addEventListener("click", (e) => {
+  const btn = e.target.closest(".tab-btn");
+  if (btn) setActiveTab(btn.dataset.tab);
+});
 
 // ── Login ────────────────────────────────────────────────────────────────────
 
@@ -548,22 +572,39 @@ document.getElementById("api-log-dialog-close").addEventListener("click", () => 
   document.getElementById(id).addEventListener("change", () => loadApiLogs());
 });
 
+document.getElementById("api-logs-refresh-btn").addEventListener("click", () => {
+  loadApiLogs();
+  loadApiLogsSummary();
+});
+
+let _clearStatusTimer = null;
+function showClearStatus(message, isError) {
+  const el = document.getElementById("api-logs-clear-status");
+  if (!el) return;
+  el.textContent = message;
+  el.style.display = "";
+  el.classList.toggle("error-text", !!isError);
+  if (_clearStatusTimer) clearTimeout(_clearStatusTimer);
+  _clearStatusTimer = setTimeout(() => {
+    el.style.display = "none";
+    el.classList.remove("error-text");
+  }, 2500);
+}
+
 document.querySelectorAll(".clear-bodies-btn").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const age = btn.dataset.age;
-    const label = btn.textContent.trim();
-    if (!confirm(`Clear stored response bodies: ${label}? Timing/error stats are preserved.`)) return;
     btn.setAttribute("aria-busy", "true");
     btn.disabled = true;
     try {
       const data = await apiFetch(`/api/v1/admin/api-logs/clear-bodies?older_than=${encodeURIComponent(age)}`, {
         method: "POST",
       });
-      alert(`Cleared ${data.cleared} response body(ies).`);
+      showClearStatus(`Cleared ${data.cleared} response body${data.cleared === 1 ? "" : "(ies)"}.`, false);
       loadApiLogs();
       loadApiLogsSummary();
     } catch (err) {
-      alert("Clear failed: " + err.message);
+      showClearStatus("Clear failed: " + err.message, true);
     } finally {
       btn.removeAttribute("aria-busy");
       btn.disabled = false;

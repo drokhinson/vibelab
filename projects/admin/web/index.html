@@ -39,73 +39,99 @@
     <!-- Dashboard -->
     <div id="view-dashboard" style="display:none;">
 
+      <nav class="tab-bar" role="tablist">
+        <button class="tab-btn" role="tab" data-tab="usage">App Usage</button>
+        <button class="tab-btn" role="tab" data-tab="users">Users</button>
+        <button class="tab-btn" role="tab" data-tab="storage">Storage</button>
+        <button class="tab-btn" role="tab" data-tab="api">API Logs</button>
+      </nav>
+
+      <div class="tab-panels">
+
       <!-- Section 1: App Usage -->
-      <article>
-        <header><h3>App Usage</h3></header>
-        <div id="usage-content">
-          <div class="loading">Loading usage data...</div>
-        </div>
-      </article>
+      <section class="tab-panel" data-tab="usage">
+        <article>
+          <header><h3>App Usage</h3></header>
+          <div id="usage-content">
+            <div class="loading">Loading usage data...</div>
+          </div>
+        </article>
+      </section>
 
       <!-- Section 2: User Management -->
-      <article>
-        <header class="section-header">
-          <h3>User Management</h3>
-          <select id="user-app-select">
-            <option value="">Select app...</option>
-          </select>
-        </header>
-        <div id="users-content">
-          <p class="muted">Select an app to view users.</p>
-        </div>
-      </article>
+      <section class="tab-panel" data-tab="users">
+        <article>
+          <header class="section-header">
+            <h3>User Management</h3>
+            <select id="user-app-select">
+              <option value="">Select app...</option>
+            </select>
+          </header>
+          <div id="users-content">
+            <p class="muted">Select an app to view users.</p>
+          </div>
+        </article>
+      </section>
 
       <!-- Section 3: Database Storage -->
-      <article>
-        <header><h3>Database Storage</h3></header>
-        <div id="storage-content">
-          <div class="loading">Loading storage data...</div>
-        </div>
-      </article>
+      <section class="tab-panel" data-tab="storage">
+        <article>
+          <header><h3>Database Storage</h3></header>
+          <div id="storage-content">
+            <div class="loading">Loading storage data...</div>
+          </div>
+        </article>
+      </section>
 
       <!-- Section 4: External API Logs -->
-      <article>
-        <header class="section-header">
-          <h3>External API Logs</h3>
-          <select id="api-logs-app-filter">
-            <option value="">All apps</option>
-          </select>
-        </header>
-        <div id="api-logs-summary" class="muted" style="margin-bottom:0.75rem;">Loading summary...</div>
-        <div class="api-logs-filters">
-          <label class="api-logs-filter-label">
-            Window
-            <select id="api-logs-since-filter">
-              <option value="1m">Last minute</option>
-              <option value="5m" selected>Last 5 min</option>
-              <option value="15m">Last 15 min</option>
-              <option value="today">Today</option>
-              <option value="all">All time</option>
-            </select>
-          </label>
-          <label class="api-logs-filter-label">
-            User
-            <select id="api-logs-user-filter">
-              <option value="">All users</option>
-            </select>
-          </label>
-        </div>
-        <div class="api-logs-actions">
-          <span class="muted">Clear stored response bodies:</span>
-          <button class="outline secondary clear-bodies-btn" data-age="1w">Older than 1 week</button>
-          <button class="outline secondary clear-bodies-btn" data-age="1m">Older than 1 month</button>
-          <button class="outline clear-bodies-btn delete-btn" data-age="all">All</button>
-        </div>
-        <div id="api-logs-content">
-          <div class="loading">Loading logs...</div>
-        </div>
-      </article>
+      <section class="tab-panel" data-tab="api">
+        <article>
+          <header><h3>External API Logs</h3></header>
+          <div class="api-logs-filters">
+            <label class="api-logs-filter-label">
+              App
+              <select id="api-logs-app-filter">
+                <option value="">All apps</option>
+              </select>
+            </label>
+            <label class="api-logs-filter-label">
+              Window
+              <select id="api-logs-since-filter">
+                <option value="1m">Last minute</option>
+                <option value="5m" selected>Last 5 min</option>
+                <option value="15m">Last 15 min</option>
+                <option value="today">Today</option>
+                <option value="all">All time</option>
+              </select>
+            </label>
+            <label class="api-logs-filter-label">
+              User
+              <select id="api-logs-user-filter">
+                <option value="">All users</option>
+              </select>
+            </label>
+            <button id="api-logs-refresh-btn" class="outline secondary" type="button">↻ Refresh</button>
+          </div>
+          <div id="api-logs-content">
+            <div class="loading">Loading logs...</div>
+          </div>
+          <hr class="maintenance-divider" />
+          <section class="api-logs-maintenance">
+            <h4>Maintenance &amp; info</h4>
+            <p class="muted" style="font-size:0.8rem;margin-bottom:0.4rem;">Last 30 days summary</p>
+            <div id="api-logs-summary" class="muted" style="margin-bottom:0.75rem;">Loading summary...</div>
+            <div class="api-logs-actions">
+              <span class="muted">Clear stored response bodies:</span>
+              <button class="outline secondary clear-bodies-btn" data-age="1w">Older than 1 week</button>
+              <button class="outline secondary clear-bodies-btn" data-age="1m">Older than 1 month</button>
+              <button class="outline clear-bodies-btn delete-btn" data-age="all">All</button>
+            </div>
+            <p id="api-logs-clear-status" class="muted" style="font-size:0.8rem;margin-top:0.5rem;display:none;"></p>
+          </section>
+        </article>
+      </section>
 
+      </div>
     </div>
   </main>
 
