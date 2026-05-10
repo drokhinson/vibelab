@@ -11,6 +11,7 @@ Phase 1: shopping step + builder shortlist consume `/catalog/search`.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -21,17 +22,11 @@ from db import get_supabase
 from . import router
 from .api_clients import (
     SEARCH_RESULT_CAP,
-    FloraConfigError,
-    flora_lookup_by_scientific,
     merge_records,
-    normalize_flora,
     normalize_perenual,
-    normalize_trefle,
     perenual_filter,
+    perenual_get,
     perenual_lookup_by_scientific,
-    trefle_filter,
-    trefle_get,
-    trefle_search,
 )
 from .garden_units import garden_is_climate_controlled, garden_uses_inches
 from .image_mirror import mirror_all_sizes
@@ -153,24 +148,47 @@ async def _upsert_normalized(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     return result.data or []
 
 
-async def _enrich_with_perenual(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """For each row missing hardiness, look it up in Perenual and merge."""
-    enriched: List[Dict[str, Any]] = []
-    for row in rows:
-        if row.get("hardiness_min") is not None or not row.get("scientific_name"):
-            enriched.append(row)
-            continue
+_PERENUAL_DETAILS_CONCURRENCY = 5
+
+
+async def _hydrate_perenual_details(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Fan out species-details calls for every species-list summary in `records`.
+
+    Perenual's /species-list returns a slim summary (id, names, watering,
+    sunlight, cycle, default_image). The detail fields the popup needs —
+    family, hardiness, indoor, dimensions, description, care_level, soil,
+    growing_months, attracts, etc. — only land via /species/details/{id}.
+
+    Calls are concurrent under a semaphore to keep peak Perenual QPS modest;
+    a failed details call falls back to the list summary so the row still
+    gets the basics (name + image).
+    """
+    if not records:
+        return []
+    sem = asyncio.Semaphore(_PERENUAL_DETAILS_CONCURRENCY)
+
+    async def _fetch(rec: Dict[str, Any]) -> Dict[str, Any]:
+        rid = rec.get("id")
         try:
-            p_record = await perenual_lookup_by_scientific(row["scientific_name"])
-        except Exception as exc:
-            logger.info("Perenual enrich failed: %s", exc)
-            p_record = None
-        if not p_record:
-            enriched.append(row)
-            continue
-        merged = merge_records(row, normalize_perenual(p_record))
-        enriched.append(merged)
-    return enriched
+            rid_int = int(rid) if rid is not None else None
+        except (TypeError, ValueError):
+            rid_int = None
+        if rid_int is None:
+            return rec
+        async with sem:
+            try:
+                detail = await perenual_get(rid_int)
+            except Exception as exc:
+                logger.info("Perenual species-details failed for id=%s: %s", rid_int, exc)
+                return rec
+        if not detail:
+            return rec
+        # Details payload is a strict superset of the list summary.
+        merged = dict(rec)
+        merged.update(detail)
+        return merged
+
+    return await asyncio.gather(*[_fetch(r) for r in records])
 
 
 async def _mirror_images_for_rows(rows: List[Dict[str, Any]]) -> None:
@@ -294,76 +312,36 @@ def _derive_planter_size(
     return "large"
 
 
-async def _trefle_lookup_for_row(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Find the best Trefle search hit for a cache row.
-
-    Tries scientific_name first; falls back to common_name. Prefers an exact
-    scientific-name match in the result set, otherwise returns the top hit.
-    Returns the search-summary record only — call trefle_get(id) afterward
-    for the deep growth/specifications nested fields.
-    """
-    sci = (row.get("scientific_name") or "").strip()
-    common = (row.get("common_name") or "").strip()
-    target_sci = sci.lower() if sci else None
-    for q in (sci, common):
-        if not q:
-            continue
-        try:
-            hits = await trefle_search(q)
-        except Exception as exc:
-            logger.info("Trefle lookup search failed for %r: %s", q, exc)
-            continue
-        if not hits:
-            continue
-        if target_sci:
-            for h in hits:
-                if (h.get("scientific_name") or "").strip().lower() == target_sci:
-                    return h
-        return hits[0]
-    return None
-
-
-async def _trefle_record_with_detail(search_hit: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalize a Trefle hit, hydrating growth/specifications via trefle_get
-    when the search-summary record doesn't already include them. Without the
-    detail call, normalize_trefle returns near-empty extras (height/pH/etc.
-    live in the nested `growth` and `specifications` blocks)."""
-    detail_rec: Optional[Dict[str, Any]] = None
-    rec_id = search_hit.get("id")
-    if rec_id is not None:
-        try:
-            detail_rec = await trefle_get(int(rec_id))
-        except Exception as exc:
-            logger.info("Trefle detail fetch failed for id=%s: %s", rec_id, exc)
-    return normalize_trefle(search_hit, detail=detail_rec)
-
-
 async def _trigger_lazy_fill(
     *,
     query: Optional[str],
     sunlight: Optional[str],
     edible: Optional[bool],
 ) -> int:
-    """Hit Trefle (and Perenual for hardiness) and write results to cache. Returns rows added."""
-    trefle_records: List[Dict[str, Any]] = []
-    if query:
-        trefle_records = await trefle_search(query)
-    if not trefle_records:
-        # Trefle's light is 0–10; map our 4-tier sunlight enum onto a min cutoff.
-        light_min = (
-            7 if sunlight == "full_sun"
-            else 5 if sunlight == "sun-part_shade"
-            else 4 if sunlight == "part_shade"
-            else None
+    """Hit Perenual species-list (with details hydration) and persist. Returns rows added.
+
+    Mirrors `fill_perenual` but is invoked from `/catalog/search` when the
+    cache returns fewer than `LAZY_FILL_THRESHOLD` matches. Image mirroring
+    is opportunistic — a failure doesn't block the response since the
+    popup falls back to the original Perenual CDN URL.
+    """
+    try:
+        records = await perenual_filter(
+            sunlight=sunlight,
+            edible=edible,
+            query=query,
         )
-        trefle_records = await trefle_filter(edible=edible, light_min=light_min)
-    if not trefle_records:
+    except Exception as exc:
+        logger.info("Perenual lazy fill failed: %s", exc)
+        return 0
+    if not records:
         return 0
 
-    normalized = [normalize_trefle(r) for r in trefle_records]
-    enriched = await _enrich_with_perenual(normalized)
-    written = await _upsert_normalized(enriched)
-    # Image mirroring is fire-and-forget for this request — populate progressively.
+    hydrated = await _hydrate_perenual_details(records)
+    normalized = [n for n in (normalize_perenual(r) for r in hydrated) if n.get("scientific_name")]
+    if not normalized:
+        return 0
+    written = await _upsert_normalized(normalized)
     try:
         await _mirror_images_for_rows(written)
     except Exception as exc:
@@ -507,66 +485,15 @@ async def catalog_detail(cache_id: str) -> CatalogPlant:
     return _row_to_catalog_plant(row)
 
 
-@router.post(
-    "/catalog/{cache_id}/enrich/trefle",
-    response_model=CatalogPlant,
-    status_code=200,
-    summary="Look up a single cached plant on Trefle by name and merge new fields",
-)
-async def enrich_trefle(cache_id: str) -> CatalogPlant:
-    """Search Trefle by scientific (then common) name, hydrate via trefle_get, merge.
-
-    Powers the plant detail panel's "Import from Trefle" button: pulls the
-    Trefle-strong fields (height, pH, days_to_harvest, toxicity, growth_rate,
-    sowing) for plants that arrived via Perenual/Flora and are missing them.
-    """
-    sb = get_supabase()
-    row_resp = (
-        sb.table("plantplanner_plant_cache")
-        .select("*")
-        .eq("id", cache_id)
-        .execute()
-    )
-    if not row_resp.data:
-        raise HTTPException(status_code=404, detail="Plant not found")
-    row = row_resp.data[0]
-    if not (row.get("scientific_name") or row.get("common_name")):
-        raise HTTPException(status_code=400, detail="Cache row has no name to look up")
-
-    try:
-        search_hit = await _trefle_lookup_for_row(row)
-    except Exception as exc:
-        logger.exception("Trefle enrich failed")
-        raise HTTPException(status_code=502, detail=f"Trefle request failed: {exc}")
-    if search_hit is None:
-        raise HTTPException(status_code=404, detail="No Trefle match found")
-
-    normalized = await _trefle_record_with_detail(search_hit)
-    merged = merge_records(row, normalized)
-    written = await _upsert_normalized([merged])
-    if not written:
-        raise HTTPException(status_code=500, detail="Failed to persist Trefle merge")
-
-    new_row = written[0]
-    try:
-        await _mirror_images_for_rows(written)
-    except Exception as exc:
-        logger.info("Trefle enrich image mirror failed: %s", exc)
-
-    return _row_to_catalog_plant(new_row)
-
-
 # ── Cache-fill orchestration ────────────────────────────────────────────────
 #
 # Drive each external API as a discrete, observable step so the frontend's
-# plant-selection screen can render a 5-item to-do list while creating a new
-# planter:
+# plant-selection screen can render a to-do list while creating a new planter:
 #   1. (frontend) save planter
-#   2. POST /catalog/fill/perenual    — filtered species-list seed → upsert
-#   3. POST /catalog/fill/trefle      — fill missing height/pH/days_to_harvest
-#   4. POST /catalog/fill/flora       — supplement with Flora data
-#   5. POST /catalog/fill/compatible  — count plants matching planter conditions
-# Steps 2–5 take the same wizard-conditions body and are independently
+#   2. POST /catalog/fill/perenual    — filtered species-list + per-row
+#                                       species-details hydration → upsert
+#   3. POST /catalog/fill/compatible  — count plants matching planter conditions
+# Steps 2–3 take the same wizard-conditions body and are independently
 # idempotent. The frontend reports per-step status; the user can continue to
 # the grid even if a step soft-fails (the final /catalog/search requery falls
 # back to whatever the cache already holds).
@@ -635,84 +562,21 @@ def _build_query_from_body(body: FillBody) -> Dict[str, Any]:
 
 
 @router.post(
-    "/catalog/fill/trefle",
-    response_model=FillStepResponse,
-    status_code=200,
-    summary="Step 3: enrich Perenual-seeded rows with Trefle (height, pH, days_to_harvest)",
-)
-async def fill_trefle(body: FillBody) -> FillStepResponse:
-    """For matching cache rows missing Trefle-strong fields, look up by sci name and merge.
-
-    Trefle is the primary source for height, pH, and days_to_harvest — fields
-    Perenual doesn't expose. After Perenual seeds the cache, scan the matching
-    rows and fill any Trefle gaps.
-    """
-    sb = get_supabase()
-    filters = _build_query_from_body(body)
-    candidates = (
-        _build_cache_query(
-            sb,
-            sunlight=filters["sunlight"],
-            watering=filters["watering"],
-            indoor=filters["indoor"],
-            zone=filters["zone"],
-            edible=filters["edible"],
-            cycle=filters["cycle"],
-            max_height_cm=filters["max_height_cm"],
-            max_spread_cm=filters["max_spread_cm"],
-            query=filters["query"],
-        )
-        .limit(SEARCH_RESULT_CAP)
-        .execute()
-        .data
-    ) or []
-
-    targets = [
-        r for r in candidates
-        if r.get("height_max_cm") is None
-        or r.get("ph_min") is None
-        or r.get("days_to_harvest") is None
-    ]
-    if not targets:
-        return FillStepResponse(status="ok", fetched=0, enriched=0)
-
-    enriched_rows: List[Dict[str, Any]] = []
-    fetched = 0
-    try:
-        for row in targets:
-            search_hit = await _trefle_lookup_for_row(row)
-            if search_hit is None:
-                continue
-            fetched += 1
-            normalized = await _trefle_record_with_detail(search_hit)
-            merged = merge_records(row, normalized)
-            enriched_rows.append(merged)
-    except Exception as exc:
-        logger.exception("Trefle fill failed")
-        return FillStepResponse(status="error", fetched=fetched, error=f"Trefle request failed: {exc}")
-
-    written = await _upsert_normalized(enriched_rows) if enriched_rows else []
-    try:
-        await _mirror_images_for_rows(written)
-    except Exception as exc:
-        logger.info("Trefle fill image mirror failed: %s", exc)
-
-    return FillStepResponse(status="ok", fetched=fetched, enriched=len(written))
-
-
-@router.post(
     "/catalog/fill/perenual",
     response_model=FillStepResponse,
     status_code=200,
     summary="Step 2: seed the cache with a Perenual species-list filtered to the wizard conditions",
 )
 async def fill_perenual(body: FillBody) -> FillStepResponse:
-    """Query Perenual v2/species-list with wizard filters; upsert results.
+    """Query Perenual v2/species-list with wizard filters and hydrate every hit.
 
-    Perenual's filter params now align with the wizard's filter logic
-    (cycle, watering, sunlight, hardiness, indoor, edible). Using it as
-    the seeding step captures cycle/watering/hardiness/sunlight/indoor
-    plus all three image sizes in a single round trip.
+    Perenual's filter params align with the wizard's filter logic
+    (cycle, watering, sunlight, hardiness, indoor, edible). The species-list
+    response only carries the slim summary, so we follow up with one
+    species-details call per hit (concurrency capped at
+    `_PERENUAL_DETAILS_CONCURRENCY`) so the upsert writes the full
+    normalized field set (family, hardiness, dimensions, growth_rate, …)
+    plus the rich `raw_perenual_json` payload the popup reads from.
     """
     sb = get_supabase()
     filters = _build_query_from_body(body)
@@ -731,9 +595,11 @@ async def fill_perenual(body: FillBody) -> FillStepResponse:
     if not records:
         return FillStepResponse(status="ok", fetched=0, new_plants=0)
 
+    hydrated = await _hydrate_perenual_details(records)
+
     normalized: List[Dict[str, Any]] = []
     sci_names: List[str] = []
-    for r in records:
+    for r in hydrated:
         n = normalize_perenual(r)
         sci = n.get("scientific_name")
         if not sci:
@@ -754,66 +620,7 @@ async def fill_perenual(body: FillBody) -> FillStepResponse:
     written = await _upsert_normalized(normalized)
     new_plants = sum(1 for row in written if row.get("scientific_name") not in pre_existing)
 
-    try:
-        await _mirror_images_for_rows(written)
-    except Exception as exc:
-        logger.info("Perenual fill image mirror failed: %s", exc)
-
     return FillStepResponse(status="ok", fetched=len(records), new_plants=new_plants)
-
-
-@router.post(
-    "/catalog/fill/flora",
-    response_model=FillStepResponse,
-    status_code=200,
-    summary="Step 4: enrich cached plants with FloraAPI (US-flora supplemental data)",
-)
-async def fill_flora(body: FillBody) -> FillStepResponse:
-    """Cross-check matching cache plants against Flora and merge any new fields."""
-    sb = get_supabase()
-    filters = _build_query_from_body(body)
-    candidates = (
-        _build_cache_query(
-            sb,
-            sunlight=filters["sunlight"],
-            watering=filters["watering"],
-            indoor=filters["indoor"],
-            zone=filters["zone"],
-            edible=filters["edible"],
-            cycle=filters["cycle"],
-            max_height_cm=filters["max_height_cm"],
-            max_spread_cm=filters["max_spread_cm"],
-            query=filters["query"],
-        )
-        .limit(SEARCH_RESULT_CAP)
-        .execute()
-        .data
-    ) or []
-
-    if not candidates:
-        return FillStepResponse(status="ok", fetched=0, enriched=0)
-
-    enriched_rows: List[Dict[str, Any]] = []
-    fetched = 0
-    try:
-        for row in candidates:
-            sci = row.get("scientific_name")
-            if not sci:
-                continue
-            f_record = await flora_lookup_by_scientific(sci)
-            if f_record is None:
-                continue
-            fetched += 1
-            merged = merge_records(row, normalize_flora(f_record))
-            enriched_rows.append(merged)
-    except FloraConfigError:
-        return FillStepResponse(status="error", error="FLORA_API_KEY is not configured on the server")
-    except Exception as exc:
-        logger.exception("Flora fill failed")
-        return FillStepResponse(status="error", fetched=fetched, error=f"Flora request failed: {exc}")
-
-    written = await _upsert_normalized(enriched_rows) if enriched_rows else []
-    return FillStepResponse(status="ok", fetched=fetched, enriched=len(written))
 
 
 @router.post(
