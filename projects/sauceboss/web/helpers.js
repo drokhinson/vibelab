@@ -217,6 +217,104 @@ function prepareItems(items) {
   });
 }
 
+// ─── Shared recipe-view renderers ────────────────────────────────────────────
+// These power the canonical recipe layout used by both the meal builder
+// (meal.js → renderMealRecipe) and the standalone recipe view used by browse,
+// cookbook, and the admin sauce manager (recipe.js → renderRecipe). The styling
+// mirrors the React Native ServingsControl + UnitToggle so web and mobile stay
+// in lockstep.
+
+function renderRecipeControls() {
+  const s = state.servings;
+  return `
+    <div class="recipe-controls">
+      <div class="servings-control">
+        <button onclick="setServings(state.servings - 1)" class="serving-btn" ${s <= 1 ? 'disabled' : ''}>−</button>
+        <span class="servings-label">${s} ${s === 1 ? 'person' : 'people'}</span>
+        <button onclick="setServings(state.servings + 1)" class="serving-btn" ${s >= 12 ? 'disabled' : ''}>+</button>
+      </div>
+      <button class="unit-toggle" onclick="setUnitSystem(state.unitSystem === 'imperial' ? 'metric' : 'imperial')">
+        ${state.unitSystem === 'imperial' ? 'Imperial' : 'Metric'}
+      </button>
+    </div>`;
+}
+
+function renderRecipeStep(step, index, allSteps) {
+  const stepTime = step.estimatedTime || 5;
+  const displayItems = prepareItems(step.ingredients);
+
+  const refStep = step.inputFromStep ? allSteps[step.inputFromStep - 1] : null;
+  if (refStep) {
+    const refTsp = cumulativeStepTsp(allSteps, step.inputFromStep - 1, state.servings);
+    const disp = tspToDisplay(refTsp);
+    displayItems.unshift({ name: `Step ${step.inputFromStep} combined`, amount: disp.amount, unit: disp.unit });
+  }
+  const refBadge = refStep
+    ? `<div class="step-ref-badge"><i data-lucide="corner-down-right"></i> Combine all of Step ${step.inputFromStep} into this bowl</div>`
+    : '';
+
+  return `<div class="step-card" style="--i:${index}">
+    <div class="step-header-row">
+      <div class="step-number">Step ${index + 1}</div>
+      <div class="step-time">~${stepTime}m</div>
+    </div>
+    <div class="step-title">${step.title}</div>
+    ${step.instructions ? `
+      <details class="step-instructions-toggle">
+        <summary>Instructions</summary>
+        <p class="step-instructions-body">${escapeHtml(step.instructions)}</p>
+      </details>` : ''}
+    ${refBadge}
+    <div class="step-viz">
+      ${buildPieChart(displayItems, 80)}
+      <div class="step-legend">${buildLegend(displayItems)}</div>
+    </div>
+  </div>`;
+}
+
+function renderVariantSwitcher(currentSauceId) {
+  const family = state.selectedSauceFamily || [];
+  if (family.length <= 1) return '';
+  return `
+    <div class="variant-switcher" role="tablist" aria-label="Switch variant">
+      ${family.map(s => `
+        <button class="variant-chip ${s.id === currentSauceId ? 'variant-chip--active' : ''}"
+                role="tab"
+                aria-selected="${s.id === currentSauceId}"
+                onclick="selectVariant('${s.id}')">
+          ${escapeHtml(s.name)}${!s.parentSauceId ? '<span class="variant-chip-tag">original</span>' : ''}
+        </button>
+      `).join('')}
+    </div>`;
+}
+
+function renderItemPrepBlock(item, prep, sauce) {
+  if (!item) return '';
+  const itemPrepLabel = item.category === 'salad'
+    ? `🥗 Toss ${item.name}`
+    : `${item.emoji} ${item.category === 'protein' ? 'Cook' : 'Prep'} ${item.name}${prep ? ` — ${prep.name}` : ''}`;
+  const itemColor = item.category === 'protein' ? '#C94E02'
+                 : item.category === 'salad'   ? '#2D6A4F'
+                 : '#1565C0';
+  const itemCookTime = (prep?.cookTimeMinutes ?? item.cookTimeMinutes) || 0;
+  const itemInstructions = prep?.instructions
+                        || item.instructions
+                        || (item.category === 'salad'
+                            ? `Toss ${item.name} with ${sauce.name} right before serving`
+                            : `Cook ${item.name} per packet instructions`);
+  return `
+    <div class="meal-section">
+      <div class="meal-section-label" style="background:${itemColor}">${itemPrepLabel}</div>
+      <div class="step-card">
+        <div class="step-header-row">
+          <div class="step-number">${item.category === 'protein' ? 'Cook' : item.category === 'salad' ? 'Assemble' : 'Boil / prep'}</div>
+          ${itemCookTime ? `<div class="step-time">~${itemCookTime}m</div>` : ''}
+        </div>
+        <div class="step-title">${itemInstructions}</div>
+      </div>
+    </div>`;
+}
+
 // ─── Shared sauce-list markup ────────────────────────────────────────────────
 // One row component used by Browse, Saucebook, the meal-flow Sauce Selector,
 // and the Sauce Manager → Sauces list. The visual is the flat
