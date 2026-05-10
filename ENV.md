@@ -20,9 +20,7 @@ Set in Railway dashboard → backend service → Variables.
 | `WEALTHMATE_JWT_SECRET` | Hand-generated (operator) | Signs WealthMate JWTs | `shared-backend/routes/wealthmate/constants.py` |
 | `BGG_API_TOKEN` | BoardGameGeek app registration (boardgamegeek.com/applications) | API rate-limit headroom | `shared-backend/routes/boardgame_buddy/bgg_client.py` |
 | `BGG_CREDENTIAL_KEY` | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` | Fernet key for encrypting linked users' BGG passwords | `shared-backend/routes/boardgame_buddy/bgg_credentials.py` |
-| `TREFLE_API_TOKEN` | Trefle dashboard (trefle.io/profile) | Free-tier plant catalog API — primary source for `plantplanner_plant_cache` lazy-fill | `shared-backend/routes/plant_planner/api_clients.py` |
-| `PERENUAL_API_KEY` | Perenual dashboard (perenual.com/user/developer) | Freemium fallback for hardiness zones + sunlight/watering data when Trefle is missing them | `shared-backend/routes/plant_planner/api_clients.py` |
-| `FLORA_API_KEY` | Flora dashboard (floraapi.com) | **Required** — paid US-flora API used by the new-planter loading orchestration's step 4. The `/catalog/fill/flora` endpoint fails the loading sequence if this is unset. | `shared-backend/routes/plant_planner/api_clients.py` |
+| `PERENUAL_API_KEY` | Perenual dashboard (perenual.com/user/developer) | Sole upstream source for `plantplanner_plant_cache`. Both wizard fill (`/catalog/fill/perenual`) and lazy fill (`/catalog/search` on miss) call species-list with the wizard filters, then fan out species-details lookups so the cache row carries hardiness, dimensions, description, care_level, soil[], growing_months[], etc. | `shared-backend/routes/plant_planner/api_clients.py` |
 
 Anything else in Railway is stale — `grep -r VAR_NAME shared-backend/` to confirm zero references before deleting.
 
