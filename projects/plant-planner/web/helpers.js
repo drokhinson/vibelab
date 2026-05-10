@@ -176,6 +176,62 @@ function _initIcons() {
   if (window.lucide) requestAnimationFrame(function() { lucide.createIcons(); });
 }
 
+// Build a `?a=1&b=2` query string from a plain params object. Drops null /
+// undefined / '' so callers can blindly pass partial filter state. Used by
+// browser.js, shopping.js, and import.js to query /catalog/search.
+function _qs(params) {
+  if (!params) return '';
+  var keys = Object.keys(params).filter(function(k) {
+    var v = params[k];
+    return v !== null && v !== undefined && v !== '' && v !== false;
+  });
+  if (!keys.length) return '';
+  return keys.map(function(k) {
+    return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+  }).join('&');
+}
+
+// Render a row of `.chip` buttons for a single-select filter group.
+//   label          — uppercase group label shown above the row
+//   options        — Array<{ value, label, icon? }>
+//   selectedValue  — currently-selected value (null = none)
+//   groupAttr      — `data-filter-group` value used by the click binder
+//
+// Each chip carries `data-filter-value="<value>"`. Wire chip clicks via
+// `bindFilterChipRow(container, groupAttr, onPick)` which toggles selection
+// (clicking the active chip clears it).
+function renderFilterChipRow(label, options, selectedValue, groupAttr) {
+  var html = '<div class="filter-group" data-filter-group="' + groupAttr + '">';
+  html += '<div class="filter-group-label">' + escapeHtml(label) + '</div>';
+  html += '<div class="filter-row">';
+  for (var i = 0; i < options.length; i++) {
+    var opt = options[i];
+    var active = opt.value === selectedValue;
+    html += '<button type="button" class="chip' + (active ? ' active' : '') + '"'
+         +  ' data-filter-value="' + escapeHtml(String(opt.value)) + '">'
+         +  (opt.icon ? opt.icon + ' ' : '')
+         +  escapeHtml(opt.label)
+         +  '</button>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+// Wire a previously-rendered filter chip row. `onPick` is called with the
+// chosen value, or null if the active chip was clicked again to clear.
+function bindFilterChipRow(rootEl, groupAttr, onPick) {
+  if (!rootEl) return;
+  var group = rootEl.querySelector('[data-filter-group="' + groupAttr + '"]');
+  if (!group) return;
+  group.querySelectorAll('.chip').forEach(function(btn) {
+    btn.onclick = function() {
+      var v = btn.dataset.filterValue;
+      var wasActive = btn.classList.contains('active');
+      onPick(wasActive ? null : v);
+    };
+  });
+}
+
 function render() {
   updateNav();
   if (currentView === "auth") renderAuth();
