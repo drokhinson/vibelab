@@ -77,17 +77,32 @@
           </select>
         </header>
         <div id="api-logs-summary" class="muted" style="margin-bottom:0.75rem;">Loading summary...</div>
+        <div class="api-logs-filters">
+          <label class="api-logs-filter-label">
+            Window
+            <select id="api-logs-since-filter">
+              <option value="1m">Last minute</option>
+              <option value="5m" selected>Last 5 min</option>
+              <option value="15m">Last 15 min</option>
+              <option value="today">Today</option>
+              <option value="all">All time</option>
+            </select>
+          </label>
+          <label class="api-logs-filter-label">
+            User
+            <select id="api-logs-user-filter">
+              <option value="">All users</option>
+            </select>
+          </label>
+        </div>
         <div class="api-logs-actions">
           <span class="muted">Clear stored response bodies:</span>
           <button class="outline secondary clear-bodies-btn" data-age="1w">Older than 1 week</button>
           <button class="outline secondary clear-bodies-btn" data-age="1m">Older than 1 month</button>
           <button class="outline clear-bodies-btn delete-btn" data-age="all">All</button>
         </div>
-        <p class="muted" style="font-size:0.8rem;margin-bottom:0.5rem;">
-          Grouped by user session (30 min idle = new session). Click a row to load its calls.
-        </p>
-        <div id="api-sessions-content">
-          <div class="loading">Loading sessions...</div>
+        <div id="api-logs-content">
+          <div class="loading">Loading logs...</div>
         </div>
       </article>
 

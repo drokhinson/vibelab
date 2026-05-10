@@ -80,7 +80,8 @@ async function loadAllSections() {
   loadUsage();
   loadAppsWithUsers();
   loadStorage();
-  loadApiSessions();
+  loadApiLogUsers();   // populate user filter dropdown
+  loadApiLogs();       // initial load (default: last 5 min)
   loadApiLogsSummary();
 }
 
@@ -289,7 +290,7 @@ async function loadStorage() {
 
 // --- Section 4: External API Logs ---
 
-// id → log row, populated as sessions are expanded so the body-viewer dialog
+// id → log row, populated when the table renders so the body-viewer dialog
 // can look up any rendered row.
 const apiLogsCache = new Map();
 
@@ -298,7 +299,7 @@ const apiLogsCache = new Map();
 // with a fresh signature) still group together.
 function apiLogFingerprint(log) {
   const url = (log.url || "").split("?")[0];
-  return [log.app, log.api_name, log.method, url, log.status_code ?? "x"].join("|");
+  return [log.app, log.api_name, log.method, url, log.status_code ?? "x", log.user_id ?? "x"].join("|");
 }
 
 function groupConsecutiveLogs(logs) {
@@ -316,95 +317,56 @@ function groupConsecutiveLogs(logs) {
   return groups;
 }
 
-async function loadApiSessions() {
-  const el = document.getElementById("api-sessions-content");
-  el.innerHTML = '<div class="loading">Loading sessions...</div>';
-  const appFilter = document.getElementById("api-logs-app-filter").value;
-  const qs = appFilter ? `?app=${encodeURIComponent(appFilter)}&limit=100` : "?limit=100";
-  try {
-    const data = await apiFetch(`/api/v1/admin/api-sessions${qs}`);
-    const sessions = data.sessions || [];
-    populateApiLogsAppFilterFromSessions(sessions);
-
-    // Always include an "Anonymous" pseudo-session for calls without a user
-    // (BGG public catalog hits, plant-planner cache fills outside an auth'd
-    // request, etc). Its calls are loaded on expand.
-    const cards = [
-      {
-        id: "anonymous",
-        app: appFilter || "all",
-        user_label: "Anonymous (no signed-in user)",
-        is_anonymous: true,
-      },
-      ...sessions,
-    ];
-
-    el.innerHTML = cards.map(renderSessionCard).join("");
-
-    el.querySelectorAll(".api-session-card").forEach((card) => {
-      card.querySelector(".api-session-header").addEventListener("click", () =>
-        toggleSessionCard(card),
-      );
-    });
-  } catch (err) {
-    el.innerHTML = `<p class="error-text">Failed to load sessions: ${esc(err.message)}</p>`;
-  }
+function readApiLogFilters() {
+  return {
+    app:    document.getElementById("api-logs-app-filter").value,
+    since:  document.getElementById("api-logs-since-filter").value,
+    userId: document.getElementById("api-logs-user-filter").value,
+  };
 }
 
-function renderSessionCard(s) {
-  const userLabel = s.user_label || s.user_id || "(unknown user)";
-  const calls = s.is_anonymous ? "—" : (s.call_count ?? 0);
-  const started = s.started_at ? new Date(s.started_at).toLocaleString() : "";
-  const last = s.last_activity_at ? new Date(s.last_activity_at) : null;
-  let lastLabel = "";
-  if (last) {
-    const ageMs = Date.now() - last.getTime();
-    if (ageMs < 60_000) lastLabel = "active now";
-    else if (ageMs < 3_600_000) lastLabel = `${Math.round(ageMs / 60_000)}m ago`;
-    else if (ageMs < 86_400_000) lastLabel = `${Math.round(ageMs / 3_600_000)}h ago`;
-    else lastLabel = last.toLocaleDateString();
-  }
-  const stateClass = s.is_anonymous ? "anon" : (s.active ? "active" : "ended");
-  const stateLabel = s.is_anonymous ? "anonymous" : (s.active ? "active" : "ended");
-  return `<details class="api-session-card" data-session-id="${esc(s.id)}" data-loaded="0">
-    <summary class="api-session-header">
-      <div class="api-session-line">
-        <span class="api-session-state ${stateClass}">${stateLabel}</span>
-        <strong class="api-session-user">${esc(userLabel)}</strong>
-        <span class="api-session-app">${esc(s.app)}</span>
-        ${s.is_anonymous ? "" : `<span class="muted">${calls} calls</span>`}
-      </div>
-      <div class="api-session-line muted" style="font-size:0.75rem;">
-        ${s.is_anonymous ? "calls without an authenticated user context" : `started ${esc(started)} · last ${esc(lastLabel)}`}
-      </div>
-    </summary>
-    <div class="api-session-body">
-      <div class="loading">Loading calls...</div>
-    </div>
-  </details>`;
-}
-
-async function toggleSessionCard(card) {
-  // <details> toggles itself; we just need to lazy-load the body once.
-  if (card.dataset.loaded === "1") return;
-  card.dataset.loaded = "1";
-  const body = card.querySelector(".api-session-body");
-  const sessionId = card.dataset.sessionId;
-  const appFilter = document.getElementById("api-logs-app-filter").value;
-  const params = new URLSearchParams({ session_id: sessionId, limit: "200" });
-  if (appFilter && sessionId === "anonymous") params.set("app", appFilter);
+async function loadApiLogs() {
+  const el = document.getElementById("api-logs-content");
+  el.innerHTML = '<div class="loading">Loading logs...</div>';
+  const { app, since, userId } = readApiLogFilters();
+  const params = new URLSearchParams({ limit: "200" });
+  if (app) params.set("app", app);
+  if (since) params.set("since", since);
+  if (userId) params.set("user_id", userId);
   try {
     const data = await apiFetch(`/api/v1/admin/api-logs?${params}`);
     const logs = data.logs || [];
+    apiLogsCache.clear();
     for (const log of logs) apiLogsCache.set(String(log.id), log);
+    populateApiLogsAppFilterFromLogs(logs);
     if (logs.length === 0) {
-      body.innerHTML = "<p class='muted'>No calls in this session.</p>";
+      el.innerHTML = "<p class='muted'>No calls match the current filters.</p>";
       return;
     }
-    body.innerHTML = renderLogTable(logs);
-    wireLogTableHandlers(body);
+    el.innerHTML = renderLogTable(logs);
+    wireLogTableHandlers(el);
   } catch (err) {
-    body.innerHTML = `<p class="error-text">Failed to load calls: ${esc(err.message)}</p>`;
+    el.innerHTML = `<p class="error-text">Failed to load logs: ${esc(err.message)}</p>`;
+  }
+}
+
+async function loadApiLogUsers() {
+  try {
+    const data = await apiFetch("/api/v1/admin/api-logs/users");
+    const users = data.users || [];
+    const select = document.getElementById("api-logs-user-filter");
+    const current = select.value;
+    // Reset to "All users" + any users we just fetched.
+    select.innerHTML = '<option value="">All users</option>';
+    for (const u of users) {
+      const opt = document.createElement("option");
+      opt.value = u.user_id;
+      opt.textContent = u.user_label || u.user_id;
+      select.appendChild(opt);
+    }
+    if ([...select.options].some((o) => o.value === current)) select.value = current;
+  } catch {
+    // dropdown stays at "All users" — non-fatal
   }
 }
 
@@ -413,7 +375,7 @@ function renderLogTable(logs) {
   let html = `<div class="table-responsive"><table>
     <thead><tr>
       <th></th>
-      <th>Time</th><th>API</th><th>Method</th><th>URL</th>
+      <th>Time</th><th>App</th><th>User</th><th>API</th><th>Method</th><th>URL</th>
       <th>Status</th><th>Latency</th><th>Size</th><th>Error</th>
     </tr></thead><tbody>`;
   groups.forEach((group, gi) => {
@@ -442,10 +404,10 @@ function wireLogTableHandlers(scope) {
   });
 }
 
-function populateApiLogsAppFilterFromSessions(sessions) {
+function populateApiLogsAppFilterFromLogs(logs) {
   const select = document.getElementById("api-logs-app-filter");
   const current = select.value;
-  const apps = Array.from(new Set(sessions.map((s) => s.app).filter(Boolean))).sort();
+  const apps = Array.from(new Set(logs.map((l) => l.app).filter(Boolean))).sort();
   for (const app of apps) {
     if (![...select.options].some((o) => o.value === app)) {
       const opt = document.createElement("option");
@@ -485,9 +447,12 @@ function renderLogGroup(group, gi) {
   const when = lead.sent_at ? new Date(lead.sent_at).toLocaleString() : "—";
   const errLabel = errors > 0 ? `${errors}/${count} failed` : "";
 
+  const userLabel = lead.user_label || lead.user_id || "anonymous";
   const summaryRow = `<tr class="api-log-row api-log-summary" data-gi="${gi}">
     <td><button class="api-log-toggle" data-gi="${gi}" aria-label="Expand"><span class="chev">▸</span></button></td>
     <td>${esc(when)}</td>
+    <td>${esc(lead.app)}</td>
+    <td>${esc(userLabel)}</td>
     <td>${esc(lead.api_name)} <span class="api-log-count">×${count}</span></td>
     <td>${esc(lead.method)}</td>
     <td title="${esc(lead.url)}">${esc(url)}</td>
@@ -517,9 +482,12 @@ function renderLogRow(r, { toggleCell = "", extraClass = "", gi = null } = {}) {
   const err = r.error_message ? esc(r.error_message.slice(0, 60)) : "";
   const giAttr = gi != null ? ` data-gi="${gi}"` : "";
   const styleAttr = extraClass.includes("api-log-child") ? ' style="display:none;"' : "";
+  const userLabel = r.user_label || r.user_id || "anonymous";
   return `<tr class="api-log-row ${extraClass}" data-id="${r.id}"${giAttr}${styleAttr}>
     ${toggleCell}
     <td>${esc(when)}</td>
+    <td>${esc(r.app)}</td>
+    <td>${esc(userLabel)}</td>
     <td>${esc(r.api_name)}</td>
     <td>${esc(r.method)}</td>
     <td title="${esc(r.url)}">${esc(url)}</td>
@@ -576,8 +544,8 @@ document.getElementById("api-log-dialog-close").addEventListener("click", () => 
   document.getElementById("api-log-dialog").close();
 });
 
-document.getElementById("api-logs-app-filter").addEventListener("change", () => {
-  loadApiSessions();
+["api-logs-app-filter", "api-logs-since-filter", "api-logs-user-filter"].forEach((id) => {
+  document.getElementById(id).addEventListener("change", () => loadApiLogs());
 });
 
 document.querySelectorAll(".clear-bodies-btn").forEach((btn) => {
@@ -592,7 +560,7 @@ document.querySelectorAll(".clear-bodies-btn").forEach((btn) => {
         method: "POST",
       });
       alert(`Cleared ${data.cleared} response body(ies).`);
-      loadApiSessions();
+      loadApiLogs();
       loadApiLogsSummary();
     } catch (err) {
       alert("Clear failed: " + err.message);

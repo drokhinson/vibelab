@@ -286,12 +286,26 @@ _AGE_DELTAS: dict[str, Optional[timedelta]] = {
 }
 
 
+# Time-window presets for the admin filter UI. "all" means no time filter.
+_SINCE_DELTAS: dict[str, Optional[timedelta]] = {
+    "1m":    timedelta(minutes=1),
+    "5m":    timedelta(minutes=5),
+    "15m":   timedelta(minutes=15),
+    "today": None,  # special-cased below — "since midnight UTC"
+    "all":   None,
+}
+
+
 @router.get("/api-logs")
 async def list_api_logs(
     app: Optional[str] = Query(None, description="Filter by app, e.g. 'plant-planner'"),
     api_name: Optional[str] = Query(None, description="Filter by api, e.g. 'trefle'"),
-    session_id: Optional[str] = Query(None, description="Filter to a single session id"),
-    limit: int = Query(100, ge=1, le=500),
+    user_id: Optional[str] = Query(None, description="Filter by user (literal 'anonymous' = NULL)"),
+    since: Optional[str] = Query(
+        None,
+        description="Window preset: '1m', '5m', '15m', 'today', or 'all'.",
+    ),
+    limit: int = Query(200, ge=1, le=500),
     authorization: Optional[str] = Header(None),
 ):
     """List recent external API calls. Newest first."""
@@ -302,7 +316,7 @@ async def list_api_logs(
         .select(
             "id, app, api_name, method, url, request_params, sent_at, "
             "response_time_ms, status_code, response_size_bytes, body_excerpt, "
-            "error_message, session_id, user_id"
+            "error_message, user_id, user_label"
         )
         .order("sent_at", desc=True)
         .limit(limit)
@@ -311,48 +325,58 @@ async def list_api_logs(
         q = q.eq("app", app)
     if api_name:
         q = q.eq("api_name", api_name)
-    if session_id == "anonymous":
-        # Sentinel for "calls without an authenticated session".
-        q = q.filter("session_id", "is", "null")
-    elif session_id:
-        q = q.eq("session_id", session_id)
+    if user_id == "anonymous":
+        q = q.filter("user_id", "is", "null")
+    elif user_id:
+        q = q.eq("user_id", user_id)
+
+    if since and since != "all":
+        cutoff_iso: Optional[str] = None
+        if since == "today":
+            now = datetime.now(timezone.utc)
+            midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            cutoff_iso = midnight.isoformat()
+        else:
+            delta = _SINCE_DELTAS.get(since)
+            if delta is not None:
+                cutoff_iso = (datetime.now(timezone.utc) - delta).isoformat()
+        if cutoff_iso:
+            q = q.gte("sent_at", cutoff_iso)
+
     result = q.execute()
     return {"logs": result.data or []}
 
 
-@router.get("/api-sessions")
-async def list_api_sessions(
-    app: Optional[str] = Query(None, description="Filter by app"),
-    limit: int = Query(50, ge=1, le=200),
-    authorization: Optional[str] = Header(None),
-):
-    """List recent API sessions (most recently active first).
+@router.get("/api-logs/users")
+async def list_api_log_users(authorization: Optional[str] = Header(None)):
+    """Distinct (user_id, user_label) pairs seen in api_logs, for the filter dropdown.
 
-    A session represents a contiguous burst of activity from one user in one
-    app — bounded by 30 minutes of API inactivity (see api_logger.py).
+    Pulls the most recent 5000 rows (admin volume is small) and dedupes in
+    Python — postgrest can't express SELECT DISTINCT.
     """
     require_admin(authorization)
     sb = get_supabase()
-    q = (
-        sb.table("api_sessions")
-        .select("id, app, user_id, user_label, started_at, last_activity_at, call_count")
-        .order("last_activity_at", desc=True)
-        .limit(limit)
+    result = (
+        sb.table("api_logs")
+        .select("user_id, user_label")
+        .order("sent_at", desc=True)
+        .limit(5000)
+        .execute()
     )
-    if app:
-        q = q.eq("app", app)
-    result = q.execute()
-    sessions = result.data or []
-    # Mark a session "active" if its last activity is within the idle timeout.
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
-    for s in sessions:
-        last_raw = s.get("last_activity_at")
-        try:
-            last = datetime.fromisoformat(last_raw.replace("Z", "+00:00")) if last_raw else None
-        except (AttributeError, ValueError):
-            last = None
-        s["active"] = bool(last and last >= cutoff)
-    return {"sessions": sessions}
+    rows = result.data or []
+    seen: dict[Optional[str], dict] = {}
+    has_anonymous = False
+    for r in rows:
+        uid = r.get("user_id")
+        if uid is None:
+            has_anonymous = True
+            continue
+        if uid not in seen:
+            seen[uid] = {"user_id": uid, "user_label": r.get("user_label") or uid}
+    users = sorted(seen.values(), key=lambda x: (x["user_label"] or "").lower())
+    if has_anonymous:
+        users.insert(0, {"user_id": "anonymous", "user_label": "Anonymous (no signed-in user)"})
+    return {"users": users}
 
 
 @router.get("/api-logs/summary")

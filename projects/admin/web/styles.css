@@ -291,73 +291,26 @@ table {
   border-left: 2px solid var(--pico-card-border-color);
 }
 
-/* Session cards */
-.api-session-card {
-  border: 1px solid var(--pico-card-border-color);
-  border-radius: var(--pico-border-radius);
-  margin-bottom: 0.5rem;
-  background: var(--pico-card-background-color);
-}
-
-.api-session-card[open] {
-  border-color: var(--pico-primary);
-}
-
-.api-session-header {
-  cursor: pointer;
-  padding: 0.6rem 0.8rem;
-  list-style: none;
-}
-
-.api-session-header::-webkit-details-marker { display: none; }
-
-.api-session-header::before {
-  content: "▸";
-  display: inline-block;
-  margin-right: 0.5rem;
-  color: var(--pico-muted-color);
-  transition: transform 0.15s ease;
-}
-
-.api-session-card[open] .api-session-header::before {
-  transform: rotate(90deg);
-}
-
-.api-session-line {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.api-session-card .api-session-line + .api-session-line {
+/* Filter row */
+.api-logs-filters {
   display: flex;
-  margin-top: 0.15rem;
-  margin-left: 1.05rem;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
-.api-session-state {
-  display: inline-block;
-  font-size: 0.65rem;
+.api-logs-filter-label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.7rem;
+  color: var(--pico-muted-color);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  font-weight: 600;
+  gap: 0.25rem;
 }
 
-.api-session-state.active { background: rgba(93, 211, 158, 0.15); color: #5dd39e; }
-.api-session-state.ended  { background: var(--pico-card-border-color); color: var(--pico-muted-color); }
-.api-session-state.anon   { background: rgba(245, 184, 94, 0.15); color: #f5b85e; }
-
-.api-session-app {
-  font-size: 0.75rem;
-  color: var(--pico-muted-color);
-  padding: 0.05rem 0.45rem;
-  border-radius: 999px;
-  background: var(--pico-card-border-color);
-}
-
-.api-session-body {
-  padding: 0 0.6rem 0.6rem;
+.api-logs-filter-label select {
+  margin: 0;
+  min-width: 160px;
 }

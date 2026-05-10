@@ -2,7 +2,8 @@
 
 Every outbound HTTP request to a third-party service (BoardGameGeek, Trefle,
 Perenual, image CDNs, future APIs) is recorded in `public.api_logs` so the
-admin dashboard can surface latency, errors, and response bodies.
+admin dashboard can surface latency, errors, and response bodies — and now
+filter by user.
 
 Usage from a route package:
 
@@ -21,6 +22,10 @@ Usage from a route package:
 The context manager always commits a row on exit (success OR exception). DB
 writes are scheduled on the running event loop so they don't block the user
 request; logger failures are swallowed.
+
+The middleware in shared-backend/main.py decodes the request's Authorization
+header and calls `set_request_user(...)` so the resulting api_logs row carries
+the user_id + a human-readable label (used by the admin filter UI).
 """
 
 from __future__ import annotations
@@ -31,7 +36,6 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Iterable, Optional
 
 import httpx
@@ -45,14 +49,9 @@ logger = logging.getLogger(__name__)
 BODY_EXCERPT_BYTES = 8192
 REDACTED = "***"
 
-# A user's session is a stretch of activity bounded by 30 minutes of idle. The
-# next call after that gap (or the first call from a fresh login) starts a new
-# session row in public.api_sessions.
-SESSION_IDLE_TIMEOUT = timedelta(minutes=30)
-
-# Per-request user context. Populated by api_logger.set_request_user() (called
-# from each app's get_current_user dependency); read by log_external_call when
-# it writes the api_logs row.
+# Per-request user context, populated by api_logger.set_request_user (called
+# from the FastAPI middleware in main.py and each app's get_current_user).
+# Read inside log_external_call when we write the api_logs row.
 _current_user: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "api_logger_current_user", default=None,
 )
@@ -62,43 +61,6 @@ _current_user_label: contextvars.ContextVar[Optional[str]] = contextvars.Context
 _current_app: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "api_logger_current_app", default=None,
 )
-_current_session_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "api_logger_current_session_id", default=None,
-)
-
-
-def _resolve_or_create_session_sync(
-    app: str, user_id: str, user_label: Optional[str],
-) -> Optional[str]:
-    """Return the active session id for (app, user_id), creating one if needed.
-
-    Synchronous — call via asyncio.to_thread from set_request_user so the event
-    loop isn't blocked.
-    """
-    sb = get_supabase()
-    cutoff = (datetime.now(timezone.utc) - SESSION_IDLE_TIMEOUT).isoformat()
-    existing = (
-        sb.table("api_sessions")
-        .select("id")
-        .eq("app", app)
-        .eq("user_id", user_id)
-        .gte("last_activity_at", cutoff)
-        .order("last_activity_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    if existing.data:
-        return existing.data[0]["id"]
-    try:
-        new_row = (
-            sb.table("api_sessions")
-            .insert({"app": app, "user_id": user_id, "user_label": user_label})
-            .execute()
-        )
-        return (new_row.data or [{}])[0].get("id")
-    except Exception as exc:
-        logger.warning("api_logger session create failed: %s", exc)
-        return None
 
 
 async def set_request_user(
@@ -106,40 +68,27 @@ async def set_request_user(
 ) -> None:
     """Bind the current request's user context to the api_logger.
 
-    Call once per request from the app's `get_current_user()` dependency, after
-    the user has been authenticated. Subsequent log_external_call() rows in the
-    same request will be tagged with the resolved session_id and user_id.
+    Called from the FastAPI middleware (or from each app's get_current_user
+    dependency). Subsequent log_external_call() rows in the same request will
+    be tagged with this user_id and user_label.
 
     For unauthenticated callers, do not call this — log rows will be written
-    with NULL session_id / user_id.
+    with NULL user_id / user_label.
+
+    Idempotent: a second call for the same (app, user_id) just refreshes the
+    label, so the dependency-level call after the middleware ran is cheap.
     """
+    if (
+        _current_app.get() == app
+        and _current_user.get() == user_id
+        and user_id is not None
+    ):
+        if user_label:
+            _current_user_label.set(user_label)
+        return
     _current_app.set(app)
     _current_user.set(user_id)
     _current_user_label.set(user_label)
-    if user_id:
-        sid = await asyncio.to_thread(
-            _resolve_or_create_session_sync, app, user_id, user_label,
-        )
-        _current_session_id.set(sid)
-    else:
-        _current_session_id.set(None)
-
-
-def _bump_session_activity_sync(session_id: str) -> None:
-    """Touch last_activity_at + bump call_count on the given session row."""
-    sb = get_supabase()
-    try:
-        # Read current count (Supabase REST has no atomic increment); the
-        # window for a lost increment under concurrency is tiny and only
-        # affects an admin display, not correctness.
-        cur = sb.table("api_sessions").select("call_count").eq("id", session_id).execute()
-        count = (cur.data or [{}])[0].get("call_count", 0) or 0
-        sb.table("api_sessions").update({
-            "last_activity_at": datetime.now(timezone.utc).isoformat(),
-            "call_count": count + 1,
-        }).eq("id", session_id).execute()
-    except Exception as exc:
-        logger.warning("api_logger session bump failed: %s", exc)
 
 
 @dataclass
@@ -202,28 +151,24 @@ def _insert_row(row: dict[str, Any]) -> None:
         logger.warning("api_logger insert failed: %s", exc)
 
 
-async def _async_insert(row: dict[str, Any], session_id: Optional[str]) -> None:
+async def _async_insert(row: dict[str, Any]) -> None:
     try:
         await asyncio.to_thread(_insert_row, row)
-        if session_id:
-            await asyncio.to_thread(_bump_session_activity_sync, session_id)
     except Exception as exc:
         logger.warning("api_logger async insert failed: %s", exc)
 
 
-def _schedule_insert(row: dict[str, Any], session_id: Optional[str]) -> None:
+def _schedule_insert(row: dict[str, Any]) -> None:
     """Fire-and-forget the DB write so the caller's request doesn't wait on it."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
     if loop is not None:
-        loop.create_task(_async_insert(row, session_id))
+        loop.create_task(_async_insert(row))
     else:
         # Sync caller (rare in this codebase) — fall back to a blocking write.
         _insert_row(row)
-        if session_id:
-            _bump_session_activity_sync(session_id)
 
 
 @asynccontextmanager
@@ -257,8 +202,6 @@ async def log_external_call(
         raise
     finally:
         elapsed_ms = int((time.monotonic() - start) * 1000)
-        session_id = _current_session_id.get()
-        user_id = _current_user.get()
         row = {
             "app": record.app,
             "api_name": record.api_name,
@@ -270,7 +213,7 @@ async def log_external_call(
             "response_size_bytes": record.response_size_bytes,
             "body_excerpt": record.body_excerpt,
             "error_message": record.error_message,
-            "session_id": session_id,
-            "user_id": user_id,
+            "user_id": _current_user.get(),
+            "user_label": _current_user_label.get(),
         }
-        _schedule_insert(row, session_id)
+        _schedule_insert(row)
