@@ -269,19 +269,26 @@ function saucebookClearFilters() {
 }
 
 function saucebookOpenRecipe(sauceId) {
-  // Saucebook rows already carry the full envelope (api.listSaucebook
-  // mirrors get_sauceboss_all_sauces_full's shape), so we can navigate to
-  // the recipe view without an extra round-trip.
-  const all = state.saucebook;
-  const found = all.find(s => s.id === sauceId);
-  if (!found) return;
-  // Build the family from the saucebook so the recipe view's variant
-  // switcher works.
-  const rootId = found.parentSauceId || found.id;
-  const family = all.filter(s => s.id === rootId || s.parentSauceId === rootId);
-  state.selectedSauce = found;
-  state.selectedSauceFamily = family.length ? family : [found];
-  state.selectedItem = null;
-  state.recipeReturnTo = 'tab-shell';
-  navigate('recipe');
+  // Saucebook rows are slim (no steps / full ingredients) — defer to the
+  // all-sauces path to load the full envelope, same flow Browse uses
+  // (browse.js:browseOpenRecipe).
+  if (!state.saucebook.some(s => s.id === sauceId)) return;
+  state.loading = 'Loading recipe…';
+  render();
+  api.allSauces().then(all => {
+    state.loading = null;
+    const found = all.find(s => s.id === sauceId);
+    if (!found) { render(); return; }
+    const rootId = found.parentSauceId || found.id;
+    const family = all.filter(s => s.id === rootId || s.parentSauceId === rootId);
+    state.selectedSauce = found;
+    state.selectedSauceFamily = family.length ? family : [found];
+    state.selectedItem = null;
+    state.recipeReturnTo = 'tab-shell';
+    navigate('recipe');
+  }).catch(err => {
+    state.loading = null;
+    console.warn('[sauceboss] saucebook recipe load failed:', err);
+    render();
+  });
 }

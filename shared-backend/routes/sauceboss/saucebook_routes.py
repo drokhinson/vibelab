@@ -22,12 +22,13 @@ logger = logging.getLogger("sauceboss")
     "/saucebook",
     response_model=SaucebookResponse,
     status_code=200,
-    summary="List the current user's saucebook (full sauce envelopes)",
+    summary="List the current user's saucebook (slim Browse-shaped envelopes)",
 )
 async def list_saucebook(
     user: CurrentUser = Depends(get_current_user),
 ) -> SaucebookResponse:
-    """The caller's saved sauces, full envelopes (matches all-sauces-full shape)."""
+    """The caller's saved sauces, slim envelopes (Browse shape + addedAt +
+    ingredientNames). Steps + full ingredients fetched via /sauces on tap."""
     sb = get_supabase()
     try:
         result = sb.rpc("get_sauceboss_saucebook", {"p_user_id": user.user_id}).execute()

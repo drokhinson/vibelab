@@ -166,9 +166,15 @@ function _proceedToSauceSelector(dish, subtype) {
   };
   const matches = (state.saucebook || []).filter(s => _attachmentsMatchTarget(s.attachments || [], target));
   state.saucesForCurrentItem = matches;
-  // Also seed allIngredients (used by the ingredient filter).
+  // Also seed allIngredients (used by the ingredient filter). Saucebook
+  // envelopes are slim — read the pre-built `ingredientNames` Set rather
+  // than the (no-longer-present) `ingredients[]` array.
   const seen = new Set();
-  for (const s of matches) for (const i of (s.ingredients || [])) if (i.name) seen.add(i.name);
+  for (const s of matches) {
+    if (s.ingredientNames instanceof Set) {
+      for (const name of s.ingredientNames) seen.add(name);
+    }
+  }
   state.allIngredients = [...seen].sort();
   state.recipeReturnTo = 'tab-shell';
   // Open the pantry filter by default in the meal flow so the user sees

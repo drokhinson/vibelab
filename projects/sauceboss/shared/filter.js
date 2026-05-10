@@ -73,8 +73,15 @@ export function groupIngredientsByCategory({ sauces, allIngredients, ingredientC
 }
 
 // Convenience: attach `ingredientNames` Set to each sauce for fast lookups.
-// Backend returns sauces with `ingredients[]` but no Set, so callers wrap them.
+// Two backend shapes feed this:
+//   * full envelopes (allSauces) ship `ingredients: [{name, ...}, ...]`
+//   * slim saucebook envelopes ship `ingredientNames: ["soy sauce", ...]` directly
+// Idempotent — already-Set inputs pass through untouched.
 export function withIngredientNames(sauce) {
+  if (sauce.ingredientNames instanceof Set) return sauce;
+  if (Array.isArray(sauce.ingredientNames)) {
+    return { ...sauce, ingredientNames: new Set(sauce.ingredientNames) };
+  }
   return {
     ...sauce,
     ingredientNames: new Set((sauce.ingredients || []).map((i) => i.name)),

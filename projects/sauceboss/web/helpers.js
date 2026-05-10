@@ -265,19 +265,16 @@ function renderRecipeRow(sauce, opts = {}) {
 }
 
 // Count how many of a sauce's ingredients are flagged missing in the user's
-// pantry. Operates on the disabledIngredients name-set so it works the same
-// for sauces in the saucebook (full envelope w/ ingredients) and gracefully
-// returns 0 for the lightweight Browse rows that don't carry ingredients.
+// pantry. Reads `sauce.ingredientNames` (Set<string>), which `listSaucebook`
+// hydrates from the backend's pre-deduped TEXT[] and `allSauces` hydrates
+// from `ingredients[].name` via withIngredientNames. Browse rows don't
+// render this badge, so the missing-Set early-return is fine.
 function sauceMissingCount(sauce) {
-  if (!sauce || !Array.isArray(sauce.ingredients)) return 0;
+  if (!sauce || !(sauce.ingredientNames instanceof Set)) return 0;
   if (!state.disabledIngredients || state.disabledIngredients.size === 0) return 0;
-  const seen = new Set();
   let n = 0;
-  for (const ing of sauce.ingredients) {
-    if (!ing || !ing.name) continue;
-    if (seen.has(ing.name)) continue;
-    seen.add(ing.name);
-    if (state.disabledIngredients.has(ing.name)) n += 1;
+  for (const name of sauce.ingredientNames) {
+    if (state.disabledIngredients.has(name)) n += 1;
   }
   return n;
 }

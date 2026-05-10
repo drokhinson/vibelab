@@ -364,9 +364,10 @@ class BulkSauceExportEnvelope(BaseModel):
 # ── Saucebook + Browse + Pantry (migration 010) ──────────────────────────────
 
 class SaucebookResponse(BaseModel):
-    """The current user's saucebook — full sauce envelopes mirroring the shape
-    used by `get_sauceboss_all_sauces_full`, plus `addedAt`, `authorName`,
-    `attachments`, and `variantCount`."""
+    """The current user's saucebook — Browse-shaped slim envelopes plus
+    saucebook-specific fields (`addedAt`, `ingredientNames`). Steps and the
+    full ingredient list are NOT included; the recipe view fetches the full
+    envelope via /sauces when the user opens a recipe (see migration 012)."""
     sauces: List[Dict[str, Any]]
 
 
