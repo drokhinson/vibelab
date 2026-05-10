@@ -22,6 +22,11 @@ var browserState = {
   busyIds: new Set(),        // Cache ids mid-mutate.
   detailPlant: null,
   filtersOpen: false,
+  // `filters` are applied — the grid reflects whatever was last sent to the
+  // server. `draftFilters` is the panel's in-flight state: chip clicks, zone
+  // edits, and edible toggles mutate it locally without hitting the server.
+  // Tapping "Apply filters" commits draft → applied and refreshes the grid;
+  // "Clear all" resets both buffers and refreshes.
   filters: {
     sunlight: null,          // full_sun | sun-part_shade | part_shade | full_shade
     watering: null,          // frequent | average | minimum | none
@@ -29,7 +34,26 @@ var browserState = {
     cycle: null,             // annual | perennial | biennial
     edible: false,           // true to require edible
   },
+  draftFilters: {
+    sunlight: null, watering: null, usda_zone: '', cycle: null, edible: false,
+  },
 };
+
+function _emptyBrowserFilters() {
+  return { sunlight: null, watering: null, usda_zone: '', cycle: null, edible: false };
+}
+
+function _cloneFilters(f) {
+  return { sunlight: f.sunlight, watering: f.watering, usda_zone: f.usda_zone, cycle: f.cycle, edible: f.edible };
+}
+
+function _filtersEqual(a, b) {
+  return a.sunlight === b.sunlight
+      && a.watering === b.watering
+      && (a.usda_zone || '') === (b.usda_zone || '')
+      && a.cycle === b.cycle
+      && !!a.edible === !!b.edible;
+}
 
 var BROWSER_FILTER_OPTIONS = {
   sunlight: [
@@ -58,6 +82,9 @@ async function renderBrowser() {
   app.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-base-content/50 gap-3"><span class="loading loading-spinner loading-md text-primary"></span>Loading the catalog…</div>';
   browserState.loading = true;
   browserState.detailPlant = null;
+  // Re-entering the view: sync the draft buffer to whatever filters were
+  // last applied so the panel doesn't show stale chip selections.
+  browserState.draftFilters = _cloneFilters(browserState.filters);
   try {
     await Promise.all([
       _refreshBrowserResults(),
@@ -162,7 +189,11 @@ function _renderBrowserView() {
 }
 
 function _renderBrowserFilterPanel() {
-  var f = browserState.filters;
+  // Render from the DRAFT buffer; chip/zone/edible interactions mutate the
+  // draft only. `Apply filters` commits draft → applied and refreshes.
+  var f = browserState.draftFilters;
+  var dirty = !_filtersEqual(browserState.draftFilters, browserState.filters);
+
   var html = '<div class="browser-filter-panel">';
   html += renderFilterChipRow('Sunlight', BROWSER_FILTER_OPTIONS.sunlight, f.sunlight, 'sunlight');
   html += renderFilterChipRow('Watering', BROWSER_FILTER_OPTIONS.watering, f.watering, 'watering');
@@ -185,6 +216,9 @@ function _renderBrowserFilterPanel() {
 
   html += '<div class="browser-filter-actions">';
   html +=   '<button type="button" class="btn btn-ghost btn-xs" id="browser-filters-clear">Clear all</button>';
+  html +=   '<button type="button" class="btn btn-primary btn-sm gap-1" id="browser-filters-apply"' + (dirty ? '' : ' disabled') + '>'
+       +     '<i data-lucide="check" style="width:1em;height:1em"></i> Apply filters'
+       +   '</button>';
   html += '</div>';
   html += '</div>';
   return html;
@@ -285,25 +319,30 @@ function _bindBrowserEvents() {
   if (browserState.filtersOpen) {
     var panel = document.querySelector('.browser-filter-panel');
     bindFilterChipRow(panel, 'sunlight', function(v) {
-      browserState.filters.sunlight = v;
-      _browserApplyAndRefresh();
+      browserState.draftFilters.sunlight = v;
+      _rerenderBrowserFilterPanel();
     });
     bindFilterChipRow(panel, 'watering', function(v) {
-      browserState.filters.watering = v;
-      _browserApplyAndRefresh();
+      browserState.draftFilters.watering = v;
+      _rerenderBrowserFilterPanel();
     });
     bindFilterChipRow(panel, 'cycle', function(v) {
-      browserState.filters.cycle = v;
-      _browserApplyAndRefresh();
+      browserState.draftFilters.cycle = v;
+      _rerenderBrowserFilterPanel();
     });
 
     var zoneInput = document.getElementById('browser-filter-zone');
     if (zoneInput) {
-      var zoneDebounce = null;
+      // No debounce + no fetch — Apply is what triggers the search now. We
+      // still re-render the panel so the Apply button toggles disabled state
+      // as soon as the input differs from the applied filters.
       zoneInput.oninput = function() {
-        browserState.filters.usda_zone = zoneInput.value.trim();
-        if (zoneDebounce) clearTimeout(zoneDebounce);
-        zoneDebounce = setTimeout(_browserApplyAndRefresh, 320);
+        browserState.draftFilters.usda_zone = zoneInput.value.trim();
+        _refreshBrowserApplyState();
+      };
+      // Enter inside the zone field is a natural Apply shortcut.
+      zoneInput.onkeydown = function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); _browserApplyFilters(); }
       };
     }
 
@@ -311,20 +350,50 @@ function _bindBrowserEvents() {
     if (ediblePanel) {
       ediblePanel.querySelectorAll('.chip').forEach(function(btn) {
         btn.onclick = function() {
-          browserState.filters.edible = !browserState.filters.edible;
-          _browserApplyAndRefresh();
+          browserState.draftFilters.edible = !browserState.draftFilters.edible;
+          _rerenderBrowserFilterPanel();
         };
       });
     }
 
     var clearBtn = document.getElementById('browser-filters-clear');
     if (clearBtn) clearBtn.onclick = function() {
-      browserState.filters = { sunlight: null, watering: null, usda_zone: '', cycle: null, edible: false };
+      // Clear acts on both buffers and refreshes immediately — the user has
+      // explicitly asked for "no filters", so there's nothing to preview.
+      browserState.draftFilters = _emptyBrowserFilters();
+      browserState.filters = _emptyBrowserFilters();
       _browserApplyAndRefresh();
     };
+
+    var applyBtn = document.getElementById('browser-filters-apply');
+    if (applyBtn) applyBtn.onclick = _browserApplyFilters;
   }
 
   _bindBrowserCardEvents();
+}
+
+// Re-render only the filter panel + the toggle (active count). Used while the
+// user is composing draft filters so each chip click feels instant without
+// rebuilding the grid or re-firing fetches.
+function _rerenderBrowserFilterPanel() {
+  var existing = document.querySelector('.browser-filter-panel');
+  if (!existing) { _renderBrowserView(); return; }
+  existing.outerHTML = _renderBrowserFilterPanel();
+  _bindBrowserEvents();
+  _initIcons();
+}
+
+function _refreshBrowserApplyState() {
+  var btn = document.getElementById('browser-filters-apply');
+  if (!btn) return;
+  var dirty = !_filtersEqual(browserState.draftFilters, browserState.filters);
+  btn.disabled = !dirty;
+}
+
+function _browserApplyFilters() {
+  if (_filtersEqual(browserState.draftFilters, browserState.filters)) return;
+  browserState.filters = _cloneFilters(browserState.draftFilters);
+  _browserApplyAndRefresh();
 }
 
 async function _browserApplyAndRefresh() {
