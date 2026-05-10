@@ -55,20 +55,26 @@ function updateNav() {
   var navRight = document.getElementById("nav-right");
   if (!navRight) return;
   if (session && currentUser) {
+    var browserActive = currentView === 'browser';
+    var libraryActive = currentView === 'library';
     var gardensActive = currentView === 'gardens' || currentView === 'wizard'
                      || currentView === 'shopping' || currentView === 'builder';
-    var libraryActive = currentView === 'library';
     navRight.innerHTML =
+      '<button class="btn btn-ghost btn-sm gap-1' + (browserActive ? ' btn-active' : '') + '" id="nav-browser"><i data-lucide="search" style="width:1em;height:1em"></i> Plant Browser</button>' +
+      '<button class="btn btn-ghost btn-sm gap-1' + (libraryActive ? ' btn-active' : '') + '" id="nav-library"><i data-lucide="sprout" style="width:1em;height:1em"></i> My Planters</button>' +
       '<button class="btn btn-ghost btn-sm gap-1' + (gardensActive ? ' btn-active' : '') + '" id="nav-gardens"><i data-lucide="layout-grid" style="width:1em;height:1em"></i> My Gardens</button>' +
-      '<button class="btn btn-ghost btn-sm gap-1' + (libraryActive ? ' btn-active' : '') + '" id="nav-library"><i data-lucide="sprout" style="width:1em;height:1em"></i> My Plants</button>' +
       '<button class="btn btn-ghost btn-sm btn-circle" id="nav-settings" title="Settings"><i data-lucide="settings" style="width:1.1em;height:1.1em"></i></button>';
-    document.getElementById("nav-gardens").onclick = function(e) {
+    document.getElementById("nav-browser").onclick = function(e) {
       e.preventDefault();
-      showView("gardens");
+      showView("browser");
     };
     document.getElementById("nav-library").onclick = function(e) {
       e.preventDefault();
       showView("library");
+    };
+    document.getElementById("nav-gardens").onclick = function(e) {
+      e.preventDefault();
+      showView("gardens");
     };
   } else {
     navRight.innerHTML =
@@ -182,6 +188,9 @@ function render() {
   }
   else if (currentView === "library") {
     if (typeof renderLibrary === 'function') renderLibrary();
+  }
+  else if (currentView === "browser") {
+    if (typeof renderBrowser === 'function') renderBrowser();
   }
   else if (currentView === "builder") renderBuilder();
   _initIcons();

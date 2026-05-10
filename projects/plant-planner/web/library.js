@@ -45,7 +45,7 @@ function _renderLibraryShell() {
   var html = '<div class="library-view">';
 
   html += '<div class="flex justify-between items-center mb-3">';
-  html += '<h3 class="text-xl font-display font-semibold">My Plants</h3>';
+  html += '<h3 class="text-xl font-display font-semibold">My Planters</h3>';
   html += '<span class="library-total">' + libraryState.rows.length + ' tracked</span>';
   html += '</div>';
 

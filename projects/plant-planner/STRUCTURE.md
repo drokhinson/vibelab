@@ -1,7 +1,7 @@
 # PlantPlanner — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-05-09 (Per-type planter geometry + 45° wizard preview + zone-only picker)
+> Last updated: 2026-05-10 (Three-tab nav: Plant Browser + My Planters + My Gardens)
 
 ## What This App Does
 
@@ -42,7 +42,8 @@ projects/plant-planner/
 │   ├── render2d.js      — SVG-based 2D top-down planter renderer (builder)
 │   ├── preview3d.js     — SVG 45° isometric renderer for the wizard step-1 preview
 │   ├── shopping.js      — Plant-shopping step + builder shortlist sidebar
-│   ├── library.js       — "My Plants" library view (status filter + detail panel)
+│   ├── library.js       — "My Planters" library view (status filter + detail panel)
+│   ├── browser.js       — "Plant Browser" view (full-catalog search + heart-to-library)
 │   ├── garden.js        — Builder shell — wires renderer, sidebar, save/reseed
 │   ├── init.js          — DOMContentLoaded, initSupabase, event listeners
 │   ├── styles.css       — App-specific styles
@@ -75,7 +76,7 @@ db/migrations/plantplanner/001_baseline.sql … 014_planter_geometry.sql
 - **plantplanner_garden_plants** — id (uuid PK), garden_id (uuid FK→gardens ON DELETE CASCADE), plant_id (uuid FK→plants, **nullable**), plant_cache_id (uuid FK→plant_cache, **nullable**), pos_x/pos_y (real, feet), radius_feet (real). CHECK constraint requires exactly one of plant_id / plant_cache_id to be set. Phase-1 placements use plant_cache_id; legacy seed-table placements use plant_id.
 - **plantplanner_companions** — id (uuid PK default gen_random_uuid()), plant_a_id (uuid FK→plants, with `a < b` ordering), plant_b_id (uuid FK→plants), relationship (text: `good`/`bad`/`neutral`), reason (text). Indexed on both `plant_a_id` and `plant_b_id`.
 - **plantplanner_plant_cache** — Phase-1 API-backed catalog. id (uuid PK), source (`trefle`/`perenual`/`merged`), source_id (text), scientific_name (text UNIQUE), common_name (text), family (text), emoji (text), hardiness_min/max (int — USDA zone), sunlight (`full_sun`/`part_shade`/`full_shade`), watering (`frequent`/`average`/`minimum`/`none`), cycle (`annual`/`perennial`/`biennial`), indoor (bool), height_min_cm/height_max_cm (int), spread_cm (int), days_to_harvest (int), edible (bool), vegetable (bool), toxicity (text), growth_rate (text), ph_min/ph_max (real), sowing (text), nitrogen_fixation (bool), tags (text[]). **Three image sizes** mirrored to Supabase Storage: image_thumbnail_url/path, image_medium_url/path, image_regular_url/path — all nullable, populated as available from each API source. raw_trefle_json + raw_perenual_json keep the source payloads for forward compat. last_synced_at + last_image_synced_at timestamps.
-- **plantplanner_user_plants** — "My Plants" library. id (uuid PK), user_id (uuid FK→profiles ON DELETE CASCADE), plant_cache_id (uuid FK→plant_cache), status (`current`/`former`/`wishlist`, default `wishlist`), quantity (int, default 0), notes (text), acquired_at (date), created_at + updated_at. UNIQUE on `(user_id, plant_cache_id)` — one row per user-species. Auto-populated: shortlist updates create wishlist rows; placement saves promote/upsert to current with quantity = max(stored, count of placements across all the user's gardens). Demote-to-former is user-driven only via PUT.
+- **plantplanner_user_plants** — "My Planters" library. id (uuid PK), user_id (uuid FK→profiles ON DELETE CASCADE), plant_cache_id (uuid FK→plant_cache), status (`current`/`former`/`wishlist`, default `wishlist`), quantity (int, default 0), notes (text), acquired_at (date), created_at + updated_at. UNIQUE on `(user_id, plant_cache_id)` — one row per user-species. Auto-populated: shortlist updates create wishlist rows; placement saves promote/upsert to current with quantity = max(stored, count of placements across all the user's gardens). Demote-to-former is user-driven only via PUT.
 
 ## API Endpoints
 
@@ -105,8 +106,10 @@ db/migrations/plantplanner/001_baseline.sql … 014_planter_geometry.sql
 ```
 Auth View (login/register)
     ↓ (on login)
-Navbar exposes two top-level views: "My Gardens" (default) and "My Plants"
-(library). The flow below is the default; the library is described after.
+Navbar exposes three top-level views: "Plant Browser" (catalog search),
+"My Planters" (library, default after sign-in), and "My Gardens" (planter
+designs). The default flow below starts from "My Gardens"; the library and
+the browser are described after.
 
 My Gardens View (list saved gardens, "+ New Garden")
     ↓ ("+ New Garden")
@@ -144,8 +147,8 @@ Garden Builder View
   │     ↳ Tap placed plant disk → remove
   └── Save button
 
-My Plant Library View (currentView === "library", reachable from the
-"My Plants" navbar button)
+My Planters Library View (currentView === "library", reachable from the
+"My Planters" navbar button)
   ├── Status filter tabs: All · Current · Wishlist · Former (with counts)
   ├── Grid of plant cards (image, name, scientific subline, status pill,
   │   "In: <Garden Name>" planter chips — or "Unpotted" for `current` rows
@@ -155,6 +158,17 @@ My Plant Library View (currentView === "library", reachable from the
       - Editable: status (3-way radio), quantity, acquired_at, notes
       - Planter chips (each navigates to that planter's builder)
       - "Remove from library" button
+
+Plant Browser View (currentView === "browser", reachable from the
+"Plant Browser" navbar button)
+  ├── Search input (free-text query against /catalog/search; no garden
+  │   context, no wizard filters — browses every cached species)
+  ├── Pinterest-style grid (reuses .shopping-card markup + styles)
+  │     ↳ Heart toggle: tap to add to library as wishlist
+  │       (POST /user_plants {plant_cache_id, status: "wishlist"});
+  │       tap again to remove (DELETE /user_plants/{id})
+  └── Card tap → slide-in detail panel (same layout as the shopping detail
+       panel; CTA toggles library membership instead of shortlist)
 ```
 
 ## Key Business Logic
@@ -213,6 +227,8 @@ My Plant Library View (currentView === "library", reachable from the
 - 2026-05-09 — **Phase-1 plant-first refactor.** Refocused the tool around plant selection. (1) New `plantplanner_plant_cache` table is the source of truth for all browsing — populated lazily from Trefle (free) with Perenual (freemium) fallback for hardiness zones. Image URLs from each API are mirrored into Supabase Storage in three sizes (thumbnail / medium / regular) and served from there, so the UI never round-trips to third-party CDNs at read time. Migration `011_plant_cache_and_shortlist.sql` adds the cache table, a `shortlist_plant_cache_ids` array on `plantplanner_gardens`, and a nullable `plant_cache_id` on `plantplanner_garden_plants` (XOR with the legacy `plant_id`). (2) New backend routes `GET /catalog/search` and `GET /catalog/{cache_id}` are cache-first; misses trigger a Trefle search (+ Perenual hardiness merge), upsert into the cache, and mirror images. (3) New shopping step (`web/shopping.js → openShoppingForGarden`) lands the user after wizard confirmation in a Pinterest-style grid of cache plants matching the wizard's conditions; the user hearts plants to shortlist, which persists on the garden. (4) The 3D Three.js render is hidden in this iteration — the builder uses an SVG-based 2D top-down renderer (`web/render2d.js`). (5) Builder sidebar switched from the seed-table catalog to a shortlist panel for any garden with a populated shortlist; legacy gardens still saw the old catalog at this point.
 
 - 2026-05-09 — **Phase-2 cutover: legacy DB integration removed.** All user-facing reads go through `plantplanner_plant_cache`. Backend deletes: `GET /plants` and `GET /companions` routes (and their files). Backend simplifies: `GET /gardens/{id}` no longer joins `plantplanner_plants` / `plantplanner_renders`; `PUT /gardens/{id}/plants` accepts only `plant_cache_id` (XOR + the legacy `plant_id` field on `PlantPlacement` are gone). Frontend deletes from the bundle: `catalog.js`, `plant-data.js`, `companions.js`, `shading.js`, `bloom-calendar.js`. Builder simplifies to a single shortlist sidebar (no fallback catalog branch). Wizard gains step 5 — **Planting season** — and moves Review to step 6/7 (with the location-skip rule preserved). The wizard's review-step "X of Y plants match" preview now hits `/catalog/search` live instead of running `plantMatchesFilters` against the seed pool. `/catalog/search` gains four new query params — `planting_season` (mapped to plant `cycle`), `garden_type` + `grid_width` + `grid_height` (combined into a small/medium/large bucket that drives `max_height_cm` and `max_spread_cm` caps so small pots don't return tree-sized plants), plus `planter_size` as an explicit override. Companion-warning chips, bloom calendar, year scrubber, and shading overlays are gone for now — they were seed-coupled and will be re-introduced in Phase 3 once equivalent data sources exist for cache plants. Tables `plantplanner_plants`, `plantplanner_companions`, and `plantplanner_renders` are still in the database but unused; a future `*_drop_legacy_plant_tables.sql` will retire them once production gardens are confirmed clear.
+
+- 2026-05-10 — **Three-tab navigation: Plant Browser added, My Plants renamed to My Planters.** Navbar now exposes three top-level views instead of two. New `web/browser.js` (`currentView === 'browser'`) renders a standalone catalog browse — free-text search against `/catalog/search` with no wizard filters — reusing the `.shopping-card` / `.shopping-detail-*` markup. Heart toggle posts to `/user_plants` (`status: "wishlist"`) on add and `DELETE /user_plants/{id}` on remove; library membership is fetched once on view entry and tracked client-side as `plant_cache_id → user_plant_id` for the toggle. The legacy "My Plants" library tab is renamed to "My Planters" (label only — endpoints, table, and behaviour are unchanged). No backend or schema changes.
 
 - 2026-05-09 — **Loading orchestration on plant selection.** Wizard review step drops the live "X plants match" pill and renames its CTA from "Create garden" to "Continue to plant selection". On confirm the planter is POST'd as before, then the shopping view enters a new orchestration phase: a 5-step to-do list overlay shows the API calls in flight (save → Trefle → Perenual → Flora → compatible-count), each with a per-step status pill (pending/running/ok/error) and human-readable detail line ("Fetched 18 plants — 12 new"). Once all steps settle, a "Continue to plant selection" button reveals the plant grid. Backend adds four discrete fill endpoints (`POST /catalog/fill/{trefle, perenual, flora, compatible}`) accepting the same wizard `FillBody`. New `FloraAPI` client lives in `api_clients.py` (`flora_search`, `flora_lookup_by_scientific`, `normalize_flora`) and **requires `FLORA_API_KEY`** — step 4 fails visibly if unset; the user can still proceed to the grid (other steps' data remains usable). Existing planters reopened from the builder ("Add more plants" button) skip the orchestration and go straight to the grid via the existing cache-first `/catalog/search` path.
 
