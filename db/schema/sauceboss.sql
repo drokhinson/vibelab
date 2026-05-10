@@ -246,7 +246,10 @@ ALTER TABLE public.sauceboss_pantry_missing ENABLE ROW LEVEL SECURITY;
 --   get_sauceboss_sauces_for_target(p_category, p_dish_id, p_subtype_id)
 --     → union of sauces attached at category, dish, subtype, and the
 --       subtype's parent dish. Used by the meal-builder flow.
---   get_sauceboss_saucebook(p_user_id) → the user's library, full envelopes.
+--   get_sauceboss_saucebook(p_user_id) → the user's library, slim envelopes
+--     (Browse-shaped + addedAt + ingredientNames TEXT[]). Drops steps/full
+--     ingredients/description/sourceUrl — the recipe view fetches the full
+--     envelope via /sauces on tap (see migration 012).
 --   get_sauceboss_browse(p_user_id, p_q, p_cuisines, p_types, p_author,
 --                        p_limit, p_offset)
 --     → paginated lightweight rows + variant count + inSaucebook flag.

@@ -3,8 +3,11 @@
 // Supabase token getter; future web can pass `window.fetch` and a Supabase JS
 // session getter. Endpoint paths are defined here once.
 //
-// Backend returns sauces with `ingredients[]`. We attach an `ingredientNames`
-// Set so screens can do O(1) lookups in the filter — same shape the web app uses.
+// Backend returns sauces in two shapes:
+//   * full envelopes (allSauces / browse-detail): `ingredients: [{name,...}]`
+//   * slim saucebook envelopes (listSaucebook): `ingredientNames: [...strings]`
+// Both paths funnel through `withIngredientNames` which produces the canonical
+// `Set<string>` consumers query (see filter.js).
 //
 // Type contracts (see .claude/rules/typed-js.md): every method that reshapes
 // the backend response into a different shape declares an `@returns` JSDoc
@@ -297,6 +300,20 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     // non-owned sauce server-side returns `{ forkedId }` (a new variant under
     // the family root, owned by the caller); the caller's saucebook row is
     // repointed to the new variant atomically.
+    //
+    // Slim envelope (Browse-shaped + addedAt + ingredientNames TEXT[]). No
+    // `steps` / full `ingredients` — recipe view fetches the full envelope
+    // via /sauces on tap (saucebookOpenRecipe → api.allSauces).
+    /**
+     * @returns {Promise<Array<{
+     *   id: string, name: string, cuisine: string, cuisineEmoji: string,
+     *   color: string, sauceType: string, createdBy: (string|null),
+     *   authorName: string, parentSauceId: (string|null),
+     *   addedAt: string, variantCount: number,
+     *   attachments: Array<{kind: string, value: string}>,
+     *   ingredientNames: Set<string>,
+     * }>>}
+     */
     listSaucebook: async () => {
       const data = await call('/saucebook');
       return (data?.sauces || []).map(withIngredientNames);
