@@ -290,6 +290,7 @@ _AGE_DELTAS: dict[str, Optional[timedelta]] = {
 async def list_api_logs(
     app: Optional[str] = Query(None, description="Filter by app, e.g. 'plant-planner'"),
     api_name: Optional[str] = Query(None, description="Filter by api, e.g. 'trefle'"),
+    session_id: Optional[str] = Query(None, description="Filter to a single session id"),
     limit: int = Query(100, ge=1, le=500),
     authorization: Optional[str] = Header(None),
 ):
@@ -301,7 +302,7 @@ async def list_api_logs(
         .select(
             "id, app, api_name, method, url, request_params, sent_at, "
             "response_time_ms, status_code, response_size_bytes, body_excerpt, "
-            "error_message"
+            "error_message, session_id, user_id"
         )
         .order("sent_at", desc=True)
         .limit(limit)
@@ -310,8 +311,48 @@ async def list_api_logs(
         q = q.eq("app", app)
     if api_name:
         q = q.eq("api_name", api_name)
+    if session_id == "anonymous":
+        # Sentinel for "calls without an authenticated session".
+        q = q.filter("session_id", "is", "null")
+    elif session_id:
+        q = q.eq("session_id", session_id)
     result = q.execute()
     return {"logs": result.data or []}
+
+
+@router.get("/api-sessions")
+async def list_api_sessions(
+    app: Optional[str] = Query(None, description="Filter by app"),
+    limit: int = Query(50, ge=1, le=200),
+    authorization: Optional[str] = Header(None),
+):
+    """List recent API sessions (most recently active first).
+
+    A session represents a contiguous burst of activity from one user in one
+    app — bounded by 30 minutes of API inactivity (see api_logger.py).
+    """
+    require_admin(authorization)
+    sb = get_supabase()
+    q = (
+        sb.table("api_sessions")
+        .select("id, app, user_id, user_label, started_at, last_activity_at, call_count")
+        .order("last_activity_at", desc=True)
+        .limit(limit)
+    )
+    if app:
+        q = q.eq("app", app)
+    result = q.execute()
+    sessions = result.data or []
+    # Mark a session "active" if its last activity is within the idle timeout.
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+    for s in sessions:
+        last_raw = s.get("last_activity_at")
+        try:
+            last = datetime.fromisoformat(last_raw.replace("Z", "+00:00")) if last_raw else None
+        except (AttributeError, ValueError):
+            last = None
+        s["active"] = bool(last and last >= cutoff)
+    return {"sessions": sessions}
 
 
 @router.get("/api-logs/summary")
