@@ -2425,3 +2425,34 @@ button.library-planter-chip { font-family: inherit; color: inherit; }
   font-size: 0.85rem;
   color: oklch(var(--bc) / 0.65);
 }
+
+/* ── Bottom navigation bar ───────────────────────────────────────────────── */
+
+/* Ensure the btm-nav spans the full viewport width regardless of the
+   max-w-[920px] content constraint applied to <main>. */
+#bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+}
+#bottom-nav .btm-nav {
+  position: relative;      /* override DaisyUI's fixed — parent is already fixed */
+  width: 100%;
+  border-top: 1px solid oklch(var(--b3));
+  background: oklch(var(--b1));
+}
+/* Tighten label text for narrow screens */
+#bottom-nav .btm-nav-label {
+  font-size: 0.65rem;
+  line-height: 1.1;
+}
+/* Active tab accent */
+#bottom-nav .btm-nav button.active {
+  color: oklch(var(--p));
+}
+#bottom-nav .btm-nav button.active .btm-nav-label {
+  color: oklch(var(--p));
+  font-weight: 600;
+}

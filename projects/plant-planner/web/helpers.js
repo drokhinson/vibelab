@@ -53,34 +53,43 @@ async function logout() {
 
 function updateNav() {
   var navRight = document.getElementById("nav-right");
+  var bottomNav = document.getElementById("bottom-nav");
   if (!navRight) return;
-  if (session && currentUser) {
-    var browserActive = currentView === 'browser';
-    var libraryActive = currentView === 'library';
-    var gardensActive = currentView === 'gardens' || currentView === 'wizard'
-                     || currentView === 'shopping' || currentView === 'builder';
-    navRight.innerHTML =
-      '<button class="btn btn-ghost btn-sm gap-1' + (browserActive ? ' btn-active' : '') + '" id="nav-browser"><i data-lucide="search" style="width:1em;height:1em"></i> Plant Browser</button>' +
-      '<button class="btn btn-ghost btn-sm gap-1' + (libraryActive ? ' btn-active' : '') + '" id="nav-library"><i data-lucide="sprout" style="width:1em;height:1em"></i> My Planters</button>' +
-      '<button class="btn btn-ghost btn-sm gap-1' + (gardensActive ? ' btn-active' : '') + '" id="nav-gardens"><i data-lucide="layout-grid" style="width:1em;height:1em"></i> My Gardens</button>' +
-      '<button class="btn btn-ghost btn-sm btn-circle" id="nav-settings" title="Settings"><i data-lucide="settings" style="width:1.1em;height:1.1em"></i></button>';
-    document.getElementById("nav-browser").onclick = function(e) {
-      e.preventDefault();
-      showView("browser");
-    };
-    document.getElementById("nav-library").onclick = function(e) {
-      e.preventDefault();
-      showView("library");
-    };
-    document.getElementById("nav-gardens").onclick = function(e) {
-      e.preventDefault();
-      showView("gardens");
-    };
-  } else {
-    navRight.innerHTML =
-      '<button class="btn btn-ghost btn-sm btn-circle" id="nav-settings" title="Settings"><i data-lucide="settings" style="width:1.1em;height:1.1em"></i></button>';
-  }
+
+  // Settings icon always lives in the header
+  navRight.innerHTML =
+    '<button class="btn btn-ghost btn-sm btn-circle" id="nav-settings" title="Settings"><i data-lucide="settings" style="width:1.1em;height:1.1em"></i></button>';
   document.getElementById("nav-settings").onclick = showThemeSettings;
+
+  // Three tabs go into the bottom nav when logged in
+  if (bottomNav) {
+    if (session && currentUser) {
+      var browserActive = currentView === 'browser' || currentView === 'import';
+      var libraryActive = currentView === 'library';
+      var gardensActive = currentView === 'gardens' || currentView === 'wizard'
+                       || currentView === 'shopping' || currentView === 'builder';
+      bottomNav.innerHTML =
+        '<nav class="btm-nav btm-nav-sm" id="btm-nav-bar">' +
+          '<button class="' + (browserActive ? 'active' : '') + '" id="nav-browser">' +
+            '<i data-lucide="search" style="width:1.25em;height:1.25em"></i>' +
+            '<span class="btm-nav-label">Plant Browser</span>' +
+          '</button>' +
+          '<button class="' + (libraryActive ? 'active' : '') + '" id="nav-library">' +
+            '<i data-lucide="sprout" style="width:1.25em;height:1.25em"></i>' +
+            '<span class="btm-nav-label">My Planters</span>' +
+          '</button>' +
+          '<button class="' + (gardensActive ? 'active' : '') + '" id="nav-gardens">' +
+            '<i data-lucide="layout-grid" style="width:1.25em;height:1.25em"></i>' +
+            '<span class="btm-nav-label">My Gardens</span>' +
+          '</button>' +
+        '</nav>';
+      document.getElementById("nav-browser").onclick = function(e) { e.preventDefault(); showView("browser"); };
+      document.getElementById("nav-library").onclick = function(e) { e.preventDefault(); showView("library"); };
+      document.getElementById("nav-gardens").onclick = function(e) { e.preventDefault(); showView("gardens"); };
+    } else {
+      bottomNav.innerHTML = '';
+    }
+  }
 }
 
 function showThemeSettings() {
