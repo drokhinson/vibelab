@@ -499,10 +499,6 @@ function _openBrowserDetailPanel(plant) {
   var img = _shoppingImageFor(plant, 'regular');
   var sci = plant.scientific_name ? '<div class="shopping-detail-sci"><i>' + escapeHtml(plant.scientific_name) + '</i></div>' : '';
   var family = plant.family ? '<div class="shopping-detail-family">' + escapeHtml(plant.family) + '</div>' : '';
-  var coreBullets   = _coreInfoBullets(plant);
-  var extraBullets  = _trefleExtraBullets(plant);
-  var extrasMissing = _trefleExtrasMissing(plant);
-
   var entry = browserState.inLibrary.get(plant.id) || null;
   var inCurrent  = !!(entry && entry.status === 'current');
   var inWishlist = !!(entry && entry.status === 'wishlist');
@@ -514,20 +510,17 @@ function _openBrowserDetailPanel(plant) {
   html += '<div class="shopping-detail-body">';
   html += '<h3>' + escapeHtml(plant.common_name || plant.scientific_name || 'Plant') + '</h3>';
   html += sci + family;
-  html += _renderDetailBullets(coreBullets);
 
-  if (extraBullets.length) {
-    html += '<div class="shopping-detail-section-label">Extra info</div>';
-    html += _renderDetailBullets(extraBullets);
-  }
-  if (extrasMissing) {
-    html += '<button type="button" class="btn btn-block btn-outline btn-sm gap-1 mt-2" id="browser-detail-trefle">'
-         +    '<i data-lucide="download-cloud" style="width:0.9em;height:0.9em"></i> '
-         +    'Import extra info from Trefle'
-         +  '</button>';
-  }
+  // Fixed-schema plant info — see helpers.js for the section list.
+  html += _plantDescriptionHtml(plant);
+  html += _renderDetailBullets(_plantCoreBullets(plant));
+  html += '<div class="shopping-detail-section-label">Extra info</div>';
+  html += _renderDetailBullets(_plantExtraBullets(plant));
+  html += _plantChipRowsHtml(plant);
+  html += _plantSourceHtml(plant);
 
-  html += _plantTagsHtml(plant);
+  // Bottom band: Trefle import CTA, then the plant-list / favorite actions.
+  html += _plantTrefleImportButtonHtml(plant, plant.id, 'browser-detail-trefle');
 
   html += '<div class="browser-detail-actions">';
   html +=   '<button type="button" class="btn btn-block gap-1' + (inCurrent ? ' btn-primary' : ' btn-outline btn-primary') + '" id="browser-detail-plant">'
@@ -539,8 +532,6 @@ function _openBrowserDetailPanel(plant) {
        +     (inWishlist ? 'In your favorites' : 'Add to favorites')
        +   '</button>';
   html += '</div>';
-
-  html += _plantSourceHtml(plant);
 
   html += '</div>';
   html += '</aside>';

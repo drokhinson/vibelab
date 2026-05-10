@@ -376,9 +376,6 @@ function _openShoppingDetailPanel(plant) {
   var img = _shoppingImageFor(plant, 'regular');
   var sci = plant.scientific_name ? '<div class="shopping-detail-sci"><i>' + escapeHtml(plant.scientific_name) + '</i></div>' : '';
   var family = plant.family ? '<div class="shopping-detail-family">' + escapeHtml(plant.family) + '</div>' : '';
-  var coreBullets  = _coreInfoBullets(plant);
-  var extraBullets = _trefleExtraBullets(plant);
-
   var picked = shoppingState.shortlist.has(plant.id);
 
   var html = '<div class="shopping-detail-overlay" id="shopping-detail-overlay"></div>';
@@ -388,17 +385,20 @@ function _openShoppingDetailPanel(plant) {
   html += '<div class="shopping-detail-body">';
   html += '<h3>' + escapeHtml(plant.common_name || plant.scientific_name || 'Plant') + '</h3>';
   html += sci + family;
-  html += _renderDetailBullets(coreBullets);
-  if (extraBullets.length) {
-    html += '<div class="shopping-detail-section-label">Extra info</div>';
-    html += _renderDetailBullets(extraBullets);
-  }
-  html += _plantTagsHtml(plant);
+
+  // Fixed-schema plant info — see helpers.js for the section list.
+  html += _plantDescriptionHtml(plant);
+  html += _renderDetailBullets(_plantCoreBullets(plant));
+  html += '<div class="shopping-detail-section-label">Extra info</div>';
+  html += _renderDetailBullets(_plantExtraBullets(plant));
+  html += _plantChipRowsHtml(plant);
+  html += _plantSourceHtml(plant);
+
+  html += _plantTrefleImportButtonHtml(plant, plant.id, 'shopping-detail-trefle');
   html += '<button type="button" class="btn btn-primary btn-block gap-1" id="shopping-detail-toggle">';
   html +=   '<i data-lucide="heart"' + (picked ? ' fill="currentColor"' : '') + '></i> ';
   html +=   (picked ? 'Remove from shortlist' : 'Add to shortlist');
   html += '</button>';
-  html += _plantSourceHtml(plant);
   html += '</div>';
   html += '</aside>';
 
@@ -411,6 +411,25 @@ function _openShoppingDetailPanel(plant) {
     _toggleShortlist(plant.id);
     _openShoppingDetailPanel(plant);  // Refresh button label
   };
+  var trefleBtn = document.getElementById('shopping-detail-trefle');
+  if (trefleBtn) trefleBtn.onclick = function() { _importTrefleForShopping(plant.id, trefleBtn); };
+}
+
+async function _importTrefleForShopping(plantId, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Importing…';
+  try {
+    var updated = await trefleEnrich(plantId);
+    var current = shoppingState.detailPlant;
+    if (current && current.id === plantId) {
+      shoppingState.detailPlant = Object.assign({}, current, updated);
+      _openShoppingDetailPanel(shoppingState.detailPlant);
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="alert-circle" style="width:0.9em;height:0.9em"></i> ' + escapeHtml(err.message || 'Import failed');
+    _initIcons();
+  }
 }
 
 function _closeShoppingDetailPanel() {

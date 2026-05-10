@@ -243,73 +243,211 @@ function bindFilterChipRow(rootEl, groupAttr, onPick) {
 
 // ── Plant detail bullets (shared by browser.js + library.js + shopping.js) ──
 //
-// The detail panel renders two groups of [label, value] pairs:
-//   1. Core conditions: sunlight, watering, cycle, hardiness, edible.
-//   2. Extras (Trefle-sourced): height, days_to_harvest, pH, toxicity,
-//      growth_rate, sowing. These ride along with the cache row but only
-//      get populated after a successful Trefle detail-call enrichment, so
-//      they're often missing on Perenual-only or Flora-only rows.
-// `_trefleExtrasMissing(plant)` flags whether to surface the "Import from
-// Trefle" CTA. `trefleEnrich(cacheId)` runs the per-plant lookup against
-// the backend; the panel re-renders with the returned cache row.
+// The detail panel renders a fixed schema:
+//   1. Description paragraph (Perenual raw_perenual_json.description).
+//   2. Core bullets — always-on list (sunlight, watering, cycle, hardiness,
+//      indoor, edible, vegetable, type, care_level).
+//   3. Extra bullets — always-on list of Trefle/Perenual fields (height,
+//      spread, pH, toxicity, watering_period, drought_tolerant, etc.).
+//   4. Chip rows — labeled rows for tags + Perenual/Trefle array fields.
+//   5. "Data from <source>" footer.
+// Missing values render as `_PLANT_DETAIL_PLACEHOLDER` ("—") so the user
+// can scan the popup for unknown fields. The bottom-anchored "Import from
+// Trefle" CTA appears when `_anyTrefleExtraMissing(plant)` is true; a
+// successful POST /catalog/{id}/enrich/trefle re-renders the panel.
 
-function _coreInfoBullets(plant) {
-  if (!plant) return [];
-  var bullets = [];
-  if (plant.sunlight) bullets.push(['Sunlight', plant.sunlight.replace(/_/g, ' ')]);
-  if (plant.watering) bullets.push(['Watering', plant.watering]);
-  if (plant.cycle)    bullets.push(['Cycle', plant.cycle]);
-  if (plant.hardiness_min != null && plant.hardiness_max != null) {
-    bullets.push(['Hardiness', 'Zone ' + plant.hardiness_min + '–' + plant.hardiness_max]);
-  }
-  if (plant.indoor === true)  bullets.push(['Indoor', 'yes']);
-  if (plant.indoor === false) bullets.push(['Indoor', 'no']);
-  if (plant.edible === true)  bullets.push(['Edible', 'yes']);
-  if (plant.edible === false) bullets.push(['Edible', 'no']);
-  if (plant.vegetable === true) bullets.push(['Vegetable', 'yes']);
-  return bullets;
+// Fixed placeholder for unknown values. Every bullet/chip row renders even
+// when the underlying data is missing so the user can scan for "—" rows.
+var _PLANT_DETAIL_PLACEHOLDER = '—';
+
+function _plantRawPerenual(plant) {
+  return (plant && plant.raw_perenual_json) || {};
+}
+function _plantRawTrefle(plant) {
+  return (plant && plant.raw_trefle_json) || {};
 }
 
-function _trefleExtraBullets(plant) {
-  if (!plant) return [];
-  var bullets = [];
-  if (plant.height_min_cm != null || plant.height_max_cm != null) {
-    bullets.push(['Height', (plant.height_min_cm || '?') + '–' + (plant.height_max_cm || '?') + ' cm']);
-  }
-  if (plant.spread_cm != null) bullets.push(['Spread', plant.spread_cm + ' cm']);
-  if (plant.days_to_harvest != null) bullets.push(['Days to harvest', String(plant.days_to_harvest)]);
-  if (plant.ph_min != null && plant.ph_max != null) bullets.push(['Soil pH', plant.ph_min + '–' + plant.ph_max]);
-  if (plant.toxicity)    bullets.push(['Toxicity', plant.toxicity]);
-  if (plant.growth_rate) bullets.push(['Growth rate', plant.growth_rate]);
-  if (plant.sowing)      bullets.push(['Sowing', plant.sowing]);
-  if (plant.nitrogen_fixation === true) bullets.push(['Nitrogen-fixing', 'yes']);
-  return bullets;
+function _yesNoOrMissing(v) {
+  if (v === true || v === 1 || v === '1') return 'yes';
+  if (v === false || v === 0 || v === '0') return 'no';
+  return null;  // unknown → caller fills placeholder
 }
 
-function _trefleExtrasMissing(plant) {
+function _firstNonEmpty(/* values */) {
+  for (var i = 0; i < arguments.length; i++) {
+    var v = arguments[i];
+    if (v === 0 || v === false) return v;
+    if (v != null && v !== '') return v;
+  }
+  return null;
+}
+
+function _wateringBenchmarkLabel(bench) {
+  if (!bench || typeof bench !== 'object') return null;
+  var v = bench.value, u = bench.unit || '';
+  if (v == null || v === '') return null;
+  return String(v) + (u ? ' ' + u : '');
+}
+
+function _hardinessLocationLabel(loc) {
+  if (!loc) return null;
+  if (typeof loc === 'string') return loc;
+  return loc.full_name || loc.name || null;
+}
+
+function _plantTypeLabel(plant) {
+  return _firstNonEmpty(_plantRawPerenual(plant).type, _plantRawTrefle(plant).type);
+}
+
+// Always-on core bullet schema. Returns the same set of [label, value-or-null]
+// pairs every time so the detail panel structure is stable. `null` values are
+// rendered as the placeholder by `_renderDetailBullets`.
+function _plantCoreBullets(plant) {
+  plant = plant || {};
+  var pe = _plantRawPerenual(plant);
+  var hardiness = (plant.hardiness_min != null && plant.hardiness_max != null)
+    ? 'Zone ' + plant.hardiness_min + '–' + plant.hardiness_max : null;
+  return [
+    ['Sunlight',    plant.sunlight ? plant.sunlight.replace(/_/g, ' ') : null],
+    ['Watering',    plant.watering || null],
+    ['Cycle',       plant.cycle || null],
+    ['Hardiness',   hardiness],
+    ['Indoor',      _yesNoOrMissing(plant.indoor)],
+    ['Edible',      _yesNoOrMissing(plant.edible)],
+    ['Vegetable',   _yesNoOrMissing(plant.vegetable)],
+    ['Type',        _plantTypeLabel(plant)],
+    ['Care level',  pe.care_level || null]
+  ];
+}
+
+// Always-on extra-info bullet schema. Combines Trefle-derived columns with
+// Perenual raw-JSON fallbacks so the user sees a stable, comprehensive list.
+function _plantExtraBullets(plant) {
+  plant = plant || {};
+  var pe = _plantRawPerenual(plant);
+  var height = (plant.height_min_cm != null || plant.height_max_cm != null)
+    ? (plant.height_min_cm || '?') + '–' + (plant.height_max_cm || '?') + ' cm'
+    : null;
+  var ph = (plant.ph_min != null && plant.ph_max != null)
+    ? plant.ph_min + '–' + plant.ph_max : null;
+  return [
+    ['Height',             height],
+    ['Spread',             plant.spread_cm != null ? plant.spread_cm + ' cm' : null],
+    ['Days to harvest',    plant.days_to_harvest != null ? String(plant.days_to_harvest) : null],
+    ['Soil pH',            ph],
+    ['Toxicity',           plant.toxicity || null],
+    ['Growth rate',        plant.growth_rate || null],
+    ['Sowing',             plant.sowing || null],
+    ['Nitrogen-fixing',    _yesNoOrMissing(plant.nitrogen_fixation)],
+    ['Watering frequency', pe.watering_period || null],
+    ['Watering benchmark', _wateringBenchmarkLabel(pe.watering_general_benchmark)],
+    ['Hardiness location', _hardinessLocationLabel(pe.hardiness_location)],
+    ['Drought tolerant',   _yesNoOrMissing(pe.drought_tolerant)],
+    ['Salt tolerant',      _yesNoOrMissing(pe.salt_tolerant)],
+    ['Invasive',           _yesNoOrMissing(pe.invasive)],
+    ['Flowers',            _yesNoOrMissing(pe.flowers)],
+    ['Toxic to humans',    _yesNoOrMissing(pe.poisonous_to_humans)],
+    ['Toxic to pets',      _yesNoOrMissing(pe.poisonous_to_pets)],
+    ['Pruning months',     (Array.isArray(pe.pruning_month) && pe.pruning_month.length) ? String(pe.pruning_month.length) : null]
+  ];
+}
+
+// True when any Trefle-derived extra bullet is unknown — drives the bottom
+// "Import extra info from Trefle" CTA visibility. Perenual-only rows are
+// excluded so the CTA still appears for species we could enrich from Trefle.
+function _anyTrefleExtraMissing(plant) {
   if (!plant) return true;
   return plant.height_max_cm == null
-      && plant.height_min_cm == null
-      && plant.spread_cm == null
-      && plant.ph_min == null
-      && plant.ph_max == null
-      && plant.days_to_harvest == null
-      && !plant.toxicity
-      && !plant.growth_rate
-      && !plant.sowing
-      && plant.nitrogen_fixation == null;
+      || plant.height_min_cm == null
+      || plant.spread_cm == null
+      || plant.ph_min == null
+      || plant.ph_max == null
+      || plant.days_to_harvest == null
+      || !plant.toxicity
+      || !plant.growth_rate
+      || !plant.sowing
+      || plant.nitrogen_fixation == null;
 }
 
-// Tag chips — Trefle/Perenual surface a free-text tag list per species
-// (e.g. "fragrant", "drought-tolerant"). Render as pill chips.
-function _plantTagsHtml(plant) {
-  if (!plant || !plant.tags || !plant.tags.length) return '';
-  var html = '<div class="shopping-detail-section-label">Tags</div>';
-  html += '<div class="plant-detail-tags">';
-  for (var i = 0; i < plant.tags.length; i++) {
-    html += '<span class="plant-detail-tag">' + escapeHtml(String(plant.tags[i])) + '</span>';
+// Description paragraph — Perenual `description` is occasionally HTML; strip
+// tags and cap at ~600 chars. Always renders the container so the popup
+// structure is stable; falls back to "No description available." when missing.
+function _plantDescriptionHtml(plant) {
+  var desc = _plantRawPerenual(plant).description;
+  if (typeof desc === 'string') desc = desc.replace(/<[^>]+>/g, '').trim();
+  if (!desc) {
+    return '<p class="plant-detail-description plant-detail-description-empty">No description available.</p>';
   }
-  html += '</div>';
+  if (desc.length > 600) desc = desc.slice(0, 600).replace(/\s+\S*$/, '') + '…';
+  return '<p class="plant-detail-description">' + escapeHtml(desc) + '</p>';
+}
+
+var _MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function _monthChipFor(m) {
+  if (m == null) return null;
+  if (typeof m === 'string') {
+    var n = parseInt(m, 10);
+    if (!isNaN(n) && n >= 1 && n <= 12) return _MONTH_NAMES[n - 1];
+    return m.length > 3 ? m.slice(0, 3) : m;
+  }
+  if (typeof m === 'number' && m >= 1 && m <= 12) return _MONTH_NAMES[m - 1];
+  return String(m);
+}
+
+function _normalizeAttractsItem(item) {
+  if (item == null) return null;
+  if (typeof item === 'string') return item;
+  if (typeof item === 'object') return item.name || item.label || item.common_name || null;
+  return String(item);
+}
+
+function _trefleDistributionList(plant, key) {
+  var dist = _plantRawTrefle(plant).distribution;
+  if (!dist || typeof dist !== 'object') return [];
+  var arr = dist[key];
+  return Array.isArray(arr) ? arr : [];
+}
+
+// Fixed list of labeled chip rows. Each row always renders its label; when
+// the underlying array is empty we render a single muted "—" chip so the
+// user can see what's tracked but unknown for this species.
+function _plantChipRowsHtml(plant) {
+  plant = plant || {};
+  var pe = _plantRawPerenual(plant);
+  var growingMonths = (Array.isArray(pe.growing_months) ? pe.growing_months : []).map(_monthChipFor).filter(Boolean);
+  var floweringSeason = pe.flowering_season;
+  if (typeof floweringSeason === 'string') floweringSeason = floweringSeason ? [floweringSeason] : [];
+  if (!Array.isArray(floweringSeason)) floweringSeason = [];
+  var attracts = (Array.isArray(pe.attracts) ? pe.attracts : []).map(_normalizeAttractsItem).filter(Boolean);
+
+  var rows = [
+    ['Tags',             plant.tags || []],
+    ['Soil',             pe.soil || []],
+    ['Growing months',   growingMonths],
+    ['Flowering season', floweringSeason],
+    ['Flower color',     pe.flower_color || []],
+    ['Leaf color',       pe.leaf_color || []],
+    ['Attracts',         attracts],
+    ['Propagation',      pe.propagation || []],
+    ['Native range',     _trefleDistributionList(plant, 'native')],
+    ['Introduced range', _trefleDistributionList(plant, 'introduced')]
+  ];
+
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    var label = rows[i][0];
+    var items = (rows[i][1] || []).filter(function(v) { return v != null && v !== ''; });
+    html += '<div class="shopping-detail-section-label">' + escapeHtml(label) + '</div>';
+    html += '<div class="plant-detail-tags">';
+    if (items.length) {
+      for (var j = 0; j < items.length; j++) {
+        html += '<span class="plant-detail-tag">' + escapeHtml(String(items[j])) + '</span>';
+      }
+    } else {
+      html += '<span class="plant-detail-tag plant-detail-tag-empty">' + escapeHtml(_PLANT_DETAIL_PLACEHOLDER) + '</span>';
+    }
+    html += '</div>';
+  }
   return html;
 }
 
@@ -323,15 +461,34 @@ function _plantSourceHtml(plant) {
 }
 
 // Render a <dl class="shopping-detail-bullets"> from a list of [label, value]
-// pairs. Returns '' for an empty list so callers can append unconditionally.
+// pairs. `null`/empty values render as the canonical placeholder with a
+// `dd--missing` modifier so users can scan for unknown fields at a glance.
 function _renderDetailBullets(bullets) {
   if (!bullets || !bullets.length) return '';
   var html = '<dl class="shopping-detail-bullets">';
   for (var i = 0; i < bullets.length; i++) {
-    html += '<dt>' + escapeHtml(bullets[i][0]) + '</dt><dd>' + escapeHtml(bullets[i][1]) + '</dd>';
+    var label = bullets[i][0];
+    var value = bullets[i][1];
+    var missing = (value == null || value === '');
+    var displayed = missing ? _PLANT_DETAIL_PLACEHOLDER : String(value);
+    html += '<dt>' + escapeHtml(label) + '</dt>';
+    html += '<dd' + (missing ? ' class="dd--missing"' : '') + '>' + escapeHtml(displayed) + '</dd>';
   }
   html += '</dl>';
   return html;
+}
+
+// Bottom-anchored "Import extra info from Trefle" CTA. Visible only when at
+// least one Trefle-derived extra is unknown AND the row has a cache id.
+// Returns the markup; the caller wires the click handler on the button id.
+function _plantTrefleImportButtonHtml(plant, cacheId, btnId) {
+  if (!cacheId || !_anyTrefleExtraMissing(plant)) return '';
+  return '<div class="plant-detail-import">'
+       +   '<button type="button" class="btn btn-block btn-outline btn-sm gap-1" id="' + btnId + '">'
+       +     '<i data-lucide="download-cloud" style="width:0.9em;height:0.9em"></i> '
+       +     'Import extra info from Trefle'
+       +   '</button>'
+       + '</div>';
 }
 
 async function trefleEnrich(cacheId) {

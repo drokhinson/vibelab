@@ -245,10 +245,6 @@ function _openLibraryDetailPanel(rowId) {
   var sci = plant.scientific_name ? '<div class="shopping-detail-sci"><i>' + escapeHtml(plant.scientific_name) + '</i></div>' : '';
   var family = plant.family ? '<div class="shopping-detail-family">' + escapeHtml(plant.family) + '</div>' : '';
 
-  var coreBullets  = _coreInfoBullets(plant);
-  var extraBullets = _trefleExtraBullets(plant);
-  var extrasMissing = _trefleExtrasMissing(plant);
-
   var showOwnedFields = row.status !== 'wishlist';
 
   var html = '<div class="shopping-detail-overlay" id="library-detail-overlay"></div>';
@@ -259,24 +255,17 @@ function _openLibraryDetailPanel(rowId) {
   html += '<h3>' + escapeHtml(name) + '</h3>';
   html += sci + family;
 
-  // Core plant facts (sunlight, watering, cycle, hardiness, edible).
-  html += _renderDetailBullets(coreBullets);
+  // Fixed-schema plant info — description, core bullets, extras, chip rows.
+  // Missing fields render as "—" so users can see what's tracked vs unknown.
+  html += _plantDescriptionHtml(plant);
+  html += _renderDetailBullets(_plantCoreBullets(plant));
+  html += '<div class="shopping-detail-section-label">Extra info</div>';
+  html += _renderDetailBullets(_plantExtraBullets(plant));
+  html += _plantChipRowsHtml(plant);
 
-  // Trefle-sourced extras (height, pH, days_to_harvest, etc.). When all of
-  // these are empty we offer an "Import from Trefle" CTA that fires
-  // POST /catalog/{cache_id}/enrich/trefle and re-renders this panel.
-  if (extraBullets.length) {
-    html += '<div class="shopping-detail-section-label">Extra info</div>';
-    html += _renderDetailBullets(extraBullets);
-  }
-  if (extrasMissing && row.plant_cache_id) {
-    html += '<button type="button" class="btn btn-block btn-outline btn-sm gap-1 mt-2" id="library-detail-trefle">'
-         +    '<i data-lucide="download-cloud" style="width:0.9em;height:0.9em"></i> '
-         +    'Import extra info from Trefle'
-         +  '</button>';
-  }
-
-  html += _plantTagsHtml(plant);
+  // Trefle import CTA is bottom-anchored — appended just above the Status
+  // picker so the import action stays separate from the read-only data.
+  html += _plantTrefleImportButtonHtml(plant, row.plant_cache_id, 'library-detail-trefle');
 
   // Status picker — three-way radio.
   html += '<div class="library-detail-section">';

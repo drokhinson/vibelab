@@ -2066,6 +2066,10 @@ dialog .dialog-header {
   font-size: 0.85rem;
 }
 .shopping-detail-bullets dt { color: oklch(var(--bc) / 0.55); font-weight: 500; }
+.shopping-detail-bullets dd.dd--missing {
+  color: oklch(var(--bc) / 0.4);
+  font-style: italic;
+}
 .shopping-detail-sci, .shopping-detail-family { font-size: 0.8rem; color: oklch(var(--bc) / 0.6); }
 .shopping-detail-sowing { font-size: 0.85rem; color: oklch(var(--bc) / 0.75); }
 .shopping-detail-section-label {
@@ -2089,6 +2093,26 @@ dialog .dialog-header {
   background: oklch(var(--b2));
   color: oklch(var(--bc) / 0.78);
 }
+.plant-detail-tag-empty {
+  color: oklch(var(--bc) / 0.4);
+  font-style: italic;
+}
+.plant-detail-description {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: oklch(var(--bc) / 0.8);
+  margin: 0.6rem 0 0.4rem;
+}
+.plant-detail-description-empty {
+  color: oklch(var(--bc) / 0.45);
+  font-style: italic;
+}
+.plant-detail-import {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid oklch(var(--bc) / 0.12);
+}
+.plant-detail-import .btn { width: 100%; }
 .plant-detail-source {
   margin-top: 0.8rem;
   font-size: 0.7rem;
