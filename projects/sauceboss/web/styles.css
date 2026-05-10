@@ -32,6 +32,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   background: #E85D04;
   padding: 0 16px 16px;
   flex-shrink: 0;
+  position: relative; /* anchors .settings-btn / .sauce-mgr-btn / .auth-pill */
 }
 .app-header .logo {
   font-size: 26px;
@@ -80,100 +81,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   text-align: center;
   color: #9CA3AF;
   font-size: 14px;
-}
-
-/* ─────────────────────────────
-   MEAL BUILDER
-───────────────────────────── */
-.meal-slots {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-/* Empty slot (tap to add) */
-.meal-slot.empty {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: white;
-  border: 2px dashed #D1D5DB;
-  border-radius: 16px;
-  padding: 16px;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-.meal-slot.empty:hover { border-color: #E85D04; box-shadow: 0 2px 10px rgba(232,93,4,0.15); }
-.meal-slot.empty:active { transform: scale(0.98); }
-
-.meal-slot-add-icon { font-size: 36px; }
-.meal-slot-add-text { flex: 1; }
-.meal-slot-add-label { font-size: 15px; font-weight: 700; color: #1A1A2E; }
-.meal-slot-add-hint  { font-size: 12px; color: #9CA3AF; margin-top: 2px; }
-.meal-slot-plus {
-  font-size: 22px;
-  color: #E85D04;
-  font-weight: 300;
-  line-height: 1;
-}
-
-/* Filled slot (component selected) */
-.meal-slot.filled {
-  background: white;
-  border: 2px solid #E85D04;
-  border-radius: 16px;
-  padding: 14px 16px;
-  box-shadow: 0 2px 8px rgba(232,93,4,0.12);
-}
-.meal-slot-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.meal-slot-icon   { font-size: 32px; }
-.meal-slot-info   { flex: 1; min-width: 0; }
-.meal-slot-title  { font-size: 14px; font-weight: 700; color: #1A1A2E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.meal-slot-sub    { font-size: 12px; color: #6B7280; margin-top: 2px; }
-.meal-slot-clear {
-  background: none;
-  border: none;
-  color: #9CA3AF;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 50%;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.meal-slot-clear:hover { color: #DC2626; background: #FEE2E2; }
-
-/* Let's Cook button */
-.cook-btn {
-  width: 100%;
-  padding: 16px;
-  background: linear-gradient(135deg, #E85D04, #C94E02);
-  color: white;
-  border: none;
-  border-radius: 14px;
-  font-size: 17px;
-  font-weight: 800;
-  cursor: pointer;
-  letter-spacing: 0.3px;
-  transition: opacity 0.15s, transform 0.1s;
-  -webkit-tap-highlight-color: transparent;
-}
-.cook-btn:hover { opacity: 0.92; }
-.cook-btn:active { transform: scale(0.98); }
-
-.meal-hint {
-  text-align: center;
-  color: #9CA3AF;
-  font-size: 13px;
-  margin-top: 8px;
 }
 
 /* ─────────────────────────────
@@ -523,19 +430,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 /* ─────────────────────────────
    RECIPE BUILDER
 ───────────────────────────── */
-.create-sauce-btn {
-  width: 100%;
-  padding: 14px;
-  margin-top: 16px;
-  border: 2.5px dashed #E85D04;
-  border-radius: 16px;
-  background: transparent;
-  color: #E85D04;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
 
 /* Sticky header inside builder */
 .builder-sticky-header {
@@ -1012,81 +906,12 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   margin-right: 6px;
 }
 
-/* ── Loading & Error ── */
-.loading-screen, .error-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100dvh;
-  gap: 16px;
-  padding: 32px;
-}
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #F3E8DF;
-  border-top-color: #E85D04;
-  border-radius: 50%;
-  animation: spin 0.75s linear infinite;
-}
+/* ── Loading text + spin animation (used by .spinner-sm and .loading-text) ── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text {
   font-size: 14px;
   color: #6B7280;
   font-weight: 500;
-}
-.error-screen {
-  color: #991B1B;
-  text-align: center;
-}
-.error-screen h2 { font-size: 18px; font-weight: 700; }
-.error-screen p { font-size: 13px; color: #6B7280; max-width: 280px; }
-
-/* ── Protein / Veggie Selector ── */
-.skip-btn {
-  display: block;
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 16px;
-  background: transparent;
-  border: 2px dashed #D1D5DB;
-  border-radius: 14px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #6B7280;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-.skip-btn:hover { border-color: #E85D04; color: #E85D04; }
-
-.addon-options-list { display: flex; flex-direction: column; gap: 10px; }
-.addon-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 14px 16px;
-  background: #fff;
-  border: 1.5px solid #E5E7EB;
-  border-radius: 16px;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.addon-option:hover { border-color: #E85D04; box-shadow: 0 2px 8px rgba(232,93,4,0.1); }
-.addon-option-emoji { font-size: 32px; flex-shrink: 0; }
-.addon-option-info { flex: 1; min-width: 0; }
-.addon-option-name { font-size: 15px; font-weight: 700; color: #1A1A2E; }
-.addon-option-desc { font-size: 12px; color: #6B7280; margin-top: 2px; }
-.addon-option-time {
-  flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: #E85D04;
-  background: #FFF7ED;
-  border-radius: 10px;
-  padding: 4px 10px;
 }
 
 /* ── Recipe: Step Time Badge ── */
@@ -1104,37 +929,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   border-radius: 8px;
   padding: 2px 8px;
 }
-
-/* ── Multi-select Addon Options ── */
-.addon-selected {
-  border-color: #E85D04 !important;
-  background: #FFF7ED !important;
-  box-shadow: 0 0 0 2px rgba(232,93,4,0.2) !important;
-  position: relative;
-}
-.addon-check {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  font-size: 14px;
-  font-weight: 800;
-  color: #E85D04;
-}
-.addon-continue-btn {
-  display: block;
-  width: 100%;
-  margin-top: 20px;
-  padding: 14px 16px;
-  background: #E85D04;
-  color: white;
-  font-size: 15px;
-  font-weight: 700;
-  border: none;
-  border-radius: 14px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.addon-continue-btn:hover { background: #C94E02; }
 
 /* ── Settings / Admin ── */
 .settings-btn {
@@ -1155,7 +949,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   transition: background 0.15s;
 }
 .settings-btn:hover { background: rgba(255,255,255,0.3); }
-.app-header { position: relative; }
 
 /* Labeled "Sauces" pill in the home header — matches auth pill height/alignment */
 .sauce-mgr-btn {
@@ -1255,19 +1048,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   color: #16A34A;
 }
 .admin-sauce-row__action:disabled { cursor: default; opacity: 0.7; }
-.admin-delete-btn {
-  flex-shrink: 0;
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
-  color: #B91C1C;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 5px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.admin-delete-btn:hover { background: #FEE2E2; }
 
 /* ── Swipe-to-reveal admin actions (edit / delete) ── */
 .swipe-row { position: relative; overflow: hidden; touch-action: pan-y; user-select: none; }
@@ -1430,17 +1210,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   color: white;
   border-color: #E85D04;
 }
-/* Icon-only variant (e.g. the favorites heart pill) — square aspect + tight padding. */
-.sm-type-pill-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 5px 8px;
-  margin-left: auto; /* push to the right edge of the filter row */
-}
-.sm-type-pill-icon i { width: 14px; height: 14px; }
-.sm-type-pill-icon.sm-type-pill-active i { fill: white; }
-
 /* ── Per-row Sauce Type Tag ── */
 .sauce-type-tag {
   display: inline-block;
@@ -1458,38 +1227,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .sauce-type-marinade { background: #FEE2E2; color: #B91C1C; }
 .sauce-type-dressing { background: #DCFCE7; color: #166534; }
 
-/* ── Admin Login Link in Header ── */
-.admin-login-link {
-  background: none;
-  border: 1px solid #E85D04;
-  color: #E85D04;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.admin-login-link:hover { background: #FFF7ED; }
-
-/* ── Admin Edit Button ── */
-.admin-edit-btn {
-  flex-shrink: 0;
-  background: #EFF6FF;
-  border: 1px solid #BFDBFE;
-  color: #1D4ED8;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 5px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.admin-edit-btn:hover { background: #DBEAFE; }
-
-/* ── Sauce row clickable ── */
-.admin-sauce-row { cursor: pointer; }
-.admin-sauce-row:hover { background: #FFF7ED; border-radius: 6px; }
-
 /* ── Carb / Addon Tab Rows ── */
 .sm-carb-emoji {
   font-size: 28px;
@@ -1497,17 +1234,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   width: 36px;
   text-align: center;
 }
-.sm-type-badge {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 4px;
-  margin-left: 6px;
-  vertical-align: middle;
-}
-.sm-type-protein { background: #FFF3E0; color: #E65100; }
-.sm-type-veggie  { background: #E8F5E9; color: #2E7D32; }
 
 /* ── Add Form (inline) ── */
 .sm-add-form {
@@ -1677,23 +1403,13 @@ body, button, input, select, textarea {
   animation: fadeUp 220ms ease both;
   animation-delay: calc(var(--i, 0) * 50ms);
 }
-.addon-options-list .addon-option {
-  animation: fadeUp 220ms ease both;
-  animation-delay: calc(var(--i, 0) * 60ms);
-}
 .steps-container .step-card {
   animation: fadeUp 220ms ease both;
   animation-delay: calc(var(--i, 0) * 70ms);
 }
-.meal-slots > * {
-  animation: fadeUp 220ms ease both;
-  animation-delay: calc(var(--i, 0) * 80ms);
-}
 
 /* ── Enhanced hover lift ── */
 .carb-card:hover { transform: translateY(-3px); }
-.addon-option { transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; }
-.addon-option:hover { transform: translateY(-2px); }
 
 /* ── Lucide icon sizing ── */
 [data-lucide] {
@@ -1704,183 +1420,12 @@ body, button, input, select, textarea {
 }
 .back-btn [data-lucide]           { width: 18px; height: 18px; }
 .settings-btn [data-lucide]       { width: 20px; height: 20px; }
-.meal-slot-clear [data-lucide]    { width: 15px; height: 15px; }
-.meal-slot-plus [data-lucide]     { width: 22px; height: 22px; }
 .filter-chevron [data-lucide]     { width: 14px; height: 14px; transition: transform 0.25s; }
 .filter-chevron.open [data-lucide] { transform: rotate(180deg); }
 .chip [data-lucide]               { width: 11px; height: 11px; }
 .section-label-icon [data-lucide] { width: 13px; height: 13px; color: #F59E0B; }
 .step-ref-badge [data-lucide]     { width: 14px; height: 14px; vertical-align: -2px; }
 .meal-timing-banner [data-lucide] { width: 15px; height: 15px; vertical-align: -2px; }
-
-/* ─────────────────────────────
-   MEAL OPTION CARDS (main screen)
-───────────────────────────── */
-.meal-options-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.meal-option-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: white;
-  border: 2px solid #E5E7EB;
-  border-radius: 16px;
-  padding: 14px 16px;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
-  -webkit-tap-highlight-color: transparent;
-  animation: fadeUp 300ms ease both;
-  animation-delay: calc(var(--i, 0) * 40ms);
-}
-.meal-option-card:hover { border-color: #E85D04; box-shadow: 0 2px 10px rgba(232,93,4,0.1); }
-.meal-option-card:active { transform: scale(0.98); }
-.meal-option-card.selected {
-  border-color: #E85D04;
-  background: #FFF3E6;
-  box-shadow: 0 2px 12px rgba(232,93,4,0.2);
-}
-
-.meal-option-icon { font-size: 28px; flex-shrink: 0; }
-
-.meal-option-info { flex: 1; min-width: 0; }
-.meal-option-label {
-  font-size: 15px;
-  font-weight: 700;
-  color: #1A1A2E;
-}
-.meal-option-hint {
-  font-size: 12px;
-  color: #9CA3AF;
-  margin-top: 2px;
-}
-
-.meal-option-check {
-  color: #D1D5DB;
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-.meal-option-card.selected .meal-option-check { color: #E85D04; }
-.meal-option-check [data-lucide] { width: 22px; height: 22px; }
-
-/* ─────────────────────────────
-   GUIDED FLOW PROGRESS BAR
-───────────────────────────── */
-.flow-progress {
-  display: flex;
-  align-items: flex-start;
-  padding: 10px 12px 8px;
-  background: rgba(160, 50, 0, 0.22);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.flow-progress::-webkit-scrollbar { display: none; }
-
-/* Step group wraps the main node + its sub-step dots */
-.step-group {
-  display: flex;
-  align-items: flex-start;
-  flex-shrink: 0;
-}
-
-.progress-node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.progress-dot {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgba(255, 200, 100, 0.22);
-  color: rgba(255, 230, 180, 0.8);
-  border: 2px solid rgba(255, 200, 100, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-}
-.progress-dot.active {
-  background: #FFD580;
-  color: #7A3200;
-  border-color: #FFD580;
-  box-shadow: 0 0 0 3px rgba(255, 213, 128, 0.35);
-}
-.progress-dot.done {
-  background: rgba(255, 210, 90, 0.9);
-  color: #7A3200;
-  border-color: rgba(255, 210, 90, 0.9);
-}
-.progress-dot [data-lucide] { width: 13px; height: 13px; }
-
-.progress-label {
-  font-size: 9px;
-  color: rgba(255, 230, 180, 0.75);
-  white-space: nowrap;
-  letter-spacing: 0.01em;
-}
-.progress-node:has(.progress-dot.active) .progress-label,
-.progress-node:has(.progress-dot.done) .progress-label {
-  color: rgba(255, 240, 200, 1);
-  font-weight: 600;
-}
-
-/* Connecting line between step groups */
-.progress-line {
-  flex: 1;
-  min-width: 16px;
-  height: 2px;
-  background: rgba(255, 200, 100, 0.28);
-  margin: 12px 2px 0;
-  flex-shrink: 1;
-}
-.progress-line.done { background: rgba(255, 200, 80, 0.8); }
-
-.progress-node.clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.progress-node.clickable:hover .progress-dot { box-shadow: 0 0 0 3px rgba(255, 213, 128, 0.4); }
-.progress-node.clickable:active .progress-dot { transform: scale(0.9); }
-
-/* Sub-step dots (small, no labels) within a step group */
-.sub-step-dots {
-  display: flex;
-  align-items: center;
-  margin-top: 8px; /* align centers with the 26px main dot */
-}
-.progress-sub-line {
-  width: 10px;
-  height: 2px;
-  background: rgba(255, 200, 100, 0.28);
-  flex-shrink: 0;
-}
-.progress-sub-line.done { background: rgba(255, 200, 80, 0.8); }
-.progress-sub-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: rgba(255, 200, 100, 0.2);
-  border: 1.5px solid rgba(255, 200, 100, 0.38);
-  flex-shrink: 0;
-}
-.progress-sub-dot.active {
-  background: #FFD580;
-  border-color: #FFD580;
-  box-shadow: 0 0 0 2px rgba(255, 213, 128, 0.35);
-}
-.progress-sub-dot.done {
-  background: rgba(255, 210, 90, 0.9);
-  border-color: rgba(255, 210, 90, 0.9);
-}
 
 /* ── Inline loading (inside scroll-body) ── */
 .loading-inline {
@@ -1905,94 +1450,12 @@ body, button, input, select, textarea {
 .loading-pot .steam-trail--2 { animation-delay: 0.3s; }
 .loading-pot .steam-trail--3 { animation-delay: 0.6s; }
 
-/* ─────────────────────────────
-   MEAL REVIEW SCREEN
-───────────────────────────── */
-.review-components {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.review-component-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: white;
-  border-radius: 16px;
-  padding: 14px 16px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  animation: fadeUp 300ms ease both;
-}
-
-.review-card-icon { font-size: 28px; flex-shrink: 0; }
-
-.review-card-info { flex: 1; min-width: 0; }
-.review-card-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #1A1A2E;
-}
-.review-card-sub {
-  font-size: 13px;
-  color: #6B7280;
-  margin-top: 2px;
-}
-
-.review-card-check {
-  color: #22C55E;
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-}
-
-.review-restart-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 12px;
-  padding: 12px;
-  background: none;
-  border: none;
-  color: #9CA3AF;
-  font-size: 14px;
-  cursor: pointer;
-  border-radius: 12px;
-  transition: color 0.15s, background 0.15s;
-}
-.review-restart-btn:hover { color: #6B7280; background: #F3F4F6; }
-.review-restart-btn [data-lucide] { width: 15px; height: 15px; }
-
 /* ── Hero illustration container ── */
 .hero-illustration {
   display: flex;
   justify-content: center;
   padding: 4px 0 20px;
   animation: fadeIn 500ms ease both;
-}
-
-/* ── Empty state with illustration ── */
-.empty-state-illustrated {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 36px 20px;
-  animation: fadeIn 300ms ease both;
-}
-.empty-state-illustrated svg { margin-bottom: 14px; opacity: 0.9; }
-.empty-state-illustrated .empty-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #1A1A2E;
-  margin-bottom: 4px;
-}
-.empty-state-illustrated .empty-desc {
-  font-size: 13px;
-  color: #9CA3AF;
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -2331,79 +1794,6 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   color: #6B7280;
 }
 .auth-modal__footer a { color: #E85D04; font-weight: 600; text-decoration: none; }
-
-/* ─── Sauce-card heart toggle + edit pencil ─────────────────────────────── */
-.heart-btn {
-  background: transparent;
-  border: 0;
-  padding: 4px;
-  margin-right: 4px;
-  color: #CA8A04;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-}
-.heart-btn:hover { background: #FFF3E6; }
-.heart-btn i { width: 18px; height: 18px; }
-.heart-btn--active { color: #DC2626; }
-.heart-btn--active i { fill: #DC2626; }
-
-.sauce-edit-btn {
-  background: transparent;
-  border: 0;
-  padding: 4px;
-  margin-right: 4px;
-  color: #6B7280;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-}
-.sauce-edit-btn:hover { background: #FFF3E6; color: #E85D04; }
-.sauce-edit-btn i { width: 16px; height: 16px; }
-
-/* ─── Favorites filter pill ────────────────────────────────────────────── */
-.favorites-pill-row {
-  display: flex;
-  justify-content: flex-end;
-  padding: 6px 16px 0;
-}
-.favorites-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid #FCA5A5;
-  background: #FEF2F2;
-  color: #B91C1C;
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.favorites-pill:disabled { opacity: 0.5; cursor: not-allowed; }
-.favorites-pill i { width: 14px; height: 14px; }
-.favorites-pill--active {
-  background: #DC2626;
-  color: #fff;
-  border-color: #DC2626;
-}
-.favorites-pill-count {
-  background: rgba(255,255,255,0.4);
-  color: inherit;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-}
-.favorites-pill--active .favorites-pill-count {
-  background: rgba(255,255,255,0.25);
-  color: #fff;
-}
 
 .empty-hint { padding: 16px; color: #888; font-size: 13px; }
 
