@@ -15,6 +15,10 @@ var libraryState = {
   loading: false,
   statusFilter: 'all',       // 'all' | 'current' | 'wishlist' | 'former'
   detailRowId: null,
+  // Lazy-loaded list of the user's planters for the "Add to a planter"
+  // picker in the detail panel. Loaded on first detail-panel open.
+  allGardens: null,
+  assigningGardenId: null,   // Garden currently mid-POST (for spinner state).
 };
 
 var LIBRARY_STATUS_TABS = [
@@ -317,6 +321,33 @@ function _openLibraryDetailPanel(rowId) {
     html += '<div class="library-detail-section"><span class="library-planter-chip library-planter-chip-warn">🪴 Unpotted — not in any planter yet</span></div>';
   }
 
+  // Assign-to-planter picker: lists every garden the plant is NOT already
+  // in. Tap a chip → POST /gardens/{id}/shortlist/{cache_id} → membership
+  // chip appears above on the next render.
+  var memberIds = {};
+  for (var m = 0; m < gardens.length; m++) memberIds[gardens[m].id] = true;
+  var available = (libraryState.allGardens || []).filter(function(g) { return !memberIds[g.id]; });
+  if (libraryState.allGardens === null) {
+    html += '<div class="library-detail-section">'
+         +    '<div class="library-detail-label">Add to a planter</div>'
+         +    '<div class="library-assign-loading"><span class="loading loading-spinner loading-xs"></span> Loading planters…</div>'
+         +  '</div>';
+  } else if (available.length) {
+    html += '<div class="library-detail-section">';
+    html +=   '<div class="library-detail-label">Add to a planter</div>';
+    html +=   '<div class="library-detail-planters">';
+    for (var n = 0; n < available.length; n++) {
+      var g = available[n];
+      var busy = libraryState.assigningGardenId === g.id;
+      html += '<button type="button" class="library-planter-chip library-assign-chip" data-garden-id="' + g.id + '"' + (busy ? ' disabled' : '') + '>'
+           +    (busy ? '<span class="loading loading-spinner loading-xs"></span> ' : '<i data-lucide="plus" style="width:0.8em;height:0.8em"></i> ')
+           +    escapeHtml(g.name)
+           +  '</button>';
+    }
+    html +=   '</div>';
+    html += '</div>';
+  }
+
   html += '<button type="button" class="btn btn-error btn-outline btn-block mt-3" id="library-detail-remove">'
        +   '<i data-lucide="trash-2" style="width:0.9em;height:0.9em"></i> Remove from library'
        + '</button>';
@@ -347,6 +378,48 @@ function _openLibraryDetailPanel(rowId) {
   document.querySelectorAll('.library-detail-open-garden').forEach(function(btn) {
     btn.onclick = function() { if (typeof openGarden === 'function') openGarden(btn.dataset.gardenId); };
   });
+  document.querySelectorAll('.library-assign-chip').forEach(function(btn) {
+    btn.onclick = function() { _assignToPlanter(row.id, row.plant_cache_id, btn.dataset.gardenId); };
+  });
+
+  // First open of the panel: kick off the planters fetch so the picker can
+  // render. We re-open the panel once it lands (cheap; no flicker because
+  // the slide-in is already visible).
+  if (libraryState.allGardens === null) _ensureAllGardensLoaded(row.id);
+}
+
+async function _ensureAllGardensLoaded(rowId) {
+  try {
+    libraryState.allGardens = (await apiFetch('/gardens')) || [];
+  } catch (err) {
+    console.warn('[plant-planner] library could not load planters:', err);
+    libraryState.allGardens = [];
+  }
+  // Re-render only if the same detail panel is still open.
+  if (libraryState.detailRowId === rowId) _openLibraryDetailPanel(rowId);
+}
+
+async function _assignToPlanter(rowId, plantCacheId, gardenId) {
+  if (!plantCacheId || !gardenId) return;
+  libraryState.assigningGardenId = gardenId;
+  if (libraryState.detailRowId === rowId) _openLibraryDetailPanel(rowId);  // show spinner
+  try {
+    await apiFetch('/gardens/' + gardenId + '/shortlist/' + plantCacheId, {
+      method: 'POST',
+    });
+    // Reflect the new membership immediately by reloading the user_plants
+    // list (cheap; library is already small).
+    libraryState.rows = (await apiFetch('/user_plants?include_gardens=true')) || [];
+  } catch (err) {
+    alert('Could not add this plant to the planter: ' + (err.message || err));
+  } finally {
+    libraryState.assigningGardenId = null;
+  }
+  // Re-render the card grid (which wipes the panel container), then re-open
+  // the panel on top so the user sees both the updated chip in "In planters"
+  // and the freshly-recomputed picker.
+  _renderLibraryShell();
+  if (libraryState.detailRowId === rowId) _openLibraryDetailPanel(rowId);
 }
 
 function _closeLibraryDetailPanel() {

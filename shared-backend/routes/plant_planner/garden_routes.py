@@ -9,7 +9,12 @@ from . import router
 from .dependencies import CurrentUser, get_current_user
 from .garden_units import floor_dims_feet
 from .library_routes import promote_to_current, upsert_wishlist_rows
-from .models import CreateGardenBody, UpdateGardenBody, SavePlantsBody
+from .models import (
+    AddToShortlistResponse,
+    CreateGardenBody,
+    SavePlantsBody,
+    UpdateGardenBody,
+)
 
 
 @router.get("/gardens")
@@ -128,6 +133,53 @@ async def update_garden(garden_id: str, body: UpdateGardenBody, user: CurrentUse
             await upsert_wishlist_rows(user.user_id, added)
 
     return result.data[0]
+
+
+@router.post(
+    "/gardens/{garden_id}/shortlist/{plant_cache_id}",
+    response_model=AddToShortlistResponse,
+    status_code=200,
+    summary="Add a plant_cache_id to a garden's shortlist (idempotent)",
+)
+async def add_to_garden_shortlist(
+    garden_id: str,
+    plant_cache_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> AddToShortlistResponse:
+    """Append plant_cache_id to the garden's shortlist if not already present.
+    Also upserts a wishlist row in the user's library for the plant. Status
+    is left at wishlist — placement on the 2D builder is what promotes a row
+    to current (see save_garden_plants below)."""
+    sb = get_supabase()
+    existing = (
+        sb.table("plantplanner_gardens")
+        .select("id, shortlist_plant_cache_ids")
+        .eq("id", garden_id)
+        .eq("user_id", user.user_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Garden not found")
+
+    current = existing.data[0].get("shortlist_plant_cache_ids") or []
+    if plant_cache_id in current:
+        return AddToShortlistResponse(
+            status="already_in_shortlist",
+            shortlist_plant_cache_ids=current,
+        )
+
+    new_list = current + [plant_cache_id]
+    (
+        sb.table("plantplanner_gardens")
+        .update({
+            "shortlist_plant_cache_ids": new_list,
+            "updated_at": "now()",
+        })
+        .eq("id", garden_id)
+        .execute()
+    )
+    await upsert_wishlist_rows(user.user_id, [plant_cache_id])
+    return AddToShortlistResponse(status="added", shortlist_plant_cache_ids=new_list)
 
 
 @router.delete("/gardens/{garden_id}")
