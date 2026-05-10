@@ -36,6 +36,7 @@ let state = {
   // variantCount. Used by the Saucebook tab + meal-builder filter + Pantry.
   saucebook: [],
   saucebookLoading: false,
+  saucebookLoaded: false,
   saucebookSearch: '',
 
   // ── Browse tab state ──────────────────────────────────────────────────────

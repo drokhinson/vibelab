@@ -54,11 +54,15 @@ function renderSaucebook() {
   }
   const cuisinesSorted = [...byCuisine.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
+  const showLoading = state.saucebookLoading && !state.saucebookLoaded;
+
   return `
     <div class="screen-wrap">
       ${renderAppHeader({ title: 'Saucebook', subtitle: 'Your recipe library' })}
       <div class="scroll-body">
-        ${sauces.length === 0 ? _saucebookEmptyState() : ''}
+        ${showLoading
+          ? `<div class="empty-state">Loading your saucebook…</div>`
+          : (sauces.length === 0 ? _saucebookEmptyState() : '')}
         ${sauces.length > 0 ? `
           <div class="tab-filter-row">
             <button class="browse-filters__toggle" onclick="saucebookToggleFilters()">

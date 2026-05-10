@@ -65,6 +65,10 @@ function initSupabase() {
           // modal closes; pantry hydrates in the background.
           await loadSaucebook();
           loadPantry();
+          // Modal closes only after data is ready so the user never sees an
+          // empty saucebook flash between sign-in and the first /saucebook
+          // response.
+          closeAuthModal();
         }
         render();
       } else {
@@ -73,6 +77,7 @@ function initSupabase() {
         // Reset saucebook + pantry to anon defaults; force the user back to
         // Browse since the other tabs are locked without an account.
         state.saucebook = [];
+        state.saucebookLoaded = false;
         state.pantry = { ingredients: [], missing: new Set(), loading: false, error: null, _loaded: false };
         state.disabledIngredients = new Set();
         state.activeTab = 'browse';
@@ -104,13 +109,15 @@ async function loadProfile() {
       await createProfile(displayName);
       currentUser = await fetchProfile();
     }
-    // Default landing tab once a user is signed in is Saucebook.
+    // Default landing tab once a user is signed in is Saucebook. Modal close
+    // is deferred to the caller so it can wait until /saucebook resolves —
+    // otherwise the user briefly sees the empty saucebook tab while the
+    // first list_saucebook call is still in flight.
     state.activeTab = 'saucebook';
     document.body.classList.add('is-auth');
     try {
       state.editMode = sessionStorage.getItem('sb_edit_mode') === '1';
     } catch (_) { state.editMode = false; }
-    closeAuthModal();
   } finally {
     _profileLoadInFlight = false;
   }
@@ -120,11 +127,18 @@ async function loadProfile() {
 // full ingredients). Caller is responsible for render().
 async function loadSaucebook() {
   if (!currentUser) return;
+  state.saucebookLoading = true;
   try {
     state.saucebook = await api.listSaucebook();
   } catch (err) {
     console.warn('[sauceboss] saucebook load failed:', err);
-    state.saucebook = [];
+    // Only clobber to empty on the initial attempt — if a refresh fails
+    // mid-session, keep the previously-loaded list visible instead of
+    // flashing the empty state.
+    if (!state.saucebookLoaded) state.saucebook = [];
+  } finally {
+    state.saucebookLoading = false;
+    state.saucebookLoaded = true;
   }
 }
 
@@ -161,6 +175,7 @@ async function handleLogout() {
   currentUser = null;
   state.editMode = false;
   state.saucebook = [];
+  state.saucebookLoaded = false;
   state.pantry = { ingredients: [], missing: new Set(), loading: false, error: null };
   state.disabledIngredients = new Set();
   state.activeTab = 'browse';

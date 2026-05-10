@@ -128,18 +128,38 @@ function renderSauceSelector() {
 // Selecting a family from the list: rebuild the family from current sauces,
 // pick the displayed sauce, and stash the full sibling list so the
 // recipe-view variant switcher doesn't need another fetch.
+//
+// Saucebook envelopes are slim — they carry `ingredientNames` but no
+// `steps[].ingredients[]`. The meal-recipe view iterates `sauce.steps` and
+// crashes on undefined, so we hydrate the full sauce + its family via
+// /sauces (same pattern as browseOpenRecipe / saucebookOpenRecipe) before
+// navigating.
 function selectSauce(rootId, displayedId) {
   const families = buildSauceFamilies(state.saucesForCurrentItem);
   const family = families.get(rootId);
   if (!family) return;
-  const sauce = (displayedId && [family.root, ...family.variants].find(s => s.id === displayedId))
+  const slim = (displayedId && [family.root, ...family.variants].find(s => s.id === displayedId))
     || _pickDisplayedFromFamily(family);
-  state.selectedSauce = sauce;
-  state.selectedSauceFamily = [family.root, ...family.variants];
-  state.meal.item  = state.selectedItem;
-  state.meal.prep  = state.selectedPrep;
-  state.meal.sauce = state.selectedSauce;
-  navigate('meal-recipe');
+  if (!slim) return;
+  state.loading = 'Loading recipe…';
+  render();
+  api.allSauces().then(all => {
+    state.loading = null;
+    const found = all.find(s => s.id === slim.id);
+    if (!found) { render(); return; }
+    const familyId = found.parentSauceId || found.id;
+    const fullFamily = all.filter(s => s.id === familyId || s.parentSauceId === familyId);
+    state.selectedSauce = found;
+    state.selectedSauceFamily = fullFamily.length ? fullFamily : [found];
+    state.meal.item  = state.selectedItem;
+    state.meal.prep  = state.selectedPrep;
+    state.meal.sauce = found;
+    navigate('meal-recipe');
+  }).catch(err => {
+    state.loading = null;
+    console.warn('[sauceboss] sauce hydrate failed:', err);
+    render();
+  });
 }
 
 // Switch between siblings inside the recipe / meal-recipe view.
