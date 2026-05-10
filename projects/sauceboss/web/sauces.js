@@ -105,12 +105,12 @@ function renderSauceSelector() {
 
   return `
     <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="navigate('${ctx.backScreen}')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo"><span>${ctx.emoji}</span>${ctx.title}</div>
-      <div class="subtitle">${visibleEntries.length} options · select your style</div>
-      ${renderHeaderAuthSlot()}
-    </div>
+    ${renderAppHeader({
+      title: ctx.title,
+      subtitle: `${visibleEntries.length} options · select your style`,
+      titleEmoji: ctx.emoji,
+      back: { onClick: `navigate('${ctx.backScreen}')` },
+    })}
     <div class="scroll-body">
       <p class="section-label">Ingredient filter</p>
       <div class="filter-panel">

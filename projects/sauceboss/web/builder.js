@@ -197,11 +197,11 @@ function renderBuilder() {
 
   return `
     <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="navigate('admin')">‹ Back</button>
-      <div class="logo"><span>🍲</span>${b.editingId ? 'Edit Sauce' : 'Create a Sauce'}</div>
-      ${renderHeaderAuthSlot()}
-    </div>
+    ${renderAppHeader({
+      title: b.editingId ? 'Edit Sauce' : 'Create a Sauce',
+      titleEmoji: '🍲',
+      back: { onClick: `navigate('${state.recipeReturnTo === 'admin' ? 'admin' : 'tab-shell'}')` },
+    })}
     <div class="scroll-body scroll-body--padded">
       <div class="builder-sticky-header">
         ${importPanel}
@@ -259,12 +259,12 @@ function renderBuilderItems() {
 
   return `
     <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="navigate('builder')">‹ Back</button>
-      <div class="logo"><span class="color-dot-header" style="background:${b.color}"></span>${b.name || 'New Sauce'}</div>
-      <div class="subtitle">${b.cuisine ? renderEmoji(b.cuisineEmoji) + ' ' + b.cuisine : `Select ${t?.pairLabel?.toLowerCase() || 'items'}`}</div>
-      ${renderHeaderAuthSlot()}
-    </div>
+    ${renderAppHeader({
+      title: b.name || 'New Sauce',
+      subtitle: b.cuisine ? renderEmoji(b.cuisineEmoji) + ' ' + b.cuisine : `Select ${t?.pairLabel?.toLowerCase() || 'items'}`,
+      titlePrefix: `<span class="color-dot-header" style="background:${b.color}"></span>`,
+      back: { onClick: "navigate('builder')" },
+    })}
     <div class="scroll-body scroll-body--padded">
       <p class="section-label">Which ${t?.pairLabel?.toLowerCase() || 'dishes'} go with this ${t?.label?.toLowerCase() || 'sauce'}?</p>
       <div class="carb-grid">${itemsHTML}</div>
@@ -298,12 +298,12 @@ function renderBuilderReview() {
 
   return `
     <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="navigate('${isStandalone ? 'builder' : 'builder-items'}')">‹ Back</button>
-      <div class="logo"><span class="color-dot-header" style="background:${b.color}"></span>${b.name}</div>
-      <div class="subtitle">${renderEmoji(b.cuisineEmoji)} ${b.cuisine} · ${b.steps.length} step${b.steps.length > 1 ? 's' : ''} · ${totalIngs} ingredients</div>
-      ${renderHeaderAuthSlot()}
-    </div>
+    ${renderAppHeader({
+      title: b.name,
+      subtitle: `${renderEmoji(b.cuisineEmoji)} ${b.cuisine} · ${b.steps.length} step${b.steps.length > 1 ? 's' : ''} · ${totalIngs} ingredients`,
+      titlePrefix: `<span class="color-dot-header" style="background:${b.color}"></span>`,
+      back: { onClick: `navigate('${isStandalone ? 'builder' : 'builder-items'}')` },
+    })}
     <div class="scroll-body scroll-body--padded">
       <div class="review-summary">
         <div class="review-carbs">${isStandalone

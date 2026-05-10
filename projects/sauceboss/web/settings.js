@@ -20,12 +20,12 @@ function renderSettings() {
   if (!currentUser) {
     return `
       <div class="status-bar"></div>
-      <div class="app-header">
-        <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
-        <div class="logo"><span><i data-lucide="key-round"></i></span>Become Admin</div>
-        <div class="subtitle">Sign in first to claim admin rights</div>
-        ${renderHeaderAuthSlot()}
-      </div>
+      ${renderAppHeader({
+        title: 'Become Admin',
+        subtitle: 'Sign in first to claim admin rights',
+        titleIcon: 'key-round',
+        back: { onClick: "navigate('admin')" },
+      })}
       <div class="scroll-body scroll-body--padded">
         <div class="settings-form">
           <p>You need to sign in before you can become an admin.</p>
@@ -37,11 +37,11 @@ function renderSettings() {
   if (currentUser.is_admin) {
     return `
       <div class="status-bar"></div>
-      <div class="app-header">
-        <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
-        <div class="logo"><span><i data-lucide="shield-check"></i></span>You're an admin</div>
-        ${renderHeaderAuthSlot()}
-      </div>
+      ${renderAppHeader({
+        title: "You're an admin",
+        titleIcon: 'shield-check',
+        back: { onClick: "navigate('admin')" },
+      })}
       <div class="scroll-body scroll-body--padded">
         <div class="settings-form">
           <p>You already have admin rights — open the Sauce Manager to edit anything.</p>
@@ -52,12 +52,12 @@ function renderSettings() {
   }
   return `
     <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="navigate('admin')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo"><span><i data-lucide="key-round"></i></span>Become Admin</div>
-      <div class="subtitle">Enter the shared admin key to unlock full edit rights</div>
-      ${renderHeaderAuthSlot()}
-    </div>
+    ${renderAppHeader({
+      title: 'Become Admin',
+      subtitle: 'Enter the shared admin key to unlock full edit rights',
+      titleIcon: 'key-round',
+      back: { onClick: "navigate('admin')" },
+    })}
     <div class="scroll-body scroll-body--padded">
       <div class="settings-form">
         <input
@@ -130,17 +130,20 @@ function renderAdmin() {
             title="${state.editMode ? 'Exit edit mode' : 'Enter edit mode'}">
       <i data-lucide="${state.editMode ? 'pencil-off' : 'pencil'}"></i>
     </button>` : '';
+  const becomeAdminBtn = (isLoggedIn && !isAdmin)
+    ? `<button class="settings-btn" onclick="openSettings()" title="Become admin"><i data-lucide="key-round"></i></button>`
+    : '';
 
   return `
     <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-category')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo"><span><i data-lucide="settings-2"></i></span>Sauce Manager</div>
-      <div class="subtitle">${state.editMode ? 'Edit mode' : (isAdmin ? 'Admin' : (isLoggedIn ? 'Signed in' : ''))}</div>
-      ${renderHeaderAuthSlot()}
-      ${editToggle}
-      ${isLoggedIn && !isAdmin ? `<button class="settings-btn" onclick="openSettings()" title="Become admin"><i data-lucide="key-round"></i></button>` : ''}
-    </div>
+    ${renderAppHeader({
+      title: 'Sauce Manager',
+      subtitle: state.editMode ? 'Edit mode' : (isAdmin ? 'Admin' : (isLoggedIn ? 'Signed in' : '')),
+      titleIcon: 'settings-2',
+      back: { onClick: "navigate('meal-category')" },
+      manage: false,
+      extraActions: editToggle + becomeAdminBtn,
+    })}
     ${state.adminError ? `<div class="settings-error" style="margin:8px 16px">${state.adminError}</div>` : ''}
     ${tabBar}
     ${searchBar}
