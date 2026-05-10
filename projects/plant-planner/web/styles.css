@@ -1991,6 +1991,17 @@ dialog .dialog-header {
   font-weight: 600;
   vertical-align: middle;
 }
+
+/* Library detail — assign-to-planter picker */
+.library-assign-chip { cursor: pointer; }
+.library-assign-chip[disabled] { opacity: 0.6; cursor: progress; }
+.library-assign-loading {
+  font-size: 0.78rem;
+  color: oklch(var(--bc) / 0.6);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
 .shopping-footer {
   position: sticky;
   bottom: 0;

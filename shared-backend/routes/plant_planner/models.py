@@ -104,6 +104,12 @@ class SavePlantsBody(BaseModel):
     plants: List[PlantPlacement]
 
 
+class AddToShortlistResponse(BaseModel):
+    """Response from POST /gardens/{id}/shortlist/{plant_cache_id}."""
+    status: str  # "added" | "already_in_shortlist"
+    shortlist_plant_cache_ids: List[str]
+
+
 # ── Plant Library (My Plants) ───────────────────────────────────────────────
 
 class GardenStub(BaseModel):
