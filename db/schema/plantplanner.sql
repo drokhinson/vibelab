@@ -1,13 +1,14 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PlantPlanner — current schema snapshot
--- Last updated: post-014_planter_geometry (per-type planter geometry: pots
--- store radius + height; boxes / raised bed / greenhouse add dim_height).
+-- Last updated: post-015_align_perenual_options (gardens.shade_level /
+-- water_plan / usda_zone realigned to Perenual v2/species-list filter enums).
 -- Migrations applied: 001_baseline, 002_seed, 003_supabase_auth,
 --                     004_enrich_plants, 005_seed_enriched, 006_companions,
 --                     007_companions_seed, 008_real_radius_placement,
 --                     009_growth_lifecycle, 010_garden_conditions,
 --                     011_plant_cache_and_shortlist, 012_planter_types_redesign,
---                     013_user_plants, 014_planter_geometry.
+--                     013_user_plants, 014_planter_geometry,
+--                     015_align_perenual_options.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Storage invariant:
@@ -71,11 +72,12 @@ CREATE TABLE IF NOT EXISTS public.plantplanner_gardens (
                     'indoor_pot', 'indoor_planter_box', 'greenhouse',
                     'outdoor_pot', 'outdoor_planter_box', 'garden_bed', 'raised_bed'
                   )),
-  shade_level     TEXT        NOT NULL DEFAULT 'full_sun',    -- full_sun | partial | shade
+  shade_level     TEXT        NOT NULL DEFAULT 'full_sun'
+                  CHECK (shade_level IN ('full_sun', 'sun-part_shade', 'part_shade', 'full_shade')),
   planting_season TEXT        NOT NULL DEFAULT 'spring',      -- spring | summer | fall | winter
-  water_plan      TEXT        NOT NULL DEFAULT 'regular'
-                  CHECK (water_plan IN ('regular', 'occasional', 'rain_only')),
-  usda_zone       TEXT,                                        -- per-garden USDA hardiness zone (e.g. "6b")
+  water_plan      TEXT        NOT NULL DEFAULT 'average'
+                  CHECK (water_plan IN ('frequent', 'average', 'minimum', 'none')),
+  usda_zone       TEXT        CHECK (usda_zone IS NULL OR usda_zone ~ '^([1-9]|1[0-3])$'),  -- per-garden USDA hardiness zone (1-13)
   location_label  TEXT,                                        -- display label for the conditions strip (e.g. "Boston, MA" or "02139")
   settings_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
   shortlist_plant_cache_ids UUID[] NOT NULL DEFAULT '{}'::uuid[],  -- plant cache rows the user shortlisted in the shopping step

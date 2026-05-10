@@ -151,16 +151,18 @@ function yearScale(plant, year) {
 }
 
 function sunlightLabel(s) {
-  if (s === "full_sun") return "Full Sun";
-  if (s === "partial") return "Partial";
-  if (s === "shade") return "Shade";
+  if (s === "full_sun") return "Full sun";
+  if (s === "sun-part_shade") return "Sun & part shade";
+  if (s === "part_shade") return "Part shade";
+  if (s === "full_shade") return "Full shade";
   return s;
 }
 
 function sunlightIcon(s) {
   if (s === "full_sun") return "☀️";
-  if (s === "partial") return "⛅";
-  if (s === "shade") return "🌙";
+  if (s === "sun-part_shade") return "🌤️";
+  if (s === "part_shade") return "⛅";
+  if (s === "full_shade") return "☁️";
   return "";
 }
 

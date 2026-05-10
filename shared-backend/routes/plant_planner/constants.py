@@ -16,15 +16,19 @@ class GardenType(StrEnum):
 
 
 class ShadeLevel(StrEnum):
+    """Aligned with Perenual v2/species-list `sunlight` filter enum."""
     FULL_SUN = "full_sun"
-    PARTIAL = "partial"
-    SHADE = "shade"
+    SUN_PART_SHADE = "sun-part_shade"
+    PART_SHADE = "part_shade"
+    FULL_SHADE = "full_shade"
 
 
 class WaterPlan(StrEnum):
-    REGULAR = "regular"
-    OCCASIONAL = "occasional"
-    RAIN_ONLY = "rain_only"
+    """Aligned with Perenual v2/species-list `watering` filter enum."""
+    FREQUENT = "frequent"
+    AVERAGE = "average"
+    MINIMUM = "minimum"
+    NONE = "none"
 
 
 class PlantingSeason(StrEnum):

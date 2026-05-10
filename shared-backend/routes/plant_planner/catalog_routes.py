@@ -217,23 +217,24 @@ def _build_cache_query(
     return q
 
 
+# shade_level / water_plan now use Perenual's `sunlight` / `watering` enums
+# directly — no runtime mapping needed. These thin wrappers stay so callers
+# don't have to care; they normalize "" / unknown values to None.
+_VALID_SUNLIGHT = {"full_sun", "sun-part_shade", "part_shade", "full_shade"}
+_VALID_WATERING = {"frequent", "average", "minimum", "none"}
+
+
 def _shade_to_sunlight(shade_level: Optional[str]) -> Optional[str]:
-    return {
-        "full_sun": "full_sun",
-        "partial": "part_shade",
-        "shade": "full_shade",
-    }.get(shade_level or "")
+    return shade_level if shade_level in _VALID_SUNLIGHT else None
 
 
 def _water_plan_to_watering(water_plan: Optional[str]) -> Optional[str]:
-    return {
-        "regular": "average",
-        "occasional": "minimum",
-        "rain_only": "minimum",
-    }.get(water_plan or "")
+    return water_plan if water_plan in _VALID_WATERING else None
 
 
 def _zone_label_to_int(zone_label: Optional[str]) -> Optional[int]:
+    """Stored zone is now a plain integer string '1'-'13'. Tolerates legacy
+    a/b half-zone suffixes for any rows in flight before migration 015."""
     if not zone_label:
         return None
     digits = "".join(ch for ch in zone_label if ch.isdigit())
@@ -241,20 +242,6 @@ def _zone_label_to_int(zone_label: Optional[str]) -> Optional[int]:
         return int(digits) if digits else None
     except ValueError:
         return None
-
-
-def _planting_season_to_cycle(season: Optional[str]) -> Optional[str]:
-    """Map the wizard's planting_season to a plant `cycle` filter.
-
-    Plants started in spring/summer are dominated by annuals (single-season
-    crops). Fall-planted is heavily perennial (bulbs, shrubs, garlic). Winter
-    planting is rare in temperate zones — leave unfiltered.
-    """
-    return {
-        "spring": "annual",
-        "summer": "annual",
-        "fall":   "perennial",
-    }.get((season or "").lower())
 
 
 # Plant-size buckets keyed off the wizard's grid dims + garden_type. The cap
@@ -309,7 +296,13 @@ async def _trigger_lazy_fill(
     if query:
         trefle_records = await trefle_search(query)
     if not trefle_records:
-        light_min = 7 if sunlight == "full_sun" else 4 if sunlight == "part_shade" else None
+        # Trefle's light is 0–10; map our 4-tier sunlight enum onto a min cutoff.
+        light_min = (
+            7 if sunlight == "full_sun"
+            else 5 if sunlight == "sun-part_shade"
+            else 4 if sunlight == "part_shade"
+            else None
+        )
         trefle_records = await trefle_filter(edible=edible, light_min=light_min)
     if not trefle_records:
         return 0
@@ -355,13 +348,17 @@ async def catalog_search(
     effective_sunlight = sunlight or _shade_to_sunlight(shade_level)
     effective_watering = watering or _water_plan_to_watering(water_plan)
     effective_zone = zone if zone is not None else _zone_label_to_int(usda_zone)
-    effective_cycle = cycle or _planting_season_to_cycle(planting_season)
+    # cycle is informative-only — kept on the cache row but not derived from
+    # planting_season any more. The query param still works as an explicit
+    # override for callers that want it.
+    effective_cycle = cycle
 
-    # Climate-controlled planters require indoor-tolerant plants. Outdoor pots
-    # are exposed to the user's actual zone — they do NOT force indoor=True.
+    # Indoor planters require indoor-tolerant plants; outdoor planters
+    # require non-indoor plants. Always send the boolean so Perenual filters
+    # both directions (was previously None for outdoor → no filter).
     effective_indoor = indoor
-    if effective_indoor is None and garden_is_climate_controlled(garden_type):
-        effective_indoor = True
+    if effective_indoor is None and garden_type:
+        effective_indoor = garden_is_climate_controlled(garden_type)
 
     # Plant-size caps come from explicit planter_size (override) or are derived
     # from garden_type + grid dims. max_height_cm / max_spread_cm overrides win.
@@ -502,8 +499,11 @@ def _build_query_from_body(body: FillBody) -> Dict[str, Any]:
     sunlight = _shade_to_sunlight(body.shade_level)
     watering = _water_plan_to_watering(body.water_plan)
     zone     = _zone_label_to_int(body.usda_zone)
-    cycle    = _planting_season_to_cycle(body.planting_season)
-    indoor   = True if garden_is_climate_controlled(body.garden_type) else None
+    # cycle stays on the cached row but is no longer used as a filter (it's
+    # informational); the planting_season → cycle bridge has been retired.
+    cycle    = None
+    # Always-explicit boolean: True for indoor planters, False for outdoor.
+    indoor   = garden_is_climate_controlled(body.garden_type) if body.garden_type else None
     bucket = _derive_planter_size(
         garden_type=body.garden_type,
         grid_width=body.grid_width,
@@ -614,7 +614,6 @@ async def fill_perenual(body: FillBody) -> FillStepResponse:
     filters = _build_query_from_body(body)
     try:
         records = await perenual_filter(
-            cycle=filters["cycle"],
             watering=filters["watering"],
             sunlight=filters["sunlight"],
             hardiness=filters["zone"],

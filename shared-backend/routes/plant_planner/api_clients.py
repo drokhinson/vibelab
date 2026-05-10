@@ -143,16 +143,18 @@ async def perenual_search(query: str) -> List[Dict[str, Any]]:
 
 
 # Forward map: internal sunlight enum → Perenual filter param value.
+# Wizard values now align with Perenual 1:1 — this map is identity-only and
+# kept as a safety filter against unknown values reaching the API call.
 _PERENUAL_SUNLIGHT_FILTER = {
-    "full_sun":   "full_sun",
-    "part_shade": "part_shade",
-    "full_shade": "full_shade",
+    "full_sun":       "full_sun",
+    "sun-part_shade": "sun-part_shade",
+    "part_shade":     "part_shade",
+    "full_shade":     "full_shade",
 }
 
 
 async def perenual_filter(
     *,
-    cycle: Optional[str] = None,
     watering: Optional[str] = None,
     sunlight: Optional[str] = None,
     hardiness: Optional[int] = None,
@@ -160,22 +162,22 @@ async def perenual_filter(
     edible: Optional[bool] = None,
     poisonous: Optional[bool] = None,
     query: Optional[str] = None,
-    page: int = 1,
 ) -> List[Dict[str, Any]]:
     """Filtered Perenual species-list — primary seed for the cache fill.
 
     Mirrors the wizard filters onto Perenual's v2/species-list query params.
-    The endpoint accepts cycle/watering/sunlight/indoor/edible/poisonous as
-    direct filters and `hardiness` as a "min-max" zone-range string.
+    The endpoint accepts watering/sunlight/indoor/edible/poisonous as direct
+    filters and `hardiness` as a "min-max" zone-range string. `cycle` is
+    deliberately not surfaced — it's informational on the cache row, not a
+    filter. Pagination is also omitted; revisit if responses outgrow the
+    SEARCH_RESULT_CAP slice.
     """
     key = _perenual_key()
     if not key:
         logger.info("PERENUAL_API_KEY not set — Perenual filter unavailable")
         return []
     url = f"{PERENUAL_BASE}/species-list"
-    params: Dict[str, Any] = {"key": key, "page": page}
-    if cycle:
-        params["cycle"] = cycle
+    params: Dict[str, Any] = {"key": key}
     if watering:
         params["watering"] = watering
     if sunlight:
@@ -359,6 +361,9 @@ def normalize_flora(record: Dict[str, Any]) -> Dict[str, Any]:
 _SUNLIGHT_MAP_PERENUAL = {
     "full_sun": "full_sun",
     "full sun": "full_sun",
+    "sun-part_shade": "sun-part_shade",
+    "sun-part shade": "sun-part_shade",
+    "sun/part shade": "sun-part_shade",
     "part_shade": "part_shade",
     "part shade": "part_shade",
     "part sun/part shade": "part_shade",
