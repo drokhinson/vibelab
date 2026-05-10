@@ -4,9 +4,12 @@ ONE service handles ALL projects. Each project registers its own router.
 Routes are namespaced: /api/v1/{project}/...
 """
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+
+from api_logger import set_request_user
+from jwt_auth import get_current_supabase_user
 
 # Project routers
 from routes import sauceboss
@@ -52,6 +55,45 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# ── api_logger user-context middleware ────────────────────────────────────────
+# Attach the authenticated user to api_logger contextvars for EVERY request,
+# regardless of whether the route declares Depends(get_current_user). Without
+# this, anonymous-friendly routes (plant-planner catalog/cache-fill, BGG public
+# catalog) emit api_logs rows with NULL user_id even when the caller's JWT
+# identifies a real user.
+_APP_PREFIX_MAP = [
+    ("/api/v1/plant-planner/",   "plant-planner"),
+    ("/api/v1/boardgame-buddy/", "boardgame-buddy"),
+    ("/api/v1/sauceboss/",       "sauceboss"),
+    ("/api/v1/wealthmate/",      "wealthmate"),
+    ("/api/v1/daywordplay/",     "daywordplay"),
+    ("/api/v1/spotme/",          "spotme"),
+]
+
+
+@app.middleware("http")
+async def attach_api_logger_user_context(request: Request, call_next):
+    """Decode the request's JWT (if any) and bind the user to the api_logger."""
+    path = request.url.path
+    app_name = next((name for prefix, name in _APP_PREFIX_MAP if path.startswith(prefix)), None)
+    if app_name:
+        authz = request.headers.get("authorization")
+        if authz:
+            try:
+                su_user = await get_current_supabase_user(authorization=authz)
+                await set_request_user(
+                    user_id=su_user.sub,
+                    user_label=su_user.email or su_user.sub,
+                    app=app_name,
+                )
+            except Exception:
+                # Invalid / expired token, JWKS hiccup, etc — log row will fall
+                # back to anonymous. Never let this fail the request.
+                pass
+    return await call_next(request)
+
 
 # ── Health ────────────────────────────────────────────────────────────────────
 @app.get("/api/v1/health", summary="Global health check")
