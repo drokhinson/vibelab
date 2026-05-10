@@ -2107,12 +2107,6 @@ dialog .dialog-header {
   color: oklch(var(--bc) / 0.45);
   font-style: italic;
 }
-.plant-detail-import {
-  margin-top: 1rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid oklch(var(--bc) / 0.12);
-}
-.plant-detail-import .btn { width: 100%; }
 .plant-detail-source {
   margin-top: 0.8rem;
   font-size: 0.7rem;

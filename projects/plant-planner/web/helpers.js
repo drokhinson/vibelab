@@ -247,14 +247,13 @@ function bindFilterChipRow(rootEl, groupAttr, onPick) {
 //   1. Description paragraph (Perenual raw_perenual_json.description).
 //   2. Core bullets — always-on list (sunlight, watering, cycle, hardiness,
 //      indoor, edible, vegetable, type, care_level).
-//   3. Extra bullets — always-on list of Trefle/Perenual fields (height,
-//      spread, pH, toxicity, watering_period, drought_tolerant, etc.).
-//   4. Chip rows — labeled rows for tags + Perenual/Trefle array fields.
+//   3. Extra bullets — always-on list of Perenual fields (height, spread, pH,
+//      toxicity, watering_period, drought_tolerant, etc.).
+//   4. Chip rows — labeled rows for tags + Perenual array fields.
 //   5. "Data from <source>" footer.
 // Missing values render as `_PLANT_DETAIL_PLACEHOLDER` ("—") so the user
-// can scan the popup for unknown fields. The bottom-anchored "Import from
-// Trefle" CTA appears when `_anyTrefleExtraMissing(plant)` is true; a
-// successful POST /catalog/{id}/enrich/trefle re-renders the panel.
+// can scan the popup for unknown fields. Perenual is the sole upstream
+// source — Trefle/Flora support was removed in May 2026.
 
 // Fixed placeholder for unknown values. Every bullet/chip row renders even
 // when the underlying data is missing so the user can scan for "—" rows.
@@ -262,9 +261,6 @@ var _PLANT_DETAIL_PLACEHOLDER = '—';
 
 function _plantRawPerenual(plant) {
   return (plant && plant.raw_perenual_json) || {};
-}
-function _plantRawTrefle(plant) {
-  return (plant && plant.raw_trefle_json) || {};
 }
 
 function _yesNoOrMissing(v) {
@@ -296,7 +292,7 @@ function _hardinessLocationLabel(loc) {
 }
 
 function _plantTypeLabel(plant) {
-  return _firstNonEmpty(_plantRawPerenual(plant).type, _plantRawTrefle(plant).type);
+  return _firstNonEmpty(_plantRawPerenual(plant).type);
 }
 
 // Always-on core bullet schema. Returns the same set of [label, value-or-null]
@@ -352,23 +348,6 @@ function _plantExtraBullets(plant) {
   ];
 }
 
-// True when any Trefle-derived extra bullet is unknown — drives the bottom
-// "Import extra info from Trefle" CTA visibility. Perenual-only rows are
-// excluded so the CTA still appears for species we could enrich from Trefle.
-function _anyTrefleExtraMissing(plant) {
-  if (!plant) return true;
-  return plant.height_max_cm == null
-      || plant.height_min_cm == null
-      || plant.spread_cm == null
-      || plant.ph_min == null
-      || plant.ph_max == null
-      || plant.days_to_harvest == null
-      || !plant.toxicity
-      || !plant.growth_rate
-      || !plant.sowing
-      || plant.nitrogen_fixation == null;
-}
-
 // Description paragraph — Perenual `description` is occasionally HTML; strip
 // tags and cap at ~600 chars. Always renders the container so the popup
 // structure is stable; falls back to "No description available." when missing.
@@ -401,13 +380,6 @@ function _normalizeAttractsItem(item) {
   return String(item);
 }
 
-function _trefleDistributionList(plant, key) {
-  var dist = _plantRawTrefle(plant).distribution;
-  if (!dist || typeof dist !== 'object') return [];
-  var arr = dist[key];
-  return Array.isArray(arr) ? arr : [];
-}
-
 // Fixed list of labeled chip rows. Each row always renders its label; when
 // the underlying array is empty we render a single muted "—" chip so the
 // user can see what's tracked but unknown for this species.
@@ -428,9 +400,7 @@ function _plantChipRowsHtml(plant) {
     ['Flower color',     pe.flower_color || []],
     ['Leaf color',       pe.leaf_color || []],
     ['Attracts',         attracts],
-    ['Propagation',      pe.propagation || []],
-    ['Native range',     _trefleDistributionList(plant, 'native')],
-    ['Introduced range', _trefleDistributionList(plant, 'introduced')]
+    ['Propagation',      pe.propagation || []]
   ];
 
   var html = '';
@@ -476,25 +446,6 @@ function _renderDetailBullets(bullets) {
   }
   html += '</dl>';
   return html;
-}
-
-// Bottom-anchored "Import extra info from Trefle" CTA. Visible only when at
-// least one Trefle-derived extra is unknown AND the row has a cache id.
-// Returns the markup; the caller wires the click handler on the button id.
-function _plantTrefleImportButtonHtml(plant, cacheId, btnId) {
-  if (!cacheId || !_anyTrefleExtraMissing(plant)) return '';
-  return '<div class="plant-detail-import">'
-       +   '<button type="button" class="btn btn-block btn-outline btn-sm gap-1" id="' + btnId + '">'
-       +     '<i data-lucide="download-cloud" style="width:0.9em;height:0.9em"></i> '
-       +     'Import extra info from Trefle'
-       +   '</button>'
-       + '</div>';
-}
-
-async function trefleEnrich(cacheId) {
-  return apiFetch('/catalog/' + encodeURIComponent(cacheId) + '/enrich/trefle', {
-    method: 'POST',
-  });
 }
 
 // ── Catalog-fill orchestration (shared by shopping.js + import.js) ──────────

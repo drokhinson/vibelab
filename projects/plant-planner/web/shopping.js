@@ -24,16 +24,14 @@ var shoppingState = {
   // Loading-orchestration state for new planters. Each step reports its own
   // status / counts / error so the to-do list can render incrementally.
   fillSteps: null,                 // Array<FillStep> | null when not running.
-  fillFinished: false,             // True once all 5 steps have settled.
+  fillFinished: false,             // True once all steps have settled.
 };
 
 // Step blueprints — order matches the user-facing to-do list. `key` matches
 // what `_runFillStep` updates so the renderer can look up state.
 var FILL_STEP_BLUEPRINTS = [
   { key: 'save',       label: 'Saving planter to your library' },
-  { key: 'perenual',   label: 'Loading filtered plant list from Perenual' },
-  { key: 'trefle',     label: 'Filling supplementary growth data from Trefle (height, pH, days to harvest…)' },
-  { key: 'flora',      label: 'Updating supplemental info from FloraAPI' },
+  { key: 'perenual',   label: 'Loading plants from Perenual (with full species details)' },
   { key: 'compatible', label: 'Gathering plants compatible with your planter' }
 ];
 
@@ -125,14 +123,6 @@ async function _runFillSequence() {
     if (data.fetched != null) lines.push('Fetched ' + data.fetched + ' plants from Perenual.');
     if (data.new_plants)      lines.push(data.new_plants + ' new plant(s) added to the catalog.');
     return lines.join(' ') || 'No matching plants returned.';
-  }, renderOpts);
-  await runFillStep(shoppingState, 'trefle', '/catalog/fill/trefle', body, function(data) {
-    if (!data.fetched && !data.enriched) return 'No plants needed Trefle enrichment.';
-    return 'Enriched ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Trefle data.';
-  }, renderOpts);
-  await runFillStep(shoppingState, 'flora', '/catalog/fill/flora', body, function(data) {
-    if (!data.fetched && !data.enriched) return 'No matching plants in Flora.';
-    return 'Cross-referenced ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Flora.';
   }, renderOpts);
   await runFillStep(shoppingState, 'compatible', '/catalog/fill/compatible', body, function(data) {
     return data.compatible_plants + ' plant(s) compatible with your planter.';
@@ -394,7 +384,6 @@ function _openShoppingDetailPanel(plant) {
   html += _plantChipRowsHtml(plant);
   html += _plantSourceHtml(plant);
 
-  html += _plantTrefleImportButtonHtml(plant, plant.id, 'shopping-detail-trefle');
   html += '<button type="button" class="btn btn-primary btn-block gap-1" id="shopping-detail-toggle">';
   html +=   '<i data-lucide="heart"' + (picked ? ' fill="currentColor"' : '') + '></i> ';
   html +=   (picked ? 'Remove from shortlist' : 'Add to shortlist');
@@ -411,25 +400,6 @@ function _openShoppingDetailPanel(plant) {
     _toggleShortlist(plant.id);
     _openShoppingDetailPanel(plant);  // Refresh button label
   };
-  var trefleBtn = document.getElementById('shopping-detail-trefle');
-  if (trefleBtn) trefleBtn.onclick = function() { _importTrefleForShopping(plant.id, trefleBtn); };
-}
-
-async function _importTrefleForShopping(plantId, btn) {
-  btn.disabled = true;
-  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Importing…';
-  try {
-    var updated = await trefleEnrich(plantId);
-    var current = shoppingState.detailPlant;
-    if (current && current.id === plantId) {
-      shoppingState.detailPlant = Object.assign({}, current, updated);
-      _openShoppingDetailPanel(shoppingState.detailPlant);
-    }
-  } catch (err) {
-    btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="alert-circle" style="width:0.9em;height:0.9em"></i> ' + escapeHtml(err.message || 'Import failed');
-    _initIcons();
-  }
 }
 
 function _closeShoppingDetailPanel() {

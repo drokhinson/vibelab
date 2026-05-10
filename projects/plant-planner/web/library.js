@@ -263,10 +263,6 @@ function _openLibraryDetailPanel(rowId) {
   html += _renderDetailBullets(_plantExtraBullets(plant));
   html += _plantChipRowsHtml(plant);
 
-  // Trefle import CTA is bottom-anchored — appended just above the Status
-  // picker so the import action stays separate from the read-only data.
-  html += _plantTrefleImportButtonHtml(plant, row.plant_cache_id, 'library-detail-trefle');
-
   // Status picker — three-way radio.
   html += '<div class="library-detail-section">';
   html += '<div class="library-detail-label">Status</div>';
@@ -379,9 +375,6 @@ function _openLibraryDetailPanel(rowId) {
     btn.onclick = function() { _assignToPlanter(row.id, row.plant_cache_id, btn.dataset.gardenId); };
   });
 
-  var trefleBtn = document.getElementById('library-detail-trefle');
-  if (trefleBtn) trefleBtn.onclick = function() { _importTrefleForLibrary(rowId, trefleBtn); };
-
   // First open of the panel: kick off the planters fetch so the picker can
   // render. We re-open the panel once it lands (cheap; no flicker because
   // the slide-in is already visible).
@@ -420,24 +413,6 @@ async function _assignToPlanter(rowId, plantCacheId, gardenId) {
   // and the freshly-recomputed picker.
   _renderLibraryShell();
   if (libraryState.detailRowId === rowId) _openLibraryDetailPanel(rowId);
-}
-
-async function _importTrefleForLibrary(rowId, btn) {
-  var row = _findLibraryRow(rowId);
-  if (!row || !row.plant_cache_id) return;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Importing…';
-  try {
-    var updated = await trefleEnrich(row.plant_cache_id);
-    // Splice the enriched fields onto the local row so the panel re-render
-    // shows them without a full /user_plants refetch.
-    row.plant = Object.assign({}, row.plant || {}, updated);
-    _openLibraryDetailPanel(rowId);
-  } catch (err) {
-    btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="alert-circle" style="width:0.9em;height:0.9em"></i> ' + escapeHtml(err.message || 'Import failed');
-    _initIcons();
-  }
 }
 
 function _closeLibraryDetailPanel() {

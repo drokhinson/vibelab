@@ -519,9 +519,6 @@ function _openBrowserDetailPanel(plant) {
   html += _plantChipRowsHtml(plant);
   html += _plantSourceHtml(plant);
 
-  // Bottom band: Trefle import CTA, then the plant-list / favorite actions.
-  html += _plantTrefleImportButtonHtml(plant, plant.id, 'browser-detail-trefle');
-
   html += '<div class="browser-detail-actions">';
   html +=   '<button type="button" class="btn btn-block gap-1' + (inCurrent ? ' btn-primary' : ' btn-outline btn-primary') + '" id="browser-detail-plant">'
        +     '<i data-lucide="leaf"' + (inCurrent ? ' fill="currentColor"' : '') + '></i> '
@@ -543,25 +540,6 @@ function _openBrowserDetailPanel(plant) {
   document.getElementById('browser-detail-close').onclick   = _closeBrowserDetailPanel;
   document.getElementById('browser-detail-plant').onclick   = function() { _toggleBrowserList(plant.id, 'current'); };
   document.getElementById('browser-detail-favorite').onclick = function() { _toggleBrowserList(plant.id, 'wishlist'); };
-
-  var trefleBtn = document.getElementById('browser-detail-trefle');
-  if (trefleBtn) trefleBtn.onclick = function() { _importTrefleForBrowser(plant.id, trefleBtn); };
-}
-
-async function _importTrefleForBrowser(plantId, btn) {
-  btn.disabled = true;
-  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Importing…';
-  try {
-    var updated = await trefleEnrich(plantId);
-    for (var i = 0; i < browserState.plants.length; i++) {
-      if (browserState.plants[i].id === plantId) browserState.plants[i] = updated;
-    }
-    _openBrowserDetailPanel(updated);
-  } catch (err) {
-    btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="alert-circle" style="width:0.9em;height:0.9em"></i> ' + escapeHtml(err.message || 'Import failed');
-    _initIcons();
-  }
 }
 
 function _closeBrowserDetailPanel() {

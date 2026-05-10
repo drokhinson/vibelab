@@ -2,9 +2,9 @@
 //
 // Standalone version of the wizard's catalog-fill orchestration. The user
 // picks the same conditions the wizard collects (light, water, zone, season,
-// edible) without committing to a planter; we then run the four /catalog/fill
-// endpoints (perenual, trefle, flora, compatible) so new species land in the
-// cache and become searchable from the browser.
+// edible) without committing to a planter; we then run the /catalog/fill
+// endpoints (perenual + compatible) so new species land in the cache and
+// become searchable from the browser.
 //
 // Reuses runFillStep / renderFillProgress / renderFilterChipRow from
 // helpers.js. There is no "save planter" step here — orchestration starts at
@@ -24,9 +24,7 @@ var importState = {
 };
 
 var IMPORT_FILL_STEP_BLUEPRINTS = [
-  { key: 'perenual',   label: 'Loading filtered plant list from Perenual' },
-  { key: 'trefle',     label: 'Filling supplementary growth data from Trefle (height, pH, days to harvest…)' },
-  { key: 'flora',      label: 'Updating supplemental info from FloraAPI' },
+  { key: 'perenual',   label: 'Loading plants from Perenual (with full species details)' },
   { key: 'compatible', label: 'Counting plants compatible with these conditions' },
 ];
 
@@ -191,14 +189,6 @@ async function _runImportFillSequence() {
     if (data.fetched != null) lines.push('Fetched ' + data.fetched + ' plants from Perenual.');
     if (data.new_plants)      lines.push(data.new_plants + ' new plant(s) added to the catalog.');
     return lines.join(' ') || 'No matching plants returned.';
-  }, renderOpts);
-  await runFillStep(importState, 'trefle', '/catalog/fill/trefle', body, function(data) {
-    if (!data.fetched && !data.enriched) return 'No plants needed Trefle enrichment.';
-    return 'Enriched ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Trefle data.';
-  }, renderOpts);
-  await runFillStep(importState, 'flora', '/catalog/fill/flora', body, function(data) {
-    if (!data.fetched && !data.enriched) return 'No matching plants in Flora.';
-    return 'Cross-referenced ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Flora.';
   }, renderOpts);
   await runFillStep(importState, 'compatible', '/catalog/fill/compatible', body, function(data) {
     return data.compatible_plants + ' plant(s) match these conditions in the catalog now.';
