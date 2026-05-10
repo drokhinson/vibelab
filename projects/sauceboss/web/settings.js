@@ -134,7 +134,7 @@ function renderAdmin() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="navigate('meal-category')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span><i data-lucide="settings-2"></i></span>Sauce Manager</div>
       <div class="subtitle">${state.editMode ? 'Edit mode' : (isAdmin ? 'Admin' : (isLoggedIn ? 'Signed in' : ''))}</div>
       ${renderHeaderAuthSlot()}

@@ -44,7 +44,7 @@ async function selectItem(id) {
       scrollBody.innerHTML = `
         <div style="padding:2rem;text-align:center;color:#dc2626">
           Failed to load ${meta.sauceTypeLabel}: ${err.message}<br>
-          <button onclick="navigate('meal-builder')" style="margin-top:1rem">‹ Back</button>
+          <button onclick="navigate('meal-category')" style="margin-top:1rem">‹ Back</button>
         </div>`;
     }
   }

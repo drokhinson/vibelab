@@ -24,7 +24,6 @@ let state = {
   // recipe view, recipe builder, admin).
   screen: 'tab-shell',
   loading: null,                // when set, the active screen renders an inline pot loader
-  mealCategory: 'carbs',        // 'carbs' | 'proteins' | 'salads' — active home tab
 
   // ── Initial-load lists (populated once on boot) ────────────────────────────
   carbs: [],

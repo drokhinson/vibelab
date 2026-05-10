@@ -4,16 +4,17 @@
 function getSauceScreenContext() {
   const item = state.selectedItem;
   const meta = flowMetaFor(item);
-  // The new saucebook-driven flow goes category → meal-dish → sauce-selector,
-  // so back from the sauce list returns to the dish picker. Legacy meal-
-  // builder home is the fallback for any unmigrated entry point.
+  // The saucebook-driven flow goes meal-category (tabbed dish grid) →
+  // meal-subtype (only for dishes that have subtypes) → sauce-selector.
+  // Back from the sauce list returns to whichever picker was last shown.
   let backScreen;
   if (state.mealFlow && state.mealFlow.dish) {
-    backScreen = 'meal-dish';
+    const subs = state.mealFlow.dish.subtypes || state.mealFlow.dish.variants || [];
+    backScreen = subs.length > 0 ? 'meal-subtype' : 'meal-category';
   } else if (state.preparations.length > 0) {
     backScreen = 'prep-selector';
   } else {
-    backScreen = 'meal-builder';
+    backScreen = 'meal-category';
   }
   return {
     sauces:      state.saucesForCurrentItem,

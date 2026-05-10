@@ -1,26 +1,28 @@
 'use strict';
 
-// ─── New saucebook-driven meal flow ─────────────────────────────────────────
-// Entry point: chef's-hat FAB on the Saucebook tab. Three steps:
-//   1. category (carb / protein / salad)
-//   2. dish + optional subtype (accordion of state.carbs / state.proteins /
-//      state.saladBases — the get_sauceboss_initial_load RPC now nests
-//      `subtypes` under each dish row)
-//   3. sauce — reuses the existing renderSauceSelector, but the sauce list
-//      is the intersection of state.saucebook and sauces matching the
-//      picked target (category-level + dish-level + subtype-level + parent-
-//      dish-level for subtypes, mirroring get_sauceboss_sauces_for_target).
+// ─── Saucebook-driven meal flow ─────────────────────────────────────────────
+// Entry point: chef's-hat FAB on the Saucebook tab. The home screen is one
+// tabbed view (Carbs / Proteins / Salads) over the SauceBoss logo and pot
+// hero. Picking a dish either drops straight into the sauce selector or, if
+// the dish has subtypes, opens the subtype picker first. The sauce list is
+// the client-side intersection of state.saucebook and sauces attached at
+// category / dish / subtype / parent-dish-of-subtype level (mirrors
+// get_sauceboss_sauces_for_target).
 
 const MEAL_CATEGORY_OPTIONS = [
-  { id: 'carb',    label: 'Carbs',    emoji: '🍚', icon: 'wheat',     listKey: 'carbs'      },
-  { id: 'protein', label: 'Proteins', emoji: '🍗', icon: 'drumstick', listKey: 'proteins'   },
-  { id: 'salad',   label: 'Salads',   emoji: '🥗', icon: 'salad',     listKey: 'saladBases' },
+  { id: 'carb',    label: 'Carbs',    icon: 'wheat',     listKey: 'carbs'      },
+  { id: 'protein', label: 'Proteins', icon: 'drumstick', listKey: 'proteins'   },
+  { id: 'salad',   label: 'Salads',   icon: 'salad',     listKey: 'saladBases' },
 ];
 
 async function startMealBuilder() {
   if (!currentUser) { openAuthModal(); return; }
-  state.mealFlow = { category: null, dish: null, subtype: null };
-  state.expandedParents = {};
+  const prevCat = state.mealFlow && state.mealFlow.category;
+  state.mealFlow = {
+    category: MEAL_CATEGORY_OPTIONS.some(c => c.id === prevCat) ? prevCat : 'carb',
+    dish: null,
+    subtype: null,
+  };
   navigate('meal-category');
   // Lazy-load the dish lists + ref data the moment the meal-builder opens.
   // They're cached after first load, so re-entering the flow is instant.
@@ -33,114 +35,139 @@ async function startMealBuilder() {
 }
 
 function renderMealCategory() {
+  const activeId = MEAL_CATEGORY_OPTIONS.some(c => c.id === state.mealFlow?.category)
+    ? state.mealFlow.category
+    : 'carb';
+  state.mealFlow.category = activeId;
+  const isAdmin = !!(currentUser && currentUser.is_admin);
+
+  const tabsHTML = `
+    <div class="cat-tabs" role="tablist" aria-label="Meal category">
+      ${MEAL_CATEGORY_OPTIONS.map(c => `
+        <button class="cat-tab ${c.id === activeId ? 'cat-tab--active' : ''}"
+                role="tab"
+                data-tab-id="${c.id}"
+                aria-selected="${c.id === activeId}"
+                onclick="mealPickCategory('${c.id}')">
+          <i data-lucide="${c.icon}"></i>
+          <span>${c.label}</span>
+        </button>`).join('')}
+    </div>`;
+
   return `
     <div class="status-bar"></div>
     <div class="app-header">
       <button class="back-btn" onclick="setActiveTab('saucebook')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo">Build a Meal</div>
-      <div class="subtitle">What are you cooking?</div>
+      <div class="logo">SauceBoss</div>
+      <div class="subtitle">What are you cooking with?</div>
+      ${renderHeaderAuthSlot()}
+      ${isAdmin ? `<button class="sauce-mgr-btn" onclick="openSauceManager()" aria-label="Manage dishes, ingredients, and sauces">
+        <i data-lucide="chef-hat"></i><span>Manage</span>
+      </button>` : ''}
+    </div>
+    <div class="scroll-body">
+      <div class="hero-illustration" id="hero-illustration">${potSVG()}</div>
+      ${tabsHTML}
+      <div id="cat-content">${_mealDishGridHTML(activeId)}</div>
+    </div>
+  `;
+}
+
+function _mealDishGridHTML(categoryId) {
+  const opt = MEAL_CATEGORY_OPTIONS.find(o => o.id === categoryId) || MEAL_CATEGORY_OPTIONS[0];
+  const dishes = state[opt.listKey] || [];
+  if (!dishes.length) {
+    return `<div class="empty-state">No ${opt.label.toLowerCase()} yet.</div>`;
+  }
+  return `<div class="carb-grid">${dishes.map((d, i) => {
+    const subs = Array.isArray(d.subtypes) ? d.subtypes : (d.variants || []);
+    return `
+    <button class="carb-card" style="--i:${i}" onclick="mealPickDish('${escapeHtml(d.id)}')">
+      <span class="carb-emoji">${d.emoji || '🍽'}</span>
+      <div class="carb-name">${escapeHtml(d.name)}</div>
+      ${subs.length > 0 ? `<div class="carb-desc">${subs.length} subtype${subs.length === 1 ? '' : 's'}</div>` :
+        (d.description ? `<div class="carb-desc">${escapeHtml(d.description)}</div>` : '')}
+    </button>`;
+  }).join('')}</div>`;
+}
+
+// Tab-only swap so the SauceBoss logo + pot illustration don't blink.
+function mealPickCategory(id) {
+  if (!MEAL_CATEGORY_OPTIONS.some(c => c.id === id)) return;
+  if (state.mealFlow.category === id) return;
+  state.mealFlow.category = id;
+  state.mealFlow.dish = null;
+  state.mealFlow.subtype = null;
+
+  const tabButtons = document.querySelectorAll('.cat-tab');
+  if (!tabButtons.length) { render(); return; }
+  tabButtons.forEach(btn => {
+    const isActive = btn.dataset.tabId === id;
+    btn.classList.toggle('cat-tab--active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  const contentEl = document.getElementById('cat-content');
+  if (contentEl) contentEl.innerHTML = _mealDishGridHTML(id);
+  if (window.lucide) requestAnimationFrame(() => lucide.createIcons());
+}
+
+function mealPickDish(dishId) {
+  const cat = state.mealFlow.category;
+  const opt = MEAL_CATEGORY_OPTIONS.find(o => o.id === cat) || MEAL_CATEGORY_OPTIONS[0];
+  const list = state[opt.listKey] || [];
+  const dish = list.find(d => d.id === dishId);
+  if (!dish) return;
+  state.mealFlow.dish = dish;
+  state.mealFlow.subtype = null;
+  const subs = Array.isArray(dish.subtypes) ? dish.subtypes : (dish.variants || []);
+  if (subs.length > 0) {
+    navigate('meal-subtype');
+    return;
+  }
+  _proceedToSauceSelector(dish, null);
+}
+
+function renderMealSubtype() {
+  const dish = state.mealFlow.dish;
+  if (!dish) return '';
+  const subs = Array.isArray(dish.subtypes) ? dish.subtypes : (dish.variants || []);
+  return `
+    <div class="status-bar"></div>
+    <div class="app-header">
+      <button class="back-btn" onclick="navigate('meal-category')"><i data-lucide="chevron-left"></i> Back</button>
+      <div class="logo"><span>${dish.emoji || '🍽'}</span>${escapeHtml(dish.name)}</div>
+      <div class="subtitle">Pick a subtype</div>
+      ${renderHeaderAuthSlot()}
     </div>
     <div class="scroll-body">
       <div class="carb-grid">
-        ${MEAL_CATEGORY_OPTIONS.map((c, i) => `
-          <button class="carb-card" style="--i:${i}" onclick="mealPickCategory('${c.id}')">
-            <span class="carb-emoji">${c.emoji}</span>
-            <div class="carb-name">${c.label}</div>
-            <div class="carb-desc">Pick a ${c.label.slice(0, -1).toLowerCase()} dish</div>
+        <button class="carb-card" style="--i:0" onclick="mealPickSubtype(null)">
+          <span class="carb-emoji">${dish.emoji || '🍽'}</span>
+          <div class="carb-name">Just ${escapeHtml(dish.name)}</div>
+          <div class="carb-desc">No subtype</div>
+        </button>
+        ${subs.map((s, i) => `
+          <button class="carb-card" style="--i:${i + 1}" onclick="mealPickSubtype('${escapeHtml(s.id)}')">
+            <span class="carb-emoji">${s.emoji || dish.emoji || '·'}</span>
+            <div class="carb-name">${escapeHtml(s.name)}</div>
+            ${s.cookTimeMinutes ? `<div class="carb-desc">${s.cookTimeMinutes} min</div>` : ''}
           </button>`).join('')}
       </div>
     </div>
   `;
 }
 
-function mealPickCategory(id) {
-  state.mealFlow.category = id;
-  state.mealFlow.dish = null;
-  state.mealFlow.subtype = null;
-  navigate('meal-dish');
-}
-
-function renderMealDish() {
-  const cat = state.mealFlow.category;
-  const opt = MEAL_CATEGORY_OPTIONS.find(o => o.id === cat) || MEAL_CATEGORY_OPTIONS[0];
-  const dishes = state[opt.listKey] || [];
-  return `
-    <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-category')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo">${opt.label}</div>
-      <div class="subtitle">Pick a dish (or a subtype) to pair with a sauce.</div>
-    </div>
-    <div class="scroll-body">
-      ${dishes.length === 0
-        ? `<div class="empty-state">No ${opt.label.toLowerCase()} configured.</div>`
-        : dishes.map(_renderMealDishRow).join('')}
-    </div>
-  `;
-}
-
-function _renderMealDishRow(dish) {
-  const subtypes = Array.isArray(dish.subtypes) ? dish.subtypes : (dish.variants || []);
-  const isOpen = !!state.expandedParents[dish.id];
-  const hasSubtypes = subtypes.length > 0;
-  return `
-    <div class="recipe-row" style="display:block;cursor:default">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span class="recipe-row__color" style="background:#FFF3E6;font-size:24px;display:flex;align-items:center;justify-content:center">${dish.emoji || '🍽'}</span>
-        <div class="recipe-row__main">
-          <div class="recipe-row__name">${escapeHtml(dish.name)}</div>
-          <div class="recipe-row__meta">
-            ${dish.description ? `<span class="recipe-row__author">${escapeHtml(dish.description)}</span>` : ''}
-          </div>
-        </div>
-        <button class="recipe-row__action" onclick="mealPickDish('${escapeHtml(dish.id)}')">Pick</button>
-        ${hasSubtypes ? `
-          <button class="recipe-row__action" style="margin-left:6px" onclick="mealToggleDishExpand('${escapeHtml(dish.id)}')">
-            ${isOpen ? '−' : '+'} ${subtypes.length}
-          </button>
-        ` : ''}
-      </div>
-      ${isOpen && hasSubtypes ? `
-        <div style="margin-top:10px;padding-left:12px;border-left:3px solid #F1E0CC">
-          ${subtypes.map(sub => `
-            <div class="recipe-row" onclick="mealPickSubtype('${escapeHtml(dish.id)}', '${escapeHtml(sub.id)}')" style="margin-bottom:6px">
-              <span class="recipe-row__color" style="background:#FFFBF5;font-size:18px;display:flex;align-items:center;justify-content:center">${sub.emoji || '·'}</span>
-              <div class="recipe-row__main">
-                <div class="recipe-row__name">${escapeHtml(sub.name)}</div>
-              </div>
-              <span class="recipe-row__action recipe-row__action--added">Pick</span>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-    </div>
-  `;
-}
-
-function mealToggleDishExpand(dishId) {
-  state.expandedParents[dishId] = !state.expandedParents[dishId];
-  render();
-}
-
-function mealPickDish(dishId) {
-  const cat = state.mealFlow.category;
-  const list = state[(MEAL_CATEGORY_OPTIONS.find(o => o.id === cat) || MEAL_CATEGORY_OPTIONS[0]).listKey] || [];
-  const dish = list.find(d => d.id === dishId);
+function mealPickSubtype(subtypeId) {
+  const dish = state.mealFlow.dish;
   if (!dish) return;
-  state.mealFlow.dish = dish;
-  state.mealFlow.subtype = null;
-  _proceedToSauceSelector(dish, null);
-}
-
-function mealPickSubtype(dishId, subtypeId) {
-  const cat = state.mealFlow.category;
-  const list = state[(MEAL_CATEGORY_OPTIONS.find(o => o.id === cat) || MEAL_CATEGORY_OPTIONS[0]).listKey] || [];
-  const dish = list.find(d => d.id === dishId);
-  if (!dish) return;
+  if (!subtypeId) {
+    state.mealFlow.subtype = null;
+    _proceedToSauceSelector(dish, null);
+    return;
+  }
   const subs = Array.isArray(dish.subtypes) ? dish.subtypes : (dish.variants || []);
   const subtype = subs.find(s => s.id === subtypeId);
   if (!subtype) return;
-  state.mealFlow.dish = dish;
   state.mealFlow.subtype = subtype;
   _proceedToSauceSelector(dish, subtype);
 }
@@ -195,8 +222,6 @@ function _attachmentsMatchTarget(attachments, target) {
 }
 
 
-// ─── Meal Builder home — single-pick across three sections ──────────────────
-
 // Shared pot illustration. Rendered both on the splash (in index.html) and
 // as the hero illustration on the meal-builder home; class names below let
 // CSS animate the steam and wiggle the pot during loading.
@@ -217,93 +242,6 @@ function potSVG() {
       <path class="steam-trail steam-trail--2" d="M90 53 Q94 41 90 31 Q86 21 90 11"     stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
       <path class="steam-trail steam-trail--3" d="M118 56 Q122 44 118 34 Q114 24 118 14" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
     </svg>`;
-}
-
-const MEAL_TABS = [
-  { id: 'carbs',    label: 'Carbs',    icon: 'wheat'     },
-  { id: 'proteins', label: 'Proteins', icon: 'drumstick' },
-  { id: 'salads',   label: 'Salads',   icon: 'salad'     },
-];
-
-function mealTabItems(id) {
-  if (id === 'proteins') return state.proteins;
-  if (id === 'salads')   return state.saladBases;
-  return state.carbs;
-}
-
-function mealCategoryItemCard(item, i) {
-  return `
-    <button class="carb-card" style="--i:${i}" onclick="selectItem('${item.id}')">
-      <span class="carb-emoji">${item.emoji}</span>
-      <div class="carb-name">${item.name}</div>
-      <div class="carb-desc">${item.description || ''}</div>
-    </button>`;
-}
-
-function mealCategoryContent(id) {
-  const items = mealTabItems(id);
-  if (!items || !items.length) {
-    const label = (MEAL_TABS.find(t => t.id === id) || MEAL_TABS[0]).label.toLowerCase();
-    return `<div class="empty-state">No ${label} yet.</div>`;
-  }
-  return `<div class="carb-grid">${items.map(mealCategoryItemCard).join('')}</div>`;
-}
-
-function renderMealBuilder() {
-  const heroSVG = `<div class="hero-illustration" id="hero-illustration">${potSVG()}</div>`;
-  const activeId = MEAL_TABS.some(t => t.id === state.mealCategory) ? state.mealCategory : 'carbs';
-
-  const tabsHTML = `
-    <div class="cat-tabs" role="tablist" aria-label="Meal category">
-      ${MEAL_TABS.map(t => `
-        <button class="cat-tab ${t.id === activeId ? 'cat-tab--active' : ''}"
-                role="tab"
-                data-tab-id="${t.id}"
-                aria-selected="${t.id === activeId}"
-                onclick="setMealCategory('${t.id}')">
-          <i data-lucide="${t.icon}"></i>
-          <span>${t.label}</span>
-        </button>`).join('')}
-    </div>`;
-
-  return `
-    <div class="status-bar"></div>
-    <div class="app-header">
-      <div class="logo">SauceBoss</div>
-      <div class="subtitle">What are you cooking with?</div>
-      ${renderHeaderAuthSlot()}
-      <button class="sauce-mgr-btn" onclick="openSauceManager()" aria-label="Sauce manager">
-        <i data-lucide="chef-hat"></i><span>Sauces</span>
-      </button>
-    </div>
-    <div class="scroll-body">
-      ${heroSVG}
-      ${tabsHTML}
-      <div id="cat-content">${mealCategoryContent(activeId)}</div>
-    </div>
-  `;
-}
-
-// Tab switch updates only the tabs' active class and the grid contents —
-// the orange header and the pot illustration aren't touched, so the logo
-// doesn't blink.
-function setMealCategory(id) {
-  if (state.mealCategory === id) return;
-  if (!MEAL_TABS.some(t => t.id === id)) return;
-  state.mealCategory = id;
-
-  const tabButtons = document.querySelectorAll('.cat-tab');
-  if (!tabButtons.length) { render(); return; }
-  tabButtons.forEach(btn => {
-    const isActive = btn.dataset.tabId === id;
-    btn.classList.toggle('cat-tab--active', isActive);
-    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-  });
-
-  const contentEl = document.getElementById('cat-content');
-  if (contentEl) contentEl.innerHTML = mealCategoryContent(id);
-
-  if (window.lucide) requestAnimationFrame(() => lucide.createIcons());
 }
 
 // ─── Unified Meal Recipe screen ───────────────────────────────────────────────
@@ -433,7 +371,7 @@ function renderMealRecipe() {
   return `
     <div class="status-bar"></div>
     <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-builder')"><i data-lucide="chevron-left"></i> Back</button>
+      <button class="back-btn" onclick="navigate('meal-category')"><i data-lucide="chevron-left"></i> Back</button>
       <div class="logo"><span>${item.emoji}</span>${title}</div>
       <div class="subtitle">${sauce.cuisine || 'Full recipe'}</div>
       ${renderHeaderAuthSlot()}

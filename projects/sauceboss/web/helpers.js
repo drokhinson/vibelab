@@ -299,9 +299,8 @@ function render() {
 
   switch (state.screen) {
     case 'tab-shell':              app.innerHTML = renderActiveTab(); break;
-    case 'meal-builder':           app.innerHTML = renderMealBuilder(); break;
-    case 'meal-category':          app.innerHTML = renderMealCategory ? renderMealCategory() : renderMealBuilder(); break;
-    case 'meal-dish':              app.innerHTML = renderMealDish ? renderMealDish() : renderMealBuilder(); break;
+    case 'meal-category':          app.innerHTML = renderMealCategory(); break;
+    case 'meal-subtype':           app.innerHTML = renderMealSubtype(); break;
     case 'meal-recipe':            app.innerHTML = renderMealRecipe(); break;
     case 'prep-selector':          app.innerHTML = renderPrepSelector(); break;
     case 'sauce-selector':         app.innerHTML = renderSauceSelector(); break;
