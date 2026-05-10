@@ -2070,6 +2070,19 @@ dialog .dialog-header {
   color: oklch(var(--bc) / 0.4);
   font-style: italic;
 }
+/* Compact 2-column layout: each grid row holds two label/value pairs.
+   Collapses to single column on the narrowest phones. */
+.shopping-detail-bullets-2col {
+  grid-template-columns: max-content 1fr max-content 1fr;
+  column-gap: 1rem;
+  row-gap: 0.35rem;
+  margin: 0.5rem 0 0.8rem;
+}
+@media (max-width: 380px) {
+  .shopping-detail-bullets-2col {
+    grid-template-columns: max-content 1fr;
+  }
+}
 .shopping-detail-sci, .shopping-detail-family { font-size: 0.8rem; color: oklch(var(--bc) / 0.6); }
 .shopping-detail-sowing { font-size: 0.85rem; color: oklch(var(--bc) / 0.75); }
 .shopping-detail-section-label {
@@ -2114,6 +2127,51 @@ dialog .dialog-header {
   font-style: italic;
   text-align: center;
 }
+
+/* Properties chip row — yes/no/unknown booleans rendered as pills above
+   the bullet sections. */
+.plant-detail-properties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.8rem;
+}
+.plant-detail-prop-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.plant-detail-prop-chip-on {
+  background: oklch(var(--su) / 0.15);
+  color: oklch(var(--su));
+  border-color: oklch(var(--su) / 0.3);
+}
+.plant-detail-prop-chip-off {
+  background: oklch(var(--b2));
+  color: oklch(var(--bc) / 0.55);
+  text-decoration: line-through;
+  text-decoration-color: oklch(var(--bc) / 0.35);
+}
+.plant-detail-prop-chip-unknown {
+  background: transparent;
+  color: oklch(var(--bc) / 0.4);
+  border-color: oklch(var(--bc) / 0.18);
+  font-style: italic;
+}
+
+/* Refresh button — bottom-anchored recovery action when the API call
+   was missed at import (or the row is otherwise sparse). */
+.plant-detail-refresh {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid oklch(var(--bc) / 0.12);
+}
+.plant-detail-refresh .btn { width: 100%; }
 
 /* ── Builder shortlist sidebar ─────────────────────────────────────────── */
 .shortlist-sidebar {
