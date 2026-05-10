@@ -141,6 +141,9 @@ function _renderBrowserView() {
        +     '<i data-lucide="sliders-horizontal" style="width:1em;height:1em"></i> '
        +     'Filters' + (_activeFilterCount() ? ' · ' + _activeFilterCount() : '')
        +   '</button>';
+  html +=   '<button type="button" class="btn btn-sm btn-ghost gap-1" id="browser-import-btn" title="Pull more species from external APIs">'
+       +     '<i data-lucide="download-cloud" style="width:1em;height:1em"></i> Import'
+       +   '</button>';
   html += '</div>';
 
   if (browserState.filtersOpen) {
@@ -275,6 +278,9 @@ function _bindBrowserEvents() {
     browserState.filtersOpen = !browserState.filtersOpen;
     _renderBrowserView();  // re-render to expand/collapse
   };
+
+  var importBtn = document.getElementById('browser-import-btn');
+  if (importBtn) importBtn.onclick = function() { showView('import'); };
 
   if (browserState.filtersOpen) {
     var panel = document.querySelector('.browser-filter-panel');

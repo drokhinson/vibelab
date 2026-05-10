@@ -89,6 +89,18 @@ async function _finishFillAndShowGrid() {
 
 
 // ── Loading orchestration ───────────────────────────────────────────────────
+//
+// Step runner + progress renderer live in helpers.js so import.js can reuse
+// them; this function configures and drives the wizard-side variant.
+
+function _shoppingFillRenderOpts() {
+  return {
+    title: 'Setting up your plant catalog',
+    subtitle: "Pulling plant data tailored to this planter's conditions.",
+    continueLabel: 'Continue to plant selection',
+    onContinue: function() { _finishFillAndShowGrid(); },
+  };
+}
 
 async function _runFillSequence() {
   // Initialize each step with status="pending" so the renderer has something
@@ -97,107 +109,37 @@ async function _runFillSequence() {
     return { key: s.key, label: s.label, status: 'pending', detail: '' };
   });
   shoppingState.fillFinished = false;
-  _renderFillProgress();
+  var renderOpts = _shoppingFillRenderOpts();
+  renderFillProgress(shoppingState, renderOpts);
 
   // Step 1 (save) is implicit — the planter was POST'd before we got here.
-  _setFillStep('save', { status: 'ok', detail: 'Saved to your planters.' });
+  setFillStep(shoppingState, 'save', { status: 'ok', detail: 'Saved to your planters.' }, renderOpts);
 
   var body = _shoppingQueryParams();
   // /catalog/fill/* ignores the `query` param the search uses; pass everything
   // else through unchanged.
   delete body.query;
 
-  await _runFillStep('perenual', '/catalog/fill/perenual', body, function(data) {
+  await runFillStep(shoppingState, 'perenual', '/catalog/fill/perenual', body, function(data) {
     var lines = [];
     if (data.fetched != null) lines.push('Fetched ' + data.fetched + ' plants from Perenual.');
     if (data.new_plants)      lines.push(data.new_plants + ' new plant(s) added to the catalog.');
     return lines.join(' ') || 'No matching plants returned.';
-  });
-  await _runFillStep('trefle', '/catalog/fill/trefle', body, function(data) {
+  }, renderOpts);
+  await runFillStep(shoppingState, 'trefle', '/catalog/fill/trefle', body, function(data) {
     if (!data.fetched && !data.enriched) return 'No plants needed Trefle enrichment.';
     return 'Enriched ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Trefle data.';
-  });
-  await _runFillStep('flora', '/catalog/fill/flora', body, function(data) {
+  }, renderOpts);
+  await runFillStep(shoppingState, 'flora', '/catalog/fill/flora', body, function(data) {
     if (!data.fetched && !data.enriched) return 'No matching plants in Flora.';
     return 'Cross-referenced ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Flora.';
-  });
-  await _runFillStep('compatible', '/catalog/fill/compatible', body, function(data) {
+  }, renderOpts);
+  await runFillStep(shoppingState, 'compatible', '/catalog/fill/compatible', body, function(data) {
     return data.compatible_plants + ' plant(s) compatible with your planter.';
-  });
+  }, renderOpts);
 
   shoppingState.fillFinished = true;
-  _renderFillProgress();
-}
-
-async function _runFillStep(key, path, body, formatDetail) {
-  _setFillStep(key, { status: 'running' });
-  try {
-    var data = await apiFetch(path, { method: 'POST', body: body });
-    if (data && data.status === 'error') {
-      _setFillStep(key, { status: 'error', detail: data.error || 'Unknown error.' });
-      return;
-    }
-    _setFillStep(key, { status: 'ok', detail: formatDetail ? formatDetail(data || {}) : '' });
-  } catch (err) {
-    _setFillStep(key, { status: 'error', detail: (err && err.message) || String(err) });
-  }
-}
-
-function _setFillStep(key, patch) {
-  if (!shoppingState.fillSteps) return;
-  for (var i = 0; i < shoppingState.fillSteps.length; i++) {
-    if (shoppingState.fillSteps[i].key === key) {
-      Object.assign(shoppingState.fillSteps[i], patch);
-      break;
-    }
-  }
-  _renderFillProgress();
-}
-
-function _fillStepIcon(status) {
-  if (status === 'ok')      return '<i data-lucide="check-circle-2" style="color:oklch(var(--su));"></i>';
-  if (status === 'error')   return '<i data-lucide="alert-circle" style="color:oklch(var(--er));"></i>';
-  if (status === 'running') return '<span class="loading loading-spinner loading-xs text-primary"></span>';
-  return '<i data-lucide="circle" style="color:oklch(var(--bc) / 0.35);"></i>';
-}
-
-function _renderFillProgress() {
-  var steps = shoppingState.fillSteps;
-  if (!steps) return;
-  var html = '<div class="shopping-fill-overlay">';
-  html += '<div class="shopping-fill-card">';
-  html += '<h3>Setting up your plant catalog</h3>';
-  html += '<p class="shopping-fill-subtitle">Pulling plant data tailored to this planter\'s conditions.</p>';
-  html += '<ul class="shopping-fill-list">';
-  for (var i = 0; i < steps.length; i++) {
-    var s = steps[i];
-    html += '<li class="shopping-fill-item shopping-fill-item-' + s.status + '">';
-    html +=   '<span class="shopping-fill-icon">' + _fillStepIcon(s.status) + '</span>';
-    html +=   '<span class="shopping-fill-body">';
-    html +=     '<span class="shopping-fill-label">' + escapeHtml(s.label) + '</span>';
-    if (s.detail) {
-      var cls = (s.status === 'error') ? 'shopping-fill-detail shopping-fill-detail-error' : 'shopping-fill-detail';
-      html += '<span class="' + cls + '">' + escapeHtml(s.detail) + '</span>';
-    }
-    html +=   '</span>';
-    html += '</li>';
-  }
-  html += '</ul>';
-  if (shoppingState.fillFinished) {
-    var anyError = steps.some(function(s) { return s.status === 'error'; });
-    html += '<div class="shopping-fill-footer">';
-    if (anyError) html += '<p class="shopping-fill-warn">Some steps had errors — you can still continue.</p>';
-    html += '<button type="button" class="btn btn-primary gap-1" id="shopping-fill-continue">Continue to plant selection <i data-lucide="arrow-right" style="width:1em;height:1em"></i></button>';
-    html += '</div>';
-  }
-  html += '</div></div>';
-  app.innerHTML = html;
-  _initIcons();
-
-  if (shoppingState.fillFinished) {
-    var btn = document.getElementById('shopping-fill-continue');
-    if (btn) btn.onclick = function() { _finishFillAndShowGrid(); };
-  }
+  renderFillProgress(shoppingState, renderOpts);
 }
 
 function _shoppingQueryParams() {
