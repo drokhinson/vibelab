@@ -217,3 +217,30 @@ ALTER TABLE public.sauceboss_user_pantry_missing ENABLE ROW LEVEL SECURITY;
 -- sauceboss_cuisine_info), attachments[], and ingredient rows with
 -- ingredientId (was foodId before migration 013). compatibleItems[] is no
 -- longer emitted — frontends now read attachments directly.
+--
+-- ── release/sauceboss-1.0 compat layer (migration 014) ─────────────────────
+-- The release-branch web/native (commit 13d7461 on origin/release/sauceboss-1.0)
+-- predates 013 and reads legacy field names. Migration 014 makes every read
+-- RPC dual-emit:
+--   * each ingredient row carries BOTH `foodId` and `ingredientId` (same value);
+--   * each sauce envelope emits a `compatibleItems[]` array synthesized from
+--     sauceboss_sauce_to_dish where target_kind='dish';
+--   * `cuisineEmoji` continues to come from the sauceboss_cuisine_info JOIN.
+-- 014 also re-adds `get_sauceboss_ingredient_categories` /
+-- `get_sauceboss_substitutions` / `upsert_sauceboss_ingredient_category` —
+-- all reading from `sauceboss_ingredient.{category, substitutions[]}`.
+--
+-- HTTP-side compat (shared-backend/routes/sauceboss/):
+--   * /api/v1/sauceboss/foods, /foods-with-usage, /admin/foods/*  — aliases
+--     that wrap the post-013 /ingredients endpoints with the legacy
+--     `{foods: [...]}` envelope.
+--   * /api/v1/sauceboss/favorites GET/PUT/DELETE — backed by
+--     sauceboss_user_saucebook (favorites table is NOT resurrected).
+--   * POST /api/v1/sauceboss/ingredient-categories — writes through to
+--     `sauceboss_ingredient.category` via the upsert RPC.
+--   * PUT /pantry accepts BOTH `missingFoodIds` and `missingIngredientIds`;
+--     PantryEntry rows expose both `foodId` and `ingredientId`.
+--
+-- Drop the compat layer in a follow-up migration once release/sauceboss-1.0
+-- is retired (delete the dual-emit fields, the lookup-table RPCs, and the
+-- shim HTTP routes — schema itself is unchanged).
