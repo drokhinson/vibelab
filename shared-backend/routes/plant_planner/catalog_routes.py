@@ -485,6 +485,74 @@ async def catalog_detail(cache_id: str) -> CatalogPlant:
     return _row_to_catalog_plant(row)
 
 
+@router.post(
+    "/catalog/{cache_id}/refresh",
+    response_model=CatalogPlant,
+    status_code=200,
+    summary="Re-pull a single cache row from Perenual species-details and upsert",
+)
+async def refresh_from_perenual(cache_id: str) -> CatalogPlant:
+    """Backfill a cache row by re-running the Perenual species-details lookup.
+
+    Powers the popup's "Refresh from Perenual" button — handy when the
+    species-details fan-out at import time was rate-limited or otherwise
+    failed and a row landed with sparse data.
+    """
+    sb = get_supabase()
+    row_resp = (
+        sb.table("plantplanner_plant_cache")
+        .select("*")
+        .eq("id", cache_id)
+        .execute()
+    )
+    if not row_resp.data:
+        raise HTTPException(status_code=404, detail="Plant not found")
+    row = row_resp.data[0]
+
+    # Resolve a Perenual species id. Prefer the stored source_id when this
+    # row originally came from Perenual; otherwise look up by name.
+    perenual_id: Optional[int] = None
+    source = (row.get("source") or "").lower()
+    raw_source_id = (row.get("source_id") or "").strip()
+    if source == "perenual" and raw_source_id:
+        try:
+            perenual_id = int(raw_source_id)
+        except ValueError:
+            perenual_id = None
+    if perenual_id is None:
+        sci = (row.get("scientific_name") or "").strip()
+        if not sci:
+            raise HTTPException(status_code=404, detail="Cache row has no name to look up")
+        try:
+            p_record = await perenual_lookup_by_scientific(sci)
+        except Exception as exc:
+            logger.exception("Perenual lookup failed for %r", sci)
+            raise HTTPException(status_code=502, detail=f"Perenual request failed: {exc}")
+        if not p_record:
+            raise HTTPException(status_code=404, detail="No Perenual match found")
+        try:
+            perenual_id = int(p_record.get("id"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=502, detail="Perenual returned a record with no id")
+
+    try:
+        detail = await perenual_get(perenual_id)
+    except Exception as exc:
+        logger.exception("Perenual species-details failed for id=%s", perenual_id)
+        raise HTTPException(status_code=502, detail=f"Perenual request failed: {exc}")
+    if not detail:
+        raise HTTPException(status_code=502, detail="Perenual returned no detail payload")
+
+    normalized = normalize_perenual(detail)
+    # Pin the existing primary key so the upsert updates this row in place.
+    normalized["id"] = row["id"]
+    written = await _upsert_normalized([normalized])
+    if not written:
+        raise HTTPException(status_code=500, detail="Failed to persist refreshed row")
+
+    return _row_to_catalog_plant(written[0])
+
+
 # ── Cache-fill orchestration ────────────────────────────────────────────────
 #
 # Drive each external API as a discrete, observable step so the frontend's
