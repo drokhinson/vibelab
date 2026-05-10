@@ -140,15 +140,20 @@ async function loadUsage() {
 
 // --- Section 2: User Management ---
 
+// name → { kind, supports_reset_code, supports_delete }
+const appCapabilities = new Map();
+
 async function loadAppsWithUsers() {
   try {
     const data = await apiFetch("/api/v1/admin/apps-with-users");
     const select = document.getElementById("user-app-select");
     select.innerHTML = '<option value="">Select app...</option>';
+    appCapabilities.clear();
     for (const app of data.apps || []) {
+      appCapabilities.set(app.name, app);
       const opt = document.createElement("option");
-      opt.value = app;
-      opt.textContent = app;
+      opt.value = app.name;
+      opt.textContent = app.name;
       select.appendChild(opt);
     }
   } catch {
@@ -162,9 +167,14 @@ document.getElementById("user-app-select").addEventListener("change", (e) => {
   else document.getElementById("users-content").innerHTML = "<p class='muted'>Select an app to view users.</p>";
 });
 
+function userLabel(u) {
+  return u.username || u.display_name || u.email || `user ${String(u.id).slice(0, 8)}`;
+}
+
 async function loadUsers(appName) {
   const el = document.getElementById("users-content");
   el.innerHTML = '<div class="loading">Loading users...</div>';
+  const cap = appCapabilities.get(appName) || { supports_reset_code: false, supports_delete: false };
   try {
     const data = await apiFetch(`/api/v1/admin/users?app=${encodeURIComponent(appName)}`);
     const users = data.users || [];
@@ -173,18 +183,23 @@ async function loadUsers(appName) {
       return;
     }
     let html = `<div class="table-responsive"><table>
-      <thead><tr><th>Username</th><th>Display Name</th><th>Email</th><th>Created</th><th>Actions</th></tr></thead><tbody>`;
+      <thead><tr><th>User</th><th>Email</th><th>Created</th><th>Last sign-in</th><th>Actions</th></tr></thead><tbody>`;
     for (const u of users) {
       const created = u.created_at ? new Date(u.created_at).toLocaleDateString() : "—";
+      const lastSignIn = u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString() : "—";
+      const label = userLabel(u);
+      const resetBtn = cap.supports_reset_code
+        ? `<button class="outline secondary reset-btn" data-uid="${esc(u.id)}" data-app="${esc(appName)}">Reset Code</button>`
+        : "";
+      const deleteBtn = cap.supports_delete
+        ? `<button class="outline delete-btn" data-uid="${esc(u.id)}" data-app="${esc(appName)}" data-label="${esc(label)}">Delete</button>`
+        : "";
       html += `<tr>
-        <td>${esc(u.username)}</td>
-        <td>${esc(u.display_name || "—")}</td>
+        <td>${esc(label)}</td>
         <td>${esc(u.email || "—")}</td>
         <td>${created}</td>
-        <td>
-          <button class="outline secondary reset-btn" data-uid="${esc(u.id)}" data-app="${esc(appName)}">Reset Code</button>
-          <button class="outline delete-btn" data-uid="${esc(u.id)}" data-app="${esc(appName)}" data-username="${esc(u.username)}">Delete</button>
-        </td>
+        <td>${esc(lastSignIn)}</td>
+        <td>${resetBtn}${deleteBtn || (resetBtn ? "" : "<span class='muted'>—</span>")}</td>
       </tr>`;
     }
     html += "</tbody></table></div>";
@@ -197,7 +212,7 @@ async function loadUsers(appName) {
 
     // Attach delete button handlers
     el.querySelectorAll(".delete-btn").forEach((btn) => {
-      btn.addEventListener("click", () => confirmDeleteUser(btn.dataset.uid, btn.dataset.app, btn.dataset.username));
+      btn.addEventListener("click", () => confirmDeleteUser(btn.dataset.uid, btn.dataset.app, btn.dataset.label));
     });
   } catch (err) {
     el.innerHTML = `<p class="error-text">Failed to load users: ${esc(err.message)}</p>`;
@@ -229,9 +244,9 @@ document.getElementById("reset-dialog-close").addEventListener("click", () => {
 
 let pendingDelete = null;
 
-function confirmDeleteUser(userId, appName, username) {
+function confirmDeleteUser(userId, appName, label) {
   pendingDelete = { userId, appName };
-  document.getElementById("delete-username").textContent = username;
+  document.getElementById("delete-username").textContent = label;
   document.getElementById("delete-app").textContent = appName;
   document.getElementById("delete-error").style.display = "none";
   document.getElementById("delete-dialog").showModal();

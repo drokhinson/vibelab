@@ -90,70 +90,108 @@ async def _delete_wealthmate_user(sb, user_id: str):
 
 # Registry of apps that have user tables.
 # Update this dict when a new app adopts shared auth.
-async def _delete_daywordplay_user(sb, user_id: str):
-    """Delete a daywordplay user and cascade-remove all their data."""
-    user = sb.table("daywordplay_users").select("id, username").eq("id", user_id).execute()
-    if not user.data:
+async def _delete_supabase_auth_user(sb, user_id: str, profile_table: str):
+    """Delete a user backed by Supabase Auth.
+
+    Removing the auth.users row cascades to <app>_profiles via the profile's
+    ON DELETE CASCADE FK, which in turn cascades to every app data table
+    whose user FK targets the profile. So one auth-side delete cleans
+    everything up — no per-table teardown needed.
+    """
+    profile = (
+        sb.table(profile_table)
+        .select("id, display_name")
+        .eq("id", user_id)
+        .execute()
+    )
+    if not profile.data:
         raise HTTPException(status_code=404, detail="User not found")
-    username = user.data[0]["username"]
+    display_name = profile.data[0].get("display_name")
 
-    # Delete votes cast by user
-    sb.table("daywordplay_votes").delete().eq("voter_user_id", user_id).execute()
+    sb.auth.admin.delete_user(user_id)
+    return {"deleted": True, "user_id": user_id, "display_name": display_name}
 
-    # Delete votes received on their sentences
-    sentences = sb.table("daywordplay_sentences").select("id").eq("user_id", user_id).execute()
-    sentence_ids = [s["id"] for s in (sentences.data or [])]
-    if sentence_ids:
-        sb.table("daywordplay_votes").delete().in_("sentence_id", sentence_ids).execute()
 
-    # Delete sentences, bookmarks, group memberships
-    sb.table("daywordplay_sentences").delete().eq("user_id", user_id).execute()
-    sb.table("daywordplay_bookmarks").delete().eq("user_id", user_id).execute()
-    sb.table("daywordplay_group_members").delete().eq("user_id", user_id).execute()
-
-    # Delete user
-    sb.table("daywordplay_users").delete().eq("id", user_id).execute()
-    return {"deleted": True, "user_id": user_id, "username": username}
+async def _delete_daywordplay_user(sb, user_id: str):
+    return await _delete_supabase_auth_user(sb, user_id, "daywordplay_profiles")
 
 
 async def _delete_plantplanner_user(sb, user_id: str):
-    """Delete a plant-planner user and cascade-remove all their data."""
-    user = sb.table("plantplanner_users").select("id, username").eq("id", user_id).execute()
-    if not user.data:
-        raise HTTPException(status_code=404, detail="User not found")
-    username = user.data[0]["username"]
-
-    # Garden plants and gardens cascade via FK ON DELETE CASCADE,
-    # so deleting the user row is sufficient.
-    sb.table("plantplanner_users").delete().eq("id", user_id).execute()
-    return {"deleted": True, "user_id": user_id, "username": username}
+    return await _delete_supabase_auth_user(sb, user_id, "plantplanner_profiles")
 
 
+async def _delete_boardgamebuddy_user(sb, user_id: str):
+    return await _delete_supabase_auth_user(sb, user_id, "boardgamebuddy_profiles")
+
+
+# Per-app config. `kind` selects the listing + reset-code path:
+#   - "legacy_users": app keeps a custom <prefix>_users table (bcrypt + recovery_hash)
+#   - "supabase_auth": identity lives in auth.users; profile fields in <prefix>_profiles
 APPS_WITH_USERS = {
     "wealthmate": {
+        "kind": "legacy_users",
         "table": "wealthmate_users",
         "identity_columns": "id, username, display_name, email, created_at",
         "delete_handler": _delete_wealthmate_user,
     },
     "spotme": {
+        "kind": "legacy_users",
         "table": "spotme_users",
         "identity_columns": "id, username, display_name, email, created_at",
     },
     "daywordplay": {
-        "table": "daywordplay_users",
-        "identity_columns": "id, username, display_name, email, created_at",
+        "kind": "supabase_auth",
+        "profile_table": "daywordplay_profiles",
         "delete_handler": _delete_daywordplay_user,
     },
     "plant-planner": {
-        "table": "plantplanner_users",
-        "identity_columns": "id, username, display_name, created_at",
+        "kind": "supabase_auth",
+        "profile_table": "plantplanner_profiles",
         "delete_handler": _delete_plantplanner_user,
     },
     "boardgame-buddy": {
-        "table": "boardgamebuddy_profiles",
-        "identity_columns": "id, display_name, avatar_url, created_at",
+        "kind": "supabase_auth",
+        "profile_table": "boardgamebuddy_profiles",
+        "delete_handler": _delete_boardgamebuddy_user,
     },
 }
+
+
+def _list_supabase_auth_users(sb, profile_table: str):
+    """Return profile rows enriched with email + last_sign_in_at from auth.users.
+
+    N+1 against auth.admin.get_user_by_id is fine for admin volume (handful of
+    users per app). Switch to auth.admin.list_users() if any app exceeds ~200.
+    """
+    rows = (
+        sb.table(profile_table)
+        .select("id, display_name, avatar_url, created_at")
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+    out = []
+    for row in rows:
+        email = None
+        last_sign_in_at = None
+        try:
+            au = sb.auth.admin.get_user_by_id(row["id"])
+            user_obj = getattr(au, "user", None) if au else None
+            if user_obj:
+                email = getattr(user_obj, "email", None)
+                last_sign_in_at = getattr(user_obj, "last_sign_in_at", None)
+        except Exception:
+            pass
+        out.append({
+            "id": row["id"],
+            "username": row.get("display_name"),  # frontend uses `username` as primary label
+            "display_name": row.get("display_name"),
+            "email": email,
+            "created_at": row.get("created_at"),
+            "last_sign_in_at": last_sign_in_at,
+        })
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -179,13 +217,18 @@ async def list_users(
 
     cfg = APPS_WITH_USERS[app]
     sb = get_supabase()
-    result = (
-        sb.table(cfg["table"])
-        .select(cfg["identity_columns"])
-        .order("created_at", desc=True)
-        .execute()
-    )
-    return {"app": app, "users": result.data or []}
+
+    if cfg["kind"] == "supabase_auth":
+        users = _list_supabase_auth_users(sb, cfg["profile_table"])
+    else:
+        result = (
+            sb.table(cfg["table"])
+            .select(cfg["identity_columns"])
+            .order("created_at", desc=True)
+            .execute()
+        )
+        users = result.data or []
+    return {"app": app, "users": users}
 
 
 @router.post("/users/{user_id}/reset-code")
@@ -201,8 +244,16 @@ async def generate_reset_code(
         raise HTTPException(status_code=400, detail=f"App '{app}' has no user management.")
 
     cfg = APPS_WITH_USERS[app]
-    sb = get_supabase()
+    if cfg["kind"] == "supabase_auth":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"'{app}' uses Supabase Auth — password recovery is handled by the "
+                "auth provider (OAuth) or Supabase magic link, not by an admin reset code."
+            ),
+        )
 
+    sb = get_supabase()
     # Verify user exists
     check = sb.table(cfg["table"]).select("id").eq("id", user_id).execute()
     if not check.data:
@@ -248,9 +299,18 @@ async def storage_overview(authorization: Optional[str] = Header(None)):
 
 @router.get("/apps-with-users")
 async def apps_with_users(authorization: Optional[str] = Header(None)):
-    """Return list of app names that have user management."""
+    """Return apps that have user management, with capability flags for the UI."""
     require_admin(authorization)
-    return {"apps": list(APPS_WITH_USERS.keys())}
+    apps = []
+    for name, cfg in APPS_WITH_USERS.items():
+        kind = cfg["kind"]
+        apps.append({
+            "name": name,
+            "kind": kind,
+            "supports_reset_code": kind == "legacy_users",
+            "supports_delete": "delete_handler" in cfg,
+        })
+    return {"apps": apps}
 
 
 @router.delete("/users/{user_id}")
