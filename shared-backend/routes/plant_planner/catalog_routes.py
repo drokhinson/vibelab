@@ -76,6 +76,12 @@ class CatalogPlant(BaseModel):
     image_thumbnail_url: Optional[str] = None
     image_medium_url: Optional[str] = None
     image_regular_url: Optional[str] = None
+    # Raw upstream payloads — surfaced so the frontend can render fields we
+    # haven't yet promoted to first-class columns (description, care_level,
+    # soil[], growing_months[], attracts[], poisonous_to_pets, distribution,
+    # etc.). Treat as opaque key/value dicts; shape varies by API version.
+    raw_perenual_json: Optional[Dict[str, Any]] = None
+    raw_trefle_json: Optional[Dict[str, Any]] = None
 
 
 class CatalogSearchResponse(BaseModel):
@@ -117,6 +123,8 @@ def _row_to_catalog_plant(row: Dict[str, Any]) -> CatalogPlant:
         image_thumbnail_url=row.get("image_thumbnail_url"),
         image_medium_url=row.get("image_medium_url"),
         image_regular_url=row.get("image_regular_url"),
+        raw_perenual_json=row.get("raw_perenual_json"),
+        raw_trefle_json=row.get("raw_trefle_json"),
     )
 
 
