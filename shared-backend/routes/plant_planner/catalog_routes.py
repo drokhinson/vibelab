@@ -625,7 +625,6 @@ async def fill_perenual(body: FillBody) -> FillStepResponse:
         records = await perenual_filter(
             watering=filters["watering"],
             sunlight=filters["sunlight"],
-            hardiness=filters["zone"],
             indoor=filters["indoor"],
             edible=filters["edible"],
             query=filters["query"],

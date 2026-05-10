@@ -157,7 +157,6 @@ async def perenual_filter(
     *,
     watering: Optional[str] = None,
     sunlight: Optional[str] = None,
-    hardiness: Optional[int] = None,
     indoor: Optional[bool] = None,
     edible: Optional[bool] = None,
     poisonous: Optional[bool] = None,
@@ -167,10 +166,15 @@ async def perenual_filter(
 
     Mirrors the wizard filters onto Perenual's v2/species-list query params.
     The endpoint accepts watering/sunlight/indoor/edible/poisonous as direct
-    filters and `hardiness` as a "min-max" zone-range string. `cycle` is
-    deliberately not surfaced — it's informational on the cache row, not a
-    filter. Pagination is also omitted; revisit if responses outgrow the
-    SEARCH_RESULT_CAP slice.
+    filters. Hardiness is intentionally NOT sent: Perenual's `hardiness=N-N`
+    param matches plants whose range *exactly* matches that span — combined
+    with sparse data it returns near-empty result sets. The local cache
+    query handles zone matching against the response's hardiness_min/max
+    fields instead. `indoor=0` is also skipped: Perenual's indoor flag is
+    sparsely populated, so filtering to non-indoor excludes most rows; we
+    only send `indoor=1` when the planter is climate-controlled. Cycle is
+    informational on the cache row, not a filter. Pagination is omitted;
+    revisit if responses outgrow the SEARCH_RESULT_CAP slice.
     """
     key = _perenual_key()
     if not key:
@@ -184,10 +188,8 @@ async def perenual_filter(
         mapped = _PERENUAL_SUNLIGHT_FILTER.get(sunlight)
         if mapped:
             params["sunlight"] = mapped
-    if hardiness is not None:
-        params["hardiness"] = f"{hardiness}-{hardiness}"
-    if indoor is not None:
-        params["indoor"] = 1 if indoor else 0
+    if indoor is True:
+        params["indoor"] = 1
     if edible is not None:
         params["edible"] = 1 if edible else 0
     if poisonous is not None:
