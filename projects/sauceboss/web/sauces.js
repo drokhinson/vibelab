@@ -7,14 +7,10 @@ function getSauceScreenContext() {
   // The saucebook-driven flow goes meal-category (tabbed dish grid) →
   // meal-subtype (only for dishes that have subtypes) → sauce-selector.
   // Back from the sauce list returns to whichever picker was last shown.
-  let backScreen;
+  let backScreen = 'meal-category';
   if (state.mealFlow && state.mealFlow.dish) {
     const subs = state.mealFlow.dish.subtypes || state.mealFlow.dish.variants || [];
     backScreen = subs.length > 0 ? 'meal-subtype' : 'meal-category';
-  } else if (state.preparations.length > 0) {
-    backScreen = 'prep-selector';
-  } else {
-    backScreen = 'meal-category';
   }
   return {
     sauces:      state.saucesForCurrentItem,
@@ -85,17 +81,12 @@ function renderSauceSelector() {
         return sub ? `${m} (try ${sub})` : m;
       }).join(', ');
       const compatText = (sauce.compatibleItems || []).join(' · ');
-      const canEdit = currentUser && (currentUser.is_admin || sauce.createdBy === currentUser.user_id);
       const variantBadge = totalVersions >= 2
         ? `<span class="variant-badge" title="${totalVersions} versions in this family"><i data-lucide="git-branch"></i> ${totalVersions}</span>`
         : '';
-      const editBtn = canEdit
-        ? `<button class="sauce-edit-btn"
-                   onclick="event.stopPropagation(); openBuilderEdit('${sauce.id}')"
-                   aria-label="Edit sauce">
-             <i data-lucide="pencil"></i>
-           </button>`
-        : '';
+      // No edit affordance here — the sauce-selector is part of the cooking
+      // workflow, not authoring. Editing lives in the saucebook (swipe) and
+      // the Sauce Manager.
       return `<div class="sauce-item ${available ? '' : 'unavailable'}" onclick="selectSauce('${family.root.id}','${sauce.id}')">
         <span class="sauce-dot" style="background:${sauce.color}"></span>
         <div class="sauce-info">
@@ -103,7 +94,6 @@ function renderSauceSelector() {
           <div class="sauce-item-tags">${compatText}${missing.length ? ' · missing: '+missingText : ''}</div>
         </div>
         ${!available ? `<span class="sauce-missing-badge">-${missing.length}</span>` : ''}
-        ${editBtn}
         <span class="sauce-arrow"><i data-lucide="chevron-right"></i></span>
       </div>`;
     }).join('') : '';

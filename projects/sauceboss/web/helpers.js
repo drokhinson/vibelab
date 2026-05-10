@@ -55,9 +55,8 @@ const api = SBShared.api.makeApi({
 
 // Existing call sites use these names; the bodies just delegate to `api` now.
 // Keeping the shims means no churn across the 60-odd callers in init.js,
-// settings.js, items.js, builder.js, sauces.js, and auth.js.
+// settings.js, builder.js, sauces.js, and auth.js.
 const fetchInitialLoad         = () => api.initialLoad();
-const fetchItemLoad            = (id) => api.itemLoad(id);
 const fetchIngredientCategories = () => api.ingredientCategories();
 const fetchSubstitutions       = () => api.substitutions();
 const fetchUnits               = () => api.units();
@@ -302,7 +301,6 @@ function render() {
     case 'meal-category':          app.innerHTML = renderMealCategory(); break;
     case 'meal-subtype':           app.innerHTML = renderMealSubtype(); break;
     case 'meal-recipe':            app.innerHTML = renderMealRecipe(); break;
-    case 'prep-selector':          app.innerHTML = renderPrepSelector(); break;
     case 'sauce-selector':         app.innerHTML = renderSauceSelector(); break;
     case 'recipe':                 app.innerHTML = renderRecipe(); break;
     case 'builder':                app.innerHTML = renderBuilder(); break;

@@ -379,19 +379,6 @@ function renderMealRecipe() {
     <div class="scroll-body">
       ${timingBanner}
       ${variantSwitcherHTML}
-      ${(currentUser && state.editMode) ? `
-        <div class="recipe-export-row">
-          <a class="recipe-export-btn"
-             href="${API}/api/v1/sauceboss/sauces/${encodeURIComponent(sauce.id)}/export.json"
-             download>
-            <i data-lucide="file-json-2"></i> Export JSON
-          </a>
-          <a class="recipe-export-btn"
-             href="${API}/api/v1/sauceboss/sauces/${encodeURIComponent(sauce.id)}/export.md"
-             download>
-            <i data-lucide="file-text"></i> Export Markdown
-          </a>
-        </div>` : ''}
       ${servingsHTML}
       ${isMarinade ? sauceSection + itemCard : itemCard + sauceSection}
     </div>
