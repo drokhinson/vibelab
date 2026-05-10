@@ -314,3 +314,94 @@ table {
   margin: 0;
   min-width: 160px;
 }
+
+/* Refresh button sits at the baseline of the filter selects, not at the
+   top where the uppercase labels live. */
+#api-logs-refresh-btn {
+  align-self: flex-end;
+  margin: 0;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+}
+
+/* Tab bar */
+.tab-bar {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--pico-card-border-color);
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+
+.tab-btn {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.6rem 1rem;
+  color: var(--pico-muted-color);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab-btn:hover {
+  color: var(--pico-color);
+}
+
+.tab-btn.active {
+  color: var(--pico-primary);
+  border-bottom-color: var(--pico-primary);
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Full-bleed dashboard layout (login keeps its narrow centered layout). */
+body.dashboard-fullbleed {
+  max-width: none;
+  padding: 0;
+}
+
+body.dashboard-fullbleed > header,
+body.dashboard-fullbleed > main {
+  max-width: none;
+  padding: 0;
+}
+
+body.dashboard-fullbleed > header {
+  padding: var(--app-padding) var(--app-padding) 0;
+}
+
+body.dashboard-fullbleed .tab-bar {
+  padding-left: var(--app-padding);
+  padding-right: var(--app-padding);
+}
+
+/* The active tab's article spans the full viewport width — no rounded corners,
+   no outer margin — so dense tables (storage, API logs) actually have room. */
+body.dashboard-fullbleed .tab-panel.active > article {
+  margin: 0;
+  border-radius: 0;
+}
+
+/* Maintenance zone in the API tab */
+.maintenance-divider {
+  margin: 2rem 0 1rem;
+  border: 0;
+  border-top: 1px dashed var(--pico-card-border-color);
+}
+
+.api-logs-maintenance h4 {
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.5rem;
+}
+
+/* Mobile: tabs scroll horizontally; tighten spacing */
+@media (max-width: 480px) {
+  .tab-btn { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
+}
