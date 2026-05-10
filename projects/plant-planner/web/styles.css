@@ -2068,6 +2068,14 @@ dialog .dialog-header {
 .shopping-detail-bullets dt { color: oklch(var(--bc) / 0.55); font-weight: 500; }
 .shopping-detail-sci, .shopping-detail-family { font-size: 0.8rem; color: oklch(var(--bc) / 0.6); }
 .shopping-detail-sowing { font-size: 0.85rem; color: oklch(var(--bc) / 0.75); }
+.shopping-detail-section-label {
+  margin-top: 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: oklch(var(--bc) / 0.55);
+}
 
 /* ── Builder shortlist sidebar ─────────────────────────────────────────── */
 .shortlist-sidebar {

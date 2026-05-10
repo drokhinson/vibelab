@@ -430,16 +430,9 @@ function _openBrowserDetailPanel(plant) {
   var img = _shoppingImageFor(plant, 'regular');
   var sci = plant.scientific_name ? '<div class="shopping-detail-sci"><i>' + escapeHtml(plant.scientific_name) + '</i></div>' : '';
   var family = plant.family ? '<div class="shopping-detail-family">' + escapeHtml(plant.family) + '</div>' : '';
-  var bullets = [];
-  if (plant.sunlight)    bullets.push(['Sunlight', plant.sunlight.replace(/_/g, ' ')]);
-  if (plant.watering)    bullets.push(['Water', plant.watering]);
-  if (plant.cycle)       bullets.push(['Cycle', plant.cycle]);
-  if (plant.hardiness_min != null && plant.hardiness_max != null) bullets.push(['Hardiness', 'Zone ' + plant.hardiness_min + '–' + plant.hardiness_max]);
-  if (plant.height_min_cm != null || plant.height_max_cm != null) bullets.push(['Height', (plant.height_min_cm || '?') + '–' + (plant.height_max_cm || '?') + ' cm']);
-  if (plant.days_to_harvest) bullets.push(['Days to harvest', String(plant.days_to_harvest)]);
-  if (plant.edible)      bullets.push(['Edible', 'yes']);
-  if (plant.toxicity)    bullets.push(['Toxicity', plant.toxicity]);
-  if (plant.ph_min != null && plant.ph_max != null) bullets.push(['Soil pH', plant.ph_min + '–' + plant.ph_max]);
+  var coreBullets   = _coreInfoBullets(plant);
+  var extraBullets  = _trefleExtraBullets(plant);
+  var extrasMissing = _trefleExtrasMissing(plant);
 
   var entry = browserState.inLibrary.get(plant.id) || null;
   var inCurrent  = !!(entry && entry.status === 'current');
@@ -452,12 +445,18 @@ function _openBrowserDetailPanel(plant) {
   html += '<div class="shopping-detail-body">';
   html += '<h3>' + escapeHtml(plant.common_name || plant.scientific_name || 'Plant') + '</h3>';
   html += sci + family;
-  html += '<dl class="shopping-detail-bullets">';
-  for (var i = 0; i < bullets.length; i++) {
-    html += '<dt>' + escapeHtml(bullets[i][0]) + '</dt><dd>' + escapeHtml(bullets[i][1]) + '</dd>';
+  html += _renderDetailBullets(coreBullets);
+
+  if (extraBullets.length) {
+    html += '<div class="shopping-detail-section-label">Extra info</div>';
+    html += _renderDetailBullets(extraBullets);
   }
-  html += '</dl>';
-  if (plant.sowing) html += '<p class="shopping-detail-sowing">' + escapeHtml(plant.sowing) + '</p>';
+  if (extrasMissing) {
+    html += '<button type="button" class="btn btn-block btn-outline btn-sm gap-1 mt-2" id="browser-detail-trefle">'
+         +    '<i data-lucide="download-cloud" style="width:0.9em;height:0.9em"></i> '
+         +    'Import extra info from Trefle'
+         +  '</button>';
+  }
 
   html += '<div class="browser-detail-actions">';
   html +=   '<button type="button" class="btn btn-block gap-1' + (inCurrent ? ' btn-primary' : ' btn-outline btn-primary') + '" id="browser-detail-plant">'
@@ -480,6 +479,25 @@ function _openBrowserDetailPanel(plant) {
   document.getElementById('browser-detail-close').onclick   = _closeBrowserDetailPanel;
   document.getElementById('browser-detail-plant').onclick   = function() { _toggleBrowserList(plant.id, 'current'); };
   document.getElementById('browser-detail-favorite').onclick = function() { _toggleBrowserList(plant.id, 'wishlist'); };
+
+  var trefleBtn = document.getElementById('browser-detail-trefle');
+  if (trefleBtn) trefleBtn.onclick = function() { _importTrefleForBrowser(plant.id, trefleBtn); };
+}
+
+async function _importTrefleForBrowser(plantId, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Importing…';
+  try {
+    var updated = await trefleEnrich(plantId);
+    for (var i = 0; i < browserState.plants.length; i++) {
+      if (browserState.plants[i].id === plantId) browserState.plants[i] = updated;
+    }
+    _openBrowserDetailPanel(updated);
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="alert-circle" style="width:0.9em;height:0.9em"></i> ' + escapeHtml(err.message || 'Import failed');
+    _initIcons();
+  }
 }
 
 function _closeBrowserDetailPanel() {

@@ -30,6 +30,7 @@ from .api_clients import (
     perenual_filter,
     perenual_lookup_by_scientific,
     trefle_filter,
+    trefle_get,
     trefle_search,
 )
 from .garden_units import garden_is_climate_controlled, garden_uses_inches
@@ -285,6 +286,50 @@ def _derive_planter_size(
     return "large"
 
 
+async def _trefle_lookup_for_row(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Find the best Trefle search hit for a cache row.
+
+    Tries scientific_name first; falls back to common_name. Prefers an exact
+    scientific-name match in the result set, otherwise returns the top hit.
+    Returns the search-summary record only — call trefle_get(id) afterward
+    for the deep growth/specifications nested fields.
+    """
+    sci = (row.get("scientific_name") or "").strip()
+    common = (row.get("common_name") or "").strip()
+    target_sci = sci.lower() if sci else None
+    for q in (sci, common):
+        if not q:
+            continue
+        try:
+            hits = await trefle_search(q)
+        except Exception as exc:
+            logger.info("Trefle lookup search failed for %r: %s", q, exc)
+            continue
+        if not hits:
+            continue
+        if target_sci:
+            for h in hits:
+                if (h.get("scientific_name") or "").strip().lower() == target_sci:
+                    return h
+        return hits[0]
+    return None
+
+
+async def _trefle_record_with_detail(search_hit: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize a Trefle hit, hydrating growth/specifications via trefle_get
+    when the search-summary record doesn't already include them. Without the
+    detail call, normalize_trefle returns near-empty extras (height/pH/etc.
+    live in the nested `growth` and `specifications` blocks)."""
+    detail_rec: Optional[Dict[str, Any]] = None
+    rec_id = search_hit.get("id")
+    if rec_id is not None:
+        try:
+            detail_rec = await trefle_get(int(rec_id))
+        except Exception as exc:
+            logger.info("Trefle detail fetch failed for id=%s: %s", rec_id, exc)
+    return normalize_trefle(search_hit, detail=detail_rec)
+
+
 async def _trigger_lazy_fill(
     *,
     query: Optional[str],
@@ -454,6 +499,55 @@ async def catalog_detail(cache_id: str) -> CatalogPlant:
     return _row_to_catalog_plant(row)
 
 
+@router.post(
+    "/catalog/{cache_id}/enrich/trefle",
+    response_model=CatalogPlant,
+    status_code=200,
+    summary="Look up a single cached plant on Trefle by name and merge new fields",
+)
+async def enrich_trefle(cache_id: str) -> CatalogPlant:
+    """Search Trefle by scientific (then common) name, hydrate via trefle_get, merge.
+
+    Powers the plant detail panel's "Import from Trefle" button: pulls the
+    Trefle-strong fields (height, pH, days_to_harvest, toxicity, growth_rate,
+    sowing) for plants that arrived via Perenual/Flora and are missing them.
+    """
+    sb = get_supabase()
+    row_resp = (
+        sb.table("plantplanner_plant_cache")
+        .select("*")
+        .eq("id", cache_id)
+        .execute()
+    )
+    if not row_resp.data:
+        raise HTTPException(status_code=404, detail="Plant not found")
+    row = row_resp.data[0]
+    if not (row.get("scientific_name") or row.get("common_name")):
+        raise HTTPException(status_code=400, detail="Cache row has no name to look up")
+
+    try:
+        search_hit = await _trefle_lookup_for_row(row)
+    except Exception as exc:
+        logger.exception("Trefle enrich failed")
+        raise HTTPException(status_code=502, detail=f"Trefle request failed: {exc}")
+    if search_hit is None:
+        raise HTTPException(status_code=404, detail="No Trefle match found")
+
+    normalized = await _trefle_record_with_detail(search_hit)
+    merged = merge_records(row, normalized)
+    written = await _upsert_normalized([merged])
+    if not written:
+        raise HTTPException(status_code=500, detail="Failed to persist Trefle merge")
+
+    new_row = written[0]
+    try:
+        await _mirror_images_for_rows(written)
+    except Exception as exc:
+        logger.info("Trefle enrich image mirror failed: %s", exc)
+
+    return _row_to_catalog_plant(new_row)
+
+
 # ── Cache-fill orchestration ────────────────────────────────────────────────
 #
 # Drive each external API as a discrete, observable step so the frontend's
@@ -578,19 +672,12 @@ async def fill_trefle(body: FillBody) -> FillStepResponse:
     fetched = 0
     try:
         for row in targets:
-            sci = row.get("scientific_name")
-            if not sci:
-                continue
-            hits = await trefle_search(sci)
-            target_sci = sci.strip().lower()
-            t_record = next(
-                (c for c in hits if (c.get("scientific_name") or "").strip().lower() == target_sci),
-                hits[0] if hits else None,
-            )
-            if t_record is None:
+            search_hit = await _trefle_lookup_for_row(row)
+            if search_hit is None:
                 continue
             fetched += 1
-            merged = merge_records(row, normalize_trefle(t_record))
+            normalized = await _trefle_record_with_detail(search_hit)
+            merged = merge_records(row, normalized)
             enriched_rows.append(merged)
     except Exception as exc:
         logger.exception("Trefle fill failed")

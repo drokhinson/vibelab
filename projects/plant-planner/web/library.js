@@ -49,7 +49,7 @@ function _renderLibraryShell() {
   var html = '<div class="library-view">';
 
   html += '<div class="flex justify-between items-center mb-3">';
-  html += '<h3 class="text-xl font-display font-semibold">My Planters</h3>';
+  html += '<h3 class="text-xl font-display font-semibold">My Plants</h3>';
   html += '<span class="library-total">' + libraryState.rows.length + ' tracked</span>';
   html += '</div>';
 
@@ -245,13 +245,9 @@ function _openLibraryDetailPanel(rowId) {
   var sci = plant.scientific_name ? '<div class="shopping-detail-sci"><i>' + escapeHtml(plant.scientific_name) + '</i></div>' : '';
   var family = plant.family ? '<div class="shopping-detail-family">' + escapeHtml(plant.family) + '</div>' : '';
 
-  var bullets = [];
-  if (plant.sunlight)    bullets.push(['Sunlight', plant.sunlight.replace(/_/g, ' ')]);
-  if (plant.watering)    bullets.push(['Water', plant.watering]);
-  if (plant.cycle)       bullets.push(['Cycle', plant.cycle]);
-  if (plant.hardiness_min != null && plant.hardiness_max != null) bullets.push(['Hardiness', 'Zone ' + plant.hardiness_min + '–' + plant.hardiness_max]);
-  if (plant.height_min_cm != null || plant.height_max_cm != null) bullets.push(['Height', (plant.height_min_cm || '?') + '–' + (plant.height_max_cm || '?') + ' cm']);
-  if (plant.edible)      bullets.push(['Edible', 'yes']);
+  var coreBullets  = _coreInfoBullets(plant);
+  var extraBullets = _trefleExtraBullets(plant);
+  var extrasMissing = _trefleExtrasMissing(plant);
 
   var showOwnedFields = row.status !== 'wishlist';
 
@@ -263,13 +259,21 @@ function _openLibraryDetailPanel(rowId) {
   html += '<h3>' + escapeHtml(name) + '</h3>';
   html += sci + family;
 
-  // Plant facts
-  if (bullets.length) {
-    html += '<dl class="shopping-detail-bullets">';
-    for (var i = 0; i < bullets.length; i++) {
-      html += '<dt>' + escapeHtml(bullets[i][0]) + '</dt><dd>' + escapeHtml(bullets[i][1]) + '</dd>';
-    }
-    html += '</dl>';
+  // Core plant facts (sunlight, watering, cycle, hardiness, edible).
+  html += _renderDetailBullets(coreBullets);
+
+  // Trefle-sourced extras (height, pH, days_to_harvest, etc.). When all of
+  // these are empty we offer an "Import from Trefle" CTA that fires
+  // POST /catalog/{cache_id}/enrich/trefle and re-renders this panel.
+  if (extraBullets.length) {
+    html += '<div class="shopping-detail-section-label">Extra info</div>';
+    html += _renderDetailBullets(extraBullets);
+  }
+  if (extrasMissing && row.plant_cache_id) {
+    html += '<button type="button" class="btn btn-block btn-outline btn-sm gap-1 mt-2" id="library-detail-trefle">'
+         +    '<i data-lucide="download-cloud" style="width:0.9em;height:0.9em"></i> '
+         +    'Import extra info from Trefle'
+         +  '</button>';
   }
 
   // Status picker — three-way radio.
@@ -382,6 +386,9 @@ function _openLibraryDetailPanel(rowId) {
     btn.onclick = function() { _assignToPlanter(row.id, row.plant_cache_id, btn.dataset.gardenId); };
   });
 
+  var trefleBtn = document.getElementById('library-detail-trefle');
+  if (trefleBtn) trefleBtn.onclick = function() { _importTrefleForLibrary(rowId, trefleBtn); };
+
   // First open of the panel: kick off the planters fetch so the picker can
   // render. We re-open the panel once it lands (cheap; no flicker because
   // the slide-in is already visible).
@@ -420,6 +427,24 @@ async function _assignToPlanter(rowId, plantCacheId, gardenId) {
   // and the freshly-recomputed picker.
   _renderLibraryShell();
   if (libraryState.detailRowId === rowId) _openLibraryDetailPanel(rowId);
+}
+
+async function _importTrefleForLibrary(rowId, btn) {
+  var row = _findLibraryRow(rowId);
+  if (!row || !row.plant_cache_id) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Importing…';
+  try {
+    var updated = await trefleEnrich(row.plant_cache_id);
+    // Splice the enriched fields onto the local row so the panel re-render
+    // shows them without a full /user_plants refetch.
+    row.plant = Object.assign({}, row.plant || {}, updated);
+    _openLibraryDetailPanel(rowId);
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="alert-circle" style="width:0.9em;height:0.9em"></i> ' + escapeHtml(err.message || 'Import failed');
+    _initIcons();
+  }
 }
 
 function _closeLibraryDetailPanel() {

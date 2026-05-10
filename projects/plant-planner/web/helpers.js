@@ -76,7 +76,7 @@ function updateNav() {
           '</button>' +
           '<button class="' + (libraryActive ? 'active' : '') + '" id="nav-library">' +
             '<i data-lucide="sprout" style="width:1.25em;height:1.25em"></i>' +
-            '<span class="btm-nav-label">My Planters</span>' +
+            '<span class="btm-nav-label">My Plants</span>' +
           '</button>' +
           '<button class="' + (gardensActive ? 'active' : '') + '" id="nav-gardens">' +
             '<i data-lucide="layout-grid" style="width:1.25em;height:1.25em"></i>' +
@@ -238,6 +238,76 @@ function bindFilterChipRow(rootEl, groupAttr, onPick) {
       var wasActive = btn.classList.contains('active');
       onPick(wasActive ? null : v);
     };
+  });
+}
+
+// ── Plant detail bullets (shared by browser.js + library.js + shopping.js) ──
+//
+// The detail panel renders two groups of [label, value] pairs:
+//   1. Core conditions: sunlight, watering, cycle, hardiness, edible.
+//   2. Extras (Trefle-sourced): height, days_to_harvest, pH, toxicity,
+//      growth_rate, sowing. These ride along with the cache row but only
+//      get populated after a successful Trefle detail-call enrichment, so
+//      they're often missing on Perenual-only or Flora-only rows.
+// `_trefleExtrasMissing(plant)` flags whether to surface the "Import from
+// Trefle" CTA. `trefleEnrich(cacheId)` runs the per-plant lookup against
+// the backend; the panel re-renders with the returned cache row.
+
+function _coreInfoBullets(plant) {
+  if (!plant) return [];
+  var bullets = [];
+  if (plant.sunlight) bullets.push(['Sunlight', plant.sunlight.replace(/_/g, ' ')]);
+  if (plant.watering) bullets.push(['Watering', plant.watering]);
+  if (plant.cycle)    bullets.push(['Cycle', plant.cycle]);
+  if (plant.hardiness_min != null && plant.hardiness_max != null) {
+    bullets.push(['Hardiness', 'Zone ' + plant.hardiness_min + '–' + plant.hardiness_max]);
+  }
+  if (plant.edible === true)  bullets.push(['Edible', 'yes']);
+  if (plant.edible === false) bullets.push(['Edible', 'no']);
+  return bullets;
+}
+
+function _trefleExtraBullets(plant) {
+  if (!plant) return [];
+  var bullets = [];
+  if (plant.height_min_cm != null || plant.height_max_cm != null) {
+    bullets.push(['Height', (plant.height_min_cm || '?') + '–' + (plant.height_max_cm || '?') + ' cm']);
+  }
+  if (plant.days_to_harvest != null) bullets.push(['Days to harvest', String(plant.days_to_harvest)]);
+  if (plant.ph_min != null && plant.ph_max != null) bullets.push(['Soil pH', plant.ph_min + '–' + plant.ph_max]);
+  if (plant.toxicity)    bullets.push(['Toxicity', plant.toxicity]);
+  if (plant.growth_rate) bullets.push(['Growth rate', plant.growth_rate]);
+  if (plant.sowing)      bullets.push(['Sowing', plant.sowing]);
+  return bullets;
+}
+
+function _trefleExtrasMissing(plant) {
+  if (!plant) return true;
+  return plant.height_max_cm == null
+      && plant.height_min_cm == null
+      && plant.ph_min == null
+      && plant.ph_max == null
+      && plant.days_to_harvest == null
+      && !plant.toxicity
+      && !plant.growth_rate
+      && !plant.sowing;
+}
+
+// Render a <dl class="shopping-detail-bullets"> from a list of [label, value]
+// pairs. Returns '' for an empty list so callers can append unconditionally.
+function _renderDetailBullets(bullets) {
+  if (!bullets || !bullets.length) return '';
+  var html = '<dl class="shopping-detail-bullets">';
+  for (var i = 0; i < bullets.length; i++) {
+    html += '<dt>' + escapeHtml(bullets[i][0]) + '</dt><dd>' + escapeHtml(bullets[i][1]) + '</dd>';
+  }
+  html += '</dl>';
+  return html;
+}
+
+async function trefleEnrich(cacheId) {
+  return apiFetch('/catalog/' + encodeURIComponent(cacheId) + '/enrich/trefle', {
+    method: 'POST',
   });
 }
 
