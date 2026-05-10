@@ -309,3 +309,58 @@ async def admin_merge_ingredients(
         "repointedRows": repointed,
         "status": "merged",
     }
+
+
+# ── release/sauceboss-1.0 compat shims ─────────────────────────────────────
+# The release-branch web/native still call /admin/foods/*. These thin aliases
+# delegate to the new /admin/ingredients/* handlers so the live release keeps
+# working. Remove once release/sauceboss-1.0 retires.
+
+@router.post(
+    "/admin/foods",
+    status_code=201,
+    summary="[compat] Create an ingredient (release/sauceboss-1.0 alias of /admin/ingredients)",
+)
+async def admin_create_food_compat(
+    body: CreateIngredientRequest,
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Forward to admin_create_ingredient — same body, same auth posture."""
+    return await admin_create_ingredient(body=body, _=user)
+
+
+@router.patch(
+    "/admin/foods/{food_id}",
+    summary="[compat] Rename an ingredient (release/sauceboss-1.0 alias)",
+)
+async def admin_update_food_compat(
+    food_id: str,
+    body: UpdateIngredientRequest,
+    admin: CurrentUser = Depends(get_current_admin),
+):
+    """Forward to admin_update_ingredient."""
+    return await admin_update_ingredient(ingredient_id=food_id, body=body, _=admin)
+
+
+@router.delete(
+    "/admin/foods/{food_id}",
+    summary="[compat] Delete an unused ingredient (release/sauceboss-1.0 alias)",
+)
+async def admin_delete_food_compat(
+    food_id: str,
+    admin: CurrentUser = Depends(get_current_admin),
+):
+    """Forward to admin_delete_ingredient."""
+    return await admin_delete_ingredient(ingredient_id=food_id, _=admin)
+
+
+@router.post(
+    "/admin/foods/merge",
+    summary="[compat] Merge ingredients (release/sauceboss-1.0 alias)",
+)
+async def admin_merge_foods_compat(
+    body: MergeIngredientsRequest,
+    admin: CurrentUser = Depends(get_current_admin),
+):
+    """Forward to admin_merge_ingredients."""
+    return await admin_merge_ingredients(body=body, _=admin)

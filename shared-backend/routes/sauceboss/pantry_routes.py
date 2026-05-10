@@ -29,8 +29,24 @@ async def get_pantry(
         raise HTTPException(500, f"Database error: {str(e)}")
     payload = result.data or {"ingredients": [], "saucebookSauceIds": []}
     return PantryResponse(
-        ingredients=[PantryEntry(**row) for row in payload.get("ingredients", [])],
+        ingredients=[_pantry_entry(row) for row in payload.get("ingredients", [])],
         saucebookSauceIds=payload.get("saucebookSauceIds", []),
+    )
+
+
+def _pantry_entry(row: dict) -> PantryEntry:
+    """Construct a PantryEntry that carries both ingredientId and foodId.
+
+    Migration 014 makes the underlying RPC emit both fields, but newer RPC
+    revisions or third-party callers might omit one — fall back to the
+    other so the release-compat alias is always populated.
+    """
+    ingredient_id = row.get("ingredientId") or row.get("foodId") or ""
+    return PantryEntry(
+        ingredientId=ingredient_id,
+        foodId=ingredient_id,
+        name=row.get("name", ""),
+        missing=bool(row.get("missing", False)),
     )
 
 
@@ -49,12 +65,12 @@ async def set_pantry_missing(
     try:
         result = sb.rpc(
             "set_sauceboss_pantry_missing",
-            {"p_user_id": user.user_id, "p_ingredient_ids": body.missingIngredientIds},
+            {"p_user_id": user.user_id, "p_ingredient_ids": body.resolve_ids()},
         ).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
     payload = result.data or {"ingredients": [], "saucebookSauceIds": []}
     return PantryResponse(
-        ingredients=[PantryEntry(**row) for row in payload.get("ingredients", [])],
+        ingredients=[_pantry_entry(row) for row in payload.get("ingredients", [])],
         saucebookSauceIds=payload.get("saucebookSauceIds", []),
     )

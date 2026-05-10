@@ -28,6 +28,20 @@ class AdminKeyBody(BaseModel):
     admin_key: str = Field(min_length=1)
 
 
+class FavoriteEntry(BaseModel):
+    """One entry in the legacy favorites response (release/sauceboss-1.0 compat).
+
+    Backed by sauceboss_user_saucebook post-013; ``createdAt`` mirrors
+    ``added_at`` so the release-branch UI keeps sorting correctly.
+    """
+    sauceId: str
+    createdAt: Optional[str] = None
+
+
+class FavoriteListResponse(BaseModel):
+    favorites: List[FavoriteEntry]
+
+
 class MessageResponse(BaseModel):
     message: str
 
@@ -354,7 +368,10 @@ class AuthorSummary(BaseModel):
 
 
 class PantryEntry(BaseModel):
+    """One pantry entry. ``foodId`` is a compat alias of ``ingredientId``
+    for release/sauceboss-1.0 — both fields carry the same value."""
     ingredientId: str
+    foodId: Optional[str] = None  # release-compat alias; populated from ingredientId
     name: str
     missing: bool
 
@@ -365,8 +382,21 @@ class PantryResponse(BaseModel):
 
 
 class SetPantryMissingRequest(BaseModel):
-    """Replace the user's pantry-missing set in one round-trip."""
-    missingIngredientIds: List[str] = Field(default_factory=list)
+    """Replace the user's pantry-missing set in one round-trip.
+
+    Accepts either ``missingIngredientIds`` (post-013) or ``missingFoodIds``
+    (release/sauceboss-1.0 compat). The route resolves to a single list before
+    calling the RPC.
+    """
+    missingIngredientIds: Optional[List[str]] = None
+    missingFoodIds: Optional[List[str]] = None  # release-compat alias
+
+    def resolve_ids(self) -> List[str]:
+        if self.missingIngredientIds is not None:
+            return self.missingIngredientIds
+        if self.missingFoodIds is not None:
+            return self.missingFoodIds
+        return []
 
 
 def _shape_items_grouped(rows: list[dict]) -> dict:

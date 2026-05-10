@@ -5,6 +5,7 @@ import re
 import secrets
 
 from fastapi import Depends, HTTPException, Path, Query
+from pydantic import BaseModel, Field
 
 from db import get_supabase
 from shared_models import HealthResponse
@@ -530,3 +531,67 @@ async def list_ingredients_with_usage() -> IngredientsWithUsageResponse:
     """Returns every ingredient with usageCount (step rows) and sauceCount (distinct sauces)."""
     rows = _rpc_or_500("list_sauceboss_ingredients_with_usage", {}, "ingredients-with-usage")
     return IngredientsWithUsageResponse(ingredients=rows or [])
+
+
+# ── release/sauceboss-1.0 compat shims ─────────────────────────────────────
+# The release-branch web/native still call /foods, /foods-with-usage, and
+# POST /ingredient-categories. These thin aliases reshape responses to the
+# legacy `{foods: [...]}` envelope and forward category writes into the
+# consolidated sauceboss_ingredient.category column. Remove once the release
+# is retired.
+
+class _LegacyFoodsListResponse(BaseModel):
+    """Legacy `{foods: [...]}` envelope expected by release/sauceboss-1.0."""
+    foods: list[dict]
+
+
+@router.get(
+    "/foods",
+    response_model=_LegacyFoodsListResponse,
+    summary="[compat] Ingredient typeahead (release/sauceboss-1.0 alias of /ingredients)",
+)
+async def list_foods_compat(
+    q: str = Query("", description="Substring to match (case-insensitive)."),
+    limit: int = Query(20, ge=1, le=100, description="Max ingredients to return."),
+) -> _LegacyFoodsListResponse:
+    """Alias of /ingredients — strips the post-013 fields the release doesn't read."""
+    sb = get_supabase()
+    query = sb.table("sauceboss_ingredient").select("id,name,plural")
+    needle = q.strip().lower()
+    if needle:
+        query = query.ilike("name_normalized", f"%{needle}%")
+    result = query.order("name").limit(limit).execute()
+    return _LegacyFoodsListResponse(foods=result.data or [])
+
+
+@router.get(
+    "/foods-with-usage",
+    response_model=_LegacyFoodsListResponse,
+    summary="[compat] Ingredients with usage (release/sauceboss-1.0 alias of /ingredients-with-usage)",
+)
+async def list_foods_with_usage_compat() -> _LegacyFoodsListResponse:
+    """Alias of /ingredients-with-usage with the legacy `{foods: [...]}` envelope."""
+    rows = _rpc_or_500("list_sauceboss_ingredients_with_usage", {}, "foods-with-usage(compat)")
+    return _LegacyFoodsListResponse(foods=rows or [])
+
+
+class _IngredientCategoryInput(BaseModel):
+    """release/sauceboss-1.0 POST /ingredient-categories body."""
+    ingredientName: str = Field(min_length=1)
+    category: str = Field(min_length=1)
+
+
+@router.post(
+    "/ingredient-categories",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="[compat] Set an ingredient's category (release/sauceboss-1.0 shim over upsert RPC)",
+)
+async def upsert_ingredient_category_compat(body: _IngredientCategoryInput) -> MessageResponse:
+    """Forward to upsert_sauceboss_ingredient_category. No-op if the named ingredient is absent."""
+    sb = get_supabase()
+    sb.rpc("upsert_sauceboss_ingredient_category", {
+        "p_ingredient_name": body.ingredientName.strip().lower(),
+        "p_category": body.category,
+    }).execute()
+    return MessageResponse(message="ok")

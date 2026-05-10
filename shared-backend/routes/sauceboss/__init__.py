@@ -11,4 +11,5 @@ from . import (  # noqa: E402, F401
     import_export_routes,
     saucebook_routes,
     pantry_routes,
+    favorites_routes,  # release/sauceboss-1.0 compat shim — remove once release retires
 )
