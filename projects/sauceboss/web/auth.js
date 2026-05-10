@@ -138,7 +138,7 @@ async function loadPantry() {
   try {
     const pantry = await api.getPantry();
     state.pantry.ingredients = pantry.ingredients || [];
-    state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.foodId));
+    state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.ingredientId));
     syncDisabledFromPantry();
   } catch (err) {
     console.warn('[sauceboss] pantry load failed:', err);

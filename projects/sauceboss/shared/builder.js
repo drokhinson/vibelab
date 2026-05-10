@@ -151,8 +151,13 @@ export function applyParsedRecipe(builder, parsed) {
 // has no color set (web defaults to "#E85D04", native picks the first swatch).
 export function builderFromSauce(sauce, defaults = {}) {
   const fallbackColor = defaults.color || '#E85D04';
-  const itemIds = Array.isArray(sauce.compatibleItems)
-    ? sauce.compatibleItems.slice()
+  // Post-013, dish-level targets live on `attachments[]`; older callers may
+  // still pass `itemIds` (array of dish ids).
+  const fromAttachments = Array.isArray(sauce.attachments)
+    ? sauce.attachments.filter((a) => a && a.kind === 'dish').map((a) => a.value)
+    : [];
+  const itemIds = fromAttachments.length
+    ? fromAttachments
     : Array.isArray(sauce.itemIds) ? sauce.itemIds.slice() : [];
   return {
     name: sauce.name || '',

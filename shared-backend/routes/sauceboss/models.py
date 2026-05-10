@@ -28,21 +28,6 @@ class AdminKeyBody(BaseModel):
     admin_key: str = Field(min_length=1)
 
 
-class FavoriteEntry(BaseModel):
-    """One entry in the user's favorites list.
-
-    ``createdAt`` is the ISO timestamp the favorite was added; the frontend
-    uses it to pick the most-recently-favorited sibling as the displayed
-    default for a sauce family.
-    """
-    sauceId: str
-    createdAt: Optional[str] = None
-
-
-class FavoriteListResponse(BaseModel):
-    favorites: List[FavoriteEntry]
-
-
 class MessageResponse(BaseModel):
     message: str
 
@@ -59,7 +44,7 @@ class SauceType(StrEnum):
     MARINADE = "marinade"
     DIP = "dip"
     # Standalone recipe — not paired with any dish category. Attachment rows
-    # are rejected by sauceboss_sauce_attachments_check (migration 011).
+    # are rejected by sauceboss_sauce_to_dish_check.
     FULL_RECIPE = "full_recipe"
 
 
@@ -74,9 +59,9 @@ class Attachment(BaseModel):
 
     `kind='category'` → `value` is one of carb/protein/salad. The sauce applies
     to every dish + subtype in that category.
-    `kind='dish'` → `value` is a sauceboss_items.id at dish_level='dish'.
+    `kind='dish'` → `value` is a sauceboss_dish.id at dish_level='dish'.
     Applies to that dish + its subtypes.
-    `kind='subtype'` → `value` is a sauceboss_items.id at dish_level='subtype'.
+    `kind='subtype'` → `value` is a sauceboss_dish.id at dish_level='subtype'.
     Applies to that subtype only.
     """
     kind: AttachmentKind
@@ -93,9 +78,9 @@ class DishLevel(StrEnum):
 class IngredientInput(BaseModel):
     """One ingredient row.
 
-    The frontend sends ``name`` (food display string) and ``unit`` (raw unit
-    string — abbreviation or alias). The backend resolves these to ``food_id``
-    and ``unit_id`` via the foods/units lookup tables before persisting; rows
+    The frontend sends ``name`` (ingredient display string) and ``unit`` (raw unit
+    string — abbreviation or alias). The backend resolves these to ``ingredient_id``
+    and ``unit_id`` via the ingredient/unit lookup tables before persisting; rows
     that don't resolve (e.g. typos) keep ``original_text`` for cleanup.
 
     ``amount`` accepts 0 so qualitative rows ("to taste") can save without a
@@ -178,7 +163,7 @@ class ParsedIngredientResponse(BaseModel):
     quantity: Optional[float] = None
     unitRaw: Optional[str] = None
     unitId: Optional[str] = None
-    foodRaw: str
+    ingredientRaw: str
     canonicalMl: Optional[float] = None
     canonicalG: Optional[float] = None
     note: Optional[str] = None
@@ -224,70 +209,49 @@ class UnitsListResponse(BaseModel):
     units: List[UnitRow]
 
 
-class FoodRow(BaseModel):
+class IngredientRow(BaseModel):
     id: str
     name: str
     plural: Optional[str] = None
+    category: Optional[str] = None
+    substitutions: Optional[List[str]] = None
 
 
-class FoodsListResponse(BaseModel):
-    foods: List[FoodRow]
+class IngredientsListResponse(BaseModel):
+    ingredients: List[IngredientRow]
 
 
-# ── Ingredient categories ────────────────────────────────────────────────────
+# ── Ingredient admin ─────────────────────────────────────────────────────────
 
-class IngredientCategoryInput(BaseModel):
-    ingredientName: str = Field(min_length=1)
-    category: str = Field(min_length=1)
-
-
-class IngredientCategoryRow(BaseModel):
-    """One row from the sauceboss_ingredient_categories table.
-
-    The shared JS client at projects/sauceboss/shared/api.js normalizes a list
-    of these rows into a dict {ingredientName: category}; the row shape lives
-    here so the OpenAPI schema matches what the RPC actually returns.
-    """
-    ingredientName: str
-    category: str
-
-
-class SubstitutionRow(BaseModel):
-    """One row from the sauceboss_ingredient_substitutions table.
-
-    See IngredientCategoryRow for the same shape-contract rationale.
-    """
-    ingredientName: str
-    substituteName: str
-    notes: Optional[str] = None
-
-
-# ── Foods (ingredient admin) ─────────────────────────────────────────────────
-
-class FoodWithUsageRow(BaseModel):
+class IngredientWithUsageRow(BaseModel):
     id: str
     name: str
     plural: Optional[str] = None
+    category: Optional[str] = None
+    substitutions: Optional[List[str]] = None
     usageCount: int
     sauceCount: int
     createdAt: Optional[str] = None
 
 
-class FoodsWithUsageResponse(BaseModel):
-    foods: List[FoodWithUsageRow]
+class IngredientsWithUsageResponse(BaseModel):
+    ingredients: List[IngredientWithUsageRow]
 
 
-class CreateFoodRequest(BaseModel):
+class CreateIngredientRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     plural: Optional[str] = Field(default=None, max_length=80)
+    category: Optional[str] = Field(default=None, max_length=40)
 
 
-class UpdateFoodRequest(BaseModel):
+class UpdateIngredientRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     plural: Optional[str] = Field(default=None, max_length=80)
+    category: Optional[str] = Field(default=None, max_length=40)
+    substitutions: Optional[List[str]] = None
 
 
-class MergeFoodsRequest(BaseModel):
+class MergeIngredientsRequest(BaseModel):
     keepId: str = Field(min_length=1)
     mergeIds: List[str] = Field(min_length=1)
 
@@ -347,7 +311,7 @@ class ItemsGroupedResponse(BaseModel):
 
 class SauceExportEnvelope(BaseModel):
     """Single-sauce export envelope. Inner mirrors CreateSauceRequest plus the
-    read-only fields populated by the RPC (id, createdBy, compatibleItems)."""
+    read-only fields populated by the RPC (id, createdBy, attachments)."""
     version: int = 1
     exportedAt: str
     sauce: Dict[str, Any]
@@ -390,7 +354,7 @@ class AuthorSummary(BaseModel):
 
 
 class PantryEntry(BaseModel):
-    foodId: str
+    ingredientId: str
     name: str
     missing: bool
 
@@ -402,16 +366,16 @@ class PantryResponse(BaseModel):
 
 class SetPantryMissingRequest(BaseModel):
     """Replace the user's pantry-missing set in one round-trip."""
-    missingFoodIds: List[str] = Field(default_factory=list)
+    missingIngredientIds: List[str] = Field(default_factory=list)
 
 
 def _shape_items_grouped(rows: list[dict]) -> dict:
-    """Group raw sauceboss_items rows into {carbs, proteins, salads} with nested variants.
+    """Group raw sauceboss_dish rows into {carbs, proteins, salads} with nested variants.
 
     Output shape preserves the legacy `variants` array name used by the admin
-    UI; each row also carries `dishLevel` (migration 007) so callers can tell
-    a `dish` from a `subtype` regardless of nesting. The `variants` array on
-    a dish row contains its subtypes.
+    UI; each row also carries `dishLevel` so callers can tell a `dish` from a
+    `subtype` regardless of nesting. The `variants` array on a dish row
+    contains its subtypes.
     """
     def shape(r: dict) -> dict:
         return {

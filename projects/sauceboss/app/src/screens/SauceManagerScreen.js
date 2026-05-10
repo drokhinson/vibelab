@@ -3,8 +3,9 @@
 //   - Sauces: any signed-in user can add. The owner of a row or any admin
 //     can edit + delete.
 //   - Dish: admin-only add/edit/delete.
-//   - Ingredients: any signed-in user can add (POST /admin/foods is open to
-//     any auth'd user on the backend). Admin can rename, delete, and merge.
+//   - Ingredients: any signed-in user can add (POST /admin/ingredients is
+//     open to any auth'd user on the backend). Admin can rename, delete,
+//     and merge.
 //
 // This file owns the orange header, search box, and tab bar. Each tab body
 // lives in screens/manager/{Sauces,Dish,Ingredients}Tab.js so this file

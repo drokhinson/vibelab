@@ -10,7 +10,7 @@
 import type {
   IngredientCategoryMap,
   SubstitutionMap,
-  FoodRow,
+  IngredientRow,
 } from "../shared/api.js";
 
 declare global {
@@ -21,8 +21,8 @@ declare global {
   interface AppState {
     ingredientCategories: IngredientCategoryMap;
     substitutions: SubstitutionMap;
-    adminFoods: FoodRow[];
-    adminFoodsLoading: boolean;
+    adminIngredients: IngredientRow[];
+    adminIngredientsLoading: boolean;
     screen: string;
     loading: string | null;
     builder:

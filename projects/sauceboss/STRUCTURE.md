@@ -67,31 +67,35 @@ db/migrations/sauceboss/002_seed.sql      — units + ingredient categories + su
 ```
 
 ## Data Model
-All tables prefixed `sauceboss_` in the shared Supabase project.
+All tables prefixed `sauceboss_` in the shared Supabase project. Renamed and consolidated by migration 013.
 
-- **sauceboss_items** — Unified selector table for carbs / proteins / salad bases. Type rows have `parent_id IS NULL`; Variant rows (e.g. basmati rice as a prep variant of rice) point at their Type via `parent_id`. Columns: `id` (text PK), `category` ('carb'|'protein'|'salad'), `parent_id` (nullable FK→items), `name`, `emoji`, `description`, `sort_order`, `cook_time_minutes`, `instructions`, `water_ratio`, `portion_per_person`, `portion_unit`.
-- **sauceboss_sauces** — All recipes (sauces, dressings, marinades). Columns: `id`, `name`, `cuisine`, `cuisine_emoji`, `color` (hex), `description`, `sauce_type` ('sauce'|'dressing'|'marinade').
-- **sauceboss_sauce_items** — Unified junction: sauces ↔ items. A trigger enforces `sauce_type ↔ item.category` (sauce→carb, marinade→protein, dressing→salad) and that links target Type rows only (not Variants). Columns: `sauce_id`, `item_id`.
-- **sauceboss_sauce_steps** — Ordered cooking steps per recipe. Columns: `id` (bigserial), `sauce_id`, `step_order` (int), `title`, `estimated_time` (minutes), `input_from_step` (nullable int).
-- **sauceboss_step_ingredients** — Ingredients per step. Mealie-inspired normalized shape (migration 063). Columns: `id`, `step_id`, `food_id` (FK→sauceboss_foods), `unit_id` (FK→sauceboss_units), `original_text`, `quantity` (numeric), `quantity_canonical_ml`, `quantity_canonical_g`. Legacy freeform `name`/`amount`/`unit` columns were dropped — joins emit them at read time for backwards-compat.
-- **sauceboss_units** — Unit registry (migration 063). One row per supported unit with `id`, `name`, `plural`, `abbreviation`, `dimension` ('volume'|'mass'|'count'), `ml_per_unit`, `g_per_unit`, `aliases` (text[]). The Python module `routes/sauceboss/units.py` mirrors this table for in-process parsing — keep the two in sync.
-- **sauceboss_foods** — One row per distinct ingredient food (migration 063). Auto-populated by `create_sauceboss_sauce` via `INSERT ... ON CONFLICT (name_normalized)`. Columns: `id`, `name`, `plural`, `name_normalized`, `aliases`. **No density column for v1** — see `routes/sauceboss/units.py::DENSITY_TODO` for the wet↔dry conversion follow-up.
-- **sauceboss_ingredient_categories** — Maps ingredient names to filter panel categories.
-- **sauceboss_ingredient_substitutions** — Substitution suggestions shown when an ingredient is marked unavailable.
-- **sauceboss_profiles** (migration 003) — Supabase-Auth-backed user profiles. Columns: `id` (UUID FK→auth.users), `display_name`, `avatar_url`, `is_admin`, `created_at`. Mirrors the boardgamebuddy_profiles pattern.
-- **sauceboss_favorites** (migration 003) — Per-user sauce favorites (composite PK `user_id`+`sauce_id`).
-- `sauceboss_sauces.created_by` (migration 003) — UUID FK→auth.users, set when a user submits a sauce. Never displayed; powers the owner-only edit gate.
+- **sauceboss_dish** — Dish hierarchy (carbs / proteins / salad bases). `dish_level='dish'` rows have `parent_id IS NULL`; `dish_level='subtype'` rows point at a dish (one level deep, enforced by `sauceboss_dish_level_check`). Columns: `id`, `category` ('carb'|'protein'|'salad'), `parent_id` (nullable FK→sauceboss_dish), `dish_level`, `name`, `emoji`, `description`, `sort_order`, `cook_time_minutes`, `instructions`, `water_ratio`, `portion_per_person`, `portion_unit`.
+- **sauceboss_cuisine_info** — Cuisine display lookup. Columns: `cuisine` (PK), `cuisine_emoji`, `cuisine_image_url`. Auto-upserted by sauce writers; read by every sauce envelope to surface `cuisineEmoji`.
+- **sauceboss_sauce** — All recipes (sauces, dressings, marinades, dips, full_recipes). Columns: `id`, `name`, `cuisine`, `color`, `description`, `source_url`, `sauce_type` (no DB CHECK; values governed by backend `SauceType` enum), `created_by`, `parent_sauce_id`, `created_at`. cuisine_emoji moved to sauceboss_cuisine_info post-013.
+- **sauceboss_sauce_step** — Ordered cooking steps per recipe. Columns: `id` (bigserial), `sauce_id`, `step_order`, `title`, `instructions`, `input_from_step`, `estimated_time`.
+- **sauceboss_sauce_step_ingredient** — Ingredients per step. Columns: `id`, `step_id`, `ingredient_id` (FK→sauceboss_ingredient), `unit_id` (FK→sauceboss_unit), `original_text`, `quantity`, `quantity_canonical_ml`, `quantity_canonical_g`. (was sauceboss_step_ingredients with food_id; renamed by migration 013.)
+- **sauceboss_sauce_to_dish** — Sauce ↔ dish targeting. Columns: `sauce_id`, `target_kind` ('category'|'dish'|'subtype'), `target_value`. The `sauceboss_sauce_to_dish_check` trigger validates target alignment with sauce_type and rejects attachments on full_recipe sauces. (was sauceboss_sauce_attachments.)
+- **sauceboss_unit** — Unit registry. One row per supported unit with `id`, `name`, `plural`, `abbreviation`, `dimension`, `ml_per_unit`, `g_per_unit`, `aliases`. The Python module `routes/sauceboss/units.py` mirrors this table — keep the two in sync.
+- **sauceboss_ingredient** — Ingredient registry. Columns: `id`, `category` (was its own table; folded in by 013), `name`, `plural`, `name_normalized` (UNIQUE), `aliases`, `substitutions[]` (was its own table; folded in by 013), `created_at`. Auto-populated by `create_sauceboss_sauce` via `INSERT ... ON CONFLICT (name_normalized)`.
+- **sauceboss_user_profiles** — Supabase-Auth-backed user profiles. Columns: `id` (UUID FK→auth.users), `display_name`, `avatar_url`, `is_admin`, `created_at`.
+- **sauceboss_user_saucebook** — Per-user library (references). Columns: `user_id`, `sauce_id`, `added_at`.
+- **sauceboss_user_pantry_missing** — Per-user negative pantry list. Columns: `user_id`, `ingredient_id`. A row means "user is OUT of this ingredient".
+- `sauceboss_sauce.created_by` — UUID FK→auth.users, set when a user submits a sauce. Powers the owner-only edit gate.
 
-**RPCs** (defined in `db/migrations/sauceboss/001_baseline.sql`, with migration 003 amending the sauce-related ones):
+**Removed by migration 013:** `sauceboss_sauce_items` (legacy junction; replaced by sauceboss_sauce_to_dish), `sauceboss_favorites` (superseded by saucebook), `sauceboss_ingredient_categories` (folded into ingredient.category), `sauceboss_ingredient_substitutions` (folded into ingredient.substitutions[]), and `sauceboss_sauce.cuisine_emoji` column (now sauceboss_cuisine_info.cuisine_emoji).
+
+**RPCs** (current bodies in `db/migrations/sauceboss/013_table_rename_consolidation.sql`):
 - `get_sauceboss_initial_load()` — `{ carbs, proteins, saladBases }` for the home screen (one round-trip).
-- `get_sauceboss_item_load(p_item_id text)` — `{ item, variants, sauces, ingredients }` for any selection screen (one round-trip).
-- `get_sauceboss_items_by_category(p_category text)` — Type rows for one category, with sauce count. Used by `initial_load`.
-- `get_sauceboss_sauces_for_item(p_item_id text)` — Fully assembled sauces linked to an item. Emits `createdBy` (003).
-- `get_sauceboss_variants_for_item(p_item_id text)` — Child rows (parent_id = p_item_id).
+- `get_sauceboss_item_load(p_item_id text)` — `{ item, variants, sauces, ingredients }` for any selection screen.
+- `get_sauceboss_items_by_category(p_category text)` — Dish rows for one category, with sauce count + nested subtypes.
+- `get_sauceboss_sauces_for_target(category, dishId, subtypeId)` — Resolver for the meal-builder; returns the union of sauces matching category / dish / subtype / parent-dish.
+- `get_sauceboss_sauces_for_item(p_item_id text)` — Sauces linked to a dish/subtype. Emits `cuisineEmoji` (joined from sauceboss_cuisine_info), `attachments[]`, and ingredient rows with `ingredientId`.
+- `get_sauceboss_variants_for_item(p_item_id text)` — Subtype rows under a dish.
 - `get_sauceboss_ingredients_for_item(p_item_id text)` — Sorted unique ingredient names across linked sauces.
-- `get_sauceboss_all_sauces[ _full ]()` — Sauce manager listings. Emit `createdBy` (003).
-- `create_sauceboss_sauce(p_data)` — Now accepts `p_data->>'createdBy'` (003).
-- `update_sauceboss_sauce(p_data)` (003) — Atomic full-replace of a sauce's scalar fields, item links, steps, and step ingredients. Preserves `created_by`. Authorization is enforced upstream.
+- `get_sauceboss_all_sauces[ _full ]()` — Sauce manager listings. compatibleItems is gone; read attachments directly.
+- `get_sauceboss_saucebook(user)` / `get_sauceboss_browse(...)` / `get_sauceboss_browse_authors(q)` / `get_sauceboss_pantry_for_user(user)` / `set_sauceboss_pantry_missing(user, ingredient_ids[])`.
+- `list_sauceboss_ingredients_with_usage()` / `merge_sauceboss_ingredients(keep, merge[])` / `delete_sauceboss_ingredient_safe(id)` — admin tooling for the Ingredient Manager.
+- `create_sauceboss_sauce(p_data)` / `update_sauceboss_sauce(p_data)` / `fork_sauceboss_sauce(source, user, data)` — atomic write paths; auto-upsert sauceboss_cuisine_info from `cuisineEmoji` on save.
 
 ## API Endpoints
 All served by `shared-backend/routes/sauceboss/` at prefix `/api/v1/sauceboss`.
@@ -107,17 +111,21 @@ All served by `shared-backend/routes/sauceboss/` at prefix `/api/v1/sauceboss`.
 | DELETE | `/api/v1/sauceboss/sauces/{sauce_id}` | JWT (owner OR admin) | Delete an owned sauce; admins may delete any. Cascades to steps, ingredients, and item links. |
 | POST | `/api/v1/sauceboss/import` | None | Mealie-style URL → recipe parser. Body `{url}`; returns a draft (does not persist). |
 | GET | `/api/v1/sauceboss/units` | None | Unit registry — id/name/plural/abbreviation/dimension/conversion factors. |
-| GET | `/api/v1/sauceboss/foods` | None | Foods typeahead (`?q=`, `?limit=`) for the builder ingredient field. |
+| GET | `/api/v1/sauceboss/ingredients` | None | Ingredient typeahead (`?q=`, `?limit=`) for the builder ingredient field. |
+| GET | `/api/v1/sauceboss/ingredient-categories` | None | `{name: category}` map (reads sauceboss_ingredient.category). |
+| GET | `/api/v1/sauceboss/substitutions` | None | `{name: [substitute_names]}` map (reads sauceboss_ingredient.substitutions[]). |
 | GET | `/api/v1/sauceboss/profile` | JWT | Current user's profile (404 if missing). |
 | POST | `/api/v1/sauceboss/profile` | JWT | Upsert `display_name` (auto-called on first login). |
 | POST | `/api/v1/sauceboss/profile/become-admin` | JWT | Body `{admin_key}`. Compared to env `ADMIN_API_KEY`; sets `is_admin=true`. |
-| DELETE | `/api/v1/sauceboss/profile` | JWT | Delete current user's profile. Cascades to favorites; sauces' `created_by` becomes NULL. |
-| GET | `/api/v1/sauceboss/favorites` | JWT | List the user's favorited sauce IDs. |
-| PUT | `/api/v1/sauceboss/favorites/{sauce_id}` | JWT | Idempotently mark a sauce as favorite. |
-| DELETE | `/api/v1/sauceboss/favorites/{sauce_id}` | JWT | Idempotently remove a favorite. |
-| POST | `/api/v1/sauceboss/admin/foods` | JWT | Add an ingredient (any logged-in user). |
-| * | `/api/v1/sauceboss/admin/*` | JWT + `is_admin` | Item / sauce / food management (rename, delete, merge). |
-| GET | `/api/v1/sauceboss/sauces/{sauce_id}/export.json` | None | Download a single sauce as a versioned JSON envelope (`{version, exportedAt, sauce}`). Per-ingredient `originalText`/`foodId`/`unitId`/`canonicalMl`/`canonicalG` are stripped — they're rebuilt server-side on save. |
+| DELETE | `/api/v1/sauceboss/profile` | JWT | Delete current user's profile. Cascades to saucebook + pantry; sauces' `created_by` becomes NULL. |
+| GET / POST / DELETE | `/api/v1/sauceboss/saucebook[/{sauce_id}]` | JWT | List / add / remove the caller's saucebook entries. |
+| GET | `/api/v1/sauceboss/pantry` | JWT | Pantry overview (every ingredient in saucebook + missing flags). |
+| PUT | `/api/v1/sauceboss/pantry` | JWT | Replace `missingIngredientIds[]` in one round-trip. |
+| GET | `/api/v1/sauceboss/browse` | Optional JWT | Paginated sauce listing with filters (q/cuisine/type/author). |
+| GET | `/api/v1/sauceboss/authors` | Optional JWT | Author autocomplete for the Browse filter. |
+| POST | `/api/v1/sauceboss/admin/ingredients` | JWT | Add an ingredient (any logged-in user). |
+| * | `/api/v1/sauceboss/admin/*` | JWT + `is_admin` | Dish / sauce / ingredient management (rename, delete, merge). |
+| GET | `/api/v1/sauceboss/sauces/{sauce_id}/export.json` | None | Download a single sauce as a versioned JSON envelope (`{version, exportedAt, sauce}`). Per-ingredient `originalText`/`ingredientId`/`unitId`/`canonicalMl`/`canonicalG` are stripped — they're rebuilt server-side on save. |
 | GET | `/api/v1/sauceboss/sauces/{sauce_id}/export.md` | None | Download a single sauce as a human-readable Markdown document (one-way; not re-importable). |
 | GET | `/api/v1/sauceboss/admin/sauces/export.json` | JWT + `is_admin` | Bulk download of every sauce in one JSON file (`{version, exportedAt, count, sauces[]}`). |
 

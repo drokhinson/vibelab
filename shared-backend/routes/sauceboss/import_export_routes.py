@@ -28,11 +28,11 @@ _SUPPORTED_VERSION = 1
 
 # Per-ingredient fields we omit from JSON exports — all are derived server-side
 # on save (``_resolve_ingredient_for_save`` rebuilds ``originalText`` from
-# amount/unit/name; foodId/unitId/canonical* come from the registry lookup).
+# amount/unit/name; ingredientId/unitId/canonical* come from the registry lookup).
 # Keeping them in the export bloats files and rots when ids drift between
 # Supabase projects. The Markdown formatter still uses ``originalText`` (it
 # reads the raw RPC payload, not the stripped one) for qualitative rows.
-_INGREDIENT_DROP_FIELDS = ("originalText", "foodId", "unitId", "canonicalMl", "canonicalG")
+_INGREDIENT_DROP_FIELDS = ("originalText", "ingredientId", "unitId", "canonicalMl", "canonicalG")
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ def _strip_export_only_fields(sauce: dict) -> dict:
     Keeps the JSON export shape symmetric with what the import unwrapper
     accepts and what the builder edit flow already discards: ``originalText``
     is rebuilt server-side from ``amount + unit + name`` on save, and
-    ``foodId``/``unitId``/``canonical*`` are looked up against this
+    ``ingredientId``/``unitId``/``canonical*`` are looked up against this
     installation's registry.
     """
     out = dict(sauce)
@@ -119,7 +119,13 @@ def _render_sauce_markdown(s: dict) -> str:
     cuisine = s.get("cuisine") or ""
     cuisine_emoji = s.get("cuisineEmoji") or ""
     sauce_type = (s.get("sauceType") or "sauce").title()
-    pairs = ", ".join(s.get("compatibleItems") or [])
+    # Attachments replaced compatibleItems post-013; emit dish-level targets
+    # in the same comma-separated form for Markdown readers.
+    pairs = ", ".join(
+        a.get("value", "")
+        for a in (s.get("attachments") or [])
+        if a.get("kind") == "dish" and a.get("value")
+    )
     source = s.get("sourceUrl") or ""
 
     meta_bits: list[str] = []

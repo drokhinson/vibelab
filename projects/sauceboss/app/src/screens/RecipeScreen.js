@@ -15,7 +15,6 @@ import StepCard from '../components/StepCard';
 import VariantSwitcher from '../components/VariantSwitcher';
 import ServingsControl from '../components/ServingsControl';
 import UnitToggle from '../components/UnitToggle';
-import HeartButton from '../components/HeartButton';
 import EmptyState from '../components/EmptyState';
 import { SAUCE_TYPES } from '#shared/constants';
 import { COLORS, SHADOWS } from '../theme';
@@ -62,11 +61,6 @@ export default function RecipeScreen({ navigation }) {
           <View style={styles.timingRow}>
             <Clock size={14} color={COLORS.primary} />
             <Text style={styles.timingTotal}>{meta.label} · ~{sauceTime} min active</Text>
-            {state.currentUser ? (
-              <View style={styles.heartSlot}>
-                <HeartButton sauceId={sauce.id} size={22} />
-              </View>
-            ) : null}
           </View>
           {marineAhead ? (
             <View style={styles.timingRow}>
@@ -157,9 +151,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.textSecondary,
-  },
-  heartSlot: {
-    marginLeft: 'auto',
   },
   variantWrap: {
     marginBottom: 8,

@@ -60,7 +60,7 @@ const fetchInitialLoad         = () => api.initialLoad();
 const fetchIngredientCategories = () => api.ingredientCategories();
 const fetchSubstitutions       = () => api.substitutions();
 const fetchUnits               = () => api.units();
-const fetchFoods               = (q, limit) => api.foods(q, limit);
+const fetchIngredients         = (q, limit) => api.ingredients(q, limit);
 const importRecipeFromUrl      = (url) => api.importRecipeFromUrl(url);
 const createSauce              = (data) => api.createSauce(data);
 const updateSauce              = (id, data) => api.updateSauce(id, data);
@@ -74,11 +74,11 @@ const deleteAdminSauce         = (id) => api.adminDeleteSauce(id);
 // Backend validates `created_by == current user OR is_admin` — same endpoint
 // used by the manager when a logged-in non-admin removes their own recipe.
 const deleteSauceOwned         = (id) => api.deleteSauce(id);
-const fetchFoodsWithUsage      = () => api.listFoodsWithUsage();
-const adminCreateFood          = (payload) => api.createFood(payload);
-const adminUpdateFood          = (id, payload) => api.updateFood(id, payload);
-const adminDeleteFood          = (id) => api.deleteFood(id);
-const adminMergeFoods          = (keepId, mergeIds) => api.mergeFoods(keepId, mergeIds);
+const fetchIngredientsWithUsage = () => api.listIngredientsWithUsage();
+const adminCreateIngredient    = (payload) => api.createIngredient(payload);
+const adminUpdateIngredient    = (id, payload) => api.updateIngredient(id, payload);
+const adminDeleteIngredient    = (id) => api.deleteIngredient(id);
+const adminMergeIngredients    = (keepId, mergeIds) => api.mergeIngredients(keepId, mergeIds);
 const adminAssignSauceVariants = (parentId, sauceIds) => api.assignSauceVariants(parentId, sauceIds);
 const fetchProfile             = () => api.getProfile();
 const createProfile            = (displayName) => api.upsertProfile(displayName);
@@ -142,13 +142,14 @@ function isKnownIngredient(name) {
   return SBShared.fuzzy.isKnownIngredient(name, state.ingredientCategories);
 }
 
-async function classifyIngredient(name, category) {
+// Update the local ingredientCategories map immediately so any open recipe /
+// builder view re-renders with the new category. Server-side persistence now
+// happens via api.updateIngredient(id, { category }) — see settings.js
+// submitFoodForm — which requires the ingredient id, not just the name.
+// Builder-side classification only updates the local cache; the category
+// will land in the DB the next time an admin opens the ingredient row.
+function classifyIngredientLocal(name, category) {
   state.ingredientCategories[name.trim().toLowerCase()] = category;
-  fetch(`${API}/api/v1/sauceboss/ingredient-categories`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ingredientName: name.trim(), category }),
-  }).catch(() => {});
 }
 
 function buildPieChart(items, size = 160) {
@@ -502,7 +503,7 @@ async function refreshSaucebookAndPantry() {
     ]);
     state.saucebook = sb;
     state.pantry.ingredients = pantry.ingredients || [];
-    state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.foodId));
+    state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.ingredientId));
     state.pantry._loaded = true;
     syncDisabledFromPantry();
     render();
@@ -512,7 +513,7 @@ async function refreshSaucebookAndPantry() {
 }
 
 // Refresh state.disabledIngredients from state.pantry. This is the bridge
-// between the foodId-keyed pantry and the name-keyed filter helpers.
+// between the ingredientId-keyed pantry and the name-keyed filter helpers.
 function syncDisabledFromPantry() {
   const out = new Set();
   for (const ing of state.pantry.ingredients || []) {
@@ -521,18 +522,18 @@ function syncDisabledFromPantry() {
   state.disabledIngredients = out;
 }
 
-// Toggle a single foodId in the user's pantry-missing set, persist to /pantry
+// Toggle a single ingredientId in the user's pantry-missing set, persist to /pantry
 // in the background, and re-render so the saucebook ingredient filter and the
 // Pantry tab stay in sync. The optimistic update lets the UI feel instant;
 // on error we revert.
-async function togglePantryMissing(foodId) {
-  if (!currentUser || !foodId) return;
+async function togglePantryMissing(ingredientId) {
+  if (!currentUser || !ingredientId) return;
   const missing = state.pantry.missing;
-  const wasMissing = missing.has(foodId);
-  if (wasMissing) missing.delete(foodId);
-  else missing.add(foodId);
+  const wasMissing = missing.has(ingredientId);
+  if (wasMissing) missing.delete(ingredientId);
+  else missing.add(ingredientId);
   for (const ing of state.pantry.ingredients) {
-    if (ing.foodId === foodId) ing.missing = !wasMissing;
+    if (ing.ingredientId === ingredientId) ing.missing = !wasMissing;
   }
   syncDisabledFromPantry();
   render();
@@ -542,9 +543,9 @@ async function togglePantryMissing(foodId) {
     syncDisabledFromPantry();
   } catch (err) {
     console.error('[sauceboss] pantry sync failed', err);
-    if (wasMissing) missing.add(foodId); else missing.delete(foodId);
+    if (wasMissing) missing.add(ingredientId); else missing.delete(ingredientId);
     for (const ing of state.pantry.ingredients) {
-      if (ing.foodId === foodId) ing.missing = wasMissing;
+      if (ing.ingredientId === ingredientId) ing.missing = wasMissing;
     }
     syncDisabledFromPantry();
     render();

@@ -89,7 +89,7 @@ export default function SettingsScreen({ navigation }) {
   function confirmDelete() {
     Alert.alert(
       'Delete account?',
-      'This removes your profile and all favorites. Sauces you created stay in the catalog but lose their owner attribution. This cannot be undone.',
+      'This removes your profile. Sauces you created stay in the catalog but lose their owner attribution. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

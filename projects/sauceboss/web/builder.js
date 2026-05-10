@@ -562,7 +562,7 @@ function builderPickAutocomplete(name, si, ii) {
 function builderClassifyIngredient(si, ii, category) {
   const b = state.builder;
   const ing = b.steps[si].ingredients[ii];
-  classifyIngredient(ing.name, category);
+  classifyIngredientLocal(ing.name, category);
   ing._showCategory = false;
   const wrap = document.querySelector(`.ingredient-row-wrap:has([data-step="${si}"][data-ing="${ii}"].ing-name)`);
   if (wrap) {
@@ -583,7 +583,7 @@ function _builderPrefillFromParent(parent) {
   b.sauceType      = parent.sauceType || b.sauceType;
   // Clone itemIds so later edits to the variant don't mutate the cached
   // parent object in state.adminSauces.
-  b.itemIds        = Array.isArray(parent.compatibleItems) ? [...parent.compatibleItems] : [];
+  b.itemIds        = (parent.attachments || []).filter(a => a.kind === 'dish').map(a => a.value);
   // Description is the only field that can be a real authored field on the
   // variant — only fill it when the user hasn't typed anything yet.
   if (!b.description) b.description = parent.description || '';
