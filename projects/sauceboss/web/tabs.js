@@ -63,12 +63,10 @@ function setActiveTab(name, opts = {}) {
   if (name === 'browse' && typeof browseEnsureLoaded === 'function') {
     browseEnsureLoaded();
   }
-  // Pantry groups ingredients by category. ingredient-categories is no
-  // longer fetched on boot — load it lazily the first time the tab is
-  // opened. The helper re-renders when the fetch resolves.
-  if (name === 'pantry' && typeof ensureIngredientCategories === 'function') {
-    ensureIngredientCategories();
-  }
+  // Pantry groups by ingredient.category, which migration 015 folds into
+  // each row of the /pantry response — no separate /ingredient-categories
+  // fetch needed on the pantry path. The recipe-builder lazy-load
+  // (ensureBuilderRefData) still covers the full global map.
   render();
 }
 

@@ -369,10 +369,15 @@ class AuthorSummary(BaseModel):
 
 class PantryEntry(BaseModel):
     """One pantry entry. ``foodId`` is a compat alias of ``ingredientId``
-    for release/sauceboss-1.0 — both fields carry the same value."""
+    for release/sauceboss-1.0 — both fields carry the same value.
+
+    ``category`` is the ingredient's curated filter-panel category from
+    ``sauceboss_ingredient.category`` (NULL when uncategorized; the frontend
+    falls back to "Uncategorized")."""
     ingredientId: str
     foodId: Optional[str] = None  # release-compat alias; populated from ingredientId
     name: str
+    category: Optional[str] = None
     missing: bool
 
 
