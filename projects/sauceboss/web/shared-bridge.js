@@ -36,6 +36,7 @@ import * as apiFactory from './shared/api.js';
 // Flat globals — exact same signature as web's old versions.
 Object.assign(window, constants, units, colors, pieMath);
 window.buildSauceFamilies = families.buildSauceFamilies;
+window.pickDisplayedFromFamily = families.pickDisplayedFromFamily;
 window.withIngredientNames = filter.withIngredientNames;
 window.levenshtein = fuzzy.levenshtein;
 
