@@ -254,10 +254,7 @@ function renderMealRecipe() {
   const sauce = meal.sauce;
   const meta  = flowMetaFor(item);
 
-  // ── Timing summary ───────────────────────────────────────────────────────────
-  const sauceTime = sauce.steps.reduce(
-    (s, st) => s + (st.estimatedTime || 5), 0,
-  );
+  const sauceTime = sauce.steps.reduce((s, st) => s + (st.estimatedTime || 5), 0);
   const itemCookTime = (prep?.cookTimeMinutes ?? item.cookTimeMinutes) || 0;
   const totalTime = sauceTime + itemCookTime;
   const isMarinade = sauce.sauceType === 'marinade';
@@ -269,104 +266,17 @@ function renderMealRecipe() {
       ${marineAhead ? `<div class="meal-timing-note"><i data-lucide="triangle-alert"></i> Start marinade ${sauceTime}+ min before you cook</div>` : ''}
     </div>`;
 
-  // ── Sauce/marinade/dressing steps ────────────────────────────────────────────
-  function sauceStepsHTML(sauceObj) {
-    return sauceObj.steps.map((step, i) => {
-      const stepTime = step.estimatedTime || 5;
-      const displayItems = prepareItems(step.ingredients);
-
-      const refStep = step.inputFromStep ? sauceObj.steps[step.inputFromStep - 1] : null;
-      if (refStep) {
-        const refTsp = cumulativeStepTsp(sauceObj.steps, step.inputFromStep - 1, state.servings);
-        const disp = tspToDisplay(refTsp);
-        displayItems.unshift({ name: `Step ${step.inputFromStep} combined`, amount: disp.amount, unit: disp.unit });
-      }
-      const refBadge = refStep
-        ? `<div class="step-ref-badge"><i data-lucide="corner-down-right"></i> Combine all of Step ${step.inputFromStep} into this bowl</div>` : '';
-
-      return `<div class="step-card">
-        <div class="step-header-row">
-          <div class="step-number">Step ${i + 1}</div>
-          <div class="step-time">~${stepTime}m</div>
-        </div>
-        <div class="step-title">${step.title}</div>
-        ${step.instructions ? `
-          <details class="step-instructions-toggle">
-            <summary>Instructions</summary>
-            <p class="step-instructions-body">${escapeHtml(step.instructions)}</p>
-          </details>` : ''}
-        ${refBadge}
-        <div class="step-viz">
-          ${buildPieChart(displayItems, 80)}
-          <div class="step-legend">${buildLegend(displayItems)}</div>
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  // ── Section colour by sauce_type ────────────────────────────────────────────
   const sauceColor = isMarinade ? '#5D4037'
                    : sauce.sauceType === 'dressing' ? '#1B5E20'
                    : '#4A0072';
   const sauceLabel = `${meta.sauceWord} — ${sauce.name}`;
-
-  // ── Item prep section (one card describing how to cook the chosen item) ────
-  const itemPrepLabel = item.category === 'salad'
-    ? `🥗 Toss ${item.name}`
-    : `${item.emoji} ${item.category === 'protein' ? 'Cook' : 'Prep'} ${item.name}${prep ? ` — ${prep.name}` : ''}`;
-  const itemColor = item.category === 'protein' ? '#C94E02'
-                 : item.category === 'salad'   ? '#2D6A4F'
-                 : '#1565C0';
-  const itemInstructions = prep?.instructions
-                        || item.instructions
-                        || (item.category === 'salad'
-                            ? `Toss ${item.name} with ${sauce.name} right before serving`
-                            : `Cook ${item.name} per packet instructions`);
-  const itemCard = `
-    <div class="meal-section">
-      <div class="meal-section-label" style="background:${itemColor}">${itemPrepLabel}</div>
-      <div class="step-card">
-        <div class="step-header-row">
-          <div class="step-number">${item.category === 'protein' ? 'Cook' : item.category === 'salad' ? 'Assemble' : 'Boil / prep'}</div>
-          ${itemCookTime ? `<div class="step-time">~${itemCookTime}m</div>` : ''}
-        </div>
-        <div class="step-title">${itemInstructions}</div>
-      </div>
-    </div>`;
-
-  const servingsHTML = `
-    <div class="recipe-controls">
-      <div class="servings-control">
-        <button onclick="changeServings(-1)" class="serving-btn" ${state.servings <= 1 ? 'disabled' : ''}>−</button>
-        <span class="servings-label">${state.servings} ${state.servings === 1 ? 'person' : 'people'}</span>
-        <button onclick="changeServings(1)" class="serving-btn" ${state.servings >= 12 ? 'disabled' : ''}>+</button>
-      </div>
-      <button class="unit-toggle" onclick="toggleUnit()">
-        ${state.unitSystem === 'imperial' ? 'Imperial' : 'Metric'}
-      </button>
-    </div>`;
-
-  const title = `${prep?.name || item.name} with ${sauce.name}`;
-
-  const family = state.selectedSauceFamily || [];
-  const variantSwitcherHTML = family.length > 1 ? `
-    <div class="variant-switcher" role="tablist" aria-label="Switch variant">
-      ${family.map(s => `
-        <button class="variant-chip ${s.id === sauce.id ? 'variant-chip--active' : ''}"
-                role="tab"
-                aria-selected="${s.id === sauce.id}"
-                onclick="selectVariant('${s.id}')">
-          ${escapeHtml(s.name)}${!s.parentSauceId ? '<span class="variant-chip-tag">original</span>' : ''}
-        </button>
-      `).join('')}
-    </div>` : '';
-
-  // For marinades, show marinade BEFORE cooking; otherwise item prep first.
   const sauceSection = `
     <div class="meal-section">
       <div class="meal-section-label" style="background:${sauceColor}">${sauceLabel}</div>
-      ${sauceStepsHTML(sauce)}
+      ${sauce.steps.map((step, i) => renderRecipeStep(step, i, sauce.steps)).join('')}
     </div>`;
+
+  const title = `${prep?.name || item.name} with ${sauce.name}`;
 
   return `
     <div class="status-bar"></div>
@@ -378,20 +288,10 @@ function renderMealRecipe() {
     </div>
     <div class="scroll-body scroll-body--padded">
       ${timingBanner}
-      ${variantSwitcherHTML}
-      ${servingsHTML}
-      ${isMarinade ? sauceSection + itemCard : itemCard + sauceSection}
+      ${renderVariantSwitcher(sauce.id)}
+      ${renderRecipeControls()}
+      ${renderItemPrepBlock(item, prep, sauce)}
+      ${sauceSection}
     </div>
   `;
-}
-
-// ─── Meal-recipe serving controls ─────────────────────────────────────────────
-// (re-uses setServings / setUnitSystem from recipe.js)
-
-function changeServings(delta) {
-  setServings(state.servings + delta);
-}
-
-function toggleUnit() {
-  setUnitSystem(state.unitSystem === 'imperial' ? 'metric' : 'imperial');
 }

@@ -202,59 +202,76 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .meal-section .step-card:first-of-type { border-radius: 0 0 12px 12px; margin-top: 0; border-top: none; }
 .meal-section .step-card:only-of-type  { border-radius: 0 0 12px 12px; }
 
-/* Compact step viz for meal recipe */
+/* Step pie + legend layout — pie on the left, ingredient legend on the right.
+   Mirrors the native MealRecipeScreen so visual density matches across web
+   and mobile. The legend wraps below on narrow phones. */
 .step-viz {
   display: flex;
+  flex-direction: row;
   align-items: flex-start;
   gap: 12px;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 .step-viz .pie-chart { flex-shrink: 0; }
-.step-viz .step-legend { flex: 1; }
+.step-viz .step-legend { flex: 1; min-width: 180px; }
 
-/* Recipe controls for meal recipe */
+/* Recipe controls — servings stepper + unit toggle. Styled to match the
+   React Native ServingsControl + UnitToggle components so the meal-builder
+   recipe view, the standalone recipe view, and the native app all look the
+   same. Color tokens come from shared/themeTokens.js. */
 .recipe-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin: 12px 0 16px;
   gap: 12px;
 }
 .servings-control {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
-  background: white;
-  border-radius: 10px;
-  padding: 8px 12px;
+  background: #FFFFFF;
   border: 1px solid #E5E7EB;
+  border-radius: 999px;
+  padding: 4px 6px;
 }
 .serving-btn {
-  background: #F3F4F6;
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
   border: none;
-  border-radius: 6px;
-  width: 28px;
-  height: 28px;
-  font-size: 16px;
+  background: #FFF8F0;
+  color: #E85D04;
+  font-size: 18px;
   font-weight: 700;
   cursor: pointer;
-  color: #E85D04;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   -webkit-tap-highlight-color: transparent;
 }
 .serving-btn:disabled { opacity: 0.35; cursor: default; }
-.servings-label { font-size: 13px; font-weight: 600; color: #1A1A2E; min-width: 60px; text-align: center; }
+.servings-label {
+  min-width: 92px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1A1A2E;
+}
 .unit-toggle {
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 10px;
+  background: #FFFFFF;
+  border: 1.5px solid #E85D04;
+  border-radius: 999px;
   padding: 8px 14px;
   font-size: 13px;
-  font-weight: 600;
-  color: #6B7280;
+  font-weight: 700;
+  color: #E85D04;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.unit-toggle:hover { border-color: #E85D04; color: #E85D04; }
+.unit-toggle:hover { background: #FFF8F0; }
 
 /* ─────────────────────────────
    SCREEN 1 — Carb Selector
@@ -442,94 +459,19 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .recipe-title { font-size: 24px; font-weight: 800; color: white; line-height: 1.2; }
 .recipe-subtitle { font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 4px; }
 
-/* Recipe controls bar */
-.recipe-controls {
-  background: #FFF8F0;
-  padding: 12px 16px;
-  border-bottom: 1px solid #F3F4F6;
-  flex-shrink: 0;
-}
-.serving-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.serving-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #374151;
-  font-weight: 500;
-  flex-wrap: wrap;
-}
-.serving-carb { font-weight: 700; color: #E85D04; }
-.serving-for { color: #6B7280; }
-.serving-stepper {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.stepper-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid #E85D04;
-  background: white;
-  color: #E85D04;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s;
-}
-.stepper-btn:active { background: #FFF3E0; }
-.stepper-count {
-  font-weight: 800;
-  font-size: 16px;
-  min-width: 20px;
-  text-align: center;
-  color: #1A1A2E;
-}
-
-/* Unit toggle */
-.unit-toggle {
-  display: flex;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid #E5E7EB;
-  flex-shrink: 0;
-}
-.toggle-btn {
-  padding: 5px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  border: none;
-  background: white;
-  color: #6B7280;
-  cursor: pointer;
-  transition: all 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-.toggle-btn.active { background: #E85D04; color: white; }
-
 /* Substitution banner */
 .sub-banner {
   background: #FEF3CD;
   border-radius: 12px;
   padding: 10px 14px;
-  margin: 12px 16px 0;
+  margin: 0 0 12px;
   font-size: 12px;
   color: #78350F;
   line-height: 1.6;
 }
 .sub-banner strong { display: block; margin-bottom: 2px; font-size: 13px; }
 
-.steps-container { padding: 16px; display: flex; flex-direction: column; gap: 20px; }
+.steps-container { display: flex; flex-direction: column; gap: 20px; }
 
 .step-card {
   background: white;
@@ -547,22 +489,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .step-title { font-size: 16px; font-weight: 700; color: #1A1A2E; margin-bottom: 12px; }
 
-/* Pie chart on the left, ingredient legend on the right — matches the
-   native MealRecipeScreen layout so the visual information density is the
-   same on web and mobile. The legend wraps under on narrow phones. */
-.pie-container {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.pie-container > .pie-chart,
-.pie-container > .pie-chart-wrap { flex-shrink: 0; }
-.pie-chart-wrap { position: relative; }
 .pie-chart { display: block; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.12)); }
 
-.legend { flex: 1; min-width: 180px; }
 .legend-item {
   display: flex;
   align-items: center;
@@ -591,40 +519,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   min-width: 34px;
   text-align: center;
 }
-
-/* ── Prep Instructions Card (recipe page) ── */
-.prep-card {
-  background: #EFF6FF;
-  border-radius: 16px;
-  padding: 14px 16px;
-  margin: 12px 16px 0;
-}
-.prep-card-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.prep-card-emoji { font-size: 28px; }
-.prep-card-title { font-size: 15px; font-weight: 700; color: #1A1A2E; }
-.prep-card-meta { font-size: 12px; color: #6B7280; margin-top: 1px; }
-.prep-card-instructions {
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.5;
-}
-
-/* ── Bottom Tip ── */
-.tip-card {
-  background: #FFF3CD;
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin: 0 16px 32px;
-  font-size: 13px;
-  color: #78350F;
-  line-height: 1.5;
-}
-.tip-card strong { display: block; margin-bottom: 2px; }
 
 /* ─────────────────────────────
    RECIPE BUILDER
@@ -1193,34 +1087,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   background: #FFF7ED;
   border-radius: 10px;
   padding: 4px 10px;
-}
-
-/* ── Recipe: Time Summary ── */
-.time-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  flex-wrap: wrap;
-}
-.time-badge {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6B7280;
-  background: #F3F4F6;
-  border-radius: 10px;
-  padding: 4px 10px;
-  white-space: nowrap;
-}
-.time-total {
-  font-size: 13px;
-  font-weight: 800;
-  color: #E85D04;
-  background: #FFF7ED;
-  border-radius: 10px;
-  padding: 4px 12px;
-  margin-left: auto;
-  white-space: nowrap;
 }
 
 /* ── Recipe: Step Time Badge ── */
@@ -1845,7 +1711,6 @@ body, button, input, select, textarea {
 .chip [data-lucide]               { width: 11px; height: 11px; }
 .section-label-icon [data-lucide] { width: 13px; height: 13px; color: #F59E0B; }
 .step-ref-badge [data-lucide]     { width: 14px; height: 14px; vertical-align: -2px; }
-.tip-card [data-lucide]           { width: 16px; height: 16px; color: #E85D04; }
 .meal-timing-banner [data-lucide] { width: 15px; height: 15px; vertical-align: -2px; }
 
 /* ─────────────────────────────
