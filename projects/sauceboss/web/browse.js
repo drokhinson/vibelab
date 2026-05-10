@@ -131,14 +131,16 @@ function _browseAuthorName() {
 }
 
 function _renderBrowseRow(row) {
-  // Browse rows are lightweight (no ingredients), so the missing-ingredient
-  // count surfaces only in Saucebook. variantCount on the backend is the
-  // number of variants under the family root, so the displayed count is
-  // root + variants.
-  const variantCount = (row.variantCount || 0) > 0 ? (row.variantCount + 1) : 0;
+  // Browse rows are lightweight (no ingredients), so missing-ingredient
+  // counts surface only in Saucebook. Variant count from the backend is the
+  // count under the family root, displayed as root + variants.
+  const totalVersions = (row.variantCount || 0) > 0 ? (row.variantCount + 1) : 0;
+  const variantBadge = totalVersions >= 2
+    ? `<span class="variant-badge" title="${totalVersions} versions in this family"><i data-lucide="git-branch"></i> ${totalVersions}</span>`
+    : '';
   const isAdded = !!row.inSaucebook;
-  return renderRecipeRow(row, {
-    variantCount,
+  return renderSauceRow(row, {
+    variantBadge,
     onClick: `browseOpenRecipe('${escapeHtml(row.id)}')`,
     actionLabel: currentUser ? (isAdded ? 'Added ✓' : '+ Saucebook') : null,
     actionHandler: `event.stopPropagation(); browseAddToSaucebook('${escapeHtml(row.id)}', this)`,

@@ -217,48 +217,66 @@ function prepareItems(items) {
   });
 }
 
-// ─── Shared recipe-row markup ────────────────────────────────────────────────
-// Used by Browse + Saucebook so the two list views are visually identical.
-// `sauce` is a sauce envelope (ingredients optional — Browse rows are
-// lightweight and skip them); `opts` controls per-tab affordances:
-//   variantCount    — number to render as a "N variants" chip (omit if 0/1)
-//   actionLabel     — text for the right-side action button (e.g. "+ Saucebook").
-//                     If null, the action button is omitted (saucebook rows).
-//   actionHandler   — JS expression for the button's onclick (already escapes
-//                     event.stopPropagation() and any other plumbing).
-//   actionDisabled  — render the button in the green "Added" pill state.
-//   onClick         — JS expression for the row's onclick (e.g. opening the
-//                     recipe view).
-//   missingCount    — number of pantry-missing ingredients in this sauce.
-//                     Renders a "Missing N" badge that does NOT block the click.
-function renderRecipeRow(sauce, opts = {}) {
-  const type = SAUCE_TYPES.find(t => t.value === sauce.sauceType);
-  const typeLabel = type ? type.label : sauce.sauceType;
+// ─── Shared sauce-list markup ────────────────────────────────────────────────
+// One row component used by Browse, Saucebook, the meal-flow Sauce Selector,
+// and the Sauce Manager → Sauces list. The visual is the flat
+// `.admin-sauce-row` shell (color dot + name + author subline + optional
+// right-slot pill / action). Per-screen extras (saucebook swipe wrapping,
+// sauce-manager type pill / merge tags, browse "+ Saucebook" CTA) are passed
+// in via `opts` so the helper itself stays neutral.
+//
+// `sauce` is a sauce envelope (ingredients optional — Browse rows are slim).
+// Options:
+//   subline       — overrides the default "by &lt;Author&gt;" line.
+//   variantBadge  — pre-rendered HTML appended after the name (e.g. the
+//                   git-branch chip used by Sauce Selector / Sauce Manager).
+//   rightSlot     — pre-rendered HTML inserted before the action button
+//                   (sauce-type pill, missing badge, merge tag, …).
+//   actionLabel / actionHandler / actionDisabled — Browse "+ Saucebook" CTA.
+//   onClick       — JS expression for the row's tap handler.
+//   rowClass      — extra classes on the row (`unavailable`,
+//                   `admin-sauce-row--variant`, …).
+function renderSauceRow(sauce, opts = {}) {
   const author = sauce.authorName || (sauce.createdBy ? 'Unknown' : 'SauceBoss');
-  const variantTag = (opts.variantCount && opts.variantCount > 1)
-    ? `<span class="recipe-row__variants">${opts.variantCount} variants</span>`
-    : '';
-  const missingTag = (opts.missingCount && opts.missingCount > 0)
-    ? `<span class="recipe-row__missing" title="${opts.missingCount} ingredient${opts.missingCount === 1 ? '' : 's'} missing from your pantry"><i data-lucide="alert-circle"></i> Missing ${opts.missingCount}</span>`
-    : '';
+  const subline = opts.subline != null ? opts.subline : `by ${escapeHtml(author)}`;
+  const variantBadge = opts.variantBadge || '';
+  const rightSlot = opts.rightSlot || '';
   const actionBtn = opts.actionLabel
-    ? `<button class="recipe-row__action ${opts.actionDisabled ? 'recipe-row__action--added' : ''}"
+    ? `<button class="admin-sauce-row__action ${opts.actionDisabled ? 'admin-sauce-row__action--added' : ''}"
                 ${opts.actionDisabled ? 'disabled' : ''}
                 onclick="${opts.actionHandler || ''}">${opts.actionLabel}</button>`
     : '';
+  const onClickAttr = opts.onClick ? ` onclick="${opts.onClick}"` : '';
+  const cls = `admin-sauce-row${opts.rowClass ? ' ' + opts.rowClass : ''}`;
   return `
-    <div class="recipe-row" onclick="${opts.onClick || ''}">
-      <span class="recipe-row__color" style="background:${sauce.color || '#E85D04'}"></span>
-      <div class="recipe-row__main">
-        <div class="recipe-row__name">${escapeHtml(sauce.name)}</div>
-        <div class="recipe-row__meta">
-          <span class="recipe-row__type">${escapeHtml(typeLabel)}</span>
-          <span class="recipe-row__author">by ${escapeHtml(author)}</span>
-          ${variantTag}
-          ${missingTag}
-        </div>
+    <div class="${cls}"${onClickAttr}>
+      <span class="sauce-dot" style="background:${sauce.color || '#E85D04'}"></span>
+      <div class="admin-sauce-info">
+        <div class="admin-sauce-name">${escapeHtml(sauce.name)}${variantBadge}</div>
+        <div class="admin-sauce-meta">${subline}</div>
       </div>
+      ${rightSlot}
       ${actionBtn}
+    </div>
+  `;
+}
+
+// Cuisine accordion shared by Saucebook, Sauce Selector, and Sauce Manager.
+// Renders the orange uppercase header + flush body using the existing
+// `.ingredient-category-*` classes. `body` is the already-rendered rows HTML
+// (caller decides what to put inside).
+function renderCuisineGroup(opts) {
+  const { label, count, isOpen, onToggle, body, emoji } = opts;
+  const chevron = isOpen ? '▾' : '▸';
+  return `
+    <div class="ingredient-category-group">
+      <div class="ingredient-category-header" onclick="${onToggle}">
+        <span class="ingredient-category-chevron">${chevron}</span>
+        ${emoji ? `<span class="cuisine-flag-emoji">${emoji}</span>` : ''}
+        <span class="ingredient-category-name">${escapeHtml(label)}</span>
+        <span class="ingredient-category-count">${count}</span>
+      </div>
+      ${isOpen ? `<div class="ingredient-category-body">${body}</div>` : ''}
     </div>
   `;
 }

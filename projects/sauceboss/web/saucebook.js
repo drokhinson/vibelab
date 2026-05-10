@@ -13,7 +13,7 @@
 //     type chips, and an author chip-list (no autocomplete needed; the
 //     saucebook is small enough to render every authoring user as a chip).
 //   • Body — sauces grouped by cuisine (one accordion per cuisine).
-//     Rows are rendered via the shared `renderRecipeRow` helper from
+//     Rows are rendered via the shared `renderSauceRow` helper from
 //     helpers.js so they're visually identical to Browse rows.
 //   • Missing-ingredient note — each row shows a "Missing N" badge if any
 //     of its ingredients are flagged in the user's pantry. The badge is a
@@ -175,16 +175,14 @@ function _saucebookFabs() {
 }
 
 function _saucebookCuisineGroup(cuisine, rows) {
-  const open = state.cuisineSections[cuisine] !== false; // default open
-  return `
-    <div class="cuisine-group">
-      <div class="cuisine-group__header" onclick="saucebookToggleCuisine('${escapeHtml(cuisine)}')">
-        <span>${escapeHtml(cuisine)}</span>
-        <span class="cuisine-group__count">${rows.length}</span>
-      </div>
-      ${open ? `<div class="cuisine-group__body">${rows.map(r => _saucebookRenderRow(r)).join('')}</div>` : ''}
-    </div>
-  `;
+  const isOpen = state.cuisineSections[cuisine] !== false; // default open
+  return renderCuisineGroup({
+    label: cuisine,
+    count: rows.length,
+    isOpen,
+    onToggle: `saucebookToggleCuisine('${escapeHtml(cuisine)}')`,
+    body: rows.map(r => _saucebookRenderRow(r)).join(''),
+  });
 }
 
 function _saucebookRenderRow({ family, displayed }) {
@@ -195,10 +193,15 @@ function _saucebookRenderRow({ family, displayed }) {
   // distinguish between a tap (opens the recipe) and a horizontal drag
   // past 60px (commits edit on right swipe / remove on left swipe).
   const safeId = escapeHtml(displayed.id);
-  const inner = renderRecipeRow(displayed, {
-    variantCount: totalVersions,
-    missingCount,
-    onClick: '',
+  const variantBadge = totalVersions >= 2
+    ? `<span class="variant-badge" title="${totalVersions} versions in this family"><i data-lucide="git-branch"></i> ${totalVersions}</span>`
+    : '';
+  const missingTag = missingCount > 0
+    ? `<span class="recipe-row__missing" title="${missingCount} ingredient${missingCount === 1 ? '' : 's'} missing from your pantry"><i data-lucide="alert-circle"></i> Missing ${missingCount}</span>`
+    : '';
+  const inner = renderSauceRow(displayed, {
+    variantBadge,
+    rightSlot: missingTag,
   });
   return `
     <div class="swipe-row swipe-row--saucebook" data-swipe

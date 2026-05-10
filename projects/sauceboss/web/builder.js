@@ -202,7 +202,7 @@ function renderBuilder() {
       <div class="logo"><span>🍲</span>${b.editingId ? 'Edit Sauce' : 'Create a Sauce'}</div>
       ${renderHeaderAuthSlot()}
     </div>
-    <div class="scroll-body">
+    <div class="scroll-body scroll-body--padded">
       <div class="builder-sticky-header">
         ${importPanel}
         <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
@@ -265,7 +265,7 @@ function renderBuilderItems() {
       <div class="subtitle">${b.cuisine ? renderEmoji(b.cuisineEmoji) + ' ' + b.cuisine : `Select ${t?.pairLabel?.toLowerCase() || 'items'}`}</div>
       ${renderHeaderAuthSlot()}
     </div>
-    <div class="scroll-body">
+    <div class="scroll-body scroll-body--padded">
       <p class="section-label">Which ${t?.pairLabel?.toLowerCase() || 'dishes'} go with this ${t?.label?.toLowerCase() || 'sauce'}?</p>
       <div class="carb-grid">${itemsHTML}</div>
       <button class="builder-primary-btn" onclick="navigate('builder-review')" ${b.itemIds.length > 0 ? '' : 'disabled'}>Review Sauce</button>
@@ -304,7 +304,7 @@ function renderBuilderReview() {
       <div class="subtitle">${renderEmoji(b.cuisineEmoji)} ${b.cuisine} · ${b.steps.length} step${b.steps.length > 1 ? 's' : ''} · ${totalIngs} ingredients</div>
       ${renderHeaderAuthSlot()}
     </div>
-    <div class="scroll-body">
+    <div class="scroll-body scroll-body--padded">
       <div class="review-summary">
         <div class="review-carbs">${isStandalone
           ? 'Standalone recipe — no dish pairing'

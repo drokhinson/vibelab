@@ -65,7 +65,7 @@ function renderMealCategory() {
         <i data-lucide="chef-hat"></i><span>Manage</span>
       </button>` : ''}
     </div>
-    <div class="scroll-body">
+    <div class="scroll-body scroll-body--padded">
       <div class="hero-illustration" id="hero-illustration">${potSVG()}</div>
       ${tabsHTML}
       <div id="cat-content">${_mealDishGridHTML(activeId)}</div>
@@ -139,7 +139,7 @@ function renderMealSubtype() {
       <div class="subtitle">Pick a subtype</div>
       ${renderHeaderAuthSlot()}
     </div>
-    <div class="scroll-body">
+    <div class="scroll-body scroll-body--padded">
       <div class="carb-grid">
         <button class="carb-card" style="--i:0" onclick="mealPickSubtype(null)">
           <span class="carb-emoji">${dish.emoji || '🍽'}</span>
@@ -376,7 +376,7 @@ function renderMealRecipe() {
       <div class="subtitle">${sauce.cuisine || 'Full recipe'}</div>
       ${renderHeaderAuthSlot()}
     </div>
-    <div class="scroll-body">
+    <div class="scroll-body scroll-body--padded">
       ${timingBanner}
       ${variantSwitcherHTML}
       ${servingsHTML}

@@ -76,37 +76,31 @@ function renderSauceSelector() {
       const totalVersions = 1 + family.variants.length;
       const available = isSauceAvailable(sauce);
       const missing = missingSauceIngredients(sauce);
-      const missingText = missing.map(m => {
-        const sub = getSubstitutionText(m);
-        return sub ? `${m} (try ${sub})` : m;
-      }).join(', ');
-      const compatText = (sauce.compatibleItems || []).join(' · ');
       const variantBadge = totalVersions >= 2
         ? `<span class="variant-badge" title="${totalVersions} versions in this family"><i data-lucide="git-branch"></i> ${totalVersions}</span>`
         : '';
-      // No edit affordance here — the sauce-selector is part of the cooking
-      // workflow, not authoring. Editing lives in the saucebook (swipe) and
-      // the Sauce Manager.
-      return `<div class="sauce-item ${available ? '' : 'unavailable'}" onclick="selectSauce('${family.root.id}','${sauce.id}')">
-        <span class="sauce-dot" style="background:${sauce.color}"></span>
-        <div class="sauce-info">
-          <div class="sauce-item-name">${sauce.name}${variantBadge}</div>
-          <div class="sauce-item-tags">${compatText}${missing.length ? ' · missing: '+missingText : ''}</div>
-        </div>
-        ${!available ? `<span class="sauce-missing-badge">-${missing.length}</span>` : ''}
-        <span class="sauce-arrow"><i data-lucide="chevron-right"></i></span>
-      </div>`;
+      const rightSlot = !available
+        ? `<span class="sauce-missing-badge" title="${missing.length} ingredient${missing.length === 1 ? '' : 's'} missing">-${missing.length}</span>`
+        : '';
+      // No edit affordance — the sauce-selector is part of the cooking
+      // workflow, not authoring. Editing lives in saucebook swipe and the
+      // Sauce Manager.
+      return renderSauceRow(sauce, {
+        rowClass: available ? '' : 'unavailable',
+        onClick: `selectSauce('${family.root.id}','${sauce.id}')`,
+        variantBadge,
+        rightSlot,
+      });
     }).join('') : '';
 
-    return `<div class="ingredient-category-group" id="cg-${cuisine}">
-      <div class="ingredient-category-header" onclick="toggleCuisine('${safeCuisine}')">
-        <span class="ingredient-category-chevron">${isOpen ? '▾' : '▸'}</span>
-        <span class="cuisine-flag-emoji">${emoji}</span>
-        <span class="ingredient-category-name">${cuisine}</span>
-        <span class="ingredient-category-count">${availCount}/${cuisineEntries.length}</span>
-      </div>
-      ${isOpen ? `<div class="ingredient-category-body">${saucesHTML}</div>` : ''}
-    </div>`;
+    return renderCuisineGroup({
+      label: cuisine,
+      emoji,
+      count: `${availCount}/${cuisineEntries.length}`,
+      isOpen,
+      onToggle: `toggleCuisine('${safeCuisine}')`,
+      body: saucesHTML,
+    });
   }).join('');
 
   return `

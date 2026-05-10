@@ -26,7 +26,7 @@ function renderSettings() {
         <div class="subtitle">Sign in first to claim admin rights</div>
         ${renderHeaderAuthSlot()}
       </div>
-      <div class="scroll-body">
+      <div class="scroll-body scroll-body--padded">
         <div class="settings-form">
           <p>You need to sign in before you can become an admin.</p>
           <button class="builder-primary-btn" onclick="openAuthModal()">Sign in</button>
@@ -42,7 +42,7 @@ function renderSettings() {
         <div class="logo"><span><i data-lucide="shield-check"></i></span>You're an admin</div>
         ${renderHeaderAuthSlot()}
       </div>
-      <div class="scroll-body">
+      <div class="scroll-body scroll-body--padded">
         <div class="settings-form">
           <p>You already have admin rights — open the Sauce Manager to edit anything.</p>
           <button class="builder-primary-btn" onclick="navigate('admin')">Open Sauce Manager</button>
@@ -58,7 +58,7 @@ function renderSettings() {
       <div class="subtitle">Enter the shared admin key to unlock full edit rights</div>
       ${renderHeaderAuthSlot()}
     </div>
-    <div class="scroll-body">
+    <div class="scroll-body scroll-body--padded">
       <div class="settings-form">
         <input
           id="admin-key-input"
@@ -230,20 +230,17 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
 
   const groupsHTML = cuisines.map(cuisine => {
     const safeCuisine = cuisine.replace(/'/g, "\\'");
-    const open = state.cuisineSections[cuisine] === true;
-    const chevron = open ? '▾' : '▸';
-    const rowsHTML = open
+    const isOpen = state.cuisineSections[cuisine] === true;
+    const rowsHTML = isOpen
       ? grouped[cuisine].rows.map(({ sauce, isVariant }) => renderSauceManagerRow(sauce, isAdmin, merge, isVariant)).join('')
       : '';
-    return `
-      <div class="ingredient-category-group">
-        <div class="ingredient-category-header" onclick="toggleCuisineSection('${safeCuisine}')">
-          <span class="ingredient-category-chevron">${chevron}</span>
-          <span class="ingredient-category-name">${cuisine}</span>
-          <span class="ingredient-category-count">${grouped[cuisine].count}</span>
-        </div>
-        ${open ? `<div class="ingredient-category-body">${rowsHTML}</div>` : ''}
-      </div>`;
+    return renderCuisineGroup({
+      label: cuisine,
+      count: grouped[cuisine].count,
+      isOpen,
+      onToggle: `toggleCuisineSection('${safeCuisine}')`,
+      body: rowsHTML,
+    });
   }).join('');
 
   // Bottom action bar: always visible while in merge mode so the user can
@@ -269,7 +266,7 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
   // badge (the indent already conveys it) and disable long-press merge.
   const variantRowCls = isVariantRow ? ' admin-sauce-row--variant' : '';
 
-  const variantTag = isVariant && !mergeMode && !isVariantRow
+  const variantBadge = isVariant && !mergeMode && !isVariantRow
     ? '<span class="variant-badge" title="Variant of another sauce"><i data-lucide="git-branch"></i></span>'
     : '';
   const mergeTag = mergeMode
@@ -277,27 +274,47 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
               : isPicked ? '<span class="food-merge-tag food-merge-tag-merge">will be variant</span>'
               : '')
     : '';
-  const inner = `
-    <span class="sauce-dot" style="background:${s.color || '#999'}"></span>
-    <div class="admin-sauce-info">
-      <div class="admin-sauce-name">${s.name}${variantTag}</div>
-      <div class="admin-sauce-carbs">${(s.compatibleItems || []).join(' · ')}</div>
-    </div>
-    ${mergeTag}
-    <span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>`;
+  const typePill = `<span class="sauce-type-tag sauce-type-${typeValue}">${typeMeta.label}</span>`;
+  // Sauce Manager subline: prefer "by Author" so admin rows match the rest
+  // of the app; fall back to the legacy compatible-items list for seed
+  // sauces (no createdBy).
+  const author = s.authorName || (s.createdBy ? 'Unknown' : null);
+  const subline = author ? `by ${escapeHtml(author)}` : escapeHtml((s.compatibleItems || []).join(' · '));
+
+  // The shared row helper builds the inner shell. Sauce Manager-specific
+  // wrappers (merge/swipe) live below.
+  const baseRowClass = `${variantRowCls}${isKeep ? ' food-row-keep' : ''}${isPicked ? ' food-row-picked' : ''}`.trim();
 
   if (mergeMode) {
     // While in merge mode the row is purely a tap-target — disable swipe so
     // the user can't accidentally edit/delete during selection.
-    const cls = `admin-sauce-row${variantRowCls}${isKeep ? ' food-row-keep' : ''}${isPicked ? ' food-row-picked' : ''}`;
-    return `<div class="${cls}" onclick="toggleSauceMergePick('${s.id}')">${inner}</div>`;
+    return renderSauceRow(s, {
+      rowClass: baseRowClass,
+      onClick: `toggleSauceMergePick('${s.id}')`,
+      subline,
+      variantBadge,
+      rightSlot: mergeTag + typePill,
+    });
   }
 
   if (!canEdit && !canDelete) {
-    return `<div class="admin-sauce-row${variantRowCls}" onclick="selectSauceFromManager('${s.id}')">${inner}</div>`;
+    return renderSauceRow(s, {
+      rowClass: variantRowCls.trim(),
+      onClick: `selectSauceFromManager('${s.id}')`,
+      subline,
+      variantBadge,
+      rightSlot: typePill,
+    });
   }
-  // Variant rows skip long-press merge (already a child of a family).
+  // Editable rows wrap the shared helper in the swipe primitive. The inner
+  // row drops its own onclick — swipe.js dispatches the tap-action instead.
   const longPressAttr = isAdmin && state.editMode && !isVariantRow ? `data-longpress-action="startSauceMerge('${s.id}')"` : '';
+  const inner = renderSauceRow(s, {
+    rowClass: variantRowCls.trim(),
+    subline,
+    variantBadge,
+    rightSlot: typePill,
+  });
   return `
     <div class="swipe-row" data-swipe
          data-tap-action="selectSauceFromManager('${s.id}')"
@@ -306,7 +323,7 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
          ${canDelete ? `data-delete-action="adminDeleteSauce('${s.id}', '${safeName}')"` : ''}>
       ${canEdit ? '<div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>' : ''}
       ${canDelete ? '<div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>' : ''}
-      <div class="swipe-content admin-sauce-row${variantRowCls}">${inner}</div>
+      <div class="swipe-content">${inner}</div>
     </div>`;
 }
 
