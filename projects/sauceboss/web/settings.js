@@ -19,7 +19,6 @@ function scrollFormIntoView() {
 function renderSettings() {
   if (!currentUser) {
     return `
-      <div class="status-bar"></div>
       ${renderAppHeader({
         title: 'Become Admin',
         subtitle: 'Sign in first to claim admin rights',
@@ -36,7 +35,6 @@ function renderSettings() {
   }
   if (currentUser.is_admin) {
     return `
-      <div class="status-bar"></div>
       ${renderAppHeader({
         title: "You're an admin",
         titleIcon: 'shield-check',
@@ -51,7 +49,6 @@ function renderSettings() {
     `;
   }
   return `
-    <div class="status-bar"></div>
     ${renderAppHeader({
       title: 'Become Admin',
       subtitle: 'Enter the shared admin key to unlock full edit rights',
@@ -135,7 +132,6 @@ function renderAdmin() {
     : '';
 
   return `
-    <div class="status-bar"></div>
     ${renderAppHeader({
       title: 'Sauce Manager',
       subtitle: state.editMode ? 'Edit mode' : (isAdmin ? 'Admin' : (isLoggedIn ? 'Signed in' : '')),

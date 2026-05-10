@@ -24,9 +24,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
 .screen.active { display: flex; }
 
-/* ── Status Bar Spacer ── */
-.status-bar { height: 44px; background: #E85D04; flex-shrink: 0; }
-
 /* ── App Header (slim, unified across all screens) ──
    Layout:
      [back?]  [title block flex:1]  [actions: manage + auth, vert-center]
@@ -300,7 +297,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .filter-panel {
   background: white;
   border-radius: 14px;
-  margin: 0 16px 16px;
+  margin: 16px 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   overflow: hidden;
 }
@@ -329,7 +326,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .filter-chevron.open { transform: rotate(180deg); }
 .filter-body { padding: 0 14px 12px; display: none; }
 .filter-body.open { display: block; }
-.filter-hint { font-size: 12px; color: #6B7280; margin-bottom: 8px; }
 .ingredient-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   display: inline-flex;
@@ -395,7 +391,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 ───────────────────────────── */
 .recipe-header {
   background: #E85D04;
-  padding: 0 16px 20px;
+  padding: 16px 16px 20px;
   flex-shrink: 0;
 }
 .recipe-cuisine-badge {
@@ -1590,7 +1586,6 @@ body.splash--exiting .splash-pot-wiggle {
 body.splash--exiting .splash-text { transition: opacity 200ms ease; opacity: 0; }
 body.splash--exiting .splash      { transition: opacity 200ms 480ms ease; opacity: 0; }
 
-body.splash--exiting .status-bar,
 body.splash--exiting .app-header {
   animation: headerSlideDown 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
