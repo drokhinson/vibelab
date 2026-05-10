@@ -276,6 +276,8 @@ function _openLibraryDetailPanel(rowId) {
          +  '</button>';
   }
 
+  html += _plantTagsHtml(plant);
+
   // Status picker — three-way radio.
   html += '<div class="library-detail-section">';
   html += '<div class="library-detail-label">Status</div>';
@@ -351,6 +353,8 @@ function _openLibraryDetailPanel(rowId) {
     html +=   '</div>';
     html += '</div>';
   }
+
+  html += _plantSourceHtml(plant);
 
   html += '<button type="button" class="btn btn-error btn-outline btn-block mt-3" id="library-detail-remove">'
        +   '<i data-lucide="trash-2" style="width:0.9em;height:0.9em"></i> Remove from library'

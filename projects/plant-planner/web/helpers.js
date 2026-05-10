@@ -262,8 +262,11 @@ function _coreInfoBullets(plant) {
   if (plant.hardiness_min != null && plant.hardiness_max != null) {
     bullets.push(['Hardiness', 'Zone ' + plant.hardiness_min + '–' + plant.hardiness_max]);
   }
+  if (plant.indoor === true)  bullets.push(['Indoor', 'yes']);
+  if (plant.indoor === false) bullets.push(['Indoor', 'no']);
   if (plant.edible === true)  bullets.push(['Edible', 'yes']);
   if (plant.edible === false) bullets.push(['Edible', 'no']);
+  if (plant.vegetable === true) bullets.push(['Vegetable', 'yes']);
   return bullets;
 }
 
@@ -273,11 +276,13 @@ function _trefleExtraBullets(plant) {
   if (plant.height_min_cm != null || plant.height_max_cm != null) {
     bullets.push(['Height', (plant.height_min_cm || '?') + '–' + (plant.height_max_cm || '?') + ' cm']);
   }
+  if (plant.spread_cm != null) bullets.push(['Spread', plant.spread_cm + ' cm']);
   if (plant.days_to_harvest != null) bullets.push(['Days to harvest', String(plant.days_to_harvest)]);
   if (plant.ph_min != null && plant.ph_max != null) bullets.push(['Soil pH', plant.ph_min + '–' + plant.ph_max]);
   if (plant.toxicity)    bullets.push(['Toxicity', plant.toxicity]);
   if (plant.growth_rate) bullets.push(['Growth rate', plant.growth_rate]);
   if (plant.sowing)      bullets.push(['Sowing', plant.sowing]);
+  if (plant.nitrogen_fixation === true) bullets.push(['Nitrogen-fixing', 'yes']);
   return bullets;
 }
 
@@ -285,12 +290,36 @@ function _trefleExtrasMissing(plant) {
   if (!plant) return true;
   return plant.height_max_cm == null
       && plant.height_min_cm == null
+      && plant.spread_cm == null
       && plant.ph_min == null
       && plant.ph_max == null
       && plant.days_to_harvest == null
       && !plant.toxicity
       && !plant.growth_rate
-      && !plant.sowing;
+      && !plant.sowing
+      && plant.nitrogen_fixation == null;
+}
+
+// Tag chips — Trefle/Perenual surface a free-text tag list per species
+// (e.g. "fragrant", "drought-tolerant"). Render as pill chips.
+function _plantTagsHtml(plant) {
+  if (!plant || !plant.tags || !plant.tags.length) return '';
+  var html = '<div class="shopping-detail-section-label">Tags</div>';
+  html += '<div class="plant-detail-tags">';
+  for (var i = 0; i < plant.tags.length; i++) {
+    html += '<span class="plant-detail-tag">' + escapeHtml(String(plant.tags[i])) + '</span>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// Small "Data from <source>" footer — surfaces which API the cache row came
+// from so users know how to interpret missing fields.
+function _plantSourceHtml(plant) {
+  if (!plant || !plant.source) return '';
+  var labels = { trefle: 'Trefle', perenual: 'Perenual', merged: 'Trefle + Perenual' };
+  var label = labels[plant.source] || plant.source;
+  return '<div class="plant-detail-source">Data from ' + escapeHtml(label) + '</div>';
 }
 
 // Render a <dl class="shopping-detail-bullets"> from a list of [label, value]

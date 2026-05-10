@@ -527,6 +527,8 @@ function _openBrowserDetailPanel(plant) {
          +  '</button>';
   }
 
+  html += _plantTagsHtml(plant);
+
   html += '<div class="browser-detail-actions">';
   html +=   '<button type="button" class="btn btn-block gap-1' + (inCurrent ? ' btn-primary' : ' btn-outline btn-primary') + '" id="browser-detail-plant">'
        +     '<i data-lucide="leaf"' + (inCurrent ? ' fill="currentColor"' : '') + '></i> '
@@ -537,6 +539,8 @@ function _openBrowserDetailPanel(plant) {
        +     (inWishlist ? 'In your favorites' : 'Add to favorites')
        +   '</button>';
   html += '</div>';
+
+  html += _plantSourceHtml(plant);
 
   html += '</div>';
   html += '</aside>';

@@ -376,16 +376,8 @@ function _openShoppingDetailPanel(plant) {
   var img = _shoppingImageFor(plant, 'regular');
   var sci = plant.scientific_name ? '<div class="shopping-detail-sci"><i>' + escapeHtml(plant.scientific_name) + '</i></div>' : '';
   var family = plant.family ? '<div class="shopping-detail-family">' + escapeHtml(plant.family) + '</div>' : '';
-  var bullets = [];
-  if (plant.sunlight)    bullets.push(['Sunlight', plant.sunlight.replace(/_/g, ' ')]);
-  if (plant.watering)    bullets.push(['Water', plant.watering]);
-  if (plant.cycle)       bullets.push(['Cycle', plant.cycle]);
-  if (plant.hardiness_min != null && plant.hardiness_max != null) bullets.push(['Hardiness', 'Zone ' + plant.hardiness_min + '–' + plant.hardiness_max]);
-  if (plant.height_min_cm != null || plant.height_max_cm != null) bullets.push(['Height', (plant.height_min_cm || '?') + '–' + (plant.height_max_cm || '?') + ' cm']);
-  if (plant.days_to_harvest) bullets.push(['Days to harvest', String(plant.days_to_harvest)]);
-  if (plant.edible)      bullets.push(['Edible', 'yes']);
-  if (plant.toxicity)    bullets.push(['Toxicity', plant.toxicity]);
-  if (plant.ph_min != null && plant.ph_max != null) bullets.push(['Soil pH', plant.ph_min + '–' + plant.ph_max]);
+  var coreBullets  = _coreInfoBullets(plant);
+  var extraBullets = _trefleExtraBullets(plant);
 
   var picked = shoppingState.shortlist.has(plant.id);
 
@@ -396,16 +388,17 @@ function _openShoppingDetailPanel(plant) {
   html += '<div class="shopping-detail-body">';
   html += '<h3>' + escapeHtml(plant.common_name || plant.scientific_name || 'Plant') + '</h3>';
   html += sci + family;
-  html += '<dl class="shopping-detail-bullets">';
-  for (var i = 0; i < bullets.length; i++) {
-    html += '<dt>' + escapeHtml(bullets[i][0]) + '</dt><dd>' + escapeHtml(bullets[i][1]) + '</dd>';
+  html += _renderDetailBullets(coreBullets);
+  if (extraBullets.length) {
+    html += '<div class="shopping-detail-section-label">Extra info</div>';
+    html += _renderDetailBullets(extraBullets);
   }
-  html += '</dl>';
-  if (plant.sowing) html += '<p class="shopping-detail-sowing">' + escapeHtml(plant.sowing) + '</p>';
+  html += _plantTagsHtml(plant);
   html += '<button type="button" class="btn btn-primary btn-block gap-1" id="shopping-detail-toggle">';
   html +=   '<i data-lucide="heart"' + (picked ? ' fill="currentColor"' : '') + '></i> ';
   html +=   (picked ? 'Remove from shortlist' : 'Add to shortlist');
   html += '</button>';
+  html += _plantSourceHtml(plant);
   html += '</div>';
   html += '</aside>';
 

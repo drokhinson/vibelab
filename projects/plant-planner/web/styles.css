@@ -2076,6 +2076,26 @@ dialog .dialog-header {
   letter-spacing: 0.05em;
   color: oklch(var(--bc) / 0.55);
 }
+.plant-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.6rem;
+}
+.plant-detail-tag {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: oklch(var(--b2));
+  color: oklch(var(--bc) / 0.78);
+}
+.plant-detail-source {
+  margin-top: 0.8rem;
+  font-size: 0.7rem;
+  color: oklch(var(--bc) / 0.5);
+  font-style: italic;
+  text-align: center;
+}
 
 /* ── Builder shortlist sidebar ─────────────────────────────────────────── */
 .shortlist-sidebar {
