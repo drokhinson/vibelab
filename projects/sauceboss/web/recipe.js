@@ -56,7 +56,6 @@ function renderRecipe() {
     </div>` : '';
 
   return `
-    <div class="status-bar"></div>
     <div class="recipe-header">
       <button class="back-btn" onclick="${isTabShellBack ? `setActiveTab('${state.activeTab}')` : `navigate('${backScreen}')`}"><i data-lucide="chevron-left"></i> Back</button>
       <div class="recipe-cuisine-badge">${renderEmoji(sauce.cuisineEmoji)} ${sauce.cuisine}</div>

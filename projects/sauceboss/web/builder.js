@@ -196,7 +196,6 @@ function renderBuilder() {
     </div>`;
 
   return `
-    <div class="status-bar"></div>
     ${renderAppHeader({
       title: b.editingId ? 'Edit Sauce' : 'Create a Sauce',
       titleEmoji: '🍲',
@@ -258,7 +257,6 @@ function renderBuilderItems() {
   }).join('');
 
   return `
-    <div class="status-bar"></div>
     ${renderAppHeader({
       title: b.name || 'New Sauce',
       subtitle: b.cuisine ? renderEmoji(b.cuisineEmoji) + ' ' + b.cuisine : `Select ${t?.pairLabel?.toLowerCase() || 'items'}`,
@@ -297,7 +295,6 @@ function renderBuilderReview() {
   `).join('');
 
   return `
-    <div class="status-bar"></div>
     ${renderAppHeader({
       title: b.name,
       subtitle: `${renderEmoji(b.cuisineEmoji)} ${b.cuisine} · ${b.steps.length} step${b.steps.length > 1 ? 's' : ''} · ${totalIngs} ingredients`,

@@ -54,7 +54,6 @@ function renderMealCategory() {
     </div>`;
 
   return `
-    <div class="status-bar"></div>
     ${renderAppHeader({
       title: 'Meal Builder',
       subtitle: "What are you cooking with?",
@@ -127,11 +126,9 @@ function renderMealSubtype() {
   if (!dish) return '';
   const subs = Array.isArray(dish.subtypes) ? dish.subtypes : (dish.variants || []);
   return `
-    <div class="status-bar"></div>
     ${renderAppHeader({
-      title: escapeHtml(dish.name),
-      subtitle: 'Pick a subtype',
-      titleEmoji: dish.emoji || '🍽',
+      title: 'Meal Builder',
+      subtitle: `What type of ${escapeHtml(dish.name.toLowerCase())}?`,
       back: { onClick: "navigate('meal-category')" },
     })}
     <div class="scroll-body scroll-body--padded">
@@ -199,10 +196,6 @@ function _proceedToSauceSelector(dish, subtype) {
   }
   state.allIngredients = [...seen].sort();
   state.recipeReturnTo = 'tab-shell';
-  // Open the pantry filter by default in the meal flow so the user sees
-  // their pantry-missing items pre-toggled and can flip any of them
-  // without a hidden interaction.
-  state.filterOpen = true;
   navigate('sauce-selector');
 }
 
@@ -274,7 +267,6 @@ function renderMealRecipe() {
   const title = `${prep?.name || item.name} with ${sauce.name}`;
 
   return `
-    <div class="status-bar"></div>
     ${renderAppHeader({
       title,
       subtitle: sauce.cuisine || 'Full recipe',

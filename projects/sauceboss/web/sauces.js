@@ -15,8 +15,7 @@ function getSauceScreenContext() {
   return {
     sauces:      state.saucesForCurrentItem,
     backScreen,
-    emoji:       item ? item.emoji : '🍲',
-    title:       item ? `${item.name} ${meta.sauceTypeLabel.charAt(0).toUpperCase() + meta.sauceTypeLabel.slice(1)}` : 'Sauces',
+    sauceWord:   meta.sauceWord.toLowerCase(),
   };
 }
 
@@ -51,7 +50,6 @@ function renderSauceSelector() {
 
   const filterBody = `
     <div class="filter-body ${state.filterOpen ? 'open' : ''}">
-      <p class="filter-hint">Uncheck ingredients you don't have — options will update.</p>
       ${categoryGroups.map(({ category, items, isKey }) => `
         <div class="ingredient-section${isKey ? ' key-section' : ''}">
           <p class="ingredient-section-label">
@@ -104,18 +102,15 @@ function renderSauceSelector() {
   }).join('');
 
   return `
-    <div class="status-bar"></div>
     ${renderAppHeader({
-      title: ctx.title,
-      subtitle: `${visibleEntries.length} options · select your style`,
-      titleEmoji: ctx.emoji,
+      title: 'Meal Builder',
+      subtitle: `Pick your ${ctx.sauceWord}`,
       back: { onClick: `navigate('${ctx.backScreen}')` },
     })}
     <div class="scroll-body">
-      <p class="section-label">Ingredient filter</p>
       <div class="filter-panel">
         <button class="filter-header" onclick="toggleFilter()">
-          <span class="filter-header-text"><i data-lucide="shopping-basket"></i> My Pantry${missingCount > 0 ? `<span class="filter-count">−${missingCount} hidden</span>` : ''}</span>
+          <span class="filter-header-text"><i data-lucide="shopping-basket"></i> My Pantry${missingCount > 0 ? `<span class="filter-count">−${missingCount} missing</span>` : ''}</span>
           <span class="filter-chevron ${state.filterOpen ? 'open' : ''}"><i data-lucide="chevron-down"></i></span>
         </button>
         ${filterBody}
