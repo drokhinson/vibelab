@@ -39,7 +39,6 @@ function renderMealCategory() {
     ? state.mealFlow.category
     : 'carb';
   state.mealFlow.category = activeId;
-  const isAdmin = !!(currentUser && currentUser.is_admin);
 
   const tabsHTML = `
     <div class="cat-tabs" role="tablist" aria-label="Meal category">
@@ -56,15 +55,11 @@ function renderMealCategory() {
 
   return `
     <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="setActiveTab('saucebook')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo">SauceBoss</div>
-      <div class="subtitle">What are you cooking with?</div>
-      ${renderHeaderAuthSlot()}
-      ${isAdmin ? `<button class="sauce-mgr-btn" onclick="openSauceManager()" aria-label="Manage dishes, ingredients, and sauces">
-        <i data-lucide="chef-hat"></i><span>Manage</span>
-      </button>` : ''}
-    </div>
+    ${renderAppHeader({
+      title: 'Meal Builder',
+      subtitle: "What are you cooking with?",
+      back: { onClick: "setActiveTab('saucebook')" },
+    })}
     <div class="scroll-body scroll-body--padded">
       <div class="hero-illustration" id="hero-illustration">${potSVG()}</div>
       ${tabsHTML}
@@ -133,12 +128,12 @@ function renderMealSubtype() {
   const subs = Array.isArray(dish.subtypes) ? dish.subtypes : (dish.variants || []);
   return `
     <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-category')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo"><span>${dish.emoji || '🍽'}</span>${escapeHtml(dish.name)}</div>
-      <div class="subtitle">Pick a subtype</div>
-      ${renderHeaderAuthSlot()}
-    </div>
+    ${renderAppHeader({
+      title: escapeHtml(dish.name),
+      subtitle: 'Pick a subtype',
+      titleEmoji: dish.emoji || '🍽',
+      back: { onClick: "navigate('meal-category')" },
+    })}
     <div class="scroll-body scroll-body--padded">
       <div class="carb-grid">
         <button class="carb-card" style="--i:0" onclick="mealPickSubtype(null)">
@@ -280,12 +275,12 @@ function renderMealRecipe() {
 
   return `
     <div class="status-bar"></div>
-    <div class="app-header">
-      <button class="back-btn" onclick="navigate('meal-category')"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="logo"><span>${item.emoji}</span>${title}</div>
-      <div class="subtitle">${sauce.cuisine || 'Full recipe'}</div>
-      ${renderHeaderAuthSlot()}
-    </div>
+    ${renderAppHeader({
+      title,
+      subtitle: sauce.cuisine || 'Full recipe',
+      titleEmoji: item.emoji,
+      back: { onClick: "navigate('meal-category')" },
+    })}
     <div class="scroll-body scroll-body--padded">
       ${timingBanner}
       ${renderVariantSwitcher(sauce.id)}

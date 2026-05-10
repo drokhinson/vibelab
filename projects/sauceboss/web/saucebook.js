@@ -54,17 +54,9 @@ function renderSaucebook() {
   }
   const cuisinesSorted = [...byCuisine.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
-  const isAdmin = !!(currentUser && currentUser.is_admin);
   return `
     <div class="screen-wrap">
-      <div class="tab-screen-header">
-        ${renderHeaderAuthSlot()}
-        ${isAdmin ? `<button class="sauce-mgr-btn" onclick="openSauceManager()" aria-label="Manage dishes, ingredients, and sauces">
-          <i data-lucide="chef-hat"></i><span>Manage</span>
-        </button>` : ''}
-        <h1>Saucebook</h1>
-        <p class="subtitle">Your recipe library</p>
-      </div>
+      ${renderAppHeader({ title: 'Saucebook', subtitle: 'Your recipe library' })}
       <div class="scroll-body">
         ${sauces.length === 0 ? _saucebookEmptyState() : ''}
         ${sauces.length > 0 ? `

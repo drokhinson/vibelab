@@ -27,27 +27,51 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 /* ── Status Bar Spacer ── */
 .status-bar { height: 44px; background: #E85D04; flex-shrink: 0; }
 
-/* ── App Header ── */
+/* ── App Header (slim, unified across all screens) ──
+   Layout:
+     [back?]  [title block flex:1]  [actions: manage + auth, vert-center]
+                subtitle under title
+   Both action buttons (manage, auth) are vertically centered relative to
+   the header content block via `align-self: center` on the actions row. */
 .app-header {
   background: #E85D04;
-  padding: 0 16px 16px;
+  padding: 16px;
   flex-shrink: 0;
-  position: relative; /* anchors .settings-btn / .sauce-mgr-btn / .auth-pill */
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative; /* anchors floating affordances like .edit-mode-toggle */
 }
-.app-header .logo {
-  font-size: 26px;
+.app-header__titles {
+  flex: 1;
+  min-width: 0;
+}
+.app-header__titles h1 {
+  font-size: 22px;
   font-weight: 800;
   color: white;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.3px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.app-header .logo span { font-size: 22px; margin-right: 6px; }
-.app-header .subtitle {
-  font-size: 14px;
+.app-header__titles h1 [data-lucide] { width: 20px; height: 20px; }
+.app-header__titles h1 .header-emoji { font-size: 20px; }
+.app-header__titles .subtitle {
+  font-size: 13px;
   color: rgba(255,255,255,0.85);
-  margin-top: 2px;
+  margin: 2px 0 0;
+}
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  align-self: center;
 }
 
-/* ── Back Button ── */
+/* ── Back Button (legacy, used inside .recipe-header) ── */
 .back-btn {
   background: none;
   border: none;
@@ -60,6 +84,28 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   gap: 4px;
   margin-bottom: 4px;
 }
+
+/* Slim icon back button used inside .app-header — sits left of the title
+   block, vertically centered with the action cluster. */
+.app-header__back {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  align-self: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+.app-header__back:hover { background: rgba(255,255,255,0.25); }
+.app-header__back [data-lucide] { width: 18px; height: 18px; }
 
 /* ── Scroll Body ── */
 /* Default is full-bleed (no horizontal gutter) so list rows + section
@@ -856,13 +902,13 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   display: flex; align-items: center; justify-content: center;
 }
 
-/* Color dot in header */
+/* Color dot in header — sits before the title text, flex gap handles
+   horizontal spacing inside .app-header__titles h1. */
 .color-dot-header {
   display: inline-block;
   width: 14px; height: 14px;
   border-radius: 50%;
-  margin-right: 6px;
-  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 /* Review screen */
@@ -930,31 +976,27 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   padding: 2px 8px;
 }
 
-/* ── Settings / Admin ── */
+/* ── Settings / Admin — sits inside .app-header__actions ── */
 .settings-btn {
-  position: absolute;
-  top: 8px;
-  right: 60px;
   background: rgba(255,255,255,0.15);
   border: none;
   color: white;
   font-size: 18px;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   transition: background 0.15s;
 }
 .settings-btn:hover { background: rgba(255,255,255,0.3); }
 
-/* Labeled "Sauces" pill in the home header — matches auth pill height/alignment */
+/* "Manage" pill in the slim header action cluster — sits to the left of the
+   auth slot, both vertically centered via .app-header__actions flex layout. */
 .sauce-mgr-btn {
-  position: absolute;
-  top: 10px;
-  right: 52px;            /* sits left of the 32x32 auth pill at right:12px (12 + 32 + 8 gap) */
   height: 32px;
   display: inline-flex;
   align-items: center;
@@ -971,7 +1013,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   cursor: pointer;
   transition: background 0.15s;
   -webkit-tap-highlight-color: transparent;
-  z-index: 5;
 }
 .sauce-mgr-btn:hover { background: rgba(255,255,255,0.30); }
 .sauce-mgr-btn [data-lucide] { width: 16px; height: 16px; }
@@ -1577,9 +1618,6 @@ body.splash--exiting .scroll-body .carb-grid {
 body:not(.is-auth) [data-auth-only] { display: none !important; }
 
 .auth-signin-btn {
-  position: absolute;
-  top: 10px;
-  right: 12px;
   width: 32px;
   height: 32px;
   display: inline-flex;
@@ -1590,16 +1628,14 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   background: rgba(255,255,255,0.15);
   color: #fff;
   cursor: pointer;
-  z-index: 5;
+  flex-shrink: 0;
 }
 .auth-signin-btn:hover { background: rgba(255,255,255,0.25); }
 .auth-signin-btn i { width: 16px; height: 16px; }
 
 .auth-pill {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  z-index: 5;
+  position: relative;
+  flex-shrink: 0;
 }
 .auth-pill__summary {
   list-style: none;
@@ -1933,22 +1969,20 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 
 /* ── Edit-mode toggle + import/export UI ─────────────────────────────────── */
 
-/* Pencil-style header toggle. Shares geometry with .settings-btn but sits to
-   its left so both buttons fit alongside the auth pill. */
+/* Pencil-style toggle, lives inside .app-header__actions alongside the
+   manage pill / auth slot. */
 .edit-mode-toggle {
-  position: absolute;
-  top: 8px;
-  right: 104px;           /* settings-btn at 60 + 36 width + 8 gap */
   background: rgba(255,255,255,0.15);
   border: none;
   color: white;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   transition: background 0.15s, transform 0.15s;
 }
 .edit-mode-toggle:hover { background: rgba(255,255,255,0.3); }
@@ -1959,10 +1993,6 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 }
 .edit-mode-toggle [data-lucide] { width: 18px; height: 18px; }
 
-/* If the user-isn't-an-admin "Become admin" key button is also rendered the
-   edit toggle still needs space — push it further left. */
-.app-header:has(.settings-btn) .edit-mode-toggle { right: 104px; }
-.app-header:not(:has(.settings-btn)) .edit-mode-toggle { right: 60px; }
 
 /* Import / bulk-export toolbar in the Sauce Manager. */
 .sm-import-export-row {
@@ -2127,31 +2157,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 /* ─────────────────────────────
    SAUCEBOOK / BROWSE / PANTRY (shared bits)
 ───────────────────────────── */
-.tab-screen-header {
-  background: #E85D04;
-  color: white;
-  padding: 16px;
-  /* Anchor for the absolutely-positioned auth pill / sign-in button. */
-  position: relative;
-}
-.tab-screen-header h1 {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.3px;
-  /* Reserve space on the right so a long title doesn't run under the auth slot. */
-  padding-right: 44px;
-}
-.tab-screen-header .subtitle {
-  font-size: 13px;
-  color: rgba(255,255,255,0.85);
-  margin-top: 2px;
-  padding-right: 44px;
-}
-/* The auth slot already self-positions via .auth-signin-btn / .auth-pill
-   (top: 10px; right: 12px). Boosting top to 12px aligns optically with the
-   tab header's 16px padding. */
-.tab-screen-header .auth-signin-btn,
-.tab-screen-header .auth-pill { top: 12px; }
+/* Tab screens use the same slim .app-header — no extra rules needed. */
 .tab-search {
   display: flex;
   align-items: center;
@@ -2344,8 +2350,9 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 }
 .recipe-row__missing [data-lucide] { width: 11px; height: 11px; }
 
-/* Pantry list */
-.pantry-section { margin: 0 16px 10px; }
+/* Pantry list — 10px gap above the first section matches the inter-section
+   rhythm (each card sits 10px below the one above it). */
+.pantry-section { margin: 10px 16px 0; }
 .pantry-section__header {
   display: flex;
   align-items: center;

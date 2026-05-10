@@ -22,11 +22,7 @@ function renderPantry() {
   if (isHydrating && ings.length === 0) {
     return `
       <div class="screen-wrap">
-        <div class="tab-screen-header">
-          ${renderHeaderAuthSlot()}
-          <h1>Pantry</h1>
-          <p class="subtitle">Mark what you're out of</p>
-        </div>
+        ${renderAppHeader({ title: 'Pantry', subtitle: "Mark what you're out of" })}
         <div class="scroll-body">
           <div class="loading-inline"><div class="loading-pot">${potSVG()}</div><p class="loading-text">Saucing…</p></div>
         </div>
@@ -36,11 +32,7 @@ function renderPantry() {
   if (ings.length === 0) {
     return `
       <div class="screen-wrap">
-        <div class="tab-screen-header">
-          ${renderHeaderAuthSlot()}
-          <h1>Pantry</h1>
-          <p class="subtitle">Mark what you're out of</p>
-        </div>
+        ${renderAppHeader({ title: 'Pantry', subtitle: "Mark what you're out of" })}
         <div class="scroll-body">
           <div class="tab-locked">
             <i data-lucide="archive"></i>
@@ -71,11 +63,10 @@ function renderPantry() {
 
   return `
     <div class="screen-wrap">
-      <div class="tab-screen-header">
-        ${renderHeaderAuthSlot()}
-        <h1>Pantry</h1>
-        <p class="subtitle">${ings.length} ingredient${ings.length === 1 ? '' : 's'} from your saucebook · ${totalMissing} missing</p>
-      </div>
+      ${renderAppHeader({
+        title: 'Pantry',
+        subtitle: `${ings.length} ingredient${ings.length === 1 ? '' : 's'} from your saucebook · ${totalMissing} missing`,
+      })}
       <div class="scroll-body">
         ${ordered.map(cat => _pantrySection(cat, groups.get(cat))).join('')}
       </div>

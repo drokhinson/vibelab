@@ -22,11 +22,7 @@ function renderBrowse() {
 
   return `
     <div class="screen-wrap">
-      <div class="tab-screen-header">
-        ${renderHeaderAuthSlot()}
-        <h1>Browse</h1>
-        <p class="subtitle">Discover recipes from every cuisine</p>
-      </div>
+      ${renderAppHeader({ title: 'Browse', subtitle: 'Discover recipes from every cuisine' })}
       <div class="scroll-body">
         <div class="tab-filter-row">
           <button class="browse-filters__toggle" onclick="browseToggleFilters()">
