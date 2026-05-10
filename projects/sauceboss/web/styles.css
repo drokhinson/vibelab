@@ -4,7 +4,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 
 /* ── Phone Shell ── */
 #app {
-  max-width: 390px;
+  width: 100%;
   min-height: 100dvh;
   margin: 0 auto;
   background: #FFF8F0;
@@ -12,6 +12,12 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+@media (min-width: 600px) {
+  #app {
+    max-width: 390px;
+  }
 }
 
 /* ── Screens ── */
@@ -2773,14 +2779,23 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 .bottom-nav {
   position: fixed;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  margin: 0 auto;
   width: 100%;
-  max-width: 390px;
   background: white;
   border-top: 1px solid #E5E7EB;
   z-index: 50;
   box-shadow: 0 -4px 12px rgba(26, 10, 0, 0.08);
+}
+
+@media (min-width: 600px) {
+  .bottom-nav {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    max-width: 390px;
+  }
 }
 .btm-nav-row { display: flex; }
 .btm-nav-btn {
