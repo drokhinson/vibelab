@@ -27,6 +27,7 @@ from .api_clients import (
     normalize_flora,
     normalize_perenual,
     normalize_trefle,
+    perenual_filter,
     perenual_lookup_by_scientific,
     trefle_filter,
     trefle_search,
@@ -458,13 +459,14 @@ async def catalog_detail(cache_id: str) -> CatalogPlant:
 # plant-selection screen can render a 5-item to-do list while creating a new
 # planter:
 #   1. (frontend) save planter
-#   2. POST /catalog/fill/trefle      — broad criteria search → upsert
-#   3. POST /catalog/fill/perenual    — fill missing hardiness/sun/water
+#   2. POST /catalog/fill/perenual    — filtered species-list seed → upsert
+#   3. POST /catalog/fill/trefle      — fill missing height/pH/days_to_harvest
 #   4. POST /catalog/fill/flora       — supplement with Flora data
 #   5. POST /catalog/fill/compatible  — count plants matching planter conditions
 # Steps 2–5 take the same wizard-conditions body and are independently
 # idempotent. The frontend reports per-step status; the user can continue to
-# the grid even if a step soft-fails.
+# the grid even if a step soft-fails (the final /catalog/search requery falls
+# back to whatever the cache already holds).
 
 
 class FillBody(BaseModel):
@@ -525,58 +527,15 @@ def _build_query_from_body(body: FillBody) -> Dict[str, Any]:
     "/catalog/fill/trefle",
     response_model=FillStepResponse,
     status_code=200,
-    summary="Step 2: pull a filtered list of plants from Trefle for these conditions",
+    summary="Step 3: enrich Perenual-seeded rows with Trefle (height, pH, days_to_harvest)",
 )
 async def fill_trefle(body: FillBody) -> FillStepResponse:
-    """Run a Trefle search for the planter's conditions and upsert results into the cache."""
-    sb = get_supabase()
-    sunlight = _shade_to_sunlight(body.shade_level)
-    light_min = 7 if sunlight == "full_sun" else 4 if sunlight == "part_shade" else None
+    """For matching cache rows missing Trefle-strong fields, look up by sci name and merge.
 
-    try:
-        if body.query:
-            records = await trefle_search(body.query)
-        else:
-            records = await trefle_filter(edible=body.edible, light_min=light_min)
-    except Exception as exc:
-        logger.exception("Trefle fill failed")
-        return FillStepResponse(status="error", error=f"Trefle request failed: {exc}")
-
-    if not records:
-        return FillStepResponse(status="ok", fetched=0, new_plants=0)
-
-    sci_names = [r.get("scientific_name") for r in records if r.get("scientific_name")]
-    pre_existing: set[str] = set()
-    if sci_names:
-        existing = (
-            sb.table("plantplanner_plant_cache")
-            .select("scientific_name")
-            .in_("scientific_name", sci_names)
-            .execute()
-        )
-        pre_existing = {row["scientific_name"] for row in (existing.data or [])}
-
-    normalized = [normalize_trefle(r) for r in records]
-    written = await _upsert_normalized(normalized)
-    new_plants = sum(1 for row in written if row.get("scientific_name") not in pre_existing)
-
-    # Mirror images in the background — best-effort.
-    try:
-        await _mirror_images_for_rows(written)
-    except Exception as exc:
-        logger.info("Trefle fill image mirror failed: %s", exc)
-
-    return FillStepResponse(status="ok", fetched=len(records), new_plants=new_plants)
-
-
-@router.post(
-    "/catalog/fill/perenual",
-    response_model=FillStepResponse,
-    status_code=200,
-    summary="Step 3: enrich cached plants with Perenual data (hardiness, sun, watering, image)",
-)
-async def fill_perenual(body: FillBody) -> FillStepResponse:
-    """Find cache plants matching these conditions that lack Perenual fields; enrich each."""
+    Trefle is the primary source for height, pH, and days_to_harvest — fields
+    Perenual doesn't expose. After Perenual seeds the cache, scan the matching
+    rows and fill any Trefle gaps.
+    """
     sb = get_supabase()
     filters = _build_query_from_body(body)
     candidates = (
@@ -597,13 +556,11 @@ async def fill_perenual(body: FillBody) -> FillStepResponse:
         .data
     ) or []
 
-    # Enrich rows missing hardiness OR cycle OR watering — Perenual is the
-    # primary source for those fields.
     targets = [
         r for r in candidates
-        if r.get("hardiness_min") is None
-        or r.get("cycle") is None
-        or r.get("watering") is None
+        if r.get("height_max_cm") is None
+        or r.get("ph_min") is None
+        or r.get("days_to_harvest") is None
     ]
     if not targets:
         return FillStepResponse(status="ok", fetched=0, enriched=0)
@@ -615,23 +572,92 @@ async def fill_perenual(body: FillBody) -> FillStepResponse:
             sci = row.get("scientific_name")
             if not sci:
                 continue
-            p_record = await perenual_lookup_by_scientific(sci)
-            if p_record is None:
+            hits = await trefle_search(sci)
+            target_sci = sci.strip().lower()
+            t_record = next(
+                (c for c in hits if (c.get("scientific_name") or "").strip().lower() == target_sci),
+                hits[0] if hits else None,
+            )
+            if t_record is None:
                 continue
             fetched += 1
-            merged = merge_records(row, normalize_perenual(p_record))
+            merged = merge_records(row, normalize_trefle(t_record))
             enriched_rows.append(merged)
     except Exception as exc:
-        logger.exception("Perenual fill failed")
-        return FillStepResponse(status="error", fetched=fetched, error=f"Perenual request failed: {exc}")
+        logger.exception("Trefle fill failed")
+        return FillStepResponse(status="error", fetched=fetched, error=f"Trefle request failed: {exc}")
 
     written = await _upsert_normalized(enriched_rows) if enriched_rows else []
     try:
         await _mirror_images_for_rows(written)
     except Exception as exc:
-        logger.info("Perenual fill image mirror failed: %s", exc)
+        logger.info("Trefle fill image mirror failed: %s", exc)
 
     return FillStepResponse(status="ok", fetched=fetched, enriched=len(written))
+
+
+@router.post(
+    "/catalog/fill/perenual",
+    response_model=FillStepResponse,
+    status_code=200,
+    summary="Step 2: seed the cache with a Perenual species-list filtered to the wizard conditions",
+)
+async def fill_perenual(body: FillBody) -> FillStepResponse:
+    """Query Perenual v2/species-list with wizard filters; upsert results.
+
+    Perenual's filter params now align with the wizard's filter logic
+    (cycle, watering, sunlight, hardiness, indoor, edible). Using it as
+    the seeding step captures cycle/watering/hardiness/sunlight/indoor
+    plus all three image sizes in a single round trip.
+    """
+    sb = get_supabase()
+    filters = _build_query_from_body(body)
+    try:
+        records = await perenual_filter(
+            cycle=filters["cycle"],
+            watering=filters["watering"],
+            sunlight=filters["sunlight"],
+            hardiness=filters["zone"],
+            indoor=filters["indoor"],
+            edible=filters["edible"],
+            query=filters["query"],
+        )
+    except Exception as exc:
+        logger.exception("Perenual fill failed")
+        return FillStepResponse(status="error", error=f"Perenual request failed: {exc}")
+
+    if not records:
+        return FillStepResponse(status="ok", fetched=0, new_plants=0)
+
+    normalized: List[Dict[str, Any]] = []
+    sci_names: List[str] = []
+    for r in records:
+        n = normalize_perenual(r)
+        sci = n.get("scientific_name")
+        if not sci:
+            continue
+        normalized.append(n)
+        sci_names.append(sci)
+
+    pre_existing: set[str] = set()
+    if sci_names:
+        existing = (
+            sb.table("plantplanner_plant_cache")
+            .select("scientific_name")
+            .in_("scientific_name", sci_names)
+            .execute()
+        )
+        pre_existing = {row["scientific_name"] for row in (existing.data or [])}
+
+    written = await _upsert_normalized(normalized)
+    new_plants = sum(1 for row in written if row.get("scientific_name") not in pre_existing)
+
+    try:
+        await _mirror_images_for_rows(written)
+    except Exception as exc:
+        logger.info("Perenual fill image mirror failed: %s", exc)
+
+    return FillStepResponse(status="ok", fetched=len(records), new_plants=new_plants)
 
 
 @router.post(
