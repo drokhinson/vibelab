@@ -162,7 +162,8 @@ function startGardenWizard() {
   var prev = (gardens && gardens[0]) || null;
   var initialType = prev ? prev.garden_type : 'garden_bed';
   wizardDraft = {
-    // Name is auto-generated until the user types something custom on review.
+    // Name is auto-generated until the user types something custom on the
+    // planter step.
     name: _autoGardenName(initialType),
     name_was_auto: true,
     garden_type: initialType,
@@ -173,39 +174,35 @@ function startGardenWizard() {
     water_plan:  prev ? (prev.water_plan  || 'average')  : 'average',
     planting_season: prev ? (prev.planting_season || 'spring') : 'spring',
     usda_zone:      prev ? (prev.usda_zone || null)      : null,
-    location_label: prev ? (prev.location_label || null) : null
+    location_label: prev ? (prev.location_label || null) : null,
+    // Sync-or-cache choice on step 3. Default to sync to match prior behavior.
+    run_fill_sequence: true,
   };
   wizardStep = 1;
   wizardEditReturnTo = null;
   showView('wizard');
 }
 
+// 4-step flow:
+//   1. Filters (light + water + zone + season + edible)
+//   2. Planter (type + size + name)
+//   3. Sync-or-cache choice
+//   4. Review
 function renderGardenWizard() {
   if (!wizardDraft) { showView('gardens'); return; }
-  // Tear down any previous mini-preview when leaving the type+size step.
-  if (wizardStep !== 1) _disposeWizardPreview();
-  if      (wizardStep === 1) renderWizardStepTypeSize();
-  else if (wizardStep === 2) renderWizardStepLight();
-  else if (wizardStep === 3) renderWizardStepLocation();
-  else if (wizardStep === 4) renderWizardStepWater();
-  else if (wizardStep === 5) renderWizardStepPlantingSeason();
+  // Tear down the live preview whenever we're not on the planter step.
+  if (wizardStep !== 2) _disposeWizardPreview();
+  if      (wizardStep === 1) renderWizardStepFilters();
+  else if (wizardStep === 2) renderWizardStepPlanter();
+  else if (wizardStep === 3) renderWizardStepSyncChoice();
   else                       renderWizardStepReview();
 }
 
-// Indoor and greenhouse planters skip the Location step (climate-controlled).
-function _wizardStepsTotal() {
-  return _wizardSkipsLocation() ? 5 : 6;
-}
-function _wizardSkipsLocation() {
-  return wizardDraft && gardenTypeIsClimateControlled(wizardDraft.garden_type);
-}
+var WIZARD_TOTAL_STEPS = 4;
 
+function _wizardStepsTotal() { return WIZARD_TOTAL_STEPS; }
 function _wizardStepLabel() {
-  // Compute "Step N of M" label, accounting for the skipped Location step.
-  var total = _wizardStepsTotal();
-  var displayed = wizardStep;
-  if (_wizardSkipsLocation() && wizardStep > 3) displayed = wizardStep - 1;
-  return 'Step ' + displayed + ' of ' + total;
+  return 'Step ' + wizardStep + ' of ' + WIZARD_TOTAL_STEPS;
 }
 
 function _seasonLabel(s) {
@@ -231,12 +228,9 @@ function _wizardHeader(title, subtitle) {
 }
 
 function _wizardProgressDots() {
-  var total = _wizardStepsTotal();
-  var displayed = wizardStep;
-  if (_wizardSkipsLocation() && wizardStep > 3) displayed = wizardStep - 1;
   var html = '';
-  for (var i = 1; i <= total; i++) {
-    var cls = 'wizard-dot' + (i < displayed ? ' done' : (i === displayed ? ' active' : ''));
+  for (var i = 1; i <= WIZARD_TOTAL_STEPS; i++) {
+    var cls = 'wizard-dot' + (i < wizardStep ? ' done' : (i === wizardStep ? ' active' : ''));
     html += '<span class="' + cls + '"></span>';
   }
   return html;
@@ -273,11 +267,9 @@ function _wizardBindCommon() {
     if (wizardEditReturnTo) {
       // Editing from review — Back returns to review without saving the change.
       wizardEditReturnTo = null;
-      wizardStep = _wizardSkipsLocation() ? 5 : 6;
+      wizardStep = WIZARD_TOTAL_STEPS;
     } else {
       wizardStep = Math.max(1, wizardStep - 1);
-      // Re-skip Location when stepping back into it.
-      if (wizardStep === 3 && _wizardSkipsLocation()) wizardStep = 2;
     }
     renderGardenWizard();
     _initIcons();
@@ -288,10 +280,9 @@ function _wizardAdvance() {
   if (wizardEditReturnTo) {
     // Returning to review after an edit.
     wizardEditReturnTo = null;
-    wizardStep = _wizardSkipsLocation() ? 5 : 6;
+    wizardStep = WIZARD_TOTAL_STEPS;
   } else {
-    wizardStep += 1;
-    if (wizardStep === 3 && _wizardSkipsLocation()) wizardStep = 4;
+    wizardStep = Math.min(WIZARD_TOTAL_STEPS, wizardStep + 1);
   }
   renderGardenWizard();
   _initIcons();
@@ -402,9 +393,9 @@ function _renderWizardTypeColumn(title, options) {
   return html;
 }
 
-function renderWizardStepTypeSize() {
+function renderWizardStepPlanter() {
   var html = '<div class="wizard-page">';
-  html += _wizardHeader('What kind of planter — and how big?', 'Pick a planter type, then size it. The preview updates live.');
+  html += _wizardHeader('Pick a planter — and name it', 'Choose a type, size it, and give it a name. The preview updates live.');
 
   // Two columns — Indoor (climate-controlled) vs Outdoor (uses your zone).
   html += '<div class="wizard-options-2col">';
@@ -430,6 +421,14 @@ function renderWizardStepTypeSize() {
     html +=     '<div id="wz-preview-cap" class="wizard-preview-caption">' + escapeHtml(sizeLabelFor(wizardDraft)) + '</div>';
     html +=   '</div>';
     html += '</div>';
+
+    html += '<div class="wizard-review-name">'
+         +   '<label class="wizard-field">'
+         +     '<span class="wizard-field-label">Garden name</span>'
+         +     '<input id="wz-name" type="text" class="input input-bordered input-sm" '
+         +       'value="' + escapeHtml(wizardDraft.name) + '" placeholder="' + escapeHtml(_autoGardenName(wizardDraft.garden_type)) + '" />'
+         +   '</label>'
+         + '</div>';
   }
 
   html += _wizardFooter({ nextDisabled: !wizardDraft.garden_type });
@@ -451,11 +450,25 @@ function renderWizardStepTypeSize() {
         if (wizardDraft.name_was_auto) {
           wizardDraft.name = _autoGardenName(newType);
         }
+        // A water_plan of 'none' is invalid for sheltered types — drop it on
+        // switch so we don't carry an invalid value into review.
+        if (gardenTypeIsClimateControlled(newType) && wizardDraft.water_plan === 'none') {
+          wizardDraft.water_plan = 'average';
+        }
       }
-      renderWizardStepTypeSize();
+      renderWizardStepPlanter();
       _initIcons();
     };
   });
+
+  var nameEl = document.getElementById('wz-name');
+  if (nameEl) {
+    nameEl.oninput = function(e) {
+      var v = e.target.value;
+      wizardDraft.name = v;
+      wizardDraft.name_was_auto = (v.trim().length === 0);
+    };
+  }
 
   _wizardBindCommon();
   document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
@@ -586,95 +599,95 @@ function _bindSizeControls() {
   };
 }
 
-// ── Step 3: Light ───────────────────────────────────────────────────────────
+// ── Step 1: Filters (light + water + zone + season) ────────────────────────
 
 // Aligned with Perenual v2/species-list `sunlight` filter values.
 var LIGHT_OPTIONS = [
-  { id: 'full_sun',       label: 'Full sun',       icon: '☀️', desc: '6+ hours of direct sun' },
-  { id: 'sun-part_shade', label: 'Sun & part shade', icon: '🌤️', desc: '4–6 hours of direct sun' },
-  { id: 'part_shade',     label: 'Part shade',     icon: '⛅', desc: '2–4 hours of direct sun' },
-  { id: 'full_shade',     label: 'Full shade',     icon: '☁️', desc: 'Less than 2 hours of direct sun' }
+  { id: 'full_sun',       label: 'Full sun',         icon: '☀️' },
+  { id: 'sun-part_shade', label: 'Sun & part shade', icon: '🌤️' },
+  { id: 'part_shade',     label: 'Part shade',       icon: '⛅' },
+  { id: 'full_shade',     label: 'Full shade',       icon: '☁️' }
 ];
 
-function renderWizardStepLight() {
-  var subtitle = gardenTypeIsClimateControlled(wizardDraft.garden_type)
-    ? 'How sunny is the spot for this planter?'
-    : 'How much direct sun does this planter get?';
+// Aligned with Perenual v2/species-list `watering` filter values.
+var WATER_OPTIONS = [
+  { id: 'frequent', label: 'Frequent',  icon: '💧💧💧' },
+  { id: 'average',  label: 'Average',   icon: '💧💧' },
+  { id: 'minimum',  label: 'Minimum',   icon: '💧' },
+  { id: 'none',     label: 'Rain only', icon: '☔' }
+];
 
+var PLANTING_SEASON_OPTIONS = [
+  { id: 'spring', label: 'Spring', icon: '🌷' },
+  { id: 'summer', label: 'Summer', icon: '☀️' },
+  { id: 'fall',   label: 'Fall',   icon: '🍂' },
+  { id: 'winter', label: 'Winter', icon: '❄️' }
+];
+
+// Map the option arrays into the chip-row format helpers.js expects.
+function _toChipOptions(arr) {
+  return arr.map(function(o) { return { value: o.id, label: o.label, icon: o.icon }; });
+}
+
+function renderWizardStepFilters() {
+  var d = wizardDraft;
   var html = '<div class="wizard-page">';
-  html += _wizardHeader('Light conditions', subtitle);
-  html += '<div class="wizard-options">';
-  for (var i = 0; i < LIGHT_OPTIONS.length; i++) {
-    var o = LIGHT_OPTIONS[i];
-    var active = wizardDraft.shade_level === o.id ? ' active' : '';
-    html += ''
-      + '<button type="button" class="wizard-option' + active + '" data-light="' + o.id + '">'
-      +   '<span class="wizard-option-icon">' + o.icon + '</span>'
-      +   '<span class="wizard-option-body">'
-      +     '<span class="wizard-option-label">' + escapeHtml(o.label) + '</span>'
-      +     '<span class="wizard-option-desc">' + escapeHtml(o.desc) + '</span>'
-      +   '</span>'
-      + '</button>';
-  }
+  html += _wizardHeader('Plant conditions', 'Tell us about the spot — we\'ll filter the catalog to plants that thrive here.');
+
+  html += '<div class="wizard-filters">';
+  html += renderFilterChipRow('Light',  _toChipOptions(LIGHT_OPTIONS),            d.shade_level,     'shade_level');
+  html += renderFilterChipRow('Water',  _toChipOptions(WATER_OPTIONS),            d.water_plan,      'water_plan');
+  html += renderFilterChipRow('Season', _toChipOptions(PLANTING_SEASON_OPTIONS),  d.planting_season, 'planting_season');
+
+  html += '<div class="filter-group">';
+  html +=   '<div class="filter-group-label">Hardiness zone <span class="wizard-field-hint">(optional — skip for indoor / greenhouse)</span></div>';
+  html +=   '<div class="filter-row" style="align-items:center; gap:0.5rem;">';
+  html +=     '<input type="text" id="wz-filter-zone" class="browser-zone-input" placeholder="e.g. 6b" value="' + escapeHtml(d.usda_zone || '') + '" />';
+  html +=     '<button type="button" class="btn btn-ghost btn-xs" id="wz-zone-skip">Skip</button>';
+  html +=   '</div>';
   html += '</div>';
+
+  html += '</div>';
+
   html += _wizardFooter({});
   html += '</div>';
   app.innerHTML = html;
 
-  document.querySelectorAll('.wizard-option').forEach(function(btn) {
-    btn.onclick = function() {
-      wizardDraft.shade_level = btn.dataset.light;
-      renderGardenWizard();
-      _initIcons();
-    };
+  var root = document.querySelector('.wizard-filters');
+  bindFilterChipRow(root, 'shade_level', function(v) {
+    wizardDraft.shade_level = v || 'full_sun';
+    renderWizardStepFilters();
   });
-  _wizardBindCommon();
-  document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
-  _initIcons();
-}
+  bindFilterChipRow(root, 'water_plan', function(v) {
+    // Sheltered planters can't pick "Rain only", but we don't yet know the
+    // type at this step — accept any selection; submit-time will sanity-check.
+    wizardDraft.water_plan = v || 'average';
+    renderWizardStepFilters();
+  });
+  bindFilterChipRow(root, 'planting_season', function(v) {
+    wizardDraft.planting_season = v || 'spring';
+    renderWizardStepFilters();
+  });
 
-// ── Step 4: Location (hardiness zone) ───────────────────────────────────────
-
-function renderWizardStepLocation() {
-  var html = '<div class="wizard-page">';
-  html += _wizardHeader('Where is this planter?', 'Pick your USDA hardiness zone — we use it to filter the plant catalog to species that survive your winter.');
-
-  html += '<div class="wizard-zone-picker" id="wz-zone-picker"></div>';
-
-  html += _wizardFooter({ nextDisabled: !wizardDraft.usda_zone });
-  html += '</div>';
-  app.innerHTML = html;
-
-  // Render the inline zone picker straight into the step.
-  if (typeof renderInlineZonePicker === 'function') {
-    renderInlineZonePicker('wz-zone-picker', {
-      selectedZone: wizardDraft.usda_zone,
-      onPick: function(loc) {
-        wizardDraft.usda_zone = loc.zone;
-        wizardDraft.location_label = loc.label;
-        // Auto-advance — the user has just confirmed; no need to make them
-        // tap Next afterward.
-        _wizardAdvance();
-      }
-    });
-  }
+  var zoneInput = document.getElementById('wz-filter-zone');
+  if (zoneInput) zoneInput.oninput = function(e) {
+    var v = e.target.value.trim();
+    wizardDraft.usda_zone = v || null;
+    wizardDraft.location_label = v ? ('Zone ' + v) : null;
+  };
+  var zoneSkip = document.getElementById('wz-zone-skip');
+  if (zoneSkip) zoneSkip.onclick = function() {
+    wizardDraft.usda_zone = null;
+    wizardDraft.location_label = null;
+    renderWizardStepFilters();
+  };
 
   _wizardBindCommon();
   document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
   _initIcons();
 }
 
-// ── Step 5: Water plan ──────────────────────────────────────────────────────
-
-// Aligned with Perenual v2/species-list `watering` filter values.
-var WATER_OPTIONS = [
-  { id: 'frequent', label: 'Frequent',    icon: '💧💧💧💧', desc: 'Daily / drip irrigation; thirsty crops, tropicals.' },
-  { id: 'average',  label: 'Average',     icon: '💧💧💧',  desc: 'Watered on a schedule (hose, sprinkler, regular drip).' },
-  { id: 'minimum',  label: 'Minimum',     icon: '💧💧',    desc: 'Watered when I remember; drought-tolerant plants thrive.' },
-  { id: 'none',     label: 'Rain only',   icon: '☔',      desc: 'No supplemental watering; only low-water plants survive.' }
-];
-
-// Climate-controlled planters are sheltered — rain isn't a real option.
+// Kept for review-row labels even though the dedicated water step is gone.
 function _wizardWaterOptions() {
   if (wizardDraft && gardenTypeIsClimateControlled(wizardDraft.garden_type)) {
     return WATER_OPTIONS.filter(function(o) { return o.id !== 'none'; });
@@ -682,87 +695,45 @@ function _wizardWaterOptions() {
   return WATER_OPTIONS;
 }
 
-function renderWizardStepWater() {
-  // If the user came back here after switching to a sheltered type, a
-  // previously-selected 'none' (rain-only) is no longer valid — reset.
-  var isSheltered = gardenTypeIsClimateControlled(wizardDraft.garden_type);
-  if (isSheltered && wizardDraft.water_plan === 'none') {
-    wizardDraft.water_plan = 'average';
-  }
-  var visibleOptions = _wizardWaterOptions();
+// ── Step 3: Sync-or-cache choice ────────────────────────────────────────────
+
+function renderWizardStepSyncChoice() {
+  var d = wizardDraft;
+  var sync = d.run_fill_sequence !== false;  // default true
 
   var html = '<div class="wizard-page">';
-  html += _wizardHeader('How will you water it?', 'Plants are filtered to ones that thrive at this watering level.');
+  html += _wizardHeader('How should we find plants?', 'Pull fresh species from external APIs, or just search what\'s already in our catalog.');
+
   html += '<div class="wizard-options">';
-  for (var i = 0; i < visibleOptions.length; i++) {
-    var o = visibleOptions[i];
-    var active = wizardDraft.water_plan === o.id ? ' active' : '';
-    html += ''
-      + '<button type="button" class="wizard-option' + active + '" data-water="' + o.id + '">'
-      +   '<span class="wizard-option-icon">' + o.icon + '</span>'
-      +   '<span class="wizard-option-body">'
-      +     '<span class="wizard-option-label">' + escapeHtml(o.label) + '</span>'
-      +     '<span class="wizard-option-desc">' + escapeHtml(o.desc) + '</span>'
-      +   '</span>'
-      + '</button>';
-  }
+  html += ''
+    + '<button type="button" class="wizard-option' + (sync ? ' active' : '') + '" data-choice="sync">'
+    +   '<span class="wizard-option-icon">🌐</span>'
+    +   '<span class="wizard-option-body">'
+    +     '<span class="wizard-option-label">Sync from API <span class="wizard-option-pill">recommended</span></span>'
+    +     '<span class="wizard-option-desc">Fetch fresh species from Trefle, Perenual, and FloraAPI before browsing. Slower (30–60 s) but most up-to-date.</span>'
+    +   '</span>'
+    + '</button>';
+  html += ''
+    + '<button type="button" class="wizard-option' + (!sync ? ' active' : '') + '" data-choice="cache">'
+    +   '<span class="wizard-option-icon">⚡</span>'
+    +   '<span class="wizard-option-body">'
+    +     '<span class="wizard-option-label">Use existing catalog</span>'
+    +     '<span class="wizard-option-desc">Faster — searches what\'s already cached. Good if you\'ve recently imported plants.</span>'
+    +   '</span>'
+    + '</button>';
   html += '</div>';
-  if (isSheltered) {
-    html += '<p class="wizard-note">Rain isn\'t an option — sheltered planters depend on you to water them.</p>';
-  }
+
   html += _wizardFooter({ nextLabel: wizardEditReturnTo ? 'Save & review' : 'Review' });
   html += '</div>';
   app.innerHTML = html;
 
   document.querySelectorAll('.wizard-option').forEach(function(btn) {
     btn.onclick = function() {
-      wizardDraft.water_plan = btn.dataset.water;
-      renderGardenWizard();
-      _initIcons();
+      wizardDraft.run_fill_sequence = (btn.dataset.choice === 'sync');
+      renderWizardStepSyncChoice();
     };
   });
-  _wizardBindCommon();
-  document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
-  _initIcons();
-}
 
-// ── Step 5 (Planting season) ────────────────────────────────────────────────
-
-var PLANTING_SEASON_OPTIONS = [
-  { id: 'spring', label: 'Spring',  icon: '🌷', desc: 'Most annuals + warm-season crops start here.' },
-  { id: 'summer', label: 'Summer',  icon: '☀️', desc: 'Quick-growing annuals; succession plantings.' },
-  { id: 'fall',   label: 'Fall',    icon: '🍂', desc: 'Cool-season crops, perennials, bulbs.' },
-  { id: 'winter', label: 'Winter',  icon: '❄️', desc: 'Indoor / greenhouse only in most zones.' }
-];
-
-function renderWizardStepPlantingSeason() {
-  var html = '<div class="wizard-page">';
-  html += _wizardHeader('When are you planting?', 'We\'ll show plants that suit this season for your conditions.');
-  html += '<div class="wizard-options">';
-  for (var i = 0; i < PLANTING_SEASON_OPTIONS.length; i++) {
-    var o = PLANTING_SEASON_OPTIONS[i];
-    var active = wizardDraft.planting_season === o.id ? ' active' : '';
-    html += ''
-      + '<button type="button" class="wizard-option' + active + '" data-season="' + o.id + '">'
-      +   '<span class="wizard-option-icon">' + o.icon + '</span>'
-      +   '<span class="wizard-option-body">'
-      +     '<span class="wizard-option-label">' + escapeHtml(o.label) + '</span>'
-      +     '<span class="wizard-option-desc">' + escapeHtml(o.desc) + '</span>'
-      +   '</span>'
-      + '</button>';
-  }
-  html += '</div>';
-  html += _wizardFooter({ nextLabel: wizardEditReturnTo ? 'Save & review' : 'Review' });
-  html += '</div>';
-  app.innerHTML = html;
-
-  document.querySelectorAll('.wizard-option').forEach(function(btn) {
-    btn.onclick = function() {
-      wizardDraft.planting_season = btn.dataset.season;
-      renderGardenWizard();
-      _initIcons();
-    };
-  });
   _wizardBindCommon();
   document.getElementById('wizard-next').onclick = function() { _wizardAdvance(); };
   _initIcons();
@@ -773,35 +744,34 @@ function renderWizardStepPlantingSeason() {
 
 function renderWizardStepReview() {
   var d = wizardDraft;
-  var matchHtml = '';
 
-  // Edit jumps target the new step numbers: type+size = 1, light = 2,
-  // location = 3, water = 4, season = 5. Name lives on the review page itself.
+  // Edit-step targets in the new layout:
+  //   1 = filters (light, water, zone, season)
+  //   2 = planter (type, size, name)
+  //   3 = sync choice
   var rows = [
-    { step: 1, label: 'Planter type', value: plantertypeIcon(d.garden_type) + ' ' + plantertypeLabel(d.garden_type) },
-    { step: 1, label: 'Size',         value: sizeLabelFor(d) },
-    { step: 2, label: 'Light',        value: sunlightIcon(d.shade_level) + ' ' + sunlightLabel(d.shade_level) }
+    { step: 2, label: 'Planter type', value: plantertypeIcon(d.garden_type) + ' ' + plantertypeLabel(d.garden_type) },
+    { step: 2, label: 'Size',         value: sizeLabelFor(d) },
+    { step: 2, label: 'Name',         value: (d.name && d.name.trim()) ? d.name : _autoGardenName(d.garden_type) },
+    { step: 1, label: 'Light',        value: sunlightIcon(d.shade_level) + ' ' + sunlightLabel(d.shade_level) },
+    { step: 1, label: 'Watering',     value: '💧 ' + waterPlanLabel(d.water_plan) },
   ];
-  if (!_wizardSkipsLocation()) {
-    rows.push({ step: 3, label: 'Location', value: '📍 ' + (d.location_label || ('Zone ' + d.usda_zone)) });
+  if (d.usda_zone) {
+    rows.push({ step: 1, label: 'Hardiness zone', value: '📍 ' + (d.location_label || ('Zone ' + d.usda_zone)) });
   } else {
-    rows.push({ step: 3, label: 'Location', value: 'Not needed (climate-controlled)', noEdit: true });
+    rows.push({ step: 1, label: 'Hardiness zone', value: 'Skipped' });
   }
-  rows.push({ step: 4, label: 'Watering', value: '💧 ' + waterPlanLabel(d.water_plan) });
-  rows.push({ step: 5, label: 'Planting season', value: _seasonIcon(d.planting_season) + ' ' + _seasonLabel(d.planting_season) });
+  rows.push({ step: 1, label: 'Planting season', value: _seasonIcon(d.planting_season) + ' ' + _seasonLabel(d.planting_season) });
+  rows.push({
+    step: 3,
+    label: 'Catalog source',
+    value: d.run_fill_sequence === false
+      ? '⚡ Use existing catalog'
+      : '🌐 Sync from API',
+  });
 
   var html = '<div class="wizard-page">';
-  html += _wizardHeader('Review your planter', 'Name your garden, then confirm. Nothing is saved until you do.');
-  html += matchHtml;
-
-  // Editable name field — prefilled with "<Type> #<n>"; manual edits persist.
-  html += '<div class="wizard-review-name">'
-       +   '<label class="wizard-field">'
-       +     '<span class="wizard-field-label">Garden name</span>'
-       +     '<input id="wz-name" type="text" class="input input-bordered input-sm" '
-       +       'value="' + escapeHtml(d.name) + '" placeholder="' + escapeHtml(_autoGardenName(d.garden_type)) + '" />'
-       +   '</label>'
-       + '</div>';
+  html += _wizardHeader('Review your planter', 'Confirm your choices. Nothing is saved until you do.');
 
   html += '<div class="wizard-review">';
   for (var i = 0; i < rows.length; i++) {
@@ -810,29 +780,17 @@ function renderWizardStepReview() {
       + '<div class="wizard-review-row">'
       +   '<div class="wizard-review-label">' + escapeHtml(r.label) + '</div>'
       +   '<div class="wizard-review-value">' + escapeHtml(String(r.value)) + '</div>'
-      +   (r.noEdit ? '' : '<button type="button" class="wizard-review-edit" data-edit-step="' + r.step + '">Edit</button>')
+      +   '<button type="button" class="wizard-review-edit" data-edit-step="' + r.step + '">Edit</button>'
       + '</div>';
   }
   html += '</div>';
 
   html += '<div class="wizard-footer">'
-       +   '<button type="button" class="btn btn-ghost btn-sm" id="wizard-back-to-water"><i data-lucide="arrow-left" style="width:1em;height:1em"></i> Back</button>'
+       +   '<button type="button" class="btn btn-ghost btn-sm" id="wizard-back-to-prev"><i data-lucide="arrow-left" style="width:1em;height:1em"></i> Back</button>'
        +   '<button type="button" class="btn btn-primary btn-sm gap-1" id="wizard-confirm">Continue to plant selection <i data-lucide="arrow-right" style="width:1em;height:1em"></i></button>'
        + '</div>';
   html += '</div>';
   app.innerHTML = html;
-
-  // Name field — once the user types, stop auto-updating from the type.
-  var nameEl = document.getElementById('wz-name');
-  if (nameEl) {
-    nameEl.oninput = function(e) {
-      var v = e.target.value;
-      wizardDraft.name = v;
-      // Treat an empty field as "still auto" so it re-syncs if they later
-      // change planter type, and so submit falls back to the placeholder.
-      wizardDraft.name_was_auto = (v.trim().length === 0);
-    };
-  }
 
   // Edit links jump back to the relevant step, then return to review on Next.
   document.querySelectorAll('.wizard-review-edit').forEach(function(btn) {
@@ -853,14 +811,12 @@ function renderWizardStepReview() {
       showView('gardens');
     }
   };
-  document.getElementById('wizard-back-to-water').onclick = function() {
-    wizardStep = 5;
+  document.getElementById('wizard-back-to-prev').onclick = function() {
+    wizardStep = 3;
     renderGardenWizard();
     _initIcons();
   };
   document.getElementById('wizard-confirm').onclick = submitGardenWizard;
-  // Async live count from /catalog/search.
-  _refreshWizardMatchCount();
   _initIcons();
 }
 
@@ -893,10 +849,10 @@ async function submitGardenWizard() {
     wizardStep = 1;
     wizardEditReturnTo = null;
     if (created && created.id) {
-      // Newly-created planters land in the shopping step with a 5-step API
-      // fill orchestration BEFORE the grid renders.
+      // Newly-created planters land in the shopping step. The user picked
+      // sync vs cache on step 3 — honor that here.
       if (typeof openShoppingForGarden === 'function') {
-        openShoppingForGarden(created.id, { runFillSequence: true });
+        openShoppingForGarden(created.id, { runFillSequence: d.run_fill_sequence !== false });
       } else {
         openGarden(created.id);
       }
