@@ -207,7 +207,10 @@ ALTER TABLE public.sauceboss_user_pantry_missing ENABLE ROW LEVEL SECURITY;
 --                                                       → paginated lightweight rows + variant count + inSaucebook flag.
 --                                                         Sorted by created_at DESC, family roots only.
 --   get_sauceboss_browse_authors(p_q)                  → author autocomplete for the Browse filter
---   get_sauceboss_pantry_for_user(p_user_id)           → ingredients in saucebook + missing flag
+--   get_sauceboss_pantry_for_user(p_user_id)           → ingredients in saucebook with `category`
+--                                                         (sauceboss_ingredient.category, NULL when uncategorized)
+--                                                         + missing flag — one round-trip; eliminates the
+--                                                         standalone /ingredient-categories call on the pantry path (migration 015).
 --   set_sauceboss_pantry_missing(p_user_id, p_ingredient_ids[]) → replace user's missing set in one round-trip
 --   list_sauceboss_ingredients_with_usage()            → ingredients with recipe usage counts
 --   merge_sauceboss_ingredients(keep, merge_ids[])     → atomic merge + repoint

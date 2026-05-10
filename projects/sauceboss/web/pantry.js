@@ -53,10 +53,12 @@ function renderPantry() {
     `;
   }
 
-  const cats = state.ingredientCategories || {};
+  // Each pantry row carries its category inline (joined from
+  // sauceboss_ingredient.category by migration 015) so we don't need to
+  // cross-reference state.ingredientCategories here. NULL means uncategorized.
   const groups = new Map();
   for (const ing of ings) {
-    const cat = cats[(ing.name || '').toLowerCase()] || 'Uncategorized';
+    const cat = ing.category || 'Uncategorized';
     if (!groups.has(cat)) groups.set(cat, []);
     groups.get(cat).push(ing);
   }

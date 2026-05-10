@@ -505,11 +505,29 @@ async function refreshSaucebookAndPantry() {
     state.pantry.ingredients = pantry.ingredients || [];
     state.pantry.missing = new Set((pantry.ingredients || []).filter(i => i.missing).map(i => i.ingredientId));
     state.pantry._loaded = true;
+    hydrateIngredientCategoriesFromPantry(state.pantry.ingredients);
     syncDisabledFromPantry();
     render();
   } catch (err) {
     console.warn('[sauceboss] refreshSaucebookAndPantry failed:', err);
   }
+}
+
+// Each pantry row now carries its `category` from sauceboss_ingredient.category
+// (migration 015), so the pantry tab can render in one round-trip. The same
+// per-row data is enough to populate state.ingredientCategories for the
+// meal-builder filter panel — no separate /ingredient-categories call needed
+// on the pantry path. The recipe builder still calls ensureBuilderRefData()
+// for the global map covering ingredients outside the saucebook.
+function hydrateIngredientCategoriesFromPantry(ingredients) {
+  if (!Array.isArray(ingredients) || ingredients.length === 0) return;
+  const cats = state.ingredientCategories || {};
+  for (const ing of ingredients) {
+    if (ing && ing.category && ing.name) {
+      cats[ing.name.toLowerCase()] = ing.category;
+    }
+  }
+  state.ingredientCategories = cats;
 }
 
 // Refresh state.disabledIngredients from state.pantry. This is the bridge

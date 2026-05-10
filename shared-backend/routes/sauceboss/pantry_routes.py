@@ -39,13 +39,16 @@ def _pantry_entry(row: dict) -> PantryEntry:
 
     Migration 014 makes the underlying RPC emit both fields, but newer RPC
     revisions or third-party callers might omit one — fall back to the
-    other so the release-compat alias is always populated.
+    other so the release-compat alias is always populated. Migration 015
+    adds `category` (NULL when uncategorized) so the pantry tab can render
+    in a single round-trip without /ingredient-categories.
     """
     ingredient_id = row.get("ingredientId") or row.get("foodId") or ""
     return PantryEntry(
         ingredientId=ingredient_id,
         foodId=ingredient_id,
         name=row.get("name", ""),
+        category=row.get("category"),
         missing=bool(row.get("missing", False)),
     )
 

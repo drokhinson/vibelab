@@ -45,6 +45,17 @@ import { withIngredientNames } from './filter.js';
  * @property {(number|null)=} canonicalMl
  * @property {(number|null)=} canonicalG
  * @property {string[]=} aliases
+ *
+ * @typedef {Object} PantryEntry
+ * @property {string} ingredientId
+ * @property {(string|null)=} foodId       — release/sauceboss-1.0 compat alias of ingredientId
+ * @property {string} name
+ * @property {(string|null)=} category     — joined from sauceboss_ingredient.category (NULL when uncategorized)
+ * @property {boolean} missing
+ *
+ * @typedef {Object} PantryResponse
+ * @property {PantryEntry[]} ingredients
+ * @property {string[]} saucebookSauceIds
  */
 
 const PREFIX = '/api/v1/sauceboss';
