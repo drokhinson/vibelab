@@ -359,6 +359,10 @@ async def catalog_search(
     effective_indoor = indoor
     if effective_indoor is None and garden_type:
         effective_indoor = garden_is_climate_controlled(garden_type)
+    # Indoor planters are climate-controlled — hardiness (outdoor cold zones)
+    # doesn't apply. Drop the zone filter so tropicals etc. aren't excluded.
+    if effective_indoor is True:
+        effective_zone = None
 
     # Plant-size caps come from explicit planter_size (override) or are derived
     # from garden_type + grid dims. max_height_cm / max_spread_cm overrides win.
@@ -504,6 +508,11 @@ def _build_query_from_body(body: FillBody) -> Dict[str, Any]:
     cycle    = None
     # Always-explicit boolean: True for indoor planters, False for outdoor.
     indoor   = garden_is_climate_controlled(body.garden_type) if body.garden_type else None
+    # Indoor planters are climate-controlled — USDA hardiness (which describes
+    # outdoor cold-tolerance) doesn't apply. Drop the hardiness filter so we
+    # don't exclude tropicals etc. from indoor-pot recommendations.
+    if indoor is True:
+        zone = None
     bucket = _derive_planter_size(
         garden_type=body.garden_type,
         grid_width=body.grid_width,
