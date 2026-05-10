@@ -6,7 +6,7 @@
 // grid_width / grid_height are inches for indoor_pot / indoor_planter_box /
 // outdoor_pot / outdoor_planter_box and feet for the rest.
 
-var currentView = "auth"; // auth | gardens | wizard | shopping | builder | library | browser
+var currentView = "auth"; // auth | gardens | wizard | shopping | builder | library | browser | import
 
 // ── Supabase Auth state ──────────────────────────────────────────────────────
 var supabaseClient = null;

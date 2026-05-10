@@ -232,6 +232,95 @@ function bindFilterChipRow(rootEl, groupAttr, onPick) {
   });
 }
 
+// ── Catalog-fill orchestration (shared by shopping.js + import.js) ──────────
+//
+// Each call site owns a state bag with `{ fillSteps: [...], fillFinished }`
+// and passes it in. setFillStep/runFillStep mutate the bag and re-render via
+// renderFillProgress; the caller controls title/subtitle/continue handling
+// through `renderOpts`.
+//
+// renderOpts shape:
+//   { title, subtitle, continueLabel, onContinue, getApp? }
+
+function _fillStepIcon(status) {
+  if (status === 'ok')      return '<i data-lucide="check-circle-2" style="color:oklch(var(--su));"></i>';
+  if (status === 'error')   return '<i data-lucide="alert-circle" style="color:oklch(var(--er));"></i>';
+  if (status === 'running') return '<span class="loading loading-spinner loading-xs text-primary"></span>';
+  return '<i data-lucide="circle" style="color:oklch(var(--bc) / 0.35);"></i>';
+}
+
+function renderFillProgress(state, opts) {
+  var steps = state && state.fillSteps;
+  if (!steps) return;
+  opts = opts || {};
+  var html = '<div class="shopping-fill-overlay">';
+  html += '<div class="shopping-fill-card">';
+  html += '<h3>' + escapeHtml(opts.title || 'Setting up your plant catalog') + '</h3>';
+  if (opts.subtitle) {
+    html += '<p class="shopping-fill-subtitle">' + escapeHtml(opts.subtitle) + '</p>';
+  }
+  html += '<ul class="shopping-fill-list">';
+  for (var i = 0; i < steps.length; i++) {
+    var s = steps[i];
+    html += '<li class="shopping-fill-item shopping-fill-item-' + s.status + '">';
+    html +=   '<span class="shopping-fill-icon">' + _fillStepIcon(s.status) + '</span>';
+    html +=   '<span class="shopping-fill-body">';
+    html +=     '<span class="shopping-fill-label">' + escapeHtml(s.label) + '</span>';
+    if (s.detail) {
+      var cls = (s.status === 'error') ? 'shopping-fill-detail shopping-fill-detail-error' : 'shopping-fill-detail';
+      html += '<span class="' + cls + '">' + escapeHtml(s.detail) + '</span>';
+    }
+    html +=   '</span>';
+    html += '</li>';
+  }
+  html += '</ul>';
+  if (state.fillFinished) {
+    var anyError = steps.some(function(s) { return s.status === 'error'; });
+    html += '<div class="shopping-fill-footer">';
+    if (anyError) html += '<p class="shopping-fill-warn">Some steps had errors — you can still continue.</p>';
+    html += '<button type="button" class="btn btn-primary gap-1" id="fill-continue">'
+         +   escapeHtml(opts.continueLabel || 'Continue')
+         +   ' <i data-lucide="arrow-right" style="width:1em;height:1em"></i>'
+         +   '</button>';
+    html += '</div>';
+  }
+  html += '</div></div>';
+  app.innerHTML = html;
+  _initIcons();
+
+  if (state.fillFinished && opts.onContinue) {
+    var btn = document.getElementById('fill-continue');
+    if (btn) btn.onclick = opts.onContinue;
+  }
+}
+
+function setFillStep(state, key, patch, renderOpts) {
+  if (!state || !state.fillSteps) return;
+  for (var i = 0; i < state.fillSteps.length; i++) {
+    if (state.fillSteps[i].key === key) {
+      Object.assign(state.fillSteps[i], patch);
+      break;
+    }
+  }
+  renderFillProgress(state, renderOpts);
+}
+
+async function runFillStep(state, key, path, body, formatDetail, renderOpts) {
+  setFillStep(state, key, { status: 'running' }, renderOpts);
+  try {
+    var data = await apiFetch(path, { method: 'POST', body: body });
+    if (data && data.status === 'error') {
+      setFillStep(state, key, { status: 'error', detail: data.error || 'Unknown error.' }, renderOpts);
+      return data;
+    }
+    setFillStep(state, key, { status: 'ok', detail: formatDetail ? formatDetail(data || {}) : '' }, renderOpts);
+    return data;
+  } catch (err) {
+    setFillStep(state, key, { status: 'error', detail: (err && err.message) || String(err) }, renderOpts);
+    return null;
+  }
+}
+
 function render() {
   updateNav();
   if (currentView === "auth") renderAuth();
@@ -247,6 +336,9 @@ function render() {
   }
   else if (currentView === "browser") {
     if (typeof renderBrowser === 'function') renderBrowser();
+  }
+  else if (currentView === "import") {
+    if (typeof renderImport === 'function') renderImport();
   }
   else if (currentView === "builder") renderBuilder();
   _initIcons();
