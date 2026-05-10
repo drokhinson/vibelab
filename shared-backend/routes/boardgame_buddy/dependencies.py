@@ -5,8 +5,11 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
+from api_logger import set_request_user
 from jwt_auth import SupabaseUser, get_current_supabase_user
 from db import get_supabase
+
+APP_NAME = "boardgame-buddy"
 
 
 class CurrentUser(BaseModel):
@@ -33,20 +36,26 @@ async def get_current_user(
 
     if result.data:
         row = result.data[0]
-        return CurrentUser(
+        user = CurrentUser(
             user_id=row["id"],
             display_name=row["display_name"],
             is_admin=bool(row.get("is_admin", False)),
         )
+    else:
+        # Auto-create profile on first auth
+        display_name = su_user.email.split("@")[0]
+        sb.table("boardgamebuddy_profiles").insert({
+            "id": su_user.sub,
+            "display_name": display_name,
+        }).execute()
+        user = CurrentUser(user_id=su_user.sub, display_name=display_name, is_admin=False)
 
-    # Auto-create profile on first auth
-    display_name = su_user.email.split("@")[0]
-    sb.table("boardgamebuddy_profiles").insert({
-        "id": su_user.sub,
-        "display_name": display_name,
-    }).execute()
-
-    return CurrentUser(user_id=su_user.sub, display_name=display_name, is_admin=False)
+    await set_request_user(
+        user_id=user.user_id,
+        user_label=user.display_name or su_user.email,
+        app=APP_NAME,
+    )
+    return user
 
 
 async def get_current_admin(
