@@ -31,8 +31,8 @@ var shoppingState = {
 // what `_runFillStep` updates so the renderer can look up state.
 var FILL_STEP_BLUEPRINTS = [
   { key: 'save',       label: 'Saving planter to your library' },
-  { key: 'trefle',     label: 'Requesting filtered list of viable plants from Trefle' },
-  { key: 'perenual',   label: 'Filling supplementary data from Perenual (image, hardiness, water…)' },
+  { key: 'perenual',   label: 'Loading filtered plant list from Perenual' },
+  { key: 'trefle',     label: 'Filling supplementary growth data from Trefle (height, pH, days to harvest…)' },
   { key: 'flora',      label: 'Updating supplemental info from FloraAPI' },
   { key: 'compatible', label: 'Gathering plants compatible with your planter' }
 ];
@@ -107,15 +107,15 @@ async function _runFillSequence() {
   // else through unchanged.
   delete body.query;
 
-  await _runFillStep('trefle', '/catalog/fill/trefle', body, function(data) {
-    var lines = [];
-    if (data.fetched != null) lines.push('Fetched ' + data.fetched + ' plants from Trefle.');
-    if (data.new_plants)      lines.push(data.new_plants + ' new plant(s) added to the catalog.');
-    return lines.join(' ');
-  });
   await _runFillStep('perenual', '/catalog/fill/perenual', body, function(data) {
-    if (!data.fetched && !data.enriched) return 'No plants needed Perenual enrichment.';
-    return 'Enriched ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Perenual data.';
+    var lines = [];
+    if (data.fetched != null) lines.push('Fetched ' + data.fetched + ' plants from Perenual.');
+    if (data.new_plants)      lines.push(data.new_plants + ' new plant(s) added to the catalog.');
+    return lines.join(' ') || 'No matching plants returned.';
+  });
+  await _runFillStep('trefle', '/catalog/fill/trefle', body, function(data) {
+    if (!data.fetched && !data.enriched) return 'No plants needed Trefle enrichment.';
+    return 'Enriched ' + (data.enriched || 0) + ' of ' + (data.fetched || 0) + ' plant(s) with Trefle data.';
   });
   await _runFillStep('flora', '/catalog/fill/flora', body, function(data) {
     if (!data.fetched && !data.enriched) return 'No matching plants in Flora.';

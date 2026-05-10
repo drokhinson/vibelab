@@ -1,4 +1,4 @@
-"""External plant-API clients (Trefle primary, Perenual fallback for hardiness).
+"""External plant-API clients (Perenual primary seed, Trefle/Flora enrichers).
 
 The cache route uses these to populate `plantplanner_plant_cache` on miss.
 All user-facing reads go through the cache table directly — these clients are
@@ -6,8 +6,9 @@ only invoked during cache-fill / cache-enrich.
 
 Normalization target shape matches `analysis/api-notes.md` (the columns of
 `plantplanner_plant_cache`). All fields are nullable and merged from whichever
-source provided them; precedence is Perenual for hardiness/sunlight/watering,
-Trefle for height/pH/days_to_harvest.
+source provided them; precedence is Perenual for hardiness/sunlight/watering/
+cycle/indoor/images, Trefle for height/pH/days_to_harvest, Flora for
+US-flora-specific supplements.
 """
 
 from __future__ import annotations
@@ -136,6 +137,70 @@ async def perenual_search(query: str) -> List[Dict[str, Any]]:
             resp = await client.get(url, params=params)
             record.attach_response(resp)
         if resp.status_code != 200:
+            return []
+        data = resp.json().get("data") or []
+        return data[:SEARCH_RESULT_CAP]
+
+
+# Forward map: internal sunlight enum → Perenual filter param value.
+_PERENUAL_SUNLIGHT_FILTER = {
+    "full_sun":   "full_sun",
+    "part_shade": "part_shade",
+    "full_shade": "full_shade",
+}
+
+
+async def perenual_filter(
+    *,
+    cycle: Optional[str] = None,
+    watering: Optional[str] = None,
+    sunlight: Optional[str] = None,
+    hardiness: Optional[int] = None,
+    indoor: Optional[bool] = None,
+    edible: Optional[bool] = None,
+    poisonous: Optional[bool] = None,
+    query: Optional[str] = None,
+    page: int = 1,
+) -> List[Dict[str, Any]]:
+    """Filtered Perenual species-list — primary seed for the cache fill.
+
+    Mirrors the wizard filters onto Perenual's v2/species-list query params.
+    The endpoint accepts cycle/watering/sunlight/indoor/edible/poisonous as
+    direct filters and `hardiness` as a "min-max" zone-range string.
+    """
+    key = _perenual_key()
+    if not key:
+        logger.info("PERENUAL_API_KEY not set — Perenual filter unavailable")
+        return []
+    url = f"{PERENUAL_BASE}/species-list"
+    params: Dict[str, Any] = {"key": key, "page": page}
+    if cycle:
+        params["cycle"] = cycle
+    if watering:
+        params["watering"] = watering
+    if sunlight:
+        mapped = _PERENUAL_SUNLIGHT_FILTER.get(sunlight)
+        if mapped:
+            params["sunlight"] = mapped
+    if hardiness is not None:
+        params["hardiness"] = f"{hardiness}-{hardiness}"
+    if indoor is not None:
+        params["indoor"] = 1 if indoor else 0
+    if edible is not None:
+        params["edible"] = 1 if edible else 0
+    if poisonous is not None:
+        params["poisonous"] = 1 if poisonous else 0
+    if query:
+        params["q"] = query
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+        async with log_external_call(
+            app="plant-planner", api_name="perenual",
+            method="GET", url=url, params=params, redact_params=("key",),
+        ) as record:
+            resp = await client.get(url, params=params)
+            record.attach_response(resp)
+        if resp.status_code != 200:
+            logger.warning("Perenual filter failed: %s %s", resp.status_code, resp.text[:200])
             return []
         data = resp.json().get("data") or []
         return data[:SEARCH_RESULT_CAP]
