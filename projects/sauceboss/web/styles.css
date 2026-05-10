@@ -420,6 +420,59 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .sub-banner strong { display: block; margin-bottom: 2px; font-size: 13px; }
 
+/* Recipe ingredient list — collapsible shopping-list view above the steps */
+.recipe-ingredient-panel {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.recipe-ingredient-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  background: white;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1A1A2E;
+}
+.recipe-ingredient-header-text { display: inline-flex; align-items: center; gap: 6px; }
+.recipe-ingredient-header-text [data-lucide] { width: 16px; height: 16px; }
+.recipe-ingredient-count {
+  background: #E85D04;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+.recipe-ingredient-chevron { color: #9CA3AF; transition: transform 0.2s; display: inline-flex; }
+.recipe-ingredient-chevron.open { transform: rotate(180deg); }
+.recipe-ingredient-body { padding: 0 14px 12px; display: none; }
+.recipe-ingredient-body.open { display: block; }
+.recipe-ingredient-list { list-style: none; padding: 0; margin: 0; }
+.recipe-ingredient-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #F3F4F6;
+  font-size: 13px;
+  color: #1F2937;
+}
+.recipe-ingredient-item:last-child { border-bottom: none; }
+.recipe-ingredient-name { font-weight: 500; }
+.recipe-ingredient-amount { color: #6B7280; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.recipe-ingredient-amount--qualitative { font-style: italic; }
+
 .steps-container { display: flex; flex-direction: column; gap: 20px; }
 
 .step-card {
