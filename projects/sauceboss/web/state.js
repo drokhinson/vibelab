@@ -58,8 +58,8 @@ let state = {
 
   // ── Pantry tab state (negative list — rows here are foods the user is OUT of) ─
   pantry: {
-    ingredients: [],            // [{ foodId, name, missing }]
-    missing: new Set(),         // Set<foodId> — synced to /pantry on every change
+    ingredients: [],            // [{ ingredientId, name, missing }]
+    missing: new Set(),         // Set<ingredientId> — synced to /pantry on every change
     loading: false,
     error: null,
   },
@@ -67,8 +67,8 @@ let state = {
   // ── Meal-builder flow (category → dish/subtype → sauce → recipe) ─────────
   mealFlow: {
     category: null,             // 'carb' | 'protein' | 'salad'
-    dish: null,                 // sauceboss_items row at dish_level='dish'
-    subtype: null,              // optional sauceboss_items row at dish_level='subtype'
+    dish: null,                 // sauceboss_dish row at dish_level='dish'
+    subtype: null,              // optional sauceboss_dish row at dish_level='subtype'
   },
 
   // ── Current selection (legacy — kept for the recipe-view path) ──────────────
@@ -111,7 +111,7 @@ let state = {
   adminError: null,
   adminSaucesLoading: false,                                       // tab-scoped loaders for sauce manager
   adminItemsLoading: false,
-  adminFoodsLoading: false,
+  adminIngredientsLoading: false,
   sauceManagerTab: 'sauces',                                      // 'sauces' | 'dish' | 'ingredients'
   sauceManagerSearch: '',                                          // search query (applies to active tab)
   sauceManagerTypeFilter: 'all',                                   // 'all' | 'sauce' | 'marinade' | 'dressing'
@@ -123,7 +123,7 @@ let state = {
   sauceMerge: null,                                                // { keepId, mergeIds: Set<id>, saving, error } — long-press a sauce in the manager to enter "assign variants" mode
 
   // ── Ingredients tab ────────────────────────────────────────────────────────
-  adminFoods: [],                                                  // [{ id, name, plural, usageCount, sauceCount }]
+  adminIngredients: [],                                                  // [{ id, name, plural, usageCount, sauceCount }]
   foodForm: null,                                                  // { mode: 'add' | 'edit', id?, name, category, categoryDraft, error?, saving? }
   foodMerge: null,                                                 // { keepId, mergeIds: Set<string>, error?, saving? }
   ingredientSections: {},                                          // { [category]: true } — open only when explicitly true
@@ -133,7 +133,7 @@ let state = {
 // disabledIngredients: Set<ingredientName> — kept as a real mutable Set so
 // existing filter helpers (`isSauceAvailable`, `missingSauceIngredients`,
 // `getSubstitutionText`) work unchanged. For logged-in users, `auth.js`
-// mirrors `state.pantry.missing` (Set<foodId>) into this set after each
+// mirrors `state.pantry.missing` (Set<ingredientId>) into this set after each
 // pantry hydration, and `togglePantryMissing` keeps the two in sync.
 state.disabledIngredients = new Set();
 

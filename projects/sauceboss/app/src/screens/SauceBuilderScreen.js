@@ -1,7 +1,7 @@
 // SauceBuilderScreen — single-screen form for creating or editing a sauce.
 // Uses #shared/validation.validateBuilder so the rules match the web app.
 // Authoring scope (per the plan): authoring + URL import. Bulk admin (item
-// management, food merge) stays on web.
+// management, ingredient merge) stays on web.
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {

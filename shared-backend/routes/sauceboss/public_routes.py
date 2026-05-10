@@ -14,19 +14,16 @@ from .models import (
     Attachment,
     CreateSauceRequest,
     ForkResponse,
-    FoodRow,
-    FoodsListResponse,
-    FoodsWithUsageResponse,
+    IngredientRow,
+    IngredientsListResponse,
+    IngredientsWithUsageResponse,
     ImportRecipeRequest,
-    IngredientCategoryInput,
-    IngredientCategoryRow,
     InitialLoadResponse,
     ItemLoadResponse,
     ItemsGroupedResponse,
     MessageResponse,
     ParsedIngredientResponse,
     ParsedRecipeResponse,
-    SubstitutionRow,
     UnitRow,
     UnitsListResponse,
     UpdateSauceRequest,
@@ -46,28 +43,42 @@ async def health():
 
 @router.get(
     "/ingredient-categories",
-    response_model=list[IngredientCategoryRow],
+    response_model=dict[str, str],
     status_code=200,
-    summary="List ingredient → category classifications",
+    summary="Map of ingredient name → category (one round-trip; reads ingredient.category)",
 )
-async def list_ingredient_categories() -> list[dict]:
-    """Returns ingredient → category mappings for grouping in the filter panel."""
+async def list_ingredient_categories() -> dict[str, str]:
+    """Returns {ingredient_name: category} for the filter-panel grouping.
+
+    Streamlined post-013: reads sauceboss_ingredient.category directly, no
+    join. Skips uncategorized rows so the response stays small.
+    """
     sb = get_supabase()
-    result = sb.rpc("get_sauceboss_ingredient_categories", {}).execute()
-    return result.data or []
+    result = (
+        sb.table("sauceboss_ingredient")
+        .select("name,category")
+        .neq("category", "uncategorized")
+        .execute()
+    )
+    return {row["name"]: row["category"] for row in (result.data or [])}
 
 
 @router.get(
     "/substitutions",
-    response_model=list[SubstitutionRow],
+    response_model=dict[str, list[str]],
     status_code=200,
-    summary="List ingredient substitution suggestions",
+    summary="Map of ingredient name → substitute names (reads ingredient.substitutions)",
 )
-async def list_substitutions() -> list[dict]:
-    """Returns ingredient substitution suggestions."""
+async def list_substitutions() -> dict[str, list[str]]:
+    """Returns {ingredient_name: [substitute_names]} from the consolidated column."""
     sb = get_supabase()
-    result = sb.rpc("get_sauceboss_substitutions", {}).execute()
-    return result.data or []
+    result = (
+        sb.table("sauceboss_ingredient")
+        .select("name,substitutions")
+        .not_.is_("substitutions", "null")
+        .execute()
+    )
+    return {row["name"]: row["substitutions"] for row in (result.data or []) if row.get("substitutions")}
 
 
 @router.post("/sauces", status_code=201, summary="Create a user-submitted sauce")
@@ -80,7 +91,7 @@ async def create_sauce(
     Sauce-to-dish targeting goes through `attachments` (preferred) or the
     legacy `itemIds` (mapped to dish-level attachments). The sauce_type's
     pairing rule (sauce + dip → carb, marinade → protein, dressing → salad)
-    is enforced by the sauceboss_sauce_attachments_check trigger.
+    is enforced by the sauceboss_sauce_to_dish_check trigger.
 
     The new sauce is automatically added to the author's saucebook so it
     appears in their Saucebook tab without an extra round-trip.
@@ -104,7 +115,7 @@ async def create_sauce(
 
     # Auto-add to author's saucebook (idempotent).
     try:
-        sb.table("sauceboss_saucebook").upsert(
+        sb.table("sauceboss_user_saucebook").upsert(
             {"user_id": user.user_id, "sauce_id": sauce_id},
             on_conflict="user_id,sauce_id",
         ).execute()
@@ -139,7 +150,7 @@ async def update_sauce(
     _ensure_attachments(body)
     sb = get_supabase()
     existing = (
-        sb.table("sauceboss_sauces")
+        sb.table("sauceboss_sauce")
         .select("id, created_by, parent_sauce_id, sauce_type")
         .eq("id", sauce_id)
         .execute()
@@ -163,7 +174,7 @@ async def update_sauce(
 
     # Non-owner: must have it in their saucebook to edit.
     sb_row = (
-        sb.table("sauceboss_saucebook")
+        sb.table("sauceboss_user_saucebook")
         .select("user_id")
         .eq("user_id", user.user_id)
         .eq("sauce_id", sauce_id)
@@ -205,10 +216,10 @@ async def delete_sauce(
     sauce_id: str = Path(..., description="Target sauce id"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Delete a sauce; steps, ingredients, and sauce_items rows cascade via FK."""
+    """Delete a sauce; steps, ingredients, and sauce_to_dish rows cascade via FK."""
     sb = get_supabase()
     existing = (
-        sb.table("sauceboss_sauces").select("id, created_by").eq("id", sauce_id).execute()
+        sb.table("sauceboss_sauce").select("id, created_by").eq("id", sauce_id).execute()
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Sauce not found")
@@ -217,7 +228,7 @@ async def delete_sauce(
         raise HTTPException(status_code=403, detail="You can only delete your own sauces")
 
     try:
-        sb.table("sauceboss_sauces").delete().eq("id", sauce_id).execute()
+        sb.table("sauceboss_sauce").delete().eq("id", sauce_id).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
     return MessageResponse(message="Sauce deleted")
@@ -227,8 +238,8 @@ def _ensure_attachments(body: CreateSauceRequest) -> None:
     """Populate `attachments` from the legacy `itemIds` if needed; reject empty.
 
     Full-recipe sauces are standalone and intentionally have no attachments —
-    the DB trigger (migration 011) rejects any attachment row for them, so
-    we also clear out anything the client may have sent in error.
+    the sauceboss_sauce_to_dish_check trigger rejects any attachment row for
+    them, so we also clear out anything the client may have sent in error.
     """
     if str(body.sauceType) == "full_recipe":
         body.attachments = []
@@ -285,7 +296,7 @@ def _validate_parent_sauce(parent_id: str, sauce_id: str) -> None:
         raise HTTPException(status_code=400, detail="A sauce cannot be a variant of itself")
     sb = get_supabase()
     parent = (
-        sb.table("sauceboss_sauces")
+        sb.table("sauceboss_sauce")
         .select("id, parent_sauce_id")
         .eq("id", parent_id)
         .execute()
@@ -345,29 +356,13 @@ async def list_all_sauces() -> list[dict]:
     summary="All dish items grouped by category with nested variants",
 )
 async def list_items() -> dict:
-    """Public read of carbs/proteins/salads parents with nested variants."""
+    """Public read of carbs/proteins/salads parents with nested subtypes."""
     sb = get_supabase()
-    result = sb.table("sauceboss_items").select(
+    result = sb.table("sauceboss_dish").select(
         "id,category,parent_id,dish_level,name,emoji,description,sort_order,"
         "cook_time_minutes,instructions,water_ratio,portion_per_person,portion_unit"
     ).order("sort_order").order("name").execute()
     return _shape_items_grouped(result.data or [])
-
-
-@router.post(
-    "/ingredient-categories",
-    response_model=MessageResponse,
-    status_code=200,
-    summary="Add or update an ingredient's category classification",
-)
-async def upsert_ingredient_category(body: IngredientCategoryInput) -> MessageResponse:
-    """Add or update an ingredient's category classification."""
-    sb = get_supabase()
-    sb.rpc("upsert_sauceboss_ingredient_category", {
-        "p_ingredient_name": body.ingredientName.strip().lower(),
-        "p_category": body.category,
-    }).execute()
-    return MessageResponse(message="ok")
 
 
 # ── Combined-load endpoints (one round-trip per user action) ─────────────────
@@ -461,7 +456,7 @@ async def import_recipe(body: ImportRecipeRequest) -> ParsedRecipeResponse:
                 quantity=ing.quantity,
                 unitRaw=ing.unit_raw,
                 unitId=(parse_unit(ing.unit_raw).id if parse_unit(ing.unit_raw) else None),
-                foodRaw=ing.food_raw,
+                ingredientRaw=ing.food_raw,
                 canonicalMl=ing.canonical_ml,
                 canonicalG=ing.canonical_g,
                 note=ing.note,
@@ -497,32 +492,41 @@ async def list_units() -> UnitsListResponse:
 
 
 @router.get(
-    "/foods",
-    response_model=FoodsListResponse,
-    summary="Foods typeahead — substring match on name",
+    "/ingredients",
+    response_model=IngredientsListResponse,
+    summary="Ingredient typeahead — substring match on name",
 )
-async def list_foods(
-    q: str = Query("", description="Substring to match (case-insensitive). Empty returns the first 50 foods alphabetically."),
-    limit: int = Query(20, ge=1, le=100, description="Max foods to return."),
-) -> FoodsListResponse:
-    """Foods typeahead for the recipe builder's ingredient name field."""
+async def list_ingredients(
+    q: str = Query("", description="Substring to match (case-insensitive). Empty returns the first 50 ingredients alphabetically."),
+    limit: int = Query(20, ge=1, le=100, description="Max ingredients to return."),
+) -> IngredientsListResponse:
+    """Ingredient typeahead for the recipe builder's ingredient name field."""
     sb = get_supabase()
-    query = sb.table("sauceboss_foods").select("id,name,plural")
+    query = sb.table("sauceboss_ingredient").select("id,name,plural,category,substitutions")
     needle = q.strip().lower()
     if needle:
         query = query.ilike("name_normalized", f"%{needle}%")
     result = query.order("name").limit(limit).execute()
     rows = result.data or []
-    foods = [FoodRow(id=r["id"], name=r["name"], plural=r.get("plural")) for r in rows]
-    return FoodsListResponse(foods=foods)
+    ingredients = [
+        IngredientRow(
+            id=r["id"],
+            name=r["name"],
+            plural=r.get("plural"),
+            category=r.get("category"),
+            substitutions=r.get("substitutions"),
+        )
+        for r in rows
+    ]
+    return IngredientsListResponse(ingredients=ingredients)
 
 
 @router.get(
-    "/foods-with-usage",
-    response_model=FoodsWithUsageResponse,
-    summary="All foods with recipe usage counts (Sauce Manager → Ingredients tab)",
+    "/ingredients-with-usage",
+    response_model=IngredientsWithUsageResponse,
+    summary="All ingredients with recipe usage counts (Sauce Manager → Ingredients tab)",
 )
-async def list_foods_with_usage() -> FoodsWithUsageResponse:
-    """Returns every food with usageCount (step rows referencing it) and sauceCount (distinct sauces)."""
-    rows = _rpc_or_500("list_sauceboss_foods_with_usage", {}, "foods-with-usage")
-    return FoodsWithUsageResponse(foods=rows or [])
+async def list_ingredients_with_usage() -> IngredientsWithUsageResponse:
+    """Returns every ingredient with usageCount (step rows) and sauceCount (distinct sauces)."""
+    rows = _rpc_or_500("list_sauceboss_ingredients_with_usage", {}, "ingredients-with-usage")
+    return IngredientsWithUsageResponse(ingredients=rows or [])

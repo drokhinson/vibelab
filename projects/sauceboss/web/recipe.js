@@ -61,7 +61,7 @@ function renderRecipe() {
       <button class="back-btn" onclick="${isTabShellBack ? `setActiveTab('${state.activeTab}')` : `navigate('${backScreen}')`}"><i data-lucide="chevron-left"></i> Back</button>
       <div class="recipe-cuisine-badge">${renderEmoji(sauce.cuisineEmoji)} ${sauce.cuisine}</div>
       <div class="recipe-title">${sauce.name}</div>
-      <div class="recipe-subtitle">Pair with: ${(sauce.compatibleItems || []).join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
+      <div class="recipe-subtitle">Pair with: ${(sauce.attachments || []).filter(a => a.kind === 'dish').map(a => a.value).join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
       ${exportButtonsHTML}
       ${removeBtnHTML ? `<div class="recipe-export-row">${removeBtnHTML}</div>` : ''}
     </div>

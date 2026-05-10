@@ -55,7 +55,6 @@ export const initialState = {
   managerError: null,
   managerSearch: '',
   managerTypeFilter: 'all',          // 'all' | 'sauce' | 'marinade' | 'dressing'
-  managerFavoritesOnly: false,
   managerExpandedCuisines: new Set(),
   // Admin "long-press a sauce → mark others as variants of it" merge mode.
   sauceMerge: null,                   // { keepId, mergeIds: Set, error, saving } when admin is merging
@@ -68,12 +67,12 @@ export const initialState = {
   expandedItemParents: new Set(),     // item ids whose variant list is open
 
   // Manager → Ingredients tab
-  managerFoods: [],                   // [{ id, name, plural, usageCount, sauceCount }]
-  managerFoodsLoading: false,
-  managerFoodsError: null,
+  managerIngredients: [],             // [{ id, name, plural, usageCount, sauceCount }]
+  managerIngredientsLoading: false,
+  managerIngredientsError: null,
   expandedIngredientSections: new Set(), // category names
-  expandedFoodIds: new Set(),         // food ids whose sauces panel is open
-  foodMerge: null,                    // { keepId, mergeIds: Set, error, saving } when admin is in merge mode
+  expandedIngredientIds: new Set(),   // ingredient ids whose sauces panel is open
+  ingredientMerge: null,              // { keepId, mergeIds: Set, error, saving } when admin is in merge mode
 
   // Auth (Phase 2 hooks; unused in Phase 1)
   authReady: false,             // false until we've checked supabase for an existing session
@@ -83,8 +82,6 @@ export const initialState = {
   becomeAdminError: null,
   session: null,
   currentUser: null,
-  favorites: new Map(),
-  favoritesOnly: false,
 
   // Edit mode — gates editorial UI in the Sauce Manager (Edit / Delete /
   // Download / Merge per-row actions, the `+` FAB, the admin bulk-export
@@ -126,7 +123,6 @@ const A = {
   MANAGER_LOAD_ERROR: 'MANAGER_LOAD_ERROR',
   MANAGER_SET_SEARCH: 'MANAGER_SET_SEARCH',
   MANAGER_SET_TYPE_FILTER: 'MANAGER_SET_TYPE_FILTER',
-  MANAGER_SET_FAVORITES_ONLY: 'MANAGER_SET_FAVORITES_ONLY',
   MANAGER_TOGGLE_CUISINE: 'MANAGER_TOGGLE_CUISINE',
   MANAGER_REMOVE_SAUCE: 'MANAGER_REMOVE_SAUCE',
   MANAGER_UPSERT_SAUCE: 'MANAGER_UPSERT_SAUCE',
@@ -144,26 +140,23 @@ const A = {
   ITEMS_TOGGLE_PARENT: 'ITEMS_TOGGLE_PARENT',
 
   // Manager → Ingredients tab
-  FOODS_LOAD_START: 'FOODS_LOAD_START',
-  FOODS_LOADED: 'FOODS_LOADED',
-  FOODS_LOAD_ERROR: 'FOODS_LOAD_ERROR',
-  FOODS_TOGGLE_SECTION: 'FOODS_TOGGLE_SECTION',
-  FOODS_TOGGLE_EXPAND: 'FOODS_TOGGLE_EXPAND',
-  FOODS_REMOVE: 'FOODS_REMOVE',
-  FOOD_MERGE_START: 'FOOD_MERGE_START',
-  FOOD_MERGE_TOGGLE_PICK: 'FOOD_MERGE_TOGGLE_PICK',
-  FOOD_MERGE_CANCEL: 'FOOD_MERGE_CANCEL',
-  FOOD_MERGE_SET_ERROR: 'FOOD_MERGE_SET_ERROR',
+  INGREDIENTS_LOAD_START: 'INGREDIENTS_LOAD_START',
+  INGREDIENTS_LOADED: 'INGREDIENTS_LOADED',
+  INGREDIENTS_LOAD_ERROR: 'INGREDIENTS_LOAD_ERROR',
+  INGREDIENTS_TOGGLE_SECTION: 'INGREDIENTS_TOGGLE_SECTION',
+  INGREDIENTS_TOGGLE_EXPAND: 'INGREDIENTS_TOGGLE_EXPAND',
+  INGREDIENTS_REMOVE: 'INGREDIENTS_REMOVE',
+  INGREDIENT_MERGE_START: 'INGREDIENT_MERGE_START',
+  INGREDIENT_MERGE_TOGGLE_PICK: 'INGREDIENT_MERGE_TOGGLE_PICK',
+  INGREDIENT_MERGE_CANCEL: 'INGREDIENT_MERGE_CANCEL',
+  INGREDIENT_MERGE_SET_ERROR: 'INGREDIENT_MERGE_SET_ERROR',
 
-  // Phase 2 hooks (auth + favorites). Not used in Phase 1 but reducer handles them so wiring later is trivial.
+  // Phase 2 hooks (auth). Not used in Phase 1 but reducer handles them so wiring later is trivial.
   SET_AUTH_READY: 'SET_AUTH_READY',
   SET_AUTH_BUSY: 'SET_AUTH_BUSY',
   SET_AUTH_ERROR: 'SET_AUTH_ERROR',
   SET_SESSION: 'SET_SESSION',
   SET_CURRENT_USER: 'SET_CURRENT_USER',
-  SET_FAVORITES: 'SET_FAVORITES',
-  SET_FAVORITE: 'SET_FAVORITE',
-  SET_FAVORITES_ONLY: 'SET_FAVORITES_ONLY',
   SET_BECOME_ADMIN_BUSY: 'SET_BECOME_ADMIN_BUSY',
   SET_BECOME_ADMIN_ERROR: 'SET_BECOME_ADMIN_ERROR',
   CLEAR_AUTH: 'CLEAR_AUTH',
@@ -311,9 +304,6 @@ function reducer(state, action) {
     case A.MANAGER_SET_TYPE_FILTER:
       return { ...state, managerTypeFilter: action.value || 'all' };
 
-    case A.MANAGER_SET_FAVORITES_ONLY:
-      return { ...state, managerFavoritesOnly: !!action.value };
-
     case A.MANAGER_TOGGLE_CUISINE: {
       const next = new Set(state.managerExpandedCuisines);
       if (next.has(action.cuisine)) next.delete(action.cuisine);
@@ -385,57 +375,57 @@ function reducer(state, action) {
       return { ...state, expandedItemParents: next };
     }
 
-    case A.FOODS_LOAD_START:
-      return { ...state, managerFoodsLoading: true, managerFoodsError: null };
+    case A.INGREDIENTS_LOAD_START:
+      return { ...state, managerIngredientsLoading: true, managerIngredientsError: null };
 
-    case A.FOODS_LOADED:
+    case A.INGREDIENTS_LOADED:
       return {
         ...state,
-        managerFoods: action.foods || [],
-        managerFoodsLoading: false,
-        managerFoodsError: null,
+        managerIngredients: action.ingredients || [],
+        managerIngredientsLoading: false,
+        managerIngredientsError: null,
       };
 
-    case A.FOODS_LOAD_ERROR:
-      return { ...state, managerFoodsLoading: false, managerFoodsError: action.error };
+    case A.INGREDIENTS_LOAD_ERROR:
+      return { ...state, managerIngredientsLoading: false, managerIngredientsError: action.error };
 
-    case A.FOODS_TOGGLE_SECTION: {
+    case A.INGREDIENTS_TOGGLE_SECTION: {
       const next = new Set(state.expandedIngredientSections);
       if (next.has(action.category)) next.delete(action.category);
       else next.add(action.category);
       return { ...state, expandedIngredientSections: next };
     }
 
-    case A.FOODS_TOGGLE_EXPAND: {
-      const next = new Set(state.expandedFoodIds);
-      if (next.has(action.foodId)) next.delete(action.foodId);
-      else next.add(action.foodId);
-      return { ...state, expandedFoodIds: next };
+    case A.INGREDIENTS_TOGGLE_EXPAND: {
+      const next = new Set(state.expandedIngredientIds);
+      if (next.has(action.ingredientId)) next.delete(action.ingredientId);
+      else next.add(action.ingredientId);
+      return { ...state, expandedIngredientIds: next };
     }
 
-    case A.FOODS_REMOVE:
-      return { ...state, managerFoods: state.managerFoods.filter((f) => f.id !== action.foodId) };
+    case A.INGREDIENTS_REMOVE:
+      return { ...state, managerIngredients: state.managerIngredients.filter((f) => f.id !== action.ingredientId) };
 
-    case A.FOOD_MERGE_START:
+    case A.INGREDIENT_MERGE_START:
       return {
         ...state,
-        foodMerge: { keepId: action.keepId, mergeIds: new Set(), error: null, saving: false },
+        ingredientMerge: { keepId: action.keepId, mergeIds: new Set(), error: null, saving: false },
       };
 
-    case A.FOOD_MERGE_TOGGLE_PICK: {
-      if (!state.foodMerge) return state;
-      const next = new Set(state.foodMerge.mergeIds);
-      if (next.has(action.foodId)) next.delete(action.foodId);
-      else next.add(action.foodId);
-      return { ...state, foodMerge: { ...state.foodMerge, mergeIds: next, error: null } };
+    case A.INGREDIENT_MERGE_TOGGLE_PICK: {
+      if (!state.ingredientMerge) return state;
+      const next = new Set(state.ingredientMerge.mergeIds);
+      if (next.has(action.ingredientId)) next.delete(action.ingredientId);
+      else next.add(action.ingredientId);
+      return { ...state, ingredientMerge: { ...state.ingredientMerge, mergeIds: next, error: null } };
     }
 
-    case A.FOOD_MERGE_CANCEL:
-      return { ...state, foodMerge: null };
+    case A.INGREDIENT_MERGE_CANCEL:
+      return { ...state, ingredientMerge: null };
 
-    case A.FOOD_MERGE_SET_ERROR:
-      return state.foodMerge
-        ? { ...state, foodMerge: { ...state.foodMerge, error: action.error, saving: !!action.saving } }
+    case A.INGREDIENT_MERGE_SET_ERROR:
+      return state.ingredientMerge
+        ? { ...state, ingredientMerge: { ...state.ingredientMerge, error: action.error, saving: !!action.saving } }
         : state;
 
     case A.SET_AUTH_READY:
@@ -462,19 +452,6 @@ function reducer(state, action) {
       // action is dispatched after a sign-out racy edge case.
       return state.currentUser ? { ...state, editMode: !state.editMode } : state;
 
-    case A.SET_FAVORITES:
-      return { ...state, favorites: action.favorites || new Map() };
-
-    case A.SET_FAVORITE: {
-      const next = new Map(state.favorites);
-      if (action.favorited) next.set(action.sauceId, action.timestamp || new Date().toISOString());
-      else next.delete(action.sauceId);
-      return { ...state, favorites: next };
-    }
-
-    case A.SET_FAVORITES_ONLY:
-      return { ...state, favoritesOnly: !!action.value };
-
     case A.SET_BECOME_ADMIN_BUSY:
       return { ...state, becomeAdminBusy: !!action.value };
 
@@ -486,8 +463,6 @@ function reducer(state, action) {
         ...state,
         session: null,
         currentUser: null,
-        favorites: new Map(),
-        favoritesOnly: false,
         authError: null,
         becomeAdminError: null,
         editMode: false,
@@ -543,7 +518,7 @@ export function AppProvider({ children }) {
   }, []);
 
   // Auth bootstrap: subscribe to Supabase session changes. On sign-in, fetch
-  // profile (auto-create on 404) + favorites. On sign-out, clear them.
+  // profile (auto-create on 404). On sign-out, clear it.
   useEffect(() => {
     if (!isAuthConfigured || !supabase) {
       // No Supabase config — auth is not available; mark ready so UI doesn't hang.
@@ -583,13 +558,6 @@ export function AppProvider({ children }) {
         }
       }
 
-      // Favorites — non-blocking.
-      try {
-        const favs = await api.listFavorites();
-        if (!cancelled) dispatch({ type: A.SET_FAVORITES, favorites: favs });
-      } catch {
-        // ignore
-      }
     }
 
     // Initial session check (rehydrated from SecureStore).
@@ -705,7 +673,6 @@ export function AppProvider({ children }) {
       },
       setManagerSearch: (value) => dispatch({ type: A.MANAGER_SET_SEARCH, value }),
       setManagerTypeFilter: (value) => dispatch({ type: A.MANAGER_SET_TYPE_FILTER, value }),
-      setManagerFavoritesOnly: (value) => dispatch({ type: A.MANAGER_SET_FAVORITES_ONLY, value }),
       toggleManagerCuisine: (cuisine) => dispatch({ type: A.MANAGER_TOGGLE_CUISINE, cuisine }),
       setManagerTab: (tab) => dispatch({ type: A.MANAGER_SET_TAB, value: tab }),
       // Owner-or-admin delete. Returns { ok, error } and optimistically removes
@@ -797,89 +764,74 @@ export function AppProvider({ children }) {
       },
 
       // ── Manager → Ingredients tab ───────────────────────────────────────────
-      loadAllFoods: async () => {
-        dispatch({ type: A.FOODS_LOAD_START });
+      loadAllIngredients: async () => {
+        dispatch({ type: A.INGREDIENTS_LOAD_START });
         try {
-          const foods = await api.listFoodsWithUsage();
-          dispatch({ type: A.FOODS_LOADED, foods });
+          const ingredients = await api.listIngredientsWithUsage();
+          dispatch({ type: A.INGREDIENTS_LOADED, ingredients });
           return { ok: true };
         } catch (e) {
-          dispatch({ type: A.FOODS_LOAD_ERROR, error: e.message || String(e) });
+          dispatch({ type: A.INGREDIENTS_LOAD_ERROR, error: e.message || String(e) });
           return { ok: false, error: e.message || String(e) };
         }
       },
-      toggleIngredientSection: (category) => dispatch({ type: A.FOODS_TOGGLE_SECTION, category }),
-      toggleFoodExpansion: (foodId) => dispatch({ type: A.FOODS_TOGGLE_EXPAND, foodId }),
+      toggleIngredientSection: (category) => dispatch({ type: A.INGREDIENTS_TOGGLE_SECTION, category }),
+      toggleIngredientExpansion: (ingredientId) => dispatch({ type: A.INGREDIENTS_TOGGLE_EXPAND, ingredientId }),
       // Any logged-in user (not admin-gated). Returns { ok } and refreshes.
-      createFood: async (payload) => {
+      createIngredient: async (payload) => {
         try {
-          await api.createFood(payload);
-          await actions._refreshFoods();
+          await api.createIngredient(payload);
+          await actions._refreshIngredients();
           return { ok: true };
         } catch (e) {
           return { ok: false, error: e.message || String(e) };
         }
       },
-      // Upserts an ingredient → category mapping. Updates local state
-      // immediately and fires the API call in the background; failures get
-      // returned to the caller (FoodFormModal surfaces them as the form error).
-      classifyIngredient: async (name, category) => {
-        const trimmed = (name || '').trim();
-        const cat = (category || '').trim();
-        if (!trimmed || !cat) return { ok: false, error: 'Name and category are required.' };
-        dispatch({ type: A.SET_INGREDIENT_CATEGORY, name: trimmed.toLowerCase(), category: cat });
+      updateIngredient: async (id, payload) => {
         try {
-          await api.classifyIngredient(trimmed, cat);
+          await api.updateIngredient(id, payload);
+          await actions._refreshIngredients();
           return { ok: true };
         } catch (e) {
           return { ok: false, error: e.message || String(e) };
         }
       },
-      updateFood: async (id, payload) => {
+      // Backend returns 409 if the ingredient is in use — caller surfaces the message.
+      deleteIngredient: async (id) => {
         try {
-          await api.updateFood(id, payload);
-          await actions._refreshFoods();
+          await api.deleteIngredient(id);
+          dispatch({ type: A.INGREDIENTS_REMOVE, ingredientId: id });
           return { ok: true };
         } catch (e) {
           return { ok: false, error: e.message || String(e) };
         }
       },
-      // Backend returns 409 if the food is in use — caller surfaces the message.
-      deleteFood: async (id) => {
+      _refreshIngredients: async () => {
         try {
-          await api.deleteFood(id);
-          dispatch({ type: A.FOODS_REMOVE, foodId: id });
-          return { ok: true };
-        } catch (e) {
-          return { ok: false, error: e.message || String(e) };
-        }
-      },
-      _refreshFoods: async () => {
-        try {
-          const foods = await api.listFoodsWithUsage();
-          dispatch({ type: A.FOODS_LOADED, foods });
+          const ingredients = await api.listIngredientsWithUsage();
+          dispatch({ type: A.INGREDIENTS_LOADED, ingredients });
         } catch {
           // ignore — keep the previous list
         }
       },
 
       // ── Manager → Ingredients merge mode ────────────────────────────────────
-      startFoodMerge: (keepId) => dispatch({ type: A.FOOD_MERGE_START, keepId }),
-      toggleFoodMergePick: (foodId) => dispatch({ type: A.FOOD_MERGE_TOGGLE_PICK, foodId }),
-      cancelFoodMerge: () => dispatch({ type: A.FOOD_MERGE_CANCEL }),
+      startIngredientMerge: (keepId) => dispatch({ type: A.INGREDIENT_MERGE_START, keepId }),
+      toggleIngredientMergePick: (ingredientId) => dispatch({ type: A.INGREDIENT_MERGE_TOGGLE_PICK, ingredientId }),
+      cancelIngredientMerge: () => dispatch({ type: A.INGREDIENT_MERGE_CANCEL }),
       // Commit: repoints all step ingredients from mergeIds → keepId and
-      // deletes the merged food rows. Refreshes on success.
-      commitFoodMerge: async () => {
-        const merge = stateRef.current.foodMerge;
+      // deletes the merged ingredient rows. Refreshes on success.
+      commitIngredientMerge: async () => {
+        const merge = stateRef.current.ingredientMerge;
         if (!merge || merge.mergeIds.size === 0) return { ok: false, error: 'Pick at least one ingredient to merge.' };
-        dispatch({ type: A.FOOD_MERGE_SET_ERROR, error: null, saving: true });
+        dispatch({ type: A.INGREDIENT_MERGE_SET_ERROR, error: null, saving: true });
         try {
-          await api.mergeFoods(merge.keepId, [...merge.mergeIds]);
-          await actions._refreshFoods();
-          dispatch({ type: A.FOOD_MERGE_CANCEL });
+          await api.mergeIngredients(merge.keepId, [...merge.mergeIds]);
+          await actions._refreshIngredients();
+          dispatch({ type: A.INGREDIENT_MERGE_CANCEL });
           return { ok: true };
         } catch (e) {
-          dispatch({ type: A.FOOD_MERGE_SET_ERROR, error: e.message || String(e), saving: false });
+          dispatch({ type: A.INGREDIENT_MERGE_SET_ERROR, error: e.message || String(e), saving: false });
           return { ok: false, error: e.message || String(e) };
         }
       },
@@ -888,7 +840,7 @@ export function AppProvider({ children }) {
 
       // Opens Google's OAuth flow in a system WebBrowser, then exchanges the
       // returned code for a Supabase session. onAuthStateChange in the
-      // provider hydrates profile + favorites once the session lands.
+      // provider hydrates profile once the session lands.
       signInWithGoogle: async () => {
         if (!isAuthConfigured || !supabase) {
           dispatch({ type: A.SET_AUTH_ERROR, error: 'Sign-in is not configured for this build.' });
@@ -919,7 +871,7 @@ export function AppProvider({ children }) {
         try {
           const { error } = await supabase.auth.signInWithPassword({ email, password });
           if (error) throw error;
-          // onAuthStateChange will populate session + currentUser + favorites.
+          // onAuthStateChange will populate session + currentUser.
           return { ok: true };
         } catch (e) {
           dispatch({ type: A.SET_AUTH_ERROR, error: e.message || String(e) });
@@ -1010,28 +962,6 @@ export function AppProvider({ children }) {
         dispatch({ type: A.CLEAR_AUTH });
       },
 
-      // ── Favorites ───────────────────────────────────────────────────────────
-      // Optimistic toggle. Updates UI immediately, syncs in the background,
-      // reverts on failure. If the user isn't signed in, returns false so
-      // the caller can prompt sign-in.
-      toggleFavorite: async (sauceId) => {
-        const cur = stateRef.current;
-        if (!cur.currentUser) return { ok: false, reason: 'unauthenticated' };
-        const wasFavorited = cur.favorites.has(sauceId);
-        const previousTimestamp = cur.favorites.get(sauceId);
-        dispatch({ type: A.SET_FAVORITE, sauceId, favorited: !wasFavorited });
-        try {
-          if (wasFavorited) await api.removeFavorite(sauceId);
-          else await api.addFavorite(sauceId);
-          return { ok: true };
-        } catch (e) {
-          // revert
-          dispatch({ type: A.SET_FAVORITE, sauceId, favorited: wasFavorited, timestamp: previousTimestamp });
-          return { ok: false, error: e.message || String(e) };
-        }
-      },
-
-      setFavoritesOnly: (value) => dispatch({ type: A.SET_FAVORITES_ONLY, value }),
     }),
     [],
   );

@@ -15,7 +15,6 @@ import VariantSwitcher from '../components/VariantSwitcher';
 import ServingsControl from '../components/ServingsControl';
 import UnitToggle from '../components/UnitToggle';
 import EmptyState from '../components/EmptyState';
-import HeartButton from '../components/HeartButton';
 import { flowMetaFor } from '#shared/constants';
 import { COLORS, SHADOWS } from '../theme';
 
@@ -120,11 +119,6 @@ export default function MealRecipeScreen({ navigation }) {
           <View style={styles.timingRow}>
             <Clock size={14} color={COLORS.primary} />
             <Text style={styles.timingTotal}>Total: ~{totalTime} min active</Text>
-            {state.currentUser ? (
-              <View style={styles.heartSlot}>
-                <HeartButton sauceId={sauce.id} size={22} />
-              </View>
-            ) : null}
           </View>
           {marineAhead ? (
             <View style={styles.timingRow}>
@@ -198,9 +192,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 2,
-  },
-  heartSlot: {
-    marginLeft: 'auto',
   },
   timingTotal: {
     fontSize: 13,

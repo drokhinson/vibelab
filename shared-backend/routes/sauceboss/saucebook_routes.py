@@ -31,7 +31,7 @@ async def list_saucebook(
     ingredientNames). Steps + full ingredients fetched via /sauces on tap."""
     sb = get_supabase()
     try:
-        result = sb.rpc("get_sauceboss_saucebook", {"p_user_id": user.user_id}).execute()
+        result = sb.rpc("get_sauceboss_user_saucebook", {"p_user_id": user.user_id}).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
     return SaucebookResponse(sauces=result.data or [])
@@ -49,11 +49,11 @@ async def add_to_saucebook(
 ) -> MessageResponse:
     """Insert (user_id, sauce_id). Idempotent: re-adding is a no-op."""
     sb = get_supabase()
-    exists = sb.table("sauceboss_sauces").select("id").eq("id", sauce_id).execute()
+    exists = sb.table("sauceboss_sauce").select("id").eq("id", sauce_id).execute()
     if not exists.data:
         raise HTTPException(404, "Sauce not found")
     try:
-        sb.table("sauceboss_saucebook").upsert(
+        sb.table("sauceboss_user_saucebook").upsert(
             {"user_id": user.user_id, "sauce_id": sauce_id},
             on_conflict="user_id,sauce_id",
         ).execute()
@@ -75,7 +75,7 @@ async def remove_from_saucebook(
     """Delete (user_id, sauce_id). No error if the row does not exist."""
     sb = get_supabase()
     try:
-        sb.table("sauceboss_saucebook").delete().eq("user_id", user.user_id).eq("sauce_id", sauce_id).execute()
+        sb.table("sauceboss_user_saucebook").delete().eq("user_id", user.user_id).eq("sauce_id", sauce_id).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
     return MessageResponse(message="Removed from saucebook")

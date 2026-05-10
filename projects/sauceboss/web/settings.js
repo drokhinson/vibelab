@@ -192,7 +192,7 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
     const haystack = [
       s.name || '',
       s.cuisine || '',
-      (s.compatibleItems || []).join(' '),
+      (s.attachments || []).map(a => a.value).join(' '),
     ].join(' ').toLowerCase();
     return haystack.includes(q);
   });
@@ -279,7 +279,7 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
   // of the app; fall back to the legacy compatible-items list for seed
   // sauces (no createdBy).
   const author = s.authorName || (s.createdBy ? 'Unknown' : null);
-  const subline = author ? `by ${escapeHtml(author)}` : escapeHtml((s.compatibleItems || []).join(' · '));
+  const subline = author ? `by ${escapeHtml(author)}` : escapeHtml((s.attachments || []).map(a => a.value).join(' · '));
 
   // The shared row helper builds the inner shell. Sauce Manager-specific
   // wrappers (merge/swipe) live below.
@@ -635,7 +635,7 @@ function setSauceManagerTab(tab) {
     render();
     refreshAdminItems();
   } else if (tab === 'ingredients') {
-    state.adminFoodsLoading = true;
+    state.adminIngredientsLoading = true;
     render();
     refreshAdminFoods();
   } else {
@@ -722,7 +722,7 @@ async function openBuilderEdit(id) {
     sourceUrl: sauce.sourceUrl || '',
     sauceType: sauce.sauceType || 'sauce',
     parentSauceId: sauce.parentSauceId || null,
-    itemIds: sauce.compatibleItems || [],
+    itemIds: (sauce.attachments || []).filter(a => a.kind === 'dish').map(a => a.value),
     steps: (sauce.steps || []).map(s => ({
       title: s.title,
       instructions: s.instructions || '',
@@ -938,7 +938,7 @@ async function adminDeleteItemAction(id, name, hasVariants) {
 
 // ─── Ingredients tab ─────────────────────────────────────────────────────────
 function renderIngredientsTab(isAdmin, isLoggedIn) {
-  const foods = state.adminFoods || [];
+  const foods = state.adminIngredients || [];
   const q = (state.sauceManagerSearch || '').trim().toLowerCase();
   const merge = state.foodMerge;
   const form = state.foodForm;
@@ -949,7 +949,7 @@ function renderIngredientsTab(isAdmin, isLoggedIn) {
   const formHTML = formVisible ? renderFoodForm() : '';
   const mergeHTML = isAdmin && merge ? renderMergePanel() : '';
 
-  if (state.adminFoodsLoading) {
+  if (state.adminIngredientsLoading) {
     return `${formHTML}${mergeHTML}${tabLoadingHTML('Loading ingredients…')}`;
   }
 
@@ -1057,7 +1057,7 @@ function renderFoodRow(f, isAdmin, merge) {
                  onclick="toggleFoodMergePick('${f.id}')">${inner}</div>`;
   }
 
-  const panelHTML = expanded ? renderFoodSaucesPanel(f.id) : '';
+  const panelHTML = expanded ? renderIngredientSaucesPanel(f.id) : '';
 
   if (!isAdmin || !state.editMode) {
     return `
@@ -1069,7 +1069,7 @@ function renderFoodRow(f, isAdmin, merge) {
          data-tap-action="toggleFoodExpand('${f.id}')"
          data-longpress-action="startFoodMerge('${f.id}')"
          data-edit-action="openFoodForm('${f.id}')"
-         data-delete-action="adminDeleteFoodAction('${f.id}','${safeName}',${usage})">
+         data-delete-action="adminDeleteIngredientAction('${f.id}','${safeName}',${usage})">
       <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
       <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
       <div class="swipe-content food-row">${inner}</div>
@@ -1077,8 +1077,8 @@ function renderFoodRow(f, isAdmin, merge) {
     ${panelHTML}`;
 }
 
-function renderFoodSaucesPanel(foodId) {
-  const sauces = saucesUsingFood(foodId);
+function renderIngredientSaucesPanel(ingredientId) {
+  const sauces = saucesUsingIngredient(ingredientId);
   if (sauces.length === 0) {
     return `<div class="food-sauces-panel"><span class="food-sauces-empty">No sauces use this yet.</span></div>`;
   }
@@ -1090,13 +1090,13 @@ function renderFoodSaucesPanel(foodId) {
   return `<div class="food-sauces-panel">${chips}</div>`;
 }
 
-function saucesUsingFood(foodId) {
+function saucesUsingIngredient(ingredientId) {
   const out = [];
   const seen = new Set();
   for (const s of state.adminSauces || []) {
     if (seen.has(s.id)) continue;
     const hit = (s.steps || []).some(st =>
-      (st.ingredients || []).some(i => i.foodId === foodId)
+      (st.ingredients || []).some(i => i.ingredientId === ingredientId)
     );
     if (hit) { out.push({ id: s.id, name: s.name, color: s.color }); seen.add(s.id); }
   }
@@ -1152,7 +1152,7 @@ function onFoodFormCategoryChange(value) {
 
 function renderMergePanel() {
   const merge = state.foodMerge;
-  const keep = (state.adminFoods || []).find(f => f.id === merge.keepId);
+  const keep = (state.adminIngredients || []).find(f => f.id === merge.keepId);
   return `
     <div class="food-merge-panel">
       <strong>Merging into: ${keep ? keep.name : '(unknown)'}</strong>
@@ -1165,17 +1165,17 @@ function renderMergePanel() {
 
 async function refreshAdminFoods() {
   try {
-    state.adminFoods = await fetchFoodsWithUsage();
+    state.adminIngredients = await fetchIngredientsWithUsage();
   } catch (err) {
     state.adminError = `Failed to load ingredients: ${err.message}`;
   } finally {
-    state.adminFoodsLoading = false;
+    state.adminIngredientsLoading = false;
     render();
   }
 }
 
 function openFoodForm(id) {
-  const food = id ? (state.adminFoods || []).find(f => f.id === id) : null;
+  const food = id ? (state.adminIngredients || []).find(f => f.id === id) : null;
   state.foodMerge = null;
   const existingCat = food
     ? (state.ingredientCategories[(food.name || '').toLowerCase()] || '')
@@ -1220,10 +1220,13 @@ async function submitFoodForm() {
   render();
   try {
     const payload = { name, plural: (f.plural || '').trim() || null };
-    if (f.mode === 'edit') await adminUpdateFood(f.id, payload);
-    else await adminCreateFood(payload);
+    if (resolvedCategory) payload.category = resolvedCategory;
+    if (f.mode === 'edit') await adminUpdateIngredient(f.id, payload);
+    else await adminCreateIngredient(payload);
     if (resolvedCategory) {
-      await classifyIngredient(name, resolvedCategory);
+      // Mirror the persisted category into the local cache so any open
+      // recipe view / builder sees it immediately without a refetch.
+      state.ingredientCategories[name.trim().toLowerCase()] = resolvedCategory;
     }
     state.foodForm = null;
     await refreshAdminFoods();
@@ -1234,14 +1237,14 @@ async function submitFoodForm() {
   }
 }
 
-async function adminDeleteFoodAction(id, name, usage) {
+async function adminDeleteIngredientAction(id, name, usage) {
   if (usage > 0) {
     alert(`Cannot delete "${name}" — it's used by ${usage} recipe step row(s). Merge it into another ingredient first.`);
     return;
   }
   if (!confirm(`Delete ingredient "${name}"? This cannot be undone.`)) return;
   try {
-    await adminDeleteFood(id);
+    await adminDeleteIngredient(id);
     await refreshAdminFoods();
   } catch (err) {
     state.adminError = `Failed to delete: ${err.message}`;
@@ -1285,7 +1288,7 @@ async function submitFoodMerge() {
   merge.error = null;
   render();
   try {
-    await adminMergeFoods(merge.keepId, [...merge.mergeIds]);
+    await adminMergeIngredients(merge.keepId, [...merge.mergeIds]);
     state.foodMerge = null;
     await refreshAdminFoods();
   } catch (err) {
@@ -1344,7 +1347,7 @@ async function handleImportSauceFile(event) {
 
   const itemIds = Array.isArray(inner.itemIds) && inner.itemIds.length
     ? inner.itemIds
-    : (Array.isArray(inner.compatibleItems) ? inner.compatibleItems : []);
+    : (Array.isArray(inner.attachments) ? inner.attachments.filter(a => a.kind === 'dish').map(a => a.value) : []);
 
   // Mirror openBuilderEdit's shape mapping (settings.js:720) minus editingId —
   // this is a brand-new sauce that will create via POST /sauces on save.

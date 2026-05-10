@@ -1,4 +1,4 @@
-"""Pantry routes — per-user negative ingredient list (sauceboss_pantry_missing)."""
+"""Pantry routes — per-user negative ingredient list (sauceboss_user_pantry_missing)."""
 
 import logging
 
@@ -16,12 +16,12 @@ logger = logging.getLogger("sauceboss")
     "/pantry",
     response_model=PantryResponse,
     status_code=200,
-    summary="Pantry overview — every food in the user's saucebook + missing flags",
+    summary="Pantry overview — every ingredient in the user's saucebook + missing flags",
 )
 async def get_pantry(
     user: CurrentUser = Depends(get_current_user),
 ) -> PantryResponse:
-    """Return every distinct food across the user's saucebook with a missing flag."""
+    """Return every distinct ingredient across the user's saucebook with a missing flag."""
     sb = get_supabase()
     try:
         result = sb.rpc("get_sauceboss_pantry_for_user", {"p_user_id": user.user_id}).execute()
@@ -49,7 +49,7 @@ async def set_pantry_missing(
     try:
         result = sb.rpc(
             "set_sauceboss_pantry_missing",
-            {"p_user_id": user.user_id, "p_food_ids": body.missingFoodIds},
+            {"p_user_id": user.user_id, "p_ingredient_ids": body.missingIngredientIds},
         ).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")

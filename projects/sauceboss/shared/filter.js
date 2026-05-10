@@ -21,10 +21,15 @@ export function missingSauceIngredients(sauce, disabledIngredients) {
   return missing;
 }
 
+// Substitutions live in `sauceboss_ingredient.substitutions[]` post-013, so
+// the map shape is now `{ [ingredientName]: string[] }`. Older callers may
+// still see the legacy `[{ substituteName, notes }]` shape during a deploy
+// window — accept both transparently.
 export function getSubstitutionText(ingredientName, substitutions) {
   const subs = substitutions && substitutions[ingredientName];
   if (!subs || subs.length === 0) return '';
-  return subs[0].substituteName;
+  const first = subs[0];
+  return typeof first === 'string' ? first : (first.substituteName || '');
 }
 
 export function getIngredientFrequencies(sauces) {

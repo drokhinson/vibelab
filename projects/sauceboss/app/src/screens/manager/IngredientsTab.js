@@ -1,6 +1,6 @@
-// Ingredients (foods) tab — every food in the catalog grouped by category,
+// Ingredients tab — every ingredient in the catalog grouped by category,
 // with usage counts. Anyone can browse + read. Logged-in users can add new
-// ingredients (the backend's POST /admin/foods is open to all auth'd users).
+// ingredients (the backend's POST /admin/ingredients is open to all auth'd users).
 // Admins can rename, delete (only when usageCount === 0), and merge
 // duplicates into a single keep target.
 
@@ -24,7 +24,7 @@ import {
 import { useAppActions, useAppState } from '../../store/AppContext';
 import LoadingPot from '../../components/LoadingPot';
 import EmptyState from '../../components/EmptyState';
-import FoodFormModal from './FoodFormModal';
+import IngredientFormModal from './IngredientFormModal';
 import { CATEGORY_ORDER } from '#shared/constants';
 import { COLORS, SHADOWS } from '../../theme';
 
@@ -38,44 +38,44 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
   const search = (state.managerSearch || '').toLowerCase().trim();
 
   useEffect(() => {
-    actions.loadAllFoods();
-    const unsub = navigation.addListener('focus', () => actions.loadAllFoods());
+    actions.loadAllIngredients();
+    const unsub = navigation.addListener('focus', () => actions.loadAllIngredients());
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [form, setForm] = useState(null); // { mode, food }
+  const [form, setForm] = useState(null); // { mode, ingredient }
 
   function openAdd() {
-    setForm({ mode: 'add', food: null });
+    setForm({ mode: 'add', ingredient: null });
   }
-  function openEdit(food) {
-    setForm({ mode: 'edit', food });
+  function openEdit(ingredient) {
+    setForm({ mode: 'edit', ingredient });
   }
   function closeForm() {
     setForm(null);
   }
 
-  // Group foods by their ingredient category. Foods that don't have a mapping
-  // in `state.ingredientCategories` end up under "Uncategorized" so admins can
-  // still find them and tag them via the web. Lookup is lowercased because
-  // the categories table stores names in lowercase.
+  // Group ingredients by category. Each ingredient row carries its own
+  // `category` field; fall back to the legacy `state.ingredientCategories`
+  // mapping (lowercased name → category) for any rows that haven't been
+  // backfilled. Rows still without a category land under "Uncategorized".
   const grouped = useMemo(() => {
     const cats = state.ingredientCategories || {};
     const groups = {};
-    for (const food of state.managerFoods || []) {
-      if (search && !(food.name || '').toLowerCase().includes(search)) continue;
-      const key = (food.name || '').toLowerCase();
-      const category = cats[key] || cats[food.name] || UNCATEGORIZED;
+    for (const ingredient of state.managerIngredients || []) {
+      if (search && !(ingredient.name || '').toLowerCase().includes(search)) continue;
+      const key = (ingredient.name || '').toLowerCase();
+      const category = ingredient.category || cats[key] || cats[ingredient.name] || UNCATEGORIZED;
       if (!groups[category]) groups[category] = [];
-      groups[category].push(food);
+      groups[category].push(ingredient);
     }
     // Sort each group's rows alphabetically.
     for (const k of Object.keys(groups)) {
       groups[k].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     }
     return groups;
-  }, [state.managerFoods, state.ingredientCategories, search]);
+  }, [state.managerIngredients, state.ingredientCategories, search]);
 
   const orderedCategories = useMemo(() => {
     const present = Object.keys(grouped);
@@ -93,52 +93,52 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
     actions.toggleIngredientSection(category);
   }
 
-  async function handleDelete(food) {
-    if (food.usageCount > 0) {
+  async function handleDelete(ingredient) {
+    if (ingredient.usageCount > 0) {
       Alert.alert(
-        `Cannot delete "${food.name}"`,
-        `It's used by ${food.usageCount} recipe step row${food.usageCount === 1 ? '' : 's'}. ` +
+        `Cannot delete "${ingredient.name}"`,
+        `It's used by ${ingredient.usageCount} recipe step row${ingredient.usageCount === 1 ? '' : 's'}. ` +
           'Merge it into another ingredient first, then delete.',
       );
       return;
     }
-    Alert.alert(`Delete "${food.name}"?`, 'This cannot be undone.', [
+    Alert.alert(`Delete "${ingredient.name}"?`, 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          const res = await actions.deleteFood(food.id);
+          const res = await actions.deleteIngredient(ingredient.id);
           if (!res.ok) Alert.alert('Could not delete', res.error || 'Unknown error');
         },
       },
     ]);
   }
 
-  function startMergeAt(food) {
-    actions.startFoodMerge(food.id);
+  function startMergeAt(ingredient) {
+    actions.startIngredientMerge(ingredient.id);
   }
 
-  function handleMergeRowTap(food) {
-    if (food.id === state.foodMerge?.keepId) return;
-    actions.toggleFoodMergePick(food.id);
+  function handleMergeRowTap(ingredient) {
+    if (ingredient.id === state.ingredientMerge?.keepId) return;
+    actions.toggleIngredientMergePick(ingredient.id);
   }
 
   async function commitMerge() {
-    const res = await actions.commitFoodMerge();
+    const res = await actions.commitIngredientMerge();
     if (!res.ok && res.error) Alert.alert('Could not merge', res.error);
   }
 
-  const merge = state.foodMerge;
+  const merge = state.ingredientMerge;
   const isMerging = !!merge;
-  const keepFood = isMerging ? (state.managerFoods || []).find((f) => f.id === merge.keepId) : null;
+  const keepIngredient = isMerging ? (state.managerIngredients || []).find((f) => f.id === merge.keepId) : null;
 
   return (
     <View style={{ flex: 1 }}>
       {isMerging ? (
         <View style={styles.mergePanel}>
           <Text style={styles.mergePanelTitle}>
-            Merging into <Text style={{ fontWeight: '900' }}>{keepFood?.name || '?'}</Text>
+            Merging into <Text style={{ fontWeight: '900' }}>{keepIngredient?.name || '?'}</Text>
           </Text>
           <Text style={styles.mergePanelHelp}>
             Tap other ingredients to mark them as duplicates. They'll be repointed to the parent.
@@ -151,14 +151,14 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {state.managerFoodsLoading && (state.managerFoods || []).length === 0 ? (
+        {state.managerIngredientsLoading && (state.managerIngredients || []).length === 0 ? (
           <LoadingPot label="Loading ingredients…" />
-        ) : state.managerFoodsError ? (
+        ) : state.managerIngredientsError ? (
           <EmptyState
             title="Couldn't load ingredients"
-            body={state.managerFoodsError}
+            body={state.managerIngredientsError}
             action="Try again"
-            onAction={() => actions.loadAllFoods()}
+            onAction={() => actions.loadAllIngredients()}
           />
         ) : orderedCategories.length === 0 ? (
           <EmptyState
@@ -182,17 +182,17 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
                 </TouchableOpacity>
                 {isOpen ? (
                   <View style={styles.rows}>
-                    {list.map((food, i) => (
-                      <FoodRow
-                        key={food.id}
-                        food={food}
+                    {list.map((ingredient, i) => (
+                      <IngredientRow
+                        key={ingredient.id}
+                        ingredient={ingredient}
                         isLast={i === list.length - 1}
                         isAdmin={isAdmin}
                         merge={merge}
-                        onEdit={() => openEdit(food)}
-                        onDelete={() => handleDelete(food)}
-                        onLongPress={() => isAdmin && !isMerging && startMergeAt(food)}
-                        onMergeTap={() => handleMergeRowTap(food)}
+                        onEdit={() => openEdit(ingredient)}
+                        onDelete={() => handleDelete(ingredient)}
+                        onLongPress={() => isAdmin && !isMerging && startMergeAt(ingredient)}
+                        onMergeTap={() => handleMergeRowTap(ingredient)}
                       />
                     ))}
                   </View>
@@ -208,12 +208,12 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
           <Text style={styles.mergeBarText}>
             {merge.mergeIds.size === 0
               ? 'Tap rows to mark as duplicates'
-              : `${merge.mergeIds.size} to merge into ${keepFood?.name || '?'}`}
+              : `${merge.mergeIds.size} to merge into ${keepIngredient?.name || '?'}`}
           </Text>
           <View style={styles.mergeBarActions}>
             <TouchableOpacity
               style={styles.mergeCancelBtn}
-              onPress={() => actions.cancelFoodMerge()}
+              onPress={() => actions.cancelIngredientMerge()}
               activeOpacity={0.7}
             >
               <Text style={styles.mergeCancelLabel}>Cancel</Text>
@@ -241,22 +241,22 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
         </TouchableOpacity>
       ) : null}
 
-      <FoodFormModal
+      <IngredientFormModal
         visible={!!form}
         mode={form?.mode}
-        food={form?.food}
+        ingredient={form?.ingredient}
         onClose={closeForm}
       />
     </View>
   );
 }
 
-function FoodRow({ food, isLast, isAdmin, merge, onEdit, onDelete, onLongPress, onMergeTap }) {
+function IngredientRow({ ingredient, isLast, isAdmin, merge, onEdit, onDelete, onLongPress, onMergeTap }) {
   const isMerging = !!merge;
-  const isKeep = merge?.keepId === food.id;
-  const isPicked = merge?.mergeIds?.has(food.id);
-  const usage = food.usageCount || 0;
-  const sauceCount = food.sauceCount || 0;
+  const isKeep = merge?.keepId === ingredient.id;
+  const isPicked = merge?.mergeIds?.has(ingredient.id);
+  const usage = ingredient.usageCount || 0;
+  const sauceCount = ingredient.sauceCount || 0;
   const subtitle = sauceCount === 0
     ? 'unused'
     : `${sauceCount} sauce${sauceCount === 1 ? '' : 's'}`;
@@ -279,9 +279,9 @@ function FoodRow({ food, isLast, isAdmin, merge, onEdit, onDelete, onLongPress, 
       <View style={styles.rowMain}>
         <View style={styles.rowInfo}>
           <Text style={styles.rowName} numberOfLines={1}>
-            {food.name}
-            {food.plural && food.plural !== food.name ? (
-              <Text style={styles.rowPlural}> · {food.plural}</Text>
+            {ingredient.name}
+            {ingredient.plural && ingredient.plural !== ingredient.name ? (
+              <Text style={styles.rowPlural}> · {ingredient.plural}</Text>
             ) : null}
           </Text>
           <Text

@@ -106,7 +106,8 @@ export default function StepCard({
 function subFor(name, substitutions) {
   const subs = substitutions[name];
   if (!subs || subs.length === 0) return '';
-  return subs[0].substituteName;
+  const first = subs[0];
+  return typeof first === 'string' ? first : (first.substituteName || '');
 }
 
 const styles = StyleSheet.create({

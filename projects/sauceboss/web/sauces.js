@@ -165,25 +165,25 @@ function toggleIngredient(name) {
     render();
     return;
   }
-  // Logged-in: route through the pantry. Find the foodId for this name in
+  // Logged-in: route through the pantry. Find the ingredientId for this name in
   // either the saucebook ingredient surface (most authoritative) or the
   // current sauce list (fallback for sauces not yet in saucebook).
-  let foodId = null;
+  let ingredientId = null;
   for (const ing of state.pantry.ingredients || []) {
-    if (ing.name === name) { foodId = ing.foodId; break; }
+    if (ing.name === name) { ingredientId = ing.ingredientId; break; }
   }
-  if (!foodId) {
+  if (!ingredientId) {
     for (const s of state.saucesForCurrentItem || []) {
       for (const ing of s.ingredients || []) {
-        if (ing.name === name && ing.foodId) { foodId = ing.foodId; break; }
+        if (ing.name === name && ing.ingredientId) { ingredientId = ing.ingredientId; break; }
       }
-      if (foodId) break;
+      if (ingredientId) break;
     }
   }
-  if (foodId) {
-    togglePantryMissing(foodId);
+  if (ingredientId) {
+    togglePantryMissing(ingredientId);
   } else {
-    // Unknown ingredient (no foodId resolution) — degrade to session-only
+    // Unknown ingredient (no ingredientId resolution) — degrade to session-only
     // toggle so the chip still feels responsive.
     if (state.disabledIngredients.has(name)) state.disabledIngredients.delete(name);
     else state.disabledIngredients.add(name);

@@ -1,4 +1,4 @@
-// Add / edit form for a sauceboss_items row. Used from the Dish tab. Admins
+// Add / edit form for a sauceboss_dish row. Used from the Dish tab. Admins
 // only — non-admins never see this modal.
 
 import React, { useEffect, useState } from 'react';

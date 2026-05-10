@@ -22,7 +22,7 @@ async def get_current_user(
     """Resolve a Supabase Auth user to a SauceBoss profile (auto-creates on first login)."""
     sb = get_supabase()
     result = (
-        sb.table("sauceboss_profiles")
+        sb.table("sauceboss_user_profiles")
         .select("id, display_name, is_admin")
         .eq("id", su_user.sub)
         .execute()
@@ -37,7 +37,7 @@ async def get_current_user(
         )
 
     display_name = (su_user.email or "").split("@")[0] or "Saucier"
-    sb.table("sauceboss_profiles").insert({
+    sb.table("sauceboss_user_profiles").insert({
         "id": su_user.sub,
         "display_name": display_name,
     }).execute()

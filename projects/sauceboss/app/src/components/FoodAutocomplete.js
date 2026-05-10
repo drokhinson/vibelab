@@ -1,6 +1,7 @@
-// Debounced food name typeahead. Calls /foods?q= 250ms after the user stops
-// typing and shows the top 6 matches. Tap a match to set the value; tap the
-// trailing "Use as new" pill to keep what's typed (creates a new food on save).
+// Debounced ingredient name typeahead. Calls /ingredients?q= 250ms after the
+// user stops typing and shows the top 6 matches. Tap a match to set the value;
+// tap the trailing "Use as new" pill to keep what's typed (creates a new
+// ingredient on save).
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -30,8 +31,8 @@ export default function FoodAutocomplete({ value, onChange, onPickFood, placehol
     debounce.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const foods = await api.foods(value.trim(), 6);
-        setResults(foods || []);
+        const ingredients = await api.ingredients(value.trim(), 6);
+        setResults(ingredients || []);
       } catch {
         setResults([]);
       } finally {

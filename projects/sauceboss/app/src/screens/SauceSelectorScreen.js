@@ -5,17 +5,15 @@ import React, { useMemo } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { Heart } from 'lucide-react-native';
 import IngredientFilterPanel from '../components/IngredientFilterPanel';
 import CuisineAccordion from '../components/CuisineAccordion';
 import EmptyState from '../components/EmptyState';
 import LoadingPot from '../components/LoadingPot';
 import { useAppActions, useAppState } from '../store/AppContext';
-import { buildSauceFamilies, pickDisplayedFromFamily, familyHasFavorite } from '#shared/families';
+import { buildSauceFamilies, pickDisplayedFromFamily } from '#shared/families';
 import { isSauceAvailable } from '#shared/filter';
 import { flowMetaFor } from '#shared/constants';
 import { COLORS } from '../theme';
@@ -28,19 +26,14 @@ export default function SauceSelectorScreen({ navigation }) {
   const prep = state.selectedPrep;
   const meta = flowMetaFor(item);
 
-  // Build families + decide which sauce to show per family, applying the
-  // favorites-only filter when the user has it on. (Phase 2 toggles this on.)
+  // Build families + decide which sauce to show per family.
   const visibleEntries = useMemo(() => {
     const families = buildSauceFamilies(state.saucesForCurrentItem || []);
-    let famsArr = [...families.values()];
-    if (state.favoritesOnly && state.currentUser) {
-      famsArr = famsArr.filter((f) => familyHasFavorite(f, state.favorites, state.currentUser));
-    }
-    return famsArr.map((family) => ({
+    return [...families.values()].map((family) => ({
       family,
-      displayed: pickDisplayedFromFamily(family, state.favorites, state.currentUser),
+      displayed: pickDisplayedFromFamily(family),
     }));
-  }, [state.saucesForCurrentItem, state.favoritesOnly, state.favorites, state.currentUser]);
+  }, [state.saucesForCurrentItem]);
 
   const cuisines = useMemo(
     () => [...new Set(visibleEntries.map((e) => e.displayed.cuisine || 'Other'))],
@@ -58,8 +51,6 @@ export default function SauceSelectorScreen({ navigation }) {
     (e) => isSauceAvailable(e.displayed, state.disabledIngredients),
   ).length;
 
-  const showFavPill = !!state.currentUser;
-
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
@@ -74,23 +65,6 @@ export default function SauceSelectorScreen({ navigation }) {
               {totalFamilies === 1 ? meta.sauceWord.toLowerCase() : meta.sauceTypeLabel} match your pantry
             </Text>
           </View>
-          {showFavPill ? (
-            <TouchableOpacity
-              style={[styles.favPill, state.favoritesOnly && styles.favPillActive]}
-              onPress={() => actions.setFavoritesOnly(!state.favoritesOnly)}
-              activeOpacity={0.7}
-            >
-              <Heart
-                size={14}
-                color={state.favoritesOnly ? '#fff' : COLORS.primary}
-                fill={state.favoritesOnly ? '#fff' : 'transparent'}
-                strokeWidth={2}
-              />
-              <Text style={[styles.favPillLabel, state.favoritesOnly && styles.favPillLabelActive]}>
-                Favorites
-              </Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
       </View>
 
@@ -143,7 +117,6 @@ export default function SauceSelectorScreen({ navigation }) {
                     disabledIngredients={state.disabledIngredients}
                     onToggle={() => actions.toggleCuisine(cuisine)}
                     onSelectSauce={onSelect}
-                    onUnauthenticatedFavorite={() => navigation.navigate('MealBuilder')}
                   />
                 );
               })
@@ -166,29 +139,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-  },
-  favPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.card,
-    marginLeft: 12,
-  },
-  favPillActive: {
-    backgroundColor: COLORS.primary,
-  },
-  favPillLabel: {
-    marginLeft: 4,
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  favPillLabelActive: {
-    color: '#fff',
   },
   title: {
     fontSize: 18,

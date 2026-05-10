@@ -1,10 +1,11 @@
-// Add / edit form for a sauceboss_foods row. Used from the Ingredients tab.
+// Add / edit form for a sauceboss_ingredient row. Used from the Ingredients tab.
 // Add: any logged-in user. Edit: admin only (but the modal itself is the same).
 //
-// Mirrors the web's renderFoodForm: name + plural + category picker. Existing
-// categories are pulled from `state.ingredientCategories`; "+ New category…"
-// expands a draft input. Saving the form calls createFood / updateFood, then
-// (if a category is set or changed) classifyIngredient to upsert the mapping.
+// Mirrors the web's renderIngredientForm: name + plural + category picker +
+// substitutions list. Existing categories are pulled from
+// `state.ingredientCategories`; "+ New category…" expands a draft input.
+// Saving the form calls createIngredient / updateIngredient with the full
+// payload (name, plural, category, substitutions).
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -27,7 +28,7 @@ import { COLORS, SHADOWS } from '../../theme';
 
 const NEW_CATEGORY = '__new__';
 
-export default function FoodFormModal({ visible, mode, food, onClose }) {
+export default function IngredientFormModal({ visible, mode, ingredient, onClose }) {
   const state = useAppState();
   const actions = useAppActions();
 
@@ -35,12 +36,13 @@ export default function FoodFormModal({ visible, mode, food, onClose }) {
   const [plural, setPlural] = useState('');
   const [category, setCategory] = useState('');           // '' | category | NEW_CATEGORY
   const [categoryDraft, setCategoryDraft] = useState(''); // populated when category === NEW_CATEGORY
+  const [substitutionsText, setSubstitutionsText] = useState(''); // comma-separated
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   // Compose the picker options: shared CATEGORY_ORDER first, then any user-
   // defined categories present in state, sorted alphabetically. Mirrors
-  // renderFoodForm in web/settings.js.
+  // renderIngredientForm in web/settings.js.
   const allCategories = useMemo(() => {
     const userCats = new Set(Object.values(state.ingredientCategories || {}));
     for (const c of CATEGORY_ORDER) userCats.delete(c);
@@ -50,19 +52,23 @@ export default function FoodFormModal({ visible, mode, food, onClose }) {
 
   useEffect(() => {
     if (!visible) return;
-    if (mode === 'edit' && food) {
-      setName(food.name || '');
-      setPlural(food.plural || '');
-      const existing = (food.name || '').toLowerCase();
-      setCategory(state.ingredientCategories?.[existing] || '');
+    if (mode === 'edit' && ingredient) {
+      setName(ingredient.name || '');
+      setPlural(ingredient.plural || '');
+      // Prefer the row's own category; fall back to the legacy mapping in state.
+      const fallback = state.ingredientCategories?.[(ingredient.name || '').toLowerCase()] || '';
+      setCategory(ingredient.category || fallback || '');
+      const subs = Array.isArray(ingredient.substitutions) ? ingredient.substitutions : [];
+      setSubstitutionsText(subs.join(', '));
     } else {
       setName('');
       setPlural('');
       setCategory('');
+      setSubstitutionsText('');
     }
     setCategoryDraft('');
     setError(null);
-  }, [visible, mode, food, state.ingredientCategories]);
+  }, [visible, mode, ingredient, state.ingredientCategories]);
 
   async function handleSubmit() {
     const n = name.trim();
@@ -83,27 +89,26 @@ export default function FoodFormModal({ visible, mode, food, onClose }) {
       return;
     }
 
+    const substitutions = substitutionsText
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     setSaving(true);
     setError(null);
     try {
-      const payload = { name: n, plural: plural.trim() || null };
-      const res = mode === 'edit' && food
-        ? await actions.updateFood(food.id, payload)
-        : await actions.createFood(payload);
+      const payload = {
+        name: n,
+        plural: plural.trim() || null,
+        category: resolvedCategory || null,
+        substitutions,
+      };
+      const res = mode === 'edit' && ingredient
+        ? await actions.updateIngredient(ingredient.id, payload)
+        : await actions.createIngredient(payload);
       if (!res.ok) {
         setError(res.error || 'Could not save');
         return;
-      }
-      // Even on edit (where category may be unchanged) the classify call is
-      // idempotent on the server, so call it whenever a category is set.
-      if (resolvedCategory) {
-        const c = await actions.classifyIngredient(n, resolvedCategory);
-        if (!c.ok) {
-          // The food row saved fine but the category mapping failed —
-          // surface a soft warning instead of leaving the user wondering.
-          setError(`Saved, but category didn't apply: ${c.error}`);
-          return;
-        }
       }
       onClose();
     } finally {
@@ -188,6 +193,17 @@ export default function FoodFormModal({ visible, mode, food, onClose }) {
                     value={plural}
                     onChangeText={setPlural}
                     placeholder="tomatoes"
+                    placeholderTextColor={COLORS.textMuted}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+
+                  <Text style={styles.label}>Substitutions (optional, comma-separated)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={substitutionsText}
+                    onChangeText={setSubstitutionsText}
+                    placeholder="canned tomato, sun-dried tomato"
                     placeholderTextColor={COLORS.textMuted}
                     autoCorrect={false}
                     autoCapitalize="none"

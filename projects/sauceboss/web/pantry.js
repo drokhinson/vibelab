@@ -111,7 +111,7 @@ function _pantryRow(ing) {
   const labelClass = missing ? 'pantry-row__name pantry-row__name--strike' : 'pantry-row__name';
   const stateClass = missing ? 'pantry-row--missing' : 'pantry-row--have';
   return `
-    <div class="pantry-row ${stateClass}" onclick="togglePantryMissing('${escapeHtml(ing.foodId)}')">
+    <div class="pantry-row ${stateClass}" onclick="togglePantryMissing('${escapeHtml(ing.ingredientId)}')">
       <span class="${labelClass}">${escapeHtml(ing.name || '')}</span>
       <span class="pantry-row__state">${missing ? 'Missing' : 'In stock'}</span>
     </div>

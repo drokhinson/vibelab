@@ -27,7 +27,7 @@ async def get_profile(
     """Return the current Supabase user's SauceBoss profile."""
     sb = get_supabase()
     result = (
-        sb.table("sauceboss_profiles")
+        sb.table("sauceboss_user_profiles")
         .select("*")
         .eq("id", su_user.sub)
         .execute()
@@ -50,7 +50,7 @@ async def create_or_update_profile(
     """Upsert the current user's SauceBoss profile."""
     sb = get_supabase()
     result = (
-        sb.table("sauceboss_profiles")
+        sb.table("sauceboss_user_profiles")
         .upsert({
             "id": su_user.sub,
             "display_name": body.display_name,
@@ -75,7 +75,7 @@ async def become_admin(
         raise HTTPException(status_code=403, detail="Invalid admin key")
     sb = get_supabase()
     result = (
-        sb.table("sauceboss_profiles")
+        sb.table("sauceboss_user_profiles")
         .update({"is_admin": True})
         .eq("id", su_user.sub)
         .execute()
@@ -94,7 +94,7 @@ async def become_admin(
 async def delete_profile(
     su_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> MessageResponse:
-    """Delete the current user's profile. Cascades to favorites; sauces' created_by becomes NULL."""
+    """Delete the current user's profile. Cascades to saucebook + pantry; sauces' created_by becomes NULL."""
     sb = get_supabase()
-    sb.table("sauceboss_profiles").delete().eq("id", su_user.sub).execute()
+    sb.table("sauceboss_user_profiles").delete().eq("id", su_user.sub).execute()
     return MessageResponse(message="Account deleted")

@@ -17,7 +17,6 @@ import {
   Download,
   GitBranch,
   GitMerge,
-  Heart,
   Pencil,
   Plus,
   Trash2,
@@ -26,9 +25,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useAppActions, useAppState } from '../../store/AppContext';
 import { api } from '../../api/client';
-import { buildSauceFamilies, pickDisplayedFromFamily, familyHasFavorite } from '#shared/families';
+import { buildSauceFamilies, pickDisplayedFromFamily } from '#shared/families';
 import { SAUCE_TYPES } from '#shared/constants';
-import HeartButton from '../../components/HeartButton';
 import LoadingPot from '../../components/LoadingPot';
 import EmptyState from '../../components/EmptyState';
 import { COLORS, SHADOWS } from '../../theme';
@@ -56,7 +54,6 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
   const editMode = !!state.editMode;
   const search = (state.managerSearch || '').toLowerCase().trim();
   const typeFilter = state.managerTypeFilter || 'all';
-  const favOnly = state.managerFavoritesOnly && isLoggedIn;
 
   const visibleEntries = useMemo(() => {
     const filtered = (state.managerSauces || []).filter((s) => {
@@ -70,15 +67,11 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
       return true;
     });
     const families = buildSauceFamilies(filtered);
-    let famsArr = [...families.values()];
-    if (favOnly) {
-      famsArr = famsArr.filter((f) => familyHasFavorite(f, state.favorites, state.currentUser));
-    }
-    return famsArr.map((family) => ({
+    return [...families.values()].map((family) => ({
       family,
-      displayed: pickDisplayedFromFamily(family, state.favorites, state.currentUser),
+      displayed: pickDisplayedFromFamily(family),
     }));
-  }, [state.managerSauces, search, typeFilter, favOnly, state.favorites, state.currentUser]);
+  }, [state.managerSauces, search, typeFilter]);
 
   const cuisines = useMemo(
     () => [...new Set(visibleEntries.map((e) => e.displayed.cuisine || 'Other'))].sort(),
@@ -196,20 +189,6 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
               </TouchableOpacity>
             );
           })}
-          {isLoggedIn ? (
-            <TouchableOpacity
-              onPress={() => actions.setManagerFavoritesOnly(!favOnly)}
-              style={[styles.typePill, favOnly && styles.typePillActive]}
-              activeOpacity={0.8}
-            >
-              <Heart
-                size={13}
-                color={favOnly ? '#fff' : COLORS.primary}
-                fill={favOnly ? '#fff' : 'transparent'}
-                strokeWidth={2}
-              />
-            </TouchableOpacity>
-          ) : null}
         </ScrollView>
       </View>
 
@@ -231,7 +210,7 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
           <EmptyState
             title="No matches"
             body={
-              search || typeFilter !== 'all' || favOnly
+              search || typeFilter !== 'all'
                 ? 'Try clearing filters or search.'
                 : 'No sauces yet. Tap the + button to add one.'
             }
@@ -458,7 +437,6 @@ function ManagerSauceRow({
         ) : (
           <>
             {showTypeTag ? <SauceTypeTag value={sauce.sauceType || 'sauce'} /> : null}
-            {currentUser ? <HeartButton sauceId={sauce.id} size={20} /> : null}
             <ChevronRight size={16} color={COLORS.textMuted} />
           </>
         )}

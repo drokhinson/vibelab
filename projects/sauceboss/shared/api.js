@@ -19,22 +19,18 @@ import { withIngredientNames } from './filter.js';
  * @typedef {Object<string, string>} IngredientCategoryMap
  *   Lowercased ingredient name → category label.
  *   e.g. `{ "garlic": "Produce", "olive oil": "Oils & Fats" }`.
- *   The backend returns this as an array of `{ ingredientName, category }`
- *   rows; `api.ingredientCategories()` reshapes it into this dict.
+ *   Post-013 the backend returns this dict directly (sauceboss_ingredient.category).
  *
- * @typedef {Object} SubstitutionEntry
- * @property {string} substituteName
- * @property {(string|null)=} notes
+ * @typedef {Object<string, string[]>} SubstitutionMap
+ *   Ingredient name → list of substitute names.
+ *   Post-013 the backend returns this dict directly (sauceboss_ingredient.substitutions[]).
  *
- * @typedef {Object<string, SubstitutionEntry[]>} SubstitutionMap
- *   Ingredient name → list of substitutes. Backend returns a flat array of
- *   `{ ingredientName, substituteName, notes }` rows; `api.substitutions()`
- *   groups them under their ingredient name.
- *
- * @typedef {Object} FoodRow
+ * @typedef {Object} IngredientRow
  * @property {string} id
  * @property {string} name
  * @property {(string|null)=} plural
+ * @property {(string|null)=} category
+ * @property {(string[]|null)=} substitutions
  * @property {number=} usageCount
  * @property {number=} sauceCount
  * @property {(string|null)=} createdAt
@@ -151,7 +147,7 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       };
     },
 
-    // All items grouped by category — parents only with nested variants. Used
+    // All dishes grouped by category — parents only with nested subtypes. Used
     // by the Sauce Builder's "pair with" picker.
     allItems: async () => {
       const data = await call('/items');
@@ -162,38 +158,19 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       };
     },
 
-    // Normalize the array response into the dict shape every consumer expects:
-    //   `{ "tomato": "Produce", "olive oil": "Oils & Fats", ... }`
-    // The backend returns `[{ ingredientName, category }, ...]` so without this
-    // step `cats[name]` lookups silently fall back to "Uncategorized" (and the
-    // ingredient filter panel falls back to "Pantry Staples" for everything).
+    // Post-013 the backend returns the dict shape directly (one round-trip,
+    // reads sauceboss_ingredient.category — no join, no array-to-dict reshape).
     /** @returns {Promise<IngredientCategoryMap>} */
     ingredientCategories: async () => {
       const data = await call('/ingredient-categories');
-      if (!Array.isArray(data)) return data || {};
-      /** @type {IngredientCategoryMap} */
-      const out = {};
-      for (const c of data) {
-        if (c && c.ingredientName) out[c.ingredientName] = c.category;
-      }
-      return out;
+      return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
     },
-    // Same shape problem as ingredient-categories: backend returns
-    //   `[{ ingredientName, substituteName, notes }, ...]`
-    // but consumers (StepCard, the recipe view) expect
-    //   `{ "<name>": [{ substituteName, notes }, ...] }`
+    // Post-013 the backend returns the dict shape directly (one round-trip,
+    // reads sauceboss_ingredient.substitutions[]).
     /** @returns {Promise<SubstitutionMap>} */
     substitutions: async () => {
       const data = await call('/substitutions');
-      if (!Array.isArray(data)) return data || {};
-      /** @type {SubstitutionMap} */
-      const out = {};
-      for (const s of data) {
-        if (!s || !s.ingredientName) continue;
-        if (!out[s.ingredientName]) out[s.ingredientName] = [];
-        out[s.ingredientName].push({ substituteName: s.substituteName, notes: s.notes });
-      }
-      return out;
+      return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
     },
 
     units: async () => {
@@ -201,12 +178,13 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       return data.units || [];
     },
 
-    foods: async (q, limit = 20) => {
+    /** @returns {Promise<IngredientRow[]>} */
+    ingredients: async (q, limit = 20) => {
       const params = new URLSearchParams();
       if (q) params.set('q', q);
       params.set('limit', String(limit));
-      const data = await call(`/foods?${params.toString()}`);
-      return data.foods || [];
+      const data = await call(`/ingredients?${params.toString()}`);
+      return data.ingredients || [];
     },
 
     importRecipeFromUrl: (url) => call('/import', { method: 'POST', body: { url } }),
@@ -228,36 +206,17 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       return sauces.map(withIngredientNames);
     },
 
-    // ── Profile + favorites (auth required) ──────────────────────────────────
+    // ── Profile (auth required) ──────────────────────────────────────────────
     getProfile: () => call('/profile'),
     upsertProfile: (displayName) => call('/profile', { method: 'POST', body: { display_name: displayName } }),
     becomeAdmin: (adminKey) => call('/profile/become-admin', { method: 'POST', body: { admin_key: adminKey } }),
     deleteProfile: () => call('/profile', { method: 'DELETE' }),
-
-    listFavorites: async () => {
-      const data = await call('/favorites');
-      const map = new Map();
-      for (const entry of data.favorites || []) {
-        map.set(entry.sauceId, entry.createdAt || null);
-      }
-      return map;
-    },
-    addFavorite: (sauceId) => call(`/favorites/${encodeURIComponent(sauceId)}`, { method: 'PUT' }),
-    removeFavorite: (sauceId) => call(`/favorites/${encodeURIComponent(sauceId)}`, { method: 'DELETE' }),
 
     // ── Authoring (auth required) ────────────────────────────────────────────
     createSauce: (data) => call('/sauces', { method: 'POST', body: data }),
     updateSauce: (id, data) => call(`/sauces/${encodeURIComponent(id)}`, { method: 'PATCH', body: data }),
     // Owner-or-admin delete. Backend enforces created_by match unless caller is_admin.
     deleteSauce: (id) => call(`/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-
-    // POST upserts an ingredient → category mapping. Used by the Food form
-    // when the admin / authoring user classifies a freshly added or renamed
-    // ingredient. Mirrors the web's classifyIngredient.
-    classifyIngredient: (ingredientName, category) => call('/ingredient-categories', {
-      method: 'POST',
-      body: { ingredientName, category },
-    }),
 
     // ── Sauce-manager Dish tab (admin CRUD) ─────────────────────────────────
     createItem: (payload) => call('/admin/items', { method: 'POST', body: payload }),
@@ -272,16 +231,16 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     adminDeleteSauce: (id) => call(`/admin/sauces/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
     // ── Sauce-manager Ingredients tab (mostly admin) ─────────────────────────
-    /** @returns {Promise<FoodRow[]>} */
-    listFoodsWithUsage: async () => {
-      const data = await call('/foods-with-usage');
-      return data.foods || [];
+    /** @returns {Promise<IngredientRow[]>} */
+    listIngredientsWithUsage: async () => {
+      const data = await call('/ingredients-with-usage');
+      return data.ingredients || [];
     },
-    createFood: (payload) => call('/admin/foods', { method: 'POST', body: payload }),
-    updateFood: (id, payload) => call(`/admin/foods/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }),
+    createIngredient: (payload) => call('/admin/ingredients', { method: 'POST', body: payload }),
+    updateIngredient: (id, payload) => call(`/admin/ingredients/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }),
     // 409 if usageCount > 0 — caller must merge first.
-    deleteFood: (id) => call(`/admin/foods/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-    mergeFoods: (keepId, mergeIds) => call('/admin/foods/merge', {
+    deleteIngredient: (id) => call(`/admin/ingredients/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    mergeIngredients: (keepId, mergeIds) => call('/admin/ingredients/merge', {
       method: 'POST',
       body: { keepId, mergeIds },
     }),
@@ -342,9 +301,9 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     },
 
     // ── Pantry (auth required) ───────────────────────────────────────────────
-    // Negative list: rows in `missingFoodIds` are foods the user is OUT of.
-    // The Pantry tab + the meal-builder ingredient filter both write here so
-    // the two views two-way-sync.
+    // Negative list: rows in `missingIngredientIds` are ingredients the user is
+    // OUT of. The Pantry tab + the meal-builder ingredient filter both write
+    // here so the two views two-way-sync.
     getPantry: async () => {
       const data = await call('/pantry');
       return {
@@ -352,8 +311,8 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
         saucebookSauceIds: data?.saucebookSauceIds || [],
       };
     },
-    setPantryMissing: async (missingFoodIds) => {
-      const data = await call('/pantry', { method: 'PUT', body: { missingFoodIds } });
+    setPantryMissing: async (missingIngredientIds) => {
+      const data = await call('/pantry', { method: 'PUT', body: { missingIngredientIds } });
       return {
         ingredients: data?.ingredients || [],
         saucebookSauceIds: data?.saucebookSauceIds || [],
