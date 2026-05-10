@@ -2066,22 +2066,18 @@ dialog .dialog-header {
   font-size: 0.85rem;
 }
 .shopping-detail-bullets dt { color: oklch(var(--bc) / 0.55); font-weight: 500; }
+.shopping-detail-bullets dd { min-width: 0; overflow-wrap: anywhere; }
 .shopping-detail-bullets dd.dd--missing {
   color: oklch(var(--bc) / 0.4);
   font-style: italic;
 }
-/* Compact 2-column layout: each grid row holds two label/value pairs.
-   Collapses to single column on the narrowest phones. */
+/* Tighter spacing variant for the new sectioned layout — keep single
+   column so long labels never push the popup body wider than the panel
+   (panel is min(420px,90vw); a 2-column grid overflows on phones). */
 .shopping-detail-bullets-2col {
-  grid-template-columns: max-content 1fr max-content 1fr;
-  column-gap: 1rem;
-  row-gap: 0.35rem;
-  margin: 0.5rem 0 0.8rem;
-}
-@media (max-width: 380px) {
-  .shopping-detail-bullets-2col {
-    grid-template-columns: max-content 1fr;
-  }
+  row-gap: 0.25rem;
+  margin: 0.4rem 0 0.7rem;
+  font-size: 0.82rem;
 }
 .shopping-detail-sci, .shopping-detail-family { font-size: 0.8rem; color: oklch(var(--bc) / 0.6); }
 .shopping-detail-sowing { font-size: 0.85rem; color: oklch(var(--bc) / 0.75); }
