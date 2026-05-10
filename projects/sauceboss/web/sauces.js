@@ -38,7 +38,11 @@ function renderSauceSelector() {
   }));
 
   const cuisines = [...new Set(visibleEntries.map(e => e.displayed.cuisine))];
-  const missingCount = state.disabledIngredients.size;
+  // Count only the missing ingredients that are actually shown in this
+  // sauce list — `state.disabledIngredients` covers the user's full pantry
+  // across every dish, but the chip list (and the badge) is scoped to
+  // ingredients used by the currently displayed sauces.
+  const missingCount = state.allIngredients.filter(name => state.disabledIngredients.has(name)).length;
   const categoryGroups = groupIngredientsByCategory();
 
   const chipHTML = (items) => items.map(({ name }) => {
