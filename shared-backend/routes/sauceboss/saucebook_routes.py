@@ -31,7 +31,7 @@ async def list_saucebook(
     ingredientNames). Steps + full ingredients fetched via /sauces on tap."""
     sb = get_supabase()
     try:
-        result = sb.rpc("get_sauceboss_user_saucebook", {"p_user_id": user.user_id}).execute()
+        result = sb.rpc("get_sauceboss_saucebook", {"p_user_id": user.user_id}).execute()
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
     return SaucebookResponse(sauces=result.data or [])
