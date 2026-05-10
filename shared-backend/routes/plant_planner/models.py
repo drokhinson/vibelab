@@ -34,7 +34,7 @@ class CreateGardenBody(BaseModel):
     garden_type: GardenType = GardenType.GARDEN_BED
     shade_level: ShadeLevel = ShadeLevel.FULL_SUN
     planting_season: PlantingSeason = PlantingSeason.SPRING
-    water_plan: WaterPlan = WaterPlan.REGULAR
+    water_plan: WaterPlan = WaterPlan.AVERAGE
     usda_zone: Optional[str] = None
     location_label: Optional[str] = None
     dim_height: Optional[float] = None
@@ -64,7 +64,7 @@ class GardenResponse(BaseModel):
     garden_type: GardenType
     shade_level: ShadeLevel
     planting_season: PlantingSeason
-    water_plan: WaterPlan = WaterPlan.REGULAR
+    water_plan: WaterPlan = WaterPlan.AVERAGE
     usda_zone: Optional[str] = None
     location_label: Optional[str] = None
     dim_height: Optional[float] = None

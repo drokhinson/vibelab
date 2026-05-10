@@ -116,10 +116,11 @@ function plantertypeIcon(t) {
 
 function waterPlanLabel(w) {
   switch (w) {
-    case 'occasional': return 'Occasional';
-    case 'rain_only':  return 'Rain only';
-    case 'regular':
-    default:           return 'Regular';
+    case 'frequent': return 'Frequent';
+    case 'minimum':  return 'Minimum';
+    case 'none':     return 'Rain only';
+    case 'average':
+    default:         return 'Average';
   }
 }
 
@@ -169,7 +170,7 @@ function startGardenWizard() {
     grid_height: _defaultGridFor(initialType).h,
     dim_height:  _defaultGridFor(initialType).dh,
     shade_level: prev ? (prev.shade_level || 'full_sun') : 'full_sun',
-    water_plan:  prev ? (prev.water_plan  || 'regular')  : 'regular',
+    water_plan:  prev ? (prev.water_plan  || 'average')  : 'average',
     planting_season: prev ? (prev.planting_season || 'spring') : 'spring',
     usda_zone:      prev ? (prev.usda_zone || null)      : null,
     location_label: prev ? (prev.location_label || null) : null
@@ -587,10 +588,12 @@ function _bindSizeControls() {
 
 // ── Step 3: Light ───────────────────────────────────────────────────────────
 
+// Aligned with Perenual v2/species-list `sunlight` filter values.
 var LIGHT_OPTIONS = [
-  { id: 'full_sun', label: 'Full sun',    icon: '☀️',  desc: '6+ hours of direct sun' },
-  { id: 'partial',  label: 'Partial sun', icon: '⛅',  desc: '3–6 hours of direct sun' },
-  { id: 'shade',    label: 'Shade',       icon: '☁️',  desc: 'Less than 3 hours of direct sun' }
+  { id: 'full_sun',       label: 'Full sun',       icon: '☀️', desc: '6+ hours of direct sun' },
+  { id: 'sun-part_shade', label: 'Sun & part shade', icon: '🌤️', desc: '4–6 hours of direct sun' },
+  { id: 'part_shade',     label: 'Part shade',     icon: '⛅', desc: '2–4 hours of direct sun' },
+  { id: 'full_shade',     label: 'Full shade',     icon: '☁️', desc: 'Less than 2 hours of direct sun' }
 ];
 
 function renderWizardStepLight() {
@@ -663,26 +666,28 @@ function renderWizardStepLocation() {
 
 // ── Step 5: Water plan ──────────────────────────────────────────────────────
 
+// Aligned with Perenual v2/species-list `watering` filter values.
 var WATER_OPTIONS = [
-  { id: 'regular',    label: 'Regular irrigation', icon: '💧💧💧', desc: 'Watered on a schedule (drip, hose, sprinkler).' },
-  { id: 'occasional', label: 'Occasional watering', icon: '💧💧',  desc: 'Watered when I remember; drought-tolerant plants thrive.' },
-  { id: 'rain_only',  label: 'Rain only',          icon: '☔',     desc: 'No supplemental watering; only low-water plants survive.' }
+  { id: 'frequent', label: 'Frequent',    icon: '💧💧💧💧', desc: 'Daily / drip irrigation; thirsty crops, tropicals.' },
+  { id: 'average',  label: 'Average',     icon: '💧💧💧',  desc: 'Watered on a schedule (hose, sprinkler, regular drip).' },
+  { id: 'minimum',  label: 'Minimum',     icon: '💧💧',    desc: 'Watered when I remember; drought-tolerant plants thrive.' },
+  { id: 'none',     label: 'Rain only',   icon: '☔',      desc: 'No supplemental watering; only low-water plants survive.' }
 ];
 
 // Climate-controlled planters are sheltered — rain isn't a real option.
 function _wizardWaterOptions() {
   if (wizardDraft && gardenTypeIsClimateControlled(wizardDraft.garden_type)) {
-    return WATER_OPTIONS.filter(function(o) { return o.id !== 'rain_only'; });
+    return WATER_OPTIONS.filter(function(o) { return o.id !== 'none'; });
   }
   return WATER_OPTIONS;
 }
 
 function renderWizardStepWater() {
   // If the user came back here after switching to a sheltered type, a
-  // previously-selected 'rain_only' is no longer valid — reset.
+  // previously-selected 'none' (rain-only) is no longer valid — reset.
   var isSheltered = gardenTypeIsClimateControlled(wizardDraft.garden_type);
-  if (isSheltered && wizardDraft.water_plan === 'rain_only') {
-    wizardDraft.water_plan = 'regular';
+  if (isSheltered && wizardDraft.water_plan === 'none') {
+    wizardDraft.water_plan = 'average';
   }
   var visibleOptions = _wizardWaterOptions();
 

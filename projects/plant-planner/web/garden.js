@@ -29,7 +29,7 @@ function renderBuilder() {
   // Row 2: conditions strip — read-only chips summarising the planter
   html += '<div class="builder-conditions">';
   html += '<span class="cond-chip">' + sunlightIcon(g.shade_level || 'full_sun') + ' ' + escapeHtml(sunlightLabel(g.shade_level || 'full_sun')) + '</span>';
-  html += '<span class="cond-chip">💧 ' + escapeHtml(waterPlanLabel(g.water_plan || 'regular')) + '</span>';
+  html += '<span class="cond-chip">💧 ' + escapeHtml(waterPlanLabel(g.water_plan || 'average')) + '</span>';
   if (g.usda_zone) {
     html += '<button type="button" id="builder-zone-chip" class="cond-chip cond-chip-btn" title="Change zone">📍 ' + escapeHtml(g.location_label || ('Zone ' + g.usda_zone)) + '</button>';
   } else if (!gardenTypeIsClimateControlled(g.garden_type)) {
