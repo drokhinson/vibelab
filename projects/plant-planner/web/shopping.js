@@ -378,11 +378,10 @@ function _openShoppingDetailPanel(plant) {
 
   // Fixed-schema plant info — see helpers.js for the section list.
   html += _plantDescriptionHtml(plant);
-  html += _renderDetailBullets(_plantCoreBullets(plant));
-  html += '<div class="shopping-detail-section-label">Extra info</div>';
-  html += _renderDetailBullets(_plantExtraBullets(plant));
-  html += _plantChipRowsHtml(plant);
+  html += _plantInfoSectionsHtml(plant);
   html += _plantSourceHtml(plant);
+
+  html += _plantRefreshButtonHtml(plant.id, 'shopping-detail-refresh');
 
   html += '<button type="button" class="btn btn-primary btn-block gap-1" id="shopping-detail-toggle">';
   html +=   '<i data-lucide="heart"' + (picked ? ' fill="currentColor"' : '') + '></i> ';
@@ -400,6 +399,29 @@ function _openShoppingDetailPanel(plant) {
     _toggleShortlist(plant.id);
     _openShoppingDetailPanel(plant);  // Refresh button label
   };
+
+  var refreshBtn = document.getElementById('shopping-detail-refresh');
+  if (refreshBtn) refreshBtn.onclick = function() { _refreshPerenualForShopping(plant.id, refreshBtn); };
+}
+
+async function _refreshPerenualForShopping(plantId, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Refreshing…';
+  try {
+    var updated = await perenualRefresh(plantId);
+    var current = shoppingState.detailPlant;
+    if (current && current.id === plantId) {
+      shoppingState.detailPlant = Object.assign({}, current, updated);
+      _openShoppingDetailPanel(shoppingState.detailPlant);
+    }
+    for (var i = 0; i < shoppingState.plants.length; i++) {
+      if (shoppingState.plants[i].id === plantId) shoppingState.plants[i] = updated;
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="alert-circle" style="width:0.9em;height:0.9em"></i> ' + escapeHtml(err.message || 'Refresh failed');
+    _initIcons();
+  }
 }
 
 function _closeShoppingDetailPanel() {

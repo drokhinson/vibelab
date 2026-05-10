@@ -255,13 +255,14 @@ function _openLibraryDetailPanel(rowId) {
   html += '<h3>' + escapeHtml(name) + '</h3>';
   html += sci + family;
 
-  // Fixed-schema plant info — description, core bullets, extras, chip rows.
-  // Missing fields render as "—" so users can see what's tracked vs unknown.
+  // Fixed-schema plant info — description, properties chips, sectioned
+  // bullets (Conditions / Plant facts / Care notes), chip rows. Missing
+  // fields render as "—" so users can see what's tracked vs unknown.
   html += _plantDescriptionHtml(plant);
-  html += _renderDetailBullets(_plantCoreBullets(plant));
-  html += '<div class="shopping-detail-section-label">Extra info</div>';
-  html += _renderDetailBullets(_plantExtraBullets(plant));
-  html += _plantChipRowsHtml(plant);
+  html += _plantInfoSectionsHtml(plant);
+
+  // Bottom-anchored Refresh-from-Perenual recovery button.
+  html += _plantRefreshButtonHtml(row.plant_cache_id, 'library-detail-refresh');
 
   // Status picker — three-way radio.
   html += '<div class="library-detail-section">';
@@ -375,6 +376,9 @@ function _openLibraryDetailPanel(rowId) {
     btn.onclick = function() { _assignToPlanter(row.id, row.plant_cache_id, btn.dataset.gardenId); };
   });
 
+  var refreshBtn = document.getElementById('library-detail-refresh');
+  if (refreshBtn) refreshBtn.onclick = function() { _refreshPerenualForLibrary(rowId, refreshBtn); };
+
   // First open of the panel: kick off the planters fetch so the picker can
   // render. We re-open the panel once it lands (cheap; no flicker because
   // the slide-in is already visible).
@@ -413,6 +417,24 @@ async function _assignToPlanter(rowId, plantCacheId, gardenId) {
   // and the freshly-recomputed picker.
   _renderLibraryShell();
   if (libraryState.detailRowId === rowId) _openLibraryDetailPanel(rowId);
+}
+
+async function _refreshPerenualForLibrary(rowId, btn) {
+  var row = _findLibraryRow(rowId);
+  if (!row || !row.plant_cache_id) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Refreshing…';
+  try {
+    var updated = await perenualRefresh(row.plant_cache_id);
+    // Splice the updated cache row onto the local entry so the panel
+    // re-render shows the new bullets without a full /user_plants refetch.
+    row.plant = Object.assign({}, row.plant || {}, updated);
+    _openLibraryDetailPanel(rowId);
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="alert-circle" style="width:0.9em;height:0.9em"></i> ' + escapeHtml(err.message || 'Refresh failed');
+    _initIcons();
+  }
 }
 
 function _closeLibraryDetailPanel() {

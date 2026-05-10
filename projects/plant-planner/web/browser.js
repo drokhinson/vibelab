@@ -513,11 +513,11 @@ function _openBrowserDetailPanel(plant) {
 
   // Fixed-schema plant info — see helpers.js for the section list.
   html += _plantDescriptionHtml(plant);
-  html += _renderDetailBullets(_plantCoreBullets(plant));
-  html += '<div class="shopping-detail-section-label">Extra info</div>';
-  html += _renderDetailBullets(_plantExtraBullets(plant));
-  html += _plantChipRowsHtml(plant);
+  html += _plantInfoSectionsHtml(plant);
   html += _plantSourceHtml(plant);
+
+  // Bottom-anchored Refresh-from-Perenual recovery button.
+  html += _plantRefreshButtonHtml(plant.id, 'browser-detail-refresh');
 
   html += '<div class="browser-detail-actions">';
   html +=   '<button type="button" class="btn btn-block gap-1' + (inCurrent ? ' btn-primary' : ' btn-outline btn-primary') + '" id="browser-detail-plant">'
@@ -540,6 +540,25 @@ function _openBrowserDetailPanel(plant) {
   document.getElementById('browser-detail-close').onclick   = _closeBrowserDetailPanel;
   document.getElementById('browser-detail-plant').onclick   = function() { _toggleBrowserList(plant.id, 'current'); };
   document.getElementById('browser-detail-favorite').onclick = function() { _toggleBrowserList(plant.id, 'wishlist'); };
+
+  var refreshBtn = document.getElementById('browser-detail-refresh');
+  if (refreshBtn) refreshBtn.onclick = function() { _refreshPerenualForBrowser(plant.id, refreshBtn); };
+}
+
+async function _refreshPerenualForBrowser(plantId, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Refreshing…';
+  try {
+    var updated = await perenualRefresh(plantId);
+    for (var i = 0; i < browserState.plants.length; i++) {
+      if (browserState.plants[i].id === plantId) browserState.plants[i] = updated;
+    }
+    _openBrowserDetailPanel(updated);
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="alert-circle" style="width:0.9em;height:0.9em"></i> ' + escapeHtml(err.message || 'Refresh failed');
+    _initIcons();
+  }
 }
 
 function _closeBrowserDetailPanel() {

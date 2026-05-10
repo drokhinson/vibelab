@@ -295,57 +295,86 @@ function _plantTypeLabel(plant) {
   return _firstNonEmpty(_plantRawPerenual(plant).type);
 }
 
-// Always-on core bullet schema. Returns the same set of [label, value-or-null]
-// pairs every time so the detail panel structure is stable. `null` values are
-// rendered as the placeholder by `_renderDetailBullets`.
-function _plantCoreBullets(plant) {
+// Three labeled bullet sections. Each function returns a stable
+// [label, value-or-null] schema so `_renderDetailBullets` can paint
+// the "—" placeholder for unknowns. The popups render each list under
+// its own `.shopping-detail-section-label` and use the 2-col CSS variant
+// so the data block reads as compact tiles instead of a long column.
+
+function _plantConditionsBullets(plant) {
   plant = plant || {};
   var pe = _plantRawPerenual(plant);
   var hardiness = (plant.hardiness_min != null && plant.hardiness_max != null)
     ? 'Zone ' + plant.hardiness_min + '–' + plant.hardiness_max : null;
   return [
-    ['Sunlight',    plant.sunlight ? plant.sunlight.replace(/_/g, ' ') : null],
-    ['Watering',    plant.watering || null],
-    ['Cycle',       plant.cycle || null],
-    ['Hardiness',   hardiness],
-    ['Indoor',      _yesNoOrMissing(plant.indoor)],
-    ['Edible',      _yesNoOrMissing(plant.edible)],
-    ['Vegetable',   _yesNoOrMissing(plant.vegetable)],
-    ['Type',        _plantTypeLabel(plant)],
-    ['Care level',  pe.care_level || null]
+    ['Sunlight',           plant.sunlight ? plant.sunlight.replace(/_/g, ' ') : null],
+    ['Watering',           plant.watering || null],
+    ['Watering frequency', pe.watering_period || null],
+    ['Watering benchmark', _wateringBenchmarkLabel(pe.watering_general_benchmark)],
+    ['Cycle',              plant.cycle || null],
+    ['Hardiness',          hardiness],
+    ['Hardiness location', _hardinessLocationLabel(pe.hardiness_location)]
   ];
 }
 
-// Always-on extra-info bullet schema. Combines Trefle-derived columns with
-// Perenual raw-JSON fallbacks so the user sees a stable, comprehensive list.
-function _plantExtraBullets(plant) {
+function _plantFactsBullets(plant) {
   plant = plant || {};
   var pe = _plantRawPerenual(plant);
   var height = (plant.height_min_cm != null || plant.height_max_cm != null)
     ? (plant.height_min_cm || '?') + '–' + (plant.height_max_cm || '?') + ' cm'
     : null;
-  var ph = (plant.ph_min != null && plant.ph_max != null)
-    ? plant.ph_min + '–' + plant.ph_max : null;
   return [
-    ['Height',             height],
-    ['Spread',             plant.spread_cm != null ? plant.spread_cm + ' cm' : null],
-    ['Days to harvest',    plant.days_to_harvest != null ? String(plant.days_to_harvest) : null],
-    ['Soil pH',            ph],
-    ['Toxicity',           plant.toxicity || null],
-    ['Growth rate',        plant.growth_rate || null],
-    ['Sowing',             plant.sowing || null],
-    ['Nitrogen-fixing',    _yesNoOrMissing(plant.nitrogen_fixation)],
-    ['Watering frequency', pe.watering_period || null],
-    ['Watering benchmark', _wateringBenchmarkLabel(pe.watering_general_benchmark)],
-    ['Hardiness location', _hardinessLocationLabel(pe.hardiness_location)],
-    ['Drought tolerant',   _yesNoOrMissing(pe.drought_tolerant)],
-    ['Salt tolerant',      _yesNoOrMissing(pe.salt_tolerant)],
-    ['Invasive',           _yesNoOrMissing(pe.invasive)],
-    ['Flowers',            _yesNoOrMissing(pe.flowers)],
-    ['Toxic to humans',    _yesNoOrMissing(pe.poisonous_to_humans)],
-    ['Toxic to pets',      _yesNoOrMissing(pe.poisonous_to_pets)],
-    ['Pruning months',     (Array.isArray(pe.pruning_month) && pe.pruning_month.length) ? String(pe.pruning_month.length) : null]
+    ['Type',        _plantTypeLabel(plant)],
+    ['Care level',  pe.care_level || null],
+    ['Height',      height],
+    ['Spread',      plant.spread_cm != null ? plant.spread_cm + ' cm' : null],
+    ['Growth rate', plant.growth_rate || null]
   ];
+}
+
+function _plantCareBullets(plant) {
+  plant = plant || {};
+  var pe = _plantRawPerenual(plant);
+  return [
+    ['Toxicity',       plant.toxicity || null],
+    ['Pruning months', (Array.isArray(pe.pruning_month) && pe.pruning_month.length) ? String(pe.pruning_month.length) : null]
+  ];
+}
+
+// Top-of-popup boolean chip row. Compresses 9 yes/no rows into one
+// horizontally-wrapping pill row. Each chip's class encodes the value
+// (on/off/unknown) so the user can scan green pills for "yes" facts.
+function _plantPropertiesChipsHtml(plant) {
+  plant = plant || {};
+  var pe = _plantRawPerenual(plant);
+  var props = [
+    ['Indoor',           plant.indoor],
+    ['Edible',           plant.edible],
+    ['Vegetable',        plant.vegetable],
+    ['Flowers',          pe.flowers],
+    ['Drought tolerant', pe.drought_tolerant],
+    ['Salt tolerant',    pe.salt_tolerant],
+    ['Invasive',         pe.invasive],
+    ['Toxic to humans',  pe.poisonous_to_humans],
+    ['Toxic to pets',    pe.poisonous_to_pets]
+  ];
+  var html = '<div class="plant-detail-properties">';
+  for (var i = 0; i < props.length; i++) {
+    var label = props[i][0];
+    var verdict = _yesNoOrMissing(props[i][1]);
+    var cls = verdict === 'yes' ? 'plant-detail-prop-chip-on'
+            : verdict === 'no'  ? 'plant-detail-prop-chip-off'
+            :                     'plant-detail-prop-chip-unknown';
+    var icon = verdict === 'yes' ? 'check'
+             : verdict === 'no'  ? 'x'
+             :                     'minus';
+    html += '<span class="plant-detail-prop-chip ' + cls + '">'
+         +    '<i data-lucide="' + icon + '" style="width:0.8em;height:0.8em"></i>'
+         +    escapeHtml(label)
+         +  '</span>';
+  }
+  html += '</div>';
+  return html;
 }
 
 // Description paragraph — Perenual `description` is occasionally HTML; strip
@@ -393,7 +422,6 @@ function _plantChipRowsHtml(plant) {
   var attracts = (Array.isArray(pe.attracts) ? pe.attracts : []).map(_normalizeAttractsItem).filter(Boolean);
 
   var rows = [
-    ['Tags',             plant.tags || []],
     ['Soil',             pe.soil || []],
     ['Growing months',   growingMonths],
     ['Flowering season', floweringSeason],
@@ -433,9 +461,11 @@ function _plantSourceHtml(plant) {
 // Render a <dl class="shopping-detail-bullets"> from a list of [label, value]
 // pairs. `null`/empty values render as the canonical placeholder with a
 // `dd--missing` modifier so users can scan for unknown fields at a glance.
-function _renderDetailBullets(bullets) {
+// `extraClass` lets callers opt into the 2-col layout variant.
+function _renderDetailBullets(bullets, extraClass) {
   if (!bullets || !bullets.length) return '';
-  var html = '<dl class="shopping-detail-bullets">';
+  var cls = 'shopping-detail-bullets' + (extraClass ? ' ' + extraClass : '');
+  var html = '<dl class="' + cls + '">';
   for (var i = 0; i < bullets.length; i++) {
     var label = bullets[i][0];
     var value = bullets[i][1];
@@ -445,6 +475,41 @@ function _renderDetailBullets(bullets) {
     html += '<dd' + (missing ? ' class="dd--missing"' : '') + '>' + escapeHtml(displayed) + '</dd>';
   }
   html += '</dl>';
+  return html;
+}
+
+// Bottom-anchored "Refresh from Perenual" button — re-runs species-details
+// for the row, used when the API call was missed at import or the row is
+// otherwise sparse. Always rendered when a cache id is present so users
+// have a recovery path even if the row already looks complete.
+function _plantRefreshButtonHtml(cacheId, btnId) {
+  if (!cacheId) return '';
+  return '<div class="plant-detail-refresh">'
+       +   '<button type="button" class="btn btn-block btn-outline btn-sm gap-1" id="' + btnId + '">'
+       +     '<i data-lucide="refresh-cw" style="width:0.9em;height:0.9em"></i> '
+       +     'Refresh from Perenual'
+       +   '</button>'
+       + '</div>';
+}
+
+async function perenualRefresh(cacheId) {
+  return apiFetch('/catalog/' + encodeURIComponent(cacheId) + '/refresh', {
+    method: 'POST',
+  });
+}
+
+// Convenience: render the whole sectioned data block (chips + 3 bullet
+// sections + chip rows) so the three popups stay identical.
+function _plantInfoSectionsHtml(plant) {
+  var html = '';
+  html += _plantPropertiesChipsHtml(plant);
+  html += '<div class="shopping-detail-section-label">Conditions</div>';
+  html += _renderDetailBullets(_plantConditionsBullets(plant), 'shopping-detail-bullets-2col');
+  html += '<div class="shopping-detail-section-label">Plant facts</div>';
+  html += _renderDetailBullets(_plantFactsBullets(plant), 'shopping-detail-bullets-2col');
+  html += '<div class="shopping-detail-section-label">Care notes</div>';
+  html += _renderDetailBullets(_plantCareBullets(plant), 'shopping-detail-bullets-2col');
+  html += _plantChipRowsHtml(plant);
   return html;
 }
 
