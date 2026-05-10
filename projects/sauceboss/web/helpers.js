@@ -240,6 +240,66 @@ function renderRecipeControls() {
     </div>`;
 }
 
+// Sum a sauce's per-step ingredients into a single shopping-list view,
+// keyed by (name, unit) so different units of the same ingredient stay
+// separate. Canonical ml/g totals are summed where present so the metric
+// conversion matches what the per-step legend would show.
+function aggregateSauceIngredients(sauce) {
+  const buckets = new Map();
+  for (const step of (sauce.steps || [])) {
+    for (const ing of (step.ingredients || [])) {
+      const key = `${ing.name}|${ing.unit}`;
+      const prev = buckets.get(key);
+      if (prev) {
+        prev.amount += Number(ing.amount) || 0;
+        if (ing.canonicalMl != null) prev.canonicalMl = (prev.canonicalMl || 0) + ing.canonicalMl;
+        if (ing.canonicalG != null)  prev.canonicalG  = (prev.canonicalG  || 0) + ing.canonicalG;
+      } else {
+        buckets.set(key, {
+          name: ing.name,
+          amount: Number(ing.amount) || 0,
+          unit: ing.unit,
+          canonicalMl: ing.canonicalMl != null ? ing.canonicalMl : null,
+          canonicalG:  ing.canonicalG  != null ? ing.canonicalG  : null,
+        });
+      }
+    }
+  }
+  return [...buckets.values()];
+}
+
+function renderRecipeIngredientPanel(sauce) {
+  const aggregated = aggregateSauceIngredients(sauce);
+  if (!aggregated.length) return '';
+  const items = prepareItems(aggregated);
+  const isOpen = !!state.recipeIngredientsOpen;
+  const rows = items.map(item => {
+    const isQualitative = item.unit === 'to taste';
+    const amountHTML = isQualitative
+      ? '<span class="recipe-ingredient-amount recipe-ingredient-amount--qualitative">to taste</span>'
+      : `<span class="recipe-ingredient-amount">${formatAmount(item.amount)} ${item.unit}</span>`;
+    return `<li class="recipe-ingredient-item">
+      <span class="recipe-ingredient-name">${escapeHtml(item.name)}</span>
+      ${amountHTML}
+    </li>`;
+  }).join('');
+  return `
+    <div class="recipe-ingredient-panel">
+      <button class="recipe-ingredient-header" onclick="toggleRecipeIngredients()" aria-expanded="${isOpen}">
+        <span class="recipe-ingredient-header-text"><i data-lucide="list"></i> Ingredients<span class="recipe-ingredient-count">${items.length}</span></span>
+        <span class="recipe-ingredient-chevron ${isOpen ? 'open' : ''}"><i data-lucide="chevron-down"></i></span>
+      </button>
+      <div class="recipe-ingredient-body ${isOpen ? 'open' : ''}">
+        <ul class="recipe-ingredient-list">${rows}</ul>
+      </div>
+    </div>`;
+}
+
+function toggleRecipeIngredients() {
+  state.recipeIngredientsOpen = !state.recipeIngredientsOpen;
+  render();
+}
+
 function renderRecipeStep(step, index, allSteps) {
   const stepTime = step.estimatedTime || 5;
   const displayItems = prepareItems(step.ingredients);

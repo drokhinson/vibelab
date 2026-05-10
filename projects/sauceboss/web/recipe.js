@@ -67,6 +67,7 @@ function renderRecipe() {
     <div class="scroll-body scroll-body--padded">
       ${renderVariantSwitcher(sauce.id)}
       ${renderRecipeControls()}
+      ${renderRecipeIngredientPanel(sauce)}
       ${subBannerHTML}
       <div class="steps-container">
         ${sauce.steps.map((step, i) => renderRecipeStep(step, i, sauce.steps)).join('')}

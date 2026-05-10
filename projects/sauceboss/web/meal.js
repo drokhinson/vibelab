@@ -277,6 +277,7 @@ function renderMealRecipe() {
       ${timingBanner}
       ${renderVariantSwitcher(sauce.id)}
       ${renderRecipeControls()}
+      ${renderRecipeIngredientPanel(sauce)}
       ${renderItemPrepBlock(item, prep, sauce)}
       ${sauceSection}
     </div>

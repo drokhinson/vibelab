@@ -84,6 +84,7 @@ let state = {
   ingredientCategories: {},
   substitutions: {},
   filterOpen: false,
+  recipeIngredientsOpen: false,
   expandedCuisines: new Set(),
 
   // ── Final meal (filled from selections above when sauce is picked) ─────────
