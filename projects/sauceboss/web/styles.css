@@ -280,15 +280,15 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   margin-bottom: 10px;
 }
 
-/* Ingredient filter */
-.filter-panel {
+/* ── Card Panel — collapsible white-card accordion ── */
+/* Used by: pantry filter, recipe ingredient list, and any future card accordions. */
+.card-panel {
   background: white;
   border-radius: 14px;
-  margin: 16px 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   overflow: hidden;
 }
-.filter-header {
+.card-panel__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -298,9 +298,13 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   border: none;
   width: 100%;
   text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1A1A2E;
 }
-.filter-header-text { font-size: 14px; font-weight: 700; color: #1A1A2E; }
-.filter-count {
+.card-panel__header-text { display: inline-flex; align-items: center; gap: 6px; }
+.card-panel__header-text [data-lucide] { width: 16px; height: 16px; }
+.card-panel__count {
   background: #E85D04;
   color: white;
   font-size: 11px;
@@ -309,10 +313,29 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   border-radius: 10px;
   margin-left: 6px;
 }
-.filter-chevron { font-size: 12px; color: #9CA3AF; transition: transform 0.2s; }
-.filter-chevron.open { transform: rotate(180deg); }
-.filter-body { padding: 0 14px 12px; display: none; }
-.filter-body.open { display: block; }
+.card-panel__chevron { color: #9CA3AF; transition: transform 0.2s; display: inline-flex; }
+.card-panel__chevron.open { transform: rotate(180deg); }
+.card-panel__chevron [data-lucide] { width: 14px; height: 14px; transition: transform 0.25s; }
+.card-panel__chevron.open [data-lucide] { transform: rotate(180deg); }
+.card-panel__body { padding: 0 14px 12px; display: none; }
+.card-panel__body.open { display: block; }
+
+/* ── Toggle Chip — pill-shaped option toggle ── */
+/* Used by: browse filters, saucebook filters, sauce manager type pills. */
+.toggle-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1.5px solid #E5E7EB;
+  background: white;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.toggle-chip:hover { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
+.toggle-chip--active { background: #E85D04; color: white; border-color: #E85D04; }
 .ingredient-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   display: inline-flex;
@@ -429,43 +452,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .sub-banner strong { display: block; margin-bottom: 2px; font-size: 13px; }
 
-/* Recipe ingredient list — collapsible shopping-list view above the steps */
-.recipe-ingredient-panel {
-  background: white;
-  border-radius: 14px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  overflow: hidden;
-  margin-bottom: 16px;
-}
-.recipe-ingredient-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-  cursor: pointer;
-  background: white;
-  border: none;
-  width: 100%;
-  text-align: left;
-  font-size: 14px;
-  font-weight: 700;
-  color: #1A1A2E;
-}
-.recipe-ingredient-header-text { display: inline-flex; align-items: center; gap: 6px; }
-.recipe-ingredient-header-text [data-lucide] { width: 16px; height: 16px; }
-.recipe-ingredient-count {
-  background: #E85D04;
-  color: white;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 10px;
-  margin-left: 4px;
-}
-.recipe-ingredient-chevron { color: #9CA3AF; transition: transform 0.2s; display: inline-flex; }
-.recipe-ingredient-chevron.open { transform: rotate(180deg); }
-.recipe-ingredient-body { padding: 0 14px 12px; display: none; }
-.recipe-ingredient-body.open { display: block; }
+/* Recipe ingredient list — uses .card-panel for the collapsible shell */
 .recipe-ingredient-list { list-style: none; padding: 0; margin: 0; }
 .recipe-ingredient-item {
   display: flex;
@@ -1288,27 +1275,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   overflow-x: auto;
   flex-shrink: 0;
 }
-.sm-type-pill {
-  flex-shrink: 0;
-  padding: 5px 12px;
-  border: 1px solid #E5E7EB;
-  background: white;
-  color: #6B7280;
-  font-size: 12px;
-  font-weight: 700;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-.sm-type-pill:hover:not(.sm-type-pill-active) {
-  color: #1A1A2E;
-  border-color: #D1D5DB;
-}
-.sm-type-pill-active {
-  background: #E85D04;
-  color: white;
-  border-color: #E85D04;
-}
+/* ── Sauce Manager Type Filter — uses .toggle-chip ── */
 /* ── Per-row Sauce Type Tag ── */
 .sauce-type-tag {
   display: inline-block;
@@ -1516,8 +1483,6 @@ body, button, input, select, textarea {
   stroke-width: 2px;
 }
 .settings-btn [data-lucide]       { width: 20px; height: 20px; }
-.filter-chevron [data-lucide]     { width: 14px; height: 14px; transition: transform 0.25s; }
-.filter-chevron.open [data-lucide] { transform: rotate(180deg); }
 .chip [data-lucide]               { width: 11px; height: 11px; }
 .section-label-icon [data-lucide] { width: 13px; height: 13px; color: #F59E0B; }
 .step-ref-badge [data-lucide]     { width: 14px; height: 14px; vertical-align: -2px; }
@@ -2260,17 +2225,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 }
 .browse-filters__row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .browse-filters__row:first-child { margin-top: 0; }
-.browse-filters__chip {
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #1A1A2E;
-  cursor: pointer;
-}
-.browse-filters__chip--active { background: #E85D04; color: white; border-color: #E85D04; }
+/* Browse & Saucebook filter chips — use .toggle-chip */
 .browse-filters__label { font-size: 11px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px; }
 .browse-filters__author-input {
   width: 100%;

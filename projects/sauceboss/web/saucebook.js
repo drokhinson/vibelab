@@ -98,7 +98,6 @@ function renderSaucebook() {
 // /authors endpoint, so this stays a single round-trip from auth.
 function _saucebookFiltersPanel(f, sauces) {
   if (!f.open) return '';
-  const cuisines = availableCuisines();
   // Distinct authors present in the saucebook (excluding seed sauces with no
   // createdBy — those collapse under the "SauceBoss" pseudo-author).
   const authorMap = new Map();
@@ -112,35 +111,24 @@ function _saucebookFiltersPanel(f, sauces) {
 
   return `
       <div class="browse-filters">
-        <span class="browse-filters__label">Cuisine</span>
-        <div class="browse-filters__row">
-          ${cuisines.map(c => `
-            <button
-              class="browse-filters__chip ${f.cuisines.has(c.name) ? 'browse-filters__chip--active' : ''}"
-              onclick="saucebookToggleCuisineFilter('${escapeHtml(c.name)}')">${renderEmoji(c.emoji)} ${escapeHtml(c.name)}</button>
-          `).join('')}
-        </div>
-
-        <span class="browse-filters__label" style="margin-top:10px;display:block">Type</span>
-        <div class="browse-filters__row">
-          ${SAUCE_TYPES.map(t => `
-            <button
-              class="browse-filters__chip ${f.types.has(t.value) ? 'browse-filters__chip--active' : ''}"
-              onclick="saucebookToggleTypeFilter('${t.value}')">${escapeHtml(t.label)}</button>
-          `).join('')}
-        </div>
+        ${renderFilterChips({
+          activeCuisines: f.cuisines,
+          activeTypes: f.types,
+          onCuisine: "saucebookToggleCuisineFilter('$NAME')",
+          onType: "saucebookToggleTypeFilter('$VALUE')",
+        })}
 
         <span class="browse-filters__label" style="margin-top:10px;display:block">Author</span>
         <div class="browse-filters__row">
           ${authors.map(a => `
             <button
-              class="browse-filters__chip ${f.authorId === a.id ? 'browse-filters__chip--active' : ''}"
+              class="toggle-chip ${f.authorId === a.id ? 'toggle-chip--active' : ''}"
               onclick="saucebookPickAuthor('${escapeHtml(a.id)}')">${escapeHtml(a.name)} <span style="opacity:0.6">· ${a.count}</span></button>
           `).join('')}
         </div>
 
         ${(f.cuisines.size || f.types.size || f.authorId) ? `
-          <button class="browse-filters__chip" style="margin-top:10px" onclick="saucebookClearFilters()">Clear filters ✕</button>
+          <button class="toggle-chip" style="margin-top:10px" onclick="saucebookClearFilters()">Clear filters ✕</button>
         ` : ''}
       </div>
   `;

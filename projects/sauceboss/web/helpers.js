@@ -283,12 +283,12 @@ function renderRecipeIngredientPanel(sauce) {
     </li>`;
   }).join('');
   return `
-    <div class="recipe-ingredient-panel">
-      <button class="recipe-ingredient-header" onclick="toggleRecipeIngredients()" aria-expanded="${isOpen}">
-        <span class="recipe-ingredient-header-text"><i data-lucide="list"></i> Ingredients<span class="recipe-ingredient-count">${items.length}</span></span>
-        <span class="recipe-ingredient-chevron ${isOpen ? 'open' : ''}"><i data-lucide="chevron-down"></i></span>
+    <div class="card-panel" style="margin-bottom:16px">
+      <button class="card-panel__header" onclick="toggleRecipeIngredients()" aria-expanded="${isOpen}">
+        <span class="card-panel__header-text"><i data-lucide="list"></i> Ingredients<span class="card-panel__count">${items.length}</span></span>
+        <span class="card-panel__chevron ${isOpen ? 'open' : ''}"><i data-lucide="chevron-down"></i></span>
       </button>
-      <div class="recipe-ingredient-body ${isOpen ? 'open' : ''}">
+      <div class="card-panel__body ${isOpen ? 'open' : ''}">
         <ul class="recipe-ingredient-list">${rows}</ul>
       </div>
     </div>`;
@@ -436,6 +436,38 @@ function renderCuisineGroup(opts) {
       </div>
       ${isOpen ? `<div class="ingredient-category-body">${body}</div>` : ''}
     </div>
+  `;
+}
+
+// ─── Shared filter chip renderers ─────────────────────────────────────────────
+// Cuisine and Type chip rows are identical across Browse and Saucebook filter
+// panels. This helper renders both sections; the caller provides active state
+// and click handlers.
+//
+// opts:
+//   activeCuisines — Set<string> of currently selected cuisine names
+//   activeTypes    — Set<string> of currently selected type values
+//   onCuisine      — JS expression template; receives `$NAME` placeholder
+//   onType         — JS expression template; receives `$VALUE` placeholder
+function renderFilterChips(opts) {
+  const cuisines = availableCuisines();
+  const cuisineChips = cuisines.map(c => {
+    const active = opts.activeCuisines.has(c.name) ? ' toggle-chip--active' : '';
+    const handler = opts.onCuisine.replace('$NAME', escapeHtml(c.name));
+    return `<button class="toggle-chip${active}" onclick="${handler}">${renderEmoji(c.emoji)} ${escapeHtml(c.name)}</button>`;
+  }).join('');
+
+  const typeChips = SAUCE_TYPES.map(t => {
+    const active = opts.activeTypes.has(t.value) ? ' toggle-chip--active' : '';
+    const handler = opts.onType.replace('$VALUE', t.value);
+    return `<button class="toggle-chip${active}" onclick="${handler}">${escapeHtml(t.label)}</button>`;
+  }).join('');
+
+  return `
+    <span class="browse-filters__label">Cuisine</span>
+    <div class="browse-filters__row">${cuisineChips}</div>
+    <span class="browse-filters__label" style="margin-top:10px;display:block">Type</span>
+    <div class="browse-filters__row">${typeChips}</div>
   `;
 }
 

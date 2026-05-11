@@ -109,9 +109,9 @@ function renderAdmin() {
 
   const typeFilterRow = tab === 'sauces' ? `
     <div class="sm-type-filter">
-      <button class="sm-type-pill ${typeFilter === 'all' ? 'sm-type-pill-active' : ''}" onclick="setSauceManagerTypeFilter('all')">All</button>
+      <button class="toggle-chip ${typeFilter === 'all' ? 'toggle-chip--active' : ''}" onclick="setSauceManagerTypeFilter('all')">All</button>
       ${SAUCE_TYPES.map(t => `
-        <button class="sm-type-pill ${typeFilter === t.value ? 'sm-type-pill-active' : ''}" onclick="setSauceManagerTypeFilter('${t.value}')">${t.label}</button>
+        <button class="toggle-chip ${typeFilter === t.value ? 'toggle-chip--active' : ''}" onclick="setSauceManagerTypeFilter('${t.value}')">${t.label}</button>
       `).join('')}
     </div>` : '';
 
@@ -477,15 +477,13 @@ function renderDishSection(sec, parents, isAdmin) {
         <button class="add-step-btn" style="margin:12px 16px" onclick="openAddItemForm('${sec.category}', null)">+ Add ${sec.addLabel}</button>
       ` : ''}
     ` : '';
-  return `
-    <div class="ingredient-category-group">
-      <div class="ingredient-category-header" onclick="toggleItemSection('${sec.key}')">
-        <span class="ingredient-category-chevron">${open ? '▾' : '▸'}</span>
-        <span class="ingredient-category-name">${sec.label}</span>
-        <span class="ingredient-category-count">${totalCount}</span>
-      </div>
-      ${open ? `<div class="ingredient-category-body">${body}</div>` : ''}
-    </div>`;
+  return renderCuisineGroup({
+    label: sec.label,
+    count: totalCount,
+    isOpen: open,
+    onToggle: `toggleItemSection('${sec.key}')`,
+    body,
+  });
 }
 
 function renderParent(parent, sec, isAdmin) {
@@ -1011,18 +1009,15 @@ function groupFoodsByCategory(foods) {
 function renderIngredientCategoryGroup(group, isAdmin, merge, forceOpen) {
   const { category, items } = group;
   const open = forceOpen || state.ingredientSections[category] === true;
-  const chevron = open ? '▾' : '▸';
   const safeCat = category.replace(/'/g, "\\'");
   const rowsHTML = open ? items.map(f => renderFoodRow(f, isAdmin, merge)).join('') : '';
-  return `
-    <div class="ingredient-category-group">
-      <div class="ingredient-category-header" onclick="toggleIngredientSection('${safeCat}')">
-        <span class="ingredient-category-chevron">${chevron}</span>
-        <span class="ingredient-category-name">${category}</span>
-        <span class="ingredient-category-count">${items.length}</span>
-      </div>
-      ${open ? `<div class="ingredient-category-body">${rowsHTML}</div>` : ''}
-    </div>`;
+  return renderCuisineGroup({
+    label: category,
+    count: items.length,
+    isOpen: open,
+    onToggle: `toggleIngredientSection('${safeCat}')`,
+    body: rowsHTML,
+  });
 }
 
 function toggleIngredientSection(category) {

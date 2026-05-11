@@ -13,7 +13,6 @@ let _authorDebounce = null;
 
 function renderBrowse() {
   const b = state.browse;
-  const cuisines = availableCuisines();
   const pageSize = b.pageSize || 20;
   const totalPages = Math.max(1, Math.ceil((b.total || 0) / pageSize));
   const currentPage = (b.page || 0) + 1; // 1-indexed for display
@@ -44,23 +43,12 @@ function renderBrowse() {
 
         ${b.filtersOpen ? `
           <div class="browse-filters">
-            <span class="browse-filters__label">Cuisine</span>
-            <div class="browse-filters__row">
-              ${cuisines.map(c => `
-                <button
-                  class="browse-filters__chip ${b.cuisines.has(c.name) ? 'browse-filters__chip--active' : ''}"
-                  onclick="browseToggleCuisine('${escapeHtml(c.name)}')">${renderEmoji(c.emoji)} ${escapeHtml(c.name)}</button>
-              `).join('')}
-            </div>
-
-            <span class="browse-filters__label" style="margin-top:10px;display:block">Type</span>
-            <div class="browse-filters__row">
-              ${SAUCE_TYPES.map(t => `
-                <button
-                  class="browse-filters__chip ${b.types.has(t.value) ? 'browse-filters__chip--active' : ''}"
-                  onclick="browseToggleType('${t.value}')">${escapeHtml(t.label)}</button>
-              `).join('')}
-            </div>
+            ${renderFilterChips({
+              activeCuisines: b.cuisines,
+              activeTypes: b.types,
+              onCuisine: "browseToggleCuisine('$NAME')",
+              onType: "browseToggleType('$VALUE')",
+            })}
 
             <span class="browse-filters__label" style="margin-top:10px;display:block">Author</span>
             <input
@@ -72,7 +60,7 @@ function renderBrowse() {
               oninput="browseAuthorAutocomplete(this.value)"
             />
             ${b.authorId ? `
-              <button class="browse-filters__chip browse-filters__chip--active" style="margin-top:6px" onclick="browseClearAuthor()">
+              <button class="toggle-chip toggle-chip--active" style="margin-top:6px" onclick="browseClearAuthor()">
                 ${escapeHtml(_browseAuthorName())} ✕
               </button>
             ` : ''}

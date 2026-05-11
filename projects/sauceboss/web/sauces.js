@@ -53,7 +53,7 @@ function renderSauceSelector() {
   }).join('');
 
   const filterBody = `
-    <div class="filter-body ${state.filterOpen ? 'open' : ''}">
+    <div class="card-panel__body ${state.filterOpen ? 'open' : ''}">
       ${categoryGroups.map(({ category, items, isKey }) => `
         <div class="ingredient-section${isKey ? ' key-section' : ''}">
           <p class="ingredient-section-label">
@@ -113,10 +113,10 @@ function renderSauceSelector() {
       auth: false,
     })}
     <div class="scroll-body">
-      <div class="filter-panel">
-        <button class="filter-header" onclick="toggleFilter()">
-          <span class="filter-header-text"><i data-lucide="shopping-basket"></i> My Pantry${missingCount > 0 ? `<span class="filter-count">−${missingCount} missing</span>` : ''}</span>
-          <span class="filter-chevron ${state.filterOpen ? 'open' : ''}"><i data-lucide="chevron-down"></i></span>
+      <div class="card-panel" style="margin:16px">
+        <button class="card-panel__header" onclick="toggleFilter()">
+          <span class="card-panel__header-text"><i data-lucide="shopping-basket"></i> My Pantry${missingCount > 0 ? `<span class="card-panel__count">−${missingCount} missing</span>` : ''}</span>
+          <span class="card-panel__chevron ${state.filterOpen ? 'open' : ''}"><i data-lucide="chevron-down"></i></span>
         </button>
         ${filterBody}
       </div>
