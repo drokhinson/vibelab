@@ -22,6 +22,41 @@ function awaitInitialAuth() {
   return _initialAuthReady;
 }
 
+async function _restoreSessionFromSupabase() {
+  if (!supabaseClient) return;
+  const hasAuthParams = window.location.search.includes('code=') ||
+    window.location.hash.includes('access_token=') ||
+    window.location.hash.includes('refresh_token=');
+
+  if (hasAuthParams) {
+    try {
+      const { data: urlData, error: urlError } = await supabaseClient.auth.getSessionFromUrl();
+      if (urlError && !urlData?.session) {
+        console.debug('[sauceboss] getSessionFromUrl no session:', urlError);
+      }
+    } catch (err) {
+      console.debug('[sauceboss] getSessionFromUrl ignored error:', err);
+    }
+  }
+
+  try {
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) {
+      console.warn('[sauceboss] getSession failed:', error);
+      return;
+    }
+    if (data?.session) {
+      session = data.session;
+      if (!currentUser) {
+        await loadProfile();
+      }
+      _resolveInitialAuth();
+    }
+  } catch (err) {
+    console.warn('[sauceboss] restoreSupabaseSession failed:', err);
+  }
+}
+
 function _resolveInitialAuth() {
   if (_initialAuthSettled) return;
   _initialAuthSettled = true;
@@ -88,6 +123,8 @@ function initSupabase() {
       if (isFirst) _resolveInitialAuth();
     }
   });
+
+  _restoreSessionFromSupabase();
 }
 
 async function loadProfile() {
@@ -128,6 +165,7 @@ async function loadProfile() {
 async function loadSaucebook() {
   if (!currentUser) return;
   state.saucebookLoading = true;
+  state.saucebookLoaded = false;
   try {
     state.saucebook = await api.listSaucebook();
   } catch (err) {
@@ -281,9 +319,10 @@ async function handleOAuthSignIn(provider) {
   state.authError = null;
   renderAuthModal();
   try {
+    const redirectTo = window.location.origin + window.location.pathname;
     const { error } = await supabaseClient.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo },
     });
     if (error) throw error;
   } catch (e) {

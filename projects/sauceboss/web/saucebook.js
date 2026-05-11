@@ -58,7 +58,7 @@ function renderSaucebook() {
   }
   const cuisinesSorted = [...byCuisine.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
-  const showLoading = state.saucebookLoading && !state.saucebookLoaded;
+  const showLoading = state.saucebookLoading || (currentUser && !state.saucebookLoaded);
 
   return `
     <div class="screen-wrap">

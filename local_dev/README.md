@@ -28,13 +28,15 @@ pip install -r requirements.txt
 uvicorn main:app --reload       # → http://localhost:8000
 #    Swagger UI: http://localhost:8000/docs
 
+# 4a. switch to project web app folder:
+cd projects/<name>/web
 
-# 4. If the project has a shared/ folder (e.g. sauceboss), copy it into web/ first:
+# 4b. If the project has a shared/ folder (e.g. sauceboss), copy it into web/ first:
     cd .. ; Copy-Item -Recurse -Force shared web\shared ; cd web   # PowerShell
     cd .. && cp -R shared web/shared && cd web                     # macOS / Linux
 
 # 5. Serve a web project (opens browser automatically)
-cd projects/<name>/web
+
 start http://localhost:5500; python -m http.server 5500 --bind 0.0.0.0
 ```
 
