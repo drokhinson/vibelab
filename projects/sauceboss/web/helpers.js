@@ -85,12 +85,39 @@ const createProfile            = (displayName) => api.upsertProfile(displayName)
 const becomeAdmin              = (adminKey) => api.becomeAdmin(adminKey);
 
 function availableCuisines() {
+  // Prefer the dynamically loaded list from GET /cuisines.
+  if (state.allCuisines && state.allCuisines.length) {
+    return state.allCuisines.map(c => ({ name: c.cuisine, emoji: c.emoji }));
+  }
+  // Fallback: hardcoded list + extras from admin sauces.
   const seen = new Map();
   for (const c of CUISINES) seen.set(c.name, c.emoji);
   for (const s of (state.adminSauces || [])) {
     if (s.cuisine && !seen.has(s.cuisine)) seen.set(s.cuisine, s.cuisineEmoji || '🍽');
   }
   return [...seen].map(([name, emoji]) => ({ name, emoji }));
+}
+
+function saucebookCuisines() {
+  // Derive distinct cuisines from the user's saucebook — only shows cuisines
+  // the user actually has. Falls back to availableCuisines() if saucebook empty.
+  const sauces = state.saucebook || [];
+  if (!sauces.length) return availableCuisines();
+  const seen = new Map();
+  for (const s of sauces) {
+    if (s.cuisine && !seen.has(s.cuisine)) {
+      seen.set(s.cuisine, s.cuisineEmoji || '🍽');
+    }
+  }
+  // Enrich with emoji from allCuisines if available.
+  if (state.allCuisines) {
+    for (const c of state.allCuisines) {
+      if (seen.has(c.cuisine) && seen.get(c.cuisine) === '🍽') {
+        seen.set(c.cuisine, c.emoji);
+      }
+    }
+  }
+  return [...seen].map(([name, emoji]) => ({ name, emoji })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Unit conversion (toTsp, cumulativeStepTsp, tspToDisplay, convertUnit,
@@ -450,24 +477,93 @@ function renderCuisineGroup(opts) {
 //   onCuisine      — JS expression template; receives `$NAME` placeholder
 //   onType         — JS expression template; receives `$VALUE` placeholder
 function renderFilterChips(opts) {
-  const cuisines = availableCuisines();
-  const cuisineChips = cuisines.map(c => {
-    const active = opts.activeCuisines.has(c.name) ? ' toggle-chip--active' : '';
-    const handler = opts.onCuisine.replace('$NAME', escapeHtml(c.name));
-    return `<button class="toggle-chip${active}" onclick="${handler}">${renderEmoji(c.emoji)} ${escapeHtml(c.name)}</button>`;
+  // ── Cuisine: search-input → dropdown → multi-select chips ──────────────
+  const allCuisines = opts.cuisineSource || availableCuisines();
+  const cuisineQ = (opts.cuisineFilterQ || '').trim().toLowerCase();
+  const activeCuisines = opts.activeCuisines || new Set();
+
+  // Selected chips (always visible)
+  const cuisineSelected = [...activeCuisines].map(name => {
+    const c = allCuisines.find(x => x.name === name);
+    const emoji = c ? renderEmoji(c.emoji) + ' ' : '';
+    const handler = opts.onCuisine.replace('$NAME', escapeHtml(name));
+    return `<button class="toggle-chip toggle-chip--active" onclick="${handler}">${emoji}${escapeHtml(name)} ✕</button>`;
   }).join('');
 
+  // Suggestion dropdown (only when typing, hide already-selected)
+  const cuisineSuggestions = cuisineQ
+    ? allCuisines.filter(c => !activeCuisines.has(c.name) && c.name.toLowerCase().includes(cuisineQ))
+    : [];
+  const cuisineSuggestHTML = cuisineSuggestions.length ? `
+    <div class="browse-filters__suggest">
+      ${cuisineSuggestions.map(c => {
+        const handler = opts.onCuisine.replace('$NAME', escapeHtml(c.name));
+        return `<button onclick="${handler}">${renderEmoji(c.emoji)} ${escapeHtml(c.name)}</button>`;
+      }).join('')}
+    </div>` : '';
+
+  // ── Type: simple toggle chips (short list, no search needed) ───────────
   const typeChips = SAUCE_TYPES.map(t => {
-    const active = opts.activeTypes.has(t.value) ? ' toggle-chip--active' : '';
+    const active = (opts.activeTypes || new Set()).has(t.value) ? ' toggle-chip--active' : '';
     const handler = opts.onType.replace('$VALUE', t.value);
     return `<button class="toggle-chip${active}" onclick="${handler}">${escapeHtml(t.label)}</button>`;
   }).join('');
 
+  // ── Dish: search-input → dropdown → multi-select chips ────────────────
+  let dishHTML = '';
+  if (opts.onDish) {
+    const allDishes = opts.dishSource || (state.allFilterDishes || []);
+    const dishQ = (opts.dishFilterQ || '').trim().toLowerCase();
+    const activeDishes = opts.activeDishes || new Set();
+
+    const dishSelected = [...activeDishes].map(id => {
+      const d = allDishes.find(x => x.id === id);
+      const label = d ? (d.emoji ? renderEmoji(d.emoji) + ' ' : '') + escapeHtml(d.name) : escapeHtml(id);
+      const handler = opts.onDish.replace('$ID', escapeHtml(id));
+      return `<button class="toggle-chip toggle-chip--active" onclick="${handler}">${label} ✕</button>`;
+    }).join('');
+
+    const dishSuggestions = dishQ
+      ? allDishes.filter(d => !activeDishes.has(d.id) && d.name.toLowerCase().includes(dishQ))
+      : [];
+    const dishSuggestHTML = dishSuggestions.length ? `
+      <div class="browse-filters__suggest">
+        ${dishSuggestions.map(d => {
+          const handler = opts.onDish.replace('$ID', escapeHtml(d.id));
+          return `<button onclick="${handler}">${d.emoji ? renderEmoji(d.emoji) + ' ' : ''}${escapeHtml(d.name)}</button>`;
+        }).join('')}
+      </div>` : '';
+
+    dishHTML = `
+      <span class="browse-filters__label" style="margin-top:10px;display:block">Compatible Dish</span>
+      <input
+        type="text"
+        class="browse-filters__filter-input"
+        placeholder="Search dishes\u2026"
+        data-focus-key="${opts.dishFilterKey || 'dish-filter'}"
+        value="${escapeHtml(opts.dishFilterQ || '')}"
+        oninput="${opts.onDishFilterQ}"
+      />
+      ${dishSuggestHTML}
+      ${dishSelected ? `<div class="browse-filters__row" style="margin-top:6px">${dishSelected}</div>` : ''}
+    `;
+  }
+
   return `
-    <span class="browse-filters__label">Cuisine</span>
-    <div class="browse-filters__row">${cuisineChips}</div>
-    <span class="browse-filters__label" style="margin-top:10px;display:block">Type</span>
+    <span class="browse-filters__label">Type</span>
     <div class="browse-filters__row">${typeChips}</div>
+    <span class="browse-filters__label" style="margin-top:10px;display:block">Cuisine</span>
+    <input
+      type="text"
+      class="browse-filters__filter-input"
+      placeholder="Search cuisines\u2026"
+      data-focus-key="${opts.cuisineFilterKey || 'cuisine-filter'}"
+      value="${escapeHtml(opts.cuisineFilterQ || '')}"
+      oninput="${opts.onCuisineFilterQ || ''}"
+    />
+    ${cuisineSuggestHTML}
+    ${cuisineSelected ? `<div class="browse-filters__row" style="margin-top:6px">${cuisineSelected}</div>` : ''}
+    ${dishHTML}
   `;
 }
 
@@ -576,6 +672,22 @@ function _tabLockedShell(label) {
 
 function _tabPlaceholder(label) {
   return `<div class="screen-wrap"><div class="scroll-body"><p style="padding:2rem;text-align:center;color:#6B7280">${label} loading…</p></div></div>`;
+}
+
+// Load cuisine + dish lookups for the filter panels (non-blocking, fire once).
+async function loadFilterLookups() {
+  // Load each independently so one failure doesn't block the other.
+  try {
+    state.allCuisines = await api.cuisines();
+  } catch (err) {
+    console.warn('[sauceboss] cuisine lookup failed, using hardcoded list', err);
+  }
+  try {
+    state.allFilterDishes = await api.filterDishes();
+  } catch (err) {
+    console.warn('[sauceboss] dish lookup failed', err);
+  }
+  render();
 }
 
 // Re-fetch the saucebook + pantry in parallel and re-render. Called after

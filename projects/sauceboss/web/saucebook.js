@@ -34,6 +34,10 @@ function renderSaucebook() {
     }
     if (f.cuisines.size && !f.cuisines.has(s.cuisine)) return false;
     if (f.types.size    && !f.types.has(s.sauceType)) return false;
+    if (f.dishes.size) {
+      const sauceDishes = (s.attachments || []).filter(a => a.kind === 'dish').map(a => a.value);
+      if (!sauceDishes.some(d => f.dishes.has(d))) return false;
+    }
     if (f.authorId      && (s.createdBy || '__none__') !== f.authorId) return false;
     return true;
   });
@@ -109,13 +113,42 @@ function _saucebookFiltersPanel(f, sauces) {
   }
   const authors = [...authorMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 
+  // Derive dish list from the user's saucebook attachments (only show dishes
+  // that are actually in the user's library).
+  const dishMap = new Map();
+  for (const s of sauces) {
+    for (const att of (s.attachments || [])) {
+      if (att.kind === 'dish' && !dishMap.has(att.value)) {
+        // Try to resolve name from the global dish list.
+        const global = (state.allFilterDishes || []).find(d => d.id === att.value);
+        dishMap.set(att.value, {
+          id: att.value,
+          name: global ? global.name : att.value,
+          emoji: global ? global.emoji : '',
+          category: global ? global.category : '',
+        });
+      }
+    }
+  }
+  const sbDishes = [...dishMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+
   return `
       <div class="browse-filters">
         ${renderFilterChips({
+          cuisineSource: saucebookCuisines(),
           activeCuisines: f.cuisines,
+          cuisineFilterQ: f.cuisineFilterQ,
+          cuisineFilterKey: 'saucebook-cuisine-filter',
+          onCuisineFilterQ: "saucebookCuisineFilterQ(this.value)",
           activeTypes: f.types,
           onCuisine: "saucebookToggleCuisineFilter('$NAME')",
           onType: "saucebookToggleTypeFilter('$VALUE')",
+          dishSource: sbDishes,
+          activeDishes: f.dishes,
+          dishFilterQ: f.dishFilterQ,
+          dishFilterKey: 'saucebook-dish-filter',
+          onDishFilterQ: "saucebookDishFilterQ(this.value)",
+          onDish: "saucebookToggleDish('$ID')",
         })}
 
         <span class="browse-filters__label" style="margin-top:10px;display:block">Author</span>
@@ -127,8 +160,11 @@ function _saucebookFiltersPanel(f, sauces) {
           `).join('')}
         </div>
 
-        ${(f.cuisines.size || f.types.size || f.authorId) ? `
-          <button class="toggle-chip" style="margin-top:10px" onclick="saucebookClearFilters()">Clear filters ✕</button>
+        ${(f.cuisines.size || f.types.size || (f.dishes && f.dishes.size) || f.authorId) ? `
+          <div class="browse-filters__clear-section">
+            <hr class="browse-filters__separator" />
+            <button class="toggle-chip" onclick="saucebookClearFilters()">Clear all filters ✕</button>
+          </div>
         ` : ''}
       </div>
   `;
@@ -206,10 +242,15 @@ function _ensureSaucebookFilters() {
     state.saucebookFilters = {
       open: false,
       cuisines: new Set(),
+      cuisineFilterQ: '',
       types: new Set(),
+      dishes: new Set(),
+      dishFilterQ: '',
       authorId: null,
     };
   }
+  // Backfill new fields for state objects created before this code deployed.
+  if (!state.saucebookFilters.dishes) state.saucebookFilters.dishes = new Set();
   return state.saucebookFilters;
 }
 
@@ -235,6 +276,7 @@ function saucebookToggleCuisineFilter(name) {
   const f = _ensureSaucebookFilters();
   if (f.cuisines.has(name)) f.cuisines.delete(name);
   else f.cuisines.add(name);
+  f.cuisineFilterQ = '';
   render();
 }
 
@@ -242,6 +284,26 @@ function saucebookToggleTypeFilter(value) {
   const f = _ensureSaucebookFilters();
   if (f.types.has(value)) f.types.delete(value);
   else f.types.add(value);
+  render();
+}
+
+function saucebookToggleDish(id) {
+  const f = _ensureSaucebookFilters();
+  if (f.dishes.has(id)) f.dishes.delete(id);
+  else f.dishes.add(id);
+  f.dishFilterQ = '';
+  render();
+}
+
+function saucebookCuisineFilterQ(q) {
+  const f = _ensureSaucebookFilters();
+  f.cuisineFilterQ = q;
+  render();
+}
+
+function saucebookDishFilterQ(q) {
+  const f = _ensureSaucebookFilters();
+  f.dishFilterQ = q;
   render();
 }
 
@@ -254,7 +316,10 @@ function saucebookPickAuthor(id) {
 function saucebookClearFilters() {
   const f = _ensureSaucebookFilters();
   f.cuisines = new Set();
+  f.cuisineFilterQ = '';
   f.types = new Set();
+  f.dishes = new Set();
+  f.dishFilterQ = '';
   f.authorId = null;
   render();
 }

@@ -29,7 +29,9 @@ let state = {
   carbs: [],
   proteins: [],
   saladBases: [],
-
+  // ── Dynamic filter lookups (loaded once on boot, used by Browse + Saucebook) ──
+  allCuisines: [],              // [{cuisine, emoji}] from GET /cuisines
+  allFilterDishes: [],          // [{id, name, emoji, category}] from GET /filter-dishes
   // ── Saucebook (per-user library; references — not copies). Populated by
   // api.listSaucebook() on login; cleared on logout. Each row is a full sauce
   // envelope (matches all-sauces-full shape) plus addedAt + authorName +
@@ -45,7 +47,10 @@ let state = {
     total: 0,
     q: '',
     cuisines: new Set(),        // multi-select cuisine filter
+    cuisineFilterQ: '',         // type-to-filter text for narrowing cuisine chips
     types: new Set(),           // multi-select type filter (sauce/marinade/dressing/dip)
+    dishes: new Set(),          // multi-select compatible-dish filter (dish ids)
+    dishFilterQ: '',            // type-to-filter text for narrowing dish chips
     authorId: null,             // selected author (uuid) or null
     authorQuery: '',            // current author autocomplete query
     authorResults: [],          // [{ userId, displayName, sauceCount }]

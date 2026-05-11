@@ -45,9 +45,17 @@ function renderBrowse() {
           <div class="browse-filters">
             ${renderFilterChips({
               activeCuisines: b.cuisines,
+              cuisineFilterQ: b.cuisineFilterQ,
+              cuisineFilterKey: 'browse-cuisine-filter',
+              onCuisineFilterQ: "browseCuisineFilterQ(this.value)",
               activeTypes: b.types,
               onCuisine: "browseToggleCuisine('$NAME')",
               onType: "browseToggleType('$VALUE')",
+              activeDishes: b.dishes,
+              dishFilterQ: b.dishFilterQ,
+              dishFilterKey: 'browse-dish-filter',
+              onDishFilterQ: "browseDishFilterQ(this.value)",
+              onDish: "browseToggleDish('$ID')",
             })}
 
             <span class="browse-filters__label" style="margin-top:10px;display:block">Author</span>
@@ -71,6 +79,13 @@ function renderBrowse() {
                     ${escapeHtml(a.displayName)} <span style="color:#9CA3AF">· ${a.sauceCount}</span>
                   </button>
                 `).join('')}
+              </div>
+            ` : ''}
+
+            ${(b.cuisines.size || b.types.size || (b.dishes && b.dishes.size) || b.authorId) ? `
+              <div class="browse-filters__clear-section">
+                <hr class="browse-filters__separator" />
+                <button class="toggle-chip" onclick="browseClearAllFilters()">Clear all filters ✕</button>
               </div>
             ` : ''}
           </div>
@@ -154,6 +169,7 @@ function browseToggleFilters() {
 function browseToggleCuisine(name) {
   if (state.browse.cuisines.has(name)) state.browse.cuisines.delete(name);
   else state.browse.cuisines.add(name);
+  state.browse.cuisineFilterQ = '';
   browseRunSearch();
 }
 
@@ -161,6 +177,24 @@ function browseToggleType(value) {
   if (state.browse.types.has(value)) state.browse.types.delete(value);
   else state.browse.types.add(value);
   browseRunSearch();
+}
+
+function browseToggleDish(id) {
+  if (!state.browse.dishes) state.browse.dishes = new Set();
+  if (state.browse.dishes.has(id)) state.browse.dishes.delete(id);
+  else state.browse.dishes.add(id);
+  state.browse.dishFilterQ = '';
+  browseRunSearch();
+}
+
+function browseCuisineFilterQ(q) {
+  state.browse.cuisineFilterQ = q;
+  render();
+}
+
+function browseDishFilterQ(q) {
+  state.browse.dishFilterQ = q;
+  render();
 }
 
 function browseAuthorAutocomplete(q) {
@@ -194,6 +228,21 @@ function browseClearAuthor() {
   browseRunSearch();
 }
 
+function browseClearAllFilters() {
+  const b = state.browse;
+  b.cuisines = new Set();
+  b.cuisineFilterQ = '';
+  b.types = new Set();
+  b.dishes = new Set();
+  b.dishFilterQ = '';
+  b.authorId = null;
+  b._authorName = null;
+  b.authorQuery = '';
+  b.authorResults = [];
+  b.q = '';
+  browseRunSearch();
+}
+
 // Discrete page navigation. The Browse view used to grow a single list with
 // "Load more"; the user feedback is that page-by-page navigation is clearer
 // once there are dozens of recipes (and the total-count chip above tells
@@ -219,8 +268,9 @@ async function browseFetch() {
   try {
     const params = {
       q: b.q,
-      cuisines: [...b.cuisines],
-      types: [...b.types],
+      cuisines: [...(b.cuisines || [])],
+      types: [...(b.types || [])],
+      dishes: [...(b.dishes || [])],
       author: b.authorId,
       limit: b.pageSize,
       offset: b.page * b.pageSize,

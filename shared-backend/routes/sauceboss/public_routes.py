@@ -351,6 +351,37 @@ async def list_all_sauces() -> list[dict]:
 
 
 @router.get(
+    "/cuisines",
+    response_model=list[dict],
+    status_code=200,
+    summary="Distinct cuisines across all sauces, with emoji from cuisine_info",
+)
+async def list_cuisines() -> list[dict]:
+    """Returns every distinct cuisine that appears on at least one sauce, plus
+    its emoji from ``sauceboss_cuisine_info`` (falls back to a generic icon
+    when the cuisine has no entry in the lookup table)."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_distinct_cuisines", {}).execute()
+    return result.data or []
+
+
+@router.get(
+    "/filter-dishes",
+    response_model=list[dict],
+    status_code=200,
+    summary="Dishes that are targeted by at least one sauce (for filter UI)",
+)
+async def list_filter_dishes() -> list[dict]:
+    """Returns dish-level items that appear in ``sauceboss_sauce_to_dish``
+    with ``target_kind='dish'``.  Used by the Browse / Saucebook filter
+    panels — only dishes with ≥1 linked sauce are included so the UI
+    never shows an empty-result chip."""
+    sb = get_supabase()
+    result = sb.rpc("get_sauceboss_filter_dishes", {}).execute()
+    return result.data or []
+
+
+@router.get(
     "/items",
     response_model=ItemsGroupedResponse,
     status_code=200,

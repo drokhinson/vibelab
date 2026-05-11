@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Background loads (non-blocking). browseEnsureLoaded is idempotent — safe
   // to call here even though setActiveTab('browse') would also fire it.
   browseEnsureLoaded();
+  loadFilterLookups();
   if (currentUser) loadPantry();
 
   requestAnimationFrame(() => {

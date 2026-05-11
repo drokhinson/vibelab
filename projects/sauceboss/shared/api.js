@@ -291,15 +291,28 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     addToSaucebook:    (id) => call(`/saucebook/${encodeURIComponent(id)}`, { method: 'POST' }),
     removeFromSaucebook: (id) => call(`/saucebook/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+    // ── Filter lookups (public, cached client-side) ───────────────────────────
+    /** @returns {Promise<Array<{cuisine: string, emoji: string}>>} */
+    cuisines: async () => {
+      const data = await call('/cuisines');
+      return Array.isArray(data) ? data : [];
+    },
+    /** @returns {Promise<Array<{id: string, name: string, emoji: string, category: string}>>} */
+    filterDishes: async () => {
+      const data = await call('/filter-dishes');
+      return Array.isArray(data) ? data : [];
+    },
+
     // ── Browse (auth optional; richer when signed in) ────────────────────────
     // Returns lightweight rows (no steps / ingredients) for a paginated
     // family-roots-only listing. Filters: q (name substring), cuisines[],
-    // types[], author (uuid). Sorted latest-first.
-    browseSauces: async ({ q = '', cuisines = [], types = [], author = null, limit = 20, offset = 0 } = {}) => {
+    // types[], dishes[], author (uuid). Sorted latest-first.
+    browseSauces: async ({ q = '', cuisines = [], types = [], dishes = [], author = null, limit = 20, offset = 0 } = {}) => {
       const params = new URLSearchParams();
       if (q) params.set('q', q);
       for (const c of cuisines) params.append('cuisine', c);
       for (const t of types) params.append('type', t);
+      for (const d of dishes) params.append('dish', d);
       if (author) params.set('author', author);
       params.set('limit', String(limit));
       params.set('offset', String(offset));
