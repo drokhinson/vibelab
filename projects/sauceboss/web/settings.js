@@ -253,7 +253,7 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
   const safeName = s.name.replace(/'/g, "\\'");
   const typeValue = s.sauceType || 'sauce';
   const typeMeta = SAUCE_TYPES.find(t => t.value === typeValue) || SAUCE_TYPES[0];
-  const isOwner = !!(currentUser && s.createdBy === currentUser.user_id);
+  const isOwner = !!(currentUser && s.createdBy === currentUser.id);
   // Edit mode gates all editorial swipe actions; merge/sauce-merge mode is its own UX.
   const canEdit = state.editMode && (isAdmin || isOwner);
   const canDelete = state.editMode && (isAdmin || isOwner);
@@ -706,11 +706,24 @@ function selectSauceFromManager(id) {
 
 async function openBuilderEdit(id) {
   if (!currentUser) { openAuthModal(); return; }
-  const sauce = (state.adminSauces || []).find(s => s.id === id)
-             || (state.saucesForCurrentItem || []).find(s => s.id === id);
+  let sauce = (state.adminSauces || []).find(s => s.id === id)
+           || (state.saucesForCurrentItem || []).find(s => s.id === id)
+           || (state.saucebook || []).find(s => s.id === id);
   if (!sauce) return;
+  // Only owner or admin may edit
+  const isOwner = currentUser && sauce.createdBy === currentUser.id;
+  const isAdmin = currentUser && currentUser.is_admin;
+  if (!isOwner && !isAdmin) return;
+  // Saucebook rows are slim (no steps) — fetch full envelope if needed
+  if (!sauce.steps) {
+    const all = await fetchAllSauces();
+    sauce = all.find(s => s.id === id);
+    if (!sauce) return;
+  }
   state.builder = {
     ...defaultBuilder(),
+    _expandedDishes: new Set(),
+    recipeSource: sauce.sourceUrl ? 'url' : 'manual',
     editingId: sauce.id,
     name: sauce.name,
     cuisine: sauce.cuisine,
@@ -731,8 +744,9 @@ async function openBuilderEdit(id) {
       })),
     })),
   };
-  navigate('builder');
-  // Lazy-load ingredient-categories + substitutions on first builder open.
+  state.recipeReturnTo = state.screen === 'admin' ? 'admin' : 'tab-shell';
+  state.builder.returnToReview = true;
+  navigate('builder-review');
   if (!_hasBuilderRefData()) {
     await withInlineLoader(ensureBuilderRefData());
   }
@@ -750,8 +764,7 @@ async function submitBecomeAdmin() {
   try {
     const profile = await becomeAdmin(key);
     currentUser = {
-      user_id: profile.id,
-      display_name: profile.display_name,
+      ...profile,
       is_admin: !!profile.is_admin,
     };
     state.becomeAdminBusy = false;
@@ -773,7 +786,7 @@ async function adminDeleteSauce(id, name) {
   if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
   const sauce = (state.adminSauces || []).find(s => s.id === id);
   const isAdmin = !!(currentUser && currentUser.is_admin);
-  const isOwner = !!(currentUser && sauce && sauce.createdBy === currentUser.user_id);
+  const isOwner = !!(currentUser && sauce && sauce.createdBy === currentUser.id);
   try {
     if (isAdmin) {
       await deleteAdminSauce(id);
@@ -1344,10 +1357,10 @@ async function handleImportSauceFile(event) {
     ? inner.itemIds
     : (Array.isArray(inner.attachments) ? inner.attachments.filter(a => a.kind === 'dish').map(a => a.value) : []);
 
-  // Mirror openBuilderEdit's shape mapping (settings.js:720) minus editingId —
-  // this is a brand-new sauce that will create via POST /sauces on save.
   state.builder = {
     ...defaultBuilder(),
+    _expandedDishes: new Set(),
+    recipeSource: inner.sourceUrl ? 'url' : 'manual',
     editingId: null,
     name: inner.name,
     cuisine: inner.cuisine || '',
@@ -1368,7 +1381,8 @@ async function handleImportSauceFile(event) {
       })),
     })),
   };
-  navigate('builder');
+  state.recipeReturnTo = state.screen === 'admin' ? 'admin' : 'tab-shell';
+  navigate('builder-info');
 }
 
 async function downloadBulkSauceExport() {

@@ -8,7 +8,7 @@
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 let supabaseClient = null;
 let session = null;          // Supabase auth session (full JWT) or null
-let currentUser = null;      // { user_id, display_name, is_admin } or null
+let currentUser = null;      // { id, display_name, is_admin } or null
 
 // ─── Global state ─────────────────────────────────────────────────────────────
 let state = {
@@ -146,9 +146,15 @@ state.disabledIngredients = new Set();
 
 function defaultBuilder() {
   return {
+    // ── Wizard navigation ──────────────────────────────────────────────
+    recipeSource: null,          // 'url' | 'reel' | 'file' | 'manual' | null
+    returnToReview: false,       // when true, Continue on any step jumps to review
+
+    // ── Recipe info ────────────────────────────────────────────────────
     name: '', cuisine: '', cuisineEmoji: '', color: '', description: '', sourceUrl: '',
     sauceType: '',               // '' | 'sauce' | 'marinade' | 'dressing' — must be selected by user
-    parentSauceId: null,         // when set, this sauce is a variant of the chosen parent
+
+    // ── Steps & ingredients ────────────────────────────────────────────
     steps: [{ title: '', instructions: '', inputFromStep: null, estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
     unassignedIngredients: [],   // imported ingredients not yet placed in a step; recipe cannot save while non-empty
     itemIds: [], saving: false, error: null,

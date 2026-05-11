@@ -563,6 +563,24 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   gap: 6px;
   padding: 4px 0;
 }
+
+/* Cuisine grid — 2 cols on narrow, 3 cols on wider screens */
+.cuisine-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  padding: 4px 0;
+}
+@media (min-width: 420px) {
+  .cuisine-grid { grid-template-columns: repeat(3, 1fr); }
+}
+.cuisine-grid .builder-chip {
+  width: 100%; text-align: center; box-sizing: border-box;
+}
+.cuisine-add-row {
+  display: flex; justify-content: center;
+  margin-top: 8px;
+}
 .builder-chip {
   padding: 5px 12px;
   border-radius: 16px;
@@ -977,6 +995,218 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .review-ing-list { display: flex; flex-direction: column; gap: 3px; }
 .review-ing-item { font-size: 13px; color: #6B7280; padding-left: 8px; border-left: 3px solid #E85D04; }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Wizard: Progress Dots
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.wizard-progress {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; margin: 4px 0 18px; padding: 0 8px;
+}
+.wizard-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; color: #9CA3AF;
+  background: #F3F4F6; border: 2px solid #E5E7EB;
+  flex-shrink: 0; transition: all .2s;
+}
+.wizard-dot.active { background: #E85D04; color: white; border-color: #E85D04; }
+.wizard-dot.done   { background: #D1FAE5; color: #065F46; border-color: #6EE7B7; }
+.wizard-dot.skipped { opacity: 0.35; }
+.wizard-line {
+  flex: 1; height: 2px; min-width: 16px; max-width: 40px;
+  background: #E5E7EB;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Wizard Step 1: Source Cards
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.source-card {
+  background: white; border-radius: 14px; padding: 16px;
+  margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  cursor: default;
+}
+.source-card--action { cursor: pointer; transition: box-shadow .15s, transform .1s; }
+.source-card--action:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); transform: translateY(-1px); }
+.source-card--action:active { transform: translateY(0); }
+.source-card--disabled { opacity: 0.55; pointer-events: none; position: relative; }
+.source-card-header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+.source-card-icon { font-size: 28px; flex-shrink: 0; line-height: 1; }
+.source-card-title { font-size: 15px; font-weight: 600; color: #1F2937; }
+.source-card-desc  { font-size: 13px; color: #6B7280; margin-top: 2px; }
+.coming-soon-badge {
+  display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  background: #FEF3C7; color: #92400E; border-radius: 6px; padding: 2px 6px;
+  vertical-align: middle; margin-left: 6px; letter-spacing: 0.4px;
+}
+
+/* File input styling */
+.builder-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.builder-file-label { cursor: pointer; text-align: center; }
+.builder-download-link {
+  display: block; font-size: 13px; color: #E85D04; margin-top: 8px;
+  text-decoration: none; font-weight: 500;
+}
+.builder-download-link:hover { text-decoration: underline; }
+
+/* Read-only source URL */
+.builder-readonly-url {
+  background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 10px;
+  padding: 10px 14px; font-size: 13px; color: #6B7280;
+  word-break: break-all; margin-bottom: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Wizard Step 3: Insert Step Divider
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.insert-step-divider {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; width: 100%; padding: 6px 0; margin: 2px 0;
+  border: none; background: transparent; cursor: pointer;
+  opacity: 0.35; transition: opacity .15s;
+}
+.insert-step-divider:hover { opacity: 1; }
+.insert-step-line {
+  flex: 1; height: 2px; background: #D1D5DB; border-radius: 1px;
+}
+.insert-step-plus {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; color: #E85D04;
+  background: #FFF3E0; border: 2px solid #E85D04;
+  margin: 0 8px; flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Wizard Step 4: Dish Tree View
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.dish-tree { margin-top: 12px; }
+.dish-tree-group { margin-bottom: 2px; }
+.dish-tree-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  transition: background .1s;
+}
+.dish-tree-item:hover { background: #F3F4F6; }
+.dish-tree-parent { font-weight: 500; }
+.dish-tree-child { padding-left: 44px; font-weight: 400; font-size: 14px; }
+.dish-tree-toggle {
+  border: none; background: none; cursor: pointer; padding: 0;
+  font-size: 11px; color: #9CA3AF; transition: transform .15s;
+  width: 20px; text-align: center; flex-shrink: 0;
+}
+.dish-tree-toggle.expanded { transform: rotate(90deg); }
+.dish-tree-toggle-spacer { width: 20px; flex-shrink: 0; }
+.dish-tree-check {
+  width: 20px; height: 20px; border-radius: 6px;
+  border: 2px solid #D1D5DB; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s; font-size: 12px;
+}
+.dish-tree-check.checked {
+  background: #E85D04; border-color: #E85D04; color: white;
+}
+.dish-tree-check.checked::after { content: '✓'; }
+.dish-tree-check.partial {
+  background: #FFF3E0; border-color: #E85D04;
+}
+.dish-tree-check.partial::after { content: '–'; color: #E85D04; font-weight: 700; }
+.dish-tree-emoji { font-size: 20px; flex-shrink: 0; }
+.dish-tree-name  { flex: 1; font-size: 14px; color: #1F2937; }
+.dish-tree-count {
+  font-size: 11px; color: #9CA3AF; background: #F3F4F6;
+  border-radius: 10px; padding: 2px 7px; flex-shrink: 0;
+}
+.dish-tree-children { margin-left: 0; }
+.standalone-hint {
+  text-align: center; padding: 24px 16px;
+  font-size: 15px; color: #6B7280;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Wizard Step 5: Review Accordion
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.review-accordion {
+  background: white; border-radius: 14px;
+  margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+.review-accordion-header {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 14px 16px; border: none; background: none;
+  cursor: pointer; text-align: left; font-size: 14px; font-weight: 600;
+  color: #1F2937;
+}
+.review-accordion-header:hover { background: #F9FAFB; }
+.review-accordion-chevron {
+  font-size: 10px; color: #9CA3AF; transition: transform .2s;
+  flex-shrink: 0; width: 14px; text-align: center;
+}
+.review-accordion-chevron.expanded { transform: rotate(90deg); }
+.review-accordion-summary {
+  flex: 1; font-size: 13px; font-weight: 400; color: #6B7280;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-left: 4px;
+}
+.review-edit-btn {
+  font-size: 13px; font-weight: 600; color: #E85D04;
+  background: none; border: none; cursor: pointer;
+  padding: 2px 8px; border-radius: 6px; flex-shrink: 0;
+}
+.review-edit-btn:hover { background: #FFF3E0; }
+.review-accordion-body {
+  padding: 0 16px 14px; font-size: 13px; color: #374151;
+}
+.review-accordion-body[hidden] { display: none; }
+.review-field { padding: 4px 0; }
+.color-dot-inline {
+  display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+  vertical-align: middle; margin-right: 4px;
+}
+.review-accordion-body .review-step-card { margin-top: 8px; }
+
+/* Review: static info bubble (recipe source) */
+.review-info-bubble {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: #F3F4F6; border-radius: 10px; padding: 10px 14px;
+  font-size: 13px; color: #6B7280; margin-bottom: 10px;
+}
+.review-info-url {
+  flex: 1; min-width: 0; color: #9CA3AF; font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Review: static info card (recipe info — non-collapsible) */
+.review-info-card {
+  position: relative;
+  background: white; border-radius: 14px; padding: 14px 16px;
+  margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.review-info-card-edit {
+  position: absolute; top: 12px; right: 14px;
+}
+.review-info-card-header {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.review-info-name {
+  font-size: 15px; font-weight: 600; color: #1F2937;
+}
+.review-info-cuisine {
+  font-size: 13px; color: #6B7280;
+}
+.review-info-desc {
+  margin-top: 8px; font-size: 13px; color: #6B7280;
+  border-top: 1px solid #F3F4F6; padding-top: 8px;
+}
+
+/* Back-to-previous link under Continue buttons */
+.builder-back-link {
+  display: block; width: 100%; margin-top: 8px; padding: 8px 0;
+  border: none; background: none; cursor: pointer;
+  font-size: 13px; font-weight: 500; color: #6B7280;
+  text-align: center;
+}
+.builder-back-link:hover { color: #E85D04; }
+
 .builder-error {
   background: #FEE2E2;
   color: #991B1B;
@@ -1154,6 +1384,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   font-size: 13px;
 }
 .swipe-action-edit   { left: 0;  background: #EFF6FF; color: #0369A1; }
+.swipe-action--disabled { opacity: 0.35; text-decoration: line-through; }
 .swipe-action-delete { right: 0; background: #FEF2F2; color: #B91C1C; }
 
 /* Saucebook swipe wrapper. Rows are flat hairline-bordered (.admin-sauce-row),

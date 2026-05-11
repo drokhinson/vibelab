@@ -223,12 +223,16 @@ function _saucebookRenderRow({ family, displayed }) {
     variantBadge,
     rightSlot: missingTag,
   });
+  const isOwner = !!(currentUser && displayed.createdBy === currentUser.id);
+  const isAdmin = !!(currentUser && currentUser.is_admin);
+  const canEdit = isOwner || isAdmin;
   return `
     <div class="swipe-row swipe-row--saucebook" data-swipe
          data-tap-action="saucebookOpenRecipe('${safeId}')"
          data-edit-action="openBuilderEdit('${safeId}')"
+         ${canEdit ? '' : 'data-edit-disabled'}
          data-delete-action="saucebookRemoveSauce('${safeId}')">
-      <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
+      <div class="swipe-action swipe-action-edit${canEdit ? '' : ' swipe-action--disabled'}" aria-hidden="true">Edit</div>
       <div class="swipe-action swipe-action-delete" aria-hidden="true">Remove</div>
       <div class="swipe-content">${inner}</div>
     </div>

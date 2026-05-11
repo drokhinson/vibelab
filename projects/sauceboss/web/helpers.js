@@ -606,9 +606,11 @@ function render() {
     case 'meal-subtype':           app.innerHTML = renderMealSubtype(); break;
     case 'sauce-selector':         app.innerHTML = renderSauceSelector(); break;
     case 'recipe':                 app.innerHTML = renderRecipe(); break;
-    case 'builder':                app.innerHTML = renderBuilder(); break;
-    case 'builder-items':          app.innerHTML = renderBuilderItems(); break;
-    case 'builder-review':         app.innerHTML = renderBuilderReview(); break;
+    case 'builder-source':           app.innerHTML = renderBuilderSource(); break;
+    case 'builder-info':             app.innerHTML = renderBuilderInfo(); break;
+    case 'builder-instructions':     app.innerHTML = renderBuilderInstructions(); break;
+    case 'builder-pairing':          app.innerHTML = renderBuilderPairing(); break;
+    case 'builder-review':           app.innerHTML = renderBuilderReview(); break;
     case 'settings':               app.innerHTML = renderSettings(); break;
     case 'admin':                  app.innerHTML = renderAdmin(); break;
   }

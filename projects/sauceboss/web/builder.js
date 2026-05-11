@@ -1,51 +1,193 @@
 'use strict';
 
-// ─── Builder Validation ───────────────────────────────────────────────────────
-// Single source of truth for what blocks the Continue button. Used by the full
-// renderer (to draw the validation card) and by the keystroke-level updater
-// (which can't re-render without dropping input focus).
-function _builderValidate(b) {
-  const ingHasQuantity = i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste');
+// ─── Per-Screen Validation ────────────────────────────────────────────────────
+function _validateInfo(b) {
   const hasCuisine = b.cuisineDraftMode
     ? !!(b.cuisineDraftName.trim() && b.cuisineDraftEmoji.trim())
     : !!b.cuisine;
-  const trayEmpty = (b.unassignedIngredients || []).length === 0;
-  const untitledStepIdxs = b.steps
-    .map((s, i) => s.title.trim() ? -1 : i)
-    .filter(i => i >= 0);
-  const hasUsableStep = b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity));
-
   const issues = [];
-  if (!b.name.trim())          issues.push('Add a sauce name');
-  if (!b.sauceType)            issues.push('Select a type (Sauce / Marinade / Dressing / Dip / Full Recipe)');
-  if (!hasCuisine)             issues.push('Select a cuisine');
-  if (!b.color)                issues.push('Pick a color');
-  if (untitledStepIdxs.length) {
-    const labels = untitledStepIdxs.map(i => i + 1).join(', ');
-    issues.push(`Add a title to step ${labels}`);
-  }
-  if (!hasUsableStep)          issues.push('Add at least one ingredient with a quantity to a titled step');
-
-  return { issues, canContinue: issues.length === 0 && trayEmpty, trayEmpty };
+  if (!b.name.trim()) issues.push('Add a sauce name');
+  if (!hasCuisine)    issues.push('Select a cuisine');
+  if (!b.color)       issues.push('Pick a color');
+  return issues;
 }
 
-// ─── Builder Screens ──────────────────────────────────────────────────────────
-function renderBuilder() {
+function _validateInstructions(b) {
+  const ingHasQuantity = i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste');
+  const trayEmpty = (b.unassignedIngredients || []).length === 0;
+  const untitledStepIdxs = b.steps.map((s, i) => s.title.trim() ? -1 : i).filter(i => i >= 0);
+  const hasUsableStep = b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity));
+  const issues = [];
+  if (!trayEmpty) issues.push('Move or delete every unassigned ingredient first');
+  if (untitledStepIdxs.length) issues.push(`Add a title to step ${untitledStepIdxs.map(i => i + 1).join(', ')}`);
+  if (!hasUsableStep) issues.push('Add at least one ingredient with a quantity to a titled step');
+  return { issues, canContinue: issues.length === 0 };
+}
+
+function _validatePairing(b) {
+  const meta = SAUCE_TYPES.find(t => t.value === b.sauceType);
+  if (!b.sauceType) return { issues: ['Select a type'], canContinue: false };
+  if (meta && meta.category === null) return { issues: [], canContinue: true };
+  if (b.itemIds.length === 0) return { issues: ['Select at least one dish'], canContinue: false };
+  return { issues: [], canContinue: true };
+}
+
+// Combined validation for safety-net in builderSave()
+function _builderValidate(b) {
+  const infoIssues = _validateInfo(b);
+  const { issues: instrIssues } = _validateInstructions(b);
+  const { issues: pairIssues } = _validatePairing(b);
+  const issues = [...infoIssues, ...instrIssues, ...pairIssues];
+  return { issues, canContinue: issues.length === 0 };
+}
+
+// ─── Wizard Navigation Helpers ────────────────────────────────────────────────
+function _builderWizardHeader(subtitle) {
+  const dest = state.recipeReturnTo || 'tab-shell';
+  return renderAppHeader({
+    title: 'Recipe Builder',
+    subtitle,
+    back: { onClick: `navigate('${dest}')` },
+  });
+}
+
+function _builderNextScreen() {
+  const b = state.builder;
+  if (b.returnToReview) { b.returnToReview = false; navigate('builder-review'); return; }
+  const order = ['builder-source', 'builder-info', 'builder-instructions', 'builder-pairing', 'builder-review'];
+  const idx = order.indexOf(state.screen);
+  if (idx >= 0 && idx < order.length - 1) navigate(order[idx + 1]);
+}
+
+function _builderBackLink() {
+  const backMap = {
+    'builder-info': state.builder.editingId ? null : 'builder-source',
+    'builder-instructions': 'builder-info',
+    'builder-pairing': 'builder-instructions',
+    'builder-review': 'builder-pairing',
+  };
+  const prev = backMap[state.screen];
+  if (!prev) return '';
+  const labels = { 'builder-source': 'Recipe Source', 'builder-info': 'Recipe Info', 'builder-instructions': 'Recipe Steps', 'builder-pairing': 'Dish Pairing' };
+  return `<button class="builder-back-link" onclick="navigate('${prev}')">&larr; Back to ${labels[prev] || 'previous step'}</button>`;
+}
+
+function builderGoToStep(screen) {
+  state.builder.returnToReview = true;
+  navigate(screen);
+}
+
+// ─── Progress indicator HTML ──────────────────────────────────────────────────
+function _wizardProgress() {
+  const steps = [
+    { screen: 'builder-source', label: 'Source' },
+    { screen: 'builder-info', label: 'Info' },
+    { screen: 'builder-instructions', label: 'Steps' },
+    { screen: 'builder-pairing', label: 'Pairing' },
+    { screen: 'builder-review', label: 'Review' },
+  ];
+  const current = state.screen;
+  const currentIdx = steps.findIndex(s => s.screen === current);
+  const isEditing = !!state.builder.editingId;
+  return `<div class="wizard-progress">${steps.map((s, i) => {
+    let cls = '';
+    if (isEditing && i === 0) cls = 'skipped';
+    else if (i === currentIdx) cls = 'active';
+    else if (i < currentIdx) cls = 'done';
+    return `<div class="wizard-dot ${cls}" title="${s.label}"><span>${i + 1}</span></div>`;
+  }).join('<div class="wizard-line"></div>')}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 1 — Recipe Source
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderBuilderSource() {
+  const b = state.builder;
+  const esc = s => (s || '').replace(/"/g, '&quot;');
+  const importErr = b.importError ? `<div class="builder-error">${esc(b.importError)}</div>` : '';
+
+  return `
+    ${_builderWizardHeader('How would you like to start?')}
+    <div class="scroll-body scroll-body--padded">
+      ${_wizardProgress()}
+
+      <div class="source-card">
+        <div class="source-card-header">
+          <span class="source-card-icon">🌐</span>
+          <div>
+            <div class="source-card-title">Import from Recipe Website</div>
+            <div class="source-card-desc">Paste a recipe URL to auto-import ingredients &amp; steps</div>
+          </div>
+        </div>
+        <div class="builder-import-row">
+          <input class="builder-input builder-import-url" type="url" placeholder="https://… (recipe page)" value="${esc(b.importUrl || '')}" data-builder-field="import-url">
+          <button class="builder-secondary-btn builder-import-btn" onclick="builderImportUrl()" ${b.importing ? 'disabled' : ''}>
+            ${b.importing ? '<span class="spinner-sm"></span>' : 'Import'}
+          </button>
+        </div>
+        ${importErr}
+      </div>
+
+      <div class="source-card source-card--disabled">
+        <div class="source-card-header">
+          <span class="source-card-icon">📱</span>
+          <div>
+            <div class="source-card-title">Import from Instagram Reel <span class="coming-soon-badge">Coming Soon</span></div>
+            <div class="source-card-desc">Paste an Instagram reel link to extract the recipe</div>
+          </div>
+        </div>
+        <div class="builder-import-row">
+          <input class="builder-input" type="url" placeholder="https://instagram.com/reel/…" disabled>
+          <button class="builder-secondary-btn" disabled>Import</button>
+        </div>
+      </div>
+
+      <div class="source-card">
+        <div class="source-card-header">
+          <span class="source-card-icon">📄</span>
+          <div>
+            <div class="source-card-title">Import from File</div>
+            <div class="source-card-desc">Upload a JSON file matching the SauceBoss import format</div>
+          </div>
+        </div>
+        <div class="builder-import-row">
+          <input type="file" accept=".json" id="builder-file-input" class="builder-file-input" onchange="builderImportFile(this)">
+          <label for="builder-file-input" class="builder-secondary-btn builder-file-label">Choose File</label>
+        </div>
+        <a class="builder-download-link" href="assets/sb-ai-recipe-instructions.md" download="SauceBoss-AI-Recipe-Instructions.md">⬇ Download AI recipe builder instructions</a>
+      </div>
+
+      <div class="source-card source-card--action" onclick="builderStartManual()">
+        <div class="source-card-header">
+          <span class="source-card-icon">✍️</span>
+          <div>
+            <div class="source-card-title">Manual Entry</div>
+            <div class="source-card-desc">Enter all sauce information by hand</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 2 — Recipe Info
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderBuilderInfo() {
   const b = state.builder;
   const esc = s => (s || '').replace(/"/g, '&quot;');
 
   const cuisineChips = availableCuisines().map(c =>
     `<button class="builder-chip ${!b.cuisineDraftMode && b.cuisine === c.name ? 'selected' : ''}" onclick="builderSetCuisine('${c.name.replace(/'/g, "\\'")}','${c.emoji}')">${renderEmoji(c.emoji)} ${c.name}</button>`
-  ).join('') + `<button class="builder-chip ${b.cuisineDraftMode ? 'selected' : ''}" onclick="builderStartNewCuisine()">+ New cuisine…</button>`;
+  ).join('');
+  const newCuisineBtn = `<div class="cuisine-add-row"><button class="builder-chip ${b.cuisineDraftMode ? 'selected' : ''}" onclick="builderStartNewCuisine()">+ New cuisine…</button></div>`;
 
   const newCuisineInputs = b.cuisineDraftMode ? `
     <div class="new-cuisine-row">
       <input class="builder-input new-cuisine-name" placeholder="Cuisine name (e.g. Thai)"
-             value="${esc(b.cuisineDraftName)}"
-             data-builder-field="cuisine-draft-name">
+             value="${esc(b.cuisineDraftName)}" data-builder-field="cuisine-draft-name">
       <input class="builder-input new-cuisine-emoji" placeholder="🌮" maxlength="4"
-             value="${esc(b.cuisineDraftEmoji)}"
-             data-builder-field="cuisine-draft-emoji">
+             value="${esc(b.cuisineDraftEmoji)}" data-builder-field="cuisine-draft-emoji">
       <button class="new-cuisine-cancel" onclick="builderCancelNewCuisine()">Cancel</button>
     </div>` : '';
 
@@ -53,30 +195,80 @@ function renderBuilder() {
     `<button class="color-swatch ${b.color === hex ? 'selected' : ''}" style="background:${hex}" onclick="builderSetColor('${hex}')"></button>`
   ).join('');
 
-  const sauceTypeChips = SAUCE_TYPES.map(t =>
-    `<button class="builder-chip builder-chip-lg ${b.sauceType === t.value ? 'selected' : ''}" onclick="builderSetSauceType('${t.value}')">${t.label}</button>`
-  ).join('');
+  const sourceUrlHTML = (b.recipeSource === 'url' || b.recipeSource === 'reel') && b.sourceUrl
+    ? `<p class="builder-label">Source</p><div class="builder-readonly-url">${esc(b.sourceUrl)}</div>` : '';
 
-  // "Variant of" dropdown — only when creating a new sauce. Re-parenting an
-  // existing sauce is intentionally out of scope; allowing it would let a
-  // user re-pin somebody else's recipe under their family.
-  const parentPool = (state.adminSauces || state.saucesForCurrentItem || [])
-    .filter(s => !s.parentSauceId && s.id !== b.editingId);
-  const parentOptions = parentPool
-    .sort((a, b1) => (a.name || '').localeCompare(b1.name || ''))
-    .map(s => `<option value="${s.id}" ${b.parentSauceId === s.id ? 'selected' : ''}>${esc(s.name)}${s.cuisine ? ` · ${esc(s.cuisine)}` : ''}</option>`)
-    .join('');
-  const variantOfHTML = b.editingId ? '' : `
-    <p class="builder-label">Variant of (optional)</p>
-    <div class="variant-of-row">
-      <select class="builder-input" data-builder-field="parent-sauce">
-        <option value="" ${!b.parentSauceId ? 'selected' : ''}>— Original recipe —</option>
-        ${parentOptions}
-      </select>
-      ${b.parentSauceId ? `<p class="builder-hint">Cuisine, color, type, and pairings copied from the original. Steps stay yours.</p>` : ''}
-    </div>`;
+  const issues = _validateInfo(b);
+  const canContinue = issues.length === 0;
 
+  const validationHTML = issues.length > 0 ? `
+    <div class="builder-validation-card">
+      <div class="builder-validation-header"><span class="builder-validation-title">⚠ Complete these to continue</span></div>
+      <ul class="builder-validation-list">${issues.map(msg => `<li>${esc(msg)}</li>`).join('')}</ul>
+    </div>` : '';
+
+  return `
+    ${_builderWizardHeader('Name, describe & style your recipe')}
+    <div class="scroll-body scroll-body--padded">
+      ${_wizardProgress()}
+      ${sourceUrlHTML}
+      <p class="builder-label">Sauce Name</p>
+      <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
+      <p class="builder-label">Description</p>
+      <textarea class="builder-input builder-description-input" placeholder="Description (optional)" data-builder-field="description">${esc(b.description || '')}</textarea>
+      <p class="builder-label">Cuisine</p>
+      <div class="cuisine-grid">${cuisineChips}</div>
+      ${newCuisineBtn}
+      ${newCuisineInputs}
+      <p class="builder-label">Color</p>
+      <div class="color-swatches">${colorDots}</div>
+      ${validationHTML}
+      <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>Continue — Recipe Steps</button>
+      ${_builderBackLink()}
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 3 — Recipe Instructions (Step Builder)
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderBuilderInstructions() {
+  const b = state.builder;
+  const esc = s => (s || '').replace(/"/g, '&quot;');
+
+  // ── Unassigned ingredients (at top for imports) ──
+  const unassignedHTML = (b.unassignedIngredients && b.unassignedIngredients.length > 0) ? `
+    <div class="builder-unassigned-card">
+      <div class="builder-unassigned-header">
+        <span class="builder-unassigned-title">⚠ Unassigned ingredients (${b.unassignedIngredients.length})</span>
+        <span class="builder-unassigned-hint">Move each to a step or delete before continuing.</span>
+      </div>
+      ${b.unassignedIngredients.map((ing, ui) => {
+        const qty = ing.unit === 'to taste'
+          ? 'to taste'
+          : `${ing.amount !== '' && ing.amount != null ? ing.amount : ''} ${ing.unit || ''}`.trim();
+        const stepOpts = b.steps.map((s, si) => {
+          const label = `Step ${si + 1}${s.title ? ' — ' + s.title.slice(0, 25) : ''}`;
+          return `<option value="${si}">${label}</option>`;
+        }).join('');
+        return `<div class="unassigned-row">
+          <span class="unassigned-ing"><strong>${esc(ing.name)}</strong>${qty ? ` <span class="unassigned-qty">${esc(qty)}</span>` : ''}</span>
+          <select class="unassigned-target" data-builder-field="unassigned-target" data-uidx="${ui}">
+            <option value="">Move to step…</option>
+            ${stepOpts}
+          </select>
+          <button class="unassigned-delete-btn" onclick="builderDeleteUnassigned(${ui})" title="Delete ingredient">✕</button>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  // ── Steps with insert-between dividers ──
   const stepsHTML = b.steps.map((step, si) => {
+    const insertBefore = si > 0 ? `
+      <button class="insert-step-divider" onclick="builderInsertStep(${si})" title="Insert step here">
+        <span class="insert-step-line"></span><span class="insert-step-plus">+</span><span class="insert-step-line"></span>
+      </button>` : '';
+
     const stepRefHTML = si > 0 ? `
       <div class="step-ref-row">
         <label class="step-ref-label">Combine output from:</label>
@@ -126,7 +318,7 @@ function renderBuilder() {
     }).join('');
 
     const timeValue = step.estimatedTime != null && step.estimatedTime !== '' ? step.estimatedTime : '';
-    return `<div class="builder-step-card">
+    return `${insertBefore}<div class="builder-step-card">
       ${b.steps.length > 1 ? `<button class="remove-step-btn" onclick="builderRemoveStep(${si})">✕</button>` : ''}
       <div class="step-number">Step ${si + 1}</div>
       ${stepRefHTML}
@@ -145,95 +337,33 @@ function renderBuilder() {
     </div>`;
   }).join('');
 
-  const { issues, canContinue, trayEmpty } = _builderValidate(b);
-
+  const { issues, canContinue } = _validateInstructions(b);
   const validationHTML = issues.length > 0 ? `
     <div class="builder-validation-card">
-      <div class="builder-validation-header">
-        <span class="builder-validation-title">⚠ Finish these before continuing</span>
-      </div>
-      <ul class="builder-validation-list">
-        ${issues.map(msg => `<li>${esc(msg)}</li>`).join('')}
-      </ul>
+      <div class="builder-validation-header"><span class="builder-validation-title">⚠ Finish these before continuing</span></div>
+      <ul class="builder-validation-list">${issues.map(msg => `<li>${esc(msg)}</li>`).join('')}</ul>
     </div>` : '';
-
-  const unassignedHTML = (b.unassignedIngredients && b.unassignedIngredients.length > 0) ? `
-    <div class="builder-unassigned-card">
-      <div class="builder-unassigned-header">
-        <span class="builder-unassigned-title">⚠ Unassigned ingredients (${b.unassignedIngredients.length})</span>
-        <span class="builder-unassigned-hint">Move each to a step or delete before saving.</span>
-      </div>
-      ${b.unassignedIngredients.map((ing, ui) => {
-        const qty = ing.unit === 'to taste'
-          ? 'to taste'
-          : `${ing.amount !== '' && ing.amount != null ? ing.amount : ''} ${ing.unit || ''}`.trim();
-        const stepOpts = b.steps.map((s, si) => {
-          const label = `Step ${si + 1}${s.title ? ' — ' + s.title.slice(0, 25) : ''}`;
-          return `<option value="${si}">${label}</option>`;
-        }).join('');
-        return `<div class="unassigned-row">
-          <span class="unassigned-ing"><strong>${esc(ing.name)}</strong>${qty ? ` <span class="unassigned-qty">${esc(qty)}</span>` : ''}</span>
-          <select class="unassigned-target" data-builder-field="unassigned-target" data-uidx="${ui}">
-            <option value="">Move to step…</option>
-            ${stepOpts}
-          </select>
-          <button class="unassigned-delete-btn" onclick="builderDeleteUnassigned(${ui})" title="Delete ingredient">✕</button>
-        </div>`;
-      }).join('')}
-    </div>` : '';
-
-  const importErr = b.importError ? `<div class="builder-error">${esc(b.importError)}</div>` : '';
-  const importPanel = `
-    <div class="builder-import-panel">
-      <p class="builder-label">Import from URL</p>
-      <div class="builder-import-row">
-        <input class="builder-input builder-import-url" type="url" placeholder="https://… (recipe page)" value="${esc(b.importUrl || '')}" data-builder-field="import-url">
-        <button class="builder-secondary-btn builder-import-btn" onclick="builderImport()" ${b.importing ? 'disabled' : ''}>
-          ${b.importing ? '<span class="spinner-sm"></span> Importing…' : 'Import'}
-        </button>
-      </div>
-      ${importErr}
-    </div>`;
 
   return `
-    ${renderAppHeader({
-      title: b.editingId ? 'Edit Sauce' : 'Create a Sauce',
-      titleEmoji: '🍲',
-      back: { onClick: `navigate('${state.recipeReturnTo === 'admin' ? 'admin' : 'tab-shell'}')` },
-    })}
+    ${_builderWizardHeader('Build your recipe steps')}
     <div class="scroll-body scroll-body--padded">
-      <div class="builder-sticky-header">
-        ${importPanel}
-        <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
-        <textarea class="builder-input builder-description-input" placeholder="Description (optional)" data-builder-field="description">${esc(b.description || '')}</textarea>
-        <input class="builder-input" type="url" placeholder="Source URL (optional)" value="${esc(b.sourceUrl || '')}" data-builder-field="source-url">
-        ${variantOfHTML}
-        <p class="builder-label">Type</p>
-        <div class="builder-chip-row">${sauceTypeChips}</div>
-        <p class="builder-label">Cuisine</p>
-        <div class="builder-chip-row">${cuisineChips}</div>
-        ${newCuisineInputs}
-        <p class="builder-label">Color</p>
-        <div class="color-swatches">${colorDots}</div>
-      </div>
-      <p class="builder-label" style="margin-top:16px">Steps</p>
-      ${stepsHTML}
-      <button class="add-step-btn" onclick="builderAddStep()">+ Add Step</button>
-      ${validationHTML}
+      ${_wizardProgress()}
       ${unassignedHTML}
-      ${(() => {
-        const meta = SAUCE_TYPES.find(t => t.value === b.sauceType);
-        // Full recipes (and any future un-paired type) skip the items-pool
-        // step and go straight to review.
-        const isStandalone = meta && meta.category === null;
-        const nextScreen = isStandalone ? 'builder-review' : 'builder-items';
-        const nextLabel  = isStandalone ? 'Continue — Review' : `Continue — Pair with ${meta?.pairLabel || 'Items'}`;
-        return `<button class="builder-primary-btn" onclick="navigate('${nextScreen}')" ${canContinue ? '' : 'disabled'}${!canContinue ? ' title="Resolve the issues above to continue"' : ''}>${nextLabel}</button>`;
-      })()}
+      <p class="builder-label">Steps</p>
+      ${stepsHTML}
+      <button class="insert-step-divider" onclick="builderAddStep()" title="Add step">
+        <span class="insert-step-line"></span><span class="insert-step-plus">+</span><span class="insert-step-line"></span>
+      </button>
+      ${validationHTML}
+      <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>Continue — Dish Pairing</button>
+      ${_builderBackLink()}
     </div>
   `;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 4 — Dish Pairing
+// ═══════════════════════════════════════════════════════════════════════════════
 function _builderItemPool() {
   const t = SAUCE_TYPES.find(x => x.value === state.builder.sauceType);
   if (!t) return [];
@@ -243,93 +373,200 @@ function _builderItemPool() {
   return [];
 }
 
-function renderBuilderItems() {
+function _allVariantIds(dish) {
+  return (dish.variants || dish.subtypes || []).map(v => v.id);
+}
+
+function renderBuilderPairing() {
   const b = state.builder;
-  const t = SAUCE_TYPES.find(x => x.value === b.sauceType);
-  const pool = _builderItemPool();
-  const itemsHTML = pool.map(item => {
-    const selected = b.itemIds.includes(item.id);
-    return `<button class="carb-card carb-card-check ${selected ? 'selected' : ''}" onclick="builderToggleItem('${item.id}')">
-      ${selected ? '<span class="check-mark">✓</span>' : ''}
-      <span class="carb-emoji">${item.emoji}</span>
-      <div class="carb-name">${item.name}</div>
-    </button>`;
-  }).join('');
+  const esc = s => (s || '').replace(/"/g, '&quot;');
+
+  // Lazy-load dish lists on first visit to pairing step
+  if (!state.carbs.length && !state.proteins.length && !state.saladBases.length) {
+    ensureItemLists().then(() => render());
+  }
+
+  const sauceTypeChips = SAUCE_TYPES.map(t =>
+    `<button class="builder-chip builder-chip-lg ${b.sauceType === t.value ? 'selected' : ''}" onclick="builderSetSauceType('${t.value}')">${t.label}</button>`
+  ).join('');
+
+  const meta = SAUCE_TYPES.find(t => t.value === b.sauceType);
+  const isStandalone = meta && meta.category === null;
+
+  let treeHTML = '';
+  if (!b.sauceType) {
+    treeHTML = '<p class="builder-hint">Select a type above to see dish pairings.</p>';
+  } else if (isStandalone) {
+    treeHTML = '<div class="builder-hint standalone-hint">🍽️ Full Recipe — standalone, no dish pairing needed.</div>';
+  } else {
+    const pool = _builderItemPool();
+    treeHTML = `<div class="dish-tree">${pool.map(dish => {
+      const variants = dish.variants || dish.subtypes || [];
+      const variantIds = variants.map(v => v.id);
+      const allSelected = variantIds.length > 0 && variantIds.every(id => b.itemIds.includes(id));
+      const someSelected = variantIds.some(id => b.itemIds.includes(id));
+      const dishSelected = b.itemIds.includes(dish.id);
+      const isExpanded = b._expandedDishes && b._expandedDishes.has(dish.id);
+
+      const checkState = dishSelected || allSelected ? 'checked' : (someSelected ? 'partial' : '');
+      const hasChildren = variants.length > 0;
+
+      const variantsHTML = hasChildren && isExpanded ? `
+        <div class="dish-tree-children">
+          ${variants.map(v => {
+            const vSel = b.itemIds.includes(v.id);
+            return `<div class="dish-tree-item dish-tree-child ${vSel ? 'selected' : ''}" onclick="builderToggleItem('${v.id}')">
+              <span class="dish-tree-check ${vSel ? 'checked' : ''}"></span>
+              <span class="dish-tree-emoji">${v.emoji || ''}</span>
+              <span class="dish-tree-name">${esc(v.name)}</span>
+            </div>`;
+          }).join('')}
+        </div>` : '';
+
+      return `<div class="dish-tree-group">
+        <div class="dish-tree-item dish-tree-parent ${dishSelected || allSelected ? 'selected' : ''}">
+          ${hasChildren ? `<button class="dish-tree-toggle ${isExpanded ? 'expanded' : ''}" onclick="builderToggleDishExpand('${dish.id}')">▶</button>` : '<span class="dish-tree-toggle-spacer"></span>'}
+          <span class="dish-tree-check ${checkState}" onclick="builderToggleDishParent('${dish.id}')"></span>
+          <span class="dish-tree-emoji">${dish.emoji || ''}</span>
+          <span class="dish-tree-name" onclick="builderToggleDishParent('${dish.id}')">${esc(dish.name)}</span>
+          ${hasChildren ? `<span class="dish-tree-count">${variants.length}</span>` : ''}
+        </div>
+        ${variantsHTML}
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  const { canContinue } = _validatePairing(b);
 
   return `
-    ${renderAppHeader({
-      title: b.name || 'New Sauce',
-      subtitle: b.cuisine ? renderEmoji(b.cuisineEmoji) + ' ' + b.cuisine : `Select ${t?.pairLabel?.toLowerCase() || 'items'}`,
-      titlePrefix: `<span class="color-dot-header" style="background:${b.color}"></span>`,
-      back: { onClick: "navigate('builder')" },
-    })}
+    ${_builderWizardHeader('What does this pair with?')}
     <div class="scroll-body scroll-body--padded">
-      <p class="section-label">Which ${t?.pairLabel?.toLowerCase() || 'dishes'} go with this ${t?.label?.toLowerCase() || 'sauce'}?</p>
-      <div class="carb-grid">${itemsHTML}</div>
-      <button class="builder-primary-btn" onclick="navigate('builder-review')" ${b.itemIds.length > 0 ? '' : 'disabled'}>Review Sauce</button>
+      ${_wizardProgress()}
+      <p class="builder-label">Type</p>
+      <div class="builder-chip-row">${sauceTypeChips}</div>
+      ${treeHTML}
+      <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>Continue — Review</button>
+      ${_builderBackLink()}
     </div>
   `;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 5 — Review
+// ═══════════════════════════════════════════════════════════════════════════════
 function renderBuilderReview() {
   const b = state.builder;
+  b.returnToReview = false;
   const esc = s => (s || '').replace(/"/g, '&quot;');
   const meta = SAUCE_TYPES.find(t => t.value === b.sauceType);
   const isStandalone = !!meta && meta.category === null;
   const pool = isStandalone ? [] : _builderItemPool();
-  const pairedItems = pool.filter(c => b.itemIds.includes(c.id));
+  const pairedItems = pool.flatMap(d => {
+    const matched = [];
+    if (b.itemIds.includes(d.id)) matched.push(d);
+    (d.variants || d.subtypes || []).forEach(v => { if (b.itemIds.includes(v.id)) matched.push(v); });
+    return matched;
+  });
   const totalIngs = b.steps.reduce((sum, s) => sum + s.ingredients.filter(i => i.name.trim()).length, 0);
 
-  const stepsPreview = b.steps.map((step, si) => `
-    <div class="review-step-card">
-      <div class="step-number">Step ${si + 1}</div>
-      <div class="step-title">${step.title || '(untitled)'}</div>
-      ${step.instructions ? `<div class="review-step-instructions">${esc(step.instructions)}</div>` : ''}
-      ${step.inputFromStep ? `<div class="step-ref-badge">⤶ Combines Step ${step.inputFromStep} output</div>` : ''}
-      <div class="review-ing-list">
-        ${step.ingredients.filter(i => i.name.trim()).map(i =>
-          `<div class="review-ing-item">${i.unit === 'to taste' ? 'to taste' : `${i.amount} ${i.unit}`} ${i.name}</div>`
-        ).join('')}
-      </div>
-    </div>
-  `).join('');
+  const sourceLabel = { url: '🌐 Imported from website', reel: '📱 Imported from reel', file: '📄 Imported from file', manual: '✍️ Manual entry' }[b.recipeSource] || 'Not set';
 
   return `
-    ${renderAppHeader({
-      title: b.name,
-      subtitle: `${renderEmoji(b.cuisineEmoji)} ${b.cuisine} · ${b.steps.length} step${b.steps.length > 1 ? 's' : ''} · ${totalIngs} ingredients`,
-      titlePrefix: `<span class="color-dot-header" style="background:${b.color}"></span>`,
-      back: { onClick: `navigate('${isStandalone ? 'builder' : 'builder-items'}')` },
-    })}
+    ${_builderWizardHeader('Review & save your recipe')}
     <div class="scroll-body scroll-body--padded">
-      <div class="review-summary">
-        <div class="review-carbs">${isStandalone
-          ? 'Standalone recipe — no dish pairing'
-          : 'Pairs with: ' + pairedItems.map(c => c.emoji + ' ' + c.name).join(', ')}</div>
+      ${_wizardProgress()}
+
+      <div class="review-info-bubble">
+        <span>${sourceLabel}</span>
+        ${b.sourceUrl ? `<span class="review-info-url">${esc(b.sourceUrl)}</span>` : ''}
       </div>
-      ${stepsPreview}
-      ${b.error ? `<div class="builder-error">${b.error}</div>` : ''}
+
+      <div class="review-info-card">
+        <span class="review-edit-btn review-info-card-edit" onclick="builderGoToStep('builder-info')">Edit</span>
+        <div class="review-info-card-header">
+          <span class="color-dot-inline" style="background:${b.color}"></span>
+          <span class="review-info-name">${esc(b.name)}</span>
+          <span class="review-info-cuisine">${renderEmoji(b.cuisineEmoji)} ${esc(b.cuisine)}</span>
+        </div>
+        ${b.description ? `<div class="review-info-desc">${esc(b.description)}</div>` : ''}
+      </div>
+
+      <div class="review-accordion">
+        <button class="review-accordion-header" onclick="toggleReviewSection(this)">
+          <span class="review-accordion-chevron">▶</span>
+          <span>Recipe Steps</span>
+          <span class="review-accordion-summary">${b.steps.length} step${b.steps.length !== 1 ? 's' : ''} · ${totalIngs} ingredients</span>
+          <span class="review-edit-btn" onclick="event.stopPropagation(); builderGoToStep('builder-instructions')">Edit</span>
+        </button>
+        <div class="review-accordion-body" hidden>
+          ${b.steps.map((step, si) => `
+            <div class="review-step-card">
+              <div class="step-number">Step ${si + 1}</div>
+              <div class="step-title">${esc(step.title) || '(untitled)'}</div>
+              ${step.instructions ? `<div class="review-step-instructions">${esc(step.instructions)}</div>` : ''}
+              ${step.inputFromStep ? `<div class="step-ref-badge">⤶ Combines Step ${step.inputFromStep} output</div>` : ''}
+              <div class="review-ing-list">
+                ${step.ingredients.filter(i => i.name.trim()).map(i =>
+                  `<div class="review-ing-item">${i.unit === 'to taste' ? 'to taste' : `${i.amount} ${i.unit}`} ${i.name}</div>`
+                ).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="review-accordion">
+        <button class="review-accordion-header" onclick="toggleReviewSection(this)">
+          <span class="review-accordion-chevron">▶</span>
+          <span>Dish Pairing</span>
+          <span class="review-accordion-summary">${meta?.label || b.sauceType}${isStandalone ? '' : ' · ' + (pairedItems.map(c => c.emoji + ' ' + c.name).join(', ') || 'None')}</span>
+          <span class="review-edit-btn" onclick="event.stopPropagation(); builderGoToStep('builder-pairing')">Edit</span>
+        </button>
+        <div class="review-accordion-body" hidden>
+          <div class="review-field"><strong>Type:</strong> ${meta?.label || b.sauceType}</div>
+          ${isStandalone
+            ? '<div class="review-field">Standalone recipe — no dish pairing</div>'
+            : `<div class="review-field"><strong>Pairs with:</strong> ${pairedItems.map(c => c.emoji + ' ' + c.name).join(', ') || 'None'}</div>`}
+        </div>
+      </div>
+
+      ${b.error ? `<div class="builder-error">${esc(b.error)}</div>` : ''}
       <button class="builder-primary-btn" onclick="builderSave()" ${b.saving ? 'disabled' : ''}>
-        ${b.saving ? '<span class="spinner-sm"></span> Saving…' : 'Save Sauce'}
+        ${b.saving ? '<span class="spinner-sm"></span> Saving…' : (b.editingId ? 'Save Changes' : 'Save Sauce')}
       </button>
-      <button class="builder-secondary-btn" onclick="navigate('builder')">Edit</button>
+      <button class="builder-back-link" onclick="builderDiscard()">Discard</button>
     </div>
   `;
+}
+
+function builderDiscard() {
+  state.builder = null;
+  navigate(state.recipeReturnTo || 'tab-shell');
+}
+
+function toggleReviewSection(btn) {
+  const body = btn.nextElementSibling;
+  const chevron = btn.querySelector('.review-accordion-chevron');
+  const isHidden = body.hidden;
+  body.hidden = !isHidden;
+  chevron.classList.toggle('expanded', isHidden);
 }
 
 // ─── Builder Actions ──────────────────────────────────────────────────────────
 async function openBuilder() {
   if (!currentUser) { openAuthModal(); return; }
   state.builder = defaultBuilder();
-  // Track where to land after save: from the admin sauce manager → admin;
-  // from the Saucebook FAB or any other entry point → Saucebook tab.
+  state.builder._expandedDishes = new Set();
   state.recipeReturnTo = state.screen === 'admin' ? 'admin' : 'tab-shell';
-  navigate('builder');
-  // Builder needs ingredient-categories (autocomplete + classify chip) and
-  // substitutions. Lazy-load on first open; subsequent opens are instant.
+  navigate('builder-source');
   if (!_hasBuilderRefData()) {
     await withInlineLoader(ensureBuilderRefData());
   }
+}
+
+function builderStartManual() {
+  state.builder.recipeSource = 'manual';
+  navigate('builder-info');
 }
 
 function builderSetCuisine(name, emoji) {
@@ -365,6 +602,19 @@ function builderAddStep() {
   render();
 }
 
+function builderInsertStep(atIndex) {
+  const b = state.builder;
+  const newStep = { title: '', instructions: '', inputFromStep: null, estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] };
+  b.steps.splice(atIndex, 0, newStep);
+  // Renumber inputFromStep references: anything pointing at or after atIndex shifts up by 1
+  for (let i = 0; i < b.steps.length; i++) {
+    if (i === atIndex) continue; // skip the new step
+    const ref = b.steps[i].inputFromStep;
+    if (ref && ref > atIndex) b.steps[i].inputFromStep = ref + 1;
+  }
+  render();
+}
+
 function builderRemoveStep(si) {
   const removedOrder = si + 1;
   state.builder.steps.splice(si, 1);
@@ -385,9 +635,6 @@ function builderRemoveIngredient(si, ii) {
   render();
 }
 
-// Move an ingredient out of the unassigned tray and into the chosen step's
-// ingredient list. Strips internal helper fields the step rows don't use so
-// the row matches the shape produced by `defaultBuilder()`.
 function builderMoveUnassignedToStep(uidx, si) {
   const b = state.builder;
   if (uidx < 0 || uidx >= b.unassignedIngredients.length) return;
@@ -415,7 +662,7 @@ function builderDeleteUnassigned(uidx) {
 function builderSetSauceType(value) {
   if (state.builder.sauceType === value) return;
   state.builder.sauceType = value;
-  state.builder.itemIds = [];   // selections from another category no longer apply
+  state.builder.itemIds = [];
   render();
 }
 
@@ -423,6 +670,41 @@ function builderToggleItem(id) {
   const idx = state.builder.itemIds.indexOf(id);
   if (idx >= 0) state.builder.itemIds.splice(idx, 1);
   else state.builder.itemIds.push(id);
+  render();
+}
+
+function builderToggleDishExpand(dishId) {
+  const b = state.builder;
+  if (!b._expandedDishes) b._expandedDishes = new Set();
+  if (b._expandedDishes.has(dishId)) b._expandedDishes.delete(dishId);
+  else b._expandedDishes.add(dishId);
+  render();
+}
+
+function builderToggleDishParent(dishId) {
+  const b = state.builder;
+  const pool = _builderItemPool();
+  const dish = pool.find(d => d.id === dishId);
+  if (!dish) return;
+  const variants = dish.variants || dish.subtypes || [];
+  if (variants.length === 0) {
+    // Leaf dish — simple toggle
+    builderToggleItem(dishId);
+    return;
+  }
+  const variantIds = variants.map(v => v.id);
+  const allSelected = variantIds.every(id => b.itemIds.includes(id));
+  if (allSelected) {
+    // Deselect all variants
+    b.itemIds = b.itemIds.filter(id => !variantIds.includes(id) && id !== dishId);
+  } else {
+    // Select all variants
+    for (const vid of variantIds) {
+      if (!b.itemIds.includes(vid)) b.itemIds.push(vid);
+    }
+    // Also include parent dish id
+    if (!b.itemIds.includes(dishId)) b.itemIds.push(dishId);
+  }
   render();
 }
 
@@ -442,8 +724,6 @@ function builderHandleInput(el) {
     case 'step-title': b.steps[si].title = el.value; break;
     case 'step-instructions': b.steps[si].instructions = el.value; break;
     case 'step-time': {
-      // Empty string clears the explicit value so the read paths fall back
-      // to the legacy 5-minute default.
       const v = el.value.trim();
       b.steps[si].estimatedTime = v === '' ? null : Math.max(0, Math.min(600, parseInt(v, 10) || 0));
       break;
@@ -462,8 +742,6 @@ function builderHandleInput(el) {
     case 'ing-unit': {
       const prev = b.steps[si].ingredients[ii].unit;
       b.steps[si].ingredients[ii].unit = el.value;
-      // Toggling in/out of "to taste" changes whether the amount input is
-      // disabled — re-render so the row reflects the new state.
       if ((prev === 'to taste') !== (el.value === 'to taste')) needsRender = true;
       break;
     }
@@ -478,31 +756,34 @@ function builderHandleInput(el) {
       builderMoveUnassignedToStep(uidx, targetSi);
       return;
     }
-    case 'parent-sauce': {
-      const id = el.value || null;
-      b.parentSauceId = id;
-      if (id) {
-        const pool = state.adminSauces || state.saucesForCurrentItem || [];
-        const parent = pool.find(s => s.id === id);
-        if (parent) _builderPrefillFromParent(parent);
-      }
-      needsRender = true;
-      break;
-    }
   }
   if (needsRender) {
     render();
     return;
   }
-  if (state.screen === 'builder') _builderRefreshValidation();
+  _builderRefreshValidation();
 }
 
-// Update the disabled state of Continue and the contents of the validation card
-// without re-rendering — keystroke handlers call this to keep warnings live
-// while preserving input focus.
 function _builderRefreshValidation() {
+  const screen = state.screen;
   const b = state.builder;
-  const { issues, canContinue } = _builderValidate(b);
+  let issues = [];
+  let canContinue = false;
+
+  if (screen === 'builder-info') {
+    issues = _validateInfo(b);
+    canContinue = issues.length === 0;
+  } else if (screen === 'builder-instructions') {
+    const result = _validateInstructions(b);
+    issues = result.issues;
+    canContinue = result.canContinue;
+  } else if (screen === 'builder-pairing') {
+    const result = _validatePairing(b);
+    issues = result.issues;
+    canContinue = result.canContinue;
+  } else {
+    return;
+  }
 
   const btn = document.querySelector('.builder-primary-btn');
   if (btn) {
@@ -523,10 +804,6 @@ function _builderRefreshValidation() {
     if (list) list.innerHTML = listHTML;
     return;
   }
-  // Card doesn't exist yet (issues just appeared) — full re-render is the
-  // simplest way to insert it in the right spot. Acceptable here because the
-  // input that triggered this almost always still has a valid issue against
-  // it; focus loss is rare in practice.
   render();
 }
 
@@ -568,26 +845,8 @@ function builderClassifyIngredient(si, ii, category) {
   }
 }
 
-// Copy metadata only from a parent sauce when "Variant of" is set. Steps,
-// ingredients, and any imported source URL are intentionally untouched so a
-// user can import a recipe and *then* mark it as a variant of an existing
-// sauce without losing the imported recipe content.
-function _builderPrefillFromParent(parent) {
-  const b = state.builder;
-  b.cuisine        = parent.cuisine || b.cuisine;
-  b.cuisineEmoji   = parent.cuisineEmoji || b.cuisineEmoji;
-  b.color          = parent.color || b.color;
-  b.sauceType      = parent.sauceType || b.sauceType;
-  // Clone itemIds so later edits to the variant don't mutate the cached
-  // parent object in state.adminSauces.
-  b.itemIds        = (parent.attachments || []).filter(a => a.kind === 'dish').map(a => a.value);
-  // Description is the only field that can be a real authored field on the
-  // variant — only fill it when the user hasn't typed anything yet.
-  if (!b.description) b.description = parent.description || '';
-}
-
 // ─── Import-from-URL ──────────────────────────────────────────────────────────
-async function builderImport() {
+async function builderImportUrl() {
   const b = state.builder;
   const url = (b.importUrl || '').trim();
   if (!url) {
@@ -602,7 +861,12 @@ async function builderImport() {
     const parsed = await importRecipeFromUrl(url);
     _builderApplyParsedRecipe(parsed);
     b.importing = false;
-    render();
+    if (b.importError) {
+      render();
+      return;
+    }
+    b.recipeSource = 'url';
+    navigate('builder-info');
   } catch (err) {
     b.importing = false;
     b.importError = err.message || 'Import failed.';
@@ -610,17 +874,52 @@ async function builderImport() {
   }
 }
 
-// Maps a /import response into the existing builder form. The actual logic
-// (parsing rules, step-matching, plural stem, unit normalisation) lives in
-// shared/builder.js so native uses identical behaviour. This wrapper keeps
-// the web-specific concern: stamping the result onto state.builder and
-// surfacing the "no ingredients parsed" import error.
+// Keep legacy name as alias for any external callers
+const builderImport = builderImportUrl;
+
+// ─── Import-from-File ─────────────────────────────────────────────────────────
+function builderImportFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const b = state.builder;
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!parsed || typeof parsed !== 'object') throw new Error('Invalid JSON structure');
+      if (!Array.isArray(parsed.ingredients) || !Array.isArray(parsed.instructions)) {
+        throw new Error('JSON must contain "ingredients" and "instructions" arrays');
+      }
+      _builderApplyParsedRecipe(parsed);
+      if (b.importError) {
+        render();
+        return;
+      }
+      b.recipeSource = 'file';
+      b.importError = null;
+      navigate('builder-info');
+    } catch (err) {
+      b.importError = err.message || 'Failed to parse file.';
+      render();
+    }
+  };
+  reader.onerror = function () {
+    b.importError = 'Failed to read file.';
+    render();
+  };
+  reader.readAsText(file);
+}
+
 function _builderApplyParsedRecipe(parsed) {
   const b = state.builder;
+  // Backend returns `ingredientRaw`; normalise to `foodRaw` for shared builder
+  for (const ing of (parsed?.ingredients || [])) {
+    if (ing.ingredientRaw && !ing.foodRaw) ing.foodRaw = ing.ingredientRaw;
+  }
   const hasIngs = (parsed?.ingredients || []).some((p) => (p?.foodRaw || '').trim());
   if (!hasIngs) {
     b.unassignedIngredients = [];
-    b.importError = 'No ingredients parsed — try a different URL.';
+    b.importError = 'No ingredients parsed — try a different source.';
     return;
   }
   const next = SBShared.builder.applyParsedRecipe(b, parsed);
@@ -634,50 +933,24 @@ async function builderSave() {
     render();
     return;
   }
-  if (!b.name.trim()) {
-    b.error = 'Sauce name is required.';
-    render();
-    return;
-  }
-  if (!b.sauceType) {
-    b.error = 'Select a type before saving.';
-    render();
-    return;
-  }
-  if (!b.color) {
-    b.error = 'Pick a color before saving.';
-    render();
-    return;
-  }
-  if (b.steps.some(s => !s.title.trim())) {
-    b.error = 'Every step needs a title.';
-    render();
-    return;
-  }
+  if (!b.name.trim()) { b.error = 'Sauce name is required.'; render(); return; }
+  if (!b.sauceType)   { b.error = 'Select a type before saving.'; render(); return; }
+  if (!b.color)        { b.error = 'Pick a color before saving.'; render(); return; }
+  if (b.steps.some(s => !s.title.trim())) { b.error = 'Every step needs a title.'; render(); return; }
   if (b.cuisineDraftMode) {
     const draftName = (b.cuisineDraftName || '').trim();
     const draftEmoji = (b.cuisineDraftEmoji || '').trim();
-    if (!draftName || !draftEmoji) {
-      b.error = 'New cuisine needs a name and emoji.';
-      render();
-      return;
-    }
+    if (!draftName || !draftEmoji) { b.error = 'New cuisine needs a name and emoji.'; render(); return; }
     b.cuisine = draftName;
     b.cuisineEmoji = draftEmoji;
     b.cuisineDraftMode = false;
   }
-  if (!b.cuisine) {
-    b.error = 'Select a cuisine before saving.';
-    render();
-    return;
-  }
+  if (!b.cuisine) { b.error = 'Select a cuisine before saving.'; render(); return; }
+  if (b.editingId && !confirm('You are about to overwrite this recipe. Continue?')) return;
   b.saving = true;
   b.error = null;
   render();
   try {
-    // Standalone (full_recipe) types ship with no item pairings; the backend
-    // also clears these defensively but stripping client-side keeps the
-    // payload obvious.
     const typeMeta = SAUCE_TYPES.find(t => t.value === b.sauceType);
     const isStandalone = !!typeMeta && typeMeta.category === null;
     const payload = {
@@ -719,12 +992,8 @@ async function builderSave() {
     } else {
       result = await createSauce(payload);
     }
-    // Whether we created, edited in place, or forked, the saucebook may have
-    // changed and the pantry is derived from it. One refresh covers both.
     await refreshSaucebookAndPantry();
     state.builder = null;
-    // Default landing after save is the Saucebook tab; admins coming from the
-    // sauce manager keep the legacy admin landing if that's where they began.
     if (state.recipeReturnTo === 'admin') {
       await openSauceManager();
     } else {

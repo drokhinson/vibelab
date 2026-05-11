@@ -51,7 +51,7 @@ function endDrag(commit) {
 
   if (commit && axis === 'x') {
     if (dx <= -SWIPE_COMMIT_PX)      runAction(row.dataset.deleteAction);
-    else if (dx >=  SWIPE_COMMIT_PX) runAction(row.dataset.editAction);
+    else if (dx >=  SWIPE_COMMIT_PX && !row.hasAttribute('data-edit-disabled')) runAction(row.dataset.editAction);
   }
 }
 
