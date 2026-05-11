@@ -1170,7 +1170,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .fab {
   position: fixed;
   right: max(20px, calc(50vw - 175px));
-  bottom: 20px;
+  bottom: 76px;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -1427,7 +1427,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .food-merge-bar {
   position: fixed;
-  left: 0; right: 0; bottom: 0;
+  left: 0; right: 0; bottom: 60px;
   background: white;
   border-top: 1px solid #FED7AA;
   padding: 12px 16px;
@@ -1439,6 +1439,14 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   font-size: 13px;
   z-index: 30;
   box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+}
+@media (min-width: 600px) {
+  .food-merge-bar {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    max-width: 390px;
+  }
 }
 .legend-amount-qualitative {
   font-style: italic;
@@ -1983,7 +1991,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 /* While any merge bar is fixed to the bottom, give the scroll body enough
    bottom padding so the last row isn't hidden behind it. */
 .scroll-body:has(.food-merge-bar) {
-  padding-bottom: 96px;
+  padding-bottom: 140px;
 }
 
 /* ── Edit-mode toggle + import/export UI ─────────────────────────────────── */
