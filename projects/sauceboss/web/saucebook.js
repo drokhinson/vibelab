@@ -203,7 +203,7 @@ function _saucebookRenderRow({ family, displayed }) {
     <div class="swipe-row swipe-row--saucebook" data-swipe
          data-tap-action="saucebookOpenRecipe('${safeId}')"
          data-edit-action="openBuilderEdit('${safeId}')"
-         data-delete-action="recipeRemoveFromSaucebook('${safeId}')">
+         data-delete-action="saucebookRemoveSauce('${safeId}')">
       <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
       <div class="swipe-action swipe-action-delete" aria-hidden="true">Remove</div>
       <div class="swipe-content">${inner}</div>
@@ -287,6 +287,7 @@ function saucebookOpenRecipe(sauceId) {
     state.selectedSauce = found;
     state.selectedSauceFamily = family.length ? family : [found];
     state.selectedItem = null;
+    state.meal = { item: null, prep: null, sauce: null };
     state.recipeReturnTo = 'tab-shell';
     navigate('recipe');
   }).catch(err => {
@@ -294,4 +295,17 @@ function saucebookOpenRecipe(sauceId) {
     console.warn('[sauceboss] saucebook recipe load failed:', err);
     render();
   });
+}
+
+async function saucebookRemoveSauce(sauceId) {
+  if (!currentUser) return;
+  try {
+    await api.removeFromSaucebook(sauceId);
+  } catch (err) {
+    alert(`Couldn't remove: ${err.message || err}`);
+    return;
+  }
+  state.saucebook = (state.saucebook || []).filter(s => s.id !== sauceId);
+  refreshSaucebookAndPantry();
+  render();
 }

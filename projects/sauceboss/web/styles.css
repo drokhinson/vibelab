@@ -68,20 +68,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   align-self: center;
 }
 
-/* ── Back Button (legacy, used inside .recipe-header) ── */
-.back-btn {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 15px;
-  padding: 8px 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 4px;
-}
-
 /* Slim icon back button used inside .app-header — sits left of the title
    block, vertically centered with the action cluster. */
 .app-header__back {
@@ -151,9 +137,10 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .meal-section .step-card:first-of-type { border-radius: 0 0 12px 12px; margin-top: 0; border-top: none; }
 .meal-section .step-card:only-of-type  { border-radius: 0 0 12px 12px; }
+.meal-section .step-card + .step-card  { margin-top: 12px; border-radius: 12px; }
 
 /* Step pie + legend layout — pie on the left, ingredient legend on the right.
-   Mirrors the native MealRecipeScreen so visual density matches across web
+   Mirrors the native RecipeScreen so visual density matches across web
    and mobile. The legend wraps below on narrow phones. */
 .step-viz {
   display: flex;
@@ -389,24 +376,46 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 /* ─────────────────────────────
    SCREEN 3 — Recipe
 ───────────────────────────── */
-.recipe-header {
+.recipe-action-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.recipe-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid #E0E0E0;
+  background: white;
+  color: #555;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.recipe-action-btn:hover { background: #F5F5F5; }
+.recipe-action-btn [data-lucide] { width: 18px; height: 18px; }
+.recipe-action-btn--active {
   background: #E85D04;
-  padding: 16px 16px 20px;
-  flex-shrink: 0;
-}
-.recipe-cuisine-badge {
-  display: inline-block;
-  background: rgba(255,255,255,0.25);
+  border-color: #E85D04;
   color: white;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 3px 10px;
-  border-radius: 12px;
-  margin-bottom: 6px;
 }
-.recipe-title { font-size: 24px; font-weight: 800; color: white; line-height: 1.2; }
-.recipe-subtitle { font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 4px; }
+.recipe-action-btn--active:hover { background: #C94E02; }
+
+/* Compact recipe-action buttons when placed in the header */
+.app-header__actions .recipe-action-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #555;
+}
+.app-header__actions .recipe-action-btn:hover { background: rgba(0,0,0,0.06); }
+.app-header__actions .recipe-action-btn--active { background: #E85D04; color: white; }
+.app-header__actions .recipe-action-btn--active:hover { background: #C94E02; }
+.app-header__actions .recipe-action-btn [data-lucide] { width: 18px; height: 18px; }
 
 /* Substitution banner */
 .sub-banner {
@@ -1494,8 +1503,6 @@ body, button, input, select, textarea {
   animation-delay: calc(var(--i, 0) * 50ms);
 }
 .steps-container .step-card {
-  animation: fadeUp 220ms ease both;
-  animation-delay: calc(var(--i, 0) * 70ms);
 }
 
 /* ── Enhanced hover lift ── */
@@ -1508,7 +1515,6 @@ body, button, input, select, textarea {
   flex-shrink: 0;
   stroke-width: 2px;
 }
-.back-btn [data-lucide]           { width: 18px; height: 18px; }
 .settings-btn [data-lucide]       { width: 20px; height: 20px; }
 .filter-chevron [data-lucide]     { width: 14px; height: 14px; transition: transform 0.25s; }
 .filter-chevron.open [data-lucide] { transform: rotate(180deg); }
@@ -2067,44 +2073,6 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 }
 .sm-tool-btn:hover { background: #FFF3E6; border-color: #E85D04; }
 .sm-tool-btn [data-lucide] { width: 14px; height: 14px; }
-
-/* Per-recipe export buttons (JSON + Markdown) in the recipe header. */
-.recipe-export-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 10px;
-}
-.recipe-export-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 999px;
-  text-decoration: none;
-  transition: background 0.15s, border-color 0.15s;
-}
-.recipe-export-btn:hover {
-  background: rgba(255, 255, 255, 0.22);
-  border-color: rgba(255, 255, 255, 0.7);
-}
-.recipe-export-btn [data-lucide] { width: 14px; height: 14px; }
-/* When the recipe header is on a light background (meal flow), invert. */
-.scroll-body > .recipe-export-row .recipe-export-btn {
-  border-color: #E5E7EB;
-  background: white;
-  color: #1A1A2E;
-}
-.scroll-body > .recipe-export-row .recipe-export-btn:hover {
-  background: #FFF3E6;
-  border-color: #E85D04;
-}
 
 /* ─────────────────────────────
    BOTTOM NAV (saucebook redesign)

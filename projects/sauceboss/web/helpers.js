@@ -219,11 +219,10 @@ function prepareItems(items) {
 }
 
 // ─── Shared recipe-view renderers ────────────────────────────────────────────
-// These power the canonical recipe layout used by both the meal builder
-// (meal.js → renderMealRecipe) and the standalone recipe view used by browse,
-// cookbook, and the admin sauce manager (recipe.js → renderRecipe). The styling
-// mirrors the React Native ServingsControl + UnitToggle so web and mobile stay
-// in lockstep.
+// These power the unified recipe layout (recipe.js → renderRecipe) used by
+// both the meal builder and standalone views (browse, saucebook, admin sauce
+// manager). The styling mirrors the React Native ServingsControl + UnitToggle
+// so web and mobile stay in lockstep.
 
 function renderRecipeControls() {
   const s = state.servings;
@@ -477,7 +476,6 @@ function render() {
     case 'tab-shell':              app.innerHTML = renderActiveTab(); break;
     case 'meal-category':          app.innerHTML = renderMealCategory(); break;
     case 'meal-subtype':           app.innerHTML = renderMealSubtype(); break;
-    case 'meal-recipe':            app.innerHTML = renderMealRecipe(); break;
     case 'sauce-selector':         app.innerHTML = renderSauceSelector(); break;
     case 'recipe':                 app.innerHTML = renderRecipe(); break;
     case 'builder':                app.innerHTML = renderBuilder(); break;
@@ -761,7 +759,7 @@ function computeInitials(name) {
 // belong in the right-side cluster (e.g. edit-mode toggle on the Sauce
 // Manager). `manage: 'auto'` (default) shows the pill only for admins;
 // `false` hides it; `true` forces it on.
-function renderAppHeader({ title, subtitle, back, manage, extraActions, titleIcon, titleEmoji, titlePrefix } = {}) {
+function renderAppHeader({ title, subtitle, back, manage, extraActions, titleIcon, titleEmoji, titlePrefix, auth = true } = {}) {
   const prefixHTML = titlePrefix
     || (titleEmoji ? `<span class="header-emoji">${titleEmoji}</span>` : '')
     + (titleIcon ? `<i data-lucide="${titleIcon}"></i>` : '');
@@ -772,7 +770,7 @@ function renderAppHeader({ title, subtitle, back, manage, extraActions, titleIco
     ? `<button class="app-header__back" onclick="${back.onClick}" aria-label="Back"><i data-lucide="chevron-left"></i></button>`
     : '';
   const isAdmin = !!(currentUser && currentUser.is_admin);
-  const showManage = manage === true || (manage !== false && manage !== 'never' && isAdmin);
+  const showManage = auth !== false && (manage === true || (manage !== false && manage !== 'never' && isAdmin));
   const manageHTML = showManage
     ? `<button class="sauce-mgr-btn" onclick="openSauceManager()" aria-label="Manage dishes, ingredients, and sauces"><i data-lucide="settings-2"></i><span>Manage</span></button>`
     : '';
@@ -786,7 +784,7 @@ function renderAppHeader({ title, subtitle, back, manage, extraActions, titleIco
       <div class="app-header__actions">
         ${extraActions || ''}
         ${manageHTML}
-        ${renderHeaderAuthSlot()}
+        ${auth !== false ? renderHeaderAuthSlot() : ''}
       </div>
     </div>
   `;

@@ -1,13 +1,17 @@
 'use strict';
 
-// Standalone single-sauce recipe view used by Browse, Cookbook (Saucebook), and
-// the admin Sauce Manager preview. The meal-builder flow uses the same shared
-// renderers (renderRecipeControls, renderRecipeStep, renderVariantSwitcher) via
-// meal.js → renderMealRecipe; the only meal-only addition is the dish prep
-// block that sits above the first sauce step.
+// Unified recipe view — handles both standalone (Browse / Saucebook / Sauce
+// Manager) and meal-builder flows. When state.meal has item + sauce, the dish
+// prep block is shown after the ingredient section. Otherwise it's sauce-only.
 function renderRecipe() {
   const sauce = state.selectedSauce;
-  const item  = state.selectedItem;            // null when coming from sauce manager / browse / cookbook
+
+  // Meal-builder context: if the user arrived via the meal flow, state.meal
+  // has all three pieces. If they came from Browse / Saucebook / Sauce
+  // Manager, selectedItem is null and meal.sauce is absent.
+  const isMeal = !!(state.meal && state.meal.item && state.meal.sauce);
+  const item = isMeal ? state.meal.item : null;
+  const prep = isMeal ? state.meal.prep : null;
 
   // Substitution banner for disabled ingredients
   const disabledInRecipe = sauce.ingredients
@@ -20,58 +24,59 @@ function renderRecipe() {
       ${disabledInRecipe.map(i => `<div>${i.name} → <strong>${i.sub}</strong></div>`).join('')}
     </div>` : '';
 
-  // backScreen priority: meal flow > explicit override (saucebook/browse) > admin.
-  const backScreen = item
-    ? 'sauce-selector'
-    : (state.recipeReturnTo || 'admin');
-  const isTabShellBack = backScreen === 'tab-shell';
+  // Back-button target
+  const backOnClick = isMeal
+    ? "navigate('meal-category')"
+    : (state.recipeReturnTo === 'tab-shell'
+        ? `setActiveTab('${state.activeTab}')`
+        : `navigate('${state.recipeReturnTo || 'admin'}')`);
 
-  // Show a "Remove from saucebook" affordance when the user is viewing one
-  // of their saucebook entries from the tab UI. Anonymous users + admin
-  // sauce-manager previews don't see this button.
+  // Saucebook toggle
   const inSaucebook = !!(currentUser && (state.saucebook || []).some(s => s.id === sauce.id));
-  const removeBtnHTML = (currentUser && isTabShellBack && inSaucebook)
-    ? `<button class="recipe-export-btn"
-               onclick="recipeRemoveFromSaucebook('${sauce.id}')"
-               title="Remove from your saucebook">
-         <i data-lucide="bookmark-minus"></i> Remove from saucebook
-       </button>`
-    : '';
+  const saucebookBtnHTML = inSaucebook
+    ? `<button class="recipe-action-btn recipe-action-btn--active" onclick="recipeToggleSaucebook('${sauce.id}')" title="Remove from saucebook"><i data-lucide="bookmark-check"></i></button>`
+    : `<button class="recipe-action-btn" onclick="recipeToggleSaucebook('${sauce.id}')" title="Save to saucebook"><i data-lucide="bookmark-plus"></i></button>`;
 
-  // Export buttons live alongside the other edit affordances — gated on edit
-  // mode (logged-in users only). Anonymous visitors can still hit the public
-  // export URLs directly via shared links.
-  const exportButtonsHTML = (currentUser && state.editMode) ? `
-    <div class="recipe-export-row">
-      <a class="recipe-export-btn"
-         href="${API}/api/v1/sauceboss/sauces/${encodeURIComponent(sauce.id)}/export.json"
-         download>
-        <i data-lucide="file-json-2"></i> Export JSON
-      </a>
-      <a class="recipe-export-btn"
-         href="${API}/api/v1/sauceboss/sauces/${encodeURIComponent(sauce.id)}/export.md"
-         download>
-        <i data-lucide="file-text"></i> Export Markdown
-      </a>
-    </div>` : '';
+  // Download button
+  const downloadBtnHTML = `<a class="recipe-action-btn" href="${API}/api/v1/sauceboss/sauces/${encodeURIComponent(sauce.id)}/export.md" download title="Download recipe"><i data-lucide="download"></i></a>`;
+
+  // Always use colored-tag meal-section style for sauce steps
+  const isMarinade = sauce.sauceType === 'marinade';
+  const sauceColor = isMarinade ? '#5D4037'
+                   : sauce.sauceType === 'dressing' ? '#1B5E20'
+                   : '#4A0072';
+  const sauceLabel = isMeal
+    ? `${flowMetaFor(item).sauceWord} — ${sauce.name}`
+    : `Sauce — ${sauce.name}`;
+  const sauceSection = `
+    <div class="meal-section">
+      <div class="meal-section-label" style="background:${sauceColor}">${sauceLabel}</div>
+      ${sauce.steps.map((step, i) => renderRecipeStep(step, i, sauce.steps)).join('')}
+    </div>`;
+  let stepsHTML;
+  if (isMeal) {
+    const itemBlock = renderItemPrepBlock(item, prep, sauce);
+    stepsHTML = isMarinade
+      ? sauceSection + itemBlock
+      : itemBlock + sauceSection;
+  } else {
+    stepsHTML = sauceSection;
+  }
 
   return `
-    <div class="recipe-header">
-      <button class="back-btn" onclick="${isTabShellBack ? `setActiveTab('${state.activeTab}')` : `navigate('${backScreen}')`}"><i data-lucide="chevron-left"></i> Back</button>
-      <div class="recipe-cuisine-badge">${renderEmoji(sauce.cuisineEmoji)} ${sauce.cuisine}</div>
-      <div class="recipe-title">${sauce.name}</div>
-      <div class="recipe-subtitle">Pair with: ${(sauce.attachments || []).filter(a => a.kind === 'dish').map(a => a.value).join(', ')} &nbsp;·&nbsp; ${sauce.steps.length} step${sauce.steps.length > 1 ? 's' : ''}</div>
-      ${exportButtonsHTML}
-      ${removeBtnHTML ? `<div class="recipe-export-row">${removeBtnHTML}</div>` : ''}
-    </div>
+    ${renderAppHeader({
+      title: sauce.name,
+      back: { onClick: backOnClick },
+      auth: false,
+      manage: 'never',
+      extraActions: saucebookBtnHTML + downloadBtnHTML,
+    })}
     <div class="scroll-body scroll-body--padded">
       ${renderVariantSwitcher(sauce.id)}
       ${renderRecipeControls()}
       ${renderRecipeIngredientPanel(sauce)}
       ${subBannerHTML}
-      <div class="steps-container">
-        ${sauce.steps.map((step, i) => renderRecipeStep(step, i, sauce.steps)).join('')}
-      </div>
+      ${stepsHTML}
     </div>
   `;
 }
@@ -86,18 +91,26 @@ function setUnitSystem(sys) {
   render();
 }
 
-async function recipeRemoveFromSaucebook(sauceId) {
-  if (!currentUser) return;
-  if (!confirm('Remove this recipe from your saucebook?')) return;
-  try {
-    await api.removeFromSaucebook(sauceId);
-  } catch (err) {
-    alert(`Couldn't remove: ${err.message || err}`);
-    return;
+async function recipeToggleSaucebook(sauceId) {
+  if (!currentUser) { openAuthModal(); return; }
+  const inSaucebook = (state.saucebook || []).some(s => s.id === sauceId);
+  if (inSaucebook) {
+    try {
+      await api.removeFromSaucebook(sauceId);
+    } catch (err) {
+      alert(`Couldn't remove: ${err.message || err}`);
+      return;
+    }
+    state.saucebook = (state.saucebook || []).filter(s => s.id !== sauceId);
+  } else {
+    try {
+      await api.addToSaucebook(sauceId);
+    } catch (err) {
+      alert(`Couldn't save: ${err.message || err}`);
+      return;
+    }
+    // Re-fetch saucebook to get the full envelope
   }
-  // Drop locally + refresh saucebook + pantry; navigate back to whichever
-  // tab the user came from (saucebook or browse).
-  state.saucebook = (state.saucebook || []).filter(s => s.id !== sauceId);
   refreshSaucebookAndPantry();
-  setActiveTab(state.activeTab || 'saucebook');
+  render();
 }

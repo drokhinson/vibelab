@@ -58,6 +58,7 @@ function renderMealCategory() {
       title: 'Meal Builder',
       subtitle: "What are you cooking with?",
       back: { onClick: "setActiveTab('saucebook')" },
+      auth: false,
     })}
     <div class="scroll-body scroll-body--padded">
       <div class="hero-illustration" id="hero-illustration">${potSVG()}</div>
@@ -130,6 +131,7 @@ function renderMealSubtype() {
       title: 'Meal Builder',
       subtitle: `What type of ${escapeHtml(dish.name.toLowerCase())}?`,
       back: { onClick: "navigate('meal-category')" },
+      auth: false,
     })}
     <div class="scroll-body scroll-body--padded">
       <div class="carb-grid">
@@ -165,7 +167,7 @@ function mealPickSubtype(subtypeId) {
 }
 
 function _proceedToSauceSelector(dish, subtype) {
-  // Set the legacy state shape so the existing sauce-selector + meal-recipe
+  // Set the legacy state shape so the existing sauce-selector + recipe
   // renderers work without changes:
   //   selectedItem  = the dish (always — it's the "main" item in the recipe)
   //   selectedPrep  = the subtype (optional; renderers already treat it as
@@ -230,56 +232,4 @@ function potSVG() {
       <path class="steam-trail steam-trail--2" d="M90 53 Q94 41 90 31 Q86 21 90 11"     stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
       <path class="steam-trail steam-trail--3" d="M118 56 Q122 44 118 34 Q114 24 118 14" stroke="#D1D5DB" stroke-width="2.5" stroke-linecap="round" fill="none"/>
     </svg>`;
-}
-
-// ─── Unified Meal Recipe screen ───────────────────────────────────────────────
-
-function renderMealRecipe() {
-  const { meal } = state;
-  if (!meal.item || !meal.sauce) return '';
-  const item  = meal.item;
-  const prep  = meal.prep;
-  const sauce = meal.sauce;
-  const meta  = flowMetaFor(item);
-
-  const sauceTime = sauce.steps.reduce((s, st) => s + (st.estimatedTime || 5), 0);
-  const itemCookTime = (prep?.cookTimeMinutes ?? item.cookTimeMinutes) || 0;
-  const totalTime = sauceTime + itemCookTime;
-  const isMarinade = sauce.sauceType === 'marinade';
-  const marineAhead = isMarinade && sauceTime > 20;
-
-  const timingBanner = `
-    <div class="meal-timing-banner">
-      <div class="meal-timing-total"><i data-lucide="clock"></i> Total: ~${totalTime} min active</div>
-      ${marineAhead ? `<div class="meal-timing-note"><i data-lucide="triangle-alert"></i> Start marinade ${sauceTime}+ min before you cook</div>` : ''}
-    </div>`;
-
-  const sauceColor = isMarinade ? '#5D4037'
-                   : sauce.sauceType === 'dressing' ? '#1B5E20'
-                   : '#4A0072';
-  const sauceLabel = `${meta.sauceWord} — ${sauce.name}`;
-  const sauceSection = `
-    <div class="meal-section">
-      <div class="meal-section-label" style="background:${sauceColor}">${sauceLabel}</div>
-      ${sauce.steps.map((step, i) => renderRecipeStep(step, i, sauce.steps)).join('')}
-    </div>`;
-
-  const title = `${prep?.name || item.name} with ${sauce.name}`;
-
-  return `
-    ${renderAppHeader({
-      title,
-      subtitle: sauce.cuisine || 'Full recipe',
-      titleEmoji: item.emoji,
-      back: { onClick: "navigate('meal-category')" },
-    })}
-    <div class="scroll-body scroll-body--padded">
-      ${timingBanner}
-      ${renderVariantSwitcher(sauce.id)}
-      ${renderRecipeControls()}
-      ${renderRecipeIngredientPanel(sauce)}
-      ${renderItemPrepBlock(item, prep, sauce)}
-      ${sauceSection}
-    </div>
-  `;
 }

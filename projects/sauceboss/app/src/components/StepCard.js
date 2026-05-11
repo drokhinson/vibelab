@@ -1,5 +1,5 @@
 // One step in a recipe — header, instructions, pie chart, legend. Replaces the
-// step rendering that PieChart was doing inline so MealRecipeScreen can compose
+// step rendering that PieChart was doing inline so RecipeScreen can compose
 // it with reference-step badges, instructions toggle, and substitution hints.
 
 import React, { useState } from 'react';

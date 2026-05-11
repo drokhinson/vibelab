@@ -43,7 +43,7 @@ export default function SauceSelectorScreen({ navigation }) {
   const onSelect = (sauce, family) => {
     const fullFamily = [family.root, ...family.variants];
     actions.selectSauce(sauce, fullFamily);
-    navigation.navigate('MealRecipe');
+    navigation.navigate('Recipe');
   };
 
   const totalFamilies = visibleEntries.length;

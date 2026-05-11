@@ -1,28 +1,38 @@
-// Single-sauce recipe view. Used when the user opens a sauce from the
-// SauceManager (no item context). The full meal flow goes through
-// MealRecipeScreen.
+// Unified recipe view — handles both standalone (SauceManager) and
+// meal-builder flows. When state.meal has item + sauce, the dish prep block
+// is shown after the controls. Otherwise it's sauce-only.
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { Clock, TriangleAlert, Lightbulb } from 'lucide-react-native';
+import { Lightbulb } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import StepCard from '../components/StepCard';
 import VariantSwitcher from '../components/VariantSwitcher';
 import ServingsControl from '../components/ServingsControl';
 import UnitToggle from '../components/UnitToggle';
 import EmptyState from '../components/EmptyState';
-import { SAUCE_TYPES } from '#shared/constants';
+import { SAUCE_TYPES, flowMetaFor } from '#shared/constants';
 import { COLORS, SHADOWS } from '../theme';
 
 export default function RecipeScreen({ navigation }) {
   const state = useAppState();
   const actions = useAppActions();
   const sauce = state.selectedSauce;
+
+  // Meal-builder context
+  const isMeal = !!(state.meal && state.meal.item && state.meal.sauce);
+  const item = isMeal ? state.meal.item : null;
+  const prep = isMeal ? state.meal.prep : null;
+
+  // Set header title to sauce name
+  useEffect(() => {
+    if (sauce) navigation.setOptions({ title: sauce.name });
+  }, [sauce?.name, navigation]);
 
   if (!sauce) {
     return (
@@ -37,42 +47,79 @@ export default function RecipeScreen({ navigation }) {
   }
 
   const family = state.selectedSauceFamily;
-  const meta = SAUCE_TYPES.find((t) => t.value === (sauce.sauceType || 'sauce')) || SAUCE_TYPES[0];
-  const sauceTime = useMemo(
-    () => (sauce.steps || []).reduce((s, st) => s + (st.estimatedTime || 5), 0),
-    [sauce.steps],
-  );
+  const meta = isMeal
+    ? flowMetaFor(item)
+    : SAUCE_TYPES.find((t) => t.value === (sauce.sauceType || 'sauce')) || SAUCE_TYPES[0];
   const isMarinade = sauce.sauceType === 'marinade';
-  const marineAhead = isMarinade && sauceTime > 20;
 
   const sauceColor = isMarinade ? '#5D4037'
     : sauce.sauceType === 'dressing' ? '#1B5E20'
     : '#4A0072';
+
+  const sauceLabel = isMeal
+    ? `${meta.sauceWord} — ${sauce.name}`
+    : `${meta.label} — ${sauce.name}`;
 
   const onPickVariant = (next) => {
     if (next.id === sauce.id) return;
     actions.selectVariant(next);
   };
 
+  // Item prep card (meal flow only)
+  const itemSection = item ? (() => {
+    const itemPrepLabel = item.category === 'salad'
+      ? `🥗 Toss ${item.name}`
+      : `${item.emoji} ${item.category === 'protein' ? 'Cook' : 'Prep'} ${item.name}${prep ? ` — ${prep.name}` : ''}`;
+    const itemColor = item.category === 'protein' ? '#C94E02'
+      : item.category === 'salad' ? '#2D6A4F'
+      : '#1565C0';
+    const itemCookTime = (prep?.cookTimeMinutes ?? item.cookTimeMinutes) || 0;
+    const itemInstructions = prep?.instructions
+      || item.instructions
+      || (item.category === 'salad'
+        ? `Toss ${item.name} with ${sauce.name} right before serving`
+        : `Cook ${item.name} per packet instructions`);
+    return (
+      <View style={styles.section}>
+        <View style={[styles.sectionLabel, { backgroundColor: itemColor }]}>
+          <Text style={styles.sectionLabelText}>{itemPrepLabel}</Text>
+        </View>
+        <View style={styles.itemCard}>
+          <View style={styles.itemHeaderRow}>
+            <Text style={styles.itemNumber}>
+              {item.category === 'protein' ? 'Cook' : item.category === 'salad' ? 'Assemble' : 'Boil / prep'}
+            </Text>
+            {itemCookTime ? <Text style={styles.itemTime}>~{itemCookTime}m</Text> : null}
+          </View>
+          <Text style={styles.itemTitle}>{itemInstructions}</Text>
+        </View>
+      </View>
+    );
+  })() : null;
+
+  const sauceSection = (
+    <View style={styles.section}>
+      <View style={[styles.sectionLabel, { backgroundColor: sauceColor }]}>
+        <Text style={styles.sectionLabelText}>{sauceLabel}</Text>
+      </View>
+      {(sauce.steps || []).map((step, i) => (
+        <StepCard
+          key={`${sauce.id}-${i}`}
+          step={step}
+          index={i}
+          steps={sauce.steps}
+          servings={state.servings}
+          unitSystem={state.unitSystem}
+          disabledIngredients={state.disabledIngredients}
+          substitutions={state.substitutions}
+        />
+      ))}
+    </View>
+  );
+
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
-        <View style={styles.timingBanner}>
-          <View style={styles.timingRow}>
-            <Clock size={14} color={COLORS.primary} />
-            <Text style={styles.timingTotal}>{meta.label} · ~{sauceTime} min active</Text>
-          </View>
-          {marineAhead ? (
-            <View style={styles.timingRow}>
-              <TriangleAlert size={14} color={COLORS.warningText} />
-              <Text style={styles.timingNote}>Marinades work best with {sauceTime}+ min ahead.</Text>
-            </View>
-          ) : null}
-          {sauce.cuisine ? (
-            <Text style={styles.cuisine}>{sauce.cuisineEmoji ? `${sauce.cuisineEmoji} ` : ''}{sauce.cuisine}</Text>
-          ) : null}
-        </View>
-
         {family && family.length > 1 ? (
           <View style={styles.variantWrap}>
             <VariantSwitcher family={family} currentId={sauce.id} onSelect={onPickVariant} />
@@ -84,23 +131,19 @@ export default function RecipeScreen({ navigation }) {
           <UnitToggle value={state.unitSystem} onChange={(v) => actions.setUnitSystem(v)} />
         </View>
 
-        <View style={styles.section}>
-          <View style={[styles.sectionLabel, { backgroundColor: sauceColor }]}>
-            <Text style={styles.sectionLabelText}>{meta.label} — {sauce.name}</Text>
-          </View>
-          {(sauce.steps || []).map((step, i) => (
-            <StepCard
-              key={`${sauce.id}-${i}`}
-              step={step}
-              index={i}
-              steps={sauce.steps}
-              servings={state.servings}
-              unitSystem={state.unitSystem}
-              disabledIngredients={state.disabledIngredients}
-              substitutions={state.substitutions}
-            />
-          ))}
-        </View>
+        {isMeal && isMarinade ? (
+          <>
+            {sauceSection}
+            {itemSection}
+          </>
+        ) : isMeal ? (
+          <>
+            {itemSection}
+            {sauceSection}
+          </>
+        ) : (
+          sauceSection
+        )}
 
         <View style={styles.tipCard}>
           <Lightbulb size={16} color={COLORS.primary} />
@@ -121,36 +164,6 @@ const styles = StyleSheet.create({
   scrollBody: {
     padding: 16,
     paddingBottom: 32,
-  },
-  timingBanner: {
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 12,
-    ...SHADOWS.sm,
-  },
-  timingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 2,
-  },
-  timingTotal: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginLeft: 6,
-  },
-  timingNote: {
-    fontSize: 12,
-    color: COLORS.warningText,
-    marginLeft: 6,
-    flex: 1,
-  },
-  cuisine: {
-    marginTop: 4,
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
   },
   variantWrap: {
     marginBottom: 8,
@@ -176,6 +189,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  itemCard: {
+    backgroundColor: COLORS.card,
+    padding: 14,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    ...SHADOWS.sm,
+  },
+  itemHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  itemNumber: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+    letterSpacing: 0.5,
+  },
+  itemTime: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  itemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+    lineHeight: 20,
   },
   tipCard: {
     flexDirection: 'row',

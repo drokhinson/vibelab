@@ -701,6 +701,7 @@ function selectSauceFromManager(id) {
   state.selectedSauce       = sauce;
   state.selectedItem        = null;
   state.selectedPrep        = null;
+  state.meal                = { item: null, prep: null, sauce: null };
   state.disabledIngredients = new Set();
   navigate('recipe');
 }

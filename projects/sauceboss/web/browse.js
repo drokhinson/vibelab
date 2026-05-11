@@ -283,6 +283,7 @@ function browseOpenRecipe(sauceId) {
     state.selectedSauce = found;
     state.selectedSauceFamily = family.length ? family : [found];
     state.selectedItem = null;
+    state.meal = { item: null, prep: null, sauce: null };
     state.recipeReturnTo = 'tab-shell';
     navigate('recipe');
   }).catch(err => {

@@ -23,7 +23,6 @@ import LoadingPot from './components/LoadingPot';
 import MealBuilderScreen from './screens/MealBuilderScreen';
 import PrepSelectorScreen from './screens/PrepSelectorScreen';
 import SauceSelectorScreen from './screens/SauceSelectorScreen';
-import MealRecipeScreen from './screens/MealRecipeScreen';
 import SauceManagerScreen from './screens/SauceManagerScreen';
 import SauceBuilderScreen from './screens/SauceBuilderScreen';
 import RecipeScreen from './screens/RecipeScreen';
@@ -63,11 +62,6 @@ function NavRoot() {
           name="SauceSelector"
           component={SauceSelectorScreen}
           options={{ title: 'Pick a sauce' }}
-        />
-        <Stack.Screen
-          name="MealRecipe"
-          component={MealRecipeScreen}
-          options={{ title: 'Your recipe' }}
         />
         <Stack.Screen
           name="SauceManager"

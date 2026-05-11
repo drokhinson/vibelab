@@ -110,6 +110,7 @@ function renderSauceSelector() {
       title: 'Meal Builder',
       subtitle: `Pick your ${ctx.sauceWord}`,
       back: { onClick: `navigate('${ctx.backScreen}')` },
+      auth: false,
     })}
     <div class="scroll-body">
       <div class="filter-panel">
@@ -130,7 +131,7 @@ function renderSauceSelector() {
 // recipe-view variant switcher doesn't need another fetch.
 //
 // Saucebook envelopes are slim — they carry `ingredientNames` but no
-// `steps[].ingredients[]`. The meal-recipe view iterates `sauce.steps` and
+// `steps[].ingredients[]`. The recipe view iterates `sauce.steps` and
 // crashes on undefined, so we hydrate the full sauce + its family via
 // /sauces (same pattern as browseOpenRecipe / saucebookOpenRecipe) before
 // navigating.
@@ -154,7 +155,7 @@ function selectSauce(rootId, displayedId) {
     state.meal.item  = state.selectedItem;
     state.meal.prep  = state.selectedPrep;
     state.meal.sauce = found;
-    navigate('meal-recipe');
+    navigate('recipe');
   }).catch(err => {
     state.loading = null;
     console.warn('[sauceboss] sauce hydrate failed:', err);
@@ -162,7 +163,7 @@ function selectSauce(rootId, displayedId) {
   });
 }
 
-// Switch between siblings inside the recipe / meal-recipe view.
+// Switch between siblings inside the recipe view.
 function selectVariant(id) {
   const next = (state.selectedSauceFamily || []).find(s => s.id === id);
   if (!next) return;
