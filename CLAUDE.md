@@ -50,6 +50,10 @@ vibelab/
 ├── CLAUDE.md                  ← this file
 ├── registry.json              ← project index (update when deploying)
 ├── scaffold.sh                ← new project scaffolding
+├── local_dev/                 ← single entry point for local dev setup
+│   ├── README.md              ← local dev quick-start guide
+│   ├── .env.example           ← template for local credentials
+│   └── setup-local.py         ← fans out credentials to all projects
 ├── landing/                   ← central landing page (Vercel)
 ├── shared-backend/            ← ONE FastAPI service for ALL projects
 │   ├── main.py                ← registers all routers
@@ -68,7 +72,6 @@ vibelab/
 ├── .claude/rules/             ← domain-specific conventions (loaded by file path)
 └── projects/[name]/
     ├── STRUCTURE.md           ← AI context doc — READ FIRST
-    ├── .env.example
     ├── web/                   ← static prototype
     └── app/                   ← React Native / Expo
 ```
@@ -104,17 +107,8 @@ bash scaffold.sh my-app "My App" "Description"
 # Then fill in STRUCTURE.md and implement routes + web/
 ```
 
-### Run the backend locally (always use venv)
-All local backend work must run inside a virtual environment — never install packages globally.
-```bash
-cd shared-backend
-python -m venv .venv                  # create once
-source .venv/Scripts/activate         # Windows (Git Bash)
-# source .venv/bin/activate           # macOS / Linux
-pip install -r requirements.txt       # install deps inside venv
-uvicorn main:app --reload             # starts on http://localhost:8000
-```
-`.venv/` is gitignored. Re-run `pip install -r requirements.txt` after pulling changes that add new deps.
+### Run locally
+See `local_dev/README.md` for the full local dev guide.
 
 ### Update the landing page
 Edit `registry.json` — the landing page reads it at load time. Set `status`, `webUrl`, `backendUrl` when deploying.
