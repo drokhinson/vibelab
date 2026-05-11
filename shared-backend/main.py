@@ -4,6 +4,9 @@ ONE service handles ALL projects. Each project registers its own router.
 Routes are namespaced: /api/v1/{project}/...
 """
 import os
+import truststore
+truststore.inject_into_ssl()  # use OS certificate store instead of certifi bundle
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
