@@ -2366,65 +2366,31 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 }
 .recipe-row__missing [data-lucide] { width: 11px; height: 11px; }
 
-/* Pantry list — 10px gap above the first section matches the inter-section
-   rhythm (each card sits 10px below the one above it). */
-.pantry-section { margin: 10px 16px 0; }
-.pantry-section__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  background: #F1E0CC;
-  border: 0;
-  border-radius: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-}
-.pantry-section__header:hover { background: #E8D5BC; }
-.pantry-section__chevron {
-  color: #6B7280;
-  font-size: 12px;
-  width: 12px;
-  display: inline-flex;
-  justify-content: center;
-}
-.pantry-section__title {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 700;
-  color: #1A1A2E;
-}
-.pantry-section__count {
-  font-size: 11px;
-  font-weight: 700;
-  color: #6B7280;
-  background: rgba(26,10,0,0.08);
-  border-radius: 999px;
-  padding: 2px 9px;
-}
-.pantry-section__count--missing {
-  color: white;
-  background: #DC2626;
-}
-.pantry-section__body {
-  margin-top: 6px;
-  padding: 0 2px;
-}
+/* Pantry — reuses .ingredient-category-group / .ingredient-category-header
+   from the ingredient manager for section headers. Rows get a slightly
+   warmer, card-ish treatment since each one is tappable toggle. */
 .pantry-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 10px 16px;
   background: white;
-  border: 1px solid #F1E0CC;
-  border-radius: 10px;
-  padding: 10px 14px;
-  margin-bottom: 6px;
+  border-bottom: 1px solid #f0e6d6;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: background 0.12s;
 }
-.pantry-row__name { font-size: 14px; color: #1A1A2E; font-weight: 500; }
+.pantry-row:hover { background: #FFF7ED; }
+.pantry-row:active { background: #FFEDD5; }
+.pantry-row--missing {
+  background: #FEF2F2;
+  border-left: 3px solid #DC2626;
+}
+.pantry-row--missing:hover { background: #FEE2E2; }
+.pantry-row__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1A1A2E;
+}
 .pantry-row__state {
   font-size: 11px;
   font-weight: 700;
@@ -2432,14 +2398,18 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   letter-spacing: 0.5px;
   padding: 3px 10px;
   border-radius: 999px;
+  flex-shrink: 0;
 }
-.pantry-row--missing { background: #FEF2F2; border-color: #FCA5A5; }
 .pantry-row--missing .pantry-row__state {
   background: #DC2626;
   color: white;
 }
-.pantry-row--have .pantry-row__state {
+.pantry-row:not(.pantry-row--missing) .pantry-row__state {
   background: #ECFDF5;
   color: #16A34A;
 }
 .pantry-row__name--strike { text-decoration: line-through; opacity: 0.55; }
+.ingredient-category-count--missing {
+  background: #DC2626;
+  color: white;
+}

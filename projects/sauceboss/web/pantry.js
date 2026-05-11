@@ -65,7 +65,7 @@ function renderPantry() {
     <div class="screen-wrap">
       ${renderAppHeader({
         title: 'Pantry',
-        subtitle: `${ings.length} ingredient${ings.length === 1 ? '' : 's'} from your saucebook · ${totalMissing} missing`,
+        subtitle: `${ings.length} saucebook ingredient${ings.length === 1 ? '' : 's'} · ${totalMissing} missing`,
       })}
       <div class="scroll-body">
         ${ordered.map(cat => _pantrySection(cat, groups.get(cat))).join('')}
@@ -86,26 +86,29 @@ function _pantrySection(cat, rows) {
   const open = _pantrySectionState().has(cat);
   const missingInCat = rows.filter(r => r.missing).length;
   const total = rows.length;
-  const badgeClass = missingInCat > 0 ? 'pantry-section__count pantry-section__count--missing' : 'pantry-section__count';
+  const inStock = total - missingInCat;
+  const countClass = missingInCat > 0
+    ? 'ingredient-category-count ingredient-category-count--missing'
+    : 'ingredient-category-count';
   return `
-    <div class="pantry-section">
-      <button class="pantry-section__header" onclick="pantryToggleSection('${escapeHtml(cat)}')">
-        <span class="pantry-section__chevron">${open ? '▾' : '▸'}</span>
-        <span class="pantry-section__title">${escapeHtml(cat)}</span>
-        <span class="${badgeClass}">${missingInCat}/${total} missing</span>
-      </button>
-      ${open ? `<div class="pantry-section__body">${rows.map(_pantryRow).join('')}</div>` : ''}
+    <div class="ingredient-category-group">
+      <div class="ingredient-category-header" onclick="pantryToggleSection('${escapeHtml(cat)}')">
+        <span class="ingredient-category-chevron">${open ? '▾' : '▸'}</span>
+        <span class="ingredient-category-name">${escapeHtml(cat)}</span>
+        <span class="${countClass}">${inStock}/${total}</span>
+      </div>
+      ${open ? `<div class="ingredient-category-body">${rows.map(_pantryRow).join('')}</div>` : ''}
     </div>
   `;
 }
 
 function _pantryRow(ing) {
   const missing = !!ing.missing;
-  const labelClass = missing ? 'pantry-row__name pantry-row__name--strike' : 'pantry-row__name';
-  const stateClass = missing ? 'pantry-row--missing' : 'pantry-row--have';
+  const rowClass = missing ? 'pantry-row pantry-row--missing' : 'pantry-row';
+  const nameClass = missing ? 'pantry-row__name pantry-row__name--strike' : 'pantry-row__name';
   return `
-    <div class="pantry-row ${stateClass}" onclick="togglePantryMissing('${escapeHtml(ing.ingredientId)}')">
-      <span class="${labelClass}">${escapeHtml(ing.name || '')}</span>
+    <div class="${rowClass}" onclick="togglePantryMissing('${escapeHtml(ing.ingredientId)}')">
+      <span class="${nameClass}">${escapeHtml(ing.name || '')}</span>
       <span class="pantry-row__state">${missing ? 'Missing' : 'In stock'}</span>
     </div>
   `;
