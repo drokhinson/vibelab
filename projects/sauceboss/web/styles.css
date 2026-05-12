@@ -485,7 +485,26 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   color: #E85D04;
   margin-bottom: 4px;
 }
-.step-title { font-size: 16px; font-weight: 700; color: #1A1A2E; margin-bottom: 12px; }
+.step-title { font-size: 16px; font-weight: 700; color: #1A1A2E; }
+
+/* Step title row with inline instructions toggle */
+.step-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.step-title-row .step-title { flex: 1; min-width: 0; margin-bottom: 0; }
+.step-instr-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex-shrink: 0;
+  border: 1.5px solid #D1D5DB; border-radius: 8px;
+  background: white; color: #9CA3AF; cursor: pointer;
+  transition: all 120ms ease;
+}
+.step-instr-btn:hover { border-color: #6B7280; color: #6B7280; }
+.step-instr-btn.expanded { border-color: #0369A1; color: #0369A1; background: #F0F9FF; }
+.step-instr-btn [data-lucide] { width: 14px; height: 14px; }
 
 .pie-chart { display: block; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.12)); }
 
@@ -732,10 +751,11 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 /* Instructions toggle button in headline row */
 .builder-instructions-toggle {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; flex-shrink: 0;
-  border: 1.5px solid #D1D5DB; border-radius: 8px;
+  width: 40px; flex-shrink: 0;
+  border: 1.5px solid #D1D5DB; border-radius: 10px;
   background: white; color: #9CA3AF; cursor: pointer;
   margin-bottom: 10px; transition: all 120ms ease;
+  align-self: stretch;
 }
 .builder-instructions-toggle:hover { border-color: #6B7280; color: #6B7280; }
 .builder-instructions-toggle.expanded { border-color: #0369A1; color: #0369A1; background: #F0F9FF; }
@@ -2145,34 +2165,16 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   font-family: Inter, sans-serif;
   line-height: 1.5;
 }
-.step-instructions-toggle {
-  margin: 4px 0 12px;
-  font-size: 13px;
-}
-.step-instructions-toggle > summary {
-  cursor: pointer;
-  color: #6B6B7B;
-  font-weight: 600;
-  list-style: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 0;
-}
-.step-instructions-toggle > summary::-webkit-details-marker { display: none; }
-.step-instructions-toggle > summary::before {
-  content: '▸';
-  font-size: 10px;
-  transition: transform 120ms ease;
-}
-.step-instructions-toggle[open] > summary::before { transform: rotate(90deg); }
-.step-instructions-toggle > summary:hover { color: #1A1A2E; }
 .step-instructions-body {
   white-space: pre-wrap;
-  margin: 8px 0 0;
+  margin: 0 0 12px;
   color: #555;
   font-size: 14px;
   line-height: 1.55;
+  padding: 8px 10px;
+  background: #F9FAFB;
+  border-radius: 8px;
+  border: 1px solid #E5E7EB;
 }
 .review-step-instructions {
   white-space: pre-wrap;

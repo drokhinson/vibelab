@@ -346,12 +346,11 @@ function renderRecipeStep(step, index, allSteps) {
       <div class="step-number">Step ${index + 1}</div>
       <div class="step-time">~${stepTime}m</div>
     </div>
-    <div class="step-title">${step.title}</div>
-    ${step.instructions ? `
-      <details class="step-instructions-toggle">
-        <summary>Instructions</summary>
-        <p class="step-instructions-body">${escapeHtml(step.instructions)}</p>
-      </details>` : ''}
+    <div class="step-title-row">
+      <div class="step-title">${step.title}</div>
+      ${step.instructions ? `<button class="step-instr-btn" onclick="this.closest('.step-card').querySelector('.step-instructions-body').toggleAttribute('hidden'); this.classList.toggle('expanded')" title="Toggle instructions"><i data-lucide="notebook-pen"></i></button>` : ''}
+    </div>
+    ${step.instructions ? `<p class="step-instructions-body" hidden>${escapeHtml(step.instructions)}</p>` : ''}
     <div class="step-viz">
       ${buildPieChart(displayItems, 80)}
       <div class="step-legend">${buildLegend(displayItems)}</div>

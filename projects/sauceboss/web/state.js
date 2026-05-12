@@ -157,7 +157,7 @@ function defaultBuilder() {
     servings: 2,
     // ── Steps & ingredients ────────────────────────────────────────────
     steps: [{ title: '', instructions: '', inputFromSteps: [], estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
-    _instructionsExpanded: new Set(),
+    _instructionsExpanded: new Set([0]),
     unassignedIngredients: [],   // imported ingredients not yet placed in a step; recipe cannot save while non-empty
     itemIds: [], saving: false, error: null,
     acStep: null, acIng: null, acResults: [], acSelected: -1,

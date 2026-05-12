@@ -335,7 +335,7 @@ function renderBuilderInstructions() {
     }).join('');
 
     const timeValue = step.estimatedTime != null && step.estimatedTime !== '' ? step.estimatedTime : '';
-    const instrExpanded = b._instructionsExpanded && b._instructionsExpanded.has(si);
+    const instrExpanded = b._instructionsExpanded ? b._instructionsExpanded.has(si) : si === 0;
     const hasInstr = !!(step.instructions && step.instructions.trim());
     return `${insertBefore}<div class="builder-step-card">
       ${b.steps.length > 1 ? `<button class="remove-step-btn" onclick="builderRemoveStep(${si})">✕</button>` : ''}
@@ -587,7 +587,7 @@ async function openBuilder() {
   if (!currentUser) { openAuthModal(); return; }
   state.builder = defaultBuilder();
   state.builder._expandedDishes = new Set();
-  state.builder._instructionsExpanded = new Set();
+  state.builder._instructionsExpanded = new Set([0]);
   state.recipeReturnTo = state.screen === 'admin' ? 'admin' : 'tab-shell';
   navigate('builder-source');
   if (!_hasBuilderRefData()) {
