@@ -706,6 +706,42 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .step-ref-select:focus { outline: none; border-color: #0369A1; }
 
+/* Multi-step select dropdown */
+.multi-step-select { flex: 1; min-width: 0; position: relative; }
+.multi-step-trigger {
+  width: 100%; padding: 6px 8px; border: 1.5px solid #BAE6FD;
+  border-radius: 8px; font-size: 12px; font-family: inherit;
+  background: white; color: #1A1A2E; text-align: left; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.multi-step-trigger:focus { outline: none; border-color: #0369A1; }
+.multi-step-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: white; border: 1.5px solid #BAE6FD; border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 20;
+  padding: 6px; max-height: 180px; overflow-y: auto;
+}
+.multi-step-option {
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  border-radius: 6px; font-size: 12px; cursor: pointer;
+}
+.multi-step-option:hover { background: #F0F9FF; }
+.multi-step-option.checked { background: #E0F2FE; font-weight: 600; }
+.multi-step-option input[type="checkbox"] { accent-color: #0369A1; }
+
+/* Instructions toggle button in headline row */
+.builder-instructions-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex-shrink: 0;
+  border: 1.5px solid #D1D5DB; border-radius: 8px;
+  background: white; color: #9CA3AF; cursor: pointer;
+  margin-bottom: 10px; transition: all 120ms ease;
+}
+.builder-instructions-toggle:hover { border-color: #6B7280; color: #6B7280; }
+.builder-instructions-toggle.expanded { border-color: #0369A1; color: #0369A1; background: #F0F9FF; }
+.builder-instructions-toggle.has-content:not(.expanded) { border-color: #F59E0B; color: #F59E0B; }
+.builder-instructions-toggle [data-lucide] { width: 16px; height: 16px; }
+
 /* Step reference badge (recipe view + review) */
 .step-ref-badge {
   display: inline-block;

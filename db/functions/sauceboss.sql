@@ -39,8 +39,15 @@
 -- get_sauceboss_sauces_for_item(p_item_id TEXT)
 --   Signature : (p_item_id TEXT) → JSON
 --   Language  : SQL STABLE
---   Defined in: sauceboss/001_baseline.sql
---   Purpose   : Fully assembled sauce objects + normalized ingredients for an item.
+--   Defined in: sauceboss/014_release_compat.sql
+--   Purpose   : Thin wrapper around get_sauceboss_sauces_for_target.
+
+-- get_sauceboss_sauces_for_target(p_category TEXT, p_dish_id TEXT, p_subtype_id TEXT)
+--   Signature : (p_category TEXT, p_dish_id TEXT, p_subtype_id TEXT) → JSON
+--   Language  : SQL STABLE
+--   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 014)
+--   Purpose   : Fully assembled sauce objects for a category/dish/subtype target.
+--   Notes     : Steps include both inputFromStep (compat) and inputFromSteps (array).
 
 -- get_sauceboss_ingredients_for_item(p_item_id TEXT)
 --   Signature : (p_item_id TEXT) → JSON
@@ -64,10 +71,11 @@
 -- get_sauceboss_all_sauces_full()
 --   Signature : () → JSON
 --   Language  : SQL STABLE
---   Defined in: sauceboss/001_baseline.sql
+--   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 001)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --              shared-backend/routes/sauceboss/import_export_routes.py
 --   Purpose   : Full sauces grid with normalized ingredients, steps, and dish links.
+--   Notes     : Steps include both inputFromStep (compat) and inputFromSteps (array).
 
 -- get_sauceboss_ingredient_categories()
 --   Signature : () → JSON
@@ -144,23 +152,26 @@
 -- create_sauceboss_sauce(p_data JSONB)
 --   Signature : (p_data JSONB) → TEXT
 --   Language  : plpgsql
---   Defined in: sauceboss/019_default_servings.sql  (latest; first in 001)
+--   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 001)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --   Purpose   : Atomic sauce creation; auto-upserts ingredients; returns sauce_id.
+--   Notes     : Accepts inputFromSteps (array) with fallback to inputFromStep (single).
 
 -- update_sauceboss_sauce(p_data JSONB)
 --   Signature : (p_data JSONB) → TEXT
 --   Language  : plpgsql
---   Defined in: sauceboss/019_default_servings.sql
+--   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 003)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --   Purpose   : Atomic full-replace of sauce scalars, items, steps, ingredients.
+--   Notes     : Accepts inputFromSteps (array) with fallback to inputFromStep (single).
 
 -- fork_sauceboss_sauce(p_source_id TEXT, p_user UUID, p_data JSONB)
 --   Signature : (p_source_id TEXT, p_user UUID, p_data JSONB) → TEXT
 --   Language  : plpgsql
---   Defined in: sauceboss/019_default_servings.sql
+--   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 013)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --   Purpose   : Create new sauce variant under family root; copy/override attachments.
+--   Notes     : Copies input_from_steps alongside input_from_step for full fidelity.
 
 -- set_sauceboss_pantry_missing(p_user_id UUID, p_ingredient_ids TEXT[])
 --   Signature : (p_user_id UUID, p_ingredient_ids TEXT[]) → JSON

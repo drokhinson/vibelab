@@ -276,7 +276,8 @@ def _build_sauce_payload(sauce_id: str, body: CreateSauceRequest, created_by: st
                 "title": step.title,
                 "instructions": (step.instructions or "").strip() or None,
                 "stepOrder": idx + 1,
-                "inputFromStep": step.inputFromStep,
+                "inputFromStep": step.inputFromStep if step.inputFromStep else (step.inputFromSteps[0] if step.inputFromSteps else None),
+                "inputFromSteps": step.inputFromSteps if step.inputFromSteps else ([step.inputFromStep] if step.inputFromStep else []),
                 "estimatedTime": step.estimatedTime,
                 "ingredients": [_resolve_ingredient_for_save(ing) for ing in step.ingredients],
             }

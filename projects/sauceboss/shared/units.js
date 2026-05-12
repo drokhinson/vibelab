@@ -8,7 +8,7 @@ export function toTsp(amount, unit) {
 }
 
 // Total tsp produced by a step's bowl, including everything inherited from
-// upstream steps it combines in. Walks `inputFromStep` recursively.
+// upstream steps it combines in. Walks `inputFromSteps` recursively.
 export function cumulativeStepTsp(steps, idx, servings, baseServings) {
   const step = steps[idx];
   if (!step) return 0;
@@ -16,8 +16,9 @@ export function cumulativeStepTsp(steps, idx, servings, baseServings) {
     (s, it) => s + toTsp(scaleAmount(it.amount, servings, baseServings), it.unit),
     0,
   );
-  if (step.inputFromStep) {
-    total += cumulativeStepTsp(steps, step.inputFromStep - 1, servings, baseServings);
+  const refs = Array.isArray(step.inputFromSteps) ? step.inputFromSteps : (step.inputFromStep ? [step.inputFromStep] : []);
+  for (const ref of refs) {
+    total += cumulativeStepTsp(steps, ref - 1, servings, baseServings);
   }
   return total;
 }

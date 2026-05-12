@@ -112,6 +112,7 @@ class StepInput(BaseModel):
     instructions: Optional[str] = None
     ingredients: List[IngredientInput] = Field(min_length=1)
     inputFromStep: int | None = None
+    inputFromSteps: list[int] = []
     estimatedTime: int | None = Field(default=None, ge=0, le=600)
 
 

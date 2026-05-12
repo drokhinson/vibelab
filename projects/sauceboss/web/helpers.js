@@ -331,15 +331,15 @@ function renderRecipeStep(step, index, allSteps) {
   const stepTime = step.estimatedTime || 5;
   const displayItems = prepareItems(step.ingredients);
 
-  const refStep = step.inputFromStep ? allSteps[step.inputFromStep - 1] : null;
-  if (refStep) {
-    const refTsp = cumulativeStepTsp(allSteps, step.inputFromStep - 1, state.servings, state.selectedSauce?.defaultServings || 2);
-    const disp = tspToDisplay(refTsp);
-    displayItems.unshift({ name: `Step ${step.inputFromStep} combined`, amount: disp.amount, unit: disp.unit });
+  const refs = Array.isArray(step.inputFromSteps) ? step.inputFromSteps : (step.inputFromStep ? [step.inputFromStep] : []);
+  for (const ref of refs) {
+    const refStep = allSteps[ref - 1];
+    if (refStep) {
+      const refTsp = cumulativeStepTsp(allSteps, ref - 1, state.servings, state.selectedSauce?.defaultServings || 2);
+      const disp = tspToDisplay(refTsp);
+      displayItems.unshift({ name: `Step ${ref} combined`, amount: disp.amount, unit: disp.unit });
+    }
   }
-  const refBadge = refStep
-    ? `<div class="step-ref-badge"><i data-lucide="corner-down-right"></i> Combine all of Step ${step.inputFromStep} into this bowl</div>`
-    : '';
 
   return `<div class="step-card" style="--i:${index}">
     <div class="step-header-row">
@@ -352,7 +352,6 @@ function renderRecipeStep(step, index, allSteps) {
         <summary>Instructions</summary>
         <p class="step-instructions-body">${escapeHtml(step.instructions)}</p>
       </details>` : ''}
-    ${refBadge}
     <div class="step-viz">
       ${buildPieChart(displayItems, 80)}
       <div class="step-legend">${buildLegend(displayItems)}</div>

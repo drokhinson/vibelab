@@ -114,7 +114,8 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_step (
   step_order      INTEGER NOT NULL,
   title           TEXT    NOT NULL,
   instructions    TEXT,                                  -- optional paragraph
-  input_from_step INT     DEFAULT NULL,                  -- previous step that feeds into this one
+  input_from_step INT     DEFAULT NULL,                  -- compat: first element of input_from_steps
+  input_from_steps INT[]  NOT NULL DEFAULT '{}',         -- prior steps that feed into this one
   estimated_time  INT                                    -- minutes, nullable
 );
 ALTER TABLE public.sauceboss_sauce_step ENABLE ROW LEVEL SECURITY;

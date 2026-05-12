@@ -739,12 +739,15 @@ async function openBuilderEdit(id) {
     steps: (sauce.steps || []).map(s => ({
       title: s.title,
       instructions: s.instructions || '',
-      inputFromStep: s.inputFromStep || null,
+      inputFromSteps: Array.isArray(s.inputFromSteps) ? s.inputFromSteps.slice() : (s.inputFromStep ? [s.inputFromStep] : []),
       estimatedTime: s.estimatedTime != null ? s.estimatedTime : null,
       ingredients: (s.ingredients || []).map(i => ({
         name: i.name, amount: i.amount, unit: i.unit,
       })),
     })),
+    _instructionsExpanded: new Set(
+      (sauce.steps || []).reduce((acc, s, i) => { if ((s.instructions || '').trim()) acc.push(i); return acc; }, [])
+    ),
   };
   state.recipeReturnTo = state.screen === 'admin' ? 'admin' : 'tab-shell';
   state.builder.returnToReview = true;
@@ -1377,12 +1380,15 @@ async function handleImportSauceFile(event) {
     steps: (inner.steps || []).map(s => ({
       title: s.title || '',
       instructions: s.instructions || '',
-      inputFromStep: s.inputFromStep || null,
+      inputFromSteps: Array.isArray(s.inputFromSteps) ? s.inputFromSteps.slice() : (s.inputFromStep ? [s.inputFromStep] : []),
       estimatedTime: s.estimatedTime != null ? s.estimatedTime : null,
       ingredients: (s.ingredients || []).map(i => ({
         name: i.name || '', amount: i.amount, unit: i.unit || 'tsp',
       })),
     })),
+    _instructionsExpanded: new Set(
+      (inner.steps || []).reduce((acc, s, i) => { if ((s.instructions || '').trim()) acc.push(i); return acc; }, [])
+    ),
   };
   state.recipeReturnTo = state.screen === 'admin' ? 'admin' : 'tab-shell';
   navigate('builder-info');

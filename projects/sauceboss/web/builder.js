@@ -272,12 +272,24 @@ function renderBuilderInstructions() {
     const stepRefHTML = si > 0 ? `
       <div class="step-ref-row">
         <label class="step-ref-label">Combine output from:</label>
-        <select class="step-ref-select" data-builder-field="input-from-step" data-step="${si}">
-          <option value="" ${!step.inputFromStep ? 'selected' : ''}>None — independent step</option>
-          ${b.steps.slice(0, si).map((_, ri) =>
-            `<option value="${ri + 1}" ${step.inputFromStep === ri + 1 ? 'selected' : ''}>Step ${ri + 1}${b.steps[ri].title ? ' — ' + b.steps[ri].title.slice(0, 25) : ''}</option>`
-          ).join('')}
-        </select>
+        <div class="multi-step-select" data-step="${si}">
+          <button class="multi-step-trigger" onclick="builderToggleStepSelect(${si})">
+            ${(step.inputFromSteps || []).length > 0
+              ? (step.inputFromSteps || []).map(r => `Step ${r}${b.steps[r - 1]?.title ? ' — ' + b.steps[r - 1].title.slice(0, 20) : ''}`).join(', ')
+              : 'None — independent step'}
+          </button>
+          ${b._stepSelectOpen === si ? `<div class="multi-step-panel">
+            ${b.steps.slice(0, si).map((_, ri) => {
+              const refOrder = ri + 1;
+              const checked = (step.inputFromSteps || []).includes(refOrder);
+              const label = `Step ${refOrder}${b.steps[ri].title ? ' — ' + b.steps[ri].title.slice(0, 25) : ''}`;
+              return `<label class="multi-step-option ${checked ? 'checked' : ''}">
+                <input type="checkbox" ${checked ? 'checked' : ''} onchange="builderToggleInputStep(${si}, ${refOrder})">
+                <span>${label}</span>
+              </label>`;
+            }).join('')}
+          </div>` : ''}
+        </div>
       </div>` : '';
 
     const ingsHTML = step.ingredients.map((ing, ii) => {
@@ -318,6 +330,8 @@ function renderBuilderInstructions() {
     }).join('');
 
     const timeValue = step.estimatedTime != null && step.estimatedTime !== '' ? step.estimatedTime : '';
+    const instrExpanded = b._instructionsExpanded && b._instructionsExpanded.has(si);
+    const hasInstr = !!(step.instructions && step.instructions.trim());
     return `${insertBefore}<div class="builder-step-card">
       ${b.steps.length > 1 ? `<button class="remove-step-btn" onclick="builderRemoveStep(${si})">✕</button>` : ''}
       <div class="step-number">Step ${si + 1}</div>
@@ -330,8 +344,11 @@ function renderBuilderInstructions() {
                  data-builder-field="step-time" data-step="${si}">
           <span class="builder-step-time-suffix">min</span>
         </label>
+        <button class="builder-instructions-toggle ${instrExpanded ? 'expanded' : ''} ${hasInstr ? 'has-content' : ''}" onclick="builderToggleInstructions(${si})" title="Detailed instructions">
+          <i data-lucide="notebook-pen"></i>
+        </button>
       </div>
-      <textarea class="builder-input builder-step-instructions" placeholder="Instructions (optional)" data-builder-field="step-instructions" data-step="${si}">${esc(step.instructions || '')}</textarea>
+      ${instrExpanded ? `<textarea class="builder-input builder-step-instructions" placeholder="Detailed Instructions (optional)" data-builder-field="step-instructions" data-step="${si}">${esc(step.instructions || '')}</textarea>` : ''}
       <div class="builder-ings-list">${ingsHTML}</div>
       <button class="add-ing-btn" onclick="builderAddIngredient(${si})">+ Ingredient</button>
     </div>`;
@@ -512,7 +529,7 @@ function renderBuilderReview() {
               <div class="step-number">Step ${si + 1}</div>
               <div class="step-title">${esc(step.title) || '(untitled)'}</div>
               ${step.instructions ? `<div class="review-step-instructions">${esc(step.instructions)}</div>` : ''}
-              ${step.inputFromStep ? `<div class="step-ref-badge">⤶ Combines Step ${step.inputFromStep} output</div>` : ''}
+              ${(step.inputFromSteps || []).length > 0 ? `<div class="step-ref-badge">⤶ Combines ${(step.inputFromSteps || []).map(r => 'Step ' + r).join(', ')} output</div>` : ''}
               <div class="review-ing-list">
                 ${step.ingredients.filter(i => i.name.trim()).map(i =>
                   `<div class="review-ing-item">${i.unit === 'to taste' ? 'to taste' : `${i.amount} ${i.unit}`} ${i.name}</div>`
@@ -565,6 +582,7 @@ async function openBuilder() {
   if (!currentUser) { openAuthModal(); return; }
   state.builder = defaultBuilder();
   state.builder._expandedDishes = new Set();
+  state.builder._instructionsExpanded = new Set();
   state.recipeReturnTo = state.screen === 'admin' ? 'admin' : 'tab-shell';
   navigate('builder-source');
   if (!_hasBuilderRefData()) {
@@ -611,19 +629,18 @@ function builderSetColor(hex) {
 }
 
 function builderAddStep() {
-  state.builder.steps.push({ title: '', instructions: '', inputFromStep: null, estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
+  state.builder.steps.push({ title: '', instructions: '', inputFromSteps: [], estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
   render();
 }
 
 function builderInsertStep(atIndex) {
   const b = state.builder;
-  const newStep = { title: '', instructions: '', inputFromStep: null, estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] };
+  const newStep = { title: '', instructions: '', inputFromSteps: [], estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] };
   b.steps.splice(atIndex, 0, newStep);
-  // Renumber inputFromStep references: anything pointing at or after atIndex shifts up by 1
+  // Renumber inputFromSteps references: anything pointing at or after atIndex shifts up by 1
   for (let i = 0; i < b.steps.length; i++) {
-    if (i === atIndex) continue; // skip the new step
-    const ref = b.steps[i].inputFromStep;
-    if (ref && ref > atIndex) b.steps[i].inputFromStep = ref + 1;
+    if (i === atIndex) continue;
+    b.steps[i].inputFromSteps = (b.steps[i].inputFromSteps || []).map(ref => ref > atIndex ? ref + 1 : ref);
   }
   render();
 }
@@ -632,8 +649,9 @@ function builderRemoveStep(si) {
   const removedOrder = si + 1;
   state.builder.steps.splice(si, 1);
   for (const step of state.builder.steps) {
-    if (step.inputFromStep === removedOrder) step.inputFromStep = null;
-    else if (step.inputFromStep > removedOrder) step.inputFromStep--;
+    step.inputFromSteps = (step.inputFromSteps || [])
+      .filter(ref => ref !== removedOrder)
+      .map(ref => ref > removedOrder ? ref - 1 : ref);
   }
   render();
 }
@@ -645,6 +663,31 @@ function builderAddIngredient(si) {
 
 function builderRemoveIngredient(si, ii) {
   state.builder.steps[si].ingredients.splice(ii, 1);
+  render();
+}
+
+function builderToggleInstructions(si) {
+  const b = state.builder;
+  if (!b._instructionsExpanded) b._instructionsExpanded = new Set();
+  if (b._instructionsExpanded.has(si)) b._instructionsExpanded.delete(si);
+  else b._instructionsExpanded.add(si);
+  render();
+}
+
+function builderToggleStepSelect(si) {
+  const b = state.builder;
+  b._stepSelectOpen = b._stepSelectOpen === si ? null : si;
+  render();
+}
+
+function builderToggleInputStep(si, refOrder) {
+  const b = state.builder;
+  const arr = b.steps[si].inputFromSteps || [];
+  const idx = arr.indexOf(refOrder);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(refOrder);
+  arr.sort((a, c) => a - c);
+  b.steps[si].inputFromSteps = arr;
   render();
 }
 
@@ -756,10 +799,6 @@ function builderHandleInput(el) {
       const prev = b.steps[si].ingredients[ii].unit;
       b.steps[si].ingredients[ii].unit = el.value;
       if ((prev === 'to taste') !== (el.value === 'to taste')) needsRender = true;
-      break;
-    }
-    case 'input-from-step': {
-      b.steps[si].inputFromStep = el.value ? parseInt(el.value) : null;
       break;
     }
     case 'unassigned-target': {
@@ -982,7 +1021,8 @@ async function builderSave() {
         .map(s => ({
           title: s.title.trim(),
           instructions: (s.instructions || '').trim() || null,
-          inputFromStep: s.inputFromStep || null,
+          inputFromStep: (s.inputFromSteps || [])[0] || null,
+          inputFromSteps: s.inputFromSteps || [],
           estimatedTime: s.estimatedTime != null && s.estimatedTime !== '' ? s.estimatedTime : null,
           ingredients: s.ingredients
             .filter(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste'))

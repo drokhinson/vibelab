@@ -91,7 +91,7 @@ export function applyParsedRecipe(builder, parsed) {
     next.steps = [{
       title: stepTitle,
       instructions: '',
-      inputFromStep: null,
+      inputFromSteps: [],
       ingredients: allIngs.length > 0 ? allIngs : [{ name: '', amount: '', unit: 'tsp' }],
     }];
     return next;
@@ -101,7 +101,7 @@ export function applyParsedRecipe(builder, parsed) {
   const steps = instructions.map((text) => ({
     title: '',
     instructions: text,
-    inputFromStep: null,
+    inputFromSteps: [],
     ingredients: [],
     _instr: text.toLowerCase(),
   }));
@@ -176,7 +176,7 @@ export function builderFromSauce(sauce, defaults = {}) {
     steps: (sauce.steps || []).map((s) => ({
       title: s.title || '',
       instructions: s.instructions || '',
-      inputFromStep: s.inputFromStep || null,
+      inputFromSteps: Array.isArray(s.inputFromSteps) ? s.inputFromSteps.slice() : (s.inputFromStep ? [s.inputFromStep] : []),
       estimatedTime: s.estimatedTime != null ? String(s.estimatedTime) : '',
       ingredients: (s.ingredients || []).map((i) => ({
         name: i.name || '',
@@ -184,6 +184,9 @@ export function builderFromSauce(sauce, defaults = {}) {
         unit: i.unit || 'tsp',
       })),
     })),
+    _instructionsExpanded: new Set(
+      (sauce.steps || []).reduce((acc, s, i) => { if ((s.instructions || '').trim()) acc.push(i); return acc; }, [])
+    ),
     unassignedIngredients: [],
   };
 }

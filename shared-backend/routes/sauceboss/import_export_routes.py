@@ -168,9 +168,10 @@ def _render_sauce_markdown(s: dict) -> str:
             est = step.get("estimatedTime")
             est_str = f" (~{est} min)" if est else ""
             lines.append(f"### Step {idx} — {title}{est_str}")
-            input_from = step.get("inputFromStep")
+            input_from = step.get("inputFromSteps") or ([step.get("inputFromStep")] if step.get("inputFromStep") else [])
             if input_from:
-                lines.append(f"*Combines all of Step {input_from} into this bowl.*")
+                refs = ', '.join(f'Step {r}' for r in input_from)
+                lines.append(f"*Combines all of {refs} into this bowl.*")
             instructions = (step.get("instructions") or "").strip()
             if instructions:
                 lines.append(instructions)
