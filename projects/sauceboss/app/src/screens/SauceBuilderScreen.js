@@ -713,7 +713,7 @@ export default function SauceBuilderScreen({ navigation, route }) {
                   </View>
                 </View>
               </View>
-              <Text style={styles.label}>Instructions (optional)</Text>
+              <Text style={styles.label}>Detailed Instructions (optional)</Text>
               <TextInput
                 style={[styles.input, styles.multiline]}
                 value={step.instructions}

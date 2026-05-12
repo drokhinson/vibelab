@@ -110,6 +110,7 @@ export default function RecipeScreen({ navigation }) {
           steps={sauce.steps}
           servings={state.servings}
           unitSystem={state.unitSystem}
+          baseServings={sauce.defaultServings || 2}
           disabledIngredients={state.disabledIngredients}
           substitutions={state.substitutions}
         />

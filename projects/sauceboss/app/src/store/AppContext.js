@@ -267,6 +267,7 @@ function reducer(state, action) {
         ...state,
         selectedSauce: action.sauce,
         selectedSauceFamily: action.family || [],
+        servings: action.sauce?.defaultServings || 2,
         meal: {
           item: state.selectedItem,
           prep: state.selectedPrep,
@@ -279,6 +280,7 @@ function reducer(state, action) {
       return {
         ...state,
         selectedSauce: sauce,
+        servings: sauce?.defaultServings || 2,
         meal: { ...state.meal, sauce },
       };
     }

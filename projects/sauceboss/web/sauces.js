@@ -151,6 +151,7 @@ function selectSauce(rootId, displayedId) {
     const familyId = found.parentSauceId || found.id;
     const fullFamily = all.filter(s => s.id === familyId || s.parentSauceId === familyId);
     state.selectedSauce = found;
+    state.servings = found.defaultServings || 2;
     state.selectedSauceFamily = fullFamily.length ? fullFamily : [found];
     state.meal.item  = state.selectedItem;
     state.meal.prep  = state.selectedPrep;
@@ -168,6 +169,7 @@ function selectVariant(id) {
   const next = (state.selectedSauceFamily || []).find(s => s.id === id);
   if (!next) return;
   state.selectedSauce = next;
+  state.servings = next.defaultServings || 2;
   if (state.meal && state.meal.sauce) state.meal.sauce = next;
   render();
 }

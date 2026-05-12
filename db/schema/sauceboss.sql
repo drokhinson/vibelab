@@ -99,8 +99,10 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauce (
   sauce_type      TEXT NOT NULL,              -- no constraints; see SauceType enum in backend
   created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   parent_sauce_id TEXT REFERENCES public.sauceboss_sauce(id) ON DELETE SET NULL,
+  default_servings SMALLINT NOT NULL DEFAULT 2,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),  -- latest-first sort key for Browse
-  CONSTRAINT sauceboss_sauce_parent_self_chk CHECK (parent_sauce_id IS NULL OR parent_sauce_id <> id)
+  CONSTRAINT sauceboss_sauce_parent_self_chk CHECK (parent_sauce_id IS NULL OR parent_sauce_id <> id),
+  CONSTRAINT sauceboss_sauce_default_servings_range CHECK (default_servings BETWEEN 1 AND 12)
 );
 ALTER TABLE public.sauceboss_sauce ENABLE ROW LEVEL SECURITY;
 

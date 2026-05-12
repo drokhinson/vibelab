@@ -15,18 +15,19 @@ export default function StepCard({
   steps,
   servings,
   unitSystem,
+  baseServings,
   disabledIngredients,
   substitutions,
 }) {
   const [showInstructions, setShowInstructions] = useState(false);
   const stepTime = step.estimatedTime || 5;
 
-  const displayItems = prepareItems(step.ingredients, { servings, unitSystem });
+  const displayItems = prepareItems(step.ingredients, { servings, unitSystem, baseServings });
 
   // Reference step (combined input) — prepend a synthetic slice for it.
   const refStep = step.inputFromStep ? steps[step.inputFromStep - 1] : null;
   if (refStep) {
-    const refTsp = cumulativeStepTsp(steps, step.inputFromStep - 1, servings);
+    const refTsp = cumulativeStepTsp(steps, step.inputFromStep - 1, servings, baseServings);
     const disp = tspToDisplay(refTsp);
     displayItems.unshift({
       name: `Step ${step.inputFromStep} combined`,

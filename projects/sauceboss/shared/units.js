@@ -9,15 +9,15 @@ export function toTsp(amount, unit) {
 
 // Total tsp produced by a step's bowl, including everything inherited from
 // upstream steps it combines in. Walks `inputFromStep` recursively.
-export function cumulativeStepTsp(steps, idx, servings) {
+export function cumulativeStepTsp(steps, idx, servings, baseServings) {
   const step = steps[idx];
   if (!step) return 0;
   let total = step.ingredients.reduce(
-    (s, it) => s + toTsp(scaleAmount(it.amount, servings), it.unit),
+    (s, it) => s + toTsp(scaleAmount(it.amount, servings, baseServings), it.unit),
     0,
   );
   if (step.inputFromStep) {
-    total += cumulativeStepTsp(steps, step.inputFromStep - 1, servings);
+    total += cumulativeStepTsp(steps, step.inputFromStep - 1, servings, baseServings);
   }
   return total;
 }
@@ -48,14 +48,14 @@ export function formatAmount(num) {
   return rounded === Math.floor(rounded) ? rounded.toFixed(0) : rounded.toFixed(1);
 }
 
-export function scaleAmount(amount, servings) {
-  return amount * (servings / 2);
+export function scaleAmount(amount, servings, baseServings) {
+  return amount * (servings / (baseServings || 2));
 }
 
 // Scales + converts a list of ingredient items for display.
-// Web base recipes are for 2 people; servings 2 → no change, servings 4 → 2x.
-export function prepareItems(items, { servings, unitSystem }) {
-  const factor = servings / 2;
+// baseServings is the number of servings the recipe was authored for (default 2).
+export function prepareItems(items, { servings, unitSystem, baseServings }) {
+  const factor = servings / (baseServings || 2);
   return items.map((item) => {
     const scaled = scaleAmount(item.amount, servings);
     const scaledItem = {

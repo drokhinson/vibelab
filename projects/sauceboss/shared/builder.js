@@ -56,6 +56,9 @@ export function applyParsedRecipe(builder, parsed) {
   if (!next.name) next.name = parsed.name || next.name || '';
   if (parsed.description && !next.description) next.description = parsed.description;
   if (parsed.sourceUrl && !next.sourceUrl) next.sourceUrl = parsed.sourceUrl;
+  if (parsed.yieldServings && parsed.yieldServings >= 1 && parsed.yieldServings <= 12) {
+    next.servings = parsed.yieldServings;
+  }
 
   const allIngs = (parsed.ingredients || [])
     .map((p) => {

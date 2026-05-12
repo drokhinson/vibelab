@@ -130,6 +130,7 @@ class CreateSauceRequest(BaseModel):
     color: str = Field(pattern=r'^#[0-9A-Fa-f]{6}$')
     description: str = ""
     sourceUrl: Optional[str] = None
+    defaultServings: int = Field(default=2, ge=1, le=12)
     sauceType: SauceType = SauceType.SAUCE
     parentSauceId: Optional[str] = None
     attachments: List[Attachment] = Field(default_factory=list)

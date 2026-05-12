@@ -266,6 +266,7 @@ def _build_sauce_payload(sauce_id: str, body: CreateSauceRequest, created_by: st
         "color": body.color,
         "description": body.description,
         "sourceUrl": body.sourceUrl,
+        "defaultServings": body.defaultServings,
         "sauceType": body.sauceType,
         "parentSauceId": body.parentSauceId,
         "attachments": [{"kind": str(a.kind), "value": a.value} for a in body.attachments],

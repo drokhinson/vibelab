@@ -319,6 +319,7 @@ function browseOpenRecipe(sauceId) {
     const found = family.find(s => s.id === sauceId) || all.find(s => s.id === sauceId);
     if (!found) { state.loading = null; render(); return; }
     state.selectedSauce = found;
+    state.servings = found.defaultServings || 2;
     state.selectedSauceFamily = family.length ? family : [found];
     state.selectedItem = null;
     state.meal = { item: null, prep: null, sauce: null };

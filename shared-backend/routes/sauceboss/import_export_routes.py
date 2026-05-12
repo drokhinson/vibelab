@@ -133,6 +133,8 @@ def _render_sauce_markdown(s: dict) -> str:
         prefix = f"{cuisine_emoji} ".strip()
         meta_bits.append(f"**Cuisine:** {prefix} {cuisine}".replace("  ", " ").strip())
     meta_bits.append(f"**Type:** {sauce_type}")
+    default_servings = s.get("defaultServings") or s.get("default_servings") or 2
+    meta_bits.append(f"**Servings:** {default_servings}")
     if pairs:
         meta_bits.append(f"**Pairs with:** {pairs}")
     if source:

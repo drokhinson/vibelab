@@ -342,6 +342,7 @@ function saucebookOpenRecipe(sauceId) {
     const rootId = found.parentSauceId || found.id;
     const family = all.filter(s => s.id === rootId || s.parentSauceId === rootId);
     state.selectedSauce = found;
+    state.servings = found.defaultServings || 2;
     state.selectedSauceFamily = family.length ? family : [found];
     state.selectedItem = null;
     state.meal = { item: null, prep: null, sauce: null };

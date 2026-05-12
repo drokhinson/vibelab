@@ -246,7 +246,7 @@ export default function ItemFormModal({ visible, mode, category, parentId, paren
 
                   {showInstructions ? (
                     <>
-                      <Text style={styles.label}>Instructions (optional)</Text>
+                      <Text style={styles.label}>Detailed Instructions (optional)</Text>
                       <TextInput
                         style={[styles.input, styles.multi]}
                         value={form.instructions}

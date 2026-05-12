@@ -225,9 +225,10 @@ function buildLegend(items) {
 }
 
 function prepareItems(items) {
-  const factor = state.servings / 2;        // base recipes are for 2 people
+  const base = state.selectedSauce?.defaultServings || 2;
+  const factor = state.servings / base;
   return items.map(item => {
-    const scaled = scaleAmount(item.amount, state.servings);
+    const scaled = scaleAmount(item.amount, state.servings, base);
     const scaledItem = {
       ...item,
       amount: scaled,
@@ -332,7 +333,7 @@ function renderRecipeStep(step, index, allSteps) {
 
   const refStep = step.inputFromStep ? allSteps[step.inputFromStep - 1] : null;
   if (refStep) {
-    const refTsp = cumulativeStepTsp(allSteps, step.inputFromStep - 1, state.servings);
+    const refTsp = cumulativeStepTsp(allSteps, step.inputFromStep - 1, state.servings, state.selectedSauce?.defaultServings || 2);
     const disp = tspToDisplay(refTsp);
     displayItems.unshift({ name: `Step ${step.inputFromStep} combined`, amount: disp.amount, unit: disp.unit });
   }
