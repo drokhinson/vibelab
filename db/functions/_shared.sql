@@ -1,0 +1,13 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- _shared — RPC function inventory
+-- Last updated: 2026-05-12
+-- FOR REFERENCE ONLY — apply changes via db/migrations/
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- admin_table_sizes()
+--   Signature : () → TABLE(table_name text, total_bytes bigint, row_estimate bigint)
+--   Language  : SQL, SECURITY DEFINER
+--   Defined in: _shared/002_admin_rpcs.sql
+--   Called by : shared-backend/routes/admin.py
+--   Purpose   : Database storage per table for the admin storage dashboard.
+--               EXECUTE is REVOKEd from PUBLIC by _shared/003_project_roles.sql.

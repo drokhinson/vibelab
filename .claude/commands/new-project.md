@@ -26,6 +26,8 @@ Create a new vibelab project. Arguments: $ARGUMENTS
 
 5. **Write the initial DB migration** — Create `db/migrations/<project-id>/001_baseline.sql` with CREATE TABLE statements for the designed schema. Use `<project-id>_` prefix on all table names. Mirror the structure of an existing app's baseline (CREATE ROLE block at top, RLS + GRANT after every table). If the app needs reference data, add `002_seed.sql` alongside.
 
+6. **Create the function inventory stub** — Create `db/functions/<project-id>.sql` with the standard header and a "No RPC functions defined" comment. If the baseline includes any `CREATE FUNCTION` statements, add entries for each one (see an existing file like `db/functions/sauceboss.sql` for the format).
+
 6. **Show the user** the completed STRUCTURE.md and migration SQL for review before writing any code.
 
 Do NOT write any implementation code until the user approves the STRUCTURE.md.

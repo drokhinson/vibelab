@@ -66,6 +66,7 @@ vibelab/
 │   ├── _shared/               ← cross-app: analytics, admin RPCs, project roles
 │   └── <app>/                 ← per-app: 001_baseline.sql + optional 002_seed.sql
 ├── db/schema/                 ← current-state schema snapshots, one file per project
+├── db/functions/              ← RPC function inventory, one file per project
 ├── _templates/                ← scaffold source, not deployed
 ├── .github/workflows/         ← CI/CD
 ├── .claude/commands/          ← Claude slash command skills
