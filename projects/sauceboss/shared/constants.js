@@ -11,7 +11,10 @@ export const CUISINES = [
   { name: 'Indian', emoji: '🇮🇳' },
 ];
 
-export const UNITS = ['tsp', 'tbsp', 'cup', 'oz', 'g', 'clove', 'cloves', 'piece', 'pinch', 'to taste'];
+export const UNITS = ['tsp', 'tbsp', 'cup', 'oz', 'g', 'clove', 'cloves', 'piece', 'pinch', 'splash', 'to taste'];
+
+/** Units where the amount field is disabled and the ingredient is excluded from the pie chart. */
+export const QUALITATIVE_UNITS = new Set(['to taste', 'splash']);
 
 export const COLOR_SWATCHES = [
   '#E85D04', '#DC2626', '#22C55E', '#3B1F0A', '#FBBF24',
