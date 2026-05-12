@@ -136,7 +136,6 @@ function renderAdmin() {
       title: 'Sauce Manager',
       subtitle: state.editMode ? 'Edit mode' : (isAdmin ? 'Admin' : (isLoggedIn ? 'Signed in' : '')),
       titleIcon: 'settings-2',
-      back: { onClick: "navigate('meal-category')" },
       manage: false,
       extraActions: editToggle + becomeAdminBtn,
     })}

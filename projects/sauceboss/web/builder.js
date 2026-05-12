@@ -48,6 +48,7 @@ function _builderWizardHeader(subtitle) {
     title: 'Recipe Builder',
     subtitle,
     back: { onClick: `navigate('${dest}')` },
+    manage: false,
   });
 }
 

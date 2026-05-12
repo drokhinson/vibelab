@@ -111,6 +111,7 @@ function renderSauceSelector() {
       subtitle: `Pick your ${ctx.sauceWord}`,
       back: { onClick: `navigate('${ctx.backScreen}')` },
       auth: false,
+      manage: false,
     })}
     <div class="scroll-body">
       <div class="card-panel" style="margin:16px">

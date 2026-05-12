@@ -59,6 +59,7 @@ function renderMealCategory() {
       subtitle: "What are you cooking with?",
       back: { onClick: "setActiveTab('saucebook')" },
       auth: false,
+      manage: false,
     })}
     <div class="scroll-body scroll-body--padded">
       <div class="hero-illustration" id="hero-illustration">${potSVG()}</div>
@@ -132,6 +133,7 @@ function renderMealSubtype() {
       subtitle: `What type of ${escapeHtml(dish.name.toLowerCase())}?`,
       back: { onClick: "navigate('meal-category')" },
       auth: false,
+      manage: false,
     })}
     <div class="scroll-body scroll-body--padded">
       <div class="carb-grid">

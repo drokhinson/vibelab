@@ -2472,6 +2472,18 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   background: white;
   border: 1px solid #F1E0CC;
 }
+.collapse-all-btn {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #9CA3AF;
+  display: flex;
+  align-items: center;
+}
+.collapse-all-btn:active { color: #E85D04; }
+.collapse-all-btn [data-lucide] { width: 18px; height: 18px; }
 
 /* Saucebook FAB cluster (lower-right) */
 .saucebook-fabs {

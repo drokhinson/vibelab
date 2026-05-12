@@ -82,6 +82,9 @@ function renderSaucebook() {
                 value="${escapeHtml(state.saucebookSearch || '')}"
                 oninput="saucebookSetSearch(this.value)"
               />
+              <button class="collapse-all-btn" onclick="saucebookToggleAllCuisines()" aria-label="${_saucebookAllCollapsed(cuisinesSorted) ? 'Expand all' : 'Collapse all'}" title="${_saucebookAllCollapsed(cuisinesSorted) ? 'Expand all' : 'Collapse all'}">
+                <i data-lucide="${_saucebookAllCollapsed(cuisinesSorted) ? 'chevrons-down-up' : 'chevrons-up-down'}"></i>
+              </button>
             </div>
           </div>
           ${_saucebookFiltersPanel(f, sauces)}
@@ -267,6 +270,22 @@ function saucebookSetSearch(q) {
 
 function saucebookToggleCuisine(name) {
   state.cuisineSections[name] = !(state.cuisineSections[name] !== false);
+  render();
+}
+
+function _saucebookAllCollapsed(cuisinesSorted) {
+  if (!cuisinesSorted || cuisinesSorted.length === 0) return false;
+  return cuisinesSorted.every(([cuisine]) => state.cuisineSections[cuisine] === false);
+}
+
+function saucebookToggleAllCuisines() {
+  // Derive cuisine list from current saucebook data so we cover cuisines
+  // that were never individually toggled (default-open).
+  const sauces = state.saucebook || [];
+  const cuisines = [...new Set(sauces.map(s => s.cuisine || 'Other'))];
+  if (!cuisines.length) return;
+  const allCollapsed = cuisines.every(c => state.cuisineSections[c] === false);
+  for (const c of cuisines) state.cuisineSections[c] = allCollapsed ? true : false;
   render();
 }
 
