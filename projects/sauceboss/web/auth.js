@@ -46,10 +46,15 @@ async function _restoreSessionFromSupabase() {
       return;
     }
     if (data?.session) {
+      // Store the session so onAuthStateChange can use it, but do NOT
+      // resolve auth here — the onAuthStateChange listener's finally block
+      // handles that after loadProfile() completes. Resolving here causes a
+      // race: init.js sees currentUser===null because loadProfile() is
+      // still in-flight inside the listener, so it skips the saucebook load.
       session = data.session;
-      if (!currentUser) {
-        await loadProfile();
-      }
+    } else {
+      // No session → anonymous user. Resolve immediately so init.js can
+      // proceed to render the Browse tab without waiting for the 3s timeout.
       _resolveInitialAuth();
     }
   } catch (err) {

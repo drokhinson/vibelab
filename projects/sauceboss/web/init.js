@@ -33,10 +33,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Phase 1 — Authenticating: Supabase roundtrip + (if session) /profile.
     await awaitInitialAuth();
 
-    // Phase 2 — Saucing: only logged-in users have content to block on.
+    // Phase 2 — Saucing: load saucebook (blocks splash) + start pantry
+    // in parallel so both resolve sooner. Pantry is fire-and-forget here;
+    // saucebook must finish before the splash drops.
     if (currentUser) {
       setSplashText('Saucing');
+      const pantryP = loadPantry();
       await loadSaucebook();
+      // pantryP settles in the background — no need to await
     }
   } catch (err) {
     console.error('[sauceboss] initial load failed', err);
@@ -61,7 +65,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // to call here even though setActiveTab('browse') would also fire it.
   browseEnsureLoaded();
   loadFilterLookups();
-  if (currentUser) loadPantry();
+  // Pantry load already kicked off in Phase 2 for logged-in users; start it
+  // here only if the user signed in between phases (e.g. via onAuthStateChange
+  // firing after awaitInitialAuth resolved).
+  if (currentUser && !state.pantry._loaded && !state.pantry.loading) loadPantry();
 
   requestAnimationFrame(() => {
     const splash    = document.getElementById('splash-screen');

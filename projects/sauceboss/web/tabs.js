@@ -63,6 +63,12 @@ function setActiveTab(name, opts = {}) {
   if (name === 'browse' && typeof browseEnsureLoaded === 'function') {
     browseEnsureLoaded();
   }
+  // Safety net: if the saucebook tab is opened but data never loaded (e.g.
+  // init.js race or late sign-in), kick off the fetch so the user never
+  // sees a permanent spinner.
+  if (name === 'saucebook' && currentUser && !state.saucebookLoaded && !state.saucebookLoading) {
+    if (typeof loadSaucebook === 'function') loadSaucebook().then(() => render());
+  }
   // Pantry groups by ingredient.category, which migration 015 folds into
   // each row of the /pantry response — no separate /ingredient-categories
   // fetch needed on the pantry path. The recipe-builder lazy-load
