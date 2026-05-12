@@ -1253,6 +1253,15 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   margin-top: 12px;
 }
 
+.builder-warning {
+  background: #FEF3C7;
+  color: #92400E;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
 .spinner-sm {
   display: inline-block;
   width: 16px; height: 16px;

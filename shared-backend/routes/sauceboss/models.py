@@ -200,6 +200,7 @@ class ParsedRecipeResponse(BaseModel):
     ingredients: List[ParsedIngredientResponse] = Field(default_factory=list)
     sourceUrl: str
     canonicalUrl: Optional[str] = None
+    warning: Optional[str] = None
 
 
 # ── Units / foods registry ────────────────────────────────────────────────────

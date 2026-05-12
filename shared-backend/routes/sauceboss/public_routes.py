@@ -478,6 +478,13 @@ async def import_recipe(body: ImportRecipeRequest) -> ParsedRecipeResponse:
         status = _SCRAPE_ERROR_STATUS.get(e.kind, 500)
         raise HTTPException(status, {"kind": str(e.kind), "message": e.message})
 
+    warning: str | None = None
+    if parsed.fallback:
+        warning = (
+            "Structured recipe data not found \u2014 imported via HTML page scrub. "
+            "Please review ingredients and steps carefully."
+        )
+
     return ParsedRecipeResponse(
         name=parsed.name,
         description=parsed.description,
@@ -499,6 +506,7 @@ async def import_recipe(body: ImportRecipeRequest) -> ParsedRecipeResponse:
         ],
         sourceUrl=parsed.source_url,
         canonicalUrl=parsed.canonical_url,
+        warning=warning,
     )
 
 

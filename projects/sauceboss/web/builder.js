@@ -105,6 +105,7 @@ function renderBuilderSource() {
   const b = state.builder;
   const esc = s => (s || '').replace(/"/g, '&quot;');
   const importErr = b.importError ? `<div class="builder-error">${esc(b.importError)}</div>` : '';
+  const importWarn = b.importWarning ? `<div class="builder-warning">⚠️ ${esc(b.importWarning)}</div>` : '';
 
   return `
     ${_builderWizardHeader('How would you like to start?')}
@@ -126,6 +127,7 @@ function renderBuilderSource() {
           </button>
         </div>
         ${importErr}
+        ${importWarn}
       </div>
 
       <div class="source-card source-card--disabled">
@@ -207,10 +209,13 @@ function renderBuilderInfo() {
       <ul class="builder-validation-list">${issues.map(msg => `<li>${esc(msg)}</li>`).join('')}</ul>
     </div>` : '';
 
+  const infoWarn = b.importWarning ? `<div class="builder-warning">⚠️ ${esc(b.importWarning)}</div>` : '';
+
   return `
     ${_builderWizardHeader('Name, describe & style your recipe')}
     <div class="scroll-body scroll-body--padded">
       ${_wizardProgress()}
+      ${infoWarn}
       ${sourceUrlHTML}
       <p class="builder-label">Sauce Name</p>
       <input class="builder-input builder-name-input" placeholder="Sauce name" value="${esc(b.name)}" data-builder-field="name">
@@ -908,11 +913,15 @@ async function builderImportUrl() {
   }
   b.importing = true;
   b.importError = null;
+  b.importWarning = null;
   render();
   try {
     const parsed = await importRecipeFromUrl(url);
     _builderApplyParsedRecipe(parsed);
     b.importing = false;
+    if (parsed.warning) {
+      b.importWarning = parsed.warning;
+    }
     if (b.importError) {
       render();
       return;
