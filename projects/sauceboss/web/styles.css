@@ -659,7 +659,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   margin-bottom: 10px;
 }
 .builder-step-time .builder-step-time-input {
-  width: 64px;
+  width: 72px;
   padding-right: 30px;
   margin-bottom: 0;
   text-align: right;
@@ -890,6 +890,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   font-size: 12px;
   font-family: inherit;
   background: white;
+  margin-bottom: 10px;
 }
 .ingredient-row .ing-unit:focus { outline: none; border-color: #E85D04; }
 .remove-ing-btn {

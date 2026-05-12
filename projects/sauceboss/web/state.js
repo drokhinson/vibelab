@@ -153,7 +153,8 @@ function defaultBuilder() {
     // ── Recipe info ────────────────────────────────────────────────────
     name: '', cuisine: '', cuisineEmoji: '', color: '', description: '', sourceUrl: '',
     sauceType: '',               // '' | 'sauce' | 'marinade' | 'dressing' — must be selected by user
-
+    // ── Servings ───────────────────────────────────────────────────────────
+    servings: 2,
     // ── Steps & ingredients ────────────────────────────────────────────
     steps: [{ title: '', instructions: '', inputFromStep: null, estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
     unassignedIngredients: [],   // imported ingredients not yet placed in a step; recipe cannot save while non-empty

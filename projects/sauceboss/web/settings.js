@@ -732,6 +732,7 @@ async function openBuilderEdit(id) {
     description: sauce.description || '',
     sourceUrl: sauce.sourceUrl || '',
     sauceType: sauce.sauceType || 'sauce',
+    servings: sauce.defaultServings || 2,
     parentSauceId: sauce.parentSauceId || null,
     itemIds: (sauce.attachments || []).filter(a => a.kind === 'dish').map(a => a.value),
     steps: (sauce.steps || []).map(s => ({
@@ -1369,6 +1370,7 @@ async function handleImportSauceFile(event) {
     description: inner.description || '',
     sourceUrl: inner.sourceUrl || '',
     sauceType: inner.sauceType || 'sauce',
+    servings: inner.defaultServings || 2,
     parentSauceId,
     itemIds,
     steps: (inner.steps || []).map(s => ({

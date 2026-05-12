@@ -167,6 +167,7 @@ export function builderFromSauce(sauce, defaults = {}) {
     description: sauce.description || '',
     sourceUrl: sauce.sourceUrl || '',
     sauceType: sauce.sauceType || 'sauce',
+    servings: sauce.defaultServings || 2,
     parentSauceId: sauce.parentSauceId || null,
     itemIds,
     steps: (sauce.steps || []).map((s) => ({

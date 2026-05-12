@@ -257,7 +257,7 @@ function renderRecipeControls() {
     <div class="recipe-controls">
       <div class="servings-control">
         <button onclick="setServings(state.servings - 1)" class="serving-btn" ${s <= 1 ? 'disabled' : ''}>−</button>
-        <span class="servings-label">${s} ${s === 1 ? 'person' : 'people'}</span>
+        <span class="servings-label">${s} ${s === 1 ? 'serving' : 'servings'}</span>
         <button onclick="setServings(state.servings + 1)" class="serving-btn" ${s >= 12 ? 'disabled' : ''}>+</button>
       </div>
       <button class="unit-toggle" onclick="setUnitSystem(state.unitSystem === 'imperial' ? 'metric' : 'imperial')">

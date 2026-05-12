@@ -19,8 +19,8 @@ function _validateInstructions(b) {
   const hasUsableStep = b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity));
   const issues = [];
   if (!trayEmpty) issues.push('Move or delete every unassigned ingredient first');
-  if (untitledStepIdxs.length) issues.push(`Add a title to step ${untitledStepIdxs.map(i => i + 1).join(', ')}`);
-  if (!hasUsableStep) issues.push('Add at least one ingredient with a quantity to a titled step');
+  if (untitledStepIdxs.length) issues.push(`Add an action to step ${untitledStepIdxs.map(i => i + 1).join(', ')}`);
+  if (!hasUsableStep) issues.push('Add at least one ingredient with a quantity to a step with an action');
   return { issues, canContinue: issues.length === 0 };
 }
 
@@ -323,7 +323,7 @@ function renderBuilderInstructions() {
       <div class="step-number">Step ${si + 1}</div>
       ${stepRefHTML}
       <div class="builder-step-headline">
-        <input class="builder-input builder-step-title" placeholder="Step title (e.g., Sauté the base)" value="${esc(step.title)}" data-builder-field="step-title" data-step="${si}">
+        <input class="builder-input builder-step-title" placeholder="Step action (e.g., Sauté the base)" value="${esc(step.title)}" data-builder-field="step-title" data-step="${si}">
         <label class="builder-step-time">
           <input class="builder-input builder-step-time-input" type="number" min="0" max="600" inputmode="numeric"
                  placeholder="5" value="${esc(String(timeValue))}"
@@ -349,6 +349,14 @@ function renderBuilderInstructions() {
     <div class="scroll-body scroll-body--padded">
       ${_wizardProgress()}
       ${unassignedHTML}
+      <p class="builder-label">Scale</p>
+      <div class="recipe-controls">
+        <div class="servings-control">
+          <button onclick="builderSetServings(state.builder.servings - 1)" class="serving-btn" ${b.servings <= 1 ? 'disabled' : ''}>−</button>
+          <span class="servings-label">${b.servings} ${b.servings === 1 ? 'serving' : 'servings'}</span>
+          <button onclick="builderSetServings(state.builder.servings + 1)" class="serving-btn" ${b.servings >= 12 ? 'disabled' : ''}>+</button>
+        </div>
+      </div>
       <p class="builder-label">Steps</p>
       ${stepsHTML}
       <button class="insert-step-divider" onclick="builderAddStep()" title="Add step">
@@ -589,6 +597,11 @@ function builderCancelNewCuisine() {
   state.builder.cuisineDraftMode = false;
   state.builder.cuisineDraftName = '';
   state.builder.cuisineDraftEmoji = '';
+  render();
+}
+
+function builderSetServings(n) {
+  state.builder.servings = Math.max(1, Math.min(12, n));
   render();
 }
 
@@ -936,7 +949,7 @@ async function builderSave() {
   if (!b.name.trim()) { b.error = 'Sauce name is required.'; render(); return; }
   if (!b.sauceType)   { b.error = 'Select a type before saving.'; render(); return; }
   if (!b.color)        { b.error = 'Pick a color before saving.'; render(); return; }
-  if (b.steps.some(s => !s.title.trim())) { b.error = 'Every step needs a title.'; render(); return; }
+  if (b.steps.some(s => !s.title.trim())) { b.error = 'Every step needs an action.'; render(); return; }
   if (b.cuisineDraftMode) {
     const draftName = (b.cuisineDraftName || '').trim();
     const draftEmoji = (b.cuisineDraftEmoji || '').trim();
@@ -960,6 +973,7 @@ async function builderSave() {
       color: b.color,
       description: b.description || '',
       sourceUrl: (b.sourceUrl || '').trim() || null,
+      defaultServings: b.servings || 2,
       sauceType: b.sauceType,
       parentSauceId: b.parentSauceId || null,
       itemIds: isStandalone ? [] : b.itemIds,

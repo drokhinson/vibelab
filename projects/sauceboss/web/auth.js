@@ -94,7 +94,19 @@ function initSupabase() {
         // decide which tab to land on and whether to fire /saucebook. No
         // other Sauceboss API calls happen here — those are init.js's job
         // under the "Saucing" splash.
-        if (sess) await loadProfile();
+        if (sess) {
+          await loadProfile();
+        } else {
+          // No session yet. If the URL contains an OAuth code or token
+          // fragment, a SIGNED_IN event will follow once the PKCE exchange
+          // completes — do NOT resolve auth now or init.js will skip the
+          // saucebook load. The 3s setTimeout is the safety net if the
+          // exchange never fires.
+          const hasAuthParams = window.location.search.includes('code=') ||
+            window.location.hash.includes('access_token=') ||
+            window.location.hash.includes('refresh_token=');
+          if (hasAuthParams) return;          // wait for SIGNED_IN
+        }
         return;
       }
       // Subsequent events (modal sign-in, sign-out, token refresh).
