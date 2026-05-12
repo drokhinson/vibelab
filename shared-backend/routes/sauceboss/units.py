@@ -1,9 +1,13 @@
 """Unit registry, quantity parsing, and canonical-quantity conversion.
 
-Single source of truth for sauceboss unit handling. The canonical units are
-millilitres for volume and grams for mass; every recipe ingredient is stored
-with both ``quantity_canonical_ml`` and ``quantity_canonical_g`` (one of which
-is null for a given unit, since v1 has no density data).
+The ``sauceboss_unit`` DB table is the single source of truth. On startup the
+backend loads the table into an in-memory cache (``UNIT_REGISTRY``) so that
+unit parsing, alias resolution, and canonical mL/g conversion run without
+hitting the database on every request.
+
+Call :func:`load_unit_registry` once at app startup (FastAPI lifespan). All
+public accessors (:data:`UNIT_REGISTRY`, :func:`parse_unit`, etc.) read from
+the cached dict.
 
 Conversion across the volume/mass boundary is a TODO — it requires a per-food
 density map. See :data:`DENSITY_TODO` below.
@@ -11,11 +15,14 @@ density map. See :data:`DENSITY_TODO` below.
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
 from fractions import Fraction
+
+log = logging.getLogger(__name__)
 
 
 class UnitDimension(StrEnum):
@@ -35,111 +42,56 @@ class UnitDef:
     ml_per_unit: float | None
     g_per_unit: float | None
     aliases: tuple[str, ...]
+    quantifiable: bool = True
 
 
-# ── Registry ──────────────────────────────────────────────────────────────────
-# Conversion factors are exact (US customary). Mealie's recipe-scrapers also
-# emits these unit names directly when scraping schema.org JSON-LD.
+# ── Registry (populated at startup by load_unit_registry) ─────────────────────
 
-UNIT_REGISTRY: dict[str, UnitDef] = {
-    "teaspoon": UnitDef(
-        id="teaspoon", name="teaspoon", plural="teaspoons",
-        abbreviation="tsp", plural_abbreviation="tsp",
-        dimension=UnitDimension.VOLUME, ml_per_unit=4.92892, g_per_unit=None,
-        aliases=("tsp", "tsps", "teaspoon", "teaspoons", "t"),
-    ),
-    "tablespoon": UnitDef(
-        id="tablespoon", name="tablespoon", plural="tablespoons",
-        abbreviation="tbsp", plural_abbreviation="tbsp",
-        dimension=UnitDimension.VOLUME, ml_per_unit=14.7868, g_per_unit=None,
-        aliases=("tbsp", "tbsps", "tablespoon", "tablespoons", "tbs", "tbl", "T"),
-    ),
-    "cup": UnitDef(
-        id="cup", name="cup", plural="cups",
-        abbreviation="cup", plural_abbreviation="cups",
-        dimension=UnitDimension.VOLUME, ml_per_unit=236.588, g_per_unit=None,
-        aliases=("cup", "cups", "c"),
-    ),
-    "fluid_ounce": UnitDef(
-        id="fluid_ounce", name="fluid ounce", plural="fluid ounces",
-        abbreviation="fl oz", plural_abbreviation="fl oz",
-        dimension=UnitDimension.VOLUME, ml_per_unit=29.5735, g_per_unit=None,
-        aliases=("fl oz", "fl. oz.", "fluid ounce", "fluid ounces", "floz"),
-    ),
-    "millilitre": UnitDef(
-        id="millilitre", name="millilitre", plural="millilitres",
-        abbreviation="ml", plural_abbreviation="ml",
-        dimension=UnitDimension.VOLUME, ml_per_unit=1.0, g_per_unit=None,
-        aliases=("ml", "milliliter", "milliliters", "millilitre", "millilitres"),
-    ),
-    "litre": UnitDef(
-        id="litre", name="litre", plural="litres",
-        abbreviation="l", plural_abbreviation="l",
-        dimension=UnitDimension.VOLUME, ml_per_unit=1000.0, g_per_unit=None,
-        aliases=("l", "liter", "liters", "litre", "litres"),
-    ),
-    "gram": UnitDef(
-        id="gram", name="gram", plural="grams",
-        abbreviation="g", plural_abbreviation="g",
-        dimension=UnitDimension.MASS, ml_per_unit=None, g_per_unit=1.0,
-        aliases=("g", "gram", "grams", "gr"),
-    ),
-    "kilogram": UnitDef(
-        id="kilogram", name="kilogram", plural="kilograms",
-        abbreviation="kg", plural_abbreviation="kg",
-        dimension=UnitDimension.MASS, ml_per_unit=None, g_per_unit=1000.0,
-        aliases=("kg", "kilogram", "kilograms"),
-    ),
-    "ounce": UnitDef(
-        id="ounce", name="ounce", plural="ounces",
-        abbreviation="oz", plural_abbreviation="oz",
-        dimension=UnitDimension.MASS, ml_per_unit=None, g_per_unit=28.3495,
-        aliases=("oz", "ounce", "ounces"),
-    ),
-    "pound": UnitDef(
-        id="pound", name="pound", plural="pounds",
-        abbreviation="lb", plural_abbreviation="lbs",
-        dimension=UnitDimension.MASS, ml_per_unit=None, g_per_unit=453.592,
-        aliases=("lb", "lbs", "pound", "pounds"),
-    ),
-    "piece": UnitDef(
-        id="piece", name="piece", plural="pieces",
-        abbreviation="piece", plural_abbreviation="pieces",
-        dimension=UnitDimension.COUNT, ml_per_unit=None, g_per_unit=None,
-        aliases=("piece", "pieces", "pc", "pcs"),
-    ),
-    "clove": UnitDef(
-        id="clove", name="clove", plural="cloves",
-        abbreviation="clove", plural_abbreviation="cloves",
-        dimension=UnitDimension.COUNT, ml_per_unit=None, g_per_unit=None,
-        aliases=("clove", "cloves"),
-    ),
-    "pinch": UnitDef(
-        id="pinch", name="pinch", plural="pinches",
-        abbreviation="pinch", plural_abbreviation="pinches",
-        dimension=UnitDimension.COUNT, ml_per_unit=None, g_per_unit=None,
-        aliases=("pinch", "pinches"),
-    ),
-    "dash": UnitDef(
-        id="dash", name="dash", plural="dashes",
-        abbreviation="dash", plural_abbreviation="dashes",
-        dimension=UnitDimension.COUNT, ml_per_unit=None, g_per_unit=None,
-        aliases=("dash", "dashes"),
-    ),
-    "to_taste": UnitDef(
-        id="to_taste", name="to taste", plural="to taste",
-        abbreviation="to taste", plural_abbreviation="to taste",
-        dimension=UnitDimension.COUNT, ml_per_unit=None, g_per_unit=None,
-        aliases=("to taste",),
-    ),
-}
-
+UNIT_REGISTRY: dict[str, UnitDef] = {}
 
 # Reverse alias index, lowercased and stripped, for fast lookup.
 _ALIAS_INDEX: dict[str, UnitDef] = {}
-for _u in UNIT_REGISTRY.values():
-    for _alias in _u.aliases:
-        _ALIAS_INDEX[_alias.lower().strip()] = _u
+
+
+def _rebuild_alias_index() -> None:
+    """Rebuild ``_ALIAS_INDEX`` from the current ``UNIT_REGISTRY``."""
+    _ALIAS_INDEX.clear()
+    for u in UNIT_REGISTRY.values():
+        for alias in u.aliases:
+            _ALIAS_INDEX[alias.lower().strip()] = u
+
+
+def load_unit_registry() -> None:
+    """Load units from the ``sauceboss_unit`` DB table into the in-memory cache.
+
+    Intended to be called once at FastAPI startup. Safe to call again to
+    refresh (e.g. after a migration adds a new unit row).
+    """
+    from db import get_supabase
+
+    sb = get_supabase()
+    resp = sb.table("sauceboss_unit").select("*").execute()
+    rows = resp.data
+
+    UNIT_REGISTRY.clear()
+    for row in rows:
+        aliases_raw = row.get("aliases") or []
+        u = UnitDef(
+            id=row["id"],
+            name=row["name"],
+            plural=row["plural"],
+            abbreviation=row["abbreviation"],
+            plural_abbreviation=row["plural_abbreviation"],
+            dimension=UnitDimension(row["dimension"]),
+            ml_per_unit=row.get("ml_per_unit"),
+            g_per_unit=row.get("g_per_unit"),
+            aliases=tuple(aliases_raw),
+            quantifiable=row.get("quantifiable", True),
+        )
+        UNIT_REGISTRY[u.id] = u
+
+    _rebuild_alias_index()
+    log.info("Loaded %d units from sauceboss_unit", len(UNIT_REGISTRY))
 
 
 # TODO(density): when a curated density map lands, allow ml→g and g→ml when

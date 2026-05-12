@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from api_logger import set_request_user
 from jwt_auth import get_current_supabase_user
+from routes.sauceboss.units import load_unit_registry
 
 # Project routers
 from routes import sauceboss
@@ -96,6 +97,12 @@ async def attach_api_logger_user_context(request: Request, call_next):
                 # back to anonymous. Never let this fail the request.
                 pass
     return await call_next(request)
+
+
+# ── Startup ────────────────────────────────────────────────────────────────────
+@app.on_event("startup")
+async def _startup():
+    load_unit_registry()
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

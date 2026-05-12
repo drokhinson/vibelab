@@ -66,7 +66,7 @@ Return a single JSON object with the following structure:
 
 ### Supported Units
 
-Use these exact unit values: `tsp`, `tbsp`, `cup`, `ml`, `l`, `oz`, `g`, `piece`, `clove`, `pinch`, `dash`, `bunch`, `can`, `slice`, `whole`, `sprig`, `stalk`, `to taste`
+Use these exact unit values: `tsp`, `tbsp`, `cup`, `ml`, `l`, `oz`, `g`, `piece`, `clove`, `pinch`, `dash`, `bunch`, `can`, `slice`, `whole`, `sprig`, `stalk`, `splash`, `to taste`
 
 ## Rules
 

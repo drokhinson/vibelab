@@ -527,6 +527,7 @@ async def list_units() -> UnitsListResponse:
             dimension=u.dimension,
             mlPerUnit=u.ml_per_unit,
             gPerUnit=u.g_per_unit,
+            quantifiable=u.quantifiable,
         )
         for u in UNIT_REGISTRY.values()
     ]

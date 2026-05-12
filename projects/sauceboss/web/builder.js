@@ -13,7 +13,7 @@ function _validateInfo(b) {
 }
 
 function _validateInstructions(b) {
-  const ingHasQuantity = i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste');
+  const ingHasQuantity = i => i.name.trim() && (parseFloat(i.amount) > 0 || QUALITATIVE_UNITS.has(i.unit));
   const trayEmpty = (b.unassignedIngredients || []).length === 0;
   const untitledStepIdxs = b.steps.map((s, i) => s.title.trim() ? -1 : i).filter(i => i >= 0);
   const hasUsableStep = b.steps.some(s => s.title.trim() && s.ingredients.some(ingHasQuantity));
@@ -249,8 +249,8 @@ function renderBuilderInstructions() {
         <span class="builder-unassigned-hint">Move each to a step or delete before continuing.</span>
       </div>
       ${b.unassignedIngredients.map((ing, ui) => {
-        const qty = ing.unit === 'to taste'
-          ? 'to taste'
+        const qty = QUALITATIVE_UNITS.has(ing.unit)
+          ? ing.unit
           : `${ing.amount !== '' && ing.amount != null ? ing.amount : ''} ${ing.unit || ''}`.trim();
         const stepOpts = b.steps.map((s, si) => {
           const label = `Step ${si + 1}${s.title ? ' — ' + s.title.slice(0, 25) : ''}`;
@@ -317,7 +317,7 @@ function renderBuilderInstructions() {
           </div>
         </div>` : '';
 
-      const isQualitative = ing.unit === 'to taste';
+      const isQualitative = QUALITATIVE_UNITS.has(ing.unit);
       return `<div class="ingredient-row-wrap">
         <div class="ingredient-row">
           <div class="ing-name-wrap">
@@ -537,7 +537,7 @@ function renderBuilderReview() {
               ${(step.inputFromSteps || []).length > 0 ? `<div class="step-ref-badge">⤶ Combines ${(step.inputFromSteps || []).map(r => 'Step ' + r).join(', ')} output</div>` : ''}
               <div class="review-ing-list">
                 ${step.ingredients.filter(i => i.name.trim()).map(i =>
-                  `<div class="review-ing-item">${i.unit === 'to taste' ? 'to taste' : `${i.amount} ${i.unit}`} ${i.name}</div>`
+                  `<div class="review-ing-item">${QUALITATIVE_UNITS.has(i.unit) ? i.unit : `${i.amount} ${i.unit}`} ${i.name}</div>`
                 ).join('')}
               </div>
             </div>
@@ -803,7 +803,7 @@ function builderHandleInput(el) {
     case 'ing-unit': {
       const prev = b.steps[si].ingredients[ii].unit;
       b.steps[si].ingredients[ii].unit = el.value;
-      if ((prev === 'to taste') !== (el.value === 'to taste')) needsRender = true;
+      if (QUALITATIVE_UNITS.has(prev) !== QUALITATIVE_UNITS.has(el.value)) needsRender = true;
       break;
     }
     case 'unassigned-target': {
@@ -1034,15 +1034,15 @@ async function builderSave() {
           inputFromSteps: s.inputFromSteps || [],
           estimatedTime: s.estimatedTime != null && s.estimatedTime !== '' ? s.estimatedTime : null,
           ingredients: s.ingredients
-            .filter(i => i.name.trim() && (parseFloat(i.amount) > 0 || i.unit === 'to taste'))
+            .filter(i => i.name.trim() && (parseFloat(i.amount) > 0 || QUALITATIVE_UNITS.has(i.unit)))
             .map(i => {
-              const isQualitative = i.unit === 'to taste';
+              const isQualitative = QUALITATIVE_UNITS.has(i.unit);
               return {
                 name: i.name.trim(),
                 amount: isQualitative ? 0 : parseFloat(i.amount),
                 unit: i.unit,
                 originalText: i.originalText || (isQualitative
-                  ? `to taste ${i.name}`.trim()
+                  ? `${i.unit} ${i.name}`.trim()
                   : `${i.amount} ${i.unit} ${i.name}`.trim()),
               };
             }),

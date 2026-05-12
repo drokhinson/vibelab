@@ -160,10 +160,11 @@
 -- update_sauceboss_sauce(p_data JSONB)
 --   Signature : (p_data JSONB) → TEXT
 --   Language  : plpgsql
---   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 003)
+--   Defined in: sauceboss/021_fix_itemids_dish_level.sql  (latest; first in 003)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --   Purpose   : Atomic full-replace of sauce scalars, items, steps, ingredients.
 --   Notes     : Accepts inputFromSteps (array) with fallback to inputFromStep (single).
+--               itemIds branch now looks up dish_level per dish instead of hardcoding 'dish'.
 
 -- fork_sauceboss_sauce(p_source_id TEXT, p_user UUID, p_data JSONB)
 --   Signature : (p_source_id TEXT, p_user UUID, p_data JSONB) → TEXT

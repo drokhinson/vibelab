@@ -220,6 +220,7 @@ class UnitRow(BaseModel):
     dimension: UnitDimensionEnum
     mlPerUnit: Optional[float] = None
     gPerUnit: Optional[float] = None
+    quantifiable: bool = True
 
 
 class UnitsListResponse(BaseModel):

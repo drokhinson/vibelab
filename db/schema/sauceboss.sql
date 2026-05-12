@@ -45,9 +45,9 @@ ALTER TABLE public.sauceboss_cuisine_info ENABLE ROW LEVEL SECURITY;
 
 -- Mealie-inspired unit registry. Single source of truth for unit names,
 -- abbreviations, plurals, dimension (volume / mass / count) and conversion
--- factors. The backend Python module routes/sauceboss/units.py mirrors this
--- table for in-process parsing; both sides MUST stay in sync — update the
--- table via migration whenever units.py changes.
+-- factors. The backend Python module routes/sauceboss/units.py loads this
+-- table into an in-memory cache at startup — the DB table is the single
+-- source of truth. Add new units via migration only.
 CREATE TABLE IF NOT EXISTS public.sauceboss_unit (
   id                  TEXT PRIMARY KEY,
   name                TEXT NOT NULL,
@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_unit (
   dimension           TEXT NOT NULL CHECK (dimension IN ('volume', 'mass', 'count')),
   ml_per_unit         DOUBLE PRECISION,         -- canonical mL per 1 of this unit (volume only)
   g_per_unit          DOUBLE PRECISION,         -- canonical g per 1 of this unit (mass only)
-  aliases             TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]
+  aliases             TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  quantifiable        BOOLEAN NOT NULL DEFAULT TRUE  -- FALSE = no numeric qty (e.g. to_taste, splash)
 );
 ALTER TABLE public.sauceboss_unit ENABLE ROW LEVEL SECURITY;
 

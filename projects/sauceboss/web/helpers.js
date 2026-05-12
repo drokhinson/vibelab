@@ -199,12 +199,12 @@ function buildPieChart(items, size = 160) {
 function buildLegend(items) {
   const total = items.reduce((s, i) => s + toTsp(i.amount, i.unit), 0);
   return items.map((item, idx) => {
-    const isQualitative = item.unit === 'to taste';
+    const isQualitative = QUALITATIVE_UNITS.has(item.unit);
     const color = ingColor(item.name, idx);
     const isDisabled = state.disabledIngredients.has(item.name);
     const sub = isDisabled ? getSubstitutionText(item.name) : '';
     const amountCell = isQualitative
-      ? '<span class="legend-amount legend-amount-qualitative">to taste</span>'
+      ? `<span class="legend-amount legend-amount-qualitative">${item.unit}</span>`
       : (() => {
           const converted = convertUnit(item.amount, item.unit, state.unitSystem, item);
           return `<span class="legend-amount">${formatAmount(converted.amount)} ${converted.unit}</span>`;
@@ -301,9 +301,9 @@ function renderRecipeIngredientPanel(sauce) {
   const items = prepareItems(aggregated);
   const isOpen = !!state.recipeIngredientsOpen;
   const rows = items.map(item => {
-    const isQualitative = item.unit === 'to taste';
+    const isQualitative = QUALITATIVE_UNITS.has(item.unit);
     const amountHTML = isQualitative
-      ? '<span class="recipe-ingredient-amount recipe-ingredient-amount--qualitative">to taste</span>'
+      ? `<span class="recipe-ingredient-amount recipe-ingredient-amount--qualitative">${item.unit}</span>`
       : `<span class="recipe-ingredient-amount">${formatAmount(item.amount)} ${item.unit}</span>`;
     return `<li class="recipe-ingredient-item">
       <span class="recipe-ingredient-name">${escapeHtml(item.name)}</span>
