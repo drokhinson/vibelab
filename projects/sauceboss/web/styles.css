@@ -514,8 +514,13 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   gap: 8px;
   padding: 5px 0;
   border-bottom: 1px solid #F3F4F6;
+  cursor: pointer;
+  transition: opacity 0.15s;
 }
+.legend-item:hover { background: #F9FAFB; }
 .legend-item:last-child { border-bottom: none; }
+.legend-hidden { opacity: 0.45; }
+.legend-hidden .legend-swatch { background: #D1D5DB !important; }
 .legend-swatch {
   width: 12px; height: 12px;
   border-radius: 3px;

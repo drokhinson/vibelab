@@ -89,9 +89,8 @@ function availableCuisines() {
   if (state.allCuisines && state.allCuisines.length) {
     return state.allCuisines.map(c => ({ name: c.cuisine, emoji: c.emoji }));
   }
-  // Fallback: hardcoded list + extras from admin sauces.
+  // Fallback: derive from admin sauces when API hasn't loaded yet.
   const seen = new Map();
-  for (const c of CUISINES) seen.set(c.name, c.emoji);
   for (const s of (state.adminSauces || [])) {
     if (s.cuisine && !seen.has(s.cuisine)) seen.set(s.cuisine, s.cuisineEmoji || '🍽');
   }
@@ -179,40 +178,57 @@ function classifyIngredientLocal(name, category) {
   state.ingredientCategories[name.trim().toLowerCase()] = category;
 }
 
-function buildPieChart(items, size = 160) {
-  const total = items.reduce((s, item) => s + toTsp(item.amount, item.unit), 0);
-  if (total === 0) return '';
+function togglePieSlice(stepIndex, name) {
+  if (!state.hiddenPieSlices[stepIndex]) state.hiddenPieSlices[stepIndex] = new Set();
+  const set = state.hiddenPieSlices[stepIndex];
+  if (set.has(name)) set.delete(name); else set.add(name);
+  render();
+}
+
+function buildPieChart(items, size = 160, stepIndex) {
+  const hidden = stepIndex != null && state.hiddenPieSlices[stepIndex] || null;
+  const visible = hidden ? items.filter(i => !hidden.has(i.name)) : items;
+  const total = visible.reduce((s, item) => s + toTsp(item.amount, item.unit), 0);
   const cx = size / 2, cy = size / 2, r = size / 2 - 6;
-  if (items.length === 1) {
-    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="pie-chart"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${ingColor(items[0].name, 0)}" stroke="#FFF8F0" stroke-width="2"/></svg>`;
+  if (total === 0) return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="pie-chart"><circle cx="${cx}" cy="${cy}" r="${r}" fill="#E5E7EB" stroke="#FFF8F0" stroke-width="2"/></svg>`;
+  if (visible.length === 1) {
+    const origIdx = items.indexOf(visible[0]);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="pie-chart"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${ingColor(visible[0].name, origIdx)}" stroke="#FFF8F0" stroke-width="2"/></svg>`;
   }
   let currentAngle = 0, svgPaths = '';
-  items.forEach((item, idx) => {
+  visible.forEach(item => {
+    const origIdx = items.indexOf(item);
     const pct = toTsp(item.amount, item.unit) / total;
     const sweep = pct * 360;
-    svgPaths += `<path d="${arcPath(cx, cy, r, currentAngle, currentAngle + sweep)}" fill="${ingColor(item.name, idx)}" stroke="#FFF8F0" stroke-width="2"/>`;
+    svgPaths += `<path d="${arcPath(cx, cy, r, currentAngle, currentAngle + sweep)}" fill="${ingColor(item.name, origIdx)}" stroke="#FFF8F0" stroke-width="2"/>`;
     currentAngle += sweep;
   });
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="pie-chart">${svgPaths}</svg>`;
 }
 
-function buildLegend(items) {
-  const total = items.reduce((s, i) => s + toTsp(i.amount, i.unit), 0);
+function buildLegend(items, stepIndex) {
+  const hidden = stepIndex != null && state.hiddenPieSlices[stepIndex] || null;
+  const visibleItems = hidden ? items.filter(i => !hidden.has(i.name)) : items;
+  const total = visibleItems.reduce((s, i) => s + toTsp(i.amount, i.unit), 0);
   return items.map((item, idx) => {
     const isQualitative = QUALITATIVE_UNITS.has(item.unit);
     const color = ingColor(item.name, idx);
     const isDisabled = state.disabledIngredients.has(item.name);
+    const isHidden = hidden ? hidden.has(item.name) : false;
     const sub = isDisabled ? getSubstitutionText(item.name) : '';
+    const safeName = item.name.replace(/'/g, "\\'");
+    const clickAttr = stepIndex != null ? ` onclick="togglePieSlice(${stepIndex}, '${safeName}')"` : '';
     const amountCell = isQualitative
       ? `<span class="legend-amount legend-amount-qualitative">${item.unit}</span>`
       : (() => {
           const converted = convertUnit(item.amount, item.unit, state.unitSystem, item);
           return `<span class="legend-amount">${formatAmount(converted.amount)} ${converted.unit}</span>`;
         })();
-    const pctCell = isQualitative
+    const pctCell = isQualitative || isHidden
       ? '<span class="legend-pct"></span>'
-      : `<span class="legend-pct">${Math.round((toTsp(item.amount, item.unit) / total) * 100)}%</span>`;
-    return `<div class="legend-item${isDisabled ? ' legend-disabled' : ''}">
+      : `<span class="legend-pct">${total ? Math.round((toTsp(item.amount, item.unit) / total) * 100) : 0}%</span>`;
+    const cls = ['legend-item', isDisabled && 'legend-disabled', isHidden && 'legend-hidden'].filter(Boolean).join(' ');
+    return `<div class="${cls}"${clickAttr}>
       <span class="legend-swatch" style="background:${color}"></span>
       <div class="legend-name-wrap">
         <span class="legend-name">${item.name}</span>
@@ -337,7 +353,14 @@ function renderRecipeStep(step, index, allSteps) {
     if (refStep) {
       const refTsp = cumulativeStepTsp(allSteps, ref - 1, state.servings, state.selectedSauce?.defaultServings || 2);
       const disp = tspToDisplay(refTsp);
-      displayItems.unshift({ name: `Step ${ref} combined`, amount: disp.amount, unit: disp.unit });
+      const refName = `Step ${ref} combined`;
+      displayItems.unshift({ name: refName, amount: disp.amount, unit: disp.unit });
+      // Default previous-step sections to hidden so they don't dwarf new ingredients
+      if (!state.hiddenPieSlices[index]) state.hiddenPieSlices[index] = new Set();
+      if (!state.hiddenPieSlices[index]._defaulted) {
+        state.hiddenPieSlices[index].add(refName);
+        state.hiddenPieSlices[index]._defaulted = true;
+      }
     }
   }
 
@@ -352,8 +375,8 @@ function renderRecipeStep(step, index, allSteps) {
     </div>
     ${step.instructions ? `<p class="step-instructions-body" hidden>${escapeHtml(step.instructions)}</p>` : ''}
     <div class="step-viz">
-      ${buildPieChart(displayItems, 80)}
-      <div class="step-legend">${buildLegend(displayItems)}</div>
+      ${buildPieChart(displayItems, 80, index)}
+      <div class="step-legend">${buildLegend(displayItems, index)}</div>
     </div>
   </div>`;
 }
@@ -675,7 +698,7 @@ function _tabPlaceholder(label) {
   return `<div class="screen-wrap"><div class="scroll-body"><p style="padding:2rem;text-align:center;color:#6B7280">${label} loading…</p></div></div>`;
 }
 
-// Load cuisine + dish lookups for the filter panels (non-blocking, fire once).
+// Load cuisine + dish + unit lookups for the filter panels (non-blocking, fire once).
 async function loadFilterLookups() {
   // Load each independently so one failure doesn't block the other.
   try {
@@ -687,6 +710,21 @@ async function loadFilterLookups() {
     state.allFilterDishes = await api.filterDishes();
   } catch (err) {
     console.warn('[sauceboss] dish lookup failed', err);
+  }
+  try {
+    const rows = await api.units();
+    if (rows.length) {
+      state.allUnits = rows;
+      // Overwrite the hardcoded globals with DB-driven values so every
+      // consumer (builder dropdown, pie-chart gating, ingredient validation)
+      // picks up units the backend actually knows about.
+      window.UNITS = rows.map(u => u.abbreviation);
+      window.QUALITATIVE_UNITS = new Set(
+        rows.filter(u => !u.quantifiable).map(u => u.abbreviation)
+      );
+    }
+  } catch (err) {
+    console.warn('[sauceboss] unit lookup failed, using hardcoded list', err);
   }
   render();
 }

@@ -698,6 +698,7 @@ function selectSauceFromManager(id) {
   state.selectedSauceFamily = family ? [family.root, ...family.variants] : [sauce];
   state.selectedSauce       = sauce;
   state.servings            = sauce.defaultServings || 2;
+  state.hiddenPieSlices     = {};
   state.selectedItem        = null;
   state.selectedPrep        = null;
   state.meal                = { item: null, prep: null, sauce: null };

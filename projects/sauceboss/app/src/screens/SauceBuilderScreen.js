@@ -33,7 +33,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAppActions, useAppState } from '../store/AppContext';
 import { api } from '../api/client';
-import { CUISINES, UNITS, COLOR_SWATCHES, SAUCE_TYPES } from '#shared/constants';
+import { COLOR_SWATCHES, SAUCE_TYPES } from '#shared/constants';
 import { validateBuilder } from '#shared/validation';
 import { applyParsedRecipe, builderFromSauce } from '#shared/builder';
 import FoodAutocomplete from '../components/FoodAutocomplete';
@@ -538,17 +538,19 @@ export default function SauceBuilderScreen({ navigation, route }) {
 
           <Text style={styles.label}>Cuisine</Text>
           <View style={styles.pillRow}>
-            {CUISINES.map((c) => {
-              const active = builder.cuisine === c.name;
+            {(state.refCuisines || []).map((c) => {
+              const name = c.cuisine || c.name;
+              const emoji = c.emoji || '🍽';
+              const active = builder.cuisine === name;
               return (
                 <TouchableOpacity
-                  key={c.name}
-                  onPress={() => pickCuisine(c)}
+                  key={name}
+                  onPress={() => pickCuisine({ name, emoji })}
                   style={[styles.pill, active && styles.pillActive]}
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
-                    {c.emoji} {c.name}
+                    {emoji} {name}
                   </Text>
                 </TouchableOpacity>
               );
@@ -994,6 +996,7 @@ function ReviewScreen({ builder, items, editingId, saving, saveError, insets, on
 function UnitPicker({ value, onChange }) {
   // Inline horizontal scroll picker — keeps the form simple on mobile.
   const [open, setOpen] = useState(false);
+  const state = useAppState();
   return (
     <View>
       <TouchableOpacity
@@ -1010,15 +1013,18 @@ function UnitPicker({ value, onChange }) {
           contentContainerStyle={styles.unitDropdown}
           keyboardShouldPersistTaps="handled"
         >
-          {UNITS.map((u) => (
-            <TouchableOpacity
-              key={u}
-              style={[styles.unitOption, u === value && styles.unitOptionActive]}
-              onPress={() => { onChange(u); setOpen(false); }}
-            >
-              <Text style={[styles.unitOptionLabel, u === value && styles.unitOptionLabelActive]}>{u}</Text>
-            </TouchableOpacity>
-          ))}
+          {(state.refUnits || []).map((row) => {
+            const u = row.abbreviation || row.id;
+            return (
+              <TouchableOpacity
+                key={u}
+                style={[styles.unitOption, u === value && styles.unitOptionActive]}
+                onPress={() => { onChange(u); setOpen(false); }}
+              >
+                <Text style={[styles.unitOptionLabel, u === value && styles.unitOptionLabelActive]}>{u}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       ) : null}
     </View>

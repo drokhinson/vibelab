@@ -153,6 +153,7 @@ function selectSauce(rootId, displayedId) {
     state.selectedSauce = found;
     state.servings = found.defaultServings || 2;
     state.selectedSauceFamily = fullFamily.length ? fullFamily : [found];
+    state.hiddenPieSlices = {};
     state.meal.item  = state.selectedItem;
     state.meal.prep  = state.selectedPrep;
     state.meal.sauce = found;
@@ -170,6 +171,7 @@ function selectVariant(id) {
   if (!next) return;
   state.selectedSauce = next;
   state.servings = next.defaultServings || 2;
+  state.hiddenPieSlices = {};
   if (state.meal && state.meal.sauce) state.meal.sauce = next;
   render();
 }

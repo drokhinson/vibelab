@@ -1,9 +1,12 @@
 'use strict';
 
-// Builder constants (CUISINES, UNITS, COLOR_SWATCHES, SAUCE_TYPES, PALETTE,
-// ING_COLOR, STEP_OUTPUT_COLOR, TO_TSP, VOLUME_TO_ML, WEIGHT_TO_G, COUNT_UNITS,
+// Builder constants (COLOR_SWATCHES, SAUCE_TYPES, PALETTE, ING_COLOR,
+// STEP_OUTPUT_COLOR, TO_TSP, VOLUME_TO_ML, WEIGHT_TO_G, COUNT_UNITS,
 // CATEGORY_ORDER) are defined in shared/constants.js and exposed on `window`
 // by shared-bridge.js — they're available as globals from this script onward.
+//
+// CUISINES, UNITS, and QUALITATIVE_UNITS start as empty defaults and are
+// overwritten at runtime by loadFilterLookups() from the backend API.
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 let supabaseClient = null;
@@ -31,6 +34,7 @@ let state = {
   saladBases: [],
   // ── Dynamic filter lookups (loaded once on boot, used by Browse + Saucebook) ──
   allCuisines: [],              // [{cuisine, emoji}] from GET /cuisines
+  allUnits: null,               // UnitRow[] from GET /units — drives UNITS + QUALITATIVE_UNITS globals
   allFilterDishes: [],          // [{id, name, emoji, category}] from GET /filter-dishes
   // ── Saucebook (per-user library; references — not copies). Populated by
   // api.listSaucebook() on login; cleared on logout. Each row is a full sauce
@@ -143,6 +147,7 @@ let state = {
 // mirrors `state.pantry.missing` (Set<ingredientId>) into this set after each
 // pantry hydration, and `togglePantryMissing` keeps the two in sync.
 state.disabledIngredients = new Set();
+state.hiddenPieSlices = {};  // { [stepIndex]: Set<ingredientName> } — per-step pie chart legend toggles
 
 function defaultBuilder() {
   return {

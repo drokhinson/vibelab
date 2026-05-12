@@ -36,7 +36,11 @@ export const initialState = {
   servings: 2,
   unitSystem: 'imperial', // 'imperial' | 'metric'
 
-  // Reference data
+  // Reference data — loaded from backend on boot (see boot useEffect below).
+  // Cuisines ← GET /api/v1/sauceboss/cuisines  (DB: sauceboss_cuisine_info)
+  // Units    ← GET /api/v1/sauceboss/units      (DB: sauceboss_unit)
+  refCuisines: [],              // [{ cuisine, emoji }]
+  refUnits: [],                 // [{ id, abbreviation, quantifiable, ... }]
   ingredientCategories: {},
   substitutions: {},
 
@@ -152,6 +156,8 @@ const A = {
   INGREDIENT_MERGE_SET_ERROR: 'INGREDIENT_MERGE_SET_ERROR',
 
   // Phase 2 hooks (auth). Not used in Phase 1 but reducer handles them so wiring later is trivial.
+  SET_REF_CUISINES: 'SET_REF_CUISINES',
+  SET_REF_UNITS: 'SET_REF_UNITS',
   SET_AUTH_READY: 'SET_AUTH_READY',
   SET_AUTH_BUSY: 'SET_AUTH_BUSY',
   SET_AUTH_ERROR: 'SET_AUTH_ERROR',
@@ -178,6 +184,11 @@ function reducer(state, action) {
       };
     case A.BOOT_ERROR:
       return { ...state, bootError: action.error, initialLoaded: false };
+
+    case A.SET_REF_CUISINES:
+      return { ...state, refCuisines: action.payload || [] };
+    case A.SET_REF_UNITS:
+      return { ...state, refUnits: action.payload || [] };
 
     case A.SET_INGREDIENT_CATEGORIES:
       return { ...state, ingredientCategories: action.payload || {} };
@@ -603,6 +614,14 @@ export function AppProvider({ children }) {
       );
       api.substitutions().then(
         (data) => !cancelled && dispatch({ type: A.SET_SUBSTITUTIONS, payload: data || {} }),
+        () => {},
+      );
+      api.cuisines().then(
+        (data) => !cancelled && dispatch({ type: A.SET_REF_CUISINES, payload: data || [] }),
+        () => {},
+      );
+      api.units().then(
+        (rows) => !cancelled && dispatch({ type: A.SET_REF_UNITS, payload: rows || [] }),
         () => {},
       );
     })();

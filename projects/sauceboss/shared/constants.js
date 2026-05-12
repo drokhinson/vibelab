@@ -1,20 +1,30 @@
 // SauceBoss shared constants — pure data, no DOM, no React Native imports.
-// Mirrors web/state.js lines 4-60.
 
-export const CUISINES = [
-  { name: 'Italian', emoji: '🇮🇹' },
-  { name: 'Asian', emoji: '🌏' },
-  { name: 'Mexican', emoji: '🇲🇽' },
-  { name: 'Mediterranean', emoji: '🫒' },
-  { name: 'BBQ', emoji: '🔥' },
-  { name: 'French', emoji: '🇫🇷' },
-  { name: 'Indian', emoji: '🇮🇳' },
-];
+// ── DB-driven reference data ─────────────────────────────────────────────────
+// CUISINES, UNITS, and QUALITATIVE_UNITS are loaded at runtime from the
+// backend and should NOT be hardcoded here.
+//
+//   Source of truth:
+//     • Cuisines  → DB table `sauceboss_cuisine_info`
+//                   API: GET /api/v1/sauceboss/cuisines
+//     • Units     → DB table `sauceboss_unit`
+//                   API: GET /api/v1/sauceboss/units
+//     • Qualitative units → derived from `sauceboss_unit.quantifiable = false`
+//
+//   Web:    loaded in helpers.js → loadFilterLookups(), overwrites window globals.
+//   Native: loaded in AppContext.js boot effect, stored in state.refCuisines / state.refUnits.
+//
+// Empty defaults below prevent import errors; they're replaced before the UI
+// renders any consumer (builder dropdown, cuisine chips, pie-chart gating).
 
-export const UNITS = ['tsp', 'tbsp', 'cup', 'oz', 'g', 'clove', 'cloves', 'piece', 'pinch', 'splash', 'to taste'];
+/** @type {{ name: string, emoji: string }[]} */
+export const CUISINES = [];
+
+/** @type {string[]} */
+export const UNITS = [];
 
 /** Units where the amount field is disabled and the ingredient is excluded from the pie chart. */
-export const QUALITATIVE_UNITS = new Set(['to taste', 'splash']);
+export const QUALITATIVE_UNITS = new Set();
 
 export const COLOR_SWATCHES = [
   '#E85D04', '#DC2626', '#22C55E', '#3B1F0A', '#FBBF24',
