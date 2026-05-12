@@ -248,7 +248,12 @@ def _ensure_attachments(body: CreateSauceRequest) -> None:
         return
     if not body.attachments:
         if body.itemIds:
-            body.attachments = [Attachment(kind="dish", value=v) for v in body.itemIds]
+            sb = get_supabase()
+            rows = sb.table("sauceboss_dish").select("id, dish_level").in_("id", body.itemIds).execute()
+            level_map = {r["id"]: r["dish_level"] for r in (rows.data or [])}
+            body.attachments = [
+                Attachment(kind=level_map.get(v, "dish"), value=v) for v in body.itemIds
+            ]
     if not body.attachments and not body.itemIds:
         raise HTTPException(
             status_code=422,

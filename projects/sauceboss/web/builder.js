@@ -228,7 +228,7 @@ function renderBuilderInfo() {
       <p class="builder-label">Color</p>
       <div class="color-swatches">${colorDots}</div>
       ${validationHTML}
-      <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>Continue — Recipe Steps</button>
+      <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>${state.builder.returnToReview ? 'Back to Review' : 'Continue — Recipe Steps'}</button>
       ${_builderBackLink()}
     </div>
   `;
@@ -385,7 +385,7 @@ function renderBuilderInstructions() {
         <span class="insert-step-line"></span><span class="insert-step-plus">+</span><span class="insert-step-line"></span>
       </button>
       ${validationHTML}
-      <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>Continue — Dish Pairing</button>
+      <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>${state.builder.returnToReview ? 'Back to Review' : 'Continue — Dish Pairing'}</button>
       ${_builderBackLink()}
     </div>
   `;
@@ -405,6 +405,21 @@ function _builderItemPool() {
 
 function _allVariantIds(dish) {
   return (dish.variants || dish.subtypes || []).map(v => v.id);
+}
+
+/** Map flat itemIds into typed attachments using dishLevel from the item pool. */
+function _buildAttachments(itemIds) {
+  const pool = _builderItemPool();
+  const lookup = new Map();
+  for (const dish of pool) {
+    lookup.set(dish.id, dish.dishLevel || 'dish');
+    for (const v of (dish.variants || dish.subtypes || [])) {
+      lookup.set(v.id, v.dishLevel || 'subtype');
+    }
+  }
+  return itemIds
+    .filter(id => lookup.has(id))
+    .map(id => ({ kind: lookup.get(id), value: id }));
 }
 
 function renderBuilderPairing() {
@@ -475,7 +490,7 @@ function renderBuilderPairing() {
       <p class="builder-label">Type</p>
       <div class="builder-chip-row">${sauceTypeChips}</div>
       ${treeHTML}
-      <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>Continue — Review</button>
+      <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>${state.builder.returnToReview ? 'Back to Review' : 'Continue — Review'}</button>
       ${_builderBackLink()}
     </div>
   `;
@@ -1025,7 +1040,7 @@ async function builderSave() {
       sauceType: b.sauceType,
       parentSauceId: b.parentSauceId || null,
       itemIds: isStandalone ? [] : b.itemIds,
-      attachments: isStandalone ? [] : undefined,
+      attachments: isStandalone ? [] : _buildAttachments(b.itemIds),
       steps: b.steps
         .map(s => ({
           title: s.title.trim(),
