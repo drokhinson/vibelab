@@ -19,16 +19,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Closet controls
-  const sortSel = document.getElementById("closet-sort");
-  if (sortSel) {
-    sortSel.value = closetSort;
-    sortSel.addEventListener("change", (e) => {
-      closetSort = e.target.value;
-      localStorage.setItem("bgb_closet_sort", closetSort);
-      loadCloset();
-    });
-  }
-
   const toggleBtn = document.getElementById("closet-view-toggle");
   if (toggleBtn) {
     toggleBtn.addEventListener("click", () => {

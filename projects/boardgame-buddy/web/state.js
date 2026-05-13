@@ -86,3 +86,6 @@ let guideSearchQuery = "";         // case-insensitive substring search
 
 // BGG search
 let bggSearchResults = [];
+
+// Import view tab state
+let importTab = "bgg"; // bgg | file | admin

@@ -414,6 +414,32 @@ body {
     0 0 18px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
+/* ── Browse: floating import button ─────────────────────────────────────── */
+.fab-import {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: oklch(var(--p));
+  color: oklch(var(--pc));
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 38;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.fab-import:hover  { transform: translateY(-2px); }
+.fab-import:active { transform: translateY(0); }
+.fab-import:focus-visible {
+  outline: 2px solid oklch(var(--p));
+  outline-offset: 3px;
+}
+
 /* ── Live session bubble (overlay panel above the FAB) ──────────────────── */
 .session-backdrop {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);

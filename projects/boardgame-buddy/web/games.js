@@ -229,8 +229,7 @@ function hasBrowseActiveFilter() {
   return gamesFilterPlayers !== null
     || gamesFilterPlaytimeMin !== null
     || gamesFilterPlaytimeMax !== null
-    || gamesFilterMechanics.length > 0
-    || gamesFilterOwnedOnly;
+    || gamesFilterMechanics.length > 0;
 }
 
 async function initBrowseFilters() {
@@ -282,7 +281,6 @@ function renderBrowseActiveFilterBar() {
 
 function browseFilterPills() {
   const pills = [];
-  if (gamesFilterOwnedOnly) pills.push('<span class="badge badge-sm badge-outline">Owned only</span>');
   if (gamesFilterPlayers !== null) pills.push(`<span class="badge badge-sm badge-outline">${gamesFilterPlayers === 8 ? '8+' : gamesFilterPlayers}P</span>`);
   if (gamesFilterPlaytimeMin !== null || gamesFilterPlaytimeMax !== null) {
     const chip = PLAYTIME_CHIPS.find(c => c.min === gamesFilterPlaytimeMin && c.max === gamesFilterPlaytimeMax);
@@ -298,21 +296,8 @@ function renderFilterStrip() {
 
   const mechanicsCount = gamesFilterMechanics.length;
 
-  const sourceToggle = currentUser ? `
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="text-xs text-base-content/50 mr-1">Show</span>
-        <div class="join">
-          <button class="btn btn-sm join-item ${gamesFilterOwnedOnly ? 'btn-outline' : 'btn-primary'}"
-                  onclick="setOwnedOnlyFilter(false)">All games</button>
-          <button class="btn btn-sm join-item ${gamesFilterOwnedOnly ? 'btn-primary' : 'btn-outline'}"
-                  onclick="setOwnedOnlyFilter(true)">Owned only</button>
-        </div>
-      </div>` : "";
-
   el.innerHTML = `
     <div class="bgb-filter-panel space-y-2">
-
-      ${sourceToggle}
 
       <!-- Players row -->
       <div class="flex items-center gap-2 flex-wrap">
@@ -418,16 +403,6 @@ function clearBrowseFilters() {
   gamesFilterPlaytimeMin = null;
   gamesFilterPlaytimeMax = null;
   gamesFilterMechanics = [];
-  gamesFilterOwnedOnly = false;
-  gamesPage = 1;
-  renderFilterStrip();
-  renderBrowseActiveFilterBar();
-  loadGames();
-}
-
-function setOwnedOnlyFilter(value) {
-  if (gamesFilterOwnedOnly === value) return;
-  gamesFilterOwnedOnly = value;
   gamesPage = 1;
   renderFilterStrip();
   renderBrowseActiveFilterBar();
@@ -507,25 +482,31 @@ async function searchBGG() {
 function renderBggResults() {
   const container = document.getElementById("bgg-results");
   if (!bggSearchResults.length) {
-    container.innerHTML = '<p class="text-base-content/50 text-sm">No results from BoardGameGeek.</p>';
+    container.innerHTML = '<p class="text-base-content/50 text-sm mt-2">No results from BoardGameGeek.</p>';
     return;
   }
-  container.innerHTML = bggSearchResults.map(r => `
-    <div class="flex items-center justify-between py-2 border-b border-base-300">
-      <div class="min-w-0">
-        <a href="${r.bgg_url}" target="_blank" rel="noopener"
-           class="font-medium text-sm link link-hover inline-flex items-center gap-1">
-          ${r.name}
-          <i data-lucide="external-link" class="w-3 h-3 opacity-60"></i>
-        </a>
-        ${r.year_published ? `<span class="text-xs text-base-content/50 ml-1">(${r.year_published})</span>` : ""}
-      </div>
-      ${r.already_in_db
-        ? '<span class="badge badge-sm badge-success">Imported</span>'
-        : `<button class="btn btn-xs btn-primary" onclick="importBggGame(${r.bgg_id})">Add</button>`
-      }
-    </div>
-  `).join("");
+  container.innerHTML = `
+    <ul class="menu bg-base-200 rounded-box mt-1 max-h-72 overflow-y-auto shadow-lg border border-base-300 p-1">
+      ${bggSearchResults.map(r => `
+        <li>
+          <div class="flex items-center justify-between gap-2 py-1 px-2">
+            <div class="min-w-0 flex-1">
+              <a href="${r.bgg_url}" target="_blank" rel="noopener"
+                 class="font-medium text-sm link link-hover inline-flex items-center gap-1"
+                 onclick="event.stopPropagation()">
+                ${r.name}
+                <i data-lucide="external-link" class="w-3 h-3 opacity-60"></i>
+              </a>
+              ${r.year_published ? `<span class="text-xs text-base-content/50 ml-1">(${r.year_published})</span>` : ""}
+            </div>
+            ${r.already_in_db
+              ? '<span class="badge badge-sm badge-success">Imported</span>'
+              : `<button class="btn btn-xs btn-primary" onclick="event.stopPropagation(); importBggGame(${r.bgg_id})">Add</button>`
+            }
+          </div>
+        </li>
+      `).join("")}
+    </ul>`;
   lucide.createIcons();
 }
 
@@ -543,6 +524,7 @@ async function importBggGame(bggId) {
 }
 
 function prefillImportSearch(query) {
+  importTab = "bgg";
   showView("import");
   renderImport();
   const input = document.getElementById("bgg-search-input");

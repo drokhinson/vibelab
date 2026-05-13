@@ -129,9 +129,6 @@ function renderListSkeleton() {
 }
 
 function applyClosetControls() {
-  const sortSel = document.getElementById("closet-sort");
-  if (sortSel) sortSel.value = closetSort;
-
   const toggleBtn = document.getElementById("closet-view-toggle");
   if (toggleBtn) {
     // The icon shows what you'll *switch to* when tapping.

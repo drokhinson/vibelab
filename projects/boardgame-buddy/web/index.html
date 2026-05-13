@@ -66,9 +66,6 @@
         <h2 class="text-xl font-bold font-display flex items-center gap-2">
           <i data-lucide="search" class="w-5 h-5"></i> Browse Games
         </h2>
-        <button class="btn btn-outline btn-sm" onclick="showView('import'); renderImport();" title="Import new games">
-          <i data-lucide="download" class="w-4 h-4"></i> Import
-        </button>
       </div>
       <div class="flex items-center gap-2 mb-3">
         <form id="game-search-form" class="flex-1 min-w-0">
@@ -90,6 +87,12 @@
       <div id="browse-active-filter-bar" class="hidden mb-2"></div>
       <div id="browse-filters" class="hidden mb-3"></div>
       <div id="games-grid"></div>
+
+      <!-- Floating import button -->
+      <button class="fab-import" onclick="showView('import'); renderImport();"
+              aria-label="Import games" title="Import games">
+        <i data-lucide="download" class="w-5 h-5"></i>
+      </button>
     </main>
 
     <!-- Closet View -->
@@ -98,6 +101,9 @@
         <h2 class="text-xl font-bold font-display flex items-center gap-2">
           <i data-lucide="library-big" class="w-5 h-5"></i> My Closet
         </h2>
+        <button id="closet-view-toggle" class="btn btn-ghost btn-square btn-sm" title="Toggle view">
+          <i data-lucide="library-big" class="w-5 h-5"></i>
+        </button>
       </div>
       <!-- Tabs: Collection | Wishlist -->
       <div role="tablist" class="tabs tabs-boxed mb-3">
@@ -107,20 +113,13 @@
       <!-- Collection controls (hidden on wishlist tab) -->
       <div class="flex items-center gap-2 mb-3" id="closet-controls">
         <div class="relative flex-1 min-w-0">
-          <input type="text" id="closet-search" class="input input-bordered input-sm w-full pr-8" placeholder="Search your games..." />
+          <input type="text" id="closet-search" class="input input-bordered w-full pr-8" placeholder="Search your games..." />
           <button type="button" id="closet-search-clear" class="absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle hidden" onclick="clearClosetSearch()" aria-label="Clear search">
             <i data-lucide="x" class="w-3.5 h-3.5"></i>
           </button>
         </div>
-        <select id="closet-sort" class="select select-bordered select-sm">
-          <option value="alphabetical">A → Z</option>
-          <option value="last_played">Last Played</option>
-        </select>
-        <button id="closet-filter-toggle" class="btn btn-ghost btn-square min-h-11 h-11 w-11" onclick="toggleClosetFilters()" title="Filters">
+        <button id="closet-filter-toggle" class="btn btn-sm btn-square" onclick="toggleClosetFilters()" title="Filters">
           <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-        </button>
-        <button id="closet-view-toggle" class="btn btn-ghost btn-square min-h-11 h-11 w-11" title="Toggle view">
-          <i data-lucide="library-big" class="w-5 h-5"></i>
         </button>
       </div>
       <div id="closet-active-filter-bar" class="hidden mb-2"></div>
