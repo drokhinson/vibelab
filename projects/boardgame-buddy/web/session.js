@@ -305,7 +305,7 @@ function renderBuddySuggestions(query) {
   const newRow = (q && !exact) ? `
     <li class="px-2 py-1.5 rounded cursor-pointer hover:bg-base-200 text-sm flex items-center gap-2 text-base-content/70"
         onmousedown="event.preventDefault()"
-        onclick="pickNewBuddy(${JSON.stringify(query)})">
+        onclick="pickNewBuddy(${escapeHtml(JSON.stringify(query))})">
       <i data-lucide="user-plus" class="w-3 h-3"></i>
       <span>Use "<span class="font-medium">${escapeHtml(query)}</span>" as new buddy</span>
     </li>` : "";
@@ -316,7 +316,7 @@ function renderBuddySuggestions(query) {
     return `
       <li class="px-2 py-1.5 rounded cursor-pointer hover:bg-base-200 text-sm flex items-center gap-2 ${used ? 'opacity-40' : ''}"
           onmousedown="event.preventDefault()"
-          onclick="pickBuddy(${JSON.stringify(name)})">
+          onclick="pickBuddy(${escapeHtml(JSON.stringify(name))})">
         <span class="avatar-bubble avatar-bubble--xs">${escapeHtml(initials)}</span>
         <span class="flex-1 truncate">${escapeHtml(name)}</span>
         ${b.play_count ? `<span class="text-xs opacity-50">${b.play_count}</span>` : ""}

@@ -18,6 +18,7 @@ function resetShelfState() {
     shelfTotal[key] = 0;
     shelfHasMore[key] = true;
     shelfLoading[key] = false;
+    closetDisplayPage[key] = 1;
     if (_shelfObservers[key]) {
       _shelfObservers[key].disconnect();
       _shelfObservers[key] = null;
@@ -51,25 +52,20 @@ async function loadCloset() {
 
 async function loadShelfPage(shelf, page) {
   if (shelfLoading[shelf]) return;
-  if (page > 1 && !shelfHasMore[shelf]) return;
 
   shelfLoading[shelf] = true;
   try {
     const params = new URLSearchParams({
       status: shelf,
-      page,
-      per_page: SHELF_PER_PAGE,
+      page: 1,
+      per_page: 500,
       sort: closetSort,
     });
     const data = await apiFetch(`/collection/shelf?${params}`);
-    if (page === 1) {
-      shelfItems[shelf] = data.items;
-    } else {
-      shelfItems[shelf] = shelfItems[shelf].concat(data.items);
-    }
-    shelfPage[shelf] = page;
+    shelfItems[shelf] = data.items;
+    shelfPage[shelf] = 1;
     shelfTotal[shelf] = data.total;
-    shelfHasMore[shelf] = shelfItems[shelf].length < data.total;
+    shelfHasMore[shelf] = false;
   } finally {
     shelfLoading[shelf] = false;
   }
@@ -214,7 +210,11 @@ function renderShelves() {
     return;
   }
 
-  container.innerHTML = SHELVES.map(shelf => `
+  container.innerHTML = SHELVES.map(shelf => {
+    const allVisible = filterItems(shelfItems[shelf.key]);
+    const totalPages = Math.ceil(allVisible.length / CLOSET_DISPLAY_PER_PAGE);
+    const page = closetDisplayPage[shelf.key];
+    return `
     <section class="shelf mb-5" data-shelf="${shelf.key}">
       <div class="shelf__label">
         <i data-lucide="${shelf.icon}" class="w-4 h-4"></i>
@@ -224,8 +224,18 @@ function renderShelves() {
       <div class="shelf__row" data-shelf-row="${shelf.key}">
         <div class="shelf__base"></div>
       </div>
-    </section>
-  `).join("");
+      ${totalPages > 1 ? `
+        <div class="flex justify-center gap-2 mt-2">
+          <button class="btn btn-sm ${page <= 1 ? 'btn-disabled' : ''}" onclick="changeClosetPage('${shelf.key}', -1)">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
+          </button>
+          <span class="btn btn-sm btn-ghost no-animation">${page} / ${totalPages}</span>
+          <button class="btn btn-sm ${page >= totalPages ? 'btn-disabled' : ''}" onclick="changeClosetPage('${shelf.key}', 1)">
+            Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>` : ""}
+    </section>`;
+  }).join("");
 
   for (const shelf of SHELVES) renderShelfRow(shelf.key);
   lucide.createIcons();
@@ -237,19 +247,23 @@ function renderShelfRow(shelf) {
   if (!row) return;
 
   const shelfDef = SHELVES.find(s => s.key === shelf);
-  const visible = filterItems(shelfItems[shelf]);
-
+  const allVisible = filterItems(shelfItems[shelf]);
   const total = shelfTotal[shelf];
-  const loaded = shelfItems[shelf].length;
+
   if (countEl) {
-    countEl.textContent = loaded < total ? `${loaded} / ${total}` : String(total);
+    countEl.textContent = String(allVisible.length);
   }
+
+  const page = closetDisplayPage[shelf];
+  const totalPages = Math.ceil(allVisible.length / CLOSET_DISPLAY_PER_PAGE);
+  const start = (page - 1) * CLOSET_DISPLAY_PER_PAGE;
+  const visible = allVisible.slice(start, start + CLOSET_DISPLAY_PER_PAGE);
 
   let content;
   if (!visible.length) {
     if (shelfItems[shelf].length && closetSearch) {
       content = `<div class="shelf__empty">No ${shelfDef.label.toLowerCase()} games match "${escapeHtml(closetSearch)}".</div>`;
-    } else if (!loaded) {
+    } else if (!total) {
       content = `<div class="shelf__empty">No ${shelfDef.label.toLowerCase()} games yet.</div>`;
     } else {
       content = "";
@@ -260,28 +274,9 @@ function renderShelfRow(shelf) {
 
   row.innerHTML = `
     ${content}
-    ${shelfHasMore[shelf] ? '<div class="shelf__sentinel" data-sentinel="' + shelf + '"></div>' : ""}
     <div class="shelf__base"></div>
   `;
 
-  if (_shelfObservers[shelf]) {
-    _shelfObservers[shelf].disconnect();
-    _shelfObservers[shelf] = null;
-  }
-  if (shelfHasMore[shelf]) {
-    const sentinel = row.querySelector(`[data-sentinel="${shelf}"]`);
-    if (sentinel) {
-      _shelfObservers[shelf] = new IntersectionObserver(async (entries) => {
-        if (!entries[0].isIntersecting) return;
-        if (shelfLoading[shelf] || !shelfHasMore[shelf]) return;
-        await loadShelfPage(shelf, shelfPage[shelf] + 1);
-        renderShelfRow(shelf);
-        lucide.createIcons();
-        attachShelfGestures(shelf);
-      }, { root: row, rootMargin: "0px 300px 0px 0px" });
-      _shelfObservers[shelf].observe(sentinel);
-    }
-  }
   attachShelfGestures(shelf);
 }
 
@@ -337,28 +332,46 @@ function renderList() {
   }
 
   container.innerHTML = SHELVES.map(shelf => {
-    const items = filterItems(shelfItems[shelf.key]);
+    const allItems = filterItems(shelfItems[shelf.key]);
     const total = shelfTotal[shelf.key];
-    const loaded = shelfItems[shelf.key].length;
-    const countLabel = loaded < total ? `${loaded} / ${total}` : String(total);
     if (!total) return "";
+
+    const page = closetDisplayPage[shelf.key];
+    const totalPages = Math.ceil(allItems.length / CLOSET_DISPLAY_PER_PAGE);
+    const start = (page - 1) * CLOSET_DISPLAY_PER_PAGE;
+    const pageItems = allItems.slice(start, start + CLOSET_DISPLAY_PER_PAGE);
+
     return `
       <section class="mb-5" data-shelf-list="${shelf.key}">
         <h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60 mb-2 flex items-center gap-2">
           <i data-lucide="${shelf.icon}" class="w-4 h-4"></i> ${shelf.label}
-          <span class="badge badge-sm badge-ghost">${countLabel}</span>
+          <span class="badge badge-sm badge-ghost">${allItems.length}</span>
         </h3>
         <div class="grid grid-cols-1 gap-2">
-          ${items.length
-            ? items.map((it, i) => groupListHTML(it, i)).join("")
-            : `<div class="text-base-content/50 text-sm italic">No matches in loaded pages.</div>`}
+          ${pageItems.length
+            ? pageItems.map((it, i) => groupListHTML(it, i)).join("")
+            : `<div class="text-base-content/50 text-sm italic">No matches.</div>`}
         </div>
-        ${shelfHasMore[shelf.key] ? `
-          <button class="btn btn-sm btn-ghost w-full mt-2" onclick="loadMoreList('${shelf.key}')">
-            <i data-lucide="chevron-down" class="w-4 h-4"></i> Load more
-          </button>` : ""}
+        ${totalPages > 1 ? `
+          <div class="flex justify-center gap-2 mt-4">
+            <button class="btn btn-sm ${page <= 1 ? 'btn-disabled' : ''}" onclick="changeClosetPage('${shelf.key}', -1)">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
+            </button>
+            <span class="btn btn-sm btn-ghost no-animation">${page} / ${totalPages}</span>
+            <button class="btn btn-sm ${page >= totalPages ? 'btn-disabled' : ''}" onclick="changeClosetPage('${shelf.key}', 1)">
+              Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>` : ""}
       </section>`;
   }).join("") || `<div class="text-center py-8 text-base-content/50">No games match "${escapeHtml(closetSearch)}"</div>`;
+}
+
+function changeClosetPage(shelf, delta) {
+  const allItems = filterItems(shelfItems[shelf]);
+  const totalPages = Math.ceil(allItems.length / CLOSET_DISPLAY_PER_PAGE);
+  closetDisplayPage[shelf] = Math.max(1, Math.min(totalPages, closetDisplayPage[shelf] + delta));
+  renderCloset();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function groupListHTML(item, i) {
@@ -378,13 +391,6 @@ function groupListHTML(item, i) {
         ${childRows}
       </div>
     </div>`;
-}
-
-async function loadMoreList(shelf) {
-  await loadShelfPage(shelf, shelfPage[shelf] + 1);
-  renderList();
-  lucide.createIcons();
-  attachAllListSwipes();
 }
 
 function listRowHTML(item, i, opts = {}) {

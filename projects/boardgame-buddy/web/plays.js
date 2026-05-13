@@ -111,7 +111,7 @@ function _renderFilterDropdown({ id, placeholder, options, selectedId, onSelect,
       <ul id="${id}-list" class="max-h-48 overflow-y-auto space-y-0.5">
         ${options.map(o => `
           <li class="px-2 py-1.5 rounded cursor-pointer hover:bg-base-200 text-sm flex items-center justify-between ${o.id === selectedId ? 'bg-primary/10 font-medium' : ''}"
-              onclick="event.stopPropagation(); ${onSelect}('${o.id}', '${escapeHtml(o.name).replace(/'/g, "\\'")}')">
+              onclick="event.stopPropagation(); ${onSelect}('${o.id}', ${escapeHtml(JSON.stringify(o.name))})">
             ${escapeHtml(o.name)}
             ${o.id === selectedId ? '<i data-lucide="check" class="w-3 h-3 text-primary flex-shrink-0"></i>' : ''}
           </li>

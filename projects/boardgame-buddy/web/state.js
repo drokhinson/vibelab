@@ -25,13 +25,15 @@ let currentExpansions = [];     // [{expansion_game_id, name, color, is_enabled,
 let allGuideChunks = [];        // cache of every linked-expansion chunk;
                                 // currentGuideChunks / hiddenChunks are derived
 
-// Closet (user collection) — shelves are paginated server-side.
+// Closet (user collection) — all items loaded up front, paginated client-side.
 let shelfItems = { owned: [], played: [] };
 let shelfPage = { owned: 1, played: 1 };
 let shelfTotal = { owned: 0, played: 0 };
 let shelfHasMore = { owned: true, played: true };
 let shelfLoading = { owned: false, played: false };
 const SHELF_PER_PAGE = 20;
+const CLOSET_DISPLAY_PER_PAGE = 20;
+let closetDisplayPage = { owned: 1, played: 1 };
 let wishlistItems = [];
 let closetView = localStorage.getItem("bgb_closet_view") || "list";  // list | shelves  (default: list)
 let closetSort = localStorage.getItem("bgb_closet_sort") || "alphabetical"; // alphabetical | last_played

@@ -36,6 +36,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
       closetSearch = e.target.value;
+      closetDisplayPage.owned = 1;
+      closetDisplayPage.played = 1;
       renderCloset();
     });
   }

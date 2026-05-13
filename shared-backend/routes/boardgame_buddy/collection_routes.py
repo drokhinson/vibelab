@@ -211,7 +211,7 @@ def _build_shelf_items(
 async def get_collection_shelf(
     status: CollectionStatus = Query(..., description="Shelf to fetch"),
     page: int = Query(1, ge=1, description="1-indexed page"),
-    per_page: int = Query(20, ge=1, le=50, description="Items per page"),
+    per_page: int = Query(20, ge=1, le=500, description="Items per page"),
     sort: CollectionSort = Query(CollectionSort.LAST_PLAYED, description="Sort order"),
     user: CurrentUser = Depends(get_current_user),
 ) -> CollectionPageResponse:
