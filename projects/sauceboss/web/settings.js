@@ -960,9 +960,9 @@ function renderIngredientsTab(isAdmin, isLoggedIn) {
   const form = state.foodForm;
   const filtered = q ? foods.filter(f => (f.name || '').toLowerCase().includes(q)) : foods;
 
-  // Add form is available to any logged-in user. Edit form (rename) is admin-only.
-  const formVisible = form && (form.mode === 'add' ? isLoggedIn : isAdmin);
-  const formHTML = formVisible ? renderFoodForm() : '';
+  // Add form renders at the top of the list; edit form renders inline (see renderFoodRow).
+  const addFormVisible = form && form.mode === 'add' && isLoggedIn;
+  const formHTML = addFormVisible ? renderFoodForm() : '';
   const mergeHTML = isAdmin && merge ? renderMergePanel() : '';
 
   if (state.adminIngredientsLoading) {
@@ -1044,6 +1044,11 @@ function toggleIngredientSection(category) {
 }
 
 function renderFoodRow(f, isAdmin, merge) {
+  // Inline edit: if this food is being edited, show the form in place
+  const form = state.foodForm;
+  if (isAdmin && form && form.mode === 'edit' && form.id === f.id) {
+    return `<div style="padding:0 16px">${renderFoodForm()}</div>`;
+  }
   const safeName = (f.name || '').replace(/'/g, "\\'");
   const usage = f.usageCount || 0;
   const sauces = f.sauceCount || 0;
