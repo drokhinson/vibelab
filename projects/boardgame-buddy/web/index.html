@@ -33,16 +33,18 @@
       <div class="flex items-center justify-between gap-3">
         <img src="assets/brand/bgb-logo.svg" alt="" class="w-10 h-10 rounded-lg" />
         <div class="flex-1 flex flex-col justify-center min-w-0">
-          <h1 class="text-2xl font-bold font-display leading-tight">BoardgameBuddy</h1>
-          <!-- BGG attribution — required by BGG XML API Terms of Use.
-               Logo only; the official "Powered by BGG" mark contains its own
-               legible text. Falls back to text label if the asset is missing. -->
-          <a id="bgg-attribution-header" class="bgg-attribution-link self-end"
-             href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer"
-             aria-label="Powered by BoardGameGeek">
-            <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek" height="14"
-                 onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Powered by BoardGameGeek',className:'bgg-attribution-fallback'}))" />
-          </a>
+          <div class="flex flex-col w-fit">
+            <h1 class="text-2xl font-bold font-display leading-tight">BoardgameBuddy</h1>
+            <!-- BGG attribution — required by BGG XML API Terms of Use.
+                 Logo only; the official "Powered by BGG" mark contains its own
+                 legible text. Falls back to text label if the asset is missing. -->
+            <a id="bgg-attribution-header" class="bgg-attribution-link self-end"
+               href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer"
+               aria-label="Powered by BoardGameGeek">
+              <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek" height="14"
+                   onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Powered by BoardGameGeek',className:'bgg-attribution-fallback'}))" />
+            </a>
+          </div>
         </div>
         <button id="profile-chip" class="btn btn-ghost btn-sm btn-circle" onclick="showView('profile'); renderProfile();" title="Account">
           <div id="profile-avatar" class="avatar-bubble"></div>

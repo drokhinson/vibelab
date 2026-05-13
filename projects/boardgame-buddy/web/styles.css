@@ -417,7 +417,7 @@ body {
 /* ── Browse: floating import button ─────────────────────────────────────── */
 .fab-import {
   position: fixed;
-  left: max(20px, env(safe-area-inset-left));
+  right: max(20px, env(safe-area-inset-right));
   bottom: calc(88px + env(safe-area-inset-bottom));
   width: 48px;
   height: 48px;
