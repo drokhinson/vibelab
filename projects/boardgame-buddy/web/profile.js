@@ -96,6 +96,14 @@ function renderAccountTab() {
       ${renderBggCard()}
     </div>
 
+    <div class="card bg-base-200 mb-3">
+      <div class="card-body p-4">
+        <button class="btn btn-ghost btn-sm self-start flex items-center gap-2" onclick="handleLogout()">
+          <i data-lucide="log-out" class="w-4 h-4"></i> Log out
+        </button>
+      </div>
+    </div>
+
     <div class="card bg-base-200 border border-error/30">
       <div class="card-body p-4">
         <h3 class="font-semibold flex items-center gap-2 text-error">
