@@ -165,7 +165,7 @@ async def list_games(
     if mechanics:
         query = query.contains("mechanics", mechanics)
 
-    query = query.order("name")
+    query = query.order("created_at", desc=True)
     result = query.range(offset, offset + per_page - 1).execute()
 
     games = [GameSummary(**g) for g in (result.data or [])]

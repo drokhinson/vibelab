@@ -129,10 +129,18 @@ function renderGamesGrid() {
   const totalPages = Math.ceil(gamesTotalCount / gamesPerPage);
 
   if (!gamesCache.length) {
+    const importLink = gamesSearch
+      ? `<a class="link link-primary font-medium" href="#"
+            onclick="event.preventDefault(); prefillImportSearch(decodeURIComponent('${encodeURIComponent(gamesSearch)}'))">
+           Search &amp; import via BoardGameGeek →
+         </a>`
+      : "";
     container.innerHTML = `
       <div class="text-center py-12 text-base-content/50">
-        <i data-lucide="search-x" class="w-12 h-12 mb-4 opacity-50"></i>
-        <p>No games found. Try a different search or filter.</p>
+        <i data-lucide="search-x" class="w-12 h-12 mb-4 opacity-50 mx-auto"></i>
+        <p class="font-semibold mb-1">No matches found in the BoardgameBuddy database.</p>
+        ${gamesSearch ? `<p class="text-sm">Continue to search and import the game via BoardGameGeek?</p>
+        <p class="mt-2">${importLink}</p>` : "<p class=\"text-sm\">Try a different search or filter.</p>"}
       </div>`;
     lucide.createIcons();
     return;
@@ -179,14 +187,24 @@ function handleGameSearch(e) {
   e.preventDefault();
   gamesSearch = document.getElementById("game-search-input").value.trim();
   gamesPage = 1;
+  syncSearchClearBtn("game-search-input", "game-search-clear");
   loadGames();
 }
 
 function clearGameSearch() {
   gamesSearch = "";
   document.getElementById("game-search-input").value = "";
+  syncSearchClearBtn("game-search-input", "game-search-clear");
   gamesPage = 1;
   loadGames();
+}
+
+/** Show/hide the X button inside a search input based on whether it has text. */
+function syncSearchClearBtn(inputId, btnId) {
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  if (!input || !btn) return;
+  btn.classList.toggle("hidden", !input.value.trim());
 }
 
 function changePage(delta) {
@@ -196,7 +214,7 @@ function changePage(delta) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-// ── Browse filter strip ───────────────────────────────────────────────────────
+// ── Browse filter panel (collapsible) ──────────────────────────────────────
 
 const PLAYER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -207,17 +225,30 @@ const PLAYTIME_CHIPS = [
   { label: "120+ min",  min: 121,  max: null },
 ];
 
+function hasBrowseActiveFilter() {
+  return gamesFilterPlayers !== null
+    || gamesFilterPlaytimeMin !== null
+    || gamesFilterPlaytimeMax !== null
+    || gamesFilterMechanics.length > 0
+    || gamesFilterOwnedOnly;
+}
+
 async function initBrowseFilters() {
-  if (mechanicsOptions.length > 0) {
-    renderFilterStrip();
-    _ensureBrowseDropdownCloser();
-    return;
+  if (mechanicsOptions.length === 0) {
+    try { mechanicsOptions = await apiFetch("/games/mechanics"); } catch { mechanicsOptions = []; }
   }
-  try {
-    mechanicsOptions = await apiFetch("/games/mechanics");
-  } catch { mechanicsOptions = []; }
   renderFilterStrip();
+  renderBrowseActiveFilterBar();
   _ensureBrowseDropdownCloser();
+}
+
+function toggleBrowseFilters() {
+  browseFiltersOpen = !browseFiltersOpen;
+  const el = document.getElementById("browse-filters");
+  const btn = document.getElementById("browse-filter-toggle");
+  if (el) el.classList.toggle("hidden", !browseFiltersOpen);
+  if (btn) btn.classList.toggle("btn-primary", browseFiltersOpen);
+  if (browseFiltersOpen) renderFilterStrip();
 }
 
 let _browseDropdownCloserAttached = false;
@@ -233,20 +264,40 @@ function _closeBrowseDropdowns(e) {
   }
 }
 
+function renderBrowseActiveFilterBar() {
+  const bar = document.getElementById("browse-active-filter-bar");
+  if (!bar) return;
+  if (!hasBrowseActiveFilter()) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+  bar.classList.remove("hidden");
+  bar.innerHTML = `
+    <div class="flex items-center gap-1 flex-wrap">
+      <span class="text-xs text-base-content/50">Filtered:</span>
+      ${browseFilterPills()}
+      <button class="btn btn-ghost btn-xs text-error" onclick="clearBrowseFilters()">
+        <i data-lucide="x" class="w-3 h-3"></i> Clear all
+      </button>
+    </div>`;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function browseFilterPills() {
+  const pills = [];
+  if (gamesFilterOwnedOnly) pills.push('<span class="badge badge-sm badge-outline">Owned only</span>');
+  if (gamesFilterPlayers !== null) pills.push(`<span class="badge badge-sm badge-outline">${gamesFilterPlayers === 8 ? '8+' : gamesFilterPlayers}P</span>`);
+  if (gamesFilterPlaytimeMin !== null || gamesFilterPlaytimeMax !== null) {
+    const chip = PLAYTIME_CHIPS.find(c => c.min === gamesFilterPlaytimeMin && c.max === gamesFilterPlaytimeMax);
+    if (chip) pills.push(`<span class="badge badge-sm badge-outline">${chip.label}</span>`);
+  }
+  gamesFilterMechanics.forEach(m => pills.push(`<span class="badge badge-sm badge-outline">${escapeHtml(m)}</span>`));
+  return pills.join("");
+}
+
 function renderFilterStrip() {
   const el = document.getElementById("browse-filters");
   if (!el) return;
 
-  const hasActiveFilter = gamesFilterPlayers !== null
-    || gamesFilterPlaytimeMin !== null
-    || gamesFilterPlaytimeMax !== null
-    || gamesFilterMechanics.length > 0
-    || gamesFilterOwnedOnly;
-
   const mechanicsCount = gamesFilterMechanics.length;
 
-  // Source toggle: only meaningful when signed in (the API ignores owned_only
-  // for anon callers anyway, but hiding it avoids a misleading UI).
   const sourceToggle = currentUser ? `
       <div class="flex items-center gap-2 flex-wrap">
         <span class="text-xs text-base-content/50 mr-1">Show</span>
@@ -259,7 +310,7 @@ function renderFilterStrip() {
       </div>` : "";
 
   el.innerHTML = `
-    <div class="space-y-2">
+    <div class="bgb-filter-panel space-y-2">
 
       ${sourceToggle}
 
@@ -313,10 +364,10 @@ function renderFilterStrip() {
       ` : ""}
 
       <!-- Clear filters -->
-      ${hasActiveFilter ? `
+      ${hasBrowseActiveFilter() ? `
         <div>
           <button class="btn btn-ghost btn-xs text-base-content/50" onclick="clearBrowseFilters()">
-            ✕ Clear filters
+            ✕ Clear all filters
           </button>
         </div>
       ` : ""}
@@ -329,6 +380,7 @@ function setPlayersFilter(value) {
   gamesFilterPlayers = value === "" || value === null ? null : Number(value);
   gamesPage = 1;
   renderFilterStrip();
+  renderBrowseActiveFilterBar();
   loadGames();
 }
 
@@ -344,6 +396,7 @@ function togglePlaytimeFilter(index) {
   }
   gamesPage = 1;
   renderFilterStrip();
+  renderBrowseActiveFilterBar();
   loadGames();
 }
 
@@ -356,6 +409,7 @@ function toggleMechanicFilter(mechanic) {
   }
   gamesPage = 1;
   _rerenderMechanicsPanelInPlace();
+  renderBrowseActiveFilterBar();
   loadGames();
 }
 
@@ -367,6 +421,7 @@ function clearBrowseFilters() {
   gamesFilterOwnedOnly = false;
   gamesPage = 1;
   renderFilterStrip();
+  renderBrowseActiveFilterBar();
   loadGames();
 }
 
@@ -375,6 +430,7 @@ function setOwnedOnlyFilter(value) {
   gamesFilterOwnedOnly = value;
   gamesPage = 1;
   renderFilterStrip();
+  renderBrowseActiveFilterBar();
   loadGames();
 }
 
@@ -465,7 +521,7 @@ function renderBggResults() {
         ${r.year_published ? `<span class="text-xs text-base-content/50 ml-1">(${r.year_published})</span>` : ""}
       </div>
       ${r.already_in_db
-        ? '<span class="badge badge-sm badge-success">In library</span>'
+        ? '<span class="badge badge-sm badge-success">Imported</span>'
         : `<button class="btn btn-xs btn-primary" onclick="importBggGame(${r.bgg_id})">Add</button>`
       }
     </div>
@@ -476,12 +532,20 @@ function renderBggResults() {
 async function importBggGame(bggId) {
   try {
     const game = await apiFetch(`/games/import-bgg/${bggId}`, { method: "POST" });
-    showToast(`${game.name} added to library!`, "success");
-    // Refresh BGG results to show "In library"
+    showToast(`${game.name} imported to BgB!`, "success");
+    // Refresh BGG results to show "Imported"
     const existing = bggSearchResults.find(r => r.bgg_id === bggId);
     if (existing) existing.already_in_db = true;
     renderBggResults();
   } catch (err) {
     showToast(err.message, "error");
   }
+}
+
+function prefillImportSearch(query) {
+  showView("import");
+  renderImport();
+  const input = document.getElementById("bgg-search-input");
+  if (input) input.value = query;
+  searchBGG();
 }

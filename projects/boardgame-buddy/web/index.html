@@ -70,16 +70,25 @@
           <i data-lucide="download" class="w-4 h-4"></i> Import
         </button>
       </div>
-      <form id="game-search-form" class="mb-4">
-        <div class="join w-full">
-          <input type="text" id="game-search-input" class="input input-bordered join-item w-full" placeholder="Search games..." />
-          <button type="submit" class="btn btn-primary join-item">
-            <i data-lucide="search" class="w-4 h-4"></i>
-          </button>
-        </div>
-      </form>
+      <div class="flex items-center gap-2 mb-3">
+        <form id="game-search-form" class="flex-1 min-w-0">
+          <div class="join w-full relative">
+            <input type="text" id="game-search-input" class="input input-bordered join-item w-full pr-8" placeholder="Search games..." />
+            <button type="button" id="game-search-clear" class="absolute right-12 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle hidden" onclick="clearGameSearch()" aria-label="Clear search">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+            <button type="submit" class="btn btn-primary join-item">
+              <i data-lucide="search" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </form>
+        <button class="btn btn-sm btn-square" id="browse-filter-toggle" onclick="toggleBrowseFilters()" title="Filters">
+          <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+        </button>
+      </div>
 
-      <div id="browse-filters" class="mb-3"></div>
+      <div id="browse-active-filter-bar" class="hidden mb-2"></div>
+      <div id="browse-filters" class="hidden mb-3"></div>
       <div id="games-grid"></div>
     </main>
 
@@ -97,15 +106,25 @@
       </div>
       <!-- Collection controls (hidden on wishlist tab) -->
       <div class="flex items-center gap-2 mb-3" id="closet-controls">
-        <input type="text" id="closet-search" class="input input-bordered input-sm flex-1 min-w-0" placeholder="Search your games..." />
+        <div class="relative flex-1 min-w-0">
+          <input type="text" id="closet-search" class="input input-bordered input-sm w-full pr-8" placeholder="Search your games..." />
+          <button type="button" id="closet-search-clear" class="absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle hidden" onclick="clearClosetSearch()" aria-label="Clear search">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
         <select id="closet-sort" class="select select-bordered select-sm">
           <option value="alphabetical">A → Z</option>
           <option value="last_played">Last Played</option>
         </select>
+        <button id="closet-filter-toggle" class="btn btn-ghost btn-square min-h-11 h-11 w-11" onclick="toggleClosetFilters()" title="Filters">
+          <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+        </button>
         <button id="closet-view-toggle" class="btn btn-ghost btn-square min-h-11 h-11 w-11" title="Toggle view">
           <i data-lucide="library-big" class="w-5 h-5"></i>
         </button>
       </div>
+      <div id="closet-active-filter-bar" class="hidden mb-2"></div>
+      <div id="closet-filters" class="hidden mb-3"></div>
       <div id="closet-shelves" class="hidden"></div>
       <div id="closet-list"></div>
       <div id="closet-wishlist" class="hidden"></div>

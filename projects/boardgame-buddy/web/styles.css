@@ -549,6 +549,14 @@ body {
   word-break: break-word;
 }
 
+/* ── Collapsible filter panel ─────────────────────────────────────────────── */
+.bgb-filter-panel {
+  background: oklch(19% 0.020 52);
+  border: 1px solid oklch(25% 0.025 52);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
 /* ── Closet: shelves + book spines ──────────────────────────────────────────── */
 .shelf__label {
   display: flex;

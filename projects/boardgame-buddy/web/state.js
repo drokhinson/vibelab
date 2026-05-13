@@ -39,6 +39,11 @@ let closetView = localStorage.getItem("bgb_closet_view") || "list";  // list | s
 let closetSort = localStorage.getItem("bgb_closet_sort") || "alphabetical"; // alphabetical | last_played
 let closetSearch = "";
 let closetTab = "collection"; // collection | wishlist
+let closetFiltersOpen = false;
+let closetFilterPlayers = null;
+let closetFilterPlaytimeMin = null;
+let closetFilterPlaytimeMax = null;
+let closetFilterMechanics = [];
 let expandedExpansionGroups = new Set(); // base game ids currently expanded in the list view
 
 // Plays
@@ -63,6 +68,7 @@ let gamesFilterPlaytimeMax = null;
 let gamesFilterMechanics = [];
 let mechanicsOptions = [];
 let gamesFilterOwnedOnly = false;
+let browseFiltersOpen = false;
 
 // Profile (account page tab state — survives re-renders)
 let profileTab = "account"; // account | buddies

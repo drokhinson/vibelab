@@ -29,6 +29,7 @@ function resetShelfState() {
 async function loadCloset() {
   resetShelfState();
   applyClosetControls();
+  renderClosetActiveFilterBar();
 
   if (closetTab === "wishlist") {
     await loadWishlist();
@@ -145,6 +146,14 @@ function applyClosetControls() {
   if (tabCollection) tabCollection.classList.toggle("tab-active", closetTab === "collection");
   if (tabWishlist) tabWishlist.classList.toggle("tab-active", closetTab === "wishlist");
   if (controls) controls.classList.toggle("hidden", closetTab === "wishlist");
+
+  // Hide filter UI when on wishlist tab
+  const filterPanel = document.getElementById("closet-filters");
+  const filterBar = document.getElementById("closet-active-filter-bar");
+  if (closetTab === "wishlist") {
+    if (filterPanel) filterPanel.classList.add("hidden");
+    if (filterBar) filterBar.classList.add("hidden");
+  }
 }
 
 async function switchClosetTab(tab) {
@@ -191,11 +200,254 @@ function renderCloset() {
 
 function filterItems(items) {
   const q = closetSearch.trim().toLowerCase();
-  if (!q) return items;
-  return items.filter(it => {
-    if ((it.game?.name || "").toLowerCase().includes(q)) return true;
-    return (it.expansions || []).some(exp => (exp.game?.name || "").toLowerCase().includes(q));
+  let result = items;
+  if (q) {
+    result = result.filter(it => {
+      if ((it.game?.name || "").toLowerCase().includes(q)) return true;
+      return (it.expansions || []).some(exp => (exp.game?.name || "").toLowerCase().includes(q));
+    });
+  }
+  if (closetFilterPlayers !== null) {
+    result = result.filter(it => {
+      const g = it.game;
+      if (!g) return false;
+      return (g.max_players || 0) >= closetFilterPlayers
+        && (closetFilterPlayers >= 6 || (g.min_players || 0) <= closetFilterPlayers);
+    });
+  }
+  if (closetFilterPlaytimeMin !== null) {
+    result = result.filter(it => (it.game?.playing_time || 0) >= closetFilterPlaytimeMin);
+  }
+  if (closetFilterPlaytimeMax !== null) {
+    result = result.filter(it => (it.game?.playing_time || 0) <= closetFilterPlaytimeMax);
+  }
+  if (closetFilterMechanics.length > 0) {
+    result = result.filter(it => {
+      const gm = it.game?.mechanics || [];
+      return closetFilterMechanics.every(m => gm.includes(m));
+    });
+  }
+  return result;
+}
+
+// ── Closet search clear ──────────────────────────────────────────────────────
+
+function clearClosetSearch() {
+  closetSearch = "";
+  const input = document.getElementById("closet-search");
+  if (input) input.value = "";
+  syncSearchClearBtn("closet-search", "closet-search-clear");
+  closetDisplayPage.owned = 1;
+  closetDisplayPage.played = 1;
+  renderCloset();
+}
+
+// ── Closet filters (collapsible, same categories as browse) ──────────────────
+
+function hasClosetActiveFilter() {
+  return closetFilterPlayers !== null
+    || closetFilterPlaytimeMin !== null
+    || closetFilterPlaytimeMax !== null
+    || closetFilterMechanics.length > 0;
+}
+
+function toggleClosetFilters() {
+  closetFiltersOpen = !closetFiltersOpen;
+  const el = document.getElementById("closet-filters");
+  const btn = document.getElementById("closet-filter-toggle");
+  if (el) el.classList.toggle("hidden", !closetFiltersOpen);
+  if (btn) btn.classList.toggle("btn-primary", closetFiltersOpen);
+  if (closetFiltersOpen) renderClosetFilterPanel();
+}
+
+function renderClosetFilterPanel() {
+  const el = document.getElementById("closet-filters");
+  if (!el) return;
+
+  const mechanicsCount = closetFilterMechanics.length;
+
+  el.innerHTML = `
+    <div class="bgb-filter-panel space-y-2">
+      <!-- Players -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-base-content/50 mr-1">Players</span>
+        <select class="select select-bordered select-sm"
+                onchange="setClosetPlayersFilter(this.value)">
+          <option value="" ${closetFilterPlayers === null ? 'selected' : ''}>Any</option>
+          ${PLAYER_OPTIONS.map(n => `
+            <option value="${n}" ${closetFilterPlayers === n ? 'selected' : ''}>${n === 8 ? '8+' : n}</option>
+          `).join("")}
+        </select>
+      </div>
+      <!-- Playtime -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-base-content/50 mr-1">Length</span>
+        ${PLAYTIME_CHIPS.map((c, i) => {
+          const active = closetFilterPlaytimeMin === c.min && closetFilterPlaytimeMax === c.max;
+          return `
+            <button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}"
+                    onclick="toggleClosetPlaytimeFilter(${i})">
+              ${c.label}
+            </button>`;
+        }).join("")}
+      </div>
+      <!-- Mechanics -->
+      ${mechanicsOptions.length ? `
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs text-base-content/50 mr-1">Mechanics</span>
+          <div class="relative" id="closet-mechanics-dropdown">
+            <button class="btn btn-sm ${mechanicsCount ? 'btn-primary' : 'btn-outline'} gap-1"
+                    onclick="event.stopPropagation(); _toggleClosetMechanicsPanel()">
+              <span>Mechanics</span>
+              <span id="closet-mechanics-badge" class="badge badge-sm ${mechanicsCount ? '' : 'hidden'}">${mechanicsCount}</span>
+              <i data-lucide="chevron-down" class="w-3 h-3 opacity-60"></i>
+            </button>
+            <div id="closet-mechanics-panel" class="hidden absolute z-50 left-0 mt-1 w-72 bg-base-100 border border-base-300 rounded-box shadow-xl p-2">
+              <input type="text" class="input input-sm input-bordered w-full mb-2"
+                     placeholder="Search mechanics..."
+                     oninput="_filterClosetMechanicsList(this)"
+                     onclick="event.stopPropagation()" />
+              <ul id="closet-mechanics-list" class="max-h-64 overflow-y-auto space-y-0.5">
+                ${_renderClosetMechanicsList()}
+              </ul>
+            </div>
+          </div>
+        </div>
+      ` : ""}
+      ${hasClosetActiveFilter() ? `
+        <div>
+          <button class="btn btn-ghost btn-xs text-base-content/50" onclick="clearClosetFilters()">
+            ✕ Clear all filters
+          </button>
+        </div>
+      ` : ""}
+    </div>`;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function renderClosetActiveFilterBar() {
+  const bar = document.getElementById("closet-active-filter-bar");
+  if (!bar) return;
+  if (!hasClosetActiveFilter()) { bar.classList.add("hidden"); bar.innerHTML = ""; return; }
+  bar.classList.remove("hidden");
+  const pills = [];
+  if (closetFilterPlayers !== null) pills.push(`<span class="badge badge-sm badge-outline">${closetFilterPlayers === 8 ? '8+' : closetFilterPlayers}P</span>`);
+  if (closetFilterPlaytimeMin !== null || closetFilterPlaytimeMax !== null) {
+    const chip = PLAYTIME_CHIPS.find(c => c.min === closetFilterPlaytimeMin && c.max === closetFilterPlaytimeMax);
+    if (chip) pills.push(`<span class="badge badge-sm badge-outline">${chip.label}</span>`);
+  }
+  closetFilterMechanics.forEach(m => pills.push(`<span class="badge badge-sm badge-outline">${escapeHtml(m)}</span>`));
+  bar.innerHTML = `
+    <div class="flex items-center gap-1 flex-wrap">
+      <span class="text-xs text-base-content/50">Filtered:</span>
+      ${pills.join("")}
+      <button class="btn btn-ghost btn-xs text-error" onclick="clearClosetFilters()">
+        <i data-lucide="x" class="w-3 h-3"></i> Clear all
+      </button>
+    </div>`;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function setClosetPlayersFilter(value) {
+  closetFilterPlayers = value === "" || value === null ? null : Number(value);
+  closetDisplayPage.owned = 1;
+  closetDisplayPage.played = 1;
+  renderClosetFilterPanel();
+  renderClosetActiveFilterBar();
+  renderCloset();
+}
+
+function toggleClosetPlaytimeFilter(index) {
+  const c = PLAYTIME_CHIPS[index];
+  const already = closetFilterPlaytimeMin === c.min && closetFilterPlaytimeMax === c.max;
+  if (already) {
+    closetFilterPlaytimeMin = null;
+    closetFilterPlaytimeMax = null;
+  } else {
+    closetFilterPlaytimeMin = c.min;
+    closetFilterPlaytimeMax = c.max;
+  }
+  closetDisplayPage.owned = 1;
+  closetDisplayPage.played = 1;
+  renderClosetFilterPanel();
+  renderClosetActiveFilterBar();
+  renderCloset();
+}
+
+function toggleClosetMechanicFilter(mechanic) {
+  const idx = closetFilterMechanics.indexOf(mechanic);
+  if (idx === -1) {
+    closetFilterMechanics = [...closetFilterMechanics, mechanic];
+  } else {
+    closetFilterMechanics = closetFilterMechanics.filter(m => m !== mechanic);
+  }
+  closetDisplayPage.owned = 1;
+  closetDisplayPage.played = 1;
+  _rerenderClosetMechanicsPanelInPlace();
+  renderClosetActiveFilterBar();
+  renderCloset();
+}
+
+function clearClosetFilters() {
+  closetFilterPlayers = null;
+  closetFilterPlaytimeMin = null;
+  closetFilterPlaytimeMax = null;
+  closetFilterMechanics = [];
+  closetDisplayPage.owned = 1;
+  closetDisplayPage.played = 1;
+  renderClosetFilterPanel();
+  renderClosetActiveFilterBar();
+  renderCloset();
+}
+
+// ── Closet mechanics dropdown helpers ────────────────────────────────────────
+
+function _renderClosetMechanicsList() {
+  const checked = closetFilterMechanics.filter(m => mechanicsOptions.includes(m));
+  const rest = mechanicsOptions
+    .filter(m => !closetFilterMechanics.includes(m))
+    .sort((a, b) => a.localeCompare(b));
+  return [...checked, ...rest].map(m => {
+    const isChecked = closetFilterMechanics.includes(m);
+    return `
+      <li class="px-2 py-1.5 rounded cursor-pointer hover:bg-base-200 text-sm flex items-center gap-2"
+          data-mechanic="${escapeAttr(m)}"
+          onclick="event.stopPropagation(); toggleClosetMechanicFilter(this.dataset.mechanic)">
+        <input type="checkbox" class="checkbox checkbox-xs pointer-events-none" ${isChecked ? 'checked' : ''} />
+        <span class="flex-1">${escapeHtml(m)}</span>
+      </li>`;
+  }).join("");
+}
+
+function _toggleClosetMechanicsPanel() {
+  const panel = document.getElementById("closet-mechanics-panel");
+  if (!panel) return;
+  panel.classList.toggle("hidden");
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function _filterClosetMechanicsList(input) {
+  const q = input.value.toLowerCase();
+  document.querySelectorAll("#closet-mechanics-list li").forEach(li => {
+    const name = (li.dataset.mechanic || "").toLowerCase();
+    li.style.display = name.includes(q) ? "" : "none";
   });
+}
+
+function _rerenderClosetMechanicsPanelInPlace() {
+  const list = document.getElementById("closet-mechanics-list");
+  const badge = document.getElementById("closet-mechanics-badge");
+  const dropdownBtn = document.querySelector("#closet-mechanics-dropdown > button");
+  if (list) list.innerHTML = _renderClosetMechanicsList();
+  if (badge) {
+    const n = closetFilterMechanics.length;
+    badge.textContent = String(n);
+    badge.classList.toggle("hidden", n === 0);
+  }
+  if (dropdownBtn) {
+    dropdownBtn.classList.toggle("btn-primary", closetFilterMechanics.length > 0);
+    dropdownBtn.classList.toggle("btn-outline", closetFilterMechanics.length === 0);
+  }
 }
 
 // ── Shelf view (owned + played only) ─────────────────────────────────────────

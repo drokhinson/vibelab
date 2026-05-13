@@ -10,6 +10,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Game search form (Browse view)
   document.getElementById("game-search-form").addEventListener("submit", handleGameSearch);
+  // Show/hide the X clear button as the user types in browse search
+  const browseSearchInput = document.getElementById("game-search-input");
+  if (browseSearchInput) {
+    browseSearchInput.addEventListener("input", () => {
+      syncSearchClearBtn("game-search-input", "game-search-clear");
+    });
+  }
 
   // Closet controls
   const sortSel = document.getElementById("closet-sort");
@@ -38,9 +45,17 @@ document.addEventListener("DOMContentLoaded", () => {
       closetSearch = e.target.value;
       closetDisplayPage.owned = 1;
       closetDisplayPage.played = 1;
+      syncSearchClearBtn("closet-search", "closet-search-clear");
       renderCloset();
     });
   }
+
+  // Close closet mechanics dropdown on outside click
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#closet-mechanics-dropdown")) {
+      document.getElementById("closet-mechanics-panel")?.classList.add("hidden");
+    }
+  });
 
   // Bottom nav: Browse | Closet | Play Log
   document.querySelectorAll(".btm-nav button").forEach(btn => {

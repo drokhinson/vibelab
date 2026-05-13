@@ -64,7 +64,7 @@ async function initSession() {
 function refreshSessionFab() {
   const fab = document.getElementById("session-fab");
   if (!fab) return;
-  if (!session) { fab.classList.add("hidden"); return; }
+  if (!session || currentView === "browse") { fab.classList.add("hidden"); return; }
   fab.classList.remove("hidden");
 
   const active = isSessionMeaningful(activeSession);
