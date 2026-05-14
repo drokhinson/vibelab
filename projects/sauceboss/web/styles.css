@@ -725,11 +725,23 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 /* Step input source — "Combine from previous step" pill and chip.
    Replaces the legacy .step-ref-row dropdown, which got clipped by its own
    overflow:hidden container. The pill mirrors .add-ing-btn; the chip mirrors
-   .ing-readonly. Edit triggers a bottom-sheet (see .ing-sheet*); × clears
-   step.inputFromSteps directly. */
+   .ing-readonly so it slots cleanly into the .builder-ings-list as the
+   step's final row. The pill lives in .builder-step-actions alongside the
+   add-ingredient pill. */
+.builder-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 4px;
+}
+.builder-step-actions > .add-ing-btn,
+.builder-step-actions > .add-step-input-btn {
+  margin: 0;
+}
 .add-step-input-btn {
-  display: block;
-  margin: 0 auto 10px;
+  display: inline-flex;
+  align-items: center;
   padding: 10px 22px;
   background: #F0F9FF;
   border: 1.5px dashed #BAE6FD;
@@ -747,8 +759,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  margin-bottom: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
   border: 1px solid #BAE6FD;
   border-radius: 12px;
   background: #F0F9FF;
@@ -758,7 +770,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .step-input-readonly:hover { background: #E0F2FE; border-color: #7DD3FC; }
 .step-input-readonly__name {
   flex: 1;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #0369A1;
   overflow: hidden;
@@ -767,7 +779,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .step-input-readonly__edit,
 .step-input-readonly__remove {
-  width: 30px; height: 30px; flex-shrink: 0;
+  width: 32px; height: 32px; flex-shrink: 0;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
