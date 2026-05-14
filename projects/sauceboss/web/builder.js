@@ -307,15 +307,18 @@ function renderBuilderInstructions() {
       const modPrefix = ing.modifier ? `${esc(ing.modifier)} ` : '';
       const nameDisplay = ing.name.trim() ? `${modPrefix}${esc(ing.name)}` : '<span class="ing-readonly__placeholder">Untitled ingredient</span>';
       const incomplete = !ing.name.trim() || (!isQualitative && !(parseFloat(ing.amount) > 0));
-      return `<div class="ing-readonly ${incomplete ? 'ing-readonly--incomplete' : ''}" onclick="builderOpenIngEditor(${si}, ${ii})">
+      // Whole chip is the tap target; edit/remove buttons inside use the same
+      // data-builder-action plumbing so the click delegator in init.js fires
+      // even when state.builder references shift between renders.
+      return `<div class="ing-readonly ${incomplete ? 'ing-readonly--incomplete' : ''}" data-builder-action="ing-edit" data-step="${si}" data-ing="${ii}">
         <div class="ing-readonly__main">
           <span class="ing-readonly__name">${nameDisplay}</span>
         </div>
         <span class="ing-readonly__qty">${qtyDisplay}</span>
-        <button class="ing-readonly__edit" onclick="event.stopPropagation(); builderOpenIngEditor(${si}, ${ii})" title="Edit ingredient" aria-label="Edit ingredient">
+        <button class="ing-readonly__edit" data-builder-action="ing-edit" data-step="${si}" data-ing="${ii}" title="Edit ingredient" aria-label="Edit ingredient">
           <i data-lucide="pencil"></i>
         </button>
-        ${step.ingredients.length > 1 ? `<button class="ing-readonly__remove" onclick="event.stopPropagation(); builderRemoveIngredient(${si},${ii})" title="Remove" aria-label="Remove ingredient">✕</button>` : ''}
+        <button class="ing-readonly__remove" data-builder-action="ing-remove" data-step="${si}" data-ing="${ii}" title="Remove" aria-label="Remove ingredient">✕</button>
       </div>`;
     }).join('');
 
@@ -340,7 +343,7 @@ function renderBuilderInstructions() {
       </div>
       ${instrExpanded ? `<textarea class="builder-input builder-step-instructions" placeholder="Detailed Instructions (optional)" data-builder-field="step-instructions" data-step="${si}">${esc(step.instructions || '')}</textarea>` : ''}
       <div class="builder-ings-list">${ingsHTML}</div>
-      <button class="add-ing-btn" onclick="builderAddIngredient(${si})">+ Ingredient</button>
+      <button class="add-ing-btn" data-builder-action="ing-add" data-step="${si}">+ Add ingredient</button>
     </div>`;
   }).join('');
 
@@ -716,13 +719,13 @@ function builderSetColor(hex) {
 }
 
 function builderAddStep() {
-  state.builder.steps.push({ title: '', instructions: '', inputFromSteps: [], estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] });
+  state.builder.steps.push({ title: '', instructions: '', inputFromSteps: [], estimatedTime: null, ingredients: [] });
   render();
 }
 
 function builderInsertStep(atIndex) {
   const b = state.builder;
-  const newStep = { title: '', instructions: '', inputFromSteps: [], estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] };
+  const newStep = { title: '', instructions: '', inputFromSteps: [], estimatedTime: null, ingredients: [] };
   b.steps.splice(atIndex, 0, newStep);
   // Renumber inputFromSteps references: anything pointing at or after atIndex shifts up by 1
   for (let i = 0; i < b.steps.length; i++) {

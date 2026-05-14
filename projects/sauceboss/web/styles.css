@@ -1154,12 +1154,30 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   display: flex; align-items: center; justify-content: center;
 }
 
-.add-ing-btn, .add-step-btn {
+.add-step-btn {
   background: none; border: none;
   color: #E85D04; font-size: 13px; font-weight: 700;
-  cursor: pointer; padding: 6px 0;
+  cursor: pointer;
+  display: block; width: 100%; text-align: center; padding: 10px;
 }
-.add-step-btn { display: block; width: 100%; text-align: center; padding: 10px; }
+
+/* Primary "add an ingredient" CTA inside each step — centered, dashed pill so
+   it reads as a deliberate action instead of a quiet text link. */
+.add-ing-btn {
+  display: block;
+  margin: 10px auto 0;
+  padding: 10px 22px;
+  background: #FFF8F0;
+  border: 1.5px dashed #FBD9B6;
+  border-radius: 999px;
+  color: #C04C03;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: Inter, sans-serif;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.add-ing-btn:hover { background: #FFF3E0; border-color: #E85D04; color: #E85D04; }
 
 /* Primary / secondary buttons */
 .builder-primary-btn {

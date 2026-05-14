@@ -163,7 +163,10 @@ function defaultBuilder() {
     // ── Servings ───────────────────────────────────────────────────────────
     servings: 2,
     // ── Steps & ingredients ────────────────────────────────────────────
-    steps: [{ title: '', instructions: '', inputFromSteps: [], estimatedTime: null, ingredients: [{ name: '', amount: '', unit: 'tsp' }] }],
+    // Steps start with an empty ingredients list; rows are added via the
+    // bottom-sheet editor so the manual builder doesn't open with a stale
+    // "Untitled ingredient" placeholder.
+    steps: [{ title: '', instructions: '', inputFromSteps: [], estimatedTime: null, ingredients: [] }],
     _instructionsExpanded: new Set([0]),
     unassignedIngredients: [],   // imported ingredients not yet placed in a step; recipe cannot save while non-empty
     itemIds: [], saving: false, error: null,
