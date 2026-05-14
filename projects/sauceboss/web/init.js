@@ -139,6 +139,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       const si = parseInt(acItem.dataset.step);
       const ii = parseInt(acItem.dataset.ing);
       builderPickAutocomplete(acItem.dataset.acPick, si, ii);
+      return;
+    }
+    const editorPick = e.target.closest('.ac-item[data-ing-editor-pick]');
+    if (editorPick) {
+      e.preventDefault();
+      builderPickIngEditorAutocomplete(editorPick.dataset.ingEditorPick);
     }
   });
 
@@ -149,6 +155,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       const si = parseInt(catChip.dataset.step);
       const ii = parseInt(catChip.dataset.ing);
       builderClassifyIngredient(si, ii, catChip.dataset.classifyCat);
+      return;
+    }
+    const editorCat = e.target.closest('.builder-chip[data-ing-editor-classify]');
+    if (editorCat) {
+      builderClassifyIngEditor(editorCat.dataset.ingEditorClassify);
+      return;
+    }
+    const editorAction = e.target.closest('[data-ing-editor-action]');
+    if (editorAction) {
+      const action = editorAction.dataset.ingEditorAction;
+      if (action === 'save')   builderSaveIngEditor();
+      if (action === 'cancel') builderCancelIngEditor();
     }
   });
 
@@ -183,6 +201,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           wrap.appendChild(div);
         }
       }
+    }
+  });
+
+  // Esc closes the ingredient editor sheet.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && state.builder && state.builder._ingEditor) {
+      builderCancelIngEditor();
     }
   });
 });
