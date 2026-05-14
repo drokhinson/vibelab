@@ -169,6 +169,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (action === 'cancel') builderCancelIngEditor();
       return;
     }
+    // Step-input editor (bottom sheet) — backdrop / handle / × / Cancel / Save.
+    const stepInputAction = e.target.closest('[data-step-input-action]');
+    if (stepInputAction) {
+      const action = stepInputAction.dataset.stepInputAction;
+      if (action === 'save')   builderSaveStepInputEditor();
+      if (action === 'cancel') builderCancelStepInputEditor();
+      return;
+    }
+    // Step-input toggle row inside the sheet body.
+    const stepInputToggle = e.target.closest('[data-step-input-toggle]');
+    if (stepInputToggle) {
+      builderToggleStepInputDraft(parseInt(stepInputToggle.dataset.stepInputToggle));
+      return;
+    }
     // Ingredient list actions on the instructions screen — chip tap, edit
     // button, remove button, and the "+ Add ingredient" CTA all route here.
     // Delegated rather than inline `onclick` so they survive re-render and
@@ -181,6 +195,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (action === 'ing-add')    { builderOpenIngEditor(si, -1); return; }
       if (action === 'ing-edit')   { builderOpenIngEditor(si, ii); return; }
       if (action === 'ing-remove') { e.stopPropagation(); builderRemoveIngredient(si, ii); return; }
+      if (action === 'step-input-add' || action === 'step-input-edit') {
+        builderOpenStepInputEditor(si);
+        return;
+      }
+      if (action === 'step-input-remove') {
+        e.stopPropagation();
+        builderClearStepInputs(si);
+        return;
+      }
     }
   });
 
@@ -218,10 +241,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Esc closes the ingredient editor sheet.
+  // Esc closes whichever builder bottom-sheet is open.
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && state.builder && state.builder._ingEditor) {
-      builderCancelIngEditor();
-    }
+    if (e.key !== 'Escape' || !state.builder) return;
+    if (state.builder._ingEditor)       builderCancelIngEditor();
+    else if (state.builder._stepInputEditor) builderCancelStepInputEditor();
   });
 });

@@ -276,28 +276,28 @@ function renderBuilderInstructions() {
         <span class="insert-step-line"></span><span class="insert-step-plus">+</span><span class="insert-step-line"></span>
       </button>` : '';
 
-    const stepRefHTML = si > 0 ? `
-      <div class="step-ref-row">
-        <label class="step-ref-label">Combine output from:</label>
-        <div class="multi-step-select" data-step="${si}">
-          <button class="multi-step-trigger" onclick="builderToggleStepSelect(${si})">
-            ${(step.inputFromSteps || []).length > 0
-              ? (step.inputFromSteps || []).map(r => `Step ${r}${b.steps[r - 1]?.title ? ' — ' + b.steps[r - 1].title.slice(0, 20) : ''}`).join(', ')
-              : 'None — independent step'}
+    // Step input source — replaces the previous in-bubble dropdown, which was
+    // clipped by its container's overflow:hidden and effectively unreachable.
+    // Empty → a dashed pill (mirrors "+ Add ingredient"); non-empty → a chip
+    // with summary + pencil + ×. Both delegate to data-builder-action.
+    let stepRefHTML = '';
+    if (si > 0) {
+      const refs = step.inputFromSteps || [];
+      if (refs.length === 0) {
+        stepRefHTML = `<button class="add-step-input-btn" data-builder-action="step-input-add" data-step="${si}">⤶ Combine from previous step</button>`;
+      } else {
+        const summary = refs
+          .map(r => `Step ${r}${b.steps[r - 1]?.title ? ' — ' + b.steps[r - 1].title.slice(0, 20) : ''}`)
+          .join(', ');
+        stepRefHTML = `<div class="step-input-readonly" data-builder-action="step-input-edit" data-step="${si}">
+          <span class="step-input-readonly__name">⤶ Combines ${esc(summary)}</span>
+          <button class="step-input-readonly__edit" data-builder-action="step-input-edit" data-step="${si}" title="Edit step inputs" aria-label="Edit step inputs">
+            <i data-lucide="pencil"></i>
           </button>
-          ${b._stepSelectOpen === si ? `<div class="multi-step-panel">
-            ${b.steps.slice(0, si).map((_, ri) => {
-              const refOrder = ri + 1;
-              const checked = (step.inputFromSteps || []).includes(refOrder);
-              const label = `Step ${refOrder}${b.steps[ri].title ? ' — ' + b.steps[ri].title.slice(0, 25) : ''}`;
-              return `<label class="multi-step-option ${checked ? 'checked' : ''}">
-                <input type="checkbox" ${checked ? 'checked' : ''} onchange="builderToggleInputStep(${si}, ${refOrder})">
-                <span>${label}</span>
-              </label>`;
-            }).join('')}
-          </div>` : ''}
-        </div>
-      </div>` : '';
+          <button class="step-input-readonly__remove" data-builder-action="step-input-remove" data-step="${si}" title="Clear" aria-label="Clear step inputs">✕</button>
+        </div>`;
+      }
+    }
 
     const ingsHTML = step.ingredients.map((ing, ii) => {
       const isQualitative = QUALITATIVE_UNITS.has(ing.unit);
@@ -377,6 +377,7 @@ function renderBuilderInstructions() {
       ${_builderBackLink()}
     </div>
     ${_renderIngEditorSheet()}
+    ${_renderStepInputSheet()}
   `;
 }
 
@@ -458,6 +459,53 @@ function _renderIngEditorSheet() {
         <div class="ing-sheet__footer">
           <button class="ing-sheet__btn ing-sheet__btn--secondary" data-ing-editor-action="cancel">Cancel</button>
           <button class="ing-sheet__btn ing-sheet__btn--primary" data-ing-editor-action="save" ${canSave ? '' : 'disabled'}>${isNew ? 'Add' : 'Save'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Bottom-sheet picker for which previous step(s) feed into this one. Reuses
+// the same .ing-sheet* layout primitives (animation, backdrop, footer buttons)
+// as the ingredient editor. Driven by `state.builder._stepInputEditor =
+// { si, draft: number[] }`; only the rows in `draft` count as selected, the
+// underlying step.inputFromSteps array is replaced atomically on Save.
+function _renderStepInputSheet() {
+  const b = state.builder;
+  if (!b || !b._stepInputEditor) return '';
+  // Local attribute escaper — matches the per-function `esc` used by every
+  // sibling render*() in this file. Skipping it throws ReferenceError mid-
+  // render and freezes the page (see _renderIngEditorSheet).
+  const esc = s => (s || '').replace(/"/g, '&quot;');
+  const ed = b._stepInputEditor;
+  const { si, draft } = ed;
+  const prior = b.steps.slice(0, si);
+  return `
+    <div class="ing-sheet" role="dialog" aria-modal="true" aria-label="Combine previous steps">
+      <div class="ing-sheet__backdrop" data-step-input-action="cancel"></div>
+      <div class="ing-sheet__card">
+        <div class="ing-sheet__handle" data-step-input-action="cancel"></div>
+        <div class="ing-sheet__header">
+          <h3 class="ing-sheet__title">Combine previous steps</h3>
+          <button class="ing-sheet__close" data-step-input-action="cancel" aria-label="Close">×</button>
+        </div>
+        <div class="ing-sheet__body">
+          <p class="ing-sheet__hint">Pick the steps whose output flows into this one.</p>
+          ${prior.length === 0
+            ? `<p class="ing-sheet__empty">No earlier steps to combine yet.</p>`
+            : prior.map((s, ri) => {
+                const refOrder = ri + 1;
+                const on = draft.includes(refOrder);
+                const titleSlice = s.title ? ' — ' + s.title.slice(0, 40) : '';
+                return `<button type="button" class="step-input-row ${on ? 'is-on' : ''}" data-step-input-toggle="${refOrder}">
+                  <span class="step-input-row__check" aria-hidden="true">${on ? '✓' : ''}</span>
+                  <span class="step-input-row__label">Step ${refOrder}${esc(titleSlice)}</span>
+                </button>`;
+              }).join('')}
+        </div>
+        <div class="ing-sheet__footer">
+          <button class="ing-sheet__btn ing-sheet__btn--secondary" data-step-input-action="cancel">Cancel</button>
+          <button class="ing-sheet__btn ing-sheet__btn--primary"   data-step-input-action="save">Save</button>
         </div>
       </div>
     </div>
@@ -902,20 +950,45 @@ function builderToggleInstructions(si) {
   render();
 }
 
-function builderToggleStepSelect(si) {
+// ── Step-input editor (bottom-sheet) ────────────────────────────────────────
+// All edits to `step.inputFromSteps` go through this overlay so the inline
+// surface stays a single pill (empty) or chip (non-empty) and the user has
+// somewhere to actually see + toggle the list. Mirrors _ingEditor lifecycle:
+// the draft array is cloned on open and only commits to state on Save.
+function builderOpenStepInputEditor(si) {
   const b = state.builder;
-  b._stepSelectOpen = b._stepSelectOpen === si ? null : si;
+  if (!b) return;
+  b._stepInputEditor = { si, draft: (b.steps[si].inputFromSteps || []).slice() };
   render();
 }
 
-function builderToggleInputStep(si, refOrder) {
+function builderCancelStepInputEditor() {
+  if (!state.builder) return;
+  state.builder._stepInputEditor = null;
+  render();
+}
+
+function builderSaveStepInputEditor() {
   const b = state.builder;
-  const arr = b.steps[si].inputFromSteps || [];
+  if (!b || !b._stepInputEditor) return;
+  const { si, draft } = b._stepInputEditor;
+  b.steps[si].inputFromSteps = draft.slice().sort((a, c) => a - c);
+  b._stepInputEditor = null;
+  render();
+}
+
+function builderToggleStepInputDraft(refOrder) {
+  const b = state.builder;
+  if (!b || !b._stepInputEditor) return;
+  const arr = b._stepInputEditor.draft;
   const idx = arr.indexOf(refOrder);
-  if (idx >= 0) arr.splice(idx, 1);
-  else arr.push(refOrder);
-  arr.sort((a, c) => a - c);
-  b.steps[si].inputFromSteps = arr;
+  if (idx >= 0) arr.splice(idx, 1); else arr.push(refOrder);
+  render();
+}
+
+function builderClearStepInputs(si) {
+  if (!state.builder) return;
+  state.builder.steps[si].inputFromSteps = [];
   render();
 }
 
