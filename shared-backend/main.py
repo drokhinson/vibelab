@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from api_logger import set_request_user
 from jwt_auth import get_current_supabase_user
+from routes.sauceboss.modifiers import load_modifier_registry
 from routes.sauceboss.units import load_unit_registry
 
 # Project routers
@@ -103,6 +104,7 @@ async def attach_api_logger_user_context(request: Request, call_next):
 @app.on_event("startup")
 async def _startup():
     load_unit_registry()
+    load_modifier_registry()
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

@@ -47,6 +47,7 @@ class ParsedIngredient:
     canonical_ml: float | None
     canonical_g: float | None
     note: str | None
+    modifier: str | None = None
 
 
 @dataclass
@@ -455,6 +456,7 @@ def _html_fallback_scrape(url: str) -> ParsedRecipe:
         )
 
     from .units import parse_quantity, parse_unit, to_canonical
+    from .modifiers import extract_modifier
 
     parsed_ings: list[ParsedIngredient] = []
     for raw_line in ingredient_lines:
@@ -466,14 +468,16 @@ def _html_fallback_scrape(url: str) -> ParsedRecipe:
             qty = parse_quantity(line)
         unit_def = parse_unit(unit_raw)
         canonical_ml, canonical_g = to_canonical(qty, unit_def)
+        clean_food, modifier, leftover_note = extract_modifier(food_raw, note)
         parsed_ings.append(ParsedIngredient(
             original_text=line,
             quantity=qty,
             unit_raw=unit_raw,
-            food_raw=food_raw,
+            food_raw=clean_food or food_raw,
             canonical_ml=canonical_ml,
             canonical_g=canonical_g,
-            note=note,
+            note=leftover_note,
+            modifier=modifier,
         ))
 
     return ParsedRecipe(
@@ -531,6 +535,7 @@ def scrape_recipe(url: str) -> ParsedRecipe:
         return _html_fallback_scrape(url)
 
     from .units import parse_quantity, parse_unit, to_canonical
+    from .modifiers import extract_modifier
 
     parsed_ings: list[ParsedIngredient] = []
     for raw_line in ingredient_lines:
@@ -542,14 +547,16 @@ def scrape_recipe(url: str) -> ParsedRecipe:
             qty = parse_quantity(line)
         unit_def = parse_unit(unit_raw)
         canonical_ml, canonical_g = to_canonical(qty, unit_def)
+        clean_food, modifier, leftover_note = extract_modifier(food_raw, note)
         parsed_ings.append(ParsedIngredient(
             original_text=line,
             quantity=qty,
             unit_raw=unit_raw,
-            food_raw=food_raw,
+            food_raw=clean_food or food_raw,
             canonical_ml=canonical_ml,
             canonical_g=canonical_g,
-            note=note,
+            note=leftover_note,
+            modifier=modifier,
         ))
 
     canonical_url: str | None = None

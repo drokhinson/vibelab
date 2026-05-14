@@ -15,6 +15,8 @@ from .models import (
     Attachment,
     CreateSauceRequest,
     ForkResponse,
+    IngredientModifierRow,
+    IngredientModifiersListResponse,
     IngredientRow,
     IngredientsListResponse,
     IngredientsWithUsageResponse,
@@ -23,6 +25,7 @@ from .models import (
     ItemLoadResponse,
     ItemsGroupedResponse,
     MessageResponse,
+    ModifierKind,
     ParsedIngredientResponse,
     ParsedRecipeResponse,
     UnitRow,
@@ -30,6 +33,7 @@ from .models import (
     UpdateSauceRequest,
     _shape_items_grouped,
 )
+from .modifiers import MODIFIER_REGISTRY
 from .parser import ScrapeError, ScrapeErrorKind, scrape_recipe
 from .units import UNIT_REGISTRY, parse_unit, to_canonical
 
@@ -327,6 +331,7 @@ def _resolve_ingredient_for_save(ing) -> dict:
     """
     unit_def = parse_unit(ing.unit)
     canonical_ml, canonical_g = to_canonical(ing.amount, unit_def)
+    modifier = (ing.modifier or "").strip().lower() or None
     return {
         "name": ing.name.strip(),
         "amount": ing.amount,
@@ -335,6 +340,7 @@ def _resolve_ingredient_for_save(ing) -> dict:
         "originalText": (ing.originalText or f"{ing.amount} {ing.unit} {ing.name}").strip(),
         "canonicalMl": canonical_ml,
         "canonicalG": canonical_g,
+        "modifier": modifier,
     }
 
 
@@ -506,6 +512,7 @@ async def import_recipe(body: ImportRecipeRequest) -> ParsedRecipeResponse:
                 canonicalMl=ing.canonical_ml,
                 canonicalG=ing.canonical_g,
                 note=ing.note,
+                modifier=ing.modifier,
             )
             for ing in parsed.ingredients
         ],
@@ -537,6 +544,32 @@ async def list_units() -> UnitsListResponse:
         for u in UNIT_REGISTRY.values()
     ]
     return UnitsListResponse(units=rows)
+
+
+@router.get(
+    "/ingredient-modifiers",
+    response_model=IngredientModifiersListResponse,
+    status_code=200,
+    summary="Ingredient modifier dropdown options (form/state + cut/prep words)",
+)
+async def list_ingredient_modifiers() -> IngredientModifiersListResponse:
+    """Vocabulary used by the builder's per-row prep dropdown and the parser.
+
+    Cached in memory at startup from ``sauceboss_ingredient_modifier`` (see
+    migration 023). The frontend stores the chosen label verbatim on each
+    step's ingredient row; comma-joined values like ``"fresh, thinly sliced"``
+    come from the parser when a recipe line carries multiple prep words.
+    """
+    modifiers = [
+        IngredientModifierRow(
+            id=m.id,
+            label=m.label,
+            kind=ModifierKind(m.kind),
+            sortOrder=m.sort_order,
+        )
+        for m in MODIFIER_REGISTRY
+    ]
+    return IngredientModifiersListResponse(modifiers=modifiers)
 
 
 @router.get(

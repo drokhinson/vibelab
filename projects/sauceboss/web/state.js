@@ -36,6 +36,8 @@ let state = {
   allCuisines: [],              // [{cuisine, emoji}] from GET /cuisines
   allUnits: null,               // UnitRow[] from GET /units — drives UNITS + QUALITATIVE_UNITS globals
   allFilterDishes: [],          // [{id, name, emoji, category}] from GET /filter-dishes
+  ingredientModifiers: [],      // IngredientModifierRow[] from GET /ingredient-modifiers — populates the builder's prep dropdown
+
   // ── Saucebook (per-user library; references — not copies). Populated by
   // api.listSaucebook() on login; cleared on logout. Each row is a full sauce
   // envelope (matches all-sauces-full shape) plus addedAt + authorName +

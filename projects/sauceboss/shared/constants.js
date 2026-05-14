@@ -26,6 +26,12 @@ export const UNITS = [];
 /** Units where the amount field is disabled and the ingredient is excluded from the pie chart. */
 export const QUALITATIVE_UNITS = new Set();
 
+/** Modifier vocabulary for the builder ingredient-row prep dropdown.
+ *  Loaded at runtime from `sauceboss_ingredient_modifier` via
+ *  GET /api/v1/sauceboss/ingredient-modifiers. See helpers.js → loadFilterLookups.
+ *  @type {{ id: string, label: string, kind: 'form'|'prep', sortOrder: number }[]} */
+export const INGREDIENT_MODIFIERS = [];
+
 export const COLOR_SWATCHES = [
   '#E85D04', '#DC2626', '#22C55E', '#3B1F0A', '#FBBF24',
   '#457B9D', '#7C3AED', '#EA580C', '#15803D', '#B91C1C',

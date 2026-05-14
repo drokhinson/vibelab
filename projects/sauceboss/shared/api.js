@@ -35,6 +35,12 @@ import { withIngredientNames } from './filter.js';
  * @property {number=} sauceCount
  * @property {(string|null)=} createdAt
  *
+ * @typedef {Object} IngredientModifierRow
+ * @property {string} id
+ * @property {string} label    canonical lowercase label, e.g. "fresh" or "thinly sliced"
+ * @property {'form'|'prep'} kind  form = source/state, prep = cut/preparation
+ * @property {number} sortOrder
+ *
  * @typedef {Object} UnitRow
  * @property {string} id
  * @property {string} singular
@@ -187,6 +193,12 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     units: async () => {
       const data = await call('/units');
       return data.units || [];
+    },
+
+    /** @returns {Promise<IngredientModifierRow[]>} */
+    ingredientModifiers: async () => {
+      const data = await call('/ingredient-modifiers');
+      return (data && data.modifiers) || [];
     },
 
     /** @returns {Promise<IngredientRow[]>} */
