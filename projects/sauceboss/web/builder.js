@@ -297,11 +297,11 @@ function renderBuilderInstructions() {
           <button class="step-input-readonly__remove" data-builder-action="step-input-remove" data-step="${si}" title="Clear" aria-label="Clear step inputs">✕</button>
         </div>`;
       }
-      // Pill always renders when the step has prior steps to draw from. When a
-      // combination already exists the pill becomes the "edit" CTA, mirroring
-      // the chip's tap target so both surfaces lead back to the same sheet.
-      const pillLabel = refs.length > 0 ? '⤶ Edit step inputs' : '⤶ Combine from previous step';
-      combinePillHTML = `<button class="add-step-input-btn" data-builder-action="step-input-add" data-step="${si}">${pillLabel}</button>`;
+      // Pill always renders when the step has prior steps to draw from. The
+      // chip in the ingredient list is the visual cue that a combination
+      // already exists; the pill label stays compact and parallels
+      // "+ Add ingredient" so the two CTAs read as siblings.
+      combinePillHTML = `<button class="add-step-input-btn" data-builder-action="step-input-add" data-step="${si}">+ Previous step</button>`;
     }
 
     const ingsHTML = step.ingredients.map((ing, ii) => {
