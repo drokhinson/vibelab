@@ -300,53 +300,22 @@ function renderBuilderInstructions() {
       </div>` : '';
 
     const ingsHTML = step.ingredients.map((ing, ii) => {
-      const isAcActive = b.acStep === si && b.acIng === ii && b.acResults.length > 0;
-      const acDropdown = isAcActive ? `
-        <div class="ac-dropdown">
-          ${b.acResults.map((name, idx) =>
-            `<div class="ac-item ${idx === b.acSelected ? 'ac-selected' : ''}" data-ac-pick="${name.replace(/"/g, '&quot;')}" data-step="${si}" data-ing="${ii}">${name}</div>`
-          ).join('')}
-        </div>` : '';
-
-      const needsCategory = ing.name.trim().length >= 2 && !isKnownIngredient(ing.name) && ing._showCategory;
-      const categoryChips = needsCategory ? `
-        <div class="category-classify">
-          <span class="category-classify-label">Classify "${ing.name.trim()}":</span>
-          <div class="builder-chip-row">
-            ${CATEGORY_ORDER.map(cat =>
-              `<button class="builder-chip" data-classify-cat="${cat}" data-step="${si}" data-ing="${ii}">${cat}</button>`
-            ).join('')}
-          </div>
-        </div>` : '';
-
       const isQualitative = QUALITATIVE_UNITS.has(ing.unit);
-      const mods = (window.INGREDIENT_MODIFIERS || []);
-      const currentMod = (ing.modifier || '').trim();
-      // Render the prep dropdown only if the registry has loaded. For multi-
-      // value modifiers from the parser (e.g. "fresh, thinly sliced") we keep
-      // the value but render a "(custom)" placeholder option so it survives
-      // edit without forcing a single-select narrowing.
-      const knownMod = mods.some(m => m.label === currentMod);
-      const modDropdown = mods.length ? `
-        <select class="ing-modifier" data-builder-field="ing-modifier" data-step="${si}" data-ing="${ii}">
-          <option value="" ${!currentMod ? 'selected' : ''}>no prep</option>
-          ${!knownMod && currentMod ? `<option value="${esc(currentMod)}" selected>${esc(currentMod)}</option>` : ''}
-          ${mods.map(m => `<option value="${esc(m.label)}" ${currentMod === m.label ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
-        </select>` : '';
-      return `<div class="ingredient-row-wrap">
-        <div class="ingredient-row">
-          <div class="ing-name-wrap">
-            <input class="builder-input ing-name" placeholder="Ingredient" value="${esc(ing.name)}" data-builder-field="ing-name" data-step="${si}" data-ing="${ii}" autocomplete="off">
-            ${acDropdown}
-          </div>
-          <input class="builder-input ing-amount" type="number" step="0.1" min="0" placeholder="${isQualitative ? '—' : 'Qty'}" value="${isQualitative ? '' : ing.amount}" data-builder-field="ing-amount" data-step="${si}" data-ing="${ii}" ${isQualitative ? 'disabled' : ''}>
-          <select class="ing-unit" data-builder-field="ing-unit" data-step="${si}" data-ing="${ii}">
-            ${UNITS.map(u => `<option ${ing.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
-          </select>
-          ${step.ingredients.length > 1 ? `<button class="remove-ing-btn" onclick="builderRemoveIngredient(${si},${ii})">✕</button>` : ''}
+      const qtyDisplay = isQualitative
+        ? esc(ing.unit || '')
+        : `${(ing.amount === '' || ing.amount == null) ? '—' : esc(String(ing.amount))} ${esc(ing.unit || '')}`.trim();
+      const modPrefix = ing.modifier ? `${esc(ing.modifier)} ` : '';
+      const nameDisplay = ing.name.trim() ? `${modPrefix}${esc(ing.name)}` : '<span class="ing-readonly__placeholder">Untitled ingredient</span>';
+      const incomplete = !ing.name.trim() || (!isQualitative && !(parseFloat(ing.amount) > 0));
+      return `<div class="ing-readonly ${incomplete ? 'ing-readonly--incomplete' : ''}" onclick="builderOpenIngEditor(${si}, ${ii})">
+        <div class="ing-readonly__main">
+          <span class="ing-readonly__name">${nameDisplay}</span>
         </div>
-        ${modDropdown}
-        ${categoryChips}
+        <span class="ing-readonly__qty">${qtyDisplay}</span>
+        <button class="ing-readonly__edit" onclick="event.stopPropagation(); builderOpenIngEditor(${si}, ${ii})" title="Edit ingredient" aria-label="Edit ingredient">
+          <i data-lucide="pencil"></i>
+        </button>
+        ${step.ingredients.length > 1 ? `<button class="ing-readonly__remove" onclick="event.stopPropagation(); builderRemoveIngredient(${si},${ii})" title="Remove" aria-label="Remove ingredient">✕</button>` : ''}
       </div>`;
     }).join('');
 
@@ -403,6 +372,86 @@ function renderBuilderInstructions() {
       ${validationHTML}
       <button class="builder-primary-btn" onclick="_builderNextScreen()" ${canContinue ? '' : 'disabled'}>${state.builder.returnToReview ? 'Back to Review' : 'Continue — Dish Pairing'}</button>
       ${_builderBackLink()}
+    </div>
+    ${_renderIngEditorSheet()}
+  `;
+}
+
+// Bottom-sheet ingredient editor — replaces the inline name/qty/unit inputs.
+// Driven by `state.builder._ingEditor = { si, ii, draft, acResults, acSelected }`.
+// `ii === -1` means a new row is being added (commits on Save). Anything else
+// edits an existing row in-place. The sheet renders as the last child of the
+// instructions screen so swapping screens unmounts it automatically.
+function _renderIngEditorSheet() {
+  const b = state.builder;
+  if (!b || !b._ingEditor) return '';
+  const ed = b._ingEditor;
+  const d = ed.draft;
+  const isNew = ed.ii < 0;
+  const isQualitative = QUALITATIVE_UNITS.has(d.unit);
+  const mods = (window.INGREDIENT_MODIFIERS || []);
+  const knownMod = !d.modifier || mods.some(m => m.label === d.modifier);
+  const acItems = (ed.acResults || []).map((name, idx) =>
+    `<div class="ac-item ${idx === ed.acSelected ? 'ac-selected' : ''}" data-ing-editor-pick="${name.replace(/"/g, '&quot;')}">${esc(name)}</div>`
+  ).join('');
+  const needsCategory = d.name.trim().length >= 2 && !isKnownIngredient(d.name);
+  const canSave = d.name.trim() && (isQualitative || parseFloat(d.amount) > 0);
+  return `
+    <div class="ing-sheet" role="dialog" aria-modal="true" aria-label="${isNew ? 'Add ingredient' : 'Edit ingredient'}">
+      <div class="ing-sheet__backdrop" data-ing-editor-action="cancel"></div>
+      <div class="ing-sheet__card">
+        <div class="ing-sheet__handle" data-ing-editor-action="cancel"></div>
+        <div class="ing-sheet__header">
+          <h3 class="ing-sheet__title">${isNew ? 'Add ingredient' : 'Edit ingredient'}</h3>
+          <button class="ing-sheet__close" data-ing-editor-action="cancel" aria-label="Close">×</button>
+        </div>
+        <div class="ing-sheet__body">
+          <label class="ing-sheet__label">
+            <span class="ing-sheet__label-text">Ingredient</span>
+            <div class="ing-sheet__ac-wrap">
+              <input class="builder-input ing-editor-name" type="text" placeholder="e.g. thyme" value="${esc(d.name)}" data-builder-field="ing-editor-name" data-focus-key="ing-editor-name" autocomplete="off" autofocus>
+              ${acItems ? `<div class="ac-dropdown">${acItems}</div>` : ''}
+            </div>
+          </label>
+
+          ${mods.length ? `
+          <label class="ing-sheet__label">
+            <span class="ing-sheet__label-text">Prep</span>
+            <select class="builder-input ing-editor-modifier" data-builder-field="ing-editor-modifier">
+              <option value="" ${!d.modifier ? 'selected' : ''}>no prep</option>
+              ${!knownMod ? `<option value="${esc(d.modifier)}" selected>${esc(d.modifier)}</option>` : ''}
+              ${mods.map(m => `<option value="${esc(m.label)}" ${d.modifier === m.label ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
+            </select>
+          </label>` : ''}
+
+          <div class="ing-sheet__row">
+            <label class="ing-sheet__label ing-sheet__label--amount">
+              <span class="ing-sheet__label-text">Quantity</span>
+              <input class="builder-input ing-editor-amount" type="number" step="0.1" min="0" inputmode="decimal" placeholder="${isQualitative ? '—' : 'e.g. 2'}" value="${isQualitative ? '' : esc(String(d.amount))}" data-builder-field="ing-editor-amount" ${isQualitative ? 'disabled' : ''}>
+            </label>
+            <label class="ing-sheet__label ing-sheet__label--unit">
+              <span class="ing-sheet__label-text">Unit</span>
+              <select class="builder-input ing-editor-unit" data-builder-field="ing-editor-unit">
+                ${UNITS.map(u => `<option ${d.unit === u ? 'selected' : ''}>${esc(u)}</option>`).join('')}
+              </select>
+            </label>
+          </div>
+
+          ${needsCategory ? `
+          <div class="category-classify ing-sheet__classify">
+            <span class="category-classify-label">Classify "${esc(d.name.trim())}":</span>
+            <div class="builder-chip-row">
+              ${CATEGORY_ORDER.map(cat =>
+                `<button class="builder-chip" data-ing-editor-classify="${esc(cat)}">${esc(cat)}</button>`
+              ).join('')}
+            </div>
+          </div>` : ''}
+        </div>
+        <div class="ing-sheet__footer">
+          <button class="ing-sheet__btn ing-sheet__btn--secondary" data-ing-editor-action="cancel">Cancel</button>
+          <button class="ing-sheet__btn ing-sheet__btn--primary" data-ing-editor-action="save" ${canSave ? '' : 'disabled'}>${isNew ? 'Add' : 'Save'}</button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -695,13 +744,146 @@ function builderRemoveStep(si) {
 }
 
 function builderAddIngredient(si) {
-  state.builder.steps[si].ingredients.push({ name: '', amount: '', unit: 'tsp', modifier: null });
-  render();
+  // Opens the ingredient editor in "add" mode; the new row is committed on Save.
+  builderOpenIngEditor(si, -1);
 }
 
 function builderRemoveIngredient(si, ii) {
   state.builder.steps[si].ingredients.splice(ii, 1);
   render();
+}
+
+// ── Ingredient editor (bottom-sheet) ────────────────────────────────────────
+// All ingredient editing routes through this overlay so the in-line list stays
+// a clean read-only view. State lives at `state.builder._ingEditor` and is
+// keyed by step index `si` plus row index `ii` (`-1` = pending new row).
+function builderOpenIngEditor(si, ii) {
+  const b = state.builder;
+  if (!b) return;
+  const source = ii >= 0 ? b.steps[si].ingredients[ii] : null;
+  b._ingEditor = {
+    si,
+    ii,
+    draft: {
+      name: source ? (source.name || '') : '',
+      amount: source ? (source.amount === '' || source.amount == null ? '' : String(source.amount)) : '',
+      unit: source ? (source.unit || 'tsp') : 'tsp',
+      modifier: source ? (source.modifier || null) : null,
+      originalText: source ? (source.originalText || '') : '',
+      canonicalMl: source ? (source.canonicalMl ?? null) : null,
+      canonicalG: source ? (source.canonicalG ?? null) : null,
+    },
+    acResults: [],
+    acSelected: -1,
+  };
+  render();
+  // Move keyboard focus into the name field so the user can start typing
+  // immediately. `data-focus-key` only preserves focus across renders; this
+  // handles the initial open.
+  requestAnimationFrame(() => {
+    const el = document.querySelector('.ing-editor-name');
+    if (el) el.focus();
+  });
+}
+
+function builderCancelIngEditor() {
+  if (!state.builder) return;
+  state.builder._ingEditor = null;
+  render();
+}
+
+function builderSaveIngEditor() {
+  const b = state.builder;
+  if (!b || !b._ingEditor) return;
+  const { si, ii, draft } = b._ingEditor;
+  const isQualitative = QUALITATIVE_UNITS.has(draft.unit);
+  // Mirror the save-payload validation: name required, plus either a positive
+  // quantity or a qualitative unit (e.g. "to taste").
+  if (!draft.name.trim() || (!isQualitative && !(parseFloat(draft.amount) > 0))) return;
+  const row = {
+    name: draft.name.trim(),
+    amount: isQualitative ? '' : draft.amount,
+    unit: draft.unit,
+    modifier: (draft.modifier || '').trim() || null,
+    originalText: draft.originalText || '',
+    canonicalMl: draft.canonicalMl,
+    canonicalG: draft.canonicalG,
+  };
+  if (ii < 0) {
+    b.steps[si].ingredients.push(row);
+  } else {
+    b.steps[si].ingredients[ii] = row;
+  }
+  b._ingEditor = null;
+  render();
+}
+
+function builderUpdateIngDraft(field, value) {
+  const b = state.builder;
+  if (!b || !b._ingEditor) return;
+  const ed = b._ingEditor;
+  ed.draft[field] = value;
+  if (field === 'name') {
+    const matches = fuzzyMatchIngredients(value);
+    ed.acResults = matches;
+    ed.acSelected = -1;
+    _updateIngEditorAcDropdown(matches);
+    return;
+  }
+  if (field === 'unit') {
+    // Switching to/from a qualitative unit changes which inputs render — full
+    // re-render rather than a surgical DOM update.
+    render();
+    return;
+  }
+  // For amount + modifier we just refresh the Save button state.
+  _refreshIngEditorSaveBtn();
+}
+
+function builderPickIngEditorAutocomplete(name) {
+  const b = state.builder;
+  if (!b || !b._ingEditor) return;
+  b._ingEditor.draft.name = name;
+  b._ingEditor.acResults = [];
+  b._ingEditor.acSelected = -1;
+  render();
+}
+
+function builderClassifyIngEditor(category) {
+  const b = state.builder;
+  if (!b || !b._ingEditor) return;
+  const name = b._ingEditor.draft.name.trim();
+  if (!name) return;
+  classifyIngredientLocal(name, category);
+  render();
+}
+
+function _updateIngEditorAcDropdown(matches) {
+  const wrap = document.querySelector('.ing-sheet__ac-wrap');
+  if (!wrap) return;
+  let dd = wrap.querySelector('.ac-dropdown');
+  if (!matches.length) {
+    if (dd) dd.remove();
+    return;
+  }
+  if (!dd) {
+    dd = document.createElement('div');
+    dd.className = 'ac-dropdown';
+    wrap.appendChild(dd);
+  }
+  dd.innerHTML = matches.map((name) =>
+    `<div class="ac-item" data-ing-editor-pick="${name.replace(/"/g, '&quot;')}">${name}</div>`
+  ).join('');
+}
+
+function _refreshIngEditorSaveBtn() {
+  const b = state.builder;
+  if (!b || !b._ingEditor) return;
+  const d = b._ingEditor.draft;
+  const isQualitative = QUALITATIVE_UNITS.has(d.unit);
+  const canSave = d.name.trim() && (isQualitative || parseFloat(d.amount) > 0);
+  const btn = document.querySelector('.ing-sheet__btn--primary');
+  if (btn) btn.disabled = !canSave;
 }
 
 function builderToggleInstructions(si) {
@@ -843,6 +1025,12 @@ function builderHandleInput(el) {
       b.steps[si].ingredients[ii].modifier = (el.value || '').trim() || null;
       break;
     }
+    // Ingredient editor (bottom-sheet) field updates. These never touch
+    // b.steps directly — they live on b._ingEditor.draft until Save.
+    case 'ing-editor-name':     builderUpdateIngDraft('name',     el.value); return;
+    case 'ing-editor-amount':   builderUpdateIngDraft('amount',   el.value); return;
+    case 'ing-editor-unit':     builderUpdateIngDraft('unit',     el.value); return;
+    case 'ing-editor-modifier': builderUpdateIngDraft('modifier', (el.value || '').trim() || null); return;
     case 'unassigned-target': {
       if (el.value === '') break;
       const uidx = parseInt(el.dataset.uidx);
