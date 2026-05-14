@@ -388,6 +388,11 @@ function renderBuilderInstructions() {
 function _renderIngEditorSheet() {
   const b = state.builder;
   if (!b || !b._ingEditor) return '';
+  // Local attribute escaper — matches the per-function `esc` defined in each
+  // sibling render*() below. Required because this function is module-level
+  // and can't reach the const inside renderBuilderInstructions's closure;
+  // omitting it throws ReferenceError on every render and freezes the page.
+  const esc = s => (s || '').replace(/"/g, '&quot;');
   const ed = b._ingEditor;
   const d = ed.draft;
   const isNew = ed.ii < 0;
