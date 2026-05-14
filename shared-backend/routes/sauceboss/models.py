@@ -100,11 +100,18 @@ class IngredientInput(BaseModel):
     ``amount`` accepts 0 so qualitative rows ("to taste") can save without a
     numeric quantity — the unit registry resolves "to taste" to its unit_id
     and the recipe view renders the originalText instead of "0 to taste".
+
+    ``modifier`` is a free-form lowercase string (e.g. ``"fresh"``,
+    ``"thinly sliced"``, ``"fresh, thinly sliced"``) that distinguishes the
+    same registered ingredient by prep state. Dropdown options come from
+    ``sauceboss_ingredient_modifier``; multi-value strings are how the parser
+    represents recipe lines like "1 cup fresh, thinly sliced basil".
     """
     name: str = Field(min_length=1)
     amount: float = Field(ge=0)
     unit: str = Field(min_length=1)
     originalText: Optional[str] = None
+    modifier: Optional[str] = None
 
 
 class StepInput(BaseModel):
@@ -183,6 +190,7 @@ class ParsedIngredientResponse(BaseModel):
     canonicalMl: Optional[float] = None
     canonicalG: Optional[float] = None
     note: Optional[str] = None
+    modifier: Optional[str] = None
 
 
 class ParsedRecipeResponse(BaseModel):
@@ -237,6 +245,24 @@ class IngredientRow(BaseModel):
 
 class IngredientsListResponse(BaseModel):
     ingredients: List[IngredientRow]
+
+
+# ── Ingredient modifiers (migration 023) ──────────────────────────────────────
+
+class ModifierKind(StrEnum):
+    FORM = "form"   # fresh / dried / frozen / raw / cooked / ground
+    PREP = "prep"   # chopped / minced / diced / sliced / thinly sliced / crushed / grated / shredded
+
+
+class IngredientModifierRow(BaseModel):
+    id: str
+    label: str
+    kind: ModifierKind
+    sortOrder: int
+
+
+class IngredientModifiersListResponse(BaseModel):
+    modifiers: List[IngredientModifierRow]
 
 
 # ── Ingredient admin ─────────────────────────────────────────────────────────

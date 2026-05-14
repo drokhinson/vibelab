@@ -84,6 +84,24 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_ingredient (
 ALTER TABLE public.sauceboss_ingredient ENABLE ROW LEVEL SECURITY;
 
 
+-- Modifier vocabulary for the per-step ingredient row. Distinguishes the same
+-- registered ingredient by prep state — "fresh thyme" and "dried thyme" both
+-- resolve to sauceboss_ingredient.id='thyme' but carry different modifier
+-- values on sauceboss_sauce_step_ingredient.modifier. kind='form' = source/
+-- storage state (fresh/dried/frozen/raw/cooked/ground); kind='prep' = cut/
+-- preparation (chopped/minced/diced/sliced/thinly sliced/crushed/grated/
+-- shredded). NOT canned or sun-dried — those stay part of the ingredient
+-- name because they represent a different ingredient. Read-only from the
+-- frontend; seeded in sauceboss/023_ingredient_modifiers.sql.
+CREATE TABLE IF NOT EXISTS public.sauceboss_ingredient_modifier (
+  id         TEXT PRIMARY KEY,
+  label      TEXT NOT NULL UNIQUE,
+  kind       TEXT NOT NULL CHECK (kind IN ('form', 'prep')),
+  sort_order SMALLINT NOT NULL DEFAULT 100
+);
+ALTER TABLE public.sauceboss_ingredient_modifier ENABLE ROW LEVEL SECURITY;
+
+
 -- All recipes: sauces, dressings, marinades, dips, full_recipes. cuisine_emoji
 -- lives on sauceboss_cuisine_info (joined at read time). sauce_type is
 -- intentionally unconstrained — values are governed by the backend Pydantic
@@ -135,7 +153,8 @@ CREATE TABLE IF NOT EXISTS public.sauceboss_sauce_step_ingredient (
   original_text         TEXT,
   quantity              NUMERIC(12, 4),
   quantity_canonical_ml DOUBLE PRECISION,
-  quantity_canonical_g  DOUBLE PRECISION
+  quantity_canonical_g  DOUBLE PRECISION,
+  modifier              TEXT                                    -- nullable: prep state ("fresh", "thinly sliced", "fresh, thinly sliced")
 );
 ALTER TABLE public.sauceboss_sauce_step_ingredient ENABLE ROW LEVEL SECURITY;
 

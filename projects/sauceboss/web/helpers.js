@@ -228,10 +228,11 @@ function buildLegend(items, stepIndex) {
       ? '<span class="legend-pct"></span>'
       : `<span class="legend-pct">${total ? Math.round((toTsp(item.amount, item.unit) / total) * 100) : 0}%</span>`;
     const cls = ['legend-item', isDisabled && 'legend-disabled', isHidden && 'legend-hidden'].filter(Boolean).join(' ');
+    const modPrefix = item.modifier ? `${item.modifier} ` : '';
     return `<div class="${cls}"${clickAttr}>
       <span class="legend-swatch" style="background:${color}"></span>
       <div class="legend-name-wrap">
-        <span class="legend-name">${item.name}</span>
+        <span class="legend-name">${modPrefix}${item.name}</span>
         ${sub ? `<span class="sub-hint">try ${sub}</span>` : ''}
       </div>
       ${amountCell}
@@ -256,6 +257,7 @@ function prepareItems(items) {
       name: item.name,
       amount: converted.amount,
       unit: converted.unit,
+      modifier: item.modifier || null,
       canonicalMl: scaledItem.canonicalMl,
       canonicalG: scaledItem.canonicalG,
     };
@@ -291,7 +293,9 @@ function aggregateSauceIngredients(sauce) {
   const buckets = new Map();
   for (const step of (sauce.steps || [])) {
     for (const ing of (step.ingredients || [])) {
-      const key = `${ing.name}|${ing.unit}`;
+      // Modifier participates in the key so "fresh thyme" and "dried thyme"
+      // stay as distinct shopping-list lines.
+      const key = `${ing.name}|${ing.unit}|${ing.modifier || ''}`;
       const prev = buckets.get(key);
       if (prev) {
         prev.amount += Number(ing.amount) || 0;
@@ -302,6 +306,7 @@ function aggregateSauceIngredients(sauce) {
           name: ing.name,
           amount: Number(ing.amount) || 0,
           unit: ing.unit,
+          modifier: ing.modifier || null,
           canonicalMl: ing.canonicalMl != null ? ing.canonicalMl : null,
           canonicalG:  ing.canonicalG  != null ? ing.canonicalG  : null,
         });
@@ -321,8 +326,9 @@ function renderRecipeIngredientPanel(sauce) {
     const amountHTML = isQualitative
       ? `<span class="recipe-ingredient-amount recipe-ingredient-amount--qualitative">${item.unit}</span>`
       : `<span class="recipe-ingredient-amount">${formatAmount(item.amount)} ${item.unit}</span>`;
+    const displayName = item.modifier ? `${item.modifier} ${item.name}` : item.name;
     return `<li class="recipe-ingredient-item">
-      <span class="recipe-ingredient-name">${escapeHtml(item.name)}</span>
+      <span class="recipe-ingredient-name">${escapeHtml(displayName)}</span>
       ${amountHTML}
     </li>`;
   }).join('');
@@ -725,6 +731,16 @@ async function loadFilterLookups() {
     }
   } catch (err) {
     console.warn('[sauceboss] unit lookup failed, using hardcoded list', err);
+  }
+  try {
+    const mods = await api.ingredientModifiers();
+    // Drives the per-ingredient prep dropdown in the recipe builder. The
+    // backend seeds this list (sauceboss_ingredient_modifier) so adding a
+    // word like "blanched" is a SQL insert, not a code change.
+    state.ingredientModifiers = mods;
+    window.INGREDIENT_MODIFIERS = mods;
+  } catch (err) {
+    console.warn('[sauceboss] ingredient modifier lookup failed', err);
   }
   render();
 }

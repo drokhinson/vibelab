@@ -153,6 +153,11 @@ def _render_sauce_markdown(s: dict) -> str:
         for ing in ingredients:
             qty = _fmt_amount(ing.get("amount"), ing.get("unit") or "", ing.get("originalText"))
             food = ing.get("name") or ing.get("originalText") or ""
+            modifier = (ing.get("modifier") or "").strip()
+            # Skip the prefix when food fell back to originalText (which already
+            # carries the modifier — `_resolve_ingredient_for_save` rebuilds it).
+            if modifier and food and food != (ing.get("originalText") or ""):
+                food = f"{modifier} {food}"
             if qty and food and qty != food:
                 lines.append(f"- {qty} {food}".rstrip())
             else:
@@ -181,6 +186,9 @@ def _render_sauce_markdown(s: dict) -> str:
                 for ing in step_ings:
                     qty = _fmt_amount(ing.get("amount"), ing.get("unit") or "", ing.get("originalText"))
                     food = ing.get("name") or ing.get("originalText") or ""
+                    modifier = (ing.get("modifier") or "").strip()
+                    if modifier and food and food != (ing.get("originalText") or ""):
+                        food = f"{modifier} {food}"
                     if qty and food and qty != food:
                         lines.append(f"- {qty} {food}".rstrip())
                     else:

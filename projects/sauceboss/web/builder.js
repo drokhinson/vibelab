@@ -257,8 +257,9 @@ function renderBuilderInstructions() {
           const label = `Step ${si + 1}${s.title ? ' — ' + s.title.slice(0, 25) : ''}`;
           return `<option value="${si}">${label}</option>`;
         }).join('');
+        const ingDisplay = ing.modifier ? `${ing.modifier} ${ing.name}` : ing.name;
         return `<div class="unassigned-row">
-          <span class="unassigned-ing"><strong>${esc(ing.name)}</strong>${qty ? ` <span class="unassigned-qty">${esc(qty)}</span>` : ''}</span>
+          <span class="unassigned-ing"><strong>${esc(ingDisplay)}</strong>${qty ? ` <span class="unassigned-qty">${esc(qty)}</span>` : ''}</span>
           <select class="unassigned-target" data-builder-field="unassigned-target" data-uidx="${ui}">
             <option value="">Move to step…</option>
             ${stepOpts}
@@ -319,6 +320,19 @@ function renderBuilderInstructions() {
         </div>` : '';
 
       const isQualitative = QUALITATIVE_UNITS.has(ing.unit);
+      const mods = (window.INGREDIENT_MODIFIERS || []);
+      const currentMod = (ing.modifier || '').trim();
+      // Render the prep dropdown only if the registry has loaded. For multi-
+      // value modifiers from the parser (e.g. "fresh, thinly sliced") we keep
+      // the value but render a "(custom)" placeholder option so it survives
+      // edit without forcing a single-select narrowing.
+      const knownMod = mods.some(m => m.label === currentMod);
+      const modDropdown = mods.length ? `
+        <select class="ing-modifier" data-builder-field="ing-modifier" data-step="${si}" data-ing="${ii}">
+          <option value="" ${!currentMod ? 'selected' : ''}>no prep</option>
+          ${!knownMod && currentMod ? `<option value="${esc(currentMod)}" selected>${esc(currentMod)}</option>` : ''}
+          ${mods.map(m => `<option value="${esc(m.label)}" ${currentMod === m.label ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
+        </select>` : '';
       return `<div class="ingredient-row-wrap">
         <div class="ingredient-row">
           <div class="ing-name-wrap">
@@ -331,6 +345,7 @@ function renderBuilderInstructions() {
           </select>
           ${step.ingredients.length > 1 ? `<button class="remove-ing-btn" onclick="builderRemoveIngredient(${si},${ii})">✕</button>` : ''}
         </div>
+        ${modDropdown}
         ${categoryChips}
       </div>`;
     }).join('');
@@ -552,9 +567,11 @@ function renderBuilderReview() {
               ${step.instructions ? `<div class="review-step-instructions">${esc(step.instructions)}</div>` : ''}
               ${(step.inputFromSteps || []).length > 0 ? `<div class="step-ref-badge">⤶ Combines ${(step.inputFromSteps || []).map(r => 'Step ' + r).join(', ')} output</div>` : ''}
               <div class="review-ing-list">
-                ${step.ingredients.filter(i => i.name.trim()).map(i =>
-                  `<div class="review-ing-item">${QUALITATIVE_UNITS.has(i.unit) ? i.unit : `${i.amount} ${i.unit}`} ${i.name}</div>`
-                ).join('')}
+                ${step.ingredients.filter(i => i.name.trim()).map(i => {
+                  const qtyStr = QUALITATIVE_UNITS.has(i.unit) ? i.unit : `${i.amount} ${i.unit}`;
+                  const modPrefix = i.modifier ? `${i.modifier} ` : '';
+                  return `<div class="review-ing-item">${qtyStr} ${modPrefix}${i.name}</div>`;
+                }).join('')}
               </div>
             </div>
           `).join('')}
@@ -678,7 +695,7 @@ function builderRemoveStep(si) {
 }
 
 function builderAddIngredient(si) {
-  state.builder.steps[si].ingredients.push({ name: '', amount: '', unit: 'tsp' });
+  state.builder.steps[si].ingredients.push({ name: '', amount: '', unit: 'tsp', modifier: null });
   render();
 }
 
@@ -820,6 +837,10 @@ function builderHandleInput(el) {
       const prev = b.steps[si].ingredients[ii].unit;
       b.steps[si].ingredients[ii].unit = el.value;
       if (QUALITATIVE_UNITS.has(prev) !== QUALITATIVE_UNITS.has(el.value)) needsRender = true;
+      break;
+    }
+    case 'ing-modifier': {
+      b.steps[si].ingredients[ii].modifier = (el.value || '').trim() || null;
       break;
     }
     case 'unassigned-target': {
@@ -1053,13 +1074,16 @@ async function builderSave() {
             .filter(i => i.name.trim() && (parseFloat(i.amount) > 0 || QUALITATIVE_UNITS.has(i.unit)))
             .map(i => {
               const isQualitative = QUALITATIVE_UNITS.has(i.unit);
+              const modifier = (i.modifier || '').trim() || null;
+              const modPrefix = modifier ? `${modifier} ` : '';
               return {
                 name: i.name.trim(),
                 amount: isQualitative ? 0 : parseFloat(i.amount),
                 unit: i.unit,
+                modifier,
                 originalText: i.originalText || (isQualitative
-                  ? `${i.unit} ${i.name}`.trim()
-                  : `${i.amount} ${i.unit} ${i.name}`.trim()),
+                  ? `${i.unit} ${modPrefix}${i.name}`.trim()
+                  : `${i.amount} ${i.unit} ${modPrefix}${i.name}`.trim()),
               };
             }),
         }))

@@ -62,12 +62,13 @@ export function applyParsedRecipe(builder, parsed) {
 
   const allIngs = (parsed.ingredients || [])
     .map((p) => {
-      const food = (p.foodRaw || '').trim();
+      const food = (p.foodRaw || p.ingredientRaw || '').trim();
       if (!food) return null;
       return {
         name: food,
         amount: p.quantity != null ? String(p.quantity) : '',
         unit: unitDisplayFromParsed(p),
+        modifier: (p.modifier || '').trim() || null,
         originalText: p.originalText || '',
         canonicalMl: p.canonicalMl != null ? p.canonicalMl : null,
         canonicalG: p.canonicalG != null ? p.canonicalG : null,
@@ -123,6 +124,7 @@ export function applyParsedRecipe(builder, parsed) {
         name: ing.name,
         amount: '',
         unit: ing.unit,
+        modifier: ing.modifier || null,
         originalText: '',
         canonicalMl: null,
         canonicalG: null,
@@ -182,6 +184,7 @@ export function builderFromSauce(sauce, defaults = {}) {
         name: i.name || '',
         amount: i.amount != null ? String(i.amount) : '',
         unit: i.unit || 'tsp',
+        modifier: (i.modifier || '').trim() || null,
       })),
     })),
     _instructionsExpanded: new Set(

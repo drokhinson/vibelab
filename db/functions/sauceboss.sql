@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SauceBoss — RPC function inventory
--- Last updated: 2026-05-12
+-- Last updated: 2026-05-14
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -45,9 +45,11 @@
 -- get_sauceboss_sauces_for_target(p_category TEXT, p_dish_id TEXT, p_subtype_id TEXT)
 --   Signature : (p_category TEXT, p_dish_id TEXT, p_subtype_id TEXT) → JSON
 --   Language  : SQL STABLE
---   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 014)
+--   Defined in: sauceboss/023_ingredient_modifiers.sql  (latest; first in 014)
 --   Purpose   : Fully assembled sauce objects for a category/dish/subtype target.
 --   Notes     : Steps include both inputFromStep (compat) and inputFromSteps (array).
+--               Each ingredient row emits modifier (prep state); aggregated
+--               ingredients key on (name, modifier) so fresh/dried split cleanly.
 
 -- get_sauceboss_ingredients_for_item(p_item_id TEXT)
 --   Signature : (p_item_id TEXT) → JSON
@@ -71,11 +73,13 @@
 -- get_sauceboss_all_sauces_full()
 --   Signature : () → JSON
 --   Language  : SQL STABLE
---   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 001)
+--   Defined in: sauceboss/023_ingredient_modifiers.sql  (latest; first in 001)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --              shared-backend/routes/sauceboss/import_export_routes.py
 --   Purpose   : Full sauces grid with normalized ingredients, steps, and dish links.
 --   Notes     : Steps include both inputFromStep (compat) and inputFromSteps (array).
+--               Each ingredient row emits modifier (prep state); aggregated
+--               ingredients key on (name, modifier) so fresh/dried split cleanly.
 
 -- get_sauceboss_ingredient_categories()
 --   Signature : () → JSON
@@ -152,27 +156,30 @@
 -- create_sauceboss_sauce(p_data JSONB)
 --   Signature : (p_data JSONB) → TEXT
 --   Language  : plpgsql
---   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 001)
+--   Defined in: sauceboss/023_ingredient_modifiers.sql  (latest; first in 001)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --   Purpose   : Atomic sauce creation; auto-upserts ingredients; returns sauce_id.
 --   Notes     : Accepts inputFromSteps (array) with fallback to inputFromStep (single).
+--               Persists per-step ingredient modifier (prep state) from JSON.
 
 -- update_sauceboss_sauce(p_data JSONB)
 --   Signature : (p_data JSONB) → TEXT
 --   Language  : plpgsql
---   Defined in: sauceboss/021_fix_itemids_dish_level.sql  (latest; first in 003)
+--   Defined in: sauceboss/023_ingredient_modifiers.sql  (latest; first in 003)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --   Purpose   : Atomic full-replace of sauce scalars, items, steps, ingredients.
 --   Notes     : Accepts inputFromSteps (array) with fallback to inputFromStep (single).
---               itemIds branch now looks up dish_level per dish instead of hardcoding 'dish'.
+--               itemIds branch looks up dish_level per dish (added in 021).
+--               Persists per-step ingredient modifier (prep state) from JSON.
 
 -- fork_sauceboss_sauce(p_source_id TEXT, p_user UUID, p_data JSONB)
 --   Signature : (p_source_id TEXT, p_user UUID, p_data JSONB) → TEXT
 --   Language  : plpgsql
---   Defined in: sauceboss/020_multi_input_steps.sql  (latest; first in 013)
+--   Defined in: sauceboss/023_ingredient_modifiers.sql  (latest; first in 013)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --   Purpose   : Create new sauce variant under family root; copy/override attachments.
 --   Notes     : Copies input_from_steps alongside input_from_step for full fidelity.
+--               Copies modifier on both the override-steps and copy-from-source paths.
 
 -- set_sauceboss_pantry_missing(p_user_id UUID, p_ingredient_ids TEXT[])
 --   Signature : (p_user_id UUID, p_ingredient_ids TEXT[]) → JSON
