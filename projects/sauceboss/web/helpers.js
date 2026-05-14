@@ -227,7 +227,11 @@ function buildLegend(items, stepIndex) {
     const pctCell = isQualitative || isHidden
       ? '<span class="legend-pct"></span>'
       : `<span class="legend-pct">${total ? Math.round((toTsp(item.amount, item.unit) / total) * 100) : 0}%</span>`;
-    const cls = ['legend-item', isDisabled && 'legend-disabled', isHidden && 'legend-hidden'].filter(Boolean).join(' ');
+    // We deliberately don't apply .legend-disabled here even when the user
+    // is out of an ingredient — striking out names on the recipe page reads
+    // as "we can't use this", which is confusing while cooking. The
+    // pantry/saucebook surface remains the place to track availability.
+    const cls = ['legend-item', isHidden && 'legend-hidden'].filter(Boolean).join(' ');
     const modPrefix = item.modifier ? `${item.modifier} ` : '';
     return `<div class="${cls}"${clickAttr}>
       <span class="legend-swatch" style="background:${color}"></span>
@@ -370,7 +374,7 @@ function renderRecipeStep(step, index, allSteps) {
     }
   }
 
-  return `<div class="step-card" style="--i:${index}">
+  return `<div class="step-card" style="--i:${index}" data-shade="${index % 4}">
     <div class="step-header-row">
       <div class="step-number">Step ${index + 1}</div>
       <div class="step-time">~${stepTime}m</div>
