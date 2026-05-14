@@ -167,6 +167,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       const action = editorAction.dataset.ingEditorAction;
       if (action === 'save')   builderSaveIngEditor();
       if (action === 'cancel') builderCancelIngEditor();
+      return;
+    }
+    // Ingredient list actions on the instructions screen — chip tap, edit
+    // button, remove button, and the "+ Add ingredient" CTA all route here.
+    // Delegated rather than inline `onclick` so they survive re-render and
+    // can't break when a function name isn't in scope at click time.
+    const ingAction = e.target.closest('[data-builder-action]');
+    if (ingAction) {
+      const action = ingAction.dataset.builderAction;
+      const si = parseInt(ingAction.dataset.step);
+      const ii = parseInt(ingAction.dataset.ing);
+      if (action === 'ing-add')    { builderOpenIngEditor(si, -1); return; }
+      if (action === 'ing-edit')   { builderOpenIngEditor(si, ii); return; }
+      if (action === 'ing-remove') { e.stopPropagation(); builderRemoveIngredient(si, ii); return; }
     }
   });
 
