@@ -276,20 +276,20 @@ function renderBuilderInstructions() {
         <span class="insert-step-line"></span><span class="insert-step-plus">+</span><span class="insert-step-line"></span>
       </button>` : '';
 
-    // Step input source — replaces the previous in-bubble dropdown, which was
-    // clipped by its container's overflow:hidden and effectively unreachable.
-    // Empty → a dashed pill (mirrors "+ Add ingredient"); non-empty → a chip
-    // with summary + pencil + ×. Both delegate to data-builder-action.
-    let stepRefHTML = '';
+    // Step-input chip — shown as the LAST row inside the ingredients list when
+    // this step combines output from an earlier step. The "+ Combine from
+    // previous step" pill lives in the action row below alongside the add
+    // ingredient pill, so the chip in the list is purely a status row +
+    // edit/clear affordance.
+    let stepInputChipHTML = '';
+    let combinePillHTML = '';
     if (si > 0) {
       const refs = step.inputFromSteps || [];
-      if (refs.length === 0) {
-        stepRefHTML = `<button class="add-step-input-btn" data-builder-action="step-input-add" data-step="${si}">⤶ Combine from previous step</button>`;
-      } else {
+      if (refs.length > 0) {
         const summary = refs
           .map(r => `Step ${r}${b.steps[r - 1]?.title ? ' — ' + b.steps[r - 1].title.slice(0, 20) : ''}`)
           .join(', ');
-        stepRefHTML = `<div class="step-input-readonly" data-builder-action="step-input-edit" data-step="${si}">
+        stepInputChipHTML = `<div class="step-input-readonly" data-builder-action="step-input-edit" data-step="${si}">
           <span class="step-input-readonly__name">⤶ Combines ${esc(summary)}</span>
           <button class="step-input-readonly__edit" data-builder-action="step-input-edit" data-step="${si}" title="Edit step inputs" aria-label="Edit step inputs">
             <i data-lucide="pencil"></i>
@@ -297,6 +297,11 @@ function renderBuilderInstructions() {
           <button class="step-input-readonly__remove" data-builder-action="step-input-remove" data-step="${si}" title="Clear" aria-label="Clear step inputs">✕</button>
         </div>`;
       }
+      // Pill always renders when the step has prior steps to draw from. When a
+      // combination already exists the pill becomes the "edit" CTA, mirroring
+      // the chip's tap target so both surfaces lead back to the same sheet.
+      const pillLabel = refs.length > 0 ? '⤶ Edit step inputs' : '⤶ Combine from previous step';
+      combinePillHTML = `<button class="add-step-input-btn" data-builder-action="step-input-add" data-step="${si}">${pillLabel}</button>`;
     }
 
     const ingsHTML = step.ingredients.map((ing, ii) => {
@@ -328,7 +333,6 @@ function renderBuilderInstructions() {
     return `${insertBefore}<div class="builder-step-card">
       ${b.steps.length > 1 ? `<button class="remove-step-btn" onclick="builderRemoveStep(${si})">✕</button>` : ''}
       <div class="step-number">Step ${si + 1}</div>
-      ${stepRefHTML}
       <div class="builder-step-headline">
         <input class="builder-input builder-step-title" placeholder="Step action (e.g., Sauté the base)" value="${esc(step.title)}" data-builder-field="step-title" data-step="${si}">
         <label class="builder-step-time">
@@ -342,8 +346,11 @@ function renderBuilderInstructions() {
         </button>
       </div>
       ${instrExpanded ? `<textarea class="builder-input builder-step-instructions" placeholder="Detailed Instructions (optional)" data-builder-field="step-instructions" data-step="${si}">${esc(step.instructions || '')}</textarea>` : ''}
-      <div class="builder-ings-list">${ingsHTML}</div>
-      <button class="add-ing-btn" data-builder-action="ing-add" data-step="${si}">+ Add ingredient</button>
+      <div class="builder-ings-list">${ingsHTML}${stepInputChipHTML}</div>
+      <div class="builder-step-actions">
+        <button class="add-ing-btn" data-builder-action="ing-add" data-step="${si}">+ Add ingredient</button>
+        ${combinePillHTML}
+      </div>
     </div>`;
   }).join('');
 
