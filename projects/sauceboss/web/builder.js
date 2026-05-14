@@ -183,7 +183,7 @@ function renderBuilderInfo() {
   const cuisineChips = availableCuisines().map(c =>
     `<button class="builder-chip ${!b.cuisineDraftMode && b.cuisine === c.name ? 'selected' : ''}" onclick="builderSetCuisine('${c.name.replace(/'/g, "\\'")}','${c.emoji}')">${renderEmoji(c.emoji)} ${c.name}</button>`
   ).join('');
-  const newCuisineBtn = `<div class="cuisine-add-row"><button class="builder-chip ${b.cuisineDraftMode ? 'selected' : ''}" onclick="builderStartNewCuisine()">+ New cuisine…</button></div>`;
+  const newCuisineBtn = `<div class="cuisine-add-row"><button class="builder-chip ${b.cuisineDraftMode ? 'selected' : ''}" onclick="builderStartNewCuisine()">+ New Cuisine…</button></div>`;
 
   const newCuisineInputs = b.cuisineDraftMode ? `
     <div class="new-cuisine-row">
@@ -348,7 +348,7 @@ function renderBuilderInstructions() {
       ${instrExpanded ? `<textarea class="builder-input builder-step-instructions" placeholder="Detailed Instructions (optional)" data-builder-field="step-instructions" data-step="${si}">${esc(step.instructions || '')}</textarea>` : ''}
       <div class="builder-ings-list">${ingsHTML}${stepInputChipHTML}</div>
       <div class="builder-step-actions">
-        <button class="add-ing-btn" data-builder-action="ing-add" data-step="${si}">+ Add ingredient</button>
+        <button class="add-ing-btn" data-builder-action="ing-add" data-step="${si}">+ Add Ingredient</button>
         ${combinePillHTML}
       </div>
     </div>`;
@@ -413,12 +413,12 @@ function _renderIngEditorSheet() {
   const needsCategory = d.name.trim().length >= 2 && !isKnownIngredient(d.name);
   const canSave = d.name.trim() && (isQualitative || parseFloat(d.amount) > 0);
   return `
-    <div class="ing-sheet" role="dialog" aria-modal="true" aria-label="${isNew ? 'Add ingredient' : 'Edit ingredient'}">
+    <div class="ing-sheet" role="dialog" aria-modal="true" aria-label="${isNew ? 'Add Ingredient' : 'Edit Ingredient'}">
       <div class="ing-sheet__backdrop" data-ing-editor-action="cancel"></div>
       <div class="ing-sheet__card">
         <div class="ing-sheet__handle" data-ing-editor-action="cancel"></div>
         <div class="ing-sheet__header">
-          <h3 class="ing-sheet__title">${isNew ? 'Add ingredient' : 'Edit ingredient'}</h3>
+          <h3 class="ing-sheet__title">${isNew ? 'Add Ingredient' : 'Edit Ingredient'}</h3>
           <button class="ing-sheet__close" data-ing-editor-action="cancel" aria-label="Close">×</button>
         </div>
         <div class="ing-sheet__body">
@@ -488,12 +488,12 @@ function _renderStepInputSheet() {
   const { si, draft } = ed;
   const prior = b.steps.slice(0, si);
   return `
-    <div class="ing-sheet" role="dialog" aria-modal="true" aria-label="Combine previous steps">
+    <div class="ing-sheet" role="dialog" aria-modal="true" aria-label="Combine Previous Steps">
       <div class="ing-sheet__backdrop" data-step-input-action="cancel"></div>
       <div class="ing-sheet__card">
         <div class="ing-sheet__handle" data-step-input-action="cancel"></div>
         <div class="ing-sheet__header">
-          <h3 class="ing-sheet__title">Combine previous steps</h3>
+          <h3 class="ing-sheet__title">Combine Previous Steps</h3>
           <button class="ing-sheet__close" data-step-input-action="cancel" aria-label="Close">×</button>
         </div>
         <div class="ing-sheet__body">
