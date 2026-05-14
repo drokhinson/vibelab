@@ -477,6 +477,15 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   padding: 16px;
   box-shadow: 0 3px 12px rgba(0,0,0,0.08);
 }
+/* Alternate step cards through a four-shade cycle so adjacent steps are
+   easy to tell apart at a glance. Same pattern applied to .builder-step-card
+   below; data-shade is set per render from index % 4. */
+.step-card[data-shade="1"],
+.builder-step-card[data-shade="1"] { background: #F8F5F0; }
+.step-card[data-shade="2"],
+.builder-step-card[data-shade="2"] { background: #F1ECE3; }
+.step-card[data-shade="3"],
+.builder-step-card[data-shade="3"] { background: #EAE3D6; }
 .step-number {
   font-size: 11px;
   font-weight: 700;

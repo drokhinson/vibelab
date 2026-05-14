@@ -330,7 +330,7 @@ function renderBuilderInstructions() {
     const timeValue = step.estimatedTime != null && step.estimatedTime !== '' ? step.estimatedTime : '';
     const instrExpanded = b._instructionsExpanded ? b._instructionsExpanded.has(si) : si === 0;
     const hasInstr = !!(step.instructions && step.instructions.trim());
-    return `${insertBefore}<div class="builder-step-card">
+    return `${insertBefore}<div class="builder-step-card" data-shade="${si % 4}">
       ${b.steps.length > 1 ? `<button class="remove-step-btn" onclick="builderRemoveStep(${si})">✕</button>` : ''}
       <div class="step-number">Step ${si + 1}</div>
       <div class="builder-step-headline">
