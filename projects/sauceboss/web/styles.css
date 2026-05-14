@@ -727,21 +727,29 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
    overflow:hidden container. The pill mirrors .add-ing-btn; the chip mirrors
    .ing-readonly so it slots cleanly into the .builder-ings-list as the
    step's final row. The pill lives in .builder-step-actions alongside the
-   add-ingredient pill. */
+   add-ingredient pill, always side-by-side on a single row. */
 .builder-step-actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
-  justify-content: center;
+  align-items: stretch;
   margin-top: 4px;
 }
 .builder-step-actions > .add-ing-btn,
 .builder-step-actions > .add-step-input-btn {
   margin: 0;
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 14px;
+  padding-right: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
 }
 .add-step-input-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 10px 22px;
   background: #F0F9FF;
   border: 1.5px dashed #BAE6FD;
