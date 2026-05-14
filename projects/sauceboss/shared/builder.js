@@ -93,7 +93,9 @@ export function applyParsedRecipe(builder, parsed) {
       title: stepTitle,
       instructions: '',
       inputFromSteps: [],
-      ingredients: allIngs.length > 0 ? allIngs : [{ name: '', amount: '', unit: 'tsp' }],
+      // Don't seed a blank "Untitled ingredient" row when nothing was parsed —
+      // the builder UI surfaces the "+ Add ingredient" pill on empty steps.
+      ingredients: allIngs,
     }];
     return next;
   }
@@ -132,12 +134,11 @@ export function applyParsedRecipe(builder, parsed) {
     }
   }
 
-  // Drop the lowercased helper, ensure every step has at least one row.
+  // Drop the lowercased helper. Steps with no matched ingredients stay empty
+  // — the builder UI shows the "+ Add ingredient" pill instead of a stale
+  // "Untitled ingredient" placeholder.
   for (const s of steps) {
     delete s._instr;
-    if (s.ingredients.length === 0) {
-      s.ingredients.push({ name: '', amount: '', unit: 'tsp' });
-    }
   }
 
   next.unassignedIngredients = unmatched;
