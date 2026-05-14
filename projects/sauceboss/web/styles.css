@@ -698,60 +698,63 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   pointer-events: none;
 }
 
-/* Step reference selector */
-.step-ref-row {
+/* Step input source — "Combine from previous step" pill and chip.
+   Replaces the legacy .step-ref-row dropdown, which got clipped by its own
+   overflow:hidden container. The pill mirrors .add-ing-btn; the chip mirrors
+   .ing-readonly. Edit triggers a bottom-sheet (see .ing-sheet*); × clears
+   step.inputFromSteps directly. */
+.add-step-input-btn {
+  display: block;
+  margin: 0 auto 10px;
+  padding: 10px 22px;
+  background: #F0F9FF;
+  border: 1.5px dashed #BAE6FD;
+  border-radius: 999px;
+  color: #0369A1;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: Inter, sans-serif;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.add-step-input-btn:hover { background: #E0F2FE; border-color: #0369A1; }
+
+.step-input-readonly {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 8px 12px;
   margin-bottom: 10px;
-  padding: 8px 10px;
-  background: #F0F9FF;
-  border-radius: 10px;
   border: 1px solid #BAE6FD;
-  overflow: hidden;
+  border-radius: 12px;
+  background: #F0F9FF;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
 }
-.step-ref-label {
-  font-size: 12px;
+.step-input-readonly:hover { background: #E0F2FE; border-color: #7DD3FC; }
+.step-input-readonly__name {
+  flex: 1;
+  font-size: 13px;
   font-weight: 600;
   color: #0369A1;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.step-ref-select {
-  flex: 1;
-  min-width: 0;
-  max-width: 100%;
-  padding: 6px 8px;
-  border: 1.5px solid #BAE6FD;
+.step-input-readonly__edit,
+.step-input-readonly__remove {
+  width: 30px; height: 30px; flex-shrink: 0;
   border-radius: 8px;
-  font-size: 12px;
-  font-family: inherit;
-  background: white;
-  color: #1A1A2E;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
 }
-.step-ref-select:focus { outline: none; border-color: #0369A1; }
-
-/* Multi-step select dropdown */
-.multi-step-select { flex: 1; min-width: 0; position: relative; }
-.multi-step-trigger {
-  width: 100%; padding: 6px 8px; border: 1.5px solid #BAE6FD;
-  border-radius: 8px; font-size: 12px; font-family: inherit;
-  background: white; color: #1A1A2E; text-align: left; cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.multi-step-trigger:focus { outline: none; border-color: #0369A1; }
-.multi-step-panel {
-  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-  background: white; border: 1.5px solid #BAE6FD; border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 20;
-  padding: 6px; max-height: 180px; overflow-y: auto;
-}
-.multi-step-option {
-  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
-  border-radius: 6px; font-size: 12px; cursor: pointer;
-}
-.multi-step-option:hover { background: #F0F9FF; }
-.multi-step-option.checked { background: #E0F2FE; font-weight: 600; }
-.multi-step-option input[type="checkbox"] { accent-color: #0369A1; }
+.step-input-readonly__edit { color: #0369A1; }
+.step-input-readonly__edit:hover { background: #fff; border-color: #7DD3FC; }
+.step-input-readonly__edit i { width: 16px; height: 16px; }
+.step-input-readonly__remove { color: #991B1B; font-size: 14px; }
+.step-input-readonly__remove:hover { background: #FEE2E2; }
 
 /* Instructions toggle button in headline row */
 .builder-instructions-toggle {
@@ -1095,6 +1098,68 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .ing-sheet__btn--primary:hover:not(:disabled) { background: #C04C03; }
 .ing-sheet__btn--primary:disabled { background: #FCD2B6; cursor: not-allowed; }
+
+/* Helper paragraph + empty-state for editor sheets (used by step-input picker). */
+.ing-sheet__hint {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: #6B7280;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.ing-sheet__empty {
+  margin: 0;
+  padding: 18px 0;
+  text-align: center;
+  font-size: 13px;
+  color: #9CA3AF;
+  text-transform: none;
+  font-weight: 500;
+}
+
+/* Toggle row inside the "combine previous step" sheet. Full-width row with a
+   checkbox glyph on the left and a step label; .is-on flips to a filled
+   blue pill. Built as a <button> so taps fire through the existing click
+   delegator without input-handling quirks. */
+.step-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 12px;
+  background: #fff;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+.step-input-row:hover { background: #F0F9FF; border-color: #BAE6FD; }
+.step-input-row.is-on { background: #E0F2FE; border-color: #0369A1; color: #0369A1; }
+.step-input-row__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid #CBD5E1;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0369A1;
+  flex-shrink: 0;
+}
+.step-input-row.is-on .step-input-row__check {
+  background: #0369A1;
+  border-color: #0369A1;
+  color: #fff;
+}
+.step-input-row__label { flex: 1; }
 
 /* Autocomplete dropdown */
 .ac-dropdown {
