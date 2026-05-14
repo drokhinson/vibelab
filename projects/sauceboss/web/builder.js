@@ -301,7 +301,7 @@ function renderBuilderInstructions() {
       // chip in the ingredient list is the visual cue that a combination
       // already exists; the pill label stays compact and parallels
       // "+ Add ingredient" so the two CTAs read as siblings.
-      combinePillHTML = `<button class="add-step-input-btn" data-builder-action="step-input-add" data-step="${si}">+ Previous step</button>`;
+      combinePillHTML = `<button class="add-step-input-btn" data-builder-action="step-input-add" data-step="${si}">+ Previous Step</button>`;
     }
 
     const ingsHTML = step.ingredients.map((ing, ii) => {
@@ -990,7 +990,17 @@ function builderToggleStepInputDraft(refOrder) {
   const arr = b._stepInputEditor.draft;
   const idx = arr.indexOf(refOrder);
   if (idx >= 0) arr.splice(idx, 1); else arr.push(refOrder);
-  render();
+  // Surgical DOM update so the sheet doesn't replay its slide-up animation
+  // and lose scroll/focus position every tap. The Save handler still calls
+  // render() once on commit, which is when state.builder.steps actually
+  // changes and the underlying step card needs to refresh.
+  const row = document.querySelector(`.step-input-row[data-step-input-toggle="${refOrder}"]`);
+  if (row) {
+    const on = arr.includes(refOrder);
+    row.classList.toggle('is-on', on);
+    const check = row.querySelector('.step-input-row__check');
+    if (check) check.textContent = on ? '✓' : '';
+  }
 }
 
 function builderClearStepInputs(si) {
