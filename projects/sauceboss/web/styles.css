@@ -665,10 +665,34 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
   position: relative;
 }
-.builder-step-card .step-number { margin-bottom: 8px; }
-.builder-step-card .builder-input { margin-bottom: 10px; }
+/* Step-number badge inside the builder. Sized + styled to read as a peer of
+   the .ing-readonly ingredient chips below it: same 1px / 12px-radius border,
+   warm cream fill, and 14px / 700 weight. The base .step-number rule at the
+   top of this file still applies to the recipe-view chevron header. */
+.builder-step-card .step-number {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  background: #FFF8F0;
+  color: #C04C03;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+/* Step headline inputs (title, time, instructions toggle) — match the
+   .ing-readonly chip silhouette: 1px / 12px-radius border, 10px 12px padding
+   from .builder-input. The toggle button is square so it reads as a peer
+   element of the inputs and chips. */
+.builder-step-card .builder-input {
+  margin-bottom: 10px;
+  border-width: 1px;
+  border-radius: 12px;
+}
 
-/* Title + time on one row so the user can scan the time without scrolling. */
 .builder-step-headline {
   display: flex;
   align-items: stretch;
@@ -756,11 +780,12 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .step-input-readonly__remove { color: #991B1B; font-size: 14px; }
 .step-input-readonly__remove:hover { background: #FEE2E2; }
 
-/* Instructions toggle button in headline row */
+/* Instructions toggle button in headline row — sized to match the
+   adjacent .builder-input chips (1px border / 12px radius). */
 .builder-instructions-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   width: 40px; flex-shrink: 0;
-  border: 1.5px solid #D1D5DB; border-radius: 10px;
+  border: 1px solid #E5E7EB; border-radius: 12px;
   background: white; color: #9CA3AF; cursor: pointer;
   margin-bottom: 10px; transition: all 120ms ease;
   align-self: stretch;
