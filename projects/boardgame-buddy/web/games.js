@@ -14,6 +14,7 @@ async function loadGames() {
     if (gamesFilterPlaytimeMin !== null) params.set("playtime_min", gamesFilterPlaytimeMin);
     if (gamesFilterPlaytimeMax !== null) params.set("playtime_max", gamesFilterPlaytimeMax);
     gamesFilterMechanics.forEach(m => params.append("mechanics", m));
+    if (gamesFilterPlayMode) params.set("play_mode", gamesFilterPlayMode);
     if (gamesFilterOwnedOnly && currentUser) params.set("owned_only", "true");
 
     const [data] = await Promise.all([
@@ -229,8 +230,15 @@ function hasBrowseActiveFilter() {
   return gamesFilterPlayers !== null
     || gamesFilterPlaytimeMin !== null
     || gamesFilterPlaytimeMax !== null
-    || gamesFilterMechanics.length > 0;
+    || gamesFilterMechanics.length > 0
+    || gamesFilterPlayMode !== null;
 }
+
+const PLAY_MODE_OPTIONS = [
+  { value: "competitive", label: "Competitive" },
+  { value: "coop",        label: "Co-op" },
+  { value: "team",        label: "Teams" },
+];
 
 async function initBrowseFilters() {
   if (mechanicsOptions.length === 0) {
@@ -287,6 +295,10 @@ function browseFilterPills() {
     if (chip) pills.push(`<span class="badge badge-sm badge-outline">${chip.label}</span>`);
   }
   gamesFilterMechanics.forEach(m => pills.push(`<span class="badge badge-sm badge-outline">${escapeHtml(m)}</span>`));
+  if (gamesFilterPlayMode) {
+    const opt = PLAY_MODE_OPTIONS.find(o => o.value === gamesFilterPlayMode);
+    if (opt) pills.push(`<span class="badge badge-sm badge-outline">${opt.label}</span>`);
+  }
   return pills.join("");
 }
 
@@ -320,6 +332,19 @@ function renderFilterStrip() {
             <button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}"
                     onclick="togglePlaytimeFilter(${i})">
               ${c.label}
+            </button>`;
+        }).join("")}
+      </div>
+
+      <!-- Play-mode row (competitive / coop / team) -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-base-content/50 mr-1">Mode</span>
+        ${PLAY_MODE_OPTIONS.map(opt => {
+          const active = gamesFilterPlayMode === opt.value;
+          return `
+            <button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}"
+                    onclick="setPlayModeFilter('${opt.value}')">
+              ${opt.label}
             </button>`;
         }).join("")}
       </div>
@@ -403,6 +428,16 @@ function clearBrowseFilters() {
   gamesFilterPlaytimeMin = null;
   gamesFilterPlaytimeMax = null;
   gamesFilterMechanics = [];
+  gamesFilterPlayMode = null;
+  gamesPage = 1;
+  renderFilterStrip();
+  renderBrowseActiveFilterBar();
+  loadGames();
+}
+
+function setPlayModeFilter(value) {
+  // Click the active mode again → clear back to "any".
+  gamesFilterPlayMode = (gamesFilterPlayMode === value) ? null : value;
   gamesPage = 1;
   renderFilterStrip();
   renderBrowseActiveFilterBar();

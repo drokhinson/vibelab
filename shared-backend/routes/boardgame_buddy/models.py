@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Any, Optional
 from pydantic import BaseModel, Field, SecretStr, computed_field
 
-from .constants import BggAuthState, CollectionStatus
+from .constants import BggAuthState, CollectionStatus, PlayMode
 
 
 # ── Shared ────────────────────────────────────────────────────────────────────
@@ -101,6 +101,7 @@ class GameSummary(BaseModel):
     base_game_bgg_id: Optional[int] = None
     expansion_color: Optional[str] = None
     rulebook_url: Optional[str] = None
+    play_mode: PlayMode = PlayMode.COMPETITIVE
 
     @computed_field  # type: ignore[misc]
     @property

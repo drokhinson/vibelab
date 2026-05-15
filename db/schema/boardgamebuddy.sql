@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   -- row to a per-game column so it can be fetched alongside the game and isn't
   -- subject to the chunk system's hide/reorder/customize flow.
   rulebook_url TEXT,
+  -- Scoring style for the play-logging UI (migration 006). Derived from BGG
+  -- mechanics at import time via derive_play_mode(): "Cooperative Game" →
+  -- 'coop', "Team-Based Game" → 'team', otherwise 'competitive'. Drives
+  -- whether the session bubble shows per-player scoring, a single all-win/
+  -- all-lose toggle, or a team picker.
+  play_mode TEXT NOT NULL DEFAULT 'competitive'
+    CHECK (play_mode IN ('competitive', 'coop', 'team')),
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_games ENABLE ROW LEVEL SECURITY;

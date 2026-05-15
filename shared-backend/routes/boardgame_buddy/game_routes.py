@@ -19,7 +19,7 @@ from .bgg_client import (
     normalize_image_url,
     parse_bgg_xml,
 )
-from .constants import EXPANSION_COLOR_PALETTE
+from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
 from .dependencies import CurrentUser, get_current_admin, maybe_supabase_user
 from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
 
@@ -118,6 +118,7 @@ async def list_games(
     playtime_min: Optional[int] = Query(None, ge=1, description="Min playing time in minutes (inclusive)"),
     playtime_max: Optional[int] = Query(None, ge=1, description="Max playing time in minutes (inclusive)"),
     mechanics: Optional[list[str]] = Query(None, description="Required mechanics (AND logic)"),
+    play_mode: Optional[PlayMode] = Query(None, description="Filter by scoring style (competitive / coop / team)"),
     owned_only: bool = Query(False, description="Only games in the caller's owned collection (requires auth; ignored otherwise)"),
     exclude_expansions: bool = Query(False, description="Hide expansion rows; only base games appear in results"),
     authorization: Optional[str] = Header(None),
@@ -145,7 +146,8 @@ async def list_games(
     query = sb.table("boardgamebuddy_games").select(
         "id, bgg_id, name, year_published, min_players, max_players, "
         "playing_time, thumbnail_url, image_url, theme_color, "
-        "is_expansion, base_game_bgg_id, expansion_color, rulebook_url",
+        "is_expansion, base_game_bgg_id, expansion_color, rulebook_url, "
+        "play_mode",
         count="exact",
     )
 
@@ -165,6 +167,8 @@ async def list_games(
         query = query.lte("playing_time", playtime_max)
     if mechanics:
         query = query.contains("mechanics", mechanics)
+    if play_mode is not None:
+        query = query.eq("play_mode", play_mode.value)
     if exclude_expansions:
         query = query.eq("is_expansion", False)
 
@@ -426,6 +430,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
         "is_expansion": is_expansion,
         "base_game_bgg_id": base_game_bgg_id,
         "expansion_color": expansion_color,
+        "play_mode": derive_play_mode(mechanics).value,
     }
 
     result = (
