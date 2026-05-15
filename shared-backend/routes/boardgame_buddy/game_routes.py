@@ -272,7 +272,28 @@ async def get_game(
     if not result.data:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    return GameDetail(**result.data[0])
+    row = result.data[0]
+    # Resolve the base game on expansion rows so the FE can render a "Back to
+    # <base>" link without a second round-trip. base_game_bgg_id is a soft
+    # reference (no FK) so we look the row up by bgg_id.
+    base_game_id: Optional[str] = None
+    base_game_name: Optional[str] = None
+    if row.get("is_expansion") and row.get("base_game_bgg_id"):
+        base = (
+            sb.table("boardgamebuddy_games")
+            .select("id, name")
+            .eq("bgg_id", row["base_game_bgg_id"])
+            .execute()
+        )
+        if base.data:
+            base_game_id = base.data[0]["id"]
+            base_game_name = base.data[0]["name"]
+
+    return GameDetail(
+        **row,
+        base_game_id=base_game_id,
+        base_game_name=base_game_name,
+    )
 
 
 async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:

@@ -207,19 +207,22 @@ function renderPlays() {
   container.innerHTML = `
     <div class="space-y-3">
       ${plays.map((p, i) => `
-        <div class="card bg-base-200 animate-fadeUp ${p.is_own ? "" : "opacity-90 border border-base-300"}" style="--i:${i}">
+        <div class="card bg-base-200 animate-fadeUp play-card ${p.is_own ? "" : "opacity-90 border border-base-300"}"
+             style="--i:${i}" onclick="openPlayDetail('${p.id}')">
           <div class="card-body p-3">
             <div class="flex items-start gap-3">
               ${p.game_thumbnail
-                ? `<img src="${p.game_thumbnail}" class="w-12 h-12 rounded object-cover flex-shrink-0 cursor-pointer" onclick="openGameDetail('${p.game_id}')" />`
-                : `<div class="w-12 h-12 rounded bg-base-300 flex items-center justify-center flex-shrink-0 cursor-pointer" onclick="openGameDetail('${p.game_id}')"><i data-lucide="dice-6" class="w-6 h-6 opacity-40"></i></div>`
+                ? `<img src="${p.game_thumbnail}" class="w-12 h-12 rounded object-cover flex-shrink-0 cursor-pointer" onclick="event.stopPropagation(); openGameDetail('${p.game_id}')" />`
+                : `<div class="w-12 h-12 rounded bg-base-300 flex items-center justify-center flex-shrink-0 cursor-pointer" onclick="event.stopPropagation(); openGameDetail('${p.game_id}')"><i data-lucide="dice-6" class="w-6 h-6 opacity-40"></i></div>`
               }
               <div class="flex-1 min-w-0">
                 <h3 class="font-semibold text-sm leading-tight">
-                  <a class="link link-hover" onclick="openGameDetail('${p.game_id}')">${escapeHtml(p.game_name)}</a>
+                  <a class="link link-hover" onclick="event.stopPropagation(); openGameDetail('${p.game_id}')">${escapeHtml(p.game_name)}</a>
                 </h3>
                 <div class="flex items-center gap-2 flex-wrap mt-0.5">
                   <p class="text-xs text-base-content/50">${formatDate(p.played_at)}</p>
+                  ${p.photo_url ? `<span class="badge badge-ghost badge-xs gap-1"><i data-lucide="image" class="w-3 h-3"></i>photo</span>` : ""}
+                  ${p.expansions?.length ? `<span class="badge badge-ghost badge-xs gap-1"><i data-lucide="puzzle" class="w-3 h-3"></i>${p.expansions.length}</span>` : ""}
                   ${p.is_own ? "" : `
                     <span class="badge badge-ghost badge-xs gap-1">
                       <i data-lucide="user" class="w-3 h-3"></i> logged by ${escapeHtml(p.logged_by_name)}
@@ -229,14 +232,14 @@ function renderPlays() {
                   <div class="flex flex-wrap gap-1 mt-1.5">
                     ${p.players.map(pl => `
                       <span class="badge badge-sm ${pl.is_winner ? 'badge-warning' : 'badge-ghost'}">
-                        ${pl.is_winner ? '<i data-lucide="trophy" class="w-3 h-3 inline mr-0.5"></i>' : ''}${escapeHtml(pl.name)}
+                        ${pl.is_winner ? '<i data-lucide="trophy" class="w-3 h-3 inline mr-0.5"></i>' : ''}${escapeHtml(pl.name)}${pl.score != null ? ` <span class="opacity-70 ml-0.5">${pl.score}</span>` : ""}
                       </span>
                     `).join("")}
                   </div>` : ""}
-                ${p.notes ? `<p class="text-xs text-base-content/60 mt-1 italic">${escapeHtml(p.notes)}</p>` : ""}
+                ${p.notes ? `<p class="text-xs text-base-content/60 mt-1 italic line-clamp-2">${escapeHtml(p.notes)}</p>` : ""}
               </div>
               ${p.is_own ? `
-                <button class="btn btn-ghost btn-xs flex-shrink-0" onclick="deletePlay('${p.id}')">
+                <button class="btn btn-ghost btn-xs flex-shrink-0" onclick="event.stopPropagation(); deletePlay('${p.id}')">
                   <i data-lucide="trash-2" class="w-3 h-3"></i>
                 </button>` : ""}
             </div>

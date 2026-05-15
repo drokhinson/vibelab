@@ -27,7 +27,23 @@ function emptySession() {
       is_winner_override: null,
     }],
     round_count: 0,
+    // Optional per-play extras (migration 005). expansion_ids holds the
+    // expansion-game UUIDs played alongside the base game; photo_file is the
+    // selected File (uploaded on save) and photo_url is the resolved public
+    // URL once uploaded.
+    expansion_ids: [],
+    photo_file: null,
+    photo_url: null,
+    photo_preview_url: null,
   };
+}
+
+// Players collected in the bubble each track per-round scores in memory. When
+// we save, only the total per player matters — round-by-round data isn't
+// stored. For an edit (where the original play has just a per-player total),
+// we represent it as a single-round score so the existing grid still works.
+function playerTotalScore(p) {
+  return (p.round_scores || []).reduce((a, b) => a + (Number(b) || 0), 0);
 }
 
 // "Meaningful" = worth showing the FAB as active. An empty bubble that the
@@ -88,7 +104,13 @@ function toggleSessionBubble() {
   openSession(seed);
 }
 
-function openSession({ gameId, gameName, gameThumb } = {}) {
+function openSession({ gameId, gameName, gameThumb, playId } = {}) {
+  // Edit mode: hydrate the bubble from a saved play.
+  if (playId) {
+    openSessionFromPlay(playId);
+    return;
+  }
+
   if (!activeSession) activeSession = emptySession();
 
   if (gameId && !activeSession.game_id) {
@@ -97,20 +119,93 @@ function openSession({ gameId, gameName, gameThumb } = {}) {
     activeSession.game_id = gameId;
     activeSession.game_name = gameName || null;
     activeSession.game_thumbnail = gameThumb || null;
+    preloadSessionExpansions(gameId);
   } else if (gameId && activeSession.game_id && activeSession.game_id !== gameId) {
     const prev = activeSession.game_name || "current game";
     if (confirm(`Replace ${prev} with ${gameName || "this game"} in the active session?`)) {
       activeSession.game_id = gameId;
       activeSession.game_name = gameName || null;
       activeSession.game_thumbnail = gameThumb || null;
+      activeSession.expansion_ids = [];
+      preloadSessionExpansions(gameId);
       markDirty();
     }
+  } else if (activeSession.game_id && !sessionExpansions.length) {
+    preloadSessionExpansions(activeSession.game_id);
   }
 
   sessionExpanded = true;
   document.getElementById("session-backdrop").classList.remove("hidden");
   document.getElementById("session-panel").classList.remove("hidden");
   renderSessionPanel();
+}
+
+// Hydrate the bubble from an existing play row for editing. Networking lives
+// here instead of in openSession() so the synchronous "new play" path stays
+// snappy.
+async function openSessionFromPlay(playId) {
+  if (sessionDirty && activeSession && !editingPlayId) {
+    if (!confirm("You have an unsaved play in progress. Discard it and edit this play instead?")) {
+      return;
+    }
+  }
+  sessionExpanded = true;
+  document.getElementById("session-backdrop").classList.remove("hidden");
+  const panel = document.getElementById("session-panel");
+  panel.classList.remove("hidden");
+  panel.innerHTML = `<div class="flex justify-center py-12">${buddyLoader('lg')}</div>`;
+  try {
+    const play = await apiFetch(`/plays/${playId}`);
+    editingPlayId = playId;
+    const hadAnyScore = (play.players || []).some(pp => pp.score != null);
+    activeSession = {
+      game_id: play.game_id,
+      game_name: play.game_name,
+      game_thumbnail: play.game_thumbnail,
+      played_at: play.played_at,
+      notes: play.notes || "",
+      // Carry per-player totals as a single round so the existing grid +
+      // winner-detection code works unchanged. If no original score, leave
+      // round_count=0 so the edit doesn't accidentally promote a NULL play
+      // to a 0-score play on save.
+      round_count: hadAnyScore ? 1 : 0,
+      players: (play.players || []).map(pp => ({
+        name: pp.name,
+        initials: computeInitials(pp.name),
+        round_scores: hadAnyScore ? [Number(pp.score) || 0] : [],
+        is_winner_override: pp.is_winner ? true : null,
+      })),
+      expansion_ids: (play.expansions || []).map(e => e.expansion_game_id),
+      photo_file: null,
+      photo_url: play.photo_url || null,
+      photo_preview_url: play.photo_url || null,
+    };
+    if (!activeSession.players.length) {
+      activeSession.players = emptySession().players;
+    }
+    sessionDirty = false;
+    await preloadSessionExpansions(activeSession.game_id);
+    renderSessionPanel();
+  } catch (err) {
+    panel.innerHTML = `<div class="text-error text-sm p-4">${escapeHtml(err.message)}</div>`;
+    editingPlayId = null;
+  }
+}
+
+async function preloadSessionExpansions(gameId) {
+  if (!gameId) { sessionExpansions = []; return; }
+  // Reuse the open game-detail's cached list when it matches the session game
+  // — saves a redundant fetch.
+  if (currentGame?.id === gameId && currentExpansions.length) {
+    sessionExpansions = currentExpansions.slice();
+    return;
+  }
+  try {
+    const list = await apiFetch(`/games/${gameId}/expansions`);
+    sessionExpansions = Array.isArray(list) ? list : [];
+  } catch {
+    sessionExpansions = [];
+  }
 }
 
 function minimizeSession() {
@@ -122,8 +217,109 @@ function minimizeSession() {
   // in-memory session so closing leaves no trace.
   if (!sessionDirty && activeSession) {
     activeSession = null;
+    editingPlayId = null;
+    sessionExpansions = [];
   }
   refreshSessionFab();
+}
+
+// ── Used-expansions chips ────────────────────────────────────────────────────
+
+function toggleSessionExpansion(expansionGameId) {
+  if (!activeSession) return;
+  const set = new Set(activeSession.expansion_ids || []);
+  if (set.has(expansionGameId)) set.delete(expansionGameId);
+  else set.add(expansionGameId);
+  activeSession.expansion_ids = [...set];
+  markDirty();
+  renderSessionExtras();
+}
+
+// ── Photo slot ───────────────────────────────────────────────────────────────
+
+function onSessionPhotoPicked(file) {
+  if (!file || !activeSession) return;
+  if (!/^image\//.test(file.type)) {
+    showToast("Please choose an image file", "warning");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("Image must be 5 MB or less", "warning");
+    return;
+  }
+  if (activeSession.photo_preview_url && activeSession.photo_preview_url.startsWith("blob:")) {
+    URL.revokeObjectURL(activeSession.photo_preview_url);
+  }
+  activeSession.photo_file = file;
+  activeSession.photo_url = null;  // will re-upload on save
+  activeSession.photo_preview_url = URL.createObjectURL(file);
+  markDirty();
+  renderSessionExtras();
+}
+
+function clearSessionPhoto() {
+  if (!activeSession) return;
+  if (activeSession.photo_preview_url && activeSession.photo_preview_url.startsWith("blob:")) {
+    URL.revokeObjectURL(activeSession.photo_preview_url);
+  }
+  activeSession.photo_file = null;
+  activeSession.photo_url = null;
+  activeSession.photo_preview_url = null;
+  markDirty();
+  renderSessionExtras();
+}
+
+// Re-renders just the extras row so the rest of the session bubble (game,
+// scores grid, notes) doesn't lose focus / cursor position.
+function renderSessionExtras() {
+  const host = document.getElementById("session-extras");
+  if (!host || !activeSession) return;
+  host.innerHTML = sessionExtrasHTML();
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function sessionExtrasHTML() {
+  if (!activeSession) return "";
+  const selected = new Set(activeSession.expansion_ids || []);
+  const chips = sessionExpansions.map(e => {
+    const active = selected.has(e.expansion_game_id);
+    const color = e.color || "#6C63FF";
+    return `
+      <button type="button"
+              class="expansion-chip ${active ? 'expansion-chip--active' : ''}"
+              style="${active ? `background:${escapeAttr(color)}26; border-color:${escapeAttr(color)};` : ''}"
+              onclick="toggleSessionExpansion('${e.expansion_game_id}')">
+        <span class="expansion-dot" style="background:${escapeAttr(color)}"></span>
+        <span>${escapeHtml(stripBaseName(e.name, activeSession.game_name))}</span>
+      </button>`;
+  }).join("");
+
+  const preview = activeSession.photo_preview_url || activeSession.photo_url;
+  const photoBlock = preview ? `
+    <div class="session-photo-preview">
+      <img src="${escapeAttr(preview)}" alt="Play photo" />
+      <button class="btn btn-circle btn-xs btn-error session-photo-remove"
+              type="button" onclick="clearSessionPhoto()" aria-label="Remove photo">
+        <i data-lucide="x" class="w-3 h-3"></i>
+      </button>
+    </div>` : `
+    <label class="session-photo-picker">
+      <input type="file" accept="image/*" class="hidden"
+             onchange="onSessionPhotoPicked(this.files[0])" />
+      <i data-lucide="camera" class="w-4 h-4"></i>
+      <span>Add photo</span>
+    </label>`;
+
+  return `
+    ${sessionExpansions.length ? `
+      <div class="mb-2">
+        <label class="text-xs opacity-60 mb-1 block">Expansions used</label>
+        <div class="expansion-chip-row">${chips}</div>
+      </div>` : ""}
+    <div class="mb-2">
+      <label class="text-xs opacity-60 mb-1 block">Photo</label>
+      ${photoBlock}
+    </div>`;
 }
 
 // Flag the session as touched so the FAB shows the "active" icon. Replaces
@@ -422,7 +618,9 @@ function setGameFromSearch(id, name, thumb) {
   activeSession.game_id = id;
   activeSession.game_name = name;
   activeSession.game_thumbnail = thumb || null;
+  activeSession.expansion_ids = [];
   markDirty();
+  preloadSessionExpansions(id).then(() => renderSessionPanel());
   renderSessionPanel();
 }
 
@@ -430,6 +628,8 @@ function clearSessionGame() {
   activeSession.game_id = null;
   activeSession.game_name = null;
   activeSession.game_thumbnail = null;
+  activeSession.expansion_ids = [];
+  sessionExpansions = [];
   markDirty();
   renderSessionPanel();
 }
@@ -450,6 +650,22 @@ function computeWinners(s) {
   if (allZero) return new Set();
   const max = Math.max(...totals);
   return new Set(totals.map((t, i) => t === max ? i : -1).filter(i => i >= 0));
+}
+
+async function uploadSessionPhoto(file) {
+  // Multipart upload — bypasses apiFetch which forces JSON content-type.
+  const fd = new FormData();
+  fd.append("file", file, file.name || "play-photo");
+  const headers = {};
+  if (session?.access_token) headers["Authorization"] = "Bearer " + session.access_token;
+  const res = await fetch(API + PREFIX + "/plays/photo", {
+    method: "POST", headers, body: fd,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || res.statusText);
+  }
+  return res.json();
 }
 
 async function saveSession() {
@@ -475,28 +691,59 @@ async function saveSession() {
     [...winners].map(i => namedIdxMap.get(i)).filter(v => v !== undefined),
   );
 
-  const body = {
-    game_id: activeSession.game_id,
-    played_at: activeSession.played_at || TODAY(),
-    notes: (activeSession.notes && activeSession.notes.trim()) || null,
-    players: named.map((p, j) => ({
-      name: p.name.trim(),
-      is_winner: namedWinners.has(j),
-    })),
-  };
-
   const btn = document.getElementById("session-save-btn");
   if (btn) { btn.classList.add("loading"); btn.disabled = true; }
   try {
-    await apiFetch("/plays", { method: "POST", body });
+    // Upload pending photo first so the play insert can reference its URL.
+    if (activeSession.photo_file && !activeSession.photo_url) {
+      const { photo_url } = await uploadSessionPhoto(activeSession.photo_file);
+      activeSession.photo_url = photo_url;
+    }
+
+    // Score: total per player. Null when the user didn't touch any score
+    // (round_count == 0) so legacy plays stay distinguishable.
+    const anyScoreEntered = (
+      activeSession.round_count > 0 ||
+      named.some(p => (p.round_scores || []).some(v => Number(v) !== 0))
+    );
+
+    const playersPayload = named.map((p, j) => ({
+      name: p.name.trim(),
+      is_winner: namedWinners.has(j),
+      score: anyScoreEntered ? playerTotalScore(p) : null,
+    }));
+
+    const body = {
+      played_at: activeSession.played_at || TODAY(),
+      notes: (activeSession.notes && activeSession.notes.trim()) || null,
+      players: playersPayload,
+      photo_url: activeSession.photo_url || null,
+      expansion_ids: activeSession.expansion_ids || [],
+    };
+
+    if (editingPlayId) {
+      await apiFetch(`/plays/${editingPlayId}`, { method: "PUT", body });
+      showToast("Play updated", "success");
+    } else {
+      body.game_id = activeSession.game_id;
+      await apiFetch("/plays", { method: "POST", body });
+      showToast("Play logged!", "success");
+    }
+
+    const justEditedId = editingPlayId;
     activeSession = null;
     sessionDirty = false;
     sessionExpanded = false;
+    editingPlayId = null;
+    sessionExpansions = [];
     document.getElementById("session-backdrop").classList.add("hidden");
     document.getElementById("session-panel").classList.add("hidden");
     refreshSessionFab();
-    showToast("Play logged!", "success");
     if (currentView === "history") loadPlays();
+    if (justEditedId && currentView === "play-detail") {
+      // Refresh the underlying play view so the user sees their changes.
+      if (typeof openPlayDetail === "function") openPlayDetail(justEditedId);
+    }
   } catch (err) {
     showToast(err.message, "error");
   } finally {
@@ -505,10 +752,14 @@ async function saveSession() {
 }
 
 async function discardSession() {
-  if (!confirm("Discard this in-progress session?")) return;
+  const isEdit = !!editingPlayId;
+  const prompt = isEdit ? "Discard unsaved changes?" : "Discard this in-progress session?";
+  if (!confirm(prompt)) return;
   activeSession = null;
   sessionDirty = false;
   sessionExpanded = false;
+  editingPlayId = null;
+  sessionExpansions = [];
   document.getElementById("session-backdrop").classList.add("hidden");
   document.getElementById("session-panel").classList.add("hidden");
   refreshSessionFab();
@@ -582,6 +833,8 @@ function renderSessionPanel() {
       </div>
     </div>
 
+    <div id="session-extras" class="mb-2">${sessionExtrasHTML()}</div>
+
     <div class="mb-3">
       <label class="text-xs opacity-60 block mb-1">Notes</label>
       <textarea class="textarea textarea-bordered w-full text-sm"
@@ -591,10 +844,10 @@ function renderSessionPanel() {
 
     <div class="flex gap-2">
       <button class="btn btn-ghost flex-1" onclick="discardSession()">
-        <i data-lucide="trash-2" class="w-4 h-4"></i> Discard
+        <i data-lucide="trash-2" class="w-4 h-4"></i> ${editingPlayId ? 'Cancel' : 'Discard'}
       </button>
       <button id="session-save-btn" class="btn btn-primary flex-1" onclick="saveSession()">
-        <i data-lucide="check" class="w-4 h-4"></i> Save Play
+        <i data-lucide="check" class="w-4 h-4"></i> ${editingPlayId ? 'Save Changes' : 'Save Play'}
       </button>
     </div>
   `;

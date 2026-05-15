@@ -1253,3 +1253,89 @@ body {
   padding: 8px 4px;
 }
 
+
+/* ── Expansion chips (session bubble + play detail) ────────────────────────── */
+.expansion-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.expansion-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid oklch(var(--bc) / 0.18);
+  background: oklch(var(--b2));
+  color: oklch(var(--bc) / 0.85);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  line-height: 1.1;
+}
+.expansion-chip:hover { background: oklch(var(--b2) / 0.6); }
+.expansion-chip:active { transform: translateY(1px); }
+.expansion-chip--active {
+  color: oklch(var(--bc));
+  font-weight: 600;
+}
+/* Static (read-only) chip used in the play-detail view. */
+.expansion-chip--static {
+  cursor: default;
+}
+.expansion-chip--static:hover { background: inherit; }
+.expansion-chip--static:active { transform: none; }
+
+/* ── Session photo slot ─────────────────────────────────────────────────────── */
+.session-photo-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px dashed oklch(var(--bc) / 0.3);
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  background: oklch(var(--b2) / 0.6);
+}
+.session-photo-picker:hover {
+  background: oklch(var(--b2));
+  border-color: var(--accent);
+}
+.session-photo-preview {
+  position: relative;
+  display: inline-block;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  max-width: 100%;
+}
+.session-photo-preview img {
+  display: block;
+  max-width: 220px;
+  max-height: 160px;
+  width: auto;
+  height: auto;
+  object-fit: cover;
+  border-radius: 0.5rem;
+}
+.session-photo-remove {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+}
+
+/* ── Play detail view ──────────────────────────────────────────────────────── */
+.play-card { cursor: pointer; }
+.play-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+.play-photo {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  border-radius: 1rem;
+}

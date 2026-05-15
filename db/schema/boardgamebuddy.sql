@@ -119,6 +119,8 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   -- BGG play_id when this row was imported from BoardGameGeek (migration 062).
   -- Unique per (user_id, bgg_play_id) so resync is idempotent.
   bgg_play_id BIGINT,
+  -- Optional photo URL into the boardgamebuddy-plays storage bucket (005).
+  photo_url TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
@@ -127,9 +129,19 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   play_id UUID NOT NULL REFERENCES public.boardgamebuddy_plays(id) ON DELETE CASCADE,
   buddy_id UUID NOT NULL REFERENCES public.boardgamebuddy_buddies(id),
-  is_winner BOOLEAN DEFAULT false
+  is_winner BOOLEAN DEFAULT false,
+  -- Optional numeric score per player (migration 005). NULL = legacy plays.
+  score INTEGER
 );
 ALTER TABLE public.boardgamebuddy_play_players ENABLE ROW LEVEL SECURITY;
+
+-- Which expansion games were used during a play (migration 005).
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_expansions (
+  play_id           UUID NOT NULL REFERENCES public.boardgamebuddy_plays(id) ON DELETE CASCADE,
+  expansion_game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
+  PRIMARY KEY (play_id, expansion_game_id)
+);
+ALTER TABLE public.boardgamebuddy_play_expansions ENABLE ROW LEVEL SECURITY;
 
 -- Legacy single-row guide table. Retained during rollout of the chunk system
 -- (migration 034); will be dropped in a follow-up migration.
@@ -218,6 +230,8 @@ CREATE INDEX IF NOT EXISTS idx_bgb_collections_user ON public.boardgamebuddy_col
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_game ON public.boardgamebuddy_collections(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_user ON public.boardgamebuddy_plays(user_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_game ON public.boardgamebuddy_plays(game_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_play_expansions_play
+  ON public.boardgamebuddy_play_expansions(play_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game ON public.boardgamebuddy_guide_chunks(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game_default
