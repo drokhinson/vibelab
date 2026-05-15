@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # two relationships between plays and games (direct game_id FK + via the
 # junction) and refuses to auto-pick — so we name the FK explicitly.
 _SELECT_PLAY = (
-    "id, user_id, game_id, played_at, notes, photo_url, created_at, "
+    "id, user_id, game_id, played_at, notes, photo_url, play_mode, created_at, "
     "boardgamebuddy_games!boardgamebuddy_plays_game_id_fkey(name, thumbnail_url), "
     "boardgamebuddy_profiles!user_id(display_name)"
 )
@@ -62,6 +62,7 @@ def _build_play_response(
         photo_url=play.get("photo_url"),
         expansions=(expansions_by_play or {}).get(play["id"], []),
         created_at=play["created_at"],
+        play_mode=play.get("play_mode") or "competitive",
         logged_by_id=play["user_id"],
         logged_by_name=logger_profile.get("display_name", "Unknown"),
         is_own=is_own,
@@ -364,10 +365,11 @@ async def log_play(
     """Record a game play with players and winner."""
     sb = get_supabase()
 
-    # Verify game exists
+    # Verify game exists; also fetch its play_mode so we can inherit it
+    # when the request didn't override.
     game = (
         sb.table("boardgamebuddy_games")
-        .select("id, name, thumbnail_url")
+        .select("id, name, thumbnail_url, play_mode")
         .eq("id", body.game_id)
         .execute()
     )
@@ -375,6 +377,11 @@ async def log_play(
         raise HTTPException(status_code=404, detail="Game not found")
 
     game_row = game.data[0]
+    effective_mode = (
+        body.play_mode.value
+        if body.play_mode is not None
+        else (game_row.get("play_mode") or "competitive")
+    )
 
     # Create play
     play_result = (
@@ -385,6 +392,7 @@ async def log_play(
             "played_at": body.played_at.isoformat(),
             "notes": body.notes,
             "photo_url": body.photo_url,
+            "play_mode": effective_mode,
         })
         .execute()
     )
@@ -406,6 +414,7 @@ async def log_play(
         photo_url=play.get("photo_url"),
         expansions=expansions,
         created_at=play["created_at"],
+        play_mode=play.get("play_mode") or effective_mode,
         logged_by_id=user.user_id,
         logged_by_name=user.display_name,
         is_own=True,
@@ -471,12 +480,16 @@ async def update_play(
     if existing.data[0]["user_id"] != user.user_id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
-    # Update the top-level row.
-    sb.table("boardgamebuddy_plays").update({
+    # Update the top-level row. play_mode is only written when the request
+    # carries one — omitting it leaves whatever was already on the play.
+    update_payload: dict[str, object] = {
         "played_at": body.played_at.isoformat(),
         "notes": body.notes,
         "photo_url": body.photo_url,
-    }).eq("id", play_id).execute()
+    }
+    if body.play_mode is not None:
+        update_payload["play_mode"] = body.play_mode.value
+    sb.table("boardgamebuddy_plays").update(update_payload).eq("id", play_id).execute()
 
     # Full-replace the nested lists.
     sb.table("boardgamebuddy_play_players").delete().eq("play_id", play_id).execute()

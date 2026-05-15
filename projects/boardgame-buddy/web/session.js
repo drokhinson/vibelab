@@ -35,6 +35,9 @@ function emptySession() {
     photo_file: null,
     photo_url: null,
     photo_preview_url: null,
+    // Per-play scoring style (migration 007). Null until a game is picked
+    // (we copy the game's default) or the user explicitly overrides.
+    play_mode: null,
   };
 }
 
@@ -182,6 +185,7 @@ async function openSessionFromPlay(playId) {
       photo_file: null,
       photo_url: play.photo_url || null,
       photo_preview_url: play.photo_url || null,
+      play_mode: play.play_mode || "competitive",
     };
     if (!activeSession.players.length) {
       activeSession.players = emptySession().players;
@@ -621,13 +625,23 @@ function setPlayedAt(date) {
   markDirty();
 }
 
-function setGameFromSearch(id, name, thumb) {
+function setGameFromSearch(id, name, thumb, playMode) {
   activeSession.game_id = id;
   activeSession.game_name = name;
   activeSession.game_thumbnail = thumb || null;
   activeSession.expansion_ids = [];
+  // Seed the session's play_mode from the game's default. The user can
+  // override afterwards via the Mode picker.
+  activeSession.play_mode = playMode || "competitive";
   markDirty();
   preloadSessionExpansions(id).then(() => renderSessionPanel());
+  renderSessionPanel();
+}
+
+function setSessionPlayMode(mode) {
+  if (!activeSession) return;
+  activeSession.play_mode = mode;
+  markDirty();
   renderSessionPanel();
 }
 
@@ -726,6 +740,7 @@ async function saveSession() {
       players: playersPayload,
       photo_url: activeSession.photo_url || null,
       expansion_ids: activeSession.expansion_ids || [],
+      play_mode: activeSession.play_mode || "competitive",
     };
 
     if (editingPlayId) {
@@ -799,6 +814,19 @@ function renderSessionPanel() {
       <input type="date" class="input input-bordered flex-1" value="${s.played_at}"
              onchange="setPlayedAt(this.value)" />
     </div>
+
+    <!-- Mode picker (migration 007). Defaults to the game's stored mode
+         when a game is chosen; click another chip to override per play. -->
+    ${s.game_id ? `
+    <div class="mb-2 flex items-center gap-2 flex-wrap">
+      <label class="text-xs opacity-60 w-10">Mode</label>
+      ${["competitive", "coop", "team"].map(m => `
+        <button type="button"
+                class="btn btn-sm ${(s.play_mode || 'competitive') === m ? 'btn-primary' : 'btn-outline'}"
+                onclick="setSessionPlayMode('${m}')">
+          ${playModeLabel(m)}
+        </button>`).join("")}
+    </div>` : ""}
 
     <div class="mb-2">
       <label class="text-xs opacity-60 mb-1 block">Scores</label>
@@ -897,12 +925,18 @@ async function searchSessionGame(q) {
         <button type="button" class="btn btn-ghost btn-sm w-full justify-start text-left session-game-pick"
                 data-id="${g.id}"
                 data-name="${escapeHtml(g.name)}"
-                data-thumb="${escapeHtml(g.thumbnail_url || "")}">
+                data-thumb="${escapeHtml(g.thumbnail_url || "")}"
+                data-play-mode="${escapeHtml(g.play_mode || "competitive")}">
           ${escapeHtml(g.name)}${g.year_published ? " (" + g.year_published + ")" : ""}
         </button>`).join("");
       out.querySelectorAll(".session-game-pick").forEach(btn => {
         btn.addEventListener("click", () => {
-          setGameFromSearch(btn.dataset.id, btn.dataset.name, btn.dataset.thumb || null);
+          setGameFromSearch(
+            btn.dataset.id,
+            btn.dataset.name,
+            btn.dataset.thumb || null,
+            btn.dataset.playMode || "competitive",
+          );
         });
       });
     } catch { /* ignore */ }

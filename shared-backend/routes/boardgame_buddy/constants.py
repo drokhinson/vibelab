@@ -30,11 +30,16 @@ class PlayMode(StrEnum):
     TEAM = "team"                # Players assigned to teams; the winning team takes it
 
 
-# BGG mechanic value → PlayMode default. List (not dict) so iteration order is
-# stable: the first match wins, so COOP is checked before TEAM — a game tagged
-# both Cooperative and Team-Based should play as coop.
+# BGG mechanic value → PlayMode default. Each entry is checked against the
+# game's mechanics array; the first match wins, so COOP entries come before
+# TEAM (a game tagged both Cooperative and Team-Based should play as coop).
+# BGG's XML returns the mechanic as just "Cooperative" / "Team-Based" in
+# practice; the " Game" forms are kept as a defensive fallback in case a
+# historical sync path used the longer wording.
 BGG_MECHANIC_TO_MODE: list[tuple[str, PlayMode]] = [
+    ("Cooperative", PlayMode.COOP),
     ("Cooperative Game", PlayMode.COOP),
+    ("Team-Based", PlayMode.TEAM),
     ("Team-Based Game", PlayMode.TEAM),
 ]
 

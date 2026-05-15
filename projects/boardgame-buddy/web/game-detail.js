@@ -103,6 +103,7 @@ function renderGameDetail() {
           <i data-lucide="external-link" class="w-3 h-3"></i>BGG</a>` : ""}
         ${g.min_players ? `<div class="badge badge-ghost"><i data-lucide="users" class="w-3 h-3 mr-1"></i>${playerRange(g.min_players, g.max_players)}</div>` : ""}
         ${g.playing_time ? `<div class="badge badge-ghost"><i data-lucide="clock" class="w-3 h-3 mr-1"></i>${formatTime(g.playing_time)}</div>` : ""}
+        <div class="badge badge-ghost"><i data-lucide="dice-5" class="w-3 h-3 mr-1"></i>${playModeLabel(g.play_mode || 'competitive')}</div>
         <span id="play-count-badge"></span>
       </div>
 
