@@ -224,6 +224,12 @@ function filterItems(items) {
       return closetFilterMechanics.every(m => gm.includes(m));
     });
   }
+  if (closetFilterPlayMode !== null) {
+    // Game default mode falls back to 'competitive' (matches the DB default).
+    result = result.filter(it =>
+      (it.game?.play_mode || "competitive") === closetFilterPlayMode
+    );
+  }
   return result;
 }
 
@@ -245,8 +251,15 @@ function hasClosetActiveFilter() {
   return closetFilterPlayers !== null
     || closetFilterPlaytimeMin !== null
     || closetFilterPlaytimeMax !== null
-    || closetFilterMechanics.length > 0;
+    || closetFilterMechanics.length > 0
+    || closetFilterPlayMode !== null;
 }
+
+const CLOSET_PLAY_MODE_OPTIONS = [
+  { value: "competitive", label: "Competitive" },
+  { value: "coop",        label: "Co-op" },
+  { value: "team",        label: "Teams" },
+];
 
 function toggleClosetFilters() {
   closetFiltersOpen = !closetFiltersOpen;
@@ -285,6 +298,18 @@ function renderClosetFilterPanel() {
             <button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}"
                     onclick="toggleClosetPlaytimeFilter(${i})">
               ${c.label}
+            </button>`;
+        }).join("")}
+      </div>
+      <!-- Play-mode (competitive / coop / team) -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-base-content/50 mr-1">Mode</span>
+        ${CLOSET_PLAY_MODE_OPTIONS.map(opt => {
+          const active = closetFilterPlayMode === opt.value;
+          return `
+            <button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}"
+                    onclick="setClosetPlayModeFilter('${opt.value}')">
+              ${opt.label}
             </button>`;
         }).join("")}
       </div>
@@ -334,6 +359,10 @@ function renderClosetActiveFilterBar() {
     if (chip) pills.push(`<span class="badge badge-sm badge-outline">${chip.label}</span>`);
   }
   closetFilterMechanics.forEach(m => pills.push(`<span class="badge badge-sm badge-outline">${escapeHtml(m)}</span>`));
+  if (closetFilterPlayMode) {
+    const opt = CLOSET_PLAY_MODE_OPTIONS.find(o => o.value === closetFilterPlayMode);
+    if (opt) pills.push(`<span class="badge badge-sm badge-outline">${opt.label}</span>`);
+  }
   bar.innerHTML = `
     <div class="flex items-center gap-1 flex-wrap">
       <span class="text-xs text-base-content/50">Filtered:</span>
@@ -390,6 +419,17 @@ function clearClosetFilters() {
   closetFilterPlaytimeMin = null;
   closetFilterPlaytimeMax = null;
   closetFilterMechanics = [];
+  closetFilterPlayMode = null;
+  closetDisplayPage.owned = 1;
+  closetDisplayPage.played = 1;
+  renderClosetFilterPanel();
+  renderClosetActiveFilterBar();
+  renderCloset();
+}
+
+function setClosetPlayModeFilter(value) {
+  // Click the active mode again → clear back to "any".
+  closetFilterPlayMode = (closetFilterPlayMode === value) ? null : value;
   closetDisplayPage.owned = 1;
   closetDisplayPage.played = 1;
   renderClosetFilterPanel();

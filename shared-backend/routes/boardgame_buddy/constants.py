@@ -22,6 +22,32 @@ class BggAuthState(StrEnum):
     RELINK_REQUIRED = "relink_required"  # Username only (legacy public link)
 
 
+class PlayMode(StrEnum):
+    """Scoring style for a game / play. Persisted on boardgamebuddy_games.play_mode."""
+
+    COMPETITIVE = "competitive"  # Per-player scores; highest total wins (today's UI)
+    COOP = "coop"                # All players win or all players lose together
+    TEAM = "team"                # Players assigned to teams; the winning team takes it
+
+
+# BGG mechanic value → PlayMode default. List (not dict) so iteration order is
+# stable: the first match wins, so COOP is checked before TEAM — a game tagged
+# both Cooperative and Team-Based should play as coop.
+BGG_MECHANIC_TO_MODE: list[tuple[str, PlayMode]] = [
+    ("Cooperative Game", PlayMode.COOP),
+    ("Team-Based Game", PlayMode.TEAM),
+]
+
+
+def derive_play_mode(mechanics: list[str] | None) -> PlayMode:
+    """Map a BGG mechanics array to its default PlayMode."""
+    mset = set(mechanics or [])
+    for tag, mode in BGG_MECHANIC_TO_MODE:
+        if tag in mset:
+            return mode
+    return PlayMode.COMPETITIVE
+
+
 # Default theme colors by primary category (fallback when game has no theme_color)
 CATEGORY_COLORS: dict[str, str] = {
     "Strategy": "#8B6914",

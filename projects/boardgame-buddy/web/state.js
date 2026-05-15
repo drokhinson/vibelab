@@ -45,6 +45,7 @@ let closetFilterPlayers = null;
 let closetFilterPlaytimeMin = null;
 let closetFilterPlaytimeMax = null;
 let closetFilterMechanics = [];
+let closetFilterPlayMode = null; // null | 'competitive' | 'coop' | 'team'
 let expandedExpansionGroups = new Set(); // base game ids currently expanded in the list view
 
 // Plays
@@ -69,6 +70,7 @@ let gamesFilterPlaytimeMax = null;
 let gamesFilterMechanics = [];
 let mechanicsOptions = [];
 let gamesFilterOwnedOnly = false;
+let gamesFilterPlayMode = null; // null | 'competitive' | 'coop' | 'team'
 let browseFiltersOpen = false;
 
 // Profile (account page tab state — survives re-renders)

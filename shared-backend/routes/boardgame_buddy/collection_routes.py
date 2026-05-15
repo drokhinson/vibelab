@@ -22,7 +22,7 @@ from .dependencies import CurrentUser, get_current_user
 _GAME_FIELDS = (
     "id, bgg_id, name, year_published, min_players, max_players, "
     "playing_time, thumbnail_url, theme_color, is_expansion, "
-    "base_game_bgg_id, expansion_color"
+    "base_game_bgg_id, expansion_color, play_mode"
 )
 
 
