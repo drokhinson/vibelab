@@ -130,6 +130,7 @@ class BggSearchResult(BaseModel):
     bgg_id: int
     name: str
     year_published: Optional[int] = None
+    is_expansion: bool = False
     already_in_db: bool = False
 
     @computed_field  # type: ignore[misc]

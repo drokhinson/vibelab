@@ -464,59 +464,190 @@ function _rerenderMechanicsPanelInPlace() {
 
 // ── BGG Live Search ──────────────────────────────────────────────────────────
 
+// Search-string -> result-name closeness score. Lower is closer:
+//   0           exact (case-insensitive)
+//   100..       starts with query (penalty grows with extra characters)
+//   200..       contains query (penalty by position + length)
+//   300         word-boundary match (any token starts with the query)
+//   1000        no match (BGG matched on a synonym / description)
+function _bggCloseness(name, query) {
+  const n = (name || "").toLowerCase().trim();
+  const q = (query || "").toLowerCase().trim();
+  if (!q) return 0;
+  if (n === q) return 0;
+  if (n.startsWith(q)) return 100 + (n.length - q.length);
+  const idx = n.indexOf(q);
+  if (idx >= 0) return 200 + idx + (n.length - q.length) * 0.1;
+  const words = n.split(/[^a-z0-9]+/i).filter(Boolean);
+  if (words.some(w => w.startsWith(q))) return 300;
+  return 1000;
+}
+
+// Sort: closest name first, then base games before expansions, then year desc.
+function _sortBggResults(results, query) {
+  return results.slice().sort((a, b) => {
+    const sa = _bggCloseness(a.name, query);
+    const sb = _bggCloseness(b.name, query);
+    if (sa !== sb) return sa - sb;
+    if (!!a.is_expansion !== !!b.is_expansion) return a.is_expansion ? 1 : -1;
+    const ya = a.year_published || 0;
+    const yb = b.year_published || 0;
+    if (ya !== yb) return yb - ya;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+let _bggLastQuery = "";
+// Expansions inlined under a base game card after the user taps "Find
+// expansions". Keyed by base game's bgg_id; each entry is a list of
+// BggSearchResult rows. Cached so re-rendering (e.g. after import) doesn't
+// re-fetch from BGG.
+const _bggInlineExpansions = new Map();   // bgg_id -> BggSearchResult[]
+const _bggExpansionsLoading = new Set();  // bgg_ids currently fetching
+const _bggExpansionsOpen = new Set();     // bgg_ids whose expansions panel is expanded
+
 async function searchBGG() {
   const query = document.getElementById("bgg-search-input").value.trim();
   if (query.length < 2) return;
 
+  _bggLastQuery = query;
+  // Reset inline expansion state on a fresh query so stale rows don't bleed in.
+  _bggInlineExpansions.clear();
+  _bggExpansionsLoading.clear();
+  _bggExpansionsOpen.clear();
+
   const container = document.getElementById("bgg-results");
-  container.innerHTML = buddyLoader('sm');
+  container.innerHTML = `<div class="flex justify-center py-6">${buddyLoader('md')}</div>`;
 
   try {
     bggSearchResults = await apiFetch(`/games/search-bgg?query=${encodeURIComponent(query)}`);
+    bggSearchResults = _sortBggResults(bggSearchResults, query);
     renderBggResults();
   } catch (err) {
-    container.innerHTML = `<p class="text-error text-sm">${err.message}</p>`;
+    container.innerHTML = `<p class="text-error text-sm">${escapeHtml(err.message)}</p>`;
   }
+}
+
+function _bggCardHTML(r, { indent = false } = {}) {
+  const isExp = !!r.is_expansion;
+  const showExpansionsBtn = !isExp;
+  const open = _bggExpansionsOpen.has(r.bgg_id);
+  const indentClass = indent ? "ml-6" : "";
+  const expansionsChild = (!isExp && open)
+    ? `<div class="mt-2 pl-2 border-l-2 border-base-300 space-y-2">${_renderInlineExpansions(r.bgg_id)}</div>`
+    : "";
+
+  return `
+    <div class="card bg-base-200 ${indentClass} animate-fadeUp" data-bgg-id="${r.bgg_id}">
+      <div class="card-body p-3">
+        <div class="flex items-start gap-2">
+          <div class="w-9 h-9 rounded bg-base-300 flex items-center justify-center flex-shrink-0">
+            <i data-lucide="${isExp ? "puzzle" : "dice-5"}" class="w-4 h-4 ${isExp ? "text-warning" : "opacity-60"}"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <a href="${r.bgg_url}" target="_blank" rel="noopener"
+                 class="font-medium text-sm link link-hover inline-flex items-center gap-1"
+                 onclick="event.stopPropagation()">
+                ${escapeHtml(r.name)}
+                <i data-lucide="external-link" class="w-3 h-3 opacity-60"></i>
+              </a>
+              ${r.year_published ? `<span class="text-xs text-base-content/50">(${r.year_published})</span>` : ""}
+              ${isExp ? `<span class="badge badge-warning badge-xs gap-0.5"><i data-lucide="puzzle" class="w-3 h-3"></i>Expansion</span>` : ""}
+            </div>
+          </div>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            ${showExpansionsBtn ? `
+              <button class="btn btn-ghost btn-xs"
+                      onclick="event.stopPropagation(); toggleBggExpansions(${r.bgg_id})"
+                      title="${open ? 'Hide expansions' : 'Find expansions'}">
+                <i data-lucide="${open ? 'chevron-up' : 'puzzle'}" class="w-3 h-3"></i>
+                ${open ? 'Hide' : 'Expansions'}
+              </button>` : ""}
+            ${r.already_in_db
+              ? '<span class="badge badge-sm badge-success">Imported</span>'
+              : `<button class="btn btn-xs btn-primary" onclick="event.stopPropagation(); importBggGame(${r.bgg_id})">
+                   <i data-lucide="plus" class="w-3 h-3"></i> Add
+                 </button>`
+            }
+          </div>
+        </div>
+        ${expansionsChild}
+      </div>
+    </div>`;
+}
+
+function _renderInlineExpansions(baseBggId) {
+  if (_bggExpansionsLoading.has(baseBggId)) {
+    return `<div class="flex justify-center py-3">${buddyLoader('sm')}</div>`;
+  }
+  const list = _bggInlineExpansions.get(baseBggId) || [];
+  if (!list.length) {
+    return `<p class="text-xs text-base-content/50 px-2 py-2">No expansions found on BGG.</p>`;
+  }
+  return list.map(r => _bggCardHTML(r, { indent: true })).join("");
 }
 
 function renderBggResults() {
   const container = document.getElementById("bgg-results");
   if (!bggSearchResults.length) {
-    container.innerHTML = '<p class="text-base-content/50 text-sm mt-2">No results from BoardGameGeek.</p>';
+    container.innerHTML = `
+      <div class="text-center py-12 text-base-content/50">
+        <i data-lucide="search-x" class="w-10 h-10 mb-3 opacity-50 mx-auto"></i>
+        <p>No results from BoardGameGeek.</p>
+      </div>`;
+    lucide.createIcons();
     return;
   }
+  const baseCount = bggSearchResults.filter(r => !r.is_expansion).length;
+  const expCount = bggSearchResults.length - baseCount;
   container.innerHTML = `
-    <ul class="menu bg-base-200 rounded-box mt-1 max-h-72 overflow-y-auto shadow-lg border border-base-300 p-1">
-      ${bggSearchResults.map(r => `
-        <li>
-          <div class="flex items-center justify-between gap-2 py-1 px-2">
-            <div class="min-w-0 flex-1">
-              <a href="${r.bgg_url}" target="_blank" rel="noopener"
-                 class="font-medium text-sm link link-hover inline-flex items-center gap-1"
-                 onclick="event.stopPropagation()">
-                ${r.name}
-                <i data-lucide="external-link" class="w-3 h-3 opacity-60"></i>
-              </a>
-              ${r.year_published ? `<span class="text-xs text-base-content/50 ml-1">(${r.year_published})</span>` : ""}
-            </div>
-            ${r.already_in_db
-              ? '<span class="badge badge-sm badge-success">Imported</span>'
-              : `<button class="btn btn-xs btn-primary" onclick="event.stopPropagation(); importBggGame(${r.bgg_id})">Add</button>`
-            }
-          </div>
-        </li>
-      `).join("")}
-    </ul>`;
+    <div class="text-xs text-base-content/60 px-1 mt-2 mb-2 flex items-center gap-2">
+      <span>${bggSearchResults.length} result${bggSearchResults.length === 1 ? "" : "s"}</span>
+      ${baseCount ? `<span>· ${baseCount} game${baseCount === 1 ? "" : "s"}</span>` : ""}
+      ${expCount ? `<span>· ${expCount} expansion${expCount === 1 ? "" : "s"}</span>` : ""}
+    </div>
+    <div class="space-y-2">
+      ${bggSearchResults.map(r => _bggCardHTML(r)).join("")}
+    </div>`;
   lucide.createIcons();
+}
+
+async function toggleBggExpansions(baseBggId) {
+  if (_bggExpansionsOpen.has(baseBggId)) {
+    _bggExpansionsOpen.delete(baseBggId);
+    renderBggResults();
+    return;
+  }
+  _bggExpansionsOpen.add(baseBggId);
+  // Serve cached list if present; otherwise fetch.
+  if (!_bggInlineExpansions.has(baseBggId)) {
+    _bggExpansionsLoading.add(baseBggId);
+    renderBggResults();
+    try {
+      const list = await apiFetch(`/games/bgg/${baseBggId}/expansions`);
+      // Sort against the user's current query so "Inns" surfaces Inns &
+      // Cathedrals to the top within an Expansions list too.
+      _bggInlineExpansions.set(baseBggId, _sortBggResults(list || [], _bggLastQuery));
+    } catch (err) {
+      _bggInlineExpansions.set(baseBggId, []);
+      showToast("Couldn't load expansions: " + err.message, "error");
+    } finally {
+      _bggExpansionsLoading.delete(baseBggId);
+    }
+  }
+  renderBggResults();
 }
 
 async function importBggGame(bggId) {
   try {
     const game = await apiFetch(`/games/import-bgg/${bggId}`, { method: "POST" });
     showToast(`${game.name} imported to BgB!`, "success");
-    // Refresh BGG results to show "Imported"
-    const existing = bggSearchResults.find(r => r.bgg_id === bggId);
-    if (existing) existing.already_in_db = true;
+    // Flip the already_in_db flag on the matching row — top-level *or* inline
+    // expansion — so the button re-renders as "Imported".
+    const flip = list => list?.forEach(r => { if (r.bgg_id === bggId) r.already_in_db = true; });
+    flip(bggSearchResults);
+    _bggInlineExpansions.forEach(flip);
     renderBggResults();
   } catch (err) {
     showToast(err.message, "error");

@@ -174,6 +174,22 @@ async def list_games(
     return GameListResponse(games=games, total=total, page=page, per_page=per_page)
 
 
+def _annotate_already_in_db(sb: Client, results: list[BggSearchResult]) -> None:
+    """Set already_in_db on each result by checking the catalog in one query."""
+    bgg_ids = [r.bgg_id for r in results]
+    if not bgg_ids:
+        return
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select("bgg_id")
+        .in_("bgg_id", bgg_ids)
+        .execute()
+    )
+    existing_set = {r["bgg_id"] for r in (existing.data or [])}
+    for r in results:
+        r.already_in_db = r.bgg_id in existing_set
+
+
 @router.get(
     "/games/search-bgg",
     response_model=list[BggSearchResult],
@@ -182,18 +198,24 @@ async def list_games(
 )
 async def search_bgg(
     query: str = Query(..., min_length=2, description="Search query"),
+    include_expansions: bool = Query(
+        True,
+        description="Include boardgame expansions in the search results",
+    ),
 ) -> list[BggSearchResult]:
-    """Proxy search to BGG XML API for games not yet in our database."""
+    """Proxy search to BGG XML API. Includes expansions by default so a name
+    search returns the base game *and* any matching expansions; the FE flags
+    expansion rows with a puzzle icon and sorts base games first."""
+    type_param = "boardgame,boardgameexpansion" if include_expansions else "boardgame"
     body = await fetch_bgg(
         "/search",
-        {"query": query, "type": "boardgame"},
+        {"query": query, "type": type_param},
         timeout=10.0,
     )
     root = parse_bgg_xml(body, context=f"search query={query!r}")
 
     results: list[BggSearchResult] = []
-    bgg_ids: list[int] = []
-    for item in root.findall("item")[:20]:
+    for item in root.findall("item")[:40]:
         try:
             bgg_id = int(item.get("id", "0"))
         except (TypeError, ValueError):
@@ -210,26 +232,63 @@ async def search_bgg(
             except (TypeError, ValueError):
                 year = None
 
-        bgg_ids.append(bgg_id)
         results.append(BggSearchResult(
             bgg_id=bgg_id,
             name=name,
             year_published=year,
+            is_expansion=item.get("type") == "boardgameexpansion",
         ))
 
-    # Check which are already in our DB
-    if bgg_ids:
-        sb = get_supabase()
-        existing = (
-            sb.table("boardgamebuddy_games")
-            .select("bgg_id")
-            .in_("bgg_id", bgg_ids)
-            .execute()
-        )
-        existing_set = {r["bgg_id"] for r in (existing.data or [])}
-        for r in results:
-            r.already_in_db = r.bgg_id in existing_set
+    _annotate_already_in_db(get_supabase(), results)
+    return results
 
+
+@router.get(
+    "/games/bgg/{bgg_id}/expansions",
+    response_model=list[BggSearchResult],
+    status_code=200,
+    summary="List a BGG game's expansions",
+)
+async def list_bgg_expansions(
+    bgg_id: int = Path(..., description="BoardGameGeek game ID"),
+) -> list[BggSearchResult]:
+    """Fetch the BGG /thing record for a base game and return every expansion
+    it links to. Each entry is shaped like a search result so the FE can reuse
+    its add/import button (no year — BGG's /thing only includes year on the
+    item itself, not on outbound links)."""
+    body = await fetch_bgg(
+        "/thing",
+        {"id": bgg_id, "stats": 0},
+        timeout=15.0,
+    )
+    root = parse_bgg_xml(body, context=f"thing id={bgg_id}")
+    item = root.find("item")
+    if item is None:
+        raise HTTPException(status_code=404, detail="Game not found on BGG")
+
+    results: list[BggSearchResult] = []
+    seen: set[int] = set()
+    for link in item.findall("link[@type='boardgameexpansion']"):
+        # Outbound links from a base game point at its expansions. Inbound
+        # links (set on an expansion's own /thing) point back at the base —
+        # skip those when this endpoint is called on an expansion by accident.
+        if link.get("inbound") == "true":
+            continue
+        try:
+            exp_id = int(link.get("id", "0"))
+        except (TypeError, ValueError):
+            continue
+        if not exp_id or exp_id in seen:
+            continue
+        seen.add(exp_id)
+        results.append(BggSearchResult(
+            bgg_id=exp_id,
+            name=link.get("value", "") or "",
+            year_published=None,
+            is_expansion=True,
+        ))
+
+    _annotate_already_in_db(get_supabase(), results)
     return results
 
 
