@@ -1,5 +1,5 @@
 // state.js — All global state variables
-let currentView = "auth";       // auth | browse | closet | game-detail | log-play | history | import | pending-guides | profile
+let currentView = "auth";       // auth | browse | closet | game-detail | log-play | history | play-detail | import | pending-guides | profile
 let session = null;             // Supabase auth session
 let currentUser = null;         // { user_id, display_name, is_admin }
 let supabaseClient = null;      // Supabase JS client
@@ -24,6 +24,7 @@ let chunkTypeCache = null;      // [{id,label,icon,display_order}] fetched once
 let currentExpansions = [];     // [{expansion_game_id, name, color, is_enabled, chunk_count, ...}]
 let allGuideChunks = [];        // cache of every linked-expansion chunk;
                                 // currentGuideChunks / hiddenChunks are derived
+let expansionsPanelCollapsed = false; // persists across recomputeGuideViews() re-renders
 
 // Closet (user collection) — all items loaded up front, paginated client-side.
 let shelfItems = { owned: [], played: [] };
@@ -78,6 +79,10 @@ let activeSession = null;          // plain object | null
 let sessionExpanded = false;       // bubble visible vs. collapsed into FAB
 let sessionDirty = false;          // true once the user has actually mutated the session
 let sessionShowingGuide = false;   // true when the session bubble is overlaid by the in-place guide
+let editingPlayId = null;          // when set, saveSession() does PUT /plays/{id} instead of POST
+// Expansion list cached for the current session's selected game when it
+// differs from `currentExpansions` (e.g. editing a play whose game isn't open).
+let sessionExpansions = [];        // [{expansion_game_id, name, color, ...}]
 
 // Quick Reference guide UI state — survives chunk re-renders so a search/filter
 // in progress isn't wiped by recomputeGuideViews().

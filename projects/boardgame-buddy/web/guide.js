@@ -436,6 +436,26 @@ function renderGuide() {
 // stamps is_expansion + base_game_bgg_id). Per-user toggle merges that
 // expansion's default chunks into the visible guide.
 
+// Strip the base game name + ":" prefix from an expansion's display name so
+// the panel reads "Inns & Cathedrals" instead of "Carcassonne: Inns &
+// Cathedrals". Case-insensitive; falls back to the raw name if no match.
+function stripBaseName(name, baseName) {
+  const base = (baseName || currentGame?.name || "").trim();
+  const raw = (name || "").trim();
+  if (!base || !raw) return raw;
+  const prefix = base.toLowerCase() + ":";
+  if (raw.toLowerCase().startsWith(prefix)) {
+    return raw.slice(base.length + 1).trim() || raw;
+  }
+  return raw;
+}
+
+function onExpansionsPanelCollapseToggle(checkboxChecked) {
+  // DaisyUI's collapse uses a checkbox: checked = open. Mirror that into
+  // our persisted state (true = collapsed).
+  expansionsPanelCollapsed = !checkboxChecked;
+}
+
 function renderExpansionsPanel() {
   const host = document.getElementById("expansions-panel");
   if (!host) return;
@@ -443,33 +463,40 @@ function renderExpansionsPanel() {
     host.innerHTML = "";
     return;
   }
+  const isOpen = !expansionsPanelCollapsed;
   host.innerHTML = `
-    <div class="expansions-panel">
-      <div class="expansions-panel__title">
+    <div class="collapse collapse-arrow bg-base-200 expansions-panel">
+      <input type="checkbox" ${isOpen ? "checked" : ""}
+             onchange="onExpansionsPanelCollapseToggle(this.checked)" />
+      <div class="collapse-title expansions-panel__title">
         <i data-lucide="puzzle" class="w-4 h-4"></i>
         <span>Expansions</span>
+        <span class="badge badge-sm badge-ghost ml-1">${currentExpansions.length}</span>
       </div>
-      <div class="expansions-panel__list">
-        ${currentExpansions.map(e => {
-          const color = e.color || "#6C63FF";
-          const enabled = !!e.is_enabled;
-          const interactive = !!session;
-          const disabled = interactive ? "" : "disabled";
-          return `
-            <label class="expansions-row">
-              <span class="expansion-dot expansion-dot--lg flex-shrink-0"
-                    style="background:${escapeAttr(color)}"></span>
-              <span class="expansions-row__name">${escapeAttr(e.name)}</span>
-              <span class="expansions-row__count">${e.chunk_count || 0} chunk${e.chunk_count === 1 ? "" : "s"}</span>
-              <input type="checkbox" class="toggle expansion-toggle"
-                     ${enabled ? "checked" : ""}
-                     ${disabled}
-                     onchange="toggleExpansion('${e.expansion_game_id}', this.checked)" />
-            </label>`;
-        }).join("")}
+      <div class="collapse-content">
+        <div class="expansions-panel__list">
+          ${currentExpansions.map(e => {
+            const color = e.color || "#6C63FF";
+            const enabled = !!e.is_enabled;
+            const interactive = !!session;
+            const disabled = interactive ? "" : "disabled";
+            const displayName = stripBaseName(e.name);
+            return `
+              <label class="expansions-row">
+                <span class="expansion-dot expansion-dot--lg flex-shrink-0"
+                      style="background:${escapeAttr(color)}"></span>
+                <span class="expansions-row__name">${escapeHtml(displayName)}</span>
+                <span class="expansions-row__count">${e.chunk_count || 0} chunk${e.chunk_count === 1 ? "" : "s"}</span>
+                <input type="checkbox" class="toggle expansion-toggle"
+                       ${enabled ? "checked" : ""}
+                       ${disabled}
+                       onchange="toggleExpansion('${e.expansion_game_id}', this.checked)" />
+              </label>`;
+          }).join("")}
+        </div>
+        ${session ? "" : `
+          <p class="text-xs text-base-content/50 mt-2">Sign in to toggle expansions.</p>`}
       </div>
-      ${session ? "" : `
-        <p class="text-xs text-base-content/50 mt-2">Sign in to toggle expansions.</p>`}
     </div>`;
   lucide.createIcons();
 }
@@ -507,7 +534,7 @@ function renderRulebooksSection() {
       <i data-lucide="file-text" class="w-5 h-5"
          style="color:${escapeAttr(e.color || "currentColor")}"></i>
       <div class="rulebook-card__text">
-        <div class="rulebook-card__title">${escapeHtml(e.name)}</div>
+        <div class="rulebook-card__title">${escapeHtml(stripBaseName(e.name))}</div>
         <div class="rulebook-card__sub">Open expansion rulebook</div>
       </div>
       <i data-lucide="external-link" class="w-4 h-4 opacity-60"></i>

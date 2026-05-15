@@ -1,8 +1,10 @@
 """Play logging and game buddies endpoints."""
 
+import logging
+import uuid
 from typing import Optional
 
-from fastapi import Depends, Path, Query, HTTPException
+from fastapi import Depends, Path, Query, HTTPException, UploadFile, File
 
 from db import get_supabase
 
@@ -13,19 +15,28 @@ from .models import (
     MessageResponse,
     PlayCountResponse,
     PlayCreate,
+    PlayExpansionRef,
     PlayFilterOption,
     PlayFilterOptions,
     PlayListResponse,
+    PlayPhotoResponse,
     PlayPlayerResponse,
     PlayResponse,
+    PlayUpdate,
 )
 from .dependencies import CurrentUser, get_current_user
 
+logger = logging.getLogger(__name__)
+
 _SELECT_PLAY = (
-    "id, user_id, game_id, played_at, notes, created_at, "
+    "id, user_id, game_id, played_at, notes, photo_url, created_at, "
     "boardgamebuddy_games(name, thumbnail_url), "
     "boardgamebuddy_profiles!user_id(display_name)"
 )
+
+PLAYS_BUCKET = "boardgamebuddy-plays"
+_ALLOWED_PHOTO_MIME = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+_MAX_PHOTO_BYTES = 5 * 1024 * 1024  # mirrors the bucket's file_size_limit
 
 
 def _build_play_response(
@@ -33,6 +44,7 @@ def _build_play_response(
     *,
     is_own: bool,
     players_by_play: dict[str, list[PlayPlayerResponse]],
+    expansions_by_play: dict[str, list[PlayExpansionRef]] | None = None,
 ) -> PlayResponse:
     game = play.get("boardgamebuddy_games") or {}
     logger_profile = play.get("boardgamebuddy_profiles") or {}
@@ -44,6 +56,8 @@ def _build_play_response(
         played_at=play["played_at"],
         notes=play.get("notes"),
         players=players_by_play.get(play["id"], []),
+        photo_url=play.get("photo_url"),
+        expansions=(expansions_by_play or {}).get(play["id"], []),
         created_at=play["created_at"],
         logged_by_id=play["user_id"],
         logged_by_name=logger_profile.get("display_name", "Unknown"),
@@ -57,7 +71,7 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
     if play_ids:
         pps = (
             sb.table("boardgamebuddy_play_players")
-            .select("play_id, buddy_id, is_winner, boardgamebuddy_buddies(name)")
+            .select("play_id, buddy_id, is_winner, score, boardgamebuddy_buddies(name)")
             .in_("play_id", play_ids)
             .execute()
         )
@@ -67,9 +81,106 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
                     buddy_id=row["buddy_id"],
                     name=(row.get("boardgamebuddy_buddies") or {}).get("name", "Unknown"),
                     is_winner=row.get("is_winner", False),
+                    score=row.get("score"),
                 )
             )
     return players_by_play
+
+
+def _fetch_play_expansions(
+    sb, play_ids: list[str]
+) -> dict[str, list[PlayExpansionRef]]:
+    """Bulk-fetch expansions used for a list of plays (no N+1)."""
+    out: dict[str, list[PlayExpansionRef]] = {pid: [] for pid in play_ids}
+    if not play_ids:
+        return out
+    rows = (
+        sb.table("boardgamebuddy_play_expansions")
+        .select(
+            "play_id, expansion_game_id, "
+            "boardgamebuddy_games(name, expansion_color)"
+        )
+        .in_("play_id", play_ids)
+        .execute()
+    )
+    for row in rows.data or []:
+        game = row.get("boardgamebuddy_games") or {}
+        out.setdefault(row["play_id"], []).append(
+            PlayExpansionRef(
+                expansion_game_id=row["expansion_game_id"],
+                name=game.get("name", "Unknown"),
+                color=game.get("expansion_color"),
+            )
+        )
+    return out
+
+
+def _upsert_buddy(sb, user_id: str, name: str) -> dict:
+    """Find or create a buddy row for (owner_id=user_id, name)."""
+    result = (
+        sb.table("boardgamebuddy_buddies")
+        .upsert(
+            {"owner_id": user_id, "name": name},
+            on_conflict="owner_id,name",
+        )
+        .execute()
+    )
+    return result.data[0]
+
+
+def _write_play_players(sb, play_id: str, user_id: str, players: list) -> list[PlayPlayerResponse]:
+    """Create buddy rows as needed and insert play_players for a single play."""
+    out: list[PlayPlayerResponse] = []
+    for p in players:
+        buddy = _upsert_buddy(sb, user_id, p.name)
+        sb.table("boardgamebuddy_play_players").insert({
+            "play_id": play_id,
+            "buddy_id": buddy["id"],
+            "is_winner": p.is_winner,
+            "score": p.score,
+        }).execute()
+        out.append(PlayPlayerResponse(
+            buddy_id=buddy["id"],
+            name=p.name,
+            is_winner=p.is_winner,
+            score=p.score,
+        ))
+    return out
+
+
+def _write_play_expansions(sb, play_id: str, expansion_ids: list[str]) -> None:
+    """Bulk-insert the expansion-game junction rows. Skips empties."""
+    rows = [
+        {"play_id": play_id, "expansion_game_id": eid}
+        for eid in expansion_ids
+        if eid
+    ]
+    if rows:
+        sb.table("boardgamebuddy_play_expansions").insert(rows).execute()
+
+
+async def _user_can_view_play(sb, user, play_row: dict) -> bool:
+    """Allow the play's owner or any linked-buddy participant to read it."""
+    if play_row["user_id"] == user.user_id:
+        return True
+    # Find buddies owned by this play's logger that link to the current user.
+    linked = (
+        sb.table("boardgamebuddy_buddies")
+        .select("id")
+        .eq("linked_user_id", user.user_id)
+        .execute()
+    )
+    buddy_ids = [b["id"] for b in linked.data or []]
+    if not buddy_ids:
+        return False
+    pp = (
+        sb.table("boardgamebuddy_play_players")
+        .select("play_id")
+        .eq("play_id", play_row["id"])
+        .in_("buddy_id", buddy_ids)
+        .execute()
+    )
+    return bool(pp.data)
 
 
 @router.get(
@@ -177,12 +288,18 @@ async def list_plays(
 
     page_ids = [t[0] for t in page_tuples]
     players_by_play = _fetch_players(sb, page_ids)
+    expansions_by_play = _fetch_play_expansions(sb, page_ids)
 
     result = []
     for play_id, _, _, _ in page_tuples:
         if play_id in rows_by_id:
             row, is_own = rows_by_id[play_id]
-            result.append(_build_play_response(row, is_own=is_own, players_by_play=players_by_play))
+            result.append(_build_play_response(
+                row,
+                is_own=is_own,
+                players_by_play=players_by_play,
+                expansions_by_play=expansions_by_play,
+            ))
     return PlayListResponse(plays=result, total=total, page=page, per_page=per_page)
 
 
@@ -261,37 +378,16 @@ async def log_play(
             "game_id": body.game_id,
             "played_at": body.played_at.isoformat(),
             "notes": body.notes,
+            "photo_url": body.photo_url,
         })
         .execute()
     )
     play = play_result.data[0]
 
-    # Create/find buddies and link to play
-    players: list[PlayPlayerResponse] = []
-    for p in body.players:
-        # Upsert buddy
-        buddy_result = (
-            sb.table("boardgamebuddy_buddies")
-            .upsert(
-                {"owner_id": user.user_id, "name": p.name},
-                on_conflict="owner_id,name",
-            )
-            .execute()
-        )
-        buddy = buddy_result.data[0]
+    players = _write_play_players(sb, play["id"], user.user_id, body.players)
+    _write_play_expansions(sb, play["id"], body.expansion_ids)
 
-        # Link player to play
-        sb.table("boardgamebuddy_play_players").insert({
-            "play_id": play["id"],
-            "buddy_id": buddy["id"],
-            "is_winner": p.is_winner,
-        }).execute()
-
-        players.append(PlayPlayerResponse(
-            buddy_id=buddy["id"],
-            name=p.name,
-            is_winner=p.is_winner,
-        ))
+    expansions = _fetch_play_expansions(sb, [play["id"]]).get(play["id"], [])
 
     return PlayResponse(
         id=play["id"],
@@ -301,11 +397,141 @@ async def log_play(
         played_at=play["played_at"],
         notes=play.get("notes"),
         players=players,
+        photo_url=play.get("photo_url"),
+        expansions=expansions,
         created_at=play["created_at"],
         logged_by_id=user.user_id,
         logged_by_name=user.display_name,
         is_own=True,
     )
+
+
+@router.get(
+    "/plays/{play_id}",
+    response_model=PlayResponse,
+    status_code=200,
+    summary="Get a single play",
+)
+async def get_play(
+    play_id: str = Path(..., description="Play UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayResponse:
+    """Return a single play with players, scores, expansions, and photo."""
+    sb = get_supabase()
+    res = (
+        sb.table("boardgamebuddy_plays")
+        .select(_SELECT_PLAY)
+        .eq("id", play_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Play not found")
+    row = res.data[0]
+    if not await _user_can_view_play(sb, user, row):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    players_by_play = _fetch_players(sb, [play_id])
+    expansions_by_play = _fetch_play_expansions(sb, [play_id])
+    return _build_play_response(
+        row,
+        is_own=row["user_id"] == user.user_id,
+        players_by_play=players_by_play,
+        expansions_by_play=expansions_by_play,
+    )
+
+
+@router.put(
+    "/plays/{play_id}",
+    response_model=PlayResponse,
+    status_code=200,
+    summary="Update a play",
+)
+async def update_play(
+    body: PlayUpdate,
+    play_id: str = Path(..., description="Play UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayResponse:
+    """Replace a play's top-level fields and its players/expansions lists (owner only)."""
+    sb = get_supabase()
+
+    existing = (
+        sb.table("boardgamebuddy_plays")
+        .select("id, user_id, game_id")
+        .eq("id", play_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Play not found")
+    if existing.data[0]["user_id"] != user.user_id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    # Update the top-level row.
+    sb.table("boardgamebuddy_plays").update({
+        "played_at": body.played_at.isoformat(),
+        "notes": body.notes,
+        "photo_url": body.photo_url,
+    }).eq("id", play_id).execute()
+
+    # Full-replace the nested lists.
+    sb.table("boardgamebuddy_play_players").delete().eq("play_id", play_id).execute()
+    sb.table("boardgamebuddy_play_expansions").delete().eq("play_id", play_id).execute()
+    _write_play_players(sb, play_id, user.user_id, body.players)
+    _write_play_expansions(sb, play_id, body.expansion_ids)
+
+    res = (
+        sb.table("boardgamebuddy_plays")
+        .select(_SELECT_PLAY)
+        .eq("id", play_id)
+        .execute()
+    )
+    row = res.data[0]
+    players_by_play = _fetch_players(sb, [play_id])
+    expansions_by_play = _fetch_play_expansions(sb, [play_id])
+    return _build_play_response(
+        row,
+        is_own=True,
+        players_by_play=players_by_play,
+        expansions_by_play=expansions_by_play,
+    )
+
+
+@router.post(
+    "/plays/photo",
+    response_model=PlayPhotoResponse,
+    status_code=201,
+    summary="Upload a play photo",
+)
+async def upload_play_photo(
+    file: UploadFile = File(..., description="Image file (jpg/png/webp/gif, ≤5 MiB)"),
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayPhotoResponse:
+    """Upload a single image to the play-photos bucket and return its public URL."""
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type not in _ALLOWED_PHOTO_MIME:
+        raise HTTPException(status_code=400, detail="Unsupported image type")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > _MAX_PHOTO_BYTES:
+        raise HTTPException(status_code=413, detail="Image exceeds 5 MiB limit")
+
+    ext = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "image/gif": "gif",
+    }.get(content_type, "jpg")
+    path = f"{user.user_id}/{uuid.uuid4().hex}.{ext}"
+
+    sb = get_supabase()
+    try:
+        sb.storage.from_(PLAYS_BUCKET).upload(
+            path, data, {"content-type": content_type, "upsert": "true"}
+        )
+    except Exception as exc:  # storage SDK raises a custom exception type
+        logger.warning("Play photo upload failed %s: %s", path, exc)
+        raise HTTPException(status_code=502, detail="Upload failed")
+    return PlayPhotoResponse(photo_url=sb.storage.from_(PLAYS_BUCKET).get_public_url(path))
 
 
 @router.delete(
@@ -377,9 +603,15 @@ async def get_game_plays(
 
     play_ids = [r["id"] for r in rows.data or []]
     players_by_play = _fetch_players(sb, play_ids)
+    expansions_by_play = _fetch_play_expansions(sb, play_ids)
 
     return [
-        _build_play_response(r, is_own=True, players_by_play=players_by_play)
+        _build_play_response(
+            r,
+            is_own=True,
+            players_by_play=players_by_play,
+            expansions_by_play=expansions_by_play,
+        )
         for r in rows.data or []
     ]
 

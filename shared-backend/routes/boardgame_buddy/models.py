@@ -113,6 +113,10 @@ class GameDetail(GameSummary):
     categories: list[str] = []
     mechanics: list[str] = []
     created_at: datetime
+    # Populated on expansion rows so the FE can render a "Back to <base>" link
+    # without a second lookup. Resolved via base_game_bgg_id at read time.
+    base_game_id: Optional[str] = None
+    base_game_name: Optional[str] = None
 
 
 class GameListResponse(BaseModel):
@@ -174,6 +178,13 @@ class CollectionPageResponse(BaseModel):
 class PlayerEntry(BaseModel):
     name: str
     is_winner: bool = False
+    score: Optional[int] = None
+
+
+class PlayExpansionRef(BaseModel):
+    expansion_game_id: str
+    name: str
+    color: Optional[str] = None
 
 
 class PlayCreate(BaseModel):
@@ -181,12 +192,29 @@ class PlayCreate(BaseModel):
     played_at: date
     players: list[PlayerEntry] = []
     notes: Optional[str] = None
+    photo_url: Optional[str] = None
+    expansion_ids: list[str] = []
+
+
+class PlayUpdate(BaseModel):
+    # Full replacement of the play. Mirrors PlayCreate but game_id can't change
+    # — pivoting a play to a different game would orphan the per-player scores.
+    played_at: date
+    players: list[PlayerEntry] = []
+    notes: Optional[str] = None
+    photo_url: Optional[str] = None
+    expansion_ids: list[str] = []
+
+
+class PlayPhotoResponse(BaseModel):
+    photo_url: str
 
 
 class PlayPlayerResponse(BaseModel):
     buddy_id: str
     name: str
     is_winner: bool
+    score: Optional[int] = None
 
 
 class PlayResponse(BaseModel):
@@ -197,6 +225,8 @@ class PlayResponse(BaseModel):
     played_at: date
     notes: Optional[str] = None
     players: list[PlayPlayerResponse] = []
+    photo_url: Optional[str] = None
+    expansions: list[PlayExpansionRef] = []
     created_at: datetime
     # Logger metadata — lets the FE distinguish own logs from shared plays
     # (where the current user appears via a linked buddy).

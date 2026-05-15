@@ -88,6 +88,12 @@ function renderGameDetail() {
 
     <!-- Game info -->
     <div class="mb-4">
+      ${g.is_expansion && g.base_game_id ? `
+        <a class="link link-hover text-xs inline-flex items-center gap-1 mb-1 text-base-content/60"
+           onclick="event.preventDefault(); openGameDetail('${g.base_game_id}')" href="#">
+          <i data-lucide="arrow-left" class="w-3 h-3"></i>
+          Back to ${escapeHtml(g.base_game_name || 'base game')}
+        </a>` : ""}
       <h1 class="text-2xl font-bold">${g.name}</h1>
       ${g.year_published ? `<span class="text-base-content/50 text-sm">(${g.year_published})</span>` : ""}
 
