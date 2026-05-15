@@ -3,6 +3,7 @@
 from typing import Optional
 
 from fastapi import Depends, Path, Query, HTTPException
+from supabase import Client
 
 from db import get_supabase
 
@@ -55,20 +56,8 @@ async def get_collection(
 
     result = query.execute()
 
-    plays_result = (
-        sb.table("boardgamebuddy_plays")
-        .select("game_id, played_at")
-        .eq("user_id", user.user_id)
-        .order("played_at", desc=True)
-        .execute()
-    )
-    last_played_by_game: dict[str, str] = {}
-    play_counts: dict[str, int] = {}
-    for play in plays_result.data or []:
-        gid = play["game_id"]
-        play_counts[gid] = play_counts.get(gid, 0) + 1
-        if gid not in last_played_by_game:
-            last_played_by_game[gid] = play["played_at"]
+    plays_data = _plays_visible_to_user(sb, user.user_id)
+    last_played_by_game, play_counts = _index_plays(plays_data)
 
     items: list[CollectionItem] = []
     owned_game_ids: set[str] = set()
@@ -116,6 +105,55 @@ async def get_collection(
                 ))
 
     return items
+
+
+def _plays_visible_to_user(sb: Client, user_id: str) -> list[dict]:
+    """All plays the user has been part of: ones they logged themselves
+    plus ones a friend logged where a buddy linked to this user was a
+    participant. Mirrors the visibility rule the play log uses (see
+    list_plays in play_routes.py) so a play that shows up in History
+    also drives the Played shelf in the Closet.
+
+    Returns rows projected as {id, game_id, played_at}, newest first.
+    """
+    own = (
+        sb.table("boardgamebuddy_plays")
+        .select("id, game_id, played_at")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    own_rows = own.data or []
+
+    linked = (
+        sb.table("boardgamebuddy_buddies")
+        .select("id")
+        .eq("linked_user_id", user_id)
+        .execute()
+    )
+    buddy_ids = [b["id"] for b in linked.data or []]
+
+    shared_rows: list[dict] = []
+    if buddy_ids:
+        own_ids = {r["id"] for r in own_rows}
+        shared_pp = (
+            sb.table("boardgamebuddy_play_players")
+            .select("play_id")
+            .in_("buddy_id", buddy_ids)
+            .execute()
+        )
+        shared_play_ids = {r["play_id"] for r in shared_pp.data or []} - own_ids
+        if shared_play_ids:
+            shared = (
+                sb.table("boardgamebuddy_plays")
+                .select("id, game_id, played_at")
+                .in_("id", list(shared_play_ids))
+                .execute()
+            )
+            shared_rows = shared.data or []
+
+    merged = own_rows + shared_rows
+    merged.sort(key=lambda r: r.get("played_at") or "", reverse=True)
+    return merged
 
 
 def _index_plays(plays: list[dict]) -> tuple[dict[str, str], dict[str, int]]:
@@ -223,14 +261,9 @@ async def get_collection_shelf(
     sb = get_supabase()
     offset = (page - 1) * per_page
 
-    plays_result = (
-        sb.table("boardgamebuddy_plays")
-        .select("game_id, played_at")
-        .eq("user_id", user.user_id)
-        .order("played_at", desc=True)
-        .execute()
+    last_played_by_game, play_counts = _index_plays(
+        _plays_visible_to_user(sb, user.user_id)
     )
-    last_played_by_game, play_counts = _index_plays(plays_result.data or [])
 
     if status == CollectionStatus.PLAYED:
         owned = (
