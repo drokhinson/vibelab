@@ -257,7 +257,7 @@ function hasClosetActiveFilter() {
 
 const CLOSET_PLAY_MODE_OPTIONS = [
   { value: "competitive", label: "Competitive" },
-  { value: "coop",        label: "Co-op" },
+  { value: "coop",        label: "Cooperative" },
   { value: "team",        label: "Teams" },
 ];
 

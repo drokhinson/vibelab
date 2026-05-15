@@ -128,6 +128,11 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   bgg_play_id BIGINT,
   -- Optional photo URL into the boardgamebuddy-plays storage bucket (005).
   photo_url TEXT,
+  -- Per-play scoring style (migration 007). Defaults to the game's
+  -- play_mode on insert via the FE; the user can override per session
+  -- (e.g. play a normally-competitive game in team mode for fun).
+  play_mode TEXT NOT NULL DEFAULT 'competitive'
+    CHECK (play_mode IN ('competitive', 'coop', 'team')),
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;

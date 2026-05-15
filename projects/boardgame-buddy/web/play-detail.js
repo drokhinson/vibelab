@@ -58,6 +58,9 @@ function renderPlayDetail(p) {
             <a class="link link-hover" onclick="openGameDetail('${p.game_id}')">${escapeHtml(p.game_name)}</a>
           </h3>
           <p class="text-xs text-base-content/60">${formatDate(p.played_at)}</p>
+          <p class="text-xs text-base-content/60 mt-0.5">
+            <span class="badge badge-sm badge-outline">${playModeLabel(p.play_mode || 'competitive')}</span>
+          </p>
           ${p.is_own ? "" : `<p class="text-xs text-base-content/50 mt-0.5">logged by ${escapeHtml(p.logged_by_name)}</p>`}
         </div>
       </div>

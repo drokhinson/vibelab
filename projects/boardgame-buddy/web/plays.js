@@ -236,6 +236,7 @@ function renderPlays() {
                 <div class="flex items-center gap-2 flex-wrap mt-1 text-xs">
                   ${winnerLabel ? `<span class="inline-flex items-center gap-1 text-warning"><i data-lucide="trophy" class="w-3 h-3"></i>${winnerLabel}</span>` : ""}
                   ${playerCount ? `<span class="inline-flex items-center gap-1 text-base-content/60"><i data-lucide="users" class="w-3 h-3"></i>${playerCount} ${playerCount === 1 ? "player" : "players"}</span>` : ""}
+                  ${p.play_mode && p.play_mode !== "competitive" ? `<span class="badge badge-sm badge-outline">${playModeLabel(p.play_mode)}</span>` : ""}
                 </div>
               </div>
             </div>

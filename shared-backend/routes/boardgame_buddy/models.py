@@ -196,6 +196,9 @@ class PlayCreate(BaseModel):
     notes: Optional[str] = None
     photo_url: Optional[str] = None
     expansion_ids: list[str] = []
+    # Optional per-play scoring style override (migration 007). When None,
+    # the play inherits the game's stored play_mode at insert time.
+    play_mode: Optional[PlayMode] = None
 
 
 class PlayUpdate(BaseModel):
@@ -206,6 +209,7 @@ class PlayUpdate(BaseModel):
     notes: Optional[str] = None
     photo_url: Optional[str] = None
     expansion_ids: list[str] = []
+    play_mode: Optional[PlayMode] = None
 
 
 class PlayPhotoResponse(BaseModel):
@@ -230,6 +234,9 @@ class PlayResponse(BaseModel):
     photo_url: Optional[str] = None
     expansions: list[PlayExpansionRef] = []
     created_at: datetime
+    # Resolved scoring style for this play. Set from PlayCreate.play_mode if
+    # provided, else inherited from the game at insert time. Always populated.
+    play_mode: PlayMode = PlayMode.COMPETITIVE
     # Logger metadata — lets the FE distinguish own logs from shared plays
     # (where the current user appears via a linked buddy).
     logged_by_id: str

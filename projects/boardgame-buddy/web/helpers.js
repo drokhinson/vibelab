@@ -73,6 +73,17 @@ function formatTime(minutes) {
   return m ? `${h}h${m}m` : `${h}h`;
 }
 
+// User-facing label for a stored play_mode value. Used by browse, closet,
+// game-detail, play log, play-detail, and the session bubble — keep one map.
+const PLAY_MODE_LABEL = {
+  competitive: "Competitive",
+  coop:        "Cooperative",
+  team:        "Teams",
+};
+function playModeLabel(mode) {
+  return PLAY_MODE_LABEL[mode] || PLAY_MODE_LABEL.competitive;
+}
+
 function formatRating(rating) {
   if (!rating) return "N/A";
   return Number(rating).toFixed(1);
