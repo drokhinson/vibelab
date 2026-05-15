@@ -130,8 +130,11 @@ function _filterDropdownList(input, listId) {
 }
 
 function _toggleDropdown(panelId) {
-  // Close all other dropdowns first
-  document.querySelectorAll("[id$='-panel']").forEach(p => {
+  // Close all other dropdowns first. Scoped to the two plays-filter panels —
+  // a broad [id$='-panel'] selector here also matched #session-panel and
+  // re-hid the session bubble whenever the play log dropdowns were on screen.
+  const PLAYS_DROPDOWN_PANELS = "#plays-game-dropdown-panel, #plays-buddy-dropdown-panel";
+  document.querySelectorAll(PLAYS_DROPDOWN_PANELS).forEach(p => {
     if (p.id !== panelId) p.classList.add("hidden");
   });
   document.getElementById(panelId)?.classList.toggle("hidden");
@@ -140,7 +143,9 @@ function _toggleDropdown(panelId) {
 
 function _closePlaysDropdowns(e) {
   if (!e.target.closest("#plays-game-dropdown") && !e.target.closest("#plays-buddy-dropdown")) {
-    document.querySelectorAll("[id$='-panel']").forEach(p => p.classList.add("hidden"));
+    document
+      .querySelectorAll("#plays-game-dropdown-panel, #plays-buddy-dropdown-panel")
+      .forEach(p => p.classList.add("hidden"));
   }
 }
 
@@ -206,46 +211,38 @@ function renderPlays() {
 
   container.innerHTML = `
     <div class="space-y-3">
-      ${plays.map((p, i) => `
+      ${plays.map((p, i) => {
+        const winners = (p.players || []).filter(pl => pl.is_winner);
+        const winnerLabel = winners.length === 0
+          ? ""
+          : winners.length === 1
+            ? escapeHtml(winners[0].name)
+            : `${winners.length} winners`;
+        const playerCount = (p.players || []).length;
+        return `
         <div class="card bg-base-200 animate-fadeUp play-card ${p.is_own ? "" : "opacity-90 border border-base-300"}"
              style="--i:${i}" onclick="openPlayDetail('${p.id}')">
           <div class="card-body p-3">
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               ${p.game_thumbnail
                 ? `<img src="${p.game_thumbnail}" class="w-12 h-12 rounded object-cover flex-shrink-0 cursor-pointer" onclick="event.stopPropagation(); openGameDetail('${p.game_id}')" />`
                 : `<div class="w-12 h-12 rounded bg-base-300 flex items-center justify-center flex-shrink-0 cursor-pointer" onclick="event.stopPropagation(); openGameDetail('${p.game_id}')"><i data-lucide="dice-6" class="w-6 h-6 opacity-40"></i></div>`
               }
               <div class="flex-1 min-w-0">
-                <h3 class="font-semibold text-sm leading-tight">
+                <h3 class="font-semibold text-sm leading-tight truncate">
                   <a class="link link-hover" onclick="event.stopPropagation(); openGameDetail('${p.game_id}')">${escapeHtml(p.game_name)}</a>
                 </h3>
-                <div class="flex items-center gap-2 flex-wrap mt-0.5">
-                  <p class="text-xs text-base-content/50">${formatDate(p.played_at)}</p>
-                  ${p.photo_url ? `<span class="badge badge-ghost badge-xs gap-1"><i data-lucide="image" class="w-3 h-3"></i>photo</span>` : ""}
-                  ${p.expansions?.length ? `<span class="badge badge-ghost badge-xs gap-1"><i data-lucide="puzzle" class="w-3 h-3"></i>${p.expansions.length}</span>` : ""}
-                  ${p.is_own ? "" : `
-                    <span class="badge badge-ghost badge-xs gap-1">
-                      <i data-lucide="user" class="w-3 h-3"></i> logged by ${escapeHtml(p.logged_by_name)}
-                    </span>`}
+                <p class="text-xs text-base-content/50">${formatDate(p.played_at)}</p>
+                <div class="flex items-center gap-2 flex-wrap mt-1 text-xs">
+                  ${winnerLabel ? `<span class="inline-flex items-center gap-1 text-warning"><i data-lucide="trophy" class="w-3 h-3"></i>${winnerLabel}</span>` : ""}
+                  ${playerCount ? `<span class="inline-flex items-center gap-1 text-base-content/60"><i data-lucide="users" class="w-3 h-3"></i>${playerCount} ${playerCount === 1 ? "player" : "players"}</span>` : ""}
                 </div>
-                ${p.players.length ? `
-                  <div class="flex flex-wrap gap-1 mt-1.5">
-                    ${p.players.map(pl => `
-                      <span class="badge badge-sm ${pl.is_winner ? 'badge-warning' : 'badge-ghost'}">
-                        ${pl.is_winner ? '<i data-lucide="trophy" class="w-3 h-3 inline mr-0.5"></i>' : ''}${escapeHtml(pl.name)}${pl.score != null ? ` <span class="opacity-70 ml-0.5">${pl.score}</span>` : ""}
-                      </span>
-                    `).join("")}
-                  </div>` : ""}
-                ${p.notes ? `<p class="text-xs text-base-content/60 mt-1 italic line-clamp-2">${escapeHtml(p.notes)}</p>` : ""}
               </div>
-              ${p.is_own ? `
-                <button class="btn btn-ghost btn-xs flex-shrink-0" onclick="event.stopPropagation(); deletePlay('${p.id}')">
-                  <i data-lucide="trash-2" class="w-3 h-3"></i>
-                </button>` : ""}
             </div>
           </div>
         </div>
-      `).join("")}
+        `;
+      }).join("")}
     </div>
 
     ${totalPages > 1 ? `
@@ -269,17 +266,4 @@ function _clearPlaysFilters() {
   playsPage = 1;
   _rebuildPlaysFilterRow();
   fetchPlays();
-}
-
-async function deletePlay(playId) {
-  if (!confirm("Delete this play?")) return;
-  try {
-    await apiFetch(`/plays/${playId}`, { method: "DELETE" });
-    showToast("Play deleted", "info");
-    // Re-fetch to keep pagination totals accurate
-    if (plays.length === 1 && playsPage > 1) playsPage--;
-    fetchPlays();
-  } catch (err) {
-    showToast(err.message, "error");
-  }
 }

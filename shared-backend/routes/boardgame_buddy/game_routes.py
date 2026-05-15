@@ -119,6 +119,7 @@ async def list_games(
     playtime_max: Optional[int] = Query(None, ge=1, description="Max playing time in minutes (inclusive)"),
     mechanics: Optional[list[str]] = Query(None, description="Required mechanics (AND logic)"),
     owned_only: bool = Query(False, description="Only games in the caller's owned collection (requires auth; ignored otherwise)"),
+    exclude_expansions: bool = Query(False, description="Hide expansion rows; only base games appear in results"),
     authorization: Optional[str] = Header(None),
 ) -> GameListResponse:
     """List games from the catalog, with optional search and filters."""
@@ -164,6 +165,8 @@ async def list_games(
         query = query.lte("playing_time", playtime_max)
     if mechanics:
         query = query.contains("mechanics", mechanics)
+    if exclude_expansions:
+        query = query.eq("is_expansion", False)
 
     query = query.order("created_at", desc=True)
     result = query.range(offset, offset + per_page - 1).execute()

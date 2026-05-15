@@ -135,9 +135,13 @@ function openSession({ gameId, gameName, gameThumb, playId } = {}) {
   }
 
   sessionExpanded = true;
+  _showSessionOverlay();
+  renderSessionPanel();
+}
+
+function _showSessionOverlay() {
   document.getElementById("session-backdrop").classList.remove("hidden");
   document.getElementById("session-panel").classList.remove("hidden");
-  renderSessionPanel();
 }
 
 // Hydrate the bubble from an existing play row for editing. Networking lives
@@ -150,9 +154,8 @@ async function openSessionFromPlay(playId) {
     }
   }
   sessionExpanded = true;
-  document.getElementById("session-backdrop").classList.remove("hidden");
+  _showSessionOverlay();
   const panel = document.getElementById("session-panel");
-  panel.classList.remove("hidden");
   panel.innerHTML = `<div class="flex justify-center py-12">${buddyLoader('lg')}</div>`;
   try {
     const play = await apiFetch(`/plays/${playId}`);
@@ -208,11 +211,15 @@ async function preloadSessionExpansions(gameId) {
   }
 }
 
+function _hideSessionOverlay() {
+  document.getElementById("session-backdrop").classList.add("hidden");
+  document.getElementById("session-panel").classList.add("hidden");
+}
+
 function minimizeSession() {
   sessionExpanded = false;
   sessionShowingGuide = false;            // back to scoreboard on reopen
-  document.getElementById("session-backdrop").classList.add("hidden");
-  document.getElementById("session-panel").classList.add("hidden");
+  _hideSessionOverlay();
   // If the user opened the bubble but never made a real change, drop the
   // in-memory session so closing leaves no trace.
   if (!sessionDirty && activeSession) {
@@ -736,8 +743,7 @@ async function saveSession() {
     sessionExpanded = false;
     editingPlayId = null;
     sessionExpansions = [];
-    document.getElementById("session-backdrop").classList.add("hidden");
-    document.getElementById("session-panel").classList.add("hidden");
+    _hideSessionOverlay();
     refreshSessionFab();
     if (currentView === "history") loadPlays();
     if (justEditedId && currentView === "play-detail") {
@@ -760,8 +766,7 @@ async function discardSession() {
   sessionExpanded = false;
   editingPlayId = null;
   sessionExpansions = [];
-  document.getElementById("session-backdrop").classList.add("hidden");
-  document.getElementById("session-panel").classList.add("hidden");
+  _hideSessionOverlay();
   refreshSessionFab();
 }
 
@@ -885,7 +890,7 @@ async function searchSessionGame(q) {
   }
   sessionGameSearchTimer = setTimeout(async () => {
     try {
-      const data = await apiFetch(`/games?search=${encodeURIComponent(q)}&per_page=5`);
+      const data = await apiFetch(`/games?search=${encodeURIComponent(q)}&per_page=5&exclude_expansions=true`);
       const out = document.getElementById("session-game-results");
       // Use data-attributes (safe under any name with quotes/HTML) + delegated click.
       out.innerHTML = data.games.map(g => `

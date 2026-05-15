@@ -28,9 +28,12 @@ from .dependencies import CurrentUser, get_current_user
 
 logger = logging.getLogger(__name__)
 
+# FK hint required: once boardgamebuddy_play_expansions exists, PostgREST sees
+# two relationships between plays and games (direct game_id FK + via the
+# junction) and refuses to auto-pick — so we name the FK explicitly.
 _SELECT_PLAY = (
     "id, user_id, game_id, played_at, notes, photo_url, created_at, "
-    "boardgamebuddy_games(name, thumbnail_url), "
+    "boardgamebuddy_games!boardgamebuddy_plays_game_id_fkey(name, thumbnail_url), "
     "boardgamebuddy_profiles!user_id(display_name)"
 )
 
@@ -317,7 +320,10 @@ async def get_play_filter_options(
 
     games_q = (
         sb.table("boardgamebuddy_plays")
-        .select("game_id, boardgamebuddy_games(name)")
+        .select(
+            "game_id, "
+            "boardgamebuddy_games!boardgamebuddy_plays_game_id_fkey(name)"
+        )
         .eq("user_id", user.user_id)
         .execute()
     )
