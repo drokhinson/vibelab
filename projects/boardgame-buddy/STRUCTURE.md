@@ -1,10 +1,10 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-04-26 (migration 044)
+> Last updated: 2026-05-16 (OOP / Strava redesign — migrations 008..012, frontend rewrite)
 
 ## What It Does
-A board game collection manager. Users browse the top 1000 BoardGameGeek-ranked games, build their closet (owned / played / wishlist), log game sessions with friends, and access quick-reference guides (setup reminders, turn summaries, rulebook links).
+A Strava-style log for board game plays. The home view is a chronological feed of plays from the user and their accepted buddies, interspersed with "hot games this week", suggested buddies, and dormant games from the user's own collection. Logging a play supports a short-code "join from another phone" flow so the host's device opens a session code that other phones join to add themselves to the player list. Profiles are fully public and show a Strava-style stats strip + collection grid. The quick-reference guide system (chunks, hide/reorder, custom layouts) is preserved in the database and the admin tooling, but is hidden from the user-facing app for now — game detail surfaces the official `rulebook_url` instead.
 
 ## Status
 Prototype
@@ -200,8 +200,25 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/plays` — own plays plus shared plays (where the current user is a linked buddy). Each play includes `is_own`, `logged_by_id`, `logged_by_name`.
 - `POST /api/v1/boardgame_buddy/plays`
 - `DELETE /api/v1/boardgame_buddy/plays/{play_id}` — only the original logger can delete
-- `GET /api/v1/boardgame_buddy/buddies` — alphabetical list with `linked_display_name` and `play_count`
-- `POST /api/v1/boardgame_buddy/buddies/{buddy_id}/link` — body `{user_id}`; one-way link, merges any of the owner's other buddies that already linked to (or have the display name of) the target
+- `GET /api/v1/boardgame_buddy/buddies` — accepted mutual edges only (mutual graph, migration 008). Returns `BuddyEdgeResponse[]`
+- `GET /api/v1/boardgame_buddy/buddies/requests` — pending requests in both directions: `{incoming[], outgoing[]}`
+- `POST /api/v1/boardgame_buddy/buddies/request` — body `{target_user_id}`; auto-accepts if a reverse request exists
+- `POST /api/v1/boardgame_buddy/buddies/{request_id}/accept` — accept incoming request
+- `POST /api/v1/boardgame_buddy/buddies/{request_id}/reject` — delete a pending request
+- `DELETE /api/v1/boardgame_buddy/buddies/{edge_id}` — unfriend (either party can call)
+- `GET /api/v1/boardgame_buddy/feed?cursor=&limit=20` — Strava-style mixed feed (plays + hot games + suggested buddies + featured-from-collection). Cursor-paginated via `created_at`.
+- `GET /api/v1/boardgame_buddy/hot-games?window_days=7` — most-played games in window
+- `GET /api/v1/boardgame_buddy/suggestions/buddies` — friends-of-friends candidates
+- `GET /api/v1/boardgame_buddy/suggestions/featured-from-collection` — dormant owned games
+- `GET /api/v1/boardgame_buddy/users/me/stats` — Strava-style aggregate stats for the current user
+- `GET /api/v1/boardgame_buddy/users/{user_id}/stats` — same shape for any user (profiles are public)
+- `GET /api/v1/boardgame_buddy/users/{user_id}/profile` — public profile + buddy-relation flags
+- `GET /api/v1/boardgame_buddy/search?q=&include_bgg=false` — unified game search (collection → DB; BGG only when `include_bgg=true`)
+- `POST /api/v1/boardgame_buddy/sessions` — open a short-code play session (body `{game_id?}`)
+- `GET /api/v1/boardgame_buddy/sessions/{code}` — poll target for the lobby
+- `POST /api/v1/boardgame_buddy/sessions/{code}/join` — join a session by code
+- `DELETE /api/v1/boardgame_buddy/sessions/{code}` — host abandons a session
+- `POST /api/v1/boardgame_buddy/sessions/{code}/finalize` — write a play row from the session
 - `POST /api/v1/boardgame_buddy/bgg/link` — body `{username, password}`; logs into BGG via `POST /login/api/v1`, stores the username + Fernet-encrypted password (`BGG_CREDENTIAL_KEY`) and the returned SessionID/bggusername/bggpassword cookies on the profile. A successful login is also our existence check (BGG returns 401 for both bad passwords and unknown handles, surfaced as a 400 to the client). Returns `{bgg_username}`.
 - `DELETE /api/v1/boardgame_buddy/bgg/link` — clear `bgg_username` plus all stored credentials/cookies. Already-imported collection/plays remain in place.
 - `POST /api/v1/boardgame_buddy/bgg/sync` — pull collection (`own=1`, `wishlist=1`, `wanttoplay=1`, `showprivate=1`) and plays (paginated) from BGG. Per-user calls go through `fetch_bgg_as_user`, which sends the stored cookies so BGG evaluates the request AS the linked user — that's what unlocks the `<privateinfo>` block (purchase price, private comment, acquisition date, …) which we mirror onto `boardgamebuddy_collections.bgg_*` columns. BGG `own→owned`; `wishlist` and `wanttoplay` both map to `'wishlist'`. Games we already have are written immediately (collections upsert on `(user_id, game_id)`; plays dedup on `(user_id, bgg_play_id)`). Games we don't have go into `boardgamebuddy_bgg_pending_imports` (the `payload.private` carries the private fields through to materialization) and a `BackgroundTasks` worker drains the queue (~1.5s between BGG calls). Returns `{bgg_username, collection_imported, collection_pending, plays_imported, plays_pending}`. Players from BGG plays are upserted as buddies on `(owner_id, name)` using the same path as `POST /plays`. If the stored password no longer works, returns 409 — the FE surfaces a "re-link required" banner.
@@ -262,15 +279,20 @@ When the bundle's `game.is_expansion` is true, the import flow stamps `is_expans
 - Promote via **Profile** screen → "Become admin" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the admin-only controls (direct imports and pending-review list) inside the **Import** screen.
 
 ## Screen Flow
-Bottom nav has three tabs: **Browse**, **Closet**, **Play Log**.
+Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
 
-1. Auth (login/signup) → 2. **Closet** (home): list view of Owned/Played (toggleable to shelf/book-spine view), plus a Wishlist tab. In-closet search filters your games. → 3. Tap a row/spine → Game detail (themed, with Log Play + guide).
-4. **Browse** tab: list of available games (BGG top 1000 + search). "Import games" button opens the Import screen.
-5. **Play Log** tab: history of plays. The global floating "+" button (visible on every authed view) opens a live **session bubble** with game + players + per-round score grid + notes. The bubble can be minimized back into the FAB while the session stays alive in browser memory, so the user can flip to the Quick Reference guide for the game and come back. Reloading the page discards any in-progress session — only the explicit Save action writes to the database. On Save, the winner is computed (highest total, or manual override) and persisted to `boardgamebuddy_play_players`; per-round scores are not stored.
-6. **Import** screen: *Import from BoardGameGeek* (live BGG API search + add), *Import from file* (upload a GuideBundle JSON — admins import directly, others queue for review), *Review pending additions* (admin only), *Download Guide Builder instructions* (downloads `guide-from-rulebook.md` so users can feed the prompt into their own AI).
-7. **Profile** (click username in header): two tabs.
-   - **Account:** display name, email, become-admin, delete account.
-   - **Buddies:** alphabetical list of everyone you've played with and how many games. A free-text buddy has a "Link" button that opens a search-by-display-name modal (with email shown for tiebreaking) — picking a result one-way links the buddy to that BoardgameBuddy account, merges any other buddies of yours that point to the same person, and from then on those plays appear in the linked user's own Play Log (read-only, badged "logged by …"). Future: link BGG account.
+1. Auth (login/signup) → splash → 2. **Feed** (home): chronological mix of plays from the viewer and their accepted buddies, plus inline "hot this week" / "buddies you may know" / "time to revisit" rails. A search pill at the top opens the **Game Search** screen.
+3. **Log a play**: pick a game (Game Search → Game Detail → Log Play, or directly from the Log tab), add players (buddies via autocomplete, free-text otherwise), and Save. Three modes are surfaced as tabs at the top of the Log Play view:
+   - **Solo log** — host fills the form alone.
+   - **Host a session** — open a 5-char code; other phones POST `/sessions/{code}/join` to add themselves; the host polls `/sessions/{code}` every 2s and the participant list streams into the player list. Save calls `/sessions/{code}/finalize` which writes a single play.
+   - **Join by code** — enter a host's code to add yourself to their session.
+   The draft auto-persists to localStorage (metadata only); the photo blob stays in memory.
+4. **Game Search** (search pill on Feed/Profile): single ranked list — collection hits first, then DB matches. A "Search BoardGameGeek for more" button appends BGG hits on demand.
+5. **Game Detail** (tap any game card): box art hero, status toggle (none → owned → wishlist → none), Log a Play button, BGG + Rulebook links, recent plays for the game. Quick-reference guides are intentionally hidden in the user-facing app for now; admins can still curate them through the Admin view.
+6. **Profile** (own): Strava-style stats strip (plays / games / wins / hours), collection grid, recent plays. Admin users get an "Admin tools" link to `/admin`.
+7. **Profile (other user)**: fully public — same stats strip + collection grid for any account. The header surfaces buddy-state ("Add buddy" / "Accept request" / "Request sent" / "Buddies").
+8. **Buddies**: accepted mutual edges, plus incoming and outgoing pending requests. Search-by-display-name to send a new request.
+9. **Admin tools**: import games, review pending guides, refresh missing images. (Reachable only when `is_admin=true`.)
 
 ## Environment Variables
 | Variable | Where | Purpose |
