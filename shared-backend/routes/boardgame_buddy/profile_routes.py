@@ -1,7 +1,5 @@
 """User profile endpoints."""
 
-from typing import Optional
-
 from fastapi import Depends, HTTPException, Query
 
 from auth import ADMIN_API_KEY
@@ -46,24 +44,24 @@ async def get_profile(
 @router.post(
     "/profile",
     response_model=ProfileResponse,
-    status_code=201,
-    summary="Create or update profile",
+    status_code=200,
+    summary="Update display name on the current user's profile",
 )
-async def create_or_update_profile(
+async def update_profile(
     body: ProfileCreate,
-    su_user: SupabaseUser = Depends(get_current_supabase_user),
+    user: CurrentUser = Depends(get_current_user),
 ) -> ProfileResponse:
-    """Create or update the current user's profile."""
+    """Rename the current user. Username is locked in at signup — only
+    display_name is mutable here."""
     sb = get_supabase()
-
     result = (
         sb.table("boardgamebuddy_profiles")
-        .upsert({
-            "id": su_user.sub,
-            "display_name": body.display_name,
-        }, on_conflict="id")
+        .update({"display_name": body.display_name})
+        .eq("id", user.user_id)
         .execute()
     )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
     return ProfileResponse(**result.data[0])
 
 
@@ -102,31 +100,31 @@ async def search_profiles(
     q: str = Query(..., min_length=1, max_length=50, description="Display name fragment"),
     user: CurrentUser = Depends(get_current_user),
 ) -> list[ProfileSearchResult]:
-    """Find other BoardgameBuddy users by display name. Email shown for tiebreaking."""
+    """Find other BoardgameBuddy users by display name *or* username
+    (case-insensitive substring match). Email shown for tiebreaking."""
     sb = get_supabase()
+    # PostgREST `.or_()` takes a comma-joined list of column ops. Both
+    # columns are matched with case-insensitive `like`; the lowercased
+    # `username` column makes the lower-vs-upper distinction moot for
+    # itself, but using `ilike` keeps the two predicates symmetrical.
+    needle = q.replace(",", "").replace("(", "").replace(")", "")
     rows = (
         sb.table("boardgamebuddy_profiles")
-        .select("id, display_name")
-        .ilike("display_name", f"%{q}%")
+        .select("id, display_name, username")
+        .or_(f"display_name.ilike.%{needle}%,username.ilike.%{needle}%")
         .neq("id", user.user_id)
         .order("display_name")
         .limit(20)
         .execute()
     )
-    out: list[ProfileSearchResult] = []
-    for row in rows.data or []:
-        email: Optional[str] = None
-        try:
-            au = sb.auth.admin.get_user_by_id(row["id"])
-            email = getattr(au.user, "email", None) if au else None
-        except Exception:
-            email = None
-        out.append(ProfileSearchResult(
+    return [
+        ProfileSearchResult(
             id=row["id"],
             display_name=row["display_name"],
-            email=email,
-        ))
-    return out
+            username=row["username"],
+        )
+        for row in (rows.data or [])
+    ]
 
 
 @router.get(
