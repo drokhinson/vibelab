@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Star, LogOut, Trash2, Save, Shield } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
+import AppHeader from '../components/AppHeader';
 import EmptyState from '../components/EmptyState';
 import { COLORS, SHADOWS } from '../theme';
 
@@ -46,11 +47,17 @@ export default function SettingsScreen({ navigation }) {
   if (!user) {
     return (
       <View style={styles.screen}>
+        <AppHeader
+          title="Settings"
+          back={() => navigation.goBack()}
+          auth={false}
+          navigation={navigation}
+        />
         <EmptyState
           title="Not signed in"
           body="Sign in from the home screen to manage your profile."
           action="Back to home"
-          onAction={() => navigation.navigate('MealBuilder')}
+          onAction={() => navigation.navigate('Home', { screen: 'BrowseTab' })}
         />
       </View>
     );
@@ -80,7 +87,10 @@ export default function SettingsScreen({ navigation }) {
         style: 'destructive',
         onPress: async () => {
           await actions.signOut();
-          navigation.navigate('MealBuilder');
+          // Land on Browse — the catalog stays useful while signed out, and
+          // Saucebook would just show the "sign in to keep recipes" empty
+          // state since CLEAR_AUTH wipes the local saucebook on logout.
+          navigation.navigate('Home', { screen: 'BrowseTab' });
         },
       },
     ]);
@@ -97,7 +107,7 @@ export default function SettingsScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             await actions.deleteAccount();
-            navigation.navigate('MealBuilder');
+            navigation.navigate('Home', { screen: 'BrowseTab' });
           },
         },
       ],
@@ -105,6 +115,13 @@ export default function SettingsScreen({ navigation }) {
   }
 
   return (
+    <View style={styles.screen}>
+      <AppHeader
+        title="Settings"
+        back={() => navigation.goBack()}
+        auth={false}
+        navigation={navigation}
+      />
     <ScrollView
       contentContainerStyle={[
         styles.scroll,
@@ -220,6 +237,7 @@ export default function SettingsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    </View>
   );
 }
 

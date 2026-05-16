@@ -7,9 +7,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
-  StyleSheet,
   ScrollView,
   ActivityIndicator,
   Alert,
@@ -17,18 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  ChevronLeft,
-  Plus,
-  Minus,
-  Trash2,
-  Link2,
-  FileUp,
-  Save,
-  X,
-  CornerDownRight,
-  ArrowRight,
-} from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAppActions, useAppState } from '../store/AppContext';
@@ -36,17 +23,37 @@ import { api } from '../api/client';
 import { COLOR_SWATCHES, SAUCE_TYPES } from '#shared/constants';
 import { validateBuilder } from '#shared/validation';
 import { applyParsedRecipe, builderFromSauce } from '#shared/builder';
-import FoodAutocomplete from '../components/FoodAutocomplete';
+import IngredientEditorSheet from '../components/IngredientEditorSheet';
+import StepInputSheet from '../components/StepInputSheet';
 import EmptyState from '../components/EmptyState';
+import BuilderProgressDots, { WIZARD_STEPS } from './builder/BuilderProgressDots';
+import SourceStep from './builder/SourceStep';
+import InfoStep from './builder/InfoStep';
+import PairingStep from './builder/PairingStep';
+import InstructionsStep from './builder/InstructionsStep';
+import ReviewStep from './builder/ReviewStep';
+import styles from './builder/builderStyles';
 import { COLORS, SHADOWS } from '../theme';
+
+const STEP_ORDER = ['source', 'info', 'instructions', 'pairing', 'review'];
+const STEP_INDEX = Object.fromEntries(STEP_ORDER.map((s, i) => [s, i]));
+const STEP_LABELS = {
+  source: 'Recipe Source',
+  info: 'Recipe Info',
+  instructions: 'Recipe Steps',
+  pairing: 'Dish Pairing',
+  review: 'Review',
+};
 
 function emptyStep() {
   return {
     title: '',
     instructions: '',
-    inputFromStep: null,
+    inputFromSteps: [],
     estimatedTime: '',
-    ingredients: [{ name: '', amount: '', unit: 'tsp' }],
+    // Empty ingredients list — the bottom-sheet editor is the only entry
+    // point. Matches the web's behavior post-ab37b01.
+    ingredients: [],
   };
 }
 
@@ -79,10 +86,28 @@ export default function SauceBuilderScreen({ navigation, route }) {
   const [importError, setImportError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  // Two-step flow: edit form → review screen → save. Tapping "Review" sends
-  // you to a read-only summary; tapping "Confirm and save" from there fires
-  // the actual create/update request.
-  const [reviewing, setReviewing] = useState(false);
+  // Bottom-sheet ingredient editor state. `ii === -1` means a new row is being
+  // added (commits on Save). Otherwise an existing row is being edited.
+  // Mirrors web's state.builder._ingEditor.
+  const [ingEditor, setIngEditor] = useState(null);
+
+  // Five-step wizard: source → info → instructions → pairing → review.
+  // Editing an existing sauce skips source (no need to re-import) and lands
+  // on info. `returnToReview` is set when the user taps an Edit pill from
+  // the Review step — Continue then jumps back to Review instead of
+  // advancing linearly. Mirrors web's b.returnToReview flow.
+  // Editing starts on the review screen (matches web). Edit pills jump
+  // to the relevant step; Continue / Back returns to review.
+  const [currentStep, setCurrentStep] = useState(editingId ? 'review' : 'source');
+  const [returnToReview, setReturnToReview] = useState(false);
+  const currentIndex = STEP_INDEX[currentStep];
+  // Standalone recipes (sauceType: 'full_recipe') skip the pairing step
+  // since they don't pair with a dish category. Web reads
+  // SAUCE_TYPES[i].category === null for this signal.
+  const isStandalone = useMemo(() => {
+    const meta = SAUCE_TYPES.find((t) => t.value === builder.sauceType);
+    return meta?.category === null;
+  }, [builder.sauceType]);
 
   // Items list — for the "pair with" picker. Backend's /items returns
   // {carbs, proteins, salads}. We flatten parents only (variants get linked
@@ -126,6 +151,24 @@ export default function SauceBuilderScreen({ navigation, route }) {
 
   const validation = useMemo(() => validateBuilder(builder), [builder]);
 
+  // Unit lookup tables derived from refUnits. `units` is the flat list of
+  // abbreviations the sheet renders as chips; `qualitativeUnits` is the set
+  // of unquantifiable units (e.g. "to taste") that disable the amount input
+  // and exclude the ingredient from the pie chart.
+  const units = useMemo(
+    () => (state.refUnits || []).map((u) => u.abbreviation || u.id),
+    [state.refUnits],
+  );
+  const qualitativeUnits = useMemo(
+    () =>
+      new Set(
+        (state.refUnits || [])
+          .filter((u) => u.quantifiable === false)
+          .map((u) => u.abbreviation || u.id),
+      ),
+    [state.refUnits],
+  );
+
   function patch(updates) {
     setBuilder((prev) => ({ ...prev, ...updates }));
   }
@@ -138,18 +181,94 @@ export default function SauceBuilderScreen({ navigation, route }) {
     });
   }
 
-  function patchIng(stepIdx, ingIdx, updates) {
-    setBuilder((prev) => {
-      const next = prev.steps.slice();
-      const ings = next[stepIdx].ingredients.slice();
-      ings[ingIdx] = { ...ings[ingIdx], ...updates };
-      next[stepIdx] = { ...next[stepIdx], ingredients: ings };
-      return { ...prev, steps: next };
+  function openIngEdit(si, ii) {
+    const source = builder.steps[si]?.ingredients?.[ii];
+    if (!source) return;
+    setIngEditor({
+      si,
+      ii,
+      draft: {
+        name: source.name || '',
+        amount: source.amount === '' || source.amount == null ? '' : String(source.amount),
+        unit: source.unit || 'tsp',
+        modifier: source.modifier || null,
+        originalText: source.originalText || '',
+        canonicalMl: source.canonicalMl ?? null,
+        canonicalG: source.canonicalG ?? null,
+      },
     });
   }
 
-  function addStep() {
-    setBuilder((prev) => ({ ...prev, steps: [...prev.steps, emptyStep()] }));
+  function openIngAdd(si) {
+    setIngEditor({
+      si,
+      ii: -1,
+      draft: {
+        name: '',
+        amount: '',
+        unit: 'tsp',
+        modifier: null,
+        originalText: '',
+        canonicalMl: null,
+        canonicalG: null,
+      },
+    });
+  }
+
+  function updateIngDraft(field, value) {
+    setIngEditor((prev) => (prev ? { ...prev, draft: { ...prev.draft, [field]: value } } : prev));
+  }
+
+  function saveIngEditor() {
+    if (!ingEditor) return;
+    const { si, ii, draft } = ingEditor;
+    const isQualitative = qualitativeUnits.has(draft.unit);
+    if (!draft.name.trim() || (!isQualitative && !(parseFloat(draft.amount) > 0))) return;
+    const row = {
+      name: draft.name.trim(),
+      amount: isQualitative ? '' : draft.amount,
+      unit: draft.unit,
+      modifier: (draft.modifier || '').trim() || null,
+      originalText: draft.originalText || '',
+      canonicalMl: draft.canonicalMl,
+      canonicalG: draft.canonicalG,
+    };
+    setBuilder((prev) => {
+      const steps = prev.steps.slice();
+      const ings = (steps[si]?.ingredients || []).slice();
+      if (ii < 0) ings.push(row);
+      else ings[ii] = row;
+      steps[si] = { ...steps[si], ingredients: ings };
+      return { ...prev, steps };
+    });
+    setIngEditor(null);
+  }
+
+  function removeIngredient(si, ii) {
+    setBuilder((prev) => {
+      const steps = prev.steps.slice();
+      const ings = (steps[si]?.ingredients || []).filter((_, i) => i !== ii);
+      steps[si] = { ...steps[si], ingredients: ings };
+      return { ...prev, steps };
+    });
+  }
+
+  // `at` is the insertion index (0..steps.length). Default = append. When
+  // inserting in the middle, any inputFromSteps refs that pointed at a
+  // shifted step get bumped so combine arrows still resolve to the same
+  // source step.
+  function addStep(at) {
+    setBuilder((prev) => {
+      const idx = typeof at === 'number' ? Math.max(0, Math.min(prev.steps.length, at)) : prev.steps.length;
+      const newStepOrder = idx + 1;
+      const shifted = prev.steps.map((s) => {
+        const refs = s.inputFromSteps || [];
+        if (refs.length === 0) return s;
+        return { ...s, inputFromSteps: refs.map((r) => (r >= newStepOrder ? r + 1 : r)) };
+      });
+      const next = shifted.slice(0, idx).concat(emptyStep(), shifted.slice(idx));
+      return { ...prev, steps: next };
+    });
   }
 
   function removeStep(idx) {
@@ -158,48 +277,61 @@ export default function SauceBuilderScreen({ navigation, route }) {
       const removedOrder = idx + 1;
       const steps = prev.steps
         .filter((_, i) => i !== idx)
-        // Any step that was combining the removed one's output loses the link.
-        // Steps that pointed at a later index get their pointer shifted down.
+        // Any step that was combining the removed one's output loses that ref;
+        // refs pointing at a later step get their order shifted down.
         .map((s) => {
-          if (s.inputFromStep == null) return s;
-          if (s.inputFromStep === removedOrder) return { ...s, inputFromStep: null };
-          if (s.inputFromStep > removedOrder) return { ...s, inputFromStep: s.inputFromStep - 1 };
-          return s;
+          const refs = s.inputFromSteps || [];
+          if (refs.length === 0) return s;
+          const inputFromSteps = refs
+            .filter((r) => r !== removedOrder)
+            .map((r) => (r > removedOrder ? r - 1 : r));
+          return { ...s, inputFromSteps };
         });
       return { ...prev, steps };
     });
   }
 
-  function setInputFromStep(stepIdx, value) {
-    setBuilder((prev) => {
-      const next = prev.steps.slice();
-      // Refuse self-references and forward references.
-      if (value != null && (value <= 0 || value > stepIdx)) {
-        return prev;
-      }
-      next[stepIdx] = { ...next[stepIdx], inputFromStep: value };
-      return { ...prev, steps: next };
+  // Step-input editor (bottom-sheet) state. The draft array is cloned on
+  // open and only commits when the user taps Save. Mirrors web's
+  // state.builder._stepInputEditor.
+  // {  si: number, draft: number[] }  | null
+  const [stepInputEditor, setStepInputEditor] = useState(null);
+
+  function openStepInputEditor(si) {
+    setStepInputEditor({
+      si,
+      draft: ((builder.steps[si] || {}).inputFromSteps || []).slice(),
     });
   }
 
-  function addIng(stepIdx) {
+  function toggleStepInputDraft(refOrder) {
+    setStepInputEditor((prev) => {
+      if (!prev) return prev;
+      const has = prev.draft.includes(refOrder);
+      const next = has ? prev.draft.filter((r) => r !== refOrder) : [...prev.draft, refOrder];
+      return { ...prev, draft: next };
+    });
+  }
+
+  function saveStepInputEditor() {
+    if (!stepInputEditor) return;
+    const { si, draft } = stepInputEditor;
     setBuilder((prev) => {
-      const next = prev.steps.slice();
-      next[stepIdx] = {
-        ...next[stepIdx],
-        ingredients: [...next[stepIdx].ingredients, { name: '', amount: '', unit: 'tsp' }],
+      const steps = prev.steps.slice();
+      steps[si] = {
+        ...steps[si],
+        inputFromSteps: draft.slice().sort((a, b) => a - b),
       };
-      return { ...prev, steps: next };
+      return { ...prev, steps };
     });
+    setStepInputEditor(null);
   }
 
-  function removeIng(stepIdx, ingIdx) {
+  function clearStepInput(si) {
     setBuilder((prev) => {
-      const next = prev.steps.slice();
-      const ings = next[stepIdx].ingredients;
-      if (ings.length <= 1) return prev;
-      next[stepIdx] = { ...next[stepIdx], ingredients: ings.filter((_, i) => i !== ingIdx) };
-      return { ...prev, steps: next };
+      const steps = prev.steps.slice();
+      steps[si] = { ...steps[si], inputFromSteps: [] };
+      return { ...prev, steps };
     });
   }
 
@@ -213,6 +345,22 @@ export default function SauceBuilderScreen({ navigation, route }) {
     });
   }
 
+  // Type selector lives on the Pairing step (mirrors web). Changing type
+  // wipes the picked itemIds since the legal pool changes — same behavior
+  // as web's builderSetSauceType.
+  function setSauceType(value) {
+    setBuilder((prev) =>
+      prev.sauceType === value ? prev : { ...prev, sauceType: value, itemIds: [] },
+    );
+  }
+
+  // Replace the entire itemIds array atomically. Used by the dish-tree
+  // parent toggle when selecting/deselecting a parent + all its variants
+  // in one shot.
+  function setItemIds(next) {
+    setBuilder((prev) => ({ ...prev, itemIds: Array.isArray(next) ? next : next(prev.itemIds) }));
+  }
+
   // Move an ingredient out of the unassigned tray and into the chosen step.
   // Strips internal helper fields so the row matches an emptyStep() ingredient.
   function moveUnassignedToStep(uIdx, stepIdx) {
@@ -221,24 +369,18 @@ export default function SauceBuilderScreen({ navigation, route }) {
       if (stepIdx < 0 || stepIdx >= prev.steps.length) return prev;
       const ing = prev.unassignedIngredients[uIdx];
       const steps = prev.steps.slice();
-      // If the target step still has a single empty placeholder row, replace
-      // it instead of stacking on top so we don't end up with a blank line.
-      const targetIngs = steps[stepIdx].ingredients;
-      const onlyHasEmptyPlaceholder =
-        targetIngs.length === 1 &&
-        !targetIngs[0].name &&
-        !targetIngs[0].amount;
       const newIng = {
         name: ing.name || '',
         amount: ing.amount != null ? String(ing.amount) : '',
         unit: ing.unit || 'tsp',
+        modifier: (ing.modifier || '').trim() || null,
         originalText: ing.originalText || '',
         canonicalMl: ing.canonicalMl != null ? ing.canonicalMl : null,
         canonicalG: ing.canonicalG != null ? ing.canonicalG : null,
       };
       steps[stepIdx] = {
         ...steps[stepIdx],
-        ingredients: onlyHasEmptyPlaceholder ? [newIng] : [...targetIngs, newIng],
+        ingredients: [...(steps[stepIdx].ingredients || []), newIng],
       };
       const unassigned = prev.unassignedIngredients.filter((_, i) => i !== uIdx);
       return { ...prev, steps, unassignedIngredients: unassigned };
@@ -265,6 +407,9 @@ export default function SauceBuilderScreen({ navigation, route }) {
       const parsed = await api.importRecipeFromUrl(url);
       setBuilder((prev) => applyParsedRecipe(prev, parsed));
       setImportUrl('');
+      // Advance to the Info step on success so the user starts editing
+      // metadata instead of staring at the Source cards.
+      if (currentStep === 'source') setCurrentStep('info');
     } catch (e) {
       setImportError(e.message || 'Could not import recipe');
     } finally {
@@ -333,6 +478,7 @@ export default function SauceBuilderScreen({ navigation, route }) {
       }
 
       setBuilder(builderFromSauce({ ...inner, parentSauceId: parent }));
+      if (currentStep === 'source') setCurrentStep('info');
     } catch (e) {
       setImportError(e.message || 'Could not read file.');
     } finally {
@@ -359,23 +505,32 @@ export default function SauceBuilderScreen({ navigation, route }) {
         sauceType: builder.sauceType,
         parentSauceId: builder.parentSauceId || null,
         itemIds: builder.itemIds,
+        // Recipe-view scaling is anchored to defaultServings. Imports inherit
+        // `yieldServings` via shared/builder.js#applyParsedRecipe (line 60);
+        // manual + edit flows default to 2 if nothing is set.
+        defaultServings: Number(builder.servings) || 2,
         steps: builder.steps.map((s, i) => {
           // Empty input -> null so the recipe view falls back to the
           // legacy 5-min default. Cap at 600 to keep the int small.
           const rawTime = (s.estimatedTime ?? '').toString().trim();
           const parsedTime = rawTime === '' ? null : Math.max(0, Math.min(600, parseInt(rawTime, 10) || 0));
+          const refs = s.inputFromSteps || [];
           return {
             stepOrder: i + 1,
             title: s.title.trim(),
             instructions: (s.instructions || '').trim() || null,
-            inputFromStep: s.inputFromStep,
+            // Write both: `inputFromStep` (singular) keeps older clients
+            // working; `inputFromSteps[]` is the canonical multi-ref shape.
+            inputFromStep: refs[0] ?? null,
+            inputFromSteps: refs,
             estimatedTime: parsedTime,
             ingredients: s.ingredients
               .filter((ing) => ing.name && ing.name.trim())
               .map((ing) => ({
                 name: ing.name.trim(),
-                amount: ing.unit === 'to taste' ? 0 : parseFloat(ing.amount) || 0,
+                amount: qualitativeUnits.has(ing.unit) ? 0 : parseFloat(ing.amount) || 0,
                 unit: ing.unit,
+                modifier: (ing.modifier || '').trim() || null,
               })),
           };
         }),
@@ -386,7 +541,15 @@ export default function SauceBuilderScreen({ navigation, route }) {
         await api.createSauce(payload);
       }
       // Refresh the manager list so the new/updated sauce appears on return.
-      await actions.loadAllSauces();
+      // For new sauces the backend's create_sauce auto-adds to the author's
+      // saucebook (public_routes.py:122); refresh that too so the row shows
+      // up immediately when the user returns to the Saucebook tab without
+      // waiting for a manual pull-to-refresh.
+      const refreshes = [actions.loadAllSauces()];
+      if (!editingId && state.currentUser) {
+        refreshes.push(actions.loadSaucebook());
+      }
+      await Promise.all(refreshes);
       navigation.goBack();
     } catch (e) {
       setSaveError(e.message || 'Could not save');
@@ -417,28 +580,98 @@ export default function SauceBuilderScreen({ navigation, route }) {
   }
 
   // The backend enforces sauce↔category pairing (sauce/carb, marinade/protein,
-  // dressing/salad). Mirror that constraint here so the picker only shows the
-  // group that matches the current sauceType — same logic as web's flowMetaFor.
-  const typeMeta = SAUCE_TYPES.find((t) => t.value === builder.sauceType) || SAUCE_TYPES[0];
-  const allowedItems = typeMeta.category === 'protein' ? items.proteins
-    : typeMeta.category === 'salad' ? items.salads
-    : items.carbs;
-  const pairLabel = typeMeta.pairLabel;
+  // dressing/salad). The pairing step picks the right group internally; we
+  // only need `isStandalone` here to drive step skipping + validation.
 
-  if (reviewing) {
-    return (
-      <ReviewScreen
-        builder={builder}
-        items={items}
-        editingId={editingId}
-        saving={saving}
-        saveError={saveError}
-        insets={insets}
-        onBack={() => setReviewing(false)}
-        onConfirm={handleSave}
-      />
-    );
+  // Per-step validation. Each step gates its Continue button based on the
+  // subset of validation.errors that apply to its inputs.
+  function isStepValid(step) {
+    const e = validation.errors || [];
+    if (step === 'info') {
+      return !e.some((m) =>
+        m === 'Sauce needs a name' ||
+        m === 'Pick a cuisine' ||
+        m === 'Pick a color' ||
+        m === 'Choose Sauce, Marinade, or Dressing'
+      );
+    }
+    if (step === 'instructions') {
+      return !e.some((m) =>
+        m === 'At least one step is required' ||
+        m.startsWith('Step ') ||
+        m.includes('needs an amount') ||
+        m.startsWith('Drain ')
+      );
+    }
+    if (step === 'pairing') {
+      return isStandalone || !e.some((m) => m === 'Pair with at least one item');
+    }
+    return true;
   }
+
+  // Step navigation. `goNext` jumps to Review when returnToReview is set
+  // (Edit-from-Review shortcut); otherwise advances linearly, skipping
+  // Pairing for full-recipe types. `goBack` mirrors that order in reverse
+  // and pops the wizard when we're at the first visible step.
+  function nextStep(from) {
+    const i = STEP_INDEX[from];
+    for (let j = i + 1; j < STEP_ORDER.length; j++) {
+      const s = STEP_ORDER[j];
+      if (s === 'pairing' && isStandalone) continue;
+      return s;
+    }
+    return from;
+  }
+  function prevStep(from) {
+    const i = STEP_INDEX[from];
+    for (let j = i - 1; j >= 0; j--) {
+      const s = STEP_ORDER[j];
+      if (s === 'source' && editingId) continue;
+      if (s === 'pairing' && isStandalone) continue;
+      return s;
+    }
+    return null;
+  }
+  function goNext() {
+    if (returnToReview) {
+      setReturnToReview(false);
+      setCurrentStep('review');
+      return;
+    }
+    const next = nextStep(currentStep);
+    if (next !== currentStep) setCurrentStep(next);
+  }
+  function goBack() {
+    // If we're here via "Edit from review", return to review (mirrors the
+    // forward returnToReview behavior of goNext).
+    if (returnToReview) {
+      setReturnToReview(false);
+      setCurrentStep('review');
+      return;
+    }
+    // Editing starts on review; tapping back there should close the
+    // editor, not walk back into pairing/instructions.
+    if (editingId && currentStep === 'review') {
+      navigation.goBack();
+      return;
+    }
+    const prev = prevStep(currentStep);
+    if (prev) setCurrentStep(prev);
+    else navigation.goBack();
+  }
+  function jumpToStep(step) {
+    setReturnToReview(true);
+    setCurrentStep(step);
+  }
+
+  // Exit the wizard entirely and land the user on the Saucebook tab. Used
+  // by the header X and the Review screen's Discard button — both want
+  // "close the builder, no save".
+  function exitToSaucebook() {
+    navigation.navigate('Home', { screen: 'SaucebookTab' });
+  }
+  // From the Source step, picking Manual Entry advances to Info immediately.
+  const handleManualStart = () => goNext();
 
   return (
     <KeyboardAvoidingView
@@ -447,13 +680,18 @@ export default function SauceBuilderScreen({ navigation, route }) {
     >
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
-            <ChevronLeft size={22} color="#fff" />
+          {/* Close button — exits the builder entirely and returns to the
+              Saucebook tab. In-wizard step-back is via the "← Back to <step>"
+              link below the Continue button on each step. */}
+          <TouchableOpacity onPress={exitToSaucebook} hitSlop={10} style={styles.closeBtn}>
+            <X size={22} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.title}>{editingId ? 'Edit sauce' : 'New sauce'}</Text>
-          <View style={{ width: 22 }} />
+          <Text style={styles.title}>Recipe Builder</Text>
+          <View style={{ width: 32 }} />
         </View>
       </View>
+
+      <BuilderProgressDots activeIndex={currentIndex} skipFirst={!!editingId} />
 
       <ScrollView
         contentContainerStyle={[
@@ -463,1043 +701,147 @@ export default function SauceBuilderScreen({ navigation, route }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Import from URL or .sauce.json file */}
-        {!editingId ? (
+        {/* Source step — URL / File / Manual import cards */}
+        {currentStep === 'source' ? (
+          <SourceStep
+            importUrl={importUrl}
+            setImportUrl={setImportUrl}
+            importing={importing}
+            importError={importError}
+            handleImport={handleImport}
+            handleImportFromFile={handleImportFromFile}
+            handleManualStart={handleManualStart}
+          />
+        ) : null}
+
+        {/* Info step — Name / Type / Cuisine / Color / Description / Source URL */}
+        {currentStep === 'info' ? (
+          <InfoStep
+            builder={builder}
+            refCuisines={state.refCuisines}
+            patch={patch}
+            pickCuisine={pickCuisine}
+          />
+        ) : null}
+
+        {/* Pairing step — dish chips or standalone hint */}
+        {currentStep === 'pairing' ? (
+          <PairingStep
+            builder={builder}
+            items={items}
+            setSauceType={setSauceType}
+            setItemIds={setItemIds}
+          />
+        ) : null}
+
+        {/* Instructions step — steps section + unassigned ingredients tray */}
+        {currentStep === 'instructions' ? (
+          <InstructionsStep
+            builder={builder}
+            qualitativeUnits={qualitativeUnits}
+            ingredientCategories={state.ingredientCategories}
+            patchStep={patchStep}
+            addStep={addStep}
+            removeStep={removeStep}
+            openIngAdd={openIngAdd}
+            openIngEdit={openIngEdit}
+            removeIngredient={removeIngredient}
+            openStepInputEditor={openStepInputEditor}
+            clearStepInput={clearStepInput}
+            moveUnassignedToStep={moveUnassignedToStep}
+            deleteUnassigned={deleteUnassigned}
+          />
+        ) : null}
+
+        {/* Review step — read-only summary with edit shortcuts.
+            Each section has an Edit pill that sets returnToReview=true and
+            jumps back to the relevant step. */}
+        {currentStep === 'review' ? (
+          <ReviewStep
+            builder={builder}
+            items={items}
+            editingId={editingId}
+            saving={saving}
+            saveError={saveError}
+            qualitativeUnits={qualitativeUnits}
+            onEditInfo={() => jumpToStep('info')}
+            onEditInstructions={() => jumpToStep('instructions')}
+            onEditPairing={() => (isStandalone ? null : jumpToStep('pairing'))}
+            isStandalone={isStandalone}
+            onConfirm={handleSave}
+            // Discard exits the wizard entirely and drops the user on the
+            // Saucebook tab — replaces the previous "← Back to Dish Pairing"
+            // link which was a confusing destination when review is the
+            // entry screen for the edit flow.
+            onDiscard={exitToSaucebook}
+          />
+        ) : null}
+
+        {/* Step-aware footer — Continue + per-step Back link. Source has
+            no Continue (cards advance themselves on Manual/URL/File pick).
+            Review uses the embedded Save inside ReviewStep. */}
+        {currentStep !== 'source' && currentStep !== 'review' ? (
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Import recipe</Text>
-            <View style={styles.importRow}>
-              <Link2 size={16} color={COLORS.textMuted} style={{ marginRight: 6 }} />
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={importUrl}
-                onChangeText={setImportUrl}
-                placeholder="https://example.com/recipe"
-                placeholderTextColor={COLORS.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity
-                style={[styles.smallBtn, (!importUrl || importing) && styles.btnDisabled]}
-                onPress={handleImport}
-                disabled={!importUrl || importing}
-                activeOpacity={0.8}
-              >
-                {importing ? <ActivityIndicator color="#fff" /> : <Text style={styles.smallBtnLabel}>Import</Text>}
-              </TouchableOpacity>
-            </View>
-            <View style={styles.importFileRow}>
-              <Text style={styles.help}>Or pick a .sauce.json file you exported earlier.</Text>
-              <TouchableOpacity
-                style={[styles.smallBtnSecondary, importing && styles.btnDisabled]}
-                onPress={handleImportFromFile}
-                disabled={importing}
-                activeOpacity={0.8}
-              >
-                <FileUp size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
-                <Text style={styles.smallBtnSecondaryLabel}>From file</Text>
-              </TouchableOpacity>
-            </View>
-            {importError ? <Text style={styles.error}>{importError}</Text> : null}
-            <Text style={styles.help}>
-              Paste a recipe URL — we'll prefill steps and ingredients. You can edit before saving.
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Basics */}
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Basics</Text>
-
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            style={styles.input}
-            value={builder.name}
-            onChangeText={(v) => patch({ name: v })}
-            placeholder="Garlic butter pan sauce"
-            placeholderTextColor={COLORS.textMuted}
-          />
-
-          <Text style={styles.label}>Type</Text>
-          <View style={styles.pillRow}>
-            {SAUCE_TYPES.map((t) => {
-              const active = builder.sauceType === t.value;
-              return (
-                <TouchableOpacity
-                  key={t.value}
-                  onPress={() => patch({ sauceType: t.value, itemIds: [] })}
-                  style={[styles.pill, active && styles.pillActive]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>{t.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={styles.label}>Cuisine</Text>
-          <View style={styles.pillRow}>
-            {(state.refCuisines || []).map((c) => {
-              const name = c.cuisine || c.name;
-              const emoji = c.emoji || '🍽';
-              const active = builder.cuisine === name;
-              return (
-                <TouchableOpacity
-                  key={name}
-                  onPress={() => pickCuisine({ name, emoji })}
-                  style={[styles.pill, active && styles.pillActive]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
-                    {emoji} {name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={styles.label}>Color</Text>
-          <View style={styles.swatchRow}>
-            {COLOR_SWATCHES.map((sw) => {
-              const active = builder.color === sw;
-              return (
-                <TouchableOpacity
-                  key={sw}
-                  onPress={() => patch({ color: sw })}
-                  style={[
-                    styles.swatch,
-                    { backgroundColor: sw },
-                    active && styles.swatchActive,
-                  ]}
-                />
-              );
-            })}
-          </View>
-
-          <Text style={styles.label}>Description (optional)</Text>
-          <TextInput
-            style={[styles.input, styles.multiline]}
-            value={builder.description}
-            onChangeText={(v) => patch({ description: v })}
-            placeholder="Bright, lemony, ready in 5 minutes"
-            placeholderTextColor={COLORS.textMuted}
-            multiline
-          />
-
-          <Text style={styles.label}>Source URL (optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={builder.sourceUrl}
-            onChangeText={(v) => patch({ sourceUrl: v })}
-            placeholder="https://example.com/your-recipe"
-            placeholderTextColor={COLORS.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-
-        {/* Pair with items — filtered to the category that matches sauceType */}
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Pair with {pairLabel.toLowerCase()}</Text>
-          <Text style={styles.help}>
-            {typeMeta.label}s pair with {pairLabel.toLowerCase()}. Change the type above to pair with a different group.
-          </Text>
-          <View style={[styles.pillRow, { marginTop: 8 }]}>
-            {allowedItems.length === 0 ? (
-              <Text style={styles.help}>No {pairLabel.toLowerCase()} in the catalog yet.</Text>
-            ) : (
-              allowedItems.map((item) => {
-                const active = builder.itemIds.includes(item.id);
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    onPress={() => toggleItemPair(item.id)}
-                    style={[styles.pill, active && styles.pillActive]}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
-                      {item.emoji} {item.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </View>
-        </View>
-
-        {/* Steps */}
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Steps</Text>
-          {builder.steps.map((step, idx) => (
-            <View key={idx} style={styles.stepBox}>
-              <View style={styles.stepHeader}>
-                <Text style={styles.stepNumber}>Step {idx + 1}</Text>
-                {builder.steps.length > 1 ? (
-                  <TouchableOpacity
-                    onPress={() => removeStep(idx)}
-                    hitSlop={8}
-                    style={styles.removeStep}
-                  >
-                    <Trash2 size={14} color={COLORS.dangerText} />
-                  </TouchableOpacity>
-                ) : null}
+            {!isStepValid(currentStep) ? (
+              <View style={styles.errorBlock}>
+                <Text style={styles.errorTitle}>Fix before continuing</Text>
+                {validation.errors.map((e, i) => (
+                  <Text key={i} style={styles.errorBullet}>• {e}</Text>
+                ))}
               </View>
-
-              {/* Combine output from a previous step. Only meaningful from
-                  Step 2 onward; the first step has no upstream. */}
-              {idx > 0 ? (
-                <>
-                  <Text style={styles.label}>Combine output from</Text>
-                  <View style={styles.pillRow}>
-                    <TouchableOpacity
-                      onPress={() => setInputFromStep(idx, null)}
-                      style={[styles.pill, step.inputFromStep == null && styles.pillActive]}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.pillLabel, step.inputFromStep == null && styles.pillLabelActive]}>
-                        None
-                      </Text>
-                    </TouchableOpacity>
-                    {builder.steps.slice(0, idx).map((upstream, uidx) => {
-                      const order = uidx + 1;
-                      const active = step.inputFromStep === order;
-                      const tail = upstream.title ? ` — ${upstream.title.slice(0, 18)}` : '';
-                      return (
-                        <TouchableOpacity
-                          key={uidx}
-                          onPress={() => setInputFromStep(idx, order)}
-                          style={[styles.pill, active && styles.pillActive]}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
-                            Step {order}{tail}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  {step.inputFromStep ? (
-                    <View style={styles.refBadge}>
-                      <CornerDownRight size={12} color={COLORS.primaryDark} />
-                      <Text style={styles.refBadgeText}>
-                        Combines all of Step {step.inputFromStep} into this bowl
-                      </Text>
-                    </View>
-                  ) : null}
-                </>
-              ) : null}
-
-              <View style={styles.titleRow}>
-                <View style={styles.titleCol}>
-                  <Text style={styles.label}>Title</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={step.title}
-                    onChangeText={(v) => patchStep(idx, { title: v })}
-                    placeholder="Whisk everything together"
-                    placeholderTextColor={COLORS.textMuted}
-                  />
-                </View>
-                <View style={styles.timeCol}>
-                  <Text style={styles.label}>Time</Text>
-                  <View style={styles.timeWrap}>
-                    <TextInput
-                      style={styles.timeInput}
-                      value={step.estimatedTime ?? ''}
-                      onChangeText={(v) => patchStep(idx, { estimatedTime: v.replace(/[^0-9]/g, '') })}
-                      placeholder="5"
-                      placeholderTextColor={COLORS.textMuted}
-                      keyboardType="number-pad"
-                      maxLength={3}
-                    />
-                    <Text style={styles.timeSuffix}>min</Text>
-                  </View>
-                </View>
-              </View>
-              <Text style={styles.label}>Detailed Instructions (optional)</Text>
-              <TextInput
-                style={[styles.input, styles.multiline]}
-                value={step.instructions}
-                onChangeText={(v) => patchStep(idx, { instructions: v })}
-                placeholder="In a small bowl, combine the ingredients and whisk until smooth."
-                placeholderTextColor={COLORS.textMuted}
-                multiline
-              />
-
-              <Text style={[styles.label, { marginTop: 12 }]}>Ingredients</Text>
-              {step.ingredients.map((ing, ingIdx) => (
-                <View key={ingIdx} style={styles.ingRow}>
-                  <View style={{ flex: 2 }}>
-                    <FoodAutocomplete
-                      value={ing.name}
-                      onChange={(v) => patchIng(idx, ingIdx, { name: v })}
-                      placeholder="Ingredient"
-                    />
-                  </View>
-                  <TextInput
-                    style={[styles.input, styles.ingAmount]}
-                    value={ing.amount}
-                    onChangeText={(v) => patchIng(idx, ingIdx, { amount: v.replace(/[^0-9.]/g, '') })}
-                    placeholder={ing.unit === 'to taste' ? '—' : 'amt'}
-                    placeholderTextColor={COLORS.textMuted}
-                    keyboardType="decimal-pad"
-                    editable={ing.unit !== 'to taste'}
-                  />
-                  <View style={styles.unitPicker}>
-                    <UnitPicker value={ing.unit} onChange={(v) => patchIng(idx, ingIdx, { unit: v })} />
-                  </View>
-                  {step.ingredients.length > 1 ? (
-                    <TouchableOpacity
-                      style={styles.removeIng}
-                      onPress={() => removeIng(idx, ingIdx)}
-                      hitSlop={6}
-                    >
-                      <Minus size={14} color={COLORS.dangerText} />
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              ))}
-              <TouchableOpacity onPress={() => addIng(idx)} style={styles.addBtn} activeOpacity={0.7}>
-                <Plus size={14} color={COLORS.primary} />
-                <Text style={styles.addBtnLabel}>Add ingredient</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-          <TouchableOpacity onPress={addStep} style={[styles.addBtn, { alignSelf: 'center', marginTop: 12 }]} activeOpacity={0.7}>
-            <Plus size={14} color={COLORS.primary} />
-            <Text style={styles.addBtnLabel}>Add step</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Unassigned ingredients (from URL import) */}
-        {builder.unassignedIngredients.length > 0 ? (
-          <View style={[styles.card, { borderColor: COLORS.warningText, borderWidth: 1 }]}>
-            <View style={styles.sectionRow}>
-              <Text style={styles.sectionLabel}>
-                ⚠ Unassigned ingredients ({builder.unassignedIngredients.length})
+            ) : null}
+            <TouchableOpacity
+              style={[styles.saveBtn, !isStepValid(currentStep) && styles.btnDisabled]}
+              onPress={goNext}
+              disabled={!isStepValid(currentStep)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.saveBtnLabel}>
+                {returnToReview ? 'Back to Review' : 'Continue'}
               </Text>
-            </View>
-            <Text style={styles.help}>
-              These came from the import but couldn't be matched to a step. Tap a step to move
-              an ingredient into it, or × to delete. The recipe can't save while this list is non-empty.
-            </Text>
-            {builder.unassignedIngredients.map((u, i) => (
-              <View key={i} style={styles.unassignedCard}>
-                <View style={styles.unassignedHeader}>
-                  <Text style={styles.unassignedName} numberOfLines={1}>
-                    {u.name}
-                  </Text>
-                  {u.amount ? (
-                    <Text style={styles.unassignedQty}>
-                      {u.amount}{u.unit ? ` ${u.unit}` : ''}
-                    </Text>
-                  ) : null}
-                  <TouchableOpacity
-                    onPress={() => deleteUnassigned(i)}
-                    hitSlop={6}
-                    style={styles.unassignedDelete}
-                  >
-                    <X size={14} color={COLORS.dangerText} />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.unassignedTargets}>
-                  <ArrowRight size={12} color={COLORS.textSecondary} />
-                  {builder.steps.map((s, si) => {
-                    const tail = s.title ? ` — ${s.title.slice(0, 14)}` : '';
-                    return (
-                      <TouchableOpacity
-                        key={si}
-                        onPress={() => moveUnassignedToStep(i, si)}
-                        style={styles.targetPill}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.targetPillLabel}>Step {si + 1}{tail}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
+            </TouchableOpacity>
+            {prevStep(currentStep) ? (
+              <TouchableOpacity
+                style={styles.backLink}
+                onPress={goBack}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.backLinkLabel}>
+                  ← Back to {STEP_LABELS[prevStep(currentStep)]}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : null}
-
-        {/* Validation + Continue to review */}
-        <View style={styles.card}>
-          {!validation.ok ? (
-            <View style={styles.errorBlock}>
-              <Text style={styles.errorTitle}>Fix before continuing</Text>
-              {validation.errors.map((e, i) => (
-                <Text key={i} style={styles.errorBullet}>• {e}</Text>
-              ))}
-            </View>
-          ) : null}
-          {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
-          <TouchableOpacity
-            style={[styles.saveBtn, !validation.ok && styles.btnDisabled]}
-            onPress={() => { setSaveError(null); setReviewing(true); }}
-            disabled={!validation.ok}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.saveBtnLabel}>Continue to review</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
+
+      <IngredientEditorSheet
+        visible={ingEditor != null}
+        draft={ingEditor?.draft}
+        isNew={ingEditor?.ii < 0}
+        modifiers={state.ingredientModifiers}
+        units={units}
+        qualitativeUnits={qualitativeUnits}
+        ingredientCategories={state.ingredientCategories}
+        onChange={updateIngDraft}
+        onSave={saveIngEditor}
+        onCancel={() => setIngEditor(null)}
+        onClassify={(category) => {
+          if (ingEditor?.draft?.name) {
+            actions.classifyIngredient(ingEditor.draft.name, category);
+          }
+        }}
+      />
+
+      <StepInputSheet
+        visible={stepInputEditor != null}
+        priorSteps={stepInputEditor ? builder.steps.slice(0, stepInputEditor.si) : []}
+        draft={stepInputEditor?.draft || []}
+        onToggle={toggleStepInputDraft}
+        onSave={saveStepInputEditor}
+        onCancel={() => setStepInputEditor(null)}
+      />
     </KeyboardAvoidingView>
   );
 }
 
-// Read-only summary shown after the user finishes editing. Two paths out:
-// "Back to edit" returns to the form; "Confirm and save" fires the API.
-function ReviewScreen({ builder, items, editingId, saving, saveError, insets, onBack, onConfirm }) {
-  const typeMeta = SAUCE_TYPES.find((t) => t.value === builder.sauceType) || SAUCE_TYPES[0];
-  const allItemsFlat = [
-    ...(items.carbs || []),
-    ...(items.proteins || []),
-    ...(items.salads || []),
-  ];
-  const pairedItems = builder.itemIds
-    .map((id) => allItemsFlat.find((it) => it.id === id))
-    .filter(Boolean);
-  const totalTime = builder.steps.reduce((sum, s) => {
-    const t = parseInt((s.estimatedTime ?? '').toString(), 10);
-    return sum + (Number.isFinite(t) && t > 0 ? t : 5);
-  }, 0);
-
-  return (
-    <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={onBack} hitSlop={10} disabled={saving}>
-            <ChevronLeft size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Review</Text>
-          <View style={{ width: 22 }} />
-        </View>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollBody,
-          { paddingBottom: Math.max(60, insets.bottom + 24) },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Summary card */}
-        <View style={styles.card}>
-          <View style={styles.reviewHeader}>
-            <View style={[styles.reviewSwatch, { backgroundColor: builder.color }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.reviewName} numberOfLines={2}>{builder.name}</Text>
-              <Text style={styles.reviewMeta}>
-                {typeMeta.label}{builder.cuisine ? ` · ${builder.cuisineEmoji ? `${builder.cuisineEmoji} ` : ''}${builder.cuisine}` : ''}
-              </Text>
-            </View>
-          </View>
-          {builder.description ? (
-            <Text style={styles.reviewDescription}>{builder.description}</Text>
-          ) : null}
-          <View style={styles.reviewMetaRow}>
-            <Text style={styles.reviewMetaLabel}>~{totalTime} min · {builder.steps.length} step{builder.steps.length === 1 ? '' : 's'}</Text>
-          </View>
-        </View>
-
-        {/* Pairing */}
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Paired with</Text>
-          {pairedItems.length === 0 ? (
-            <Text style={styles.help}>Nothing paired.</Text>
-          ) : (
-            <View style={styles.pillRow}>
-              {pairedItems.map((item) => (
-                <View key={item.id} style={[styles.pill, styles.pillActive]}>
-                  <Text style={[styles.pillLabel, styles.pillLabelActive]}>
-                    {item.emoji} {item.name}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Steps */}
-        {builder.steps.map((step, idx) => {
-          const stepTime = (() => {
-            const t = parseInt((step.estimatedTime ?? '').toString(), 10);
-            return Number.isFinite(t) && t > 0 ? t : 5;
-          })();
-          const visibleIngs = step.ingredients.filter((i) => i.name && i.name.trim());
-          return (
-            <View key={idx} style={styles.card}>
-              <View style={styles.reviewStepHeader}>
-                <Text style={styles.reviewStepNumber}>STEP {idx + 1}</Text>
-                <Text style={styles.reviewStepTime}>~{stepTime}m</Text>
-              </View>
-              {step.title ? <Text style={styles.reviewStepTitle}>{step.title}</Text> : null}
-              {step.inputFromStep ? (
-                <View style={styles.refBadge}>
-                  <CornerDownRight size={12} color={COLORS.primaryDark} />
-                  <Text style={styles.refBadgeText}>
-                    Combines all of Step {step.inputFromStep} into this bowl
-                  </Text>
-                </View>
-              ) : null}
-              {step.instructions ? (
-                <Text style={styles.reviewStepInstructions}>{step.instructions}</Text>
-              ) : null}
-              {visibleIngs.length > 0 ? (
-                <View style={styles.reviewIngList}>
-                  {visibleIngs.map((ing, ii) => (
-                    <View key={ii} style={styles.reviewIngRow}>
-                      <Text style={styles.reviewIngName} numberOfLines={1}>{ing.name}</Text>
-                      <Text style={styles.reviewIngQty}>
-                        {ing.unit === 'to taste' ? 'to taste' : `${ing.amount || '0'} ${ing.unit}`}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-          );
-        })}
-
-        {/* Confirm */}
-        <View style={styles.card}>
-          {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
-          <TouchableOpacity
-            style={[styles.saveBtn, saving && styles.btnDisabled]}
-            onPress={onConfirm}
-            disabled={saving}
-            activeOpacity={0.85}
-          >
-            {saving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Save size={16} color="#fff" />
-                <Text style={styles.saveBtnLabel}>{editingId ? 'Save changes' : 'Create sauce'}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.backToEditBtn}
-            onPress={onBack}
-            disabled={saving}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.backToEditLabel}>Back to edit</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
-
-function UnitPicker({ value, onChange }) {
-  // Inline horizontal scroll picker — keeps the form simple on mobile.
-  const [open, setOpen] = useState(false);
-  const state = useAppState();
-  return (
-    <View>
-      <TouchableOpacity
-        style={styles.unitBtn}
-        onPress={() => setOpen((v) => !v)}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.unitLabel} numberOfLines={1}>{value}</Text>
-      </TouchableOpacity>
-      {open ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.unitDropdown}
-          keyboardShouldPersistTaps="handled"
-        >
-          {(state.refUnits || []).map((row) => {
-            const u = row.abbreviation || row.id;
-            return (
-              <TouchableOpacity
-                key={u}
-                style={[styles.unitOption, u === value && styles.unitOptionActive]}
-                onPress={() => { onChange(u); setOpen(false); }}
-              >
-                <Text style={[styles.unitOptionLabel, u === value && styles.unitOptionLabelActive]}>{u}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      ) : null}
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  title: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  scrollBody: {
-    padding: 16,
-    paddingBottom: 60,
-  },
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    ...SHADOWS.sm,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.text,
-    letterSpacing: 0.4,
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    letterSpacing: 0.3,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: COLORS.text,
-  },
-  multiline: {
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  titleCol: {
-    flex: 1,
-  },
-  timeCol: {
-    width: 84,
-  },
-  timeWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    paddingRight: 10,
-  },
-  timeInput: {
-    flex: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: COLORS.text,
-    textAlign: 'right',
-  },
-  timeSuffix: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    marginLeft: 4,
-  },
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-  },
-  pillActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  pillLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  pillLabelActive: {
-    color: '#fff',
-  },
-  swatchRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-  },
-  swatch: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  swatchActive: {
-    borderColor: COLORS.text,
-  },
-  importRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  smallBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginLeft: 6,
-  },
-  smallBtnLabel: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  smallBtnSecondary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginLeft: 8,
-  },
-  smallBtnSecondaryLabel: {
-    color: COLORS.primary,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  importFileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  btnDisabled: {
-    opacity: 0.45,
-  },
-  help: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 6,
-    lineHeight: 14,
-  },
-  stepBox: {
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
-  },
-  stepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  stepNumber: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.primary,
-    letterSpacing: 0.5,
-  },
-  removeStep: {
-    padding: 4,
-  },
-  ingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 6,
-  },
-  ingAmount: {
-    width: 60,
-  },
-  unitPicker: {
-    minWidth: 70,
-  },
-  unitBtn: {
-    backgroundColor: COLORS.background,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    minWidth: 70,
-    alignItems: 'center',
-  },
-  unitLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  unitDropdown: {
-    paddingVertical: 6,
-  },
-  unitOption: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginRight: 4,
-    backgroundColor: COLORS.card,
-  },
-  unitOptionActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  unitOptionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  unitOptionLabelActive: {
-    color: '#fff',
-  },
-  removeIng: {
-    width: 28,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  addBtnLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-    marginLeft: 6,
-  },
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  refBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.highlightTint,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  refBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.primaryDark,
-    marginLeft: 4,
-    flex: 1,
-  },
-  unassignedCard: {
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 8,
-  },
-  unassignedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  unassignedName: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  unassignedQty: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginRight: 8,
-  },
-  unassignedDelete: {
-    padding: 4,
-  },
-  unassignedTargets: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-  },
-  targetPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.card,
-  },
-  targetPillLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  errorBlock: {
-    backgroundColor: COLORS.danger,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-  },
-  errorTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.dangerText,
-    marginBottom: 4,
-  },
-  errorBullet: {
-    fontSize: 12,
-    color: COLORS.dangerText,
-    marginVertical: 1,
-  },
-  error: {
-    color: COLORS.dangerText,
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 8,
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 14,
-    marginTop: 4,
-  },
-  saveBtnLabel: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 14,
-    marginLeft: 6,
-  },
-  backToEditBtn: {
-    marginTop: 10,
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  backToEditLabel: {
-    color: COLORS.textSecondary,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  reviewSwatch: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 12,
-  },
-  reviewName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  reviewMeta: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  reviewDescription: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  reviewMetaRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  reviewMetaLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primary,
-    letterSpacing: 0.4,
-  },
-  reviewStepHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  reviewStepNumber: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.primary,
-    letterSpacing: 0.6,
-  },
-  reviewStepTime: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  reviewStepTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  reviewStepInstructions: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-    marginVertical: 4,
-  },
-  reviewIngList: {
-    marginTop: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.surfaceSubtle,
-  },
-  reviewIngRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  reviewIngName: {
-    flex: 1,
-    fontSize: 13,
-    color: COLORS.text,
-    marginRight: 8,
-  },
-  reviewIngQty: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-});

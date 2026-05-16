@@ -57,9 +57,9 @@ export default function IngredientFilterPanel({
           </Text>
 
           {groups.map(({ category, items, isKey }) => (
-            <View key={category} style={[styles.section, isKey && styles.keySection]}>
+            <View key={category} style={styles.section}>
               <View style={styles.sectionHeader}>
-                {isKey ? <Star size={14} color={COLORS.primary} /> : null}
+                {isKey ? <Star size={12} color={COLORS.primary} /> : null}
                 <Text style={styles.sectionLabel}>{category}</Text>
                 {isKey ? (
                   <Text style={styles.sectionLabelDetail}>— unlock the most options</Text>
@@ -81,7 +81,7 @@ export default function IngredientFilterPanel({
                         <X size={11} color="#991B1B" />
                       )}
                       <Text style={[styles.chipLabel, !has && styles.chipLabelMissing]}>
-                        {' '}{name}
+                        {name}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -157,33 +157,30 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     lineHeight: 16,
   },
+  // Mirrors web's .ingredient-section + .ingredient-section-label:
+  // uppercase, letter-spaced, no highlighted background for the "Key
+  // Ingredients" group — just a star + label + "unlock the most options"
+  // detail. Less visual noise, matches web exactly.
   section: {
-    marginTop: 6,
-    marginBottom: 4,
-    paddingTop: 6,
-  },
-  keySection: {
-    backgroundColor: COLORS.highlightTint,
-    borderRadius: 12,
-    padding: 10,
-    marginVertical: 8,
+    marginBottom: 10,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
     marginBottom: 6,
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.text,
-    letterSpacing: 0.4,
-    marginLeft: 4,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   sectionLabelDetail: {
     fontSize: 11,
     color: COLORS.textSecondary,
-    marginLeft: 6,
+    marginLeft: 2,
   },
   chips: {
     flexDirection: 'row',
@@ -193,19 +190,20 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   chipHas: {
     backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    borderColor: '#D1FAE5',
   },
   chipMissing: {
     backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
-    opacity: 0.75,
+    borderColor: '#FEE2E2',
+    opacity: 0.7,
   },
   chipLabel: {
     fontSize: 12,

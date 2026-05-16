@@ -13,10 +13,16 @@ import {
   ScrollView,
 } from 'react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
+import AppHeader from '../components/AppHeader';
 import EmptyState from '../components/EmptyState';
 import LoadingPot from '../components/LoadingPot';
 import { flowMetaFor } from '#shared/constants';
 import { COLORS, SHADOWS } from '../theme';
+
+// Exit-to-saucebook helper shared by the X close button + the cancel paths.
+function exitMealFlow(navigation) {
+  navigation.navigate('Home', { screen: 'SaucebookTab' });
+}
 
 export default function PrepSelectorScreen({ navigation }) {
   const state = useAppState();
@@ -39,6 +45,14 @@ export default function PrepSelectorScreen({ navigation }) {
   if (!item) {
     return (
       <View style={styles.screen}>
+        <AppHeader
+          title="Meal Builder"
+          back={() => exitMealFlow(navigation)}
+          closeIcon
+          manage={false}
+          auth={false}
+          navigation={navigation}
+        />
         <EmptyState body="Pick an item from the home screen first." />
       </View>
     );
@@ -51,6 +65,15 @@ export default function PrepSelectorScreen({ navigation }) {
 
   return (
     <View style={styles.screen}>
+      <AppHeader
+        title="Meal Builder"
+        subtitle={`Step 2 of 3 · ${item.name}`}
+        back={() => exitMealFlow(navigation)}
+        closeIcon
+        manage={false}
+        auth={false}
+        navigation={navigation}
+      />
       <View style={styles.header}>
         <Text style={styles.title}>
           {item.emoji} How are you preparing the {item.name.toLowerCase()}?
@@ -91,6 +114,16 @@ export default function PrepSelectorScreen({ navigation }) {
             activeOpacity={0.7}
           >
             <Text style={styles.skipLabel}>Skip — show me everything</Text>
+          </TouchableOpacity>
+
+          {/* In-flow back link to MealBuilder (step 1). The header X exits
+              the whole meal flow; this link walks one step back instead. */}
+          <TouchableOpacity
+            style={styles.backLink}
+            onPress={() => navigation.navigate('MealBuilder')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.backLinkLabel}>← Back to Meal Builder</Text>
           </TouchableOpacity>
         </ScrollView>
       )}
@@ -171,5 +204,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.textSecondary,
+  },
+  backLink: {
+    marginTop: 12,
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  backLinkLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });

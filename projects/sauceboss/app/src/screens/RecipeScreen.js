@@ -2,21 +2,30 @@
 // meal-builder flows. When state.meal has item + sauce, the dish prep block
 // is shown after the controls. Otherwise it's sauce-only.
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
+  TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Alert,
 } from 'react-native';
-import { Lightbulb } from 'lucide-react-native';
+// expo-file-system top-level export in SDK 54 dropped EncodingType — use
+// the /legacy subpath (same as SauceBuilderScreen) to keep writeAsStringAsync.
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { Lightbulb, ChevronDown, Bookmark, BookmarkCheck, Download } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import StepCard from '../components/StepCard';
 import VariantSwitcher from '../components/VariantSwitcher';
 import ServingsControl from '../components/ServingsControl';
 import UnitToggle from '../components/UnitToggle';
 import EmptyState from '../components/EmptyState';
+import { api } from '../api/client';
 import { SAUCE_TYPES, flowMetaFor } from '#shared/constants';
+import { aggregateSauceIngredients, prepareItems, formatAmount } from '#shared/units';
+import { capitalizeIngredient } from '#shared/text';
 import { COLORS, SHADOWS } from '../theme';
 
 export default function RecipeScreen({ navigation }) {
@@ -29,10 +38,73 @@ export default function RecipeScreen({ navigation }) {
   const item = isMeal ? state.meal.item : null;
   const prep = isMeal ? state.meal.prep : null;
 
-  // Set header title to sauce name
+  const inSaucebook = !!(sauce && (state.saucebook?.items || []).some((s) => s.id === sauce.id));
+  const isSignedIn = !!state.currentUser;
+
+  const onToggleBookmark = useCallback(async () => {
+    if (!sauce) return;
+    if (!isSignedIn) {
+      Alert.alert('Sign in to save recipes', 'Use the Settings tab to sign in, then tap the bookmark again.');
+      return;
+    }
+    const res = inSaucebook
+      ? await actions.removeFromSaucebook(sauce.id)
+      : await actions.addToSaucebook(sauce);
+    if (!res?.ok && res?.error) {
+      Alert.alert('Saucebook', res.error);
+    }
+  }, [sauce, isSignedIn, inSaucebook, actions]);
+
+  const onDownload = useCallback(async () => {
+    if (!sauce) return;
+    try {
+      const md = await api.exportSauceMd(sauce.id);
+      const safeName = (sauce.name || 'sauce').replace(/[^a-z0-9-_]+/gi, '-').toLowerCase() || 'sauce';
+      const fileUri = `${FileSystem.cacheDirectory}${safeName}.md`;
+      await FileSystem.writeAsStringAsync(fileUri, md, { encoding: FileSystem.EncodingType.UTF8 });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/markdown', dialogTitle: 'Download recipe' });
+      } else {
+        Alert.alert('Saved', `Recipe written to ${fileUri}`);
+      }
+    } catch (e) {
+      Alert.alert('Download failed', e?.message || String(e));
+    }
+  }, [sauce]);
+
+  // Header: title + bookmark + download. Re-runs whenever the saucebook
+  // membership flips or the user signs in/out so the icon stays in sync.
   useEffect(() => {
-    if (sauce) navigation.setOptions({ title: sauce.name });
-  }, [sauce?.name, navigation]);
+    if (!sauce) return;
+    navigation.setOptions({
+      title: sauce.name,
+      headerRight: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingRight: 4 }}>
+          <TouchableOpacity
+            onPress={onToggleBookmark}
+            hitSlop={8}
+            style={{ padding: 8 }}
+            accessibilityLabel={inSaucebook ? 'Remove from saucebook' : 'Save to saucebook'}
+          >
+            {inSaucebook ? (
+              <BookmarkCheck size={22} color="#fff" />
+            ) : (
+              <Bookmark size={22} color="#fff" />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onDownload}
+            hitSlop={8}
+            style={{ padding: 8 }}
+            accessibilityLabel="Download recipe"
+          >
+            <Download size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      ),
+    });
+  }, [sauce?.id, sauce?.name, inSaucebook, navigation, onToggleBookmark, onDownload]);
 
   if (!sauce) {
     return (
@@ -64,6 +136,18 @@ export default function RecipeScreen({ navigation }) {
     if (next.id === sauce.id) return;
     actions.selectVariant(next);
   };
+
+  // Aggregated shopping-list view across all steps. Recomputed per
+  // (sauce, servings, unitSystem) so scaling + unit toggles flow through.
+  const aggregatedItems = useMemo(() => {
+    const aggregated = aggregateSauceIngredients(sauce);
+    if (!aggregated.length) return [];
+    return prepareItems(aggregated, {
+      servings: state.servings,
+      unitSystem: state.unitSystem,
+      baseServings: sauce.defaultServings || 2,
+    });
+  }, [sauce, state.servings, state.unitSystem]);
 
   // Item prep card (meal flow only)
   const itemSection = item ? (() => {
@@ -113,6 +197,8 @@ export default function RecipeScreen({ navigation }) {
           baseServings={sauce.defaultServings || 2}
           disabledIngredients={state.disabledIngredients}
           substitutions={state.substitutions}
+          hiddenSlices={state.hiddenPieSlices[i]}
+          onTogglePieSlice={actions.togglePieSlice}
         />
       ))}
     </View>
@@ -131,6 +217,48 @@ export default function RecipeScreen({ navigation }) {
           <ServingsControl value={state.servings} onChange={(v) => actions.setServings(v)} />
           <UnitToggle value={state.unitSystem} onChange={(v) => actions.setUnitSystem(v)} />
         </View>
+
+        {aggregatedItems.length > 0 ? (
+          <View style={styles.ingPanel}>
+            <TouchableOpacity
+              style={styles.ingPanelHeader}
+              onPress={actions.toggleRecipeIngredients}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.ingPanelTitle}>
+                Ingredients · {aggregatedItems.length}
+              </Text>
+              <ChevronDown
+                size={16}
+                color={COLORS.textSecondary}
+                style={{
+                  transform: [
+                    { rotate: state.recipeIngredientsOpen ? '180deg' : '0deg' },
+                  ],
+                }}
+              />
+            </TouchableOpacity>
+            {state.recipeIngredientsOpen ? (
+              <View style={styles.ingPanelBody}>
+                {aggregatedItems.map((it, i) => {
+                  // Falsy amount → qualitative unit (to taste / splash /
+                  // pinch / etc.). Render just the unit name, not "0 X".
+                  const isQual = !it.amount;
+                  return (
+                    <View key={`${it.name}-${i}`} style={styles.ingPanelRow}>
+                      <Text style={styles.ingPanelName} numberOfLines={1}>
+                        {it.modifier ? `${capitalizeIngredient(it.modifier)} ` : ''}{capitalizeIngredient(it.name)}
+                      </Text>
+                      <Text style={styles.ingPanelQty}>
+                        {isQual ? it.unit : `${formatAmount(it.amount)} ${it.unit}`}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {isMeal && isMarinade ? (
           <>
@@ -173,7 +301,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  ingPanel: {
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
     marginBottom: 16,
+    ...SHADOWS.sm,
+    overflow: 'hidden',
+  },
+  ingPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  ingPanelTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: 0.4,
+  },
+  ingPanelBody: {
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceSubtle,
+  },
+  ingPanelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surfaceSubtle,
+  },
+  ingPanelName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginRight: 8,
+  },
+  ingPanelQty: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
   },
   section: {
     marginBottom: 16,

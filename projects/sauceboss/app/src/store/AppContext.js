@@ -42,7 +42,15 @@ export const initialState = {
   refCuisines: [],              // [{ cuisine, emoji }]
   refUnits: [],                 // [{ id, abbreviation, quantifiable, ... }]
   ingredientCategories: {},
+  ingredientModifiers: [],      // [{ id, name }] — prep states like "minced"
   substitutions: {},
+
+  // Recipe-screen UI state (collapsible Ingredients summary + per-step pie
+  // chart toggles). `hiddenPieSlices[stepIndex]` is a Set of ingredient
+  // names hidden in that step's chart + legend. Cleared on SELECT_SAUCE so
+  // toggles don't bleed across recipes.
+  recipeIngredientsOpen: false,
+  hiddenPieSlices: {},
 
   // Filter state
   disabledIngredients: new Set(),
@@ -93,6 +101,58 @@ export const initialState = {
   // Defaults to false; flipped by the pencil toggle in the manager header
   // (visible only to logged-in users); reset to false on sign-out.
   editMode: false,
+
+  // ── Three-tab home (Browse / Saucebook / Pantry) ──────────────────────────
+  // Browse: paginated public-discovery list. Filters compound; page resets
+  // to 0 on any filter change. Sets are used for multi-select chips so the
+  // shape matches expandedCuisines / disabledIngredients elsewhere.
+  browse: {
+    items: [],
+    total: 0,
+    page: 0,
+    pageSize: 20,
+    loading: false,
+    loaded: false,
+    error: null,
+    q: '',
+    cuisines: new Set(),
+    types: new Set(),
+    dishes: new Set(),
+    authorId: null,
+    authorQuery: '',
+    authorResults: [],
+    filtersOpen: false,
+  },
+
+  // Saucebook: the user's personal library. Lightweight rows (no steps).
+  // Each row has `ingredientNames: Set<string>` (attached by shared/api.js).
+  saucebook: {
+    items: [],
+    loading: false,
+    loaded: false,
+    error: null,
+    search: '',
+    filters: {
+      open: false,
+      cuisines: new Set(),
+      types: new Set(),
+      dishes: new Set(),
+      authorId: null,
+    },
+  },
+  cuisineSections: {}, // { [cuisine]: bool } — saucebook accordion open state
+
+  // Pantry: user's negative ingredient list, derived from saucebook
+  // ingredients. `missing` flags two-way sync with `disabledIngredients`
+  // (which is the meal-builder filter Set keyed by ingredient name).
+  pantry: {
+    ingredients: [], // [{ ingredientId, name, plural, category, missing }]
+    saucebookSauceIds: [],
+    loading: false,
+    loaded: false,
+    error: null,
+    openSections: new Set(),
+  },
 };
 
 // ── Action types ────────────────────────────────────────────────────────────
@@ -101,8 +161,11 @@ const A = {
   BOOT_ERROR: 'BOOT_ERROR',
   SET_INGREDIENT_CATEGORIES: 'SET_INGREDIENT_CATEGORIES',
   SET_INGREDIENT_CATEGORY: 'SET_INGREDIENT_CATEGORY',
+  SET_INGREDIENT_MODIFIERS: 'SET_INGREDIENT_MODIFIERS',
   SET_SUBSTITUTIONS: 'SET_SUBSTITUTIONS',
   SET_MEAL_CATEGORY: 'SET_MEAL_CATEGORY',
+  TOGGLE_PIE_SLICE: 'TOGGLE_PIE_SLICE',
+  TOGGLE_RECIPE_INGREDIENTS: 'TOGGLE_RECIPE_INGREDIENTS',
 
   ITEM_SELECT_START: 'ITEM_SELECT_START',
   ITEM_LOADED: 'ITEM_LOADED',
@@ -168,6 +231,40 @@ const A = {
   CLEAR_AUTH: 'CLEAR_AUTH',
 
   TOGGLE_EDIT_MODE: 'TOGGLE_EDIT_MODE',
+
+  // ── Three-tab home ───────────────────────────────────────────────────────
+  BROWSE_LOAD_START: 'BROWSE_LOAD_START',
+  BROWSE_LOADED: 'BROWSE_LOADED',
+  BROWSE_LOAD_ERROR: 'BROWSE_LOAD_ERROR',
+  BROWSE_SET_SEARCH: 'BROWSE_SET_SEARCH',
+  BROWSE_TOGGLE_FILTER: 'BROWSE_TOGGLE_FILTER', // payload: { key: 'cuisines'|'types'|'dishes', value }
+  BROWSE_SET_AUTHOR: 'BROWSE_SET_AUTHOR',
+  BROWSE_SET_AUTHOR_QUERY: 'BROWSE_SET_AUTHOR_QUERY',
+  BROWSE_SET_AUTHOR_RESULTS: 'BROWSE_SET_AUTHOR_RESULTS',
+  BROWSE_SET_PAGE: 'BROWSE_SET_PAGE',
+  BROWSE_TOGGLE_FILTERS_OPEN: 'BROWSE_TOGGLE_FILTERS_OPEN',
+  BROWSE_CLEAR_FILTERS: 'BROWSE_CLEAR_FILTERS',
+  BROWSE_MARK_IN_SAUCEBOOK: 'BROWSE_MARK_IN_SAUCEBOOK',
+
+  SAUCEBOOK_LOAD_START: 'SAUCEBOOK_LOAD_START',
+  SAUCEBOOK_LOADED: 'SAUCEBOOK_LOADED',
+  SAUCEBOOK_LOAD_ERROR: 'SAUCEBOOK_LOAD_ERROR',
+  SAUCEBOOK_ADD: 'SAUCEBOOK_ADD',
+  SAUCEBOOK_REMOVE: 'SAUCEBOOK_REMOVE',
+  SAUCEBOOK_SET_SEARCH: 'SAUCEBOOK_SET_SEARCH',
+  SAUCEBOOK_TOGGLE_FILTER: 'SAUCEBOOK_TOGGLE_FILTER',
+  SAUCEBOOK_TOGGLE_FILTERS_OPEN: 'SAUCEBOOK_TOGGLE_FILTERS_OPEN',
+  SAUCEBOOK_SET_AUTHOR: 'SAUCEBOOK_SET_AUTHOR',
+  SAUCEBOOK_TOGGLE_CUISINE_SECTION: 'SAUCEBOOK_TOGGLE_CUISINE_SECTION',
+  SAUCEBOOK_SET_ALL_CUISINE_SECTIONS: 'SAUCEBOOK_SET_ALL_CUISINE_SECTIONS',
+
+  PANTRY_LOAD_START: 'PANTRY_LOAD_START',
+  PANTRY_LOADED: 'PANTRY_LOADED',
+  PANTRY_LOAD_ERROR: 'PANTRY_LOAD_ERROR',
+  PANTRY_TOGGLE_MISSING: 'PANTRY_TOGGLE_MISSING',
+  PANTRY_TOGGLE_SECTION: 'PANTRY_TOGGLE_SECTION',
+  PANTRY_RESTOCK_ALL: 'PANTRY_RESTOCK_ALL',
+  PANTRY_SET_ALL_SECTIONS: 'PANTRY_SET_ALL_SECTIONS',
 };
 
 // ── Reducer ─────────────────────────────────────────────────────────────────
@@ -199,8 +296,26 @@ function reducer(state, action) {
       return { ...state, ingredientCategories: next };
     }
 
+    case A.SET_INGREDIENT_MODIFIERS:
+      return { ...state, ingredientModifiers: action.payload || [] };
+
     case A.SET_SUBSTITUTIONS:
       return { ...state, substitutions: action.payload || {} };
+
+    case A.TOGGLE_PIE_SLICE: {
+      const { stepIndex, name } = action;
+      const current = state.hiddenPieSlices[stepIndex] || new Set();
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return {
+        ...state,
+        hiddenPieSlices: { ...state.hiddenPieSlices, [stepIndex]: next },
+      };
+    }
+
+    case A.TOGGLE_RECIPE_INGREDIENTS:
+      return { ...state, recipeIngredientsOpen: !state.recipeIngredientsOpen };
 
     case A.SET_MEAL_CATEGORY:
       return { ...state, mealCategory: action.payload };
@@ -279,6 +394,7 @@ function reducer(state, action) {
         selectedSauce: action.sauce,
         selectedSauceFamily: action.family || [],
         servings: action.sauce?.defaultServings || 2,
+        hiddenPieSlices: {},
         meal: {
           item: state.selectedItem,
           prep: state.selectedPrep,
@@ -292,6 +408,7 @@ function reducer(state, action) {
         ...state,
         selectedSauce: sauce,
         servings: sauce?.defaultServings || 2,
+        hiddenPieSlices: {},
         meal: { ...state.meal, sauce },
       };
     }
@@ -479,7 +596,266 @@ function reducer(state, action) {
         authError: null,
         becomeAdminError: null,
         editMode: false,
+        // Drop any per-user data so the next sign-in starts clean.
+        saucebook: { ...state.saucebook, items: [], loaded: false },
+        pantry: { ...state.pantry, ingredients: [], saucebookSauceIds: [], loaded: false },
       };
+
+    // ── Browse ────────────────────────────────────────────────────────────
+    case A.BROWSE_LOAD_START:
+      return { ...state, browse: { ...state.browse, loading: true, error: null } };
+
+    case A.BROWSE_LOADED:
+      return {
+        ...state,
+        browse: {
+          ...state.browse,
+          items: action.items || [],
+          total: action.total || 0,
+          loading: false,
+          loaded: true,
+          error: null,
+        },
+      };
+
+    case A.BROWSE_LOAD_ERROR:
+      return { ...state, browse: { ...state.browse, loading: false, error: action.error } };
+
+    case A.BROWSE_SET_SEARCH:
+      // Reset page to 0 on any search change so results stay coherent.
+      return { ...state, browse: { ...state.browse, q: action.value || '', page: 0 } };
+
+    case A.BROWSE_TOGGLE_FILTER: {
+      const { key, value } = action;
+      const current = state.browse[key] || new Set();
+      const next = new Set(current);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return { ...state, browse: { ...state.browse, [key]: next, page: 0 } };
+    }
+
+    case A.BROWSE_SET_AUTHOR:
+      return {
+        ...state,
+        browse: {
+          ...state.browse,
+          authorId: action.authorId || null,
+          authorQuery: action.authorQuery ?? state.browse.authorQuery,
+          page: 0,
+        },
+      };
+
+    case A.BROWSE_SET_AUTHOR_QUERY:
+      return { ...state, browse: { ...state.browse, authorQuery: action.value || '' } };
+
+    case A.BROWSE_SET_AUTHOR_RESULTS:
+      return { ...state, browse: { ...state.browse, authorResults: action.results || [] } };
+
+    case A.BROWSE_SET_PAGE:
+      return { ...state, browse: { ...state.browse, page: Math.max(0, action.page | 0) } };
+
+    case A.BROWSE_TOGGLE_FILTERS_OPEN:
+      return { ...state, browse: { ...state.browse, filtersOpen: !state.browse.filtersOpen } };
+
+    case A.BROWSE_CLEAR_FILTERS:
+      return {
+        ...state,
+        browse: {
+          ...state.browse,
+          q: '',
+          cuisines: new Set(),
+          types: new Set(),
+          dishes: new Set(),
+          authorId: null,
+          authorQuery: '',
+          page: 0,
+        },
+      };
+
+    case A.BROWSE_MARK_IN_SAUCEBOOK: {
+      const items = state.browse.items.map((s) =>
+        s.id === action.sauceId ? { ...s, inSaucebook: !!action.value } : s,
+      );
+      return { ...state, browse: { ...state.browse, items } };
+    }
+
+    // ── Saucebook ─────────────────────────────────────────────────────────
+    case A.SAUCEBOOK_LOAD_START:
+      return { ...state, saucebook: { ...state.saucebook, loading: true, error: null } };
+
+    case A.SAUCEBOOK_LOADED:
+      return {
+        ...state,
+        saucebook: {
+          ...state.saucebook,
+          items: action.items || [],
+          loading: false,
+          loaded: true,
+          error: null,
+        },
+      };
+
+    case A.SAUCEBOOK_LOAD_ERROR:
+      // `loaded: true` so the screen can distinguish "never tried" from
+      // "tried and failed" — the loading spinner clears and the error
+      // empty-state surfaces.
+      return { ...state, saucebook: { ...state.saucebook, loading: false, loaded: true, error: action.error } };
+
+    case A.SAUCEBOOK_ADD: {
+      // Optimistic add — caller passes the row to splice in.
+      const exists = state.saucebook.items.some((s) => s.id === action.sauce?.id);
+      if (exists || !action.sauce) return state;
+      return {
+        ...state,
+        saucebook: { ...state.saucebook, items: [action.sauce, ...state.saucebook.items] },
+      };
+    }
+
+    case A.SAUCEBOOK_REMOVE:
+      return {
+        ...state,
+        saucebook: {
+          ...state.saucebook,
+          items: state.saucebook.items.filter((s) => s.id !== action.sauceId),
+        },
+      };
+
+    case A.SAUCEBOOK_SET_SEARCH:
+      return { ...state, saucebook: { ...state.saucebook, search: action.value || '' } };
+
+    case A.SAUCEBOOK_TOGGLE_FILTER: {
+      const { key, value } = action;
+      const current = state.saucebook.filters[key] || new Set();
+      const next = new Set(current);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return {
+        ...state,
+        saucebook: {
+          ...state.saucebook,
+          filters: { ...state.saucebook.filters, [key]: next },
+        },
+      };
+    }
+
+    case A.SAUCEBOOK_SET_AUTHOR:
+      return {
+        ...state,
+        saucebook: {
+          ...state.saucebook,
+          filters: { ...state.saucebook.filters, authorId: action.authorId || null },
+        },
+      };
+
+    case A.SAUCEBOOK_TOGGLE_FILTERS_OPEN:
+      return {
+        ...state,
+        saucebook: {
+          ...state.saucebook,
+          filters: { ...state.saucebook.filters, open: !state.saucebook.filters.open },
+        },
+      };
+
+    case A.SAUCEBOOK_TOGGLE_CUISINE_SECTION: {
+      const cuisine = action.cuisine;
+      const prev = state.cuisineSections[cuisine];
+      // Default is open; toggling explicitly stores false. Subsequent toggles flip.
+      return {
+        ...state,
+        cuisineSections: {
+          ...state.cuisineSections,
+          [cuisine]: prev === undefined ? false : !prev,
+        },
+      };
+    }
+
+    // Bulk collapse / expand. `cuisines` is the caller-supplied visible set
+    // (typically the current grouped list). `value` is the new open state —
+    // true means expand all, false means collapse all.
+    case A.SAUCEBOOK_SET_ALL_CUISINE_SECTIONS: {
+      const next = { ...state.cuisineSections };
+      for (const c of (action.cuisines || [])) {
+        next[c] = !!action.value;
+      }
+      return { ...state, cuisineSections: next };
+    }
+
+    // ── Pantry ────────────────────────────────────────────────────────────
+    case A.PANTRY_LOAD_START:
+      return { ...state, pantry: { ...state.pantry, loading: true, error: null } };
+
+    case A.PANTRY_LOADED: {
+      const ingredients = action.ingredients || [];
+      // Mirror the missing set into disabledIngredients (keyed by name) so
+      // the meal-builder filter stays in sync.
+      const disabled = new Set();
+      for (const i of ingredients) {
+        if (i.missing) disabled.add(i.name);
+      }
+      return {
+        ...state,
+        pantry: {
+          ...state.pantry,
+          ingredients,
+          saucebookSauceIds: action.saucebookSauceIds || [],
+          loading: false,
+          loaded: true,
+          error: null,
+        },
+        disabledIngredients: disabled,
+      };
+    }
+
+    case A.PANTRY_LOAD_ERROR:
+      return { ...state, pantry: { ...state.pantry, loading: false, error: action.error } };
+
+    case A.PANTRY_TOGGLE_MISSING: {
+      const id = action.ingredientId;
+      const ingredients = state.pantry.ingredients.map((i) =>
+        i.ingredientId === id ? { ...i, missing: !i.missing } : i,
+      );
+      // Keep disabledIngredients in lock-step with the toggle.
+      const disabled = new Set();
+      for (const i of ingredients) {
+        if (i.missing) disabled.add(i.name);
+      }
+      return {
+        ...state,
+        pantry: { ...state.pantry, ingredients },
+        disabledIngredients: disabled,
+      };
+    }
+
+    case A.PANTRY_TOGGLE_SECTION: {
+      const next = new Set(state.pantry.openSections);
+      if (next.has(action.category)) next.delete(action.category);
+      else next.add(action.category);
+      return { ...state, pantry: { ...state.pantry, openSections: next } };
+    }
+
+    // Mark every pantry ingredient as in-stock and clear the disabled set.
+    // The "Restock" button on the pantry header fires this so the user can
+    // reset filters with one tap after a grocery trip.
+    case A.PANTRY_RESTOCK_ALL: {
+      const ingredients = state.pantry.ingredients.map((i) =>
+        i.missing ? { ...i, missing: false } : i,
+      );
+      return {
+        ...state,
+        pantry: { ...state.pantry, ingredients },
+        disabledIngredients: new Set(),
+      };
+    }
+
+    // Bulk-collapse / bulk-expand every visible category in one shot. The
+    // pantry header's collapse-all toggle dispatches this with the current
+    // visible category list + the target value.
+    case A.PANTRY_SET_ALL_SECTIONS: {
+      const next = action.value
+        ? new Set(action.categories || [])
+        : new Set();
+      return { ...state, pantry: { ...state.pantry, openSections: next } };
+    }
 
     default:
       return state;
@@ -546,7 +922,10 @@ export function AppProvider({ children }) {
         dispatch({ type: A.CLEAR_AUTH });
         return;
       }
-      // Profile: 404 means auto-create.
+      // Profile: 404 means auto-create. Any other failure means the Supabase
+      // session is good but our backend rejected the request — keep
+      // currentUser null and surface the message via authError so the user
+      // doesn't see a stuck "Sign in" button without explanation.
       try {
         const profile = await api.getProfile();
         if (!cancelled) {
@@ -565,12 +944,21 @@ export function AppProvider({ children }) {
                 user: { user_id: created.id, display_name: created.display_name, is_admin: !!created.is_admin },
               });
             }
-          } catch {
-            // ignore — non-fatal, user is signed in but profile creation failed
+          } catch (e2) {
+            if (!cancelled) {
+              dispatch({
+                type: A.SET_AUTH_ERROR,
+                error: `Signed in, but profile creation failed: ${e2.message || String(e2)}`,
+              });
+            }
           }
+        } else if (!cancelled) {
+          dispatch({
+            type: A.SET_AUTH_ERROR,
+            error: `Signed in, but couldn't load your profile: ${e.message || String(e)}`,
+          });
         }
       }
-
     }
 
     // Initial session check (rehydrated from SecureStore).
@@ -624,11 +1012,53 @@ export function AppProvider({ children }) {
         (rows) => !cancelled && dispatch({ type: A.SET_REF_UNITS, payload: rows || [] }),
         () => {},
       );
+      api.ingredientModifiers().then(
+        (rows) => !cancelled && dispatch({ type: A.SET_INGREDIENT_MODIFIERS, payload: rows || [] }),
+        () => {}, // 404 means the endpoint isn't live yet; modifier UI degrades gracefully
+      );
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // Hydrate saucebook + pantry whenever the user signs in. Mirrors
+  // web/init.js:64-66 — both are background loads kicked off once
+  // currentUser lands so the Saucebook / Pantry tabs render instantly
+  // when the user navigates to them. CLEAR_AUTH wipes both lists.
+  const currentUserId = state.currentUser?.user_id;
+  useEffect(() => {
+    if (!currentUserId) return;
+    api.listSaucebook().then(
+      (items) => dispatch({ type: A.SAUCEBOOK_LOADED, items }),
+      (e) => dispatch({ type: A.SAUCEBOOK_LOAD_ERROR, error: e.message || String(e) }),
+    );
+    api.getPantry().then(
+      (data) =>
+        dispatch({
+          type: A.PANTRY_LOADED,
+          ingredients: data.ingredients,
+          saucebookSauceIds: data.saucebookSauceIds,
+        }),
+      (e) => dispatch({ type: A.PANTRY_LOAD_ERROR, error: e.message || String(e) }),
+    );
+    // Re-fetch Browse with the now-authenticated session so each row gets
+    // the correct `inSaucebook` flag — and so the `+ Saucebook` button
+    // (gated by isSignedIn in BrowseRow) hydrates on rows fetched anonymously
+    // before login.
+    api.browseSauces({
+      q: state.browse?.q || '',
+      cuisines: [...(state.browse?.cuisines || [])],
+      types: [...(state.browse?.types || [])],
+      dishes: [...(state.browse?.dishes || [])],
+      author: state.browse?.authorId || null,
+      limit: state.browse?.pageSize || 20,
+      offset: (state.browse?.page || 0) * (state.browse?.pageSize || 20),
+    }).then(
+      (data) => dispatch({ type: A.BROWSE_LOADED, items: data.items, total: data.total }),
+      () => {}, // best-effort; the screen will refetch on next filter change
+    );
+  }, [currentUserId]);
 
   // Stable action creators that wrap async API calls and dispatch reducer events.
   const actions = useMemo(
@@ -674,9 +1104,35 @@ export function AppProvider({ children }) {
       toggleCuisine: (cuisine) => dispatch({ type: A.TOGGLE_CUISINE, cuisine }),
 
       selectSauce: (sauce, family) => dispatch({ type: A.SELECT_SAUCE, sauce, family }),
+      // Browse + Saucebook hold slim rows (no steps / ingredients). Before
+      // navigating to Recipe we need the full envelope from /sauces. Mirrors
+      // web's browseOpenRecipe (web/browse.js:308).
+      openSauceById: async (sauceId) => {
+        if (!sauceId) return { ok: false, error: 'no id' };
+        try {
+          const all = await api.allSauces();
+          const target = all.find((s) => s.id === sauceId);
+          if (!target) return { ok: false, error: 'Sauce not found' };
+          const rootId = target.parentSauceId || target.id;
+          const family = all.filter((s) => s.id === rootId || s.parentSauceId === rootId);
+          dispatch({ type: A.SELECT_SAUCE, sauce: target, family });
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
       selectVariant: (sauce) => dispatch({ type: A.SELECT_VARIANT, sauce }),
       setServings: (value) => dispatch({ type: A.SET_SERVINGS, value }),
       setUnitSystem: (value) => dispatch({ type: A.SET_UNIT_SYSTEM, value }),
+
+      togglePieSlice: (stepIndex, name) =>
+        dispatch({ type: A.TOGGLE_PIE_SLICE, stepIndex, name }),
+      toggleRecipeIngredients: () => dispatch({ type: A.TOGGLE_RECIPE_INGREDIENTS }),
+      // Update the local ingredient-categories cache so the builder + recipe
+      // views see the new category immediately. Server-side persistence
+      // happens later via the admin tools (matches web's classifyIngredientLocal).
+      classifyIngredient: (name, category) =>
+        dispatch({ type: A.SET_INGREDIENT_CATEGORY, name: name.trim().toLowerCase(), category }),
 
       toggleEditMode: () => dispatch({ type: A.TOGGLE_EDIT_MODE }),
 
@@ -982,6 +1438,154 @@ export function AppProvider({ children }) {
         }
         dispatch({ type: A.CLEAR_AUTH });
       },
+
+      // ── Three-tab home actions ────────────────────────────────────────
+      // Browse — paginated public discovery.
+      loadBrowseSauces: async () => {
+        const b = stateRef.current.browse;
+        dispatch({ type: A.BROWSE_LOAD_START });
+        try {
+          const data = await api.browseSauces({
+            q: b.q,
+            cuisines: [...b.cuisines],
+            types: [...b.types],
+            dishes: [...b.dishes],
+            author: b.authorId,
+            limit: b.pageSize,
+            offset: b.page * b.pageSize,
+          });
+          dispatch({ type: A.BROWSE_LOADED, items: data.items, total: data.total });
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.BROWSE_LOAD_ERROR, error: e.message || String(e) });
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      setBrowseSearch: (value) => dispatch({ type: A.BROWSE_SET_SEARCH, value }),
+      toggleBrowseCuisine: (cuisine) =>
+        dispatch({ type: A.BROWSE_TOGGLE_FILTER, key: 'cuisines', value: cuisine }),
+      toggleBrowseType: (type) =>
+        dispatch({ type: A.BROWSE_TOGGLE_FILTER, key: 'types', value: type }),
+      toggleBrowseDish: (dishId) =>
+        dispatch({ type: A.BROWSE_TOGGLE_FILTER, key: 'dishes', value: dishId }),
+      setBrowseAuthor: (authorId, authorQuery) =>
+        dispatch({ type: A.BROWSE_SET_AUTHOR, authorId, authorQuery }),
+      setBrowseAuthorQuery: (value) => dispatch({ type: A.BROWSE_SET_AUTHOR_QUERY, value }),
+      setBrowseAuthorResults: (results) =>
+        dispatch({ type: A.BROWSE_SET_AUTHOR_RESULTS, results }),
+      goBrowsePage: (page) => dispatch({ type: A.BROWSE_SET_PAGE, page }),
+      toggleBrowseFilters: () => dispatch({ type: A.BROWSE_TOGGLE_FILTERS_OPEN }),
+      clearBrowseFilters: () => dispatch({ type: A.BROWSE_CLEAR_FILTERS }),
+      // Fetch author autocomplete (debounced by the caller).
+      fetchBrowseAuthors: async (q) => {
+        try {
+          const results = await api.listAuthors(q);
+          dispatch({ type: A.BROWSE_SET_AUTHOR_RESULTS, results });
+        } catch {
+          dispatch({ type: A.BROWSE_SET_AUTHOR_RESULTS, results: [] });
+        }
+      },
+
+      // Saucebook — user's library.
+      loadSaucebook: async () => {
+        if (!stateRef.current.currentUser) return { ok: false };
+        dispatch({ type: A.SAUCEBOOK_LOAD_START });
+        try {
+          const items = await api.listSaucebook();
+          dispatch({ type: A.SAUCEBOOK_LOADED, items });
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.SAUCEBOOK_LOAD_ERROR, error: e.message || String(e) });
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      addToSaucebook: async (sauce) => {
+        // Optimistic: mark inSaucebook on the browse row, insert into the
+        // saucebook list, then call the API and reconcile on failure.
+        if (!sauce?.id) return { ok: false };
+        dispatch({ type: A.BROWSE_MARK_IN_SAUCEBOOK, sauceId: sauce.id, value: true });
+        // Browse rows are slim — no ingredientNames. Normalize before dispatch
+        // so SaucebookRow's missingSauceIngredients() doesn't blow up.
+        dispatch({ type: A.SAUCEBOOK_ADD, sauce: withIngredientNames({ ...sauce, inSaucebook: true }) });
+        try {
+          await api.addToSaucebook(sauce.id);
+          // Refresh pantry — the new sauce's ingredients should appear there.
+          actions.loadPantry();
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.BROWSE_MARK_IN_SAUCEBOOK, sauceId: sauce.id, value: false });
+          dispatch({ type: A.SAUCEBOOK_REMOVE, sauceId: sauce.id });
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      removeFromSaucebook: async (sauceId) => {
+        // Optimistic remove. Browse row's inSaucebook flag flips too if it
+        // happens to be currently visible.
+        dispatch({ type: A.SAUCEBOOK_REMOVE, sauceId });
+        dispatch({ type: A.BROWSE_MARK_IN_SAUCEBOOK, sauceId, value: false });
+        try {
+          await api.removeFromSaucebook(sauceId);
+          actions.loadPantry();
+          return { ok: true };
+        } catch (e) {
+          // Best-effort restore from a fresh fetch — the row is gone locally,
+          // refetch puts it back if the server still has it.
+          actions.loadSaucebook();
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      setSaucebookSearch: (value) => dispatch({ type: A.SAUCEBOOK_SET_SEARCH, value }),
+      toggleSaucebookCuisine: (cuisine) =>
+        dispatch({ type: A.SAUCEBOOK_TOGGLE_FILTER, key: 'cuisines', value: cuisine }),
+      toggleSaucebookType: (type) =>
+        dispatch({ type: A.SAUCEBOOK_TOGGLE_FILTER, key: 'types', value: type }),
+      toggleSaucebookDish: (dishId) =>
+        dispatch({ type: A.SAUCEBOOK_TOGGLE_FILTER, key: 'dishes', value: dishId }),
+      setSaucebookAuthor: (authorId) =>
+        dispatch({ type: A.SAUCEBOOK_SET_AUTHOR, authorId }),
+      toggleSaucebookFilters: () => dispatch({ type: A.SAUCEBOOK_TOGGLE_FILTERS_OPEN }),
+      toggleCuisineSection: (cuisine) =>
+        dispatch({ type: A.SAUCEBOOK_TOGGLE_CUISINE_SECTION, cuisine }),
+      setAllSaucebookCuisines: (cuisines, value) =>
+        dispatch({ type: A.SAUCEBOOK_SET_ALL_CUISINE_SECTIONS, cuisines, value }),
+
+      // Pantry — negative ingredient list.
+      loadPantry: async () => {
+        if (!stateRef.current.currentUser) return { ok: false };
+        dispatch({ type: A.PANTRY_LOAD_START });
+        try {
+          const data = await api.getPantry();
+          dispatch({
+            type: A.PANTRY_LOADED,
+            ingredients: data.ingredients,
+            saucebookSauceIds: data.saucebookSauceIds,
+          });
+          return { ok: true };
+        } catch (e) {
+          dispatch({ type: A.PANTRY_LOAD_ERROR, error: e.message || String(e) });
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      // Optimistically flip + persist. On failure, refetch to reconcile.
+      togglePantryIngredient: async (ingredient) => {
+        if (!ingredient?.ingredientId) return { ok: false };
+        dispatch({ type: A.PANTRY_TOGGLE_MISSING, ingredientId: ingredient.ingredientId });
+        try {
+          const missingIds = stateRef.current.pantry.ingredients
+            .filter((i) => i.missing)
+            .map((i) => i.ingredientId);
+          await api.setPantryMissing(missingIds);
+          return { ok: true };
+        } catch (e) {
+          actions.loadPantry();
+          return { ok: false, error: e.message || String(e) };
+        }
+      },
+      togglePantrySection: (category) =>
+        dispatch({ type: A.PANTRY_TOGGLE_SECTION, category }),
+      restockPantry: () => dispatch({ type: A.PANTRY_RESTOCK_ALL }),
+      setAllPantrySections: (categories, value) =>
+        dispatch({ type: A.PANTRY_SET_ALL_SECTIONS, categories, value }),
 
     }),
     [],
