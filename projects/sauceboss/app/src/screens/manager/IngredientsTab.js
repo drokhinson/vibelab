@@ -321,7 +321,7 @@ function IngredientRow({ ingredient, isLast, isAdmin, editMode, merge, onEdit, o
           </TouchableOpacity>
           <TouchableOpacity onPress={onLongPress} style={styles.actionBtn} hitSlop={6}>
             <GitMerge size={13} color={COLORS.textSecondary} />
-            <Text style={[styles.actionLabel, { color: COLORS.textSecondary }]}>Merge into…</Text>
+            <Text style={[styles.actionLabel, { color: COLORS.textSecondary }]}>Merge</Text>
           </TouchableOpacity>
         </View>
       ) : null}
