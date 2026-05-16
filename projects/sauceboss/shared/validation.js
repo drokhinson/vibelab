@@ -21,8 +21,15 @@ export function validateBuilder(builder) {
       }
       const ings = step.ingredients || [];
       const validIngs = ings.filter((i) => i.name && i.name.trim());
-      if (validIngs.length === 0) {
-        errors.push(`Step ${idx + 1} needs at least one ingredient`);
+      // A step is valid if it has at least one ingredient OR it combines a
+      // previous step. The combine-only case lets users author "reduce + plate"
+      // style steps that take an upstream bowl and add nothing new.
+      const refs = Array.isArray(step.inputFromSteps)
+        ? step.inputFromSteps
+        : (step.inputFromStep ? [step.inputFromStep] : []);
+      const hasRefs = refs.length > 0;
+      if (validIngs.length === 0 && !hasRefs) {
+        errors.push(`Step ${idx + 1} needs at least one ingredient or a previous step`);
       }
       validIngs.forEach((ing) => {
         if (ing.unit !== 'to taste' && (ing.amount === '' || ing.amount == null)) {

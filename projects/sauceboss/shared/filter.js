@@ -15,6 +15,7 @@ export function isSauceAvailable(sauce, disabledIngredients) {
 export function missingSauceIngredients(sauce, disabledIngredients) {
   const missing = [];
   if (!disabledIngredients) return missing;
+  if (!sauce?.ingredientNames) return missing;
   for (const name of sauce.ingredientNames) {
     if (disabledIngredients.has(name)) missing.push(name);
   }

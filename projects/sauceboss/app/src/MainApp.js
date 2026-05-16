@@ -6,9 +6,13 @@ import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
+import { Compass, BookOpen, Archive, Lock } from 'lucide-react-native';
 import {
   useFonts,
   Inter_400Regular,
@@ -18,8 +22,11 @@ import {
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
 
-import { AppProvider } from './store/AppContext';
+import { AppProvider, useAppState } from './store/AppContext';
 import LoadingPot from './components/LoadingPot';
+import BrowseScreen from './screens/BrowseScreen';
+import SaucebookScreen from './screens/SaucebookScreen';
+import PantryScreen from './screens/PantryScreen';
 import MealBuilderScreen from './screens/MealBuilderScreen';
 import PrepSelectorScreen from './screens/PrepSelectorScreen';
 import SauceSelectorScreen from './screens/SauceSelectorScreen';
@@ -32,13 +39,111 @@ import { handleAuthDeepLink } from './auth/oauth';
 import { COLORS } from './theme';
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+// Tab icon with optional anonymous-user lock dot. Mirrors web's
+// tabs.js lock-badge for Saucebook / Pantry when no session.
+function TabIcon({ Icon, color, size, locked }) {
+  return (
+    <View style={{ width: size + 4, height: size + 4, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon size={size} color={color} />
+      {locked ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: -2,
+            right: -2,
+            width: 12,
+            height: 12,
+            borderRadius: 6,
+            backgroundColor: COLORS.card,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Lock size={9} color={COLORS.textSecondary} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// HomeTabs holds the three primary destinations. The initial tab depends
+// on whether the user is signed in (matches web/init.js:61). Locked tabs
+// for anonymous users prompt sign-in via the existing AuthModal flow
+// instead of switching — handled in tabPress listener (phase 9 polish).
+function HomeTabs() {
+  const state = useAppState();
+  const isAnon = !state.currentUser;
+  return (
+    <Tab.Navigator
+      // Always land on Saucebook — anonymous users see the sign-in empty
+      // state on that tab, which is more useful than dropping them on Browse.
+      initialRouteName="SaucebookTab"
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.textSecondary,
+        tabBarStyle: { backgroundColor: COLORS.card, borderTopColor: COLORS.border },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+      }}
+    >
+      <Tab.Screen
+        name="BrowseTab"
+        component={BrowseScreen}
+        options={{
+          title: 'Browse',
+          tabBarIcon: ({ color, size }) => <TabIcon Icon={Compass} color={color} size={size} />,
+        }}
+      />
+      <Tab.Screen
+        name="SaucebookTab"
+        component={SaucebookScreen}
+        options={{
+          title: 'Saucebook',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon Icon={BookOpen} color={color} size={size} locked={isAnon} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="PantryTab"
+        component={PantryScreen}
+        options={{
+          title: 'Pantry',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon Icon={Archive} color={color} size={size} locked={isAnon} />
+          ),
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
+
+// Gate the navigator on auth hydration so signed-in users don't see the
+// not-signed-in empty state flicker by during Supabase's getSession() round-trip.
+// `authReady` flips true after the auth bootstrap finishes — either with a
+// session restored or with no session found, OR immediately when auth isn't
+// configured (see AppContext useEffect at line ~912). The fonts gate sits one
+// level up in MainApp.
+function BootGate({ children }) {
+  const { authReady } = useAppState();
+  if (!authReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.background, justifyContent: 'center' }}>
+        <LoadingPot label="Warming up the kitchen…" />
+      </View>
+    );
+  }
+  return children;
+}
 
 function NavRoot() {
   return (
     <NavigationContainer>
       <StatusBar style="light" backgroundColor={COLORS.primary} />
       <Stack.Navigator
-        initialRouteName="MealBuilder"
+        initialRouteName="Home"
         screenOptions={{
           headerStyle: { backgroundColor: COLORS.primary },
           headerTintColor: '#fff',
@@ -49,6 +154,11 @@ function NavRoot() {
         }}
       >
         <Stack.Screen
+          name="Home"
+          component={HomeTabs}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
           name="MealBuilder"
           component={MealBuilderScreen}
           options={{ headerShown: false }}
@@ -56,12 +166,12 @@ function NavRoot() {
         <Stack.Screen
           name="PrepSelector"
           component={PrepSelectorScreen}
-          options={{ title: 'Choose a variant' }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="SauceSelector"
           component={SauceSelectorScreen}
-          options={{ title: 'Pick a sauce' }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="SauceManager"
@@ -71,7 +181,11 @@ function NavRoot() {
         <Stack.Screen
           name="SauceBuilder"
           component={SauceBuilderScreen}
-          options={{ headerShown: false, presentation: 'modal' }}
+          // Plain stack (not `presentation: 'modal'`) so the in-screen
+          // BottomSheetModal portals can surface — modal presentation puts
+          // the screen above the app-root BottomSheetModalProvider on iOS
+          // (FullWindowOverlay), suppressing the Add Ingredient sheet.
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Recipe"
@@ -81,7 +195,7 @@ function NavRoot() {
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}
-          options={{ title: 'Settings' }}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>
@@ -132,10 +246,16 @@ export default function MainApp() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AppProvider>
-        <NavRoot />
-      </AppProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppProvider>
+          <BottomSheetModalProvider>
+            <BootGate>
+              <NavRoot />
+            </BootGate>
+          </BottomSheetModalProvider>
+        </AppProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

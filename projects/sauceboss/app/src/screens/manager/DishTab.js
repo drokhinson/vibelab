@@ -31,6 +31,8 @@ export default function DishTab({ navigation, scrollPaddingBottom }) {
   const state = useAppState();
   const actions = useAppActions();
   const isAdmin = !!state.currentUser?.is_admin;
+  const editMode = !!state.editMode;
+  const canEdit = isAdmin && editMode;
   const search = (state.managerSearch || '').toLowerCase().trim();
 
   // Refresh on focus mirrors SaucesTab behavior so newly-saved items appear.
@@ -145,6 +147,7 @@ export default function DishTab({ navigation, scrollPaddingBottom }) {
                         parent={parent}
                         isLast={i === list.length - 1}
                         isAdmin={isAdmin}
+                        canEdit={canEdit}
                         isExpanded={state.expandedItemParents.has(parent.id)}
                         onToggleExpand={() => toggleParent(parent.id)}
                         onEdit={() => openEdit(parent)}
@@ -155,7 +158,7 @@ export default function DishTab({ navigation, scrollPaddingBottom }) {
                       />
                     ))
                   )}
-                  {isAdmin ? (
+                  {canEdit ? (
                     <TouchableOpacity
                       style={styles.addRow}
                       onPress={() => openAdd(sec.category, null, null)}
@@ -189,6 +192,7 @@ function ParentRow({
   parent,
   isLast,
   isAdmin,
+  canEdit,
   isExpanded,
   onToggleExpand,
   onEdit,
@@ -210,20 +214,20 @@ function ParentRow({
     <View style={[styles.row, !isLast && styles.rowBorder]}>
       <TouchableOpacity
         style={styles.rowMain}
-        onPress={() => (variants.length > 0 || isAdmin ? onToggleExpand() : null)}
-        activeOpacity={variants.length > 0 || isAdmin ? 0.7 : 1}
+        onPress={() => (variants.length > 0 || canEdit ? onToggleExpand() : null)}
+        activeOpacity={variants.length > 0 || canEdit ? 0.7 : 1}
       >
         <Text style={styles.rowEmoji}>{parent.emoji || '🍽️'}</Text>
         <View style={styles.rowInfo}>
           <Text style={styles.rowName} numberOfLines={1}>{parent.name}</Text>
           {subtitle ? <Text style={styles.rowSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
         </View>
-        {variants.length > 0 || isAdmin ? (
+        {variants.length > 0 || canEdit ? (
           <Text style={[styles.chev, isExpanded && styles.chevOpen]}>▾</Text>
         ) : null}
       </TouchableOpacity>
 
-      {isAdmin ? (
+      {canEdit ? (
         <View style={styles.rowActions}>
           <TouchableOpacity onPress={onEdit} style={styles.actionBtn} hitSlop={6}>
             <Pencil size={14} color={COLORS.primary} />
@@ -250,7 +254,7 @@ function ParentRow({
                     {[v.cookTimeMinutes ? `${v.cookTimeMinutes} min` : null, v.description].filter(Boolean).join(' · ') || ' '}
                   </Text>
                 </View>
-                {isAdmin ? (
+                {canEdit ? (
                   <View style={styles.variantActions}>
                     <TouchableOpacity onPress={() => onEditVariant(v)} hitSlop={6} style={styles.variantAction}>
                       <Pencil size={13} color={COLORS.primary} />
@@ -263,7 +267,7 @@ function ParentRow({
               </View>
             ))
           )}
-          {isAdmin ? (
+          {canEdit ? (
             <TouchableOpacity style={styles.addVariantBtn} onPress={onAddVariant} activeOpacity={0.7}>
               <Plus size={13} color={COLORS.primary} />
               <Text style={styles.addVariantLabel}>Add variant of {parent.name}</Text>

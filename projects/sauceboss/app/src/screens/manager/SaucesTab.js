@@ -13,6 +13,7 @@ import {
   LayoutAnimation,
 } from 'react-native';
 import {
+  BookPlus,
   ChevronRight,
   Download,
   GitBranch,
@@ -29,6 +30,8 @@ import { buildSauceFamilies, pickDisplayedFromFamily } from '#shared/families';
 import { SAUCE_TYPES } from '#shared/constants';
 import LoadingPot from '../../components/LoadingPot';
 import EmptyState from '../../components/EmptyState';
+import SauceRow from '../../components/SauceRow';
+import CuisineAccordion from '../../components/CuisineAccordion';
 import { COLORS, SHADOWS } from '../../theme';
 
 const TYPE_FILTERS = [
@@ -223,52 +226,44 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
             const isOpen = state.managerExpandedCuisines.has(cuisine);
             const cuisineEmoji = entries[0]?.displayed.cuisineEmoji || '🍽️';
             return (
-              <View key={cuisine} style={styles.cuisineGroup}>
-                <TouchableOpacity
-                  style={styles.cuisineHeader}
-                  onPress={() => toggleCuisine(cuisine)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.cuisineFlag}>{cuisineEmoji}</Text>
-                  <Text style={styles.cuisineName}>{cuisine}</Text>
-                  <Text style={styles.cuisineCount}>{entries.length}</Text>
-                  <Text style={[styles.chev, isOpen && styles.chevOpen]}>▾</Text>
-                </TouchableOpacity>
-                {isOpen ? (
-                  <View style={styles.rows}>
-                    {entries.map(({ family, displayed }, i) => (
-                      <ManagerSauceRow
-                        key={displayed.id}
-                        sauce={displayed}
-                        family={family}
-                        isLast={i === entries.length - 1}
-                        currentUser={state.currentUser}
-                        isAdmin={isAdmin}
-                        editMode={editMode}
-                        showTypeTag={typeFilter === 'all'}
-                        merge={merge}
-                        onTap={() => {
-                          if (isMerging) actions.toggleSauceMergePick(displayed.id);
-                          else openSauceRecipe(displayed, family);
-                        }}
-                        onLongPress={() => {
-                          // Variant rows already belong to a family — long-press
-                          // is reserved for root rows so we don't accidentally
-                          // re-parent a variant.
-                          const isRoot = !displayed.parentSauceId;
-                          if (isAdmin && !isMerging && isRoot) {
-                            actions.startSauceMerge(displayed.id);
-                          }
-                        }}
-                        onEdit={() => openBuilderFor(displayed.id)}
-                        onDelete={() => confirmDelete(displayed)}
-                        onDownload={() => pickExportFormat(displayed)}
-                        onStartMerge={() => actions.startSauceMerge(displayed.id)}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-              </View>
+              <CuisineAccordion
+                key={cuisine}
+                cuisine={cuisine}
+                cuisineEmoji={cuisineEmoji}
+                entries={entries}
+                isOpen={isOpen}
+                onToggle={() => toggleCuisine(cuisine)}
+                countLabel={String(entries.length)}
+                renderRow={({ family, displayed, isLast }) => (
+                  <ManagerSauceRow
+                    sauce={displayed}
+                    family={family}
+                    isLast={isLast}
+                    currentUser={state.currentUser}
+                    isAdmin={isAdmin}
+                    editMode={editMode}
+                    showTypeTag={typeFilter === 'all'}
+                    merge={merge}
+                    onTap={() => {
+                      if (isMerging) actions.toggleSauceMergePick(displayed.id);
+                      else openSauceRecipe(displayed, family);
+                    }}
+                    onLongPress={() => {
+                      // Variant rows already belong to a family — long-press
+                      // is reserved for root rows so we don't accidentally
+                      // re-parent a variant.
+                      const isRoot = !displayed.parentSauceId;
+                      if (isAdmin && !isMerging && isRoot) {
+                        actions.startSauceMerge(displayed.id);
+                      }
+                    }}
+                    onEdit={() => openBuilderFor(displayed.id)}
+                    onDelete={() => confirmDelete(displayed)}
+                    onDownload={() => pickExportFormat(displayed)}
+                    onStartMerge={() => actions.startSauceMerge(displayed.id)}
+                  />
+                )}
+              />
             );
           })
         )}
@@ -317,8 +312,9 @@ export default function SauceManagerSaucesTab({ navigation, scrollPaddingBottom,
           style={[styles.fab, { bottom: fabBottom }]}
           onPress={() => openBuilderFor(null)}
           activeOpacity={0.8}
+          accessibilityLabel="Import or build a recipe"
         >
-          <Plus size={26} color="#fff" />
+          <BookPlus size={26} color="#fff" />
         </TouchableOpacity>
       ) : null}
     </>
@@ -400,47 +396,34 @@ function ManagerSauceRow({
     isPicked && styles.rowPicked,
   ];
 
+  const rightSlot = isMerging ? (
+    isKeep ? (
+      <View style={[styles.mergeTag, styles.mergeTagKeep]}>
+        <Text style={styles.mergeTagLabel}>parent</Text>
+      </View>
+    ) : isPicked ? (
+      <View style={[styles.mergeTag, styles.mergeTagPicked]}>
+        <Text style={styles.mergeTagLabel}>will be variant</Text>
+      </View>
+    ) : null
+  ) : (
+    <View style={styles.rightGroup}>
+      {showTypeTag ? <SauceTypeTag value={sauce.sauceType || 'sauce'} /> : null}
+      <ChevronRight size={16} color={COLORS.textMuted} />
+    </View>
+  );
+
   return (
     <View style={containerStyle}>
-      <TouchableOpacity
-        style={styles.rowMain}
+      <SauceRow
+        sauce={sauce}
+        subline={sauce.description || null}
+        variantCount={totalVersions}
+        rightSlot={rightSlot}
         onPress={onTap}
         onLongPress={onLongPress}
-        delayLongPress={350}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.dot, { backgroundColor: sauce.color || COLORS.primary }]} />
-        <View style={styles.rowInfo}>
-          <View style={styles.rowNameRow}>
-            <Text style={styles.rowName} numberOfLines={1}>{sauce.name}</Text>
-            {totalVersions > 1 ? (
-              <View style={styles.variantBadge}>
-                <GitBranch size={10} color={COLORS.textSecondary} />
-                <Text style={styles.variantBadgeText}>{totalVersions}</Text>
-              </View>
-            ) : null}
-          </View>
-          {sauce.description ? (
-            <Text style={styles.rowDesc} numberOfLines={1}>{sauce.description}</Text>
-          ) : null}
-        </View>
-        {isMerging ? (
-          isKeep ? (
-            <View style={[styles.mergeTag, styles.mergeTagKeep]}>
-              <Text style={styles.mergeTagLabel}>parent</Text>
-            </View>
-          ) : isPicked ? (
-            <View style={[styles.mergeTag, styles.mergeTagPicked]}>
-              <Text style={styles.mergeTagLabel}>will be variant</Text>
-            </View>
-          ) : null
-        ) : (
-          <>
-            {showTypeTag ? <SauceTypeTag value={sauce.sauceType || 'sauce'} /> : null}
-            <ChevronRight size={16} color={COLORS.textMuted} />
-          </>
-        )}
-      </TouchableOpacity>
+        isLast
+      />
 
       {!isMerging && editMode && (canEdit || canDelete || (isAdmin && !isVariantRow)) ? (
         <View style={styles.rowActions}>
@@ -539,6 +522,7 @@ const styles = StyleSheet.create({
   rows: { borderTopWidth: 1, borderTopColor: COLORS.surfaceSubtle },
   row: { paddingHorizontal: 14, paddingVertical: 10 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: '#F9FAFB' },
+  rightGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   rowMain: { flexDirection: 'row', alignItems: 'center' },
   rowInfo: { flex: 1, marginLeft: 10, marginRight: 8 },
   rowNameRow: { flexDirection: 'row', alignItems: 'center' },

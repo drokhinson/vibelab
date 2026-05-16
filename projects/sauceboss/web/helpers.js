@@ -19,6 +19,17 @@ const FLAG_SUPPORTED = (() => {
   } catch { return true; }
 })();
 
+// Backend stores ingredient names lowercased ("jalapeño", "olive oil");
+// surfaces capitalize the first letter of each word for display so users
+// see "Jalapeño" / "Olive Oil". Use anywhere `ing.name` is rendered.
+function capitalizeIngredient(name) {
+  if (!name) return '';
+  return String(name)
+    .split(/(\s+)/)
+    .map(t => (t.trim() ? t.charAt(0).toUpperCase() + t.slice(1) : t))
+    .join('');
+}
+
 function flagEmojiToCode(emoji) {
   const codePoints = [...emoji].map(c => c.codePointAt(0));
   if (codePoints.length === 2 && codePoints.every(cp => cp >= 0x1F1E6 && cp <= 0x1F1FF)) {

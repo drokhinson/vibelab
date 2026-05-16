@@ -162,7 +162,10 @@ def parse_quantity(raw: str | None) -> float | None:
                 total += float(part)
     except (ValueError, ZeroDivisionError):
         return None
-    return total
+    # Round to the nearest 0.01 — scraped recipes love to surface things like
+    # "0.333333" from "1/3" and the extra precision is visual noise in the
+    # builder. Two decimal places preserves "0.25", "0.33", "0.67" cleanly.
+    return round(total, 2)
 
 
 # ── Unit parsing ──────────────────────────────────────────────────────────────

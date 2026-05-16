@@ -1,13 +1,21 @@
-// Cuisine accordion — collapsible group of sauce families.
-// Reads filter logic from #shared so behavior stays in lockstep with web.
+// Cuisine accordion — collapsible group of sauce families. Mirrors web's
+// renderCuisineGroup helper (web/helpers.js:485). Used by Saucebook, the
+// Sauce Selector flow, and the Sauce Manager so the orange/uppercase
+// header chrome stays identical across screens.
 //
 // Props:
 //   cuisine, cuisineEmoji
-//   entries  [{ family, displayed }]   — pre-grouped from buildSauceFamilies + pickDisplayedFromFamily
+//   entries  [{ family, displayed }]   — pre-grouped via buildSauceFamilies + pickDisplayedFromFamily
 //   isOpen   boolean
-//   disabledIngredients  Set<string>
+//   disabledIngredients  Set<string>   — used for default available/missing logic
 //   onToggle ()=>void
 //   onSelectSauce  (sauce, family) => void
+//   renderRow      optional ({ family, displayed, isLast, isOpen }) => ReactNode
+//                  — overrides the default SauceRow render so callers
+//                    (Manager) can plug in their own row body while reusing
+//                    the cuisine header chrome.
+//   countLabel     optional string — overrides the default "available/total"
+//                    count shown in the header.
 
 import React from 'react';
 import {
@@ -17,8 +25,9 @@ import {
   StyleSheet,
   LayoutAnimation,
 } from 'react-native';
-import { ChevronRight, GitBranch } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { isSauceAvailable, missingSauceIngredients } from '#shared/filter';
+import SauceRow from './SauceRow';
 import { COLORS } from '../theme';
 
 export default function CuisineAccordion({
@@ -29,6 +38,8 @@ export default function CuisineAccordion({
   disabledIngredients,
   onToggle,
   onSelectSauce,
+  renderRow,
+  countLabel,
 }) {
   const availableCount = entries.filter((e) => isSauceAvailable(e.displayed, disabledIngredients)).length;
 
@@ -43,7 +54,7 @@ export default function CuisineAccordion({
         <Text style={styles.flag}>{cuisineEmoji}</Text>
         <Text style={styles.cuisineName}>{cuisine}</Text>
         <Text style={styles.count}>
-          {availableCount}/{entries.length}
+          {countLabel != null ? countLabel : `${availableCount}/${entries.length}`}
         </Text>
         <Text style={[styles.chevron, isOpen && styles.chevronOpen]}>▾</Text>
       </TouchableOpacity>
@@ -51,59 +62,42 @@ export default function CuisineAccordion({
       {isOpen ? (
         <View style={styles.sauceList}>
           {entries.map(({ family, displayed }, i) => {
+            const isLast = i === entries.length - 1;
+            // Manager (and any caller passing renderRow) gets full control of
+            // the row body — typically a richer cell with action buttons.
+            if (renderRow) {
+              return (
+                <React.Fragment key={displayed.id}>
+                  {renderRow({ family, displayed, isLast, isOpen })}
+                </React.Fragment>
+              );
+            }
             const sauce = displayed;
             const totalVersions = 1 + family.variants.length;
             const available = isSauceAvailable(sauce, disabledIngredients);
             const missing = missingSauceIngredients(sauce, disabledIngredients);
-            const isLast = i === entries.length - 1;
-
+            const subline = missing.length > 0
+              ? `Missing: ${missing.join(', ')}`
+              : (sauce.description || null);
+            const rightSlot = available ? (
+              <ChevronRight size={18} color={COLORS.textMuted} />
+            ) : (
+              <View style={styles.missingBadge}>
+                <Text style={styles.missingBadgeText}>−{missing.length}</Text>
+              </View>
+            );
             return (
-              <TouchableOpacity
+              <SauceRow
                 key={sauce.id}
-                style={[
-                  styles.sauceRow,
-                  !isLast && styles.sauceRowBorder,
-                  !available && styles.sauceRowUnavailable,
-                ]}
-                onPress={() => available && onSelectSauce(sauce, family)}
-                activeOpacity={available ? 0.7 : 1}
-              >
-                <View style={[styles.dot, { backgroundColor: sauce.color || COLORS.primary }]} />
-
-                <View style={styles.sauceInfo}>
-                  <View style={styles.sauceNameRow}>
-                    <Text
-                      style={[styles.sauceName, !available && styles.textFaded]}
-                      numberOfLines={1}
-                    >
-                      {sauce.name}
-                    </Text>
-                    {totalVersions > 1 ? (
-                      <View style={styles.variantBadge}>
-                        <GitBranch size={10} color={COLORS.textSecondary} />
-                        <Text style={styles.variantBadgeText}>{totalVersions}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  {missing.length > 0 ? (
-                    <Text style={styles.missingLabel} numberOfLines={1}>
-                      Missing: {missing.join(', ')}
-                    </Text>
-                  ) : sauce.description ? (
-                    <Text style={styles.descLabel} numberOfLines={1}>
-                      {sauce.description}
-                    </Text>
-                  ) : null}
-                </View>
-
-                {available ? (
-                  <ChevronRight size={18} color={COLORS.textMuted} />
-                ) : (
-                  <View style={styles.missingBadge}>
-                    <Text style={styles.missingBadgeText}>−{missing.length}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+                sauce={sauce}
+                subline={subline}
+                variantCount={totalVersions}
+                rightSlot={rightSlot}
+                onPress={() => onSelectSauce && onSelectSauce(sauce, family)}
+                disabled={!available}
+                faded={!available}
+                isLast={isLast}
+              />
             );
           })}
         </View>
@@ -158,67 +152,6 @@ const styles = StyleSheet.create({
   sauceList: {
     borderTopWidth: 1,
     borderTopColor: COLORS.surfaceSubtle,
-  },
-  sauceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  sauceRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
-  },
-  sauceRowUnavailable: {
-    opacity: 0.45,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 12,
-  },
-  sauceInfo: {
-    flex: 1,
-    marginRight: 8,
-  },
-  sauceNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sauceName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    flexShrink: 1,
-  },
-  textFaded: {
-    color: COLORS.textMuted,
-  },
-  variantBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 8,
-    backgroundColor: COLORS.surfaceSubtle,
-  },
-  variantBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    marginLeft: 2,
-  },
-  descLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
-  missingLabel: {
-    fontSize: 11,
-    color: '#EF4444',
-    marginTop: 1,
   },
   missingBadge: {
     backgroundColor: COLORS.danger,

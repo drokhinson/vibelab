@@ -4,10 +4,15 @@
 
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { CornerDownRight, ChevronDown } from 'lucide-react-native';
-import { prepareItems, cumulativeStepTsp, tspToDisplay, ingColor, formatAmount } from '#shared';
+import { ChevronDown } from 'lucide-react-native';
+import { prepareItems, cumulativeStepTsp, tspToDisplay, ingColor, formatAmount, capitalizeIngredient } from '#shared';
 import PieChart from './PieChart';
 import { COLORS } from '../theme';
+
+// Four-tone rotation matches the web's data-shade="0..3" pattern from
+// commit 27bd051. Cycled by `index % 4` so adjacent step cards in a
+// recipe read distinctly.
+const STEP_SHADES = ['#FFFFFF', '#F8F5F0', '#F1ECE3', '#EAE3D6'];
 
 export default function StepCard({
   step,
@@ -18,26 +23,36 @@ export default function StepCard({
   baseServings,
   disabledIngredients,
   substitutions,
+  hiddenSlices,
+  onTogglePieSlice,
 }) {
   const [showInstructions, setShowInstructions] = useState(false);
   const stepTime = step.estimatedTime || 5;
 
   const displayItems = prepareItems(step.ingredients, { servings, unitSystem, baseServings });
 
-  // Reference step (combined input) — prepend a synthetic slice for it.
-  const refStep = step.inputFromStep ? steps[step.inputFromStep - 1] : null;
-  if (refStep) {
-    const refTsp = cumulativeStepTsp(steps, step.inputFromStep - 1, servings, baseServings);
+  // Reference steps (combined input) — one synthetic slice per ref. Reads the
+  // new `inputFromSteps[]` array but falls back to the legacy `inputFromStep`
+  // singular for older saved sauces.
+  const refOrders = (step.inputFromSteps && step.inputFromSteps.length > 0)
+    ? step.inputFromSteps
+    : (step.inputFromStep ? [step.inputFromStep] : []);
+  for (let r = refOrders.length - 1; r >= 0; r--) {
+    const refOrder = refOrders[r];
+    if (!steps[refOrder - 1]) continue;
+    const refTsp = cumulativeStepTsp(steps, refOrder - 1, servings, baseServings);
     const disp = tspToDisplay(refTsp);
     displayItems.unshift({
-      name: `Step ${step.inputFromStep} combined`,
+      name: `Step ${refOrder} combined`,
       amount: disp.amount,
       unit: disp.unit,
     });
   }
 
+  const shade = STEP_SHADES[index % STEP_SHADES.length];
+
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: shade }]}>
       <View style={styles.headerRow}>
         <Text style={styles.stepNumber}>Step {index + 1}</Text>
         <Text style={styles.stepTime}>~{stepTime}m</Text>
@@ -64,38 +79,49 @@ export default function StepCard({
         <Text style={styles.instructionsBody}>{step.instructions}</Text>
       ) : null}
 
-      {refStep ? (
-        <View style={styles.refBadge}>
-          <CornerDownRight size={14} color={COLORS.primary} />
-          <Text style={styles.refBadgeText}>
-            Combine all of Step {step.inputFromStep} into this bowl
-          </Text>
-        </View>
-      ) : null}
+      {/* Combined-step refBadge intentionally omitted — the legend already
+          surfaces "Step N combined" as a synthetic slice (see refOrders
+          loop above) so a separate badge would just repeat the info. */}
 
       <View style={styles.viz}>
         <View style={styles.chartWrap}>
-          <PieChart items={displayItems} size={110} />
+          <PieChart
+            items={displayItems.filter((it) => !(hiddenSlices && hiddenSlices.has(it.name)))}
+            size={110}
+          />
         </View>
         <View style={styles.legend}>
           {displayItems.map((it, i) => {
             const color = ingColor(it.name, i);
             const isDisabled = disabledIngredients?.has(it.name);
+            const isHidden = !!(hiddenSlices && hiddenSlices.has(it.name));
             const sub = isDisabled && substitutions ? subFor(it.name, substitutions) : '';
-            const isQualitative = it.unit === 'to taste';
+            // Treat any falsy amount as qualitative ("to taste", "splash",
+            // "pinch", etc.) so we render just the unit name instead of "0 X".
+            const isQualitative = !it.amount;
             return (
-              <View key={`${it.name}-${i}`} style={styles.legendRow}>
+              <TouchableOpacity
+                key={`${it.name}-${i}`}
+                onPress={() => onTogglePieSlice && onTogglePieSlice(index, it.name)}
+                activeOpacity={onTogglePieSlice ? 0.6 : 1}
+                style={[styles.legendRow, isHidden && styles.legendRowHidden]}
+              >
                 <View style={[styles.swatch, { backgroundColor: color }]} />
                 <View style={styles.legendNameWrap}>
-                  <Text style={[styles.legendName, isDisabled && styles.legendNameDisabled]} numberOfLines={1}>
-                    {it.name}
+                  <Text
+                    style={[styles.legendName, isDisabled && styles.legendNameDisabled]}
+                    numberOfLines={1}
+                  >
+                    {it.modifier ? `${capitalizeIngredient(it.modifier)} ` : ''}{capitalizeIngredient(it.name)}
                   </Text>
                   {sub ? <Text style={styles.subHint}>try {sub}</Text> : null}
                 </View>
-                <Text style={[styles.legendAmount, isQualitative && styles.legendAmountQual]}>
-                  {isQualitative ? 'to taste' : `${formatAmount(it.amount)} ${it.unit}`}
-                </Text>
-              </View>
+                {isHidden ? null : (
+                  <Text style={[styles.legendAmount, isQualitative && styles.legendAmountQual]}>
+                    {isQualitative ? it.unit : `${formatAmount(it.amount)} ${it.unit}`}
+                  </Text>
+                )}
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -209,14 +235,19 @@ const styles = StyleSheet.create({
   legendNameWrap: {
     flex: 1,
   },
+  legendRowHidden: {
+    opacity: 0.4,
+  },
   legendName: {
     fontSize: 13,
     fontWeight: '500',
     color: COLORS.text,
   },
+  // Disabled (out-of-pantry) ingredients render muted but no longer striked.
+  // Striking implied "this recipe can't be made", which is confusing mid-cook;
+  // the substitution hint is the better signal. Matches web 27bd051.
   legendNameDisabled: {
     color: COLORS.textMuted,
-    textDecorationLine: 'line-through',
   },
   subHint: {
     fontSize: 11,

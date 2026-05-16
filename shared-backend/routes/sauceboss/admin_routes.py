@@ -141,17 +141,20 @@ async def admin_create_ingredient(
     _: CurrentUser = Depends(get_current_user),
 ):
     """Insert a new ingredient row. Conflicts on the normalized name return 409."""
-    name = body.name.strip()
-    norm = name.lower()
+    # Ingredient names are stored lowercased — display capitalizes the first
+    # letter via shared/text.js#capitalizeIngredient so "Garlic" + "garlic"
+    # never split into separate rows. Both `name` and `name_normalized` are
+    # set to the same lowercase value.
+    norm = body.name.strip().lower()
     sb = get_supabase()
     existing = sb.table("sauceboss_ingredient").select("id,name").eq("name_normalized", norm).execute()
     if existing.data:
         raise HTTPException(409, f"Ingredient already exists: {existing.data[0]['name']} (id={existing.data[0]['id']})")
-    ingredient_id = _ingredient_id_for(name)
+    ingredient_id = _ingredient_id_for(norm)
     payload = {
         "id": ingredient_id,
-        "name": name,
-        "plural": body.plural,
+        "name": norm,
+        "plural": (body.plural or '').strip().lower() or None,
         "name_normalized": norm,
     }
     if body.category:
@@ -172,8 +175,8 @@ async def admin_update_ingredient(
     """Rename / recategorize an ingredient. If the new name normalizes to another
     existing ingredient the caller should use the merge endpoint instead — this
     route returns 409 in that case rather than silently merging."""
-    new_name = body.name.strip()
-    new_norm = new_name.lower()
+    # Lowercase the rename so casing variants collapse to one row.
+    new_norm = body.name.strip().lower()
     sb = get_supabase()
     conflict = (
         sb.table("sauceboss_ingredient")
@@ -189,8 +192,8 @@ async def admin_update_ingredient(
             f"(id={conflict.data[0]['id']}). Use merge to combine them.",
         )
     payload: dict = {
-        "name": new_name,
-        "plural": body.plural,
+        "name": new_norm,
+        "plural": (body.plural or '').strip().lower() or None,
         "name_normalized": new_norm,
     }
     if body.category is not None:
