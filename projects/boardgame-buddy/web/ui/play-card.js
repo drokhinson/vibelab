@@ -126,6 +126,12 @@
     const winners = (p.players || []).filter((pl) => pl.is_winner);
     const players = p.players || [];
     const expansions = p.expansions || [];
+    // Ghost players (no linked account) are scoped to whoever logged the play
+    // — surface that scoping as a "@<host>" handle so two different hosts'
+    // free-text "Sean D" entries read as distinct identities, not the same
+    // person. Real-account players already carry their own identity in the
+    // display name and don't need the attribution.
+    const hostHandle = p.logged_by_name ? escapeHtml(p.logged_by_name) : "";
     return `
       <header class="play-card__back-head">
         <span class="play-card__back-title">${escapeHtml(p.game_name || (card.game && card.game.name) || "")}</span>
@@ -143,10 +149,15 @@
           ? `<li class="play-card__back-empty">No players recorded.</li>`
           : players.map((pl) => `
               <li class="play-card__back-player ${pl.is_winner ? "is-winner" : ""}">
-                <span class="play-card__back-player-name">
-                  ${pl.is_winner ? `<i data-lucide="trophy" class="w-3.5 h-3.5"></i> ` : ""}
-                  ${escapeHtml(pl.name)}
-                </span>
+                <div class="play-card__back-player-info">
+                  <span class="play-card__back-player-name">
+                    ${pl.is_winner ? `<i data-lucide="trophy" class="w-3.5 h-3.5"></i> ` : ""}
+                    ${escapeHtml(pl.name)}
+                  </span>
+                  ${!pl.user_id && hostHandle
+                    ? `<span class="play-card__back-player-handle" title="Custom player logged by ${hostHandle}">@${hostHandle}</span>`
+                    : ""}
+                </div>
                 <span class="play-card__back-player-score">${pl.score != null ? pl.score : ""}</span>
               </li>`).join("")}
       </ul>
@@ -205,9 +216,16 @@
       </div>
 
       <ul class="play-card__edit-players">
-        ${d.players.map((pl, i) => `
+        ${d.players.map((pl, i) => {
+          const ghostHandle = !pl.user_id && p.logged_by_name
+            ? `<span class="play-card__back-player-handle">@${escapeHtml(p.logged_by_name)}</span>`
+            : "";
+          return `
           <li class="play-card__edit-player">
-            <span class="play-card__edit-player-name">${escapeHtml(pl.name)}</span>
+            <div class="play-card__edit-player-info">
+              <span class="play-card__edit-player-name">${escapeHtml(pl.name)}</span>
+              ${ghostHandle}
+            </div>
             <input type="number" class="input input-bordered input-sm play-card__edit-score"
                    placeholder="Score" value="${escapeAttr(pl.score)}"
                    oninput="window.playCardFlip.setScore('${escapeAttr(p.id)}', ${i}, this.value)" />
@@ -216,7 +234,8 @@
                      onchange="window.playCardFlip.setWinner('${escapeAttr(p.id)}', ${i}, this.checked)" />
               Won
             </label>
-          </li>`).join("")}
+          </li>`;
+        }).join("")}
       </ul>
 
       <textarea class="textarea textarea-bordered w-full play-card__edit-notes"

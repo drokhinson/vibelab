@@ -160,13 +160,13 @@
     }
 
     _renderSkeleton() {
-      // First-paint loader. The three-bar skeleton-card pattern doesn't
-      // animate, so it read as "stuck" while the feed warmed up. Use the
-      // shared bouncing-buddy loader instead — same SVG that the splash
-      // and every other view's loading placeholder uses.
+      // First-paint loader. Centered vertically + horizontally so it lands in
+      // the same spot the splash uses (see `index.html`'s splash <main>:
+      // flex/items-center/justify-center/min-h-[60vh]). Keeps the boot →
+      // first-feed-paint transition feel like the same loader continuing.
       return `
-        <div class="feed-shell">
-          ${window.buddyLoader({ size: 120 })}
+        <div class="flex flex-col items-center justify-center min-h-[60vh]">
+          ${window.buddyLoader({ size: 176, padded: false })}
         </div>
       `;
     }
