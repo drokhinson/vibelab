@@ -29,6 +29,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { useAppActions, useAppState } from '../store/AppContext';
 import AppHeader from '../components/AppHeader';
 import EmptyState from '../components/EmptyState';
+import FilterPicker from '../components/FilterPicker';
 import LoadingPot from '../components/LoadingPot';
 import { SAUCE_TYPES } from '#shared/constants';
 import { missingSauceIngredients } from '#shared/filter';
@@ -72,6 +73,18 @@ export default function SaucebookScreen({ navigation }) {
     return [...map.values()].sort((a, b) => a.cuisine.localeCompare(b.cuisine));
   }, [filtered]);
 
+  // Author list derived from items — surfaced in the Author search-and-pick
+  // filter. Declared up here so the picker memos below can reference it.
+  const authorOptions = useMemo(() => {
+    const seen = new Map();
+    for (const s of sb.items || []) {
+      if (s.createdBy && !seen.has(s.createdBy)) {
+        seen.set(s.createdBy, { id: s.createdBy, name: s.authorName || 'Anonymous' });
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [sb.items]);
+
   // Collapse-all / expand-all toggle next to the Filters button. Reads the
   // currently-visible cuisine groups and dispatches a bulk flip.
   const anyOpen = useMemo(
@@ -91,6 +104,70 @@ export default function SaucebookScreen({ navigation }) {
     sb.filters.dishes.size > 0 ||
     !!sb.filters.authorId;
 
+  // Local search-query state for the three search-and-pick filters.
+  const [cuisineQ, setCuisineQ] = useState('');
+  const [dishQ, setDishQ] = useState('');
+  const [authorQ, setAuthorQ] = useState('');
+
+  // Flat dish pool — matches BrowseScreen so the Pairs-with filter offers the
+  // same items on both screens.
+  const dishPool = useMemo(() => {
+    const merge = (arr, category) =>
+      (arr || []).map((d) => ({ id: d.id, name: d.name, emoji: d.emoji, category }));
+    return [
+      ...merge(state.carbs, 'carb'),
+      ...merge(state.proteins, 'protein'),
+      ...merge(state.saladBases, 'salad'),
+    ];
+  }, [state.carbs, state.proteins, state.saladBases]);
+
+  // Suggest-list builders for each picker — filter the catalog by the query
+  // and drop already-selected items so the dropdown only shows new picks.
+  const cuisineSuggestions = useMemo(() => {
+    const q = cuisineQ.trim().toLowerCase();
+    if (!q) return [];
+    return (state.refCuisines || [])
+      .map((c) => ({ id: c.cuisine || c.name, emoji: c.emoji }))
+      .filter((c) => !sb.filters.cuisines.has(c.id) && c.id.toLowerCase().includes(q))
+      .map((c) => ({ id: c.id, label: `${c.emoji || ''} ${c.id}` }));
+  }, [cuisineQ, state.refCuisines, sb.filters.cuisines]);
+
+  const dishSuggestions = useMemo(() => {
+    const q = dishQ.trim().toLowerCase();
+    if (!q) return [];
+    return dishPool
+      .filter((d) => !sb.filters.dishes.has(d.id) && (d.name || '').toLowerCase().includes(q))
+      .map((d) => ({ id: d.id, label: `${d.emoji || ''} ${d.name}` }));
+  }, [dishQ, dishPool, sb.filters.dishes]);
+
+  const authorSuggestions = useMemo(() => {
+    const q = authorQ.trim().toLowerCase();
+    if (!q) return [];
+    return authorOptions
+      .filter((a) => a.id !== sb.filters.authorId && (a.name || '').toLowerCase().includes(q))
+      .map((a) => ({ id: a.id, label: a.name }));
+  }, [authorQ, authorOptions, sb.filters.authorId]);
+
+  const selectedCuisines = useMemo(
+    () => [...sb.filters.cuisines].map((name) => {
+      const c = (state.refCuisines || []).find((x) => (x.cuisine || x.name) === name);
+      return { id: name, label: `${c?.emoji || ''} ${name}` };
+    }),
+    [sb.filters.cuisines, state.refCuisines],
+  );
+  const selectedDishes = useMemo(
+    () => [...sb.filters.dishes].map((id) => {
+      const d = dishPool.find((x) => x.id === id);
+      return d ? { id, label: `${d.emoji || ''} ${d.name}` } : null;
+    }).filter(Boolean),
+    [sb.filters.dishes, dishPool],
+  );
+  const selectedAuthor = useMemo(() => {
+    if (!sb.filters.authorId) return [];
+    const a = authorOptions.find((x) => x.id === sb.filters.authorId);
+    return a ? [{ id: a.id, label: a.name }] : [];
+  }, [sb.filters.authorId, authorOptions]);
+
   // flag so the RefreshControl spinner stays up until the fetch resolves.
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -101,17 +178,6 @@ export default function SaucebookScreen({ navigation }) {
       setRefreshing(false);
     }
   }, [actions]);
-
-  // Author list derived from items for the filter panel.
-  const authorOptions = useMemo(() => {
-    const seen = new Map();
-    for (const s of sb.items || []) {
-      if (s.createdBy && !seen.has(s.createdBy)) {
-        seen.set(s.createdBy, { id: s.createdBy, name: s.authorName || 'Anonymous' });
-      }
-    }
-    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [sb.items]);
 
   const isAdmin = !!(state.currentUser && state.currentUser.is_admin);
   const currentUserId = state.currentUser?.user_id;
@@ -217,38 +283,56 @@ export default function SaucebookScreen({ navigation }) {
             ))}
           </ScrollView>
 
-          <Text style={[styles.filterGroupLabel, { marginTop: 14 }]}>Cuisine</Text>
-          <View style={styles.chipRow}>
-            {(state.refCuisines || []).map((c) => {
-              const name = c.cuisine || c.name;
-              const active = sb.filters.cuisines.has(name);
-              return (
-                <Chip
-                  key={name}
-                  label={`${c.emoji || ''} ${name}`}
-                  active={active}
-                  onPress={() => actions.toggleSaucebookCuisine(name)}
-                />
-              );
-            })}
+          <View style={styles.pickerWrap}>
+            <FilterPicker
+              label="Cuisine"
+              placeholder="Search cuisines"
+              query={cuisineQ}
+              onQueryChange={setCuisineQ}
+              suggestions={cuisineSuggestions}
+              selected={selectedCuisines}
+              onPick={(id) => {
+                actions.toggleSaucebookCuisine(id);
+                setCuisineQ('');
+              }}
+              onRemove={(id) => actions.toggleSaucebookCuisine(id)}
+            />
           </View>
 
+          {dishPool.length > 0 ? (
+            <View style={styles.pickerWrap}>
+              <FilterPicker
+                label="Pairs with"
+                placeholder="Search dishes"
+                query={dishQ}
+                onQueryChange={setDishQ}
+                suggestions={dishSuggestions}
+                selected={selectedDishes}
+                onPick={(id) => {
+                  actions.toggleSaucebookDish(id);
+                  setDishQ('');
+                }}
+                onRemove={(id) => actions.toggleSaucebookDish(id)}
+              />
+            </View>
+          ) : null}
+
           {authorOptions.length > 0 ? (
-            <>
-              <Text style={[styles.filterGroupLabel, { marginTop: 14 }]}>Author</Text>
-              <View style={styles.chipRow}>
-                {authorOptions.map((a) => (
-                  <Chip
-                    key={a.id}
-                    label={a.name}
-                    active={sb.filters.authorId === a.id}
-                    onPress={() =>
-                      actions.setSaucebookAuthor(sb.filters.authorId === a.id ? null : a.id)
-                    }
-                  />
-                ))}
-              </View>
-            </>
+            <View style={styles.pickerWrap}>
+              <FilterPicker
+                label="Author"
+                placeholder="Search authors"
+                query={authorQ}
+                onQueryChange={setAuthorQ}
+                suggestions={authorSuggestions}
+                selected={selectedAuthor}
+                onPick={(id) => {
+                  actions.setSaucebookAuthor(id);
+                  setAuthorQ('');
+                }}
+                onRemove={() => actions.setSaucebookAuthor(null)}
+              />
+            </View>
           ) : null}
 
           {hasAnyFilter ? (
@@ -506,7 +590,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: COLORS.border,
   },
-  filtersBody: { padding: 12, paddingBottom: 48 },
+  // Bottom padding sized to clear the "Clear all filters" button when
+  // visible; constant whether or not the button is showing so the panel
+  // ends at the same place regardless of filter state.
+  filtersBody: { padding: 12, paddingBottom: 20 },
+  // Gap between FilterPicker sections (Cuisine / Pairs-with / Author).
+  pickerWrap: { marginTop: 14 },
   filterGroupLabel: {
     fontSize: 11,
     fontWeight: '800',

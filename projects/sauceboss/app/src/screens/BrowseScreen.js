@@ -30,6 +30,7 @@ import AppHeader from '../components/AppHeader';
 import EmptyState from '../components/EmptyState';
 import LoadingPot from '../components/LoadingPot';
 import SauceRow from '../components/SauceRow';
+import FilterPicker from '../components/FilterPicker';
 import { BASE_API_URL } from '../api/client';
 import { SAUCE_TYPES } from '#shared/constants';
 import { COLORS, SHADOWS } from '../theme';
@@ -85,6 +86,57 @@ export default function BrowseScreen({ navigation }) {
   const isSignedIn = !!state.currentUser;
 
   const [openingId, setOpeningId] = React.useState(null);
+
+  // Local search-query state for the three search-and-pick filters.
+  const [cuisineQ, setCuisineQ] = useState('');
+  const [dishQ, setDishQ] = useState('');
+
+  // Suggest-list + selected-chip builders — same shape SaucebookScreen feeds
+  // <FilterPicker>. Cuisine + dish are local-only filters; Author calls
+  // fetchBrowseAuthors so its suggestion source is `b.authorResults`.
+  const cuisineSuggestions = useMemo(() => {
+    const q = cuisineQ.trim().toLowerCase();
+    if (!q) return [];
+    return (state.refCuisines || [])
+      .map((c) => ({ id: c.cuisine || c.name, emoji: c.emoji }))
+      .filter((c) => !b.cuisines.has(c.id) && c.id.toLowerCase().includes(q))
+      .map((c) => ({ id: c.id, label: `${c.emoji || ''} ${c.id}` }));
+  }, [cuisineQ, state.refCuisines, b.cuisines]);
+
+  const dishSuggestions = useMemo(() => {
+    const q = dishQ.trim().toLowerCase();
+    if (!q) return [];
+    return dishPool
+      .filter((d) => !b.dishes.has(d.id) && (d.name || '').toLowerCase().includes(q))
+      .map((d) => ({ id: d.id, label: `${d.emoji || ''} ${d.name}` }));
+  }, [dishQ, dishPool, b.dishes]);
+
+  const authorSuggestions = useMemo(() => {
+    const q = (b.authorQuery || '').trim();
+    if (q.length < 2) return [];
+    return (b.authorResults || [])
+      .filter((a) => (a.userId || a.id) !== b.authorId)
+      .map((a) => ({ id: a.userId || a.id, label: a.displayName, _raw: a }));
+  }, [b.authorQuery, b.authorResults, b.authorId]);
+
+  const selectedCuisines = useMemo(
+    () => [...b.cuisines].map((name) => {
+      const c = (state.refCuisines || []).find((x) => (x.cuisine || x.name) === name);
+      return { id: name, label: `${c?.emoji || ''} ${name}` };
+    }),
+    [b.cuisines, state.refCuisines],
+  );
+  const selectedDishes = useMemo(
+    () => [...b.dishes].map((id) => {
+      const d = dishPool.find((x) => x.id === id);
+      return d ? { id, label: `${d.emoji || ''} ${d.name}` } : null;
+    }).filter(Boolean),
+    [b.dishes, dishPool],
+  );
+  const selectedAuthor = b.authorId && b.authorQuery
+    ? [{ id: b.authorId, label: b.authorQuery }]
+    : [];
+
   // Pull-to-refresh — fires loadBrowseSauces; the existing useEffect on
   // filterKey also covers re-fetching when filters change, but the manual
   // pull keeps the gesture available for force-refresh on stale data.
@@ -175,82 +227,59 @@ export default function BrowseScreen({ navigation }) {
             })}
           </ScrollView>
 
-          {/* Cuisine — flat chip row, matches Saucebook. */}
-          <Text style={[styles.filterGroupLabel, { marginTop: 12 }]}>Cuisine</Text>
-          <View style={styles.chipRow}>
-            {(state.refCuisines || []).map((c) => {
-              const name = c.cuisine || c.name;
-              const active = b.cuisines.has(name);
-              return (
-                <FilterChip
-                  key={name}
-                  label={`${c.emoji || ''} ${name}`}
-                  active={active}
-                  onPress={() => actions.toggleBrowseCuisine(name)}
-                />
-              );
-            })}
+          <View style={styles.pickerWrap}>
+            <FilterPicker
+              label="Cuisine"
+              placeholder="Search cuisines"
+              query={cuisineQ}
+              onQueryChange={setCuisineQ}
+              suggestions={cuisineSuggestions}
+              selected={selectedCuisines}
+              onPick={(id) => {
+                actions.toggleBrowseCuisine(id);
+                setCuisineQ('');
+              }}
+              onRemove={(id) => actions.toggleBrowseCuisine(id)}
+            />
           </View>
 
-          {/* Pairs with — flat chip row, matches Saucebook. */}
           {dishPool.length > 0 ? (
-            <>
-              <Text style={[styles.filterGroupLabel, { marginTop: 12 }]}>Pairs with</Text>
-              <View style={styles.chipRow}>
-                {dishPool.map((d) => {
-                  const active = b.dishes.has(d.id);
-                  return (
-                    <FilterChip
-                      key={d.id}
-                      label={`${d.emoji || ''} ${d.name}`}
-                      active={active}
-                      onPress={() => actions.toggleBrowseDish(d.id)}
-                    />
-                  );
-                })}
-              </View>
-            </>
-          ) : null}
-
-          {/* Author — single-select. Search fires fetchBrowseAuthors;
-              suggest dropdown picks; selected author shown as a chip. */}
-          <Text style={[styles.filterGroupLabel, { marginTop: 12 }]}>Author</Text>
-          {b.authorId && b.authorQuery ? (
-            <View style={styles.chipRow}>
-              <FilterChip
-                label={`${b.authorQuery} ✕`}
-                active
-                onPress={() => actions.setBrowseAuthor(null, '')}
+            <View style={styles.pickerWrap}>
+              <FilterPicker
+                label="Pairs with"
+                placeholder="Search dishes"
+                query={dishQ}
+                onQueryChange={setDishQ}
+                suggestions={dishSuggestions}
+                selected={selectedDishes}
+                onPick={(id) => {
+                  actions.toggleBrowseDish(id);
+                  setDishQ('');
+                }}
+                onRemove={(id) => actions.toggleBrowseDish(id)}
               />
             </View>
-          ) : (
-            <>
-              <FilterSearchInput
-                value={b.authorQuery || ''}
-                onChangeText={(v) => {
-                  actions.setBrowseAuthorQuery(v);
-                  if (v.trim().length >= 2) actions.fetchBrowseAuthors(v);
-                }}
-                placeholder="Search authors"
-              />
-              {(b.authorResults || []).length > 0 && (b.authorQuery || '').trim().length >= 2 ? (
-                <View style={styles.suggestDropdown}>
-                  {b.authorResults.map((a) => (
-                    <TouchableOpacity
-                      key={a.userId || a.id || a.displayName}
-                      onPress={() =>
-                        actions.setBrowseAuthor(a.userId || a.id || null, a.displayName || '')
-                      }
-                      style={styles.suggestItem}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.suggestItemLabel}>{a.displayName}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
-            </>
-          )}
+          ) : null}
+
+          <View style={styles.pickerWrap}>
+            <FilterPicker
+              label="Author"
+              placeholder="Search authors"
+              query={b.authorQuery || ''}
+              onQueryChange={(v) => actions.setBrowseAuthorQuery(v)}
+              onQuerySubmit={(v) => {
+                if (v.trim().length >= 2) actions.fetchBrowseAuthors(v);
+              }}
+              minQueryLength={2}
+              suggestions={authorSuggestions}
+              selected={selectedAuthor}
+              onPick={(id) => {
+                const match = authorSuggestions.find((s) => s.id === id);
+                actions.setBrowseAuthor(id, match?.label || '');
+              }}
+              onRemove={() => actions.setBrowseAuthor(null, '')}
+            />
+          </View>
 
           {hasAnyFilter ? (
             <TouchableOpacity
@@ -470,8 +499,10 @@ const styles = StyleSheet.create({
   },
   filtersBody: {
     padding: 12,
-    paddingBottom: 48,
+    paddingBottom: 20,
   },
+  // Gap between FilterPicker sections (Cuisine / Pairs-with / Author).
+  pickerWrap: { marginTop: 14 },
   filterGroupLabel: {
     fontSize: 11,
     fontWeight: '800',
