@@ -1,7 +1,46 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 2026-05-12
+-- Last updated: 2026-05-16 (post-012 OOP/Strava redesign RPCs)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- No RPC functions defined. All queries go through shared-backend/routes/boardgame_buddy/.
+-- bgb_hot_games(window_days INT DEFAULT 7, lim INT DEFAULT 10)
+--   → TABLE (game_id UUID, play_count BIGINT)
+--   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
+--   Purpose:    Top-N most-played games in the last N days for the Feed's
+--               "Hot Games" card.
+
+-- bgb_user_stats(uid UUID)
+--   → TABLE (total_plays BIGINT, unique_games BIGINT, win_count BIGINT,
+--            last_played_at DATE, hours_played NUMERIC)
+--   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/stats_service.py
+--   Purpose:    Strava-style per-user stats card on the Profile view.
+
+-- bgb_feed_plays(viewer UUID, before TIMESTAMPTZ DEFAULT NULL, lim INT DEFAULT 20)
+--   → TABLE (play_id UUID, play_user_id UUID, play_user_name TEXT,
+--            play_user_avatar TEXT, game_id UUID, game_name TEXT,
+--            game_image_url TEXT, game_thumbnail_url TEXT, played_at DATE,
+--            created_at TIMESTAMPTZ, notes TEXT, photo_url TEXT,
+--            play_mode TEXT, winner_display_name TEXT,
+--            participant_count INT)
+--   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
+--   Purpose:    Visible plays for the Feed (own + accepted buddies),
+--               pre-joined to game name/image and winner display.
+--               Cursor-paginated by created_at.
+
+-- bgb_dormant_collection(uid UUID, days_since INT DEFAULT 60, lim INT DEFAULT 5)
+--   → TABLE (game_id UUID, last_played_at DATE)
+--   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
+--   Purpose:    Owned games this user hasn't played in N days; powers the
+--               "Featured from your collection" Feed card.
+
+-- bgb_suggested_buddies(uid UUID, lim INT DEFAULT 10)
+--   → TABLE (user_id UUID, mutual_count BIGINT)
+--   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
+--   Purpose:    Friends-of-friends candidates not yet connected, ranked by
+--               mutual count. Powers the Feed's "Suggested buddies" card.
