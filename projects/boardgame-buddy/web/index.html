@@ -10,247 +10,89 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Lucide Icons (SVG icon set) -->
+  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
-  <!-- Supabase JS Client (for auth) -->
+  <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Google Fonts: Poppins (UI) + Crimson Text (display, cozy serif) -->
+  <!-- Google Fonts: Poppins (UI) + Crimson Text (display) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Crimson+Text:wght@400;600;700&display=swap" />
 
-  <!-- Project styles -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="app" class="max-w-[480px] mx-auto min-h-screen flex flex-col pb-20">
 
-    <!-- Top bar -->
-    <header class="hidden sticky top-0 z-30 bg-base-100/95 backdrop-blur border-b border-base-300 px-4 py-2" data-auth-only>
-      <!-- TODO(app): mirror BGG attribution in the React Native app once any
-           screen renders BGG data. See header logo + profile Data Sources card. -->
-      <div class="flex items-center justify-between gap-3">
-        <img src="assets/brand/bgb-logo.svg" alt="" class="w-10 h-10 rounded-lg" />
-        <div class="flex-1 flex flex-col justify-center min-w-0">
-          <div class="flex flex-col w-fit">
-            <h1 class="text-2xl font-bold font-display leading-tight">BoardgameBuddy</h1>
-            <!-- BGG attribution — required by BGG XML API Terms of Use.
-                 Logo only; the official "Powered by BGG" mark contains its own
-                 legible text. Falls back to text label if the asset is missing. -->
-            <a id="bgg-attribution-header" class="bgg-attribution-link self-end"
-               href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer"
-               aria-label="Powered by BoardGameGeek">
-              <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek" height="14"
-                   onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Powered by BoardGameGeek',className:'bgg-attribution-fallback'}))" />
-            </a>
-          </div>
-        </div>
-        <button id="profile-chip" class="btn btn-ghost btn-sm btn-circle" onclick="showView('profile'); renderProfile();" title="Account">
-          <div id="profile-avatar" class="avatar-bubble"></div>
-        </button>
-      </div>
-    </header>
-
-    <!-- Splash / boot view — visible while we wait for the Supabase session to resolve.
-         Animated buddy SVG conveys "loading" via its bounce + blink loop — no separate
-         loading-dots indicator needed. -->
-    <main data-view="splash" id="splash-view" class="flex-1 px-4 py-4 flex flex-col items-center justify-center min-h-[60vh]">
-      <img src="assets/illustrations/bgb-loading.svg" alt="Loading" style="width:176px;height:176px;" class="rounded-2xl" />
-    </main>
-
-    <!-- Auth View -->
-    <main data-view="auth" id="auth-container" class="hidden flex-1 px-4 py-4"></main>
-
-    <!-- Browse Games View -->
-    <main data-view="browse" class="hidden flex-1 px-4 py-4">
-      <div class="flex items-center justify-between mb-3 gap-2">
-        <h2 class="text-xl font-bold font-display flex items-center gap-2">
-          <i data-lucide="search" class="w-5 h-5"></i> Browse Games
-        </h2>
-      </div>
-      <div class="flex items-center gap-2 mb-3">
-        <form id="game-search-form" class="flex-1 min-w-0">
-          <div class="join w-full relative">
-            <input type="text" id="game-search-input" class="input input-bordered join-item w-full pr-8" placeholder="Search games..." />
-            <button type="button" id="game-search-clear" class="absolute right-12 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle hidden" onclick="clearGameSearch()" aria-label="Clear search">
-              <i data-lucide="x" class="w-3.5 h-3.5"></i>
-            </button>
-            <button type="submit" class="btn btn-primary join-item">
-              <i data-lucide="search" class="w-4 h-4"></i>
-            </button>
-          </div>
-        </form>
-        <button class="btn btn-sm btn-square" id="browse-filter-toggle" onclick="toggleBrowseFilters()" title="Filters">
-          <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-        </button>
-      </div>
-
-      <div id="browse-active-filter-bar" class="hidden mb-2"></div>
-      <div id="browse-filters" class="hidden mb-3"></div>
-      <div id="games-grid"></div>
-
-      <!-- Floating import button -->
-      <button class="fab-import" onclick="showView('import'); renderImport();"
-              aria-label="Import games" title="Import games">
-        <i data-lucide="download" class="w-5 h-5"></i>
-      </button>
-    </main>
-
-    <!-- Closet View -->
-    <main data-view="closet" class="hidden flex-1 px-4 py-4">
-      <div class="flex items-center justify-between mb-3 gap-2">
-        <h2 class="text-xl font-bold font-display flex items-center gap-2">
-          <i data-lucide="library-big" class="w-5 h-5"></i> My Closet
-        </h2>
-        <button id="closet-view-toggle" class="btn btn-ghost btn-square btn-sm" title="Toggle view">
-          <i data-lucide="library-big" class="w-5 h-5"></i>
-        </button>
-      </div>
-      <!-- Tabs: Collection | Wishlist -->
-      <div role="tablist" class="tabs tabs-boxed mb-3">
-        <button role="tab" id="tab-collection" class="tab tab-active" onclick="switchClosetTab('collection')"><i data-lucide="library-big" class="w-4 h-4 mr-1"></i> Collection</button>
-        <button role="tab" id="tab-wishlist" class="tab" onclick="switchClosetTab('wishlist')"><i data-lucide="star" class="w-4 h-4 mr-1"></i> Wishlist</button>
-      </div>
-      <!-- Collection controls (hidden on wishlist tab) -->
-      <div class="flex items-center gap-2 mb-3" id="closet-controls">
-        <div class="relative flex-1 min-w-0">
-          <input type="text" id="closet-search" class="input input-bordered w-full pr-8" placeholder="Search your games..." />
-          <button type="button" id="closet-search-clear" class="absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle hidden" onclick="clearClosetSearch()" aria-label="Clear search">
-            <i data-lucide="x" class="w-3.5 h-3.5"></i>
-          </button>
-        </div>
-        <button id="closet-filter-toggle" class="btn btn-sm btn-square" onclick="toggleClosetFilters()" title="Filters">
-          <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-        </button>
-      </div>
-      <div id="closet-active-filter-bar" class="hidden mb-2"></div>
-      <div id="closet-filters" class="hidden mb-3"></div>
-      <div id="closet-shelves" class="hidden"></div>
-      <div id="closet-list"></div>
-      <div id="closet-wishlist" class="hidden"></div>
-    </main>
-
-    <!-- Game Detail View -->
-    <main data-view="game-detail" class="hidden flex-1 px-4 py-4">
-      <div id="game-detail-content"></div>
-    </main>
-
-    <!-- Import View — BGG search, file upload, review queue, download skill -->
-    <main data-view="import" class="hidden flex-1 px-4 py-4">
-      <div id="import-content"></div>
-    </main>
-
-    <!-- Pending Guide Review View (admin only) -->
-    <main data-view="pending-guides" class="hidden flex-1 px-4 py-4">
-      <div id="pending-guides-content"></div>
-    </main>
-
-    <!-- Missing-images Refresh View (admin only) -->
-    <main data-view="missing-images" class="hidden flex-1 px-4 py-4">
-      <div id="missing-images-content"></div>
-    </main>
-
-    <!-- User Profile View -->
-    <main data-view="profile" class="hidden flex-1 px-4 py-4">
-      <div id="profile-content"></div>
-      <!-- BGG attribution card — primary, prominent attribution surface.
-           Required by BGG XML API Terms of Use. Sibling of #profile-content
-           so renderProfile() can replace its innerHTML without clobbering this. -->
-      <section id="bgg-data-sources" class="bgg-attribution-card">
-        <h3>Data Sources</h3>
-        <p>Game data, box art, and metadata are sourced from
-          <a href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer">BoardGameGeek</a>
-          via the BGG XML API.</p>
-        <a class="bgg-attribution-card__logo"
-           href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer">
-          <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek" height="40" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Powered by BoardGameGeek',className:'bgg-attribution-card__fallback'}))" />
-        </a>
-      </section>
-    </main>
-
-    <!-- Play Log (history) View -->
-    <main data-view="history" class="hidden flex-1 px-4 py-4">
-      <h2 class="text-xl font-bold mb-3 flex items-center gap-2">
-        <i data-lucide="history" class="w-5 h-5"></i> Play Log
-      </h2>
-      <div id="plays-filter-row" class="mb-3"></div>
-      <div id="history-content"></div>
-    </main>
-
-    <!-- Play Detail View -->
-    <main data-view="play-detail" class="hidden flex-1 px-4 py-4">
-      <div id="play-detail-content"></div>
-    </main>
+    <!-- ── Views ────────────────────────────────────────────────────────────── -->
+    <main data-view="splash" class="flex-1 px-4 py-4 flex flex-col items-center justify-center min-h-[60vh]"></main>
+    <main data-view="auth" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="feed" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="log-play" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="game-search" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="game-detail" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="profile-self" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="profile-other" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="buddies" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="admin" class="hidden flex-1 px-4 py-4"></main>
 
     <!-- Toast -->
     <div id="toast" class="toast toast-end toast-top hidden z-50"></div>
-
-    <!-- Hidden chunks panel -->
-    <dialog id="hidden-chunks-dialog" class="modal">
-      <div class="modal-box max-w-md">
-        <h3 class="font-bold text-lg mb-2">Hidden chunks</h3>
-        <div id="hidden-chunks-body"></div>
-      </div>
-      <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
-
-    <!-- Chunk create/edit -->
-    <dialog id="chunk-editor" class="modal">
-      <div class="modal-box max-w-md">
-        <h3 class="font-bold text-lg mb-2">Guide chunk</h3>
-        <div id="chunk-editor-body"></div>
-      </div>
-      <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
-
   </div>
 
-  <!-- Bottom Navigation: Browse | Closet | Play Log
-       Lives outside #app so its fixed positioning is relative to the viewport
-       regardless of #app's max-width / centering. -->
+  <!-- Bottom nav: Feed | Log | Profile -->
   <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
-    <button data-nav="browse">
-      <i data-lucide="search" class="w-5 h-5"></i>
-      <span class="btm-nav-label text-xs">Browse</span>
+    <button data-nav="feed">
+      <i data-lucide="home" class="w-5 h-5"></i>
+      <span class="btm-nav-label text-xs">Feed</span>
     </button>
-    <button data-nav="closet" class="active">
-      <i data-lucide="library-big" class="w-5 h-5"></i>
-      <span class="btm-nav-label text-xs">Closet</span>
+    <button data-nav="log-play">
+      <i data-lucide="plus-circle" class="w-5 h-5"></i>
+      <span class="btm-nav-label text-xs">Log</span>
     </button>
-    <button data-nav="history">
-      <i data-lucide="history" class="w-5 h-5"></i>
-      <span class="btm-nav-label text-xs">Play Log</span>
+    <button data-nav="profile-self">
+      <i data-lucide="user" class="w-5 h-5"></i>
+      <span class="btm-nav-label text-xs">Profile</span>
     </button>
   </nav>
 
-  <!-- Global Log-a-Play bubble: FAB + expandable session panel.
-       Panel + backdrop are toggled by session.js via sessionExpanded; the
-       FAB itself uses data-auth-only so it appears on every authed view.
-       All three sit at body root so fixed positioning anchors to the viewport. -->
-  <div id="session-backdrop" class="session-backdrop hidden"
-       onclick="minimizeSession()"></div>
-  <div id="session-panel" class="session-panel hidden"></div>
-  <button id="session-fab" class="fab-log-play hidden" data-auth-only
-          aria-label="Log a play" onclick="toggleSessionBubble()">
-    <i data-lucide="plus" class="w-6 h-6"></i>
-  </button>
-
-  <!-- Scripts: load order matters -->
+  <!-- Load order: config → helpers → domain → ui → views → init -->
   <script src="config.js"></script>
-  <script src="state.js"></script>
   <script src="helpers.js"></script>
-  <script src="auth.js"></script>
-  <script src="games.js"></script>
-  <script src="collection.js"></script>
-  <script src="game-detail.js"></script>
-  <script src="guide.js"></script>
-  <script src="plays.js"></script>
-  <script src="play-detail.js"></script>
-  <script src="session.js"></script>
-  <script src="import.js"></script>
-  <script src="buddies.js"></script>
-  <script src="profile.js"></script>
+
+  <!-- Domain -->
+  <script src="domain/api.js"></script>
+  <script src="domain/store.js"></script>
+  <script src="domain/view.js"></script>
+  <script src="domain/status.js"></script>
+  <script src="domain/user.js"></script>
+  <script src="domain/game.js"></script>
+  <script src="domain/collection.js"></script>
+  <script src="domain/play.js"></script>
+  <script src="domain/play-session.js"></script>
+  <script src="domain/buddy.js"></script>
+  <script src="domain/feed.js"></script>
+  <script src="domain/search.js"></script>
+  <script src="domain/stats.js"></script>
+
+  <!-- UI components -->
+  <script src="ui/oauth-buttons.js"></script>
+  <script src="ui/play-card.js"></script>
+  <script src="ui/game-card.js"></script>
+
+  <!-- Views -->
+  <script src="views/splash-view.js"></script>
+  <script src="views/auth-view.js"></script>
+  <script src="views/feed-view.js"></script>
+  <script src="views/log-play-view.js"></script>
+  <script src="views/game-search-view.js"></script>
+  <script src="views/game-detail-view.js"></script>
+  <script src="views/profile-self-view.js"></script>
+  <script src="views/profile-other-view.js"></script>
+  <script src="views/buddies-view.js"></script>
+  <script src="views/admin-view.js"></script>
+
   <script src="init.js"></script>
 </body>
 </html>
