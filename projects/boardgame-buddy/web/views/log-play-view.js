@@ -21,11 +21,29 @@
     async onMount() {
       const existing = window.PlaySession.load();
       this._ps = existing || new window.PlaySession();
+      this._ensureSelfIncluded();
       window.store.set("activePlay", this._ps);
       try {
         this._buddies = await window.Buddy.list();
       } catch (_) { this._buddies = []; }
       this.render();
+    }
+
+    _ensureSelfIncluded() {
+      // The logger needs a play_players row so their wins / play counts /
+      // played-with leaderboards include them. Only auto-add when the draft
+      // has no players yet — never overwrite an existing list the user
+      // already touched.
+      if (this._ps.players.length > 0) return;
+      const me = window.store.get("user");
+      if (!me) return;
+      this._ps.players.push({
+        name: me.display_name,
+        is_winner: false,
+        score: null,
+        user_id: me.id,
+      });
+      this._ps.persist();
     }
 
     async onUnmount() {
@@ -35,17 +53,12 @@
     render() {
       const ps = this._ps;
       this.container.innerHTML = `
-        <header class="log-play__topbar">
-          <button class="btn btn-ghost btn-sm" onclick="history.back()">
-            <i data-lucide="x" class="w-5 h-5"></i>
-          </button>
+        <header class="log-play__topbar log-play__topbar--center">
           <h2 class="log-play__title font-display">Log a play</h2>
-          <button class="btn btn-ghost btn-sm" onclick="window.logPlayView._reset()">Reset</button>
         </header>
 
         <div class="log-play__tabs">
-          <button class="log-play__tab ${this._mode === "solo" ? "is-active" : ""}" onclick="window.logPlayView._setMode('solo')">Solo log</button>
-          <button class="log-play__tab ${this._mode === "lobby" ? "is-active" : ""}" onclick="window.logPlayView._setMode('lobby')">Host a session</button>
+          <button class="log-play__tab ${this._mode !== "joining" ? "is-active" : ""}" onclick="window.logPlayView._setMode('solo')">Log a play</button>
           <button class="log-play__tab ${this._mode === "joining" ? "is-active" : ""}" onclick="window.logPlayView._setMode('joining')">Join by code</button>
         </div>
 
@@ -81,36 +94,36 @@
                  onchange="window.logPlayView._setDate(this.value)" />
         </section>
 
+        ${this._renderPlayModeSelector()}
+
         <section class="log-play__section">
-          <label class="log-play__label">Players</label>
+          <div class="log-play__players-head">
+            <label class="log-play__label">Players</label>
+            ${this._renderSessionChip()}
+          </div>
           ${ps.players.length === 0 ? `<p class="text-sm opacity-60 mb-2">No players added yet.</p>` : ""}
           <ul class="log-play__players">
-            ${ps.players.map((p, i) => `
-              <li class="log-play__player">
-                <span class="log-play__player-name">${escape(p.name)}</span>
-                <label class="log-play__player-win">
-                  <input type="checkbox" ${p.is_winner ? "checked" : ""}
-                         onchange="window.logPlayView._toggleWinner(${i}, this.checked)" />
-                  Winner
-                </label>
-                <button class="btn btn-ghost btn-xs" onclick="window.logPlayView._removePlayer(${i})">
-                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                </button>
-              </li>
-            `).join("")}
+            ${ps.players.map((p, i) => this._renderPlayerRow(p, i)).join("")}
           </ul>
           <div class="log-play__player-add">
-            <input id="log-play-buddy-input" class="input input-bordered input-sm w-full"
-                   list="log-play-buddy-list" placeholder="Add player (buddy or free-text)"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();window.logPlayView._addPlayerFromInput();}" />
-            <datalist id="log-play-buddy-list">
-              ${this._buddies.map((b) => `<option value="${escapeAttr(b.other_display_name)}" data-user="${b.other_user_id}">`).join("")}
-            </datalist>
+            <div class="log-play__buddy-combo">
+              <input id="log-play-buddy-input"
+                     class="input input-bordered input-sm w-full"
+                     placeholder="Add player (buddy or free-text)"
+                     autocomplete="off"
+                     oninput="window.logPlayView._onBuddyInput(this.value)"
+                     onfocus="window.logPlayView._openBuddyDropdown()"
+                     onblur="window.logPlayView._scheduleCloseBuddyDropdown()"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();window.logPlayView._addPlayerFromInput();}else if(event.key==='Escape'){window.logPlayView._closeBuddyDropdown();}" />
+              <ul id="log-play-buddy-dropdown" class="log-play__buddy-dropdown hidden"
+                  onmousedown="event.preventDefault()"></ul>
+            </div>
             <button class="btn btn-primary btn-sm" onclick="window.logPlayView._addPlayerFromInput()">Add</button>
           </div>
         </section>
 
-        ${this._mode === "lobby" ? this._renderLobbyPanel() : ""}
+        ${this._renderScoringSection()}
+        ${this._renderPhotoSection()}
 
         <section class="log-play__section">
           <label class="log-play__label">Notes</label>
@@ -123,34 +136,234 @@
                   onclick="window.logPlayView._save()">
             ${this._saving ? "Saving…" : "Save play"}
           </button>
+          <button class="btn btn-ghost btn-sm w-full mt-2" onclick="window.logPlayView._reset()">
+            Reset
+          </button>
         </section>
       `;
     }
 
-    _renderLobbyPanel() {
+    _renderSessionChip() {
+      // Inline session-code control lives alongside the Players label.
+      // - No active lobby → tiny "+ Code" button to spin one up.
+      // - Active lobby   → compact pill with the code + an × to end. The
+      //   poll loop merges joining players straight into the players list,
+      //   so there's no separate participants display to clutter the panel.
       if (!this._lobby) {
         return `
-          <section class="log-play__section log-play__lobby">
-            <button class="btn btn-outline w-full" onclick="window.logPlayView._openLobby()">
-              <i data-lucide="qr-code" class="w-4 h-4"></i> Create session code
-            </button>
-            <p class="text-xs opacity-60 mt-2">Other phones can join with the code and add themselves to the player list.</p>
-          </section>
+          <button class="session-chip session-chip--add" title="Create a code others can join with"
+                  onclick="window.logPlayView._openLobby()">
+            <i data-lucide="qr-code" class="w-3 h-3"></i>
+            <span>Session code</span>
+          </button>
         `;
       }
-      const code = this._lobby.code;
-      const parts = this._lobby.participants || [];
       return `
-        <section class="log-play__section log-play__lobby">
-          <div class="log-play__lobby-code">
-            <span class="log-play__lobby-label">Session code</span>
-            <span class="log-play__lobby-value">${escape(code)}</span>
+        <span class="session-chip session-chip--active" title="Players can join with this code">
+          <i data-lucide="qr-code" class="w-3 h-3"></i>
+          <span class="session-chip__code">${escape(this._lobby.code)}</span>
+          <button class="session-chip__end" title="End session"
+                  onclick="window.logPlayView._closeLobby()">
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+        </span>
+      `;
+    }
+
+    _renderPlayerRow(p, i) {
+      const isTeamGame = this._isTeamGame();
+      const initials = p.initials != null ? p.initials : computeInitials(p.name);
+      return `
+        <li class="log-play__player">
+          <span class="log-play__player-name">${escape(p.name)}</span>
+          <input class="log-play__player-init" type="text" maxlength="3"
+                 aria-label="Initials"
+                 placeholder="${escapeAttr(computeInitials(p.name))}"
+                 value="${escapeAttr(initials)}"
+                 oninput="window.logPlayView._setInitials(${i}, this.value)" />
+          ${isTeamGame ? `
+            <input class="log-play__player-team" type="text" maxlength="6"
+                   aria-label="Team"
+                   placeholder="Team"
+                   value="${escapeAttr(p.team || '')}"
+                   oninput="window.logPlayView._setTeam(${i}, this.value)" />
+          ` : ''}
+          <button class="btn btn-ghost btn-xs" title="Remove player"
+                  onclick="window.logPlayView._removePlayer(${i})">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </li>
+      `;
+    }
+
+    _resolvePlayMode() {
+      const ps = this._ps;
+      if (ps.playMode) return ps.playMode;
+      const g = ps.gameSnapshot;
+      if (g && g.play_mode) return g.play_mode;
+      return 'competitive';
+    }
+
+    _isTeamGame() {
+      return this._resolvePlayMode() === 'team';
+    }
+
+    _renderPlayModeSelector() {
+      const mode = this._resolvePlayMode();
+      const opt = (id, label, icon) => `
+        <button class="play-mode-opt ${mode === id ? 'is-active' : ''}"
+                onclick="window.logPlayView._setPlayMode('${id}')">
+          <i data-lucide="${icon}" class="w-4 h-4"></i>
+          <span>${label}</span>
+        </button>`;
+      return `
+        <section class="log-play__section">
+          <label class="log-play__label">Game type</label>
+          <div class="play-mode-selector">
+            ${opt('competitive', 'Competitive', 'swords')}
+            ${opt('team', 'Team', 'users')}
+            ${opt('coop', 'Co-op', 'handshake')}
           </div>
-          <p class="text-xs opacity-60 mt-1">${parts.length} ${parts.length === 1 ? "player" : "players"} joined</p>
-          <ul class="log-play__lobby-parts">
-            ${parts.map((p) => `<li>${escape(p.display_name)}</li>`).join("")}
-          </ul>
-          <button class="btn btn-ghost btn-xs mt-2" onclick="window.logPlayView._closeLobby()">End session</button>
+        </section>
+      `;
+    }
+
+    _setPlayMode(mode) {
+      if (!['competitive', 'team', 'coop'].includes(mode)) return;
+      this._ps.playMode = mode;
+      // Switching modes can invalidate the current winner state. Don't auto-
+      // clear: the user might have a partial setup we'd rather preserve, and
+      // re-clicking the trophy is one tap. Just re-render so the UI swaps.
+      this._ps.persist();
+      this.render();
+    }
+
+    _renderScoringSection() {
+      const ps = this._ps;
+      if (ps.players.length === 0) return "";
+      const mode = this._resolvePlayMode();
+      const roundCount = Math.max(0, ...ps.players.map((p) => (p.roundScores || []).length));
+      const playerTotal = (p) => (p.roundScores || []).reduce((a, b) => a + (Number(b) || 0), 0);
+      const labelFor = (p) => p.initials || computeInitials(p.name);
+      // Table is visible from the start — the totals row carries the trophy
+      // buttons (competitive / team) or a shared outcome banner (co-op) so
+      // the winner state is reachable without entering any scores. Round
+      // rows are added on demand and removable individually via the X
+      // beside each round label.
+      return `
+        <section class="log-play__section">
+          <label class="log-play__label">Scoring</label>
+          ${mode === 'coop' ? this._renderCoopOutcome() : ''}
+          <div class="scoring-table-wrap">
+            <table class="scoring-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  ${ps.players.map((p) => `<th class="scoring-head" title="${escapeAttr(p.name)}">${escape(labelFor(p))}</th>`).join("")}
+                </tr>
+              </thead>
+              <tbody>
+                ${Array.from({ length: roundCount }).map((_, r) => `
+                  <tr>
+                    <th class="scoring-round-th">
+                      <span class="scoring-round-label">
+                        <button class="scoring-round-remove" title="Remove round"
+                                onclick="window.logPlayView._removeRoundAt(${r})">
+                          <i data-lucide="x" class="w-3 h-3"></i>
+                        </button>
+                        R${r + 1}
+                      </span>
+                    </th>
+                    ${ps.players.map((p, i) => `
+                      <td>
+                        <input type="number" inputmode="numeric"
+                               class="scoring-cell"
+                               value="${escapeAttr((p.roundScores && p.roundScores[r] != null) ? String(p.roundScores[r]) : "")}"
+                               oninput="window.logPlayView._setRoundScore(${i}, ${r}, this.value)" />
+                      </td>
+                    `).join("")}
+                  </tr>
+                `).join("")}
+                <tr class="scoring-total-row">
+                  <th>Total</th>
+                  ${ps.players.map((p, i) => this._renderTotalsCell(p, i, mode, playerTotal(p))).join("")}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="flex gap-2 mt-1">
+            <button class="btn btn-ghost btn-xs" onclick="window.logPlayView._addRound()">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> Round
+            </button>
+          </div>
+        </section>
+      `;
+    }
+
+    _renderTotalsCell(p, i, mode, total) {
+      // Co-op uses the shared-outcome control above the table — totals row
+      // here just carries the per-player score. Competitive + Team keep the
+      // per-player trophy; Team syncs teammates on toggle.
+      if (mode === 'coop') {
+        return `<td class="${p.is_winner ? 'scoring-total-cell--winner' : ''}">
+          <div class="scoring-total-cell">
+            <span class="scoring-total">${total}</span>
+          </div>
+        </td>`;
+      }
+      return `<td class="${p.is_winner ? 'scoring-total-cell--winner' : ''}">
+        <div class="scoring-total-cell">
+          <button class="scoring-winner-btn ${p.is_winner ? 'is-winner' : ''}"
+                  title="${p.is_winner ? 'Winner' : 'Mark as winner'}"
+                  onclick="window.logPlayView._toggleWinner(${i})">
+            <i data-lucide="${p.is_winner ? 'trophy' : 'circle'}" class="w-4 h-4"></i>
+          </button>
+          <span class="scoring-total">${total}</span>
+        </div>
+      </td>`;
+    }
+
+    _renderCoopOutcome() {
+      const players = this._ps.players;
+      const won = players.length > 0 && players.every((p) => p.is_winner);
+      return `
+        <div class="coop-outcome">
+          <button class="coop-outcome-btn ${won ? 'is-winner' : ''}"
+                  onclick="window.logPlayView._setCoopOutcome(${!won})">
+            <i data-lucide="${won ? 'trophy' : 'circle'}" class="w-4 h-4"></i>
+            <span>${won ? 'We won together' : 'Mark as won'}</span>
+          </button>
+          <p class="text-xs opacity-60 mt-1">Co-op: everyone wins or loses together.</p>
+        </div>
+      `;
+    }
+
+    _setCoopOutcome(won) {
+      for (const p of this._ps.players) p.is_winner = !!won;
+      this._ps.persist();
+      this.render();
+    }
+
+    _renderPhotoSection() {
+      const url = this._ps.photoPreviewUrl;
+      return `
+        <section class="log-play__section">
+          <label class="log-play__label">Photo</label>
+          ${url ? `
+            <div class="log-play__photo">
+              <img src="${url}" alt="Selected play photo" />
+              <button class="btn btn-ghost btn-xs log-play__photo-remove" onclick="window.logPlayView._clearPhoto()">
+                <i data-lucide="x" class="w-3.5 h-3.5"></i> Remove
+              </button>
+            </div>
+          ` : `
+            <label class="log-play__photo-pick">
+              <input type="file" accept="image/*" class="hidden"
+                     onchange="window.logPlayView._onPhotoSelect(this.files && this.files[0])" />
+              <i data-lucide="camera" class="w-5 h-5"></i>
+              <span>Click to add photo</span>
+            </label>
+          `}
         </section>
       `;
     }
@@ -173,17 +386,17 @@
     _setMode(mode) {
       this._mode = mode;
       this._error = null;
-      this._stopPolling();
+      // Polling lives with the lobby itself now, not the tab. Switching
+      // tabs doesn't end the session — the host can flip to "Join by code"
+      // and back without losing participants.
       this.render();
-      if (mode === "lobby" && this._lobby) {
-        this._startPolling();
-      }
     }
 
     _pickGame() {
-      // Route to search so the user can pick. The detail view's "Log a play"
-      // path also lands us here with gameSnapshot pre-set.
-      window.router.go("game-search");
+      // Route to search in "pick-for-play" mode so clicking a result returns
+      // to this view with the game pre-selected (instead of opening the
+      // game-detail page).
+      window.router.go("game-search", { mode: "pick-for-play" });
     }
 
     _setDate(value) {
@@ -200,16 +413,192 @@
       const input = document.getElementById("log-play-buddy-input");
       const name = (input.value || "").trim();
       if (!name) return;
-      const buddy = (this._buddies || []).find((b) => b.other_display_name.toLowerCase() === name.toLowerCase());
-      this._ps.players.push({
+      // If the typed name matches a buddy exactly, treat it as that buddy
+      // (carries user_id). Otherwise it's a free-text ghost player.
+      const buddy = (this._buddies || []).find(
+        (b) => b.other_display_name.toLowerCase() === name.toLowerCase()
+      );
+      this._addPlayer({
         name,
-        is_winner: false,
-        score: null,
         user_id: buddy ? buddy.other_user_id : null,
       });
-      input.value = "";
+    }
+
+    _addPlayer({ name, user_id }) {
+      // Skip dupes (case-insensitive) so picking a buddy who's already in the
+      // list is a no-op rather than stacking duplicates.
+      const exists = this._ps.players.some(
+        (p) => (p.name || "").toLowerCase() === (name || "").toLowerCase()
+      );
+      if (!exists) {
+        // New player slots into the existing scoring-table grid — pad their
+        // roundScores so column lengths match the current number of rounds.
+        const currentRounds = Math.max(0, ...this._ps.players.map((p) => (p.roundScores || []).length));
+        const roundScores = Array(currentRounds).fill(null);
+        this._ps.players.push({
+          name,
+          is_winner: false,
+          score: null,
+          user_id: user_id || null,
+          roundScores,
+        });
+        this._ps.persist();
+      }
+      this._closeBuddyDropdown();
+      this.render();
+    }
+
+    // ── Scoring rounds ────────────────────────────────────────────────────────
+
+    _addRound() {
+      for (const p of this._ps.players) {
+        if (!Array.isArray(p.roundScores)) p.roundScores = [];
+        p.roundScores.push(null);
+      }
       this._ps.persist();
       this.render();
+    }
+
+    _removeRoundAt(r) {
+      let removed = false;
+      for (const p of this._ps.players) {
+        if (Array.isArray(p.roundScores) && r >= 0 && r < p.roundScores.length) {
+          p.roundScores.splice(r, 1);
+          removed = true;
+        }
+      }
+      if (removed) {
+        this._ps.persist();
+        this.render();
+      }
+    }
+
+    _setInitials(i, value) {
+      const p = this._ps.players[i];
+      if (!p) return;
+      // Uppercase + strip whitespace so the table header stays compact.
+      p.initials = String(value || "").replace(/\s+/g, "").slice(0, 3).toUpperCase();
+      this._ps.persist();
+      // Patch only the matching column header so the input keeps focus.
+      const heads = this.container.querySelectorAll(".scoring-head");
+      const label = p.initials || computeInitials(p.name);
+      if (heads[i]) heads[i].textContent = label;
+    }
+
+    _setTeam(i, value) {
+      const ps = this._ps;
+      const p = ps.players[i];
+      if (!p) return;
+      p.team = String(value || "").trim();
+      // If any existing teammate is already marked winner, inherit it so the
+      // table doesn't show a mismatched team. Skip when team is empty.
+      if (p.team) {
+        const tag = p.team.toLowerCase();
+        const teammateWon = ps.players.some(
+          (o, j) => j !== i && (o.team || '').trim().toLowerCase() === tag && o.is_winner
+        );
+        if (teammateWon !== p.is_winner) {
+          p.is_winner = teammateWon;
+          this._ps.persist();
+          this.render();
+          return;
+        }
+      }
+      ps.persist();
+    }
+
+    _setRoundScore(playerIndex, roundIndex, value) {
+      const p = this._ps.players[playerIndex];
+      if (!p) return;
+      if (!Array.isArray(p.roundScores)) p.roundScores = [];
+      // Allow blanks (treated as 0 in the total) so partially-scored rounds
+      // don't force a 0 into the cell.
+      p.roundScores[roundIndex] = value === "" ? null : Number(value);
+      this._ps.persist();
+      // Update only the total cell so the input doesn't lose focus on each
+      // keystroke — find the cell via its column index.
+      const totals = this.container.querySelectorAll(".scoring-total");
+      const total = (p.roundScores || []).reduce((a, b) => a + (Number(b) || 0), 0);
+      if (totals[playerIndex]) totals[playerIndex].textContent = String(total);
+    }
+
+    // ── Photo ────────────────────────────────────────────────────────────────
+
+    _onPhotoSelect(file) {
+      if (!file) return;
+      this._clearPhoto({ keepRender: true });
+      this._ps.photoFile = file;
+      this._ps.photoPreviewUrl = URL.createObjectURL(file);
+      this.render();
+    }
+
+    _clearPhoto({ keepRender = false } = {}) {
+      if (this._ps.photoPreviewUrl) {
+        try { URL.revokeObjectURL(this._ps.photoPreviewUrl); } catch (_) {}
+      }
+      this._ps.photoFile = null;
+      this._ps.photoPreviewUrl = null;
+      if (!keepRender) this.render();
+    }
+
+    // ── Custom buddy dropdown (replaces native <datalist>) ──────────────────
+    //
+    // The native datalist only fills the input on pick; the user still had to
+    // press Add. This custom dropdown adds the buddy directly on click.
+
+    _onBuddyInput(value) {
+      // Live filter — repaint the dropdown only (not the whole view) so the
+      // input keeps focus and the caret position survives.
+      this._renderBuddyDropdown(value);
+    }
+
+    _openBuddyDropdown() {
+      const input = document.getElementById("log-play-buddy-input");
+      this._renderBuddyDropdown(input ? input.value : "");
+    }
+
+    _scheduleCloseBuddyDropdown() {
+      // Defer so an onclick on a row in the dropdown still fires (blur runs
+      // before click without the delay).
+      setTimeout(() => this._closeBuddyDropdown(), 150);
+    }
+
+    _closeBuddyDropdown() {
+      const dd = document.getElementById("log-play-buddy-dropdown");
+      if (dd) {
+        dd.classList.add("hidden");
+        dd.innerHTML = "";
+      }
+    }
+
+    _renderBuddyDropdown(query) {
+      const dd = document.getElementById("log-play-buddy-dropdown");
+      if (!dd) return;
+      const q = (query || "").trim().toLowerCase();
+      const already = new Set(
+        this._ps.players.map((p) => (p.name || "").toLowerCase())
+      );
+      const filtered = (this._buddies || [])
+        .filter((b) => {
+          const name = (b.other_display_name || "").toLowerCase();
+          if (already.has(name)) return false;
+          if (!q) return true;
+          return name.includes(q);
+        })
+        .slice(0, 8);
+      if (filtered.length === 0) {
+        dd.classList.add("hidden");
+        dd.innerHTML = "";
+        return;
+      }
+      dd.innerHTML = filtered.map((b) => `
+        <li class="log-play__buddy-dropdown-item"
+            onclick="window.logPlayView._addPlayer({name:'${escapeAttr(b.other_display_name)}', user_id:'${escapeAttr(b.other_user_id)}'})">
+          <span class="avatar-bubble avatar-bubble--xs">${escape(initialsOf(b.other_display_name))}</span>
+          <span class="log-play__buddy-dropdown-name">${escape(b.other_display_name)}</span>
+        </li>
+      `).join("");
+      dd.classList.remove("hidden");
     }
 
     _removePlayer(i) {
@@ -218,9 +607,27 @@
       this.render();
     }
 
-    _toggleWinner(i, on) {
-      this._ps.players[i].is_winner = !!on;
-      this._ps.persist();
+    _toggleWinner(i) {
+      const ps = this._ps;
+      const p = ps.players[i];
+      if (!p) return;
+      const next = !p.is_winner;
+      const mode = this._resolvePlayMode();
+      if (mode === 'coop') {
+        // Coop: everyone wins or loses together.
+        for (const other of ps.players) other.is_winner = next;
+      } else if (mode === 'team' && p.team && p.team.trim()) {
+        // Team: teammates win together. Players without a team value stay
+        // individual (toggling them only flips themselves).
+        const tag = p.team.trim().toLowerCase();
+        for (const other of ps.players) {
+          if ((other.team || '').trim().toLowerCase() === tag) other.is_winner = next;
+        }
+      } else {
+        p.is_winner = next;
+      }
+      ps.persist();
+      this.render();
     }
 
     async _openLobby() {
@@ -254,10 +661,25 @@
       this._pollHandle = setInterval(async () => {
         try {
           const session = await window.PlaySession.fetchLobby(this._lobby.code);
+          // Diff before touching state — the lobby refreshes every 2s and
+          // most polls return the same participants. Re-rendering on every
+          // tick made the whole view innerHTML-swap, which read as a blink.
+          const prevIds = new Set(
+            (this._lobby.participants || []).map((p) => p.id)
+          );
+          const nextParts = session.participants || [];
+          let participantsChanged =
+            nextParts.length !== prevIds.size ||
+            nextParts.some((p) => !prevIds.has(p.id));
+
           this._lobby = session;
+
           // Merge any new participants into the player list (skip dupes).
-          const known = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
-          for (const part of session.participants || []) {
+          const known = new Set(
+            this._ps.players.map((p) => (p.name || "").toLowerCase())
+          );
+          let playersChanged = false;
+          for (const part of nextParts) {
             const key = (part.display_name || "").toLowerCase();
             if (key && !known.has(key)) {
               this._ps.players.push({
@@ -267,10 +689,12 @@
                 user_id: part.user_id || null,
               });
               known.add(key);
+              playersChanged = true;
             }
           }
-          this._ps.persist();
-          this.render();
+
+          if (playersChanged) this._ps.persist();
+          if (participantsChanged || playersChanged) this.render();
         } catch (_) {}
       }, 2000);
     }
@@ -305,12 +729,30 @@
       this._saving = true;
       this.render();
       const payload = this._ps.toPlayCreate();
+      const photoFile = this._ps.photoFile;
       try {
         let play;
-        if (this._lobby && this._lobby.code && this._mode === "lobby") {
+        if (this._lobby && this._lobby.code) {
+          // Active session — finalize through the lobby so the server can
+          // close it out atomically with the play creation.
           play = await window.PlaySession.finalizeLobby(this._lobby.code, payload);
         } else {
           play = await window.Play.create(payload);
+        }
+        // The photo upload endpoint requires a play_id, so it has to run AFTER
+        // create. If the upload errors we surface it but keep the play that
+        // was already saved — the user can add the photo via Edit later.
+        if (photoFile && play && play.id) {
+          try {
+            const fd = new FormData();
+            fd.append("file", photoFile);
+            await window.api.upload(`/plays/${play.id}/photo`, fd);
+          } catch (e) {
+            this._error = "Play saved, but the photo upload failed: " + (e.message || "");
+            this._saving = false;
+            this.render();
+            return;
+          }
         }
         this._ps.clear();
         window.store.set("activePlay", null);
@@ -329,7 +771,8 @@
       this._lobby = null;
       this._error = null;
       this._stopPolling();
-      window.store.set("activePlay", null);
+      this._ensureSelfIncluded();
+      window.store.set("activePlay", this._ps);
       this.render();
     }
   }
@@ -340,6 +783,11 @@
     }[c]));
   }
   function escapeAttr(s) { return escape(s); }
+  function initialsOf(name) {
+    const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return (parts[0] || "?").slice(0, 2).toUpperCase();
+  }
 
   window.LogPlayView = LogPlayView;
 })();

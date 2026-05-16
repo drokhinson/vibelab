@@ -18,6 +18,16 @@
 
     // Profile search — returns ProfileSearchResult[]
     static searchProfiles(q) { return window.api.get("/profiles/search", { q }); }
+
+    // Played-with discovery + ghost-player linking.
+    static playedWith()   { return window.api.get("/played-with"); }
+    static ghostPlayers() { return window.api.get("/ghost-players"); }
+    static linkGhost(displayName, targetUserId) {
+      return window.api.post("/ghost-players/link", {
+        display_name: displayName,
+        target_user_id: targetUserId,
+      });
+    }
   }
 
   window.Buddy = Buddy;

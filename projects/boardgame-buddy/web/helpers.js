@@ -35,6 +35,35 @@ function formatDate(dateStr) {
   });
 }
 
+// JS-string escape for safely embedding text inside inline onclicks
+// (e.g. `onclick="...router.go('game-detail',{gameName:'${jsStr(name)}'})"`).
+// Handles backslashes, single quotes, and newlines — that's enough for
+// every place we use it today.
+function jsStr(s) {
+  return String(s ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n");
+}
+
+// Bouncing-buddy loader. Returns an HTML fragment views can drop into
+// any "Loading…" slot. The SVG already animates itself (transform-based
+// bounce + head bob), so this is just a sized <img> wrapper that
+// centres the mark and optionally captions it.
+function buddyLoader({ size = 96, label = null, padded = true } = {}) {
+  const safe = String(label || "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+  return `
+    <div class="buddy-loader ${padded ? "buddy-loader--padded" : ""}">
+      <img src="assets/illustrations/bgb-loading.svg" alt="Loading"
+           class="buddy-loader__mark"
+           style="width:${size}px;height:${size}px;" />
+      ${label ? `<div class="buddy-loader__label">${safe}</div>` : ""}
+    </div>
+  `;
+}
+
 function showToast(message, type = "info") {
   const toast = document.getElementById("toast");
   if (!toast) return;

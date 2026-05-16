@@ -25,6 +25,31 @@
 <body>
   <div id="app" class="max-w-[480px] mx-auto min-h-screen flex flex-col pb-20">
 
+    <!-- Global app header — persists across views once the user is signed in.
+         Brand on the left routes back to the feed; avatar on the right opens
+         the user's profile. Hidden on splash / auth via data-auth-only. -->
+    <header data-auth-only class="hidden bgb-global-header">
+      <a class="bgb-global-header__brand" onclick="window.router.go('feed')">
+        <img src="assets/brand/bgb-logo.svg" alt="" class="bgb-global-header__logo" />
+        <div class="bgb-global-header__text">
+          <span class="bgb-global-header__title font-display">BoardgameBuddy</span>
+          <!-- The BGG mark already reads "Powered by BoardGameGeek" — no
+               additional text needed. It sits flush-right against the title
+               so its right edge lines up with the wordmark. -->
+          <a class="bgb-global-header__bgg" href="https://boardgamegeek.com"
+             target="_blank" rel="noopener noreferrer"
+             onclick="event.stopPropagation()"
+             aria-label="Powered by BoardGameGeek">
+            <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek" />
+          </a>
+        </div>
+      </a>
+      <button class="bgb-global-header__avatar" title="Settings"
+              onclick="window.router.go('settings')">
+        <span id="bgb-global-avatar" class="avatar-bubble">?</span>
+      </button>
+    </header>
+
     <!-- ── Views ────────────────────────────────────────────────────────────── -->
     <main data-view="splash" class="flex-1 px-4 py-4 flex flex-col items-center justify-center min-h-[60vh]"></main>
     <main data-view="auth" class="hidden flex-1 px-4 py-4"></main>
@@ -34,7 +59,9 @@
     <main data-view="game-detail" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="profile-self" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="profile-other" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="play-detail" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="buddies" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="settings" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="admin" class="hidden flex-1 px-4 py-4"></main>
 
     <!-- Toast -->
@@ -75,11 +102,14 @@
   <script src="domain/feed.js"></script>
   <script src="domain/search.js"></script>
   <script src="domain/stats.js"></script>
+  <script src="domain/bgg.js"></script>
 
   <!-- UI components -->
   <script src="ui/oauth-buttons.js"></script>
   <script src="ui/play-card.js"></script>
   <script src="ui/game-card.js"></script>
+  <script src="ui/status-tag.js"></script>
+  <script src="ui/buddies-panel.js"></script>
 
   <!-- Views -->
   <script src="views/splash-view.js"></script>
@@ -90,7 +120,9 @@
   <script src="views/game-detail-view.js"></script>
   <script src="views/profile-self-view.js"></script>
   <script src="views/profile-other-view.js"></script>
+  <script src="views/play-detail-view.js"></script>
   <script src="views/buddies-view.js"></script>
+  <script src="views/settings-view.js"></script>
   <script src="views/admin-view.js"></script>
 
   <script src="init.js"></script>

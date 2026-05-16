@@ -17,7 +17,9 @@
   window.gameDetailView  = new window.GameDetailView();
   window.profileSelfView = new window.ProfileSelfView();
   window.profileOtherView = new window.ProfileOtherView();
+  window.playDetailView  = new window.PlayDetailView();
   window.buddiesView     = new window.BuddiesView();
+  window.settingsView    = new window.SettingsView();
   window.adminView       = new window.AdminView();
 
   window.router.register("splash",        window.splashView);
@@ -28,7 +30,9 @@
   window.router.register("game-detail",   window.gameDetailView);
   window.router.register("profile-self",  window.profileSelfView);
   window.router.register("profile-other", window.profileOtherView);
+  window.router.register("play-detail",   window.playDetailView);
   window.router.register("buddies",       window.buddiesView);
+  window.router.register("settings",      window.settingsView);
   window.router.register("admin",         window.adminView);
 
   // Supabase boot. We model this as a global helper (used by views directly)
@@ -75,6 +79,16 @@
       });
     });
   }
+
+  // Keep the global header's avatar initials in sync with the current user.
+  // Lives at this level (not in a View) because the header persists across
+  // every screen.
+  function syncGlobalAvatar(user) {
+    const el = document.getElementById("bgb-global-avatar");
+    if (!el) return;
+    el.textContent = user ? new window.User(user).initials() : "?";
+  }
+  window.store.subscribe("user", syncGlobalAvatar);
 
   // Logout helper — referenced by ProfileSelfView.
   window.handleLogout = async function () {

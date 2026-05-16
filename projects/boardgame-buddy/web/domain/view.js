@@ -46,22 +46,36 @@
       this._unsubs.push(unsub);
     }
 
+    // Subscribe to a global DOM event with auto-removal on unmount. Useful
+    // for cross-view notifications (e.g. the `status-changed` custom event
+    // fired by the status-tag picker).
+    listenDom(event, fn) {
+      document.addEventListener(event, fn);
+      this._unsubs.push(() => document.removeEventListener(event, fn));
+    }
+
     // Default render() is a no-op — subclasses override.
     render() {}
   }
 
   // Router ──────────────────────────────────────────────────────────────────────
+  // Maintains its own back stack — the SPA never touches the browser history,
+  // so history.back() doesn't work and we model it ourselves. router.back()
+  // pops the most recent entry; falls back to a caller-chosen default
+  // (e.g. 'feed') when the stack is empty.
   class Router {
     constructor() {
       this._views = new Map();
       this._current = null;
+      this._stack = [];          // [{name, params}, ...]
+      this._maxStack = 20;
     }
 
     register(name, view) {
       this._views.set(name, view);
     }
 
-    async go(name, params) {
+    async go(name, params, { skipPush = false } = {}) {
       const next = this._views.get(name);
       if (!next) {
         console.error("Unknown view:", name);
@@ -69,6 +83,10 @@
       }
       const prev = this._current;
       if (prev && prev !== next) {
+        if (!skipPush) {
+          this._stack.push({ name: prev.name, params: prev.params || {} });
+          if (this._stack.length > this._maxStack) this._stack.shift();
+        }
         await prev.unmount();
       }
       window.store.set("currentRoute", { name, params: params || {} });
@@ -95,6 +113,13 @@
 
       if (window.lucide) window.lucide.createIcons();
       if (window.api) window.api.trackEvent("view:" + name);
+    }
+
+    async back(fallback = "feed") {
+      const entry = this._stack.pop();
+      // skipPush so back→forward→back doesn't keep growing the stack.
+      if (entry) return this.go(entry.name, entry.params, { skipPush: true });
+      return this.go(fallback, {}, { skipPush: true });
     }
   }
 

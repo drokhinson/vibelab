@@ -67,6 +67,11 @@
       this.hostUserId = null;
       this.photoBlob = null;
       this.photoUrl = null;
+      if (this.photoPreviewUrl) {
+        try { URL.revokeObjectURL(this.photoPreviewUrl); } catch (_) {}
+      }
+      this.photoFile = null;
+      this.photoPreviewUrl = null;
       try { localStorage.removeItem(LS_KEY); } catch (_) {}
     }
 
@@ -100,7 +105,9 @@
     }
 
     // Build the POST /plays body from this draft. Used both for solo logs and
-    // for the host's finalize call (which has the same shape).
+    // for the host's finalize call (which has the same shape). When per-round
+    // scoring was used, each player's `score` is the sum of their roundScores;
+    // the round breakdown itself isn't persisted server-side.
     toPlayCreate() {
       return {
         game_id: this.gameId,
@@ -108,7 +115,7 @@
         players: this.players.map((p) => ({
           name: p.name,
           is_winner: !!p.is_winner,
-          score: p.score ?? null,
+          score: rollupScore(p),
           user_id: p.user_id || null,
         })),
         notes: this.notes || null,
@@ -117,6 +124,14 @@
         play_mode: this.playMode || null,
       };
     }
+  }
+
+  function rollupScore(p) {
+    const rs = p && p.roundScores;
+    if (Array.isArray(rs) && rs.length > 0) {
+      return rs.reduce((a, b) => a + (Number(b) || 0), 0);
+    }
+    return p && p.score != null ? p.score : null;
   }
 
   window.PlaySession = PlaySession;

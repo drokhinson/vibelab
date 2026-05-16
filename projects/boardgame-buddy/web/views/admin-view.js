@@ -25,7 +25,7 @@
     render() {
       this.container.innerHTML = `
         <header class="search-topbar">
-          <button class="btn btn-ghost btn-sm" onclick="history.back()">
+          <button class="btn btn-ghost btn-sm" onclick="window.router.back('profile-self')">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="font-display font-semibold text-lg">Admin tools</h2>
