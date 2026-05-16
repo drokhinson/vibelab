@@ -332,8 +332,10 @@ def _resolve_ingredient_for_save(ing) -> dict:
     unit_def = parse_unit(ing.unit)
     canonical_ml, canonical_g = to_canonical(ing.amount, unit_def)
     modifier = (ing.modifier or "").strip().lower() or None
+    # Stored names are always lowercased so "Jalapeño" and "jalapeño" map to
+    # one row. Frontends capitalize for display (shared/text.js).
     return {
-        "name": ing.name.strip(),
+        "name": ing.name.strip().lower(),
         "amount": ing.amount,
         "unit": ing.unit,
         "unitId": unit_def.id if unit_def else None,

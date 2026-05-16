@@ -38,6 +38,71 @@ class ScrapeError(Exception):
         self.message = message
 
 
+# ── Ingredient name normalization ─────────────────────────────────────────────
+#
+# All ingredient names are stored lowercased so "Jalapeño", "jalapeño" and
+# "JALAPEÑO" collapse to one row. Frontends capitalize for display via
+# shared/text.js#capitalizeIngredient.
+#
+# Plural recognition is heuristic — try a few common English plural suffixes
+# and accept the shortest form that already exists in the categories table.
+# Falls back to the raw lowercased input when no singular form is known.
+
+
+def _plural_candidates(name: str) -> list[str]:
+    """Return ``name`` plus likely singular variants in priority order.
+
+    Examples::
+
+        "tomatoes" → ["tomatoes", "tomatoe", "tomato"]
+        "berries"  → ["berries", "berry"]
+        "leaves"   → ["leaves", "leave", "leav"]   (irregular; harmless if
+                                                    none match the DB)
+        "jalapeños" → ["jalapeños", "jalapeño"]
+    """
+    out = [name]
+    if name.endswith("ies") and len(name) > 3:
+        out.append(name[:-3] + "y")
+    if name.endswith("es") and len(name) > 2:
+        out.append(name[:-2])
+        out.append(name[:-1])
+    elif name.endswith("s") and len(name) > 1:
+        out.append(name[:-1])
+    return out
+
+
+def _normalize_ingredient_name(raw: str, known_lower: set[str] | None) -> str:
+    """Lowercase ``raw`` and singularize if a known form matches.
+
+    ``known_lower`` is a set of already-lowercased ingredient names from the
+    DB (loaded once per scrape). When None, just lowercases.
+    """
+    lower = (raw or "").strip().lower()
+    if not lower or not known_lower:
+        return lower
+    for candidate in _plural_candidates(lower):
+        if candidate in known_lower:
+            return candidate
+    return lower
+
+
+def _load_known_ingredient_names() -> set[str] | None:
+    """Pull every ingredient.name from Supabase as a lowercased set.
+
+    Failure is non-fatal — return None so the parser falls back to plain
+    lowercasing without DB-aware singularize.
+    """
+    try:
+        from db import get_supabase
+
+        sb = get_supabase()
+        result = sb.table("sauceboss_ingredient").select("name").execute()
+        return {str(row["name"]).strip().lower() for row in (result.data or []) if row.get("name")}
+    except Exception:
+        logger.exception("parser: could not load known ingredient names")
+        return None
+
+
 @dataclass
 class ParsedIngredient:
     original_text: str
@@ -458,6 +523,7 @@ def _html_fallback_scrape(url: str) -> ParsedRecipe:
     from .units import parse_quantity, parse_unit, to_canonical
     from .modifiers import extract_modifier
 
+    known_ingredients = _load_known_ingredient_names()
     parsed_ings: list[ParsedIngredient] = []
     for raw_line in ingredient_lines:
         line = str(raw_line).strip()
@@ -467,13 +533,26 @@ def _html_fallback_scrape(url: str) -> ParsedRecipe:
         if qty is None:
             qty = parse_quantity(line)
         unit_def = parse_unit(unit_raw)
+        # "2 medium jalapeños" — quantity but no unit. Default to the "whole"
+        # count unit so the row renders as "2 whole jalapeño" instead of bare
+        # "2 jalapeño" (which then drifts when scaled).
+        if qty is not None and unit_def is None:
+            unit_def = parse_unit("whole")
+            if unit_def is not None:
+                unit_raw = unit_def.abbreviation or "whole"
         canonical_ml, canonical_g = to_canonical(qty, unit_def)
         clean_food, modifier, leftover_note = extract_modifier(food_raw, note)
+        # Lowercase + singularize so scraped names line up with the canonical
+        # row in sauceboss_ingredient. "Tomatoes" → "tomato", "Jalapeños" →
+        # "jalapeño", etc. Unknown words pass through as their lowercased form.
+        canonical_food = _normalize_ingredient_name(
+            clean_food or food_raw, known_ingredients,
+        )
         parsed_ings.append(ParsedIngredient(
             original_text=line,
             quantity=qty,
             unit_raw=unit_raw,
-            food_raw=clean_food or food_raw,
+            food_raw=canonical_food or (clean_food or food_raw),
             canonical_ml=canonical_ml,
             canonical_g=canonical_g,
             note=leftover_note,
@@ -537,6 +616,7 @@ def scrape_recipe(url: str) -> ParsedRecipe:
     from .units import parse_quantity, parse_unit, to_canonical
     from .modifiers import extract_modifier
 
+    known_ingredients = _load_known_ingredient_names()
     parsed_ings: list[ParsedIngredient] = []
     for raw_line in ingredient_lines:
         line = str(raw_line).strip()
@@ -546,13 +626,26 @@ def scrape_recipe(url: str) -> ParsedRecipe:
         if qty is None:
             qty = parse_quantity(line)
         unit_def = parse_unit(unit_raw)
+        # "2 medium jalapeños" — quantity but no unit. Default to the "whole"
+        # count unit so the row renders as "2 whole jalapeño" instead of bare
+        # "2 jalapeño" (which then drifts when scaled).
+        if qty is not None and unit_def is None:
+            unit_def = parse_unit("whole")
+            if unit_def is not None:
+                unit_raw = unit_def.abbreviation or "whole"
         canonical_ml, canonical_g = to_canonical(qty, unit_def)
         clean_food, modifier, leftover_note = extract_modifier(food_raw, note)
+        # Lowercase + singularize so scraped names line up with the canonical
+        # row in sauceboss_ingredient. "Tomatoes" → "tomato", "Jalapeños" →
+        # "jalapeño", etc. Unknown words pass through as their lowercased form.
+        canonical_food = _normalize_ingredient_name(
+            clean_food or food_raw, known_ingredients,
+        )
         parsed_ings.append(ParsedIngredient(
             original_text=line,
             quantity=qty,
             unit_raw=unit_raw,
-            food_raw=clean_food or food_raw,
+            food_raw=canonical_food or (clean_food or food_raw),
             canonical_ml=canonical_ml,
             canonical_g=canonical_g,
             note=leftover_note,
