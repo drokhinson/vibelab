@@ -8,7 +8,7 @@ Everything you need to run any vibelab app locally. Do this once, then all proje
 
 ```bash
 # 1. Fill in the one shared env file
-cp local_dev/.env.example local_dev/.env
+# cp local_dev/.env.example local_dev/.env
 #    → edit local_dev/.env: fill SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
 
 # 2. Fan out credentials to every project (web + native)
