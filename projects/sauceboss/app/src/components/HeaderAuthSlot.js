@@ -1,6 +1,6 @@
 // Top-right slot for the home header. Shows a "Sign in" pill when logged out,
 // or an avatar bubble (initials) when logged in. Tapping the avatar navigates
-// to Settings; tapping Sign-in opens the AuthModal.
+// straight to the Settings screen — sign-out and admin actions live there.
 
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
@@ -53,6 +53,7 @@ export default function HeaderAuthSlot({ navigation }) {
       style={styles.pill}
       onPress={() => navigation?.navigate('Settings')}
       activeOpacity={0.8}
+      accessibilityLabel="Account settings"
     >
       <Text style={styles.initials}>{initials}</Text>
       {state.currentUser.is_admin ? (

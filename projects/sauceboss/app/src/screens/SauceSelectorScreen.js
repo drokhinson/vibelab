@@ -5,11 +5,13 @@ import React, { useMemo } from 'react';
 import {
   View,
   Text,
+  TouchableOpacity,
   ScrollView,
   StyleSheet,
 } from 'react-native';
 import IngredientFilterPanel from '../components/IngredientFilterPanel';
 import CuisineAccordion from '../components/CuisineAccordion';
+import AppHeader from '../components/AppHeader';
 import EmptyState from '../components/EmptyState';
 import LoadingPot from '../components/LoadingPot';
 import { useAppActions, useAppState } from '../store/AppContext';
@@ -51,8 +53,25 @@ export default function SauceSelectorScreen({ navigation }) {
     (e) => isSauceAvailable(e.displayed, state.disabledIngredients),
   ).length;
 
+  // Going back from the sauce list: if a prep variant was picked, return
+  // to PrepSelector; otherwise jump straight back to MealBuilder.
+  const backLabel = prep ? 'Preparation' : 'Meal Builder';
+  function goBackStep() {
+    if (prep) navigation.navigate('PrepSelector');
+    else navigation.navigate('MealBuilder');
+  }
+
   return (
     <View style={styles.screen}>
+      <AppHeader
+        title="Meal Builder"
+        subtitle="Step 3 of 3 · Pick a sauce"
+        back={() => navigation.navigate('Home', { screen: 'SaucebookTab' })}
+        closeIcon
+        manage={false}
+        auth={false}
+        navigation={navigation}
+      />
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
@@ -121,6 +140,17 @@ export default function SauceSelectorScreen({ navigation }) {
                 );
               })
             )}
+
+            {/* In-flow back link — header X exits the whole meal flow; this
+                link walks one step back (to PrepSelector if a prep was
+                picked, otherwise to MealBuilder). */}
+            <TouchableOpacity
+              style={styles.backLink}
+              onPress={goBackStep}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backLinkLabel}>← Back to {backLabel}</Text>
+            </TouchableOpacity>
           </>
         )}
       </ScrollView>
@@ -153,5 +183,16 @@ const styles = StyleSheet.create({
   scrollBody: {
     paddingHorizontal: 16,
     paddingBottom: 32,
+  },
+  backLink: {
+    marginTop: 16,
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  backLinkLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });

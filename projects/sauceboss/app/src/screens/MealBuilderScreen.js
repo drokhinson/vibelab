@@ -1,6 +1,9 @@
-// Home — three category tabs (Carbs / Proteins / Salads), grid of items.
-// Tapping an item kicks off the item-load fetch, then navigates to PrepSelector
-// (if variants exist) or SauceSelector.
+// Meal Builder — three category tabs (Carbs / Proteins / Salads), grid of
+// items. Tapping an item kicks off the item-load fetch, then navigates to
+// PrepSelector (auto-redirecting to SauceSelector if no variants exist).
+//
+// Post-three-tab migration this is no longer the home screen — it's
+// launched from the Saucebook chef-hat FAB and pushes onto the root stack.
 
 import React, { useMemo } from 'react';
 import {
@@ -10,13 +13,12 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Wheat, Drumstick, Salad, ChefHat } from 'lucide-react-native';
+import { Wheat, Drumstick, Salad } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
+import AppHeader from '../components/AppHeader';
 import PotIllustration from '../components/PotIllustration';
 import LoadingPot from '../components/LoadingPot';
 import EmptyState from '../components/EmptyState';
-import HeaderAuthSlot from '../components/HeaderAuthSlot';
 import { COLORS, SHADOWS } from '../theme';
 
 const TABS = [
@@ -34,7 +36,6 @@ function itemsForTab(state, id) {
 export default function MealBuilderScreen({ navigation }) {
   const state = useAppState();
   const actions = useAppActions();
-  const insets = useSafeAreaInsets();
   const items = itemsForTab(state, state.mealCategory);
 
   // Navigate immediately so the loading state lives on the destination screen
@@ -87,25 +88,18 @@ export default function MealBuilderScreen({ navigation }) {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerText}>
-            <Text style={styles.logo}>SauceBoss</Text>
-            <Text style={styles.subtitle}>What are you cooking with?</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.managerBtn}
-              onPress={() => navigation.navigate('SauceManager')}
-              activeOpacity={0.8}
-            >
-              <ChefHat size={14} color="#fff" />
-              <Text style={styles.managerBtnLabel}>Sauces</Text>
-            </TouchableOpacity>
-            <HeaderAuthSlot navigation={navigation} />
-          </View>
-        </View>
-      </View>
+      <AppHeader
+        title="Meal Builder"
+        subtitle="What are you cooking with?"
+        // X (close) instead of chevron-back — exit the meal flow entirely.
+        // The meal builder is its own end-to-end mini-flow; in-flow step-back
+        // is via the bottom "← Back to <step>" link on PrepSelector + SauceSelector.
+        back={() => navigation.navigate('Home', { screen: 'SaucebookTab' })}
+        closeIcon
+        manage={false}
+        auth={false}
+        navigation={navigation}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
@@ -139,50 +133,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingBottom: 18,
-    paddingHorizontal: 20,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  headerText: {
-    flex: 1,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  managerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    height: 36,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-  },
-  managerBtnLabel: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  logo: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 0.5,
-  },
-  subtitle: {
-    color: '#fff',
-    opacity: 0.85,
-    fontSize: 13,
-    marginTop: 2,
   },
   scrollBody: {
     paddingHorizontal: 16,

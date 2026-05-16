@@ -26,6 +26,7 @@ import LoadingPot from '../../components/LoadingPot';
 import EmptyState from '../../components/EmptyState';
 import IngredientFormModal from './IngredientFormModal';
 import { CATEGORY_ORDER } from '#shared/constants';
+import { capitalizeIngredient } from '#shared/text';
 import { COLORS, SHADOWS } from '../../theme';
 
 const UNCATEGORIZED = 'Uncategorized';
@@ -35,6 +36,7 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
   const actions = useAppActions();
   const isAdmin = !!state.currentUser?.is_admin;
   const isLoggedIn = !!state.currentUser;
+  const editMode = !!state.editMode;
   const search = (state.managerSearch || '').toLowerCase().trim();
 
   useEffect(() => {
@@ -163,7 +165,7 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
         ) : orderedCategories.length === 0 ? (
           <EmptyState
             title="No ingredients yet"
-            body={search ? 'Try a different search term.' : isLoggedIn ? 'Tap the + button to add one.' : 'Sign in to contribute.'}
+            body={search ? 'Try a different search term.' : isLoggedIn ? (editMode ? 'Tap the + button to add one.' : 'Turn on Edit mode to add one.') : 'Sign in to contribute.'}
           />
         ) : (
           orderedCategories.map((category) => {
@@ -188,10 +190,11 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
                         ingredient={ingredient}
                         isLast={i === list.length - 1}
                         isAdmin={isAdmin}
+                        editMode={editMode}
                         merge={merge}
                         onEdit={() => openEdit(ingredient)}
                         onDelete={() => handleDelete(ingredient)}
-                        onLongPress={() => isAdmin && !isMerging && startMergeAt(ingredient)}
+                        onLongPress={() => isAdmin && editMode && !isMerging && startMergeAt(ingredient)}
                         onMergeTap={() => handleMergeRowTap(ingredient)}
                       />
                     ))}
@@ -231,7 +234,7 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
             </TouchableOpacity>
           </View>
         </View>
-      ) : isLoggedIn ? (
+      ) : isLoggedIn && editMode ? (
         <TouchableOpacity
           style={[styles.fab, { bottom: fabBottom }]}
           onPress={openAdd}
@@ -251,7 +254,7 @@ export default function IngredientsTab({ navigation, scrollPaddingBottom, fabBot
   );
 }
 
-function IngredientRow({ ingredient, isLast, isAdmin, merge, onEdit, onDelete, onLongPress, onMergeTap }) {
+function IngredientRow({ ingredient, isLast, isAdmin, editMode, merge, onEdit, onDelete, onLongPress, onMergeTap }) {
   const isMerging = !!merge;
   const isKeep = merge?.keepId === ingredient.id;
   const isPicked = merge?.mergeIds?.has(ingredient.id);
@@ -272,16 +275,16 @@ function IngredientRow({ ingredient, isLast, isAdmin, merge, onEdit, onDelete, o
     <TouchableOpacity
       style={rowStyle}
       onPress={isMerging ? onMergeTap : undefined}
-      onLongPress={isAdmin && !isMerging ? onLongPress : undefined}
+      onLongPress={isAdmin && editMode && !isMerging ? onLongPress : undefined}
       delayLongPress={350}
       activeOpacity={isMerging ? 0.7 : 1}
     >
       <View style={styles.rowMain}>
         <View style={styles.rowInfo}>
           <Text style={styles.rowName} numberOfLines={1}>
-            {ingredient.name}
+            {capitalizeIngredient(ingredient.name)}
             {ingredient.plural && ingredient.plural !== ingredient.name ? (
-              <Text style={styles.rowPlural}> · {ingredient.plural}</Text>
+              <Text style={styles.rowPlural}> · {capitalizeIngredient(ingredient.plural)}</Text>
             ) : null}
           </Text>
           <Text
@@ -306,7 +309,7 @@ function IngredientRow({ ingredient, isLast, isAdmin, merge, onEdit, onDelete, o
           ) : null
         ) : null}
       </View>
-      {isAdmin && !isMerging ? (
+      {isAdmin && editMode && !isMerging ? (
         <View style={styles.rowActions}>
           <TouchableOpacity onPress={onEdit} style={styles.actionBtn} hitSlop={6}>
             <Pencil size={13} color={COLORS.primary} />
