@@ -85,8 +85,6 @@ export default function BrowseScreen({ navigation }) {
   const isSignedIn = !!state.currentUser;
 
   const [openingId, setOpeningId] = React.useState(null);
-  const [cuisineQ, setCuisineQ] = React.useState('');
-  const [dishQ, setDishQ] = React.useState('');
   // Pull-to-refresh — fires loadBrowseSauces; the existing useEffect on
   // filterKey also covers re-fetching when filters change, but the manual
   // pull keeps the gesture available for force-refresh on stale data.
@@ -156,9 +154,14 @@ export default function BrowseScreen({ navigation }) {
           contentContainerStyle={styles.filtersBody}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Type — chip row, no search (short fixed list) */}
+          {/* Type — horizontal-scrollable chip row so the five chips
+              don't wrap on narrow phones. Matches the Saucebook treatment. */}
           <Text style={styles.filterGroupLabel}>Type</Text>
-          <View style={styles.chipRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.typeScroll}
+          >
             {SAUCE_TYPES.map((t) => {
               const active = b.types.has(t.value);
               return (
@@ -170,118 +173,42 @@ export default function BrowseScreen({ navigation }) {
                 />
               );
             })}
+          </ScrollView>
+
+          {/* Cuisine — flat chip row, matches Saucebook. */}
+          <Text style={[styles.filterGroupLabel, { marginTop: 12 }]}>Cuisine</Text>
+          <View style={styles.chipRow}>
+            {(state.refCuisines || []).map((c) => {
+              const name = c.cuisine || c.name;
+              const active = b.cuisines.has(name);
+              return (
+                <FilterChip
+                  key={name}
+                  label={`${c.emoji || ''} ${name}`}
+                  active={active}
+                  onPress={() => actions.toggleBrowseCuisine(name)}
+                />
+              );
+            })}
           </View>
 
-          {/* Cuisine — search → suggest dropdown → selected chips below.
-              Mirrors web's renderFilterChips cuisine block: long catalog,
-              so we don't display every cuisine pill by default. */}
-          <Text style={[styles.filterGroupLabel, { marginTop: 12 }]}>Cuisine</Text>
-          <FilterSearchInput
-            value={cuisineQ}
-            onChangeText={setCuisineQ}
-            placeholder="Search cuisines"
-          />
-          {(() => {
-            const q = cuisineQ.trim().toLowerCase();
-            if (!q) return null;
-            const matches = (state.refCuisines || []).filter((c) => {
-              const name = c.cuisine || c.name || '';
-              if (b.cuisines.has(name)) return false;
-              return name.toLowerCase().includes(q);
-            });
-            if (matches.length === 0) return null;
-            return (
-              <View style={styles.suggestDropdown}>
-                {matches.map((c) => {
-                  const name = c.cuisine || c.name;
-                  return (
-                    <TouchableOpacity
-                      key={name}
-                      onPress={() => {
-                        actions.toggleBrowseCuisine(name);
-                        setCuisineQ('');
-                      }}
-                      style={styles.suggestItem}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.suggestItemLabel}>
-                        {c.emoji ? `${c.emoji} ` : ''}{name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            );
-          })()}
-          {b.cuisines.size > 0 ? (
-            <View style={[styles.chipRow, { marginTop: 6 }]}>
-              {[...b.cuisines].map((name) => {
-                const c = (state.refCuisines || []).find((x) => (x.cuisine || x.name) === name);
-                return (
-                  <FilterChip
-                    key={name}
-                    label={`${c?.emoji || ''} ${name} ✕`}
-                    active
-                    onPress={() => actions.toggleBrowseCuisine(name)}
-                  />
-                );
-              })}
-            </View>
-          ) : null}
-
-          {/* Pairs with — same search-and-select pattern as Cuisine */}
+          {/* Pairs with — flat chip row, matches Saucebook. */}
           {dishPool.length > 0 ? (
             <>
               <Text style={[styles.filterGroupLabel, { marginTop: 12 }]}>Pairs with</Text>
-              <FilterSearchInput
-                value={dishQ}
-                onChangeText={setDishQ}
-                placeholder="Search dishes"
-              />
-              {(() => {
-                const q = dishQ.trim().toLowerCase();
-                if (!q) return null;
-                const matches = dishPool.filter((d) => {
-                  if (b.dishes.has(d.id)) return false;
-                  return (d.name || '').toLowerCase().includes(q);
-                });
-                if (matches.length === 0) return null;
-                return (
-                  <View style={styles.suggestDropdown}>
-                    {matches.map((d) => (
-                      <TouchableOpacity
-                        key={d.id}
-                        onPress={() => {
-                          actions.toggleBrowseDish(d.id);
-                          setDishQ('');
-                        }}
-                        style={styles.suggestItem}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.suggestItemLabel}>
-                          {d.emoji ? `${d.emoji} ` : ''}{d.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                );
-              })()}
-              {b.dishes.size > 0 ? (
-                <View style={[styles.chipRow, { marginTop: 6 }]}>
-                  {[...b.dishes].map((id) => {
-                    const d = dishPool.find((x) => x.id === id);
-                    if (!d) return null;
-                    return (
-                      <FilterChip
-                        key={id}
-                        label={`${d.emoji || ''} ${d.name} ✕`}
-                        active
-                        onPress={() => actions.toggleBrowseDish(id)}
-                      />
-                    );
-                  })}
-                </View>
-              ) : null}
+              <View style={styles.chipRow}>
+                {dishPool.map((d) => {
+                  const active = b.dishes.has(d.id);
+                  return (
+                    <FilterChip
+                      key={d.id}
+                      label={`${d.emoji || ''} ${d.name}`}
+                      active={active}
+                      onPress={() => actions.toggleBrowseDish(d.id)}
+                    />
+                  );
+                })}
+              </View>
             </>
           ) : null}
 
@@ -576,6 +503,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+  },
+  // Horizontal-scrollable Type chip row — matches Saucebook so the five
+  // type chips never wrap to a second line on narrow devices.
+  typeScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingRight: 12,
   },
   chip: {
     paddingHorizontal: 10,

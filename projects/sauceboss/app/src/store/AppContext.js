@@ -253,6 +253,7 @@ const A = {
   SAUCEBOOK_REMOVE: 'SAUCEBOOK_REMOVE',
   SAUCEBOOK_SET_SEARCH: 'SAUCEBOOK_SET_SEARCH',
   SAUCEBOOK_TOGGLE_FILTER: 'SAUCEBOOK_TOGGLE_FILTER',
+  SAUCEBOOK_CLEAR_FILTERS: 'SAUCEBOOK_CLEAR_FILTERS',
   SAUCEBOOK_TOGGLE_FILTERS_OPEN: 'SAUCEBOOK_TOGGLE_FILTERS_OPEN',
   SAUCEBOOK_SET_AUTHOR: 'SAUCEBOOK_SET_AUTHOR',
   SAUCEBOOK_TOGGLE_CUISINE_SECTION: 'SAUCEBOOK_TOGGLE_CUISINE_SECTION',
@@ -744,6 +745,24 @@ function reducer(state, action) {
         saucebook: {
           ...state.saucebook,
           filters: { ...state.saucebook.filters, authorId: action.authorId || null },
+        },
+      };
+
+    // Wipe every filter chip + author selection on the saucebook list.
+    // Mirrors the Browse clearBrowseFilters action. Leaves `open` and the
+    // search box alone so the filter panel stays where the user put it.
+    case A.SAUCEBOOK_CLEAR_FILTERS:
+      return {
+        ...state,
+        saucebook: {
+          ...state.saucebook,
+          filters: {
+            ...state.saucebook.filters,
+            cuisines: new Set(),
+            types: new Set(),
+            dishes: new Set(),
+            authorId: null,
+          },
         },
       };
 
@@ -1543,6 +1562,7 @@ export function AppProvider({ children }) {
         dispatch({ type: A.SAUCEBOOK_TOGGLE_FILTER, key: 'dishes', value: dishId }),
       setSaucebookAuthor: (authorId) =>
         dispatch({ type: A.SAUCEBOOK_SET_AUTHOR, authorId }),
+      clearSaucebookFilters: () => dispatch({ type: A.SAUCEBOOK_CLEAR_FILTERS }),
       toggleSaucebookFilters: () => dispatch({ type: A.SAUCEBOOK_TOGGLE_FILTERS_OPEN }),
       toggleCuisineSection: (cuisine) =>
         dispatch({ type: A.SAUCEBOOK_TOGGLE_CUISINE_SECTION, cuisine }),
