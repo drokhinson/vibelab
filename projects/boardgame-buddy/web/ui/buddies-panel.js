@@ -30,11 +30,18 @@
       // the underlying lists may have changed shape after a mutation.
       this._buddiesPage = 0;
       this._playedWithPage = 0;
+      // True only during the first `_load()` so the initial mount shows the
+      // bouncing-buddy loader instead of an empty "Buddies (0)" section.
+      // Subsequent reloads after a mutation skip the loader so the lists
+      // stay visible while the data refreshes.
+      this._loading = true;
       window[hostId] = this; // for inline onclick lookup
     }
 
     async mount(container) {
       this._container = container;
+      this._loading = true;
+      this.render();
       await this._load();
     }
 
@@ -60,6 +67,7 @@
         this._buddiesPage = 0;
         this._playedWithPage = 0;
       } finally {
+        this._loading = false;
         this.render();
       }
     }
@@ -103,6 +111,17 @@
 
     render() {
       if (!this._container) return;
+      if (this._loading) {
+        // Match the splash / feed loader placement so the buddies tab opens
+        // with the same centered bouncing-buddy artwork the rest of the app
+        // uses for first-paint waits.
+        this._container.innerHTML = `
+          <div class="flex flex-col items-center justify-center min-h-[60vh]">
+            ${window.buddyLoader({ size: 176, padded: false, label: "Gathering buddies…" })}
+          </div>
+        `;
+        return;
+      }
       const active = document.activeElement;
       const activeId = active && active.id;
       const caret = active && active.selectionStart;

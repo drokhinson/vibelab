@@ -1683,11 +1683,23 @@ body {
   font-size: 0.85rem;
 }
 .play-card__back-player.is-winner { border-color: var(--accent); }
+.play-card__back-player-info {
+  display: flex; flex-direction: column; gap: 0.05rem;
+  min-width: 0; flex: 1;
+}
 .play-card__back-player-name {
   display: inline-flex; align-items: center; gap: 0.3rem;
   min-width: 0; overflow: hidden; text-overflow: ellipsis;
 }
 .play-card__back-player.is-winner .play-card__back-player-name { color: var(--accent); font-weight: 600; }
+/* Ghost (free-text) players carry the logger's handle so two different hosts'
+   "Sean D" stay readable as distinct identities. Real-account rows omit
+   this. */
+.play-card__back-player-handle {
+  font-size: 0.7rem;
+  opacity: 0.55;
+  letter-spacing: 0.01em;
+}
 .play-card__back-player-score {
   font-family: var(--font-display); font-weight: 700;
 }
@@ -1774,9 +1786,13 @@ body {
   border: 1px solid oklch(var(--b3));
   border-radius: 0.55rem;
 }
+.play-card__edit-player-info {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 0.05rem;
+}
 .play-card__edit-player-name {
-  flex: 1; min-width: 0; font-size: 0.85rem; font-weight: 500;
-  overflow: hidden; text-overflow: ellipsis;
+  font-size: 0.85rem; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .play-card__edit-score { width: 4.5rem; flex-shrink: 0; }
 .play-card__edit-winner {
