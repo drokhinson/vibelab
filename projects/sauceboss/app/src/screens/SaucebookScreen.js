@@ -258,11 +258,7 @@ export default function SaucebookScreen({ navigation }) {
       </View>
 
       {sb.filters.open ? (
-        <ScrollView
-          style={styles.filtersPanel}
-          contentContainerStyle={styles.filtersBody}
-          keyboardShouldPersistTaps="handled"
-        >
+        <View style={[styles.filtersPanel, styles.filtersBody]}>
           {/* Type first, then Cuisine — matches Browse and gives the longer
               cuisine chip list room to scroll without crowding the panel top.
               Type is horizontal-scrollable so the five chips never wrap to a
@@ -335,16 +331,20 @@ export default function SaucebookScreen({ navigation }) {
             </View>
           ) : null}
 
-          {hasAnyFilter ? (
-            <TouchableOpacity
-              style={styles.clearAllBtn}
-              onPress={actions.clearSaucebookFilters}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.clearAllLabel}>Clear all filters</Text>
-            </TouchableOpacity>
-          ) : null}
-        </ScrollView>
+          {/* Always rendered so the panel reserves the Clear All slot —
+              keeps panel height stable when the first filter is applied
+              and matches Browse. */}
+          <TouchableOpacity
+            style={[styles.clearAllBtn, !hasAnyFilter && styles.clearAllBtnHidden]}
+            onPress={actions.clearSaucebookFilters}
+            activeOpacity={0.8}
+            disabled={!hasAnyFilter}
+            accessibilityElementsHidden={!hasAnyFilter}
+            importantForAccessibility={hasAnyFilter ? 'auto' : 'no-hide-descendants'}
+          >
+            <Text style={styles.clearAllLabel}>Clear all filters</Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       {sb.loading || !sb.loaded ? (
@@ -581,20 +581,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Filter panel takes about three-quarters of the screen so all four
-  // pickers + Clear All fit without scrolling on most devices. ScrollView
-  // shrinks to content when it's shorter than the cap.
+  // Panel wraps tightly to its content via a plain View — ScrollView's
+  // outer dimensions in a flex column container weren't reliably
+  // shrinking to fit, which left a dead stripe under Clear All on
+  // sparse saucebooks. Content here (type row + three search inputs +
+  // Clear All slot) fits without internal scroll.
   filtersPanel: {
-    maxHeight: '75%',
     backgroundColor: COLORS.card,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: COLORS.border,
   },
-  // Tight bottom padding: combined with clearAllBtn.marginTop:16 this
-  // leaves ~24px below the button (or ~8px below the last picker when
-  // Clear All isn't visible). Keeps the panel from sprouting dead space.
-  filtersBody: { padding: 12, paddingBottom: 8 },
+  filtersBody: { padding: 12, paddingBottom: 12 },
   // Gap between FilterPicker sections (Cuisine / Pairs-with / Author).
   pickerWrap: { marginTop: 14 },
   filterGroupLabel: {
@@ -609,7 +607,7 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   typeScroll: { flexDirection: 'row', gap: 6, paddingRight: 12 },
   clearAllBtn: {
-    marginTop: 16,
+    marginTop: 14,
     alignSelf: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -617,6 +615,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.dangerText,
   },
+  // Keeps the layout slot but hides the button when no filter is applied.
+  clearAllBtnHidden: { opacity: 0 },
   clearAllLabel: {
     color: COLORS.dangerText,
     fontSize: 12,
