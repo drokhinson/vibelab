@@ -1,12 +1,13 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: post-consolidation (matches db/migrations/boardgamebuddy/001_baseline.sql)
+-- Last updated: post-008..012 (OOP/Strava redesign). 013 cleanup applied
+-- after the new frontend cuts over.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
--- Note: status='played' on boardgamebuddy_collections is no longer written by
--- the app (migration 038). The CHECK still allows it for backward compat, but
--- the Played shelf in the closet is derived server-side from
--- boardgamebuddy_plays.
+-- Note: the legacy boardgamebuddy_buddies table is now strictly for free-text
+-- ghost-player nicknames. Mutual friendship lives in
+-- boardgamebuddy_buddy_edges. play_players references real profiles directly
+-- (player_user_id / player_display_name).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
@@ -91,7 +92,8 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('owned', 'played', 'wishlist')),
+  -- migration 010 tightened this from ('owned','played','wishlist').
+  status TEXT NOT NULL CHECK (status IN ('owned', 'wishlist')),
   added_at TIMESTAMPTZ DEFAULT now(),
   -- Private fields from BGG /collection?showprivate=1 (migration 003).
   -- Populated only when the BGG sync request was authenticated as the
@@ -107,6 +109,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
 );
 ALTER TABLE public.boardgamebuddy_collections ENABLE ROW LEVEL SECURITY;
 
+-- Free-text ghost players only. Mutual friendship now lives in
+-- boardgamebuddy_buddy_edges. linked_user_id is retained during the
+-- redesign rollout and dropped in migration 013.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -116,6 +121,21 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddies (
   UNIQUE(owner_id, name)
 );
 ALTER TABLE public.boardgamebuddy_buddies ENABLE ROW LEVEL SECURITY;
+
+-- Mutual friendship graph (migration 008). One canonical row per
+-- (user_a, user_b) pair, user_a < user_b. status pending→accepted; accepted
+-- edges are what Feed / Profile / Buddies all read.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_edges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_a UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  user_b UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'blocked')),
+  requested_by UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  accepted_at TIMESTAMPTZ,
+  CONSTRAINT bgb_buddy_edges_canonical CHECK (user_a < user_b)
+);
+ALTER TABLE public.boardgamebuddy_buddy_edges ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -137,13 +157,20 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
 );
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
 
+-- Players in a logged play. After migration 009, plays reference real
+-- profiles directly (player_user_id) or a free-text name (player_display_name).
+-- buddy_id is retained during the redesign rollout and dropped in migration 013.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   play_id UUID NOT NULL REFERENCES public.boardgamebuddy_plays(id) ON DELETE CASCADE,
-  buddy_id UUID NOT NULL REFERENCES public.boardgamebuddy_buddies(id),
+  buddy_id UUID REFERENCES public.boardgamebuddy_buddies(id),
+  player_user_id UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE SET NULL,
+  player_display_name TEXT,
   is_winner BOOLEAN DEFAULT false,
   -- Optional numeric score per player (migration 005). NULL = legacy plays.
-  score INTEGER
+  score INTEGER,
+  CONSTRAINT bgb_play_players_identity_chk
+    CHECK (player_user_id IS NOT NULL OR player_display_name IS NOT NULL)
 );
 ALTER TABLE public.boardgamebuddy_play_players ENABLE ROW LEVEL SECURITY;
 
@@ -223,6 +250,31 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_pending_imports (
 );
 ALTER TABLE public.boardgamebuddy_bgg_pending_imports ENABLE ROW LEVEL SECURITY;
 
+-- Short-code play-session lobby (migration 011). Host creates a session with
+-- a code; other phones join, then the host finalizes into a single play.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT NOT NULL,
+  host_user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  game_id UUID REFERENCES public.boardgamebuddy_games(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'finalized', 'abandoned')),
+  finalized_play_id UUID REFERENCES public.boardgamebuddy_plays(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '2 hours'),
+  finalized_at TIMESTAMPTZ
+);
+ALTER TABLE public.boardgamebuddy_play_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.boardgamebuddy_play_sessions(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.boardgamebuddy_play_session_participants ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_selections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -283,3 +335,30 @@ CREATE INDEX IF NOT EXISTS idx_bgb_bgg_pending_user_status
   WHERE status = 'pending';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_bgg_pending_unique
   ON public.boardgamebuddy_bgg_pending_imports (user_id, bgg_id, kind);
+-- Mutual buddy edges (migration 008).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_buddy_edges_pair
+  ON public.boardgamebuddy_buddy_edges (user_a, user_b);
+CREATE INDEX IF NOT EXISTS idx_bgb_buddy_edges_user_a
+  ON public.boardgamebuddy_buddy_edges (user_a, status);
+CREATE INDEX IF NOT EXISTS idx_bgb_buddy_edges_user_b
+  ON public.boardgamebuddy_buddy_edges (user_b, status);
+-- play_players decoupling (migration 009).
+CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user
+  ON public.boardgamebuddy_play_players (player_user_id)
+  WHERE player_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_bgb_play_players_play
+  ON public.boardgamebuddy_play_players (play_id);
+-- Play sessions (migration 011).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_sessions_open_code
+  ON public.boardgamebuddy_play_sessions (code)
+  WHERE status = 'open';
+CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_host
+  ON public.boardgamebuddy_play_sessions (host_user_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_session_user_unique
+  ON public.boardgamebuddy_play_session_participants (session_id, user_id)
+  WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_session_guest_unique
+  ON public.boardgamebuddy_play_session_participants (session_id, lower(display_name))
+  WHERE user_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_bgb_play_session_participants_session
+  ON public.boardgamebuddy_play_session_participants (session_id);
