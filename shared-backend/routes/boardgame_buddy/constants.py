@@ -5,8 +5,44 @@ from enum import StrEnum
 
 class CollectionStatus(StrEnum):
     OWNED = "owned"
+    # Legacy synthetic shelf — derived from boardgamebuddy_plays, never written
+    # to boardgamebuddy_collections after migration 010. Kept on the enum so
+    # existing /collection endpoints can still serve the "Played" filter while
+    # the new Feed/Profile views replace them.
     PLAYED = "played"
     WISHLIST = "wishlist"
+
+
+class BuddyEdgeStatus(StrEnum):
+    """Lifecycle of a mutual buddy edge (boardgamebuddy_buddy_edges)."""
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    BLOCKED = "blocked"
+
+
+class PlaySessionStatus(StrEnum):
+    """Lifecycle of a short-code play-logging session."""
+
+    OPEN = "open"
+    FINALIZED = "finalized"
+    ABANDONED = "abandoned"
+
+
+class FeedCardKind(StrEnum):
+    """Card types the Feed view can render."""
+
+    PLAY = "play"
+    HOT_GAMES = "hot_games"
+    SUGGESTED_BUDDIES = "suggested_buddies"
+    FEATURED_FROM_COLLECTION = "featured_from_collection"
+
+
+# Short-code session codes use Crockford base32 (no I, L, O, U to avoid OCR /
+# voice ambiguity). 5 chars → 32^5 ≈ 33M codes; service layer retries on
+# collision so absolute uniqueness only matters within currently-open sessions.
+PLAY_SESSION_CODE_ALPHABET: str = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+PLAY_SESSION_CODE_LENGTH: int = 5
 
 
 class CollectionSort(StrEnum):

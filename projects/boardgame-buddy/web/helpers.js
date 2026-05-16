@@ -1,57 +1,12 @@
-// helpers.js — API fetch, navigation, formatting utilities
-
-const API = window.APP_CONFIG?.apiBase || "http://localhost:8000";
-const PREFIX = "/api/v1/boardgame_buddy";
+// helpers.js — small utilities shared across the OOP frontend.
+// The legacy apiFetch / showView / trackEvent / state-coupled helpers have
+// moved to the domain layer (api.js, view.js) and to the individual views.
 
 function bggImg(url) {
   if (!url) return null;
   if (url.startsWith("//")) return "https:" + url;
   return url;
 }
-
-// ── API ──────────────────────────────────────────────────────────────────────
-
-async function apiFetch(path, opts = {}) {
-  const headers = opts.headers || {};
-  if (session?.access_token) {
-    headers["Authorization"] = "Bearer " + session.access_token;
-  }
-  if (opts.body && typeof opts.body === "object") {
-    headers["Content-Type"] = "application/json";
-    opts.body = JSON.stringify(opts.body);
-  }
-  const res = await fetch(API + PREFIX + path, { ...opts, headers });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || res.statusText);
-  }
-  // 204 No Content (e.g. DELETE /my-guide) — no JSON body to parse.
-  if (res.status === 204) return null;
-  return res.json();
-}
-
-// ── Navigation ───────────────────────────────────────────────────────────────
-
-function showView(view) {
-  currentView = view;
-  document.querySelectorAll("[data-view]").forEach(el => {
-    el.classList.toggle("hidden", el.dataset.view !== view);
-  });
-  // Update bottom nav active state
-  document.querySelectorAll(".btm-nav button").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.nav === view);
-  });
-  // Update auth-dependent visibility
-  const isAuthed = !!session;
-  document.querySelectorAll("[data-auth-only]").forEach(el => {
-    el.classList.toggle("hidden", !isAuthed);
-  });
-  // Re-paint the session FAB so it reflects the active-session state on
-  // every nav (showView strips/re-adds `hidden` and resets the icon HTML).
-  if (typeof refreshSessionFab === "function") refreshSessionFab();
-}
-
-// ── Formatting ───────────────────────────────────────────────────────────────
 
 function computeInitials(name) {
   const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
@@ -73,22 +28,6 @@ function formatTime(minutes) {
   return m ? `${h}h${m}m` : `${h}h`;
 }
 
-// User-facing label for a stored play_mode value. Used by browse, closet,
-// game-detail, play log, play-detail, and the session bubble — keep one map.
-const PLAY_MODE_LABEL = {
-  competitive: "Competitive",
-  coop:        "Cooperative",
-  team:        "Teams",
-};
-function playModeLabel(mode) {
-  return PLAY_MODE_LABEL[mode] || PLAY_MODE_LABEL.competitive;
-}
-
-function formatRating(rating) {
-  if (!rating) return "N/A";
-  return Number(rating).toFixed(1);
-}
-
 function formatDate(dateStr) {
   if (!dateStr) return "";
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -96,31 +35,40 @@ function formatDate(dateStr) {
   });
 }
 
-// ── Toast ────────────────────────────────────────────────────────────────────
+// JS-string escape for safely embedding text inside inline onclicks
+// (e.g. `onclick="...router.go('game-detail',{gameName:'${jsStr(name)}'})"`).
+// Handles backslashes, single quotes, and newlines — that's enough for
+// every place we use it today.
+function jsStr(s) {
+  return String(s ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n");
+}
+
+// Bouncing-buddy loader. Returns an HTML fragment views can drop into
+// any "Loading…" slot. The SVG already animates itself (transform-based
+// bounce + head bob), so this is just a sized <img> wrapper that
+// centres the mark and optionally captions it.
+function buddyLoader({ size = 96, label = null, padded = true } = {}) {
+  const safe = String(label || "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+  return `
+    <div class="buddy-loader ${padded ? "buddy-loader--padded" : ""}">
+      <img src="assets/illustrations/bgb-loading.svg" alt="Loading"
+           class="buddy-loader__mark"
+           style="width:${size}px;height:${size}px;" />
+      ${label ? `<div class="buddy-loader__label">${safe}</div>` : ""}
+    </div>
+  `;
+}
 
 function showToast(message, type = "info") {
   const toast = document.getElementById("toast");
+  if (!toast) return;
   toast.className = `toast toast-end toast-top`;
   toast.innerHTML = `<div class="alert alert-${type}"><span>${message}</span></div>`;
   toast.classList.remove("hidden");
   setTimeout(() => toast.classList.add("hidden"), 3000);
-}
-
-// ── Analytics ────────────────────────────────────────────────────────────────
-
-function trackEvent(event) {
-  fetch(API + "/api/v1/analytics/track", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ app: "boardgame-buddy", event }),
-  }).catch(() => {});
-}
-
-// Loading indicator. Returns an animated buddy <img>, sized to roughly match
-// the visual weight of DaisyUI's loading-{xs,sm,md,lg} spinners. Pass a number
-// to override with an exact pixel size.
-function buddyLoader(size = 'md') {
-  const map = { xs: 20, sm: 32, md: 56, lg: 88 };
-  const px = typeof size === 'number' ? size : (map[size] || map.md);
-  return `<img src="assets/illustrations/bgb-loading.svg" alt="Loading" class="buddy-loader" style="width:${px}px;height:${px}px;display:inline-block;vertical-align:middle;">`;
 }
