@@ -1,4 +1,8 @@
-"""Play logging and game buddies endpoints."""
+"""Play logging endpoints.
+
+Game-buddy endpoints used to live here under the legacy one-way model. The
+new mutual graph lives in buddy_routes.py.
+"""
 
 import logging
 import uuid
@@ -10,8 +14,6 @@ from db import get_supabase
 
 from . import router
 from .models import (
-    BuddyLinkBody,
-    BuddyResponse,
     MessageResponse,
     PlayCountResponse,
     PlayCreate,
@@ -133,16 +135,25 @@ def _upsert_buddy(sb, user_id: str, name: str) -> dict:
 
 
 def _write_play_players(sb, play_id: str, user_id: str, players: list) -> list[PlayPlayerResponse]:
-    """Create buddy rows as needed and insert play_players for a single play."""
+    """Insert one play_players row per player.
+
+    Each row carries both the legacy buddy_id (so anything still reading the
+    old shape keeps working) and the new player_user_id / player_display_name
+    columns from migration 009 — that's what the feed RPC reads.
+    """
     out: list[PlayPlayerResponse] = []
     for p in players:
         buddy = _upsert_buddy(sb, user_id, p.name)
-        sb.table("boardgamebuddy_play_players").insert({
+        row: dict = {
             "play_id": play_id,
             "buddy_id": buddy["id"],
             "is_winner": p.is_winner,
             "score": p.score,
-        }).execute()
+            "player_display_name": p.name,
+        }
+        if getattr(p, "user_id", None):
+            row["player_user_id"] = p.user_id
+        sb.table("boardgamebuddy_play_players").insert(row).execute()
         out.append(PlayPlayerResponse(
             buddy_id=buddy["id"],
             name=p.name,
@@ -635,228 +646,6 @@ async def get_game_plays(
     ]
 
 
-@router.get(
-    "/buddies",
-    response_model=list[BuddyResponse],
-    status_code=200,
-    summary="List game buddies",
-)
-async def list_buddies(
-    user: CurrentUser = Depends(get_current_user),
-) -> list[BuddyResponse]:
-    """
-    List all game buddies for the current user, with the linked profile's
-    display name (when linked) and the play_count across all sessions.
-    """
-    sb = get_supabase()
-
-    rows = (
-        sb.table("boardgamebuddy_buddies")
-        .select(
-            "id, name, linked_user_id, created_at, "
-            "boardgamebuddy_profiles!linked_user_id(display_name), "
-            "boardgamebuddy_play_players(count)"
-        )
-        .eq("owner_id", user.user_id)
-        .execute()
-    )
-
-    out: list[BuddyResponse] = []
-    for r in rows.data or []:
-        linked_profile = r.get("boardgamebuddy_profiles") or {}
-        # Embedded count is returned as [{"count": N}] from PostgREST.
-        pp = r.get("boardgamebuddy_play_players") or []
-        play_count = pp[0]["count"] if pp and isinstance(pp, list) else 0
-        out.append(BuddyResponse(
-            id=r["id"],
-            name=r["name"],
-            linked_user_id=r.get("linked_user_id"),
-            linked_display_name=linked_profile.get("display_name"),
-            play_count=play_count,
-            created_at=r["created_at"],
-        ))
-
-    # Sort alphabetically by the display name the user actually sees.
-    out.sort(key=lambda b: (b.linked_display_name or b.name).lower())
-    return out
-
-
-@router.post(
-    "/buddies",
-    response_model=BuddyResponse,
-    status_code=201,
-    summary="Add a buddy by user account",
-)
-async def add_buddy(
-    body: BuddyLinkBody,
-    user: CurrentUser = Depends(get_current_user),
-) -> BuddyResponse:
-    """Create a new buddy directly linked to an existing user account."""
-    sb = get_supabase()
-
-    if body.user_id == user.user_id:
-        raise HTTPException(status_code=400, detail="Cannot add yourself as a buddy")
-
-    target = (
-        sb.table("boardgamebuddy_profiles")
-        .select("id, display_name")
-        .eq("id", body.user_id)
-        .execute()
-    )
-    if not target.data:
-        raise HTTPException(status_code=404, detail="User not found")
-    target_name: str = target.data[0]["display_name"]
-
-    # Idempotent: already linked to this user
-    existing = (
-        sb.table("boardgamebuddy_buddies")
-        .select("id, name, linked_user_id, created_at, boardgamebuddy_play_players(count)")
-        .eq("owner_id", user.user_id)
-        .eq("linked_user_id", body.user_id)
-        .execute()
-    )
-    if existing.data:
-        r = existing.data[0]
-        pp = r.get("boardgamebuddy_play_players") or []
-        return BuddyResponse(
-            id=r["id"],
-            name=r["name"],
-            linked_user_id=r.get("linked_user_id"),
-            linked_display_name=target_name,
-            play_count=pp[0]["count"] if pp else 0,
-            created_at=r["created_at"],
-        )
-
-    # Name collision: link an existing unlinked buddy with the same name
-    collision = (
-        sb.table("boardgamebuddy_buddies")
-        .select("id, name, created_at, boardgamebuddy_play_players(count)")
-        .eq("owner_id", user.user_id)
-        .eq("name", target_name)
-        .is_("linked_user_id", "null")
-        .execute()
-    )
-    if collision.data:
-        c = collision.data[0]
-        sb.table("boardgamebuddy_buddies").update(
-            {"linked_user_id": body.user_id}
-        ).eq("id", c["id"]).execute()
-        pp = c.get("boardgamebuddy_play_players") or []
-        return BuddyResponse(
-            id=c["id"],
-            name=c["name"],
-            linked_user_id=body.user_id,
-            linked_display_name=target_name,
-            play_count=pp[0]["count"] if pp else 0,
-            created_at=c["created_at"],
-        )
-
-    # Default: create new buddy row linked to the target account
-    result = (
-        sb.table("boardgamebuddy_buddies")
-        .insert({
-            "owner_id": user.user_id,
-            "name": target_name,
-            "linked_user_id": body.user_id,
-        })
-        .execute()
-    )
-    r = result.data[0]
-    return BuddyResponse(
-        id=r["id"],
-        name=r["name"],
-        linked_user_id=body.user_id,
-        linked_display_name=target_name,
-        play_count=0,
-        created_at=r["created_at"],
-    )
-
-
-@router.post(
-    "/buddies/{buddy_id}/link",
-    response_model=MessageResponse,
-    status_code=200,
-    summary="Link buddy to user account",
-)
-async def link_buddy(
-    body: BuddyLinkBody,
-    buddy_id: str = Path(..., description="Buddy UUID"),
-    user: CurrentUser = Depends(get_current_user),
-) -> MessageResponse:
-    """
-    Link a free-text buddy to another user's BoardgameBuddy account.
-
-    Linking is one-way and consolidates duplicates: if the current user already
-    has another buddy linked to the same target, all play_players from this
-    buddy are re-pointed to the existing one and this buddy row is deleted.
-    """
-    sb = get_supabase()
-
-    # Verify buddy belongs to current user
-    buddy = (
-        sb.table("boardgamebuddy_buddies")
-        .select("id")
-        .eq("id", buddy_id)
-        .eq("owner_id", user.user_id)
-        .execute()
-    )
-    if not buddy.data:
-        raise HTTPException(status_code=404, detail="Buddy not found")
-
-    # Verify target user exists, capture display_name so future autocomplete
-    # picks of that name reuse this same buddy row.
-    target = (
-        sb.table("boardgamebuddy_profiles")
-        .select("id, display_name")
-        .eq("id", body.user_id)
-        .execute()
-    )
-    if not target.data:
-        raise HTTPException(status_code=404, detail="Target user not found")
-    target_name = target.data[0]["display_name"]
-
-    # Find an existing buddy by this owner already linked to the target.
-    existing = (
-        sb.table("boardgamebuddy_buddies")
-        .select("id")
-        .eq("owner_id", user.user_id)
-        .eq("linked_user_id", body.user_id)
-        .neq("id", buddy_id)
-        .execute()
-    )
-    if existing.data:
-        # MERGE: re-point all play_players from this buddy to the existing one,
-        # then delete this buddy row.
-        target_buddy_id = existing.data[0]["id"]
-        sb.table("boardgamebuddy_play_players").update(
-            {"buddy_id": target_buddy_id}
-        ).eq("buddy_id", buddy_id).execute()
-        sb.table("boardgamebuddy_buddies").delete().eq("id", buddy_id).execute()
-        return MessageResponse(message="Buddy merged into linked account")
-
-    # If the target's display_name collides with another (unlinked) buddy of
-    # the same owner, merge that one in first to preserve UNIQUE(owner,name).
-    if target_name:
-        collision = (
-            sb.table("boardgamebuddy_buddies")
-            .select("id")
-            .eq("owner_id", user.user_id)
-            .eq("name", target_name)
-            .neq("id", buddy_id)
-            .execute()
-        )
-        if collision.data:
-            collision_id = collision.data[0]["id"]
-            sb.table("boardgamebuddy_play_players").update(
-                {"buddy_id": buddy_id}
-            ).eq("buddy_id", collision_id).execute()
-            sb.table("boardgamebuddy_buddies").delete().eq("id", collision_id).execute()
-
-    # Plain link — set linked_user_id and rename to the linked display_name so
-    # autocomplete picks of that name reuse this buddy on subsequent plays.
-    sb.table("boardgamebuddy_buddies").update({
-        "linked_user_id": body.user_id,
-        "name": target_name,
-    }).eq("id", buddy_id).execute()
-
-    return MessageResponse(message="Buddy linked to user account")
+# Legacy buddy endpoints (GET/POST /buddies, POST /buddies/{id}/link) have
+# moved to buddy_routes.py under the mutual-edge model. The legacy
+# boardgamebuddy_buddies table is now strictly for free-text ghost players.

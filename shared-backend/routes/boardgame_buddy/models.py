@@ -1,10 +1,17 @@
 """Pydantic models for BoardgameBuddy."""
 
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional, Union
 from pydantic import BaseModel, Field, SecretStr, computed_field
 
-from .constants import BggAuthState, CollectionStatus, PlayMode
+from .constants import (
+    BggAuthState,
+    BuddyEdgeStatus,
+    CollectionStatus,
+    FeedCardKind,
+    PlayMode,
+    PlaySessionStatus,
+)
 
 
 # ── Shared ────────────────────────────────────────────────────────────────────
@@ -181,6 +188,11 @@ class PlayerEntry(BaseModel):
     name: str
     is_winner: bool = False
     score: Optional[int] = None
+    # Real-account player id. Populated when the FE picks this player from
+    # the user's accepted-buddy list; None for free-text ghost players.
+    # Backend uses it to populate play_players.player_user_id (migration 009)
+    # so the new feed RPC can resolve the winner's display name.
+    user_id: Optional[str] = None
 
 
 class PlayExpansionRef(BaseModel):
@@ -455,3 +467,200 @@ class ExpansionToggleRequest(BaseModel):
 
 class ExpansionColorUpdate(BaseModel):
     color: str
+
+
+# ── Mutual buddy graph (migration 008) ────────────────────────────────────────
+
+class BuddyEdgeResponse(BaseModel):
+    """An accepted buddy edge from the current user's perspective."""
+
+    id: str
+    other_user_id: str
+    other_display_name: str
+    other_avatar_url: Optional[str] = None
+    accepted_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class BuddyRequestResponse(BaseModel):
+    """A pending buddy request, either incoming or outgoing."""
+
+    id: str
+    direction: Literal["incoming", "outgoing"]
+    other_user_id: str
+    other_display_name: str
+    other_avatar_url: Optional[str] = None
+    created_at: datetime
+
+
+class BuddyRequestsResponse(BaseModel):
+    incoming: list[BuddyRequestResponse] = []
+    outgoing: list[BuddyRequestResponse] = []
+
+
+class BuddyRequestCreate(BaseModel):
+    target_user_id: str
+
+
+# ── Public profile view (Strava-style) ────────────────────────────────────────
+
+class PublicProfileResponse(BaseModel):
+    """Always 200 — profiles are fully public per product decision."""
+
+    id: str
+    display_name: str
+    avatar_url: Optional[str] = None
+    created_at: datetime
+    # Whether the viewer has an accepted mutual edge with this profile. The FE
+    # uses this to swap the "Add buddy" button for an "Unfriend" affordance.
+    is_buddy: bool = False
+    # Whether a pending request exists in either direction. FE shows
+    # "Request sent" / "Accept request" instead of "Add buddy".
+    has_pending_request: bool = False
+    pending_request_direction: Optional[Literal["incoming", "outgoing"]] = None
+
+
+class StatsResponse(BaseModel):
+    total_plays: int = 0
+    unique_games: int = 0
+    win_count: int = 0
+    last_played_at: Optional[date] = None
+    hours_played: float = 0.0
+
+
+# ── Play sessions (short-code lobby) ──────────────────────────────────────────
+
+class SessionParticipantResponse(BaseModel):
+    id: str
+    user_id: Optional[str] = None
+    display_name: str
+    joined_at: datetime
+    avatar_url: Optional[str] = None
+
+
+class SessionResponse(BaseModel):
+    id: str
+    code: str
+    status: PlaySessionStatus
+    host_user_id: str
+    game_id: Optional[str] = None
+    game: Optional[GameSummary] = None
+    participants: list[SessionParticipantResponse] = []
+    created_at: datetime
+    expires_at: datetime
+    finalized_play_id: Optional[str] = None
+
+
+class SessionCreate(BaseModel):
+    game_id: Optional[str] = None
+
+
+class SessionJoinBody(BaseModel):
+    # Used only when the caller is not authenticated (guest join). When a real
+    # user joins, the display_name is taken from their profile and this field
+    # is ignored.
+    display_name: Optional[str] = None
+
+
+# ── Unified search ────────────────────────────────────────────────────────────
+
+class UnifiedSearchHit(BaseModel):
+    """A single hit in the unified ranked search list."""
+
+    source: Literal["collection", "db"]
+    game: GameSummary
+    # Present when source='collection': which shelf this game sits on for the
+    # viewer ('owned' | 'wishlist'). None otherwise.
+    collection_status: Optional[str] = None
+
+
+class UnifiedSearchResponse(BaseModel):
+    results: list[UnifiedSearchHit] = []
+    # Always present; only populated when include_bgg=true was passed.
+    bgg_results: list[BggSearchResult] = []
+    # True when the caller passed include_bgg=true (regardless of whether BGG
+    # actually returned anything). Lets the FE tell "BGG fetched but empty"
+    # apart from "BGG not requested".
+    bgg_searched: bool = False
+
+
+# ── Feed cards ────────────────────────────────────────────────────────────────
+
+class FeedPlayUser(BaseModel):
+    id: str
+    display_name: str
+    avatar_url: Optional[str] = None
+
+
+class FeedPlayCard(BaseModel):
+    kind: Literal[FeedCardKind.PLAY] = FeedCardKind.PLAY
+    play_id: str
+    user: FeedPlayUser
+    game: GameSummary
+    played_at: date
+    created_at: datetime
+    notes: Optional[str] = None
+    photo_url: Optional[str] = None
+    play_mode: PlayMode = PlayMode.COMPETITIVE
+    winner_display_name: Optional[str] = None
+    participant_count: int = 0
+
+
+class FeedHotGamesEntry(BaseModel):
+    game: GameSummary
+    play_count: int
+
+
+class FeedHotGamesCard(BaseModel):
+    kind: Literal[FeedCardKind.HOT_GAMES] = FeedCardKind.HOT_GAMES
+    window_days: int
+    games: list[FeedHotGamesEntry]
+
+
+class FeedSuggestedBuddy(BaseModel):
+    user_id: str
+    display_name: str
+    avatar_url: Optional[str] = None
+    mutual_count: int
+
+
+class FeedSuggestedBuddiesCard(BaseModel):
+    kind: Literal[FeedCardKind.SUGGESTED_BUDDIES] = FeedCardKind.SUGGESTED_BUDDIES
+    suggestions: list[FeedSuggestedBuddy]
+
+
+class FeedFeaturedFromCollectionEntry(BaseModel):
+    game: GameSummary
+    last_played_at: Optional[date] = None
+
+
+class FeedFeaturedFromCollectionCard(BaseModel):
+    kind: Literal[FeedCardKind.FEATURED_FROM_COLLECTION] = FeedCardKind.FEATURED_FROM_COLLECTION
+    games: list[FeedFeaturedFromCollectionEntry]
+
+
+FeedCard = Union[
+    FeedPlayCard,
+    FeedHotGamesCard,
+    FeedSuggestedBuddiesCard,
+    FeedFeaturedFromCollectionCard,
+]
+
+
+class FeedPageResponse(BaseModel):
+    cards: list[FeedCard]
+    # ISO-8601 created_at of the last play in this page; null = no more pages.
+    next_cursor: Optional[datetime] = None
+
+
+class HotGamesResponse(BaseModel):
+    games: list[FeedHotGamesEntry] = []
+    window_days: int
+
+
+class SuggestedBuddiesResponse(BaseModel):
+    suggestions: list[FeedSuggestedBuddy] = []
+
+
+class FeaturedFromCollectionResponse(BaseModel):
+    games: list[FeedFeaturedFromCollectionEntry] = []
