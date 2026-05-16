@@ -49,6 +49,11 @@ ALTER TABLE public.boardgamebuddy_games ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   display_name TEXT NOT NULL,
+  -- Stable, lowercased handle (migration 017). Backfilled from the auth
+  -- email's local-part with `[a-z0-9_]{3,30}` enforcement + uniqueness.
+  -- Readonly in the user-facing UI; new signups derive it on first auth.
+  username TEXT NOT NULL
+    CHECK (username ~ '^[a-z0-9_]{3,30}$'),
   avatar_url TEXT,
   is_admin BOOLEAN NOT NULL DEFAULT false,
   -- Linked BoardGameGeek username for collection/plays sync (migration 062).
@@ -288,6 +293,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_selections (
 ALTER TABLE public.boardgamebuddy_guide_selections ENABLE ROW LEVEL SECURITY;
 
 -- Indexes
+CREATE UNIQUE INDEX IF NOT EXISTS bgb_profiles_username_uk ON public.boardgamebuddy_profiles(username);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_bgg_id ON public.boardgamebuddy_games(bgg_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_name ON public.boardgamebuddy_games USING gin(to_tsvector('english', name));
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_user ON public.boardgamebuddy_collections(user_id);

@@ -13,23 +13,33 @@
 
 -- bgb_user_stats(uid UUID)
 --   → TABLE (total_plays BIGINT, unique_games BIGINT, win_count BIGINT,
---            last_played_at DATE, hours_played NUMERIC)
---   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--            last_played_at DATE, hours_played NUMERIC, owned_games BIGINT,
+--            owned_expansions BIGINT, favorite_game_id UUID,
+--            favorite_game_name TEXT, favorite_play_count BIGINT)
+--   Defined in: db/migrations/boardgamebuddy/015_user_stats_with_favorite.sql
+--               (originally 012; widened to surface owned_games (base only),
+--                owned_expansions, and favorite_game)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/stats_service.py
---   Purpose:    Strava-style per-user stats card on the Profile view.
+--   Purpose:    Per-user stats card on the Profile view (Played Games,
+--               Owned Games, Wins, Favorite Game). owned_games excludes
+--               expansions; owned_expansions is the secondary counter.
 
--- bgb_feed_plays(viewer UUID, before TIMESTAMPTZ DEFAULT NULL, lim INT DEFAULT 20)
+-- bgb_feed_plays(viewer UUID, before_played_at DATE DEFAULT NULL,
+--                before_created_at TIMESTAMPTZ DEFAULT NULL, lim INT DEFAULT 20)
 --   → TABLE (play_id UUID, play_user_id UUID, play_user_name TEXT,
 --            play_user_avatar TEXT, game_id UUID, game_name TEXT,
 --            game_image_url TEXT, game_thumbnail_url TEXT, played_at DATE,
 --            created_at TIMESTAMPTZ, notes TEXT, photo_url TEXT,
 --            play_mode TEXT, winner_display_name TEXT,
 --            participant_count INT)
---   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--   Defined in: db/migrations/boardgamebuddy/014_feed_order_by_played_at.sql
+--               (originally 012; signature changed to a composite cursor)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Visible plays for the Feed (own + accepted buddies),
 --               pre-joined to game name/image and winner display.
---               Cursor-paginated by created_at.
+--               Ordered by played_at DESC, created_at DESC. Cursor is the
+--               last row's (played_at, created_at) for lexicographic tuple
+--               comparison.
 
 -- bgb_dormant_collection(uid UUID, days_since INT DEFAULT 60, lim INT DEFAULT 5)
 --   → TABLE (game_id UUID, last_played_at DATE)
