@@ -63,15 +63,36 @@
   function renderFront(card) {
     const u = card.user || {};
     const g = card.game || {};
-    const userName = escapeHtml(u.display_name || "Unknown");
+    const me = window.store && window.store.get && window.store.get("user");
+    // Self-attribution: when the play's logger is the current user, swap the
+    // display name for "You" so the feed reads "You played Catan" instead of
+    // echoing your own name back. Winner attribution uses the same trick —
+    // matched by display name since the feed payload doesn't carry the
+    // winner's user_id.
+    const isSelf = !!(me && u.id && me.id === u.id);
+    const userName = isSelf ? "You" : escapeHtml(u.display_name || "Unknown");
     const gameName = escapeHtml(g.name || "Unknown game");
     const hasUserPhoto = !!card.photo_url;
     const gameThumb = g.thumbnail_url || g.image_url || "";
     const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${jsStr(g.name || "")}'})`;
 
-    let media = "";
+    const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
+    const winnerChip = card.winner_display_name
+      ? `<span class="play-card__meta-chip play-card__meta-chip--winner">
+           <i data-lucide="trophy" class="w-3.5 h-3.5"></i> ${winnerIsSelf ? "You" : escapeHtml(card.winner_display_name)} won
+         </span>`
+      : "";
+    const notesBlock = card.notes ? `<p class="play-card__notes">${escapeHtml(card.notes)}</p>` : "";
+
+    // Layout split by presence of a user-uploaded photo:
+    //   - With user photo: stretched hero + corner box-art badge, with the
+    //     winner chip + notes stacked underneath (Strava-style).
+    //   - Without: a horizontal row — square box art on the left, winner
+    //     chip + notes stacked on the right — so the box art reads as a
+    //     thumbnail tied to the play rather than trying to act as a hero.
+    let body = "";
     if (hasUserPhoto) {
-      media = `
+      body = `
         <div class="play-card__photo">
           <img class="play-card__photo-img" src="${escapeAttr(card.photo_url)}" alt="" loading="lazy" />
           ${gameThumb ? `
@@ -79,21 +100,28 @@
               <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
             </div>` : ""}
         </div>
+        ${winnerChip ? `<div class="play-card__meta-row">${winnerChip}</div>` : ""}
+        ${notesBlock}
       `;
     } else if (gameThumb) {
-      media = `
-        <div class="play-card__photo play-card__photo--game-only" data-no-flip onclick="${gameNav}">
-          <img class="play-card__photo-img" src="${escapeAttr(gameThumb)}" alt="" loading="lazy" />
+      body = `
+        <div class="play-card__no-photo-row">
+          <div class="play-card__box" data-no-flip onclick="${gameNav}">
+            <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
+          </div>
+          <div class="play-card__no-photo-meta">
+            ${winnerChip}
+            ${notesBlock}
+          </div>
         </div>
       `;
+    } else {
+      // No photo and no box art — show whatever meta we have on its own.
+      body = `
+        ${winnerChip ? `<div class="play-card__meta-row">${winnerChip}</div>` : ""}
+        ${notesBlock}
+      `;
     }
-
-    const winnerChip = card.winner_display_name
-      ? `<span class="play-card__meta-chip play-card__meta-chip--winner">
-           <i data-lucide="trophy" class="w-3.5 h-3.5"></i> ${escapeHtml(card.winner_display_name)} won
-         </span>`
-      : "";
-    const metaRow = winnerChip ? `<div class="play-card__meta-row">${winnerChip}</div>` : "";
 
     return `
       <header class="play-card__header">
@@ -104,9 +132,7 @@
         </div>
         <div class="play-card__time">${formatPlayedAt(card.played_at)}</div>
       </header>
-      ${media}
-      ${metaRow}
-      ${card.notes ? `<p class="play-card__notes">${escapeHtml(card.notes)}</p>` : ""}
+      ${body}
     `;
   }
 
@@ -132,6 +158,11 @@
     // person. Real-account players already carry their own identity in the
     // display name and don't need the attribution.
     const hostHandle = p.logged_by_name ? escapeHtml(p.logged_by_name) : "";
+    const me = window.store && window.store.get && window.store.get("user");
+    const myName = me && me.display_name ? me.display_name : null;
+    const winnerLabel = winners
+      .map((w) => (myName && w.name === myName) ? "You" : escapeHtml(w.name))
+      .join(", ");
     return `
       <header class="play-card__back-head">
         <span class="play-card__back-title">${escapeHtml(p.game_name || (card.game && card.game.name) || "")}</span>
@@ -141,7 +172,7 @@
       ${winners.length > 0 ? `
         <div class="play-card__back-winners">
           <i data-lucide="trophy" class="w-3.5 h-3.5"></i>
-          ${winners.map((w) => escapeHtml(w.name)).join(", ")} won
+          ${winnerLabel} won
         </div>` : ""}
 
       <ul class="play-card__back-players">
@@ -209,8 +240,13 @@
           <label class="play-card__edit-photo-pick" data-no-flip>
             <input type="file" accept="image/*" class="hidden"
                    onchange="window.playCardFlip.onPhotoSelect('${escapeAttr(p.id)}', this.files)" />
-            <i data-lucide="camera" class="w-5 h-5"></i>
-            <span>Add a photo</span>
+            <span class="play-card__edit-photo-pick-icon">
+              <i data-lucide="image-plus" class="w-5 h-5"></i>
+            </span>
+            <span class="play-card__edit-photo-pick-body">
+              <span class="play-card__edit-photo-pick-title">Add a photo</span>
+              <span class="play-card__edit-photo-pick-hint">Tap to choose an image</span>
+            </span>
           </label>
         `}
       </div>
