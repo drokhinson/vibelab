@@ -17,9 +17,63 @@
     }
 
     async onMount() {
-      this.listen("activePlay", () => this._renderResumeChip());
       this.listen("feed", () => this.render());
+      this.listen("myCollectionMap", () => this._refreshCollectionData());
+      this.listenDom("status-changed", (e) => {
+        const { gameId, status } = e.detail || {};
+        if (!gameId) return;
+        if (status == null) delete this._statusMap[gameId];
+        else this._statusMap[gameId] = status;
+        this.render();
+      });
+      this._statusMap = {};
+      this._expansionCounts = {};
+      this._refreshCollectionData();
       await this._load({ initial: true });
+      this._installScrollObserver();
+    }
+
+    async _refreshCollectionData() {
+      try {
+        const [status, exp] = await Promise.all([
+          window.Collection.myStatusMap(),
+          window.Collection.myExpansionCountByBaseBggId(),
+        ]);
+        this._statusMap = status || {};
+        this._expansionCounts = exp || {};
+      } catch (_) {}
+      this.render();
+    }
+
+    async onUnmount() {
+      this._uninstallScrollObserver();
+    }
+
+    _installScrollObserver() {
+      if (this._observer) return;
+      // Watch a sentinel rendered at the tail of the cards. When it enters the
+      // viewport the user has scrolled near the bottom; auto-fetch the next
+      // page. IntersectionObserver lives across re-renders because the
+      // sentinel keeps its id; we re-observe whenever render() runs.
+      this._observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) this._loadMore();
+        }
+      }, { rootMargin: "200px 0px" });
+      this._observeSentinel();
+    }
+
+    _observeSentinel() {
+      if (!this._observer) return;
+      const el = document.getElementById("feed-sentinel");
+      if (el) this._observer.observe(el);
+    }
+
+    _uninstallScrollObserver() {
+      if (this._observer) {
+        this._observer.disconnect();
+        this._observer = null;
+      }
     }
 
     async _load({ initial = false, cursor = null } = {}) {
@@ -44,36 +98,16 @@
       }
     }
 
-    _renderResumeChip() {
-      const chip = this.container.querySelector("#feed-resume-chip");
-      if (!chip) return;
-      const ps = window.store.get("activePlay");
-      if (ps && ps.isActive()) {
-        chip.classList.remove("hidden");
-        const game = ps.gameSnapshot;
-        chip.innerHTML = `
-          <button class="resume-chip" onclick="window.router.go('log-play')">
-            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-            <span>Resume ${game ? game.name : "play"}</span>
-          </button>
-        `;
-      } else {
-        chip.classList.add("hidden");
-        chip.innerHTML = "";
-      }
-      if (window.lucide) window.lucide.createIcons();
-    }
-
     render() {
       if (!this._page && this._loading) {
         this.container.innerHTML = this._renderSkeleton();
         return;
       }
       const cards = (this._page && this._page.cards) || [];
+      // Search pill + avatar moved into the global app header — feed now
+      // jumps straight to the resume chip and the card timeline.
       const html = `
         <div class="feed-shell">
-          ${this._renderTopBar()}
-          <div id="feed-resume-chip" class="hidden mb-3"></div>
           ${this._error ? `<div class="alert alert-error mb-3">${this._error}</div>` : ""}
           <div class="feed-cards">
             ${cards.length === 0 && !this._loading ? this._renderEmpty() : ""}
@@ -84,24 +118,9 @@
       `;
       this.container.innerHTML = html;
       if (window.lucide) window.lucide.createIcons();
-      this._renderResumeChip();
-    }
-
-    _renderTopBar() {
-      const me = window.store.get("user");
-      const av = me ? me.display_name : "?";
-      const initials = me ? new window.User(me).initials() : "";
-      return `
-        <header class="feed-topbar">
-          <button class="feed-search-pill" onclick="window.router.go('game-search')">
-            <i data-lucide="search" class="w-4 h-4"></i>
-            <span>Search games</span>
-          </button>
-          <button class="feed-avatar-btn" onclick="window.router.go('profile-self')" title="My profile">
-            <span class="avatar-bubble">${initials}</span>
-          </button>
-        </header>
-      `;
+      // The sentinel div is replaced on every render — re-observe the
+      // new node so infinite scroll keeps firing.
+      this._observeSentinel();
     }
 
     _renderEmpty() {
@@ -118,35 +137,36 @@
     _renderLoadMore() {
       if (!this._page) return "";
       if (this._page.next_cursor) {
+        // Sentinel triggers IntersectionObserver-based auto-load. The button
+        // stays in the DOM as a manual fallback (keyboard / a11y) — clicking
+        // it just runs _loadMore() too.
         return `
-          <div class="feed-load-more">
+          <div id="feed-sentinel" class="feed-load-more">
             <button class="btn btn-ghost btn-sm" ${this._loading ? "disabled" : ""}
                     onclick="window.feedView._loadMore()">
-              ${this._loading ? "Loading…" : "Load more"}
+              ${this._loading ? "Loading more…" : "Load more"}
             </button>
           </div>
         `;
       }
-      return "";
+      // Reached the end — let the user know explicitly.
+      return `<div class="feed-end opacity-50 text-xs text-center py-3">You've reached the end.</div>`;
     }
 
     _loadMore() {
+      if (this._loading) return;
       if (!this._page || !this._page.next_cursor) return;
       this._load({ cursor: this._page.next_cursor });
     }
 
     _renderSkeleton() {
-      const skel = (k) => `
-        <div class="play-card play-card--skeleton" key="${k}">
-          <div class="skeleton-line skeleton-line--avatar"></div>
-          <div class="skeleton-line"></div>
-          <div class="skeleton-line skeleton-line--photo"></div>
-        </div>
-      `;
+      // First-paint loader. The three-bar skeleton-card pattern doesn't
+      // animate, so it read as "stuck" while the feed warmed up. Use the
+      // shared bouncing-buddy loader instead — same SVG that the splash
+      // and every other view's loading placeholder uses.
       return `
         <div class="feed-shell">
-          ${this._renderTopBar()}
-          <div class="feed-cards">${[1,2,3].map(skel).join("")}</div>
+          ${window.buddyLoader({ size: 120 })}
         </div>
       `;
     }
@@ -167,8 +187,12 @@
     }
 
     _renderHotGamesCard(card) {
-      const tiles = (card.games || []).map((entry) => `
-        <button class="hot-game-tile" onclick="window.router.go('game-detail',{gameId:'${entry.game.id}'})">
+      const tiles = (card.games || []).map((entry) => {
+        const status = this._statusMap[entry.game.id] || null;
+        const expCount = entry.game.bgg_id ? (this._expansionCounts[entry.game.bgg_id] || 0) : 0;
+        return `
+        <div class="hot-game-tile" onclick="window.router.go('game-detail',{gameId:'${entry.game.id}',gameName:'${jsStr(entry.game.name || '')}'})">
+          ${window.renderStatusTag(entry.game.id, status, { size: "xs" })}
           ${entry.game.thumbnail_url
             ? `<img src="${entry.game.thumbnail_url}" alt="" loading="lazy" />`
             : `<div class="hot-game-tile__placeholder"><i data-lucide="dice-6"></i></div>`
@@ -177,8 +201,9 @@
             <div class="hot-game-tile__name">${escape(entry.game.name)}</div>
             <div class="hot-game-tile__plays">${entry.play_count} plays</div>
           </div>
-        </button>
-      `).join("");
+          ${window.renderExpansionBadge(expCount)}
+        </div>`;
+      }).join("");
       return `
         <section class="feed-rail">
           <header class="feed-rail__header">
@@ -213,8 +238,12 @@
     }
 
     _renderFeaturedFromCollectionCard(card) {
-      const tiles = (card.games || []).map((entry) => `
-        <button class="hot-game-tile" onclick="window.router.go('game-detail',{gameId:'${entry.game.id}'})">
+      const tiles = (card.games || []).map((entry) => {
+        const status = this._statusMap[entry.game.id] || null;
+        const expCount = entry.game.bgg_id ? (this._expansionCounts[entry.game.bgg_id] || 0) : 0;
+        return `
+        <div class="hot-game-tile" onclick="window.router.go('game-detail',{gameId:'${entry.game.id}',gameName:'${jsStr(entry.game.name || '')}'})">
+          ${window.renderStatusTag(entry.game.id, status, { size: "xs" })}
           ${entry.game.thumbnail_url
             ? `<img src="${entry.game.thumbnail_url}" alt="" loading="lazy" />`
             : `<div class="hot-game-tile__placeholder"><i data-lucide="dice-6"></i></div>`
@@ -223,8 +252,9 @@
             <div class="hot-game-tile__name">${escape(entry.game.name)}</div>
             <div class="hot-game-tile__plays">${entry.last_played_at ? "Last: " + formatDate(entry.last_played_at) : "Never played"}</div>
           </div>
-        </button>
-      `).join("");
+          ${window.renderExpansionBadge(expCount)}
+        </div>`;
+      }).join("");
       return `
         <section class="feed-rail">
           <header class="feed-rail__header">

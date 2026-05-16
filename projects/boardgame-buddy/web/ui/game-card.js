@@ -18,7 +18,7 @@
     const img = game.thumbnail_url || game.image_url || "";
     return `
       <article class="game-card" style="--game-accent:${accent}"
-               onclick="window.router.go('game-detail',{gameId:'${game.id}'})">
+               onclick="window.router.go('game-detail',{gameId:'${game.id}',gameName:'${jsStr(game.name)}'})">
         ${badge}
         <div class="game-card__thumb">
           ${img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" />` : `<div class="game-card__thumb-placeholder"><i data-lucide="dice-6"></i></div>`}

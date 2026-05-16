@@ -1,21 +1,6 @@
 // ui/play-card.js — Strava-style play card rendered in the Feed and Profile.
 
 (function () {
-  function formatRelative(iso) {
-    if (!iso) return "";
-    const then = new Date(iso).getTime();
-    const now = Date.now();
-    const diff = Math.max(0, now - then);
-    const min = Math.round(diff / 60000);
-    if (min < 1) return "just now";
-    if (min < 60) return `${min}m ago`;
-    const hr = Math.round(min / 60);
-    if (hr < 24) return `${hr}h ago`;
-    const days = Math.round(hr / 24);
-    if (days < 7) return `${days}d ago`;
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-
   function initials(name) {
     const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -25,37 +10,79 @@
   function renderPlayCard(card) {
     const u = card.user || {};
     const g = card.game || {};
-    const photo = card.photo_url || g.image_url || g.thumbnail_url || "";
     const accent = g.theme_color || "#C9922A";
-    const winnerLine = card.winner_display_name
-      ? `<div class="play-card__winner"><i data-lucide="trophy" class="w-3.5 h-3.5"></i> ${escapeHtml(card.winner_display_name)} won</div>`
+    const hasUserPhoto = !!card.photo_url;
+    const gameThumb = g.thumbnail_url || g.image_url || "";
+
+    // Winners + players collapse into a single dot-separated meta row so the
+    // card carries them on one line instead of two stacked.
+    const winnerChip = card.winner_display_name
+      ? `<span class="play-card__meta-chip play-card__meta-chip--winner">
+           <i data-lucide="trophy" class="w-3.5 h-3.5"></i> ${escapeHtml(card.winner_display_name)} won
+         </span>`
       : "";
-    const participants = card.participant_count
-      ? `<span class="play-card__meta-chip"><i data-lucide="users" class="w-3.5 h-3.5"></i> ${card.participant_count}</span>`
+    const playersChip = card.participant_count
+      ? `<span class="play-card__meta-chip">
+           <i data-lucide="users" class="w-3.5 h-3.5"></i> ${card.participant_count} ${card.participant_count === 1 ? "player" : "players"}
+         </span>`
+      : "";
+    const metaRow = (winnerChip || playersChip)
+      ? `<div class="play-card__meta-row">${winnerChip}${playersChip}</div>`
       : "";
 
+    // When the play has a user-uploaded photo, render the box-art thumbnail
+    // as a small overlay in the bottom-right corner (Strava-style "map" badge).
+    // When there's no photo, fall back to a plain box-art hero so the card
+    // always has a visual anchor.
+    let media = "";
+    if (hasUserPhoto) {
+      media = `
+        <div class="play-card__photo" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || '')}'})">
+          <img class="play-card__photo-img" src="${escapeAttr(card.photo_url)}" alt="" loading="lazy" />
+          ${gameThumb ? `
+            <div class="play-card__game-overlay">
+              <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
+            </div>` : ""}
+        </div>
+      `;
+    } else if (gameThumb) {
+      media = `
+        <div class="play-card__photo play-card__photo--game-only" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || '')}'})">
+          <img class="play-card__photo-img" src="${escapeAttr(gameThumb)}" alt="" loading="lazy" />
+        </div>
+      `;
+    }
+
+    // Title structure: avatar dot, then a single sentence
+    //   "<Username> played <Game name>"
+    // smaller than the old display-font headline, with the play date on
+    // the line below. The username links to the user's profile, the game
+    // name links to the game detail.
+    const userName = escapeHtml(u.display_name || "Unknown");
+    const gameName = escapeHtml(g.name || "Unknown game");
     return `
       <article class="play-card" style="--game-accent:${accent}">
-        <header class="play-card__header" onclick="window.router.go('profile-other',{userId:'${u.id}'})">
-          <div class="play-card__avatar">${u.avatar_url
-            ? `<img src="${escapeAttr(u.avatar_url)}" alt="" />`
-            : initials(u.display_name)
-          }</div>
+        <header class="play-card__header">
+          <div class="play-card__avatar"
+               onclick="window.router.go('profile-other',{userId:'${u.id}'})">
+            ${u.avatar_url
+              ? `<img src="${escapeAttr(u.avatar_url)}" alt="" />`
+              : initials(u.display_name)}
+          </div>
           <div class="play-card__author">
-            <div class="play-card__name">${escapeHtml(u.display_name || "Unknown")}</div>
-            <div class="play-card__time">${formatRelative(card.created_at)}</div>
+            <div class="play-card__title">
+              <a class="play-card__user-link"
+                 onclick="window.router.go('profile-other',{userId:'${u.id}'})">${userName}</a>
+              <span class="play-card__title-verb">played</span>
+              <a class="play-card__game-link"
+                 onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || '')}'})">${gameName}</a>
+            </div>
+            <div class="play-card__time">${formatPlayedAt(card.played_at)}</div>
           </div>
         </header>
-        <div class="play-card__game" onclick="window.router.go('game-detail',{gameId:'${g.id}'})">
-          <span class="play-card__game-name">${escapeHtml(g.name || "Unknown game")}</span>
-        </div>
-        ${photo ? `<div class="play-card__photo"><img src="${escapeAttr(photo)}" alt="" loading="lazy" /></div>` : ""}
-        ${winnerLine}
+        ${media}
+        ${metaRow}
         ${card.notes ? `<p class="play-card__notes">${escapeHtml(card.notes)}</p>` : ""}
-        <footer class="play-card__footer">
-          ${participants}
-          <span class="play-card__meta-chip"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> ${formatPlayedAt(card.played_at)}</span>
-        </footer>
       </article>
     `;
   }
