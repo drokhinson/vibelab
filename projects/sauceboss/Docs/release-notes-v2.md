@@ -1,167 +1,117 @@
-# SauceBoss v2 — Release Notes
+# SauceBoss v2.0 — Release Notes
 
-A rollup of the changes that bring the React Native app to parity with the web
-prototype, harden ingredient parsing on the backend, and converge the Browse +
-Saucebook filter panels on a single shared design.
+## Short version (Google Play "What's new" — ~480 chars)
 
----
-
-## Highlights
-
-- **Native app overhaul** — Sauce Builder wizard rewritten, list screens get
-  pull-to-refresh and shared row components, navigation chrome normalized.
-- **Backend parser + ingredient normalization** — scraped names are
-  lowercased and singularized against the DB, quantities default to a new
-  "whole" unit, and historical rows are backfilled.
-- **Unified filter panel** — Browse and Saucebook now share a single
-  search-and-pick filter component with stable sizing and a reserved
-  Clear-All slot.
+> v2.0 brings a brand-new Sauce Builder wizard with guided steps for
+> importing, editing, and pairing recipes. Browse and Saucebook share a
+> matching layout with pull-to-refresh, faster filters, and a unified
+> row design. Ingredient names are properly capitalized and scaled, the
+> Add Ingredient / Previous Step pop-ups are reliable, and swipe-to-edit
+> commits on release. Plus: Pantry expand/collapse, X-close on Meal
+> Builder, and no more "Sign in" flash on launch.
 
 ---
 
-## Mobile app — `projects/sauceboss/app/` (4b00b56a)
+## Full notes
 
-### Sauce Builder wizard
-- Type chips moved to the **Pairing step**, with an expandable Dish tree
-  (tri-state checkbox + chevron expand) that mirrors the web `.dish-tree`.
-- **Source step** is four bubble cards (URL / File / Manual / Instagram
-  coming-soon). URL has the input above the button; File has Choose File +
-  Instructions side-by-side.
-- **Info step** uses fieldHeader-style labels for Name / Description /
-  Cuisine grid (with inline "+ New Cuisine") / Color. Case-insensitive
-  color preselect on edit, with a custom swatch fallback.
-- **Instructions step**: separator dividers between every step, insert at
-  position (not append-only), per-step collapse, "NEW" pill on
-  uncategorized ingredients, and combine-only steps now save (no
-  ingredient required when `inputFromSteps` is set).
-- **Review screen** is the entry point on edit. Steps and Dish Pairing
-  render as accordion summaries with Edit pills; grey Discard button at
-  the bottom.
-- Editor modals (Add Ingredient / Previous Step) switched from
-  `@gorhom/bottom-sheet` to React Native's built-in `Modal` — fixes the
-  long-running "buttons did nothing" bug. The Ingredient editor gained a
-  type-ahead autocomplete dropdown.
+### A brand-new Sauce Builder
 
-### List screens & navigation
-- New shared `<SauceRow>` used by Browse, Saucebook (via
-  `CuisineAccordion`), and Manager — three lists, one row shape.
-- `CuisineAccordion` accepts a `renderRow` override so Manager wraps it
-  instead of rolling its own header.
-- Browse + Saucebook get pull-to-refresh, recipe-page bookmark + download
-  header, full-sauce-envelope fetch before opening Recipe, and
-  search-then-pick filters (Type → Cuisine → Pairs with → Author).
-- Saucebook gains a collapse-all toggle next to Filters, a loading
-  spinner until the first fetch resolves, swipe-commits-on-release past
-  threshold, and an X close on the builder header.
-- Manager: shared cuisine accordion; edit-toggle gates Dish + Ingredients
-  tabs uniformly.
-- Pantry: Restock + Expand/Collapse pill buttons under the header,
-  section counts as right-justified badges.
-- Settings: `AppHeader` wrap with `headerShown: false` on the stack
-  screen (no duplicate orange bar); avatar tap → direct nav to Settings;
-  sign-out / delete / not-signed-in all land on Browse.
+Building or editing a recipe is now a guided wizard. Each step does one
+thing well:
 
-### App chrome
-- `AppHeader` props normalized to `titleIcon` / `titleEmoji` (mirrors web's
-  `renderAppHeader`); new `closeIcon` prop swaps chevron-back for X;
-  manage/auth slots togglable per screen.
-- `BookPlus` icon on the "add recipe" FABs so the affordance reads as
-  "import / build a recipe" instead of a generic +.
-- MealBuilder flow: X close on every header (exits to Saucebook), Manage
-  + Profile chrome hidden, "← Back to <prev step>" link at the bottom of
-  PrepSelector + SauceSelector.
-- `BootGate` inside `AppProvider` keeps the LoadingPot visible until
-  `state.authReady` — signed-in users no longer flash the "Sign in to
-  keep recipes" empty state on launch.
-- Browse refetches on sign-in so `inSaucebook` flags + the + button
-  hydrate without a manual pull.
+- **Source** — bring a recipe in from a URL, a photo or PDF, or start
+  from scratch. (Instagram import coming soon.)
+- **Info** — set the recipe's name, description, cuisine, and color.
+  Adding a brand-new cuisine is now a one-line form right where you
+  need it.
+- **Pairing** — tag the recipe with one or more dishes from a tree you
+  can expand and check off in any combination.
+- **Instructions** — add steps anywhere in the list, not just at the
+  end. Each step has its own ingredients and detailed instructions you
+  can collapse to keep your view tidy. "NEW" pills flag ingredients
+  that aren't in the catalog yet so you can clean them up before
+  saving.
+- **Review** — when you reopen an existing recipe, it lands here with
+  every section summarized. Tap "Edit" on the section you want to
+  change; leave the rest alone.
 
----
+The Add Ingredient and Previous Step pop-ups have been rebuilt — taps
+now register reliably (no more buttons that did nothing). The
+ingredient picker gained a type-ahead so you can find an ingredient
+without scrolling.
 
-## Filter panel convergence — Browse + Saucebook
+### Faster, friendlier recipe browsing
 
-Four commits walked the two screens onto a single shared design:
+- **Pull-to-refresh** on Browse and Saucebook.
+- A **bookmark + download** header on every recipe page so you can save
+  or stash recipes for offline viewing.
+- **Saucebook and Browse share the same row design** — saved and
+  unsaved recipes look and feel consistent.
+- The full recipe loads before the page opens, so you no longer land on
+  a half-rendered screen.
 
-1. **Scrollable Type filter, matching chip layout** (11b81b40) — Type
-   chip row becomes a horizontal `ScrollView` on both screens so the five
-   type chips stay on one line on narrow phones. Browse Cuisine and
-   Pairs-with reverted to flat wrapping chip rows to match Saucebook.
-   Saucebook gained a "Clear all filters" button at the bottom of its
-   panel, visible only when a filter is active.
-2. **Naming fix** (2ae9b221).
-3. **Shared `<FilterPicker>` component** (25717e6e) — new
-   `components/FilterPicker.js` (label + search input + suggest dropdown
-   + selected-pill row) drives Cuisine, Pairs-with, and Author on both
-   screens. Saucebook gained the Pairs-with (Dish) filter to match
-   Browse, and Browse moved Author through the shared component (drops
-   the duplicate inline search + dropdown).
-4. **Panel sizing parity** (c2979f9f) — both panels switched to
-   `maxHeight: '75%'` (replacing fixed `520px` / `480px` caps).
-5. **Stable filter panel sizing** (e644e37) — outer `<ScrollView>`
-   replaced by a plain `<View>` so the panel reliably wraps to its
-   content (no dead stripe in Saucebook, no clipping in Browse). The
-   "Clear all filters" button is now rendered unconditionally and faded
-   to `opacity: 0` when no filter is applied, so the panel reserves a
-   stable bottom slot whether or not any filter is active. Margins and
-   paddings aligned between the two screens.
+### Smarter filter panel
 
-Net result: the filter panel reads as the same component across Browse
-and Saucebook, with no layout jump when the first filter is applied.
+The Filters panel is now identical across Browse and Saucebook:
 
----
+- Type, Cuisine, Pairs With, and Author all live behind the same clean
+  **search-and-pick** design.
+- The five **Type chips stay on one line** on narrow phones (swipe
+  sideways if they don't all fit).
+- **"Clear all filters"** sits in the same spot every time — no layout
+  jump when you tap your first filter, and Saucebook no longer leaves a
+  blank stripe at the bottom of the panel.
 
-## Parser, normalization, and shared helpers (ca6a0407)
+### Saucebook polish
 
-### Parser — `shared-backend/routes/sauceboss/parser.py` + `units.py`
-- Lowercase + DB-aware singularize on scraped ingredient names: "Tomatoes"
-  → "tomato", "Jalapeños" → "jalapeño", "Berries" → "berry". Falls back
-  to plain lowercase when no canonical row matches, so unknown items
-  still surface via the **NEW** pill.
-- Quantity with no unit → defaults to the new **"whole"** unit (added in
-  migration 024 below). "2 jalapeños" imports as "2 whole jalapeño"
-  rather than bare "2 jalapeño".
-- `parse_quantity` rounds to `0.01` — kills `0.333333` noise from "1/3".
+- **Collapse all** of your cuisine groups with one tap (or expand them
+  all back).
+- **Swipe-to-edit** and **swipe-to-delete** commit when you let go past
+  the threshold — no second tap needed.
+- The Saucebook loads cleanly on launch; signed-in users no longer see
+  a brief "Sign in to keep recipes" empty state flash.
+- The **+ to save a recipe** updates immediately, even right after
+  signing in.
 
-### Save paths
-- `public_routes._build_sauce_ingredient` and the admin routes lowercase
-  ingredient names on store. The web builder mirrors the lowercase on the
-  optimistic save payload.
+### Meal Builder cleanup
 
-### Shared logic
-- `shared/text.js` (new): `capitalizeIngredient` title-cases for display
-  so users see "Jalapeño" / "Olive Oil" while storage stays lowercased.
-  Re-exported via `shared/index.js`. The web bundle mirrors the helper
-  inline in `helpers.js`.
-- `shared/validation.js`: combine-only steps (`inputFromSteps`, no
-  ingredients) now validate cleanly.
-- `shared/units.js#prepareItems`: passes `baseServings` to `scaleAmount`
-  so imperial + metric scaling stop diverging on non-2-serving recipes.
-- `shared/filter.js`: defensive guard on `missingSauceIngredients` so
-  rows without `ingredientNames` no longer crash the row renderer.
+- Every step has a clear **X close** button that drops you back into
+  Saucebook.
+- A **"← Back to previous step"** link at the bottom of each screen so
+  you can backtrack without hunting for it.
 
-### Web display
-- `recipe.js` and `builder.js` apply `capitalizeIngredient` at the
-  disabled-list, unassigned, readonly chip, and review-ing-list render
-  sites.
+### Pantry
 
-### Database migrations
-- `024_whole_unit.sql` — adds the "whole" count unit (aliases:
-  whole/wholes/unit/units).
-- `025_lowercase_ingredients.sql` — backfills existing
-  `sauceboss_ingredient.name`, `.plural`, and
-  `sauceboss_sauce_step_ingredient.name` to lowercase so historical rows
-  line up with the new convention.
+- **Restock** and **Expand/Collapse** buttons under the header.
+- Section counts now show as right-aligned badges so you can scan
+  your shelves at a glance.
+
+### Settings and account
+
+- Tap your **avatar** to jump straight to Settings.
+- A single, consistent header — no more duplicate orange bars.
+- Signing out, deleting your account, or browsing without an account
+  always lands you on Browse.
+
+### Better ingredient handling
+
+- Imported recipe names get the proper treatment: **"Jalapeño",
+  "Olive Oil", "Tomato"** — properly capitalized for display and
+  singularized so duplicates merge correctly.
+- A new **"whole" unit** captures "2 jalapeños" as "2 whole jalapeño",
+  so quantities scale correctly when you change servings.
+- Quantities like "1/3" no longer turn into 0.3333333.
+- **Imperial and metric scaling** now agree on recipes that aren't
+  sized for two servings.
+
+### Bug fixes
+
+- **Combine-only steps** (instructions with no ingredients) save
+  without errors.
+- Recipe rows no longer crash when an ingredient list is empty.
+- The Add Ingredient and Previous Step pop-ups are responsive to every
+  tap.
 
 ---
 
-## Commits in this release
-
-| SHA       | Summary |
-|-----------|---------|
-| `4b00b56a` | native: mobile app overhaul — builder rewrite, list polish, parity |
-| `ca6a0407` | parser + ingredient normalization + shared helpers |
-| `11b81b40` | native: scrollable Type filter + match Browse to Saucebook chip layout |
-| `2ae9b221` | fix naming |
-| `25717e6e` | native: unified search-and-pick filter panel on Browse + Saucebook |
-| `c2979f9f` | native: match Browse + Saucebook filter panel sizing |
-| `e644e37`  | native: stable filter panel sizing across Browse + Saucebook |
+Thanks for cooking with SauceBoss.
