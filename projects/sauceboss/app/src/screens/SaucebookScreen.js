@@ -581,19 +581,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Filter panel takes about half the screen now so cuisine chips + future
-  // search dropdowns have room to render without crowding the row list.
+  // Filter panel takes about three-quarters of the screen so all four
+  // pickers + Clear All fit without scrolling on most devices. ScrollView
+  // shrinks to content when it's shorter than the cap.
   filtersPanel: {
-    maxHeight: 480,
+    maxHeight: '75%',
     backgroundColor: COLORS.card,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: COLORS.border,
   },
-  // Bottom padding sized to clear the "Clear all filters" button when
-  // visible; constant whether or not the button is showing so the panel
-  // ends at the same place regardless of filter state.
-  filtersBody: { padding: 12, paddingBottom: 20 },
+  // Tight bottom padding: combined with clearAllBtn.marginTop:16 this
+  // leaves ~24px below the button (or ~8px below the last picker when
+  // Clear All isn't visible). Keeps the panel from sprouting dead space.
+  filtersBody: { padding: 12, paddingBottom: 8 },
   // Gap between FilterPicker sections (Cuisine / Pairs-with / Author).
   pickerWrap: { marginTop: 14 },
   filterGroupLabel: {
