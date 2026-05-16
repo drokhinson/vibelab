@@ -1328,8 +1328,9 @@ body {
 
 /* ── Play detail view ──────────────────────────────────────────────────────── */
 .play-card { cursor: pointer; }
-.play-card:hover {
-  transform: translateY(-1px);
+/* Apply hover lift on the front face so the parent's transform stays at
+   identity — keeping the 3D flip context clean. */
+.play-card:hover .play-card__front {
   box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 }
 .play-photo {
@@ -1507,39 +1508,73 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ── Play card ────────────────────────────────────────────────────────────── */
+/* ── Play card ──────────────────────────────────────────────────────────────
+   Two-faced flip card: tap the body to rotate to the back (players + scores
+   + edit). Game-name + box-art keep their own onclick to navigate to the
+   game detail page — those zones are marked `data-no-flip` in play-card.js. */
 .play-card {
+  background: transparent;        /* faces carry the surface colour */
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 1rem;
+  animation: fadeUp 200ms ease both;
+  perspective: 1200px;
+  position: relative;
+}
+.play-card__inner {
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+  transition: transform 450ms cubic-bezier(.2,.7,.2,1);
+  /* Sized by the front face; the back is absolutely positioned on top so the
+     article height matches the front's natural height. When the back is
+     taller (long player list) the back grows naturally and the article
+     follows on flip. Handled with min-height in `.is-flipped` below. */
+}
+.play-card.is-flipped .play-card__inner { transform: rotateY(180deg); }
+
+.play-card__front,
+.play-card__back {
   background: oklch(var(--b2));
   border: 1px solid oklch(var(--b3));
+  border-left: 3px solid var(--game-accent, var(--accent));
   border-radius: 1rem;
   padding: 0.85rem 0.95rem;
   box-shadow: 0 1px 2px oklch(0 0 0 / 0.18);
-  animation: fadeUp 200ms ease both;
-  border-left: 3px solid var(--game-accent, var(--accent));
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
+.play-card__front {
+  /* Front owns the document flow so the article auto-sizes to it; the back
+     overlays via absolute positioning. */
+  position: relative;
+}
+.play-card__back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: auto;
+}
+
 .play-card__header {
-  display: flex; align-items: center; gap: 0.65rem;
+  display: flex; align-items: baseline; gap: 0.65rem;
 }
-.play-card__avatar {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 40px; height: 40px; border-radius: 999px;
-  background: oklch(var(--b3)); color: oklch(var(--bc));
-  font-weight: 600; font-size: 0.85rem; overflow: hidden;
-  cursor: pointer; flex-shrink: 0;
-}
-.play-card__avatar img { width: 100%; height: 100%; object-fit: cover; }
-.play-card__author { flex: 1; min-width: 0; }
 .play-card__title {
-  font-size: 0.85rem; line-height: 1.25;
-  /* "Username played Game" — kept noticeably smaller than the section
-     headlines elsewhere so the play date below feels like the metadata
-     line, not a sibling. */
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem; line-height: 1.3;
+  /* "Username played Game" — single line, ellipsises when long. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.play-card__user-link {
+.play-card__user-name {
   font-weight: 600;
-  cursor: pointer;
 }
-.play-card__user-link:hover { text-decoration: underline; }
 .play-card__title-verb { opacity: 0.7; margin: 0 0.15rem; }
 .play-card__game-link {
   font-weight: 700;
@@ -1548,16 +1583,15 @@ body {
 }
 .play-card__game-link:hover { text-decoration: underline; }
 .play-card__time {
-  font-size: 0.72rem;
-  opacity: 0.6;
-  margin-top: 0.1rem;
+  font-size: 0.78rem;
+  opacity: 0.65;
+  flex-shrink: 0;
 }
 .play-card__photo {
   position: relative;
   margin-top: 0.55rem;
   border-radius: 0.75rem;
   overflow: hidden;
-  cursor: pointer;
 }
 .play-card__photo-img {
   width: 100%;
@@ -1565,9 +1599,11 @@ body {
   object-fit: cover;
   display: block;
 }
-/* Photo-less plays fall back to a smaller game-only hero so the card height
-   stays grounded in the box art rather than a full-bleed image. */
-.play-card__photo--game-only .play-card__photo-img { max-height: 220px; }
+/* Photo-less plays fall back to a much smaller game-only row so the box art
+   doesn't try to act as a hero image — it reads as a thumbnail badge for the
+   game the play is about. */
+.play-card__photo--game-only { cursor: pointer; }
+.play-card__photo--game-only .play-card__photo-img { max-height: 120px; }
 
 /* Strava-style "map overlay": box-art thumbnail floating in the bottom-right
    corner of a user photo. Has its own shadow and border so it reads as a
@@ -1615,6 +1651,141 @@ body {
   font-weight: 600;
   opacity: 1;
 }
+
+/* ── Play card — back face (players / scores / edit) ────────────────────── */
+.play-card__back-head {
+  display: flex; align-items: baseline; gap: 0.5rem;
+}
+.play-card__back-title {
+  flex: 1; min-width: 0;
+  font-weight: 700; font-size: 0.95rem;
+  color: var(--game-accent, var(--accent));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.play-card__back-date {
+  font-size: 0.78rem; opacity: 0.65; flex-shrink: 0;
+}
+.play-card__back-winners {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.82rem; font-weight: 600; color: var(--accent);
+}
+.play-card__back-players {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 0.3rem;
+}
+.play-card__back-player {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.55rem;
+  background: oklch(var(--b1));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.55rem;
+  font-size: 0.85rem;
+}
+.play-card__back-player.is-winner { border-color: var(--accent); }
+.play-card__back-player-name {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+}
+.play-card__back-player.is-winner .play-card__back-player-name { color: var(--accent); font-weight: 600; }
+.play-card__back-player-score {
+  font-family: var(--font-display); font-weight: 700;
+}
+.play-card__back-empty { font-size: 0.85rem; opacity: 0.6; }
+
+.play-card__back-expansions {
+  display: flex; flex-wrap: wrap; gap: 0.35rem;
+  margin-top: 0.1rem;
+}
+.play-card__back-exp {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  background: oklch(var(--b1));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  cursor: pointer;
+}
+.play-card__back-exp-dot {
+  width: 0.5rem; height: 0.5rem; border-radius: 999px;
+  background: var(--exp-color, var(--accent));
+  display: inline-block;
+}
+.play-card__back-notes {
+  font-size: 0.85rem; opacity: 0.85;
+}
+.play-card__back-actions {
+  display: flex; justify-content: flex-end; gap: 0.4rem;
+  margin-top: auto;
+}
+.play-card__back-actions--edit { justify-content: space-between; }
+
+.play-card__back-loading,
+.play-card__back-error {
+  display: grid; place-items: center;
+  height: 100%;
+  font-size: 0.85rem;
+  opacity: 0.75;
+  text-align: center;
+}
+.play-card__back-error { color: var(--error, #e54d4d); opacity: 1; }
+
+/* Edit form (owner only). The form lives on the back face when state.editing
+   is true; the read view's button list is replaced atomically. */
+.play-card__edit-photo {
+  position: relative;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  background: oklch(var(--b1));
+}
+.play-card__edit-photo img {
+  display: block; width: 100%; max-height: 120px; object-fit: cover;
+}
+.play-card__edit-photo-replace,
+.play-card__edit-photo-pick {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.55rem;
+}
+.play-card__edit-photo-replace {
+  position: absolute; right: 0.4rem; bottom: 0.4rem;
+  background: oklch(var(--b1) / 0.9);
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+}
+.play-card__edit-photo-pick {
+  width: 100%;
+  justify-content: center;
+  padding: 0.75rem;
+  border: 1px dashed oklch(var(--b3));
+  border-radius: 0.6rem;
+  opacity: 0.85;
+}
+.play-card__edit-players {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 0.3rem;
+}
+.play-card__edit-player {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.3rem 0.55rem;
+  background: oklch(var(--b1));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.55rem;
+}
+.play-card__edit-player-name {
+  flex: 1; min-width: 0; font-size: 0.85rem; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.play-card__edit-score { width: 4.5rem; flex-shrink: 0; }
+.play-card__edit-winner {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+.play-card__edit-notes { font-size: 0.85rem; }
+
 /* ── Feed rails (hot games / suggested buddies / featured) ────────────────── */
 .feed-rail {
   background: oklch(var(--b2));

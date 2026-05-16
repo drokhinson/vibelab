@@ -142,21 +142,26 @@ def fetch_featured_from_collection(
     days_since: int = 60,
     limit: int = 5,
 ) -> FeaturedFromCollectionResponse:
+    # Over-fetch so expansion-only entries can be dropped without starving the
+    # rail. The RPC returns owned-collection rows ordered oldest-first; we
+    # filter out is_expansion games here in Python (no migration needed).
     rows = sb.rpc(
         "bgb_dormant_collection",
-        {"uid": viewer_id, "days_since": days_since, "lim": limit},
+        {"uid": viewer_id, "days_since": days_since, "lim": limit * 2},
     ).execute().data or []
     game_ids = [r["game_id"] for r in rows]
     games = fetch_games_by_ids(sb, game_ids)
     entries: list[FeedFeaturedFromCollectionEntry] = []
     for r in rows:
         g = games.get(r["game_id"])
-        if not g:
+        if not g or g.is_expansion:
             continue
         entries.append(FeedFeaturedFromCollectionEntry(
             game=g,
             last_played_at=r.get("last_played_at"),
         ))
+        if len(entries) >= limit:
+            break
     return FeaturedFromCollectionResponse(games=entries)
 
 
@@ -194,16 +199,20 @@ def build_feed_page(
         if feat.games:
             featured_card = FeedFeaturedFromCollectionCard(games=feat.games)
 
+    # Time-to-revisit lands immediately after the first play so dormant games
+    # are surfaced before the user has to scroll. Suggestions still slot in
+    # near the top but after the featured rail, so the order is:
+    #   play 1 → featured-from-collection → suggested-buddies → play 2 → ...
+    insert_feat_after = 1
     insert_sug_after = 1
-    insert_feat_after = 5
     for i, card in enumerate(play_cards):
         cards.append(card)
-        if suggestions_card and i + 1 == insert_sug_after:
-            cards.append(suggestions_card)
-            suggestions_card = None
         if featured_card and i + 1 == insert_feat_after:
             cards.append(featured_card)
             featured_card = None
+        if suggestions_card and i + 1 == insert_sug_after:
+            cards.append(suggestions_card)
+            suggestions_card = None
     # Stragglers (page too short to hit the insertion index).
     if suggestions_card:
         cards.append(suggestions_card)
