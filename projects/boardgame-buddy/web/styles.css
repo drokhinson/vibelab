@@ -1599,11 +1599,34 @@ body {
   object-fit: cover;
   display: block;
 }
-/* Photo-less plays fall back to a much smaller game-only row so the box art
-   doesn't try to act as a hero image — it reads as a thumbnail badge for the
-   game the play is about. */
-.play-card__photo--game-only { cursor: pointer; }
-.play-card__photo--game-only .play-card__photo-img { max-height: 120px; }
+/* Photo-less plays fall back to a horizontal row: square box art on the left,
+   winner chip + notes stacked to the right. The box art reads as a thumbnail
+   tied to the play rather than trying to act as a hero image. */
+.play-card__no-photo-row {
+  display: flex;
+  gap: 0.7rem;
+  margin-top: 0.55rem;
+  align-items: flex-start;
+}
+.play-card__box {
+  flex: 0 0 88px;
+  width: 88px;
+  height: 88px;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  background: oklch(var(--b1));
+  border: 1px solid oklch(var(--b3));
+  cursor: pointer;
+}
+.play-card__box img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.play-card__no-photo-meta {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 0.4rem;
+  padding-top: 0.1rem;
+}
+.play-card__no-photo-meta .play-card__notes { margin-top: 0; }
 
 /* Strava-style "map overlay": box-art thumbnail floating in the bottom-right
    corner of a user photo. Has its own shadow and border so it reads as a
@@ -1768,12 +1791,37 @@ body {
   backdrop-filter: blur(4px);
 }
 .play-card__edit-photo-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
   width: 100%;
-  justify-content: center;
-  padding: 0.75rem;
-  border: 1px dashed oklch(var(--b3));
-  border-radius: 0.6rem;
-  opacity: 0.85;
+  padding: 0.7rem 0.85rem;
+  border: 1.5px dashed oklch(var(--accent) / 0.5);
+  background: oklch(var(--accent) / 0.06);
+  border-radius: 0.7rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.play-card__edit-photo-pick:hover {
+  background: oklch(var(--accent) / 0.12);
+  border-color: oklch(var(--accent) / 0.7);
+}
+.play-card__edit-photo-pick-icon {
+  display: inline-grid; place-items: center;
+  width: 2.25rem; height: 2.25rem;
+  border-radius: 999px;
+  background: oklch(var(--accent) / 0.18);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.play-card__edit-photo-pick-body {
+  display: flex; flex-direction: column; min-width: 0;
+}
+.play-card__edit-photo-pick-title {
+  font-size: 0.88rem; font-weight: 600;
+}
+.play-card__edit-photo-pick-hint {
+  font-size: 0.72rem; opacity: 0.6;
 }
 .play-card__edit-players {
   list-style: none; margin: 0; padding: 0;
@@ -2074,13 +2122,45 @@ body {
 .collection-tile__name { padding: 0.3rem 0.4rem; font-size: 0.75rem; font-weight: 600; line-height: 1.15; text-align: left; }
 
 .recent-plays { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-.recent-plays li {
-  display: flex; align-items: center; gap: 0.55rem;
-  padding: 0.55rem 0.6rem; background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
-  border-radius: 0.55rem; cursor: pointer;
+/* Each row is a positioning container so the foreground can slide left over
+   a red "Delete" button anchored to the right edge. The inner div carries
+   the visible card chrome (background, border, padding). */
+.recent-plays__row {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.55rem;
+  touch-action: pan-y;
 }
-.recent-plays li:hover { border-color: var(--accent); }
-.recent-plays img { width: 44px; height: 44px; object-fit: cover; border-radius: 0.4rem; flex-shrink: 0; }
+.recent-plays__row-inner {
+  position: relative;
+  z-index: 1;
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.55rem 0.6rem;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.55rem;
+  cursor: pointer;
+  transition: transform 200ms cubic-bezier(.2,.7,.2,1);
+  will-change: transform;
+}
+.recent-plays__row:hover .recent-plays__row-inner { border-color: var(--accent); }
+.recent-plays__row.is-swiped .recent-plays__row-inner { transform: translateX(-88px); }
+.recent-plays__delete {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 88px;
+  background: oklch(0.55 0.22 27);
+  color: white;
+  border: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 0;
+}
+.recent-plays__delete:hover { background: oklch(0.5 0.22 27); }
+.recent-plays__row img { width: 44px; height: 44px; object-fit: cover; border-radius: 0.4rem; flex-shrink: 0; }
 .recent-plays__placeholder { width: 44px; height: 44px; border-radius: 0.4rem; display: grid; place-items: center; background: oklch(var(--b3)); flex-shrink: 0; }
 .recent-plays__body { flex: 1; min-width: 0; }
 .recent-plays__top {
