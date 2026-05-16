@@ -16,7 +16,9 @@ from .models import (
     ProfileCreate,
     ProfileResponse,
     ProfileSearchResult,
+    PublicProfileResponse,
 )
+from .services import profile_service
 
 
 @router.get(
@@ -125,6 +127,20 @@ async def search_profiles(
             email=email,
         ))
     return out
+
+
+@router.get(
+    "/users/{user_id}/profile",
+    response_model=PublicProfileResponse,
+    status_code=200,
+    summary="Get a user's public profile",
+)
+async def get_public_profile(
+    user_id: str,
+    viewer: CurrentUser = Depends(get_current_user),
+) -> PublicProfileResponse:
+    """Profiles are fully public — anyone signed in can see anyone else's profile."""
+    return profile_service.fetch_public_profile(get_supabase(), viewer.user_id, user_id)
 
 
 @router.delete(
