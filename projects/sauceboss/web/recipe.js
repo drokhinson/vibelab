@@ -21,7 +21,7 @@ function renderRecipe() {
   const subBannerHTML = disabledInRecipe.length > 0 ? `
     <div class="sub-banner">
       <strong>Ingredient swaps</strong>
-      ${disabledInRecipe.map(i => `<div>${i.name} → <strong>${i.sub}</strong></div>`).join('')}
+      ${disabledInRecipe.map(i => `<div>${capitalizeIngredient(i.name)} → <strong>${capitalizeIngredient(i.sub)}</strong></div>`).join('')}
     </div>` : '';
 
   // Back-button target

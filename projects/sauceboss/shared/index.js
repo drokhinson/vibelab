@@ -8,6 +8,7 @@ export * from './families.js';
 export * from './filter.js';
 export * from './fuzzy.js';
 export * from './pieMath.js';
+export * from './text.js';
 export * from './validation.js';
 export * from './builder.js';
 export * from './themeTokens.js';

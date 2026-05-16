@@ -131,20 +131,6 @@ function renderBuilderSource() {
         ${importWarn}
       </div>
 
-      <div class="source-card source-card--disabled">
-        <div class="source-card-header">
-          <span class="source-card-icon">📱</span>
-          <div>
-            <div class="source-card-title">Import from Instagram Reel <span class="coming-soon-badge">Coming Soon</span></div>
-            <div class="source-card-desc">Paste an Instagram reel link to extract the recipe</div>
-          </div>
-        </div>
-        <div class="builder-import-row">
-          <input class="builder-input" type="url" placeholder="https://instagram.com/reel/…" disabled>
-          <button class="builder-secondary-btn" disabled>Import</button>
-        </div>
-      </div>
-
       <div class="source-card">
         <div class="source-card-header">
           <span class="source-card-icon">📄</span>
@@ -167,6 +153,20 @@ function renderBuilderSource() {
             <div class="source-card-title">Manual Entry</div>
             <div class="source-card-desc">Enter all sauce information by hand</div>
           </div>
+        </div>
+      </div>
+
+      <div class="source-card source-card--disabled">
+        <div class="source-card-header">
+          <span class="source-card-icon">📱</span>
+          <div>
+            <div class="source-card-title">Import from Instagram Reel <span class="coming-soon-badge">Coming Soon</span></div>
+            <div class="source-card-desc">Paste an Instagram reel link to extract the recipe</div>
+          </div>
+        </div>
+        <div class="builder-import-row">
+          <input class="builder-input" type="url" placeholder="https://instagram.com/reel/…" disabled>
+          <button class="builder-secondary-btn" disabled>Import</button>
         </div>
       </div>
     </div>
@@ -257,7 +257,9 @@ function renderBuilderInstructions() {
           const label = `Step ${si + 1}${s.title ? ' — ' + s.title.slice(0, 25) : ''}`;
           return `<option value="${si}">${label}</option>`;
         }).join('');
-        const ingDisplay = ing.modifier ? `${ing.modifier} ${ing.name}` : ing.name;
+        const ingDisplay = ing.modifier
+          ? `${capitalizeIngredient(ing.modifier)} ${capitalizeIngredient(ing.name)}`
+          : capitalizeIngredient(ing.name);
         return `<div class="unassigned-row">
           <span class="unassigned-ing"><strong>${esc(ingDisplay)}</strong>${qty ? ` <span class="unassigned-qty">${esc(qty)}</span>` : ''}</span>
           <select class="unassigned-target" data-builder-field="unassigned-target" data-uidx="${ui}">
@@ -309,8 +311,8 @@ function renderBuilderInstructions() {
       const qtyDisplay = isQualitative
         ? esc(ing.unit || '')
         : `${(ing.amount === '' || ing.amount == null) ? '—' : esc(String(ing.amount))} ${esc(ing.unit || '')}`.trim();
-      const modPrefix = ing.modifier ? `${esc(ing.modifier)} ` : '';
-      const nameDisplay = ing.name.trim() ? `${modPrefix}${esc(ing.name)}` : '<span class="ing-readonly__placeholder">Untitled ingredient</span>';
+      const modPrefix = ing.modifier ? `${esc(capitalizeIngredient(ing.modifier))} ` : '';
+      const nameDisplay = ing.name.trim() ? `${modPrefix}${esc(capitalizeIngredient(ing.name))}` : '<span class="ing-readonly__placeholder">Untitled ingredient</span>';
       const incomplete = !ing.name.trim() || (!isQualitative && !(parseFloat(ing.amount) > 0));
       // Whole chip is the tap target; edit/remove buttons inside use the same
       // data-builder-action plumbing so the click delegator in init.js fires
@@ -681,8 +683,8 @@ function renderBuilderReview() {
               <div class="review-ing-list">
                 ${step.ingredients.filter(i => i.name.trim()).map(i => {
                   const qtyStr = QUALITATIVE_UNITS.has(i.unit) ? i.unit : `${i.amount} ${i.unit}`;
-                  const modPrefix = i.modifier ? `${i.modifier} ` : '';
-                  return `<div class="review-ing-item">${qtyStr} ${modPrefix}${i.name}</div>`;
+                  const modPrefix = i.modifier ? `${capitalizeIngredient(i.modifier)} ` : '';
+                  return `<div class="review-ing-item">${qtyStr} ${modPrefix}${capitalizeIngredient(i.name)}</div>`;
                 }).join('')}
               </div>
             </div>
@@ -1363,7 +1365,9 @@ async function builderSave() {
               const modifier = (i.modifier || '').trim() || null;
               const modPrefix = modifier ? `${modifier} ` : '';
               return {
-                name: i.name.trim(),
+                // Lowercased — backend lowercases server-side too, but
+                // mirroring it here keeps optimistic UI in sync.
+                name: i.name.trim().toLowerCase(),
                 amount: isQualitative ? 0 : parseFloat(i.amount),
                 unit: i.unit,
                 modifier,

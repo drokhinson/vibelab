@@ -56,9 +56,10 @@ export function scaleAmount(amount, servings, baseServings) {
 // Scales + converts a list of ingredient items for display.
 // baseServings is the number of servings the recipe was authored for (default 2).
 export function prepareItems(items, { servings, unitSystem, baseServings }) {
-  const factor = servings / (baseServings || 2);
+  const base = baseServings || 2;
+  const factor = servings / base;
   return items.map((item) => {
-    const scaled = scaleAmount(item.amount, servings);
+    const scaled = scaleAmount(item.amount, servings, base);
     const scaledItem = {
       ...item,
       amount: scaled,
@@ -68,10 +69,41 @@ export function prepareItems(items, { servings, unitSystem, baseServings }) {
     const converted = convertUnit(scaled, item.unit, unitSystem, scaledItem);
     return {
       name: item.name,
+      modifier: item.modifier || null,
       amount: converted.amount,
       unit: converted.unit,
       canonicalMl: scaledItem.canonicalMl,
       canonicalG: scaledItem.canonicalG,
     };
   });
+}
+
+// Sum a sauce's per-step ingredients into a single shopping-list view,
+// keyed by (name, unit, modifier) so different units / preps of the same
+// ingredient stay separate. Canonical ml/g totals are summed where present
+// so the metric conversion matches what the per-step legend would show.
+// Ported from web/helpers.js#aggregateSauceIngredients.
+export function aggregateSauceIngredients(sauce) {
+  const buckets = new Map();
+  for (const step of (sauce?.steps || [])) {
+    for (const ing of (step.ingredients || [])) {
+      const key = `${ing.name}|${ing.unit}|${ing.modifier || ''}`;
+      const prev = buckets.get(key);
+      if (prev) {
+        prev.amount += Number(ing.amount) || 0;
+        if (ing.canonicalMl != null) prev.canonicalMl = (prev.canonicalMl || 0) + ing.canonicalMl;
+        if (ing.canonicalG != null) prev.canonicalG = (prev.canonicalG || 0) + ing.canonicalG;
+      } else {
+        buckets.set(key, {
+          name: ing.name,
+          amount: Number(ing.amount) || 0,
+          unit: ing.unit,
+          modifier: ing.modifier || null,
+          canonicalMl: ing.canonicalMl != null ? ing.canonicalMl : null,
+          canonicalG: ing.canonicalG != null ? ing.canonicalG : null,
+        });
+      }
+    }
+  }
+  return [...buckets.values()];
 }
