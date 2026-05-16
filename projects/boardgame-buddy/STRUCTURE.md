@@ -193,11 +193,12 @@ each missing game from the BGG XML API.
 - `POST /api/v1/boardgame_buddy/profile/become-admin` — body `{admin_key}`; sets `is_admin=true` if the key matches `ADMIN_API_KEY`
 - `GET /api/v1/boardgame_buddy/profiles/search?q=` — search other users by display name (returns id, display_name, email) for buddy linking
 - `DELETE /api/v1/boardgame_buddy/profile` — delete current user's account and data
-- `GET /api/v1/boardgame_buddy/collection`
+- `GET /api/v1/boardgame_buddy/collection` — flat list (legacy shape, list[CollectionItem])
+- `GET /api/v1/boardgame_buddy/collection/grid` — paginated owned collection sorted by `last_played_at DESC NULLS LAST, added_at DESC`. Supports `search`, `players`, `playtime_min/max`, `play_mode`, `exclude_expansions` (default true), and `user_id` (target user; defaults to the viewer — profiles are public). Two round-trips: collection+game join, then plays for the matching set.
 - `POST /api/v1/boardgame_buddy/collection`
 - `PATCH /api/v1/boardgame_buddy/collection/{game_id}`
 - `DELETE /api/v1/boardgame_buddy/collection/{game_id}`
-- `GET /api/v1/boardgame_buddy/plays` — own plays plus shared plays (where the current user is a linked buddy). Each play includes `is_own`, `logged_by_id`, `logged_by_name`.
+- `GET /api/v1/boardgame_buddy/plays` — paginated plays the target user logged + participated in. Each play includes `is_own`, `logged_by_id`, `logged_by_name`. Supports `page`, `per_page`, `game_id`, `buddy_id` (treated as a player_user_id filter post-migration-009), `search` (free-text match on game name OR any player's display name), and `user_id` (target user; defaults to the viewer — profiles are public).
 - `POST /api/v1/boardgame_buddy/plays`
 - `DELETE /api/v1/boardgame_buddy/plays/{play_id}` — only the original logger can delete
 - `GET /api/v1/boardgame_buddy/buddies` — accepted mutual edges only (mutual graph, migration 008). Returns `BuddyEdgeResponse[]`
@@ -206,6 +207,9 @@ each missing game from the BGG XML API.
 - `POST /api/v1/boardgame_buddy/buddies/{request_id}/accept` — accept incoming request
 - `POST /api/v1/boardgame_buddy/buddies/{request_id}/reject` — delete a pending request
 - `DELETE /api/v1/boardgame_buddy/buddies/{edge_id}` — unfriend (either party can call)
+- `GET /api/v1/boardgame_buddy/played-with` — real-account players the viewer has shared a play with (carries buddy-relation flags so the FE can show a quick-add affordance for non-buddies)
+- `GET /api/v1/boardgame_buddy/ghost-players` — free-text nicknames the viewer recorded in plays without an account, grouped with play counts + last-played date
+- `POST /api/v1/boardgame_buddy/ghost-players/link` — promote a ghost nickname to a real account (body `{display_name, target_user_id}`); stamps player_user_id on every matching play_players row the viewer logged
 - `GET /api/v1/boardgame_buddy/feed?cursor=&limit=20` — Strava-style mixed feed (plays + hot games + suggested buddies + featured-from-collection). Cursor-paginated via `created_at`.
 - `GET /api/v1/boardgame_buddy/hot-games?window_days=7` — most-played games in window
 - `GET /api/v1/boardgame_buddy/suggestions/buddies` — friends-of-friends candidates
