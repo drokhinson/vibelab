@@ -488,18 +488,21 @@ const styles = StyleSheet.create({
   filtersBtnLabelActive: {
     color: '#fff',
   },
-  // Tall enough that the cuisine/dish/author suggest dropdowns can render
-  // their full match list inside the panel without getting clipped.
+  // Same sizing rule as Saucebook — 75% of screen so all four pickers +
+  // Clear All fit without an internal scroll on most devices. ScrollView
+  // shrinks to content when content is shorter than the cap.
   filtersPanel: {
-    maxHeight: 520,
+    maxHeight: '75%',
     backgroundColor: COLORS.card,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: COLORS.border,
   },
+  // Tight bottom padding so the panel ends snugly under Clear All
+  // (~24px below) or under the last picker (~8px below) without dead space.
   filtersBody: {
     padding: 12,
-    paddingBottom: 20,
+    paddingBottom: 8,
   },
   // Gap between FilterPicker sections (Cuisine / Pairs-with / Author).
   pickerWrap: { marginTop: 14 },
