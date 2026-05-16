@@ -83,6 +83,14 @@ export default function SaucebookScreen({ navigation }) {
   }, [groups, anyOpen, actions]);
 
   // Pull-to-refresh — drives the saucebook reload + flips a local "refreshing"
+  // True when any saucebook filter is active — drives the visibility of the
+  // "Clear all filters" button at the bottom of the filter panel.
+  const hasAnyFilter =
+    sb.filters.cuisines.size > 0 ||
+    sb.filters.types.size > 0 ||
+    sb.filters.dishes.size > 0 ||
+    !!sb.filters.authorId;
+
   // flag so the RefreshControl spinner stays up until the fetch resolves.
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -190,9 +198,15 @@ export default function SaucebookScreen({ navigation }) {
           keyboardShouldPersistTaps="handled"
         >
           {/* Type first, then Cuisine — matches Browse and gives the longer
-              cuisine chip list room to scroll without crowding the panel top. */}
+              cuisine chip list room to scroll without crowding the panel top.
+              Type is horizontal-scrollable so the five chips never wrap to a
+              second line on narrow phones. */}
           <Text style={styles.filterGroupLabel}>Type</Text>
-          <View style={styles.chipRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.typeScroll}
+          >
             {SAUCE_TYPES.map((t) => (
               <Chip
                 key={t.value}
@@ -201,7 +215,7 @@ export default function SaucebookScreen({ navigation }) {
                 onPress={() => actions.toggleSaucebookType(t.value)}
               />
             ))}
-          </View>
+          </ScrollView>
 
           <Text style={[styles.filterGroupLabel, { marginTop: 14 }]}>Cuisine</Text>
           <View style={styles.chipRow}>
@@ -235,6 +249,16 @@ export default function SaucebookScreen({ navigation }) {
                 ))}
               </View>
             </>
+          ) : null}
+
+          {hasAnyFilter ? (
+            <TouchableOpacity
+              style={styles.clearAllBtn}
+              onPress={actions.clearSaucebookFilters}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.clearAllLabel}>Clear all filters</Text>
+            </TouchableOpacity>
           ) : null}
         </ScrollView>
       ) : null}
@@ -493,6 +517,21 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  typeScroll: { flexDirection: 'row', gap: 6, paddingRight: 12 },
+  clearAllBtn: {
+    marginTop: 16,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.dangerText,
+  },
+  clearAllLabel: {
+    color: COLORS.dangerText,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   chip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
