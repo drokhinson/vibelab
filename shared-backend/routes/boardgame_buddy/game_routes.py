@@ -176,9 +176,38 @@ async def list_games(
     result = query.range(offset, offset + per_page - 1).execute()
 
     games = [GameSummary(**g) for g in (result.data or [])]
+    _attach_expansion_counts(sb, games)
     total = result.count or 0
 
     return GameListResponse(games=games, total=total, page=page, per_page=per_page)
+
+
+def _attach_expansion_counts(sb: Client, games: list[GameSummary]) -> None:
+    """Fill `expansion_count` for each *base* game in the result page.
+
+    One round-trip — pull every expansion row whose `base_game_bgg_id`
+    matches a bgg_id in `games`, then tally locally. Expansions
+    themselves keep expansion_count=0.
+    """
+    base_bgg_ids = [g.bgg_id for g in games if g.bgg_id and not g.is_expansion]
+    if not base_bgg_ids:
+        return
+    rows = (
+        sb.table("boardgamebuddy_games")
+        .select("base_game_bgg_id")
+        .eq("is_expansion", True)
+        .in_("base_game_bgg_id", base_bgg_ids)
+        .execute()
+    )
+    counts: dict[int, int] = {}
+    for row in (rows.data or []):
+        bid = row.get("base_game_bgg_id")
+        if bid is None:
+            continue
+        counts[bid] = counts.get(bid, 0) + 1
+    for g in games:
+        if g.bgg_id and not g.is_expansion:
+            g.expansion_count = counts.get(g.bgg_id, 0)
 
 
 def _annotate_already_in_db(sb: Client, results: list[BggSearchResult]) -> None:

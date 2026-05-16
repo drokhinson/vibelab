@@ -14,7 +14,7 @@ from . import buddy_service
 def fetch_public_profile(sb, viewer_id: str, target_id: str) -> PublicProfileResponse:
     rows = (
         sb.table("boardgamebuddy_profiles")
-        .select("id, display_name, avatar_url, created_at")
+        .select("id, display_name, username, avatar_url, created_at")
         .eq("id", target_id)
         .execute()
     )
@@ -25,6 +25,7 @@ def fetch_public_profile(sb, viewer_id: str, target_id: str) -> PublicProfileRes
     return PublicProfileResponse(
         id=p["id"],
         display_name=p["display_name"],
+        username=p["username"],
         avatar_url=p.get("avatar_url"),
         created_at=p["created_at"],
         is_buddy=bool(rel["is_buddy"]),

@@ -16,9 +16,13 @@ from .models import (
     BuddyRequestCreate,
     BuddyRequestResponse,
     BuddyRequestsResponse,
+    GhostLinkRequest,
+    GhostLinkResponse,
+    GhostPlayer,
     MessageResponse,
+    PlayedWithUser,
 )
-from .services import buddy_service
+from .services import buddy_service, played_with_service
 
 
 @router.get(
@@ -103,3 +107,50 @@ async def delete_buddy_edge(
     """Remove an accepted mutual edge. Either party can call this."""
     buddy_service.unfriend(get_supabase(), user.user_id, edge_id)
     return MessageResponse(message="Unfriended")
+
+
+@router.get(
+    "/played-with",
+    response_model=list[PlayedWithUser],
+    status_code=200,
+    summary="List real-account players the viewer has shared a play with",
+)
+async def list_played_with(
+    user: CurrentUser = Depends(get_current_user),
+) -> list[PlayedWithUser]:
+    """Played-with discovery: anyone whose account appears in the viewer's
+    plays (either as the logger or via player_user_id)."""
+    return played_with_service.fetch_played_with(get_supabase(), user.user_id)
+
+
+@router.get(
+    "/ghost-players",
+    response_model=list[GhostPlayer],
+    status_code=200,
+    summary="List free-text ghost players the viewer has recorded",
+)
+async def list_ghost_players(
+    user: CurrentUser = Depends(get_current_user),
+) -> list[GhostPlayer]:
+    """Nicknames the viewer logged for players without accounts. Grouped by
+    name with a play count and last-played date for context."""
+    return played_with_service.fetch_ghost_players(get_supabase(), user.user_id)
+
+
+@router.post(
+    "/ghost-players/link",
+    response_model=GhostLinkResponse,
+    status_code=200,
+    summary="Promote a ghost player to a real account",
+)
+async def link_ghost_player(
+    body: GhostLinkRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> GhostLinkResponse:
+    """Stamp `target_user_id` onto every matching ghost play_players row.
+    Subsequent reads of those plays surface the real account's display
+    name and the play counts toward the played-with leaderboard."""
+    n = played_with_service.link_ghost(
+        get_supabase(), user.user_id, body.display_name, body.target_user_id
+    )
+    return GhostLinkResponse(rows_updated=n)

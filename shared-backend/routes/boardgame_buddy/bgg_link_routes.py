@@ -162,19 +162,16 @@ def _materialize_play(
         name = (player.get("name") or "").strip()
         if not name:
             continue
-        buddy_result = (
-            sb.table("boardgamebuddy_buddies")
-            .upsert(
-                {"owner_id": user_id, "name": name},
-                on_conflict="owner_id,name",
-            )
-            .execute()
-        )
-        if not buddy_result.data:
-            continue
+        # Keep the legacy buddies roster populated (admin tools still read it)
+        # but write the play_players row through the new columns from
+        # migration 009 so we don't touch the dropped buddy_id (migration 013).
+        sb.table("boardgamebuddy_buddies").upsert(
+            {"owner_id": user_id, "name": name},
+            on_conflict="owner_id,name",
+        ).execute()
         sb.table("boardgamebuddy_play_players").insert({
             "play_id": play_id,
-            "buddy_id": buddy_result.data[0]["id"],
+            "player_display_name": name,
             "is_winner": bool(player.get("is_winner")),
         }).execute()
 

@@ -1,8 +1,8 @@
 """Feed assembly — composes play cards + hot games + suggested buddies +
 featured-from-collection. Hits the RPCs added in migration 012."""
 
-from datetime import datetime
-from typing import Any, Optional
+from datetime import date, datetime
+from typing import Any, Optional, Tuple
 
 from ..models import (
     FeedCard,
@@ -48,23 +48,53 @@ def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
     )
 
 
+def _encode_cursor(played_at: date, created_at: datetime) -> str:
+    """Composite "played_at|created_at" string the FE round-trips back."""
+    return f"{played_at.isoformat()}|{created_at.isoformat()}"
+
+
+def _decode_cursor(cursor: Optional[str]) -> Tuple[Optional[date], Optional[datetime]]:
+    if not cursor:
+        return None, None
+    if "|" not in cursor:
+        # Tolerate legacy single-timestamp cursors from before migration 014.
+        try:
+            return None, datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+        except ValueError:
+            return None, None
+    played_str, created_str = cursor.split("|", 1)
+    try:
+        played = date.fromisoformat(played_str)
+    except ValueError:
+        played = None
+    try:
+        created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+    except ValueError:
+        created = None
+    return played, created
+
+
 def fetch_feed_plays(
     sb,
     viewer_id: str,
     *,
-    before: Optional[datetime] = None,
+    cursor: Optional[str] = None,
     limit: int = 20,
-) -> tuple[list[FeedPlayCard], Optional[datetime]]:
-    """Returns (cards, next_cursor). next_cursor is the last created_at; None
-    means no more pages."""
+) -> tuple[list[FeedPlayCard], Optional[str]]:
+    """Returns (cards, next_cursor). next_cursor is "played_at|created_at"
+    of the last row; None means no more pages."""
+    before_played, before_created = _decode_cursor(cursor)
     params: dict[str, Any] = {"viewer": viewer_id, "lim": limit}
-    if before is not None:
-        params["before"] = before.isoformat()
+    if before_played is not None:
+        params["before_played_at"] = before_played.isoformat()
+    if before_created is not None:
+        params["before_created_at"] = before_created.isoformat()
     rows = sb.rpc("bgb_feed_plays", params).execute().data or []
     cards = [_play_card_from_rpc_row(r) for r in rows]
-    next_cursor: Optional[datetime] = None
+    next_cursor: Optional[str] = None
     if len(rows) == limit and rows:
-        next_cursor = cards[-1].created_at
+        last = cards[-1]
+        next_cursor = _encode_cursor(last.played_at, last.created_at)
     return cards, next_cursor
 
 
@@ -134,19 +164,19 @@ def build_feed_page(
     sb,
     viewer_id: str,
     *,
-    before: Optional[datetime] = None,
+    cursor: Optional[str] = None,
     limit: int = 20,
 ) -> FeedPageResponse:
     """Assemble a single page of mixed feed cards.
 
-    Composition rule (v1): plays form the spine; on the first page (before is
+    Composition rule (v1): plays form the spine; on the first page (cursor is
     None), prepend a Hot Games card and intersperse a Suggested Buddies card
     after the first play and a Featured-From-Collection card mid-page.
     Subsequent pages return plays only.
     """
-    play_cards, next_cursor = fetch_feed_plays(sb, viewer_id, before=before, limit=limit)
+    play_cards, next_cursor = fetch_feed_plays(sb, viewer_id, cursor=cursor, limit=limit)
     cards: list[FeedCard] = []
-    first_page = before is None
+    first_page = cursor is None
     if first_page:
         hot = fetch_hot_games(sb)
         if hot.games:

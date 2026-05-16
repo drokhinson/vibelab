@@ -72,24 +72,51 @@ def _build_play_response(
 
 
 def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse]]:
-    """Bulk-fetch players for a list of play IDs (no N+1)."""
+    """Bulk-fetch players for a list of play IDs (no N+1).
+
+    Reads from the post-migration-009 columns directly so the response survives
+    migration 013 dropping buddy_id. The legacy buddies-table join is gone;
+    real-account players resolve their display name from their profile, and
+    free-text ghost players use player_display_name.
+    """
     players_by_play: dict[str, list[PlayPlayerResponse]] = {pid: [] for pid in play_ids}
-    if play_ids:
-        pps = (
-            sb.table("boardgamebuddy_play_players")
-            .select("play_id, buddy_id, is_winner, score, boardgamebuddy_buddies(name)")
-            .in_("play_id", play_ids)
+    if not play_ids:
+        return players_by_play
+
+    pps = (
+        sb.table("boardgamebuddy_play_players")
+        .select("play_id, player_user_id, player_display_name, is_winner, score")
+        .in_("play_id", play_ids)
+        .execute()
+    )
+    rows = pps.data or []
+
+    profile_ids = [r["player_user_id"] for r in rows if r.get("player_user_id")]
+    profile_names: dict[str, str] = {}
+    if profile_ids:
+        prof = (
+            sb.table("boardgamebuddy_profiles")
+            .select("id, display_name")
+            .in_("id", list(set(profile_ids)))
             .execute()
         )
-        for row in pps.data or []:
-            players_by_play.setdefault(row["play_id"], []).append(
-                PlayPlayerResponse(
-                    buddy_id=row["buddy_id"],
-                    name=(row.get("boardgamebuddy_buddies") or {}).get("name", "Unknown"),
-                    is_winner=row.get("is_winner", False),
-                    score=row.get("score"),
-                )
+        profile_names = {p["id"]: p["display_name"] for p in (prof.data or [])}
+
+    for row in rows:
+        uid = row.get("player_user_id")
+        name = (
+            profile_names.get(uid)
+            if uid else None
+        ) or row.get("player_display_name") or "Unknown"
+        players_by_play.setdefault(row["play_id"], []).append(
+            PlayPlayerResponse(
+                buddy_id=None,
+                user_id=uid,
+                name=name,
+                is_winner=row.get("is_winner", False),
+                score=row.get("score"),
             )
+        )
     return players_by_play
 
 
@@ -137,25 +164,30 @@ def _upsert_buddy(sb, user_id: str, name: str) -> dict:
 def _write_play_players(sb, play_id: str, user_id: str, players: list) -> list[PlayPlayerResponse]:
     """Insert one play_players row per player.
 
-    Each row carries both the legacy buddy_id (so anything still reading the
-    old shape keeps working) and the new player_user_id / player_display_name
-    columns from migration 009 — that's what the feed RPC reads.
+    Writes go through the new (post-migration-009) columns directly:
+    player_user_id for real-account players, player_display_name as the
+    free-text label. The legacy boardgamebuddy_buddies upsert is kept so the
+    Plays-by-buddy filter in the legacy admin tools still has a roster to
+    pick from, but the play_players row no longer references it.
     """
     out: list[PlayPlayerResponse] = []
     for p in players:
-        buddy = _upsert_buddy(sb, user_id, p.name)
+        # Keep populating the legacy buddies roster for the current owner so
+        # the autocomplete picker in admin tools still has something to show.
+        _upsert_buddy(sb, user_id, p.name)
         row: dict = {
             "play_id": play_id,
-            "buddy_id": buddy["id"],
             "is_winner": p.is_winner,
             "score": p.score,
             "player_display_name": p.name,
         }
-        if getattr(p, "user_id", None):
-            row["player_user_id"] = p.user_id
+        player_uid = getattr(p, "user_id", None)
+        if player_uid:
+            row["player_user_id"] = player_uid
         sb.table("boardgamebuddy_play_players").insert(row).execute()
         out.append(PlayPlayerResponse(
-            buddy_id=buddy["id"],
+            buddy_id=None,
+            user_id=player_uid,
             name=p.name,
             is_winner=p.is_winner,
             score=p.score,
@@ -175,24 +207,16 @@ def _write_play_expansions(sb, play_id: str, expansion_ids: list[str]) -> None:
 
 
 async def _user_can_view_play(sb, user, play_row: dict) -> bool:
-    """Allow the play's owner or any linked-buddy participant to read it."""
+    """Allow the play's owner or any participant resolved to a real account."""
     if play_row["user_id"] == user.user_id:
         return True
-    # Find buddies owned by this play's logger that link to the current user.
-    linked = (
-        sb.table("boardgamebuddy_buddies")
-        .select("id")
-        .eq("linked_user_id", user.user_id)
-        .execute()
-    )
-    buddy_ids = [b["id"] for b in linked.data or []]
-    if not buddy_ids:
-        return False
+    # After migration 009, play_players carries player_user_id directly — no
+    # need to go through the legacy per-owner buddies table.
     pp = (
         sb.table("boardgamebuddy_play_players")
         .select("play_id")
         .eq("play_id", play_row["id"])
-        .in_("buddy_id", buddy_ids)
+        .eq("player_user_id", user.user_id)
         .execute()
     )
     return bool(pp.data)
@@ -209,19 +233,63 @@ async def list_plays(
     per_page: int = Query(20, ge=1, le=100, description="Items per page"),
     game_id: Optional[str] = Query(None, description="Filter by game UUID"),
     buddy_id: Optional[str] = Query(None, description="Filter by buddy participant UUID"),
+    search: Optional[str] = Query(
+        None,
+        description="Free-text filter: matches game name OR any player's display name",
+    ),
+    user_id: Optional[str] = Query(
+        None,
+        description="Target user (profiles are public); defaults to the viewer",
+    ),
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayListResponse:
-    """List plays the current user logged (paginated, latest first), with optional filters."""
+    """List plays the target user logged + participated in (paginated, latest first)."""
     sb = get_supabase()
     offset = (page - 1) * per_page
+    target_user_id = user_id or user.user_id
 
-    # Pre-fetch play_ids where the filtered buddy participated (used as an ID filter below).
+    # Pre-compute the set of play_ids that match the free-text search across
+    # game names and player display names. Done in one pass each so the main
+    # own_q / shared_q queries can just intersect.
+    search_play_ids: set[str] | None = None
+    if search and search.strip():
+        s = search.strip()
+        game_match_play_ids: set[str] = set()
+        game_rows = (
+            sb.table("boardgamebuddy_games")
+            .select("id")
+            .ilike("name", f"%{s}%")
+            .execute()
+        )
+        game_ids_match = [g["id"] for g in (game_rows.data or [])]
+        if game_ids_match:
+            gp = (
+                sb.table("boardgamebuddy_plays")
+                .select("id")
+                .in_("game_id", game_ids_match)
+                .execute()
+            )
+            game_match_play_ids = {r["id"] for r in (gp.data or [])}
+        player_match = (
+            sb.table("boardgamebuddy_play_players")
+            .select("play_id")
+            .ilike("player_display_name", f"%{s}%")
+            .execute()
+        )
+        player_match_play_ids = {r["play_id"] for r in (player_match.data or [])}
+        search_play_ids = game_match_play_ids | player_match_play_ids
+        if not search_play_ids:
+            return PlayListResponse(plays=[], total=0, page=page, per_page=per_page)
+
+    # Pre-fetch play_ids where the filtered player participated (used as an
+    # ID filter below). The query param is named buddy_id for FE compat but
+    # is now treated as a player_user_id lookup post-migration-009.
     buddy_play_ids: set[str] | None = None
     if buddy_id:
         bpp = (
             sb.table("boardgamebuddy_play_players")
             .select("play_id")
-            .eq("buddy_id", buddy_id)
+            .eq("player_user_id", buddy_id)
             .execute()
         )
         buddy_play_ids = {r["play_id"] for r in bpp.data or []}
@@ -232,44 +300,43 @@ async def list_plays(
     own_q = (
         sb.table("boardgamebuddy_plays")
         .select("id, played_at, created_at")
-        .eq("user_id", user.user_id)
+        .eq("user_id", target_user_id)
     )
     if game_id:
         own_q = own_q.eq("game_id", game_id)
     if buddy_play_ids is not None:
         own_q = own_q.in_("id", list(buddy_play_ids))
+    if search_play_ids is not None:
+        own_q = own_q.in_("id", list(search_play_ids))
     own_tuples: list[tuple[str, str, str, bool]] = [
         (r["id"], r["played_at"], r["created_at"], True)
         for r in (own_q.execute().data or [])
     ]
     own_ids_set = {t[0] for t in own_tuples}
 
-    # Shared plays: current user appears as a linked buddy.
-    linked = (
-        sb.table("boardgamebuddy_buddies")
-        .select("id")
-        .eq("linked_user_id", user.user_id)
+    # Shared plays: target user appears as a play participant (via
+    # player_user_id, set by either the new write path or the migration-009
+    # backfill from buddies.linked_user_id).
+    shared_tuples: list[tuple[str, str, str, bool]] = []
+    shared_pp = (
+        sb.table("boardgamebuddy_play_players")
+        .select("play_id")
+        .eq("player_user_id", target_user_id)
         .execute()
     )
-    user_buddy_ids = [b["id"] for b in linked.data or []]
-    shared_tuples: list[tuple[str, str, str, bool]] = []
-
-    if user_buddy_ids:
-        shared_pp = (
-            sb.table("boardgamebuddy_play_players")
-            .select("play_id")
-            .in_("buddy_id", user_buddy_ids)
-            .execute()
-        )
-        candidate_ids = {r["play_id"] for r in shared_pp.data or []} - own_ids_set
+    shared_play_ids_raw = {r["play_id"] for r in shared_pp.data or []}
+    if shared_play_ids_raw:
+        candidate_ids = shared_play_ids_raw - own_ids_set
         if buddy_play_ids is not None:
             candidate_ids &= buddy_play_ids
+        if search_play_ids is not None:
+            candidate_ids &= search_play_ids
         if candidate_ids:
             shared_q = (
                 sb.table("boardgamebuddy_plays")
                 .select("id, played_at, created_at")
                 .in_("id", list(candidate_ids))
-                .neq("user_id", user.user_id)
+                .neq("user_id", target_user_id)
             )
             if game_id:
                 shared_q = shared_q.eq("game_id", game_id)

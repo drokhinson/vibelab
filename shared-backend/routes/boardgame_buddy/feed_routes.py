@@ -7,7 +7,6 @@ Thin adapter over services/feed_service.py. The Feed page composes:
   - featured-from-collection (first page)
 """
 
-from datetime import datetime
 from typing import Optional
 
 from fastapi import Depends, Query
@@ -32,9 +31,9 @@ from .services import feed_service
     summary="Strava-style chronological feed",
 )
 async def get_feed(
-    cursor: Optional[datetime] = Query(
+    cursor: Optional[str] = Query(
         None,
-        description="created_at of the last play on the previous page (omit on first call)",
+        description="Composite \"played_at|created_at\" cursor returned by the previous page",
     ),
     limit: int = Query(20, ge=1, le=50, description="Plays per page"),
     user: CurrentUser = Depends(get_current_user),
@@ -43,7 +42,7 @@ async def get_feed(
     return feed_service.build_feed_page(
         get_supabase(),
         user.user_id,
-        before=cursor,
+        cursor=cursor,
         limit=limit,
     )
 

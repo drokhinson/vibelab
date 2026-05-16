@@ -16,7 +16,7 @@ from .models import (
     GameSummary,
     MessageResponse,
 )
-from .constants import CollectionSort, CollectionStatus
+from .constants import CollectionSort, CollectionStatus, PlayMode
 from .dependencies import CurrentUser, get_current_user
 
 
@@ -124,32 +124,27 @@ def _plays_visible_to_user(sb: Client, user_id: str) -> list[dict]:
     )
     own_rows = own.data or []
 
-    linked = (
-        sb.table("boardgamebuddy_buddies")
-        .select("id")
-        .eq("linked_user_id", user_id)
+    # Shared plays: current user appears as a play participant via the new
+    # player_user_id column (post-migration-009 — replaces the legacy lookup
+    # through boardgamebuddy_buddies.linked_user_id which migration 013 drops).
+    shared_rows: list[dict] = []
+    shared_pp = (
+        sb.table("boardgamebuddy_play_players")
+        .select("play_id")
+        .eq("player_user_id", user_id)
         .execute()
     )
-    buddy_ids = [b["id"] for b in linked.data or []]
-
-    shared_rows: list[dict] = []
-    if buddy_ids:
-        own_ids = {r["id"] for r in own_rows}
-        shared_pp = (
-            sb.table("boardgamebuddy_play_players")
-            .select("play_id")
-            .in_("buddy_id", buddy_ids)
+    candidate = {r["play_id"] for r in shared_pp.data or []}
+    own_ids = {r["id"] for r in own_rows}
+    shared_play_ids = candidate - own_ids
+    if shared_play_ids:
+        shared = (
+            sb.table("boardgamebuddy_plays")
+            .select("id, game_id, played_at")
+            .in_("id", list(shared_play_ids))
             .execute()
         )
-        shared_play_ids = {r["play_id"] for r in shared_pp.data or []} - own_ids
-        if shared_play_ids:
-            shared = (
-                sb.table("boardgamebuddy_plays")
-                .select("id, game_id, played_at")
-                .in_("id", list(shared_play_ids))
-                .execute()
-            )
-            shared_rows = shared.data or []
+        shared_rows = shared.data or []
 
     merged = own_rows + shared_rows
     merged.sort(key=lambda r: r.get("played_at") or "", reverse=True)
@@ -405,3 +400,167 @@ async def remove_from_collection(
     ).eq("game_id", game_id).execute()
 
     return MessageResponse(message="Game removed from collection")
+
+
+# ── Profile / Collection grid ─────────────────────────────────────────────────
+# Tailored read for the Profile view's collection plate. Two round-trips
+# (collection+game join, then plays for last_played_at) and sorts in Python
+# by (last_played DESC NULLS LAST, added_at DESC) so the user's most-
+# recently-played base games surface first, then the newest additions.
+#
+# Replaces the previous "/games?owned_only=true" call which ordered by
+# games.created_at (the catalog timestamp) and had nothing per-user to
+# anchor the sort on.
+
+_GRID_GAME_FIELDS = (
+    "id, bgg_id, name, year_published, min_players, max_players, "
+    "playing_time, thumbnail_url, image_url, theme_color, is_expansion, "
+    "base_game_bgg_id, expansion_color, rulebook_url, play_mode"
+)
+
+
+def _passes_grid_filters(
+    game: dict,
+    *,
+    search: Optional[str],
+    players: Optional[int],
+    playtime_min: Optional[int],
+    playtime_max: Optional[int],
+    play_mode: Optional[str],
+    exclude_expansions: bool,
+) -> bool:
+    if exclude_expansions and game.get("is_expansion"):
+        return False
+    name = (game.get("name") or "").lower()
+    if search and search.lower() not in name:
+        return False
+    if players is not None:
+        mn, mx = game.get("min_players"), game.get("max_players")
+        if mx is not None and mx < players:
+            return False
+        if players < 6 and mn is not None and mn > players:
+            return False
+    pt = game.get("playing_time") or 0
+    if playtime_min is not None and pt < playtime_min:
+        return False
+    if playtime_max is not None and pt > playtime_max:
+        return False
+    if play_mode is not None and game.get("play_mode") != play_mode:
+        return False
+    return True
+
+
+@router.get(
+    "/collection/grid",
+    response_model=CollectionPageResponse,
+    status_code=200,
+    summary="Paginated owned collection sorted by last-played then added-at",
+)
+async def collection_grid(
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(12, ge=1, le=100, description="Tiles per page"),
+    search: Optional[str] = Query(None, description="Case-insensitive game-name match"),
+    players: Optional[int] = Query(None, ge=1, le=20),
+    playtime_min: Optional[int] = Query(None, ge=1),
+    playtime_max: Optional[int] = Query(None, ge=1),
+    play_mode: Optional[PlayMode] = Query(None, description="competitive / coop / team"),
+    exclude_expansions: bool = Query(
+        True,
+        description="When true (default) expansions are hidden — surfaced separately on the Profile.",
+    ),
+    user_id: Optional[str] = Query(
+        None,
+        description="Target user (profiles are public); defaults to the viewer.",
+    ),
+    user: CurrentUser = Depends(get_current_user),
+) -> CollectionPageResponse:
+    """Owned collection sorted last_played DESC NULLS LAST, then added_at DESC."""
+    sb = get_supabase()
+    target_user_id = user_id or user.user_id
+
+    # Round-trip 1: every owned row, with the joined game payload embedded.
+    coll_rows = (
+        sb.table("boardgamebuddy_collections")
+        .select(
+            "id, added_at, game_id, "
+            f"boardgamebuddy_games({_GRID_GAME_FIELDS})"
+        )
+        .eq("user_id", target_user_id)
+        .eq("status", "owned")
+        .execute()
+        .data
+        or []
+    )
+
+    # In-Python filter (PostgREST can't filter on the embedded fields).
+    mode_value = play_mode.value if play_mode else None
+    filtered: list[dict] = []
+    for r in coll_rows:
+        g = r.get("boardgamebuddy_games") or {}
+        if not g:
+            continue
+        if not _passes_grid_filters(
+            g,
+            search=search,
+            players=players,
+            playtime_min=playtime_min,
+            playtime_max=playtime_max,
+            play_mode=mode_value,
+            exclude_expansions=exclude_expansions,
+        ):
+            continue
+        filtered.append(r)
+
+    total = len(filtered)
+    if total == 0:
+        return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
+
+    # Round-trip 2: last_played_at + play_count per game, scoped to the user's
+    # plays of the filtered game set. One query — keeps the endpoint at two
+    # round-trips total.
+    game_ids = [r["game_id"] for r in filtered]
+    last_played: dict[str, str] = {}
+    play_counts: dict[str, int] = {}
+    plays = (
+        sb.table("boardgamebuddy_plays")
+        .select("game_id, played_at")
+        .eq("user_id", target_user_id)
+        .in_("game_id", game_ids)
+        .execute()
+        .data
+        or []
+    )
+    for p in plays:
+        gid = p["game_id"]
+        played = p.get("played_at")
+        play_counts[gid] = play_counts.get(gid, 0) + 1
+        if played and (gid not in last_played or played > last_played[gid]):
+            last_played[gid] = played
+
+    # Sort: last_played DESC NULLS LAST, then added_at DESC. Split into
+    # has-play and never-played buckets so NULLS LAST is trivial; each
+    # bucket sorts by its own secondary key.
+    has_plays = [r for r in filtered if r["game_id"] in last_played]
+    no_plays = [r for r in filtered if r["game_id"] not in last_played]
+    has_plays.sort(
+        key=lambda r: (last_played[r["game_id"]], r.get("added_at") or ""),
+        reverse=True,
+    )
+    no_plays.sort(key=lambda r: r.get("added_at") or "", reverse=True)
+    ordered = has_plays + no_plays
+
+    offset = (page - 1) * per_page
+    page_rows = ordered[offset : offset + per_page]
+    items = [
+        CollectionItem(
+            id=r["id"],
+            game_id=r["game_id"],
+            status="owned",
+            added_at=r["added_at"],
+            last_played_at=last_played.get(r["game_id"]),
+            play_count=play_counts.get(r["game_id"], 0),
+            game=GameSummary(**r["boardgamebuddy_games"]),
+        )
+        for r in page_rows
+    ]
+    return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
