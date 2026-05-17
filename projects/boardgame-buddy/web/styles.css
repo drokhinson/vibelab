@@ -2037,6 +2037,27 @@ body {
 .profile-wishlist__count {
   font-size: 0.78rem; opacity: 0.6;
 }
+
+/* Played-not-owned shelf — same secondary-shelf treatment as wishlist but
+   with the muted body-foreground colour for the title so it reads as a
+   neutral history section rather than competing with the wishlist accent. */
+.profile-played {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid oklch(var(--b3));
+}
+.profile-played__head {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+.profile-played__title {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-weight: 600; font-size: 0.95rem;
+  opacity: 0.85;
+}
+.profile-played__count {
+  font-size: 0.78rem; opacity: 0.6;
+}
 .collection-tile {
   background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
   border-radius: 0.6rem; overflow: hidden; cursor: pointer; padding: 0;
@@ -2084,7 +2105,13 @@ body {
   z-index: 0;
 }
 .recent-plays__delete:hover { background: oklch(0.5 0.22 27); }
-.recent-plays__row img { width: 44px; height: 44px; object-fit: cover; border-radius: 0.4rem; flex-shrink: 0; }
+.recent-plays__row img {
+  width: 44px; height: 44px; object-fit: cover;
+  border-radius: 0.4rem; flex-shrink: 0;
+  /* Box art is its own click target — opens game-detail rather than the
+     play. The row-inner cursor would suggest "open play" instead. */
+  cursor: pointer;
+}
 .recent-plays__placeholder { width: 44px; height: 44px; border-radius: 0.4rem; display: grid; place-items: center; background: oklch(var(--b3)); flex-shrink: 0; }
 .recent-plays__body { flex: 1; min-width: 0; }
 .recent-plays__top {

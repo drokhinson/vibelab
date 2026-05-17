@@ -454,14 +454,17 @@ def _passes_grid_filters(
     "/collection/grid",
     response_model=CollectionPageResponse,
     status_code=200,
-    summary="Paginated collection grid (owned by default; pass status=wishlist for the wishlist)",
+    summary="Paginated collection grid (owned default; wishlist / played also supported)",
 )
 async def collection_grid(
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(12, ge=1, le=100, description="Tiles per page"),
     status: CollectionStatus = Query(
         CollectionStatus.OWNED,
-        description="Which shelf to return — owned (default) or wishlist.",
+        description=(
+            "Which shelf to return — owned (default), wishlist, or played "
+            "(games the user has plays for but does not currently own / wishlist)."
+        ),
     ),
     search: Optional[str] = Query(None, description="Case-insensitive game-name match"),
     players: Optional[int] = Query(None, ge=1, le=20),
@@ -482,6 +485,91 @@ async def collection_grid(
     sb = get_supabase()
     target_user_id = user_id or user.user_id
     status_value = status.value
+    mode_value = play_mode.value if play_mode else None
+
+    if status == CollectionStatus.PLAYED:
+        # Played-not-owned shelf: every game the user has logged a play for
+        # that doesn't currently sit on their owned OR wishlist shelf. Lets the
+        # Profile surface games-they-play-but-don't-have as a distinct row
+        # without duplicating anything from the other two shelves above it.
+        plays = (
+            sb.table("boardgamebuddy_plays")
+            .select("game_id, played_at")
+            .eq("user_id", target_user_id)
+            .execute()
+            .data
+            or []
+        )
+        last_played: dict[str, str] = {}
+        play_counts: dict[str, int] = {}
+        for p in plays:
+            gid = p["game_id"]
+            played = p.get("played_at")
+            play_counts[gid] = play_counts.get(gid, 0) + 1
+            if played and (gid not in last_played or played > last_played[gid]):
+                last_played[gid] = played
+        if not last_played:
+            return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
+
+        # Any collection row excludes the game from this shelf — both owned
+        # and wishlist live in the same table, so a single fetch covers both.
+        coll = (
+            sb.table("boardgamebuddy_collections")
+            .select("game_id")
+            .eq("user_id", target_user_id)
+            .execute()
+            .data
+            or []
+        )
+        collected_ids = {r["game_id"] for r in coll}
+        candidate_ids = [gid for gid in last_played if gid not in collected_ids]
+        if not candidate_ids:
+            return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
+
+        games = (
+            sb.table("boardgamebuddy_games")
+            .select(_GRID_GAME_FIELDS)
+            .in_("id", candidate_ids)
+            .execute()
+            .data
+            or []
+        )
+        filtered_games = [
+            g for g in games
+            if _passes_grid_filters(
+                g,
+                search=search,
+                players=players,
+                playtime_min=playtime_min,
+                playtime_max=playtime_max,
+                play_mode=mode_value,
+                exclude_expansions=exclude_expansions,
+            )
+        ]
+        total = len(filtered_games)
+        if total == 0:
+            return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
+
+        # Same sort axis as the owned grid below: most-recently-played first.
+        filtered_games.sort(
+            key=lambda g: last_played.get(g["id"], ""),
+            reverse=True,
+        )
+        offset = (page - 1) * per_page
+        page_games = filtered_games[offset : offset + per_page]
+        items = [
+            CollectionItem(
+                id=f"played-{g['id']}",
+                game_id=g["id"],
+                status=CollectionStatus.PLAYED.value,
+                added_at=f"{last_played[g['id']]}T00:00:00+00:00",
+                last_played_at=last_played.get(g["id"]),
+                play_count=play_counts.get(g["id"], 0),
+                game=GameSummary(**g),
+            )
+            for g in page_games
+        ]
+        return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
 
     # Round-trip 1: every shelf row, with the joined game payload embedded.
     coll_rows = (
@@ -498,7 +586,6 @@ async def collection_grid(
     )
 
     # In-Python filter (PostgREST can't filter on the embedded fields).
-    mode_value = play_mode.value if play_mode else None
     filtered: list[dict] = []
     for r in coll_rows:
         g = r.get("boardgamebuddy_games") or {}
