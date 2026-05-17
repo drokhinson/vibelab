@@ -121,11 +121,46 @@ async def list_games(
     play_mode: Optional[PlayMode] = Query(None, description="Filter by scoring style (competitive / coop / team)"),
     owned_only: bool = Query(False, description="Only games in the caller's owned collection (requires auth; ignored otherwise)"),
     exclude_expansions: bool = Query(False, description="Hide expansion rows; only base games appear in results"),
+    bgg_ids: Optional[str] = Query(
+        None,
+        description=(
+            "Comma-separated list of bgg_ids to include. Used by the search "
+            "UI to hydrate base games for orphan expansions on the current "
+            "page; bypasses other filters when set and ignores pagination."
+        ),
+    ),
     authorization: Optional[str] = Header(None),
 ) -> GameListResponse:
     """List games from the catalog, with optional search and filters."""
     sb = get_supabase()
     offset = (page - 1) * per_page
+
+    # bgg_ids is a direct lookup — pull every match in one shot, no pagination
+    # / per_page slicing applied. Other filters are ignored so the caller can
+    # reliably retrieve the games they listed.
+    if bgg_ids:
+        try:
+            ids = [int(p) for p in bgg_ids.split(",") if p.strip()]
+        except ValueError:
+            return GameListResponse(games=[], total=0, page=page, per_page=per_page)
+        if not ids:
+            return GameListResponse(games=[], total=0, page=page, per_page=per_page)
+        rows = (
+            sb.table("boardgamebuddy_games")
+            .select(
+                "id, bgg_id, name, year_published, min_players, max_players, "
+                "playing_time, thumbnail_url, image_url, theme_color, "
+                "is_expansion, base_game_bgg_id, expansion_color, rulebook_url, "
+                "play_mode"
+            )
+            .in_("bgg_id", ids)
+            .execute()
+            .data
+            or []
+        )
+        games = [GameSummary(**g) for g in rows]
+        _attach_expansion_counts(sb, games)
+        return GameListResponse(games=games, total=len(games), page=1, per_page=len(games) or 1)
 
     owned_ids: Optional[list[str]] = None
     if owned_only:

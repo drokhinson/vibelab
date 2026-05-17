@@ -137,6 +137,7 @@
         const data = await window.api.get("/games?" + qs.toString());
         this._games = (data && data.games) || [];
         this._total = (data && data.total) || 0;
+        await this._hydrateOrphanBases();
       } catch (e) {
         this._error = e.message || "Failed to load";
         this._games = [];
@@ -350,21 +351,28 @@
       const clickHandler = this._mode === "pick-for-play"
         ? `window.gameSearchView._pickForPlay('${g.id}')`
         : `window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || '')}'})`;
-      // Leading slot: chevron toggle on parents that have children in the
-      // current results, a spacer on child rows to keep their body text
-      // aligned with the parent's body column, nothing on plain rows.
+      // Leading slot:
+      //   - Parent w/ children: a small vertical stack — expansion count on
+      //     top, chevron toggle below. Tapping the whole thing flips the
+      //     collapse state, so the count doubles as a hit target.
+      //   - Child row: a coloured dot bullet (the expansion's own colour
+      //     when set, otherwise the accent) acts as the visual indent.
+      //   - Plain row: spacer so the body column stays aligned across rows.
       let leading = "";
       if (opts.childrenCount > 0) {
         const icon = opts.collapsed ? "chevron-right" : "chevron-down";
         leading = `
           <button class="search-hit__expand-toggle"
                   aria-label="${opts.collapsed ? "Show" : "Hide"} expansions"
-                  title="${opts.collapsed ? "Show" : "Hide"} expansions"
+                  title="${opts.collapsed ? "Show" : "Hide"} ${opts.childrenCount} expansion${opts.childrenCount === 1 ? "" : "s"}"
                   onclick="event.stopPropagation();window.gameSearchView._toggleExpansions('${g.id}')">
+            <span class="search-hit__expand-count">${opts.childrenCount}</span>
             <i data-lucide="${icon}" class="w-4 h-4"></i>
           </button>
         `;
-      } else if (!opts.isChild) {
+      } else if (opts.isChild) {
+        leading = `<span class="search-hit__exp-dot" aria-hidden="true"></span>`;
+      } else {
         leading = `<span class="search-hit__expand-toggle search-hit__expand-toggle--placeholder"></span>`;
       }
       const rowClass = `search-hit ${opts.isChild ? "search-hit--child" : ""}`;
@@ -378,7 +386,6 @@
             <div class="search-hit__meta">${escapeHtml(meta)}</div>
           </div>
           ${window.renderStatusTag(g.id, status, { size: "xs" })}
-          ${opts.isChild ? "" : window.renderExpansionBadge(g.expansion_count, { context: "total" })}
         </li>
       `;
     }
@@ -387,6 +394,42 @@
       if (this._collapsedBases.has(baseId)) this._collapsedBases.delete(baseId);
       else this._collapsedBases.add(baseId);
       this.render();
+    }
+
+    // After the main search returns, scan for expansions whose base game
+    // isn't in the result set. Fetch those bases by bgg_id and prepend them
+    // so every shown expansion has a visible parent — even if doing so pushes
+    // the visible list beyond the per-page slice. The pager's `total` stays
+    // anchored to the original search count.
+    async _hydrateOrphanBases() {
+      const games = this._games || [];
+      if (games.length === 0) return;
+      const presentBaseBggIds = new Set();
+      for (const g of games) {
+        if (!g.is_expansion && g.bgg_id != null) presentBaseBggIds.add(g.bgg_id);
+      }
+      const missing = [];
+      const seen = new Set();
+      for (const g of games) {
+        if (!g.is_expansion) continue;
+        const baseBgg = g.base_game_bgg_id;
+        if (baseBgg == null || presentBaseBggIds.has(baseBgg) || seen.has(baseBgg)) continue;
+        missing.push(baseBgg);
+        seen.add(baseBgg);
+      }
+      if (missing.length === 0) return;
+      try {
+        const data = await window.api.get(
+          "/games?bgg_ids=" + encodeURIComponent(missing.join(","))
+        );
+        const bases = (data && data.games) || [];
+        if (bases.length === 0) return;
+        // Prepend so the hydrated bases sit at the top — the grouping pass
+        // will thread each orphan expansion right under its base on render.
+        this._games = [...bases, ...games];
+      } catch (_) {
+        /* Hydration is best-effort; on failure leave expansions as orphans. */
+      }
     }
 
     _pickForPlay(gameId) {
