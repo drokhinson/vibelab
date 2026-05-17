@@ -7,10 +7,11 @@
 (function () {
   const PLAYS_PER_PAGE = 10;
   const COLLECTION_PER_PAGE = 12;
-  // Wishlist sits below the collection grid and is intentionally smaller —
-  // 2 rows × 3-column grid so it reads as a secondary shelf rather than a
-  // peer of the owned collection. Search + filter pills apply to both.
+  // Wishlist + played-not-owned shelves are intentionally smaller — 2 rows
+  // (3-column grid → 6 per page) so they read as secondary shelves below the
+  // main owned collection. Search + filter pills apply to all three shelves.
   const WISHLIST_PER_PAGE = 6;
+  const PLAYED_PER_PAGE = 6;
   const TAB_COLLECTION = "collection";
   const TAB_PLAYS = "plays";
   const TAB_BUDDIES = "buddies";
@@ -64,6 +65,14 @@
       this._wishlistPage = 1;
       this._wishlistLoading = false;
       this._wishlistError = null;
+
+      // Played-not-owned — games the user has logged plays for but doesn't
+      // currently own or wishlist. Shares the same shelf-query plumbing.
+      this._playedItems = [];
+      this._playedTotal = 0;
+      this._playedPage = 1;
+      this._playedLoading = false;
+      this._playedError = null;
 
       // Buddies tab is delegated to the shared BuddiesPanel — same render
       // logic the standalone /buddies route uses.
@@ -170,16 +179,18 @@
 
     async _loadCollection({ reset = false } = {}) {
       // Reset paging on filter/search changes so the user lands on page 1 of
-      // both shelves, then fetch owned + wishlist in parallel — they share
-      // the same backend filter inputs so doing it sequentially would just
-      // add latency.
+      // all three shelves, then fetch owned + wishlist + played in parallel
+      // — they share the same backend filter inputs so doing it sequentially
+      // would just add latency.
       if (reset) {
         this._collectionPage = 1;
         this._wishlistPage = 1;
+        this._playedPage = 1;
       }
       await Promise.all([
         this._loadOwned(),
         this._loadWishlist(),
+        this._loadPlayed(),
       ]);
     }
 
@@ -225,6 +236,29 @@
         this._wishlistTotal = 0;
       } finally {
         this._wishlistLoading = false;
+        this.render();
+      }
+    }
+
+    async _loadPlayed() {
+      this._playedLoading = true;
+      this._playedError = null;
+      this.render();
+      try {
+        const qs = this._buildShelfQuery({
+          status: "played",
+          page: this._playedPage,
+          perPage: PLAYED_PER_PAGE,
+        });
+        const data = await window.api.get("/collection/grid?" + qs);
+        this._playedItems = (data && data.items) || [];
+        this._playedTotal = (data && data.total) || 0;
+      } catch (e) {
+        this._playedError = e.message || "Failed to load";
+        this._playedItems = [];
+        this._playedTotal = 0;
+      } finally {
+        this._playedLoading = false;
         this.render();
       }
     }
@@ -345,6 +379,7 @@
     _renderCollectionPanel() {
       const totalPages = Math.max(1, Math.ceil(this._collectionTotal / COLLECTION_PER_PAGE));
       const wishlistTotalPages = Math.max(1, Math.ceil(this._wishlistTotal / WISHLIST_PER_PAGE));
+      const playedTotalPages = Math.max(1, Math.ceil(this._playedTotal / PLAYED_PER_PAGE));
       const activeFilterCount = this._collectionActiveFilterCount();
       const ownedExp = (this._stats && this._stats.owned_expansions) || 0;
       const subtitle = ownedExp > 0
@@ -374,6 +409,7 @@
           ${this._renderCollectionBody()}
           ${this._renderCollectionPager(totalPages)}
           ${this._renderWishlistSection(wishlistTotalPages)}
+          ${this._renderPlayedSection(playedTotalPages)}
         </div>
       `;
     }
@@ -442,6 +478,72 @@
     }
 
     _goWishlistPage(n) { this._wishlistPage = n; this._loadWishlist(); }
+
+    _renderPlayedSection(totalPages) {
+      // Played-not-owned shelf. Hidden in the resting state when empty —
+      // surfaces only if the user has played-but-uncollected games or is
+      // actively searching/filtering (so an empty section under a search
+      // still reads as "no matches" rather than disappearing entirely).
+      const isSearchingOrFiltering =
+        this._collectionQuery || this._collectionActiveFilterCount() > 0;
+      if (
+        !this._playedLoading &&
+        this._playedTotal === 0 &&
+        !isSearchingOrFiltering &&
+        !this._playedError
+      ) {
+        return "";
+      }
+      return `
+        <section class="profile-played">
+          <header class="profile-played__head">
+            <h3 class="profile-played__title">
+              <i data-lucide="history" class="w-4 h-4"></i>
+              Played, not owned
+            </h3>
+            <span class="profile-played__count">${this._playedTotal}</span>
+          </header>
+          ${this._renderPlayedBody(isSearchingOrFiltering)}
+          ${this._renderPlayedPager(totalPages)}
+        </section>
+      `;
+    }
+
+    _renderPlayedBody(isSearchingOrFiltering) {
+      if (this._playedError) {
+        return `<div class="alert alert-error text-sm">${escape(this._playedError)}</div>`;
+      }
+      if (this._playedLoading && this._playedItems.length === 0) {
+        return window.buddyLoader({ size: 72 });
+      }
+      if (this._playedItems.length === 0) {
+        return `<div class="profile-empty profile-empty--sm">${isSearchingOrFiltering ? "No played-not-owned matches." : "No played-but-uncollected games."}</div>`;
+      }
+      return `
+        <div class="profile-collection-grid">
+          ${this._playedItems.map((it) => this._renderCollectionTile(it)).join("")}
+        </div>
+      `;
+    }
+
+    _renderPlayedPager(totalPages) {
+      if (totalPages <= 1) return "";
+      return `
+        <nav class="search-pager">
+          <button class="btn btn-ghost btn-xs" ${this._playedPage <= 1 ? "disabled" : ""}
+                  onclick="window.profileSelfView._goPlayedPage(${this._playedPage - 1})">
+            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i> Prev
+          </button>
+          <span class="text-xs opacity-60">Page ${this._playedPage} of ${totalPages}</span>
+          <button class="btn btn-ghost btn-xs" ${this._playedPage >= totalPages ? "disabled" : ""}
+                  onclick="window.profileSelfView._goPlayedPage(${this._playedPage + 1})">
+            Next <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </nav>
+      `;
+    }
+
+    _goPlayedPage(n) { this._playedPage = n; this._loadPlayed(); }
 
     _collectionActiveFilterCount() {
       const f = this._collectionFilters;
@@ -633,6 +735,9 @@
       // reveal Delete; tap Delete to remove the play. Non-owners (rare in
       // self-view but possible) skip the action entirely.
       const canDelete = p.is_own !== false;
+      // Tapping the box art routes to game-detail; rest of the row opens the
+      // play. Consistent with every other place a boardgame image appears.
+      const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || '')}'})`;
       return `
         <li class="recent-plays__row ${canDelete ? "" : "is-no-swipe"}" data-play-id="${p.id}">
           ${canDelete ? `
@@ -643,7 +748,9 @@
             </button>` : ""}
           <div class="recent-plays__row-inner"
                onclick="window.profileSelfView._openRecentPlay(event,'${p.id}')">
-            ${p.game_thumbnail ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" />` : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
+            ${p.game_thumbnail
+              ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
+              : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
             <div class="recent-plays__body">
               <div class="recent-plays__top">
                 <div class="recent-plays__game">${escape(p.game_name)}</div>

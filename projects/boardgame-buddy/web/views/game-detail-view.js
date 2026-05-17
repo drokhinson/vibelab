@@ -150,14 +150,12 @@
     }
 
     _renderRecentPlays() {
-      // Match the profile-tab recent-plays card: thumbnail + top row
-      // (logger name + date right-aligned) + sub row (trophy winner +
-      // player count, dot-separated). The game is fixed on this page,
-      // so the primary line carries "who played" instead of the game
-      // name that the profile view shows.
+      // Same `.recent-plays__row` / `__row-inner` chrome the profile uses, so
+      // both lists read identical visually. Top line carries "Logger played"
+      // here because the game name is implicit on this page.
       return `
         <section class="game-detail__section">
-          <h3 class="game-detail__section-title">Recent plays</h3>
+          <h3 class="game-detail__section-title">Your plays</h3>
           ${this._plays.length === 0
             ? `<div class="text-sm opacity-60 p-3">No plays logged yet.</div>`
             : `<ul class="recent-plays">${this._plays.map((p) => this._renderRecentPlayRow(p)).join("")}</ul>`}
@@ -177,17 +175,24 @@
         subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
       }
       const thumb = p.game_thumbnail || this._game.thumbnail_url;
+      // Tapping the box art routes to game-detail (consistent with every
+      // other place a boardgame image appears). Tapping anywhere else on
+      // the row opens the play.
+      const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${this._game.id}',gameName:'${jsStr(this._game.name || '')}'})`;
       return `
-        <li onclick="window.router.go('play-detail',{playId:'${p.id}'})">
-          ${thumb
-            ? `<img src="${escapeAttr(thumb)}" alt="" />`
-            : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
-          <div class="recent-plays__body">
-            <div class="recent-plays__top">
-              <div class="recent-plays__game">${escape(p.logged_by_name)} played</div>
-              <div class="recent-plays__date">${formatDate(p.played_at)}</div>
+        <li class="recent-plays__row" data-play-id="${p.id}">
+          <div class="recent-plays__row-inner"
+               onclick="window.router.go('play-detail',{playId:'${p.id}'})">
+            ${thumb
+              ? `<img src="${escapeAttr(thumb)}" alt="" onclick="${gameNav}" />`
+              : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
+            <div class="recent-plays__body">
+              <div class="recent-plays__top">
+                <div class="recent-plays__game">${escape(p.logged_by_name)} played</div>
+                <div class="recent-plays__date">${formatDate(p.played_at)}</div>
+              </div>
+              ${subParts.length ? `<div class="recent-plays__sub">${subParts.join(" · ")}</div>` : ""}
             </div>
-            ${subParts.length ? `<div class="recent-plays__sub">${subParts.join(" · ")}</div>` : ""}
           </div>
         </li>
       `;
