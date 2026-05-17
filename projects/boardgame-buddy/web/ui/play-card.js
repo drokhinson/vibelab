@@ -2,11 +2,12 @@
 //
 // Two-faced card:
 //   Front  → "<Username> played <Game>" header (date right-aligned), optional
-//            user photo or capped box-art row, winner chip, notes, and a
-//            maximize button that opens the full play-detail page.
-//   Back   → read-only: header (game + date), winners line, players + scores.
-//            Notes and expansions live on the front and the play-detail page;
-//            all editing happens on the play-detail page.
+//            user photo or capped box-art row, winner chip, notes.
+//   Back   → read-only: game title, winners line, players + scores, plus a
+//            maximize button (top-right corner) that opens the full
+//            play-detail page. Notes and expansions live on the front and
+//            the play-detail page; all editing happens on the play-detail
+//            page.
 //
 // Clicking the game-name text, any box-art image, or the maximize button
 // navigates (data-no-flip). Clicking anywhere else on the card flips it.
@@ -70,7 +71,6 @@
     const hasUserPhoto = !!card.photo_url;
     const gameThumb = g.thumbnail_url || g.image_url || "";
     const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${jsStr(g.name || "")}'})`;
-    const detailNav = `event.stopPropagation(); window.router.go('play-detail',{playId:'${escapeAttr(card.play_id)}'})`;
 
     const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
     const winnerChip = card.winner_display_name
@@ -119,20 +119,7 @@
       `;
     }
 
-    // Maximize button: top-right corner, opens the full play-detail page
-    // where the user can view expansions, edit the play, etc. data-no-flip
-    // keeps the article-level click handler from flipping when tapped.
-    const maximize = `
-      <button class="play-card__maximize" data-no-flip
-              aria-label="Open play details"
-              title="Open play details"
-              onclick="${detailNav}">
-        <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
-      </button>
-    `;
-
     return `
-      ${maximize}
       <header class="play-card__header">
         <div class="play-card__title">
           <span class="play-card__user-name">${userName}</span>
@@ -165,10 +152,16 @@
     const winnerLabel = winners
       .map((w) => (myName && w.name === myName) ? "You" : escapeHtml(w.name))
       .join(", ");
+    const detailNav = `event.stopPropagation(); window.router.go('play-detail',{playId:'${escapeAttr(card.play_id)}'})`;
     return `
+      <button class="play-card__maximize" data-no-flip
+              aria-label="Open play details"
+              title="Open play details"
+              onclick="${detailNav}">
+        <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+      </button>
       <header class="play-card__back-head">
         <span class="play-card__back-title">${escapeHtml(p.game_name || (card.game && card.game.name) || "")}</span>
-        <span class="play-card__back-date">${formatPlayedAt(p.played_at)}</span>
       </header>
 
       ${winners.length > 0 ? `
@@ -263,7 +256,24 @@
 
   function formatPlayedAt(iso) {
     if (!iso) return "";
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    // played_at is a "YYYY-MM-DD" date — parse the parts in local time so the
+    // Today/Yesterday comparison doesn't drift across the UTC date line (a
+    // raw `new Date("2026-05-17")` parses as UTC midnight, which can read
+    // as the previous day in negative-offset timezones).
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const d = m
+      ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10))
+      : new Date(iso);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    const sameDay = (a, b) =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+    if (sameDay(d, today)) return "Today";
+    if (sameDay(d, yesterday)) return "Yesterday";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
   function escapeHtml(s) {
