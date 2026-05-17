@@ -60,7 +60,9 @@ function safeParse(s) {
 }
 
 // ── settings (device-global) ─────────────────────────────────────────────────
-const DEFAULT_SETTINGS = { enabled: false };
+// `onboardingSeen` tracks whether we've shown the first-time "save offline?"
+// prompt yet. Device-scoped so the same Alert doesn't pop on every sign-in.
+const DEFAULT_SETTINGS = { enabled: false, onboardingSeen: false };
 
 export async function loadSettings() {
   const raw = await AsyncStorage.getItem(SETTINGS_KEY);

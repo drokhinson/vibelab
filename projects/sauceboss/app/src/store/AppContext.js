@@ -3,6 +3,7 @@
 // re-render on read changes.
 
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { Alert } from 'react-native';
 import { api, setAuthTokenGetter } from '../api/client';
 import { supabase, isAuthConfigured } from '../auth/supabase';
 import { signInWithGoogleOAuth } from '../auth/oauth';
@@ -1229,6 +1230,49 @@ export function AppProvider({ children }) {
       const meta = uid ? await offlineCache.readMeta(uid) : {};
       if (cancelled) return;
       dispatch({ type: A.OFFLINE_META_LOADED, meta, enabled: !!settings.enabled });
+    })();
+    return () => { cancelled = true; };
+  }, [currentUserId]);
+
+  // First-sign-in prompt: ask once per device whether the user wants their
+  // saucebook cached offline by default. The "seen" flag is device-global
+  // (same key namespace as the enabled toggle), so the same Alert doesn't
+  // pop on every sign-in — and once the user has answered, the toggle in
+  // Settings is the single source of truth going forward. Skip if the
+  // toggle is already on (e.g. set in a prior session and persisted).
+  useEffect(() => {
+    if (!currentUserId) return;
+    let cancelled = false;
+    (async () => {
+      const settings = await offlineCache.loadSettings();
+      if (cancelled) return;
+      if (settings.onboardingSeen || settings.enabled) return;
+
+      // Defer a tick so the home screen mounts before the Alert pops.
+      const delay = setTimeout(() => {
+        if (cancelled) return;
+        const markSeen = () => offlineCache.saveSettings({ onboardingSeen: true });
+        Alert.alert(
+          'Save your saucebook offline?',
+          "We can cache your saved recipes on this device so they're available without a connection. You can change this anytime in Settings.",
+          [
+            {
+              text: 'Not now',
+              style: 'cancel',
+              onPress: () => { markSeen(); },
+            },
+            {
+              text: 'Save offline',
+              onPress: async () => {
+                await markSeen();
+                offlineSync.enable();
+              },
+            },
+          ],
+          { cancelable: true, onDismiss: () => { markSeen(); } },
+        );
+      }, 1200);
+      return () => clearTimeout(delay);
     })();
     return () => { cancelled = true; };
   }, [currentUserId]);
