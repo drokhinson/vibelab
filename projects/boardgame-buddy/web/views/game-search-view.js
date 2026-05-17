@@ -39,6 +39,10 @@
       this._mechanicsOptions = [];
 
       this._collectionMap = {};   // {gameId: 'owned' | 'wishlist'}
+      // Per-base collapse state for expansion sub-rows. Default: all expanded
+      // ("not in set" → expanded). A user tap on the chevron adds the base's
+      // game id, hiding its expansion block until tapped again.
+      this._collapsedBases = new Set();
 
       this._bggResults = null;    // null = not searched; [] = searched, no hits
       this._bggLoading = false;
@@ -299,14 +303,44 @@
           </div>
         `;
       }
-      return `
-        <ul class="search-list">
-          ${this._games.map((g) => this._renderHit(g)).join("")}
-        </ul>
-      `;
+      // Group expansions under their base game (when the base is also in
+      // the current result set). Expansions whose base isn't visible — e.g.
+      // pagination split — fall through as top-level orphan rows so the user
+      // doesn't lose them.
+      const baseByBgg = new Map();
+      for (const g of this._games) {
+        if (!g.is_expansion && g.bgg_id != null) baseByBgg.set(g.bgg_id, g);
+      }
+      const childrenByBaseId = new Map();
+      for (const g of this._games) {
+        if (!g.is_expansion) continue;
+        const parent = g.base_game_bgg_id != null ? baseByBgg.get(g.base_game_bgg_id) : null;
+        if (!parent) continue;
+        if (!childrenByBaseId.has(parent.id)) childrenByBaseId.set(parent.id, []);
+        childrenByBaseId.get(parent.id).push(g);
+      }
+
+      const lines = [];
+      for (const g of this._games) {
+        if (g.is_expansion) {
+          const parent = g.base_game_bgg_id != null ? baseByBgg.get(g.base_game_bgg_id) : null;
+          if (parent) continue; // already rendered (or about to be) under its parent
+          lines.push(this._renderHit(g));                       // orphan expansion
+          continue;
+        }
+        const children = childrenByBaseId.get(g.id) || [];
+        const collapsed = this._collapsedBases.has(g.id);
+        lines.push(this._renderHit(g, { childrenCount: children.length, collapsed }));
+        if (!collapsed && children.length > 0) {
+          for (const child of children) {
+            lines.push(this._renderHit(child, { isChild: true }));
+          }
+        }
+      }
+      return `<ul class="search-list">${lines.join("")}</ul>`;
     }
 
-    _renderHit(g) {
+    _renderHit(g, opts = {}) {
       const status = this._collectionMap[g.id] || null;
       const meta = [
         g.year_published,
@@ -316,17 +350,43 @@
       const clickHandler = this._mode === "pick-for-play"
         ? `window.gameSearchView._pickForPlay('${g.id}')`
         : `window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || '')}'})`;
+      // Leading slot: chevron toggle on parents that have children in the
+      // current results, a spacer on child rows to keep their body text
+      // aligned with the parent's body column, nothing on plain rows.
+      let leading = "";
+      if (opts.childrenCount > 0) {
+        const icon = opts.collapsed ? "chevron-right" : "chevron-down";
+        leading = `
+          <button class="search-hit__expand-toggle"
+                  aria-label="${opts.collapsed ? "Show" : "Hide"} expansions"
+                  title="${opts.collapsed ? "Show" : "Hide"} expansions"
+                  onclick="event.stopPropagation();window.gameSearchView._toggleExpansions('${g.id}')">
+            <i data-lucide="${icon}" class="w-4 h-4"></i>
+          </button>
+        `;
+      } else if (!opts.isChild) {
+        leading = `<span class="search-hit__expand-toggle search-hit__expand-toggle--placeholder"></span>`;
+      }
+      const rowClass = `search-hit ${opts.isChild ? "search-hit--child" : ""}`;
+      const expColor = opts.isChild && g.expansion_color ? ` style="--exp-color:${escapeAttr(g.expansion_color)}"` : "";
       return `
-        <li class="search-hit" onclick="${clickHandler}">
+        <li class="${rowClass}"${expColor} onclick="${clickHandler}">
+          ${leading}
           ${g.thumbnail_url ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="" loading="lazy" />` : `<div class="search-hit__placeholder"><i data-lucide="dice-6"></i></div>`}
           <div class="search-hit__body">
             <div class="search-hit__name">${escapeHtml(g.name)}</div>
             <div class="search-hit__meta">${escapeHtml(meta)}</div>
           </div>
           ${window.renderStatusTag(g.id, status, { size: "xs" })}
-          ${window.renderExpansionBadge(g.expansion_count, { context: "total" })}
+          ${opts.isChild ? "" : window.renderExpansionBadge(g.expansion_count, { context: "total" })}
         </li>
       `;
+    }
+
+    _toggleExpansions(baseId) {
+      if (this._collapsedBases.has(baseId)) this._collapsedBases.delete(baseId);
+      else this._collapsedBases.add(baseId);
+      this.render();
     }
 
     _pickForPlay(gameId) {
