@@ -2894,6 +2894,31 @@ body {
 .profile-collection-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
 }
+/* Reloading state — same pattern as .search-results.is-reloading on Game
+   Search. Dims existing tiles + overlays a spinner so the user sees that
+   their filter / search / page change registered. */
+.profile-collection-grid.is-reloading {
+  position: relative;
+}
+.profile-collection-grid.is-reloading > * {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.profile-collection-grid.is-reloading::after {
+  content: "";
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  border: 3px solid oklch(var(--bc) / 0.15);
+  border-top-color: oklch(var(--p));
+  border-radius: 50%;
+  animation: search-results-spin 720ms linear infinite;
+  z-index: 2;
+}
 
 /* Owned-collection header — matches the wishlist + played shelves below
    so the three sections read as a vertical stack with consistent chrome.

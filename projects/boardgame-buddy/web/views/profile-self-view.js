@@ -462,8 +462,9 @@
       if (this._wishlistItems.length === 0) {
         return `<div class="profile-empty profile-empty--sm">${isSearchingOrFiltering ? "No wishlist matches." : "Nothing on your wishlist yet."}</div>`;
       }
+      const reloading = this._wishlistLoading ? "is-reloading" : "";
       return `
-        <div class="profile-collection-grid">
+        <div class="profile-collection-grid ${reloading}">
           ${this._wishlistItems.map((it) => this._renderCollectionTile(it)).join("")}
         </div>
       `;
@@ -528,8 +529,9 @@
       if (this._playedItems.length === 0) {
         return `<div class="profile-empty profile-empty--sm">${isSearchingOrFiltering ? "No played-not-owned matches." : "No played-but-uncollected games."}</div>`;
       }
+      const reloading = this._playedLoading ? "is-reloading" : "";
       return `
-        <div class="profile-collection-grid">
+        <div class="profile-collection-grid ${reloading}">
           ${this._playedItems.map((it) => this._renderCollectionTile(it)).join("")}
         </div>
       `;
@@ -621,8 +623,12 @@
       if (this._collectionItems.length === 0) {
         return `<div class="profile-empty">${this._collectionQuery || this._collectionActiveFilterCount() > 0 ? "No matches in your collection." : "No owned games yet — tap the + to search."}</div>`;
       }
+      // Re-fetch in flight with results in hand → dim + overlay spinner so a
+      // filter/search/page change has visible feedback. Mirrors the Game
+      // Search reload pattern.
+      const reloading = this._collectionLoading ? "is-reloading" : "";
       return `
-        <div class="profile-collection-grid">
+        <div class="profile-collection-grid ${reloading}">
           ${this._collectionItems.map((it) => this._renderCollectionTile(it)).join("")}
         </div>
       `;
