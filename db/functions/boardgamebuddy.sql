@@ -62,3 +62,26 @@
 --   Purpose:    Sorted distinct mechanic strings across the games catalog.
 --               Backs the /games/mechanics endpoint without a full table
 --               scan + Python aggregation.
+
+-- bgb_game_detail_bundle(game_uuid UUID, viewer UUID, plays_limit INT DEFAULT 5)
+--   → JSONB
+--   Defined in: db/migrations/boardgamebuddy/021_profile_and_game_detail_bundles.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/game_routes.py
+--               (GET /games/{game_id}/bundle)
+--   Purpose:    Single round-trip Game Detail payload: game row + base game
+--               (when expansion) + viewer's collection status + last N
+--               plays visible to viewer + expansions list with viewer's
+--               toggle state. Reads denormalized plays.game_* fields (020)
+--               so most rows don't join boardgamebuddy_games.
+
+-- bgb_profile_bundle(viewer UUID, target UUID, col_per_page INT DEFAULT 12,
+--                    plays_per_page INT DEFAULT 10)
+--   → JSONB
+--   Defined in: db/migrations/boardgamebuddy/021_profile_and_game_detail_bundles.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
+--               (GET /profile/bundle)
+--   Purpose:    Single round-trip Profile Self / Profile Other payload.
+--               Stats + owned/wishlist/played first pages + recent plays +
+--               viewer's status_map + expansion_counts. Buddies + pending
+--               requests are included only when viewer = target. Reuses
+--               bgb_user_stats for the stats block.

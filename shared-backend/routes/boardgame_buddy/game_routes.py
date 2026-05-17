@@ -421,6 +421,37 @@ async def get_game(
     )
 
 
+@router.get(
+    "/games/{game_id}/bundle",
+    response_model=dict,
+    status_code=200,
+    summary="Single-call Game Detail bundle (game + base + status + plays + expansions)",
+)
+async def get_game_detail_bundle(
+    game_id: str = Path(..., description="Game UUID"),
+    plays_limit: int = Query(5, ge=1, le=50, description="Recent plays cap"),
+    viewer: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Return everything Game Detail needs on cold load in one round trip.
+
+    Backed by the `bgb_game_detail_bundle` RPC; mirrors what the FE used to
+    fetch via /games/{id}, /collection (for viewer status), /plays?game_id,
+    and /games/{id}/expansions.
+    """
+    sb = get_supabase()
+    result = sb.rpc(
+        "bgb_game_detail_bundle",
+        {
+            "game_uuid": game_id,
+            "viewer": viewer.user_id,
+            "plays_limit": plays_limit,
+        },
+    ).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return result.data
+
+
 async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
     """Fetch a single game from BGG and insert it into boardgamebuddy_games.
 

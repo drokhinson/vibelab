@@ -1,5 +1,7 @@
 """User profile endpoints."""
 
+from typing import Any
+
 from fastapi import Depends, HTTPException, Query
 
 from auth import ADMIN_API_KEY
@@ -139,6 +141,45 @@ async def get_public_profile(
 ) -> PublicProfileResponse:
     """Profiles are fully public — anyone signed in can see anyone else's profile."""
     return profile_service.fetch_public_profile(get_supabase(), viewer.user_id, user_id)
+
+
+@router.get(
+    "/profile/bundle",
+    response_model=dict,
+    status_code=200,
+    summary="Single-call Profile view bundle (stats + shelves + plays + caches)",
+)
+async def get_profile_bundle(
+    target_user_id: str | None = Query(
+        None,
+        description=(
+            "User whose profile to load. Defaults to the caller (Profile Self). "
+            "Pass another user's id for Profile Other — buddies / requests are "
+            "omitted from the response in that case."
+        ),
+    ),
+    col_per_page: int = Query(12, ge=1, le=100, description="Per-page size for each shelf's first page"),
+    plays_per_page: int = Query(10, ge=1, le=50, description="Per-page size for the recent-plays block"),
+    viewer: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return everything Profile Self / Profile Other need on cold load in one round trip.
+
+    Backed by the `bgb_profile_bundle` RPC; the shape mirrors what the FE
+    currently destructures from /users/{id}/stats + /collection/grid (×3) +
+    /plays + /collection + /buddies + /buddies/requests.
+    """
+    sb = get_supabase()
+    target = target_user_id or viewer.user_id
+    result = sb.rpc(
+        "bgb_profile_bundle",
+        {
+            "viewer": viewer.user_id,
+            "target": target,
+            "col_per_page": col_per_page,
+            "plays_per_page": plays_per_page,
+        },
+    ).execute()
+    return result.data or {}
 
 
 @router.delete(
