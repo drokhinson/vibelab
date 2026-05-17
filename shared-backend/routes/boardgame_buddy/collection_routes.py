@@ -454,11 +454,15 @@ def _passes_grid_filters(
     "/collection/grid",
     response_model=CollectionPageResponse,
     status_code=200,
-    summary="Paginated owned collection sorted by last-played then added-at",
+    summary="Paginated collection grid (owned by default; pass status=wishlist for the wishlist)",
 )
 async def collection_grid(
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(12, ge=1, le=100, description="Tiles per page"),
+    status: CollectionStatus = Query(
+        CollectionStatus.OWNED,
+        description="Which shelf to return — owned (default) or wishlist.",
+    ),
     search: Optional[str] = Query(None, description="Case-insensitive game-name match"),
     players: Optional[int] = Query(None, ge=1, le=20),
     playtime_min: Optional[int] = Query(None, ge=1),
@@ -474,11 +478,12 @@ async def collection_grid(
     ),
     user: CurrentUser = Depends(get_current_user),
 ) -> CollectionPageResponse:
-    """Owned collection sorted last_played DESC NULLS LAST, then added_at DESC."""
+    """Collection shelf sorted last_played DESC NULLS LAST, then added_at DESC."""
     sb = get_supabase()
     target_user_id = user_id or user.user_id
+    status_value = status.value
 
-    # Round-trip 1: every owned row, with the joined game payload embedded.
+    # Round-trip 1: every shelf row, with the joined game payload embedded.
     coll_rows = (
         sb.table("boardgamebuddy_collections")
         .select(
@@ -486,7 +491,7 @@ async def collection_grid(
             f"boardgamebuddy_games({_GRID_GAME_FIELDS})"
         )
         .eq("user_id", target_user_id)
-        .eq("status", "owned")
+        .eq("status", status_value)
         .execute()
         .data
         or []
@@ -555,7 +560,7 @@ async def collection_grid(
         CollectionItem(
             id=r["id"],
             game_id=r["game_id"],
-            status="owned",
+            status=status_value,
             added_at=r["added_at"],
             last_played_at=last_played.get(r["game_id"]),
             play_count=play_counts.get(r["game_id"], 0),
