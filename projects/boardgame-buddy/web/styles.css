@@ -1706,54 +1706,16 @@ body {
   font-size: 0.85rem;
 }
 .play-card__back-player.is-winner { border-color: var(--accent); }
-.play-card__back-player-info {
-  display: flex; flex-direction: column; gap: 0.05rem;
-  min-width: 0; flex: 1;
-}
 .play-card__back-player-name {
   display: inline-flex; align-items: center; gap: 0.3rem;
-  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; flex: 1;
+  overflow: hidden; text-overflow: ellipsis;
 }
 .play-card__back-player.is-winner .play-card__back-player-name { color: var(--accent); font-weight: 600; }
-/* Ghost (free-text) players carry the logger's handle so two different hosts'
-   "Sean D" stay readable as distinct identities. Real-account rows omit
-   this. */
-.play-card__back-player-handle {
-  font-size: 0.7rem;
-  opacity: 0.55;
-  letter-spacing: 0.01em;
-}
 .play-card__back-player-score {
   font-family: var(--font-display); font-weight: 700;
 }
 .play-card__back-empty { font-size: 0.85rem; opacity: 0.6; }
-
-.play-card__back-expansions {
-  display: flex; flex-wrap: wrap; gap: 0.35rem;
-  margin-top: 0.1rem;
-}
-.play-card__back-exp {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  padding: 0.2rem 0.55rem;
-  font-size: 0.78rem;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 999px;
-  cursor: pointer;
-}
-.play-card__back-exp-dot {
-  width: 0.5rem; height: 0.5rem; border-radius: 999px;
-  background: var(--exp-color, var(--accent));
-  display: inline-block;
-}
-.play-card__back-notes {
-  font-size: 0.85rem; opacity: 0.85;
-}
-.play-card__back-actions {
-  display: flex; justify-content: flex-end; gap: 0.4rem;
-  margin-top: auto;
-}
-.play-card__back-actions--edit { justify-content: space-between; }
 
 .play-card__back-loading,
 .play-card__back-error {
@@ -1765,90 +1727,30 @@ body {
 }
 .play-card__back-error { color: var(--error, #e54d4d); opacity: 1; }
 
-/* Edit form (owner only). The form lives on the back face when state.editing
-   is true; the read view's button list is replaced atomically. */
-.play-card__edit-photo {
-  position: relative;
-  border-radius: 0.6rem;
-  overflow: hidden;
+/* Maximize button — top-right of the front face, opens the full play-detail
+   page. data-no-flip in the markup keeps the article-level click handler
+   from flipping the card when tapped. */
+.play-card__maximize {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: oklch(var(--b1) / 0.7);
+  border: 1px solid oklch(var(--b3));
+  color: oklch(var(--bc));
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 120ms ease, background 120ms ease;
+  z-index: 2;
+}
+.play-card__maximize:hover {
+  opacity: 1;
   background: oklch(var(--b1));
 }
-.play-card__edit-photo img {
-  display: block; width: 100%; max-height: 120px; object-fit: cover;
-}
-.play-card__edit-photo-replace,
-.play-card__edit-photo-pick {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  cursor: pointer;
-  font-size: 0.78rem;
-  padding: 0.35rem 0.55rem;
-}
-.play-card__edit-photo-replace {
-  position: absolute; right: 0.4rem; bottom: 0.4rem;
-  background: oklch(var(--b1) / 0.9);
-  border: 1px solid oklch(var(--b3));
-  border-radius: 999px;
-  backdrop-filter: blur(4px);
-}
-.play-card__edit-photo-pick {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  width: 100%;
-  padding: 0.7rem 0.85rem;
-  border: 1.5px dashed oklch(var(--accent) / 0.5);
-  background: oklch(var(--accent) / 0.06);
-  border-radius: 0.7rem;
-  cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
-}
-.play-card__edit-photo-pick:hover {
-  background: oklch(var(--accent) / 0.12);
-  border-color: oklch(var(--accent) / 0.7);
-}
-.play-card__edit-photo-pick-icon {
-  display: inline-grid; place-items: center;
-  width: 2.25rem; height: 2.25rem;
-  border-radius: 999px;
-  background: oklch(var(--accent) / 0.18);
-  color: var(--accent);
-  flex-shrink: 0;
-}
-.play-card__edit-photo-pick-body {
-  display: flex; flex-direction: column; min-width: 0;
-}
-.play-card__edit-photo-pick-title {
-  font-size: 0.88rem; font-weight: 600;
-}
-.play-card__edit-photo-pick-hint {
-  font-size: 0.72rem; opacity: 0.6;
-}
-.play-card__edit-players {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 0.3rem;
-}
-.play-card__edit-player {
-  display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.3rem 0.55rem;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.55rem;
-}
-.play-card__edit-player-info {
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column; gap: 0.05rem;
-}
-.play-card__edit-player-name {
-  font-size: 0.85rem; font-weight: 500;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.play-card__edit-score { width: 4.5rem; flex-shrink: 0; }
-.play-card__edit-winner {
-  display: inline-flex; align-items: center; gap: 0.25rem;
-  font-size: 0.78rem;
-  flex-shrink: 0;
-}
-.play-card__edit-notes { font-size: 0.85rem; }
 
 /* ── Feed rails (hot games / suggested buddies / featured) ────────────────── */
 .feed-rail {
@@ -2284,6 +2186,63 @@ body {
 
 /* Edit mode */
 .play-detail--edit .play-detail__game-info { gap: 0.35rem; }
+
+/* Photo control on the play-detail edit form. Replaces the inline flip-side
+   photo upload that used to live on the feed card — all editing happens
+   here now. Two states: existing photo with a Replace overlay, or an
+   accent-tinted dashed Add Photo zone when no photo is set yet. */
+.play-detail__edit-photo {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: oklch(var(--b1));
+}
+.play-detail__edit-photo img {
+  display: block; width: 100%; max-height: 360px; object-fit: cover;
+}
+.play-detail__edit-photo-replace {
+  position: absolute; right: 0.5rem; bottom: 0.5rem;
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.8rem;
+  background: oklch(var(--b1) / 0.9);
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+.play-detail__edit-photo-pick {
+  display: flex; align-items: center; gap: 0.7rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1.5px dashed oklch(var(--accent) / 0.5);
+  background: oklch(var(--accent) / 0.06);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.play-detail__edit-photo-pick:hover {
+  background: oklch(var(--accent) / 0.12);
+  border-color: oklch(var(--accent) / 0.7);
+}
+.play-detail__edit-photo-pick-icon {
+  display: inline-grid; place-items: center;
+  width: 2.5rem; height: 2.5rem;
+  border-radius: 999px;
+  background: oklch(var(--accent) / 0.18);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.play-detail__edit-photo-pick-body {
+  display: flex; flex-direction: column; min-width: 0;
+}
+.play-detail__edit-photo-pick-title {
+  font-size: 0.95rem; font-weight: 600;
+}
+.play-detail__edit-photo-pick-hint {
+  font-size: 0.78rem; opacity: 0.6;
+}
+
 .play-detail__edit-players { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
 .play-detail__edit-player {
   display: flex; align-items: center; gap: 0.4rem;

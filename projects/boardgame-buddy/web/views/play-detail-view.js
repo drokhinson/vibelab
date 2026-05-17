@@ -195,6 +195,12 @@
         })),
         expansion_ids: (p.expansions || []).map((e) => e.expansion_game_id),
         play_mode: p.play_mode,
+        // Photo edit state lives on the draft so Cancel discards it cleanly.
+        // photoFile is the pending File object; photoPreviewUrl is the
+        // browser-side blob: URL we render while the upload hasn't happened
+        // yet — revoked in _clearPendingPhoto to avoid leaking.
+        photoFile: null,
+        photoPreviewUrl: null,
       };
       this._editing = true;
       this._editError = null;
@@ -202,17 +208,59 @@
     }
 
     _cancelEdit() {
+      if (this._draft) this._clearPendingPhoto(this._draft);
       this._editing = false;
       this._draft = null;
       this._editError = null;
       this.render();
     }
 
+    _onPhotoSelect(fileList) {
+      const file = fileList && fileList[0];
+      if (!file || !this._draft) return;
+      this._clearPendingPhoto(this._draft);
+      this._draft.photoFile = file;
+      this._draft.photoPreviewUrl = URL.createObjectURL(file);
+      this.render();
+    }
+
+    _clearPendingPhoto(draft) {
+      if (draft.photoPreviewUrl) {
+        try { URL.revokeObjectURL(draft.photoPreviewUrl); } catch (_) {}
+      }
+      draft.photoFile = null;
+      draft.photoPreviewUrl = null;
+    }
+
     _renderEdit(p) {
       const d = this._draft;
+      // Photo source resolution: pending new upload (preview blob) wins over
+      // the play's stored URL so the user sees their selection immediately.
+      const photoUrl = d.photoPreviewUrl || p.photo_url || "";
       return `
         <article class="play-detail play-detail--edit">
-          ${p.photo_url ? `<img class="play-detail__photo" src="${escapeAttr(p.photo_url)}" alt="" />` : ""}
+          <section class="play-detail__edit-photo">
+            ${photoUrl ? `
+              <img src="${escapeAttr(photoUrl)}" alt="" />
+              <label class="play-detail__edit-photo-replace">
+                <input type="file" accept="image/*" class="hidden"
+                       onchange="window.playDetailView._onPhotoSelect(this.files)" />
+                <i data-lucide="camera" class="w-4 h-4"></i> Replace photo
+              </label>
+            ` : `
+              <label class="play-detail__edit-photo-pick">
+                <input type="file" accept="image/*" class="hidden"
+                       onchange="window.playDetailView._onPhotoSelect(this.files)" />
+                <span class="play-detail__edit-photo-pick-icon">
+                  <i data-lucide="image-plus" class="w-5 h-5"></i>
+                </span>
+                <span class="play-detail__edit-photo-pick-body">
+                  <span class="play-detail__edit-photo-pick-title">Add a photo</span>
+                  <span class="play-detail__edit-photo-pick-hint">Tap to choose an image</span>
+                </span>
+              </label>
+            `}
+          </section>
 
           <div class="play-detail__meta">
             <div class="play-detail__game-row">
@@ -321,10 +369,31 @@
       this._saving = true;
       this._editError = null;
       this.render();
+
+      // Photo upload first so the PUT carries the new URL atomically. The
+      // /plays/photo endpoint returns { photo_url } pointing at the uploaded
+      // blob in storage; we then attach that URL to the play via the regular
+      // PlayUpdate payload. Failures bail before the PUT so the play's
+      // existing photo isn't accidentally nulled out.
+      let photoUrl = this._play.photo_url || null;
+      if (this._draft.photoFile) {
+        try {
+          const fd = new FormData();
+          fd.append("file", this._draft.photoFile);
+          const resp = await window.api.upload("/plays/photo", fd);
+          if (resp && resp.photo_url) photoUrl = resp.photo_url;
+        } catch (e) {
+          this._editError = (e && e.message) || "Photo upload failed";
+          this._saving = false;
+          this.render();
+          return;
+        }
+      }
+
       const payload = {
         played_at: this._draft.played_at,
         notes: this._draft.notes || null,
-        photo_url: this._play.photo_url || null,
+        photo_url: photoUrl,
         expansion_ids: this._draft.expansion_ids,
         play_mode: this._draft.play_mode || null,
         players: this._draft.players.map((p) => ({
@@ -336,6 +405,7 @@
       };
       try {
         this._play = await window.Play.update(this._play.id, payload);
+        if (this._draft) this._clearPendingPhoto(this._draft);
         this._editing = false;
         this._draft = null;
         // Bust the feed cache so the updated play shows new data on next view.
