@@ -7,6 +7,8 @@ import { api, setAuthTokenGetter } from '../api/client';
 import { supabase, isAuthConfigured } from '../auth/supabase';
 import { signInWithGoogleOAuth } from '../auth/oauth';
 import { withIngredientNames } from '#shared/filter';
+import * as offlineCache from '../offline/cache';
+import { createOfflineSync } from '../offline/sync';
 
 // ── Initial state ───────────────────────────────────────────────────────────
 export const initialState = {
@@ -153,6 +155,22 @@ export const initialState = {
     error: null,
     openSections: new Set(),
   },
+
+  // Offline saucebook — opt-in cache of the user's saucebook recipes so they
+  // can be browsed without a connection. Toggle lives in Settings, cache
+  // lives in AsyncStorage (see ../offline/cache.js). `bytes` and `count` are
+  // running totals maintained at write time so the settings card can render
+  // usage without scanning storage.
+  offline: {
+    enabled: false,
+    pendingDownload: false, // toggle on but last sync failed (typically offline)
+    bytes: 0,
+    count: 0,
+    lastSyncedAt: null,
+    syncing: false,
+    progress: null, // { done, total } while syncing
+    error: null,
+  },
 };
 
 // ── Action types ────────────────────────────────────────────────────────────
@@ -266,6 +284,15 @@ const A = {
   PANTRY_TOGGLE_SECTION: 'PANTRY_TOGGLE_SECTION',
   PANTRY_RESTOCK_ALL: 'PANTRY_RESTOCK_ALL',
   PANTRY_SET_ALL_SECTIONS: 'PANTRY_SET_ALL_SECTIONS',
+
+  // ── Offline saucebook ────────────────────────────────────────────────────
+  OFFLINE_META_LOADED: 'OFFLINE_META_LOADED', // { meta }
+  OFFLINE_SET_ENABLED: 'OFFLINE_SET_ENABLED', // { value }
+  OFFLINE_SET_PENDING: 'OFFLINE_SET_PENDING', // { value }
+  OFFLINE_SYNC_START: 'OFFLINE_SYNC_START',
+  OFFLINE_SYNC_PROGRESS: 'OFFLINE_SYNC_PROGRESS', // { done, total }
+  OFFLINE_SYNC_DONE: 'OFFLINE_SYNC_DONE', // { meta }
+  OFFLINE_SYNC_ERROR: 'OFFLINE_SYNC_ERROR', // { error }
 };
 
 // ── Reducer ─────────────────────────────────────────────────────────────────
@@ -600,6 +627,19 @@ function reducer(state, action) {
         // Drop any per-user data so the next sign-in starts clean.
         saucebook: { ...state.saucebook, items: [], loaded: false },
         pantry: { ...state.pantry, ingredients: [], saucebookSauceIds: [], loaded: false },
+        // Offline cache is per-user; clear in-memory stats. The on-disk wipe
+        // happens in the signOut action (reducers stay pure). The user-level
+        // "enabled" preference survives — same device, same toggle.
+        offline: {
+          ...state.offline,
+          bytes: 0,
+          count: 0,
+          lastSyncedAt: null,
+          pendingDownload: false,
+          syncing: false,
+          progress: null,
+          error: null,
+        },
       };
 
     // ── Browse ────────────────────────────────────────────────────────────
@@ -876,6 +916,74 @@ function reducer(state, action) {
       return { ...state, pantry: { ...state.pantry, openSections: next } };
     }
 
+    // ── Offline ────────────────────────────────────────────────────────────
+    case A.OFFLINE_META_LOADED: {
+      const m = action.meta || {};
+      return {
+        ...state,
+        offline: {
+          ...state.offline,
+          bytes: m.bytes ?? state.offline.bytes,
+          count: m.count ?? state.offline.count,
+          lastSyncedAt: m.lastSyncedAt ?? state.offline.lastSyncedAt,
+          pendingDownload: m.pendingDownload ?? state.offline.pendingDownload,
+          enabled: action.enabled ?? state.offline.enabled,
+        },
+      };
+    }
+
+    case A.OFFLINE_SET_ENABLED:
+      return {
+        ...state,
+        offline: {
+          ...state.offline,
+          enabled: !!action.value,
+          // Clear stats when disabling so the UI snaps back; sync will repopulate.
+          ...(action.value ? null : { bytes: 0, count: 0, lastSyncedAt: null, pendingDownload: false, error: null }),
+        },
+      };
+
+    case A.OFFLINE_SET_PENDING:
+      return { ...state, offline: { ...state.offline, pendingDownload: !!action.value } };
+
+    case A.OFFLINE_SYNC_START:
+      return { ...state, offline: { ...state.offline, syncing: true, error: null, progress: null } };
+
+    case A.OFFLINE_SYNC_PROGRESS:
+      return {
+        ...state,
+        offline: { ...state.offline, progress: { done: action.done, total: action.total } },
+      };
+
+    case A.OFFLINE_SYNC_DONE: {
+      const m = action.meta || {};
+      return {
+        ...state,
+        offline: {
+          ...state.offline,
+          syncing: false,
+          progress: null,
+          error: null,
+          bytes: m.bytes ?? state.offline.bytes,
+          count: m.count ?? state.offline.count,
+          lastSyncedAt: m.lastSyncedAt ?? state.offline.lastSyncedAt,
+          pendingDownload: false,
+        },
+      };
+    }
+
+    case A.OFFLINE_SYNC_ERROR:
+      return {
+        ...state,
+        offline: {
+          ...state.offline,
+          syncing: false,
+          progress: null,
+          error: action.error || 'Sync failed',
+          pendingDownload: true,
+        },
+      };
+
     default:
       return state;
   }
@@ -901,6 +1009,19 @@ export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Offline sync orchestration — single instance per provider, reads live
+  // state via stateRef so it sees the current user/toggle without re-creation.
+  const offlineSyncRef = useRef(null);
+  if (!offlineSyncRef.current) {
+    offlineSyncRef.current = createOfflineSync({
+      api,
+      dispatch,
+      getState: () => stateRef.current,
+      actions: A,
+    });
+  }
+  const offlineSync = offlineSyncRef.current;
 
   // Wire the API client to read the auth token directly from the Supabase
   // client (not from React state). Going through stateRef.current.session
@@ -1050,7 +1171,23 @@ export function AppProvider({ children }) {
     if (!currentUserId) return;
     api.listSaucebook().then(
       (items) => dispatch({ type: A.SAUCEBOOK_LOADED, items }),
-      (e) => dispatch({ type: A.SAUCEBOOK_LOAD_ERROR, error: e.message || String(e) }),
+      async (e) => {
+        // Offline-mode fallback — when the network call fails, hydrate
+        // from the on-disk cache so the saucebook tab still works in
+        // airplane mode. Cached ingredientNames is a string array; rehydrate
+        // back into a Set via withIngredientNames so SaucebookRow's
+        // missingSauceIngredients() doesn't blow up.
+        if (stateRef.current.offline?.enabled) {
+          try {
+            const cached = await offlineCache.readList(currentUserId);
+            if (cached && cached.length) {
+              dispatch({ type: A.SAUCEBOOK_LOADED, items: cached.map(withIngredientNames) });
+              return;
+            }
+          } catch {}
+        }
+        dispatch({ type: A.SAUCEBOOK_LOAD_ERROR, error: e.message || String(e) });
+      },
     );
     api.getPantry().then(
       (data) =>
@@ -1078,6 +1215,50 @@ export function AppProvider({ children }) {
       () => {}, // best-effort; the screen will refetch on next filter change
     );
   }, [currentUserId]);
+
+  // ── Offline saucebook hydration ────────────────────────────────────────────
+  // Load the device-global enabled flag once at boot, then re-read per-user
+  // meta (bytes / count / lastSyncedAt) whenever the signed-in user changes.
+  // This keeps the Settings card showing correct usage info immediately.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const settings = await offlineCache.loadSettings();
+      if (cancelled) return;
+      const uid = stateRef.current.currentUser?.user_id;
+      const meta = uid ? await offlineCache.readMeta(uid) : {};
+      if (cancelled) return;
+      dispatch({ type: A.OFFLINE_META_LOADED, meta, enabled: !!settings.enabled });
+    })();
+    return () => { cancelled = true; };
+  }, [currentUserId]);
+
+  // Auto-sync when toggle is on and the saucebook list lands. The dependency
+  // on the sorted-id signature intentionally re-fires after any membership
+  // change (add, remove, or swap) — keeping the cache in step with the live
+  // list without an explicit listener wired into every mutating action. A
+  // token ref absorbs rapid re-renders.
+  const syncTokenRef = useRef(0);
+  const saucebookIdSig = state.saucebook.items.map((s) => s.id).sort().join(',');
+  useEffect(() => {
+    if (!currentUserId) return;
+    if (!state.offline.enabled) return;
+    if (!state.saucebook.loaded) return;
+    const token = ++syncTokenRef.current;
+    // Debounce a tick so back-to-back dispatches collapse into one sync.
+    const id = setTimeout(() => {
+      if (token !== syncTokenRef.current) return;
+      offlineSync.syncAll(currentUserId);
+    }, 250);
+    return () => clearTimeout(id);
+  }, [currentUserId, state.offline.enabled, state.saucebook.loaded, saucebookIdSig]);
+
+  // Foreground retry — if the user toggled offline on while offline (or a
+  // sync failed mid-flight), retry whenever the app comes back to the
+  // foreground. The listener self-checks enabled/pending state.
+  useEffect(() => {
+    return offlineSync.attachAppStateListener();
+  }, []);
 
   // Stable action creators that wrap async API calls and dispatch reducer events.
   const actions = useMemo(
@@ -1128,6 +1309,32 @@ export function AppProvider({ children }) {
       // web's browseOpenRecipe (web/browse.js:308).
       openSauceById: async (sauceId) => {
         if (!sauceId) return { ok: false, error: 'no id' };
+        const offlineEnabled = stateRef.current.offline?.enabled;
+        const uid = stateRef.current.currentUser?.user_id;
+
+        // Cache-first: when offline mode is on, try the local copy before
+        // hitting the network. Avoids a spinner and works in airplane mode.
+        if (offlineEnabled && uid) {
+          try {
+            const cached = await offlineCache.readSauce(uid, sauceId);
+            if (cached) {
+              const target = withIngredientNames(cached);
+              const rootId = target.parentSauceId || target.id;
+              // Pull the full variant family from disk — syncAll writes
+              // sibling variants even when only one is in the saucebook so
+              // the variant picker stays useful offline.
+              const familyRaw = await offlineCache.readFamily(uid, rootId);
+              const family = familyRaw.length
+                ? familyRaw.map(withIngredientNames)
+                : [target];
+              dispatch({ type: A.SELECT_SAUCE, sauce: target, family });
+              return { ok: true };
+            }
+          } catch {
+            // fall through to network
+          }
+        }
+
         try {
           const all = await api.allSauces();
           const target = all.find((s) => s.id === sauceId);
@@ -1135,6 +1342,11 @@ export function AppProvider({ children }) {
           const rootId = target.parentSauceId || target.id;
           const family = all.filter((s) => s.id === rootId || s.parentSauceId === rootId);
           dispatch({ type: A.SELECT_SAUCE, sauce: target, family });
+          // Opportunistic write-through: keep the offline cache fresh on
+          // every tap when the toggle is on.
+          if (offlineEnabled && uid) {
+            offlineCache.writeSauces(uid, family).catch(() => {});
+          }
           return { ok: true };
         } catch (e) {
           return { ok: false, error: e.message || String(e) };
@@ -1401,6 +1613,12 @@ export function AppProvider({ children }) {
       },
 
       signOut: async () => {
+        // Wipe per-user offline cache from disk before clearing auth state.
+        // The toggle (device-global) is left intact — same device, same pref.
+        const prevUid = stateRef.current.currentUser?.user_id;
+        if (prevUid) {
+          try { await offlineCache.clearAll(prevUid); } catch {}
+        }
         if (!supabase) {
           dispatch({ type: A.CLEAR_AUTH });
           return;
@@ -1447,10 +1665,14 @@ export function AppProvider({ children }) {
       },
 
       deleteAccount: async () => {
+        const prevUid = stateRef.current.currentUser?.user_id;
         try {
           await api.deleteProfile();
         } catch {
           // even if the server delete fails, signing out locally is still useful
+        }
+        if (prevUid) {
+          try { await offlineCache.clearAll(prevUid); } catch {}
         }
         if (supabase) {
           try { await supabase.auth.signOut(); } catch {}
@@ -1606,6 +1828,15 @@ export function AppProvider({ children }) {
       restockPantry: () => dispatch({ type: A.PANTRY_RESTOCK_ALL }),
       setAllPantrySections: (categories, value) =>
         dispatch({ type: A.PANTRY_SET_ALL_SECTIONS, categories, value }),
+
+      // Offline saucebook — toggle + manual retry. Settings card calls these.
+      enableOffline: () => offlineSync.enable(),
+      disableOffline: () => offlineSync.disable(),
+      retryOfflineSync: () => {
+        const uid = stateRef.current.currentUser?.user_id;
+        if (uid) return offlineSync.syncAll(uid);
+        return Promise.resolve({ ok: false });
+      },
 
     }),
     [],

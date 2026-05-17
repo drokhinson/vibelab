@@ -21,6 +21,8 @@ import { Star, LogOut, Trash2, Save, Shield } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import AppHeader from '../components/AppHeader';
 import EmptyState from '../components/EmptyState';
+import OfflineSaucebookCard from '../components/OfflineSaucebookCard';
+import { formatBytes } from '../offline/cache';
 import { COLORS, SHADOWS } from '../theme';
 
 function computeInitials(name) {
@@ -94,6 +96,22 @@ export default function SettingsScreen({ navigation }) {
         },
       },
     ]);
+  }
+
+  function onToggleOffline(value) {
+    if (value) {
+      actions.enableOffline();
+      return;
+    }
+    const bytes = state.offline?.bytes || 0;
+    Alert.alert(
+      'Clear offline recipes?',
+      `This deletes ${formatBytes(bytes)} of cached recipes from this device. You can re-enable anytime to download again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear', style: 'destructive', onPress: () => actions.disableOffline() },
+      ],
+    );
   }
 
   function confirmDelete() {
@@ -211,6 +229,13 @@ export default function SettingsScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       ) : null}
+
+      {/* Offline saucebook */}
+      <OfflineSaucebookCard
+        offline={state.offline}
+        onToggle={onToggleOffline}
+        onRetry={() => actions.retryOfflineSync()}
+      />
 
       {/* Account actions */}
       <View style={styles.card}>
