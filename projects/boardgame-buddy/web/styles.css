@@ -130,20 +130,28 @@ body {
     inset 0 0 28px rgba(139, 111, 60, 0.28),
     0 4px 12px rgba(0, 0, 0, 0.35);
 }
-/* Rolled edges — top and bottom "curl" */
+/* Rolled edges — top and bottom "curl". Thicker + rounder than v1 so
+   the closed scroll reads as a tied-up cylinder rather than a thin seam. */
 .scroll-panel::before,
 .scroll-panel::after {
   content: "";
   position: absolute;
   left: -4px;
   right: -4px;
-  height: 14px;
-  background: linear-gradient(180deg, #B89556 0%, #8B6F3C 60%, #6B532A 100%);
-  border-radius: 4px;
-  box-shadow: 0 3px 6px rgba(0,0,0,0.45);
+  height: 22px;
+  background:
+    linear-gradient(180deg,
+      #C9A468 0%,
+      #A07A3C 40%,
+      #6B532A 80%,
+      #4A3818 100%);
+  border-radius: 6px;
+  box-shadow:
+    0 4px 8px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255, 232, 184, 0.45);
 }
-.scroll-panel::before { top: -6px; }
-.scroll-panel::after  { bottom: -6px; }
+.scroll-panel::before { top: -10px; }
+.scroll-panel::after  { bottom: -10px; }
 
 /* Readable dark-on-tan overrides inside the scroll */
 .scroll-panel .guide-text,
@@ -170,25 +178,76 @@ body {
 /* ── Reference guide scroll: roll-up animation + open/closed states ────── */
 .scroll-panel {
   overflow: hidden;
-  transition: padding 360ms cubic-bezier(.4, 0, .2, 1);
+  transition: padding 480ms cubic-bezier(.22, .61, .36, 1);
 }
 .scroll-panel__body {
   max-height: 4000px;
   overflow: hidden;
-  transition: max-height 360ms cubic-bezier(.4, 0, .2, 1),
-              opacity 240ms ease 80ms;
   opacity: 1;
+  transform-origin: top center;
+  transform: scaleY(1);
+  transition:
+    max-height 480ms cubic-bezier(.22, .61, .36, 1),
+    transform  480ms cubic-bezier(.22, .61, .36, 1),
+    opacity    280ms ease 80ms;
 }
 .scroll-panel--rolled {
-  padding-top: 0.1rem;
-  padding-bottom: 0.1rem;
+  /* Keep some height so the rolled scroll looks like a thick cylinder
+     around the search peek, not a thin seam. */
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
 }
 .scroll-panel--rolled .scroll-panel__body {
   max-height: 0;
   opacity: 0;
-  transition: max-height 360ms cubic-bezier(.4, 0, .2, 1),
-              opacity 180ms ease;
+  transform: scaleY(0.85);
 }
+
+/* Always-visible peek between the rolls. Holds the search row plus,
+   when rolled, the "Tap to expand" hint. */
+.scroll-panel__peek {
+  position: relative;
+  z-index: 1;
+}
+.scroll-panel__hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 100%;
+  margin-top: 0.45rem;
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  color: #6B4A1A;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.scroll-panel__hint:hover { color: #2B1D0A; }
+
+/* Per-type section inside the guide. Header above its chapter list. */
+.scroll-section {
+  margin-top: 0.6rem;
+}
+.scroll-section:first-child {
+  margin-top: 0.25rem;
+}
+.scroll-section__header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.3rem;
+  padding: 0 4px;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #6B4A1A;
+}
+.scroll-section__header [data-lucide] { color: #6B4A1A; }
 /* Make the rolled edges tappable. They visually overlap the existing
    ::before/::after rolls and give a 32px tap target. */
 .scroll-panel__roll {
@@ -262,18 +321,6 @@ body {
 .scroll-chapter__summary::marker { content: ""; }
 .scroll-chapter__icon { flex-shrink: 0; }
 .scroll-chapter__title { flex: 1; min-width: 0; }
-.scroll-chapter__type {
-  font-family: var(--font-sans);
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  background: rgba(139, 111, 60, 0.2);
-  color: #2B1D0A;
-  border: 1px solid rgba(139, 111, 60, 0.35);
-  border-radius: 999px;
-  padding: 2px 8px;
-}
 .scroll-chapter__content {
   padding: 4px 14px 12px;
   font-size: 0.88rem;
@@ -461,6 +508,97 @@ body {
 }
 .chapter-add__pool-report { padding: 4px 8px; }
 
+/* Per-row add/remove toggle. The "added" variant flips to a muted
+   confirmation pill so the user can tell at a glance which rows are
+   already in their guide, and tap again to remove. */
+.chapter-add__pool-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 5px 10px;
+  background: var(--accent);
+  color: #1a0e02;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.chapter-add__pool-toggle:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.chapter-add__pool-toggle--in {
+  background: transparent;
+  color: oklch(var(--bc) / 0.75);
+  border-color: oklch(var(--b3));
+}
+.chapter-add__pool-toggle--in:hover {
+  background: rgba(166, 93, 44, 0.12);
+  color: var(--rust);
+  border-color: var(--rust);
+}
+
+/* Per-type section inside the Browse pool. Mirrors the user's-guide
+   `.scroll-section` rhythm so both screens read the same way. */
+.chapter-add__pool-section {
+  margin-bottom: 0.8rem;
+}
+.chapter-add__pool-section:last-child { margin-bottom: 0; }
+.chapter-add__pool-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.4rem;
+  padding: 0 4px;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: oklch(var(--bc) / 0.65);
+}
+.chapter-add__pool-section-header [data-lucide] { color: var(--accent); }
+
+/* Horizontally-scrollable chip filter. Fits any phone screen without
+   overflowing into other UI. Native scroll, snap-x, hidden scrollbar. */
+.chapter-add__filter-chips {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 -0.5rem 0.7rem;
+  padding: 4px 0.5rem 6px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.chapter-add__filter-chips::-webkit-scrollbar { display: none; }
+.chapter-add__filter-chips { scrollbar-width: none; }
+.chapter-add__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+  padding: 6px 12px;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  color: oklch(var(--bc) / 0.75);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.chapter-add__chip:hover { border-color: var(--accent); color: oklch(var(--bc)); }
+.chapter-add__chip--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a0e02;
+}
+.chapter-add__chip--active [data-lucide] { color: #1a0e02; }
+
 .chapter-add__form {
   display: flex;
   flex-direction: column;
@@ -505,6 +643,87 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
   line-height: 1.45;
+}
+
+/* Write / Preview sub-tabs in the Create form. Compact pill tabs that
+   sit on the same row as the "Content (Markdown)" label. */
+.chapter-add__editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.chapter-add__editor-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  padding: 2px;
+}
+.chapter-add__editor-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 4px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: oklch(var(--bc) / 0.65);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.chapter-add__editor-tab:hover { color: oklch(var(--bc)); }
+.chapter-add__editor-tab.is-active {
+  background: var(--accent);
+  color: #1a0e02;
+}
+
+/* Preview pane: rendered markdown in the same family as the open scroll
+   so creators see what the chapter will look like in their guide. */
+.chapter-add__preview {
+  min-height: 18rem;
+  padding: 12px 14px;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.55rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: oklch(var(--bc));
+}
+.chapter-add__preview h2,
+.chapter-add__preview h3,
+.chapter-add__preview h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 0.6rem 0 0.3rem;
+}
+.chapter-add__preview h2 { font-size: 1.05rem; }
+.chapter-add__preview h3 { font-size: 0.95rem; }
+.chapter-add__preview p { margin: 0.4rem 0; }
+.chapter-add__preview ul {
+  margin: 0.3rem 0 0.4rem;
+  padding-left: 1.1rem;
+}
+.chapter-add__preview code {
+  background: oklch(var(--b3));
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+.chapter-add__preview .guide-table {
+  margin: 0.4rem 0;
+  width: 100%;
+  font-size: 0.82rem;
+  border-collapse: collapse;
+}
+.chapter-add__preview .guide-table th,
+.chapter-add__preview .guide-table td {
+  border: 1px solid oklch(var(--b3));
+  padding: 4px 8px;
+  text-align: left;
 }
 .chapter-add__actions {
   display: flex;
