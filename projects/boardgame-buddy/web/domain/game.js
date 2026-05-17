@@ -51,6 +51,24 @@
       const r = m % 60;
       return r ? `${h}h${r}m` : `${h}h`;
     }
+
+    // ── Admin: image rehydration ─────────────────────────────────────────────
+
+    /** List catalog games whose image_url or thumbnail_url is missing. */
+    static adminMissingImages() {
+      return window.api.get("/games/admin/missing-images");
+    }
+
+    /** Re-fetch box art + thumbnail from BGG for a single game. */
+    static adminRefreshOneImage(gameId) {
+      return window.api.post(`/games/admin/${gameId}/refresh-images`);
+    }
+
+    /** Bulk-rehost images for every catalog game with a missing or BGG-hosted URL.
+     *  Throttled server-side; can take a while if many games need work. */
+    static adminRefreshAllImages() {
+      return window.api.post("/games/refresh-images");
+    }
   }
 
   window.Game = Game;
