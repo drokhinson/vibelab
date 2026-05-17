@@ -32,6 +32,12 @@ from supabase import Client
 from db import get_supabase
 
 from . import router
+from .game_routes import (
+    COLLECTION_DENORM_GAME_FIELDS,
+    PLAY_DENORM_GAME_FIELDS,
+    collection_denormalized_from_game,
+    play_denormalized_from_game,
+)
 from .bgg_client import (
     BggWarmUpError,
     clear_user_session,
@@ -75,33 +81,48 @@ _WORKER_MAX_ATTEMPTS = 3
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _existing_game_map(sb: Client, bgg_ids: list[int]) -> dict[int, str]:
-    """Bulk-resolve {bgg_id → game_id} for games already in our catalog."""
+def _existing_game_map(sb: Client, bgg_ids: list[int]) -> dict[int, dict]:
+    """Bulk-resolve {bgg_id → game row} for games already in our catalog.
+
+    Returns the full denormalization payload set (covers both collection and
+    play denorm fields from migration 020) plus `id` so callers can pass the
+    row straight into _upsert_collection_row / _materialize_play without a
+    second round trip per (bgg_id) during sync.
+    """
     if not bgg_ids:
         return {}
     rows = (
         sb.table("boardgamebuddy_games")
-        .select("id, bgg_id")
+        .select("id, " + COLLECTION_DENORM_GAME_FIELDS + ", image_url")
         .in_("bgg_id", bgg_ids)
         .execute()
     )
-    return {r["bgg_id"]: r["id"] for r in (rows.data or []) if r.get("bgg_id")}
+    return {r["bgg_id"]: r for r in (rows.data or []) if r.get("bgg_id")}
 
 
 def _upsert_collection_row(
     sb: Client,
     user_id: str,
-    game_id: str,
+    game: dict,
     status: str,
     private: Optional[dict] = None,
 ) -> None:
     """Upsert one collection row using the existing (user_id, game_id) UNIQUE.
 
+    `game` is the full row returned by _existing_game_map or import_game_from_bgg;
+    its denormalized fields (migration 020) are written inline so the new
+    collection row doesn't need a sync trigger.
+
     `private` is the dict produced by _parse_collection (private fields from
     BGG's <privateinfo>). Keys missing from BGG come through as None so
     re-syncing after BGG-side deletion still nulls our copy.
     """
-    payload: dict = {"user_id": user_id, "game_id": game_id, "status": status}
+    payload: dict = {
+        "user_id": user_id,
+        "game_id": game["id"],
+        "status": status,
+        **collection_denormalized_from_game(game),
+    }
     if private is not None:
         payload.update({
             "bgg_private_comment": private.get("private_comment"),
@@ -121,10 +142,13 @@ def _upsert_collection_row(
 def _materialize_play(
     sb: Client,
     user_id: str,
-    game_id: str,
+    game: dict,
     play_payload: dict,
 ) -> None:
     """Insert a play + buddies + play_players from a BGG-derived payload.
+
+    `game` is the full row returned by _existing_game_map or
+    import_game_from_bgg; its denormalized fields land on the play row inline.
 
     Dedups on (user_id, bgg_play_id): if a row with this BGG play id already
     exists for this user we skip re-inserting and don't touch its buddies.
@@ -147,10 +171,11 @@ def _materialize_play(
         sb.table("boardgamebuddy_plays")
         .insert({
             "user_id": user_id,
-            "game_id": game_id,
+            "game_id": game["id"],
             "played_at": play_payload["played_at"],
             "notes": play_payload.get("notes"),
             "bgg_play_id": bgg_play_id,
+            **play_denormalized_from_game(game),
         })
         .execute()
     )
@@ -404,21 +429,20 @@ async def _process_pending_imports(user_id: str) -> None:
                 await asyncio.sleep(_WORKER_THROTTLE_SECONDS)
                 continue
 
-            game_id = game_row["id"]
-
-            # Materialize each pending row for this game.
+            # Materialize each pending row for this game. game_row already
+            # carries the denormalized fields we need to land on dependents.
             for row in group:
                 try:
                     if row["kind"] == "collection":
                         _upsert_collection_row(
                             sb,
                             user_id,
-                            game_id,
+                            game_row,
                             row["payload"]["status"],
                             row["payload"].get("private"),
                         )
                     elif row["kind"] == "play":
-                        _materialize_play(sb, user_id, game_id, row["payload"])
+                        _materialize_play(sb, user_id, game_row, row["payload"])
                     sb.table("boardgamebuddy_bgg_pending_imports").update({
                         "status": "done",
                         "error_message": None,
@@ -572,8 +596,9 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
     coll_imported = 0
     coll_pending = 0
     for bgg_id, status, private in collection_rows:
-        if bgg_id in known:
-            _upsert_collection_row(sb, user_id, known[bgg_id], status, private)
+        game_row = known.get(bgg_id)
+        if game_row is not None:
+            _upsert_collection_row(sb, user_id, game_row, status, private)
             coll_imported += 1
         else:
             _queue_pending(
@@ -593,8 +618,9 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
             "notes": play.get("notes"),
             "players": play.get("players") or [],
         }
-        if bgg_id in known:
-            _materialize_play(sb, user_id, known[bgg_id], play_payload)
+        game_row = known.get(bgg_id)
+        if game_row is not None:
+            _materialize_play(sb, user_id, game_row, play_payload)
             plays_imported += 1
         else:
             _queue_pending(sb, user_id, bgg_id, "play", play_payload)

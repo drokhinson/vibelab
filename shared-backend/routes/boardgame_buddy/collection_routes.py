@@ -18,6 +18,10 @@ from .models import (
 )
 from .constants import CollectionSort, CollectionStatus, PlayMode
 from .dependencies import CurrentUser, get_current_user
+from .game_routes import (
+    COLLECTION_DENORM_GAME_FIELDS,
+    collection_denormalized_from_game,
+)
 
 
 _GAME_FIELDS = (
@@ -352,10 +356,12 @@ async def add_to_collection(
     """Add a game to the user's collection."""
     sb = get_supabase()
 
-    # Verify game exists
+    # Verify game exists AND fetch its denormalized fields in one round trip
+    # so the upsert below can populate the game_* cache columns on the new
+    # collection row without a second select.
     game = (
         sb.table("boardgamebuddy_games")
-        .select("id")
+        .select(COLLECTION_DENORM_GAME_FIELDS)
         .eq("id", body.game_id)
         .execute()
     )
@@ -367,6 +373,7 @@ async def add_to_collection(
         "user_id": user.user_id,
         "game_id": body.game_id,
         "status": body.status.value,
+        **collection_denormalized_from_game(game.data[0]),
     }, on_conflict="user_id,game_id").execute()
 
     return MessageResponse(message=f"Game added as {body.status.value}")
@@ -386,9 +393,12 @@ async def update_collection(
     """Change the status of a game in the user's collection."""
     sb = get_supabase()
 
+    # Same trick as add_to_collection: fetch the denormalized fields so the
+    # upsert lands them on a freshly-inserted row (this is a PATCH but the
+    # upsert means the row may not pre-exist for a wishlist→owned bump).
     game = (
         sb.table("boardgamebuddy_games")
-        .select("id")
+        .select(COLLECTION_DENORM_GAME_FIELDS)
         .eq("id", game_id)
         .execute()
     )
@@ -399,6 +409,7 @@ async def update_collection(
         "user_id": user.user_id,
         "game_id": game_id,
         "status": body.status.value,
+        **collection_denormalized_from_game(game.data[0]),
     }, on_conflict="user_id,game_id").execute()
 
     return MessageResponse(message=f"Status updated to {body.status.value}")
