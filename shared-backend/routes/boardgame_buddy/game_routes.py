@@ -20,7 +20,7 @@ from .bgg_client import (
     parse_bgg_xml,
 )
 from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
-from .dependencies import CurrentUser, get_current_admin, maybe_supabase_user
+from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
 from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
 
 logger = logging.getLogger(__name__)
