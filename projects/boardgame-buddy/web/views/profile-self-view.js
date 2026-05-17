@@ -7,6 +7,10 @@
 (function () {
   const PLAYS_PER_PAGE = 10;
   const COLLECTION_PER_PAGE = 12;
+  // Wishlist sits below the collection grid and is intentionally smaller —
+  // 2 rows × 3-column grid so it reads as a secondary shelf rather than a
+  // peer of the owned collection. Search + filter pills apply to both.
+  const WISHLIST_PER_PAGE = 6;
   const TAB_COLLECTION = "collection";
   const TAB_PLAYS = "plays";
   const TAB_BUDDIES = "buddies";
@@ -42,7 +46,7 @@
       this._recentPlaysLoaded = false;
       this._recentSearchTimer = null;
 
-      // Collection
+      // Collection (owned)
       this._collectionItems = [];
       this._collectionTotal = 0;
       this._collectionPage = 1;
@@ -52,6 +56,14 @@
       this._collectionLoading = false;
       this._collectionError = null;
       this._collectionSearchTimer = null;
+
+      // Wishlist — same search + filters as the owned collection but a
+      // separate page cursor and its own loading/error state.
+      this._wishlistItems = [];
+      this._wishlistTotal = 0;
+      this._wishlistPage = 1;
+      this._wishlistLoading = false;
+      this._wishlistError = null;
 
       // Buddies tab is delegated to the shared BuddiesPanel — same render
       // logic the standalone /buddies route uses.
@@ -137,24 +149,51 @@
       }
     }
 
+    // Builds the shared filter query string. Search input + filter pills
+    // apply to both the owned grid and the wishlist — the only per-shelf
+    // params are status, page, and per_page.
+    _buildShelfQuery({ status, page, perPage }) {
+      const qs = new URLSearchParams({
+        status,
+        page: String(page),
+        per_page: String(perPage),
+        exclude_expansions: "true",
+      });
+      if (this._collectionQuery) qs.set("search", this._collectionQuery);
+      const f = this._collectionFilters;
+      if (f.players)            qs.set("players", String(f.players));
+      if (f.playtimeMin != null) qs.set("playtime_min", String(f.playtimeMin));
+      if (f.playtimeMax != null) qs.set("playtime_max", String(f.playtimeMax));
+      if (f.playMode)           qs.set("play_mode", f.playMode);
+      return qs.toString();
+    }
+
     async _loadCollection({ reset = false } = {}) {
+      // Reset paging on filter/search changes so the user lands on page 1 of
+      // both shelves, then fetch owned + wishlist in parallel — they share
+      // the same backend filter inputs so doing it sequentially would just
+      // add latency.
+      if (reset) {
+        this._collectionPage = 1;
+        this._wishlistPage = 1;
+      }
+      await Promise.all([
+        this._loadOwned(),
+        this._loadWishlist(),
+      ]);
+    }
+
+    async _loadOwned() {
       this._collectionLoading = true;
       this._collectionError = null;
-      if (reset) this._collectionPage = 1;
       this.render();
       try {
-        const qs = new URLSearchParams({
-          page: String(this._collectionPage),
-          per_page: String(COLLECTION_PER_PAGE),
-          exclude_expansions: "true",
+        const qs = this._buildShelfQuery({
+          status: "owned",
+          page: this._collectionPage,
+          perPage: COLLECTION_PER_PAGE,
         });
-        if (this._collectionQuery) qs.set("search", this._collectionQuery);
-        const f = this._collectionFilters;
-        if (f.players)       qs.set("players", String(f.players));
-        if (f.playtimeMin != null) qs.set("playtime_min", String(f.playtimeMin));
-        if (f.playtimeMax != null) qs.set("playtime_max", String(f.playtimeMax));
-        if (f.playMode)      qs.set("play_mode", f.playMode);
-        const data = await window.api.get("/collection/grid?" + qs.toString());
+        const data = await window.api.get("/collection/grid?" + qs);
         this._collectionItems = (data && data.items) || [];
         this._collectionTotal = (data && data.total) || 0;
       } catch (e) {
@@ -163,6 +202,29 @@
         this._collectionTotal = 0;
       } finally {
         this._collectionLoading = false;
+        this.render();
+      }
+    }
+
+    async _loadWishlist() {
+      this._wishlistLoading = true;
+      this._wishlistError = null;
+      this.render();
+      try {
+        const qs = this._buildShelfQuery({
+          status: "wishlist",
+          page: this._wishlistPage,
+          perPage: WISHLIST_PER_PAGE,
+        });
+        const data = await window.api.get("/collection/grid?" + qs);
+        this._wishlistItems = (data && data.items) || [];
+        this._wishlistTotal = (data && data.total) || 0;
+      } catch (e) {
+        this._wishlistError = e.message || "Failed to load";
+        this._wishlistItems = [];
+        this._wishlistTotal = 0;
+      } finally {
+        this._wishlistLoading = false;
         this.render();
       }
     }
@@ -282,6 +344,7 @@
 
     _renderCollectionPanel() {
       const totalPages = Math.max(1, Math.ceil(this._collectionTotal / COLLECTION_PER_PAGE));
+      const wishlistTotalPages = Math.max(1, Math.ceil(this._wishlistTotal / WISHLIST_PER_PAGE));
       const activeFilterCount = this._collectionActiveFilterCount();
       const ownedExp = (this._stats && this._stats.owned_expansions) || 0;
       const subtitle = ownedExp > 0
@@ -310,9 +373,75 @@
           ${this._collectionFiltersOpen ? this._renderCollectionFilters() : ""}
           ${this._renderCollectionBody()}
           ${this._renderCollectionPager(totalPages)}
+          ${this._renderWishlistSection(wishlistTotalPages)}
         </div>
       `;
     }
+
+    _renderWishlistSection(totalPages) {
+      // Wishlist sits below the owned grid as a smaller secondary shelf.
+      // Hidden entirely when both empty AND not currently searching/filtering
+      // — surfacing an empty shelf in the resting state would be noise.
+      const isSearchingOrFiltering =
+        this._collectionQuery || this._collectionActiveFilterCount() > 0;
+      if (
+        !this._wishlistLoading &&
+        this._wishlistTotal === 0 &&
+        !isSearchingOrFiltering &&
+        !this._wishlistError
+      ) {
+        return "";
+      }
+      return `
+        <section class="profile-wishlist">
+          <header class="profile-wishlist__head">
+            <h3 class="profile-wishlist__title">
+              <i data-lucide="star" class="w-4 h-4"></i>
+              Wishlist
+            </h3>
+            <span class="profile-wishlist__count">${this._wishlistTotal}</span>
+          </header>
+          ${this._renderWishlistBody(isSearchingOrFiltering)}
+          ${this._renderWishlistPager(totalPages)}
+        </section>
+      `;
+    }
+
+    _renderWishlistBody(isSearchingOrFiltering) {
+      if (this._wishlistError) {
+        return `<div class="alert alert-error text-sm">${escape(this._wishlistError)}</div>`;
+      }
+      if (this._wishlistLoading && this._wishlistItems.length === 0) {
+        return window.buddyLoader({ size: 72 });
+      }
+      if (this._wishlistItems.length === 0) {
+        return `<div class="profile-empty profile-empty--sm">${isSearchingOrFiltering ? "No wishlist matches." : "Nothing on your wishlist yet."}</div>`;
+      }
+      return `
+        <div class="profile-collection-grid">
+          ${this._wishlistItems.map((it) => this._renderCollectionTile(it)).join("")}
+        </div>
+      `;
+    }
+
+    _renderWishlistPager(totalPages) {
+      if (totalPages <= 1) return "";
+      return `
+        <nav class="search-pager">
+          <button class="btn btn-ghost btn-xs" ${this._wishlistPage <= 1 ? "disabled" : ""}
+                  onclick="window.profileSelfView._goWishlistPage(${this._wishlistPage - 1})">
+            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i> Prev
+          </button>
+          <span class="text-xs opacity-60">Page ${this._wishlistPage} of ${totalPages}</span>
+          <button class="btn btn-ghost btn-xs" ${this._wishlistPage >= totalPages ? "disabled" : ""}
+                  onclick="window.profileSelfView._goWishlistPage(${this._wishlistPage + 1})">
+            Next <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </nav>
+      `;
+    }
+
+    _goWishlistPage(n) { this._wishlistPage = n; this._loadWishlist(); }
 
     _collectionActiveFilterCount() {
       const f = this._collectionFilters;
@@ -447,7 +576,9 @@
       this._loadCollection({ reset: true });
     }
     _toggleCollectionFilters() { this._collectionFiltersOpen = !this._collectionFiltersOpen; this.render(); }
-    _goCollectionPage(n) { this._collectionPage = n; this._loadCollection({ reset: false }); }
+    // Pager clicks scope the refetch to the affected shelf — search/filter
+    // changes still hit both via _loadCollection({ reset: true }).
+    _goCollectionPage(n) { this._collectionPage = n; this._loadOwned(); }
 
     // ── Recent plays panel ────────────────────────────────────────────────────
 
