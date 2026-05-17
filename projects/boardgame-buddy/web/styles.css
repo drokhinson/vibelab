@@ -2418,14 +2418,6 @@ body {
 .status-tag--lg i { width: 1rem; height: 1rem; }
 .status-tag__label { font-weight: 600; }
 
-/* Slot wrapper in the game-detail actions row so the picker button sits
-   alongside Log a play / BGG / Rulebook at the same height. */
-.game-detail__status-slot {
-  display: inline-flex; align-items: stretch;
-}
-.game-detail__status-slot .status-tag {
-  display: inline-flex; align-items: center;
-}
 /* Fully-opaque tag backgrounds so a tag overlaid on a photo / box art
    still reads cleanly — the previous low-alpha fills bled the underlying
    image through. Text contrast is held by a high-lightness foreground
@@ -2886,15 +2878,15 @@ body {
 .game-detail__body { padding-top: 0.5rem; }
 .game-detail__name { font-size: 1.85rem; margin: 0; line-height: 1.1; color: var(--game-accent); }
 .game-detail__meta { display: flex; gap: 0.6rem; font-size: 0.85rem; opacity: 0.75; margin: 0.35rem 0 0.75rem; }
+/* Status sits on its own row above the action buttons so the picker stays
+   visible regardless of how the button row wraps. */
+.game-detail__status {
+  display: flex; align-items: center;
+  margin-bottom: 0.55rem;
+}
 .game-detail__actions {
   display: flex; align-items: stretch; gap: 0.4rem; flex-wrap: wrap;
   margin-bottom: 1rem;
-}
-/* Group BGG + Rulebook and pin them to the right so Log a play sits
-   on the left and the external links cluster opposite. */
-.game-detail__links {
-  margin-left: auto;
-  display: flex; align-items: stretch; gap: 0.4rem; flex-wrap: wrap;
 }
 /* Vertical sizing parity: every action button matches the
    btn-secondary "Log a play" height. */
@@ -2908,7 +2900,7 @@ body {
   white-space: nowrap;
 }
 .game-detail__link-btn { border: none; color: #fff8ec; }
-.game-detail__link-btn:hover { filter: brightness(1.08); }
+.game-detail__link-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .game-detail__link-btn--bgg {
   /* BGG brand orange — keeps the external-link visually distinct from
      the gold-accented project actions. */
@@ -2917,6 +2909,26 @@ body {
 .game-detail__link-btn--rulebook {
   background: var(--accent);
   color: #1a0d00;
+}
+/* Greyed + crossed-out variant rendered when the underlying link
+   (`bgg_id` / `rulebook_url`) is unavailable. Keeps the button slot in
+   the row so the action layout stays consistent across games. */
+.game-detail__link-btn--disabled {
+  position: relative;
+  background: oklch(var(--b3));
+  color: oklch(var(--bc) / 0.45);
+  cursor: not-allowed;
+}
+.game-detail__link-btn--disabled:hover { filter: none; }
+.game-detail__link-btn--disabled::after {
+  content: "";
+  position: absolute;
+  left: 0.55rem; right: 0.55rem;
+  top: 50%;
+  height: 1.5px;
+  background: currentColor;
+  opacity: 0.7;
+  pointer-events: none;
 }
 .game-detail__desc { font-size: 0.9rem; line-height: 1.55; opacity: 0.9; margin-bottom: 1rem; }
 /* Unified section header for both Expansions and Recent plays so the

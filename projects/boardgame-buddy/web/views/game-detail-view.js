@@ -116,25 +116,29 @@
               ${g.playerRangeText() ? `<span>${g.playerRangeText()}</span>` : ""}
               ${g.playTimeText() ? `<span>${g.playTimeText()}</span>` : ""}
             </div>
+            <div class="game-detail__status">
+              ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add to collection" })}
+            </div>
             <div class="game-detail__actions">
-              <span class="game-detail__action game-detail__status-slot">
-                ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add to collection" })}
-              </span>
               ${g.is_expansion ? "" : `
                 <button class="btn btn-secondary game-detail__action" onclick="window.gameDetailView._startPlay()">
                   <i data-lucide="play" class="w-4 h-4"></i> Log a play
                 </button>
               `}
-              <div class="game-detail__links">
-                ${g.bggUrl() ? `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--bgg"
-                                  href="${g.bggUrl()}" target="_blank" rel="noopener">
-                  <i data-lucide="external-link" class="w-4 h-4"></i> BGG
-                </a>` : ""}
-                ${g.rulebookUrl() ? `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--rulebook"
-                                       href="${g.rulebookUrl()}" target="_blank" rel="noopener">
-                  <i data-lucide="book-open" class="w-4 h-4"></i> Rulebook
-                </a>` : ""}
-              </div>
+              ${g.bggUrl() ? `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--bgg"
+                                href="${g.bggUrl()}" target="_blank" rel="noopener">
+                <i data-lucide="external-link" class="w-4 h-4"></i> BGG
+              </a>` : `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--disabled" disabled
+                                title="No BGG link available">
+                <i data-lucide="external-link" class="w-4 h-4"></i> BGG
+              </button>`}
+              ${g.rulebookUrl() ? `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--rulebook"
+                                     href="${g.rulebookUrl()}" target="_blank" rel="noopener">
+                <i data-lucide="book-open" class="w-4 h-4"></i> Rulebook
+              </a>` : `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--disabled" disabled
+                                title="No rulebook available">
+                <i data-lucide="book-open" class="w-4 h-4"></i> Rulebook
+              </button>`}
             </div>
             ${g.description ? `<div class="game-detail__desc">${stripHtml(g.description)}</div>` : ""}
             ${this._renderExpansions()}
