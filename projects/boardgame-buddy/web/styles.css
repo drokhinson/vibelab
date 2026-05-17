@@ -2427,35 +2427,48 @@ body {
 .search-hit__body { flex: 1; min-width: 0; }
 .search-hit__name { font-weight: 600; font-size: 0.92rem; line-height: 1.2; }
 .search-hit__meta { font-size: 0.76rem; opacity: 0.6; margin-top: 0.1rem; }
-/* Chevron toggle on parent rows that have expansion sub-rows in the
-   current results. Same square footprint as a placeholder on
-   non-expandable parents so the body column stays aligned across rows. */
+/* Expand toggle on parent rows that have expansion sub-rows in the
+   current results — vertical stack: count on top, chevron icon below.
+   Same column footprint as a placeholder spacer (used on plain parent
+   rows) so the body column stays aligned across rows. */
 .search-hit__expand-toggle {
   flex-shrink: 0;
-  width: 1.5rem; height: 1.5rem;
-  display: grid; place-items: center;
+  width: 1.6rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.05rem;
   background: transparent;
   border: none;
   border-radius: 0.35rem;
   color: oklch(var(--bc));
   cursor: pointer;
-  opacity: 0.7;
+  padding: 0.15rem 0.1rem;
+  opacity: 0.75;
 }
 .search-hit__expand-toggle:hover { opacity: 1; background: oklch(var(--b3)); }
-.search-hit__expand-toggle--placeholder { pointer-events: none; opacity: 0; }
-/* Indented sub-row for an expansion under its base game. The left
-   coloured rail mirrors the expansion-list pattern used on the
-   game-detail page (`--exp-color` falls back to the muted border tone
-   when the expansion has no stored colour). Smaller thumb keeps the
-   sub-rows compact when many expansions are expanded. */
+.search-hit__expand-toggle--placeholder { pointer-events: none; opacity: 0; padding: 0; }
+.search-hit__expand-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+/* Coloured-dot bullet on indented sub-rows. Replaces the previous
+   left-border rail — same `--exp-color` semantics (per-expansion colour
+   when stored, otherwise the accent) but rendered as a small disc in
+   the leading column so the indent reads as a bulleted list. */
 .search-hit--child {
   margin-left: 1.75rem;
   background: oklch(var(--b1));
-  border-left: 3px solid var(--exp-color, oklch(var(--b3)));
   padding: 0.45rem 0.55rem;
 }
 .search-hit--child img,
 .search-hit--child .search-hit__placeholder { width: 36px; height: 36px; }
+.search-hit__exp-dot {
+  flex-shrink: 0;
+  width: 0.55rem; height: 0.55rem;
+  border-radius: 999px;
+  background: var(--exp-color, var(--accent));
+  align-self: center;
+}
 .search-extend { display: flex; justify-content: center; padding: 0.75rem 0 1rem; }
 .search-bgg-section { margin-top: 1.2rem; }
 .search-bgg-heading { font-size: 0.85rem; font-weight: 600; opacity: 0.75; margin: 0 0 0.4rem; }
