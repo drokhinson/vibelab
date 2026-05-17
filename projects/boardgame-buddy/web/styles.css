@@ -2067,44 +2067,16 @@ body {
 .collection-tile__name { padding: 0.3rem 0.4rem; font-size: 0.75rem; font-weight: 600; line-height: 1.15; text-align: left; }
 
 .recent-plays { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-/* Each row is a positioning container so the foreground can slide left over
-   a red "Delete" button anchored to the right edge. The inner div carries
-   the visible card chrome (background, border, padding). */
-.recent-plays__row {
-  position: relative;
-  overflow: hidden;
-  border-radius: 0.55rem;
-  touch-action: pan-y;
-}
+.recent-plays__row { border-radius: 0.55rem; }
 .recent-plays__row-inner {
-  position: relative;
-  z-index: 1;
   display: flex; align-items: center; gap: 0.55rem;
   padding: 0.55rem 0.6rem;
   background: oklch(var(--b2));
   border: 1px solid oklch(var(--b3));
   border-radius: 0.55rem;
   cursor: pointer;
-  transition: transform 200ms cubic-bezier(.2,.7,.2,1);
-  will-change: transform;
 }
 .recent-plays__row:hover .recent-plays__row-inner { border-color: var(--accent); }
-.recent-plays__row.is-swiped .recent-plays__row-inner { transform: translateX(-88px); }
-.recent-plays__delete {
-  position: absolute;
-  top: 0; right: 0; bottom: 0;
-  width: 88px;
-  background: oklch(0.55 0.22 27);
-  color: white;
-  border: none;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 0.15rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  z-index: 0;
-}
-.recent-plays__delete:hover { background: oklch(0.5 0.22 27); }
 .recent-plays__row img {
   width: 44px; height: 44px; object-fit: cover;
   border-radius: 0.4rem; flex-shrink: 0;
@@ -2281,7 +2253,17 @@ body {
 .play-detail__edit-score { width: 4.5rem; }
 .play-detail__edit-winner { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.78rem; }
 .play-detail__add-player { display: flex; gap: 0.35rem; margin-top: 0.5rem; }
-.play-detail__save-row { display: flex; gap: 0.5rem; justify-content: flex-end; padding-top: 0.5rem; }
+.play-detail__save-row { display: flex; gap: 0.5rem; justify-content: flex-end; padding-top: 0.5rem; flex-wrap: wrap; }
+/* Push the destructive action to the far left so it's visibly separated
+   from the positive Cancel/Save pair on the right. */
+.play-detail__delete-btn {
+  margin-right: auto;
+  color: oklch(0.7 0.18 27);
+}
+.play-detail__delete-btn:hover:not(:disabled) {
+  background: oklch(0.55 0.22 27 / 0.15);
+  color: oklch(0.78 0.2 27);
+}
 
 /* ── Search view ──────────────────────────────────────────────────────────── */
 .search-topbar {
