@@ -130,28 +130,21 @@ body {
     inset 0 0 28px rgba(139, 111, 60, 0.28),
     0 4px 12px rgba(0, 0, 0, 0.35);
 }
-/* Rolled edges — top and bottom "curl". Thicker + rounder than v1 so
-   the closed scroll reads as a tied-up cylinder rather than a thin seam. */
+/* Rolled edges — top and bottom "curl" (matches the original
+   parchment-scroll look). */
 .scroll-panel::before,
 .scroll-panel::after {
   content: "";
   position: absolute;
   left: -4px;
   right: -4px;
-  height: 22px;
-  background:
-    linear-gradient(180deg,
-      #C9A468 0%,
-      #A07A3C 40%,
-      #6B532A 80%,
-      #4A3818 100%);
-  border-radius: 6px;
-  box-shadow:
-    0 4px 8px rgba(0,0,0,0.45),
-    inset 0 1px 0 rgba(255, 232, 184, 0.45);
+  height: 14px;
+  background: linear-gradient(180deg, #B89556 0%, #8B6F3C 60%, #6B532A 100%);
+  border-radius: 4px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.45);
 }
-.scroll-panel::before { top: -10px; }
-.scroll-panel::after  { bottom: -10px; }
+.scroll-panel::before { top: -6px; }
+.scroll-panel::after  { bottom: -6px; }
 
 /* Readable dark-on-tan overrides inside the scroll */
 .scroll-panel .guide-text,
@@ -208,6 +201,7 @@ body {
 .scroll-panel__peek {
   position: relative;
   z-index: 1;
+  padding-top: 0.45rem;
 }
 .scroll-panel__hint {
   display: flex;
