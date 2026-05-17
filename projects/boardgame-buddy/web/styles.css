@@ -382,6 +382,38 @@ body {
 }
 .scroll-panel__add:hover { background: rgba(43, 29, 10, 1); }
 
+/* Source dot on chapter summaries — ties an expansion's chapter to its
+   identity color when the scroll is showing a merged base+expansions view.
+   Base-game chapters omit the dot (source_color is null). */
+.scroll-chapter__source-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--exp-color, #C9922A);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(43, 29, 10, 0.18);
+}
+
+/* Bottom "roll up" affordance inside the open scroll body. Mirrors the
+   top peek hint that prompts "tap to expand" when rolled. */
+.scroll-panel__rollup-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 100%;
+  margin-top: 0.55rem;
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  color: #6B4A1A;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.scroll-panel__rollup-hint:hover { color: #2B1D0A; }
+
 /* ── Collapsible section header (Expansions, etc.) ───────────────────────── */
 .collapsible-header {
   display: flex;
@@ -493,6 +525,61 @@ body {
   opacity: 0.75;
   line-height: 1.35;
   white-space: pre-wrap;
+}
+/* Source-game pill on pool rows (only rendered when Browse is showing
+   base + expansions). The leading dot matches the expansion's color so the
+   row pairs visually with the scroll's chapter dots. */
+.chapter-add__pool-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1px 7px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  font-weight: 500;
+}
+.chapter-add__pool-source-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--exp-color, var(--accent));
+  flex-shrink: 0;
+}
+
+/* Target-game selector on the Create tab. Pill-style chips, one per game
+   (base + expansions); active chip uses the expansion accent. */
+.chapter-add__target-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.chapter-add__target-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 6px 12px;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: oklch(var(--bc));
+}
+.chapter-add__target-btn--active {
+  background: var(--exp-color, var(--accent));
+  border-color: var(--exp-color, var(--accent));
+  color: #1a0e02;
+}
+.chapter-add__target-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--exp-color, var(--accent));
+  flex-shrink: 0;
+}
+.chapter-add__target-btn--active .chapter-add__target-dot {
+  background: #1a0e02;
 }
 .chapter-add__pool-actions {
   display: flex;
@@ -3239,6 +3326,43 @@ body {
   display: inline-flex; align-items: center; gap: 0.3rem;
   margin-top: 0.35rem; font-size: 0.8rem; color: var(--accent);
 }
+
+/* Centered Rulebook CTA inside the in-play Reference guide section. The
+   external-link icon signals that tapping leaves the app to open the PDF. */
+.log-play__rulebook-row {
+  display: flex; justify-content: center; margin-bottom: 0.6rem;
+}
+.log-play__rulebook-cta {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+}
+
+/* Expansions picker rows reuse the existing .expansion-list styling but get
+   a checkmark/plus toggle on the right that reflects ps.expansionIds. */
+.log-play__exp-list { margin-top: 0.4rem; }
+.log-play__exp-row.is-active {
+  border-color: var(--exp-color, var(--accent));
+  background: rgba(255, 255, 255, 0.02);
+}
+.log-play__exp-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 999px;
+  background: oklch(var(--b1));
+  border: 1px solid oklch(var(--b3));
+  color: oklch(var(--bc));
+  opacity: 0.65;
+  margin-left: auto;
+}
+.log-play__exp-toggle--on {
+  background: var(--exp-color, var(--accent));
+  border-color: var(--exp-color, var(--accent));
+  color: #1a0d00;
+  opacity: 1;
+}
+
+/* In-play guide section: tighten label spacing so the rulebook button
+   reads as part of the section, not as a floating chip. */
+.log-play__section--guide .log-play__label { margin-bottom: 0.55rem; }
 .log-play__players { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
 .log-play__player {
   display: flex; align-items: center; gap: 0.5rem;
