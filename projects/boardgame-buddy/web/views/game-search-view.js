@@ -151,6 +151,11 @@
     render() {
       const totalPages = Math.max(1, Math.ceil(this._total / PER_PAGE));
       const activeFilterCount = this._activeFilterCount();
+      // Reloading state: we have results in hand AND a new fetch is in flight
+      // (filter / search / page change). The CSS class dims the list and
+      // overlays a spinner so the user sees that their action is processing
+      // — otherwise the screen just sits there showing stale results.
+      const isReloading = this._loading && this._games.length > 0;
       this.container.innerHTML = `
         ${this._mode === "pick-for-play" ? `
           <div class="search-pick-banner">
@@ -184,7 +189,7 @@
           <span class="text-xs opacity-60">${this._loading ? "Loading…" : `${this._total.toLocaleString()} games`}</span>
         </div>
 
-        <div class="search-results">
+        <div class="search-results ${isReloading ? "is-reloading" : ""}">
           ${this._renderResults()}
         </div>
 
@@ -208,6 +213,10 @@
 
     _renderFilters() {
       const f = this._filters;
+      // Locally-scoped: render() also computes one but it's its own variable.
+      // Without this line we'd ReferenceError out of the footer and the panel
+      // would silently fail to appear when the user hits the filter button.
+      const activeFilterCount = this._activeFilterCount();
       const playerChip = (n) => `
         <button class="filter-chip ${f.players === n ? "is-active" : ""}"
                 onclick="window.gameSearchView._setFilter('players', ${f.players === n ? "null" : n})">
