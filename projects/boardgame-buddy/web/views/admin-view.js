@@ -11,6 +11,13 @@
       this._reports = [];
       this._loading = false;
       this._status = "open"; // "open" | "resolved"
+      // Missing-images panel. _refreshingOne tracks the currently-refreshing
+      // single-game id so we can disable that row's button. _bulkRefreshing
+      // does the same for the "Refresh all" button.
+      this._missingImages = [];
+      this._missingImagesLoading = false;
+      this._refreshingOne = null;
+      this._bulkRefreshing = false;
     }
 
     async onMount() {
@@ -24,7 +31,11 @@
         `;
         return;
       }
-      await this._loadReports();
+      // Fan both panels' fetches out in parallel — they're independent.
+      await Promise.all([
+        this._loadReports(),
+        this._loadMissingImages(),
+      ]);
     }
 
     async _loadReports() {
@@ -37,6 +48,62 @@
         this._reports = [];
       } finally {
         this._loading = false;
+        this.render();
+      }
+    }
+
+    async _loadMissingImages() {
+      this._missingImagesLoading = true;
+      this.render();
+      try {
+        const rows = await window.Game.adminMissingImages();
+        this._missingImages = Array.isArray(rows) ? rows : [];
+      } catch (e) {
+        showToast(e.message || "Failed to load games with missing images", "error");
+        this._missingImages = [];
+      } finally {
+        this._missingImagesLoading = false;
+        this.render();
+      }
+    }
+
+    async _refreshOneImage(gameId) {
+      this._refreshingOne = gameId;
+      this.render();
+      try {
+        await window.Game.adminRefreshOneImage(gameId);
+        showToast("Image refreshed", "success");
+        // Drop the row optimistically so the user sees progress without
+        // waiting for the missing-images query to round-trip again.
+        this._missingImages = this._missingImages.filter((g) => g.id !== gameId);
+        this.render();
+      } catch (e) {
+        showToast(e.message || "Refresh failed", "error");
+      } finally {
+        this._refreshingOne = null;
+        this.render();
+      }
+    }
+
+    async _refreshAllImages() {
+      const count = this._missingImages.length;
+      const proceed = window.confirm(
+        count > 0
+          ? `Re-host BGG images for ${count} game${count === 1 ? "" : "s"}? This calls BGG once per game and is throttled — may take a minute or two.`
+          : "Re-host images for every game with a missing or BGG-hosted URL? This calls BGG once per game and is throttled.",
+      );
+      if (!proceed) return;
+      this._bulkRefreshing = true;
+      this.render();
+      try {
+        const result = await window.Game.adminRefreshAllImages();
+        const updated = (result && result.updated) || 0;
+        showToast(`Refreshed ${updated} game${updated === 1 ? "" : "s"}`, "success");
+        await this._loadMissingImages();
+      } catch (e) {
+        showToast(e.message || "Bulk refresh failed", "error");
+      } finally {
+        this._bulkRefreshing = false;
         this.render();
       }
     }
@@ -64,8 +131,79 @@
           </div>
           ${this._renderBody()}
         </section>
+
+        <section class="p-3">
+          ${this._renderMissingImagesPanel()}
+        </section>
       `;
       if (window.lucide) window.lucide.createIcons();
+    }
+
+    _renderMissingImagesPanel() {
+      const count = this._missingImages.length;
+      const bulkDisabled = this._bulkRefreshing || this._missingImagesLoading;
+      return `
+        <div class="admin-reports__header">
+          <h3 class="font-semibold flex items-center gap-2">
+            <i data-lucide="image-off" class="w-4 h-4"></i>
+            Games missing images
+            ${this._missingImagesLoading ? "" : `<span class="opacity-60 font-normal text-sm">(${count})</span>`}
+          </h3>
+          <button class="btn btn-xs ${bulkDisabled ? "btn-ghost" : "btn-primary"}"
+                  ${bulkDisabled ? "disabled" : ""}
+                  onclick="window.adminView._refreshAllImages()">
+            ${this._bulkRefreshing
+              ? `<span class="loading loading-spinner loading-xs"></span> Refreshing…`
+              : `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh all`}
+          </button>
+        </div>
+        ${this._renderMissingImagesBody()}
+      `;
+    }
+
+    _renderMissingImagesBody() {
+      if (this._missingImagesLoading && this._missingImages.length === 0) {
+        return window.buddyLoader({ size: 64 });
+      }
+      if (this._missingImages.length === 0) {
+        return `<div class="text-sm opacity-60 p-6 text-center">All catalog games have images.</div>`;
+      }
+      return `
+        <ul class="admin-reports__list">
+          ${this._missingImages.map((g) => this._renderMissingImageRow(g)).join("")}
+        </ul>
+      `;
+    }
+
+    _renderMissingImageRow(g) {
+      const refreshing = this._refreshingOne === g.id;
+      const disabled = refreshing || !g.bgg_id || this._bulkRefreshing;
+      const missingParts = [];
+      if (!g.thumbnail_url) missingParts.push("thumb");
+      if (!g.image_url) missingParts.push("image");
+      const label = missingParts.length ? `Missing: ${missingParts.join(", ")}` : "OK";
+      return `
+        <li class="admin-reports__row">
+          <div class="admin-reports__meta">
+            <span class="admin-reports__game">${escape(g.name)}</span>
+            ${g.bgg_id ? `<span class="admin-reports__type">BGG ${g.bgg_id}</span>` : `<span class="admin-reports__type">no bgg_id</span>`}
+            ${g.year_published ? `<span class="admin-reports__date">${g.year_published}</span>` : ""}
+          </div>
+          <div class="admin-reports__preview">${escape(label)}</div>
+          <div class="admin-reports__footer">
+            <span class="admin-reports__reporter">${g.bgg_id ? "" : "No BGG id — refresh disabled."}</span>
+            <div class="admin-reports__actions">
+              <button class="btn btn-xs ${disabled ? "btn-ghost" : "btn-primary"}"
+                      ${disabled ? "disabled" : ""}
+                      onclick="window.adminView._refreshOneImage('${g.id}')">
+                ${refreshing
+                  ? `<span class="loading loading-spinner loading-xs"></span> Refreshing…`
+                  : `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh`}
+              </button>
+            </div>
+          </div>
+        </li>
+      `;
     }
 
     _renderBody() {
