@@ -100,11 +100,11 @@
 
       this.container.innerHTML = `
         <article class="game-detail" style="--game-accent:${accent}">
-          <header class="game-detail__hero">
+          <header class="game-detail__hero" id="game-detail-hero">
             <button class="btn btn-ghost btn-sm game-detail__back" onclick="window.router.back('feed')">
               <i data-lucide="arrow-left" class="w-4 h-4"></i>
             </button>
-            ${g.image_url || g.thumbnail_url ? `<img src="${g.image_url || g.thumbnail_url}" alt="" />` : ""}
+            ${g.image_url || g.thumbnail_url ? `<img id="game-detail-hero-img" class="game-detail__hero-img" src="${g.image_url || g.thumbnail_url}" alt="" />` : ""}
             <span class="game-detail__hero-status">
               ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add to collection" })}
             </span>
@@ -147,6 +147,61 @@
         </article>
       `;
       if (window.lucide) window.lucide.createIcons();
+      // Defer the canvas sample until after layout so it doesn't block the
+      // synchronous render path. Cache hits short-circuit immediately.
+      requestAnimationFrame(() => this._sampleHeroEdgeColor());
+    }
+
+    // Sample the leftmost + rightmost columns of the hero image and use the
+    // averaged colour as the banner gutter fill. Cached by URL so re-renders
+    // (status flips, route re-mounts) reuse the result. Silent fallback to
+    // the per-game accent if the image can't be read (CORS, load error).
+    _sampleHeroEdgeColor() {
+      const hero = document.getElementById("game-detail-hero");
+      const img = document.getElementById("game-detail-hero-img");
+      if (!hero || !img) return;
+      const url = img.getAttribute("src");
+      if (!url) return;
+      const cached = window.GameDetailView._heroColorCache.get(url);
+      if (cached) {
+        hero.style.setProperty("--hero-edge", cached);
+        return;
+      }
+      // crossOrigin must be set before src for CORS to apply on canvas readback.
+      const sample = new Image();
+      sample.crossOrigin = "anonymous";
+      sample.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = 32; canvas.height = 32;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+          ctx.drawImage(sample, 0, 0, 32, 32);
+          const data = ctx.getImageData(0, 0, 32, 32).data;
+          let r = 0, g = 0, b = 0, n = 0;
+          // Leftmost (x=0) and rightmost (x=31) columns — 32 rows each.
+          for (let y = 0; y < 32; y++) {
+            for (const x of [0, 31]) {
+              const i = (y * 32 + x) * 4;
+              const a = data[i + 3];
+              if (a < 16) continue; // skip transparent pixels
+              r += data[i]; g += data[i + 1]; b += data[i + 2];
+              n++;
+            }
+          }
+          if (n === 0) return;
+          const color = `rgb(${(r / n) | 0}, ${(g / n) | 0}, ${(b / n) | 0})`;
+          window.GameDetailView._heroColorCache.set(url, color);
+          // The hero may have been re-rendered while the sample was in flight;
+          // re-resolve the element before applying.
+          const cur = document.getElementById("game-detail-hero");
+          if (cur) cur.style.setProperty("--hero-edge", color);
+        } catch (_) {
+          /* SecurityError on getImageData → silent fallback to --game-accent. */
+        }
+      };
+      sample.onerror = () => { /* network/CORS error → silent fallback. */ };
+      sample.src = url;
     }
 
     _renderRecentPlays() {
@@ -280,6 +335,10 @@
     tmp.innerHTML = s || "";
     return tmp.textContent || "";
   }
+
+  // Class-level cache for hero edge colours, keyed by image URL. Survives
+  // view re-mounts so a return visit to the same game doesn't re-sample.
+  GameDetailView._heroColorCache = new Map();
 
   window.GameDetailView = GameDetailView;
 })();
