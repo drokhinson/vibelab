@@ -407,7 +407,13 @@
               <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
           </div>
-          <div class="profile-panel__subtitle">${escape(subtitle)}</div>
+          <header class="profile-collection__head">
+            <h3 class="profile-collection__title">
+              <i data-lucide="library-big" class="w-4 h-4"></i>
+              Collection
+            </h3>
+            <span class="profile-collection__count">${escape(subtitle)}</span>
+          </header>
           ${this._collectionFiltersOpen ? this._renderCollectionFilters() : ""}
           ${this._renderCollectionBody()}
           ${this._renderCollectionPager(totalPages)}

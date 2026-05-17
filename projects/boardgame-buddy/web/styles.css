@@ -2027,6 +2027,22 @@ body {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
 }
 
+/* Owned-collection header — matches the wishlist + played shelves below
+   so the three sections read as a vertical stack with consistent chrome.
+   `align-items: baseline` keeps the count's text baseline-aligned with
+   the title text across all three shelves. */
+.profile-collection__head {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+.profile-collection__title {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-weight: 600; font-size: 0.95rem;
+}
+.profile-collection__count {
+  font-size: 0.78rem; opacity: 0.6;
+}
+
 /* Wishlist sits below the owned collection grid as a secondary shelf with
    its own header + count + pager. Same tile grid, smaller page size — the
    visual rhythm makes the two shelves distinct without two separate views. */
