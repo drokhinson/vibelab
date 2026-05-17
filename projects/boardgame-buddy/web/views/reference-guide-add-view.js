@@ -35,6 +35,13 @@
       // Preview modal: id of the chapter whose full markdown content is
       // currently shown; null = no modal.
       this._previewChapterId = null;
+      // Inline edit (creator-only) state. _editing flips the modal body to
+      // a textarea; _savingEdit disables the Save button mid-flight.
+      this._editing = false;
+      this._editTitle = "";
+      this._editContent = "";
+      this._editError = null;
+      this._savingEdit = false;
     }
 
     async onMount() {
@@ -256,10 +263,6 @@
                 ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
                 : `<i data-lucide="plus" class="w-4 h-4"></i>`}
             </button>
-            <button class="btn btn-ghost btn-xs chapter-add__pool-report" title="Report this chapter"
-                    onclick="event.stopPropagation();window.referenceGuideAddView._reportChapter('${c.id}')">
-              <i data-lucide="flag" class="w-3.5 h-3.5"></i>
-            </button>
           </div>
         </li>
       `;
@@ -279,6 +282,75 @@
            </span>`
         : "";
       const inGuide = !!c.in_my_guide;
+      const me = window.store && window.store.get("user");
+      const isAuthed = !!me;
+      const isOwner = !!(me && c.created_by && me.id === c.created_by);
+      const editing = !!this._editing;
+
+      // Header title swaps to an input when editing; everything else in the
+      // header stays so meta + close affordance remain visible.
+      const titleHtml = editing
+        ? `<input id="chapter-edit-title"
+                  class="input input-bordered input-sm chapter-add__edit-title"
+                  type="text" maxlength="200"
+                  value="${escapeAttr(this._editTitle)}"
+                  oninput="window.referenceGuideAddView._editTitle = this.value" />`
+        : `<div class="chapter-add__preview-title font-display">${escape(c.title)}</div>`;
+
+      const bodyHtml = editing
+        ? `<div class="chapter-add__preview-body chapter-add__preview-body--editing">
+             <textarea id="chapter-edit-content"
+                       class="textarea textarea-bordered chapter-add__edit-textarea"
+                       rows="14"
+                       oninput="window.referenceGuideAddView._editContent = this.value">${escape(this._editContent)}</textarea>
+             ${this._editError ? `<div class="text-error text-sm mt-2">${escape(this._editError)}</div>` : ""}
+           </div>`
+        : `<div class="chapter-add__preview-body">
+             ${window.renderMarkdown(c.content || "")}
+           </div>`;
+
+      const footerHtml = editing
+        ? `<div class="chapter-add__preview-footer">
+             <div class="chapter-add__preview-actions">
+               <button class="btn btn-ghost btn-sm"
+                       onclick="window.referenceGuideAddView._cancelEdit()">Cancel</button>
+               <button class="chapter-add__pool-toggle"
+                       ${this._savingEdit ? "disabled" : ""}
+                       onclick="window.referenceGuideAddView._saveEdit()">
+                 <i data-lucide="check" class="w-4 h-4"></i>
+                 <span>${this._savingEdit ? "Saving…" : "Save"}</span>
+               </button>
+             </div>
+           </div>`
+        : `<div class="chapter-add__preview-footer">
+             <button class="chapter-add__pool-toggle ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
+                     onclick="window.referenceGuideAddView._toggleInGuide('${c.id}')">
+               ${inGuide
+                 ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
+                 : `<i data-lucide="plus" class="w-4 h-4"></i><span>Add to my guide</span>`}
+             </button>
+             <div class="chapter-add__preview-actions">
+               ${isOwner ? `
+                 <button class="btn btn-ghost btn-sm chapter-add__preview-edit"
+                         title="Edit this chapter"
+                         onclick="window.referenceGuideAddView._startEdit('${c.id}')">
+                   <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                   <span>Edit</span>
+                 </button>
+               ` : ""}
+               ${isAuthed && !isOwner ? `
+                 <button class="btn btn-ghost btn-sm chapter-add__preview-report"
+                         title="Report this chapter"
+                         onclick="window.referenceGuideAddView._reportChapter('${c.id}')">
+                   <i data-lucide="flag" class="w-3.5 h-3.5"></i>
+                   <span>Report</span>
+                 </button>
+               ` : ""}
+               <button class="btn btn-ghost btn-sm"
+                       onclick="window.referenceGuideAddView._closePreview()">Close</button>
+             </div>
+           </div>`;
+
       return `
         <div class="chapter-add__preview-backdrop"
              onclick="window.referenceGuideAddView._closePreview()">
@@ -287,7 +359,7 @@
             <div class="chapter-add__preview-header">
               <div class="chapter-add__preview-icon"><i data-lucide="${icon}" class="w-5 h-5"></i></div>
               <div class="chapter-add__preview-titlewrap">
-                <div class="chapter-add__preview-title font-display">${escape(c.title)}</div>
+                ${titleHtml}
                 <div class="chapter-add__preview-meta">
                   <span class="chapter-add__pool-pop">
                     <i data-lucide="users" class="w-3 h-3"></i> ${c.popularity}
@@ -301,19 +373,8 @@
                 <i data-lucide="x" class="w-4 h-4"></i>
               </button>
             </div>
-            <div class="chapter-add__preview-body scroll-chapter__content">
-              ${window.renderMarkdown(c.content || "")}
-            </div>
-            <div class="chapter-add__preview-footer">
-              <button class="chapter-add__pool-toggle ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
-                      onclick="window.referenceGuideAddView._toggleInGuide('${c.id}')">
-                ${inGuide
-                  ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
-                  : `<i data-lucide="plus" class="w-4 h-4"></i><span>Add to my guide</span>`}
-              </button>
-              <button class="btn btn-ghost btn-sm"
-                      onclick="window.referenceGuideAddView._closePreview()">Close</button>
-            </div>
+            ${bodyHtml}
+            ${footerHtml}
           </div>
         </div>
       `;
@@ -321,12 +382,74 @@
 
     _openPreview(chapterId) {
       this._previewChapterId = chapterId;
+      this._editing = false;
+      this._editError = null;
       this.render();
     }
 
     _closePreview() {
       this._previewChapterId = null;
+      this._editing = false;
+      this._editError = null;
       this.render();
+    }
+
+    _startEdit(chapterId) {
+      const c = this._pool.find((x) => x.id === chapterId);
+      if (!c) return;
+      const me = window.store && window.store.get("user");
+      // Defensive — the Edit button is hidden for non-owners but a stale
+      // click after the user signs out shouldn't be able to slip through.
+      if (!me || me.id !== c.created_by) return;
+      this._editing = true;
+      this._editTitle = c.title || "";
+      this._editContent = c.content || "";
+      this._editError = null;
+      this._savingEdit = false;
+      this.render();
+    }
+
+    _cancelEdit() {
+      this._editing = false;
+      this._editTitle = "";
+      this._editContent = "";
+      this._editError = null;
+      this.render();
+    }
+
+    async _saveEdit() {
+      if (!this._previewChapterId) return;
+      const c = this._pool.find((x) => x.id === this._previewChapterId);
+      if (!c) return;
+      const title = (this._editTitle || "").trim();
+      const content = (this._editContent || "").trim();
+      if (!title || !content) {
+        this._editError = "Title and content are required.";
+        this.render();
+        return;
+      }
+      this._savingEdit = true;
+      this._editError = null;
+      this.render();
+      try {
+        const updated = await window.Chapter.update(c.id, { title, content });
+        // Patch the pool row in place so popularity / in_my_guide / source_*
+        // tags stay intact — _loadPool would clobber them.
+        c.title = updated.title;
+        c.content = updated.content;
+        c.updated_at = updated.updated_at;
+        this._editing = false;
+        this._savingEdit = false;
+        document.dispatchEvent(new CustomEvent("chapters-changed", {
+          detail: { gameId: c.source_game_id || c.game_id || this._gameId },
+        }));
+        showToast("Chapter updated", "success");
+        this.render();
+      } catch (e) {
+        this._editError = e.message || "Failed to save chapter";
+        this._savingEdit = false;
+        this.render();
+      }
     }
 
     _onSearchInput(v) {
