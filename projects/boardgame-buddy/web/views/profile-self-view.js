@@ -325,9 +325,6 @@
         body.innerHTML = this._renderCollectionPanel();
       } else if (this._activeTab === TAB_PLAYS) {
         body.innerHTML = this._renderRecentPlaysPanel();
-        // Bind swipe handlers on the freshly painted list. Idempotent via the
-        // `dataset.swipeBound` guard inside the helper.
-        this._attachRecentPlaysSwipe();
       } else if (this._activeTab === TAB_BUDDIES) {
         // BuddiesPanel manages its own innerHTML inside the container.
         body.innerHTML = "";
@@ -730,24 +727,14 @@
       if (playerCount > 0) {
         subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
       }
-      // Each row has a sliding foreground + a fixed-width red "Delete" action
-      // behind it on the right. The user swipes the foreground leftwards to
-      // reveal Delete; tap Delete to remove the play. Non-owners (rare in
-      // self-view but possible) skip the action entirely.
-      const canDelete = p.is_own !== false;
       // Tapping the box art routes to game-detail; rest of the row opens the
       // play. Consistent with every other place a boardgame image appears.
+      // Delete now lives on the play-detail edit form, not on the row.
       const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || '')}'})`;
       return `
-        <li class="recent-plays__row ${canDelete ? "" : "is-no-swipe"}" data-play-id="${p.id}">
-          ${canDelete ? `
-            <button class="recent-plays__delete" aria-label="Delete play"
-                    onclick="event.stopPropagation();window.profileSelfView._confirmDeleteRecentPlay('${p.id}')">
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-              <span>Delete</span>
-            </button>` : ""}
+        <li class="recent-plays__row" data-play-id="${p.id}">
           <div class="recent-plays__row-inner"
-               onclick="window.profileSelfView._openRecentPlay(event,'${p.id}')">
+               onclick="window.router.go('play-detail',{playId:'${p.id}'})">
             ${p.game_thumbnail
               ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
               : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
@@ -761,134 +748,6 @@
           </div>
         </li>
       `;
-    }
-
-    // ── Swipe-to-delete on recent plays ──────────────────────────────────────
-    // The handlers live on the view (not the row) so re-renders don't drop the
-    // listeners. The view delegates from a single touchstart on the list and
-    // tracks per-row state via the closest `.recent-plays__row` ancestor.
-
-    _attachRecentPlaysSwipe() {
-      const list = this.container.querySelector(".recent-plays");
-      if (!list || list.dataset.swipeBound === "1") return;
-      list.dataset.swipeBound = "1";
-      const view = this;
-      let activeRow = null;
-      let startX = 0;
-      let startY = 0;
-      let dx = 0;
-      let locked = null; // "horizontal" | "vertical" | null
-      const REVEAL = 88; // px — matches `.recent-plays__delete` width
-
-      const reset = () => {
-        if (activeRow) {
-          const inner = activeRow.querySelector(".recent-plays__row-inner");
-          if (inner) inner.style.transition = "";
-        }
-        activeRow = null;
-        startX = startY = dx = 0;
-        locked = null;
-      };
-
-      list.addEventListener("touchstart", (e) => {
-        const row = e.target.closest(".recent-plays__row");
-        if (!row || row.classList.contains("is-no-swipe")) return;
-        activeRow = row;
-        const t = e.touches[0];
-        startX = t.clientX;
-        startY = t.clientY;
-        dx = 0;
-        locked = null;
-        const inner = row.querySelector(".recent-plays__row-inner");
-        if (inner) inner.style.transition = "none";
-      }, { passive: true });
-
-      list.addEventListener("touchmove", (e) => {
-        if (!activeRow) return;
-        const t = e.touches[0];
-        const rawDx = t.clientX - startX;
-        const rawDy = t.clientY - startY;
-        if (locked == null) {
-          if (Math.abs(rawDx) < 6 && Math.abs(rawDy) < 6) return;
-          locked = Math.abs(rawDx) > Math.abs(rawDy) ? "horizontal" : "vertical";
-          if (locked === "vertical") {
-            const inner = activeRow.querySelector(".recent-plays__row-inner");
-            if (inner) inner.style.transition = "";
-            activeRow = null;
-            return;
-          }
-        }
-        const wasOpen = activeRow.classList.contains("is-swiped");
-        const base = wasOpen ? -REVEAL : 0;
-        dx = Math.max(-REVEAL, Math.min(0, base + rawDx));
-        const inner = activeRow.querySelector(".recent-plays__row-inner");
-        if (inner) inner.style.transform = `translateX(${dx}px)`;
-      }, { passive: true });
-
-      const finish = (e) => {
-        if (!activeRow) return;
-        const wasHorizontal = locked === "horizontal";
-        const inner = activeRow.querySelector(".recent-plays__row-inner");
-        if (inner) inner.style.transition = "";
-        if (inner) inner.style.transform = "";
-        if (dx <= -REVEAL / 2) activeRow.classList.add("is-swiped");
-        else activeRow.classList.remove("is-swiped");
-        if (wasHorizontal) {
-          // Mobile browsers synthesize a click on the touched element ~300ms
-          // after touchend. Without this guard the click immediately fires
-          // _openRecentPlay → sees `is-swiped` → unswipes the row before the
-          // user ever sees the Delete affordance. Block for 400ms.
-          view._swipeClickBlockUntil = Date.now() + 400;
-          if (e && e.cancelable) e.preventDefault();
-        }
-        reset();
-      };
-      list.addEventListener("touchend", finish);
-      list.addEventListener("touchcancel", finish);
-    }
-
-    _openRecentPlay(event, playId) {
-      // Suppress the synthetic click that arrives right after a swipe gesture
-      // (set by `finish()` in _attachRecentPlaysSwipe). Without this, a fresh
-      // swipe would self-cancel.
-      if (this._swipeClickBlockUntil && Date.now() < this._swipeClickBlockUntil) {
-        if (event) { event.stopPropagation(); event.preventDefault(); }
-        return;
-      }
-      // Tapping a swiped-open row closes it instead of drilling in — gives
-      // users a clean way to dismiss the Delete affordance.
-      const row = event && event.currentTarget && event.currentTarget.closest(".recent-plays__row");
-      if (row && row.classList.contains("is-swiped")) {
-        row.classList.remove("is-swiped");
-        event.stopPropagation();
-        event.preventDefault();
-        return;
-      }
-      window.router.go("play-detail", { playId });
-    }
-
-    async _confirmDeleteRecentPlay(playId) {
-      if (!confirm("Delete this play? This can't be undone.")) {
-        // User backed out — close the swipe affordance so the row reads tidy.
-        const row = this.container.querySelector(`.recent-plays__row[data-play-id="${playId}"]`);
-        if (row) row.classList.remove("is-swiped");
-        return;
-      }
-      try {
-        await window.Play.remove(playId);
-      } catch (e) {
-        alert(e.message || "Failed to delete");
-        return;
-      }
-      // Bust the feed cache so the deleted play disappears the next time the
-      // feed paints. Locally, drop it from the recent-plays list and patch
-      // the total so the pager + "load more" stay accurate.
-      if (window.store && window.store.invalidate) window.store.invalidate("feed");
-      this._recentPlays = (this._recentPlays || []).filter((p) => p.id !== playId);
-      this._recentPlaysTotal = Math.max(0, this._recentPlaysTotal - 1);
-      // Refresh stats too — wins / play counts may have shifted.
-      this._loadStats();
-      this.render();
     }
 
     _renderRecentPlaysLoadMore() {

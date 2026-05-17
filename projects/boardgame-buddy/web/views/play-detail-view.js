@@ -318,6 +318,10 @@
           ${this._editError ? `<div class="alert alert-error m-3">${escape(this._editError)}</div>` : ""}
 
           <section class="play-detail__section play-detail__save-row">
+            <button class="btn btn-ghost play-detail__delete-btn" ${this._saving ? "disabled" : ""}
+                    onclick="window.playDetailView._deletePlay()">
+              <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
+            </button>
             <button class="btn btn-ghost" onclick="window.playDetailView._cancelEdit()">Cancel</button>
             <button class="btn btn-primary" ${this._saving ? "disabled" : ""}
                     onclick="window.playDetailView._saveEdit()">
@@ -362,6 +366,28 @@
       }
       if (input) input.value = "";
       this.render();
+    }
+
+    async _deletePlay() {
+      if (!this._play || !this._play.id) return;
+      if (!confirm("Delete this play? This can't be undone.")) return;
+      this._saving = true;
+      this._editError = null;
+      this.render();
+      try {
+        await window.Play.remove(this._play.id);
+      } catch (e) {
+        this._editError = (e && e.message) || "Failed to delete";
+        this._saving = false;
+        this.render();
+        return;
+      }
+      // Bust the feed cache so the deleted play disappears the next time the
+      // feed paints. Then bounce back to wherever the user came from (feed by
+      // default — `router.back` falls back to that if there's no history).
+      if (window.store && window.store.invalidate) window.store.invalidate("feed");
+      if (this._draft) this._clearPendingPhoto(this._draft);
+      window.router.back("feed");
     }
 
     async _saveEdit() {
