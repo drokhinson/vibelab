@@ -1678,15 +1678,15 @@ body {
 /* ── Play card — back face (players / scores / edit) ────────────────────── */
 .play-card__back-head {
   display: flex; align-items: baseline; gap: 0.5rem;
+  /* Reserve room on the right so the title doesn't run under the absolutely-
+     positioned maximize button that lives in the top-right corner. */
+  padding-right: 2rem;
 }
 .play-card__back-title {
   flex: 1; min-width: 0;
   font-weight: 700; font-size: 0.95rem;
   color: var(--game-accent, var(--accent));
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.play-card__back-date {
-  font-size: 0.78rem; opacity: 0.65; flex-shrink: 0;
 }
 .play-card__back-winners {
   display: inline-flex; align-items: center; gap: 0.3rem;
