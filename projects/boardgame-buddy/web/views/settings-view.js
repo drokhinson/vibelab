@@ -382,7 +382,11 @@
       } finally {
         this._bggSyncing = false;
         // Bust the Profile view's caches: if the user navigates to Profile
-        // next, it'll re-fetch fresh stats / collection / plays.
+        // next, it'll re-fetch fresh stats / collection / plays. The
+        // collection map cache lives inside Collection (not in window.store),
+        // so an explicit invalidate is needed alongside the feed bust —
+        // otherwise status pills keep reflecting the pre-sync shelves.
+        window.Collection.invalidateMyStatusMap();
         window.store.invalidate("feed");
         await this._loadBggStatus();
       }

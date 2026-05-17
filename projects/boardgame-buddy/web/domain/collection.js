@@ -3,12 +3,23 @@
 // /collection fetch and are cached together; any mutation busts both.
 
 (function () {
+  // 5 minute TTL: a user navigating Feed → Game Detail → Profile within the
+  // same session should hit the cached map every time, but the cache must
+  // refresh on its own if a sync or a mutation we missed lands on the
+  // backend (e.g. another tab, a BGG worker draining pending imports).
+  const TTL_MS = 5 * 60 * 1000;
+
   let _status = null;            // { gameId: 'owned' | 'wishlist' | 'played' }
   let _expCount = null;          // { base_game_bgg_id: count }
+  let _fetchedAt = 0;
   let _inflight = null;
 
+  function _isFresh() {
+    return _status && _expCount && (Date.now() - _fetchedAt) < TTL_MS;
+  }
+
   async function _ensure({ force = false } = {}) {
-    if (!force && _status && _expCount) return { status: _status, expCount: _expCount };
+    if (!force && _isFresh()) return { status: _status, expCount: _expCount };
     if (_inflight) return _inflight;
     _inflight = (async () => {
       try {
@@ -29,6 +40,7 @@
         }
         _status = status;
         _expCount = expCount;
+        _fetchedAt = Date.now();
         window.store.set("myCollectionMap", status);
         return { status, expCount };
       } finally {
@@ -83,6 +95,7 @@
     static invalidateMyStatusMap() {
       _status = null;
       _expCount = null;
+      _fetchedAt = 0;
       window.store.invalidate("myCollectionMap");
     }
   }

@@ -81,20 +81,21 @@
       this._recentPlaysTotal = 0;
       this._recentPlaysPage = 1;
       this._recentPlaysLoaded = false;
-      try {
-        const [profile, stats] = await Promise.all([
-          window.User.fetch(userId),
-          window.Stats.for(userId),
-        ]);
-        this._profile = profile;
-        this._stats = stats;
-        this.render();
-        // Collection eagerly so the default tab has content.
-        this._loadCollection();
-      } catch (e) {
-        this._error = e.message || "Failed to load profile";
-        this.render();
-      }
+      // Fan all three top-level fetches out in parallel — the collection
+      // panel doesn't need the profile or stats response, just the userId
+      // we already have. Whichever resolves first hydrates its own block
+      // and re-renders; we don't wait on the slowest call to paint the
+      // header.
+      this._collectionLoading = true;
+      this.render();
+      const profilePromise = window.User.fetch(userId)
+        .then((p) => { this._profile = p; this.render(); })
+        .catch((e) => { this._error = e.message || "Failed to load profile"; this.render(); });
+      const statsPromise = window.Stats.for(userId)
+        .then((s) => { this._stats = s; this.render(); })
+        .catch(() => { /* stats panel renders empty on failure */ });
+      const collectionPromise = this._loadCollection();
+      await Promise.all([profilePromise, statsPromise, collectionPromise]);
     }
 
     async _loadCollection() {

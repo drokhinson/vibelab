@@ -300,10 +300,15 @@ ALTER TABLE public.boardgamebuddy_chapter_reports ENABLE ROW LEVEL SECURITY;
 CREATE UNIQUE INDEX IF NOT EXISTS bgb_profiles_username_uk ON public.boardgamebuddy_profiles(username);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_bgg_id ON public.boardgamebuddy_games(bgg_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_name ON public.boardgamebuddy_games USING gin(to_tsvector('english', name));
-CREATE INDEX IF NOT EXISTS idx_bgb_collections_user ON public.boardgamebuddy_collections(user_id);
-CREATE INDEX IF NOT EXISTS idx_bgb_collections_game ON public.boardgamebuddy_collections(game_id);
-CREATE INDEX IF NOT EXISTS idx_bgb_plays_user ON public.boardgamebuddy_plays(user_id);
-CREATE INDEX IF NOT EXISTS idx_bgb_plays_game ON public.boardgamebuddy_plays(game_id);
+-- Composite indexes (migration 019) — supersede the single-column variants.
+CREATE INDEX IF NOT EXISTS idx_bgb_collections_user_status
+  ON public.boardgamebuddy_collections (user_id, status, added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bgb_collections_game_user
+  ON public.boardgamebuddy_collections (game_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_plays_user_played
+  ON public.boardgamebuddy_plays (user_id, played_at DESC, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bgb_plays_game_played
+  ON public.boardgamebuddy_plays (game_id, played_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_expansions_play
   ON public.boardgamebuddy_play_expansions(play_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(game_id);
@@ -350,9 +355,11 @@ CREATE INDEX IF NOT EXISTS idx_bgb_buddy_edges_user_a
   ON public.boardgamebuddy_buddy_edges (user_a, status);
 CREATE INDEX IF NOT EXISTS idx_bgb_buddy_edges_user_b
   ON public.boardgamebuddy_buddy_edges (user_b, status);
--- play_players decoupling (migration 009).
-CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user
-  ON public.boardgamebuddy_play_players (player_user_id)
+-- play_players decoupling (migration 009 → 019).
+-- Migration 019 replaced the (player_user_id) index with the composite
+-- (player_user_id, play_id) so "find plays I appeared in" is index-only.
+CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user_play
+  ON public.boardgamebuddy_play_players (player_user_id, play_id)
   WHERE player_user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_play
   ON public.boardgamebuddy_play_players (play_id);
