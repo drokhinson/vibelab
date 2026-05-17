@@ -56,7 +56,15 @@ async def get_collection(
 
     result = query.execute()
 
-    plays_data = _plays_visible_to_user(sb, user.user_id)
+    # When the caller only wants owned/wishlist, we don't need the full
+    # cross-user play visibility map — just the plays whose game_id appears
+    # on the shelf, so we can populate last_played_at / play_count on each
+    # tile. Skipping the unscoped fetch is a 2-query saving on the hot path.
+    shelf_game_ids: set[str] = {row["game_id"] for row in (result.data or [])}
+    if status is None or status == CollectionStatus.PLAYED:
+        plays_data = _plays_visible_to_user(sb, user.user_id)
+    else:
+        plays_data = _plays_visible_to_user(sb, user.user_id, list(shelf_game_ids))
     last_played_by_game, play_counts = _index_plays(plays_data)
 
     items: list[CollectionItem] = []
@@ -107,21 +115,33 @@ async def get_collection(
     return items
 
 
-def _plays_visible_to_user(sb: Client, user_id: str) -> list[dict]:
+def _plays_visible_to_user(
+    sb: Client,
+    user_id: str,
+    game_ids: Optional[list[str]] = None,
+) -> list[dict]:
     """All plays the user has been part of: ones they logged themselves
     plus ones a friend logged where a buddy linked to this user was a
     participant. Mirrors the visibility rule the play log uses (see
     list_plays in play_routes.py) so a play that shows up in History
     also drives the Played shelf in the Closet.
 
+    `game_ids`, when provided, scopes both branches to those games — used
+    by /collection for owned/wishlist where we only need play stats for the
+    games already on the shelf and not the full derivation set.
+
     Returns rows projected as {id, game_id, played_at}, newest first.
     """
-    own = (
+    own_q = (
         sb.table("boardgamebuddy_plays")
         .select("id, game_id, played_at")
         .eq("user_id", user_id)
-        .execute()
     )
+    if game_ids is not None:
+        if not game_ids:
+            return []
+        own_q = own_q.in_("game_id", game_ids)
+    own = own_q.execute()
     own_rows = own.data or []
 
     # Shared plays: current user appears as a play participant via the new
@@ -138,12 +158,14 @@ def _plays_visible_to_user(sb: Client, user_id: str) -> list[dict]:
     own_ids = {r["id"] for r in own_rows}
     shared_play_ids = candidate - own_ids
     if shared_play_ids:
-        shared = (
+        shared_q = (
             sb.table("boardgamebuddy_plays")
             .select("id, game_id, played_at")
             .in_("id", list(shared_play_ids))
-            .execute()
         )
+        if game_ids is not None:
+            shared_q = shared_q.in_("game_id", game_ids)
+        shared = shared_q.execute()
         shared_rows = shared.data or []
 
     merged = own_rows + shared_rows

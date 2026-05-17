@@ -54,3 +54,11 @@
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Friends-of-friends candidates not yet connected, ranked by
 --               mutual count. Powers the Feed's "Suggested buddies" card.
+
+-- bgb_distinct_mechanics()
+--   → TABLE (mechanic TEXT)
+--   Defined in: db/migrations/boardgamebuddy/019_perf_indexes.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/game_routes.py
+--   Purpose:    Sorted distinct mechanic strings across the games catalog.
+--               Backs the /games/mechanics endpoint without a full table
+--               scan + Python aggregation.

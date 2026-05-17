@@ -372,13 +372,8 @@ async def list_bgg_expansions(
 async def list_mechanics() -> list[str]:
     """Return a sorted list of all distinct mechanic strings across all games."""
     sb = get_supabase()
-    rows = sb.table("boardgamebuddy_games").select("mechanics").execute()
-    seen: set[str] = set()
-    for row in rows.data or []:
-        for m in row.get("mechanics") or []:
-            if m:
-                seen.add(m)
-    return sorted(seen)
+    result = sb.rpc("bgb_distinct_mechanics", {}).execute()
+    return [row["mechanic"] for row in (result.data or []) if row.get("mechanic")]
 
 
 @router.get(
