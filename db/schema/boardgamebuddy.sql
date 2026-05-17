@@ -94,6 +94,22 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
   bgg_purchase_currency TEXT,
   bgg_inventory_location TEXT,
   bgg_quantity INTEGER,
+  -- Denormalized game fields (migration 020) so the shelf can render +
+  -- filter without joining boardgamebuddy_games. Games are immutable post-
+  -- import; admin re-host paths call _sync_denormalized_game_fields to
+  -- propagate any updates.
+  game_name TEXT NOT NULL,
+  game_thumbnail_url TEXT,
+  game_year_published INTEGER,
+  game_min_players SMALLINT,
+  game_max_players SMALLINT,
+  game_playing_time SMALLINT,
+  game_is_expansion BOOLEAN,
+  game_base_game_bgg_id INTEGER,
+  game_expansion_color TEXT,
+  game_play_mode TEXT,
+  game_bgg_id INTEGER,
+  game_theme_color TEXT,
   UNIQUE(user_id, game_id)
 );
 ALTER TABLE public.boardgamebuddy_collections ENABLE ROW LEVEL SECURITY;
@@ -142,6 +158,14 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   -- (e.g. play a normally-competitive game in team mode for fun).
   play_mode TEXT NOT NULL DEFAULT 'competitive'
     CHECK (play_mode IN ('competitive', 'coop', 'team')),
+  -- Denormalized game fields (migration 020). Games are immutable after BGG
+  -- import; caching name/image/play_mode here turns every play list into a
+  -- single-table read. game_play_mode is the game's intrinsic mode, distinct
+  -- from play_mode above (which is what the user actually played).
+  game_name TEXT NOT NULL,
+  game_thumbnail_url TEXT,
+  game_image_url TEXT,
+  game_play_mode TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
@@ -309,6 +333,9 @@ CREATE INDEX IF NOT EXISTS idx_bgb_plays_user_played
   ON public.boardgamebuddy_plays (user_id, played_at DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_game_played
   ON public.boardgamebuddy_plays (game_id, played_at DESC);
+-- Phase 2 (migration 020): alphabetical shelf sort.
+CREATE INDEX IF NOT EXISTS idx_bgb_collections_user_status_name
+  ON public.boardgamebuddy_collections (user_id, status, game_name);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_expansions_play
   ON public.boardgamebuddy_play_expansions(play_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(game_id);

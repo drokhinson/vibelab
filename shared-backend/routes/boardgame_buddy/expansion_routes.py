@@ -15,6 +15,7 @@ from fastapi import Depends, Header, HTTPException, Path
 from db import get_supabase
 
 from . import router
+from .game_routes import _sync_denormalized_game_fields
 from .dependencies import (
     CurrentUser,
     get_current_admin,
@@ -194,4 +195,6 @@ async def update_expansion_color(
     )
     if not updated.data:
         raise HTTPException(status_code=500, detail="Failed to update color")
+    # Fan the new color out to any collection rows that cache it.
+    _sync_denormalized_game_fields(sb, game_id)
     return GameSummary(**updated.data[0])

@@ -551,10 +551,100 @@ async def refresh_game_images(
                 "image_url": await _upload_to_storage(sb, game["bgg_id"], raw_img, "image"),
                 "thumbnail_url": await _upload_to_storage(sb, game["bgg_id"], raw_thumb, "thumb"),
             }).eq("id", game["id"]).execute()
+            _sync_denormalized_game_fields(sb, game["id"])
             updated += 1
         except Exception:
             continue
     return RefreshImagesResponse(updated=updated)
+
+
+# ── Denormalization helpers (migration 020) ──────────────────────────────────
+# Plays and collections cache a subset of game fields so list reads stay
+# single-table. These helpers build the payload from an in-hand game row
+# (no extra round trip) and fan a games-row mutation out to dependents.
+
+# Columns a play row caches off boardgamebuddy_games. game_play_mode is the
+# game's intrinsic mode, distinct from plays.play_mode (the user's per-play
+# choice).
+PLAY_DENORM_GAME_FIELDS = "name, thumbnail_url, image_url, play_mode"
+
+# Columns a collection row caches off boardgamebuddy_games.
+COLLECTION_DENORM_GAME_FIELDS = (
+    "bgg_id, name, thumbnail_url, year_published, min_players, max_players, "
+    "playing_time, is_expansion, base_game_bgg_id, expansion_color, "
+    "play_mode, theme_color"
+)
+
+
+def play_denormalized_from_game(game: dict) -> dict:
+    """Translate a boardgamebuddy_games row into the play-denorm payload."""
+    return {
+        "game_name": game["name"],
+        "game_thumbnail_url": game.get("thumbnail_url"),
+        "game_image_url": game.get("image_url"),
+        "game_play_mode": game.get("play_mode"),
+    }
+
+
+def collection_denormalized_from_game(game: dict) -> dict:
+    """Translate a boardgamebuddy_games row into the collection-denorm payload."""
+    return {
+        "game_name": game["name"],
+        "game_thumbnail_url": game.get("thumbnail_url"),
+        "game_year_published": game.get("year_published"),
+        "game_min_players": game.get("min_players"),
+        "game_max_players": game.get("max_players"),
+        "game_playing_time": game.get("playing_time"),
+        "game_is_expansion": game.get("is_expansion"),
+        "game_base_game_bgg_id": game.get("base_game_bgg_id"),
+        "game_expansion_color": game.get("expansion_color"),
+        "game_play_mode": game.get("play_mode"),
+        "game_bgg_id": game.get("bgg_id"),
+        "game_theme_color": game.get("theme_color"),
+    }
+
+
+def fetch_play_denorm_for_game(sb: Client, game_id: str) -> Optional[dict]:
+    """Look up a game and return the play-denorm payload, or None if missing."""
+    res = (
+        sb.table("boardgamebuddy_games")
+        .select(PLAY_DENORM_GAME_FIELDS)
+        .eq("id", game_id)
+        .execute()
+    )
+    return play_denormalized_from_game(res.data[0]) if res.data else None
+
+
+def fetch_collection_denorm_for_game(sb: Client, game_id: str) -> Optional[dict]:
+    """Look up a game and return the collection-denorm payload, or None if missing."""
+    res = (
+        sb.table("boardgamebuddy_games")
+        .select(COLLECTION_DENORM_GAME_FIELDS)
+        .eq("id", game_id)
+        .execute()
+    )
+    return collection_denormalized_from_game(res.data[0]) if res.data else None
+
+
+def _sync_denormalized_game_fields(sb: Client, game_id: str) -> None:
+    """Propagate a games-row mutation to every plays / collections row that
+    caches its fields. Called from the admin paths that mutate games
+    (re-host images, override expansion color). New plays/collections write
+    the denorm fields inline so they don't need this fan-out.
+    """
+    res = (
+        sb.table("boardgamebuddy_games")
+        .select(COLLECTION_DENORM_GAME_FIELDS)
+        .eq("id", game_id)
+        .execute()
+    )
+    if not res.data:
+        return
+    game = res.data[0]
+    play_payload = play_denormalized_from_game(game)
+    collection_payload = collection_denormalized_from_game(game)
+    sb.table("boardgamebuddy_plays").update(play_payload).eq("game_id", game_id).execute()
+    sb.table("boardgamebuddy_collections").update(collection_payload).eq("game_id", game_id).execute()
 
 
 _GAME_SUMMARY_FIELDS = (
@@ -588,6 +678,7 @@ async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Non
         "image_url": await _upload_to_storage(sb, bgg_id, raw_img, "image"),
         "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
     }).eq("id", game_id).execute()
+    _sync_denormalized_game_fields(sb, game_id)
 
 
 @router.get(

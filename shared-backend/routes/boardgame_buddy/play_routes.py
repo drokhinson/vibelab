@@ -13,6 +13,7 @@ from fastapi import Depends, Path, Query, HTTPException, UploadFile, File
 from db import get_supabase
 
 from . import router
+from .game_routes import play_denormalized_from_game
 from .models import (
     MessageResponse,
     PlayCountResponse,
@@ -444,10 +445,11 @@ async def log_play(
     sb = get_supabase()
 
     # Verify game exists; also fetch its play_mode so we can inherit it
-    # when the request didn't override.
+    # when the request didn't override + image_url for the new play row's
+    # denormalized cache (migration 020).
     game = (
         sb.table("boardgamebuddy_games")
-        .select("id, name, thumbnail_url, play_mode")
+        .select("id, name, thumbnail_url, image_url, play_mode")
         .eq("id", body.game_id)
         .execute()
     )
@@ -471,6 +473,7 @@ async def log_play(
             "notes": body.notes,
             "photo_url": body.photo_url,
             "play_mode": effective_mode,
+            **play_denormalized_from_game(game_row),
         })
         .execute()
     )
