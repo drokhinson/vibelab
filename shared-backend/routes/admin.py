@@ -10,6 +10,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Header, Query
 
+import cache
 from db import get_supabase
 from auth import hash_password, require_admin
 from shared_models import HealthResponse
@@ -202,6 +203,35 @@ def _list_supabase_auth_users(sb, profile_table: str):
 async def health():
     """Health check."""
     return {"project": "admin", "status": "ok"}
+
+
+@router.get("/cache/stats", summary="Per-namespace in-process cache sizes")
+async def cache_stats(authorization: Optional[str] = Header(None)):
+    """Snapshot of the in-process TTL cache (entries + cap per namespace).
+
+    Per-worker view — Railway runs multiple uvicorn workers in production and
+    each one has its own cache, so this is a debug aid rather than ground
+    truth. Useful for sanity-checking that BGG / game / mechanics caches are
+    populating as expected.
+    """
+    require_admin(authorization)
+    return {"namespaces": cache.stats()}
+
+
+@router.post("/cache/clear", summary="Clear an in-process cache namespace (or all)")
+async def cache_clear(
+    namespace: Optional[str] = Query(
+        None,
+        description="Specific namespace to clear (e.g. 'bgg.thing', 'game.detail'). Omit to clear everything.",
+    ),
+    authorization: Optional[str] = Header(None),
+):
+    """Drop entries from the in-process TTL cache. Useful when a BGG /thing
+    response went stale faster than its 24h TTL (rare) or when debugging
+    cache invalidation. Per-worker — call once per running worker."""
+    require_admin(authorization)
+    cache.clear(namespace)
+    return {"cleared": namespace or "all"}
 
 
 @router.get("/users")

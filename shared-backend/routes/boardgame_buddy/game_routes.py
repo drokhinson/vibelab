@@ -9,6 +9,7 @@ from fastapi import Depends, Header, Query, Path, HTTPException
 from fastapi.responses import Response
 from supabase import Client
 
+import cache
 from db import get_supabase
 from shared_models import HealthResponse
 
@@ -16,11 +17,34 @@ from . import router
 from .bgg_client import (
     BGG_USER_AGENT,
     fetch_bgg,
+    invalidate_bgg_thing_cache,
     normalize_image_url,
     parse_bgg_xml,
 )
+
+
+# Cache namespaces for game-side reads. Both invalidate on admin writes
+# (refresh-images, expansion-color override) and on a fresh BGG import.
+_CACHE_GAME = "game.detail"          # game_id (str) → boardgamebuddy_games row dict
+_CACHE_MECHANICS = "game.mechanics"  # sentinel key → sorted list[str]
+_CACHE_GAME_TTL_S = 60 * 60          # games are immutable post-import; 1h is plenty
+_CACHE_MECHANICS_TTL_S = 60 * 60
+_MECHANICS_KEY = "all"               # single-entry namespace; constant key
+
+cache.configure(_CACHE_GAME, max_entries=2000)
+cache.configure(_CACHE_MECHANICS, max_entries=1)
+
+
+def _invalidate_game_caches(bgg_id: Optional[int] = None) -> None:
+    """One-shot bust called from every admin path that mutates games (and from
+    import). Clears the in-process game row cache, the mechanics list, and the
+    BGG /thing XML cache so a subsequent read sees fresh data.
+    """
+    cache.clear(_CACHE_GAME)
+    cache.clear(_CACHE_MECHANICS)
+    invalidate_bgg_thing_cache()
 from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
-from .dependencies import CurrentUser, get_current_admin, maybe_supabase_user
+from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
 from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
 
 logger = logging.getLogger(__name__)
@@ -370,10 +394,19 @@ async def list_bgg_expansions(
     summary="Distinct mechanics",
 )
 async def list_mechanics() -> list[str]:
-    """Return a sorted list of all distinct mechanic strings across all games."""
+    """Return a sorted list of all distinct mechanic strings across all games.
+
+    Cached in-process for 1h. The mechanics catalog only grows on a BGG
+    import; invalidated by `_invalidate_game_caches`.
+    """
+    hit = cache.get(_CACHE_MECHANICS, _MECHANICS_KEY)
+    if hit is not None:
+        return hit
     sb = get_supabase()
     result = sb.rpc("bgb_distinct_mechanics", {}).execute()
-    return [row["mechanic"] for row in (result.data or []) if row.get("mechanic")]
+    out = [row["mechanic"] for row in (result.data or []) if row.get("mechanic")]
+    cache.set(_CACHE_MECHANICS, _MECHANICS_KEY, out, ttl_seconds=_CACHE_MECHANICS_TTL_S)
+    return out
 
 
 @router.get(
@@ -385,8 +418,19 @@ async def list_mechanics() -> list[str]:
 async def get_game(
     game_id: str = Path(..., description="Game UUID"),
 ) -> GameDetail:
-    """Get full details for a single game."""
+    """Get full details for a single game.
+
+    The games row + the base-game lookup are cached for 1h (game data is
+    immutable post-import; admin paths bust the cache via
+    `_invalidate_game_caches`). Saves 1–2 DB round-trips per Game Detail
+    open on repeat visits.
+    """
     sb = get_supabase()
+
+    cached = cache.get(_CACHE_GAME, game_id)
+    if cached is not None:
+        return GameDetail(**cached["row"], base_game_id=cached.get("base_game_id"), base_game_name=cached.get("base_game_name"))
+
     result = (
         sb.table("boardgamebuddy_games")
         .select("*")
@@ -414,6 +458,12 @@ async def get_game(
             base_game_id = base.data[0]["id"]
             base_game_name = base.data[0]["name"]
 
+    cache.set(
+        _CACHE_GAME,
+        game_id,
+        {"row": row, "base_game_id": base_game_id, "base_game_name": base_game_name},
+        ttl_seconds=_CACHE_GAME_TTL_S,
+    )
     return GameDetail(
         **row,
         base_game_id=base_game_id,
@@ -528,6 +578,10 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
         .insert(game_data)
         .execute()
     )
+    # New game added — mechanics list might expand and the catalog grew, so
+    # bust the read-side caches. BGG /thing for THIS game is now stale (we
+    # just persisted it; further /thing fetches should hit our DB instead).
+    _invalidate_game_caches(bgg_id=bgg_id)
     return result.data[0]
 
 
@@ -586,6 +640,8 @@ async def refresh_game_images(
             updated += 1
         except Exception:
             continue
+    if updated:
+        _invalidate_game_caches()
     return RefreshImagesResponse(updated=updated)
 
 
@@ -710,6 +766,7 @@ async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Non
         "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
     }).eq("id", game_id).execute()
     _sync_denormalized_game_fields(sb, game_id)
+    _invalidate_game_caches(bgg_id=bgg_id)
 
 
 @router.get(
