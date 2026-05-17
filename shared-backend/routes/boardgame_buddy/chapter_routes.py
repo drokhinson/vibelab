@@ -586,7 +586,11 @@ async def list_chapter_reports(
             " boardgamebuddy_guide_chapters(title, content, chapter_type, game_id,"
             " boardgamebuddy_chapter_types(label),"
             " boardgamebuddy_games(name)),"
-            " boardgamebuddy_profiles(display_name)"
+            # boardgamebuddy_chapter_reports has TWO FKs into profiles
+            # (reporter_id + resolved_by). PostgREST can't pick a default
+            # relationship, so disambiguate via !reporter_id and alias the
+            # joined object as `reporter` for a stable JSON key.
+            " reporter:boardgamebuddy_profiles!reporter_id(display_name)"
         )
         .eq("status", status)
         .order("created_at", desc=False)
@@ -598,7 +602,7 @@ async def list_chapter_reports(
         chapter = r.get("boardgamebuddy_guide_chapters") or {}
         type_obj = chapter.get("boardgamebuddy_chapter_types") or {}
         game_obj = chapter.get("boardgamebuddy_games") or {}
-        reporter = r.get("boardgamebuddy_profiles") or {}
+        reporter = r.get("reporter") or {}
         content = chapter.get("content") or ""
         preview = content[:240] + ("…" if len(content) > 240 else "")
         out.append(ChapterReportResponse(
