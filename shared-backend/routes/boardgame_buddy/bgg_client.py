@@ -21,12 +21,13 @@ import logging
 import os
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Optional
 
 import httpx
 from fastapi import HTTPException
 from supabase import Client
 
+import cache
 from api_logger import log_external_call
 from db import get_supabase
 
@@ -157,7 +158,20 @@ async def fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
 
     Anonymous request — used for catalog endpoints (search, /thing). Sends the
     shared bearer token only.
+
+    `/thing` (game detail) and `/search` responses are cached in-process by
+    `_get_cached_response` / `_put_cached_response` since they're read-mostly
+    and immutable per (path, params) for the cache lifetime: games never
+    change post-import so 24h is fine, search results are momentary so 1h is
+    enough to absorb repeat typing. fetch_bgg_as_user (per-user collection/
+    plays) is never cached — those reflect the user's live BGG state.
     """
+    cache_key = _cache_key_for(path, params)
+    if cache_key is not None:
+        hit = _get_cached_response(path, cache_key)
+        if hit is not None:
+            return hit
+
     full_url = f"{BGG_API_BASE}{path}"
 
     async def _do_get() -> httpx.Response:
@@ -180,7 +194,56 @@ async def fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
         )
 
     _map_bgg_status(resp, path=path, params=params)
-    return resp.text
+    text = resp.text
+    if cache_key is not None:
+        _put_cached_response(path, cache_key, text)
+    return text
+
+
+# Cache namespaces + TTLs. /thing dominates memory (XML payloads ~30KB each)
+# so it's capped at 500 entries (~15MB worst case); /search payloads are
+# smaller and shorter-lived. fetch_bgg consults these and writes through on
+# miss. Invalidation hooks live in game_routes (import / admin refresh).
+_BGG_CACHE_THING = "bgg.thing"
+_BGG_CACHE_SEARCH = "bgg.search"
+_BGG_THING_TTL_S = 24 * 60 * 60
+_BGG_SEARCH_TTL_S = 60 * 60
+
+cache.configure(_BGG_CACHE_THING, max_entries=500)
+cache.configure(_BGG_CACHE_SEARCH, max_entries=200)
+
+
+def _cache_key_for(path: str, params: dict) -> Optional[tuple[str, ...]]:
+    """Return a stable cache key for cacheable paths, or None to bypass.
+
+    Tuple of sorted (k, str(v)) pairs so the key is hashable and order-stable
+    across callers that pass the same params in different orders.
+    """
+    if path not in ("/thing", "/search"):
+        return None
+    return tuple(sorted((k, str(v)) for k, v in params.items()))
+
+
+def _get_cached_response(path: str, key: tuple[str, ...]) -> Optional[str]:
+    ns = _BGG_CACHE_THING if path == "/thing" else _BGG_CACHE_SEARCH
+    return cache.get(ns, key)
+
+
+def _put_cached_response(path: str, key: tuple[str, ...], value: str) -> None:
+    ns = _BGG_CACHE_THING if path == "/thing" else _BGG_CACHE_SEARCH
+    ttl = _BGG_THING_TTL_S if path == "/thing" else _BGG_SEARCH_TTL_S
+    cache.set(ns, key, value, ttl_seconds=ttl)
+
+
+def invalidate_bgg_thing_cache() -> None:
+    """Drop the entire /thing cache.
+
+    Called by admin paths that re-import or re-host images. Per-key
+    invalidation would be more surgical but the cache is small (capped
+    at 500 entries) and admin writes are rare, so clearing the namespace
+    is the simpler safe choice.
+    """
+    cache.clear(_BGG_CACHE_THING)
 
 
 # ── Per-user (cookie) variant ────────────────────────────────────────────────
