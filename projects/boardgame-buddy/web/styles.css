@@ -108,7 +108,7 @@ body {
   color: oklch(var(--bc));
 }
 
-/* Search-highlight inside chunk content */
+/* Search-highlight inside chapter content */
 .guide-text mark,
 .scroll-panel mark {
   background: rgba(201, 146, 42, 0.42);
@@ -155,36 +155,422 @@ body {
 .scroll-panel .collapse-title {
   color: #2B1D0A;
 }
-.scroll-panel .scroll-chunk {
+.scroll-panel .scroll-chapter {
   background: rgba(255, 250, 235, 0.55);
   border: 1px solid rgba(139, 111, 60, 0.3);
   border-radius: 3px;
 }
-/* Make chunks themselves a comfortable tap target on phones — 48px+
-   guarantees the whole row is hittable without missing the collapse arrow. */
-.scroll-panel .scroll-chunk > .collapse-title {
-  min-height: 48px;
-  padding-top: 12px;
-  padding-bottom: 12px;
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-/* Pull the chunk list flush against the parchment edges (edge-to-edge) so
-   horizontal padding from .scroll-panel doesn't double-up with chunk margin. */
-.scroll-panel #guide-chunk-list { margin: 0 0.1rem; }
-.scroll-panel .guide-section { margin: 0; }
-.scroll-panel .scroll-chunk .badge {
-  background: rgba(139, 111, 60, 0.2);
-  color: #2B1D0A;
-  border: 1px solid rgba(139, 111, 60, 0.35);
-}
-.scroll-panel .scroll-chunk [data-lucide] {
+.scroll-panel .scroll-chapter [data-lucide] {
   color: #6B4A1A;
 }
 .scroll-panel .btn-ghost {
   color: #2B1D0A;
 }
+
+/* ── Reference guide scroll: roll-up animation + open/closed states ────── */
+.scroll-panel {
+  overflow: hidden;
+  transition: padding 360ms cubic-bezier(.4, 0, .2, 1);
+}
+.scroll-panel__body {
+  max-height: 4000px;
+  overflow: hidden;
+  transition: max-height 360ms cubic-bezier(.4, 0, .2, 1),
+              opacity 240ms ease 80ms;
+  opacity: 1;
+}
+.scroll-panel--rolled {
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
+}
+.scroll-panel--rolled .scroll-panel__body {
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 360ms cubic-bezier(.4, 0, .2, 1),
+              opacity 180ms ease;
+}
+/* Make the rolled edges tappable. They visually overlap the existing
+   ::before/::after rolls and give a 32px tap target. */
+.scroll-panel__roll {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  height: 32px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  z-index: 2;
+  padding: 0;
+}
+.scroll-panel__roll--top    { top: -16px; }
+.scroll-panel__roll--bottom { bottom: -16px; }
+.scroll-panel__roll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.scroll-panel__search-row {
+  position: relative;
+  margin-bottom: 0.4rem;
+}
+.scroll-panel__search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6B4A1A;
+}
+.scroll-panel__search {
+  width: 100%;
+  height: 38px;
+  border-radius: 999px;
+  background: rgba(255, 250, 235, 0.75);
+  border: 1px solid rgba(139, 111, 60, 0.35);
+  color: #2B1D0A;
+  padding: 0 14px 0 32px;
+  font-size: 0.88rem;
+}
+.scroll-panel__search::placeholder { color: rgba(43, 29, 10, 0.45); }
+.scroll-panel__search:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.scroll-chapter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.scroll-chapter__summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 10px 12px;
+  min-height: 48px;
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.scroll-chapter__summary::-webkit-details-marker { display: none; }
+.scroll-chapter__summary::marker { content: ""; }
+.scroll-chapter__icon { flex-shrink: 0; }
+.scroll-chapter__title { flex: 1; min-width: 0; }
+.scroll-chapter__type {
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(139, 111, 60, 0.2);
+  color: #2B1D0A;
+  border: 1px solid rgba(139, 111, 60, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.scroll-chapter__content {
+  padding: 4px 14px 12px;
+  font-size: 0.88rem;
+  color: #2B1D0A;
+  line-height: 1.45;
+}
+.scroll-chapter__content h2,
+.scroll-chapter__content h3,
+.scroll-chapter__content h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 0.6rem 0 0.3rem;
+}
+.scroll-chapter__content h2 { font-size: 1.05rem; }
+.scroll-chapter__content h3 { font-size: 0.95rem; }
+.scroll-chapter__content p { margin: 0.4rem 0; }
+.scroll-chapter__content ul {
+  margin: 0.3rem 0 0.4rem;
+  padding-left: 1.1rem;
+}
+.scroll-chapter__content code {
+  background: rgba(139, 111, 60, 0.18);
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+.scroll-chapter__content .guide-table {
+  margin: 0.4rem 0;
+  width: 100%;
+  font-size: 0.82rem;
+}
+.scroll-chapter__actions {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0 12px 10px;
+}
+.scroll-panel__empty {
+  text-align: center;
+  padding: 1rem 0.6rem;
+  font-size: 0.88rem;
+  color: #6B4A1A;
+}
+.scroll-panel__loading {
+  display: flex;
+  justify-content: center;
+  padding: 0.6rem 0;
+}
+.scroll-panel__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 10px 14px;
+  background: rgba(43, 29, 10, 0.85);
+  color: #F5E9D0;
+  border: 0;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.scroll-panel__add:hover { background: rgba(43, 29, 10, 1); }
+
+/* ── Collapsible section header (Expansions, etc.) ───────────────────────── */
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 4px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+  font-size: inherit;
+}
+.collapsible-header__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+}
+.collapsible-header__chev {
+  opacity: 0.6;
+  transition: opacity 120ms ease;
+}
+.collapsible-header:hover .collapsible-header__chev { opacity: 1; }
+
+/* ── Add-chapter view (Create | Browse) ──────────────────────────────────── */
+.chapter-add__tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  border-bottom: 1px solid oklch(var(--b3));
+}
+.chapter-add__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 8px 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: oklch(var(--bc) / 0.7);
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.chapter-add__tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.chapter-add__filters {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.chapter-add__search { flex: 1; }
+.chapter-add__pool {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.chapter-add__pool-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 10px 12px;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.55rem;
+}
+.chapter-add__pool-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(201, 146, 42, 0.18);
+  color: var(--accent);
+}
+.chapter-add__pool-body { flex: 1; min-width: 0; }
+.chapter-add__pool-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.chapter-add__pool-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 2px 0 4px;
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+.chapter-add__pool-pop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+.chapter-add__pool-preview {
+  font-size: 0.78rem;
+  opacity: 0.75;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+.chapter-add__pool-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-end;
+}
+.chapter-add__pool-report { padding: 4px 8px; }
+
+.chapter-add__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.chapter-add__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.chapter-add__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.chapter-add__type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.4rem;
+}
+.chapter-add__type-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 8px 10px;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.5rem;
+  color: oklch(var(--bc));
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.chapter-add__type-btn:hover { border-color: var(--accent); }
+.chapter-add__type-btn--active {
+  background: rgba(201, 146, 42, 0.16);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.chapter-add__textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.chapter-add__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ── Admin reports ──────────────────────────────────────────────────────── */
+.admin-reports__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+.admin-reports__filter { display: inline-flex; gap: 0.3rem; }
+.admin-reports__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.admin-reports__row {
+  padding: 10px 12px;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.55rem;
+}
+.admin-reports__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+.admin-reports__game { font-weight: 600; opacity: 0.9; }
+.admin-reports__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  margin: 2px 0 4px;
+}
+.admin-reports__preview {
+  font-size: 0.82rem;
+  opacity: 0.75;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.admin-reports__reason {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  padding: 6px 8px;
+  background: rgba(166, 93, 44, 0.1);
+  border-left: 3px solid var(--rust);
+  border-radius: 3px;
+}
+.admin-reports__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+.admin-reports__actions { display: inline-flex; gap: 0.4rem; }
 
 /* Markdown tables rendered as real data grids */
 .scroll-panel .guide-table {
@@ -215,7 +601,7 @@ body {
   background: #e7e3db;
 }
 
-/* ── Sticky guide sub-header (back / search / chunk-type pills) ─────────── */
+/* ── Sticky guide sub-header (back / search / chapter-type pills) ─────────── */
 /* Always-on-screen affordances for one-handed lookup — sits inside
    #game-detail-content above the scroll-panel and rides scroll. */
 .guide-controls {
@@ -334,7 +720,7 @@ body {
 }
 .guide-pill[aria-pressed="true"] .guide-pill__count { opacity: 0.85; }
 
-/* When a chunk is filtered out by type or search, the row is fully hidden. */
+/* When a chapter is filtered out by type or search, the row is fully hidden. */
 .swipe-row[hidden] { display: none !important; }
 
 /* "No results" message inside guide search */
@@ -959,7 +1345,7 @@ body {
   transform: none;
 }
 
-/* ── Guide sections (grouping by chunk_type) ─────────────────────────────── */
+/* ── Guide sections (grouping by chapter_type) ─────────────────────────────── */
 .guide-section + .guide-section { margin-top: 0.85rem; }
 .guide-section__title {
   display: flex;
@@ -1053,7 +1439,7 @@ body {
   border-color: var(--accent-hover);
 }
 
-/* ── Guide chunk swipe ──────────────────────────────────────────────────────── */
+/* ── Guide chapter swipe ──────────────────────────────────────────────────── */
 .swipe-row {
   position: relative;
   overflow: hidden;

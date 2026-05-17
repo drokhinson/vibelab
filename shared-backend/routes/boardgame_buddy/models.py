@@ -310,154 +310,81 @@ class ProfileSearchResult(BaseModel):
     email: Optional[str] = None
 
 
-# ── Guide chunks ──────────────────────────────────────────────────────────────
+# ── Reference-guide chapters ──────────────────────────────────────────────────
 
-class ChunkTypeResponse(BaseModel):
+class ChapterTypeResponse(BaseModel):
     id: str
     label: str
     icon: Optional[str] = None
     display_order: int
 
 
-class ChunkCreate(BaseModel):
-    chunk_type: str
+class ChapterCreate(BaseModel):
+    chapter_type: str
     title: str
     content: str
     layout: str = "text"
 
 
-class ChunkUpdate(BaseModel):
-    chunk_type: Optional[str] = None
+class ChapterUpdate(BaseModel):
+    chapter_type: Optional[str] = None
     title: Optional[str] = None
     content: Optional[str] = None
     layout: Optional[str] = None
-    # Admin-only. Promotes/demotes a chunk in the curated default guide.
-    is_default: Optional[bool] = None
 
 
-class ExpansionInline(BaseModel):
-    """Source-pack metadata inlined on chunks that come from an expansion.
-
-    `expansion_game_id` is the game UUID (FK target). The frontend uses
-    `color` to render the dot in the chunk header; `name` powers the tooltip.
-    """
-    expansion_game_id: str
-    name: str
-    color: Optional[str] = None
-
-
-class ChunkResponse(BaseModel):
+class ChapterResponse(BaseModel):
     id: str
     game_id: str
-    chunk_type: str
-    chunk_type_label: Optional[str] = None
-    chunk_type_icon: Optional[str] = None
-    chunk_type_order: int = 0
+    chapter_type: str
+    chapter_type_label: Optional[str] = None
+    chapter_type_icon: Optional[str] = None
+    chapter_type_order: int = 0
     title: str
     layout: str
     content: str
-    is_default: bool = False
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
     updated_at: datetime
-    expansion: Optional[ExpansionInline] = None
 
 
-class MyGuideChunkResponse(ChunkResponse):
-    is_hidden: bool = False
-    user_display_order: Optional[int] = None
-    # True for base-game chunks and chunks from expansions the user has
-    # enabled. False only when include_all_expansions=true surfaces a chunk
-    # from a linked-but-disabled expansion so the frontend can cache it.
-    is_expansion_enabled: bool = True
+class ChapterPoolItem(ChapterResponse):
+    # Number of users who have this chapter in their guide. Browse pool
+    # rows are sorted by `popularity DESC, created_at DESC`.
+    popularity: int = 0
+    # Whether the calling user already has this chapter in their guide.
+    # Frontend hides rows where this is true. Anon callers always see
+    # `in_my_guide=false`.
+    in_my_guide: bool = False
 
 
-class MyGuideResponse(BaseModel):
-    has_customizations: bool
-    chunks: list[MyGuideChunkResponse]
+class MyGuideChapterResponse(ChapterResponse):
+    added_at: datetime
 
 
-class GuideSelectionUpdate(BaseModel):
-    chunk_ids: list[str]
+class AddChapterRequest(BaseModel):
+    chapter_id: str
 
 
-class ChunkVisibilityUpdate(BaseModel):
-    is_hidden: bool
+class ChapterReportCreate(BaseModel):
+    reason: Optional[str] = Field(None, max_length=500)
 
 
-# ── Guide bundle import (agentic generator) ───────────────────────────────────
-
-class GuideBundleGame(BaseModel):
-    bgg_id: int = Field(..., gt=0)
-    name: str
-    min_players: Optional[int] = None
-    max_players: Optional[int] = None
-    playing_time: Optional[int] = None
-    bgg_url: Optional[str] = None
-    is_expansion: bool = False
-    base_game_bgg_id: Optional[int] = None
-    rulebook_url: Optional[str] = None
-
-
-class GuideBundleChunk(BaseModel):
-    chunk_type: str
-    title: str = Field(..., max_length=200)
-    content: str
-    layout: str = "text"
-    # Per-chunk override. None falls back to the bulk default determined by the
-    # caller (admin direct import → True; community submission → False).
-    is_default: Optional[bool] = None
-
-
-class GuideBundle(BaseModel):
-    version: int = 1
-    game: GuideBundleGame
-    chunks: list[GuideBundleChunk] = Field(..., min_length=1, max_length=25)
-    source: Optional[dict[str, Any]] = None
-
-
-class GuideImportResponse(BaseModel):
-    game_id: str
-    imported_game: bool
-    chunks_inserted: int
-    chunks_skipped: int
-    skipped_reasons: list[str]
-    # Set when a new game was inserted directly from bundle metadata and the
-    # follow-up best-effort BGG image fetch failed. Approval still succeeds.
-    image_fetch_warning: Optional[str] = None
-
-
-# ── Pending guide review (user-uploaded bundles) ──────────────────────────────
-
-class PendingGuideSubmitResponse(BaseModel):
-    id: Optional[str] = None
-    status: str  # "submitted" — always queued for admin review
-    message: str
-    import_result: Optional[GuideImportResponse] = None
-
-
-class PendingGuideSummary(BaseModel):
+class ChapterReportResponse(BaseModel):
     id: str
-    uploader_id: str
-    uploader_name: Optional[str] = None
+    chapter_id: str
+    chapter_title: str
+    chapter_content_preview: str
+    chapter_type: str
+    chapter_type_label: Optional[str] = None
+    game_id: str
     game_name: str
-    bgg_id: Optional[int] = None
-    chunk_count: int
+    reporter_id: str
+    reporter_name: Optional[str] = None
+    reason: Optional[str] = None
     status: str
     created_at: datetime
-
-
-class PendingGuideDetail(PendingGuideSummary):
-    bundle: dict[str, Any]
-    # Existing-game lookup so the review UI can show NEW vs EXISTING up front.
-    game_exists: bool = False
-    existing_game: Optional[GameSummary] = None
-
-
-class PendingGuideDecisionBody(BaseModel):
-    notes: Optional[str] = None
-    force: bool = False
-    override_bundle: Optional[GuideBundle] = None
+    resolved_at: Optional[datetime] = None
 
 
 # ── Expansions ────────────────────────────────────────────────────────────────
@@ -469,7 +396,6 @@ class ExpansionListItem(BaseModel):
     thumbnail_url: Optional[str] = None
     color: Optional[str] = None
     is_enabled: bool = False
-    chunk_count: int = 0
     rulebook_url: Optional[str] = None
 
 

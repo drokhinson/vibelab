@@ -1,10 +1,10 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-05-16 (OOP / Strava redesign — migrations 008..012, frontend rewrite)
+> Last updated: 2026-05-17 (reference guide rebuilt as user-owned "chapters" — migration 018)
 
 ## What It Does
-A Strava-style log for board game plays. The home view is a chronological feed of plays from the user and their accepted buddies, interspersed with "hot games this week", suggested buddies, and dormant games from the user's own collection. Logging a play supports a short-code "join from another phone" flow so the host's device opens a session code that other phones join to add themselves to the player list. Profiles are fully public and show a Strava-style stats strip + collection grid. The quick-reference guide system (chunks, hide/reorder, custom layouts) is preserved in the database and the admin tooling, but is hidden from the user-facing app for now — game detail surfaces the official `rulebook_url` instead.
+A Strava-style log for board game plays. The home view is a chronological feed of plays from the user and their accepted buddies, interspersed with "hot games this week", suggested buddies, and dormant games from the user's own collection. Logging a play supports a short-code "join from another phone" flow so the host's device opens a session code that other phones join to add themselves to the player list. Profiles are fully public and show a Strava-style stats strip + collection grid. The reference-guide system is fully user-driven: each user builds their own per-game guide by adding "chapters" — either creating new ones or browsing the community pool. The pool sorts by popularity. Reports on offensive chapters route to admin review.
 
 ## Status
 Prototype
@@ -37,7 +37,7 @@ Game catalog seeded from BGG top 1000.
 | is_expansion | BOOLEAN | default false; true when this row is an expansion of another game |
 | base_game_bgg_id | INTEGER | nullable; BGG id of the base game this expansion extends (no FK — expansions may be imported before their base game) |
 | expansion_color | TEXT | nullable; auto-assigned at import for the expansion-dot UI (admin-overridable) |
-| rulebook_url | TEXT | nullable; official rulebook URL surfaced as a link card on the game's reference guide. Per-game metadata, not a chunk |
+| rulebook_url | TEXT | nullable; official rulebook URL surfaced as a link card on the game detail page |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_profiles
@@ -49,22 +49,6 @@ Linked to Supabase Auth `auth.users`.
 | avatar_url | TEXT | nullable |
 | is_admin | BOOLEAN | default false; granted via `POST /profile/become-admin` with the shared admin key |
 | bgg_username | TEXT | nullable; linked BoardGameGeek username (migration 062). Unique when non-null. |
-| created_at | TIMESTAMPTZ | |
-
-### boardgamebuddy_pending_guides
-Review queue for guide bundles uploaded by non-admin users.
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | |
-| uploader_id | UUID FK | → profiles |
-| game_name | TEXT | |
-| bgg_id | INTEGER | nullable |
-| chunk_count | INTEGER | |
-| bundle | JSONB | the full GuideBundle payload |
-| status | TEXT | `pending` / `approved` / `rejected` |
-| review_notes | TEXT | nullable |
-| reviewed_by | UUID FK | nullable → profiles |
-| reviewed_at | TIMESTAMPTZ | nullable |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_collections
@@ -112,50 +96,65 @@ a second buddy of yours to the same account merges into the first.
 | buddy_id | UUID FK | → buddies |
 | is_winner | BOOLEAN | |
 
-### boardgamebuddy_chunk_types (lookup)
+### boardgamebuddy_chapter_types (lookup)
 | Column | Type | Notes |
 |--------|------|-------|
-| id | TEXT PK | `setup`, `player_turn`, `card_reference`, `scoring`, `tips` (the legacy `rulebook` type was promoted to `boardgamebuddy_games.rulebook_url` in migration 048) |
+| id | TEXT PK | `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant` |
 | label | TEXT | human label |
 | icon | TEXT | lucide icon name |
 | display_order | INT | sort in UI |
 
-### boardgamebuddy_guide_chunks
-Reusable chunks of guide content contributed by any authed user.
+### boardgamebuddy_guide_chapters
+Reference-guide chapters contributed by users. Each chapter belongs to one
+game; there are no admin-curated defaults. Chapters surface in the per-game
+browse pool sorted by popularity.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | UUID PK | |
 | game_id | UUID FK | → games |
-| chunk_type | TEXT FK | → chunk_types |
+| chapter_type | TEXT FK | → chapter_types |
 | title | TEXT | short label |
-| created_by | UUID FK | nullable → profiles (only creator can edit/delete) |
+| created_by | UUID FK | nullable → profiles (creator can edit; creator or admin can delete) |
 | layout | TEXT | `text` for now; future `table`, `grid` |
-| content | TEXT | markdown for `text` layout |
+| content | TEXT | markdown |
 | created_at / updated_at | TIMESTAMPTZ | |
 
-### boardgamebuddy_guide_selections
-Per-user ordered selection of chunks that assemble into that user's guide.
+### boardgamebuddy_user_chapters
+Presence row: this chapter is in the user's guide for that game.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | UUID PK | |
 | user_id | UUID FK | → profiles |
 | game_id | UUID FK | → games |
-| chunk_id | UUID FK | → guide_chunks |
-| display_order | INT | position within the user's guide |
+| chapter_id | UUID FK | → guide_chapters |
+| display_order | INT | reserved for future reorder UI; V1 sorts by `created_at` |
+| created_at | TIMESTAMPTZ | when the user added the chapter |
+| UNIQUE(user_id, chapter_id) | | one row per user-chapter pair |
 
-### boardgamebuddy_user_expansions
-Per-user toggle: presence of a row means the user has enabled that expansion
-for its base game, which merges the expansion's default chunks into the
-user's reference guide.
+### boardgamebuddy_chapter_reports
+User-submitted moderation reports against a chapter. Admins resolve
+(`status='resolved'`) or delete the chapter outright (cascade removes
+the report).
 | Column | Type | Notes |
 |--------|------|-------|
-| user_id | UUID FK | → profiles, PK part 1 |
-| expansion_game_id | UUID FK | → games (the expansion), PK part 2 |
-| enabled_at | TIMESTAMPTZ | |
+| id | UUID PK | |
+| chapter_id | UUID FK | → guide_chapters |
+| reporter_id | UUID FK | → profiles |
+| reason | TEXT | nullable user-provided reason |
+| status | TEXT | `open` / `resolved` |
+| resolved_by | UUID FK | nullable → profiles |
+| resolved_at | TIMESTAMPTZ | nullable |
+| created_at | TIMESTAMPTZ | |
+| UNIQUE(chapter_id, reporter_id) | | one report per user per chapter |
+
+### boardgamebuddy_user_expansions
+Per-user expansion toggle from the previous design. Retained but unused
+by the new chapter system; each game (including expansions) has its own
+guide. Drop in a follow-up.
 
 ### boardgamebuddy_guides (legacy)
-Flat guide table from the initial prototype. Retained temporarily during rollout
-of the chunk system; will be dropped in a follow-up migration.
+Flat guide table from the initial prototype. Retained as a historical
+no-op; drop in a follow-up.
 
 ### boardgamebuddy_bgg_pending_imports
 Staging queue for BGG syncs (migration 062). When a user's collection or play
@@ -183,9 +182,9 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/games/{game_id}` — detail (includes derived `bgg_url`)
 - `GET /api/v1/boardgame_buddy/games/search-bgg?query=` — proxy BGG API
 - `GET /api/v1/boardgame_buddy/games/lookup-by-bgg/{bgg_id}` — null-or-`GameSummary`; the import preview uses this to label a bundle as "new game" vs "existing game"
-- `GET /api/v1/boardgame_buddy/games/{game_id}/chunks` — all guide chunks for a game
-- `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise. Each item includes the expansion's `rulebook_url` so the frontend can render expansion-rulebook links at the bottom of the Quick Reference when the toggle is on
-- `GET /api/v1/boardgame_buddy/chunk-types` — chunk type lookup
+- `GET /api/v1/boardgame_buddy/games/{game_id}/chapter-pool` — browse the pool of existing chapters for a game. Each row carries `popularity` (count of users who have it) and `in_my_guide` (whether the caller has it). Sorted by `popularity DESC, created_at DESC`. Supports `?q=` (title+content ILIKE) and `?chapter_type=`. Auth optional — anon callers always see `in_my_guide=false`.
+- `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise. Each item includes the expansion's `rulebook_url`.
+- `GET /api/v1/boardgame_buddy/chapter-types` — chapter type lookup
 
 ### Auth Required
 - `GET /api/v1/boardgame_buddy/profile`
@@ -228,59 +227,23 @@ each missing game from the BGG XML API.
 - `POST /api/v1/boardgame_buddy/bgg/sync` — pull collection (`own=1`, `wishlist=1`, `wanttoplay=1`, `showprivate=1`) and plays (paginated) from BGG. Per-user calls go through `fetch_bgg_as_user`, which sends the stored cookies so BGG evaluates the request AS the linked user — that's what unlocks the `<privateinfo>` block (purchase price, private comment, acquisition date, …) which we mirror onto `boardgamebuddy_collections.bgg_*` columns. BGG `own→owned`; `wishlist` and `wanttoplay` both map to `'wishlist'`. Games we already have are written immediately (collections upsert on `(user_id, game_id)`; plays dedup on `(user_id, bgg_play_id)`). Games we don't have go into `boardgamebuddy_bgg_pending_imports` (the `payload.private` carries the private fields through to materialization) and a `BackgroundTasks` worker drains the queue (~1.5s between BGG calls). Returns `{bgg_username, collection_imported, collection_pending, plays_imported, plays_pending}`. Players from BGG plays are upserted as buddies on `(owner_id, name)` using the same path as `POST /plays`. If the stored password no longer works, returns 409 — the FE surfaces a "re-link required" banner.
 - `POST /api/v1/boardgame_buddy/bgg/sync/process-pending` — manual fallback to drain the pending queue (e.g. after a process restart cut a BackgroundTask short). Idempotent.
 - `GET /api/v1/boardgame_buddy/bgg/sync/status` — `{bgg_username, auth_state, pending_count, errored_count, last_completed_at}`. `auth_state` is `unlinked` / `linked` / `relink_required`; the Account tab polls this every 3s while `pending_count > 0` and uses `auth_state` to choose between the link form, the re-link prompt, and the synced view.
-- `POST /api/v1/boardgame_buddy/games/{game_id}/chunks` — contribute a new chunk
-- `PATCH /api/v1/boardgame_buddy/chunks/{chunk_id}` — edit own chunk
-- `DELETE /api/v1/boardgame_buddy/chunks/{chunk_id}` — delete own chunk
-- `GET /api/v1/boardgame_buddy/games/{game_id}/my-guide` — this user's chunk selection. Default chunks of any expansion the user has toggled on are merged in; each merged chunk's response carries an `expansion: {expansion_game_id, name, color}` object so the UI can render the source dot.
-- `PUT /api/v1/boardgame_buddy/games/{game_id}/my-guide` — replace selection (ordered). Accepts chunk ids from the base game OR any enabled expansion.
-- `POST /api/v1/boardgame_buddy/games/{base_id}/expansions/{expansion_id}/toggle` — body `{is_enabled}`; per-user enable/disable. Inserts or deletes one row in `boardgamebuddy_user_expansions`.
+- `POST /api/v1/boardgame_buddy/games/{game_id}/chapters` — create a brand-new chapter (type + title + markdown) and auto-add to the creator's guide
+- `PATCH /api/v1/boardgame_buddy/chapters/{chapter_id}` — edit own chapter (creator-only)
+- `DELETE /api/v1/boardgame_buddy/chapters/{chapter_id}` — delete from pool (creator or admin); cascades to user_chapters + reports
+- `POST /api/v1/boardgame_buddy/chapters/{chapter_id}/report` — body `{reason?}`; flag a chapter for admin moderation. Idempotent per user.
+- `GET /api/v1/boardgame_buddy/games/{game_id}/my-chapters` — chapters the caller has added to their guide for this game (empty list when none)
+- `POST /api/v1/boardgame_buddy/games/{game_id}/my-chapters` — body `{chapter_id}`; add an existing pool chapter to my guide (idempotent)
+- `DELETE /api/v1/boardgame_buddy/games/{game_id}/my-chapters/{chapter_id}` — remove from my guide (does NOT delete the chapter)
+- `POST /api/v1/boardgame_buddy/games/{base_id}/expansions/{expansion_id}/toggle` — body `{is_enabled}`; per-user expansion toggle (currently a no-op for the reference guide; the toggle table is retained but the chapter system no longer reads it)
 - `PATCH /api/v1/boardgame_buddy/games/admin/{game_id}/expansion-color` — *admin-only* override the auto-assigned `expansion_color`
-- `POST /api/v1/boardgame_buddy/guides/submit` — upload a GuideBundle. Admin users import directly; everyone else's submission is queued for admin review.
-- `GET /api/v1/boardgame_buddy/guides/pending` — *admin-only* list of pending submissions
-- `GET /api/v1/boardgame_buddy/guides/pending/{id}` — *admin-only* fetch full bundle. Response includes `game_exists` and `existing_game` so the review UI can show a NEW vs EXISTING banner without a second round-trip.
-- `POST /api/v1/boardgame_buddy/guides/pending/{id}/approve` — *admin-only* import. Per-chunk `is_default` from the override bundle decides which chunks land in the curated default guide; by default community-submitted chunks are non-default. When the bundle has full metadata for a new game, image hydration runs best-effort — failures surface as `image_fetch_warning` instead of blocking approval.
-- `POST /api/v1/boardgame_buddy/guides/pending/{id}/reject` — *admin-only* reject
+- `GET /api/v1/boardgame_buddy/admin/chapter-reports?status=open|resolved` — *admin-only* list chapter moderation reports
+- `POST /api/v1/boardgame_buddy/admin/chapter-reports/{report_id}/resolve` — *admin-only* mark a report resolved with no further action
 - `GET  /api/v1/boardgame_buddy/games/admin/missing-images` — *admin-only* list of games whose `image_url` or `thumbnail_url` is NULL
 - `POST /api/v1/boardgame_buddy/games/admin/{game_id}/refresh-images` — *admin-only* re-fetch one game's box art + thumbnail from BGG and re-host in Storage
 - `POST /api/v1/boardgame_buddy/games/refresh-images` — *admin-only* bulk refresh of all games with missing or BGG-hosted image URLs
 
-### Admin (ADMIN_API_KEY)
-- `POST /api/v1/boardgame_buddy/guides/import?force=<bool>` — bulk import a guide bundle produced by the `/guide-from-rulebook` slash command. Request body = `GuideBundle` JSON (see below). If the referenced game isn't in `boardgamebuddy_games`, the endpoint calls the existing BGG import flow. `force=true` deletes existing chunks with `created_by IS NULL` for the game before inserting (user chunks are preserved). Dedupe key: `(game_id, chunk_type, title)`.
-
-#### GuideBundle schema
-If `min_players`, `max_players`, and `playing_time` are all present in the bundle's `game` object, `/guides/import` skips the BGG XML API call and inserts the game directly. `image_url` / `thumbnail_url` stay NULL on that path — admins backfill them from the Import screen → "Refresh missing images". Otherwise the import falls back to the existing BGG-fetch flow.
-```json
-{
-  "version": 1,
-  "game": {
-    "bgg_id": 68448,
-    "name": "7 Wonders",
-    "min_players": 2,
-    "max_players": 7,
-    "playing_time": 30,
-    "bgg_url": "https://boardgamegeek.com/boardgame/68448",
-    "is_expansion": false,
-    "base_game_bgg_id": null,
-    "rulebook_url": "https://example.com/7-wonders-rulebook.pdf"
-  },
-  "source": {
-    "generated_at": "2026-04-24T00:00:00Z",
-    "generator": "guide-from-rulebook@2",
-    "rulebook_urls": [{ "url": "...", "label": "Publisher EN", "source": "publisher" }],
-    "missing": ["variant"]
-  },
-  "chunks": [
-    { "chunk_type": "setup",        "title": "Components & Dealing", "content": "markdown", "layout": "text" },
-    { "chunk_type": "player_turn",  "title": "Turn Actions",         "content": "markdown", "layout": "text" }
-  ]
-}
-```
-`chunk_type` must be one of the IDs in `boardgamebuddy_chunk_types` (`setup`, `player_turn`, `card_reference`, `scoring`, `tips`). The rulebook URL is per-game metadata at `game.rulebook_url`, not a chunk. Up to 25 chunks per bundle. Legacy bundles that still carry a `chunk_type='rulebook'` chunk are accepted: the importer migrates the URL into `boardgamebuddy_games.rulebook_url` and drops the chunk.
-
-When the bundle's `game.is_expansion` is true, the import flow stamps `is_expansion`, `base_game_bgg_id`, and (if not already set) auto-assigns `expansion_color` from the palette in `boardgame_buddy/constants.py`. The expansion then surfaces in the base game's `GET /games/{id}/expansions` response with `is_enabled=false` until the viewer flips the toggle.
-
 ### Admin UI
-- Promote via **Profile** screen → "Become admin" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the admin-only controls (direct imports and pending-review list) inside the **Import** screen.
+- Promote via **Settings** screen → "Have an admin key?" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the **Admin** screen with the chapter-reports moderation panel.
 
 ## Screen Flow
 Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
@@ -292,11 +255,12 @@ Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
    - **Join by code** — enter a host's code to add yourself to their session.
    The draft auto-persists to localStorage (metadata only); the photo blob stays in memory.
 4. **Game Search** (search pill on Feed/Profile): single ranked list — collection hits first, then DB matches. A "Search BoardGameGeek for more" button appends BGG hits on demand.
-5. **Game Detail** (tap any game card): box art hero, status toggle (none → owned → wishlist → none), Log a Play button, BGG + Rulebook links, recent plays for the game. Quick-reference guides are intentionally hidden in the user-facing app for now; admins can still curate them through the Admin view.
-6. **Profile** (own): Strava-style stats strip (plays / games / wins / hours), collection grid, recent plays. Admin users get an "Admin tools" link to `/admin`.
-7. **Profile (other user)**: fully public — same stats strip + collection grid for any account. The header surfaces buddy-state ("Add buddy" / "Accept request" / "Request sent" / "Buddies").
-8. **Buddies**: accepted mutual edges, plus incoming and outgoing pending requests. Search-by-display-name to send a new request.
-9. **Admin tools**: import games, review pending guides, refresh missing images. (Reachable only when `is_admin=true`.)
+5. **Game Detail** (tap any game card): box art hero, status toggle (none → owned → wishlist → none), Log a Play button, BGG + Rulebook links, collapsible Expansions section (default collapsed), a rolled-up parchment **Reference Guide scroll** (tap either roll to open/close), and recent plays. The scroll is per-user per-game and starts empty; tap **Add a chapter** at the bottom to either Create a new one or Browse the community pool.
+6. **Reference guide chapter add**: full-screen view with two tabs — **Create** (chapter-type picker + title + markdown) or **Browse** (search the per-game pool, sorted by popularity, tap + to add). Each browseable row also has a **Report** action for moderation.
+7. **Profile** (own): Strava-style stats strip (plays / games / wins / hours), collection grid, recent plays. Admin users get an "Admin tools" link.
+8. **Profile (other user)**: fully public — same stats strip + collection grid for any account. The header surfaces buddy-state ("Add buddy" / "Accept request" / "Request sent" / "Buddies").
+9. **Buddies**: accepted mutual edges, plus incoming and outgoing pending requests. Search-by-display-name to send a new request.
+10. **Admin tools**: chapter-reports moderation. Each row has Resolve (no action) and Delete chapter (remove from the pool). (Reachable only when `is_admin=true`.)
 
 ## Environment Variables
 | Variable | Where | Purpose |
@@ -306,14 +270,13 @@ Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
 | SUPABASE_ANON_KEY | Vercel | Client-side Supabase Auth |
 | SUPABASE_JWT_SECRET | Railway | Verify Supabase JWTs in backend |
 | ALLOWED_ORIGINS | Railway | CORS |
-| ADMIN_API_KEY | Railway | Protects `POST /guides/import` (admin guide upload) |
+| ADMIN_API_KEY | Railway | Promotes a profile to admin via `/profile/become-admin` |
 | BGG_API_TOKEN | Railway | BoardGameGeek app-registration bearer token (rate-limit accounting; not user-scoped) |
 | BGG_CREDENTIAL_KEY | Railway | Fernet key (urlsafe base64) used to encrypt linked users' BGG passwords. Generate via `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Rotating it forces every BGG-linked user to re-link. |
 
 ## Active Development Notes
 - Pilot project for Supabase Auth across the monorepo
 - Hybrid data: pre-seeded top 1000 BGG games + live BGG API search
-- Quick reference guides seeded for: Puerto Rico, Castles of Burgundy, Lost Cities, 7 Wonders
-- Guides can now be generated agentically via `/guide-from-rulebook <game name>`, which writes a JSON bundle to `projects/boardgame-buddy/web/sample-guides/<slug>.json` for an admin to upload through `?admin=1`.
+- Reference guides are 100% user-built (migration 018). No curated defaults, no admin seed content, no bulk import. The community pool is whatever users author and share.
 - Game detail pages themed with accent color + header image from box art
 - BGG XML API has a daily request quota. Imports prefer bundle metadata (skips the API call when player counts + playtime are present); image refresh is admin-gated and sequential to spread requests across the day.

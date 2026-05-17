@@ -150,10 +150,10 @@ async def get_public_profile(
 async def delete_profile(
     su_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> MessageResponse:
-    """Delete the current user's profile. Cascades to collections, plays, chunks they authored (set null), etc."""
+    """Delete the current user's profile. Cascades to collections, plays, user_chapters, etc."""
     sb = get_supabase()
     # Deleting the profile cascades via ON DELETE CASCADE to collections, plays,
-    # buddies, pending guides, guide selections. Guide chunks the user authored
+    # buddies, user_chapters, chapter_reports. Guide chapters the user authored
     # have created_by set to NULL (ON DELETE SET NULL).
     sb.table("boardgamebuddy_profiles").delete().eq("id", su_user.sub).execute()
     return MessageResponse(message="Account deleted")
