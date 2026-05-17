@@ -520,12 +520,21 @@ body {
   color: var(--accent);
   font-weight: 600;
 }
-.chapter-add__pool-preview {
-  font-size: 0.78rem;
-  opacity: 0.75;
-  line-height: 1.35;
-  white-space: pre-wrap;
+/* The whole pool row is a tap target — clicking anywhere outside the
+   action buttons opens the markdown-preview modal. */
+.chapter-add__pool-row--clickable {
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
 }
+.chapter-add__pool-row--clickable:hover {
+  background: oklch(var(--b3));
+  border-color: var(--accent);
+}
+.chapter-add__pool-row--clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Source-game pill on pool rows (only rendered when Browse is showing
    base + expansions). The leading dot matches the expansion's color so the
    row pairs visually with the scroll's chapter dots. */
@@ -581,6 +590,98 @@ body {
 .chapter-add__target-btn--active .chapter-add__target-dot {
   background: #1a0e02;
 }
+
+/* ── Chapter preview modal ───────────────────────────────────────────────
+   Opened by tapping a Browse pool row. Mirrors the .session-backdrop
+   overlay pattern so dismissals (backdrop tap / Escape) feel familiar. */
+.chapter-add__preview-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.chapter-add__preview-card {
+  max-width: 460px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: oklch(var(--b1));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.75rem;
+  padding: 1rem 1rem 0.85rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.chapter-add__preview-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-bottom: 0.65rem;
+}
+.chapter-add__preview-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(201, 146, 42, 0.18);
+  color: var(--accent);
+}
+.chapter-add__preview-titlewrap { flex: 1; min-width: 0; }
+.chapter-add__preview-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 2px 0 4px;
+}
+.chapter-add__preview-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.74rem;
+  opacity: 0.75;
+}
+.chapter-add__preview-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.chapter-add__preview-close:hover { opacity: 1; background: oklch(var(--b2)); }
+.chapter-add__preview-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.chapter-add__preview-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid oklch(var(--b3));
+}
+
 .chapter-add__pool-actions {
   display: flex;
   flex-direction: column;

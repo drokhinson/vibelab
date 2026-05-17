@@ -31,6 +31,10 @@
       this._createSubTab = "write"; // "write" | "preview"
       this._saving = false;
       this._error = null;
+
+      // Preview modal: id of the chapter whose full markdown content is
+      // currently shown; null = no modal.
+      this._previewChapterId = null;
     }
 
     async onMount() {
@@ -43,6 +47,10 @@
       this._expansionMeta = this._gameId
         ? { [this._gameId]: { name: this._gameName, color: null } }
         : {};
+      // Escape dismisses the preview modal. Auto-removed on view unmount.
+      this.listenDom("keydown", (e) => {
+        if (e.key === "Escape" && this._previewChapterId) this._closePreview();
+      });
       if (!this._gameId) {
         this.render();
         return;
@@ -142,6 +150,7 @@
           </button>
         </div>
         ${this._tab === "browse" ? this._renderBrowse() : this._renderCreate()}
+        ${this._renderPreviewModal()}
       `;
       if (window.lucide) window.lucide.createIcons();
     }
@@ -210,10 +219,6 @@
     _renderPoolRow(c) {
       const icon = c.chapter_type_icon || "book";
       const author = c.created_by_name ? `by ${escape(c.created_by_name)}` : "";
-      const previewSrc = c.content || "";
-      const preview = previewSrc.length > 160
-        ? escape(previewSrc.slice(0, 160)) + "…"
-        : escape(previewSrc);
       const inGuide = !!c.in_my_guide;
       // Only show the source label/dot when this view is aggregating across
       // multiple games (i.e. the caller passed expansionIds). For a plain
@@ -225,8 +230,13 @@
              ${escape(c.source_game_name)}
            </span>`
         : "";
+      // Whole row is the open-preview target. Action buttons inside stop
+      // propagation so a tap on +/check/flag doesn't also open the modal.
       return `
-        <li class="chapter-add__pool-row" data-chapter-id="${c.id}">
+        <li class="chapter-add__pool-row chapter-add__pool-row--clickable" data-chapter-id="${c.id}"
+            role="button" tabindex="0"
+            onclick="window.referenceGuideAddView._openPreview('${c.id}')"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.referenceGuideAddView._openPreview('${c.id}')}">
           <div class="chapter-add__pool-icon"><i data-lucide="${icon}" class="w-4 h-4"></i></div>
           <div class="chapter-add__pool-body">
             <div class="chapter-add__pool-title">${escape(c.title)}</div>
@@ -237,23 +247,86 @@
               ${sourceLabel}
               ${author ? `<span class="chapter-add__pool-author">${author}</span>` : ""}
             </div>
-            ${preview ? `<div class="chapter-add__pool-preview">${preview}</div>` : ""}
           </div>
           <div class="chapter-add__pool-actions">
             <button class="chapter-add__pool-toggle ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
                     title="${inGuide ? "Remove from my guide" : "Add to my guide"}"
-                    onclick="window.referenceGuideAddView._toggleInGuide('${c.id}')">
+                    onclick="event.stopPropagation();window.referenceGuideAddView._toggleInGuide('${c.id}')">
               ${inGuide
                 ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
                 : `<i data-lucide="plus" class="w-4 h-4"></i>`}
             </button>
             <button class="btn btn-ghost btn-xs chapter-add__pool-report" title="Report this chapter"
-                    onclick="window.referenceGuideAddView._reportChapter('${c.id}')">
+                    onclick="event.stopPropagation();window.referenceGuideAddView._reportChapter('${c.id}')">
               <i data-lucide="flag" class="w-3.5 h-3.5"></i>
             </button>
           </div>
         </li>
       `;
+    }
+
+    // ── Preview modal ────────────────────────────────────────────────────────
+    _renderPreviewModal() {
+      if (!this._previewChapterId) return "";
+      const c = this._pool.find((x) => x.id === this._previewChapterId);
+      if (!c) return "";
+      const icon = c.chapter_type_icon || "book";
+      const author = c.created_by_name ? `by ${escape(c.created_by_name)}` : "";
+      const sourceLabel = (this._expansionIds.length && c.source_game_name && c.source_color)
+        ? `<span class="chapter-add__pool-source" style="--exp-color:${escapeAttr(c.source_color)}">
+             <span class="chapter-add__pool-source-dot"></span>
+             ${escape(c.source_game_name)}
+           </span>`
+        : "";
+      const inGuide = !!c.in_my_guide;
+      return `
+        <div class="chapter-add__preview-backdrop"
+             onclick="window.referenceGuideAddView._closePreview()">
+          <div class="chapter-add__preview-card" role="dialog" aria-modal="true"
+               onclick="event.stopPropagation()">
+            <div class="chapter-add__preview-header">
+              <div class="chapter-add__preview-icon"><i data-lucide="${icon}" class="w-5 h-5"></i></div>
+              <div class="chapter-add__preview-titlewrap">
+                <div class="chapter-add__preview-title font-display">${escape(c.title)}</div>
+                <div class="chapter-add__preview-meta">
+                  <span class="chapter-add__pool-pop">
+                    <i data-lucide="users" class="w-3 h-3"></i> ${c.popularity}
+                  </span>
+                  ${sourceLabel}
+                  ${author ? `<span class="chapter-add__pool-author">${author}</span>` : ""}
+                </div>
+              </div>
+              <button class="chapter-add__preview-close" aria-label="Close"
+                      onclick="window.referenceGuideAddView._closePreview()">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="chapter-add__preview-body scroll-chapter__content">
+              ${window.renderMarkdown(c.content || "")}
+            </div>
+            <div class="chapter-add__preview-footer">
+              <button class="chapter-add__pool-toggle ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
+                      onclick="window.referenceGuideAddView._toggleInGuide('${c.id}')">
+                ${inGuide
+                  ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
+                  : `<i data-lucide="plus" class="w-4 h-4"></i><span>Add to my guide</span>`}
+              </button>
+              <button class="btn btn-ghost btn-sm"
+                      onclick="window.referenceGuideAddView._closePreview()">Close</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    _openPreview(chapterId) {
+      this._previewChapterId = chapterId;
+      this.render();
+    }
+
+    _closePreview() {
+      this._previewChapterId = null;
+      this.render();
     }
 
     _onSearchInput(v) {
