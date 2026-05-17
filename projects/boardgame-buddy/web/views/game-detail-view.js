@@ -357,83 +357,154 @@
 
     // ── Reference guide scroll ────────────────────────────────────────────────
     _renderReferenceGuide() {
+      const anon = !window.session;
+      const hasChapters = this._guideChapters.length > 0;
+
+      // State A: anon viewer.
+      if (anon) {
+        return this._renderReferenceGuideShell(`
+          <div class="scroll-panel">
+            <div class="scroll-panel__body">
+              <div class="scroll-panel__empty">
+                <p>Sign in to build a reference guide for <strong>${escape(this._game.name)}</strong>.</p>
+                <button class="btn btn-primary btn-sm mt-2" onclick="window.router.go('auth')">
+                  Sign in
+                </button>
+              </div>
+            </div>
+          </div>
+        `);
+      }
+
+      // State B: signed in, zero chapters. Always open, no search,
+      // no roll toggle — just the explanation copy + Add button.
+      if (!this._guideLoading && !hasChapters) {
+        return this._renderReferenceGuideShell(`
+          <div class="scroll-panel">
+            <div class="scroll-panel__body">
+              <div class="scroll-panel__empty">
+                <p>Add chapters for quick rule lookup and clarification.</p>
+                <button class="scroll-panel__add"
+                        onclick="window.gameDetailView._openAddChapter()">
+                  <i data-lucide="plus" class="w-4 h-4"></i> Add a chapter
+                </button>
+              </div>
+            </div>
+          </div>
+        `);
+      }
+
+      // State C: signed in, has chapters (or still loading). Toggleable.
+      // Search bar lives in the always-visible peek; chapters + Add live
+      // in the collapsible body.
       const open = this._scrollOpen;
       const rolledClass = open ? "" : "scroll-panel--rolled";
-      const anon = !window.session;
       const needle = (this._guideSearch || "").trim().toLowerCase();
-      const chapters = needle
+      const filtered = needle
         ? this._guideChapters.filter((c) =>
             (c.title || "").toLowerCase().includes(needle) ||
             (c.content || "").toLowerCase().includes(needle))
         : this._guideChapters;
 
-      let body = "";
-      if (anon) {
-        body = `
-          <div class="scroll-panel__empty">
-            <p>Sign in to build a reference guide for <strong>${escape(this._game.name)}</strong>.</p>
-            <button class="btn btn-primary btn-sm mt-2" onclick="window.router.go('auth')">
-              Sign in
+      const bodyInner = this._guideLoading
+        ? `<div class="scroll-panel__loading">${window.buddyLoader({ size: 60 })}</div>`
+        : (filtered.length > 0
+            ? this._groupChaptersByType(filtered)
+                .map((g) => this._renderChapterSection(g)).join("")
+            : `<div class="scroll-panel__empty">No chapters match "${escape(this._guideSearch)}".</div>`);
+
+      return this._renderReferenceGuideShell(`
+        <div class="scroll-panel ${rolledClass}">
+          <button class="scroll-panel__roll scroll-panel__roll--top"
+                  aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
+                  onclick="window.gameDetailView._toggleScroll()"></button>
+          <div class="scroll-panel__peek">
+            <div class="scroll-panel__search-row">
+              <i data-lucide="search" class="w-4 h-4 scroll-panel__search-icon"></i>
+              <input class="scroll-panel__search"
+                     type="search"
+                     placeholder="Search chapters…"
+                     value="${escapeAttr(this._guideSearch)}"
+                     oninput="window.gameDetailView._onGuideSearch(this.value)" />
+            </div>
+            ${!open ? `
+              <button class="scroll-panel__hint" type="button"
+                      onclick="window.gameDetailView._toggleScroll()">
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                Tap to expand and see chapters
+              </button>` : ""}
+          </div>
+          <div class="scroll-panel__body">
+            ${bodyInner}
+            <button class="scroll-panel__add"
+                    onclick="window.gameDetailView._openAddChapter()">
+              <i data-lucide="plus" class="w-4 h-4"></i> Add a chapter
             </button>
           </div>
-        `;
-      } else if (this._guideLoading) {
-        body = `<div class="scroll-panel__loading">${window.buddyLoader({ size: 60 })}</div>`;
-      } else {
-        const hasChapters = this._guideChapters.length > 0;
-        const list = hasChapters
-          ? (chapters.length > 0
-              ? `<ul class="scroll-chapter-list">${chapters.map((c) => this._renderChapter(c)).join("")}</ul>`
-              : `<div class="scroll-panel__empty">No chapters match "${escape(this._guideSearch)}".</div>`)
-          : `<div class="scroll-panel__empty">
-               Your guide is empty. Add chapters to assemble your quick-reference.
-             </div>`;
-        body = `
-          <div class="scroll-panel__search-row">
-            <i data-lucide="search" class="w-4 h-4 scroll-panel__search-icon"></i>
-            <input class="scroll-panel__search"
-                   type="search"
-                   placeholder="Search chapters…"
-                   value="${escapeAttr(this._guideSearch)}"
-                   oninput="window.gameDetailView._onGuideSearch(this.value)" />
-          </div>
-          ${list}
-          <button class="scroll-panel__add"
-                  onclick="window.gameDetailView._openAddChapter()">
-            <i data-lucide="plus" class="w-4 h-4"></i> Add a chapter
-          </button>
-        `;
-      }
+          <button class="scroll-panel__roll scroll-panel__roll--bottom"
+                  aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
+                  onclick="window.gameDetailView._toggleScroll()"></button>
+        </div>
+      `);
+    }
 
+    _renderReferenceGuideShell(inner) {
       return `
         <section class="game-detail__section game-detail__section--guide">
-          <div class="scroll-panel ${rolledClass}">
-            <button class="scroll-panel__roll scroll-panel__roll--top"
-                    aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
-                    onclick="window.gameDetailView._toggleScroll()"></button>
-            <div class="scroll-panel__body">
-              ${body}
-            </div>
-            <button class="scroll-panel__roll scroll-panel__roll--bottom"
-                    aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
-                    onclick="window.gameDetailView._toggleScroll()"></button>
-          </div>
+          <h3 class="game-detail__section-title">
+            <i data-lucide="scroll-text" class="w-4 h-4"></i>
+            Reference guide
+          </h3>
+          ${inner}
+        </section>
+      `;
+    }
+
+    // Group chapters by chapter_type. Order each group by chapter_type_order
+    // so Setup → Player Turn → Scoring → Card Reference → Tips → Variants.
+    // Within a group, preserve insertion order (already added_at ascending).
+    _groupChaptersByType(list) {
+      const groups = new Map();
+      for (const c of list) {
+        const key = c.chapter_type;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            type: key,
+            label: c.chapter_type_label || key,
+            icon: c.chapter_type_icon || "book",
+            order: c.chapter_type_order || 0,
+            chapters: [],
+          });
+        }
+        groups.get(key).chapters.push(c);
+      }
+      return [...groups.values()].sort((a, b) => a.order - b.order);
+    }
+
+    _renderChapterSection(group) {
+      return `
+        <section class="scroll-section" data-type="${escapeAttr(group.type)}">
+          <h4 class="scroll-section__header">
+            <i data-lucide="${group.icon}" class="w-4 h-4"></i>
+            ${escape(group.label)}
+          </h4>
+          <ul class="scroll-chapter-list">
+            ${group.chapters.map((c) => this._renderChapter(c)).join("")}
+          </ul>
         </section>
       `;
     }
 
     _renderChapter(c) {
       const icon = c.chapter_type_icon || "book";
-      const typeLabel = c.chapter_type_label || c.chapter_type;
       return `
         <li class="scroll-chapter" data-chapter-id="${c.id}">
           <details>
             <summary class="scroll-chapter__summary">
               <span class="scroll-chapter__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
               <span class="scroll-chapter__title">${escape(c.title)}</span>
-              <span class="scroll-chapter__type">${escape(typeLabel)}</span>
             </summary>
-            <div class="scroll-chapter__content">${renderMarkdown(c.content || "")}</div>
+            <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
             <div class="scroll-chapter__actions">
               <button class="btn btn-ghost btn-xs"
                       onclick="window.gameDetailView._removeChapter('${c.id}', event)">
@@ -527,75 +598,6 @@
     const tmp = document.createElement("div");
     tmp.innerHTML = s || "";
     return tmp.textContent || "";
-  }
-
-  // Minimal markdown renderer for chapter content. Supports:
-  // - ## / ### headings
-  // - GitHub-style pipe tables (with header separator row)
-  // - * / - bulleted lists
-  // - **bold**, *italic*, `inline code`
-  // - paragraphs (blank-line separated)
-  // Everything is escaped first to keep user content safe.
-  function renderMarkdown(src) {
-    const lines = String(src || "").split(/\r?\n/);
-    const blocks = [];
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      if (!line.trim()) { i++; continue; }
-      const h = /^(#{2,4})\s+(.*)$/.exec(line);
-      if (h) {
-        const level = h[1].length;
-        blocks.push(`<h${level}>${renderInline(h[2])}</h${level}>`);
-        i++; continue;
-      }
-      // Pipe table: a header row + a separator row (---) + body rows.
-      if (line.includes("|") && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[i + 1])) {
-        const headers = splitRow(line);
-        i += 2;
-        const rows = [];
-        while (i < lines.length && lines[i].includes("|") && lines[i].trim()) {
-          rows.push(splitRow(lines[i]));
-          i++;
-        }
-        blocks.push(renderTable(headers, rows));
-        continue;
-      }
-      if (/^[-*]\s+/.test(line)) {
-        const items = [];
-        while (i < lines.length && /^[-*]\s+/.test(lines[i])) {
-          items.push(renderInline(lines[i].replace(/^[-*]\s+/, "")));
-          i++;
-        }
-        blocks.push(`<ul>${items.map((it) => `<li>${it}</li>`).join("")}</ul>`);
-        continue;
-      }
-      // Paragraph: gather until blank line.
-      const para = [];
-      while (i < lines.length && lines[i].trim() && !/^#{2,4}\s/.test(lines[i])) {
-        para.push(lines[i]);
-        i++;
-      }
-      blocks.push(`<p>${renderInline(para.join(" "))}</p>`);
-    }
-    return blocks.join("");
-  }
-  function splitRow(s) {
-    return s.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
-  }
-  function renderTable(headers, rows) {
-    return `
-      <table class="guide-table">
-        <thead><tr>${headers.map((h) => `<th>${renderInline(h)}</th>`).join("")}</tr></thead>
-        <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${renderInline(c)}</td>`).join("")}</tr>`).join("")}</tbody>
-      </table>
-    `;
-  }
-  function renderInline(s) {
-    return escape(s)
-      .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/(?<![*])\*([^*\n]+)\*(?![*])/g, "<em>$1</em>");
   }
 
   // Class-level cache for hero edge colours, keyed by image URL. Survives

@@ -21,6 +21,7 @@
       this._formType = "";
       this._formTitle = "";
       this._formContent = "";
+      this._createSubTab = "write"; // "write" | "preview"
       this._saving = false;
       this._error = null;
     }
@@ -51,7 +52,10 @@
           q: this._search || undefined,
           chapterType: this._typeFilter || undefined,
         });
-        this._pool = (pool || []).filter((c) => !c.in_my_guide);
+        // Show every pool row regardless of in_my_guide — the per-row
+        // toggle button reflects the current state and adds/removes
+        // without hiding the row.
+        this._pool = pool || [];
       } catch (e) {
         showToast(e.message || "Failed to load chapter pool", "error");
         this._pool = [];
@@ -59,6 +63,26 @@
         this._poolLoading = false;
         this.render();
       }
+    }
+
+    // Mirrors GameDetailView._groupChaptersByType so the user's guide and
+    // the Browse pool read with the same per-type section headers.
+    _groupPoolByType(list) {
+      const groups = new Map();
+      for (const c of list) {
+        const key = c.chapter_type;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            type: key,
+            label: c.chapter_type_label || key,
+            icon: c.chapter_type_icon || "book",
+            order: c.chapter_type_order || 0,
+            chapters: [],
+          });
+        }
+        groups.get(key).chapters.push(c);
+      }
+      return [...groups.values()].sort((a, b) => a.order - b.order);
     }
 
     render() {
@@ -106,9 +130,17 @@
 
     // ── Browse ────────────────────────────────────────────────────────────────
     _renderBrowse() {
-      const typeOpts = this._types.map((t) =>
-        `<option value="${escapeAttr(t.id)}" ${t.id === this._typeFilter ? "selected" : ""}>${escape(t.label)}</option>`
-      ).join("");
+      const chipBtns = [`
+        <button class="chapter-add__chip ${!this._typeFilter ? "chapter-add__chip--active" : ""}"
+                onclick="window.referenceGuideAddView._onTypeFilter('')">All</button>
+      `, ...this._types.map((t) => `
+        <button class="chapter-add__chip ${t.id === this._typeFilter ? "chapter-add__chip--active" : ""}"
+                onclick="window.referenceGuideAddView._onTypeFilter('${t.id}')">
+          <i data-lucide="${t.icon || "book"}" class="w-3.5 h-3.5"></i>
+          ${escape(t.label)}
+        </button>
+      `)].join("");
+
       const body = this._poolLoading
         ? window.buddyLoader({ size: 80 })
         : this._pool.length === 0
@@ -119,22 +151,34 @@
                  Create the first one
                </button>
              </div>`
-          : `<ul class="chapter-add__pool">
-               ${this._pool.map((c) => this._renderPoolRow(c)).join("")}
-             </ul>`;
+          : this._groupPoolByType(this._pool)
+              .map((g) => this._renderPoolSection(g)).join("");
+
       return `
         <div class="chapter-add__filters">
           <input type="search" class="input input-bordered input-sm chapter-add__search"
                  placeholder="Search title or content…"
                  value="${escapeAttr(this._search)}"
                  oninput="window.referenceGuideAddView._onSearchInput(this.value)" />
-          <select class="select select-bordered select-sm"
-                  onchange="window.referenceGuideAddView._onTypeFilter(this.value)">
-            <option value="">All types</option>
-            ${typeOpts}
-          </select>
+        </div>
+        <div class="chapter-add__filter-chips" role="tablist">
+          ${chipBtns}
         </div>
         ${body}
+      `;
+    }
+
+    _renderPoolSection(group) {
+      return `
+        <section class="chapter-add__pool-section" data-type="${escapeAttr(group.type)}">
+          <h4 class="chapter-add__pool-section-header">
+            <i data-lucide="${group.icon}" class="w-4 h-4"></i>
+            ${escape(group.label)}
+          </h4>
+          <ul class="chapter-add__pool">
+            ${group.chapters.map((c) => this._renderPoolRow(c)).join("")}
+          </ul>
+        </section>
       `;
     }
 
@@ -145,13 +189,13 @@
       const preview = previewSrc.length > 160
         ? escape(previewSrc.slice(0, 160)) + "…"
         : escape(previewSrc);
+      const inGuide = !!c.in_my_guide;
       return `
         <li class="chapter-add__pool-row" data-chapter-id="${c.id}">
           <div class="chapter-add__pool-icon"><i data-lucide="${icon}" class="w-4 h-4"></i></div>
           <div class="chapter-add__pool-body">
             <div class="chapter-add__pool-title">${escape(c.title)}</div>
             <div class="chapter-add__pool-meta">
-              <span class="chapter-add__pool-type">${escape(c.chapter_type_label || c.chapter_type)}</span>
               <span class="chapter-add__pool-pop" title="${c.popularity} ${c.popularity === 1 ? "person has" : "people have"} this in their guide">
                 <i data-lucide="users" class="w-3 h-3"></i> ${c.popularity}
               </span>
@@ -160,9 +204,12 @@
             ${preview ? `<div class="chapter-add__pool-preview">${preview}</div>` : ""}
           </div>
           <div class="chapter-add__pool-actions">
-            <button class="btn btn-primary btn-sm" title="Add to my guide"
-                    onclick="window.referenceGuideAddView._addChapter('${c.id}')">
-              <i data-lucide="plus" class="w-4 h-4"></i>
+            <button class="chapter-add__pool-toggle ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
+                    title="${inGuide ? "Remove from my guide" : "Add to my guide"}"
+                    onclick="window.referenceGuideAddView._toggleInGuide('${c.id}')">
+              ${inGuide
+                ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
+                : `<i data-lucide="plus" class="w-4 h-4"></i>`}
             </button>
             <button class="btn btn-ghost btn-xs chapter-add__pool-report" title="Report this chapter"
                     onclick="window.referenceGuideAddView._reportChapter('${c.id}')">
@@ -184,17 +231,25 @@
       this._loadPool();
     }
 
-    async _addChapter(chapterId) {
+    async _toggleInGuide(chapterId) {
+      const row = this._pool.find((c) => c.id === chapterId);
+      if (!row) return;
+      const targetState = !row.in_my_guide;
       try {
-        await window.Chapter.add(this._gameId, chapterId);
-        this._pool = this._pool.filter((c) => c.id !== chapterId);
+        if (targetState) {
+          await window.Chapter.add(this._gameId, chapterId);
+        } else {
+          await window.Chapter.remove(this._gameId, chapterId);
+        }
+        row.in_my_guide = targetState;
         document.dispatchEvent(new CustomEvent("chapters-changed", {
           detail: { gameId: this._gameId },
         }));
-        showToast("Added to your guide", "success");
+        showToast(targetState ? "Added to your guide" : "Removed from your guide",
+                  targetState ? "success" : "info");
         this.render();
       } catch (e) {
-        showToast(e.message || "Failed to add chapter", "error");
+        showToast(e.message || "Failed to update guide", "error");
       }
     }
 
@@ -222,6 +277,24 @@
           <span>${escape(t.label)}</span>
         </button>
       `).join("");
+
+      // Content editor: Write tab keeps the existing required textarea
+      // (so HTML5 form validation still works on submit). Preview tab
+      // renders the buffered markdown. Switching is purely visual —
+      // _formContent stays in memory across switches.
+      const isPreview = this._createSubTab === "preview";
+      const editorBody = isPreview
+        ? `<div class="chapter-add__preview">
+             ${this._formContent.trim()
+               ? window.renderMarkdown(this._formContent)
+               : `<p class="opacity-60 text-sm italic">Nothing to preview yet — switch to Write and type some markdown.</p>`}
+           </div>`
+        : `<textarea id="chapter-form-content"
+                      class="textarea textarea-bordered chapter-add__textarea"
+                      rows="14" required
+                      oninput="window.referenceGuideAddView._formContent = this.value"
+                      placeholder="## What you can do on your turn…">${escape(this._formContent)}</textarea>`;
+
       return `
         <form class="chapter-add__form" onsubmit="window.referenceGuideAddView._submitCreate(event)">
           <div class="chapter-add__field">
@@ -237,12 +310,20 @@
                    placeholder="e.g. Turn Actions" />
           </div>
           <div class="chapter-add__field">
-            <label class="chapter-add__label" for="chapter-form-content">Content (Markdown)</label>
-            <textarea id="chapter-form-content"
-                      class="textarea textarea-bordered chapter-add__textarea"
-                      rows="12" required
-                      oninput="window.referenceGuideAddView._formContent = this.value"
-                      placeholder="## What you can do on your turn…">${escape(this._formContent)}</textarea>
+            <div class="chapter-add__editor-header">
+              <label class="chapter-add__label">Content (Markdown)</label>
+              <div class="chapter-add__editor-tabs" role="tablist">
+                <button type="button" class="chapter-add__editor-tab ${!isPreview ? "is-active" : ""}"
+                        onclick="window.referenceGuideAddView._setSubTab('write')">
+                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Write
+                </button>
+                <button type="button" class="chapter-add__editor-tab ${isPreview ? "is-active" : ""}"
+                        onclick="window.referenceGuideAddView._setSubTab('preview')">
+                  <i data-lucide="eye" class="w-3.5 h-3.5"></i> Preview
+                </button>
+              </div>
+            </div>
+            ${editorBody}
           </div>
           ${this._error ? `<div class="text-error text-sm">${escape(this._error)}</div>` : ""}
           <div class="chapter-add__actions">
@@ -259,6 +340,12 @@
 
     _pickType(id) {
       this._formType = id;
+      this.render();
+    }
+
+    _setSubTab(t) {
+      if (this._createSubTab === t) return;
+      this._createSubTab = t;
       this.render();
     }
 
