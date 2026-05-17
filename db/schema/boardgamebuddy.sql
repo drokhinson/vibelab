@@ -77,22 +77,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
 );
 ALTER TABLE public.boardgamebuddy_profiles ENABLE ROW LEVEL SECURITY;
 
--- Review queue for guide bundles uploaded by non-admin users (migration 039).
-CREATE TABLE IF NOT EXISTS public.boardgamebuddy_pending_guides (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  uploader_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
-  game_name TEXT NOT NULL,
-  bgg_id INTEGER,
-  chunk_count INTEGER NOT NULL DEFAULT 0,
-  bundle JSONB NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-  review_notes TEXT,
-  reviewed_by UUID REFERENCES public.boardgamebuddy_profiles(id),
-  reviewed_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-ALTER TABLE public.boardgamebuddy_pending_guides ENABLE ROW LEVEL SECURITY;
-
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -202,32 +186,33 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guides (
 );
 ALTER TABLE public.boardgamebuddy_guides ENABLE ROW LEVEL SECURITY;
 
--- Chunked guide system (migration 034)
-CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chunk_types (
+-- Chapter system (migration 018 renamed from chunks). Each user builds
+-- their own reference guide for each game by picking chapters from the
+-- shared pool or authoring new ones. There is no curated default set.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chapter_types (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
   icon TEXT,
   display_order INT DEFAULT 0
 );
-ALTER TABLE public.boardgamebuddy_chunk_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.boardgamebuddy_chapter_types ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chunks (
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
-  chunk_type TEXT NOT NULL REFERENCES public.boardgamebuddy_chunk_types(id),
+  chapter_type TEXT NOT NULL REFERENCES public.boardgamebuddy_chapter_types(id),
   title TEXT NOT NULL,
   created_by UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE SET NULL,
   layout TEXT NOT NULL DEFAULT 'text' CHECK (layout IN ('text')),
   content TEXT NOT NULL,
-  is_default BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.boardgamebuddy_guide_chunks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.boardgamebuddy_guide_chapters ENABLE ROW LEVEL SECURITY;
 
--- Per-user expansion toggle (migration 046). Row presence = enabled; absence
--- = disabled (default). When an expansion is enabled, its default chunks are
--- merged into the base game's reference guide for that user.
+-- Per-user expansion toggle (migration 046). Retained for now; the new
+-- chapter system no longer consumes it (each game has its own guide).
+-- Drop in a follow-up once confirmed unused.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_expansions (
   user_id            UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   expansion_game_id  UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
@@ -280,17 +265,36 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_participants (
 );
 ALTER TABLE public.boardgamebuddy_play_session_participants ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_selections (
+-- Per-user "this chapter is in my guide" rows (migration 018, renamed
+-- from boardgamebuddy_guide_selections). Presence = in guide, absence =
+-- not. display_order is kept for a future reorder UI; V1 sorts by
+-- created_at.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_chapters (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
-  chunk_id UUID NOT NULL REFERENCES public.boardgamebuddy_guide_chunks(id) ON DELETE CASCADE,
+  chapter_id UUID NOT NULL REFERENCES public.boardgamebuddy_guide_chapters(id) ON DELETE CASCADE,
   display_order INT NOT NULL DEFAULT 0,
-  is_hidden BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE (user_id, chunk_id)
+  UNIQUE (user_id, chapter_id)
 );
-ALTER TABLE public.boardgamebuddy_guide_selections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.boardgamebuddy_user_chapters ENABLE ROW LEVEL SECURITY;
+
+-- Chapter moderation reports (migration 018). Any user can report a
+-- chapter; admins resolve (no-action) or delete the chapter outright.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chapter_reports (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chapter_id  UUID NOT NULL REFERENCES public.boardgamebuddy_guide_chapters(id) ON DELETE CASCADE,
+  reporter_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  reason      TEXT,
+  status      TEXT NOT NULL DEFAULT 'open'
+              CHECK (status IN ('open', 'resolved')),
+  resolved_by UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (chapter_id, reporter_id)
+);
+ALTER TABLE public.boardgamebuddy_chapter_reports ENABLE ROW LEVEL SECURITY;
 
 -- Indexes
 CREATE UNIQUE INDEX IF NOT EXISTS bgb_profiles_username_uk ON public.boardgamebuddy_profiles(username);
@@ -303,17 +307,15 @@ CREATE INDEX IF NOT EXISTS idx_bgb_plays_game ON public.boardgamebuddy_plays(gam
 CREATE INDEX IF NOT EXISTS idx_bgb_play_expansions_play
   ON public.boardgamebuddy_play_expansions(play_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(game_id);
-CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game ON public.boardgamebuddy_guide_chunks(game_id);
-CREATE INDEX IF NOT EXISTS idx_bgb_chunks_game_default
-  ON public.boardgamebuddy_guide_chunks(game_id, is_default);
-CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game
-  ON public.boardgamebuddy_guide_selections(user_id, game_id);
-CREATE INDEX IF NOT EXISTS idx_bgb_selections_user_game_hidden
-  ON public.boardgamebuddy_guide_selections(user_id, game_id, is_hidden);
-CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_status
-  ON public.boardgamebuddy_pending_guides(status);
-CREATE INDEX IF NOT EXISTS idx_bgb_pending_guides_uploader
-  ON public.boardgamebuddy_pending_guides(uploader_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_chapters_game ON public.boardgamebuddy_guide_chapters(game_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_chapters_game_type
+  ON public.boardgamebuddy_guide_chapters(game_id, chapter_type);
+CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_user_game
+  ON public.boardgamebuddy_user_chapters(user_id, game_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_chapter
+  ON public.boardgamebuddy_user_chapters(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_chapter_reports_status
+  ON public.boardgamebuddy_chapter_reports(status, created_at);
 -- Expansions (migration 046): fast lookup of a base game's expansions by bgg_id.
 CREATE INDEX IF NOT EXISTS idx_bgb_games_base_bgg
   ON public.boardgamebuddy_games(base_game_bgg_id)

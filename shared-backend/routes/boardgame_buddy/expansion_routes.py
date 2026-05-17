@@ -1,10 +1,10 @@
 """Expansion linking + per-user toggle endpoints.
 
 Expansions are first-class games (`is_expansion=true`, `base_game_bgg_id=N`)
-imported via the BGG flow or a guide bundle. This module exposes:
+imported via the BGG flow. This module exposes:
 
 - listing the expansions linked to a base game (with the caller's enable state),
-- toggling one on/off per-user,
+- toggling one on/off per-user (legacy — the chapter system no longer reads it),
 - an admin override for the auto-assigned dot color.
 """
 
@@ -84,18 +84,6 @@ async def list_expansions(
         )
         enabled_ids = {r["expansion_game_id"] for r in (enabled.data or [])}
 
-    # One round-trip to count default chunks per expansion.
-    chunk_counts: dict[str, int] = {eid: 0 for eid in exp_ids}
-    chunks = (
-        sb.table("boardgamebuddy_guide_chunks")
-        .select("game_id")
-        .in_("game_id", exp_ids)
-        .eq("is_default", True)
-        .execute()
-    )
-    for c in chunks.data or []:
-        chunk_counts[c["game_id"]] = chunk_counts.get(c["game_id"], 0) + 1
-
     return [
         ExpansionListItem(
             expansion_game_id=r["id"],
@@ -104,7 +92,6 @@ async def list_expansions(
             thumbnail_url=r.get("thumbnail_url"),
             color=r.get("expansion_color"),
             is_enabled=r["id"] in enabled_ids,
-            chunk_count=chunk_counts.get(r["id"], 0),
             rulebook_url=r.get("rulebook_url"),
         )
         for r in rows

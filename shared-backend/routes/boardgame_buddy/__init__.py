@@ -20,8 +20,7 @@ from . import session_routes   # noqa: F401, E402
 from . import feed_routes      # noqa: F401, E402
 from . import stats_routes     # noqa: F401, E402
 from . import search_routes    # noqa: F401, E402
-from . import chunk_routes     # noqa: F401, E402
+from . import chapter_routes   # noqa: F401, E402
 from . import expansion_routes  # noqa: F401, E402
-from . import guide_import_routes  # noqa: F401, E402
 from . import profile_routes   # noqa: F401, E402
 from . import bgg_link_routes  # noqa: F401, E402

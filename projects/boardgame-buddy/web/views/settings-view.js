@@ -149,40 +149,24 @@
       `;
     }
 
-    // Admin-only section. Same chrome as Account Details / BoardGameGeek —
-    // h3 title with the shared `.settings-section__title` class so all three
-    // headers stay the same size/font, and the same bottom-border divider
-    // via `.settings-section`. Three sub-section cards stand in for the
-    // legacy `/admin` page; they still trigger the placeholder alerts the
-    // standalone AdminView used until the tools migrate over.
+    // Admin-only section. Surfaces a single link to the Admin view, which
+    // hosts the chapter-reports moderation panel.
     _renderAdminSection() {
-      const card = (icon, title, blurb, label) => `
-        <button class="admin-tool" onclick="window.settingsView._adminToolClick('${label}')">
-          <span class="admin-tool__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
-          <span class="admin-tool__body">
-            <span class="admin-tool__title">${title}</span>
-            <span class="admin-tool__blurb">${blurb}</span>
-          </span>
-          <i data-lucide="chevron-right" class="w-4 h-4 admin-tool__chev"></i>
-        </button>
-      `;
       return `
         <section class="settings-section">
           <h3 class="settings-section__title">Admin tools</h3>
           <div class="admin-tool-list">
-            ${card("download", "Import games", "Bulk-import from BGG or upload a guide bundle.", "Import games")}
-            ${card("file-clock", "Pending guide review", "Approve community-submitted reference guides.", "Pending guides review")}
-            ${card("image-off", "Missing-images sweep", "Refetch image URLs for games imported without box art.", "Missing-images sweep")}
+            <button class="admin-tool" onclick="window.router.go('admin')">
+              <span class="admin-tool__icon"><i data-lucide="flag" class="w-4 h-4"></i></span>
+              <span class="admin-tool__body">
+                <span class="admin-tool__title">Chapter reports</span>
+                <span class="admin-tool__blurb">Moderate community-reported reference-guide chapters.</span>
+              </span>
+              <i data-lucide="chevron-right" class="w-4 h-4 admin-tool__chev"></i>
+            </button>
           </div>
         </section>
       `;
-    }
-
-    _adminToolClick(label) {
-      // The legacy AdminView surfaced these as alerts pending migration.
-      // Keep the same affordance here so admins know nothing is wired up
-      // yet without rebuilding the placeholders.
-      alert(`${label} — migrated in a follow-up`);
     }
 
     _openAdminForm()  { this._adminFormOpen = true; this._adminError = null; this.render();

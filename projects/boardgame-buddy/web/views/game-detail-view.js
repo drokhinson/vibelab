@@ -11,6 +11,12 @@
       this._expansions = [];  // ExpansionListItem[] (only for base games)
       this._loading = false;
       this._error = null;
+      // Reference guide scroll state.
+      this._scrollOpen = false;
+      this._guideChapters = [];
+      this._guideLoading = false;
+      this._guideSearch = "";
+      this._expansionsOpen = false;
     }
 
     async onMount() {
@@ -27,12 +33,34 @@
         if (this._game && gameId === this._game.id) this._status = status;
         this.render();
       });
+      this.listenDom("chapters-changed", async (e) => {
+        const { gameId } = e.detail || {};
+        if (this._game && gameId === this._game.id) await this._loadMyChapters();
+      });
       window.Collection.myStatusMap()
         .then((m) => { this._statusMap = m || {}; this.render(); })
         .catch(() => {});
       await this._load();
     }
     async onParamsChange() { await this._load(); }
+
+    async _loadMyChapters() {
+      if (!this._game) return;
+      if (!window.session) {
+        this._guideChapters = [];
+        this.render();
+        return;
+      }
+      this._guideLoading = true;
+      try {
+        this._guideChapters = await window.Chapter.myChapters(this._game.id) || [];
+      } catch (_) {
+        this._guideChapters = [];
+      } finally {
+        this._guideLoading = false;
+        this.render();
+      }
+    }
 
     async _load() {
       const id = this.params && this.params.gameId;
@@ -50,6 +78,10 @@
       this._status = null;
       this._plays = [];
       this._expansions = [];
+      this._guideChapters = [];
+      this._guideSearch = "";
+      this._scrollOpen = false;
+      this._expansionsOpen = false;
       this._error = null;
       this._loading = true;
       this.render();
@@ -57,18 +89,25 @@
         const game = await window.Game.fetch(id);
         // Fan out the secondary fetches in parallel once we know the game.
         // Expansions only fetched for base games (the endpoint returns [] for
-        // expansions anyway, but skip the round-trip).
-        const [status, plays, expansions] = await Promise.all([
+        // expansions anyway, but skip the round-trip). Chapters only loaded
+        // for authenticated callers — anon viewers see a sign-in CTA in the
+        // scroll instead.
+        const chaptersPromise = window.session
+          ? window.Chapter.myChapters(id).catch(() => [])
+          : Promise.resolve([]);
+        const [status, plays, expansions, chapters] = await Promise.all([
           window.Collection.statusFor(id).catch(() => null),
           window.Play.list({ gameId: id, perPage: 5 }).catch(() => ({ plays: [] })),
           game && !game.is_expansion
             ? window.api.get(`/games/${id}/expansions`).catch(() => [])
             : Promise.resolve([]),
+          chaptersPromise,
         ]);
         this._game = game;
         this._status = status;
         this._plays = plays.plays || [];
         this._expansions = Array.isArray(expansions) ? expansions : [];
+        this._guideChapters = Array.isArray(chapters) ? chapters : [];
       } catch (e) {
         this._error = e.message || "Failed to load game";
       } finally {
@@ -142,6 +181,7 @@
             </div>
             ${g.description ? `<div class="game-detail__desc">${stripHtml(g.description)}</div>` : ""}
             ${this._renderExpansions()}
+            ${this._renderReferenceGuide()}
             ${this._renderRecentPlays()}
           </div>
         </article>
@@ -273,35 +313,188 @@
 
     _renderExpansions() {
       if (!this._expansions || this._expansions.length === 0) return "";
+      const open = this._expansionsOpen;
+      const chevron = open ? "chevron-down" : "chevron-right";
       return `
         <section class="game-detail__section game-detail__section--expansions">
-          <h3 class="game-detail__section-title">
-            <i data-lucide="puzzle" class="w-4 h-4"></i>
-            Expansions (${this._expansions.length})
-          </h3>
-          <ul class="expansion-list">
-            ${this._expansions.map((e) => {
-              const status = (this._statusMap || {})[e.expansion_game_id] || null;
-              return `
-              <li class="expansion-list__row"
-                  onclick="window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || '')}'})"
-                  style="--exp-color:${e.color || "#C9922A"}">
-                <span class="expansion-list__dot"></span>
-                ${e.thumbnail_url
-                  ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" class="expansion-list__thumb" loading="lazy" />`
-                  : `<div class="expansion-list__thumb expansion-list__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
-                <div class="expansion-list__body">
-                  <div class="expansion-list__name">${escape(e.name)}</div>
-                  ${e.chunk_count
-                    ? `<div class="expansion-list__meta">${e.chunk_count} reference chunk${e.chunk_count === 1 ? "" : "s"}</div>`
-                    : ""}
-                </div>
-                ${window.renderStatusTag(e.expansion_game_id, status, { size: "xs" })}
-              </li>
-            `;}).join("")}
-          </ul>
+          <button class="collapsible-header"
+                  aria-expanded="${open}"
+                  onclick="window.gameDetailView._toggleExpansions()">
+            <span class="collapsible-header__title">
+              <i data-lucide="puzzle" class="w-4 h-4"></i>
+              Expansions (${this._expansions.length})
+            </span>
+            <i data-lucide="${chevron}" class="w-4 h-4 collapsible-header__chev"></i>
+          </button>
+          ${open ? `
+            <ul class="expansion-list">
+              ${this._expansions.map((e) => {
+                const status = (this._statusMap || {})[e.expansion_game_id] || null;
+                return `
+                <li class="expansion-list__row"
+                    onclick="window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || '')}'})"
+                    style="--exp-color:${e.color || "#C9922A"}">
+                  <span class="expansion-list__dot"></span>
+                  ${e.thumbnail_url
+                    ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" class="expansion-list__thumb" loading="lazy" />`
+                    : `<div class="expansion-list__thumb expansion-list__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
+                  <div class="expansion-list__body">
+                    <div class="expansion-list__name">${escape(e.name)}</div>
+                  </div>
+                  ${window.renderStatusTag(e.expansion_game_id, status, { size: "xs" })}
+                </li>
+              `;}).join("")}
+            </ul>
+          ` : ""}
         </section>
       `;
+    }
+
+    _toggleExpansions() {
+      this._expansionsOpen = !this._expansionsOpen;
+      this.render();
+    }
+
+    // ── Reference guide scroll ────────────────────────────────────────────────
+    _renderReferenceGuide() {
+      const open = this._scrollOpen;
+      const rolledClass = open ? "" : "scroll-panel--rolled";
+      const anon = !window.session;
+      const needle = (this._guideSearch || "").trim().toLowerCase();
+      const chapters = needle
+        ? this._guideChapters.filter((c) =>
+            (c.title || "").toLowerCase().includes(needle) ||
+            (c.content || "").toLowerCase().includes(needle))
+        : this._guideChapters;
+
+      let body = "";
+      if (anon) {
+        body = `
+          <div class="scroll-panel__empty">
+            <p>Sign in to build a reference guide for <strong>${escape(this._game.name)}</strong>.</p>
+            <button class="btn btn-primary btn-sm mt-2" onclick="window.router.go('auth')">
+              Sign in
+            </button>
+          </div>
+        `;
+      } else if (this._guideLoading) {
+        body = `<div class="scroll-panel__loading">${window.buddyLoader({ size: 60 })}</div>`;
+      } else {
+        const hasChapters = this._guideChapters.length > 0;
+        const list = hasChapters
+          ? (chapters.length > 0
+              ? `<ul class="scroll-chapter-list">${chapters.map((c) => this._renderChapter(c)).join("")}</ul>`
+              : `<div class="scroll-panel__empty">No chapters match "${escape(this._guideSearch)}".</div>`)
+          : `<div class="scroll-panel__empty">
+               Your guide is empty. Add chapters to assemble your quick-reference.
+             </div>`;
+        body = `
+          <div class="scroll-panel__search-row">
+            <i data-lucide="search" class="w-4 h-4 scroll-panel__search-icon"></i>
+            <input class="scroll-panel__search"
+                   type="search"
+                   placeholder="Search chapters…"
+                   value="${escapeAttr(this._guideSearch)}"
+                   oninput="window.gameDetailView._onGuideSearch(this.value)" />
+          </div>
+          ${list}
+          <button class="scroll-panel__add"
+                  onclick="window.gameDetailView._openAddChapter()">
+            <i data-lucide="plus" class="w-4 h-4"></i> Add a chapter
+          </button>
+        `;
+      }
+
+      return `
+        <section class="game-detail__section game-detail__section--guide">
+          <div class="scroll-panel ${rolledClass}">
+            <button class="scroll-panel__roll scroll-panel__roll--top"
+                    aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
+                    onclick="window.gameDetailView._toggleScroll()"></button>
+            <div class="scroll-panel__body">
+              ${body}
+            </div>
+            <button class="scroll-panel__roll scroll-panel__roll--bottom"
+                    aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
+                    onclick="window.gameDetailView._toggleScroll()"></button>
+          </div>
+        </section>
+      `;
+    }
+
+    _renderChapter(c) {
+      const icon = c.chapter_type_icon || "book";
+      const typeLabel = c.chapter_type_label || c.chapter_type;
+      return `
+        <li class="scroll-chapter" data-chapter-id="${c.id}">
+          <details>
+            <summary class="scroll-chapter__summary">
+              <span class="scroll-chapter__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
+              <span class="scroll-chapter__title">${escape(c.title)}</span>
+              <span class="scroll-chapter__type">${escape(typeLabel)}</span>
+            </summary>
+            <div class="scroll-chapter__content">${renderMarkdown(c.content || "")}</div>
+            <div class="scroll-chapter__actions">
+              <button class="btn btn-ghost btn-xs"
+                      onclick="window.gameDetailView._removeChapter('${c.id}', event)">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove from my guide
+              </button>
+              <button class="btn btn-ghost btn-xs"
+                      onclick="window.gameDetailView._reportChapter('${c.id}', event)">
+                <i data-lucide="flag" class="w-3.5 h-3.5"></i> Report
+              </button>
+            </div>
+          </details>
+        </li>
+      `;
+    }
+
+    _toggleScroll() {
+      this._scrollOpen = !this._scrollOpen;
+      this.render();
+    }
+
+    _onGuideSearch(v) {
+      this._guideSearch = v || "";
+      // Filter is purely client-side; cheap to re-render the body.
+      this.render();
+      // Keep focus on the search input.
+      const el = document.querySelector(".scroll-panel__search");
+      if (el) { el.focus(); el.setSelectionRange(v.length, v.length); }
+    }
+
+    _openAddChapter() {
+      window.router.go("reference-guide-add", {
+        gameId: this._game.id,
+        gameName: this._game.name,
+      });
+    }
+
+    async _removeChapter(chapterId, event) {
+      if (event) event.preventDefault();
+      try {
+        await window.Chapter.remove(this._game.id, chapterId);
+        this._guideChapters = this._guideChapters.filter((c) => c.id !== chapterId);
+        showToast("Removed from your guide", "info");
+        this.render();
+      } catch (e) {
+        showToast(e.message || "Failed to remove chapter", "error");
+      }
+    }
+
+    async _reportChapter(chapterId, event) {
+      if (event) event.preventDefault();
+      const reason = window.prompt(
+        "Why are you reporting this chapter? (optional)",
+        ""
+      );
+      if (reason === null) return;
+      try {
+        await window.Chapter.report(chapterId, reason.trim() || null);
+        showToast("Reported — thanks for flagging", "success");
+      } catch (e) {
+        showToast(e.message || "Failed to report chapter", "error");
+      }
     }
 
     _startPlay() {
@@ -334,6 +527,75 @@
     const tmp = document.createElement("div");
     tmp.innerHTML = s || "";
     return tmp.textContent || "";
+  }
+
+  // Minimal markdown renderer for chapter content. Supports:
+  // - ## / ### headings
+  // - GitHub-style pipe tables (with header separator row)
+  // - * / - bulleted lists
+  // - **bold**, *italic*, `inline code`
+  // - paragraphs (blank-line separated)
+  // Everything is escaped first to keep user content safe.
+  function renderMarkdown(src) {
+    const lines = String(src || "").split(/\r?\n/);
+    const blocks = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line.trim()) { i++; continue; }
+      const h = /^(#{2,4})\s+(.*)$/.exec(line);
+      if (h) {
+        const level = h[1].length;
+        blocks.push(`<h${level}>${renderInline(h[2])}</h${level}>`);
+        i++; continue;
+      }
+      // Pipe table: a header row + a separator row (---) + body rows.
+      if (line.includes("|") && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[i + 1])) {
+        const headers = splitRow(line);
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].includes("|") && lines[i].trim()) {
+          rows.push(splitRow(lines[i]));
+          i++;
+        }
+        blocks.push(renderTable(headers, rows));
+        continue;
+      }
+      if (/^[-*]\s+/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^[-*]\s+/.test(lines[i])) {
+          items.push(renderInline(lines[i].replace(/^[-*]\s+/, "")));
+          i++;
+        }
+        blocks.push(`<ul>${items.map((it) => `<li>${it}</li>`).join("")}</ul>`);
+        continue;
+      }
+      // Paragraph: gather until blank line.
+      const para = [];
+      while (i < lines.length && lines[i].trim() && !/^#{2,4}\s/.test(lines[i])) {
+        para.push(lines[i]);
+        i++;
+      }
+      blocks.push(`<p>${renderInline(para.join(" "))}</p>`);
+    }
+    return blocks.join("");
+  }
+  function splitRow(s) {
+    return s.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
+  }
+  function renderTable(headers, rows) {
+    return `
+      <table class="guide-table">
+        <thead><tr>${headers.map((h) => `<th>${renderInline(h)}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${renderInline(c)}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>
+    `;
+  }
+  function renderInline(s) {
+    return escape(s)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(?<![*])\*([^*\n]+)\*(?![*])/g, "<em>$1</em>");
   }
 
   // Class-level cache for hero edge colours, keyed by image URL. Survives
