@@ -1,10 +1,12 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-05-17 (reference guide rebuilt as user-owned "chapters" — migration 018)
+> Last updated: 2026-05-17 (reference guide rebuilt as user-owned "chapters" — migration 018; in-play expansions picker + merged reference guide added the same day)
 
 ## What It Does
 A Strava-style log for board game plays. The home view is a chronological feed of plays from the user and their accepted buddies, interspersed with "hot games this week", suggested buddies, and dormant games from the user's own collection. Logging a play supports a short-code "join from another phone" flow so the host's device opens a session code that other phones join to add themselves to the player list. Profiles are fully public and show a Strava-style stats strip + collection grid. The reference-guide system is fully user-driven: each user builds their own per-game guide by adding "chapters" — either creating new ones or browsing the community pool. The pool sorts by popularity. Reports on offensive chapters route to admin review.
+
+Logging a play also surfaces the reference guide in-line: once a game is picked, a collapsed Expansions section lets the player toggle which expansions are active for this session, and a Reference guide section appears below Scoring with a centered Rulebook button + the parchment scroll merging chapters from the base game and every active expansion (each tagged with a colored dot matching the expansion's identity color). Adding chapters from this in-play scroll routes through the same Browse/Create UI, with each chapter saved against its source game's pool so it propagates automatically the next time the user opens the guide.
 
 ## Status
 Prototype
@@ -182,7 +184,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/games/{game_id}` — detail (includes derived `bgg_url`)
 - `GET /api/v1/boardgame_buddy/games/search-bgg?query=` — proxy BGG API
 - `GET /api/v1/boardgame_buddy/games/lookup-by-bgg/{bgg_id}` — null-or-`GameSummary`; the import preview uses this to label a bundle as "new game" vs "existing game"
-- `GET /api/v1/boardgame_buddy/games/{game_id}/chapter-pool` — browse the pool of existing chapters for a game. Each row carries `popularity` (count of users who have it) and `in_my_guide` (whether the caller has it). Sorted by `popularity DESC, created_at DESC`. Supports `?q=` (title+content ILIKE) and `?chapter_type=`. Auth optional — anon callers always see `in_my_guide=false`.
+- `GET /api/v1/boardgame_buddy/games/{game_id}/chapter-pool` — browse the pool of existing chapters for a game. Each row carries `popularity` (count of users who have it) and `in_my_guide` (whether the caller has it). Sorted by `popularity DESC, created_at DESC`. Supports `?q=` (title+content ILIKE), `?chapter_type=`, and `?expansion_ids=a,b,c` (comma-separated game UUIDs to merge into the pool — each merged row carries `source_game_id` / `source_game_name` / `source_color` so the FE can render colored dots tying chapters to their expansion). Auth optional — anon callers always see `in_my_guide=false`.
 - `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise. Each item includes the expansion's `rulebook_url`.
 - `GET /api/v1/boardgame_buddy/chapter-types` — chapter type lookup
 
@@ -231,7 +233,7 @@ each missing game from the BGG XML API.
 - `PATCH /api/v1/boardgame_buddy/chapters/{chapter_id}` — edit own chapter (creator-only)
 - `DELETE /api/v1/boardgame_buddy/chapters/{chapter_id}` — delete from pool (creator or admin); cascades to user_chapters + reports
 - `POST /api/v1/boardgame_buddy/chapters/{chapter_id}/report` — body `{reason?}`; flag a chapter for admin moderation. Idempotent per user.
-- `GET /api/v1/boardgame_buddy/games/{game_id}/my-chapters` — chapters the caller has added to their guide for this game (empty list when none)
+- `GET /api/v1/boardgame_buddy/games/{game_id}/my-chapters` — chapters the caller has added to their guide for this game (empty list when none). Supports `?expansion_ids=a,b,c` to also merge in chapters from the listed expansions in one round-trip; each row carries `source_game_id` / `source_game_name` / `source_color` for FE colored-dot rendering.
 - `POST /api/v1/boardgame_buddy/games/{game_id}/my-chapters` — body `{chapter_id}`; add an existing pool chapter to my guide (idempotent)
 - `DELETE /api/v1/boardgame_buddy/games/{game_id}/my-chapters/{chapter_id}` — remove from my guide (does NOT delete the chapter)
 - `POST /api/v1/boardgame_buddy/games/{base_id}/expansions/{expansion_id}/toggle` — body `{is_enabled}`; per-user expansion toggle (currently a no-op for the reference guide; the toggle table is retained but the chapter system no longer reads it)

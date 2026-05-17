@@ -346,6 +346,14 @@ class ChapterResponse(BaseModel):
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
     updated_at: datetime
+    # Source-game tagging — populated whenever the response might mix chapters
+    # from multiple games (base + expansions). Always equals (game_id, game
+    # name, expansion_color) for the chapter's defining game; source_color is
+    # None for base games and the boardgamebuddy_games.expansion_color for
+    # expansion rows.
+    source_game_id: Optional[str] = None
+    source_game_name: Optional[str] = None
+    source_color: Optional[str] = None
 
 
 class ChapterPoolItem(ChapterResponse):

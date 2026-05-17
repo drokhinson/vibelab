@@ -11,12 +11,8 @@
       this._expansions = [];  // ExpansionListItem[] (only for base games)
       this._loading = false;
       this._error = null;
-      // Reference guide scroll state.
-      this._scrollOpen = false;
-      this._guideChapters = [];
-      this._guideLoading = false;
-      this._guideSearch = "";
       this._expansionsOpen = false;
+      this._guide = null;  // ReferenceGuideScroll widget; instantiated on first render
     }
 
     async onMount() {
@@ -33,9 +29,11 @@
         if (this._game && gameId === this._game.id) this._status = status;
         this.render();
       });
-      this.listenDom("chapters-changed", async (e) => {
-        const { gameId } = e.detail || {};
-        if (this._game && gameId === this._game.id) await this._loadMyChapters();
+      this.listenDom("chapters-changed", (e) => {
+        // The widget may not exist yet during the initial _load, and a
+        // chapter add could be for the base game OR for an active
+        // expansion — refresh whenever the widget has a game in scope.
+        if (this._guide) this._guide.refresh();
       });
       window.Collection.myStatusMap()
         .then((m) => { this._statusMap = m || {}; this.render(); })
@@ -43,24 +41,6 @@
       await this._load();
     }
     async onParamsChange() { await this._load(); }
-
-    async _loadMyChapters() {
-      if (!this._game) return;
-      if (!window.session) {
-        this._guideChapters = [];
-        this.render();
-        return;
-      }
-      this._guideLoading = true;
-      try {
-        this._guideChapters = await window.Chapter.myChapters(this._game.id) || [];
-      } catch (_) {
-        this._guideChapters = [];
-      } finally {
-        this._guideLoading = false;
-        this.render();
-      }
-    }
 
     async _load() {
       const id = this.params && this.params.gameId;
@@ -78,10 +58,8 @@
       this._status = null;
       this._plays = [];
       this._expansions = [];
-      this._guideChapters = [];
-      this._guideSearch = "";
-      this._scrollOpen = false;
       this._expansionsOpen = false;
+      this._guide = null;
       this._error = null;
       this._loading = true;
       this.render();
@@ -89,25 +67,18 @@
         const game = await window.Game.fetch(id);
         // Fan out the secondary fetches in parallel once we know the game.
         // Expansions only fetched for base games (the endpoint returns [] for
-        // expansions anyway, but skip the round-trip). Chapters only loaded
-        // for authenticated callers — anon viewers see a sign-in CTA in the
-        // scroll instead.
-        const chaptersPromise = window.session
-          ? window.Chapter.myChapters(id).catch(() => [])
-          : Promise.resolve([]);
-        const [status, plays, expansions, chapters] = await Promise.all([
+        // expansions anyway, but skip the round-trip).
+        const [status, plays, expansions] = await Promise.all([
           window.Collection.statusFor(id).catch(() => null),
           window.Play.list({ gameId: id, perPage: 5 }).catch(() => ({ plays: [] })),
           game && !game.is_expansion
             ? window.api.get(`/games/${id}/expansions`).catch(() => [])
             : Promise.resolve([]),
-          chaptersPromise,
         ]);
         this._game = game;
         this._status = status;
         this._plays = plays.plays || [];
         this._expansions = Array.isArray(expansions) ? expansions : [];
-        this._guideChapters = Array.isArray(chapters) ? chapters : [];
       } catch (e) {
         this._error = e.message || "Failed to load game";
       } finally {
@@ -187,6 +158,7 @@
         </article>
       `;
       if (window.lucide) window.lucide.createIcons();
+      this._mountGuide();
       // Defer the canvas sample until after layout so it doesn't block the
       // synchronous render path. Cache hits short-circuit immediately.
       requestAnimationFrame(() => this._sampleHeroEdgeColor());
@@ -356,216 +328,36 @@
     }
 
     // ── Reference guide scroll ────────────────────────────────────────────────
+    // Returns the section shell containing a mount point. The actual scroll
+    // widget is instantiated after innerHTML is set (see _mountGuide).
     _renderReferenceGuide() {
-      const anon = !window.session;
-      const hasChapters = this._guideChapters.length > 0;
-
-      // State A: anon viewer.
-      if (anon) {
-        return this._renderReferenceGuideShell(`
-          <div class="scroll-panel">
-            <div class="scroll-panel__body">
-              <div class="scroll-panel__empty">
-                <p>Sign in to build a reference guide for <strong>${escape(this._game.name)}</strong>.</p>
-                <button class="btn btn-primary btn-sm mt-2" onclick="window.router.go('auth')">
-                  Sign in
-                </button>
-              </div>
-            </div>
-          </div>
-        `);
-      }
-
-      // State B: signed in, zero chapters. Always open, no search,
-      // no roll toggle — just the explanation copy + Add button.
-      if (!this._guideLoading && !hasChapters) {
-        return this._renderReferenceGuideShell(`
-          <div class="scroll-panel">
-            <div class="scroll-panel__body">
-              <div class="scroll-panel__empty">
-                <p>Add chapters for quick rule lookup and clarification.</p>
-                <button class="scroll-panel__add"
-                        onclick="window.gameDetailView._openAddChapter()">
-                  <i data-lucide="plus" class="w-4 h-4"></i> Add a chapter
-                </button>
-              </div>
-            </div>
-          </div>
-        `);
-      }
-
-      // State C: signed in, has chapters (or still loading). Toggleable.
-      // Search bar lives in the always-visible peek; chapters + Add live
-      // in the collapsible body.
-      const open = this._scrollOpen;
-      const rolledClass = open ? "" : "scroll-panel--rolled";
-      const needle = (this._guideSearch || "").trim().toLowerCase();
-      const filtered = needle
-        ? this._guideChapters.filter((c) =>
-            (c.title || "").toLowerCase().includes(needle) ||
-            (c.content || "").toLowerCase().includes(needle))
-        : this._guideChapters;
-
-      const bodyInner = this._guideLoading
-        ? `<div class="scroll-panel__loading">${window.buddyLoader({ size: 60 })}</div>`
-        : (filtered.length > 0
-            ? this._groupChaptersByType(filtered)
-                .map((g) => this._renderChapterSection(g)).join("")
-            : `<div class="scroll-panel__empty">No chapters match "${escape(this._guideSearch)}".</div>`);
-
-      return this._renderReferenceGuideShell(`
-        <div class="scroll-panel ${rolledClass}">
-          <button class="scroll-panel__roll scroll-panel__roll--top"
-                  aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
-                  onclick="window.gameDetailView._toggleScroll()"></button>
-          <div class="scroll-panel__peek">
-            <div class="scroll-panel__search-row">
-              <i data-lucide="search" class="w-4 h-4 scroll-panel__search-icon"></i>
-              <input class="scroll-panel__search"
-                     type="search"
-                     placeholder="Search chapters…"
-                     value="${escapeAttr(this._guideSearch)}"
-                     oninput="window.gameDetailView._onGuideSearch(this.value)" />
-            </div>
-            ${!open ? `
-              <button class="scroll-panel__hint" type="button"
-                      onclick="window.gameDetailView._toggleScroll()">
-                <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
-                Tap to expand and see chapters
-              </button>` : ""}
-          </div>
-          <div class="scroll-panel__body">
-            ${bodyInner}
-            <button class="scroll-panel__add"
-                    onclick="window.gameDetailView._openAddChapter()">
-              <i data-lucide="plus" class="w-4 h-4"></i> Add a chapter
-            </button>
-          </div>
-          <button class="scroll-panel__roll scroll-panel__roll--bottom"
-                  aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
-                  onclick="window.gameDetailView._toggleScroll()"></button>
-        </div>
-      `);
-    }
-
-    _renderReferenceGuideShell(inner) {
       return `
         <section class="game-detail__section game-detail__section--guide">
           <h3 class="game-detail__section-title">
             <i data-lucide="scroll-text" class="w-4 h-4"></i>
             Reference guide
           </h3>
-          ${inner}
+          <div id="game-detail-guide-mount"></div>
         </section>
       `;
     }
 
-    // Group chapters by chapter_type. Order each group by chapter_type_order
-    // so Setup → Player Turn → Scoring → Card Reference → Tips → Variants.
-    // Within a group, preserve insertion order (already added_at ascending).
-    _groupChaptersByType(list) {
-      const groups = new Map();
-      for (const c of list) {
-        const key = c.chapter_type;
-        if (!groups.has(key)) {
-          groups.set(key, {
-            type: key,
-            label: c.chapter_type_label || key,
-            icon: c.chapter_type_icon || "book",
-            order: c.chapter_type_order || 0,
-            chapters: [],
-          });
-        }
-        groups.get(key).chapters.push(c);
+    _mountGuide() {
+      const host = document.getElementById("game-detail-guide-mount");
+      if (!host || !this._game) return;
+      // Single-game view: only the base game id is in scope. No expansion meta
+      // needed since there's no merge happening.
+      if (!this._guide) {
+        this._guide = new window.ReferenceGuideScroll({
+          baseGameId: this._game.id,
+          gameIds: [this._game.id],
+          expansionMeta: { [this._game.id]: { name: this._game.name, color: null } },
+          onAfterMutate: () => this.render(),
+        });
+      } else {
+        this._guide.setExpansionMeta({ [this._game.id]: { name: this._game.name, color: null } });
       }
-      return [...groups.values()].sort((a, b) => a.order - b.order);
-    }
-
-    _renderChapterSection(group) {
-      return `
-        <section class="scroll-section" data-type="${escapeAttr(group.type)}">
-          <h4 class="scroll-section__header">
-            <i data-lucide="${group.icon}" class="w-4 h-4"></i>
-            ${escape(group.label)}
-          </h4>
-          <ul class="scroll-chapter-list">
-            ${group.chapters.map((c) => this._renderChapter(c)).join("")}
-          </ul>
-        </section>
-      `;
-    }
-
-    _renderChapter(c) {
-      const icon = c.chapter_type_icon || "book";
-      return `
-        <li class="scroll-chapter" data-chapter-id="${c.id}">
-          <details>
-            <summary class="scroll-chapter__summary">
-              <span class="scroll-chapter__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
-              <span class="scroll-chapter__title">${escape(c.title)}</span>
-            </summary>
-            <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
-            <div class="scroll-chapter__actions">
-              <button class="btn btn-ghost btn-xs"
-                      onclick="window.gameDetailView._removeChapter('${c.id}', event)">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove from my guide
-              </button>
-              <button class="btn btn-ghost btn-xs"
-                      onclick="window.gameDetailView._reportChapter('${c.id}', event)">
-                <i data-lucide="flag" class="w-3.5 h-3.5"></i> Report
-              </button>
-            </div>
-          </details>
-        </li>
-      `;
-    }
-
-    _toggleScroll() {
-      this._scrollOpen = !this._scrollOpen;
-      this.render();
-    }
-
-    _onGuideSearch(v) {
-      this._guideSearch = v || "";
-      // Filter is purely client-side; cheap to re-render the body.
-      this.render();
-      // Keep focus on the search input.
-      const el = document.querySelector(".scroll-panel__search");
-      if (el) { el.focus(); el.setSelectionRange(v.length, v.length); }
-    }
-
-    _openAddChapter() {
-      window.router.go("reference-guide-add", {
-        gameId: this._game.id,
-        gameName: this._game.name,
-      });
-    }
-
-    async _removeChapter(chapterId, event) {
-      if (event) event.preventDefault();
-      try {
-        await window.Chapter.remove(this._game.id, chapterId);
-        this._guideChapters = this._guideChapters.filter((c) => c.id !== chapterId);
-        showToast("Removed from your guide", "info");
-        this.render();
-      } catch (e) {
-        showToast(e.message || "Failed to remove chapter", "error");
-      }
-    }
-
-    async _reportChapter(chapterId, event) {
-      if (event) event.preventDefault();
-      const reason = window.prompt(
-        "Why are you reporting this chapter? (optional)",
-        ""
-      );
-      if (reason === null) return;
-      try {
-        await window.Chapter.report(chapterId, reason.trim() || null);
-        showToast("Reported — thanks for flagging", "success");
-      } catch (e) {
-        showToast(e.message || "Failed to report chapter", "error");
-      }
+      this._guide.mount(host);
     }
 
     _startPlay() {

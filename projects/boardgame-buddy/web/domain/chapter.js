@@ -9,13 +9,20 @@
     types() {
       return window.api.get("/chapter-types");
     },
-    myChapters(gameId) {
-      return window.api.get(`/games/${gameId}/my-chapters`);
+    myChapters(gameId, { expansionIds } = {}) {
+      const query = {};
+      if (expansionIds && expansionIds.length) {
+        query.expansion_ids = expansionIds.join(",");
+      }
+      return window.api.get(`/games/${gameId}/my-chapters`, query);
     },
-    pool(gameId, { q, chapterType } = {}) {
+    pool(gameId, { q, chapterType, expansionIds } = {}) {
       const query = {};
       if (q) query.q = q;
       if (chapterType) query.chapter_type = chapterType;
+      if (expansionIds && expansionIds.length) {
+        query.expansion_ids = expansionIds.join(",");
+      }
       return window.api.get(`/games/${gameId}/chapter-pool`, query);
     },
     create(gameId, payload) {

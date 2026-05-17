@@ -7,8 +7,15 @@
     constructor() {
       super("reference-guide-add");
       this._tab = "browse";          // "browse" | "create"
-      this._gameId = null;
+      this._gameId = null;            // base game uuid (route param)
       this._gameName = "";
+      // Optional expansion uuids passed from the in-play guide widget. When
+      // present, Browse shows chapters across base + these expansions and the
+      // Create tab gets a "Target game" picker so the new chapter can be
+      // saved against an expansion's pool.
+      this._expansionIds = [];
+      this._expansionMeta = {};       // gameId → {name, color}
+      this._createTargetGameId = null; // defaults to base game in onMount
 
       // Browse state
       this._poolLoading = false;
@@ -30,13 +37,30 @@
       this._gameId = (this.params && this.params.gameId) || null;
       this._gameName = (this.params && this.params.gameName) || "";
       this._tab = (this.params && this.params.tab) || "browse";
+      const rawExp = (this.params && this.params.expansionIds) || "";
+      this._expansionIds = rawExp.split(",").map((s) => s.trim()).filter(Boolean);
+      this._createTargetGameId = this._gameId;
+      this._expansionMeta = this._gameId
+        ? { [this._gameId]: { name: this._gameName, color: null } }
+        : {};
       if (!this._gameId) {
         this.render();
         return;
       }
-      // Always preload chapter types — they're needed by both tabs.
-      try { this._types = await window.Chapter.types(); }
-      catch (_) { this._types = []; }
+      // Always preload chapter types — they're needed by both tabs. When
+      // expansions are in scope, also fetch the base game's expansion list
+      // so we can populate names/colors for the Create-target selector.
+      const typesP = window.Chapter.types().catch(() => []);
+      const expsP = this._expansionIds.length
+        ? window.api.get(`/games/${this._gameId}/expansions`).catch(() => [])
+        : Promise.resolve([]);
+      const [types, exps] = await Promise.all([typesP, expsP]);
+      this._types = types || [];
+      for (const e of (exps || [])) {
+        if (this._expansionIds.includes(e.expansion_game_id)) {
+          this._expansionMeta[e.expansion_game_id] = { name: e.name, color: e.color || null };
+        }
+      }
       if (this._tab === "browse") await this._loadPool();
       this.render();
     }
@@ -51,6 +75,7 @@
         const pool = await window.Chapter.pool(this._gameId, {
           q: this._search || undefined,
           chapterType: this._typeFilter || undefined,
+          expansionIds: this._expansionIds.length ? this._expansionIds : undefined,
         });
         // Show every pool row regardless of in_my_guide — the per-row
         // toggle button reflects the current state and adds/removes
@@ -190,6 +215,16 @@
         ? escape(previewSrc.slice(0, 160)) + "…"
         : escape(previewSrc);
       const inGuide = !!c.in_my_guide;
+      // Only show the source label/dot when this view is aggregating across
+      // multiple games (i.e. the caller passed expansionIds). For a plain
+      // single-game add flow source_game_name is unset and we keep the row
+      // chrome identical to the legacy layout.
+      const sourceLabel = (this._expansionIds.length && c.source_game_name && c.source_color)
+        ? `<span class="chapter-add__pool-source" style="--exp-color:${escapeAttr(c.source_color)}">
+             <span class="chapter-add__pool-source-dot"></span>
+             ${escape(c.source_game_name)}
+           </span>`
+        : "";
       return `
         <li class="chapter-add__pool-row" data-chapter-id="${c.id}">
           <div class="chapter-add__pool-icon"><i data-lucide="${icon}" class="w-4 h-4"></i></div>
@@ -199,6 +234,7 @@
               <span class="chapter-add__pool-pop" title="${c.popularity} ${c.popularity === 1 ? "person has" : "people have"} this in their guide">
                 <i data-lucide="users" class="w-3 h-3"></i> ${c.popularity}
               </span>
+              ${sourceLabel}
               ${author ? `<span class="chapter-add__pool-author">${author}</span>` : ""}
             </div>
             ${preview ? `<div class="chapter-add__pool-preview">${preview}</div>` : ""}
@@ -234,16 +270,20 @@
     async _toggleInGuide(chapterId) {
       const row = this._pool.find((c) => c.id === chapterId);
       if (!row) return;
+      // When the pool spans base + expansions each chapter carries its own
+      // source_game_id. Single-game pool rows leave source_game_id null, so
+      // we fall back to the base game id.
+      const targetGameId = row.source_game_id || row.game_id || this._gameId;
       const targetState = !row.in_my_guide;
       try {
         if (targetState) {
-          await window.Chapter.add(this._gameId, chapterId);
+          await window.Chapter.add(targetGameId, chapterId);
         } else {
-          await window.Chapter.remove(this._gameId, chapterId);
+          await window.Chapter.remove(targetGameId, chapterId);
         }
         row.in_my_guide = targetState;
         document.dispatchEvent(new CustomEvent("chapters-changed", {
-          detail: { gameId: this._gameId },
+          detail: { gameId: targetGameId },
         }));
         showToast(targetState ? "Added to your guide" : "Removed from your guide",
                   targetState ? "success" : "info");
@@ -295,8 +335,15 @@
                       oninput="window.referenceGuideAddView._formContent = this.value"
                       placeholder="## What you can do on your turn…">${escape(this._formContent)}</textarea>`;
 
+      // Target-game selector only renders when expansions are in scope —
+      // the single-game add flow saves to the base game implicitly.
+      const targetSelector = this._expansionIds.length
+        ? this._renderCreateTargetSelector()
+        : "";
+
       return `
         <form class="chapter-add__form" onsubmit="window.referenceGuideAddView._submitCreate(event)">
+          ${targetSelector}
           <div class="chapter-add__field">
             <label class="chapter-add__label">Chapter type</label>
             <div class="chapter-add__type-grid">${typeBtns}</div>
@@ -338,6 +385,37 @@
       `;
     }
 
+    _renderCreateTargetSelector() {
+      // Build ordered options: base game first, then expansions in the order
+      // they were passed in via the route param.
+      const ids = [this._gameId, ...this._expansionIds];
+      const opts = ids.map((id) => {
+        const meta = this._expansionMeta[id] || { name: id, color: null };
+        const isActive = id === this._createTargetGameId;
+        const color = meta.color || "transparent";
+        return `
+          <button type="button"
+                  class="chapter-add__target-btn ${isActive ? "chapter-add__target-btn--active" : ""}"
+                  style="--exp-color:${color}"
+                  onclick="window.referenceGuideAddView._pickCreateTarget('${id}')">
+            ${meta.color ? `<span class="chapter-add__target-dot"></span>` : ""}
+            <span>${escape(meta.name || "Game")}</span>
+          </button>
+        `;
+      }).join("");
+      return `
+        <div class="chapter-add__field">
+          <label class="chapter-add__label">Save to</label>
+          <div class="chapter-add__target-grid">${opts}</div>
+        </div>
+      `;
+    }
+
+    _pickCreateTarget(id) {
+      this._createTargetGameId = id;
+      this.render();
+    }
+
     _pickType(id) {
       this._formType = id;
       this.render();
@@ -366,15 +444,16 @@
       }
       this._saving = true;
       this.render();
+      const targetGameId = this._createTargetGameId || this._gameId;
       try {
-        await window.Chapter.create(this._gameId, {
+        await window.Chapter.create(targetGameId, {
           chapter_type: this._formType,
           title,
           content,
           layout: "text",
         });
         document.dispatchEvent(new CustomEvent("chapters-changed", {
-          detail: { gameId: this._gameId },
+          detail: { gameId: targetGameId },
         }));
         showToast("Chapter added to your guide", "success");
         this._formTitle = "";

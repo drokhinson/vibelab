@@ -16,6 +16,15 @@
       this._error = null;
       this._saving = false;
       this._pollHandle = null;
+      // Expansions picker state. _expansionsLoadedFor caches the game id so
+      // we only re-fetch when the picked game changes; _expansionsOpen is
+      // false by default so the section starts collapsed.
+      this._expansions = [];
+      this._expansionsLoadedFor = null;
+      this._expansionsOpen = false;
+      // ReferenceGuideScroll widget instance; recreated when the picked game
+      // changes (handled inside _mountReferenceGuide via the baseGameId check).
+      this._guideWidget = null;
     }
 
     async onMount() {
@@ -23,10 +32,54 @@
       this._ps = existing || new window.PlaySession();
       this._ensureSelfIncluded();
       window.store.set("activePlay", this._ps);
-      try {
-        this._buddies = await window.Buddy.list();
-      } catch (_) { this._buddies = []; }
+      // When a chapter is added/removed from inside the reference-guide-add
+      // view, the in-play scroll needs to re-fetch so the new chapter shows
+      // up in the merged guide.
+      this.listenDom("chapters-changed", () => {
+        if (this._guideWidget) this._guideWidget.refresh();
+      });
+      const buddyPromise = window.Buddy.list().catch(() => []);
+      const expansionsPromise = this._loadExpansionsIfNeeded();
+      const [buddies] = await Promise.all([buddyPromise, expansionsPromise]);
+      this._buddies = buddies;
       this.render();
+      // The view persists across mounts (init.js builds a single instance),
+      // so a widget created during a previous mount still has its cached
+      // chapter list. The chapters-changed listener is torn down during the
+      // intermediate trip to reference-guide-add, so the in-play scroll has
+      // to re-fetch on re-entry to surface any chapters the user just added.
+      if (this._guideWidget) this._guideWidget.refresh();
+    }
+
+    async _loadExpansionsIfNeeded() {
+      const gameId = this._ps && this._ps.gameId;
+      if (!gameId) {
+        this._expansions = [];
+        this._expansionsLoadedFor = null;
+        return;
+      }
+      if (this._expansionsLoadedFor === gameId) return;
+      // Expansions don't have sub-expansions — skip the round-trip.
+      const snap = this._ps.gameSnapshot;
+      if (snap && snap.is_expansion) {
+        this._expansions = [];
+        this._expansionsLoadedFor = gameId;
+        return;
+      }
+      try {
+        const list = await window.api.get(`/games/${gameId}/expansions`);
+        this._expansions = Array.isArray(list) ? list : [];
+      } catch (_) {
+        this._expansions = [];
+      }
+      this._expansionsLoadedFor = gameId;
+      // Prune any persisted expansionIds that aren't in this game's expansion
+      // list — stale selections from a previously-picked game would otherwise
+      // ride along into the new session.
+      const valid = new Set(this._expansions.map((e) => e.expansion_game_id));
+      const before = (this._ps.expansionIds || []).length;
+      this._ps.expansionIds = (this._ps.expansionIds || []).filter((id) => valid.has(id));
+      if (this._ps.expansionIds.length !== before) this._ps.persist();
     }
 
     _ensureSelfIncluded() {
@@ -66,6 +119,7 @@
         ${this._error ? `<div class="alert alert-error m-3">${escape(this._error)}</div>` : ""}
       `;
       if (window.lucide) window.lucide.createIcons();
+      this._mountReferenceGuide();
     }
 
     _renderSoloOrLobby() {
@@ -80,7 +134,6 @@
               <div class="log-play__game-name">${escape(game.name)}</div>
               <button class="btn btn-ghost btn-sm" onclick="window.logPlayView._pickGame()">Change</button>
             </div>
-            ${game.rulebook_url ? `<a href="${escapeAttr(game.rulebook_url)}" target="_blank" rel="noopener" class="log-play__rulebook"><i data-lucide="book-open" class="w-4 h-4"></i> Rulebook</a>` : ""}
           ` : `
             <button class="btn btn-outline w-full" onclick="window.logPlayView._pickGame()">
               <i data-lucide="search" class="w-4 h-4"></i> Pick a game
@@ -122,7 +175,9 @@
           </div>
         </section>
 
+        ${this._renderExpansionsPicker()}
         ${this._renderScoringSection()}
+        ${this._renderReferenceGuideSection()}
         ${this._renderPhotoSection()}
 
         <section class="log-play__section">
@@ -342,6 +397,144 @@
       for (const p of this._ps.players) p.is_winner = !!won;
       this._ps.persist();
       this.render();
+    }
+
+    // ── Expansions picker ────────────────────────────────────────────────────
+    // Collapsed by default; only renders when a base game is picked AND that
+    // game has expansion rows. Toggling rows mutates ps.expansionIds, which
+    // also drives which chapters appear in the reference-guide widget below.
+    _renderExpansionsPicker() {
+      if (!this._ps.gameId) return "";
+      const snap = this._ps.gameSnapshot;
+      if (snap && snap.is_expansion) return "";
+      if (!this._expansions || this._expansions.length === 0) return "";
+
+      const open = !!this._expansionsOpen;
+      const chevron = open ? "chevron-down" : "chevron-right";
+      const selected = (this._ps.expansionIds || []).length;
+      return `
+        <section class="log-play__section log-play__section--expansions">
+          <button class="collapsible-header" aria-expanded="${open}"
+                  onclick="window.logPlayView._toggleExpansionsPicker()">
+            <span class="collapsible-header__title">
+              <i data-lucide="puzzle" class="w-4 h-4"></i>
+              Expansions${selected ? ` (${selected} selected)` : ""}
+            </span>
+            <i data-lucide="${chevron}" class="w-4 h-4 collapsible-header__chev"></i>
+          </button>
+          ${open ? `
+            <ul class="expansion-list log-play__exp-list">
+              ${this._expansions.map((e) => this._renderExpansionPickerRow(e)).join("")}
+            </ul>
+          ` : ""}
+        </section>
+      `;
+    }
+
+    _renderExpansionPickerRow(e) {
+      const active = (this._ps.expansionIds || []).includes(e.expansion_game_id);
+      return `
+        <li class="expansion-list__row log-play__exp-row ${active ? "is-active" : ""}"
+            onclick="window.logPlayView._toggleExpansion('${e.expansion_game_id}')"
+            style="--exp-color:${e.color || "#C9922A"}">
+          <span class="expansion-list__dot"></span>
+          ${e.thumbnail_url
+            ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" class="expansion-list__thumb" loading="lazy" />`
+            : `<div class="expansion-list__thumb expansion-list__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
+          <div class="expansion-list__body">
+            <div class="expansion-list__name">${escape(e.name)}</div>
+          </div>
+          <span class="log-play__exp-toggle ${active ? "log-play__exp-toggle--on" : ""}">
+            <i data-lucide="${active ? "check" : "plus"}" class="w-4 h-4"></i>
+          </span>
+        </li>
+      `;
+    }
+
+    _toggleExpansionsPicker() {
+      this._expansionsOpen = !this._expansionsOpen;
+      this.render();
+    }
+
+    _toggleExpansion(expansionGameId) {
+      const ids = (this._ps.expansionIds || []).slice();
+      const idx = ids.indexOf(expansionGameId);
+      if (idx >= 0) ids.splice(idx, 1);
+      else ids.push(expansionGameId);
+      this._ps.expansionIds = ids;
+      this._ps.persist();
+      this.render();
+    }
+
+    // ── Reference guide section ──────────────────────────────────────────────
+    _renderReferenceGuideSection() {
+      if (!this._ps.gameId) return "";
+      const game = this._ps.gameSnapshot || {};
+      const rulebookUrl = game.rulebook_url;
+      const rulebookBtn = rulebookUrl
+        ? `<a href="${escapeAttr(rulebookUrl)}" target="_blank" rel="noopener"
+              class="btn btn-outline btn-sm log-play__rulebook-cta">
+             <i data-lucide="book-open" class="w-4 h-4"></i>
+             <span>Rulebook</span>
+             <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+           </a>`
+        : `<button class="btn btn-outline btn-sm log-play__rulebook-cta" disabled
+              title="No rulebook available">
+             <i data-lucide="book-open" class="w-4 h-4"></i>
+             <span>Rulebook</span>
+           </button>`;
+      return `
+        <section class="log-play__section log-play__section--guide">
+          <label class="log-play__label">Reference guide</label>
+          <div class="log-play__rulebook-row">${rulebookBtn}</div>
+          <div id="log-play-guide-mount"></div>
+        </section>
+      `;
+    }
+
+    _buildExpansionMetaMap() {
+      const meta = {};
+      const snap = this._ps.gameSnapshot;
+      meta[this._ps.gameId] = { name: snap ? snap.name : "", color: null };
+      for (const e of (this._expansions || [])) {
+        meta[e.expansion_game_id] = { name: e.name, color: e.color || null };
+      }
+      return meta;
+    }
+
+    _mountReferenceGuide() {
+      if (!this._ps.gameId) {
+        // No game picked yet — clear stale widget so we re-fetch cleanly when
+        // a game is picked on the next render.
+        this._guideWidget = null;
+        return;
+      }
+      const host = document.getElementById("log-play-guide-mount");
+      if (!host) return;
+      const meta = this._buildExpansionMetaMap();
+      const gameIds = [this._ps.gameId, ...(this._ps.expansionIds || [])];
+
+      // Recreate the widget if the user picked a different base game — keeping
+      // the prior widget would reuse cached chapters from the old game.
+      if (this._guideWidget && this._guideWidget._baseGameId !== this._ps.gameId) {
+        this._guideWidget = null;
+      }
+      if (!this._guideWidget) {
+        this._guideWidget = new window.ReferenceGuideScroll({
+          baseGameId: this._ps.gameId,
+          gameIds,
+          expansionMeta: meta,
+          onAfterMutate: () => this.render(),
+        });
+        this._guideWidget.mount(host);
+      } else {
+        // Attach to the new container first so the loading-state re-render
+        // triggered by setGameIds writes into the visible DOM, not the old
+        // (now-detached) mount point.
+        this._guideWidget.mount(host);
+        this._guideWidget.setExpansionMeta(meta);
+        this._guideWidget.setGameIds(gameIds);
+      }
     }
 
     _renderPhotoSection() {
@@ -771,6 +964,10 @@
       this._lobby = null;
       this._error = null;
       this._stopPolling();
+      this._expansions = [];
+      this._expansionsLoadedFor = null;
+      this._expansionsOpen = false;
+      this._guideWidget = null;
       this._ensureSelfIncluded();
       window.store.set("activePlay", this._ps);
       this.render();

@@ -42,8 +42,48 @@ _CHAPTER_SELECT = (
 )
 
 
-def _chapter_row_to_response(row: dict[str, Any]) -> ChapterResponse:
-    """Flatten a Supabase row with joined chapter_type + profile."""
+def _parse_expansion_ids(raw: Optional[str]) -> list[str]:
+    """Parse comma-separated ?expansion_ids=a,b,c into a list (empty if blank)."""
+    if not raw:
+        return []
+    return [s for s in (p.strip() for p in raw.split(",")) if s]
+
+
+def _build_source_map(sb, game_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Fetch (name, expansion_color) for a list of game ids in one round-trip.
+
+    The chapter response uses this to populate source_game_name / source_color
+    so the FE can render colored dots tying each chapter to its expansion (or
+    leave the dot blank for base-game chapters).
+    """
+    if not game_ids:
+        return {}
+    rows = (
+        sb.table("boardgamebuddy_games")
+        .select("id, name, expansion_color, is_expansion")
+        .in_("id", game_ids)
+        .execute()
+    ).data or []
+    return {
+        r["id"]: {
+            "name": r.get("name") or "",
+            # Base games get None — the FE skips the colored dot.
+            "color": r.get("expansion_color") if r.get("is_expansion") else None,
+        }
+        for r in rows
+    }
+
+
+def _chapter_row_to_response(
+    row: dict[str, Any],
+    source_map: Optional[dict[str, dict[str, Any]]] = None,
+) -> ChapterResponse:
+    """Flatten a Supabase row with joined chapter_type + profile.
+
+    When `source_map` is supplied, also populate source_game_id /
+    source_game_name / source_color so a multi-game merged response can be
+    rendered with the right colored dot per chapter.
+    """
     type_obj = row.get("boardgamebuddy_chapter_types")
     profile_obj = row.get("boardgamebuddy_profiles")
 
@@ -59,6 +99,16 @@ def _chapter_row_to_response(row: dict[str, Any]) -> ChapterResponse:
     if isinstance(profile_obj, dict):
         created_by_name = profile_obj.get("display_name")
 
+    source_game_id = None
+    source_game_name = None
+    source_color = None
+    if source_map is not None:
+        entry = source_map.get(row["game_id"])
+        source_game_id = row["game_id"]
+        if entry:
+            source_game_name = entry.get("name")
+            source_color = entry.get("color")
+
     return ChapterResponse(
         id=row["id"],
         game_id=row["game_id"],
@@ -72,6 +122,9 @@ def _chapter_row_to_response(row: dict[str, Any]) -> ChapterResponse:
         created_by=row.get("created_by"),
         created_by_name=created_by_name,
         updated_at=row["updated_at"],
+        source_game_id=source_game_id,
+        source_game_name=source_game_name,
+        source_color=source_color,
     )
 
 
@@ -115,9 +168,17 @@ async def browse_chapter_pool(
     game_id: str = Path(..., description="Game UUID"),
     q: Optional[str] = Query(None, description="Keyword search across title + content"),
     chapter_type: Optional[str] = Query(None, description="Optional chapter-type filter"),
+    expansion_ids: Optional[str] = Query(
+        None,
+        description=(
+            "Comma-separated expansion game UUIDs to also include in the pool."
+            " When set, the pool merges chapters from the base game plus these"
+            " expansions, each row tagged with source_game_id/source_color."
+        ),
+    ),
     authorization: Optional[str] = Header(None),
 ) -> list[ChapterPoolItem]:
-    """Browse every chapter that exists for this game.
+    """Browse every chapter that exists for this game (optionally + expansions).
 
     Sorted by `popularity DESC, created_at DESC`. Each row includes
     a `popularity` count (how many users have it in their guide) and
@@ -126,11 +187,11 @@ async def browse_chapter_pool(
     sb = get_supabase()
     su_user = await maybe_supabase_user(authorization)
 
-    pool_q = (
-        sb.table("boardgamebuddy_guide_chapters")
-        .select(_CHAPTER_SELECT)
-        .eq("game_id", game_id)
-    )
+    exp_ids = _parse_expansion_ids(expansion_ids)
+    all_game_ids = [game_id, *exp_ids]
+
+    pool_q = sb.table("boardgamebuddy_guide_chapters").select(_CHAPTER_SELECT)
+    pool_q = pool_q.in_("game_id", all_game_ids) if exp_ids else pool_q.eq("game_id", game_id)
     if chapter_type:
         pool_q = pool_q.eq("chapter_type", chapter_type)
     if q:
@@ -143,6 +204,7 @@ async def browse_chapter_pool(
         return []
 
     chapter_ids = [r["id"] for r in pool_rows]
+    source_map = _build_source_map(sb, all_game_ids) if exp_ids else {}
 
     # Popularity: count user_chapters rows per chapter in one round trip.
     popularity: dict[str, int] = {cid: 0 for cid in chapter_ids}
@@ -174,7 +236,7 @@ async def browse_chapter_pool(
 
     return [
         ChapterPoolItem(
-            **_chapter_row_to_response(row).model_dump(),
+            **_chapter_row_to_response(row, source_map if exp_ids else None).model_dump(),
             popularity=popularity.get(row["id"], 0),
             in_my_guide=row["id"] in in_my_guide,
         )
@@ -370,19 +432,31 @@ async def report_chapter(
 )
 async def get_my_chapters(
     game_id: str = Path(..., description="Game UUID"),
+    expansion_ids: Optional[str] = Query(
+        None,
+        description=(
+            "Comma-separated expansion game UUIDs to also include. When set,"
+            " the response merges the caller's chapters across the base game"
+            " and these expansions, each tagged with source_game_id/source_color."
+        ),
+    ),
     user: CurrentUser = Depends(get_current_user),
 ) -> list[MyGuideChapterResponse]:
-    """Return only the chapters the caller has added to their guide for this game."""
+    """Return the chapters the caller has added to their guide for this game
+    (and optionally for the listed expansions, merged into one response)."""
     sb = get_supabase()
 
-    sel_rows = (
+    exp_ids = _parse_expansion_ids(expansion_ids)
+    all_game_ids = [game_id, *exp_ids]
+
+    sel_q = (
         sb.table("boardgamebuddy_user_chapters")
-        .select("chapter_id, created_at")
+        .select("chapter_id, game_id, created_at")
         .eq("user_id", user.user_id)
-        .eq("game_id", game_id)
         .order("created_at")
-        .execute()
-    ).data or []
+    )
+    sel_q = sel_q.in_("game_id", all_game_ids) if exp_ids else sel_q.eq("game_id", game_id)
+    sel_rows = sel_q.execute().data or []
 
     if not sel_rows:
         return []
@@ -397,13 +471,15 @@ async def get_my_chapters(
         .execute()
     ).data or []
 
+    source_map = _build_source_map(sb, all_game_ids) if exp_ids else {}
+
     # Preserve insertion order (added_at ascending).
     by_id = {r["id"]: r for r in chapters}
     ordered_rows = [by_id[cid] for cid in chapter_ids if cid in by_id]
 
     out: list[MyGuideChapterResponse] = []
     for row in ordered_rows:
-        base = _chapter_row_to_response(row)
+        base = _chapter_row_to_response(row, source_map if exp_ids else None)
         out.append(MyGuideChapterResponse(
             **base.model_dump(),
             added_at=added_at_map[row["id"]],
