@@ -101,10 +101,16 @@
       this._statusMap = {};
       this._expansionCounts = {};
       this.render();
+      // Preload every subtab so switching to Recent Plays or Buddies is an
+      // instant paint instead of a fresh round-trip. The buddies panel runs
+      // _load() with no container attached; its render() bails out, but the
+      // data lands on the panel so mount() can paint immediately later.
       await Promise.all([
         this._loadStats(),
         this._loadCollection({ reset: true }),
         this._refreshCollectionData(),
+        this._loadRecentPlays({ reset: true }),
+        this._buddiesPanel._load(),
       ]);
     }
 

@@ -30,17 +30,25 @@
       // the underlying lists may have changed shape after a mutation.
       this._buddiesPage = 0;
       this._playedWithPage = 0;
-      // True only during the first `_load()` so the initial mount shows the
-      // bouncing-buddy loader instead of an empty "Buddies (0)" section.
-      // Subsequent reloads after a mutation skip the loader so the lists
-      // stay visible while the data refreshes.
-      this._loading = true;
+      // Initial-load flag — only true during the very first `_load()` so the
+      // bouncing-buddy loader appears once. After that the data is cached on
+      // the panel; tab re-entries render the cached lists immediately, and
+      // refreshes happen out-of-band via the manual button.
+      this._initialLoading = true;
+      this._refreshing = false;
+      this._loaded = false;
       window[hostId] = this; // for inline onclick lookup
     }
 
     async mount(container) {
       this._container = container;
-      this._loading = true;
+      if (this._loaded) {
+        // Data was pre-fetched (e.g. parent view kicked off `_load()` during
+        // its own onMount) or cached from a previous mount — just paint.
+        this.render();
+        return;
+      }
+      this._initialLoading = true;
       this.render();
       await this._load();
     }
@@ -66,10 +74,21 @@
         // empty trailing page.
         this._buddiesPage = 0;
         this._playedWithPage = 0;
+        this._loaded = true;
       } finally {
-        this._loading = false;
+        this._initialLoading = false;
+        this._refreshing = false;
         this.render();
       }
+    }
+
+    async _refresh() {
+      // Manual refresh — keeps the cached lists visible while the refetch
+      // runs in the background and spins the header button's icon.
+      if (this._refreshing) return;
+      this._refreshing = true;
+      this.render();
+      await this._load();
     }
 
     _paginate(items, page) {
@@ -111,7 +130,7 @@
 
     render() {
       if (!this._container) return;
-      if (this._loading) {
+      if (this._initialLoading) {
         // Match the splash / feed loader placement so the buddies tab opens
         // with the same centered bouncing-buddy artwork the rest of the app
         // uses for first-paint waits.
@@ -207,10 +226,26 @@
 
     _renderBuddiesSection(playCountByUser, hostRef) {
       const total = this._buddies.length;
+      // Section header carries a manual refresh button — buddies data is
+      // loaded once (on first mount or preloaded by the parent view) and
+      // only refetched when the user explicitly asks via this button or
+      // takes an action that mutates the list (add / accept / unfriend).
+      const head = `
+        <header class="buddies-section__head">
+          <h3>Buddies (${total})</h3>
+          <button class="btn btn-ghost btn-xs buddies-section__refresh"
+                  aria-label="Refresh buddies"
+                  title="Refresh buddies"
+                  ${this._refreshing ? "disabled" : ""}
+                  onclick="${hostRef}._refresh()">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 ${this._refreshing ? "animate-spin" : ""}"></i>
+          </button>
+        </header>
+      `;
       if (total === 0) {
         return `
           <section class="buddies-section">
-            <h3>Buddies (0)</h3>
+            ${head}
             <p class="text-sm opacity-60 p-3">No buddies yet — search above to add some.</p>
           </section>
         `;
@@ -236,7 +271,7 @@
       }).join("");
       return `
         <section class="buddies-section">
-          <h3>Buddies (${total})</h3>
+          ${head}
           <ul class="buddies-list">${rows}</ul>
           ${this._renderPager("buddies", info)}
         </section>
