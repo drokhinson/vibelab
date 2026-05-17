@@ -3201,7 +3201,31 @@ body {
   background: transparent; border: none; cursor: pointer; padding: 0.1rem;
   color: oklch(var(--bc) / 0.6);
 }
-.search-results { padding-top: 0.75rem; }
+.search-results { padding-top: 0.75rem; position: relative; }
+/* Re-fetch in flight with results already on screen — dim the list and pop
+   a spinner so the user gets feedback that their filter / search applied. */
+.search-results.is-reloading .search-list {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.search-results.is-reloading::after {
+  content: "";
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  border: 3px solid oklch(var(--bc) / 0.15);
+  border-top-color: oklch(var(--p));
+  border-radius: 50%;
+  animation: search-results-spin 720ms linear infinite;
+  z-index: 2;
+}
+@keyframes search-results-spin {
+  to { transform: translateX(-50%) rotate(360deg); }
+}
 
 /* ── Search filter UI ─────────────────────────────────────────────────────── */
 .search-filter-badge {
