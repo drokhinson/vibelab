@@ -737,13 +737,19 @@
       // play. Consistent with every other place a boardgame image appears.
       // Delete now lives on the play-detail edit form, not on the row.
       const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || '')}'})`;
+      const statusOverlay = p.game_id
+        ? `<span class="recent-plays__status">${window.renderStatusTag(p.game_id, (this._statusMap || {})[p.game_id] || null, { compact: true })}</span>`
+        : "";
       return `
         <li class="recent-plays__row" data-play-id="${p.id}">
           <div class="recent-plays__row-inner"
                onclick="window.router.go('play-detail',{playId:'${p.id}'})">
-            ${p.game_thumbnail
-              ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
-              : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
+            <div class="recent-plays__thumb">
+              ${p.game_thumbnail
+                ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
+                : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
+              ${statusOverlay}
+            </div>
             <div class="recent-plays__body">
               <div class="recent-plays__top">
                 <div class="recent-plays__game">${escape(p.game_name)}</div>

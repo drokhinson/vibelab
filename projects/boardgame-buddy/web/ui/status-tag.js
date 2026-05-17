@@ -61,31 +61,36 @@
       opts.size === "xs" ? " status-tag--xs" :
       opts.size === "lg" ? " status-tag--lg" :
       "";
+    // Compact mode is the icon-only chip rendered as a corner banner on a
+    // boardgame image. Picker still opens on tap, so users can flip the
+    // shelf-state from any context — no label, just colour + icon.
+    const compactCls = opts.compact ? " status-tag--compact" : "";
     const isStatus = status === "owned" || status === "wishlist" || status === "played";
     if (isStatus) {
-      // Every status tag is a button now: tap → open the picker so the user
-      // can switch the game between Owned / Wishlist / Remove without having
-      // to drill into the game-detail page.
+      const label = opts.compact ? "" : LABEL[status];
       return `
-        <button class="status-tag status-tag--${status}${sizeCls}"
-                title="Change status"
+        <button class="status-tag status-tag--${status}${sizeCls}${compactCls}"
+                title="${LABEL[status]} — change status"
+                aria-label="${LABEL[status]} — change status"
                 onclick="event.stopPropagation();window.statusPicker.openFor(event,'${jsStr(gameId)}','${status}')">
           <i data-lucide="${ICON[status]}" class="w-3 h-3"></i>
-          ${LABEL[status]}
+          ${label}
         </button>
       `;
     }
     // No collection relationship — render the + that opens the picker.
     // Callers can pass opts.addLabel to inline a text label next to the
-    // plus (e.g. "Add to collection" on the game-detail action row).
-    const addLabel = opts.addLabel
+    // plus (e.g. "Add to collection" on the game-detail action row). The
+    // compact variant suppresses the label so the chip is a pure icon button.
+    const addLabel = opts.addLabel && !opts.compact
       ? `<span class="status-tag__label">${String(opts.addLabel).replace(/[&<>"']/g, (c) => ({
           "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
         }[c]))}</span>`
       : "";
     return `
-      <button class="status-tag status-tag--add${sizeCls}"
+      <button class="status-tag status-tag--add${sizeCls}${compactCls}"
               title="Add to collection"
+              aria-label="Add to collection"
               onclick="event.stopPropagation();window.statusPicker.openFor(event,'${jsStr(gameId)}','')">
         <i data-lucide="plus" class="w-3.5 h-3.5"></i>
         ${addLabel}
@@ -181,6 +186,11 @@
         alert(e.message || "Failed to add");
         return;
       }
+      // Patch the cached map so any reader (play cards, recent-plays thumbs,
+      // anything pulling `window.store.get('myCollectionMap')` synchronously)
+      // sees the new state without waiting for the next refetch.
+      const cur = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
+      window.store.set("myCollectionMap", { ...cur, [gameId]: status });
       document.dispatchEvent(new CustomEvent("status-changed", {
         detail: { gameId, status },
       }));
@@ -196,6 +206,10 @@
         alert(e.message || "Failed to remove");
         return;
       }
+      const cur = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
+      const next = { ...cur };
+      delete next[gameId];
+      window.store.set("myCollectionMap", next);
       // null status flags "no relationship" — listeners delete the entry
       // from their local status map so the tile flips back to the + button.
       document.dispatchEvent(new CustomEvent("status-changed", {

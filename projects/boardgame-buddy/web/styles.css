@@ -1593,6 +1593,15 @@ body {
   border-radius: 0.75rem;
   overflow: hidden;
 }
+/* Status overlay sits in the top-right of any boardgame image on the
+   play card (hero photo or no-photo box art). Sits above the box-art
+   thumbnail overlay (which lives bottom-right). */
+.play-card__status-overlay {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 3;
+}
 .play-card__photo-img {
   width: 100%;
   max-height: 320px;
@@ -1609,6 +1618,7 @@ body {
   align-items: flex-start;
 }
 .play-card__box {
+  position: relative;
   flex: 0 0 88px;
   width: 88px;
   height: 88px;
@@ -2077,14 +2087,34 @@ body {
   cursor: pointer;
 }
 .recent-plays__row:hover .recent-plays__row-inner { border-color: var(--accent); }
+/* The thumb sits inside a relatively-positioned wrapper so the corner
+   status banner can overlay it. The image keeps its own click target
+   (opens game-detail) — the row-inner cursor would suggest "open play"
+   instead. */
+.recent-plays__thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+}
 .recent-plays__row img {
   width: 44px; height: 44px; object-fit: cover;
-  border-radius: 0.4rem; flex-shrink: 0;
-  /* Box art is its own click target — opens game-detail rather than the
-     play. The row-inner cursor would suggest "open play" instead. */
+  border-radius: 0.4rem;
   cursor: pointer;
 }
-.recent-plays__placeholder { width: 44px; height: 44px; border-radius: 0.4rem; display: grid; place-items: center; background: oklch(var(--b3)); flex-shrink: 0; }
+.recent-plays__placeholder { width: 44px; height: 44px; border-radius: 0.4rem; display: grid; place-items: center; background: oklch(var(--b3)); }
+/* Corner banner on the 44px thumb. The compact status tag is 1.5rem
+   square at default — too big for a 44px image — so shrink it here. */
+.recent-plays__status {
+  position: absolute;
+  top: -3px; right: -3px;
+  z-index: 2;
+}
+.recent-plays__status .status-tag--compact {
+  width: 1.1rem; height: 1.1rem;
+  border: 2px solid oklch(var(--b2));
+}
+.recent-plays__status .status-tag--compact i { width: 0.6rem; height: 0.6rem; }
 .recent-plays__body { flex: 1; min-width: 0; }
 .recent-plays__top {
   display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem;
@@ -2425,6 +2455,21 @@ body {
   padding: 0.4rem 0.9rem;
 }
 .status-tag--lg i { width: 1rem; height: 1rem; }
+/* Icon-only chip used as a corner banner on small boardgame images
+   (recent-plays thumbs, photo-less play-card box art). Still clickable —
+   tap opens the status picker. */
+.status-tag--compact {
+  padding: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  gap: 0;
+  font-size: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+}
+.status-tag--compact i { width: 0.85rem; height: 0.85rem; }
+.status-tag--compact .status-tag__label { display: none; }
 .status-tag__label { font-weight: 600; }
 
 /* Fully-opaque tag backgrounds so a tag overlaid on a photo / box art
@@ -2896,11 +2941,13 @@ body {
 .game-detail__body { padding-top: 0.5rem; }
 .game-detail__name { font-size: 1.85rem; margin: 0; line-height: 1.1; color: var(--game-accent); }
 .game-detail__meta { display: flex; gap: 0.6rem; font-size: 0.85rem; opacity: 0.75; margin: 0.35rem 0 0.75rem; }
-/* Status sits on its own row above the action buttons so the picker stays
-   visible regardless of how the button row wraps. */
-.game-detail__status {
-  display: flex; align-items: center;
-  margin-bottom: 0.55rem;
+/* Status tag overlays the top-right of the hero image as a corner banner
+   so it shares the same affordance as collection / search / recent-plays
+   tiles. Picker still opens on tap. */
+.game-detail__hero-status {
+  position: absolute;
+  top: 0.6rem; right: 0.6rem;
+  z-index: 2;
 }
 .game-detail__actions {
   display: flex; align-items: stretch; gap: 0.4rem; flex-wrap: wrap;

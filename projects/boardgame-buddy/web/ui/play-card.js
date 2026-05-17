@@ -80,6 +80,16 @@
       : "";
     const notesBlock = card.notes ? `<p class="play-card__notes">${escapeHtml(card.notes)}</p>` : "";
 
+    // Status overlay reads the viewer's collection map straight from the
+    // store so it stays in sync without threading state through the feed.
+    // The status picker patches the same map on mutation (see status-tag.js),
+    // so a tap → pick cycle reflects in the card immediately.
+    const statusMap = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
+    const gameStatus = (g.id && statusMap[g.id]) || null;
+    const statusOverlay = g.id
+      ? `<span class="play-card__status-overlay" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true })}</span>`
+      : "";
+
     // Layout split by presence of a user-uploaded photo:
     //   - With user photo: stretched hero + corner box-art badge, with the
     //     winner chip then notes stacked underneath.
@@ -91,6 +101,7 @@
       body = `
         <div class="play-card__photo">
           <img class="play-card__photo-img" src="${escapeAttr(card.photo_url)}" alt="" loading="lazy" />
+          ${statusOverlay}
           ${gameThumb ? `
             <div class="play-card__game-overlay" data-no-flip onclick="${gameNav}">
               <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
@@ -104,6 +115,7 @@
         <div class="play-card__no-photo-row">
           <div class="play-card__box" data-no-flip onclick="${gameNav}">
             <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
+            ${statusOverlay}
           </div>
           <div class="play-card__no-photo-meta">
             ${winnerChip}

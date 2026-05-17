@@ -105,6 +105,9 @@
               <i data-lucide="arrow-left" class="w-4 h-4"></i>
             </button>
             ${g.image_url || g.thumbnail_url ? `<img src="${g.image_url || g.thumbnail_url}" alt="" />` : ""}
+            <span class="game-detail__hero-status">
+              ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add to collection" })}
+            </span>
             <div class="game-detail__hero-veil"></div>
           </header>
           <div class="game-detail__body">
@@ -115,9 +118,6 @@
               ${g.year_published ? `<span>${g.year_published}</span>` : ""}
               ${g.playerRangeText() ? `<span>${g.playerRangeText()}</span>` : ""}
               ${g.playTimeText() ? `<span>${g.playTimeText()}</span>` : ""}
-            </div>
-            <div class="game-detail__status">
-              ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add to collection" })}
             </div>
             <div class="game-detail__actions">
               ${g.is_expansion ? "" : `
@@ -179,13 +179,19 @@
       // other place a boardgame image appears). Tapping anywhere else on
       // the row opens the play.
       const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${this._game.id}',gameName:'${jsStr(this._game.name || '')}'})`;
+      const statusOverlay = this._game.id
+        ? `<span class="recent-plays__status">${window.renderStatusTag(this._game.id, this._status || null, { compact: true })}</span>`
+        : "";
       return `
         <li class="recent-plays__row" data-play-id="${p.id}">
           <div class="recent-plays__row-inner"
                onclick="window.router.go('play-detail',{playId:'${p.id}'})">
-            ${thumb
-              ? `<img src="${escapeAttr(thumb)}" alt="" onclick="${gameNav}" />`
-              : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
+            <div class="recent-plays__thumb">
+              ${thumb
+                ? `<img src="${escapeAttr(thumb)}" alt="" onclick="${gameNav}" />`
+                : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
+              ${statusOverlay}
+            </div>
             <div class="recent-plays__body">
               <div class="recent-plays__top">
                 <div class="recent-plays__game">${escape(p.logged_by_name)} played</div>
