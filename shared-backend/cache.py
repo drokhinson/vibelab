@@ -10,6 +10,33 @@ where most cold restarts coincide with a deploy. The Phase 5 frontend cache
 layer mirrors this contract for repeated FE-side reads.
 
 Pattern lifted from `.claude/rules/performance-caching.md` (dwpCache).
+
+TODO (Redis upgrade path):
+    The single biggest perf cliff with this module is that each uvicorn
+    worker keeps its own cache copy. On Railway today that's 1–2 workers
+    so the duplication is cheap; once we scale out (or move to a service
+    mesh) the same BGG /thing payload gets fetched once per worker per
+    24h. Swapping the dict storage for Redis would:
+
+      • share the cache across every worker + every replica
+      • survive deploys / restarts (drop the "lost on restart" caveat
+        in the module docstring above)
+      • allow per-key TTL invalidation on bgg.thing (game_routes.py
+        currently has to nuke the whole namespace because the in-process
+        backend can't iterate keys by predicate cheaply)
+      • give a real path for cross-worker invalidation of the FE-blocking
+        caches (Profile bundle, game detail bundle) once those move to
+        the backend instead of just the FE layer
+      • unlock per-request "warm before respond" patterns — kick a Redis
+        SET from a BackgroundTask so the next viewer hits a warm cache
+        without waiting on us to compute first
+
+    Migration would be a drop-in: keep this module's get/set/delete/clear
+    API surface, swap the internal Map for a redis.Redis client (pickle
+    or json serialisation per entry, EXPIRE matching ttl_seconds). The
+    call sites in bgg_client.py and game_routes.py wouldn't change.
+    Env var: REDIS_URL (Railway add-on). When unset, fall back to this
+    in-process implementation so local dev stays no-infra.
 """
 
 import threading

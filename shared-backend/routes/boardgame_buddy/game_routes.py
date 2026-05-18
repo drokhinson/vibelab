@@ -25,6 +25,17 @@ from .bgg_client import (
 
 # Cache namespaces for game-side reads. Both invalidate on admin writes
 # (refresh-images, expansion-color override) and on a fresh BGG import.
+#
+# TODO (Redis upgrade): shared-backend/cache.py is per-worker today. Moving
+# it to Redis (see the migration TODO in that module's docstring) makes
+# game.detail and game.mechanics cluster-wide:
+#   • a popular game's row is fetched from Postgres exactly once per hour
+#     across the whole fleet instead of once per worker per hour
+#   • new BGG imports + admin image refreshes invalidate cluster-wide via
+#     a single Redis DEL, removing the "have to nuke the whole namespace"
+#     compromise in _invalidate_game_caches
+#   • we can publish a Redis pub/sub event on invalidation so the FE
+#     bundle caches (Phase 5) can subscribe for instant cross-tab refresh
 _CACHE_GAME = "game.detail"          # game_id (str) → boardgamebuddy_games row dict
 _CACHE_MECHANICS = "game.mechanics"  # sentinel key → sorted list[str]
 _CACHE_GAME_TTL_S = 60 * 60          # games are immutable post-import; 1h is plenty
