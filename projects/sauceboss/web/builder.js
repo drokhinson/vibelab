@@ -136,11 +136,11 @@ function renderBuilderSource() {
           <span class="source-card-icon">📄</span>
           <div>
             <div class="source-card-title">Import from File</div>
-            <div class="source-card-desc">Upload a JSON file matching the SauceBoss import format</div>
+            <div class="source-card-desc">Upload JSON, plain text, Markdown, or HTML — non-JSON files run through our recipe parser</div>
           </div>
         </div>
         <div class="builder-import-row">
-          <input type="file" accept=".json" id="builder-file-input" class="builder-file-input" onchange="builderImportFile(this)">
+          <input type="file" accept=".json,.txt,.md,.html,.htm,text/plain,text/markdown,text/html,application/json" id="builder-file-input" class="builder-file-input" onchange="builderImportFile(this)">
           <label for="builder-file-input" class="builder-secondary-btn builder-file-label">Choose File</label>
         </div>
         <a class="builder-download-link" href="assets/sb-ai-recipe-instructions.md" download="SauceBoss-AI-Recipe-Instructions.md">⬇ Download AI recipe builder instructions</a>
@@ -156,18 +156,24 @@ function renderBuilderSource() {
         </div>
       </div>
 
-      <div class="source-card source-card--disabled">
+      <div class="source-card">
         <div class="source-card-header">
           <span class="source-card-icon">📱</span>
           <div>
-            <div class="source-card-title">Import from Instagram Reel <span class="coming-soon-badge">Coming Soon</span></div>
-            <div class="source-card-desc">Paste an Instagram reel link to extract the recipe</div>
+            <div class="source-card-title">Import from Instagram Reel</div>
+            <div class="source-card-desc">Paste a Reel URL, or copy the caption from the IG app and paste it below</div>
           </div>
         </div>
         <div class="builder-import-row">
-          <input class="builder-input" type="url" placeholder="https://instagram.com/reel/…" disabled>
-          <button class="builder-secondary-btn" disabled>Import</button>
+          <input class="builder-input" type="url" placeholder="https://instagram.com/reel/…" value="${esc(b.reelUrl || '')}" data-builder-field="reel-url">
+          <button class="builder-secondary-btn builder-import-btn" onclick="builderImportReelUrl()" ${b.importing ? 'disabled' : ''}>
+            ${b.importing ? '<span class="spinner-sm"></span>' : 'Import'}
+          </button>
         </div>
+        <textarea class="builder-input builder-reel-caption" rows="4" placeholder="Or paste the caption text from Instagram…" data-builder-field="reel-caption">${esc(b.reelCaption || '')}</textarea>
+        <button class="builder-secondary-btn builder-reel-parse-btn" onclick="builderImportReelText()" ${b.importing || !(b.reelCaption || '').trim() ? 'disabled' : ''}>
+          ${b.importing ? '<span class="spinner-sm"></span>' : 'Parse Caption'}
+        </button>
       </div>
     </div>
   `;
@@ -1095,6 +1101,8 @@ function builderHandleInput(el) {
     case 'description': b.description = el.value; break;
     case 'source-url': b.sourceUrl = el.value; break;
     case 'import-url': b.importUrl = el.value; break;
+    case 'reel-url': b.reelUrl = el.value; break;
+    case 'reel-caption': b.reelCaption = el.value; break;
     case 'cuisine-draft-name': b.cuisineDraftName = el.value; break;
     case 'cuisine-draft-emoji': b.cuisineDraftEmoji = el.value; break;
     case 'step-title': b.steps[si].title = el.value; break;
@@ -1263,28 +1271,107 @@ async function builderImportUrl() {
 // Keep legacy name as alias for any external callers
 const builderImport = builderImportUrl;
 
+// ─── Import-from-Instagram-Reel (URL) ────────────────────────────────────────
+async function builderImportReelUrl() {
+  const b = state.builder;
+  const url = (b.reelUrl || '').trim();
+  if (!url) {
+    b.importError = 'Paste an Instagram reel URL first.';
+    render();
+    return;
+  }
+  b.importing = true;
+  b.importError = null;
+  b.importWarning = null;
+  render();
+  try {
+    const parsed = await importRecipeFromUrl(url);
+    _builderApplyParsedRecipe(parsed);
+    b.importing = false;
+    if (parsed.warning) b.importWarning = parsed.warning;
+    if (b.importError) { render(); return; }
+    b.recipeSource = 'reel';
+    b.sourceUrl = b.sourceUrl || url;
+    navigate('builder-info');
+  } catch (err) {
+    b.importing = false;
+    // The backend's NO_STRUCTURED_DATA branch (login wall / unparseable
+    // caption) already returns a "paste the caption below" hint — surface
+    // it as-is so the textarea right under this button is the obvious next
+    // step.
+    b.importError = err.message || 'Could not fetch the reel.';
+    render();
+  }
+}
+
+// ─── Import-from-Instagram-Reel (pasted caption) ─────────────────────────────
+async function builderImportReelText() {
+  const b = state.builder;
+  const text = (b.reelCaption || '').trim();
+  if (!text) {
+    b.importError = 'Paste the caption text first.';
+    render();
+    return;
+  }
+  const url = (b.reelUrl || '').trim() || null;
+  b.importing = true;
+  b.importError = null;
+  b.importWarning = null;
+  render();
+  try {
+    const parsed = await importRecipeFromText(text, url, 'text');
+    _builderApplyParsedRecipe(parsed);
+    b.importing = false;
+    if (parsed.warning) b.importWarning = parsed.warning;
+    if (b.importError) { render(); return; }
+    b.recipeSource = 'reel';
+    if (url) b.sourceUrl = b.sourceUrl || url;
+    navigate('builder-info');
+  } catch (err) {
+    b.importing = false;
+    b.importError = err.message || 'Could not parse the caption.';
+    render();
+  }
+}
+
 // ─── Import-from-File ─────────────────────────────────────────────────────────
+// Accepts JSON (strict export shape) or plain text / markdown / HTML (parsed
+// server-side via /import/text). The file extension picks the path.
+const _TEXT_FILE_MAX_BYTES = 200_000;
+
+function _builderFileExt(name) {
+  const m = /\.([a-z0-9]+)$/i.exec(name || '');
+  return m ? m[1].toLowerCase() : '';
+}
+
 function builderImportFile(input) {
   const file = input.files && input.files[0];
   if (!file) return;
   const b = state.builder;
+  const ext = _builderFileExt(file.name);
+  // Reject obvious binaries early so the user gets a fast, clear error
+  // instead of a 422 from the backend's max_length check.
+  if (file.size && file.size > _TEXT_FILE_MAX_BYTES) {
+    b.importError = `File is too large (${Math.round(file.size / 1024)} KB). Maximum 200 KB.`;
+    render();
+    return;
+  }
   const reader = new FileReader();
-  reader.onload = function (e) {
+  reader.onload = async function (e) {
+    const text = e.target.result;
     try {
-      const parsed = JSON.parse(e.target.result);
-      if (!parsed || typeof parsed !== 'object') throw new Error('Invalid JSON structure');
-      if (!Array.isArray(parsed.ingredients) || !Array.isArray(parsed.instructions)) {
-        throw new Error('JSON must contain "ingredients" and "instructions" arrays');
-      }
-      _builderApplyParsedRecipe(parsed);
-      if (b.importError) {
+      if (ext === 'json') {
+        await _builderImportJsonText(text);
+      } else if (ext === 'txt' || ext === 'md') {
+        await _builderImportRemoteText(text, 'text');
+      } else if (ext === 'html' || ext === 'htm') {
+        await _builderImportRemoteText(text, 'html');
+      } else {
+        b.importError = `Unsupported file type ".${ext || '?'}". Use .json, .txt, .md, or .html.`;
         render();
-        return;
       }
-      b.recipeSource = 'file';
-      b.importError = null;
-      navigate('builder-info');
     } catch (err) {
+      b.importing = false;
       b.importError = err.message || 'Failed to parse file.';
       render();
     }
@@ -1294,6 +1381,48 @@ function builderImportFile(input) {
     render();
   };
   reader.readAsText(file);
+}
+
+async function _builderImportJsonText(text) {
+  const b = state.builder;
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw new Error(
+      `Invalid JSON: ${err.message}. If this isn't a SauceBoss export, save it as .txt and re-upload — we'll run it through the recipe parser.`
+    );
+  }
+  if (!parsed || typeof parsed !== 'object') throw new Error('Invalid JSON structure.');
+  if (!Array.isArray(parsed.ingredients) || !Array.isArray(parsed.instructions)) {
+    throw new Error('JSON must contain "ingredients" and "instructions" arrays. Plain-text recipes? Save the file as .txt and re-upload.');
+  }
+  _builderApplyParsedRecipe(parsed);
+  if (b.importError) { render(); return; }
+  b.recipeSource = 'file';
+  b.importError = null;
+  navigate('builder-info');
+}
+
+async function _builderImportRemoteText(text, contentType) {
+  const b = state.builder;
+  b.importing = true;
+  b.importError = null;
+  b.importWarning = null;
+  render();
+  try {
+    const parsed = await importRecipeFromText(text, null, contentType);
+    _builderApplyParsedRecipe(parsed);
+    b.importing = false;
+    if (parsed.warning) b.importWarning = parsed.warning;
+    if (b.importError) { render(); return; }
+    b.recipeSource = 'file';
+    navigate('builder-info');
+  } catch (err) {
+    b.importing = false;
+    b.importError = err.message || 'Failed to parse file.';
+    render();
+  }
 }
 
 function _builderApplyParsedRecipe(parsed) {

@@ -21,6 +21,12 @@ export default function SourceStep({
   handleImport,
   handleImportFromFile,
   handleManualStart,
+  reelUrl,
+  setReelUrl,
+  reelCaption,
+  setReelCaption,
+  handleImportReelUrl,
+  handleImportReelText,
 }) {
   return (
     <View>
@@ -114,20 +120,61 @@ export default function SourceStep({
         </View>
       </TouchableOpacity>
 
-      {/* Bubble 4 — Instagram (disabled, coming soon) */}
-      <View style={[styles.bubble, styles.bubbleDisabled]}>
+      {/* Bubble 4 — Instagram Reel. Paste URL (best-effort auto-fetch) or
+          paste the caption directly. The textarea is always visible because
+          Instagram frequently login-walls anonymous requests; this turns the
+          failure into a one-tap recovery. */}
+      <View style={styles.bubble}>
         <View style={styles.bubbleHeader}>
           <View style={[styles.bubbleIconWrap, { backgroundColor: '#F3E8FF' }]}>
             <Text style={{ fontSize: 18 }}>📱</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.bubbleTitle, styles.bubbleTitleMuted]}>Import from Instagram Reel</Text>
-            <Text style={styles.bubbleSubtitle}>Paste a Reel URL</Text>
-          </View>
-          <View style={styles.comingSoonBadge}>
-            <Text style={styles.comingSoonLabel}>Soon</Text>
+            <Text style={styles.bubbleTitle}>Import from Instagram Reel</Text>
+            <Text style={styles.bubbleSubtitle}>Paste a URL, or copy the caption from the IG app</Text>
           </View>
         </View>
+        <TextInput
+          style={[builderStyles.input, styles.urlInput]}
+          value={reelUrl}
+          onChangeText={setReelUrl}
+          placeholder="https://instagram.com/reel/..."
+          placeholderTextColor={COLORS.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TouchableOpacity
+          style={[builderStyles.smallBtn, styles.importBtn, (!reelUrl || importing) && builderStyles.btnDisabled]}
+          onPress={handleImportReelUrl}
+          disabled={!reelUrl || importing}
+          activeOpacity={0.8}
+        >
+          {importing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={builderStyles.smallBtnLabel}>Import Reel</Text>
+          )}
+        </TouchableOpacity>
+        <TextInput
+          style={[builderStyles.input, styles.captionInput]}
+          value={reelCaption}
+          onChangeText={setReelCaption}
+          placeholder="Or paste the caption text from Instagram…"
+          placeholderTextColor={COLORS.textMuted}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+        />
+        <TouchableOpacity
+          style={[builderStyles.smallBtnSecondary, styles.parseCaptionBtn, (!(reelCaption || '').trim() || importing) && builderStyles.btnDisabled]}
+          onPress={handleImportReelText}
+          disabled={!(reelCaption || '').trim() || importing}
+          activeOpacity={0.8}
+        >
+          <Text style={builderStyles.smallBtnSecondaryLabel}>
+            {importing ? 'Parsing…' : 'Parse Caption'}
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -186,6 +233,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 14,
+  },
+  captionInput: {
+    marginTop: 12,
+    minHeight: 96,
+    paddingTop: 10,
+  },
+  parseCaptionBtn: {
+    marginTop: 10,
+    alignSelf: 'flex-end',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
   },
   comingSoonBadge: {
     backgroundColor: '#F3F4F6',

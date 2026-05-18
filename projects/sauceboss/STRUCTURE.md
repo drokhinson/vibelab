@@ -109,7 +109,8 @@ All served by `shared-backend/routes/sauceboss/` at prefix `/api/v1/sauceboss`.
 | POST | `/api/v1/sauceboss/sauces` | JWT | Create a sauce. Stores `created_by = current user`. |
 | PATCH | `/api/v1/sauceboss/sauces/{sauce_id}` | JWT (owner OR admin) | Atomic full replace of an existing sauce. |
 | DELETE | `/api/v1/sauceboss/sauces/{sauce_id}` | JWT (owner OR admin) | Delete an owned sauce; admins may delete any. Cascades to steps, ingredients, and item links. |
-| POST | `/api/v1/sauceboss/import` | None | Mealie-style URL → recipe parser. Body `{url}`; returns a draft (does not persist). |
+| POST | `/api/v1/sauceboss/import` | None | URL → recipe parser. Body `{url}`; returns a draft (does not persist). Instagram (`/reel/`, `/p/`, `/tv/`) URLs route through a caption-aware path that returns 422 with a "paste manually" hint if the post is login-walled. |
+| POST | `/api/v1/sauceboss/import/text` | None | Plain text / HTML → recipe parser. Body `{text, sourceUrl?, contentType?}` (`contentType` is `text` or `html`, default `text`). Used for `.txt/.md/.html` file uploads and pasted Instagram captions. Returns the same draft shape as `/import`. |
 | GET | `/api/v1/sauceboss/units` | None | Unit registry — id/name/plural/abbreviation/dimension/conversion factors. |
 | GET | `/api/v1/sauceboss/ingredients` | None | Ingredient typeahead (`?q=`, `?limit=`) for the builder ingredient field. |
 | GET | `/api/v1/sauceboss/ingredient-categories` | None | `{name: category}` map (reads sauceboss_ingredient.category). |
