@@ -680,7 +680,12 @@
 
     _renderCollectionTile(item) {
       const g = item.game || {};
-      const status = this._statusMap[g.id] || "owned";
+      // Prefer the viewer's collection map (lets the picker reflect "this is
+      // currently on my shelf"); fall back to the row's own status — vital
+      // for the "played, not owned" shelf where the game has no collection
+      // row so the map can't surface it — then to null so the renderer
+      // shows the "+" picker rather than an incorrect default pill.
+      const status = this._statusMap[g.id] || item.status || null;
       const expCount = g.bgg_id ? (this._expansionCounts[g.bgg_id] || 0) : 0;
       return `
         <div class="collection-tile" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || '')}'})">

@@ -78,6 +78,11 @@
 --                    plays_per_page INT DEFAULT 10)
 --   → JSONB
 --   Defined in: db/migrations/boardgamebuddy/021_profile_and_game_detail_bundles.sql
+--   Last updated in: db/migrations/boardgamebuddy/022_profile_bundle_status_map_includes_played.sql
+--               (status_map now includes synthetic 'played' entries for the
+--               viewer's plays-not-owned games — restores parity with the
+--               legacy /collection endpoint so played tiles paint the
+--               purple Played pill instead of falling back to "owned")
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)
 --   Purpose:    Single round-trip Profile Self / Profile Other payload.
