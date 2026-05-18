@@ -105,11 +105,11 @@
 
     render() {
       const ps = this._ps;
+      // The "Log a play" header used to sit above the mode tabs; removed
+      // because the active tab ("Log a play" / "Join by code") already
+      // labels the screen and the duplicate stacked title ate vertical
+      // space on a mobile-first layout.
       this.container.innerHTML = `
-        <header class="log-play__topbar log-play__topbar--center">
-          <h2 class="log-play__title font-display">Log a play</h2>
-        </header>
-
         <div class="log-play__tabs">
           <button class="log-play__tab ${this._mode !== "joining" ? "is-active" : ""}" onclick="window.logPlayView._setMode('solo')">Log a play</button>
           <button class="log-play__tab ${this._mode === "joining" ? "is-active" : ""}" onclick="window.logPlayView._setMode('joining')">Join by code</button>
