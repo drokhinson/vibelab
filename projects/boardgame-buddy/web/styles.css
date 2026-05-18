@@ -3474,6 +3474,22 @@ body {
   color: #1a0d00;
   border-color: var(--accent);
 }
+/* xs + add: rendered on collection tiles when the viewer has no relationship
+   with the game. The base pill's uneven padding (0.18rem vertical, 0.4rem
+   horizontal) made it an oval — the "+" looked off-centre against the
+   apparent circle. Constrain to a square so border-radius: 999px renders a
+   real circle, with the icon grid-centred in it. */
+.status-tag--xs.status-tag--add {
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+.status-tag--xs.status-tag--add i {
+  width: 0.85rem;
+  height: 0.85rem;
+}
 
 /* Bottom-right expansion-owned count for any tile that has room. Uses the
    tile's relative positioning anchor (set via .collection-tile / .hot-game-tile). */
