@@ -325,7 +325,7 @@ function browseOpenRecipe(sauceId) {
     state.selectedItem = null;
     state.meal = { item: null, prep: null, sauce: null };
     state.recipeReturnTo = 'tab-shell';
-    navigate('recipe');
+    navigate('recipe', { path: '/sauce/' + encodeURIComponent(found.id) });
   }).catch(err => {
     state.loading = null;
     state.browse.error = err?.message || 'Recipe load failed';
