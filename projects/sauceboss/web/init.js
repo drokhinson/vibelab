@@ -137,6 +137,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   installSwipeHandlers(appEl);
 
+  // Close the recipe share menu when the user clicks anywhere outside it.
+  // Clicks inside `.share-menu` (the toggle button or a menu item) are
+  // ignored — those handle their own state via the dedicated onclicks.
+  document.addEventListener('click', e => {
+    if (!state.shareMenuOpen) return;
+    if (e.target.closest('.share-menu')) return;
+    closeShareMenu();
+  });
+
   // Ingredient chip toggles
   appEl.addEventListener('click', e => {
     const chip = e.target.closest('.chip[data-ingredient]');

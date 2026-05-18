@@ -961,6 +961,20 @@ function _initIcons() {
   if (window.lucide) requestAnimationFrame(() => lucide.createIcons());
 }
 
+// Transient bottom-center toast. Imperative on purpose — doesn't go through
+// the render() cycle so it can fire from async callbacks without races.
+function showToast(message) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = message;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('toast--visible'));
+  setTimeout(() => {
+    el.classList.remove('toast--visible');
+    setTimeout(() => el.remove(), 250);
+  }, 1800);
+}
+
 // Initials helper — kept in sync with boardgame-buddy/web/helpers.js so any
 // avatar bubble across vibelab apps derives "JS" / "Mary" the same way.
 function computeInitials(name) {

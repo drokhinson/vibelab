@@ -37,8 +37,24 @@ function renderRecipe() {
     ? `<button class="recipe-action-btn recipe-action-btn--active" onclick="recipeToggleSaucebook('${sauce.id}')" title="Remove from saucebook"><i data-lucide="bookmark-check"></i></button>`
     : `<button class="recipe-action-btn" onclick="recipeToggleSaucebook('${sauce.id}')" title="Save to saucebook"><i data-lucide="bookmark-plus"></i></button>`;
 
-  // Download button
-  const downloadBtnHTML = `<a class="recipe-action-btn" href="${API}/api/v1/sauceboss/sauces/${encodeURIComponent(sauce.id)}/export.md" download title="Download recipe"><i data-lucide="download"></i></a>`;
+  // Share menu — replaces the old standalone download. Opens a popover with
+  // two options: copy the permalink (via navigator.share when supported,
+  // clipboard fallback otherwise) and download the .md export.
+  const exportUrl = `${API}/api/v1/sauceboss/sauces/${encodeURIComponent(sauce.id)}/export.md`;
+  const shareMenuHTML = state.shareMenuOpen ? `
+    <div class="share-menu__dropdown" role="menu">
+      <button class="share-menu__item" role="menuitem" onclick="shareRecipeLink()">
+        <i data-lucide="link"></i><span>Copy link</span>
+      </button>
+      <a class="share-menu__item" role="menuitem" href="${exportUrl}" download onclick="closeShareMenu()">
+        <i data-lucide="download"></i><span>Download (.md)</span>
+      </a>
+    </div>` : '';
+  const shareBtnHTML = `
+    <div class="share-menu">
+      <button class="recipe-action-btn${state.shareMenuOpen ? ' recipe-action-btn--active' : ''}" onclick="toggleShareMenu(event)" title="Share recipe" aria-haspopup="menu" aria-expanded="${state.shareMenuOpen}"><i data-lucide="share-2"></i></button>
+      ${shareMenuHTML}
+    </div>`;
 
   // Always use colored-tag meal-section style for sauce steps
   const isMarinade = sauce.sauceType === 'marinade';
@@ -69,7 +85,7 @@ function renderRecipe() {
       back: { onClick: backOnClick },
       auth: false,
       manage: 'never',
-      extraActions: saucebookBtnHTML + downloadBtnHTML,
+      extraActions: saucebookBtnHTML + shareBtnHTML,
     })}
     <div class="scroll-body scroll-body--padded">
       ${renderVariantSwitcher(sauce.id)}
@@ -129,6 +145,42 @@ function openRecipePermalink(sauceId, opts = {}) {
 function setServings(n) {
   state.servings = Math.max(1, Math.min(12, n));
   render();
+}
+
+function toggleShareMenu(e) {
+  // Stop the click from bubbling to the document-level outside-close handler
+  // installed in init.js — otherwise the menu would open and immediately close.
+  if (e) e.stopPropagation();
+  state.shareMenuOpen = !state.shareMenuOpen;
+  render();
+}
+
+function closeShareMenu() {
+  if (!state.shareMenuOpen) return;
+  state.shareMenuOpen = false;
+  render();
+}
+
+async function shareRecipeLink() {
+  const sauce = state.selectedSauce;
+  closeShareMenu();
+  if (!sauce) return;
+  const url = `${location.origin}/sauce/${encodeURIComponent(sauce.id)}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: sauce.name, text: `Recipe: ${sauce.name}`, url });
+      return;
+    } catch (err) {
+      // User cancelled the native sheet — don't fall through to clipboard.
+      if (err && err.name === 'AbortError') return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Link copied');
+  } catch (_) {
+    showToast("Couldn't copy link");
+  }
 }
 
 function setUnitSystem(sys) {

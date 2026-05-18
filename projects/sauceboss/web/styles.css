@@ -440,6 +440,68 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .app-header__actions .recipe-action-btn--active:hover { background: #C94E02; }
 .app-header__actions .recipe-action-btn [data-lucide] { width: 18px; height: 18px; }
 
+/* Share menu — popover anchored under the share button in the recipe header.
+   Wrapping div keeps the button + dropdown positioned together; outside-click
+   handler in init.js closes the menu when the user clicks elsewhere. */
+.share-menu { position: relative; display: inline-flex; }
+.share-menu__dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 180px;
+  background: white;
+  border: 1px solid #E0E0E0;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  animation: shareMenuIn 0.12s ease-out;
+}
+@keyframes shareMenuIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.share-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1A1A2E;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: left;
+}
+.share-menu__item:hover { background: #F5F5F5; }
+.share-menu__item [data-lucide] { width: 16px; height: 16px; color: #555; flex-shrink: 0; }
+
+/* Transient bottom-center toast. Created imperatively by showToast() in
+   helpers.js — no markup required on the page. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%) translateY(8px);
+  background: #1A1A2E;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 1000;
+  pointer-events: none;
+}
+.toast--visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 /* Substitution banner */
 .sub-banner {
   background: #FEF3CD;

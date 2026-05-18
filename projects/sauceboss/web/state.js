@@ -141,6 +141,10 @@ let state = {
   foodMerge: null,                                                 // { keepId, mergeIds: Set<string>, error?, saving? }
   ingredientSections: {},                                          // { [category]: true } — open only when explicitly true
   expandedFoodIds: new Set(),                                      // food ids whose sauces panel is open
+
+  // Recipe-view share menu: open when the user taps the share button in the
+  // recipe header. Toggles between "Copy link" and "Download (.md)".
+  shareMenuOpen: false,
 };
 
 // disabledIngredients: Set<ingredientName> — kept as a real mutable Set so
