@@ -81,6 +81,13 @@
         this._status = bundle.viewer_status || null;
         this._plays = bundle.recent_plays || [];
         this._expansions = Array.isArray(bundle.expansions) ? bundle.expansions : [];
+        // Defence in depth: pre-migration-023 the bundle's viewer_status was
+        // null for games the viewer had only played (no collection row).
+        // Derive 'played' from the recent_plays block so the hero banner
+        // paints the purple Played pill even before that migration runs.
+        if (!this._status && this._plays.length > 0) {
+          this._status = "played";
+        }
       } catch (e) {
         this._error = e.message || "Failed to load game";
       } finally {
@@ -118,7 +125,7 @@
             </button>
             ${g.image_url || g.thumbnail_url ? `<img id="game-detail-hero-img" class="game-detail__hero-img" src="${g.image_url || g.thumbnail_url}" alt="" />` : ""}
             <span class="game-detail__hero-status">
-              ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add to collection" })}
+              ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add" })}
             </span>
             <div class="game-detail__hero-veil"></div>
           </header>

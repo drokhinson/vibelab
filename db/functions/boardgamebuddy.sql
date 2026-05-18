@@ -66,6 +66,10 @@
 -- bgb_game_detail_bundle(game_uuid UUID, viewer UUID, plays_limit INT DEFAULT 5)
 --   → JSONB
 --   Defined in: db/migrations/boardgamebuddy/021_profile_and_game_detail_bundles.sql
+--   Last updated in: db/migrations/boardgamebuddy/023_game_detail_bundle_viewer_status_played.sql
+--               (viewer_status now falls through to 'played' when the viewer
+--               has any visible play of the game with no collection row —
+--               same fix Profile bundle's status_map got in migration 022)
 --   Called by:  shared-backend/routes/boardgame_buddy/game_routes.py
 --               (GET /games/{game_id}/bundle)
 --   Purpose:    Single round-trip Game Detail payload: game row + base game
