@@ -100,6 +100,14 @@
 
       this._statusMap = {};
       this._expansionCounts = {};
+      // Mark every shelf + plays panel as loading BEFORE the first paint —
+      // the bundle request is in flight for a few hundred ms and the
+      // renderer otherwise falls through to "No owned games yet" while
+      // _collectionItems is still []. _recentPlaysLoaded defaults to false
+      // already so its panel paints the buddyLoader from the constructor.
+      this._collectionLoading = true;
+      this._wishlistLoading = true;
+      this._playedLoading = true;
       this.render();
       // Cold-load: one round trip via /profile/bundle covers stats + every
       // shelf's first page + recent plays + the viewer's collection map +
@@ -133,17 +141,22 @@
       // { items, total, page, per_page }. Bundle returns *_page (the items
       // array) + *_total alongside it; merge them into the same state slots
       // the per-shelf loaders use so the existing render code keeps working.
+      // Clear the loading flags we set in onMount so an empty shelf falls
+      // through to its own empty-state copy instead of spinning forever.
       this._collectionItems = b.owned_page || [];
       this._collectionTotal = b.owned_total || 0;
       this._collectionPage = 1;
+      this._collectionLoading = false;
       this._collectionError = null;
       this._wishlistItems = b.wishlist_page || [];
       this._wishlistTotal = b.wishlist_total || 0;
       this._wishlistPage = 1;
+      this._wishlistLoading = false;
       this._wishlistError = null;
       this._playedItems = b.played_page || [];
       this._playedTotal = b.played_total || 0;
       this._playedPage = 1;
+      this._playedLoading = false;
       this._playedError = null;
       // Recent plays.
       this._recentPlays = b.recent_plays || [];
