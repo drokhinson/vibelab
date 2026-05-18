@@ -16,9 +16,25 @@
     }
 
     static get(id) { return window.api.get(`/plays/${id}`); }
-    static create(payload) { return window.api.post("/plays", payload); }
-    static update(id, payload) { return window.api.put(`/plays/${id}`, payload); }
-    static remove(id) { return window.api.del(`/plays/${id}`); }
+
+    // Any play mutation can shift Profile stats, recent_plays, and the
+    // played-not-owned shelf; it can also change Game Detail's recent_plays
+    // for that game. Bust the bundle caches so the next visit re-hydrates.
+    static create(payload) {
+      return window.api.post("/plays", payload).then((r) => { _invalidatePlayDeps(); return r; });
+    }
+    static update(id, payload) {
+      return window.api.put(`/plays/${id}`, payload).then((r) => { _invalidatePlayDeps(); return r; });
+    }
+    static remove(id) {
+      return window.api.del(`/plays/${id}`).then((r) => { _invalidatePlayDeps(); return r; });
+    }
+  }
+
+  function _invalidatePlayDeps() {
+    if (window.Profile && window.Profile.invalidate) window.Profile.invalidate();
+    if (window.Game && window.Game.invalidateBundle) window.Game.invalidateBundle();
+    window.store.invalidate("feed");
   }
 
   window.Play = Play;

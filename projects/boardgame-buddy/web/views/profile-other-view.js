@@ -81,21 +81,52 @@
       this._recentPlaysTotal = 0;
       this._recentPlaysPage = 1;
       this._recentPlaysLoaded = false;
-      // Fan all three top-level fetches out in parallel — the collection
-      // panel doesn't need the profile or stats response, just the userId
-      // we already have. Whichever resolves first hydrates its own block
-      // and re-renders; we don't wait on the slowest call to paint the
-      // header.
+      // /profile/bundle covers stats + collection-grid for the target user in
+      // one round trip; User.fetch is still needed for the display-name /
+      // avatar / buddy-relation metadata the bundle doesn't carry. Both
+      // requests fire in parallel and hydrate their blocks independently.
       this._collectionLoading = true;
       this.render();
       const profilePromise = window.User.fetch(userId)
         .then((p) => { this._profile = p; this.render(); })
         .catch((e) => { this._error = e.message || "Failed to load profile"; this.render(); });
-      const statsPromise = window.Stats.for(userId)
-        .then((s) => { this._stats = s; this.render(); })
-        .catch(() => { /* stats panel renders empty on failure */ });
-      const collectionPromise = this._loadCollection();
-      await Promise.all([profilePromise, statsPromise, collectionPromise]);
+      const bundlePromise = window.Profile.bundle(userId, { colPerPage: COLLECTION_PER_PAGE, playsPerPage: PLAYS_PER_PAGE })
+        .then((b) => { this._hydrateFromBundle(b); })
+        .catch((e) => {
+          // Fall back to the legacy per-call path so the panel still loads
+          // if the bundle endpoint regresses.
+          if (window.console) console.warn("profile bundle failed, falling back", e);
+          return Promise.all([
+            window.Stats.for(userId).then((s) => { this._stats = s; this.render(); }).catch(() => {}),
+            this._loadCollection(),
+          ]);
+        });
+      await Promise.all([profilePromise, bundlePromise]);
+    }
+
+    _hydrateFromBundle(b) {
+      if (!b) return;
+      this._stats = b.stats || null;
+      // The collection panel only renders the owned page on Profile Other —
+      // the existing UI doesn't expose wishlist/played for other users.
+      this._collectionItems = b.owned_page || [];
+      this._collectionTotal = b.owned_total || 0;
+      this._collectionPage = 1;
+      this._collectionLoading = false;
+      // Recent plays are tab-loaded on demand; seed page 1 so the tab paints
+      // instantly when the user clicks it.
+      this._recentPlays = b.recent_plays || [];
+      this._recentPlaysTotal = b.recent_plays_total || 0;
+      this._recentPlaysPage = 1;
+      this._recentPlaysLoaded = true;
+      // Seed the viewer's collection map / expansion counts so tile pills
+      // render the right state without a separate /collection round trip.
+      if (b.status_map && b.expansion_counts) {
+        window.Collection.seedFromBundle(b.status_map, b.expansion_counts);
+        this._statusMap = b.status_map;
+        this._expansionCounts = b.expansion_counts;
+      }
+      this.render();
     }
 
     async _loadCollection() {

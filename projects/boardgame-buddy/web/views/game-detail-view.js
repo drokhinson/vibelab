@@ -64,21 +64,23 @@
       this._loading = true;
       this.render();
       try {
-        const game = await window.Game.fetch(id);
-        // Fan out the secondary fetches in parallel once we know the game.
-        // Expansions only fetched for base games (the endpoint returns [] for
-        // expansions anyway, but skip the round-trip).
-        const [status, plays, expansions] = await Promise.all([
-          window.Collection.statusFor(id).catch(() => null),
-          window.Play.list({ gameId: id, perPage: 5 }).catch(() => ({ plays: [] })),
-          game && !game.is_expansion
-            ? window.api.get(`/games/${id}/expansions`).catch(() => [])
-            : Promise.resolve([]),
-        ]);
-        this._game = game;
-        this._status = status;
-        this._plays = plays.plays || [];
-        this._expansions = Array.isArray(expansions) ? expansions : [];
+        // Single round trip via /games/{id}/bundle (Phase 3) — replaces the
+        // serial Game.fetch + parallel status/plays/expansions fan-out.
+        const bundle = await window.Game.detailBundle(id, { playsLimit: 5 });
+        if (!bundle || !bundle.game) {
+          throw new Error("Game not found");
+        }
+        this._game = new window.Game(bundle.game);
+        // base_game_id / base_game_name are nested under .base_game in the
+        // bundle but the existing render code reads them off `this._game`.
+        // Patch the props on so the back-to-base link keeps working.
+        if (bundle.base_game) {
+          this._game.base_game_id = bundle.base_game.id;
+          this._game.base_game_name = bundle.base_game.name;
+        }
+        this._status = bundle.viewer_status || null;
+        this._plays = bundle.recent_plays || [];
+        this._expansions = Array.isArray(bundle.expansions) ? bundle.expansions : [];
       } catch (e) {
         this._error = e.message || "Failed to load game";
       } finally {

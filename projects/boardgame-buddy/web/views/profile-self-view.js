@@ -101,17 +101,61 @@
       this._statusMap = {};
       this._expansionCounts = {};
       this.render();
-      // Preload every subtab so switching to Recent Plays or Buddies is an
-      // instant paint instead of a fresh round-trip. The buddies panel runs
-      // _load() with no container attached; its render() bails out, but the
-      // data lands on the panel so mount() can paint immediately later.
-      await Promise.all([
-        this._loadStats(),
-        this._loadCollection({ reset: true }),
-        this._refreshCollectionData(),
-        this._loadRecentPlays({ reset: true }),
-        this._buddiesPanel._load(),
-      ]);
+      // Cold-load: one round trip via /profile/bundle covers stats + every
+      // shelf's first page + recent plays + the viewer's collection map +
+      // expansion counts. Buddies panel keeps its own load path — its
+      // played-with and ghost-player blocks aren't in the bundle, and
+      // teaching the panel to seed partially would be churn for little win.
+      const meId = window.store.get("user").id;
+      const bundlePromise = window.Profile.bundle(meId)
+        .then((b) => this._hydrateFromBundle(b))
+        .catch((e) => {
+          // Fall back to the legacy fan-out if the bundle endpoint fails for
+          // any reason — keeps Profile usable while a regression is being
+          // diagnosed.
+          if (window.console) console.warn("profile bundle failed, falling back", e);
+          return Promise.all([
+            this._loadStats(),
+            this._loadCollection({ reset: true }),
+            this._refreshCollectionData(),
+            this._loadRecentPlays({ reset: true }),
+          ]);
+        });
+      await Promise.all([bundlePromise, this._buddiesPanel._load()]);
+    }
+
+    _hydrateFromBundle(b) {
+      if (!b) return;
+      // Stats.
+      this._stats = b.stats || null;
+      this._statsError = null;
+      // Collection shelves — match the existing /collection/grid shape:
+      // { items, total, page, per_page }. Bundle returns *_page (the items
+      // array) + *_total alongside it; merge them into the same state slots
+      // the per-shelf loaders use so the existing render code keeps working.
+      this._collectionItems = b.owned_page || [];
+      this._collectionTotal = b.owned_total || 0;
+      this._collectionPage = 1;
+      this._collectionError = null;
+      this._wishlistItems = b.wishlist_page || [];
+      this._wishlistTotal = b.wishlist_total || 0;
+      this._wishlistPage = 1;
+      this._wishlistError = null;
+      this._playedItems = b.played_page || [];
+      this._playedTotal = b.played_total || 0;
+      this._playedPage = 1;
+      this._playedError = null;
+      // Recent plays.
+      this._recentPlays = b.recent_plays || [];
+      this._recentPlaysTotal = b.recent_plays_total || 0;
+      this._recentPlaysPage = 1;
+      this._recentPlaysLoaded = true;
+      this._recentPlaysError = null;
+      // Status pills + expansion counts.
+      this._statusMap = b.status_map || {};
+      this._expansionCounts = b.expansion_counts || {};
+      window.Collection.seedFromBundle(this._statusMap, this._expansionCounts);
+      this.render();
     }
 
     async _refreshCollectionData() {
