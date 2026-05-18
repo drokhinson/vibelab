@@ -109,18 +109,9 @@ function nativeBadges(p) {
 // muted span — the slot is preserved either way so the row stays balanced.
 function featuredPill(provider, label, url, status) {
   const logo = PILL_LOGOS[provider];
-  // Render an inline status sub-label for anything that isn't shipped yet —
-  // "Beta", "WIP", "Not started" — so visitors can read the platform's state
-  // straight off the pill instead of relying on a hover tooltip. `live`
-  // short-circuits so already-shipped pills (e.g. Web) stay clean.
-  const stateLabel = status && status !== "live" ? (PLATFORM_STATUS_LABEL[status] ?? status) : "";
-  const stateHTML = stateLabel
-    ? `<span class="featured-pill__status">${stateLabel}</span>`
-    : "";
-  const inner = `${logo}<span class="featured-pill__label">${label}</span>${stateHTML}`;
+  const inner = `${logo}<span class="featured-pill__label">${label}</span>`;
   if (url) {
-    const titleSuffix = stateLabel ? ` (${stateLabel})` : "";
-    return `<a class="featured-pill featured-pill--${provider}" href="${url}" target="_blank" rel="noopener" title="${label}${titleSuffix}">${inner}</a>`;
+    return `<a class="featured-pill featured-pill--${provider}" href="${url}" target="_blank" rel="noopener" title="${label}">${inner}</a>`;
   }
   const hint = status ? ` (${PLATFORM_STATUS_LABEL[status] ?? status})` : "";
   return `<span class="featured-pill featured-pill--${provider} featured-pill--disabled" aria-disabled="true" title="${label}${hint}">${inner}</span>`;
