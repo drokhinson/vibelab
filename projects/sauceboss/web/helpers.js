@@ -942,10 +942,13 @@ function setEditMode(on) {
 }
 
 function navigate(screen, opts = {}) {
-  const { push = true, replace = false } = opts;
+  const { push = true, replace = false, path } = opts;
   state.screen = screen;
   const histState = { screen, sb: true };
-  const url = '#' + screen;
+  // `path` switches the URL from the default `#screen` fragment to a real
+  // pathname (e.g. `/sauce/<id>` for shareable recipe permalinks). Vercel
+  // rewrites these back to `index.html` so the SPA still boots.
+  const url = path || ('#' + screen);
   if (replace) {
     history.replaceState(histState, '', url);
   } else if (push) {

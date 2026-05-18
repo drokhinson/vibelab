@@ -81,6 +81,51 @@ function renderRecipe() {
   `;
 }
 
+// Load a sauce by id and open the recipe view. Used by the boot path when
+// the URL is a `/sauce/<id>` permalink, and by popstate when the user
+// navigates back/forward into a recipe entry.
+function openRecipePermalink(sauceId, opts = {}) {
+  const { push = true } = opts;
+  state.loading = 'Loading recipe…';
+  render();
+  api.allSauces().then(all => {
+    state.loading = null;
+    const found = all.find(s => s.id === sauceId);
+    if (!found) {
+      // Unknown id — drop the user on the default tab and clear the URL so
+      // a stale permalink doesn't trap them on an empty screen.
+      state.activeTab = currentUser ? 'saucebook' : 'browse';
+      state.screen = 'tab-shell';
+      history.replaceState(
+        { screen: 'tab-shell', tab: state.activeTab, sb: true },
+        '', '#' + state.activeTab,
+      );
+      render();
+      return;
+    }
+    const rootId = found.parentSauceId || found.id;
+    const family = all.filter(s => s.id === rootId || s.parentSauceId === rootId);
+    state.selectedSauce = found;
+    state.servings = found.defaultServings || 2;
+    state.selectedSauceFamily = family.length ? family : [found];
+    state.hiddenPieSlices = {};
+    state.selectedItem = null;
+    state.meal = { item: null, prep: null, sauce: null };
+    state.recipeReturnTo = 'tab-shell';
+    navigate('recipe', { path: '/sauce/' + encodeURIComponent(found.id), push, replace: !push });
+  }).catch(err => {
+    state.loading = null;
+    console.warn('[sauceboss] recipe permalink load failed:', err);
+    state.activeTab = currentUser ? 'saucebook' : 'browse';
+    state.screen = 'tab-shell';
+    history.replaceState(
+      { screen: 'tab-shell', tab: state.activeTab, sb: true },
+      '', '#' + state.activeTab,
+    );
+    render();
+  });
+}
+
 function setServings(n) {
   state.servings = Math.max(1, Math.min(12, n));
   render();

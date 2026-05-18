@@ -57,9 +57,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Tab-shell is the default screen. Anonymous users land on Browse;
   // logged-in users default to Saucebook (already populated by Phase 2).
+  // If the URL is a `/sauce/<id>` permalink, the recipe view takes over
+  // once the sauce loads; the tab underneath is still set so the recipe's
+  // back button has a destination.
   state.screen = 'tab-shell';
   state.activeTab = currentUser ? 'saucebook' : 'browse';
-  render();
+  const permalinkMatch = location.pathname.match(/^\/sauce\/([^\/]+)\/?$/);
+  if (permalinkMatch) {
+    openRecipePermalink(decodeURIComponent(permalinkMatch[1]), { push: false });
+  } else {
+    render();
+  }
 
   // Background loads (non-blocking). browseEnsureLoaded is idempotent — safe
   // to call here even though setActiveTab('browse') would also fire it.
@@ -98,13 +106,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Replace-state with the tab id when on the tab-shell, so reload + back
   // restore the right tab. Otherwise use the screen name (existing behavior).
-  history.replaceState(
-    { screen: state.screen, tab: state.activeTab, sb: true },
-    '',
-    state.screen === 'tab-shell' ? '#' + state.activeTab : '#' + state.screen,
-  );
+  // Skip this when booting from a `/sauce/<id>` permalink — that flow
+  // manages its own URL via openRecipePermalink.
+  if (!permalinkMatch) {
+    history.replaceState(
+      { screen: state.screen, tab: state.activeTab, sb: true },
+      '',
+      state.screen === 'tab-shell' ? '#' + state.activeTab : '#' + state.screen,
+    );
+  }
 
   window.addEventListener('popstate', (e) => {
+    // The URL is the source of truth for permalinks — popstate may arrive
+    // before state was attached (e.g. when going forward into an entry we
+    // never pushState'd ourselves), so match on pathname first.
+    const m = location.pathname.match(/^\/sauce\/([^\/]+)\/?$/);
+    if (m) {
+      openRecipePermalink(decodeURIComponent(m[1]), { push: false });
+      return;
+    }
     if (!e.state || !e.state.sb) return;
     if (e.state.screen === 'tab-shell' && e.state.tab) {
       setActiveTab(e.state.tab, { silent: true });

@@ -367,7 +367,7 @@ function saucebookOpenRecipe(sauceId) {
     state.selectedItem = null;
     state.meal = { item: null, prep: null, sauce: null };
     state.recipeReturnTo = 'tab-shell';
-    navigate('recipe');
+    navigate('recipe', { path: '/sauce/' + encodeURIComponent(found.id) });
   }).catch(err => {
     state.loading = null;
     console.warn('[sauceboss] saucebook recipe load failed:', err);
