@@ -381,11 +381,11 @@
         this._bggSyncResult = e.message || "Sync failed";
       } finally {
         this._bggSyncing = false;
-        // Bust the Profile view's caches: if the user navigates to Profile
-        // next, it'll re-fetch fresh stats / collection / plays. The
-        // collection map cache lives inside Collection (not in window.store),
-        // so an explicit invalidate is needed alongside the feed bust —
-        // otherwise status pills keep reflecting the pre-sync shelves.
+        // BGG sync can grow the catalog, shift owned/wishlist, and import
+        // plays — bust every viewer-data cache so the next Profile / Feed /
+        // Game Detail visit picks up the fresh state. (Collection's invalidate
+        // also clears Profile + Game bundle caches, so this is one call's
+        // worth of fan-out.)
         window.Collection.invalidateMyStatusMap();
         window.store.invalidate("feed");
         await this._loadBggStatus();

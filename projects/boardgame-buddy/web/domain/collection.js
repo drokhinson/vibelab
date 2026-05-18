@@ -97,6 +97,28 @@
       _expCount = null;
       _fetchedAt = 0;
       window.store.invalidate("myCollectionMap");
+      // The Profile bundle embeds the status map + every shelf's count — any
+      // collection mutation invalidates both numbers, so clear the bundle
+      // cache too. Game.detailBundle caches viewer_status alongside the game
+      // row; clear that as well so a tile's pill in Game Detail tracks the
+      // mutation a router-back lands on.
+      if (window.Profile && window.Profile.invalidate) window.Profile.invalidate();
+      if (window.Game && window.Game.invalidateBundle) window.Game.invalidateBundle();
+    }
+
+    /**
+     * Prime the in-memory cache from the Profile bundle so views that get the
+     * status map for free as part of the bundle don't pay a separate
+     * /collection round trip. Both maps must be present and trusted to be
+     * complete — passing partial data here would mask later writes since the
+     * cache treats this as a normal hydration.
+     */
+    static seedFromBundle(statusMap, expansionCounts) {
+      if (!statusMap || !expansionCounts) return;
+      _status = { ...statusMap };
+      _expCount = { ...expansionCounts };
+      _fetchedAt = Date.now();
+      window.store.set("myCollectionMap", _status);
     }
   }
 
