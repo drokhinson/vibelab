@@ -73,6 +73,7 @@ const fetchSubstitutions       = () => api.substitutions();
 const fetchUnits               = () => api.units();
 const fetchIngredients         = (q, limit) => api.ingredients(q, limit);
 const importRecipeFromUrl      = (url) => api.importRecipeFromUrl(url);
+const importRecipeFromText     = (text, sourceUrl, contentType) => api.importRecipeFromText(text, sourceUrl, contentType);
 const createSauce              = (data) => api.createSauce(data);
 const updateSauce              = (id, data) => api.updateSauce(id, data);
 const fetchAllSauces           = () => api.allSauces();

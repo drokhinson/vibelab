@@ -62,6 +62,28 @@ import { withIngredientNames } from './filter.js';
  * @typedef {Object} PantryResponse
  * @property {PantryEntry[]} ingredients
  * @property {string[]} saucebookSauceIds
+ *
+ * @typedef {Object} ParsedIngredientResponse
+ * @property {string} originalText
+ * @property {(number|null)=} quantity
+ * @property {(string|null)=} unitRaw
+ * @property {(string|null)=} unitId
+ * @property {string} ingredientRaw
+ * @property {(number|null)=} canonicalMl
+ * @property {(number|null)=} canonicalG
+ * @property {(string|null)=} note
+ * @property {(string|null)=} modifier
+ *
+ * @typedef {Object} ParsedRecipeResponse
+ * @property {string} name
+ * @property {string=} description
+ * @property {(number|null)=} totalTimeMinutes
+ * @property {(number|null)=} yieldServings
+ * @property {string[]} instructions
+ * @property {ParsedIngredientResponse[]} ingredients
+ * @property {string} sourceUrl
+ * @property {(string|null)=} canonicalUrl
+ * @property {(string|null)=} warning
  */
 
 const PREFIX = '/api/v1/sauceboss';
@@ -210,7 +232,20 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       return data.ingredients || [];
     },
 
+    /** @returns {Promise<ParsedRecipeResponse>} */
     importRecipeFromUrl: (url) => call('/import', { method: 'POST', body: { url } }),
+
+    /**
+     * Parse pasted text (or HTML markup) into a recipe draft.
+     * Used for non-JSON file uploads (.txt/.md/.html) and for manually-pasted
+     * Instagram captions when the auto-fetch can't reach the post.
+     * @param {string} text
+     * @param {(string|null)=} sourceUrl
+     * @param {'text'|'html'=} contentType
+     * @returns {Promise<ParsedRecipeResponse>}
+     */
+    importRecipeFromText: (text, sourceUrl = null, contentType = 'text') =>
+      call('/import/text', { method: 'POST', body: { text, sourceUrl, contentType } }),
 
     // ── Single-sauce export (public) ─────────────────────────────────────────
     // Both return the raw response body as a string so the caller can write

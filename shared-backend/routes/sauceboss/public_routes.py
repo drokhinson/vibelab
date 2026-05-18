@@ -15,12 +15,14 @@ from .models import (
     Attachment,
     CreateSauceRequest,
     ForkResponse,
+    ImportContentType,
     IngredientModifierRow,
     IngredientModifiersListResponse,
     IngredientRow,
     IngredientsListResponse,
     IngredientsWithUsageResponse,
     ImportRecipeRequest,
+    ImportRecipeTextRequest,
     InitialLoadResponse,
     ItemLoadResponse,
     ItemsGroupedResponse,
@@ -34,7 +36,13 @@ from .models import (
     _shape_items_grouped,
 )
 from .modifiers import MODIFIER_REGISTRY
-from .parser import ScrapeError, ScrapeErrorKind, scrape_recipe
+from .parser import (
+    ParsedRecipe,
+    ScrapeError,
+    ScrapeErrorKind,
+    parse_recipe_from_text,
+    scrape_recipe,
+)
 from .units import UNIT_REGISTRY, parse_unit, to_canonical
 
 logger = logging.getLogger("sauceboss")
@@ -471,30 +479,16 @@ _SCRAPE_ERROR_STATUS: dict[ScrapeErrorKind, int] = {
 }
 
 
-@router.post(
-    "/import",
-    response_model=ParsedRecipeResponse,
-    status_code=200,
-    summary="Parse a recipe URL into a draft (does not persist)",
-)
-async def import_recipe(body: ImportRecipeRequest) -> ParsedRecipeResponse:
-    """Fetch ``url``, run schema.org JSON-LD extraction, return a draft.
+def _to_parsed_recipe_response(parsed: ParsedRecipe) -> ParsedRecipeResponse:
+    """Shape a ParsedRecipe (dataclass) into the API response model.
 
-    The draft is shaped for the builder UI to populate its existing form. The
-    user reviews / edits the parsed ingredients and submits via ``POST
-    /sauces`` to persist. Failures map to 422 (bad URL / no structured data /
-    unsupported site) or 502 (network).
+    Shared between ``/import`` and ``/import/text`` so both paths emit an
+    identical envelope and the ``fallback=True`` warning is consistent.
     """
-    try:
-        parsed = scrape_recipe(str(body.url))
-    except ScrapeError as e:
-        status = _SCRAPE_ERROR_STATUS.get(e.kind, 500)
-        raise HTTPException(status, {"kind": str(e.kind), "message": e.message})
-
     warning: str | None = None
     if parsed.fallback:
         warning = (
-            "Structured recipe data not found \u2014 imported via HTML page scrub. "
+            "Structured recipe data not found \u2014 imported via heuristic parsing. "
             "Please review ingredients and steps carefully."
         )
 
@@ -522,6 +516,68 @@ async def import_recipe(body: ImportRecipeRequest) -> ParsedRecipeResponse:
         canonicalUrl=parsed.canonical_url,
         warning=warning,
     )
+
+
+@router.post(
+    "/import",
+    response_model=ParsedRecipeResponse,
+    status_code=200,
+    summary="Parse a recipe URL into a draft (does not persist)",
+)
+async def import_recipe(body: ImportRecipeRequest) -> ParsedRecipeResponse:
+    """Fetch ``url``, run schema.org JSON-LD extraction, return a draft.
+
+    The draft is shaped for the builder UI to populate its existing form. The
+    user reviews / edits the parsed ingredients and submits via ``POST
+    /sauces`` to persist. Failures map to 422 (bad URL / no structured data /
+    unsupported site) or 502 (network). Instagram URLs are detected upstream
+    and routed through the caption-aware path.
+    """
+    try:
+        parsed = scrape_recipe(str(body.url))
+    except ScrapeError as e:
+        status = _SCRAPE_ERROR_STATUS.get(e.kind, 500)
+        raise HTTPException(status, {"kind": str(e.kind), "message": e.message})
+
+    return _to_parsed_recipe_response(parsed)
+
+
+@router.post(
+    "/import/text",
+    response_model=ParsedRecipeResponse,
+    status_code=200,
+    summary="Parse a raw text or HTML blob into a recipe draft",
+)
+async def import_recipe_text(body: ImportRecipeTextRequest) -> ParsedRecipeResponse:
+    """Heuristically parse pasted recipe text (or HTML) into a draft.
+
+    Used for non-JSON file uploads (.txt/.md/.html) and for pasted Instagram
+    captions when the auto-fetch hits a login wall. For ``contentType=html``
+    we run BeautifulSoup-based microdata + class-name heuristics first and
+    fall through to the text-line parser if those come up empty. Failures
+    map to 422 the same way ``/import`` does.
+    """
+    source = str(body.sourceUrl) if body.sourceUrl else None
+    try:
+        if body.contentType == ImportContentType.HTML:
+            from bs4 import BeautifulSoup
+            from .parser import _parse_html_fallback_from_soup
+            soup = BeautifulSoup(body.text, "html.parser")
+            try:
+                parsed = _parse_html_fallback_from_soup(soup, source_url=source or "")
+            except ScrapeError:
+                # No ingredients via DOM heuristics \u2014 try plain-text inference
+                # on the rendered text (last-ditch fallback for stripped /
+                # unrecognized markup).
+                fallback_text = soup.get_text("\n")
+                parsed = parse_recipe_from_text(fallback_text, source_url=source)
+        else:
+            parsed = parse_recipe_from_text(body.text, source_url=source)
+    except ScrapeError as e:
+        status = _SCRAPE_ERROR_STATUS.get(e.kind, 500)
+        raise HTTPException(status, {"kind": str(e.kind), "message": e.message})
+
+    return _to_parsed_recipe_response(parsed)
 
 
 @router.get(

@@ -173,6 +173,9 @@ function defaultBuilder() {
     acStep: null, acIng: null, acResults: [], acSelected: -1,
     pendingCategories: [],
     importUrl: '', importing: false, importError: null,
+    // Instagram Reel inputs — separate fields so the URL and pasted caption
+    // are kept in distinct text inputs on the source card.
+    reelUrl: '', reelCaption: '',
     cuisineDraftMode: false, cuisineDraftName: '', cuisineDraftEmoji: '',
     editingId: null,             // when set, builderSave PATCHes instead of POSTing
   };

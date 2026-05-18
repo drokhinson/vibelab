@@ -180,6 +180,24 @@ class ImportRecipeRequest(BaseModel):
     url: HttpUrl
 
 
+class ImportContentType(StrEnum):
+    """Body kind for POST /import/text — plain text vs. raw HTML markup."""
+    TEXT = "text"
+    HTML = "html"
+
+
+class ImportRecipeTextRequest(BaseModel):
+    """Recipe-import request body — a raw text/HTML blob to parse heuristically.
+
+    Used for non-JSON file uploads (.txt/.md/.html) and for pasted Instagram
+    captions when the server can't reach the post directly. Cap is generous
+    enough for any plausible caption (~2 200 chars) or saved recipe page.
+    """
+    text: str = Field(min_length=1, max_length=20_000)
+    sourceUrl: Optional[HttpUrl] = None
+    contentType: ImportContentType = ImportContentType.TEXT
+
+
 class ParsedIngredientResponse(BaseModel):
     """One ingredient row in an import preview."""
     originalText: str

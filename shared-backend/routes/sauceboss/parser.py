@@ -339,6 +339,57 @@ _SERVING_REVERSE_RE = re.compile(
     r"(\d+)\s*(?:serv(?:ing|e)s?|portion)", re.IGNORECASE,
 )
 
+# ── Plain-text / caption heuristics ───────────────────────────────────────────
+#
+# Used by parse_recipe_from_text() for non-JSON file uploads (.txt/.md) and
+# Instagram captions. The patterns intentionally skew permissive — the import
+# flow surfaces a "review carefully" warning and a manual paste fallback, so
+# false positives are cheaper than missed matches.
+
+_SECTION_HEADER_RE = re.compile(
+    r"^\s*#{0,6}\s*[*_]*\s*"
+    r"(ingredient|instruction|direction|method|step|preparation|notes?|tips?)s?\s*"
+    r"[*_:]*\s*$",
+    re.IGNORECASE,
+)
+_INGREDIENT_SECTION_RE = re.compile(r"\bingredient", re.IGNORECASE)
+_INSTRUCTION_SECTION_RE = re.compile(
+    r"\b(?:instruction|direction|method|step|preparation)", re.IGNORECASE,
+)
+# Strip leading list markers: "1.", "1)", "- ", "* ", "• ", "Step 3:".
+_LIST_MARKER_RE = re.compile(
+    r"^\s*(?:Step\s*\d+\s*[:.\-)]?\s*|"
+    r"\d+\s*[.)]\s+|"
+    r"[\-*•·▪►▶✓✦◦]\s+)",
+    re.IGNORECASE,
+)
+# Lines that look like ingredient rows when no section header is present.
+# Allow digits, unicode fractions, or "a/an <noun>".
+_INGREDIENT_LINE_HINT_RE = re.compile(
+    r"^\s*(?:\d|[½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]|(?:a|an)\s+)",
+    re.IGNORECASE,
+)
+_INSTRUCTION_VERB_RE = re.compile(
+    r"^\s*(?:add|mix|stir|heat|cook|boil|bake|fry|chop|dice|mince|pour|combine|"
+    r"whisk|simmer|season|preheat|melt|brown|saute|sauté|reduce|blend|toss|"
+    r"sprinkle|drizzle|serve|garnish|fold|knead|grill|roast|steam|marinate|"
+    r"slice|cut|peel|grate|crush|spread|cover|remove|let|allow|place|put|"
+    r"transfer|return|continue|repeat|taste|adjust|set\b|turn|reduce|bring)\b",
+    re.IGNORECASE,
+)
+_TITLE_PREFIX_RE = re.compile(r"^(?:title|name|recipe)\s*[:\-]\s*(.+)$", re.IGNORECASE)
+# instagram.com/(reel|reels|p|tv)/<shortcode>/... — query strings pass through.
+_INSTAGRAM_URL_RE = re.compile(
+    r"^https?://(?:www\.)?(?:instagram\.com|instagr\.am)/"
+    r"(?:reel|reels|p|tv)/[A-Za-z0-9_-]+",
+    re.IGNORECASE,
+)
+
+# Cap on text-parse input: 20 000 chars covers any plausible recipe page or
+# caption (the longest Instagram caption is ~2 200 chars). Anything past this
+# is almost certainly noise.
+_TEXT_PARSE_MAX_CHARS = 20_000
+
 
 def _fetch_html(url: str) -> str:
     """Download raw HTML with a browser-like User-Agent."""
@@ -493,37 +544,20 @@ def _extract_description_fallback(soup) -> str:
     return ""
 
 
-def _html_fallback_scrape(url: str) -> ParsedRecipe:
-    """Fetch *url* and extract recipe data from raw HTML patterns.
+def _build_parsed_ingredients(
+    ingredient_lines: list[str],
+    known_ingredients: set[str] | None = None,
+) -> list[ParsedIngredient]:
+    """Run each ingredient line through the NLP / regex parser + unit canonicalization.
 
-    Used as a fallback when ``recipe-scrapers`` finds no structured JSON-LD
-    data. Looks for common HTML patterns: microdata attributes, CSS class
-    names containing "ingredient"/"instruction", and section headings
-    followed by lists.
-
-    Raises :class:`ScrapeError` if no ingredients can be found even after
-    the HTML heuristics — a page without any detectable ingredient list is
-    unlikely to be a recipe.
+    Shared between :func:`_html_fallback_scrape` and
+    :func:`parse_recipe_from_text` so both paths produce identical row shapes.
+    Loading the known-ingredient cache is the caller's responsibility (so we
+    don't refetch on every call).
     """
-    from bs4 import BeautifulSoup
-
-    html = _fetch_html(url)
-    soup = BeautifulSoup(html, "html.parser")
-
-    ingredient_lines = _extract_ingredients_fallback(soup)
-    instructions = _extract_instructions_fallback(soup)
-    name = _extract_title_fallback(soup)
-
-    if not ingredient_lines:
-        raise ScrapeError(
-            ScrapeErrorKind.NO_STRUCTURED_DATA,
-            "No recipe data found on this page — try a different URL.",
-        )
-
     from .units import parse_quantity, parse_unit, to_canonical
     from .modifiers import extract_modifier
 
-    known_ingredients = _load_known_ingredient_names()
     parsed_ings: list[ParsedIngredient] = []
     for raw_line in ingredient_lines:
         line = str(raw_line).strip()
@@ -542,9 +576,6 @@ def _html_fallback_scrape(url: str) -> ParsedRecipe:
                 unit_raw = unit_def.abbreviation or "whole"
         canonical_ml, canonical_g = to_canonical(qty, unit_def)
         clean_food, modifier, leftover_note = extract_modifier(food_raw, note)
-        # Lowercase + singularize so scraped names line up with the canonical
-        # row in sauceboss_ingredient. "Tomatoes" → "tomato", "Jalapeños" →
-        # "jalapeño", etc. Unknown words pass through as their lowercased form.
         canonical_food = _normalize_ingredient_name(
             clean_food or food_raw, known_ingredients,
         )
@@ -558,6 +589,46 @@ def _html_fallback_scrape(url: str) -> ParsedRecipe:
             note=leftover_note,
             modifier=modifier,
         ))
+    return parsed_ings
+
+
+def _html_fallback_scrape(url: str) -> ParsedRecipe:
+    """Fetch *url* and extract recipe data from raw HTML patterns.
+
+    Used as a fallback when ``recipe-scrapers`` finds no structured JSON-LD
+    data. Looks for common HTML patterns: microdata attributes, CSS class
+    names containing "ingredient"/"instruction", and section headings
+    followed by lists.
+
+    Raises :class:`ScrapeError` if no ingredients can be found even after
+    the HTML heuristics — a page without any detectable ingredient list is
+    unlikely to be a recipe.
+    """
+    from bs4 import BeautifulSoup
+
+    html = _fetch_html(url)
+    soup = BeautifulSoup(html, "html.parser")
+    return _parse_html_fallback_from_soup(soup, source_url=url)
+
+
+def _parse_html_fallback_from_soup(soup, *, source_url: str) -> ParsedRecipe:
+    """Soup-side of HTML fallback parsing — shared between the URL-fetch path
+    and the ``contentType=html`` text-import endpoint.
+
+    Raises :class:`ScrapeError` if no ingredients are detectable.
+    """
+    ingredient_lines = _extract_ingredients_fallback(soup)
+    instructions = _extract_instructions_fallback(soup)
+    name = _extract_title_fallback(soup)
+
+    if not ingredient_lines:
+        raise ScrapeError(
+            ScrapeErrorKind.NO_STRUCTURED_DATA,
+            "No recipe data found on this page — try a different URL.",
+        )
+
+    known_ingredients = _load_known_ingredient_names()
+    parsed_ings = _build_parsed_ingredients(ingredient_lines, known_ingredients)
 
     return ParsedRecipe(
         name=name or "Untitled recipe",
@@ -566,10 +637,362 @@ def _html_fallback_scrape(url: str) -> ParsedRecipe:
         yield_servings=_extract_servings_fallback(soup),
         instructions=instructions,
         ingredients=parsed_ings,
-        source_url=url,
+        source_url=source_url,
         canonical_url=None,
         fallback=True,
     )
+
+
+# ── Plain-text / Instagram caption parsing ────────────────────────────────────
+
+def _strip_list_marker(line: str) -> str:
+    """Remove a leading bullet/number/Step marker plus markdown decoration."""
+    stripped = _LIST_MARKER_RE.sub("", line, count=1).strip()
+    # Drop wrapping markdown bold/italic on the whole line: "**foo**" → "foo".
+    stripped = re.sub(r"^[*_]+(.+?)[*_]+$", r"\1", stripped).strip()
+    return stripped
+
+
+def _extract_title_from_text(lines: list[str]) -> str:
+    """Title from explicit prefix, markdown header, or first short line."""
+    for line in lines[:8]:
+        m = _TITLE_PREFIX_RE.match(line.strip())
+        if m:
+            return m.group(1).strip()[:120]
+    # First markdown H1/H2 that isn't a section header.
+    for line in lines[:8]:
+        s = line.strip()
+        if s.startswith("#"):
+            cleaned = s.lstrip("#").strip()
+            if cleaned and not _SECTION_HEADER_RE.match(s):
+                return cleaned[:120]
+    # First non-empty, non-section, non-bullet line.
+    for line in lines[:8]:
+        s = line.strip()
+        if not s or _SECTION_HEADER_RE.match(s) or _LIST_MARKER_RE.match(s):
+            continue
+        return s[:120]
+    return ""
+
+
+def _extract_servings_from_text(text: str) -> int | None:
+    """Reuse the HTML serving regexes against a plain-text blob."""
+    m = _SERVING_RE.search(text)
+    if m:
+        try:
+            return int(m.group(1))
+        except (TypeError, ValueError):
+            pass
+    m = _SERVING_REVERSE_RE.search(text)
+    if m:
+        try:
+            return int(m.group(1))
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _classify_section(header_line: str) -> str | None:
+    """Return 'ingredients' / 'instructions' / None for a header line."""
+    if _INGREDIENT_SECTION_RE.search(header_line):
+        return "ingredients"
+    if _INSTRUCTION_SECTION_RE.search(header_line):
+        return "instructions"
+    return None
+
+
+def _split_text_sections(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """Walk *lines* and bucket each into (intro, ingredients, instructions).
+
+    A section is started when a line matches ``_SECTION_HEADER_RE`` and its
+    classification is ingredients-like or instructions-like. Lines outside any
+    section go into ``intro`` (used for title + description inference).
+    """
+    intro: list[str] = []
+    ings: list[str] = []
+    steps: list[str] = []
+    current = "intro"
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            continue
+        if _SECTION_HEADER_RE.match(line):
+            kind = _classify_section(line)
+            if kind == "ingredients":
+                current = "ings"
+                continue
+            if kind == "instructions":
+                current = "steps"
+                continue
+            # Other section ("Notes", "Tips") — stop adding to any recipe bucket.
+            current = "other"
+            continue
+        cleaned = _strip_list_marker(line)
+        if not cleaned:
+            continue
+        if current == "ings":
+            ings.append(cleaned)
+        elif current == "steps":
+            steps.append(cleaned)
+        elif current == "intro":
+            intro.append(cleaned)
+        # 'other' lines are dropped.
+    return intro, ings, steps
+
+
+def _guess_caption_buckets(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """No section headers found — infer ingredients vs. instructions per line.
+
+    Used for Instagram captions (and other free-form sources). Ingredient
+    rows look like "2 cups flour" or "½ tsp salt"; instructions match
+    imperative-verb heuristics or numbered prefixes. Title candidates are
+    short non-list lines at the top.
+    """
+    from .units import UNIT_REGISTRY
+
+    # Pre-compute a lowercase set of unit aliases for quick line-level checks.
+    unit_aliases: set[str] = set()
+    for u in UNIT_REGISTRY.values():
+        for a in u.aliases:
+            if a:
+                unit_aliases.add(a.lower())
+
+    intro: list[str] = []
+    ings: list[str] = []
+    steps: list[str] = []
+    seen_recipe_line = False
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            continue
+        cleaned = _strip_list_marker(line)
+        if not cleaned:
+            continue
+
+        had_marker = cleaned != line.strip()
+        is_step_marker = bool(re.match(r"^\s*(?:step\s*\d+|\d+\s*[.)])\s+", line, re.IGNORECASE))
+        is_ing_hint = bool(_INGREDIENT_LINE_HINT_RE.match(cleaned))
+        has_unit_token = any(
+            re.search(rf"\b{re.escape(a)}\b", cleaned.lower())
+            for a in unit_aliases
+            if len(a) >= 2
+        )
+        is_verb = bool(_INSTRUCTION_VERB_RE.match(cleaned))
+
+        if is_step_marker:
+            steps.append(cleaned)
+            seen_recipe_line = True
+            continue
+        if is_ing_hint and (has_unit_token or len(cleaned) < 60):
+            ings.append(cleaned)
+            seen_recipe_line = True
+            continue
+        if had_marker and is_ing_hint:
+            ings.append(cleaned)
+            seen_recipe_line = True
+            continue
+        if is_verb and len(cleaned) >= 20:
+            steps.append(cleaned)
+            seen_recipe_line = True
+            continue
+
+        # Pre-recipe text → intro/title bucket; mid-recipe long lines → steps.
+        if not seen_recipe_line:
+            intro.append(cleaned)
+        elif len(cleaned) >= 30:
+            steps.append(cleaned)
+        # Short non-classifiable mid-text lines are dropped.
+
+    return intro, ings, steps
+
+
+def parse_recipe_from_text(text: str, source_url: str | None = None) -> ParsedRecipe:
+    """Heuristic recipe extraction from a plain-text blob.
+
+    Handles markdown / plain-text uploads and Instagram captions. Tries
+    section-header splitting first; falls back to line-by-line inference for
+    sources without explicit "Ingredients" / "Instructions" headers.
+
+    Always returns ``fallback=True`` so the import UI surfaces the
+    review-carefully warning. Raises :class:`ScrapeError` if no ingredients
+    can be detected — the caller (or the frontend) is expected to surface a
+    "paste manually" CTA in that case.
+    """
+    if not isinstance(text, str) or not text.strip():
+        raise ScrapeError(ScrapeErrorKind.NO_STRUCTURED_DATA, "Text is empty.")
+
+    # Normalize newlines, decode common HTML entities (captions sometimes
+    # come through as "&amp;quot;..."), strip BOM, collapse blank-line runs.
+    import html as html_lib
+
+    normalized = (
+        text.replace("\r\n", "\n").replace("\r", "\n").lstrip("﻿")
+    )
+    normalized = html_lib.unescape(normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    if len(normalized) > _TEXT_PARSE_MAX_CHARS:
+        logger.info(
+            "parse_recipe_from_text: truncating %d-char input to %d",
+            len(normalized), _TEXT_PARSE_MAX_CHARS,
+        )
+        normalized = normalized[:_TEXT_PARSE_MAX_CHARS]
+
+    lines = normalized.split("\n")
+
+    # First pass: section-header split.
+    intro, ing_lines, step_lines = _split_text_sections(lines)
+
+    # If sections didn't catch ingredients, fall through to inference.
+    if not ing_lines:
+        intro, ing_lines, step_lines = _guess_caption_buckets(lines)
+
+    if not ing_lines:
+        raise ScrapeError(
+            ScrapeErrorKind.NO_STRUCTURED_DATA,
+            "No recipe ingredients could be detected in the text.",
+        )
+
+    title = _extract_title_from_text(intro or lines)
+    # Description = first intro line that isn't the title (or a header form
+    # of it). Strip leading "#" markdown so "# Spicy Pasta" matches "Spicy
+    # Pasta" — otherwise the title is repeated as the description.
+    description = ""
+    title_lc = title.lower()
+    for cand in intro:
+        s = cand.strip().lstrip("#").strip()
+        if s and s.lower() != title_lc:
+            description = s[:240]
+            break
+
+    known_ingredients = _load_known_ingredient_names()
+    parsed_ings = _build_parsed_ingredients(ing_lines, known_ingredients)
+
+    return ParsedRecipe(
+        name=title or "Untitled recipe",
+        description=description,
+        total_time_minutes=None,
+        yield_servings=_extract_servings_from_text(normalized),
+        instructions=step_lines,
+        ingredients=parsed_ings,
+        source_url=source_url or "",
+        canonical_url=None,
+        fallback=True,
+    )
+
+
+# ── Instagram caption extraction ───────────────────────────────────────────────
+
+# Instagram wraps the caption in og:description / og:title using the format:
+#   "1,234 likes, 56 comments - @user on January 1, 2024: \"<caption>\""
+# We pull just the quoted caption when this pattern matches.
+_IG_OG_WRAP_RE = re.compile(
+    r"""[^"“”]*?[:\-]\s*["“](.+?)["”]\s*\.?\s*$""",
+    re.DOTALL,
+)
+
+
+def _strip_ig_og_decoration(text: str) -> str:
+    """Pull the inner caption out of an Instagram og:description wrapper."""
+    if not text:
+        return ""
+    m = _IG_OG_WRAP_RE.match(text.strip())
+    if m:
+        return m.group(1).strip()
+    return text.strip()
+
+
+def _extract_instagram_caption(html: str) -> str | None:
+    """Best-effort caption extraction from an Instagram post page.
+
+    Looks (in order) at JSON-LD blocks, then ``og:description``,
+    ``og:title``, and ``name=description`` meta tags. Returns ``None`` when
+    the page is a login-wall or nothing usable is found.
+    """
+    from bs4 import BeautifulSoup
+    import json
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # 1. JSON-LD blocks sometimes embed the full caption under
+    # `description`, `articleBody`, or `caption`.
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = (script.string or script.get_text() or "").strip()
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+        for candidate in _iter_json_strings(data, ("caption", "articleBody", "description")):
+            if candidate and len(candidate) > 20:
+                return _strip_ig_og_decoration(candidate)
+
+    # 2. OG meta — most reliable on public posts, but IG truncates to ~150 chars.
+    meta = soup.find("meta", attrs={"property": "og:description"})
+    if meta and meta.get("content"):
+        cleaned = _strip_ig_og_decoration(meta["content"])
+        if cleaned and len(cleaned) > 10:
+            return cleaned
+
+    # 3. Some IG pages put the caption in og:title.
+    meta = soup.find("meta", attrs={"property": "og:title"})
+    if meta and meta.get("content"):
+        cleaned = _strip_ig_og_decoration(meta["content"])
+        if cleaned and len(cleaned) > 20:
+            return cleaned
+
+    # 4. Standard description meta tag.
+    meta = soup.find("meta", attrs={"name": "description"})
+    if meta and meta.get("content"):
+        cleaned = _strip_ig_og_decoration(meta["content"])
+        if cleaned and len(cleaned) > 20:
+            return cleaned
+
+    return None
+
+
+def _iter_json_strings(obj, keys: tuple[str, ...]):
+    """Recursively yield string values found under any of *keys* inside *obj*."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(v, str) and k in keys:
+                yield v
+            else:
+                yield from _iter_json_strings(v, keys)
+    elif isinstance(obj, list):
+        for item in obj:
+            yield from _iter_json_strings(item, keys)
+
+
+def _scrape_instagram(url: str) -> ParsedRecipe:
+    """Fetch an Instagram post and parse its caption as a recipe.
+
+    Raises :class:`ScrapeError` (``NO_STRUCTURED_DATA``) when IG returns a
+    login-wall, an empty caption, or a caption with no recognizable
+    ingredients — the frontend surfaces a "paste the caption manually" CTA
+    in that case.
+    """
+    html = _fetch_html(url)
+    caption = _extract_instagram_caption(html)
+    if not caption:
+        logger.info("instagram fetch: no caption found in %d chars of HTML", len(html))
+        raise ScrapeError(
+            ScrapeErrorKind.NO_STRUCTURED_DATA,
+            "Instagram blocked the auto-fetch or the post has no readable caption. "
+            "Copy the caption from the Instagram app and paste it below.",
+        )
+
+    try:
+        parsed = parse_recipe_from_text(caption, source_url=url)
+    except ScrapeError:
+        logger.info("instagram caption parse: no ingredients in %d-char caption", len(caption))
+        raise ScrapeError(
+            ScrapeErrorKind.NO_STRUCTURED_DATA,
+            "The Instagram caption didn't contain a recognizable ingredient list. "
+            "Try pasting the caption manually so you can fix it up.",
+        )
+    logger.info("instagram fetch: parsed %d ingredients from %s", len(parsed.ingredients), url)
+    return parsed
 
 
 def scrape_recipe(url: str) -> ParsedRecipe:
@@ -584,6 +1007,11 @@ def scrape_recipe(url: str) -> ParsedRecipe:
         raise ScrapeError(ScrapeErrorKind.INVALID_URL, "URL is required.")
     if not re.match(r"^https?://", url, flags=re.IGNORECASE):
         raise ScrapeError(ScrapeErrorKind.INVALID_URL, "URL must start with http:// or https://.")
+
+    # Instagram posts won't be in recipe-scrapers' supported list and have no
+    # schema.org JSON-LD — branch straight to the caption-aware path.
+    if _INSTAGRAM_URL_RE.match(url):
+        return _scrape_instagram(url)
 
     # ── Try structured JSON-LD first via recipe-scrapers ───────────────────
     try:
@@ -613,44 +1041,10 @@ def scrape_recipe(url: str) -> ParsedRecipe:
         logger.info("recipe-scrapers found no data for %s — trying HTML fallback", url)
         return _html_fallback_scrape(url)
 
-    from .units import parse_quantity, parse_unit, to_canonical
-    from .modifiers import extract_modifier
-
     known_ingredients = _load_known_ingredient_names()
-    parsed_ings: list[ParsedIngredient] = []
-    for raw_line in ingredient_lines:
-        line = str(raw_line).strip()
-        if not line:
-            continue
-        qty, unit_raw, food_raw, note = _parse_ingredient_line(line)
-        if qty is None:
-            qty = parse_quantity(line)
-        unit_def = parse_unit(unit_raw)
-        # "2 medium jalapeños" — quantity but no unit. Default to the "whole"
-        # count unit so the row renders as "2 whole jalapeño" instead of bare
-        # "2 jalapeño" (which then drifts when scaled).
-        if qty is not None and unit_def is None:
-            unit_def = parse_unit("whole")
-            if unit_def is not None:
-                unit_raw = unit_def.abbreviation or "whole"
-        canonical_ml, canonical_g = to_canonical(qty, unit_def)
-        clean_food, modifier, leftover_note = extract_modifier(food_raw, note)
-        # Lowercase + singularize so scraped names line up with the canonical
-        # row in sauceboss_ingredient. "Tomatoes" → "tomato", "Jalapeños" →
-        # "jalapeño", etc. Unknown words pass through as their lowercased form.
-        canonical_food = _normalize_ingredient_name(
-            clean_food or food_raw, known_ingredients,
-        )
-        parsed_ings.append(ParsedIngredient(
-            original_text=line,
-            quantity=qty,
-            unit_raw=unit_raw,
-            food_raw=canonical_food or (clean_food or food_raw),
-            canonical_ml=canonical_ml,
-            canonical_g=canonical_g,
-            note=leftover_note,
-            modifier=modifier,
-        ))
+    parsed_ings = _build_parsed_ingredients(
+        [str(line) for line in ingredient_lines], known_ingredients,
+    )
 
     canonical_url: str | None = None
     canonical_getter = getattr(scraper, "canonical_url", None)

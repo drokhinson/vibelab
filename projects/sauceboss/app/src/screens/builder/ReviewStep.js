@@ -74,9 +74,17 @@ export default function ReviewStep({
     0,
   );
 
-  // Heuristic source label — mirrors web's `recipeSource` field. Native
-  // doesn't track that explicitly, so derive from sourceUrl presence.
-  const sourceLabel = builder.sourceUrl ? '🌐 Imported from website' : '✍️ Manual entry';
+  // Mirrors web's source-label map (builder.js:647). Falls back to the
+  // sourceUrl-derived heuristic for builders that pre-date the recipeSource
+  // field (e.g. an edit of a sauce saved before this change).
+  const SOURCE_LABELS = {
+    url: '🌐 Imported from website',
+    reel: '📱 Imported from reel',
+    file: '📄 Imported from file',
+    manual: '✍️ Manual entry',
+  };
+  const sourceLabel = SOURCE_LABELS[builder.recipeSource]
+    || (builder.sourceUrl ? '🌐 Imported from website' : '✍️ Manual entry');
 
   const stepCount = builder.steps.length;
   const stepsSummary = `${stepCount} step${stepCount === 1 ? '' : 's'} · ${totalIngs} ingredient${totalIngs === 1 ? '' : 's'}`;

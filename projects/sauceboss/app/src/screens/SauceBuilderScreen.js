@@ -70,6 +70,10 @@ function emptyBuilder() {
     itemIds: [],
     steps: [emptyStep()],
     unassignedIngredients: [],
+    // Mirrors web's b.recipeSource — drives the Review screen label and
+    // distinguishes a reel import (no sourceUrl when caption-only) from a
+    // manual entry. Values: 'url' | 'reel' | 'file' | 'manual' | null.
+    recipeSource: null,
   };
 }
 
@@ -82,6 +86,8 @@ export default function SauceBuilderScreen({ navigation, route }) {
   const [builder, setBuilder] = useState(emptyBuilder);
   const [loadingExisting, setLoadingExisting] = useState(!!editingId);
   const [importUrl, setImportUrl] = useState('');
+  const [reelUrl, setReelUrl] = useState('');
+  const [reelCaption, setReelCaption] = useState('');
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -405,7 +411,7 @@ export default function SauceBuilderScreen({ navigation, route }) {
     setImportError(null);
     try {
       const parsed = await api.importRecipeFromUrl(url);
-      setBuilder((prev) => applyParsedRecipe(prev, parsed));
+      setBuilder((prev) => ({ ...applyParsedRecipe(prev, parsed), recipeSource: 'url' }));
       setImportUrl('');
       // Advance to the Info step on success so the user starts editing
       // metadata instead of staring at the Source cards.
@@ -417,16 +423,72 @@ export default function SauceBuilderScreen({ navigation, route }) {
     }
   }
 
-  // File-import counterpart to handleImport: parse a `.sauce.json` (the same
-  // shape produced by the export endpoints) into a fresh builder draft, then
-  // route through the existing review + save flow. Mirrors the web's
-  // handleImportSauceFile (settings.js).
+  // Instagram Reel — auto-fetch path. The backend detects the IG URL and
+  // tries to extract the caption from og:description / JSON-LD. If the
+  // page is login-walled the server returns 422 with a "paste manually"
+  // message and the user falls back to handleImportReelText below.
+  async function handleImportReelUrl() {
+    const url = (reelUrl || '').trim();
+    if (!url) return;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const parsed = await api.importRecipeFromUrl(url);
+      setBuilder((prev) => ({
+        ...applyParsedRecipe(prev, parsed),
+        recipeSource: 'reel',
+        sourceUrl: prev.sourceUrl || url,
+      }));
+      if (currentStep === 'source') setCurrentStep('info');
+    } catch (e) {
+      setImportError(e.message || 'Could not fetch the reel. Paste the caption below.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  // Instagram Reel — pasted caption path. Posts the raw caption text to
+  // /import/text, which runs the same heuristic parser used for .txt/.md
+  // file uploads.
+  async function handleImportReelText() {
+    const text = (reelCaption || '').trim();
+    if (!text) return;
+    const url = (reelUrl || '').trim() || null;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const parsed = await api.importRecipeFromText(text, url, 'text');
+      setBuilder((prev) => ({
+        ...applyParsedRecipe(prev, parsed),
+        recipeSource: 'reel',
+        sourceUrl: url ? (prev.sourceUrl || url) : prev.sourceUrl,
+      }));
+      if (currentStep === 'source') setCurrentStep('info');
+    } catch (e) {
+      setImportError(e.message || 'Could not parse the caption.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  // File-import: JSON files keep the strict export-shape flow; .txt/.md/.html
+  // route through POST /import/text so the same heuristic parser used for
+  // pasted captions handles them. Web mirrors this in builderImportFile().
   async function handleImportFromFile() {
     setImporting(true);
     setImportError(null);
     try {
       const res = await DocumentPicker.getDocumentAsync({
-        type: ['application/json', 'public.json', '*/*'],
+        type: [
+          'application/json',
+          'text/plain',
+          'text/markdown',
+          'text/html',
+          'public.json',
+          'public.plain-text',
+          'public.html',
+          '*/*',
+        ],
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -437,11 +499,35 @@ export default function SauceBuilderScreen({ navigation, route }) {
       const text = await FileSystem.readAsStringAsync(file.uri, {
         encoding: FileSystem.EncodingType.UTF8,
       });
+      if (text.length > 200_000) {
+        Alert.alert('File too large', 'Maximum 200 KB.');
+        return;
+      }
+      const ext = (file.name || '').toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || '';
+
+      if (ext === 'txt' || ext === 'md' || ext === 'html' || ext === 'htm') {
+        const contentType = (ext === 'html' || ext === 'htm') ? 'html' : 'text';
+        try {
+          const parsed = await api.importRecipeFromText(text, null, contentType);
+          setBuilder((prev) => ({ ...applyParsedRecipe(prev, parsed), recipeSource: 'file' }));
+          if (currentStep === 'source') setCurrentStep('info');
+        } catch (e) {
+          Alert.alert('Import failed', e.message || 'Could not parse the file.');
+        }
+        return;
+      }
+
+      // Default branch — JSON. Anything not matching a known text extension
+      // is attempted as JSON so users who picked a `.sauce.json` with an
+      // unusual extension still get the strict path.
       let raw;
       try {
         raw = JSON.parse(text);
       } catch (e) {
-        Alert.alert('Import failed', `File is not valid JSON: ${e.message}`);
+        Alert.alert(
+          'Import failed',
+          `File is not valid JSON: ${e.message}. If this is a plain-text recipe, rename it to .txt or .md and try again.`,
+        );
         return;
       }
 
@@ -477,7 +563,7 @@ export default function SauceBuilderScreen({ navigation, route }) {
         }
       }
 
-      setBuilder(builderFromSauce({ ...inner, parentSauceId: parent }));
+      setBuilder({ ...builderFromSauce({ ...inner, parentSauceId: parent }), recipeSource: 'file' });
       if (currentStep === 'source') setCurrentStep('info');
     } catch (e) {
       setImportError(e.message || 'Could not read file.');
@@ -671,7 +757,10 @@ export default function SauceBuilderScreen({ navigation, route }) {
     navigation.navigate('Home', { screen: 'SaucebookTab' });
   }
   // From the Source step, picking Manual Entry advances to Info immediately.
-  const handleManualStart = () => goNext();
+  const handleManualStart = () => {
+    setBuilder((prev) => ({ ...prev, recipeSource: 'manual' }));
+    goNext();
+  };
 
   return (
     <KeyboardAvoidingView
@@ -711,6 +800,12 @@ export default function SauceBuilderScreen({ navigation, route }) {
             handleImport={handleImport}
             handleImportFromFile={handleImportFromFile}
             handleManualStart={handleManualStart}
+            reelUrl={reelUrl}
+            setReelUrl={setReelUrl}
+            reelCaption={reelCaption}
+            setReelCaption={setReelCaption}
+            handleImportReelUrl={handleImportReelUrl}
+            handleImportReelText={handleImportReelText}
           />
         ) : null}
 
