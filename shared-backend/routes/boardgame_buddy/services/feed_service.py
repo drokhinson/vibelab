@@ -12,6 +12,7 @@ from ..models import (
     FeedHotGamesEntry,
     FeedPageResponse,
     FeedPlayCard,
+    FeedPlayParticipant,
     FeedPlayUser,
     FeedSuggestedBuddiesCard,
     FeedSuggestedBuddy,
@@ -45,10 +46,11 @@ def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
         play_mode=PlayMode(row.get("play_mode") or PlayMode.COMPETITIVE.value),
         winner_display_name=row.get("winner_display_name"),
         participant_count=int(row.get("participant_count") or 0),
-        # Default to [] so the route keeps working against an unmigrated
-        # RPC (migration 024 adds these columns).
-        player_user_ids=list(row.get("player_user_ids") or []),
-        player_display_names=list(row.get("player_display_names") or []),
+        # Default to [] so the route keeps responding against an unmigrated
+        # RPC (migration 025 introduces the `participants` jsonb column).
+        participants=[
+            FeedPlayParticipant(**p) for p in (row.get("participants") or [])
+        ],
     )
 
 
