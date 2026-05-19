@@ -908,7 +908,7 @@
       try {
         await window.PlaySession.joinLobby(code);
         this._error = null;
-        alert(`Joined session ${code}. The host will save the play.`);
+        window.router.go("session-viewer", { code });
       } catch (e) {
         this._error = e.message || "Failed to join";
         this.render();

@@ -3191,6 +3191,48 @@ body {
   white-space: pre-wrap;
 }
 
+/* ── Session viewer (joiner-side read-only lobby) ───────────────────────────── */
+.session-viewer { display: flex; flex-direction: column; gap: 0.85rem; }
+.session-viewer__game {
+  padding: 0.55rem 0.65rem;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.6rem;
+}
+.session-viewer__thumb-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  background: oklch(var(--b3));
+  color: oklch(var(--bc) / 0.55);
+}
+.session-viewer__status {
+  display: flex; align-items: center; gap: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  background: oklch(var(--b2));
+  border: 1px solid oklch(var(--b3));
+  font-size: 0.85rem;
+}
+.session-viewer__status--finalized {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.session-viewer__status--abandoned {
+  border-color: var(--rust);
+  color: var(--rust);
+}
+.session-viewer__host-tag {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  font-size: 0.7rem; font-weight: 600;
+  color: var(--accent);
+}
+.session-viewer__refresh {
+  display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+  font-size: 0.72rem;
+  opacity: 0.55;
+  padding-top: 0.25rem;
+}
+.session-viewer__guide-mount { margin-top: 0.25rem; }
+
 /* Edit mode */
 .play-detail--edit .play-detail__game-info { gap: 0.35rem; }
 

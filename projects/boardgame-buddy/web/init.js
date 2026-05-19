@@ -19,6 +19,7 @@
   window.profileSelfView = new window.ProfileSelfView();
   window.profileOtherView = new window.ProfileOtherView();
   window.playDetailView  = new window.PlayDetailView();
+  window.sessionViewerView = new window.SessionViewerView();
   window.buddiesView     = new window.BuddiesView();
   window.settingsView    = new window.SettingsView();
   window.adminView       = new window.AdminView();
@@ -33,6 +34,7 @@
   window.router.register("profile-self",  window.profileSelfView);
   window.router.register("profile-other", window.profileOtherView);
   window.router.register("play-detail",   window.playDetailView);
+  window.router.register("session-viewer", window.sessionViewerView);
   window.router.register("buddies",       window.buddiesView);
   window.router.register("settings",      window.settingsView);
   window.router.register("admin",         window.adminView);
