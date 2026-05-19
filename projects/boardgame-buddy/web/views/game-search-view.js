@@ -118,7 +118,8 @@
       this.render();
       try {
         const params = { page: this._page, per_page: PER_PAGE };
-        if (this._q) params.search = this._q;
+        const q = (this._q || "").trim();
+        if (q) params.search = q;
         const f = this._filters;
         if (f.players) params.players = f.players;
         if (f.playtimeMin != null) params.playtime_min = f.playtimeMin;
@@ -156,6 +157,13 @@
       // overlays a spinner so the user sees that their action is processing
       // — otherwise the screen just sits there showing stale results.
       const isReloading = this._loading && this._games.length > 0;
+      // Capture the search input's focus + caret so a render mid-typing
+      // (debounced _load reaches its loading/finished re-render while the
+      // user is still typing) doesn't kick them out of the box.
+      const active = document.activeElement;
+      const restoreFocus = active && active.id === "search-input";
+      const selStart = restoreFocus ? active.selectionStart : null;
+      const selEnd   = restoreFocus ? active.selectionEnd   : null;
       this.container.innerHTML = `
         ${this._mode === "pick-for-play" ? `
           <div class="search-pick-banner">
@@ -170,7 +178,9 @@
           <form class="search-form" onsubmit="window.gameSearchView._submit(event)">
             <i data-lucide="search" class="w-4 h-4 search-form__icon"></i>
             <input id="search-input" type="text" placeholder="Search games"
-                   value="${escapeAttr(this._q)}" class="search-form__input" />
+                   value="${escapeAttr(this._q)}" class="search-form__input"
+                   autocomplete="off" autocapitalize="off" autocorrect="off"
+                   oninput="window.gameSearchView._onInput(this.value)" />
             ${this._q
               ? `<button type="button" class="search-form__clear" onclick="window.gameSearchView._clear()">
                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
@@ -198,6 +208,15 @@
         ${this._renderBggSection()}
       `;
       if (window.lucide) window.lucide.createIcons();
+      if (restoreFocus) {
+        const input = document.getElementById("search-input");
+        if (input) {
+          input.focus();
+          if (selStart != null) {
+            try { input.setSelectionRange(selStart, selEnd); } catch (_) {}
+          }
+        }
+      }
     }
 
     _activeFilterCount() {
@@ -555,6 +574,7 @@
     }
 
     _clear() {
+      clearTimeout(this._searchTimer);
       this._q = "";
       this._page = 1;
       this._load();
@@ -562,8 +582,16 @@
       if (input) input.focus();
     }
 
+    _onInput(value) {
+      this._q = value || "";
+      this._page = 1;
+      clearTimeout(this._searchTimer);
+      this._searchTimer = setTimeout(() => this._load(), 220);
+    }
+
     _submit(event) {
       event.preventDefault();
+      clearTimeout(this._searchTimer);
       const input = document.getElementById("search-input");
       this._q = (input.value || "").trim();
       this._page = 1;
