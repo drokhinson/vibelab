@@ -180,7 +180,7 @@
             <input id="search-input" type="text" placeholder="Search games"
                    value="${escapeAttr(this._q)}" class="search-form__input"
                    autocomplete="off" autocapitalize="off" autocorrect="off"
-                   oninput="window.gameSearchView._onInput(this.value)" />
+                   onchange="window.gameSearchView._onInput(this.value)" />
             ${this._q
               ? `<button type="button" class="search-form__clear" onclick="window.gameSearchView._clear()">
                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
@@ -590,8 +590,7 @@
     _onInput(value) {
       this._q = value || "";
       this._page = 1;
-      clearTimeout(this._searchTimer);
-      this._searchTimer = setTimeout(() => this._load(), 220);
+      this._load();
     }
 
     _submit(event) {

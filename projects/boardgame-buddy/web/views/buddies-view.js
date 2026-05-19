@@ -77,7 +77,8 @@
           <input id="buddies-search-input" class="input input-bordered w-full"
                  placeholder="Find people by display name"
                  autocomplete="off"
-                 oninput="window.buddiesView._searchInput(this.value)"
+                 onblur="window.buddiesView._searchInput(this.value)"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();window.buddiesView._searchInput(this.value);}"
                  value="${escapeAttr(this._q)}" />
           ${this._q
             ? `<ul class="search-list">${this._search.map((u) => `
