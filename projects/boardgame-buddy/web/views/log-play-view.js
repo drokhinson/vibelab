@@ -923,31 +923,32 @@
       }
       this._saving = true;
       this.render();
-      const payload = this._ps.toPlayCreate();
-      const photoFile = this._ps.photoFile;
       try {
-        let play;
-        if (this._lobby && this._lobby.code) {
-          // Active session — finalize through the lobby so the server can
-          // close it out atomically with the play creation.
-          play = await window.PlaySession.finalizeLobby(this._lobby.code, payload);
-        } else {
-          play = await window.Play.create(payload);
-        }
-        // The photo upload endpoint requires a play_id, so it has to run AFTER
-        // create. If the upload errors we surface it but keep the play that
-        // was already saved — the user can add the photo via Edit later.
-        if (photoFile && play && play.id) {
+        // Upload the photo first so its URL rides along in the create payload.
+        // The backend only exposes POST /plays/photo (no play_id in the path);
+        // it stages the blob in the user's storage folder and returns
+        // { photo_url }. Bail before the create on failure so we don't leave
+        // a play without the photo the user expected.
+        if (this._ps.photoFile) {
           try {
             const fd = new FormData();
-            fd.append("file", photoFile);
-            await window.api.upload(`/plays/${play.id}/photo`, fd);
+            fd.append("file", this._ps.photoFile);
+            const resp = await window.api.upload("/plays/photo", fd);
+            if (resp && resp.photo_url) this._ps.photoUrl = resp.photo_url;
           } catch (e) {
-            this._error = "Play saved, but the photo upload failed: " + (e.message || "");
+            this._error = "Photo upload failed: " + (e.message || "");
             this._saving = false;
             this.render();
             return;
           }
+        }
+        const payload = this._ps.toPlayCreate();
+        if (this._lobby && this._lobby.code) {
+          // Active session — finalize through the lobby so the server can
+          // close it out atomically with the play creation.
+          await window.PlaySession.finalizeLobby(this._lobby.code, payload);
+        } else {
+          await window.Play.create(payload);
         }
         this._ps.clear();
         window.store.set("activePlay", null);
