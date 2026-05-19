@@ -186,6 +186,30 @@ def join_session(
     return _build_response(sb, session)
 
 
+def update_session_game(
+    sb,
+    *,
+    viewer_id: str,
+    code: str,
+    game_id: Optional[str],
+) -> SessionResponse:
+    """Host-only: change the game on an open lobby (or clear it).
+
+    Lets joiners see the pick live via their poll loop — without this the
+    game_id on the row was frozen at create time. Idempotent: skip the write
+    when the value is unchanged.
+    """
+    session = _fetch_open_session(sb, code)
+    if session["host_user_id"] != viewer_id:
+        raise HTTPException(status_code=403, detail="Only the host can update the session")
+    if session.get("game_id") != game_id:
+        sb.table("boardgamebuddy_play_sessions").update(
+            {"game_id": game_id}
+        ).eq("id", session["id"]).execute()
+        session["game_id"] = game_id
+    return _build_response(sb, session)
+
+
 def abandon_session(sb, viewer_id: str, code: str) -> None:
     session = _fetch_open_session(sb, code)
     if session["host_user_id"] != viewer_id:

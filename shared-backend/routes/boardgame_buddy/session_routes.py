@@ -27,6 +27,7 @@ from .models import (
     SessionCreate,
     SessionJoinBody,
     SessionResponse,
+    SessionUpdateBody,
 )
 from .services import session_service
 
@@ -83,6 +84,27 @@ async def join_session(
         user_id=user.user_id,
         user_display_name=user.display_name,
         guest_display_name=body.display_name,
+    )
+
+
+@router.patch(
+    "/sessions/{code}",
+    response_model=SessionResponse,
+    status_code=200,
+    summary="Update an open play session (host-only, game pick)",
+)
+async def update_session(
+    body: SessionUpdateBody,
+    code: str = Path(..., description="Session code"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionResponse:
+    """Host edits the lobby — currently only the game pick. Pass game_id=null
+    to clear. Joiners pick this up on their next poll."""
+    return session_service.update_session_game(
+        get_supabase(),
+        viewer_id=user.user_id,
+        code=code,
+        game_id=body.game_id,
     )
 
 

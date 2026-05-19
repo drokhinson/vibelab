@@ -548,6 +548,12 @@ class SessionCreate(BaseModel):
     game_id: Optional[str] = None
 
 
+class SessionUpdateBody(BaseModel):
+    # Currently the only field a host may change on an open lobby. Sent as
+    # null when clearing the pick, set to a game UUID when (re)selecting one.
+    game_id: Optional[str] = None
+
+
 class SessionJoinBody(BaseModel):
     # Used only when the caller is not authenticated (guest join). When a real
     # user joins, the display_name is taken from their profile and this field

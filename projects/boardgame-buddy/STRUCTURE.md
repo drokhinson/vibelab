@@ -221,6 +221,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/search?q=&include_bgg=false` — unified game search (collection → DB; BGG only when `include_bgg=true`)
 - `POST /api/v1/boardgame_buddy/sessions` — open a short-code play session (body `{game_id?}`)
 - `GET /api/v1/boardgame_buddy/sessions/{code}` — poll target for the lobby
+- `PATCH /api/v1/boardgame_buddy/sessions/{code}` — host updates the lobby (body `{game_id?}`)
 - `POST /api/v1/boardgame_buddy/sessions/{code}/join` — join a session by code
 - `DELETE /api/v1/boardgame_buddy/sessions/{code}` — host abandons a session
 - `POST /api/v1/boardgame_buddy/sessions/{code}/finalize` — write a play row from the session
