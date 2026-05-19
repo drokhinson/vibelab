@@ -6,7 +6,12 @@
 // route to the saved play; when they abandon we surface that and stop polling.
 
 (function () {
-  const POLL_MS = 30000;
+  // Two cadences: the joiner cares MOST about seeing the host's game pick
+  // as soon as it lands, so we poll fast (5s) while game_id is null. Once
+  // the game is set the per-player update rate drops to "someone new might
+  // join" — 30s is plenty.
+  const POLL_FAST_MS = 5000;
+  const POLL_SLOW_MS = 30000;
 
   class SessionViewerView extends window.View {
     constructor() {
@@ -16,6 +21,7 @@
       this._loading = false;
       this._error = null;
       this._pollHandle = null;
+      this._pollMs = POLL_SLOW_MS;
       this._guideWidget = null;
     }
 
@@ -55,7 +61,8 @@
 
     _startPolling() {
       if (this._pollHandle || !this._code) return;
-      this._pollHandle = setInterval(() => this._poll(), POLL_MS);
+      this._pollMs = this._desiredPollMs();
+      this._pollHandle = setInterval(() => this._poll(), this._pollMs);
     }
 
     _stopPolling() {
@@ -63,6 +70,22 @@
         clearInterval(this._pollHandle);
         this._pollHandle = null;
       }
+    }
+
+    _desiredPollMs() {
+      const s = this._session;
+      return s && s.game_id ? POLL_SLOW_MS : POLL_FAST_MS;
+    }
+
+    // Re-arm the interval when the desired cadence changes (e.g. host picks
+    // the game and we can downshift to slow polling).
+    _retunePolling() {
+      if (!this._pollHandle) return;
+      const next = this._desiredPollMs();
+      if (next === this._pollMs) return;
+      clearInterval(this._pollHandle);
+      this._pollMs = next;
+      this._pollHandle = setInterval(() => this._poll(), next);
     }
 
     async _load() {
@@ -89,6 +112,7 @@
         this._session = next;
         if (changed) this.render();
         this._handleStatusTransition();
+        this._retunePolling();
       } catch (_) {
         // Best-effort; keep the loop alive and let the next tick try again.
       }
@@ -98,6 +122,7 @@
       if (!prev || !next) return true;
       if (prev.status !== next.status) return true;
       if (prev.finalized_play_id !== next.finalized_play_id) return true;
+      if (prev.game_id !== next.game_id) return true;
       const a = prev.participants || [];
       const b = next.participants || [];
       if (a.length !== b.length) return true;
@@ -197,7 +222,9 @@
 
           <div class="session-viewer__refresh">
             <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-            Auto-refreshes every 30 seconds
+            ${s.game_id
+              ? "Auto-refreshes every 30 seconds"
+              : "Auto-refreshes every 5 seconds while waiting on the game"}
           </div>
         </article>
       `;

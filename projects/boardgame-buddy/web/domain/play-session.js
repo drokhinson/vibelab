@@ -96,6 +96,11 @@
       return window.api.get(`/sessions/${code}`);
     }
 
+    // Host-only. Pass `gameId: null` to clear the pick.
+    static updateLobby(code, { gameId } = {}) {
+      return window.api.patch(`/sessions/${code}`, { game_id: gameId || null });
+    }
+
     static abandonLobby(code) {
       return window.api.del(`/sessions/${code}`);
     }

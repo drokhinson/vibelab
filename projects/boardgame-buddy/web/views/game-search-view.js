@@ -474,6 +474,11 @@
       ps.playMode = g.play_mode || ps.playMode || null;
       ps.persist();
       window.store.set("activePlay", ps);
+      // Fire-and-forget: if this host is sharing a lobby code, push the game
+      // pick so joiners see it on their next poll.
+      if (ps.code) {
+        window.PlaySession.updateLobby(ps.code, { gameId: g.id }).catch(() => {});
+      }
       window.router.back("log-play");
     }
 
