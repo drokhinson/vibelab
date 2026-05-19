@@ -2650,9 +2650,9 @@ body {
 .play-session {
   background: oklch(var(--b2));
   border: 1px solid oklch(var(--b3));
-  border-left: 3px solid var(--game-accent, var(--accent));
   border-radius: 1rem;
   padding: 0.75rem 0 0.45rem;
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.18);
   animation: fadeUp 200ms ease both;
 }
 .play-session__header {
