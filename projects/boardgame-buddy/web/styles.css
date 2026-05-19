@@ -2431,23 +2431,19 @@ body {
 .play-card__header {
   display: flex; align-items: baseline; gap: 0.65rem;
 }
-.play-card__title {
+/* Card header is now just the game name in the top-left. The "User played"
+   attribution + date live in the parent .play-session header, so each card
+   front announces only its game — no per-card date or echoed attribution. */
+.play-card__game-link {
   flex: 1;
   min-width: 0;
-  font-size: 0.9rem; line-height: 1.3;
-  /* "Username played Game" — single line, ellipsises when long. */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.play-card__user-name {
-  font-weight: 600;
-}
-.play-card__title-verb { opacity: 0.7; margin: 0 0.15rem; }
-.play-card__game-link {
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--game-accent, var(--accent));
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .play-card__game-link:hover { text-decoration: underline; }
 .play-card__time {
@@ -2461,14 +2457,22 @@ body {
   border-radius: 0.75rem;
   overflow: hidden;
 }
-/* Status overlay sits in the top-right of any boardgame image on the
-   play card (hero photo or no-photo box art). Sits above the box-art
-   thumbnail overlay (which lives bottom-right). */
+/* Status overlay sits in the top-right of the game image. When the card
+   has a user photo, the game image is the small thumbnail badge in the
+   photo's bottom-right corner; when there's no photo, it's the box-art
+   tile on the left of the row. Either way, the pill anchors to the game
+   image specifically — not to the user's snapshot. */
 .play-card__status-overlay {
   position: absolute;
   top: 0.45rem;
   right: 0.45rem;
   z-index: 3;
+}
+/* Inside the small game-thumbnail badge (~64×64) the default offset is
+   too generous — tighten it so the pill stays inside the badge. */
+.play-card__game-overlay .play-card__status-overlay {
+  top: 2px;
+  right: 2px;
 }
 .play-card__photo-img {
   width: 100%;
@@ -2590,6 +2594,14 @@ body {
   overflow: hidden; text-overflow: ellipsis;
 }
 .play-card__back-player.is-winner .play-card__back-player-name { color: var(--accent); font-weight: 600; }
+/* Registered players become clickable links to a profile; ghost rows
+   stay as plain text. Inherit colour so the row treatment is unchanged
+   visually until hover. */
+.play-card__back-player-link {
+  color: inherit;
+  cursor: pointer;
+}
+.play-card__back-player-link:hover { text-decoration: underline; }
 .play-card__back-player-score {
   font-family: var(--font-display); font-weight: 700;
 }
@@ -2660,6 +2672,15 @@ body {
   opacity: 0.65;
   flex-shrink: 0;
 }
+/* Names inside the session title route to profiles. Inherit colour so
+   the surrounding "played 3 games" text stays consistent; underline on
+   hover so the affordance is discoverable. */
+.play-session__name {
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+.play-session__name:hover { text-decoration: underline; }
 .play-session__scroll {
   display: flex;
   gap: 0.6rem;

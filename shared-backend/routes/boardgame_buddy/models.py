@@ -585,6 +585,11 @@ class FeedPlayUser(BaseModel):
     avatar_url: Optional[str] = None
 
 
+class FeedPlayParticipant(BaseModel):
+    user_id: str
+    display_name: str
+
+
 class FeedPlayCard(BaseModel):
     kind: Literal[FeedCardKind.PLAY] = FeedCardKind.PLAY
     play_id: str
@@ -597,13 +602,11 @@ class FeedPlayCard(BaseModel):
     play_mode: PlayMode = PlayMode.COMPETITIVE
     winner_display_name: Optional[str] = None
     participant_count: int = 0
-    # Sorted, distinct list of registered-user participants. The FE keys
-    # session grouping by this set so "Bill + Sam" sessions don't merge
-    # with "Bill alone" sessions.
-    player_user_ids: list[str] = []
-    # Full resolved participant roster (registered display_name or ghost
-    # free-text name). Used for the "You and Sam played 3 games" header.
-    player_display_names: list[str] = []
+    # Paired {user_id, display_name} list filtered to the viewer + their
+    # accepted buddies (ghosts and non-buddy registered players excluded).
+    # Drives the session grouping key on the FE and the clickable names in
+    # the session header. Sorted by display_name in the RPC.
+    participants: list[FeedPlayParticipant] = []
 
 
 class FeedHotGamesEntry(BaseModel):

@@ -193,22 +193,35 @@
     }
 
     _renderPlaySession(card) {
-      // Header reads "You and Sam played 3 games" (viewer's name swapped
-      // to "You" and surfaced first). Each play inside the rail reuses
-      // renderPlayCard so flip / no-flip subtrees / state map all keep
+      // Header reads "You and Sam played 3 games" / "Bill played Catan".
+      // Names are clickable: viewer's own name → profile-self, others →
+      // profile-other. Each play inside the rail still reuses
+      // renderPlayCard so flip / no-flip subtrees / state map keep
       // working — the rail is purely a layout wrapper.
       const me = window.store && window.store.get && window.store.get("user");
-      const viewerName = (me && me.display_name) || null;
-      const title = formatSessionTitle(card.player_display_names, viewerName, card.plays.length);
+      const viewer = me ? { id: me.id, display_name: me.display_name } : null;
+      const firstPlay = card.plays[0];
+      // When the session is a single play, surface the game name in the
+      // title ("You played Catan") instead of the count.
+      const gameNameForSingle = (card.plays.length === 1 && firstPlay && firstPlay.game)
+        ? firstPlay.game.name
+        : null;
+      const title = formatSessionTitleHtml({
+        participants: card.participants || [],
+        viewer,
+        loggerFallback: firstPlay && firstPlay.user,
+        gameCount: card.plays.length,
+        gameNameForSingle,
+      });
       const dateLabel = formatSessionDate(card.played_at);
       // Borrow the accent of the first play so the session card carries a
       // colour cue consistent with the cards it holds.
-      const accent = (card.plays[0] && card.plays[0].game && card.plays[0].game.theme_color) || "var(--accent)";
+      const accent = (firstPlay && firstPlay.game && firstPlay.game.theme_color) || "var(--accent)";
       const cards = card.plays.map((p) => window.renderPlayCard(p)).join("");
       return `
         <section class="play-session" style="--game-accent:${escape(accent)}">
           <header class="play-session__header">
-            <span class="play-session__title">${escape(title)}</span>
+            <span class="play-session__title">${title}</span>
             <span class="play-session__date">${escape(dateLabel)}</span>
           </header>
           <div class="play-session__scroll">${cards}</div>
@@ -311,10 +324,11 @@
   //
   // The backend orders plays by (played_at DESC, created_at DESC) so plays
   // that share a (date, buddy-set) bucket arrive contiguously. We walk the
-  // mixed card list once and fold any run of ≥2 same-key play cards into a
-  // synthetic { kind: "play_session", plays: [...] } card. Lone plays pass
-  // through untouched. Non-play cards (hot games rail etc.) break a run
-  // because they're rare and only ever appear on page 1.
+  // play cards once and bucket runs of same-key cards into a synthetic
+  // { kind: "play_session", plays: [...] } card. Single plays also wrap so
+  // every feed item carries the gold-bordered section + clickable header.
+  // Non-play cards (hot games rail etc.) break a run because they're rare
+  // and only ever appear on page 1.
 
   function groupCards(rawCards) {
     const out = [];
@@ -331,55 +345,91 @@
       while (j < rawCards.length && rawCards[j].kind === "play" && sessionKey(rawCards[j]) === key) {
         j++;
       }
-      if (j - i >= 2) {
-        const plays = rawCards.slice(i, j);
-        out.push({
-          kind: "play_session",
-          played_at: card.played_at,
-          player_user_ids: card.player_user_ids || [],
-          player_display_names: card.player_display_names || [],
-          plays,
-        });
-      } else {
-        out.push(card);
-      }
+      const plays = rawCards.slice(i, j);
+      out.push({
+        kind: "play_session",
+        played_at: card.played_at,
+        participants: card.participants || [],
+        plays,
+      });
       i = j;
     }
     return out;
   }
 
   function sessionKey(card) {
-    // Registered participants are the canonical bucket — sorted by the
-    // backend already. Falls back to "logger:<uid>" when no registered
-    // players were tagged so solo plays from the same logger still merge.
-    const ids = (card.player_user_ids && card.player_user_ids.length)
-      ? card.player_user_ids.join(",")
+    // Backend already filtered participants to viewer + buddies and sorted
+    // by display name. Stringify the user_id list to get a stable key.
+    // Fallback to the logger id in the (unexpected) event the play has no
+    // visible participants — keeps consecutive same-day, same-logger plays
+    // merged instead of fragmenting them.
+    const ids = (card.participants && card.participants.length)
+      ? card.participants.map((p) => p.user_id).join(",")
       : `logger:${(card.user && card.user.id) || ""}`;
     return `${card.played_at}|${ids}`;
   }
 
   // ── Session header ────────────────────────────────────────────────────────
 
-  function formatSessionTitle(playerNames, viewerName, gameCount) {
-    let names = (playerNames || []).slice();
-    // Surface "You" first when the viewer is one of the participants.
-    if (viewerName) {
-      const idx = names.indexOf(viewerName);
-      if (idx >= 0) {
-        names.splice(idx, 1);
-        names.unshift("You");
+  function formatSessionTitleHtml({ participants, viewer, loggerFallback, gameCount, gameNameForSingle }) {
+    // Build a "name token" list. Each token has { html, isViewer } where
+    // html is the already-escaped, possibly-anchored name span. We rotate
+    // "You" to position 0 when the viewer is among the participants.
+    let tokens = (participants || []).map((p) => ({
+      isViewer: viewer && p.user_id === viewer.id,
+      html: nameLinkHtml(p, viewer),
+    }));
+    if (tokens.length === 0) {
+      // Defensive fallback: backend should always include at least the
+      // logger when the play is visible. If somehow empty, render the
+      // logger directly (or "Someone" if even that's missing).
+      if (loggerFallback && loggerFallback.id) {
+        tokens = [{
+          isViewer: viewer && loggerFallback.id === viewer.id,
+          html: nameLinkHtml(
+            { user_id: loggerFallback.id, display_name: loggerFallback.display_name || "Someone" },
+            viewer,
+          ),
+        }];
+      } else {
+        tokens = [{ isViewer: false, html: escape("Someone") }];
       }
     }
-    if (names.length === 0) names = ["Someone"];
-    let who;
-    if (names.length === 1) who = names[0];
-    else if (names.length === 2) who = `${names[0]} and ${names[1]}`;
-    else if (names.length === 3) who = `${names[0]}, ${names[1]}, and ${names[2]}`;
-    else {
-      const others = names.length - 2;
-      who = `${names[0]}, ${names[1]}, and ${others} others`;
+    // Float "You" to the front.
+    const viewerIdx = tokens.findIndex((t) => t.isViewer);
+    if (viewerIdx > 0) {
+      const [me] = tokens.splice(viewerIdx, 1);
+      tokens.unshift(me);
     }
-    return `${who} played ${gameCount} games`;
+    let who;
+    if (tokens.length === 1) who = tokens[0].html;
+    else if (tokens.length === 2) who = `${tokens[0].html} and ${tokens[1].html}`;
+    else if (tokens.length === 3) who = `${tokens[0].html}, ${tokens[1].html}, and ${tokens[2].html}`;
+    else {
+      const others = tokens.length - 2;
+      who = `${tokens[0].html}, ${tokens[1].html}, and ${others} others`;
+    }
+    // Single-play sessions surface the game name; multi-play sessions
+    // count games. The session header is the only place either appears
+    // now that the card front dropped its "User played Game" line.
+    const trailing = gameNameForSingle
+      ? `played ${escape(gameNameForSingle)}`
+      : `played ${gameCount} games`;
+    return `${who} ${trailing}`;
+  }
+
+  function nameLinkHtml(participant, viewer) {
+    // Viewer's own row → profile-self (the router's no-arg self profile
+    // route, registered as 'profile-self'). Anyone else → profile-other
+    // with their user_id. stopPropagation so the click doesn't bubble
+    // into a parent flippable card (the session header isn't inside a
+    // .play-card today, but defensive in case it ever is).
+    const isViewer = viewer && participant.user_id === viewer.id;
+    const label = isViewer ? "You" : (participant.display_name || "Someone");
+    const route = isViewer
+      ? `window.router.go('profile-self')`
+      : `window.router.go('profile-other',{userId:'${escape(participant.user_id)}'})`;
+    return `<a class="play-session__name" onclick="event.stopPropagation(); ${route}">${escape(label)}</a>`;
   }
 
   function formatSessionDate(iso) {

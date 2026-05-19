@@ -57,16 +57,8 @@
   }
 
   function renderFront(card) {
-    const u = card.user || {};
     const g = card.game || {};
     const me = window.store && window.store.get && window.store.get("user");
-    // Self-attribution: when the play's logger is the current user, swap the
-    // display name for "You" so the feed reads "You played Catan" instead of
-    // echoing your own name back. Winner attribution uses the same trick —
-    // matched by display name since the feed payload doesn't carry the
-    // winner's user_id.
-    const isSelf = !!(me && u.id && me.id === u.id);
-    const userName = isSelf ? "You" : escapeHtml(u.display_name || "Unknown");
     const gameName = escapeHtml(g.name || "Unknown game");
     const hasUserPhoto = !!card.photo_url;
     const gameThumb = g.thumbnail_url || g.image_url || "";
@@ -91,20 +83,21 @@
       : "";
 
     // Layout split by presence of a user-uploaded photo:
-    //   - With user photo: stretched hero + corner box-art badge, with the
-    //     winner chip then notes stacked underneath.
-    //   - Without: a horizontal row — square box art on the left, winner
-    //     chip on the right — then notes at full width below, matching the
-    //     with-photo flow (photo → winner → notes).
+    //   - With user photo: stretched hero + corner box-art badge carrying
+    //     the owned/played status pill (so the toggle anchors to the game,
+    //     not the user's snapshot).
+    //   - Without: a horizontal row — square box art on the left (status
+    //     pill on the box-art's top-right), winner chip on the right —
+    //     then notes at full width below.
     let body = "";
     if (hasUserPhoto) {
       body = `
         <div class="play-card__photo">
           <img class="play-card__photo-img" src="${escapeAttr(card.photo_url)}" alt="" loading="lazy" />
-          ${statusOverlay}
           ${gameThumb ? `
             <div class="play-card__game-overlay" data-no-flip onclick="${gameNav}">
               <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
+              ${statusOverlay}
             </div>` : ""}
         </div>
         ${winnerChip ? `<div class="play-card__meta-row">${winnerChip}</div>` : ""}
@@ -131,14 +124,12 @@
       `;
     }
 
+    // The "User played Game" attribution moved up to the session header so
+    // the card front just announces which game this card is. Date moved
+    // with it (session header shows Today / Yesterday / Mon 15 once).
     return `
       <header class="play-card__header">
-        <div class="play-card__title">
-          <span class="play-card__user-name">${userName}</span>
-          <span class="play-card__title-verb">played</span>
-          <a class="play-card__game-link" data-no-flip onclick="${gameNav}">${gameName}</a>
-        </div>
-        <div class="play-card__time">${formatPlayedAt(card.played_at)}</div>
+        <a class="play-card__game-link" data-no-flip onclick="${gameNav}">${gameName}</a>
       </header>
       ${body}
     `;
@@ -189,12 +180,25 @@
               <li class="play-card__back-player ${pl.is_winner ? "is-winner" : ""}">
                 <span class="play-card__back-player-name">
                   ${pl.is_winner ? `<i data-lucide="trophy" class="w-3.5 h-3.5"></i> ` : ""}
-                  ${escapeHtml(pl.name)}
+                  ${playerNameHtml(pl, me)}
                 </span>
                 <span class="play-card__back-player-score">${pl.score != null ? pl.score : ""}</span>
               </li>`).join("")}
       </ul>
     `;
+  }
+
+  // Registered player rows route to a profile (own → profile-self, others
+  // → profile-other). profile-other already carries the "Buddy up" CTA when
+  // the viewer isn't connected, so we don't need an inline add button here.
+  // Ghost rows (no user_id) stay as plain text.
+  function playerNameHtml(pl, me) {
+    if (!pl.user_id) return escapeHtml(pl.name);
+    const route = (me && me.id === pl.user_id)
+      ? `window.router.go('profile-self')`
+      : `window.router.go('profile-other',{userId:'${escapeAttr(pl.user_id)}'})`;
+    return `<a class="play-card__back-player-link" data-no-flip
+              onclick="event.stopPropagation(); ${route}">${escapeHtml(pl.name)}</a>`;
   }
 
   // ── Single-card re-render (preserves feed scroll) ───────────────────────────
