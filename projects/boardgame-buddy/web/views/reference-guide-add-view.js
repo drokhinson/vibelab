@@ -655,6 +655,7 @@
         this._formTitle = "";
         this._formContent = "";
         this._formType = "";
+        this._saving = false;
         window.router.back("game-detail");
       } catch (e) {
         this._error = e.message || "Failed to create chapter";
