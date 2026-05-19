@@ -31,15 +31,20 @@
 --            game_image_url TEXT, game_thumbnail_url TEXT, played_at DATE,
 --            created_at TIMESTAMPTZ, notes TEXT, photo_url TEXT,
 --            play_mode TEXT, winner_display_name TEXT,
---            participant_count INT)
+--            participant_count INT, player_user_ids UUID[],
+--            player_display_names TEXT[])
 --   Defined in: db/migrations/boardgamebuddy/014_feed_order_by_played_at.sql
 --               (originally 012; signature changed to a composite cursor)
+--   Last updated in: db/migrations/boardgamebuddy/024_feed_plays_with_participants.sql
+--               (added player_user_ids + player_display_names so the FE can
+--               collapse same-day, same-buddy-set plays into one session
+--               card without a second round trip)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Visible plays for the Feed (own + accepted buddies),
---               pre-joined to game name/image and winner display.
---               Ordered by played_at DESC, created_at DESC. Cursor is the
---               last row's (played_at, created_at) for lexicographic tuple
---               comparison.
+--               pre-joined to game name/image, winner display, and the
+--               full participant set. Ordered by played_at DESC,
+--               created_at DESC. Cursor is the last row's
+--               (played_at, created_at) for lexicographic tuple comparison.
 
 -- bgb_dormant_collection(uid UUID, days_since INT DEFAULT 60, lim INT DEFAULT 5)
 --   → TABLE (game_id UUID, last_played_at DATE)

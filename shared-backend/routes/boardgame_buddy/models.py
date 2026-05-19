@@ -597,6 +597,13 @@ class FeedPlayCard(BaseModel):
     play_mode: PlayMode = PlayMode.COMPETITIVE
     winner_display_name: Optional[str] = None
     participant_count: int = 0
+    # Sorted, distinct list of registered-user participants. The FE keys
+    # session grouping by this set so "Bill + Sam" sessions don't merge
+    # with "Bill alone" sessions.
+    player_user_ids: list[str] = []
+    # Full resolved participant roster (registered display_name or ghost
+    # free-text name). Used for the "You and Sam played 3 games" header.
+    player_display_names: list[str] = []
 
 
 class FeedHotGamesEntry(BaseModel):

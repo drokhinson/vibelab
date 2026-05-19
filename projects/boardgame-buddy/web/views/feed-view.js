@@ -103,7 +103,11 @@
         this.container.innerHTML = this._renderSkeleton();
         return;
       }
-      const cards = (this._page && this._page.cards) || [];
+      const rawCards = (this._page && this._page.cards) || [];
+      // Collapse runs of same-day, same-buddy-set plays into a session card.
+      // Run on every render so cross-page boundaries fold naturally when new
+      // pages append.
+      const cards = groupCards(rawCards);
       // Search pill + avatar moved into the global app header — feed now
       // jumps straight to the resume chip and the card timeline.
       const html = `
@@ -175,6 +179,8 @@
       switch (card.kind) {
         case "play":
           return window.renderPlayCard(card);
+        case "play_session":
+          return this._renderPlaySession(card);
         case "hot_games":
           return this._renderHotGamesCard(card);
         case "suggested_buddies":
@@ -184,6 +190,30 @@
         default:
           return "";
       }
+    }
+
+    _renderPlaySession(card) {
+      // Header reads "You and Sam played 3 games" (viewer's name swapped
+      // to "You" and surfaced first). Each play inside the rail reuses
+      // renderPlayCard so flip / no-flip subtrees / state map all keep
+      // working — the rail is purely a layout wrapper.
+      const me = window.store && window.store.get && window.store.get("user");
+      const viewerName = (me && me.display_name) || null;
+      const title = formatSessionTitle(card.player_display_names, viewerName, card.plays.length);
+      const dateLabel = formatSessionDate(card.played_at);
+      // Borrow the accent of the first play so the session card carries a
+      // colour cue consistent with the cards it holds.
+      const accent = (card.plays[0] && card.plays[0].game && card.plays[0].game.theme_color) || "var(--accent)";
+      const cards = card.plays.map((p) => window.renderPlayCard(p)).join("");
+      return `
+        <section class="play-session" style="--game-accent:${escape(accent)}">
+          <header class="play-session__header">
+            <span class="play-session__title">${escape(title)}</span>
+            <span class="play-session__date">${escape(dateLabel)}</span>
+          </header>
+          <div class="play-session__scroll">${cards}</div>
+        </section>
+      `;
     }
 
     _renderHotGamesCard(card) {
@@ -275,6 +305,101 @@
         btnEl.textContent = "Try again";
       }
     }
+  }
+
+  // ── Same-day session grouping ─────────────────────────────────────────────
+  //
+  // The backend orders plays by (played_at DESC, created_at DESC) so plays
+  // that share a (date, buddy-set) bucket arrive contiguously. We walk the
+  // mixed card list once and fold any run of ≥2 same-key play cards into a
+  // synthetic { kind: "play_session", plays: [...] } card. Lone plays pass
+  // through untouched. Non-play cards (hot games rail etc.) break a run
+  // because they're rare and only ever appear on page 1.
+
+  function groupCards(rawCards) {
+    const out = [];
+    let i = 0;
+    while (i < rawCards.length) {
+      const card = rawCards[i];
+      if (card.kind !== "play") {
+        out.push(card);
+        i++;
+        continue;
+      }
+      const key = sessionKey(card);
+      let j = i + 1;
+      while (j < rawCards.length && rawCards[j].kind === "play" && sessionKey(rawCards[j]) === key) {
+        j++;
+      }
+      if (j - i >= 2) {
+        const plays = rawCards.slice(i, j);
+        out.push({
+          kind: "play_session",
+          played_at: card.played_at,
+          player_user_ids: card.player_user_ids || [],
+          player_display_names: card.player_display_names || [],
+          plays,
+        });
+      } else {
+        out.push(card);
+      }
+      i = j;
+    }
+    return out;
+  }
+
+  function sessionKey(card) {
+    // Registered participants are the canonical bucket — sorted by the
+    // backend already. Falls back to "logger:<uid>" when no registered
+    // players were tagged so solo plays from the same logger still merge.
+    const ids = (card.player_user_ids && card.player_user_ids.length)
+      ? card.player_user_ids.join(",")
+      : `logger:${(card.user && card.user.id) || ""}`;
+    return `${card.played_at}|${ids}`;
+  }
+
+  // ── Session header ────────────────────────────────────────────────────────
+
+  function formatSessionTitle(playerNames, viewerName, gameCount) {
+    let names = (playerNames || []).slice();
+    // Surface "You" first when the viewer is one of the participants.
+    if (viewerName) {
+      const idx = names.indexOf(viewerName);
+      if (idx >= 0) {
+        names.splice(idx, 1);
+        names.unshift("You");
+      }
+    }
+    if (names.length === 0) names = ["Someone"];
+    let who;
+    if (names.length === 1) who = names[0];
+    else if (names.length === 2) who = `${names[0]} and ${names[1]}`;
+    else if (names.length === 3) who = `${names[0]}, ${names[1]}, and ${names[2]}`;
+    else {
+      const others = names.length - 2;
+      who = `${names[0]}, ${names[1]}, and ${others} others`;
+    }
+    return `${who} played ${gameCount} games`;
+  }
+
+  function formatSessionDate(iso) {
+    if (!iso) return "";
+    // Match play-card.js's formatPlayedAt — parse Y-M-D as local so
+    // Today/Yesterday doesn't drift across UTC boundaries.
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const d = m
+      ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10))
+      : new Date(iso);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    const sameDay = (a, b) =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+    if (sameDay(d, today)) return "Today";
+    if (sameDay(d, yesterday)) return "Yesterday";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
   function escape(s) {
