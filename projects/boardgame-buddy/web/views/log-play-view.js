@@ -566,8 +566,10 @@
         <section class="log-play__section">
           <label class="log-play__label">Enter the host's code</label>
           <div class="flex gap-2">
-            <input id="join-code-input" class="input input-bordered flex-1"
+            <input id="join-code-input" class="input input-bordered flex-1 min-w-0"
                    placeholder="5-character code"
+                   maxlength="5"
+                   autocapitalize="characters"
                    value="${escapeAttr(this._joinCode)}"
                    onchange="window.logPlayView._joinCode = this.value.toUpperCase();" />
             <button class="btn btn-primary" onclick="window.logPlayView._joinByCode()">Join</button>
