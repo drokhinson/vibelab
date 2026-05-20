@@ -64,6 +64,10 @@
         Promise.resolve().then(() => live.stop()).catch(() => {});
       }
       this._liveScores = null;
+      // Defensive: any pending Discard-confirm dialog should not survive
+      // the navigation. PolaroidPopup is a global overlay, so it would
+      // otherwise float over the destination view.
+      if (window.PolaroidPopup) window.PolaroidPopup.dismiss();
     }
 
     // ── Lobby + phase ────────────────────────────────────────────────────────

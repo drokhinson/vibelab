@@ -2567,16 +2567,16 @@ body {
 }
 .play-card__game-overlay {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: 54px;
-  height: 54px;
-  border-radius: 8px;
+  right: 10px;
+  bottom: 10px;
+  width: 78px;
+  height: 78px;
+  border-radius: 10px;
   overflow: hidden;
   background: var(--polaroid-bg);
   border: 2px solid var(--polaroid-bg);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.35),
-              0 0 0 1px rgba(0,0,0,0.15);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.4),
+              0 0 0 1px rgba(0,0,0,0.18);
   z-index: 2;
   cursor: pointer;
 }
@@ -2584,10 +2584,11 @@ body {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
 .play-card--strip .play-card__game-overlay {
-  width: 38px;
-  height: 38px;
-  right: 6px;
-  bottom: 6px;
+  width: 54px;
+  height: 54px;
+  right: 8px;
+  bottom: 8px;
+  border-radius: 8px;
 }
 
 /* ── Caption row ──────────────────────────────────────────────────────────
@@ -4574,6 +4575,15 @@ body {
    inside #app. Force the main to participate in a column-flex chain so
    the inner .cascade-scroll can claim the remaining height without
    hard-coding the global header height. */
+/* Hard-hide the cascade containers when the router toggles .hidden. The
+   default Tailwind `.hidden { display: none }` has lower specificity than
+   the active-state rule below, and any cascade-ordering quirk between the
+   CDN-injected Tailwind sheet and styles.css would let the container leak
+   on top of Feed / Profile. !important removes the ambiguity. */
+main[data-view="play-flow"].hidden,
+main[data-view="session-viewer"].hidden {
+  display: none !important;
+}
 main[data-view="play-flow"]:not(.hidden),
 main[data-view="session-viewer"]:not(.hidden) {
   display: flex;
