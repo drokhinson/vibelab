@@ -2196,10 +2196,15 @@ body {
 
 /* ── Play detail view ──────────────────────────────────────────────────────── */
 .play-card { cursor: pointer; }
-/* Apply hover lift on the front face so the parent's transform stays at
-   identity — keeping the 3D flip context clean. */
-.play-card:hover .play-card__front {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+/* Lift only the inner flip-context so the article's tilt transform stays
+   intact — hover deepens the print shadow and tugs the card forward in 3D
+   without canceling the polaroid rotation. */
+.play-card:hover .play-card__front,
+.play-card:hover .play-card__back {
+  box-shadow:
+    0 2px 2px oklch(0 0 0 / 0.4),
+    0 14px 32px -10px oklch(0 0 0 / 0.55),
+    inset 0 1px 0 oklch(1 0 0 / 0.05);
 }
 .play-photo {
   display: block;
@@ -2376,16 +2381,18 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ── Play card ──────────────────────────────────────────────────────────────
-   Two-faced flip card: tap the body to rotate to the back (players + scores
-   + edit). Game-name + box-art keep their own onclick to navigate to the
-   game detail page — those zones are marked `data-no-flip` in play-card.js. */
+/* ── Play card — Polaroid ────────────────────────────────────────────────────
+   Each play renders as a polaroid print: square photo window on top, caption
+   with the big serif game name + winner chip below, optional notes line.
+   Two-faced flip — tap the body to rotate to the back (players + scores).
+   Zones marked `data-no-flip` (game name, photo, maximize) navigate instead
+   of flipping. */
 .play-card {
   background: transparent;        /* faces carry the surface colour */
   border: none;
   box-shadow: none;
   padding: 0;
-  border-radius: 1rem;
+  border-radius: 8px;
   animation: fadeUp 200ms ease both;
   perspective: 1200px;
   position: relative;
@@ -2394,11 +2401,7 @@ body {
   position: relative;
   width: 100%;
   transform-style: preserve-3d;
-  transition: transform 450ms cubic-bezier(.2,.7,.2,1);
-  /* Sized by the front face; the back is absolutely positioned on top so the
-     article height matches the front's natural height. When the back is
-     taller (long player list) the back grows naturally and the article
-     follows on flip. Handled with min-height in `.is-flipped` below. */
+  transition: transform 600ms cubic-bezier(.34,.07,.16,.96);
 }
 .play-card.is-flipped .play-card__inner { transform: rotateY(180deg); }
 
@@ -2406,10 +2409,12 @@ body {
 .play-card__back {
   background: oklch(var(--b2));
   border: 1px solid oklch(var(--b3));
-  border-left: 3px solid var(--game-accent, var(--accent));
-  border-radius: 1rem;
-  padding: 0.85rem 0.95rem;
-  box-shadow: 0 1px 2px oklch(0 0 0 / 0.18);
+  border-radius: 8px;
+  padding: 12px 12px 16px;
+  box-shadow:
+    0 1px 1px oklch(0 0 0 / 0.4),
+    0 8px 24px -8px oklch(0 0 0 / 0.5),
+    inset 0 1px 0 oklch(1 0 0 / 0.04);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
@@ -2428,152 +2433,158 @@ body {
   overflow: auto;
 }
 
-.play-card__header {
-  display: flex; align-items: baseline; gap: 0.65rem;
+/* ── Polaroid photo window ────────────────────────────────────────────────── */
+.play-card__polaroid-photo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 3px;
+  overflow: hidden;
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklch, var(--game-accent, var(--accent)) 60%, oklch(var(--b1))) 0%,
+    oklch(var(--b1)) 100%
+  );
 }
-/* Card header is now just the game name in the top-left. The "User played"
-   attribution + date live in the parent .play-session header, so each card
-   front announces only its game — no per-card date or echoed attribution. */
-.play-card__game-link {
+.play-card__polaroid-photo.is-cover { cursor: pointer; }
+.play-card__polaroid-photo.has-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 55%, oklch(0 0 0 / 0.35));
+  pointer-events: none;
+}
+.play-card__polaroid-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.play-card__polaroid-photo.is-placeholder {
+  display: grid;
+  place-items: center;
+}
+.play-card__polaroid-placeholder-icon {
+  width: 36px;
+  height: 36px;
+  color: oklch(var(--bc) / 0.35);
+}
+
+/* Game-cover badge in the bottom-right of the photo window — appears only
+   when the hero is a user snapshot, so the box art reads as a secondary
+   surface anchored to the game (not the moment). The status pill nests
+   inside. */
+.play-card__polaroid-cover {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid oklch(var(--b1));
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.5), 0 0 0 1px oklch(0 0 0 / 0.25);
+  background: oklch(var(--b1));
+  cursor: pointer;
+  z-index: 2;
+}
+.play-card__polaroid-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Status overlay sits in the top-right of whichever surface carries the
+   game art — the corner badge when there's a user photo, the photo window
+   itself otherwise. */
+.play-card__status-overlay {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+}
+.play-card__polaroid-cover .play-card__status-overlay {
+  top: 2px;
+  right: 2px;
+}
+
+/* ── Polaroid caption ─────────────────────────────────────────────────────── */
+.play-card__polaroid-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 14px 2px 0;
+}
+.play-card__polaroid-name {
   flex: 1;
   min-width: 0;
-  font-size: 0.95rem;
+  font-family: var(--font-display);
   font-weight: 700;
+  font-size: 1.2rem;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
   color: var(--game-accent, var(--accent));
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.play-card__game-link:hover { text-decoration: underline; }
-.play-card__time {
-  font-size: 0.78rem;
-  opacity: 0.65;
+.play-card__polaroid-name:hover { text-decoration: underline; }
+.play-card__polaroid-winner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
-}
-.play-card__photo {
-  position: relative;
-  margin-top: 0.55rem;
-  border-radius: 0.75rem;
-  overflow: hidden;
-}
-/* Status overlay sits in the top-right of the game image. When the card
-   has a user photo, the game image is the small thumbnail badge in the
-   photo's bottom-right corner; when there's no photo, it's the box-art
-   tile on the left of the row. Either way, the pill anchors to the game
-   image specifically — not to the user's snapshot. */
-.play-card__status-overlay {
-  position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
-  z-index: 3;
-}
-/* Inside the small game-thumbnail badge (~64×64) the default offset is
-   too generous — tighten it so the pill stays inside the badge. */
-.play-card__game-overlay .play-card__status-overlay {
-  top: 2px;
-  right: 2px;
-}
-.play-card__photo-img {
-  width: 100%;
-  max-height: 320px;
-  object-fit: contain;
-  background: oklch(var(--b3));
-  display: block;
-}
-/* Photo-less plays fall back to a horizontal row: square box art on the left,
-   winner chip + notes stacked to the right. The box art reads as a thumbnail
-   tied to the play rather than trying to act as a hero image. */
-.play-card__no-photo-row {
-  display: flex;
-  gap: 0.7rem;
-  margin-top: 0.55rem;
-  align-items: flex-start;
-}
-.play-card__box {
-  position: relative;
-  flex: 0 0 88px;
-  width: 88px;
-  height: 88px;
-  border-radius: 0.6rem;
-  overflow: hidden;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  cursor: pointer;
-}
-.play-card__box img {
-  width: 100%; height: 100%; object-fit: cover; display: block;
-}
-.play-card__no-photo-meta {
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column; gap: 0.4rem;
-  padding-top: 0.1rem;
-}
-.play-card__no-photo-meta .play-card__notes { margin-top: 0; }
-
-/* Strava-style "map overlay": box-art thumbnail floating in the bottom-right
-   corner of a user photo. Has its own shadow and border so it reads as a
-   secondary surface stacked over the primary media. */
-.play-card__game-overlay {
-  position: absolute;
-  right: 0.6rem;
-  bottom: 0.6rem;
-  width: 64px;
-  height: 64px;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  border: 2px solid oklch(var(--b1));
-  box-shadow: 0 4px 12px oklch(0 0 0 / 0.5), 0 0 0 1px oklch(0 0 0 / 0.2);
-  background: oklch(var(--b1));
-}
-.play-card__game-overlay img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.play-card__notes { margin-top: 0.45rem; font-size: 0.9rem; opacity: 0.85; }
-
-/* Winner + player-count + any other footnote chips live in one row with
-   a dot separator drawn via flex gaps + ::after pseudo-elements on all
-   but the last chip. */
-.play-card__meta-row {
-  display: flex; align-items: center; flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.55rem;
-  font-size: 0.78rem;
-}
-.play-card__meta-chip {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  opacity: 0.7;
-}
-.play-card__meta-chip + .play-card__meta-chip::before {
-  content: "·";
-  margin-right: 0.4rem;
-  opacity: 0.5;
-}
-.play-card__meta-chip--winner {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   color: var(--accent);
-  font-weight: 600;
-  opacity: 1;
+  white-space: nowrap;
+}
+.play-card__polaroid-winner i { width: 12px; height: 12px; }
+
+.play-card__polaroid-notes {
+  margin-top: 8px;
+  padding: 0 2px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: oklch(var(--bc) / 0.78);
 }
 
-/* ── Play card — back face (players / scores / edit) ────────────────────── */
+/* ── Play card — back face (players / scores / notes) ───────────────────── */
 .play-card__back-head {
-  display: flex; align-items: baseline; gap: 0.5rem;
-  /* Reserve room on the right so the title doesn't run under the absolutely-
-     positioned maximize button that lives in the top-right corner. */
-  padding-right: 2rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0 2rem 10px 2px;
+  border-bottom: 1px dashed oklch(var(--b3));
+  margin-bottom: 4px;
 }
 .play-card__back-title {
   flex: 1; min-width: 0;
-  font-weight: 700; font-size: 0.95rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
   color: var(--game-accent, var(--accent));
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.play-card__back-date {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: oklch(var(--bc) / 0.55);
+  flex-shrink: 0;
+}
 .play-card__back-winners {
   display: inline-flex; align-items: center; gap: 0.3rem;
-  font-size: 0.82rem; font-weight: 600; color: var(--accent);
+  font-size: 0.78rem; font-weight: 700; color: var(--accent);
+  padding: 0 2px;
+  letter-spacing: 0.02em;
 }
 .play-card__back-players {
   list-style: none; margin: 0; padding: 0;
@@ -2588,16 +2599,22 @@ body {
   border-radius: 0.55rem;
   font-size: 0.85rem;
 }
-.play-card__back-player.is-winner { border-color: var(--accent); }
+.play-card__back-player.is-winner {
+  border-color: color-mix(in oklch, var(--accent) 45%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--accent) 18%, transparent),
+    oklch(var(--b1))
+  );
+}
 .play-card__back-player-name {
   display: inline-flex; align-items: center; gap: 0.3rem;
   min-width: 0; flex: 1;
   overflow: hidden; text-overflow: ellipsis;
 }
-.play-card__back-player.is-winner .play-card__back-player-name { color: var(--accent); font-weight: 600; }
-/* Registered players become clickable links to a profile; ghost rows
-   stay as plain text. Inherit colour so the row treatment is unchanged
-   visually until hover. */
+.play-card__back-player.is-winner .play-card__back-player-name {
+  color: var(--accent); font-weight: 700;
+}
 .play-card__back-player-link {
   color: inherit;
   cursor: pointer;
@@ -2606,7 +2623,21 @@ body {
 .play-card__back-player-score {
   font-family: var(--font-display); font-weight: 700;
 }
+.play-card__back-player.is-winner .play-card__back-player-score {
+  color: var(--accent);
+}
 .play-card__back-empty { font-size: 0.85rem; opacity: 0.6; }
+
+.play-card__back-notes {
+  margin-top: auto;
+  padding: 10px 2px 2px;
+  border-top: 1px dashed oklch(var(--b3));
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: oklch(var(--bc) / 0.78);
+}
 
 .play-card__back-loading,
 .play-card__back-error {
@@ -2618,19 +2649,19 @@ body {
 }
 .play-card__back-error { color: var(--error, #e54d4d); opacity: 1; }
 
-/* Maximize button — top-right of the front face, opens the full play-detail
+/* Maximize button — top-right of the back face, opens the full play-detail
    page. data-no-flip in the markup keeps the article-level click handler
-   from flipping the card when tapped. */
+   from flipping the card back when tapped. */
 .play-card__maximize {
   position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
+  top: 8px;
+  right: 8px;
   width: 1.75rem;
   height: 1.75rem;
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: oklch(var(--b1) / 0.7);
+  background: oklch(var(--b1) / 0.8);
   border: 1px solid oklch(var(--b3));
   color: oklch(var(--bc));
   cursor: pointer;
@@ -2649,16 +2680,35 @@ body {
    .play-card (reused via window.renderPlayCard) — flip in place still
    works because the 3D rotation lives on the card itself, not the rail. */
 .play-session {
+  position: relative;
   background: oklch(var(--b2));
   border: 1px solid oklch(var(--b3));
-  border-radius: 1rem;
-  padding: 0.75rem 0 0.45rem;
+  /* Brass spine connects the session header to its rail of polaroids
+     down the right edge — the app's gold accent ties the group together
+     while each card keeps its own --game-accent inside. */
+  border-right: 3px solid var(--accent);
+  border-radius: 1rem 0.35rem 0.35rem 1rem;
+  padding: 0.75rem 0 0.55rem;
   box-shadow: 0 1px 3px oklch(0 0 0 / 0.18);
   animation: fadeUp 200ms ease both;
 }
+/* Brass dot caps the gold spine at the top-right corner of the session so
+   the connector reads as a deliberate marker rather than a stray border. */
+.play-session::before {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  right: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px oklch(var(--b1)), 0 1px 2px oklch(0 0 0 / 0.4);
+  z-index: 2;
+}
 .play-session__header {
-  display: flex; align-items: baseline; justify-content: space-between;
-  padding: 0 0.95rem;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 1.5rem 0 0.95rem;
   margin-bottom: 0.55rem;
   gap: 0.5rem;
 }
@@ -2684,18 +2734,25 @@ body {
 .play-session__name:hover { text-decoration: underline; }
 .play-session__scroll {
   display: flex;
-  gap: 0.6rem;
+  gap: 1rem;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
-  padding: 0 0.95rem 0.35rem;
+  padding: 0.5rem 0.95rem 0.5rem;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
   align-items: flex-start;        /* heights vary; don't stretch siblings */
 }
 .play-session__scroll > .play-card {
-  flex: 0 0 86%;                  /* ~14% of next card peeks on the right */
+  flex: 0 0 78%;                  /* ~22% of next card peeks on the right */
   scroll-snap-align: start;
 }
+/* Polaroid fan — gentle alternating tilts inside the rail. Applied to
+   the outer article only; the .play-card__inner flip transform is
+   undisturbed. */
+.play-session__scroll > .play-card:nth-child(4n+1) { transform: rotate(-1.4deg); }
+.play-session__scroll > .play-card:nth-child(4n+2) { transform: rotate(0.8deg); }
+.play-session__scroll > .play-card:nth-child(4n+3) { transform: rotate(-0.4deg); }
+.play-session__scroll > .play-card:nth-child(4n)   { transform: rotate(1.2deg); }
 /* Date is already in the session header — hide the per-card timestamp so
    we don't echo "Today" four times. */
 .play-session .play-card__time { display: none; }
