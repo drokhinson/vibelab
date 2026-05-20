@@ -2917,9 +2917,16 @@ body {
   background: var(--polaroid-line); opacity: 0.7;
   color: var(--polaroid-ink-soft);
 }
-.hot-game-tile__body { padding: 0.4rem 0.55rem; }
-.hot-game-tile__name { font-size: 0.85rem; font-weight: 600; line-height: 1.2; color: var(--polaroid-ink); }
-.hot-game-tile__plays { font-size: 0.72rem; color: var(--polaroid-muted); margin-top: 0.15rem; }
+.hot-game-tile__body { padding: 0.4rem 0.55rem; min-width: 0; }
+.hot-game-tile__name {
+  font-size: 0.85rem; font-weight: 600; line-height: 1.2;
+  color: var(--polaroid-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hot-game-tile__plays {
+  font-size: 0.72rem; color: var(--polaroid-muted); margin-top: 0.15rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .buddy-tile {
   flex: 0 0 130px;
