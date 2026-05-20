@@ -298,10 +298,8 @@
     _setPlayMode(mode) {
       if (!['competitive', 'team', 'coop'].includes(mode)) return;
       this._ps.playMode = mode;
-      // Switching modes can invalidate the current winner state. Don't auto-
-      // clear: the user might have a partial setup we'd rather preserve, and
-      // re-clicking the trophy is one tap. Just re-render so the UI swaps.
       this._ps.persist();
+      this._autoSelectWinners();
       this.render();
     }
 
@@ -663,6 +661,7 @@
         p.roundScores.push(null);
       }
       this._ps.persist();
+      this._autoSelectWinners();
       this.render();
     }
 
@@ -676,8 +675,47 @@
       }
       if (removed) {
         this._ps.persist();
+        this._autoSelectWinners();
         this.render();
       }
+    }
+
+    // Auto-pick winners from current totals. Skips co-op (own outcome UI) and
+    // skips when no scores have been entered yet so the trophies don't
+    // disappear before the user types anything. Overwrites is_winner — manual
+    // overrides via the trophy button get reset on the next score change, by
+    // design ("Live, always" per user choice).
+    _autoSelectWinners() {
+      const ps = this._ps;
+      if (!ps || !ps.players || ps.players.length === 0) return;
+      if (this._resolvePlayMode() === 'coop') return;
+
+      const totals = ps.players.map(
+        (p) => (p.roundScores || []).reduce((a, b) => a + (Number(b) || 0), 0)
+      );
+      if (totals.every((t) => t === 0)) return;
+
+      if (this._resolvePlayMode() === 'team') {
+        // Empty team tag → that player is their own group of one, matching
+        // _toggleWinner's "no team = individual" behavior.
+        const groupKey = (p, i) => {
+          const tag = (p.team || '').trim().toLowerCase();
+          return tag || `__solo_${i}`;
+        };
+        const groupTotals = new Map();
+        ps.players.forEach((p, i) => {
+          const key = groupKey(p, i);
+          groupTotals.set(key, (groupTotals.get(key) || 0) + totals[i]);
+        });
+        const max = Math.max(...groupTotals.values());
+        ps.players.forEach((p, i) => {
+          p.is_winner = groupTotals.get(groupKey(p, i)) === max;
+        });
+      } else {
+        const max = Math.max(...totals);
+        ps.players.forEach((p, i) => { p.is_winner = totals[i] === max; });
+      }
+      ps.persist();
     }
 
     _setInitials(i, value) {
@@ -707,11 +745,13 @@
         if (teammateWon !== p.is_winner) {
           p.is_winner = teammateWon;
           this._ps.persist();
+          this._autoSelectWinners();
           this.render();
           return;
         }
       }
       ps.persist();
+      this._autoSelectWinners();
     }
 
     _setRoundScore(playerIndex, roundIndex, value) {
@@ -722,11 +762,21 @@
       // don't force a 0 into the cell.
       p.roundScores[roundIndex] = value === "" ? null : Number(value);
       this._ps.persist();
-      // Update only the total cell so the input doesn't lose focus on each
-      // keystroke — find the cell via its column index.
-      const totals = this.container.querySelectorAll(".scoring-total");
-      const total = (p.roundScores || []).reduce((a, b) => a + (Number(b) || 0), 0);
-      if (totals[playerIndex]) totals[playerIndex].textContent = String(total);
+      this._autoSelectWinners();
+      // Surgically rewrite the totals row only. A full render() would blow
+      // away the focused <input> mid-keystroke and dismiss the mobile keyboard.
+      // The round-row score inputs live in sibling <tr>s so they're untouched.
+      const totalsRow = this.container.querySelector(".scoring-total-row");
+      if (totalsRow) {
+        const mode = this._resolvePlayMode();
+        totalsRow.innerHTML = `<th>Total</th>` + this._ps.players.map((pl, i) =>
+          this._renderTotalsCell(
+            pl, i, mode,
+            (pl.roundScores || []).reduce((a, b) => a + (Number(b) || 0), 0)
+          )
+        ).join("");
+        if (window.lucide) window.lucide.createIcons();
+      }
     }
 
     // ── Photo ────────────────────────────────────────────────────────────────
@@ -811,6 +861,7 @@
     _removePlayer(i) {
       this._ps.players.splice(i, 1);
       this._ps.persist();
+      this._autoSelectWinners();
       this.render();
     }
 

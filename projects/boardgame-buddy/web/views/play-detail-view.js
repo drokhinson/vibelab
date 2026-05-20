@@ -34,6 +34,7 @@
       this._error = null;
       this._editing = false;
       this._draft = null;
+      this._saving = false;
       this.render();
       try {
         this._play = await window.Play.get(playId);
@@ -387,6 +388,7 @@
       // default — `router.back` falls back to that if there's no history).
       if (window.store && window.store.invalidate) window.store.invalidate("feed");
       if (this._draft) this._clearPendingPhoto(this._draft);
+      this._saving = false;
       window.router.back("feed");
     }
 
