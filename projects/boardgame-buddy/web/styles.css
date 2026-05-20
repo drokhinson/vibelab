@@ -1451,9 +1451,38 @@ body {
 .btm-nav {
   padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
 }
+/* The active tab gets a warm brass-gold gradient pill behind it and the
+   icon flips to dark mahogany ink, so the selection reads at a glance. */
+.btm-nav button {
+  position: relative;
+  transition: color 180ms ease;
+}
 .btm-nav button.active {
-  color: var(--accent);
-  border-top-color: var(--accent);
+  color: #1a120a;
+  border-top-color: transparent;
+}
+.btm-nav button.active::before {
+  content: "";
+  position: absolute;
+  inset: 4px 8px;
+  border-radius: 12px;
+  background: linear-gradient(
+    150deg,
+    #f6cf6a 0%,
+    var(--accent) 45%,
+    #a16f12 100%
+  );
+  box-shadow: 0 4px 12px -4px rgba(201, 146, 42, 0.55),
+              inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  z-index: 0;
+  pointer-events: none;
+}
+.btm-nav button.active > * {
+  position: relative;
+  z-index: 1;
+}
+.btm-nav button.active .btm-nav-label {
+  font-weight: 600;
 }
 
 /* ── Tabs — warm gold active state ──────────────────────────────────────────── */
@@ -4731,12 +4760,33 @@ main[data-view="session-viewer"]:not(.hidden) {
   z-index: 3;
 }
 
-/* Invite-code card. Cream polaroid with the brass-orange code centered. */
+/* Invite-code card. Cream polaroid with the brass-orange code centered.
+   Trailing slot is the "Join someone else's session instead" pill. */
 .cascade-card--invite {
   display: grid;
-  grid-template-columns: 36px 1fr;
+  grid-template-columns: 36px 1fr auto;
   align-items: center;
   gap: 12px;
+}
+.cascade-invite__join {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.cascade-invite__join:hover {
+  background: var(--polaroid-accent);
+  color: #fff;
+  border-color: var(--polaroid-accent);
 }
 .cascade-invite__icon {
   width: 36px;

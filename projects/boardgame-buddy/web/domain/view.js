@@ -106,9 +106,15 @@
         el.classList.toggle("hidden", !authed);
       });
 
-      // Bottom-nav active state (only when authed).
+      // Bottom-nav active state (only when authed). When data-nav-views is
+      // present on a button, it lists every view name that should keep the
+      // tab highlighted — so the Log tab stays active across the chooser,
+      // play-flow, join-session, and session-viewer mirror.
       document.querySelectorAll(".btm-nav button").forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset.nav === name);
+        const views = btn.dataset.navViews
+          ? btn.dataset.navViews.split(",").map((s) => s.trim())
+          : [btn.dataset.nav];
+        btn.classList.toggle("active", views.includes(name));
       });
 
       if (window.lucide) window.lucide.createIcons();

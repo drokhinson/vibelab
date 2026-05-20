@@ -68,11 +68,20 @@
     async _teardown() {
       this._stopPolling();
       this._guideWidget = null;
-      if (this._phaseOff) { try { await this._phaseOff(); } catch (_) {} }
+      // Fire-and-forget Realtime cleanup so a stuck channel can't block
+      // bottom-nav navigation. removeChannel awaits an unsubscribe ack that
+      // may never arrive if the socket never reached READY.
+      if (this._phaseOff) {
+        const off = this._phaseOff;
+        Promise.resolve().then(() => off()).catch(() => {});
+      }
       this._phaseOff = null;
-      if (this._liveOff) this._liveOff();
+      if (this._liveOff) { try { this._liveOff(); } catch (_) {} }
       this._liveOff = null;
-      if (this._liveScores) { try { await this._liveScores.stop(); } catch (_) {} }
+      if (this._liveScores) {
+        const live = this._liveScores;
+        Promise.resolve().then(() => live.stop()).catch(() => {});
+      }
       this._liveScores = null;
     }
 
