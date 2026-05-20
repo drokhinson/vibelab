@@ -97,16 +97,13 @@
     const gameName = escapeHtml(g.name || "Unknown game");
     const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${jsStr(g.name || "")}'})`;
 
-    // Winner caption — show "You" when the viewer won, the winner's name
-    // otherwise. Score (if known) sits next to the brass star.
-    const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
-    const winnerName = card.winner_display_name
-      ? (winnerIsSelf ? "You" : escapeHtml(card.winner_display_name))
-      : "";
-    const winnerScore = winnerScoreFor(card);
-    const winnerBlock = winnerName
-      ? `<span class="win">${winnerName}${winnerScore != null ? ` ✶ <span class="win-score">${escapeHtml(String(winnerScore))}</span>` : ""}</span>`
-      : "";
+    // Caption "winner" block. Three modes:
+    //   - cooperative + any winners → "We beat the game" (brass win style)
+    //   - cooperative + no winners  → "The game won" (muted, no star)
+    //   - competitive               → winner name(s) ✶ score (or just name)
+    // Coop renderings don't list players because everyone won/lost together
+    // and the joined name list overruns the caption on big tables.
+    const winnerBlock = buildWinnerBlock(card, me);
 
     // The game thumbnail only appears as a corner badge when the user
     // uploaded their own photo — otherwise the game art *is* the hero.
@@ -137,20 +134,47 @@
          </div>`
       : `<div class="play-card__photo" style="${photoStyle}">${statusOverlayHtml}</div>`;
 
-    // Front-side notes only on the standalone polaroid — strip cards keep the
-    // caption tight so multiple cards still fit comfortably in the rail.
-    const notesBlock = (variant === "single" && card.notes)
-      ? `<p class="play-card__notes">${escapeHtml(card.notes)}</p>`
-      : "";
+    // Notes live exclusively on the back of the card now — the front stays
+    // tight (photo + caption) so cards in a strip line up cleanly.
+    //
+    // Long winners ("Wolfgang Theresa, britt.michaela, …") get bumped onto
+    // their own row below the title where they scroll horizontally inside
+    // the polaroid frame. Threshold is text-only; the photo onload pass
+    // can later flip the class if the rendered text actually overflows.
+    const winnerText = stripTags(winnerBlock);
+    const longThreshold = variant === "strip" ? 18 : 28;
+    const wrapClass = winnerText.length > longThreshold ? " has-long-meta" : "";
 
     return `
       ${photoHtml}
-      <div class="play-card__caption">
+      <div class="play-card__caption${wrapClass}">
         <a class="play-card__caption-name" data-no-flip onclick="${gameNav}">${gameName}</a>
         <div class="play-card__caption-meta">${winnerBlock}</div>
       </div>
-      ${notesBlock}
     `;
+  }
+
+  function stripTags(html) {
+    return String(html).replace(/<[^>]*>/g, "");
+  }
+
+  // Build the "won" caption span:
+  //   coop + any winners → brass "We beat the game"
+  //   coop + no winners  → grey  "The game won"
+  //   competitive        → "<You|Name> ✶ <score>" (score omitted if unknown)
+  // Returns "" when there's nothing to say (competitive, no winner yet).
+  function buildWinnerBlock(card, me) {
+    const playMode = card.play_mode || "competitive";
+    if (playMode === "cooperative") {
+      return card.winner_display_name
+        ? `<span class="win">We beat the game</span>`
+        : `<span class="win-loss">The game won</span>`;
+    }
+    if (!card.winner_display_name) return "";
+    const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
+    const winnerName = winnerIsSelf ? "You" : escapeHtml(card.winner_display_name);
+    const winnerScore = winnerScoreFor(card);
+    return `<span class="win">${winnerName}${winnerScore != null ? ` ✶ <span class="win-score">${escapeHtml(String(winnerScore))}</span>` : ""}</span>`;
   }
 
   function winnerScoreFor(card) {

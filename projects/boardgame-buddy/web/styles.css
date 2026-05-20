@@ -2521,38 +2521,61 @@ body {
 }
 
 /* ── Caption row ──────────────────────────────────────────────────────────
-   Game name on the left in Fraunces serif; winner on the right with a brass
-   star + JetBrains Mono score so the number lines up cleanly. */
+   Default: game name left, winner right on a single row. When the winner
+   text is long (set by JS via .has-long-meta on the caption), the meta
+   drops to its own row below the title and scrolls horizontally inside
+   the polaroid frame instead of clipping. */
 .play-card__caption {
+  width: 100%;
   padding: 14px 4px 4px;
   display: flex;
+  flex-wrap: nowrap;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: baseline;
   gap: 10px;
+}
+.play-card__caption.has-long-meta {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px 10px;
 }
 .play-card__caption-name {
   font-family: var(--font-polaroid);
   font-weight: 700;
   font-size: 22px;
-  line-height: 1;
+  line-height: 1.05;
   letter-spacing: -0.01em;
   color: var(--polaroid-ink);
   cursor: pointer;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.play-card__caption.has-long-meta .play-card__caption-name {
+  flex: 0 0 100%;            /* claim the first row entirely */
+}
 .play-card__caption-name:hover { text-decoration: underline; }
 .play-card__caption-meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   text-align: right;
   font-size: 11px;
   color: var(--polaroid-muted);
   font-weight: 500;
   letter-spacing: 0.02em;
-  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: none;
 }
+.play-card__caption.has-long-meta .play-card__caption-meta {
+  flex: 0 0 100%;            /* full-width scroll lane on row 2 */
+  text-align: left;
+}
+.play-card__caption-meta::-webkit-scrollbar { display: none; }
 .play-card__caption-meta .win {
   display: inline-flex;
   align-items: center;
@@ -2565,30 +2588,32 @@ body {
   font-family: var(--font-score);
   font-weight: 700;
 }
-
-/* Front-side notes (single card only) — italic serif so it reads like a
-   handwritten margin caption on the polaroid. */
-.play-card__notes {
-  font-family: var(--font-polaroid);
+/* Coop loss state — same slot as the win chip but grey so it reads as a
+   neutral outcome rather than a brag. */
+.play-card__caption-meta .win-loss {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--polaroid-muted);
+  font-weight: 600;
+  font-size: 12px;
   font-style: italic;
-  font-size: 14px;
-  color: var(--polaroid-ink-soft);
-  padding: 6px 4px 0;
-  line-height: 1.4;
-  font-weight: 500;
 }
 
 /* ── Size variants ─────────────────────────────────────────────────────── */
 .play-card--strip {
-  flex: 0 0 200px;            /* default before image decodes */
+  flex: 0 0 240px;            /* default before image decodes (matches landscape) */
+  min-width: 220px;           /* never let the polaroid get smaller than this */
   scroll-snap-align: start;
 }
-.play-card--strip.is-landscape { flex: 0 0 240px; }
-.play-card--strip.is-portrait  { flex: 0 0 160px; }
+.play-card--strip.is-landscape { flex: 0 0 260px; }
+.play-card--strip.is-portrait  { flex: 0 0 220px; }
 .play-card--strip .play-card__caption       { padding: 10px 2px 2px; }
-.play-card--strip .play-card__caption-name  { font-size: 16px; }
+.play-card--strip .play-card__caption-name  { font-size: 17px; }
 .play-card--strip .play-card__caption-meta  { font-size: 10px; }
 .play-card--strip .play-card__caption-meta .win { font-size: 11px; }
+.play-card--strip .play-card__caption-meta .win-loss { font-size: 11px; }
+.play-card--single { min-width: 280px; }
 
 /* ── Back face ────────────────────────────────────────────────────────── */
 .play-card__back-head {
@@ -2623,19 +2648,27 @@ body {
 }
 .play-card__back-players {
   list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: 6px;
 }
 .play-card__back-player {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  /* All rows share the same padding + transparent border so the gold pill
+     on the winner row doesn't shift its name column rightward relative
+     to the losers. */
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   font-size: 14px;
   color: var(--polaroid-ink);
   font-weight: 500;
 }
 .play-card__back-player.is-winner {
   font-weight: 700;
+  background: linear-gradient(90deg, rgba(229,192,74,0.28), rgba(229,192,74,0.08));
+  border-color: rgba(229,192,74,0.5);
 }
 .play-card__back-player-name {
   display: inline-flex;
@@ -2649,12 +2682,9 @@ body {
 }
 .play-card__back-player.is-winner .play-card__back-player-name {
   color: var(--polaroid-ink);
-}
-.play-card__back-player.is-winner .play-card__back-player-name::before {
-  /* Crown marks the winner on the back-side scoreboard. Using a glyph keeps
-     the marker visible even when the trophy lucide icon hasn't yet hydrated. */
-  content: "👑";
-  font-size: 13px;
+  /* Names stay left-aligned across winner and loser rows — the gold pill
+     background is the winner indicator, so no leading crown that would
+     shove the winner's name a glyph-width to the right. */
 }
 .play-card__back-player-link {
   color: inherit;
