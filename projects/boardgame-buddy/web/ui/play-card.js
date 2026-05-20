@@ -65,73 +65,73 @@
     const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${jsStr(g.name || "")}'})`;
 
     const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
-    const winnerLabel = card.winner_display_name
-      ? (winnerIsSelf ? "You" : escapeHtml(card.winner_display_name))
-      : "";
-    const winnerChip = winnerLabel
-      ? `<span class="play-card__polaroid-winner">
-           <i data-lucide="trophy" class="w-3 h-3"></i> ${winnerLabel} won
+    const winnerChip = card.winner_display_name
+      ? `<span class="play-card__meta-chip play-card__meta-chip--winner">
+           <i data-lucide="trophy" class="w-3.5 h-3.5"></i> ${winnerIsSelf ? "You" : escapeHtml(card.winner_display_name)} won
          </span>`
       : "";
+    const notesBlock = card.notes ? `<p class="play-card__notes">${escapeHtml(card.notes)}</p>` : "";
 
     // Status overlay reads the viewer's collection map straight from the
     // store so it stays in sync without threading state through the feed.
+    // The status picker patches the same map on mutation (see status-tag.js),
+    // so a tap → pick cycle reflects in the card immediately.
     const statusMap = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
     const gameStatus = (g.id && statusMap[g.id]) || null;
     const statusOverlay = g.id
       ? `<span class="play-card__status-overlay" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true })}</span>`
       : "";
 
-    // Polaroid photo window. Hero image priority:
-    //   1. card.photo_url — user's session snapshot
-    //   2. game.thumbnail_url / image_url — fallback
-    //   3. game-accent gradient placeholder (no image at all)
-    // When the snapshot is present, the box-art badge sits in the
-    // bottom-right corner of the window and carries the status pill.
-    // When the snapshot is absent and the box-art itself fills the
-    // window, the corner thumb is suppressed (no duplicate art) and the
-    // status pill anchors to the window directly.
-    let photoWindow;
+    // Layout split by presence of a user-uploaded photo:
+    //   - With user photo: stretched hero + corner box-art badge carrying
+    //     the owned/played status pill (so the toggle anchors to the game,
+    //     not the user's snapshot).
+    //   - Without: a horizontal row — square box art on the left (status
+    //     pill on the box-art's top-right), winner chip on the right —
+    //     then notes at full width below.
+    let body = "";
     if (hasUserPhoto) {
-      photoWindow = `
-        <div class="play-card__polaroid-photo has-photo">
-          <img class="play-card__polaroid-photo-img"
-               src="${escapeAttr(card.photo_url)}" alt="" loading="lazy" />
+      body = `
+        <div class="play-card__photo">
+          <img class="play-card__photo-img" src="${escapeAttr(card.photo_url)}" alt="" loading="lazy" />
           ${gameThumb ? `
-            <div class="play-card__polaroid-cover" data-no-flip onclick="${gameNav}">
+            <div class="play-card__game-overlay" data-no-flip onclick="${gameNav}">
               <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
               ${statusOverlay}
             </div>` : ""}
         </div>
+        ${winnerChip ? `<div class="play-card__meta-row">${winnerChip}</div>` : ""}
+        ${notesBlock}
       `;
     } else if (gameThumb) {
-      photoWindow = `
-        <div class="play-card__polaroid-photo is-cover" data-no-flip onclick="${gameNav}">
-          <img class="play-card__polaroid-photo-img"
-               src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
-          ${statusOverlay}
+      body = `
+        <div class="play-card__no-photo-row">
+          <div class="play-card__box" data-no-flip onclick="${gameNav}">
+            <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
+            ${statusOverlay}
+          </div>
+          <div class="play-card__no-photo-meta">
+            ${winnerChip}
+          </div>
         </div>
+        ${notesBlock}
       `;
     } else {
-      photoWindow = `
-        <div class="play-card__polaroid-photo is-placeholder">
-          <i data-lucide="dice-6" class="play-card__polaroid-placeholder-icon"></i>
-          ${statusOverlay}
-        </div>
+      // No photo and no box art — show whatever meta we have on its own.
+      body = `
+        ${winnerChip ? `<div class="play-card__meta-row">${winnerChip}</div>` : ""}
+        ${notesBlock}
       `;
     }
 
-    const notesBlock = card.notes
-      ? `<p class="play-card__polaroid-notes">${escapeHtml(card.notes)}</p>`
-      : "";
-
+    // The "User played Game" attribution moved up to the session header so
+    // the card front just announces which game this card is. Date moved
+    // with it (session header shows Today / Yesterday / Mon 15 once).
     return `
-      ${photoWindow}
-      <div class="play-card__polaroid-caption">
-        <a class="play-card__polaroid-name" data-no-flip onclick="${gameNav}">${gameName}</a>
-        ${winnerChip}
-      </div>
-      ${notesBlock}
+      <header class="play-card__header">
+        <a class="play-card__game-link" data-no-flip onclick="${gameNav}">${gameName}</a>
+      </header>
+      ${body}
     `;
   }
 
@@ -156,8 +156,6 @@
       .map((w) => (myName && w.name === myName) ? "You" : escapeHtml(w.name))
       .join(", ");
     const detailNav = `event.stopPropagation(); window.router.go('play-detail',{playId:'${escapeAttr(card.play_id)}'})`;
-    const dateLabel = formatPlayedAt(p.played_at || card.played_at);
-    const notesText = p.notes || card.notes || "";
     return `
       <button class="play-card__maximize" data-no-flip
               aria-label="Open play details"
@@ -167,7 +165,6 @@
       </button>
       <header class="play-card__back-head">
         <span class="play-card__back-title">${escapeHtml(p.game_name || (card.game && card.game.name) || "")}</span>
-        ${dateLabel ? `<span class="play-card__back-date">${escapeHtml(dateLabel)}</span>` : ""}
       </header>
 
       ${winners.length > 0 ? `
@@ -188,8 +185,6 @@
                 <span class="play-card__back-player-score">${pl.score != null ? pl.score : ""}</span>
               </li>`).join("")}
       </ul>
-
-      ${notesText ? `<p class="play-card__back-notes">${escapeHtml(notesText)}</p>` : ""}
     `;
   }
 
