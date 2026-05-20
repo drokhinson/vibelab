@@ -150,10 +150,8 @@
         ${this._renderPlayModeSelector()}
 
         <section class="log-play__section">
-          <div class="log-play__players-head">
-            <label class="log-play__label">Players</label>
-            ${this._renderSessionChip()}
-          </div>
+          <label class="log-play__label">Players</label>
+          ${this._renderInvitePanel()}
           ${ps.players.length === 0 ? `<p class="text-sm opacity-60 mb-2">No players added yet.</p>` : ""}
           <ul class="log-play__players">
             ${ps.players.map((p, i) => this._renderPlayerRow(p, i)).join("")}
@@ -161,7 +159,7 @@
           <div class="log-play__player-add">
             <div class="log-play__buddy-combo">
               <input id="log-play-buddy-input"
-                     class="input input-bordered input-sm w-full"
+                     class="input input-bordered w-full"
                      placeholder="Add player (buddy or free-text)"
                      autocomplete="off"
                      oninput="window.logPlayView._onBuddyInput(this.value)"
@@ -171,7 +169,7 @@
               <ul id="log-play-buddy-dropdown" class="log-play__buddy-dropdown hidden"
                   onmousedown="event.preventDefault()"></ul>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="window.logPlayView._addPlayerFromInput()">Add</button>
+            <button class="btn btn-primary" onclick="window.logPlayView._addPlayerFromInput()">Add</button>
           </div>
         </section>
 
@@ -198,30 +196,44 @@
       `;
     }
 
-    _renderSessionChip() {
-      // Inline session-code control lives alongside the Players label.
-      // - No active lobby → tiny "+ Code" button to spin one up.
-      // - Active lobby   → compact pill with the code + an × to end. The
-      //   poll loop merges joining players straight into the players list,
-      //   so there's no separate participants display to clutter the panel.
+    _renderInvitePanel() {
+      // Session-code invite block above the player list.
+      // - No active lobby → explainer + primary button to spin one up.
+      // - Active lobby   → table-readable code so other players can join
+      //   from across the table. The poll loop merges joining players
+      //   straight into the players list, so there's no separate
+      //   participants display.
       if (!this._lobby) {
         return `
-          <button class="session-chip session-chip--add" title="Create a code others can join with"
-                  onclick="window.logPlayView._openLobby()">
-            <i data-lucide="qr-code" class="w-3 h-3"></i>
-            <span>Session code</span>
-          </button>
+          <div class="session-invite">
+            <span class="session-invite__icon">
+              <i data-lucide="qr-code" class="w-4 h-4"></i>
+            </span>
+            <div class="session-invite__body">
+              <span class="session-invite__title">Playing in person?</span>
+              <span class="session-invite__hint">Share a code so others can join from their phone.</span>
+            </div>
+            <button class="btn btn-primary btn-sm session-invite__action"
+                    onclick="window.logPlayView._openLobby()">
+              Generate code
+            </button>
+          </div>
         `;
       }
       return `
-        <span class="session-chip session-chip--active" title="Players can join with this code">
-          <i data-lucide="qr-code" class="w-3 h-3"></i>
-          <span class="session-chip__code">${escape(this._lobby.code)}</span>
-          <button class="session-chip__end" title="End session"
+        <div class="session-invite session-invite--active">
+          <span class="session-invite__icon">
+            <i data-lucide="qr-code" class="w-4 h-4"></i>
+          </span>
+          <div class="session-invite__body">
+            <span class="session-invite__title">Session code</span>
+            <span class="session-invite__code">${escape(this._lobby.code)}</span>
+          </div>
+          <button class="session-invite__end" title="End session"
                   onclick="window.logPlayView._closeLobby()">
-            <i data-lucide="x" class="w-3 h-3"></i>
+            <i data-lucide="x" class="w-4 h-4"></i>
           </button>
-        </span>
+        </div>
       `;
     }
 

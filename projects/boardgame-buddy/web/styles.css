@@ -1295,6 +1295,44 @@ body {
     0 0 18px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
+/* ── Collection: extended "+ Game" floating action button ─────────────────
+   Visible only on the Profile → Collection sub-tab. Routes to game-search.
+   Pinned above the bottom nav, matching the .fab-log-play positioning. */
+.fab-add-game {
+  position: fixed;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.7rem 1.1rem;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: var(--accent);
+  color: #1a1208;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.5),
+    0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
+  cursor: pointer;
+  z-index: 40;
+  transition: transform 120ms ease, background 120ms ease;
+}
+.fab-add-game:hover  { transform: translateY(-2px); background: var(--accent-hover); }
+.fab-add-game:active { transform: translateY(0); }
+.fab-add-game:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.fab-add-game svg { width: 18px; height: 18px; stroke-width: 2.5; }
+
+/* Pin the FAB to the same 480px column as the bottom nav on desktop so it
+   sits inside the phone shell rather than drifting into the gutter. */
+@media (min-width: 520px) {
+  .fab-add-game {
+    right: max(20px, calc(50vw - 220px));
+  }
+}
+
 /* ── Browse: floating import button ─────────────────────────────────────── */
 .fab-import {
   position: fixed;
@@ -3520,20 +3558,27 @@ body {
 
 /* ── Search view ──────────────────────────────────────────────────────────── */
 .search-topbar {
-  display: flex; align-items: center; gap: 0.5rem;
+  display: flex; align-items: center; gap: 0.6rem;
+  min-height: 52px;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid oklch(var(--b3));
+}
+.search-topbar .btn-sm {
+  min-height: 44px; height: 44px;
+  padding-inline: 0.75rem;
 }
 .search-form {
   position: relative; flex: 1;
   display: flex; align-items: center;
 }
-.search-form__icon { position: absolute; left: 0.7rem; opacity: 0.6; pointer-events: none; }
+.search-form__icon { position: absolute; left: 0.85rem; opacity: 0.6; pointer-events: none; }
 .search-form__input {
   width: 100%; background: oklch(var(--b2));
   border: 1px solid oklch(var(--b3));
   border-radius: 999px;
-  padding: 0.55rem 2rem 0.55rem 2.1rem;
+  padding: 0.75rem 2.25rem 0.75rem 2.4rem;
+  font-size: 0.95rem;
+  min-height: 44px;
 }
 .search-form__clear {
   position: absolute; right: 0.5rem;
@@ -3609,12 +3654,12 @@ body {
   scrollbar-width: thin;
 }
 .filter-chip {
-  padding: 0.25rem 0.65rem;
+  padding: 0.4rem 0.85rem;
   border-radius: 999px;
   background: oklch(var(--b1));
   border: 1px solid oklch(var(--b3));
   color: oklch(var(--bc));
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -3974,54 +4019,83 @@ body {
 .avatar-bubble--xs { width: 26px; height: 26px; font-size: 0.7rem; }
 .log-play__save { padding-top: 1rem; }
 
-/* ── Players-section header row with inline session-code chip ─────────── */
-.log-play__players-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.3rem;
-}
-.log-play__players-head .log-play__label { margin: 0; }
-.session-chip {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  padding: 0.18rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  line-height: 1;
-  font-weight: 600;
-  cursor: pointer;
-  background: oklch(var(--b2));
-  color: oklch(var(--bc) / 0.78);
+/* ── Session invite block ─────────────────────────────────────────────────
+   Sits at the top of the Players section. Idle: explainer + "Generate code"
+   button. Active: large readable code so other players can read it across
+   the table, with an × to end the session. */
+.session-invite {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.65rem 0.8rem;
+  margin-bottom: 0.6rem;
+  border-radius: 0.6rem;
   border: 1px dashed oklch(var(--b3));
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  background: oklch(var(--b2));
+  transition: background 0.15s, border-color 0.15s;
 }
-.session-chip:hover { color: var(--accent); border-color: var(--accent); }
-.session-chip--active {
-  background: var(--accent);
-  color: #1a1208;
-  border: 1px solid var(--accent);
-  cursor: default;
-  letter-spacing: 0.04em;
-  padding: 0.28rem 0.6rem;
-}
-.session-chip__code {
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  color: #1a1208;
-}
-.session-chip__end {
+.session-invite__icon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 1rem; height: 1rem;
-  background: transparent;
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  border-radius: 999px;
+  background: oklch(var(--b3));
+  color: var(--accent);
+}
+.session-invite__body {
+  flex: 1;
+  display: flex; flex-direction: column; gap: 0.15rem;
+  min-width: 0;
+}
+.session-invite__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: oklch(var(--bc));
+}
+.session-invite__hint {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  line-height: 1.3;
+}
+.session-invite__action {
+  flex-shrink: 0;
+}
+
+.session-invite--active {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #1a1208;
+  align-items: center;
+}
+.session-invite--active .session-invite__icon {
+  background: rgba(26, 18, 8, 0.15);
+  color: #1a1208;
+}
+.session-invite--active .session-invite__title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #1a1208;
+  opacity: 0.75;
+}
+.session-invite__code {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  line-height: 1.1;
+  color: #1a1208;
+}
+.session-invite__end {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem;
+  background: rgba(26, 18, 8, 0.12);
   border: none;
   border-radius: 999px;
-  color: inherit;
-  opacity: 0.85;
+  color: #1a1208;
   cursor: pointer;
   padding: 0;
+  transition: background 0.15s;
 }
-.session-chip__end:hover { background: oklch(0 0 0 / 0.18); opacity: 1; }
+.session-invite__end:hover { background: rgba(26, 18, 8, 0.22); }
 .log-play__topbar--center { justify-content: center; }
 
 /* ── Scoring rounds table ─────────────────────────────────────────────────── */

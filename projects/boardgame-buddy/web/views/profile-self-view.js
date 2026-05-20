@@ -450,18 +450,15 @@
         <div class="profile-panel">
           <div class="profile-panel__controls">
             <input id="collection-search-input"
-                   class="input input-bordered input-sm flex-1 min-w-0"
+                   class="input input-bordered flex-1 min-w-0"
                    placeholder="Search your collection by name"
                    autocomplete="off"
                    value="${escapeAttr(this._collectionQuery)}"
                    oninput="window.profileSelfView._onCollectionSearchInput(this.value)" />
-            <button class="btn btn-ghost btn-sm relative" title="Filters"
+            <button class="btn btn-ghost relative" title="Filters"
                     onclick="window.profileSelfView._toggleCollectionFilters()">
               <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
               ${activeFilterCount > 0 ? `<span class="search-filter-badge">${activeFilterCount}</span>` : ""}
-            </button>
-            <button class="btn btn-ghost btn-sm" onclick="window.router.go('game-search')">
-              <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
           </div>
           <header class="profile-collection__head">
@@ -477,6 +474,11 @@
           ${this._renderWishlistSection(wishlistTotalPages)}
           ${this._renderPlayedSection(playedTotalPages)}
         </div>
+        <button class="fab-add-game" onclick="window.router.go('game-search')"
+                aria-label="Add a game to your collection">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Game</span>
+        </button>
       `;
     }
 
