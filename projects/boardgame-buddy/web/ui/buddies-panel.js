@@ -264,8 +264,11 @@
               <div class="buddies-row__name">${escape(b.other_display_name)}</div>
               <div class="buddies-row__when">${sub}</div>
             </div>
-            <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();${hostRef}._unfriend('${b.id}')">
-              <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
+            <button class="btn btn-ghost btn-xs bgb-destructive-icon-btn"
+                    aria-label="Remove buddy"
+                    title="Remove buddy"
+                    onclick="event.stopPropagation();${hostRef}._unfriend('${b.id}')">
+              <i data-lucide="x" class="w-4 h-4"></i>
             </button>
           </li>`;
       }).join("");
