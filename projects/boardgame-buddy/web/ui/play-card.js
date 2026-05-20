@@ -111,15 +111,26 @@
     const gameThumb = g.thumbnail_url || g.image_url || "";
     const statusMap = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
     const gameStatus = (g.id && statusMap[g.id]) || null;
+    // Status pill placement:
+    //  - User uploaded a session photo → pin to TOP-right of the photo so
+    //    it doesn't pile up against the game-thumbnail badge in the bottom
+    //    corner.
+    //  - No session photo (game art fills the slot) → keep at bottom-right
+    //    as before.
+    const statusTopClass = hasUserPhoto ? " is-top" : "";
     const statusOverlayHtml = g.id
-      ? `<span class="play-card__status-overlay" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true })}</span>`
+      ? `<span class="play-card__status-overlay${statusTopClass}" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true })}</span>`
       : "";
 
+    // Game thumbnail badge: only appears when the user uploaded their own
+    // session photo (otherwise the game image IS the photo slot). The status
+    // pill is no longer nested inside the badge — they live as siblings on
+    // the photo so the pill stays anchored to its bottom-right home.
     const badgeHtml = (hasUserPhoto && gameThumb)
       ? `<div class="play-card__game-overlay" data-no-flip onclick="${gameNav}">
            <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
-           ${statusOverlayHtml}
-         </div>`
+         </div>
+         ${statusOverlayHtml}`
       : statusOverlayHtml;
 
     const photoStyle = `--photo-aspect:${aspect}`;
@@ -158,23 +169,51 @@
     return String(html).replace(/<[^>]*>/g, "");
   }
 
-  // Build the "won" caption span:
-  //   coop + any winners → brass "We beat the game"
-  //   coop + no winners  → grey  "The game won"
-  //   competitive        → "<You|Name> ✶ <score>" (score omitted if unknown)
-  // Returns "" when there's nothing to say (competitive, no winner yet).
+  // Build the "won" caption span. Three buckets:
+  //   - all-or-nothing (coop, OR everyone won, OR nobody won) →
+  //       any winners → "We won!" / "They won!"     (brass)
+  //       no winners  → "We lost" / "They lost"     (grey/italic)
+  //   - standard competitive (a single named winner) →
+  //       "<You|Name> ✶ <score>" (score omitted if unknown)
+  // "We" vs "They" depends on whether the viewer is in the play (logged it
+  // OR appears in participants).
   function buildWinnerBlock(card, me) {
     const playMode = card.play_mode || "competitive";
-    if (playMode === "cooperative") {
-      return card.winner_display_name
-        ? `<span class="win">We beat the game</span>`
-        : `<span class="win-loss">The game won</span>`;
+    const winnerCount = countWinners(card.winner_display_name);
+    const participantTotal = card.participant_count || 0;
+    const everyoneWon = participantTotal > 0 && winnerCount > 0 && winnerCount >= participantTotal;
+    const nobodyWon = winnerCount === 0;
+    const teamBucket = (playMode === "cooperative") || everyoneWon || nobodyWon;
+    const we = viewerInPlay(card, me) ? "We" : "They";
+
+    if (teamBucket) {
+      return winnerCount > 0
+        ? `<span class="win">${we} won!</span>`
+        : `<span class="win-loss">${we} lost</span>`;
     }
     if (!card.winner_display_name) return "";
     const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
     const winnerName = winnerIsSelf ? "You" : escapeHtml(card.winner_display_name);
     const winnerScore = winnerScoreFor(card);
     return `<span class="win">${winnerName}${winnerScore != null ? ` ✶ <span class="win-score">${escapeHtml(String(winnerScore))}</span>` : ""}</span>`;
+  }
+
+  // `winner_display_name` is a comma-joined list of winners (one entry for a
+  // single winner, multiple for team / coop wins, null when nobody won).
+  // Names normally don't contain commas so a comma-split is reliable enough
+  // for the UI bucket selection.
+  function countWinners(raw) {
+    if (!raw) return 0;
+    return String(raw).split(",").map((s) => s.trim()).filter(Boolean).length;
+  }
+
+  // True when the viewer's user_id matches the play logger or any visible
+  // participant. Used to pick "We" vs "They" in the team-outcome caption.
+  function viewerInPlay(card, me) {
+    if (!me || !me.id) return false;
+    if (card.user && card.user.id === me.id) return true;
+    const ps = card.participants || [];
+    return ps.some((p) => p && p.user_id === me.id);
   }
 
   function winnerScoreFor(card) {

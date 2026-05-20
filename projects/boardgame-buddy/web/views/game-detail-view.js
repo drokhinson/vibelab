@@ -413,7 +413,8 @@
         await window.Game.adminSetRulebookUrl(this._game.id, trimmed);
         await this._reload();
       } catch (e) {
-        alert(`Failed to set rulebook URL: ${(e && e.message) || e}`);
+        const status = e && e.status ? ` (HTTP ${e.status})` : "";
+        alert(`Failed to set rulebook URL${status}: ${(e && e.message) || e}`);
       }
     }
 
@@ -423,7 +424,17 @@
         await window.Game.adminSetRulebookUrl(this._game.id, null);
         await this._reload();
       } catch (e) {
-        alert(`Failed to delete rulebook URL: ${(e && e.message) || e}`);
+        // 404 on a delete usually means the URL is already gone (game record
+        // dropped, or the admin endpoint isn't deployed on this environment
+        // yet). Refresh the view so the user sees the current state instead
+        // of a scary error toast — the no-rulebook state is the goal anyway.
+        if (e && e.status === 404) {
+          console.warn("Rulebook delete 404 — refreshing view", e);
+          await this._reload();
+          return;
+        }
+        const status = e && e.status ? ` (HTTP ${e.status})` : "";
+        alert(`Failed to delete rulebook URL${status}: ${(e && e.message) || e}`);
       }
     }
 

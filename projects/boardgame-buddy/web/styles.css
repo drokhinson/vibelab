@@ -2491,6 +2491,13 @@ body {
   bottom: 6px;
   z-index: 3;
 }
+/* On cards with a user-uploaded session photo the game-thumbnail badge
+   owns the bottom-right corner — so the status pill moves up to the
+   top-right of the photo. */
+.play-card__status-overlay.is-top {
+  top: 6px;
+  bottom: auto;
+}
 .play-card__game-overlay {
   position: absolute;
   right: 8px;
@@ -2508,10 +2515,6 @@ body {
 }
 .play-card__game-overlay img {
   width: 100%; height: 100%; object-fit: cover; display: block;
-}
-.play-card__game-overlay .play-card__status-overlay {
-  right: 2px;
-  bottom: 2px;
 }
 .play-card--strip .play-card__game-overlay {
   width: 38px;
@@ -2848,7 +2851,9 @@ body {
 .play-session__name:hover { text-decoration: underline; }
 
 /* Multi-card rail — horizontal scroll of polaroid strip cards. Padded
-   generously so the tilted edges don't clip against the viewport. */
+   generously so the tilted edges don't clip against the viewport. Cards
+   are vertically centered so landscape (shorter) polaroids don't float at
+   the top of the row next to taller portrait neighbours. */
 .play-session__scroll {
   display: flex;
   gap: 16px;
@@ -2858,7 +2863,7 @@ body {
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  align-items: flex-start;
+  align-items: center;
 }
 .play-session__scroll::-webkit-scrollbar { display: none; }
 
