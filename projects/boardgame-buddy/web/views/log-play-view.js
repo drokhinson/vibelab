@@ -90,6 +90,13 @@
     }
 
     async _discard() {
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Discard this play?",
+        body: "The lobby will close and the in-progress draft will be cleared.",
+        confirmLabel: "Discard",
+        cancelLabel: "Keep playing",
+      });
+      if (!ok) return;
       const ps = window.PlaySession.load();
       if (ps && ps.code) {
         // Best-effort: tell the server to abandon the existing session
