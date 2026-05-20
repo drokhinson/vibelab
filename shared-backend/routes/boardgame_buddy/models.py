@@ -415,6 +415,12 @@ class ExpansionColorUpdate(BaseModel):
     color: str
 
 
+class RulebookUrlUpdate(BaseModel):
+    """Admin override to set or clear a game's rulebook_url. Pass null to clear."""
+
+    rulebook_url: Optional[str] = None
+
+
 # ── Mutual buddy graph (migration 008) ────────────────────────────────────────
 
 class BuddyEdgeResponse(BaseModel):

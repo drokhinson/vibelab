@@ -4339,6 +4339,18 @@ body {
   background: var(--accent);
   color: #1a0d00;
 }
+/* Admin "add" variant — shown when no rulebook URL is set yet. Reads as
+   the same slot in the action row but visually invites a tap-to-fill
+   instead of the greyed/struck-through "not available" state. */
+.game-detail__link-btn--add {
+  background: transparent;
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+}
+.game-detail__link-btn--add:hover:not(:disabled) {
+  background: rgba(201, 146, 42, 0.12);
+  filter: none;
+}
 /* Greyed + crossed-out variant rendered when the underlying link
    (`bgg_id` / `rulebook_url`) is unavailable. Keeps the button slot in
    the row so the action layout stays consistent across games. */
