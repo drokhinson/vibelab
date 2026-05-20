@@ -53,9 +53,16 @@
 
     async onUnmount() {
       this._stopLobbyPoll();
-      if (this._liveOff) this._liveOff();
+      if (this._liveOff) { try { this._liveOff(); } catch (_) {} }
       this._liveOff = null;
-      if (this._liveScores) await this._liveScores.stop();
+      // Fire-and-forget: supabase-js removeChannel awaits an unsubscribe ack
+      // that never arrives if the socket never reached READY (e.g. when the
+      // migration hasn't been applied yet or RLS denies SELECT). Awaiting it
+      // would freeze the bottom-nav navigation.
+      if (this._liveScores) {
+        const live = this._liveScores;
+        Promise.resolve().then(() => live.stop()).catch(() => {});
+      }
       this._liveScores = null;
     }
 
@@ -268,6 +275,12 @@
             <span class="cascade-invite__code">${escape(code || "— — — — —")}</span>
             <span class="cascade-invite__hint">Open until you start the game.</span>
           </div>
+          <button class="cascade-invite__join"
+                  onclick="window.router.go('join-session')"
+                  title="Join someone else's session instead">
+            <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+            <span>Join</span>
+          </button>
         </section>
 
         <section class="cascade-card">

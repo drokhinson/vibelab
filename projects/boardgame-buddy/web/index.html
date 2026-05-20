@@ -73,13 +73,18 @@
     <div id="toast" class="toast toast-end toast-top hidden z-50"></div>
   </div>
 
-  <!-- Bottom nav: Feed | Log | Profile -->
+  <!-- Bottom nav: Feed | Log | Profile.
+       data-nav is the destination on tap; data-nav-views (when present)
+       is a comma-separated list of view names that keep this tab marked
+       active — so the Log tab stays gold throughout play-flow, the join
+       chooser, and the joiner's session-viewer mirror. -->
   <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
     <button data-nav="feed">
       <i data-lucide="home" class="w-5 h-5"></i>
       <span class="btm-nav-label text-xs">Feed</span>
     </button>
-    <button data-nav="log-play">
+    <button data-nav="play-flow"
+            data-nav-views="play-flow,log-play,join-session,session-viewer">
       <i data-lucide="plus-circle" class="w-5 h-5"></i>
       <span class="btm-nav-label text-xs">Log</span>
     </button>
