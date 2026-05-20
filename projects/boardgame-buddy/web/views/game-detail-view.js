@@ -151,13 +151,7 @@
                                 title="No BGG link available">
                 <i data-lucide="external-link" class="w-4 h-4"></i> BGG
               </button>`}
-              ${g.rulebookUrl() ? `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--rulebook"
-                                     href="${g.rulebookUrl()}" target="_blank" rel="noopener">
-                <i data-lucide="book-open" class="w-4 h-4"></i> Rulebook
-              </a>` : `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--disabled" disabled
-                                title="No rulebook available">
-                <i data-lucide="book-open" class="w-4 h-4"></i> Rulebook
-              </button>`}
+              ${this._renderRulebookButton(g)}
             </div>
             ${g.description ? `<div class="game-detail__desc">${stripHtml(g.description)}</div>` : ""}
             ${this._renderExpansions()}
@@ -367,6 +361,103 @@
         this._guide.setExpansionMeta({ [this._game.id]: { name: this._game.name, color: null } });
       }
       this._guide.mount(host);
+    }
+
+    // Rulebook button. Three shapes:
+    //  - has URL → link out, opens in new tab. Admins additionally get a
+    //    long-press handler that prompts to delete the URL.
+    //  - no URL + admin → "+ Rulebook" button that prompts for a URL and
+    //    writes it via the admin endpoint.
+    //  - no URL + non-admin → the original greyed-out button.
+    _renderRulebookButton(g) {
+      const me = window.store && window.store.get && window.store.get("user");
+      const isAdmin = !!(me && me.is_admin);
+      const url = g.rulebookUrl();
+      if (url) {
+        const adminAttrs = isAdmin
+          ? ` onpointerdown="window.gameDetailView._rulebookHoldStart(event)"
+              onpointerup="window.gameDetailView._rulebookHoldEnd(event)"
+              onpointercancel="window.gameDetailView._rulebookHoldEnd(event)"
+              onpointerleave="window.gameDetailView._rulebookHoldEnd(event)"
+              onclick="if(window.gameDetailView._rulebookSuppressClick(event)){return false;}"
+              title="Long-press to delete rulebook (admin)"`
+          : "";
+        return `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--rulebook"
+                   href="${url}" target="_blank" rel="noopener"${adminAttrs}>
+                  <i data-lucide="book-open" class="w-4 h-4"></i> Rulebook
+                </a>`;
+      }
+      if (isAdmin) {
+        return `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--add"
+                        onclick="window.gameDetailView._promptAddRulebook()"
+                        title="Set rulebook URL (admin)">
+                  <i data-lucide="plus" class="w-4 h-4"></i> Rulebook
+                </button>`;
+      }
+      return `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--disabled" disabled
+                      title="No rulebook available">
+                <i data-lucide="book-open" class="w-4 h-4"></i> Rulebook
+              </button>`;
+    }
+
+    async _promptAddRulebook() {
+      const url = window.prompt("Rulebook URL", "https://");
+      if (url == null) return;                    // user hit Cancel
+      const trimmed = url.trim();
+      if (!trimmed) return;
+      if (!/^https?:\/\//i.test(trimmed)) {
+        alert("Rulebook URL must start with http:// or https://");
+        return;
+      }
+      try {
+        await window.Game.adminSetRulebookUrl(this._game.id, trimmed);
+        await this._reload();
+      } catch (e) {
+        alert(`Failed to set rulebook URL: ${(e && e.message) || e}`);
+      }
+    }
+
+    async _promptDeleteRulebook() {
+      if (!confirm("Delete the rulebook URL for this game?")) return;
+      try {
+        await window.Game.adminSetRulebookUrl(this._game.id, null);
+        await this._reload();
+      } catch (e) {
+        alert(`Failed to delete rulebook URL: ${(e && e.message) || e}`);
+      }
+    }
+
+    async _reload() {
+      // Bust the cached detail bundle and re-render so the new state shows.
+      // _load() reads this.params, so no arg needed — just refresh.
+      window.Game.invalidateBundle(this._game.id);
+      await this._load();
+    }
+
+    // Long-press detector. Starts a 600ms timer on pointerdown; if it fires
+    // before pointerup, the delete prompt opens and a "suppress next click"
+    // flag is raised so the link doesn't ALSO navigate to the rulebook PDF.
+    _rulebookHoldStart(event) {
+      this._rulebookHoldTimer = setTimeout(() => {
+        this._rulebookHoldTimer = null;
+        this._rulebookSuppressNextClick = true;
+        this._promptDeleteRulebook();
+      }, 600);
+    }
+    _rulebookHoldEnd(event) {
+      if (this._rulebookHoldTimer) {
+        clearTimeout(this._rulebookHoldTimer);
+        this._rulebookHoldTimer = null;
+      }
+    }
+    _rulebookSuppressClick(event) {
+      if (this._rulebookSuppressNextClick) {
+        this._rulebookSuppressNextClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+      }
+      return false;
     }
 
     _startPlay() {

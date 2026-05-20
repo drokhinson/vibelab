@@ -97,6 +97,13 @@
     static adminRefreshAllImages() {
       return window.api.post("/games/refresh-images");
     }
+
+    /** Admin: set or clear a game's rulebook URL. Pass null/"" to clear. */
+    static adminSetRulebookUrl(gameId, url) {
+      const cleaned = (url || "").trim() || null;
+      return window.api.patch(`/games/admin/${gameId}/rulebook-url`, { rulebook_url: cleaned })
+        .then((r) => { Game.invalidateBundle(gameId); return r; });
+    }
   }
 
   window.Game = Game;

@@ -56,7 +56,7 @@ def _invalidate_game_caches(bgg_id: Optional[int] = None) -> None:
     invalidate_bgg_thing_cache()
 from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
 from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
-from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse
+from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse, RulebookUrlUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -859,6 +859,46 @@ async def refresh_single_game_images(
     if not refreshed.data:
         raise HTTPException(status_code=500, detail="Failed to update game row")
     return GameSummary(**refreshed.data[0])
+
+
+@router.patch(
+    "/games/admin/{game_id}/rulebook-url",
+    response_model=GameSummary,
+    status_code=200,
+    summary="Set or clear a game's rulebook URL (admin)",
+)
+async def update_game_rulebook_url(
+    body: RulebookUrlUpdate,
+    game_id: str = Path(..., description="Game UUID"),
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> GameSummary:
+    """Admin-only: write rulebook_url on a game row. Pass null to clear it."""
+    sb = get_supabase()
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select("id")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    # Minimal http(s) validation — accept null/empty to clear, otherwise must
+    # look like a URL. Anything richer than this we leave to the admin's eyes.
+    url = body.rulebook_url.strip() if body.rulebook_url else None
+    if url and not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="rulebook_url must start with http:// or https://")
+
+    updated = (
+        sb.table("boardgamebuddy_games")
+        .update({"rulebook_url": url})
+        .eq("id", game_id)
+        .execute()
+    )
+    if not updated.data:
+        raise HTTPException(status_code=500, detail="Failed to update rulebook_url")
+    _invalidate_game_caches()
+    return GameSummary(**updated.data[0])
 
 
 @router.get(

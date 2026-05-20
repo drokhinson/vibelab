@@ -244,6 +244,7 @@ each missing game from the BGG XML API.
 - `GET  /api/v1/boardgame_buddy/games/admin/missing-images` — *admin-only* list of games whose `image_url` or `thumbnail_url` is NULL
 - `POST /api/v1/boardgame_buddy/games/admin/{game_id}/refresh-images` — *admin-only* re-fetch one game's box art + thumbnail from BGG and re-host in Storage
 - `POST /api/v1/boardgame_buddy/games/refresh-images` — *admin-only* bulk refresh of all games with missing or BGG-hosted image URLs
+- `PATCH /api/v1/boardgame_buddy/games/admin/{game_id}/rulebook-url` — *admin-only* set or clear a game's `rulebook_url` (body `{rulebook_url: string|null}`)
 
 ### Admin UI
 - Promote via **Settings** screen → "Have an admin key?" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the **Admin** screen with the chapter-reports moderation panel.
