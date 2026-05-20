@@ -273,12 +273,18 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_sessions (
   game_id UUID REFERENCES public.boardgamebuddy_games(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'open'
     CHECK (status IN ('open', 'finalized', 'abandoned')),
+  -- Host-driven cursor through the three-screen flow (migration 026). Drives
+  -- realtime phase fanout to joiners — `status` still gates expiry/finalize.
+  phase TEXT NOT NULL DEFAULT 'gather'
+    CHECK (phase IN ('gather', 'play', 'settle', 'finalized', 'abandoned')),
   finalized_play_id UUID REFERENCES public.boardgamebuddy_plays(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '2 hours'),
   finalized_at TIMESTAMPTZ
 );
 ALTER TABLE public.boardgamebuddy_play_sessions ENABLE ROW LEVEL SECURITY;
+-- Migration 026 adds a SELECT policy so authed joiners' anon-key Realtime
+-- subscriptions can resolve phase updates (host + participants only).
 
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -288,6 +294,19 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_participants (
   joined_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_play_session_participants ENABLE ROW LEVEL SECURITY;
+
+-- Per-player, per-round live scores during the Play phase (migration 026).
+-- Browser writes directly via anon key; RLS limits each row to (host of the
+-- session) OR (player_user_id = auth.uid()), and only while phase='play'.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_scores (
+  session_id     UUID NOT NULL REFERENCES public.boardgamebuddy_play_sessions(id) ON DELETE CASCADE,
+  player_user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  round_index    SMALLINT NOT NULL CHECK (round_index >= 0 AND round_index < 64),
+  score          INTEGER,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (session_id, player_user_id, round_index)
+);
+ALTER TABLE public.boardgamebuddy_play_session_scores ENABLE ROW LEVEL SECURITY;
 
 -- Per-user "this chapter is in my guide" rows (migration 018, renamed
 -- from boardgamebuddy_guide_selections). Presence = in guide, absence =
@@ -390,12 +409,14 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user_play
   WHERE player_user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_play
   ON public.boardgamebuddy_play_players (play_id);
--- Play sessions (migration 011).
+-- Play sessions (migration 011, phase added in 026).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_sessions_open_code
   ON public.boardgamebuddy_play_sessions (code)
   WHERE status = 'open';
 CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_host
   ON public.boardgamebuddy_play_sessions (host_user_id, status);
+CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_code_phase
+  ON public.boardgamebuddy_play_sessions (code, phase);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_session_user_unique
   ON public.boardgamebuddy_play_session_participants (session_id, user_id)
   WHERE user_id IS NOT NULL;
@@ -404,3 +425,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_session_guest_unique
   WHERE user_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_bgb_play_session_participants_session
   ON public.boardgamebuddy_play_session_participants (session_id);
+-- Live scoring (migration 026).
+CREATE INDEX IF NOT EXISTS idx_bgb_play_session_scores_session
+  ON public.boardgamebuddy_play_session_scores (session_id, round_index);

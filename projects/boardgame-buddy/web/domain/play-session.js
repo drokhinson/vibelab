@@ -23,6 +23,9 @@
       this.code         = initial.code || null;
       this.sessionId    = initial.sessionId || null;
       this.hostUserId   = initial.hostUserId || null;
+      // Cascade screen the host is currently on. Mirrors the backend
+      // `phase` column so a refresh resumes on the same screen.
+      this.phase        = initial.phase || "gather";
       this.photoBlob    = null; // in-memory only — never persisted
       this.photoUrl     = initial.photoUrl || null;
     }
@@ -50,6 +53,7 @@
         code: this.code,
         sessionId: this.sessionId,
         hostUserId: this.hostUserId,
+        phase: this.phase,
         photoUrl: this.photoUrl,
       };
       try { localStorage.setItem(LS_KEY, JSON.stringify(snapshot)); } catch (_) {}
@@ -65,6 +69,7 @@
       this.code = null;
       this.sessionId = null;
       this.hostUserId = null;
+      this.phase = "gather";
       this.photoBlob = null;
       this.photoUrl = null;
       if (this.photoPreviewUrl) {
@@ -107,6 +112,16 @@
 
     static finalizeLobby(code, payload) {
       return window.api.post(`/sessions/${code}/finalize`, payload);
+    }
+
+    // Host-only. Move the lobby through gather → play → settle, or abandon.
+    static advancePhase(code, phase) {
+      return window.api.patch(`/sessions/${code}/phase`, { phase });
+    }
+
+    // Joinable sessions for the current viewer (drives the Join chooser).
+    static listJoinable() {
+      return window.api.get("/sessions/joinable");
     }
 
     // Build the POST /plays body from this draft. Used both for solo logs and

@@ -3,12 +3,14 @@
 The "join a play in progress" flow. Host's phone calls POST /sessions to get
 a 5-char code; other phones call POST /sessions/{code}/join to enter the
 lobby. Both ends poll GET /sessions/{code} to refresh the participant list.
-The host calls POST /sessions/{code}/finalize with a PlayCreate body to turn
-the session into a real boardgamebuddy_plays row.
+The host walks the lobby through gather → play → settle via PATCH
+/sessions/{code}/phase, and joiners pick up phase changes via Supabase
+Realtime. POST /sessions/{code}/finalize converts the lobby to a real
+boardgamebuddy_plays row, merging in any live per-round scores the joiners
+wrote during the Play phase.
 
-Finalize composes session_service (mark-finalized) with the existing
-play-creation pipeline (delegated via a small helper here to avoid pulling
-play_routes into a circular import).
+Route order note: /sessions/joinable is declared before /sessions/{code} so
+the literal path wins over the slug.
 """
 
 import uuid
@@ -21,11 +23,13 @@ from . import router
 from .constants import PlaySessionStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import (
+    JoinableSessionsResponse,
     MessageResponse,
     PlayCreate,
     PlayResponse,
     SessionCreate,
     SessionJoinBody,
+    SessionPhaseUpdate,
     SessionResponse,
     SessionUpdateBody,
 )
@@ -49,6 +53,21 @@ async def create_session(
         user.display_name,
         game_id=body.game_id,
     )
+
+
+@router.get(
+    "/sessions/joinable",
+    response_model=JoinableSessionsResponse,
+    status_code=200,
+    summary="List active sessions the caller can join",
+)
+async def list_joinable_sessions(
+    user: CurrentUser = Depends(get_current_user),
+) -> JoinableSessionsResponse:
+    """Drives the Join chooser screen — sessions in phase=gather where the
+    caller is a participant, the host, or a buddy of the host."""
+    sessions = session_service.list_joinable(get_supabase(), user.user_id)
+    return JoinableSessionsResponse(sessions=sessions)
 
 
 @router.get(
@@ -108,6 +127,28 @@ async def update_session(
     )
 
 
+@router.patch(
+    "/sessions/{code}/phase",
+    response_model=SessionResponse,
+    status_code=200,
+    summary="Advance the session phase (host-only)",
+)
+async def update_session_phase(
+    body: SessionPhaseUpdate,
+    code: str = Path(..., description="Session code"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionResponse:
+    """Move the host's lobby along gather → play → settle, or abandon it.
+    Joiners watch the phase column via Realtime and auto-advance their
+    read-only mirror when the host moves forward."""
+    return session_service.update_phase(
+        get_supabase(),
+        viewer_id=user.user_id,
+        code=code,
+        next_phase=body.phase,
+    )
+
+
 @router.delete(
     "/sessions/{code}",
     response_model=MessageResponse,
@@ -137,19 +178,26 @@ async def finalize_session(
     """Write a single boardgamebuddy_plays row from the session's participants
     and mark the session finalized.
 
-    The host's PlayCreate body wins for game_id / played_at / players / etc.
-    Session participants are surfaced through the FE so the host can edit
-    them before calling finalize.
+    The host's PlayCreate body provides the game / players / mode / notes.
+    Live-scoring rows written by joiners during phase='play' are merged in
+    here: each authenticated player's `score` is overwritten by the sum of
+    their live rounds. Guest players (no user_id) keep the host's locally-
+    typed scores.
     """
     sb = get_supabase()
     session = session_service.get_session(sb, code)
     if session.host_user_id != user.user_id:
         raise HTTPException(status_code=403, detail="Only the host can finalize")
 
+    merged_players = session_service.merge_live_scores_into_players(
+        sb, session_id=session.id, players=body.players
+    )
+    merged_body = body.model_copy(update={"players": merged_players})
+
     # Defer to play_routes.log_play for the write — keeps the player /
     # expansion bookkeeping in one place. Local import dodges the circular
     # import at module load.
     from .play_routes import log_play  # noqa: WPS433
-    play = await log_play(body, user)
+    play = await log_play(merged_body, user)
     session_service.mark_finalized(sb, session.id, play.id)
     return play

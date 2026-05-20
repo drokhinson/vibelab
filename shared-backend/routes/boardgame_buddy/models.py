@@ -11,6 +11,7 @@ from .constants import (
     FeedCardKind,
     PlayMode,
     PlaySessionStatus,
+    SessionPhase,
 )
 
 
@@ -541,6 +542,10 @@ class SessionResponse(BaseModel):
     id: str
     code: str
     status: PlaySessionStatus
+    # Host-driven cursor through the Gather → Play → Settle Up flow
+    # (migration 026). Defaults to gather for legacy rows that pre-date
+    # the column.
+    phase: SessionPhase = SessionPhase.GATHER
     host_user_id: str
     game_id: Optional[str] = None
     game: Optional[GameSummary] = None
@@ -560,11 +565,40 @@ class SessionUpdateBody(BaseModel):
     game_id: Optional[str] = None
 
 
+class SessionPhaseUpdate(BaseModel):
+    phase: SessionPhase
+
+
 class SessionJoinBody(BaseModel):
     # Used only when the caller is not authenticated (guest join). When a real
     # user joins, the display_name is taken from their profile and this field
     # is ignored.
     display_name: Optional[str] = None
+
+
+class JoinableSession(BaseModel):
+    """A session the calling user can join from the Join chooser screen.
+
+    Surfaces sessions that are still in the gather phase where the viewer
+    is either (a) the host of the session — useful for refresh recovery,
+    (b) already listed as a participant — rejoin after a disconnect, or
+    (c) the host is one of the viewer's accepted buddies.
+    """
+
+    id: str
+    code: str
+    host_user_id: str
+    host_display_name: str
+    host_avatar_url: Optional[str] = None
+    game: Optional[GameSummary] = None
+    participant_count: int = 0
+    is_participant: bool = False
+    is_host_buddy: bool = False
+    created_at: datetime
+
+
+class JoinableSessionsResponse(BaseModel):
+    sessions: list[JoinableSession] = []
 
 
 # ── Unified search ────────────────────────────────────────────────────────────

@@ -13,6 +13,8 @@
   window.authView        = new window.AuthView();
   window.feedView        = new window.FeedView();
   window.logPlayView     = new window.LogPlayView();
+  window.playFlowView    = new window.PlayFlowView();
+  window.joinSessionView = new window.JoinSessionView();
   window.gameSearchView  = new window.GameSearchView();
   window.gameDetailView  = new window.GameDetailView();
   window.referenceGuideAddView = new window.ReferenceGuideAddView();
@@ -28,6 +30,8 @@
   window.router.register("auth",          window.authView);
   window.router.register("feed",          window.feedView);
   window.router.register("log-play",      window.logPlayView);
+  window.router.register("play-flow",     window.playFlowView);
+  window.router.register("join-session",  window.joinSessionView);
   window.router.register("game-search",   window.gameSearchView);
   window.router.register("game-detail",   window.gameDetailView);
   window.router.register("reference-guide-add", window.referenceGuideAddView);

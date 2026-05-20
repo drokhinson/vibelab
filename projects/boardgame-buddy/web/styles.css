@@ -4530,3 +4530,723 @@ body {
 .bgg-attribution-card a { color: var(--accent); text-decoration: underline; }
 .bgg-attribution-card__logo { display: block; margin-top: 0.5rem; }
 .bgg-attribution-card__logo img { max-height: 36px; }
+
+/* ── Cascade play flow (Gather → Play → Settle Up) ───────────────────────── */
+/* Three-screen guided log-play flow. The container snap-scrolls vertically;
+   each screen is a viewport-height block. Locked sections (the host hasn't
+   advanced yet) stay in the DOM but collapse out of snap pathing so the
+   ReferenceGuideScroll widget keeps its state across back/forward. */
+
+:root {
+  --cascade-bottom-pad: 96px;  /* room for the sticky CTA + iOS safe area */
+}
+
+/* The cascade lives inside <main data-view="play-flow"> which is flex-1
+   inside #app. Force the main to participate in a column-flex chain so
+   the inner .cascade-scroll can claim the remaining height without
+   hard-coding the global header height. */
+main[data-view="play-flow"],
+main[data-view="session-viewer"] {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cascade-scroll {
+  scroll-snap-type: y mandatory;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1;
+  min-height: 0;
+  scrollbar-width: none;
+}
+.cascade-scroll::-webkit-scrollbar { display: none; }
+
+.cascade-screen {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  /* Each screen fills the visible scroll-area exactly so snap lands on
+     screen boundaries. 70dvh keeps the screen workable on short
+     viewports (landscape phone) without hard-coding chrome heights. */
+  min-height: 100%;
+  padding: 12px 16px var(--cascade-bottom-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+}
+.cascade-screen.is-locked {
+  scroll-snap-align: none;
+  visibility: hidden;
+  height: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Screen header — title in Fraunces, monospace step indicator. */
+.cascade-screen__header {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding-top: 4px;
+}
+.cascade-screen__header--read .cascade-screen__step::before {
+  content: "";
+}
+.cascade-screen__header-body {
+  text-align: center;
+}
+.cascade-screen__title {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 1.1;
+  color: var(--polaroid-bg);
+  letter-spacing: -0.01em;
+}
+.cascade-screen__step {
+  display: block;
+  font-family: var(--font-score);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-top: 2px;
+}
+.cascade-back,
+.cascade-screen__close {
+  background: oklch(var(--b2) / 0.7);
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: oklch(var(--bc));
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.cascade-back:hover,
+.cascade-screen__close:hover {
+  background: oklch(var(--b3));
+}
+.cascade-back-spacer { display: inline-block; width: 32px; height: 32px; }
+
+/* Top "back" row used on join-session (single-screen view with a back to
+   the chooser). Same visual weight as .cascade-screen__header. */
+.cascade-back-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 4px 0 0;
+}
+.cascade-back-row__title {
+  text-align: center;
+  font-size: 22px;
+  color: var(--polaroid-bg);
+}
+
+/* Cards within a cascade screen — cream polaroid on the dark page bg. */
+.cascade-card {
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border-radius: 14px;
+  border: 1px solid var(--polaroid-line);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45),
+              0 2px 4px rgba(0, 0, 0, 0.18);
+  padding: 14px 14px 16px;
+  position: relative;
+}
+.cascade-card__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--polaroid-ink);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.cascade-card__error {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: rgba(200, 85, 61, 0.1);
+  color: var(--polaroid-accent);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* Subtle alternating tilt on decorative cards inside Gather. The scoring
+   table and reference-guide cards stay flat for legibility. */
+.cascade-screen#screen-gather > .cascade-card:nth-of-type(odd) {
+  transform: rotate(-0.4deg);
+}
+.cascade-screen#screen-gather > .cascade-card:nth-of-type(even) {
+  transform: rotate(0.35deg);
+}
+.cascade-card--scoring,
+.cascade-card--guide,
+.cascade-card--invite { transform: none !important; }
+
+/* CTA (Continue / Wrap up / Save play). Sticks to the bottom of each
+   screen so the user always sees the next-step button. */
+.cascade-cta-wrap {
+  position: sticky;
+  bottom: 12px;
+  margin-top: auto;
+  padding-top: 8px;
+  z-index: 2;
+}
+.cascade-cta {
+  width: 100%;
+  height: 52px;
+  border-radius: 999px;
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 10px 22px -8px rgba(201, 146, 42, 0.55);
+}
+.cascade-cta:hover { background: var(--accent-hover); }
+
+.cascade-error {
+  position: sticky;
+  bottom: 76px;
+  margin: 0 16px;
+  z-index: 3;
+}
+
+/* Invite-code card. Cream polaroid with the brass-orange code centered. */
+.cascade-card--invite {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.cascade-invite__icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--polaroid-line);
+  color: var(--polaroid-ink);
+  border-radius: 999px;
+}
+.cascade-invite__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cascade-invite__title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--polaroid-muted);
+}
+.cascade-invite__code {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  color: var(--polaroid-accent);
+}
+.cascade-invite__hint {
+  font-size: 11px;
+  color: var(--polaroid-muted);
+}
+
+/* Game pick row inside Gather */
+.cascade-game {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.cascade-game__thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--polaroid-line);
+}
+.cascade-game__thumb--placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--polaroid-muted);
+}
+.cascade-game__name {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 16px;
+}
+.cascade-game__sub { font-size: 11px; color: var(--polaroid-muted); }
+
+/* Player list */
+.cascade-players { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.cascade-player {
+  display: grid;
+  grid-template-columns: 1fr 56px auto;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  background: rgba(255, 251, 241, 0.55);
+  border: 1px solid var(--polaroid-line);
+  border-radius: 8px;
+}
+.cascade-player--read { grid-template-columns: 1fr auto; }
+.cascade-player__name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--polaroid-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cascade-player__init,
+.cascade-player__team {
+  background: var(--polaroid-bg);
+  border: 1px solid var(--polaroid-line);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-family: var(--font-score);
+  font-size: 12px;
+  text-align: center;
+  color: var(--polaroid-ink);
+}
+.cascade-player__team { width: 64px; }
+
+.cascade-player-add {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cascade-buddy-combo { position: relative; }
+.cascade-buddy-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border: 1px solid var(--polaroid-line);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  list-style: none;
+  padding: 4px;
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.cascade-buddy-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cascade-buddy-dropdown-item:hover { background: var(--polaroid-bg-soft); }
+.cascade-buddy-dropdown-name { font-size: 13px; }
+
+/* Expansions list in Gather reuses the regular expansion-list rows but
+   sits inside the cream polaroid card. */
+.cascade-card--expansions .collapsible-header {
+  color: var(--polaroid-ink);
+  background: transparent;
+  border: none;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-family: var(--font-polaroid);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.cascade-exp-list { list-style: none; padding: 0; margin: 8px 0 0; }
+.cascade-exp-row {
+  background: rgba(255, 251, 241, 0.55);
+  border: 1px solid var(--polaroid-line);
+}
+.cascade-exp-row.is-active { background: rgba(201, 146, 42, 0.15); border-color: var(--exp-color, var(--accent)); }
+.cascade-exp-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-muted);
+  border: 1px solid var(--polaroid-line);
+}
+.cascade-exp-toggle--on {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* Reference guide section header inside Play */
+.cascade-card--guide .cascade-rulebook-row { margin-bottom: 8px; }
+.cascade-card--guide #play-flow-guide-mount,
+.cascade-card--guide #session-viewer-guide-mount { background: transparent; }
+
+/* Settle Up: photo picker + notes */
+.cascade-photo {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--polaroid-line);
+}
+.cascade-photo img { width: 100%; display: block; }
+.cascade-photo__remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 251, 241, 0.9);
+  color: var(--polaroid-ink);
+}
+.cascade-photo__pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 12px;
+  border: 2px dashed var(--polaroid-line);
+  border-radius: 10px;
+  color: var(--polaroid-muted);
+  cursor: pointer;
+  background: rgba(255, 251, 241, 0.4);
+}
+.cascade-photo__pick:hover { background: rgba(255, 251, 241, 0.7); }
+.cascade-notes {
+  background: rgba(255, 251, 241, 0.6);
+  color: var(--polaroid-ink);
+  border-color: var(--polaroid-line);
+}
+
+/* ── Host/Join chooser ───────────────────────────────────────────────────── */
+.cascade-chooser__header { padding: 12px 4px 18px; text-align: center; }
+.cascade-chooser__header h1 {
+  font-size: 28px;
+  margin-bottom: 6px;
+  color: oklch(var(--bc));
+}
+.cascade-chooser__lead { font-size: 13px; opacity: 0.7; }
+.cascade-chooser__resume {
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border-radius: 14px;
+  border: 1px solid var(--polaroid-line);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.cascade-chooser__resume-title { font-family: var(--font-polaroid); font-weight: 700; font-size: 14px; }
+.cascade-chooser__resume-meta { display: block; font-size: 11px; color: var(--polaroid-muted); }
+.cascade-chooser__resume-actions { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+
+.cascade-chooser__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 24px;
+}
+.cascade-chooser__card {
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border: 1px solid var(--polaroid-line);
+  border-radius: 14px;
+  padding: 18px 16px;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  row-gap: 4px;
+  box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.45),
+              0 2px 4px rgba(0, 0, 0, 0.18);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+  cursor: pointer;
+}
+.cascade-chooser__card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px -14px rgba(0, 0, 0, 0.5);
+}
+.cascade-chooser__card--host { transform: rotate(-0.6deg); }
+.cascade-chooser__card--host:hover { transform: rotate(-0.6deg) translateY(-2px); }
+.cascade-chooser__card--join { transform: rotate(0.5deg); }
+.cascade-chooser__card--join:hover { transform: rotate(0.5deg) translateY(-2px); }
+.cascade-chooser__card-icon {
+  grid-row: 1 / span 2;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cascade-chooser__card-title {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 17px;
+}
+.cascade-chooser__card-body {
+  font-size: 12.5px;
+  color: var(--polaroid-muted);
+  line-height: 1.35;
+}
+
+/* ── Join Session view ───────────────────────────────────────────────────── */
+.cascade-join__code-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.cascade-join__code-input {
+  font-family: var(--font-score);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.cascade-join__list-wrap { margin-top: 18px; }
+.cascade-join__list-title {
+  font-family: var(--font-polaroid);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  margin: 0 4px 8px;
+  color: oklch(var(--bc));
+}
+.cascade-join__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.cascade-join__row {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 10px;
+  align-items: center;
+  cursor: pointer;
+}
+.cascade-join__row:hover { transform: translateY(-1px); }
+.cascade-join__row-thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--polaroid-line);
+}
+.cascade-join__row-thumb--placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--polaroid-muted);
+}
+.cascade-join__row-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cascade-join__row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.cascade-join__row-host { font-family: var(--font-polaroid); font-weight: 700; font-size: 14px; }
+.cascade-join__row-code {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--polaroid-accent);
+}
+.cascade-join__row-bottom {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--polaroid-muted);
+}
+.cascade-join__row-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.cascade-join__row-badges { display: flex; gap: 6px; margin-top: 4px; }
+.cascade-join__badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-muted);
+  border: 1px solid var(--polaroid-line);
+}
+.cascade-join__badge--rejoin { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cascade-join__empty {
+  background: var(--polaroid-bg);
+  color: var(--polaroid-muted);
+  border: 1px dashed var(--polaroid-line);
+  border-radius: 14px;
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+}
+.cascade-join__loading { text-align: center; padding: 20px 0; }
+
+/* ── Polaroid popup ──────────────────────────────────────────────────────── */
+.polaroid-popup__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 12, 10, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  animation: fadeIn 200ms ease-out both;
+}
+.polaroid-popup__card {
+  position: relative;
+  width: min(86vw, 320px);
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border-radius: 8px;
+  padding: 14px 14px 22px;
+  box-shadow: 0 22px 48px -14px rgba(0, 0, 0, 0.65),
+              0 4px 10px rgba(0, 0, 0, 0.35);
+  transform: rotate(-1.2deg);
+  animation: polaroidPopupIn 280ms cubic-bezier(.22, .61, .36, 1) both;
+  text-align: center;
+}
+@keyframes polaroidPopupIn {
+  from { opacity: 0; transform: translateY(20px) rotate(-1.2deg); }
+  to   { opacity: 1; transform: translateY(0) rotate(-1.2deg); }
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.polaroid-popup__close {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border: 1px solid var(--polaroid-line);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.polaroid-popup__photo {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--polaroid-line);
+  margin-bottom: 12px;
+}
+.polaroid-popup__photo--placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--polaroid-muted);
+}
+.polaroid-popup__title {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--polaroid-ink);
+  margin-bottom: 6px;
+}
+.polaroid-popup__winner {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(200, 85, 61, 0.12);
+  color: var(--polaroid-accent);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.polaroid-popup__winner--muted {
+  background: transparent;
+  color: var(--polaroid-muted);
+  font-weight: 500;
+}
+.polaroid-popup__view { margin-top: 10px; color: var(--polaroid-ink); }
+
+/* Read-only scoring cell on the joiner's grid. */
+.scoring-cell--read {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  text-align: center;
+  font-family: var(--font-score);
+  color: var(--polaroid-ink);
+  opacity: 0.85;
+}
+
+/* Scoring table inside a cream polaroid card — recolor to fit the
+   parchment surface (the legacy version sat on the dark page bg). */
+.cascade-card--scoring .scoring-table th,
+.cascade-card--scoring .scoring-table td {
+  border-bottom-color: var(--polaroid-line);
+  color: var(--polaroid-ink);
+}
+.cascade-card--scoring .scoring-cell {
+  background: rgba(255, 251, 241, 0.6);
+  border-color: var(--polaroid-line);
+  color: var(--polaroid-ink);
+  font-family: var(--font-score);
+}
+.cascade-card--scoring .scoring-cell:focus { border-color: var(--accent); }
+.cascade-card--scoring .scoring-total-row { background: rgba(218, 201, 164, 0.18); }
+.cascade-card--scoring .scoring-total {
+  font-family: var(--font-score);
+  color: var(--polaroid-accent);
+}
+.cascade-card--scoring .scoring-total-cell--winner { background: rgba(201, 146, 42, 0.18); }
+.cascade-card--scoring .scoring-winner-btn { color: rgba(29, 24, 18, 0.4); }
+.cascade-card--scoring .scoring-winner-btn:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+.cascade-card--scoring .scoring-winner-btn.is-winner { color: var(--polaroid-accent); }
+.cascade-card--scoring .scoring-round-remove { color: rgba(29, 24, 18, 0.45); }
+.cascade-card--scoring .scoring-round-remove:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+
+/* Play-mode selector inside the Gather cream card */
+.cascade-card .play-mode-selector { gap: 0.35rem; }
+.cascade-card .play-mode-opt {
+  background: rgba(255, 251, 241, 0.6);
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-ink);
+}
+.cascade-card .play-mode-opt.is-active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
