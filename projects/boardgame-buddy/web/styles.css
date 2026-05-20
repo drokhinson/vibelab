@@ -30,6 +30,19 @@
   --rust-soft:         rgba(166,93,44,0.28);
   --rust-strong:       rgba(166,93,44,0.85);
   --warm-gray-mid:     rgba(165,149,136,0.55); /* warm taupe-grey for inactive toggles */
+
+  /* Polaroid play-card palette — warm cream surface that reads like a real
+     instant photo on the dark luxury background. Kept independent from the
+     DaisyUI oklch theme so the cards stay legible on any future re-theme. */
+  --polaroid-bg:        #FFFBF1;
+  --polaroid-bg-soft:   #F5EEDC;
+  --polaroid-ink:       #1D1812;
+  --polaroid-ink-soft:  #4A3F2F;
+  --polaroid-muted:     #8B7E68;
+  --polaroid-line:      #DAC9A4;
+  --polaroid-accent:    #C8553D;
+  --font-polaroid:      'Fraunces', Georgia, serif;
+  --font-score:         'JetBrains Mono', ui-monospace, monospace;
 }
 
 /* ── Warm the luxury theme backgrounds (subtle amber tint) ───────────────────── */
@@ -2195,12 +2208,6 @@ body {
 }
 
 /* ── Play detail view ──────────────────────────────────────────────────────── */
-.play-card { cursor: pointer; }
-/* Apply hover lift on the front face so the parent's transform stays at
-   identity — keeping the 3D flip context clean. */
-.play-card:hover .play-card__front {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-}
 .play-photo {
   display: block;
   width: 100%;
@@ -2376,289 +2383,369 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ── Play card ──────────────────────────────────────────────────────────────
-   Two-faced flip card: tap the body to rotate to the back (players + scores
-   + edit). Game-name + box-art keep their own onclick to navigate to the
-   game detail page — those zones are marked `data-no-flip` in play-card.js. */
+/* ── Play card — Polaroid ──────────────────────────────────────────────────
+   The card reads like an instant photo pinned to the page: cream surface,
+   soft drop shadow, slight tilt, photo at the top in its natural aspect
+   ratio, big serif caption below. Three sizes via modifier classes:
+     .play-card--single                  → full-width standalone play
+     .play-card--strip.is-landscape      → in a multi-game session, wide photo
+     .play-card--strip.is-portrait       → in a multi-game session, tall photo
+   The flip mechanic, hydration on first flip, click routing, and the
+   scroll-position-preserving rerender are unchanged — see ui/play-card.js. */
 .play-card {
-  background: transparent;        /* faces carry the surface colour */
+  background: var(--polaroid-bg);
   border: none;
-  box-shadow: none;
-  padding: 0;
-  border-radius: 1rem;
-  animation: fadeUp 200ms ease both;
-  perspective: 1200px;
+  border-radius: 6px;
+  padding: 12px 12px 16px;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.04),
+              0 8px 24px -8px rgba(0,0,0,0.55),
+              0 2px 4px rgba(0,0,0,0.18);
+  perspective: 1500px;
   position: relative;
+  cursor: pointer;
+  color: var(--polaroid-ink);
+  /* Entrance animation lives on .play-session — putting it on the card
+     itself would override the per-card tilt below because the fadeUp
+     keyframe ends with `transform: translateY(0)` under `both` fill-mode.
+     Tilts are applied via the dedicated nth-child block below so toggling
+     `.no-tilt` kills them in one place. */
 }
 .play-card__inner {
   position: relative;
   width: 100%;
   transform-style: preserve-3d;
-  transition: transform 450ms cubic-bezier(.2,.7,.2,1);
-  /* Sized by the front face; the back is absolutely positioned on top so the
-     article height matches the front's natural height. When the back is
-     taller (long player list) the back grows naturally and the article
-     follows on flip. Handled with min-height in `.is-flipped` below. */
+  transition: transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 .play-card.is-flipped .play-card__inner { transform: rotateY(180deg); }
 
 .play-card__front,
 .play-card__back {
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-left: 3px solid var(--game-accent, var(--accent));
-  border-radius: 1rem;
-  padding: 0.85rem 0.95rem;
-  box-shadow: 0 1px 2px oklch(0 0 0 / 0.18);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
 .play-card__front {
-  /* Front owns the document flow so the article auto-sizes to it; the back
-     overlays via absolute positioning. */
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 .play-card__back {
   position: absolute;
   inset: 0;
   transform: rotateY(180deg);
+  background: var(--polaroid-bg);
+  border-radius: 6px;
+  padding: 18px 16px 14px;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  overflow: auto;
+  overflow: hidden;
 }
 
-.play-card__header {
-  display: flex; align-items: baseline; gap: 0.65rem;
-}
-/* Card header is now just the game name in the top-left. The "User played"
-   attribution + date live in the parent .play-session header, so each card
-   front announces only its game — no per-card date or echoed attribution. */
-.play-card__game-link {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--game-accent, var(--accent));
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.play-card__game-link:hover { text-decoration: underline; }
-.play-card__time {
-  font-size: 0.78rem;
-  opacity: 0.65;
-  flex-shrink: 0;
-}
+/* ── Tilts (isolated for easy kill-switch) ────────────────────────────────
+   Single-card polaroids alternate by their order in the feed; strip cards
+   alternate inside the rail. Add `.no-tilt` anywhere up the tree to flatten
+   every card without touching markup. */
+.play-card--single                                  { transform: rotate(-0.6deg); }
+.play-card--single:nth-of-type(even)                { transform: rotate( 0.8deg); }
+.play-session__scroll > .play-card--strip:nth-child(4n+1) { transform: rotate(-1.4deg); }
+.play-session__scroll > .play-card--strip:nth-child(4n+2) { transform: rotate( 0.8deg); }
+.play-session__scroll > .play-card--strip:nth-child(4n+3) { transform: rotate(-0.4deg); }
+.play-session__scroll > .play-card--strip:nth-child(4n)   { transform: rotate( 1.2deg); }
+.no-tilt .play-card,
+.no-tilt .play-card--single,
+.no-tilt .play-session__scroll > .play-card--strip { transform: none; }
+
+/* ── Photo frame ──────────────────────────────────────────────────────────
+   --photo-aspect is set inline by JS once the natural image dimensions are
+   known. Defaults to 1 so the placeholder square renders before decode. */
 .play-card__photo {
   position: relative;
-  margin-top: 0.55rem;
-  border-radius: 0.75rem;
+  width: 100%;
+  aspect-ratio: var(--photo-aspect, 1);
+  border-radius: 3px;
   overflow: hidden;
+  background: var(--polaroid-line);
+  flex-shrink: 0;
 }
-/* Status overlay sits in the top-right of the game image. When the card
-   has a user photo, the game image is the small thumbnail badge in the
-   photo's bottom-right corner; when there's no photo, it's the box-art
-   tile on the left of the row. Either way, the pill anchors to the game
-   image specifically — not to the user's snapshot. */
-.play-card__status-overlay {
+.play-card__photo::after {
+  /* Subtle bottom-edge darkening so a corner badge or status pill has a
+     consistent surface even on bright photos. */
+  content: "";
   position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
-  z-index: 3;
-}
-/* Inside the small game-thumbnail badge (~64×64) the default offset is
-   too generous — tighten it so the pill stays inside the badge. */
-.play-card__game-overlay .play-card__status-overlay {
-  top: 2px;
-  right: 2px;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 65%, rgba(0,0,0,0.18));
+  pointer-events: none;
 }
 .play-card__photo-img {
-  width: 100%;
-  max-height: 320px;
-  object-fit: contain;
-  background: oklch(var(--b3));
-  display: block;
-}
-/* Photo-less plays fall back to a horizontal row: square box art on the left,
-   winner chip + notes stacked to the right. The box art reads as a thumbnail
-   tied to the play rather than trying to act as a hero image. */
-.play-card__no-photo-row {
-  display: flex;
-  gap: 0.7rem;
-  margin-top: 0.55rem;
-  align-items: flex-start;
-}
-.play-card__box {
-  position: relative;
-  flex: 0 0 88px;
-  width: 88px;
-  height: 88px;
-  border-radius: 0.6rem;
-  overflow: hidden;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  cursor: pointer;
-}
-.play-card__box img {
-  width: 100%; height: 100%; object-fit: cover; display: block;
-}
-.play-card__no-photo-meta {
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column; gap: 0.4rem;
-  padding-top: 0.1rem;
-}
-.play-card__no-photo-meta .play-card__notes { margin-top: 0; }
-
-/* Strava-style "map overlay": box-art thumbnail floating in the bottom-right
-   corner of a user photo. Has its own shadow and border so it reads as a
-   secondary surface stacked over the primary media. */
-.play-card__game-overlay {
-  position: absolute;
-  right: 0.6rem;
-  bottom: 0.6rem;
-  width: 64px;
-  height: 64px;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  border: 2px solid oklch(var(--b1));
-  box-shadow: 0 4px 12px oklch(0 0 0 / 0.5), 0 0 0 1px oklch(0 0 0 / 0.2);
-  background: oklch(var(--b1));
-}
-.play-card__game-overlay img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.play-card__notes { margin-top: 0.45rem; font-size: 0.9rem; opacity: 0.85; }
 
-/* Winner + player-count + any other footnote chips live in one row with
-   a dot separator drawn via flex gaps + ::after pseudo-elements on all
-   but the last chip. */
-.play-card__meta-row {
-  display: flex; align-items: center; flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.55rem;
-  font-size: 0.78rem;
+/* Status overlay — bottom-right of the photo by default. When a game
+   thumbnail badge is also present, the pill nests inside the badge so the
+   "owned/played" state stays anchored to the game, not the user's snapshot. */
+.play-card__status-overlay {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 3;
 }
-.play-card__meta-chip {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  opacity: 0.7;
+.play-card__game-overlay {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--polaroid-bg);
+  border: 2px solid var(--polaroid-bg);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.35),
+              0 0 0 1px rgba(0,0,0,0.15);
+  z-index: 2;
+  cursor: pointer;
 }
-.play-card__meta-chip + .play-card__meta-chip::before {
-  content: "·";
-  margin-right: 0.4rem;
-  opacity: 0.5;
+.play-card__game-overlay img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
 }
-.play-card__meta-chip--winner {
-  color: var(--accent);
-  font-weight: 600;
-  opacity: 1;
+.play-card__game-overlay .play-card__status-overlay {
+  right: 2px;
+  bottom: 2px;
+}
+.play-card--strip .play-card__game-overlay {
+  width: 38px;
+  height: 38px;
+  right: 6px;
+  bottom: 6px;
 }
 
-/* ── Play card — back face (players / scores / edit) ────────────────────── */
+/* ── Caption row ──────────────────────────────────────────────────────────
+   Game name on the left in Fraunces serif; winner on the right with a brass
+   star + JetBrains Mono score so the number lines up cleanly. */
+.play-card__caption {
+  padding: 14px 4px 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+}
+.play-card__caption-name {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--polaroid-ink);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.play-card__caption-name:hover { text-decoration: underline; }
+.play-card__caption-meta {
+  text-align: right;
+  font-size: 11px;
+  color: var(--polaroid-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.play-card__caption-meta .win {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--polaroid-accent);
+  font-weight: 700;
+  font-size: 12px;
+}
+.play-card__caption-meta .win-score {
+  font-family: var(--font-score);
+  font-weight: 700;
+}
+
+/* Front-side notes (single card only) — italic serif so it reads like a
+   handwritten margin caption on the polaroid. */
+.play-card__notes {
+  font-family: var(--font-polaroid);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--polaroid-ink-soft);
+  padding: 6px 4px 0;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+/* ── Size variants ─────────────────────────────────────────────────────── */
+.play-card--strip {
+  flex: 0 0 200px;            /* default before image decodes */
+  scroll-snap-align: start;
+}
+.play-card--strip.is-landscape { flex: 0 0 240px; }
+.play-card--strip.is-portrait  { flex: 0 0 160px; }
+.play-card--strip .play-card__caption       { padding: 10px 2px 2px; }
+.play-card--strip .play-card__caption-name  { font-size: 16px; }
+.play-card--strip .play-card__caption-meta  { font-size: 10px; }
+.play-card--strip .play-card__caption-meta .win { font-size: 11px; }
+
+/* ── Back face ────────────────────────────────────────────────────────── */
 .play-card__back-head {
-  display: flex; align-items: baseline; gap: 0.5rem;
-  /* Reserve room on the right so the title doesn't run under the absolutely-
-     positioned maximize button that lives in the top-right corner. */
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
   padding-right: 2rem;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px dashed var(--polaroid-line);
 }
 .play-card__back-title {
   flex: 1; min-width: 0;
-  font-weight: 700; font-size: 0.95rem;
-  color: var(--game-accent, var(--accent));
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--polaroid-ink);
+  letter-spacing: -0.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.play-card__back-meta {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--polaroid-muted);
+  font-weight: 700;
+  flex-shrink: 0;
+}
 .play-card__back-winners {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  font-size: 0.82rem; font-weight: 600; color: var(--accent);
+  display: none;             /* winner already highlighted in the player list */
 }
 .play-card__back-players {
   list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 0.3rem;
+  display: flex; flex-direction: column; gap: 8px;
 }
 .play-card__back-player {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.35rem 0.55rem;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.55rem;
-  font-size: 0.85rem;
+  font-size: 14px;
+  color: var(--polaroid-ink);
+  font-weight: 500;
 }
-.play-card__back-player.is-winner { border-color: var(--accent); }
+.play-card__back-player.is-winner {
+  font-weight: 700;
+}
 .play-card__back-player-name {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  min-width: 0; flex: 1;
-  overflow: hidden; text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--polaroid-ink);
 }
-.play-card__back-player.is-winner .play-card__back-player-name { color: var(--accent); font-weight: 600; }
-/* Registered players become clickable links to a profile; ghost rows
-   stay as plain text. Inherit colour so the row treatment is unchanged
-   visually until hover. */
+.play-card__back-player.is-winner .play-card__back-player-name {
+  color: var(--polaroid-ink);
+}
+.play-card__back-player.is-winner .play-card__back-player-name::before {
+  /* Crown marks the winner on the back-side scoreboard. Using a glyph keeps
+     the marker visible even when the trophy lucide icon hasn't yet hydrated. */
+  content: "👑";
+  font-size: 13px;
+}
 .play-card__back-player-link {
   color: inherit;
   cursor: pointer;
 }
 .play-card__back-player-link:hover { text-decoration: underline; }
 .play-card__back-player-score {
-  font-family: var(--font-display); font-weight: 700;
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--polaroid-ink);
+  letter-spacing: -0.02em;
 }
-.play-card__back-empty { font-size: 0.85rem; opacity: 0.6; }
-
+.play-card__back-player.is-winner .play-card__back-player-score {
+  color: var(--polaroid-accent);
+}
+.play-card__back-empty {
+  font-size: 0.85rem;
+  color: var(--polaroid-muted);
+  text-align: center;
+  padding: 0.4rem 0;
+}
+.play-card__back-notes {
+  font-family: var(--font-polaroid);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--polaroid-ink-soft);
+  line-height: 1.4;
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px dashed var(--polaroid-line);
+}
+.play-card__back-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px dashed var(--polaroid-line);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--polaroid-muted);
+  font-weight: 700;
+  text-align: center;
+}
 .play-card__back-loading,
 .play-card__back-error {
   display: grid; place-items: center;
-  height: 100%;
+  flex: 1;
   font-size: 0.85rem;
-  opacity: 0.75;
+  color: var(--polaroid-muted);
   text-align: center;
 }
-.play-card__back-error { color: var(--error, #e54d4d); opacity: 1; }
+.play-card__back-error { color: var(--polaroid-accent); }
 
-/* Maximize button — top-right of the front face, opens the full play-detail
-   page. data-no-flip in the markup keeps the article-level click handler
-   from flipping the card when tapped. */
+/* Maximize button — top-right of the back face. Lives on the back so the
+   front stays clean; tap routes straight to play-detail (data-no-flip). */
 .play-card__maximize {
   position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
-  width: 1.75rem;
-  height: 1.75rem;
+  top: 10px;
+  right: 10px;
+  width: 1.6rem;
+  height: 1.6rem;
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: oklch(var(--b1) / 0.7);
-  border: 1px solid oklch(var(--b3));
-  color: oklch(var(--bc));
+  background: rgba(0,0,0,0.04);
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-ink-soft);
   cursor: pointer;
-  opacity: 0.7;
+  opacity: 0.8;
   transition: opacity 120ms ease, background 120ms ease;
-  z-index: 2;
+  z-index: 4;
 }
 .play-card__maximize:hover {
   opacity: 1;
-  background: oklch(var(--b1));
+  background: rgba(0,0,0,0.08);
 }
 
 /* ── Play sessions (same-day, same-buddy-set plays) ───────────────────────
-   A run of 2+ plays from the same day with the same participant set folds
-   into one horizontally-scrollable rail. Each card inside is a regular
-   .play-card (reused via window.renderPlayCard) — flip in place still
-   works because the 3D rotation lives on the card itself, not the rail. */
+   The session wrapper is the dark gallery wall the polaroids sit on. When a
+   session holds a single play we drop the rail and render the polaroid full
+   width via .play-card--single — see ui/play-card.js for the variant pick. */
 .play-session {
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 1rem;
-  padding: 0.75rem 0 0.45rem;
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.18);
+  padding: 0.5rem 0 0.5rem;
+  margin: 0 0 0.75rem;
   animation: fadeUp 200ms ease both;
 }
 .play-session__header {
-  display: flex; align-items: baseline; justify-content: space-between;
-  padding: 0 0.95rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 1rem;
   margin-bottom: 0.55rem;
   gap: 0.5rem;
 }
@@ -2667,38 +2754,41 @@ body {
   font-size: 0.95rem;
   flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: oklch(var(--bc));
 }
 .play-session__date {
   font-size: 0.78rem;
   opacity: 0.65;
   flex-shrink: 0;
+  color: oklch(var(--bc));
 }
-/* Names inside the session title route to profiles. Inherit colour so
-   the surrounding "played 3 games" text stays consistent; underline on
-   hover so the affordance is discoverable. */
 .play-session__name {
   font-weight: 600;
   color: inherit;
   cursor: pointer;
 }
 .play-session__name:hover { text-decoration: underline; }
+
+/* Multi-card rail — horizontal scroll of polaroid strip cards. Padded
+   generously so the tilted edges don't clip against the viewport. */
 .play-session__scroll {
   display: flex;
-  gap: 0.6rem;
+  gap: 16px;
   overflow-x: auto;
+  overflow-y: visible;
+  padding: 14px 20px 18px;
   scroll-snap-type: x mandatory;
-  padding: 0 0.95rem 0.35rem;
-  scrollbar-width: thin;
+  scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  align-items: flex-start;        /* heights vary; don't stretch siblings */
+  align-items: flex-start;
 }
-.play-session__scroll > .play-card {
-  flex: 0 0 86%;                  /* ~14% of next card peeks on the right */
-  scroll-snap-align: start;
+.play-session__scroll::-webkit-scrollbar { display: none; }
+
+/* Single-play session — no rail, just the standalone polaroid centered with
+   breathing room so the tilt doesn't kiss the edge of the column. */
+.play-session__single {
+  padding: 8px 24px 16px;
 }
-/* Date is already in the session header — hide the per-card timestamp so
-   we don't echo "Today" four times. */
-.play-session .play-card__time { display: none; }
 
 /* ── Feed rails (hot games / suggested buddies / featured) ────────────────── */
 .feed-rail {
