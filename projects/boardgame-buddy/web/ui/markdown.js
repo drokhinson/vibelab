@@ -5,8 +5,11 @@
 // - GitHub-style pipe tables (with header separator row)
 // - * / - bulleted lists
 // - **bold**, *italic*, `inline code`
+// - <span style="color:#hex">…</span> for colored inline labels
 // - paragraphs (blank-line separated)
-// All input is HTML-escaped before formatting so user content is safe.
+// All input is HTML-escaped before formatting so user content is safe; the
+// color span pattern is the one exception, and only the hex value is
+// reintroduced into the live attribute — the inner text stays escaped.
 
 (function () {
   function escape(s) {
@@ -23,7 +26,15 @@
     return escape(s)
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/(?<![*])\*([^*\n]+)\*(?![*])/g, "<em>$1</em>");
+      .replace(/(?<![*])\*([^*\n]+)\*(?![*])/g, "<em>$1</em>")
+      // Re-allow color spans after escape: only hex colors are accepted, and
+      // the inner text is already escaped so wrapping it in a real <span> is
+      // safe. Anything that doesn't match (named colors, other attributes,
+      // event handlers, other tags) stays escaped as literal text.
+      .replace(
+        /&lt;span style=(?:&quot;|&#39;)color:\s*(#[0-9a-fA-F]{3,8})\s*;?\s*(?:&quot;|&#39;)&gt;([\s\S]*?)&lt;\/span&gt;/g,
+        '<span style="color:$1">$2</span>'
+      );
   }
 
   function renderTable(headers, rows) {
