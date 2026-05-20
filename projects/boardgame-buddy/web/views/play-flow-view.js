@@ -598,6 +598,13 @@
     }
 
     async _abandon() {
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Discard this play?",
+        body: "Players in the lobby will be kicked and any scores so far will be lost. This can't be undone.",
+        confirmLabel: "Discard",
+        cancelLabel: "Keep playing",
+      });
+      if (!ok) return;
       if (this._lobby && this._lobby.code) {
         try { await window.PlaySession.advancePhase(this._lobby.code, "abandoned"); } catch (_) {}
       }

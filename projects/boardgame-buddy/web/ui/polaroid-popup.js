@@ -120,6 +120,41 @@
     `;
   }
 
+  /**
+   * Render a small confirm dialog with two buttons. Resolves true when the
+   * user picks the destructive action, false on cancel / backdrop click.
+   * @param {{title:string, body?:string, confirmLabel?:string, cancelLabel?:string}} opts
+   * @returns {Promise<boolean>}
+   */
+  function confirm({ title, body, confirmLabel = "Discard", cancelLabel = "Keep playing" }) {
+    return new Promise((resolve) => {
+      dismiss();
+      const root = document.createElement("div");
+      root.id = BACKDROP_ID;
+      root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--confirm";
+      root.innerHTML = `
+        <div class="polaroid-popup__card polaroid-popup__card--confirm"
+             role="alertdialog" aria-modal="true">
+          <div class="polaroid-popup__title">${escape(title)}</div>
+          ${body ? `<p class="polaroid-popup__body">${escape(body)}</p>` : ""}
+          <div class="polaroid-popup__actions">
+            <button class="btn btn-ghost btn-sm polaroid-popup__cancel">${escape(cancelLabel)}</button>
+            <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escape(confirmLabel)}</button>
+          </div>
+        </div>
+      `;
+      root.addEventListener("click", (ev) => {
+        if (ev.target === root) { dismiss(); resolve(false); }
+      });
+      document.body.appendChild(root);
+      if (window.lucide) window.lucide.createIcons();
+      const cancelBtn = root.querySelector(".polaroid-popup__cancel");
+      const confirmBtn = root.querySelector(".polaroid-popup__confirm");
+      if (cancelBtn) cancelBtn.addEventListener("click", () => { dismiss(); resolve(false); });
+      if (confirmBtn) confirmBtn.addEventListener("click", () => { dismiss(); resolve(true); });
+    });
+  }
+
   function escape(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -127,5 +162,5 @@
   }
   function escapeAttr(s) { return escape(s); }
 
-  window.PolaroidPopup = { show, update, dismiss };
+  window.PolaroidPopup = { show, update, dismiss, confirm };
 })();

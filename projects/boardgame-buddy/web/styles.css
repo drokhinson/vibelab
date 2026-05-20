@@ -4545,8 +4545,8 @@ body {
    inside #app. Force the main to participate in a column-flex chain so
    the inner .cascade-scroll can claim the remaining height without
    hard-coding the global header height. */
-main[data-view="play-flow"],
-main[data-view="session-viewer"] {
+main[data-view="play-flow"]:not(.hidden),
+main[data-view="session-viewer"]:not(.hidden) {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -5250,3 +5250,61 @@ main[data-view="session-viewer"] {
   color: #fff;
   border-color: var(--accent);
 }
+
+/* Form controls inside a cream polaroid card. The DaisyUI defaults pull
+   from the luxury dark theme, so without these the input chrome reads
+   as a black rectangle on the parchment surface. */
+.cascade-card .input,
+.cascade-card .textarea,
+.cascade-card input[type="date"],
+.cascade-card input[type="number"],
+.cascade-card input[type="text"] {
+  background: rgba(255, 251, 241, 0.7);
+  color: var(--polaroid-ink);
+  border-color: var(--polaroid-line);
+}
+.cascade-card .input:focus,
+.cascade-card .textarea:focus,
+.cascade-card input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(201, 146, 42, 0.15);
+}
+.cascade-card .input::placeholder,
+.cascade-card .textarea::placeholder {
+  color: var(--polaroid-muted);
+  opacity: 0.7;
+}
+/* Tint the native calendar glyph from white (default on dark themes)
+   toward the polaroid brass so it stays visible on cream. */
+.cascade-card input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7) sepia(0.4) saturate(2) hue-rotate(345deg);
+  cursor: pointer;
+}
+
+/* Confirm-variant of the polaroid popup (discard-session dialog). */
+.polaroid-popup__card--confirm {
+  transform: rotate(-0.6deg);
+  padding: 18px 18px 16px;
+}
+.polaroid-popup__body {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--polaroid-muted);
+  margin: 6px 0 14px;
+}
+.polaroid-popup__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.polaroid-popup__actions .btn-primary {
+  background: var(--polaroid-accent);
+  border-color: var(--polaroid-accent);
+  color: #fff;
+}
+.polaroid-popup__actions .btn-primary:hover {
+  background: #b3492f;
+  border-color: #b3492f;
+}
+.polaroid-popup__actions .btn-ghost { color: var(--polaroid-ink); }
