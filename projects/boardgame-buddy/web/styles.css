@@ -2653,17 +2653,64 @@ body {
 .play-card__back-player {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 10px;
   /* All rows share the same padding + transparent border so the gold pill
      on the winner row doesn't shift its name column rightward relative
-     to the losers. */
+     to the losers. The score sits at the far right via margin-left:auto on
+     the score element below so the avatar + name column stays anchored. */
   padding: 6px 10px;
   border: 1px solid transparent;
   border-radius: 999px;
   font-size: 14px;
   color: var(--polaroid-ink);
   font-weight: 500;
+}
+
+/* Profile bubble at the start of each player row. Same visual language as
+   .avatar-bubble used elsewhere, sized to fit comfortably inside the gold
+   winner pill without enlarging the row height noticeably. */
+.play-card__back-player-avatar {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.06);
+  color: var(--polaroid-ink);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  user-select: none;
+}
+.play-card__back-player-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 999px;
+}
+.play-card__back-player-avatar.is-link {
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.play-card__back-player-avatar.is-link:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.06);
+}
+.play-card__back-player-avatar.is-link:focus-visible {
+  outline: 2px solid var(--polaroid-accent);
+  outline-offset: 2px;
+}
+.play-card__back-player-avatar.is-ghost {
+  background: var(--polaroid-line);
+  color: var(--polaroid-muted);
+  cursor: default;
+}
+.play-card__back-player-avatar.is-ghost i {
+  width: 14px;
+  height: 14px;
 }
 .play-card__back-player.is-winner {
   font-weight: 700;
@@ -2697,6 +2744,7 @@ body {
   font-size: 14px;
   color: var(--polaroid-ink);
   letter-spacing: -0.02em;
+  flex-shrink: 0;
 }
 .play-card__back-player.is-winner .play-card__back-player-score {
   color: var(--polaroid-accent);
@@ -4150,6 +4198,16 @@ body {
 .buddies-row__body { flex: 1; min-width: 0; }
 .buddies-row__name { font-weight: 600; }
 .buddies-row__when { font-size: 0.74rem; opacity: 0.6; }
+
+/* Destructive icon button — tints the inner Lucide stroke and outlines on
+   hover so the X reads as a destructive action even before the confirm. */
+.bgb-destructive-icon-btn { color: var(--rust); }
+.bgb-destructive-icon-btn i { color: var(--rust); }
+.bgb-destructive-icon-btn:hover {
+  background: var(--rust-soft);
+  color: var(--rust-strong);
+}
+.bgb-destructive-icon-btn:hover i { color: var(--rust-strong); }
 .buddies-subsection-label {
   font-size: 0.72rem; font-weight: 600; opacity: 0.55;
   text-transform: uppercase; letter-spacing: 0.05em;

@@ -235,7 +235,7 @@
           ? `<li class="play-card__back-empty">No players recorded.</li>`
           : ranked.map((pl) => `
               <li class="play-card__back-player ${pl.is_winner ? "is-winner" : ""}">
-                <span class="play-card__back-player-name">${playerNameHtml(pl, me)}</span>
+                ${renderPlayerRow(pl, me)}
                 <span class="play-card__back-player-score">${pl.score != null ? escapeHtml(String(pl.score)) : ""}</span>
               </li>`).join("")}
       </ul>
@@ -246,15 +246,47 @@
     `;
   }
 
-  // Registered player rows route to a profile (own → profile-self, others
-  // → profile-other). Ghost rows (no user_id) stay as plain text.
-  function playerNameHtml(pl, me) {
-    if (!pl.user_id) return escapeHtml(pl.name);
+  // Render a single back-side player row: avatar bubble on the left, name
+  // beside it. Registered players get a clickable initials bubble that
+  // routes to their profile (own → profile-self, others → profile-other);
+  // the bubble is the only navigable surface so tapping the name is inert.
+  // Ghost players get a non-clickable bubble with a ghost icon so the row
+  // still aligns at the same avatar column.
+  function renderPlayerRow(pl, me) {
+    const nameHtml = `<span class="play-card__back-player-name">${escapeHtml(pl.name)}</span>`;
+    if (!pl.user_id) {
+      return `
+        <span class="play-card__back-player-avatar is-ghost" aria-hidden="true">
+          <i data-lucide="ghost"></i>
+        </span>
+        ${nameHtml}
+      `;
+    }
     const route = (me && me.id === pl.user_id)
       ? `window.router.go('profile-self')`
       : `window.router.go('profile-other',{userId:'${escapeAttr(pl.user_id)}'})`;
-    return `<a class="play-card__back-player-link" data-no-flip
-              onclick="event.stopPropagation(); ${route}">${escapeHtml(pl.name)}</a>`;
+    const avatarBody = pl.avatar_url
+      ? `<img src="${escapeAttr(pl.avatar_url)}" alt="" />`
+      : escapeHtml(initialsOf(pl.name));
+    return `
+      <span class="play-card__back-player-avatar avatar-bubble is-link"
+            role="button" tabindex="0" data-no-flip
+            aria-label="Open ${escapeAttr(pl.name)}'s profile"
+            onclick="event.stopPropagation(); ${route}"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();${route};}">
+        ${avatarBody}
+      </span>
+      ${nameHtml}
+    `;
+  }
+
+  // Two-letter initials fallback for the avatar bubble. Mirrors the
+  // locally-defined helpers in feed-view.js / buddies-view.js — there's no
+  // shared module so duplicating here matches the existing convention.
+  function initialsOf(name) {
+    const parts = String(name || "").trim().split(/[\s.]+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return (parts[0] || "?").slice(0, 2).toUpperCase();
   }
 
   // ── Aspect ratio detection ──────────────────────────────────────────────────
