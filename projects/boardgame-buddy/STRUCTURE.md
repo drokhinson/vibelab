@@ -4,7 +4,7 @@
 > Last updated: 2026-05-17 (reference guide rebuilt as user-owned "chapters" — migration 018; in-play expansions picker + merged reference guide added the same day)
 
 ## What It Does
-A Strava-style log for board game plays. The home view is a chronological feed of plays from the user and their accepted buddies, interspersed with "hot games this week", suggested buddies, and dormant games from the user's own collection. Logging a play supports a short-code "join from another phone" flow so the host's device opens a session code that other phones join to add themselves to the player list. Profiles are fully public and show a Strava-style stats strip + collection grid. The reference-guide system is fully user-driven: each user builds their own per-game guide by adding "chapters" — either creating new ones or browsing the community pool. The pool sorts by popularity. Reports on offensive chapters route to admin review.
+A Strava-style log for board game plays. The home view is a chronological feed of plays from the user and their accepted buddies, interspersed with "hot games this week", suggested buddies, and dormant games from the user's own collection. Logging a play is a guided three-screen cascade — Gather → Play → Settle Up — that walks the host through the play and mirrors read-only to non-host joiners (who can score their own column live). The Log tab opens a Host-or-Join chooser; hosting opens a short-code session, joining either enters a code or picks a live session hosted by a buddy. Profiles are fully public and show a Strava-style stats strip + collection grid. The reference-guide system is fully user-driven: each user builds their own per-game guide by adding "chapters" — either creating new ones or browsing the community pool. The pool sorts by popularity. Reports on offensive chapters route to admin review.
 
 Logging a play also surfaces the reference guide in-line: once a game is picked, a collapsed Expansions section lets the player toggle which expansions are active for this session, and a Reference guide section appears below Scoring with a centered Rulebook button + the parchment scroll merging chapters from the base game and every active expansion (each tagged with a colored dot matching the expansion's identity color). Adding chapters from this in-play scroll routes through the same Browse/Create UI, with each chapter saved against its source game's pool so it propagates automatically the next time the user opens the guide.
 
@@ -97,6 +97,47 @@ a second buddy of yours to the same account merges into the first.
 | play_id | UUID FK | → plays |
 | buddy_id | UUID FK | → buddies |
 | is_winner | BOOLEAN | |
+
+### boardgamebuddy_play_sessions
+Short-code lobby state for the cascading play-flow. The host's device opens
+a row on entry to Gather; joiners use the code to add themselves; the host
+walks the row through phase=gather → play → settle → finalized.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| code | TEXT | 5-char Crockford base32; unique among open sessions |
+| host_user_id | UUID FK | → profiles |
+| game_id | UUID FK | nullable → games |
+| status | TEXT | open / finalized / abandoned (gates expiry + finalize path) |
+| phase | TEXT | gather / play / settle / finalized / abandoned (drives cascading screen state; migration 026). Watched by joiners via Supabase Realtime. |
+| finalized_play_id | UUID FK | nullable → plays |
+| created_at | TIMESTAMPTZ | |
+| expires_at | TIMESTAMPTZ | default now + 2h |
+| finalized_at | TIMESTAMPTZ | nullable |
+
+### boardgamebuddy_play_session_participants
+Roster for an open session — populated as players join.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| session_id | UUID FK | → play_sessions |
+| user_id | UUID FK | nullable → profiles (NULL for guest joins) |
+| display_name | TEXT | |
+| joined_at | TIMESTAMPTZ | |
+
+### boardgamebuddy_play_session_scores
+Per-player, per-round live scores during the Play phase (migration 026).
+Browser writes directly via Supabase Realtime + RLS — only the host of the
+session or the player themselves can write, and only while phase=play.
+Merged into the canonical play on finalize.
+| Column | Type | Notes |
+|--------|------|-------|
+| session_id | UUID FK | → play_sessions |
+| player_user_id | UUID FK | → profiles (authed players only — guests stay local) |
+| round_index | SMALLINT | 0-indexed, capped at 64 |
+| score | INTEGER | nullable (blank cell) |
+| updated_at | TIMESTAMPTZ | |
+| PK (session_id, player_user_id, round_index) | | |
 
 ### boardgamebuddy_chapter_types (lookup)
 | Column | Type | Notes |
@@ -219,12 +260,14 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/users/{user_id}/stats` — same shape for any user (profiles are public)
 - `GET /api/v1/boardgame_buddy/users/{user_id}/profile` — public profile + buddy-relation flags
 - `GET /api/v1/boardgame_buddy/search?q=&include_bgg=false` — unified game search (collection → DB; BGG only when `include_bgg=true`)
-- `POST /api/v1/boardgame_buddy/sessions` — open a short-code play session (body `{game_id?}`)
+- `POST /api/v1/boardgame_buddy/sessions` — open a short-code play session (body `{game_id?}`). Closes any prior open session for the same host first.
+- `GET /api/v1/boardgame_buddy/sessions/joinable` — list active sessions the caller can join (phase=gather where caller is participant/host/host-buddy). Drives the Join chooser screen.
 - `GET /api/v1/boardgame_buddy/sessions/{code}` — poll target for the lobby
 - `PATCH /api/v1/boardgame_buddy/sessions/{code}` — host updates the lobby (body `{game_id?}`)
-- `POST /api/v1/boardgame_buddy/sessions/{code}/join` — join a session by code
+- `PATCH /api/v1/boardgame_buddy/sessions/{code}/phase` — host advances the cascading flow (body `{phase: 'gather'|'play'|'settle'|'finalized'|'abandoned'}`). Transitions enforced: gather→play→settle→finalized, plus any→abandoned. Joiners watch this column via Realtime.
+- `POST /api/v1/boardgame_buddy/sessions/{code}/join` — join a session by code. Returns 409 once the session has moved past phase=gather.
 - `DELETE /api/v1/boardgame_buddy/sessions/{code}` — host abandons a session
-- `POST /api/v1/boardgame_buddy/sessions/{code}/finalize` — write a play row from the session
+- `POST /api/v1/boardgame_buddy/sessions/{code}/finalize` — write a play row from the session. Merges per-player live-scoring rows from `boardgamebuddy_play_session_scores` into the player payload (authed players only; guests keep host-typed scores).
 - `POST /api/v1/boardgame_buddy/bgg/link` — body `{username, password}`; logs into BGG via `POST /login/api/v1`, stores the username + Fernet-encrypted password (`BGG_CREDENTIAL_KEY`) and the returned SessionID/bggusername/bggpassword cookies on the profile. A successful login is also our existence check (BGG returns 401 for both bad passwords and unknown handles, surfaced as a 400 to the client). Returns `{bgg_username}`.
 - `DELETE /api/v1/boardgame_buddy/bgg/link` — clear `bgg_username` plus all stored credentials/cookies. Already-imported collection/plays remain in place.
 - `POST /api/v1/boardgame_buddy/bgg/sync` — pull collection (`own=1`, `wishlist=1`, `wanttoplay=1`, `showprivate=1`) and plays (paginated) from BGG. Per-user calls go through `fetch_bgg_as_user`, which sends the stored cookies so BGG evaluates the request AS the linked user — that's what unlocks the `<privateinfo>` block (purchase price, private comment, acquisition date, …) which we mirror onto `boardgamebuddy_collections.bgg_*` columns. BGG `own→owned`; `wishlist` and `wanttoplay` both map to `'wishlist'`. Games we already have are written immediately (collections upsert on `(user_id, game_id)`; plays dedup on `(user_id, bgg_play_id)`). Games we don't have go into `boardgamebuddy_bgg_pending_imports` (the `payload.private` carries the private fields through to materialization) and a `BackgroundTasks` worker drains the queue (~1.5s between BGG calls). Returns `{bgg_username, collection_imported, collection_pending, plays_imported, plays_pending}`. Players from BGG plays are upserted as buddies on `(owner_id, name)` using the same path as `POST /plays`. If the stored password no longer works, returns 409 — the FE surfaces a "re-link required" banner.
@@ -253,11 +296,13 @@ each missing game from the BGG XML API.
 Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
 
 1. Auth (login/signup) → splash → 2. **Feed** (home): chronological mix of plays from the viewer and their accepted buddies, plus inline "hot this week" / "buddies you may know" / "time to revisit" rails. A search pill at the top opens the **Game Search** screen.
-3. **Log a play**: pick a game (Game Search → Game Detail → Log Play, or directly from the Log tab), add players (buddies via autocomplete, free-text otherwise), and Save. Three modes are surfaced as tabs at the top of the Log Play view:
-   - **Solo log** — host fills the form alone.
-   - **Host a session** — open a 5-char code; other phones POST `/sessions/{code}/join` to add themselves; the host polls `/sessions/{code}` every 2s and the participant list streams into the player list. Save calls `/sessions/{code}/finalize` which writes a single play.
-   - **Join by code** — enter a host's code to add yourself to their session.
-   The draft auto-persists to localStorage (metadata only); the photo blob stays in memory.
+3. **Log a play**: the Log tab opens a Host-or-Join chooser. Picking **Host a game** drops the user into the cascading three-screen flow (`play-flow` view); picking **Join a game** routes to a session-select screen that combines a 5-char code input with a list of active sessions where the user is a participant or the host is a buddy.
+   The Log a play cascade has three snap-scroll screens:
+   - **Gather** — pick a game, set game type (competitive/team/co-op), manage the player list. A session code opens on entry and is shown at the top of the screen; other phones can join via code while the host is on Gather. Joiners stream into the player list via polling.
+   - **Play** — full-width reference guide on top, scoring grid below. Host has full grid access (add rounds, override winners). Authenticated joiners see the same grid in read-only mode except for their own column, which they can edit live. Per-cell edits stream both ways via Supabase Realtime against `boardgamebuddy_play_session_scores`.
+   - **Settle Up** — host only. Optional photo upload + "Key moments" notes textarea (reuses the play's `notes` column), then Save. Save calls `/sessions/{code}/finalize` which merges live scores into the canonical play and marks the session finalized.
+   When the host advances Gather→Play, the lobby closes (`POST /sessions/{code}/join` returns 409 thereafter). When the host enters Settle Up, every non-host joiner sees a polaroid splash popup centered on the screen with the game thumbnail and current winner; tapping the X dismisses to a refreshed feed.
+   The draft auto-persists to localStorage (metadata only, plus current phase); the photo blob stays in memory. The chooser surfaces a "Resume hosting?" banner when a non-terminal draft exists.
 4. **Game Search** (search pill on Feed/Profile): single ranked list — collection hits first, then DB matches. A "Search BoardGameGeek for more" button appends BGG hits on demand.
 5. **Game Detail** (tap any game card): box art hero, status toggle (none → owned → wishlist → none), Log a Play button, BGG + Rulebook links, collapsible Expansions section (default collapsed), a rolled-up parchment **Reference Guide scroll** (tap either roll to open/close), and recent plays. The scroll is per-user per-game and starts empty; tap **Add a chapter** at the bottom to either Create a new one or Browse the community pool.
 6. **Reference guide chapter add**: full-screen view with two tabs — **Create** (chapter-type picker + title + markdown) or **Browse** (search the per-game pool, sorted by popularity, tap + to add). Each browseable row also has a **Report** action for moderation.

@@ -29,6 +29,29 @@ class PlaySessionStatus(StrEnum):
     ABANDONED = "abandoned"
 
 
+class SessionPhase(StrEnum):
+    """Host-driven cursor through the Gather → Play → Settle Up flow
+    (migration 026). Joiners watch this via Supabase Realtime and auto-
+    advance their read-only mirror when the host moves forward."""
+
+    GATHER = "gather"
+    PLAY = "play"
+    SETTLE = "settle"
+    FINALIZED = "finalized"
+    ABANDONED = "abandoned"
+
+
+# Allowed forward/abandon transitions per phase. Backwards moves and
+# terminal-state resurrections are rejected at the service layer.
+ALLOWED_PHASE_TRANSITIONS: dict[SessionPhase, frozenset[SessionPhase]] = {
+    SessionPhase.GATHER: frozenset({SessionPhase.PLAY, SessionPhase.ABANDONED}),
+    SessionPhase.PLAY: frozenset({SessionPhase.SETTLE, SessionPhase.ABANDONED}),
+    SessionPhase.SETTLE: frozenset({SessionPhase.FINALIZED, SessionPhase.ABANDONED}),
+    SessionPhase.FINALIZED: frozenset(),
+    SessionPhase.ABANDONED: frozenset(),
+}
+
+
 class FeedCardKind(StrEnum):
     """Card types the Feed view can render."""
 
