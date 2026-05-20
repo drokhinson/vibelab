@@ -214,17 +214,25 @@
         gameNameForSingle,
       });
       const dateLabel = formatSessionDate(card.played_at);
-      // Borrow the accent of the first play so the session card carries a
-      // colour cue consistent with the cards it holds.
-      const accent = (firstPlay && firstPlay.game && firstPlay.game.theme_color) || "var(--accent)";
-      const cards = card.plays.map((p) => window.renderPlayCard(p)).join("");
+      const sessionPlayCount = card.plays.length;
+      // Annotate each play with the session play count so the polaroid
+      // renderer can pick the variant (single vs strip) without re-walking
+      // the DOM. The `__`-prefix keeps the field clearly UI-scoped.
+      const cards = card.plays
+        .map((p) => window.renderPlayCard({ ...p, __sessionPlayCount: sessionPlayCount }))
+        .join("");
+      // Single-play sessions drop the horizontal rail and render the lone
+      // polaroid full-width inside a padded wrapper instead.
+      const bodyHtml = sessionPlayCount === 1
+        ? `<div class="play-session__single">${cards}</div>`
+        : `<div class="play-session__scroll">${cards}</div>`;
       return `
-        <section class="play-session" style="--game-accent:${escape(accent)}">
+        <section class="play-session">
           <header class="play-session__header">
             <span class="play-session__title">${title}</span>
             <span class="play-session__date">${escape(dateLabel)}</span>
           </header>
-          <div class="play-session__scroll">${cards}</div>
+          ${bodyHtml}
         </section>
       `;
     }

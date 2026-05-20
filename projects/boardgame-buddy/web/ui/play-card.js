@@ -1,24 +1,30 @@
-// ui/play-card.js — Strava-style play card rendered in the Feed and Profile.
+// ui/play-card.js — Polaroid play card rendered in the Feed and Profile.
 //
-// Two-faced card:
-//   Front  → "<Username> played <Game>" header (date right-aligned), optional
-//            user photo or capped box-art row, winner chip, notes.
-//   Back   → read-only: game title, winners line, players + scores, plus a
-//            maximize button (top-right corner) that opens the full
-//            play-detail page. Notes and expansions live on the front and
-//            the play-detail page; all editing happens on the play-detail
-//            page.
+// Two-faced flip card styled like an instant photo: cream surface, soft drop
+// shadow, slight tilt, photo at the top in its natural aspect ratio.
+//   Front  → photo (with game-thumbnail badge in the bottom-right corner if
+//            the user uploaded their own snapshot), then a caption row with
+//            the game name on the left and the winner on the right. Front-side
+//            notes only render on the single (non-session) variant.
+//   Back   → game title + duration, ranked scoreboard with the winner row
+//            tinted, optional notes, maximize button (top-right) into the
+//            full play-detail page, and a "Tap to flip back" footer.
 //
-// Clicking the game-name text, any box-art image, or the maximize button
-// navigates (data-no-flip). Clicking anywhere else on the card flips it.
-// State lives in a module-level Map keyed by play_id so flipping re-renders
-// only the affected <article> via outerHTML replacement — the feed scroll
-// position is preserved.
+// Clicking the game-name text, the game-thumbnail badge, or the maximize
+// button navigates (data-no-flip). Clicking anywhere else on the card flips
+// it. State lives in a module-level Map keyed by play_id so flipping
+// re-renders only the affected <article> via outerHTML replacement — the
+// feed scroll position is preserved.
 
 (function () {
   // Per-play state lives outside the render so re-renders are cheap and
   // scoped: { flipped, hydrated (full PlayResponse), hydrating, error }.
   const cardState = new Map();
+
+  // Photo aspect ratio cache, keyed by image URL. Populated by onPhotoLoad
+  // after the image decodes; survives rerenderCard so a card that already
+  // settled into is-portrait keeps that classification on subsequent renders.
+  const aspectCache = new Map();
 
   function getState(playId) {
     let s = cardState.get(playId);
@@ -28,20 +34,49 @@
         hydrated: null,
         hydrating: false,
         error: null,
+        // Cached at first render so rerenderCard (which looks the card up
+        // from the raw, ungrouped feed page) can still pick the strip vs
+        // single variant after a flip.
+        sessionPlayCount: 1,
       };
       cardState.set(playId, s);
     }
     return s;
   }
 
+  function orientFor(ratio) {
+    // Square (1:1) treated as landscape so BGG box art and matchstick photos
+    // both default to the wider strip-card width.
+    return ratio < 0.95 ? "portrait" : "landscape";
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   function renderPlayCard(card) {
     const s = getState(card.play_id);
-    const accent = (card.game && card.game.theme_color) || "#C9922A";
+    const accent = (card.game && card.game.theme_color) || "var(--polaroid-accent)";
+    // Prefer the freshly-passed count, fall back to whatever the first render
+    // recorded. rerenderCard re-enters this function with the raw store card
+    // (no __sessionPlayCount) so the cached value keeps strip vs single stable.
+    if (card.__sessionPlayCount) s.sessionPlayCount = card.__sessionPlayCount;
+    const sessionCount = s.sessionPlayCount || 1;
+    const variant = sessionCount > 1 ? "strip" : "single";
+
+    // Pick photo source — user-uploaded snapshot wins, otherwise the game's
+    // own art so the polaroid always has a hero image at natural aspect.
+    const g = card.game || {};
+    const photoSrc = card.photo_url || g.image_url || g.thumbnail_url || "";
+    const cached = photoSrc ? aspectCache.get(photoSrc) : null;
+    const orient = cached ? cached.orient : "landscape";
+    const aspect = cached ? cached.ratio : 1;
+
+    const variantClass = variant === "strip"
+      ? `play-card--strip is-${orient}`
+      : "play-card--single";
     const flippedAttr = s.flipped ? " is-flipped" : "";
+
     return `
-      <article class="play-card${flippedAttr}"
+      <article class="play-card ${variantClass}${flippedAttr}"
                data-play-id="${escapeAttr(card.play_id)}"
                style="--game-accent:${escapeAttr(accent)}"
                role="button" tabindex="0"
@@ -49,90 +84,82 @@
                onclick="window.playCardFlip.handleClick(event, '${escapeAttr(card.play_id)}')"
                onkeydown="window.playCardFlip.handleKey(event, '${escapeAttr(card.play_id)}')">
         <div class="play-card__inner">
-          <div class="play-card__front">${renderFront(card)}</div>
+          <div class="play-card__front">${renderFront(card, { variant, photoSrc, aspect })}</div>
           <div class="play-card__back">${renderBack(card, s)}</div>
         </div>
       </article>
     `;
   }
 
-  function renderFront(card) {
+  function renderFront(card, { variant, photoSrc, aspect }) {
     const g = card.game || {};
     const me = window.store && window.store.get && window.store.get("user");
     const gameName = escapeHtml(g.name || "Unknown game");
-    const hasUserPhoto = !!card.photo_url;
-    const gameThumb = g.thumbnail_url || g.image_url || "";
     const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${jsStr(g.name || "")}'})`;
 
+    // Winner caption — show "You" when the viewer won, the winner's name
+    // otherwise. Score (if known) sits next to the brass star.
     const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
-    const winnerChip = card.winner_display_name
-      ? `<span class="play-card__meta-chip play-card__meta-chip--winner">
-           <i data-lucide="trophy" class="w-3.5 h-3.5"></i> ${winnerIsSelf ? "You" : escapeHtml(card.winner_display_name)} won
-         </span>`
+    const winnerName = card.winner_display_name
+      ? (winnerIsSelf ? "You" : escapeHtml(card.winner_display_name))
       : "";
-    const notesBlock = card.notes ? `<p class="play-card__notes">${escapeHtml(card.notes)}</p>` : "";
+    const winnerScore = winnerScoreFor(card);
+    const winnerBlock = winnerName
+      ? `<span class="win">${winnerName}${winnerScore != null ? ` ✶ <span class="win-score">${escapeHtml(String(winnerScore))}</span>` : ""}</span>`
+      : "";
 
-    // Status overlay reads the viewer's collection map straight from the
-    // store so it stays in sync without threading state through the feed.
-    // The status picker patches the same map on mutation (see status-tag.js),
-    // so a tap → pick cycle reflects in the card immediately.
+    // The game thumbnail only appears as a corner badge when the user
+    // uploaded their own photo — otherwise the game art *is* the hero.
+    const hasUserPhoto = !!card.photo_url;
+    const gameThumb = g.thumbnail_url || g.image_url || "";
     const statusMap = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
     const gameStatus = (g.id && statusMap[g.id]) || null;
-    const statusOverlay = g.id
+    const statusOverlayHtml = g.id
       ? `<span class="play-card__status-overlay" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true })}</span>`
       : "";
 
-    // Layout split by presence of a user-uploaded photo:
-    //   - With user photo: stretched hero + corner box-art badge carrying
-    //     the owned/played status pill (so the toggle anchors to the game,
-    //     not the user's snapshot).
-    //   - Without: a horizontal row — square box art on the left (status
-    //     pill on the box-art's top-right), winner chip on the right —
-    //     then notes at full width below.
-    let body = "";
-    if (hasUserPhoto) {
-      body = `
-        <div class="play-card__photo">
-          <img class="play-card__photo-img" src="${escapeAttr(card.photo_url)}" alt="" loading="lazy" />
-          ${gameThumb ? `
-            <div class="play-card__game-overlay" data-no-flip onclick="${gameNav}">
-              <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
-              ${statusOverlay}
-            </div>` : ""}
-        </div>
-        ${winnerChip ? `<div class="play-card__meta-row">${winnerChip}</div>` : ""}
-        ${notesBlock}
-      `;
-    } else if (gameThumb) {
-      body = `
-        <div class="play-card__no-photo-row">
-          <div class="play-card__box" data-no-flip onclick="${gameNav}">
-            <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
-            ${statusOverlay}
-          </div>
-          <div class="play-card__no-photo-meta">
-            ${winnerChip}
-          </div>
-        </div>
-        ${notesBlock}
-      `;
-    } else {
-      // No photo and no box art — show whatever meta we have on its own.
-      body = `
-        ${winnerChip ? `<div class="play-card__meta-row">${winnerChip}</div>` : ""}
-        ${notesBlock}
-      `;
-    }
+    const badgeHtml = (hasUserPhoto && gameThumb)
+      ? `<div class="play-card__game-overlay" data-no-flip onclick="${gameNav}">
+           <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
+           ${statusOverlayHtml}
+         </div>`
+      : statusOverlayHtml;
 
-    // The "User played Game" attribution moved up to the session header so
-    // the card front just announces which game this card is. Date moved
-    // with it (session header shows Today / Yesterday / Mon 15 once).
+    const photoStyle = `--photo-aspect:${aspect}`;
+    const photoHtml = photoSrc
+      ? `<div class="play-card__photo" style="${photoStyle}">
+           <img class="play-card__photo-img"
+                src="${escapeAttr(photoSrc)}"
+                alt="${escapeAttr(g.name || "")}"
+                loading="lazy"
+                onload="window.playCardFlip.onPhotoLoad(event, '${escapeAttr(card.play_id)}')" />
+           ${badgeHtml}
+         </div>`
+      : `<div class="play-card__photo" style="${photoStyle}">${statusOverlayHtml}</div>`;
+
+    // Front-side notes only on the standalone polaroid — strip cards keep the
+    // caption tight so multiple cards still fit comfortably in the rail.
+    const notesBlock = (variant === "single" && card.notes)
+      ? `<p class="play-card__notes">${escapeHtml(card.notes)}</p>`
+      : "";
+
     return `
-      <header class="play-card__header">
-        <a class="play-card__game-link" data-no-flip onclick="${gameNav}">${gameName}</a>
-      </header>
-      ${body}
+      ${photoHtml}
+      <div class="play-card__caption">
+        <a class="play-card__caption-name" data-no-flip onclick="${gameNav}">${gameName}</a>
+        <div class="play-card__caption-meta">${winnerBlock}</div>
+      </div>
+      ${notesBlock}
     `;
+  }
+
+  function winnerScoreFor(card) {
+    if (!card.winner_display_name) return null;
+    const players = card.players || [];
+    const winner = players.find((p) => p.is_winner && p.name === card.winner_display_name)
+      || players.find((p) => p.is_winner);
+    if (!winner) return null;
+    return (winner.score != null && winner.score !== "") ? winner.score : null;
   }
 
   function renderBack(card, s) {
@@ -148,14 +175,25 @@
       // shell so the back has something behind the front during the rotation.
       return `<div class="play-card__back-loading">…</div>`;
     }
-    const winners = (p.players || []).filter((pl) => pl.is_winner);
     const players = p.players || [];
     const me = window.store && window.store.get && window.store.get("user");
-    const myName = me && me.display_name ? me.display_name : null;
-    const winnerLabel = winners
-      .map((w) => (myName && w.name === myName) ? "You" : escapeHtml(w.name))
-      .join(", ");
     const detailNav = `event.stopPropagation(); window.router.go('play-detail',{playId:'${escapeAttr(card.play_id)}'})`;
+    const durationMeta = p.duration_minutes
+      ? `${p.duration_minutes} min`
+      : (p.played_at ? "" : "");
+
+    // Rank by score descending; players without a score keep their order
+    // after the scored rows.
+    const ranked = players.slice().sort((a, b) => {
+      const sa = a.score == null ? -Infinity : Number(a.score);
+      const sb = b.score == null ? -Infinity : Number(b.score);
+      return sb - sa;
+    });
+
+    const notesBlock = p.notes
+      ? `<p class="play-card__back-notes">${escapeHtml(p.notes)}</p>`
+      : "";
+
     return `
       <button class="play-card__maximize" data-no-flip
               aria-label="Open play details"
@@ -165,33 +203,27 @@
       </button>
       <header class="play-card__back-head">
         <span class="play-card__back-title">${escapeHtml(p.game_name || (card.game && card.game.name) || "")}</span>
+        ${durationMeta ? `<span class="play-card__back-meta">${escapeHtml(durationMeta)}</span>` : ""}
       </header>
 
-      ${winners.length > 0 ? `
-        <div class="play-card__back-winners">
-          <i data-lucide="trophy" class="w-3.5 h-3.5"></i>
-          ${winnerLabel} won
-        </div>` : ""}
-
       <ul class="play-card__back-players">
-        ${players.length === 0
+        ${ranked.length === 0
           ? `<li class="play-card__back-empty">No players recorded.</li>`
-          : players.map((pl) => `
+          : ranked.map((pl) => `
               <li class="play-card__back-player ${pl.is_winner ? "is-winner" : ""}">
-                <span class="play-card__back-player-name">
-                  ${pl.is_winner ? `<i data-lucide="trophy" class="w-3.5 h-3.5"></i> ` : ""}
-                  ${playerNameHtml(pl, me)}
-                </span>
-                <span class="play-card__back-player-score">${pl.score != null ? pl.score : ""}</span>
+                <span class="play-card__back-player-name">${playerNameHtml(pl, me)}</span>
+                <span class="play-card__back-player-score">${pl.score != null ? escapeHtml(String(pl.score)) : ""}</span>
               </li>`).join("")}
       </ul>
+
+      ${notesBlock}
+
+      <div class="play-card__back-footer">Tap to flip back</div>
     `;
   }
 
   // Registered player rows route to a profile (own → profile-self, others
-  // → profile-other). profile-other already carries the "Buddy up" CTA when
-  // the viewer isn't connected, so we don't need an inline add button here.
-  // Ghost rows (no user_id) stay as plain text.
+  // → profile-other). Ghost rows (no user_id) stay as plain text.
   function playerNameHtml(pl, me) {
     if (!pl.user_id) return escapeHtml(pl.name);
     const route = (me && me.id === pl.user_id)
@@ -199,6 +231,36 @@
       : `window.router.go('profile-other',{userId:'${escapeAttr(pl.user_id)}'})`;
     return `<a class="play-card__back-player-link" data-no-flip
               onclick="event.stopPropagation(); ${route}">${escapeHtml(pl.name)}</a>`;
+  }
+
+  // ── Aspect ratio detection ──────────────────────────────────────────────────
+  //
+  // Detect the photo's natural aspect ratio after decode. We mutate the DOM
+  // in place — set the --photo-aspect CSS var on the photo frame and toggle
+  // is-portrait / is-landscape on the article — so there's no rerender and
+  // no scroll-position jump. Cache the result by URL so subsequent renders
+  // (e.g. after a flip) skip the placeholder square entirely.
+  function onPhotoLoad(event, playId) {
+    const img = event && event.target;
+    if (!img || !img.naturalWidth || !img.naturalHeight) return;
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    const ratio = w / h;
+    const orient = orientFor(ratio);
+    const url = img.currentSrc || img.src;
+    if (url) {
+      const prev = aspectCache.get(url);
+      if (!prev || prev.orient !== orient || Math.abs(prev.ratio - ratio) > 0.02) {
+        aspectCache.set(url, { ratio, orient });
+      }
+    }
+    const photo = img.closest(".play-card__photo");
+    if (photo) photo.style.setProperty("--photo-aspect", ratio.toFixed(3));
+    const article = img.closest(".play-card");
+    if (article && article.classList.contains("play-card--strip")) {
+      article.classList.toggle("is-portrait", orient === "portrait");
+      article.classList.toggle("is-landscape", orient === "landscape");
+    }
   }
 
   // ── Single-card re-render (preserves feed scroll) ───────────────────────────
@@ -220,7 +282,10 @@
   function findCardById(playId) {
     const page = window.store && window.store.get && window.store.get("feed");
     if (!page || !page.cards) return null;
-    return page.cards.find((c) => c.kind === "play" && c.play_id === playId);
+    // The feed store holds the raw, ungrouped page (groupCards runs inside
+    // render). Session play count is recovered from cardState — see the
+    // sessionPlayCount cache inside getState.
+    return page.cards.find((c) => c.kind === "play" && c.play_id === playId) || null;
   }
 
   // ── Flip controller (called from inline onclick handlers) ───────────────────
@@ -230,7 +295,7 @@
       const t = event.target;
       if (!t) return;
       // Anything in a no-flip subtree handles its own navigation (game-name
-      // link, box-art, maximize button).
+      // link, game-thumbnail badge, maximize button, status pill).
       if (t.closest && t.closest("[data-no-flip]")) return;
       // Buttons / form controls / links never flip the card.
       if (t.closest && t.closest("input, textarea, button, label, select")) return;
@@ -266,31 +331,11 @@
       }
       rerenderCard(playId);
     },
+
+    onPhotoLoad,
   };
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-
-  function formatPlayedAt(iso) {
-    if (!iso) return "";
-    // played_at is a "YYYY-MM-DD" date — parse the parts in local time so the
-    // Today/Yesterday comparison doesn't drift across the UTC date line (a
-    // raw `new Date("2026-05-17")` parses as UTC midnight, which can read
-    // as the previous day in negative-offset timezones).
-    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    const d = m
-      ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10))
-      : new Date(iso);
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-    const sameDay = (a, b) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-    if (sameDay(d, today)) return "Today";
-    if (sameDay(d, yesterday)) return "Yesterday";
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
 
   function escapeHtml(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({
