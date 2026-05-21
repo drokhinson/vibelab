@@ -5787,6 +5787,15 @@ main[data-view="session-viewer"].hidden {
   justify-content: center;
   color: var(--polaroid-muted);
 }
+/* Status pill pinned to the top-right of the polaroid photo. Mirrors the
+   play-card status overlay so the affordance reads identically across the
+   feed and the find-a-game grid. */
+.game-polaroid__status {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+}
 .game-polaroid__caption {
   padding: 6px 2px 0;
   text-align: center;

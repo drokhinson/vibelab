@@ -42,6 +42,10 @@
       this._loading = false;
       this._error = null;
       this._scopeAutoSwitched = false;
+      // Per-game owned/wishlist/played status map. Populated from
+      // Collection.myStatusMap() on mount; patched live by status-changed
+      // CustomEvents fired from the status-picker.
+      this._collectionMap = {};
     }
 
     _emptyFilters() {
@@ -55,6 +59,26 @@
     }
 
     async onMount() {
+      // Keep the polaroid status badges in sync with any other view that
+      // mutates the user's collection (game-detail status picker, profile
+      // grid, etc.). The status-tag picker dispatches `status-changed` on
+      // document; the shared collection cache also pushes into the store.
+      this.listen("myCollectionMap", (m) => {
+        this._collectionMap = m || {};
+        this.render();
+      });
+      this.listenDom("status-changed", (e) => {
+        const { gameId, status } = (e && e.detail) || {};
+        if (!gameId) return;
+        if (status == null) delete this._collectionMap[gameId];
+        else this._collectionMap[gameId] = status;
+        this.render();
+      });
+      try {
+        this._collectionMap = (await window.Collection.myStatusMap()) || {};
+      } catch (_) {
+        this._collectionMap = {};
+      }
       this.render();
       await this._loadGames();
       // Honor `focus=find` query param from the Profile FAB → scroll the
@@ -269,6 +293,7 @@
       }
       const cards = this._games.map((g) => window.renderGamePolaroid(g, {
         clickHandler: `window.logPlayView._pickFromGrid('${jsStr(g.id)}')`,
+        collectionStatus: this._collectionMap[g.id] || null,
       })).join("");
       return `<div class="lp-find-grid ${this._loading ? "is-reloading" : ""}">${cards}</div>`;
     }
