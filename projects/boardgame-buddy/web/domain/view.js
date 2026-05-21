@@ -114,7 +114,7 @@
         el.classList.toggle("hidden", !authed);
       });
 
-      document.querySelectorAll(".btm-nav button").forEach((btn) => {
+      document.querySelectorAll(".bgb-nav button, .btm-nav button").forEach((btn) => {
         const views = btn.dataset.navViews
           ? btn.dataset.navViews.split(",").map((s) => s.trim())
           : [btn.dataset.nav];

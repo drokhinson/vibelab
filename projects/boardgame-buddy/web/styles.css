@@ -1447,42 +1447,104 @@ body {
   -webkit-line-clamp: 2;
 }
 
-/* ── Bottom nav active state — brass accent + iOS safe-area ─────────────────── */
-.btm-nav {
-  padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+/* ── Bottom nav — floating bar + raised Create button ──────────────────────── */
+/* Mobile-first floating panel that visually separates from the dark
+   feed/profile content. Feed + Profile are flanking pill-tabs; Log is a
+   raised gold disc that reads as a deliberate Create CTA. */
+
+.bgb-nav {
+  position: fixed;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 28px);
+  max-width: 452px;
+  height: 64px;
+  border-radius: 26px;
+  background: linear-gradient(180deg, #33240F 0%, #1E1308 100%);
+  box-shadow:
+    0 -2px 16px rgba(0, 0, 0, 0.4),
+    0 10px 26px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(245, 220, 142, 0.12),
+    inset 0 0 0 1px rgba(205, 162, 63, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 40;
 }
-/* The active tab gets a warm brass-gold gradient pill behind it and the
-   icon flips to dark mahogany ink, so the selection reads at a glance. */
-.btm-nav button {
+
+.bgb-nav__tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: rgba(247, 239, 220, 0.55);
+  cursor: pointer;
+  padding: 8px 0;
+  border-radius: 16px;
+  margin: 0 14px;
+  min-height: 44px;
+  background: transparent;
+  border: none;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.bgb-nav__tab:hover { color: rgba(247, 239, 220, 0.85); }
+.bgb-nav__tab.active {
+  color: #F5DC8E;
+  background: rgba(205, 162, 63, 0.14);
+}
+.bgb-nav__tab.active .bgb-nav__ico svg,
+.bgb-nav__tab.active .bgb-nav__ico i {
+  filter: drop-shadow(0 0 6px rgba(232, 200, 104, 0.45));
+}
+.bgb-nav__ico { display: inline-flex; align-items: center; justify-content: center; }
+.bgb-nav__label { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
+
+.bgb-nav__create {
+  flex: 0 0 auto;
+  width: 60px;
+  height: 60px;
+  margin: 0 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 32%, #F5DC8E 0%, #CDA23F 45%, #A87C22 100%);
+  box-shadow:
+    0 6px 16px rgba(168, 124, 34, 0.5),
+    0 0 0 5px oklch(var(--b1)),
+    inset 0 2px 3px rgba(255, 255, 255, 0.5),
+    inset 0 -3px 5px rgba(110, 78, 18, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2A1B0E;
+  cursor: pointer;
+  transform: translateY(-16px);
   position: relative;
-  transition: color 180ms ease;
+  border: none;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease;
 }
-.btm-nav button.active {
-  color: #1a120a;
-  border-top-color: transparent;
+.bgb-nav__create:active { transform: translateY(-16px) scale(0.94); }
+.bgb-nav__create.active {
+  box-shadow:
+    0 8px 22px rgba(232, 200, 104, 0.55),
+    0 0 0 5px oklch(var(--b1)),
+    inset 0 2px 3px rgba(255, 255, 255, 0.6),
+    inset 0 -3px 5px rgba(110, 78, 18, 0.55);
 }
-.btm-nav button.active::before {
-  content: "";
+.bgb-nav__create-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #2A1B0E;
+}
+.bgb-nav__create-label {
   position: absolute;
-  inset: 4px 8px;
-  border-radius: 12px;
-  background: linear-gradient(
-    150deg,
-    #f6cf6a 0%,
-    var(--accent) 45%,
-    #a16f12 100%
-  );
-  box-shadow: 0 4px 12px -4px rgba(201, 146, 42, 0.55),
-              inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  z-index: 0;
-  pointer-events: none;
-}
-.btm-nav button.active > * {
-  position: relative;
-  z-index: 1;
-}
-.btm-nav button.active .btm-nav-label {
-  font-weight: 600;
+  bottom: -18px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #E8C868;
+  letter-spacing: 0.02em;
 }
 
 /* ── Tabs — warm gold active state ──────────────────────────────────────────── */

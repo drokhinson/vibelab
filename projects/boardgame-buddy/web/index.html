@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app" class="max-w-[480px] mx-auto min-h-screen flex flex-col pb-20">
+  <div id="app" class="max-w-[480px] mx-auto min-h-screen flex flex-col pb-28">
 
     <!-- Global app header — persists across views once the user is signed in.
          Brand on the left routes back to the feed; avatar on the right opens
@@ -73,24 +73,32 @@
     <div id="toast" class="toast toast-end toast-top hidden z-50"></div>
   </div>
 
-  <!-- Bottom nav: Feed | Log | Profile.
-       data-nav is the destination on tap; data-nav-views (when present)
-       is a comma-separated list of view names that keep this tab marked
-       active — so the Log tab stays gold throughout play-flow, the join
-       chooser, and the joiner's session-viewer mirror. -->
-  <nav class="hidden btm-nav btm-nav-sm z-40" data-auth-only>
-    <button data-nav="feed">
-      <i data-lucide="home" class="w-5 h-5"></i>
-      <span class="btm-nav-label text-xs">Feed</span>
+  <!-- Bottom nav: floating bar + raised Create button.
+       Feed and Profile are flanking tabs; Log is a raised gold disc that
+       reads as a create CTA. data-nav is the destination on tap;
+       data-nav-views (when present) is a comma-separated list of view
+       names that keep this tab marked active — so the Log button stays
+       lit throughout play-flow, the join chooser, and the joiner's
+       session-viewer mirror. -->
+  <nav class="hidden bgb-nav" data-auth-only>
+    <button class="bgb-nav__tab" data-nav="feed">
+      <span class="bgb-nav__ico">
+        <i data-lucide="home" class="w-5 h-5"></i>
+      </span>
+      <span class="bgb-nav__label">Feed</span>
     </button>
-    <button data-nav="play-flow"
+    <button class="bgb-nav__create" data-nav="play-flow"
             data-nav-views="play-flow,log-play,join-session,session-viewer">
-      <i data-lucide="plus-circle" class="w-5 h-5"></i>
-      <span class="btm-nav-label text-xs">Log</span>
+      <span class="bgb-nav__create-ico">
+        <i data-lucide="plus" class="w-7 h-7"></i>
+      </span>
+      <span class="bgb-nav__create-label">Log</span>
     </button>
-    <button data-nav="profile-self">
-      <i data-lucide="user" class="w-5 h-5"></i>
-      <span class="btm-nav-label text-xs">Profile</span>
+    <button class="bgb-nav__tab" data-nav="profile-self">
+      <span class="bgb-nav__ico">
+        <i data-lucide="user" class="w-5 h-5"></i>
+      </span>
+      <span class="bgb-nav__label">Profile</span>
     </button>
   </nav>
 
