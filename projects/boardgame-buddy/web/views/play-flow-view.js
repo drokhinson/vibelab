@@ -567,7 +567,7 @@
       const ps = this._ps;
       return `
         <section class="cascade-card">
-          <label class="cascade-card__label">When</label>
+          <label class="cascade-card__label">Date played</label>
           <input type="date" class="input input-bordered w-full"
                  value="${escapeAttr(ps.playedAt)}"
                  onchange="window.playFlowView._setDate(this.value)" />
