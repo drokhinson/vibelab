@@ -5629,9 +5629,10 @@ main[data-view="session-viewer"].hidden {
 }
 .lp-find-section { padding-bottom: 24px; }
 .lp-section-title {
-  font-size: 22px;
+  font-size: 28px;
+  text-align: center;
   color: oklch(var(--bc));
-  margin: 0 4px 12px;
+  margin: 0 4px 14px;
 }
 .lp-filters {
   display: flex;
@@ -5716,7 +5717,9 @@ main[data-view="session-viewer"].hidden {
   grid-template-columns: repeat(3, 1fr);
   gap: 14px 10px;
   padding: 6px 2px 14px;
+  transition: opacity 160ms ease;
 }
+.lp-find-grid.is-reloading { opacity: 0.6; }
 .lp-find-loading {
   display: flex;
   align-items: center;
@@ -5733,27 +5736,12 @@ main[data-view="session-viewer"].hidden {
   align-items: center;
   gap: 10px;
 }
-/* Infinite-scroll sentinel anchor. The idle (next-page trigger) variant
-   is a 1px-tall invisible div the IntersectionObserver watches. The
-   loading variant inflates to show the buddy loader while a page lands. */
-.lp-find-sentinel {
-  height: 1px;
-  width: 100%;
-}
-.lp-find-sentinel--loading {
-  height: auto;
+.lp-find-pager {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 16px 0 24px;
-}
-.lp-find-sentinel--done {
-  height: auto;
-  text-align: center;
-  padding: 16px 0 24px;
-  font-size: 11px;
-  color: var(--polaroid-muted);
-  font-style: italic;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 2px 12px;
 }
 
 /* ── Polaroid game card (used inside .lp-find-grid) ──────────────────────── */
