@@ -60,7 +60,7 @@ html, body {
 }
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   font-family: var(--font-sans);
   background: oklch(var(--b1));
 }
@@ -4638,19 +4638,21 @@ body {
 .bgg-attribution-card__logo img { max-height: 36px; }
 
 /* ── Cascade play flow (Gather → Play → Settle Up) ───────────────────────── */
-/* Three-screen guided log-play flow. The container snap-scrolls vertically;
-   each screen is a viewport-height block. Locked sections (the host hasn't
-   advanced yet) stay in the DOM but collapse out of snap pathing so the
-   ReferenceGuideScroll widget keeps its state across back/forward. */
+/* Three-screen guided log-play flow. Each cascade-screen is a top-level
+   block inside <main data-view="play-flow"> — the DOCUMENT is the scroll
+   container (no inner scroller). This is intentional: a previous take used
+   an inner .cascade-scroll div sized via a flex chain, but `min-height:
+   100%` on the screens didn't always resolve on iOS Safari, leaving the
+   inner scroller un-scrollable AND breaking pull-to-refresh because
+   overscroll-behavior was contained inside the inner div. Letting the
+   document scroll gives us reliable touch scroll on mobile and restores
+   pull-to-refresh. The global header stays pinned at the top via its
+   existing position: sticky; top: 0 rule. */
 
 :root {
-  --cascade-bottom-pad: 24px;  /* #app reserves nav height; this is just inner breathing room for the sticky CTA */
+  --cascade-bottom-pad: 24px;  /* inner breathing room above the sticky CTA */
 }
 
-/* The cascade lives inside <main data-view="play-flow"> which is flex-1
-   inside #app. Force the main to participate in a column-flex chain so
-   the inner .cascade-scroll can claim the remaining height without
-   hard-coding the global header height. */
 /* Hard-hide the cascade containers when the router toggles .hidden. The
    default Tailwind `.hidden { display: none }` has lower specificity than
    the active-state rule below, and any cascade-ordering quirk between the
@@ -4660,36 +4662,12 @@ main[data-view="play-flow"].hidden,
 main[data-view="session-viewer"].hidden {
   display: none !important;
 }
-main[data-view="play-flow"]:not(.hidden),
-main[data-view="session-viewer"]:not(.hidden) {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.cascade-scroll {
-  /* Free vertical scroll. We tried scroll-snap-type: y proximity with
-     scroll-snap-stop: always on each cascade-screen so screens felt like
-     discrete "pages," but on mobile (especially iOS Safari) snap-stop:
-     always overrides proximity and yanks the scroll back to the current
-     screen's start on every flick — making it impossible to reach the
-     middle/bottom of a long Gather screen. The Continue button still
-     programmatically advances to the next screen via scrollIntoView
-     (see _scrollToCurrentPhase / _scrollTo in play-flow-view.js), and
-     each screen's min-height: 100% keeps the per-step "page" feel. */
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  flex: 1;
-  min-height: 0;
-  scrollbar-width: none;
-}
-.cascade-scroll::-webkit-scrollbar { display: none; }
 
 .cascade-screen {
-  /* Each screen fills the visible scroll area at minimum, then grows to
-     fit its content. Programmatic scrollIntoView lands cleanly on the
-     screen's top edge thanks to scroll-margin-top: 0 (the default). */
-  min-height: 100%;
+  /* Each visible screen fills at least the live viewport (minus the
+     fixed bottom nav) so it reads as its own "page" — content beyond
+     that grows the section and the document scrolls naturally. */
+  min-height: calc(100dvh - var(--bgb-nav-height) - env(safe-area-inset-bottom));
   padding: 12px 16px var(--cascade-bottom-pad);
   display: flex;
   flex-direction: column;
@@ -4813,23 +4791,13 @@ main[data-view="session-viewer"]:not(.hidden) {
   font-size: 12px;
 }
 
-/* Subtle alternating tilt on decorative cards inside Gather. The scoring
-   table and reference-guide cards stay flat for legibility. */
-.cascade-screen#screen-gather > .cascade-card:nth-of-type(odd) {
-  transform: rotate(-0.4deg);
-}
-.cascade-screen#screen-gather > .cascade-card:nth-of-type(even) {
-  transform: rotate(0.35deg);
-}
-.cascade-card--scoring,
-.cascade-card--guide,
-.cascade-card--invite { transform: none !important; }
-
 /* CTA (Continue / Wrap up / Save play). Sticks to the bottom of each
    screen so the user always sees the next-step button. */
 .cascade-cta-wrap {
   position: sticky;
-  bottom: 12px;
+  /* With document scroll, sticky bottom is relative to the viewport, so
+     the CTA must clear the fixed bottom nav. */
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 12px);
   margin-top: auto;
   padding-top: 8px;
   z-index: 2;
@@ -4855,7 +4823,9 @@ main[data-view="session-viewer"]:not(.hidden) {
 
 .cascade-error {
   position: sticky;
-  bottom: 76px;
+  /* Same nav-clearance trick as .cascade-cta-wrap, plus room above the
+     CTA so the error toast lands between the CTA and the last card. */
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 76px);
   margin: 0 16px;
   z-index: 3;
 }
@@ -5163,10 +5133,6 @@ main[data-view="session-viewer"]:not(.hidden) {
   transform: translateY(-2px);
   box-shadow: 0 18px 36px -14px rgba(0, 0, 0, 0.5);
 }
-.cascade-chooser__card--host { transform: rotate(-0.6deg); }
-.cascade-chooser__card--host:hover { transform: rotate(-0.6deg) translateY(-2px); }
-.cascade-chooser__card--join { transform: rotate(0.5deg); }
-.cascade-chooser__card--join:hover { transform: rotate(0.5deg) translateY(-2px); }
 .cascade-chooser__card-icon {
   grid-row: 1 / span 2;
   width: 48px;

@@ -274,20 +274,18 @@
 
       this.container.innerHTML = `
         ${this._renderTopbar(s)}
-        <div class="cascade-scroll cascade-scroll--read" id="session-viewer-scroll">
-          <section class="cascade-screen" id="screen-gather">
-            ${this._renderHeaderRow("Gather", 1, "Waiting on the host")}
-            ${this._renderGather(s)}
-          </section>
-          <section class="cascade-screen ${lockPlay ? "is-locked" : ""}" id="screen-play">
-            ${this._renderHeaderRow("Play", 2, this._headerHint(phase))}
-            ${this._renderPlay(s)}
-          </section>
-          <section class="cascade-screen ${lockSettle ? "is-locked" : ""}" id="screen-settle">
-            ${this._renderHeaderRow("Settle Up", 3, "The host is wrapping up")}
-            ${this._renderSettlePlaceholder()}
-          </section>
-        </div>
+        <section class="cascade-screen" id="screen-gather">
+          ${this._renderHeaderRow("Gather", 1, "Waiting on the host")}
+          ${this._renderGather(s)}
+        </section>
+        <section class="cascade-screen ${lockPlay ? "is-locked" : ""}" id="screen-play">
+          ${this._renderHeaderRow("Play", 2, this._headerHint(phase))}
+          ${this._renderPlay(s)}
+        </section>
+        <section class="cascade-screen ${lockSettle ? "is-locked" : ""}" id="screen-settle">
+          ${this._renderHeaderRow("Settle Up", 3, "The host is wrapping up")}
+          ${this._renderSettlePlaceholder()}
+        </section>
       `;
       if (window.lucide) window.lucide.createIcons();
       if (phase === "play" || phase === "settle") this._mountReferenceGuide(s);
@@ -527,8 +525,10 @@
             The host ended the session.
           </div>
         `;
-        const scroll = this.container.querySelector(".cascade-scroll");
-        if (scroll) scroll.insertAdjacentHTML("afterbegin", banner);
+        // The cascade no longer has an inner scroll wrapper — drop the
+        // banner above the first cascade-screen so it reads at the top.
+        const firstScreen = this.container.querySelector(".cascade-screen");
+        if (firstScreen) firstScreen.insertAdjacentHTML("beforebegin", banner);
         if (window.lucide) window.lucide.createIcons();
       }
     }
