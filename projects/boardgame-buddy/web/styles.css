@@ -4668,12 +4668,15 @@ main[data-view="session-viewer"]:not(.hidden) {
 }
 
 .cascade-scroll {
-  /* Proximity snap, not mandatory — a screen with lots of players /
-     expansions / scoring rows is taller than the viewport, and mandatory
-     snap would force-yank the user back to the screen start, hiding the
-     Continue CTA. Proximity still pulls the next screen into place when
-     the user nudges past a snap point. */
-  scroll-snap-type: y proximity;
+  /* Free vertical scroll. We tried scroll-snap-type: y proximity with
+     scroll-snap-stop: always on each cascade-screen so screens felt like
+     discrete "pages," but on mobile (especially iOS Safari) snap-stop:
+     always overrides proximity and yanks the scroll back to the current
+     screen's start on every flick — making it impossible to reach the
+     middle/bottom of a long Gather screen. The Continue button still
+     programmatically advances to the next screen via scrollIntoView
+     (see _scrollToCurrentPhase / _scrollTo in play-flow-view.js), and
+     each screen's min-height: 100% keeps the per-step "page" feel. */
   overflow-y: auto;
   overscroll-behavior: contain;
   flex: 1;
@@ -4683,11 +4686,9 @@ main[data-view="session-viewer"]:not(.hidden) {
 .cascade-scroll::-webkit-scrollbar { display: none; }
 
 .cascade-screen {
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  /* Each screen fills the visible scroll-area exactly so snap lands on
-     screen boundaries. 70dvh keeps the screen workable on short
-     viewports (landscape phone) without hard-coding chrome heights. */
+  /* Each screen fills the visible scroll area at minimum, then grows to
+     fit its content. Programmatic scrollIntoView lands cleanly on the
+     screen's top edge thanks to scroll-margin-top: 0 (the default). */
   min-height: 100%;
   padding: 12px 16px var(--cascade-bottom-pad);
   display: flex;
@@ -4696,7 +4697,6 @@ main[data-view="session-viewer"]:not(.hidden) {
   position: relative;
 }
 .cascade-screen.is-locked {
-  scroll-snap-align: none;
   visibility: hidden;
   height: 0;
   min-height: 0;
