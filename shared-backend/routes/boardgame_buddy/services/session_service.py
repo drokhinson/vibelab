@@ -177,17 +177,19 @@ def join_session(
     user_display_name: Optional[str],
     guest_display_name: Optional[str],
 ) -> SessionResponse:
-    """Idempotent join. Authed callers join as a real account; anon callers as a guest."""
-    session = _fetch_open_session(sb, code)
-    # Lobby closes once the host advances past Gather — late joiners can't
-    # be added to a play that's already underway.
-    if session.get("phase") and session["phase"] != SessionPhase.GATHER.value:
-        raise HTTPException(
-            status_code=409,
-            detail="Lobby is closed — host has already started the game",
-        )
+    """Idempotent join. Authed callers join as a real account; anon callers as a guest.
 
-    if user_id:
+    Joining during Gather adds the caller to the participants table — the
+    host's poll then promotes them to a player row in the live draft.
+    Joining after Gather (Play / Settle) is allowed too but does NOT touch
+    the participants table: the caller is a spectator with the same
+    read-only session-viewer view as joiners-during-gather, just absent
+    from the host's player list.
+    """
+    session = _fetch_open_session(sb, code)
+    in_gather = (session.get("phase") or SessionPhase.GATHER.value) == SessionPhase.GATHER.value
+
+    if in_gather and user_id:
         existing = (
             sb.table("boardgamebuddy_play_session_participants")
             .select("id")
@@ -201,7 +203,7 @@ def join_session(
                 "user_id": user_id,
                 "display_name": user_display_name or "Player",
             }).execute()
-    else:
+    elif in_gather:
         name = (guest_display_name or "").strip()
         if not name:
             raise HTTPException(status_code=400, detail="display_name is required for guests")
@@ -307,21 +309,30 @@ def update_phase(
 def list_joinable(sb, viewer_id: str) -> list[JoinableSession]:
     """Open sessions the viewer can land on from the Join chooser.
 
-    Includes any open session in phase='gather' that the viewer has
-    visibility into:
+    Includes any open in-progress session (phase ∈ gather/play/settle)
+    that the viewer has visibility into:
       - their own hosted sessions (refresh recovery),
       - sessions they've already joined (disconnect recovery), or
       - sessions hosted by an accepted buddy.
 
-    Sessions in phase='play'/'settle'/'finalized'/'abandoned' are excluded
-    — the lobby is closed once the host moves past Gather.
+    Gather sessions can be joined as a player; Play/Settle sessions are
+    spectator-only — the FE surfaces a "Spectate" badge so the user
+    knows what they're stepping into. Finalized and abandoned sessions
+    are excluded.
     """
     now_iso = datetime.now(timezone.utc).isoformat()
     rows = (
         sb.table("boardgamebuddy_play_sessions")
         .select(_SESSION_SELECT)
         .eq("status", PlaySessionStatus.OPEN.value)
-        .eq("phase", SessionPhase.GATHER.value)
+        .in_(
+            "phase",
+            [
+                SessionPhase.GATHER.value,
+                SessionPhase.PLAY.value,
+                SessionPhase.SETTLE.value,
+            ],
+        )
         .gt("expires_at", now_iso)
         .order("created_at", desc=True)
         .execute()
@@ -380,6 +391,7 @@ def list_joinable(sb, viewer_id: str) -> list[JoinableSession]:
             host_display_name=prof.get("display_name") or "Host",
             host_avatar_url=prof.get("avatar_url"),
             game=games.get(s["game_id"]) if s.get("game_id") else None,
+            phase=SessionPhase(s.get("phase") or SessionPhase.GATHER.value),
             participant_count=len(plist),
             is_participant=is_participant,
             is_host_buddy=is_host_buddy,

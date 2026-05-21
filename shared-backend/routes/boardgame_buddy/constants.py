@@ -41,12 +41,19 @@ class SessionPhase(StrEnum):
     ABANDONED = "abandoned"
 
 
-# Allowed forward/abandon transitions per phase. Backwards moves and
-# terminal-state resurrections are rejected at the service layer.
+# Allowed phase transitions. Forward moves drive the host through the
+# guided flow; one-step backward moves let the host bounce back to a
+# previous step (Play → Gather, Settle → Play) when they tap the
+# top-left back arrow. Terminal states (finalized / abandoned) are
+# absorbing — no resurrections.
 ALLOWED_PHASE_TRANSITIONS: dict[SessionPhase, frozenset[SessionPhase]] = {
     SessionPhase.GATHER: frozenset({SessionPhase.PLAY, SessionPhase.ABANDONED}),
-    SessionPhase.PLAY: frozenset({SessionPhase.SETTLE, SessionPhase.ABANDONED}),
-    SessionPhase.SETTLE: frozenset({SessionPhase.FINALIZED, SessionPhase.ABANDONED}),
+    SessionPhase.PLAY: frozenset(
+        {SessionPhase.GATHER, SessionPhase.SETTLE, SessionPhase.ABANDONED}
+    ),
+    SessionPhase.SETTLE: frozenset(
+        {SessionPhase.PLAY, SessionPhase.FINALIZED, SessionPhase.ABANDONED}
+    ),
     SessionPhase.FINALIZED: frozenset(),
     SessionPhase.ABANDONED: frozenset(),
 }
