@@ -508,13 +508,17 @@ async def collection_grid(
         True,
         description="When true (default) expansions are hidden — surfaced separately on the Profile.",
     ),
+    sort: CollectionSort = Query(
+        CollectionSort.LAST_PLAYED,
+        description="Sort order — last_played (default), added_at, or alphabetical.",
+    ),
     user_id: Optional[str] = Query(
         None,
         description="Target user (profiles are public); defaults to the viewer.",
     ),
     user: CurrentUser = Depends(get_current_user),
 ) -> CollectionPageResponse:
-    """Collection shelf sorted last_played DESC NULLS LAST, then added_at DESC."""
+    """Collection shelf sorted by `sort` (default last_played DESC NULLS LAST, then added_at DESC)."""
     sb = get_supabase()
     target_user_id = user_id or user.user_id
     status_value = status.value
@@ -662,17 +666,25 @@ async def collection_grid(
         if played and (gid not in last_played or played > last_played[gid]):
             last_played[gid] = played
 
-    # Sort: last_played DESC NULLS LAST, then added_at DESC. Split into
-    # has-play and never-played buckets so NULLS LAST is trivial; each
-    # bucket sorts by its own secondary key.
-    has_plays = [r for r in filtered if r["game_id"] in last_played]
-    no_plays = [r for r in filtered if r["game_id"] not in last_played]
-    has_plays.sort(
-        key=lambda r: (last_played[r["game_id"]], r.get("added_at") or ""),
-        reverse=True,
-    )
-    no_plays.sort(key=lambda r: r.get("added_at") or "", reverse=True)
-    ordered = has_plays + no_plays
+    if sort == CollectionSort.ADDED_AT:
+        ordered = sorted(filtered, key=lambda r: r.get("added_at") or "", reverse=True)
+    elif sort == CollectionSort.ALPHABETICAL:
+        ordered = sorted(
+            filtered,
+            key=lambda r: ((r.get("boardgamebuddy_games") or {}).get("name") or "").lower(),
+        )
+    else:
+        # last_played DESC NULLS LAST, then added_at DESC. Split into
+        # has-play and never-played buckets so NULLS LAST is trivial; each
+        # bucket sorts by its own secondary key.
+        has_plays = [r for r in filtered if r["game_id"] in last_played]
+        no_plays = [r for r in filtered if r["game_id"] not in last_played]
+        has_plays.sort(
+            key=lambda r: (last_played[r["game_id"]], r.get("added_at") or ""),
+            reverse=True,
+        )
+        no_plays.sort(key=lambda r: r.get("added_at") or "", reverse=True)
+        ordered = has_plays + no_plays
 
     offset = (page - 1) * per_page
     page_rows = ordered[offset : offset + per_page]

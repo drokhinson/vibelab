@@ -27,6 +27,14 @@
       this._error = null;
       this._saving = false;
       this._lobbyPoll = null;
+      // Inline game-picker state. _recentGames caches the recently-played
+      // seed list for the empty-input dropdown; _gameQueryToken increments
+      // on every search so stale responses can be discarded. _gameBggMode
+      // tracks whether the dropdown is currently showing BGG fallback hits.
+      this._recentGames = null;
+      this._gameQueryToken = 0;
+      this._gameSearchTimer = null;
+      this._gameBggMode = false;
     }
 
     async onMount() {
@@ -329,17 +337,20 @@
 
         <section class="cascade-card">
           <label class="cascade-card__label">Game</label>
-          ${game ? `
-            <div class="cascade-game">
-              ${game.thumbnail_url ? `<img class="cascade-game__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />` : ""}
-              <div class="cascade-game__name">${escape(game.name)}</div>
-              <button class="btn btn-ghost btn-sm" onclick="window.playFlowView._pickGame()">Change</button>
-            </div>
-          ` : `
-            <button class="btn btn-outline w-full" onclick="window.playFlowView._pickGame()">
-              <i data-lucide="search" class="w-4 h-4"></i> Pick a game
-            </button>
-          `}
+          <div id="play-flow-game-chip">${this._renderPickedGameChip()}</div>
+          <div class="cascade-game-combo">
+            <i data-lucide="search" class="w-4 h-4 cascade-game-combo__icon"></i>
+            <input id="play-flow-game-input"
+                   class="input input-bordered cascade-game-combo__input"
+                   placeholder="${game ? 'Change game…' : 'Search for a game…'}"
+                   autocomplete="off" autocapitalize="off" autocorrect="off"
+                   oninput="window.playFlowView._onGameInput(this.value)"
+                   onfocus="window.playFlowView._openGameDropdown()"
+                   onblur="window.playFlowView._scheduleCloseGameDropdown()"
+                   onkeydown="if(event.key==='Escape'){event.preventDefault();window.playFlowView._closeGameDropdown();}" />
+            <ul id="play-flow-game-dropdown" class="cascade-game-dropdown hidden"
+                onmousedown="event.preventDefault()"></ul>
+          </div>
         </section>
 
         ${this._renderExpansionsPicker()}
@@ -694,8 +705,321 @@
 
     // ── Game pick + form fields ─────────────────────────────────────────────
 
-    _pickGame() {
-      window.router.go("game-search", { mode: "pick-for-play" });
+    _renderPickedGameChip() {
+      const game = this._ps && this._ps.gameSnapshot;
+      if (!game) return "";
+      return `
+        <div class="cascade-game-chip">
+          ${game.thumbnail_url
+            ? `<img class="cascade-game-chip__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />`
+            : `<div class="cascade-game-chip__thumb cascade-game-chip__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
+          <div class="cascade-game-chip__name">${escape(game.name)}</div>
+          <button class="cascade-game-chip__clear" type="button"
+                  title="Change game" aria-label="Clear pick"
+                  onclick="window.playFlowView._clearGamePick()">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      `;
+    }
+
+    _refreshPickedGameChip() {
+      const wrap = document.getElementById("play-flow-game-chip");
+      if (!wrap) return;
+      wrap.innerHTML = this._renderPickedGameChip();
+      if (window.lucide) window.lucide.createIcons();
+      // Keep the input's placeholder in sync (search vs change game).
+      const input = document.getElementById("play-flow-game-input");
+      if (input) {
+        input.placeholder = this._ps && this._ps.gameSnapshot
+          ? "Change game…" : "Search for a game…";
+      }
+    }
+
+    _clearGamePick() {
+      const ps = this._ps;
+      if (!ps) return;
+      ps.gameId = null;
+      ps.gameSnapshot = null;
+      ps.persist();
+      // Push the clear to the lobby so joiners' read-only mirrors drop the
+      // game pick alongside the host.
+      if (ps.code) {
+        window.PlaySession.updateLobby(ps.code, { gameId: null }).catch(() => {});
+      }
+      this._refreshPickedGameChip();
+      // Continue button enable/disable also depends on gameId — repaint the
+      // sticky CTA without rebuilding the form (innerHTML on the wrapper
+      // would unmount the focused input).
+      this._refreshContinueCta();
+      const input = document.getElementById("play-flow-game-input");
+      if (input) input.focus();
+    }
+
+    _refreshContinueCta() {
+      const gather = document.getElementById("screen-gather");
+      if (!gather) return;
+      const wrap = gather.querySelector(".cascade-cta-wrap");
+      if (!wrap) return;
+      wrap.outerHTML = this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId });
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    // Inline picker. The dropdown is the only DOM that gets mutated as the
+    // user types — the <input> node stays put across every render, so the
+    // OS caret never moves and focus is preserved.
+    _onGameInput(value) {
+      clearTimeout(this._gameSearchTimer);
+      const q = (value || "").trim();
+      // Empty: snap back to the recently-played seed list immediately.
+      if (!q) {
+        this._gameBggMode = false;
+        this._renderGameDropdown("");
+        return;
+      }
+      // Debounce 180ms so a fast typer doesn't fire one query per keystroke.
+      this._gameSearchTimer = setTimeout(() => {
+        this._gameBggMode = false;
+        this._renderGameDropdown(q);
+      }, 180);
+    }
+
+    async _openGameDropdown() {
+      // First focus path: lazy-load the recently-played seed list. Cached
+      // for the lifetime of the mount; mostly stable because plays only
+      // get added at finalize time.
+      if (this._recentGames === null) {
+        try {
+          this._recentGames = await window.Game.recentlyPlayed(6);
+        } catch (_) {
+          this._recentGames = [];
+        }
+      }
+      const input = document.getElementById("play-flow-game-input");
+      const q = input ? (input.value || "").trim() : "";
+      this._renderGameDropdown(q);
+    }
+
+    _scheduleCloseGameDropdown() {
+      setTimeout(() => this._closeGameDropdown(), 200);
+    }
+
+    _closeGameDropdown() {
+      const dd = document.getElementById("play-flow-game-dropdown");
+      if (dd) {
+        dd.classList.add("hidden");
+        dd.innerHTML = "";
+      }
+    }
+
+    async _renderGameDropdown(query) {
+      const dd = document.getElementById("play-flow-game-dropdown");
+      if (!dd) return;
+      const q = (query || "").trim();
+      const token = ++this._gameQueryToken;
+
+      // Empty query → recently-played seed list (or hint if none).
+      if (!q) {
+        const list = this._recentGames || [];
+        if (list.length === 0) {
+          dd.innerHTML = `<li class="cascade-game-dropdown__hint">Type a game name to search.</li>`;
+        } else {
+          dd.innerHTML =
+            `<li class="cascade-game-dropdown__header">Recently played</li>` +
+            list.map((g) => this._renderGameDropdownRow(g)).join("");
+        }
+        dd.classList.remove("hidden");
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      // Non-empty query → unified search (collection + DB hits).
+      dd.innerHTML = `<li class="cascade-game-dropdown__hint">Searching…</li>`;
+      dd.classList.remove("hidden");
+      let data;
+      try {
+        data = await window.Game.search(q);
+      } catch (_) {
+        if (token !== this._gameQueryToken) return;
+        dd.innerHTML = `<li class="cascade-game-dropdown__hint">Search failed. Try again.</li>`;
+        return;
+      }
+      if (token !== this._gameQueryToken) return;
+      const hits = (data && data.results) || [];
+      if (hits.length === 0) {
+        // Empty → offer BGG extension.
+        dd.innerHTML = `
+          <li class="cascade-game-dropdown__hint">No matches in your library.</li>
+          <li class="cascade-game-dropdown-item cascade-game-dropdown-item--bgg"
+              onclick="window.playFlowView._runBggFromDropdown('${jsStr(q)}')">
+            <i data-lucide="search" class="w-4 h-4"></i>
+            <span>Search BoardGameGeek for "${escape(q)}"</span>
+          </li>`;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+      dd.innerHTML = hits.map((h) => this._renderGameDropdownRow(h.game)).join("");
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    _renderGameDropdownRow(game) {
+      const meta = [
+        game.year_published,
+        game.min_players ? `${game.min_players}${game.max_players && game.max_players !== game.min_players ? "–" + game.max_players : ""}P` : null,
+        game.playing_time ? `${game.playing_time}m` : null,
+      ].filter(Boolean).join(" · ");
+      return `
+        <li class="cascade-game-dropdown-item"
+            onclick="window.playFlowView._pickGameById('${jsStr(game.id)}')">
+          ${game.thumbnail_url
+            ? `<img class="cascade-game-dropdown-item__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" loading="lazy" />`
+            : `<div class="cascade-game-dropdown-item__thumb cascade-game-dropdown-item__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
+          <div class="cascade-game-dropdown-item__body">
+            <div class="cascade-game-dropdown-item__name">${escape(game.name)}</div>
+            ${meta ? `<div class="cascade-game-dropdown-item__meta">${escape(meta)}</div>` : ""}
+          </div>
+        </li>
+      `;
+    }
+
+    async _runBggFromDropdown(q) {
+      const dd = document.getElementById("play-flow-game-dropdown");
+      if (!dd) return;
+      this._gameBggMode = true;
+      const token = ++this._gameQueryToken;
+      dd.innerHTML = `<li class="cascade-game-dropdown__hint">Searching BoardGameGeek…</li>`;
+      dd.classList.remove("hidden");
+      let data;
+      try {
+        data = await window.Game.search(q, { includeBgg: true });
+      } catch (_) {
+        if (token !== this._gameQueryToken) return;
+        dd.innerHTML = `<li class="cascade-game-dropdown__hint">BoardGameGeek search failed.</li>`;
+        return;
+      }
+      if (token !== this._gameQueryToken) return;
+      const bgg = (data && data.bgg_results) || [];
+      if (bgg.length === 0) {
+        dd.innerHTML = `<li class="cascade-game-dropdown__hint">No BoardGameGeek matches.</li>`;
+        return;
+      }
+      dd.innerHTML =
+        `<li class="cascade-game-dropdown__header">From BoardGameGeek</li>` +
+        bgg.map((hit) => `
+          <li class="cascade-game-dropdown-item cascade-game-dropdown-item--bgg"
+              data-bgg-id="${hit.bgg_id}"
+              onclick="window.playFlowView._importBggInDropdown(${hit.bgg_id}, '${jsStr(hit.name)}')">
+            <div class="cascade-game-dropdown-item__thumb cascade-game-dropdown-item__thumb--placeholder">
+              <i data-lucide="dice-6"></i>
+            </div>
+            <div class="cascade-game-dropdown-item__body">
+              <div class="cascade-game-dropdown-item__name">${escape(hit.name)}</div>
+              <div class="cascade-game-dropdown-item__meta">
+                ${[hit.year_published, hit.is_expansion ? "Expansion" : null].filter(Boolean).join(" · ")}
+                ${hit.already_in_db ? " · In library" : ""}
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-xs cascade-game-dropdown-item__action">
+              ${hit.already_in_db ? "Pick" : "Import"}
+            </button>
+          </li>
+        `).join("");
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    async _importBggInDropdown(bggId, name) {
+      const dd = document.getElementById("play-flow-game-dropdown");
+      if (!dd) return;
+      const row = dd.querySelector(`li[data-bgg-id="${bggId}"]`);
+      if (row) {
+        const body = row.querySelector(".cascade-game-dropdown-item__body");
+        if (body) {
+          body.innerHTML = `
+            <div class="cascade-game-dropdown-item__name">${escape(name)}</div>
+            <div class="cascade-game-dropdown-item__meta">Importing from BoardGameGeek…</div>
+          `;
+        }
+        const action = row.querySelector(".cascade-game-dropdown-item__action");
+        if (action) { action.disabled = true; action.textContent = "…"; }
+      }
+      try {
+        const game = await window.Game.importBgg(bggId);
+        if (!document.getElementById("play-flow-game-input")) return; // view unmounted mid-import
+        if (game && game.is_expansion) {
+          if (row) {
+            const body = row.querySelector(".cascade-game-dropdown-item__body");
+            if (body) {
+              body.innerHTML = `
+                <div class="cascade-game-dropdown-item__name">${escape(name)}</div>
+                <div class="cascade-game-dropdown-item__meta">Pick a base game; expansions attach later.</div>
+              `;
+            }
+            const action = row.querySelector(".cascade-game-dropdown-item__action");
+            if (action) action.remove();
+          }
+          return;
+        }
+        this._applyGamePick(game);
+      } catch (e) {
+        if (!document.getElementById("play-flow-game-input")) return;
+        if (row) {
+          const body = row.querySelector(".cascade-game-dropdown-item__body");
+          if (body) {
+            body.innerHTML = `
+              <div class="cascade-game-dropdown-item__name">${escape(name)}</div>
+              <div class="cascade-game-dropdown-item__meta">Import failed. Try again.</div>
+            `;
+          }
+          const action = row.querySelector(".cascade-game-dropdown-item__action");
+          if (action) { action.disabled = false; action.textContent = "Retry"; }
+        }
+      }
+    }
+
+    async _pickGameById(gameId) {
+      // Look it up in any of the dropdown sources we know about. If the
+      // user picked a search hit we may not have it cached locally; in
+      // that case fall through to a single GET.
+      let game = (this._recentGames || []).find((g) => g.id === gameId);
+      if (!game) {
+        try {
+          game = await window.api.get(`/games/${gameId}`);
+        } catch (_) { return; }
+      }
+      this._applyGamePick(game);
+    }
+
+    _applyGamePick(game) {
+      if (!game || !game.id) return;
+      const ps = this._ps;
+      ps.gameId = game.id;
+      ps.gameSnapshot = {
+        id: game.id,
+        name: game.name,
+        thumbnail_url: game.thumbnail_url,
+        rulebook_url: game.rulebook_url,
+        is_expansion: !!game.is_expansion,
+      };
+      ps.playMode = game.play_mode || ps.playMode || null;
+      ps.persist();
+      window.store.set("activePlay", ps);
+      // Push the pick to the lobby so joiners' read-only mirrors swap too.
+      if (ps.code) {
+        window.PlaySession.updateLobby(ps.code, { gameId: game.id }).catch(() => {});
+      }
+      // Reload expansions for the newly-picked game; once the list is in,
+      // re-mount the reference guide widget. The dropdown closes, the chip
+      // appears above the input — the input itself stays in place so focus
+      // can return to it for further searches.
+      this._closeGameDropdown();
+      const input = document.getElementById("play-flow-game-input");
+      if (input) input.value = "";
+      this._refreshPickedGameChip();
+      this._refreshContinueCta();
+      this._loadExpansionsIfNeeded().then(() => {
+        this.render();
+        if (this._guideWidget) this._guideWidget.refresh();
+      });
     }
 
     _setDate(value) {

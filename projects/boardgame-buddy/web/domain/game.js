@@ -52,6 +52,17 @@
       return data;
     }
 
+    // Caller's most-recently-played distinct games (seed for the inline
+    // game-picker dropdown on Gather).
+    static recentlyPlayed(limit = 6) {
+      return window.api.get("/games/recently-played", { limit });
+    }
+
+    // Import a BGG game into the catalog and return the new GameSummary.
+    static importBgg(bggId) {
+      return window.api.post(`/games/import-bgg/${bggId}`);
+    }
+
     accentColor() {
       return this.theme_color || this.expansion_color || "#C9922A";
     }
