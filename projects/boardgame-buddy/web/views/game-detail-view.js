@@ -471,8 +471,30 @@
       return false;
     }
 
-    _startPlay() {
-      const ps = window.store.get("activePlay") || new window.PlaySession();
+    async _startPlay() {
+      // Tap-from-game-detail starts a fresh host session with this game
+      // pre-filled and drops the user straight into the Gather screen.
+      // If a live lobby is already open (has a server code), confirm
+      // before abandoning it — otherwise the local-only draft is safe
+      // to overwrite silently.
+      const existing = window.PlaySession.load();
+      if (existing && existing.code) {
+        const ok = await window.PolaroidPopup.confirm({
+          title: "Start a new session?",
+          body: "Your in-progress lobby will be closed. This can't be undone.",
+          confirmLabel: "Start new",
+          cancelLabel: "Keep current",
+        });
+        if (!ok) return;
+        // Fire-and-forget: tell the server to abandon the old lobby so
+        // joiners aren't stuck staring at a dead session.
+        const oldCode = existing.code;
+        existing.clear();
+        window.PlaySession.advancePhase(oldCode, "abandoned").catch(() => {});
+      } else if (existing) {
+        existing.clear();
+      }
+      const ps = new window.PlaySession();
       ps.gameId = this._game.id;
       ps.gameSnapshot = {
         id: this._game.id,
@@ -483,7 +505,9 @@
       ps.playMode = this._game.play_mode || null;
       ps.persist();
       window.store.set("activePlay", ps);
-      window.router.go("log-play");
+      // play-flow-view.onMount calls _ensureLobbyOpen() which creates the
+      // server-side lobby on first paint, so we don't need to do it here.
+      window.router.go("play-flow");
     }
   }
 

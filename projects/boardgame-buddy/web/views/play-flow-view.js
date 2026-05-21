@@ -644,16 +644,31 @@
         this.render();
         return;
       }
+      // Optimistic: flip the phase locally and repaint immediately so the
+      // user sees the section transition without waiting on the server
+      // round-trip. The PATCH happens in the background; on failure we
+      // surface the error and roll the phase back. This also keeps the
+      // Continue/Wrap-up/back-arrow taps feeling instant on a slow link.
+      const prevPhase = this._ps.phase;
+      this._ps.phase = next;
+      this._ps.persist();
+      this.render();
+      this._scrollToCurrentPhase();
       try {
         const updated = await window.PlaySession.advancePhase(this._lobby.code, next);
         this._lobby = updated;
-        this._ps.phase = updated.phase;
-        this._ps.persist();
-        this.render();
-        this._scrollToCurrentPhase();
+        if (updated.phase && updated.phase !== this._ps.phase) {
+          // Server overrode (shouldn't normally happen). Sync local view.
+          this._ps.phase = updated.phase;
+          this._ps.persist();
+          this.render();
+        }
       } catch (e) {
+        this._ps.phase = prevPhase;
+        this._ps.persist();
         this._error = e.message || "Could not advance to the next screen";
         this.render();
+        this._scrollToCurrentPhase();
       }
     }
 
