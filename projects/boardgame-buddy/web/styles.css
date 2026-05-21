@@ -4650,10 +4650,12 @@ body {
    existing position: sticky; top: 0 rule. */
 
 :root {
-  /* Bottom padding inside each cascade-screen, so the last card clears
-     the fixed-position .cascade-cta-wrap (52px tall, pinned 12px above
-     the bottom nav). 76px = 52 + 12 + 12 breathing room. */
-  --cascade-bottom-pad: 76px;
+  /* Bottom padding inside each cascade-screen so the last card always
+     clears the fixed-position .cascade-cta-wrap. The CTA is 52px tall,
+     pinned at (nav-height + safe + 28px) above the viewport bottom — so
+     CTA-top sits 80px above the bottom. 92px = 80 + 12px breathing
+     room between the last card and the CTA. */
+  --cascade-bottom-pad: 92px;
 }
 
 /* Hard-hide the cascade containers when the router toggles .hidden. The
@@ -4802,9 +4804,12 @@ main[data-view="session-viewer"].hidden {
      end-of-section release that briefly tucks it back into flow. The
      three cascade-screens each render their own CTA inside this wrapper;
      visibility: hidden on .is-locked screens cascades to their fixed
-     children, so only the active section's CTA is shown. */
+     children, so only the active section's CTA is shown.
+     The 28px offset clears the Play disc, which lifts 16px above the
+     64px nav (disc top = nav-height + safe + 30 from bottom). 28 keeps
+     the CTA bottom edge above the disc top with a small breathing gap. */
   position: fixed;
-  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 12px);
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 28px);
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 32px);    /* match cascade-screen's 16px gutters */
@@ -4846,9 +4851,10 @@ main[data-view="session-viewer"].hidden {
 
 .cascade-error {
   /* Fixed alongside .cascade-cta-wrap so it floats above the CTA
-     regardless of scroll position. */
+     regardless of scroll position. CTA top is at (nav + safe + 80) from
+     viewport bottom, so the error sits 12px above that. */
   position: fixed;
-  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 76px);
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 92px);
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 32px);
