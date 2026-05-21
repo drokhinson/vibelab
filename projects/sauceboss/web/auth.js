@@ -368,9 +368,19 @@ async function handleEmailSubmit() {
       const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) throw error;
     } else {
-      const { error } = await supabaseClient.auth.signUp({ email, password });
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
       if (error) throw error;
-      state.authError = 'Check your email to confirm your account, then sign in.';
+      // Supabase's anti-enumeration response: an existing email returns a
+      // synthetic user with empty `identities` and sends no confirmation
+      // email. Across vibelab apps the same auth.users row backs every app,
+      // so a BGB / DayWordPlay / etc. user trying to sign up for Sauceboss
+      // would otherwise be told to "check email" for a mail that never
+      // arrives. Flip to sign-in with the existing password instead.
+      if (data?.user && (data.user.identities?.length ?? 0) === 0) {
+        state.authError = 'An account with this email already exists in another vibelab app. Sign in with your existing password to link Sauceboss.';
+      } else {
+        state.authError = 'Check your email to confirm your account, then sign in.';
+      }
       state.authMode = 'login';
     }
   } catch (e) {

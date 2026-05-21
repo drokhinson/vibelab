@@ -28,14 +28,20 @@ from .services import profile_service
     summary="Get current user profile",
 )
 async def get_profile(
-    su_user: SupabaseUser = Depends(get_current_supabase_user),
+    user: CurrentUser = Depends(get_current_user),
 ) -> ProfileResponse:
-    """Get the current user's profile."""
+    """Get the current user's profile.
+
+    Routed through ``get_current_user`` so first-time callers (including
+    cross-app users whose ``auth.users`` row was created by another vibelab
+    app) get a ``boardgamebuddy_profiles`` row auto-created here instead of
+    bouncing back to auth on a 404.
+    """
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_profiles")
         .select("*")
-        .eq("id", su_user.sub)
+        .eq("id", user.user_id)
         .execute()
     )
     if not result.data:
