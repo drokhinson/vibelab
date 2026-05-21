@@ -77,7 +77,7 @@
     });
   }
 
-  // Bottom nav: Feed | Log | Profile (floating bar + raised Create).
+  // Bottom nav: Feed | Play | Profile (floating bar + raised Create).
   function wireBottomNav() {
     document.querySelectorAll(".bgb-nav button[data-nav], .btm-nav button[data-nav]").forEach((btn) => {
       btn.addEventListener("click", () => {
