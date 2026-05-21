@@ -6,6 +6,7 @@
       super("auth");
       this._mode = "login";
       this._error = null;
+      this._email = "";
     }
 
     onMount() {
@@ -51,7 +52,7 @@
               </div>
               <form onsubmit="window.authView.submit(event)">
                 <div class="form-control mb-3">
-                  <input type="email" id="auth-email" placeholder="Email" class="input input-bordered w-full" required />
+                  <input type="email" id="auth-email" placeholder="Email" class="input input-bordered w-full" value="${this._email || ""}" required />
                 </div>
                 <div class="form-control mb-4">
                   <input type="password" id="auth-password" placeholder="Password" class="input input-bordered w-full" required minlength="6" />
@@ -99,13 +100,31 @@
       btn.disabled = true;
       const email = document.getElementById("auth-email").value;
       const password = document.getElementById("auth-password").value;
+      this._email = email;
       try {
         if (!window.supabaseClient) throw new Error("Auth is not configured");
         if (this._mode === "signup") {
-          const { error } = await window.supabaseClient.auth.signUp({ email, password });
+          const { data, error } = await window.supabaseClient.auth.signUp({ email, password });
           if (error) throw error;
-          this.setError(null);
-          alert("Account created! Check your email to confirm.");
+          // Supabase returns a synthetic user with empty `identities` (and
+          // sends no email) when the address is already registered — the
+          // anti-enumeration path. Across vibelab apps the same auth.users
+          // row backs every app, so this case is common: a Sauceboss user
+          // signs up for BGB and would otherwise be told to "check email"
+          // for a mail that will never arrive. Flip to sign-in instead so
+          // they can link with their existing password.
+          if (data?.user && (data.user.identities?.length ?? 0) === 0) {
+            this._mode = "login";
+            this.setError("An account with this email already exists in another vibelab app. Sign in with your existing password to link BoardgameBuddy.");
+          } else if (data?.session) {
+            // Project is configured without email confirmation; the auth
+            // state listener will land the user on the feed.
+            this.setError(null);
+          } else {
+            // Truly new email + email confirmation is enabled.
+            this._mode = "login";
+            this.setError("Account created. Check your email to confirm, then sign in.");
+          }
         } else {
           const { error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
           if (error) throw error;
