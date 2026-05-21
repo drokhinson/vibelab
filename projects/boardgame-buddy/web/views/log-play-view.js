@@ -30,9 +30,6 @@
       this.container.innerHTML = `
         <header class="cascade-chooser__header">
           <h1 class="font-display">Log a play</h1>
-          <p class="cascade-chooser__lead">
-            Hosting at the table, or hopping into someone else's game?
-          </p>
         </header>
 
         ${resumable ? `
