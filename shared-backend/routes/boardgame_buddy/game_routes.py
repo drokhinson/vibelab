@@ -242,6 +242,14 @@ async def list_games(
     if exclude_expansions:
         query = query.eq("is_expansion", False)
 
+    # When the player-count filter is set, surface exact-fit games (where
+    # max_players == players) before wider-range ones — a "2 player game"
+    # is more useful when the user picked 2 than a 2–6 player game. Ordering
+    # by max_players ASC achieves this: the gte(max_players, players)
+    # filter above already trimmed everything below players, so the smallest
+    # max in the result set IS the exact match.
+    if players is not None:
+        query = query.order("max_players", desc=False)
     query = query.order("created_at", desc=True)
     result = query.range(offset, offset + per_page - 1).execute()
 

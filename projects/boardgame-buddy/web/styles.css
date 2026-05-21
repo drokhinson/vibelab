@@ -5716,9 +5716,7 @@ main[data-view="session-viewer"].hidden {
   grid-template-columns: repeat(3, 1fr);
   gap: 14px 10px;
   padding: 6px 2px 14px;
-  transition: opacity 160ms ease;
 }
-.lp-find-grid.is-reloading { opacity: 0.6; }
 .lp-find-loading {
   display: flex;
   align-items: center;
@@ -5735,12 +5733,27 @@ main[data-view="session-viewer"].hidden {
   align-items: center;
   gap: 10px;
 }
-.lp-find-pager {
+/* Infinite-scroll sentinel anchor. The idle (next-page trigger) variant
+   is a 1px-tall invisible div the IntersectionObserver watches. The
+   loading variant inflates to show the buddy loader while a page lands. */
+.lp-find-sentinel {
+  height: 1px;
+  width: 100%;
+}
+.lp-find-sentinel--loading {
+  height: auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 4px 2px 12px;
+  justify-content: center;
+  padding: 16px 0 24px;
+}
+.lp-find-sentinel--done {
+  height: auto;
+  text-align: center;
+  padding: 16px 0 24px;
+  font-size: 11px;
+  color: var(--polaroid-muted);
+  font-style: italic;
 }
 
 /* ── Polaroid game card (used inside .lp-find-grid) ──────────────────────── */
@@ -5757,9 +5770,7 @@ main[data-view="session-viewer"].hidden {
   display: flex;
   flex-direction: column;
 }
-.lp-find-grid .game-polaroid:nth-child(3n+1) { transform: rotate(-0.5deg); }
-.lp-find-grid .game-polaroid:nth-child(3n+2) { transform: rotate( 0.4deg); }
-.lp-find-grid .game-polaroid:nth-child(3n+3) { transform: rotate(-0.25deg); }
+.lp-find-grid .game-polaroid { transform: none; }
 .no-tilt .game-polaroid { transform: none; }
 .game-polaroid:hover {
   transform: translateY(-2px);
@@ -5788,6 +5799,15 @@ main[data-view="session-viewer"].hidden {
   align-items: center;
   justify-content: center;
   color: var(--polaroid-muted);
+}
+/* Status pill pinned to the top-right of the polaroid photo. Mirrors the
+   play-card status overlay so the affordance reads identically across the
+   feed and the find-a-game grid. */
+.game-polaroid__status {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
 }
 .game-polaroid__caption {
   padding: 6px 2px 0;

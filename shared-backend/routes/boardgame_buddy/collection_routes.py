@@ -686,6 +686,15 @@ async def collection_grid(
         no_plays.sort(key=lambda r: r.get("added_at") or "", reverse=True)
         ordered = has_plays + no_plays
 
+    # When the player-count filter is set, surface exact-fit games (where
+    # max_players == players) before wider-range ones. Stable secondary
+    # sort keeps the chosen `sort` ordering inside each bucket.
+    if players is not None:
+        ordered = sorted(
+            ordered,
+            key=lambda r: 0 if ((r.get("boardgamebuddy_games") or {}).get("max_players") == players) else 1,
+        )
+
     offset = (page - 1) * per_page
     page_rows = ordered[offset : offset + per_page]
     items = [
