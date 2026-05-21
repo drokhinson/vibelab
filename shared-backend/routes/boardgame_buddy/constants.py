@@ -78,6 +78,7 @@ PLAY_SESSION_CODE_LENGTH: int = 5
 class CollectionSort(StrEnum):
     ALPHABETICAL = "alphabetical"
     LAST_PLAYED = "last_played"
+    ADDED_AT = "added_at"
 
 
 class BggAuthState(StrEnum):

@@ -16,8 +16,9 @@
   const TAB_PLAYS = "plays";
   const TAB_BUDDIES = "buddies";
 
-  // Same playtime bubbles as the game-search filter panel. Duplicated
-  // locally so each view stays self-contained — they're tiny.
+  // Same playtime bubbles as the Find-a-Game filter strip on the
+  // Host/Join landing. Duplicated locally so each view stays
+  // self-contained — they're tiny.
   const PLAYTIME_BUCKETS = [
     { id: "u30",   label: "< 30 min",   min: null, max: 29 },
     { id: "30-60", label: "30–60 min",  min: 30,   max: 60 },
@@ -474,7 +475,7 @@
           ${this._renderWishlistSection(wishlistTotalPages)}
           ${this._renderPlayedSection(playedTotalPages)}
         </div>
-        <button class="fab-add-game" onclick="window.router.go('game-search')"
+        <button class="fab-add-game" onclick="window.router.go('log-play', { focus: 'find' })"
                 aria-label="Add a game to your collection">
           <i data-lucide="plus" class="w-4 h-4"></i>
           <span>Game</span>

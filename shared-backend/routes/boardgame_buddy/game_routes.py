@@ -399,6 +399,57 @@ async def list_bgg_expansions(
 
 
 @router.get(
+    "/games/recently-played",
+    response_model=list[GameSummary],
+    status_code=200,
+    summary="Caller's recently-played games",
+)
+async def recently_played_games(
+    limit: int = Query(6, ge=1, le=24, description="Max games to return"),
+    user: CurrentUser = Depends(get_current_user),
+) -> list[GameSummary]:
+    """Distinct games the caller has plays for, sorted by latest played_at DESC."""
+    sb = get_supabase()
+    plays = (
+        sb.table("boardgamebuddy_plays")
+        .select("game_id, played_at")
+        .eq("user_id", user.user_id)
+        .order("played_at", desc=True)
+        .limit(200)
+        .execute()
+        .data
+        or []
+    )
+    seen: set[str] = set()
+    ordered_ids: list[str] = []
+    for p in plays:
+        gid = p["game_id"]
+        if gid in seen:
+            continue
+        seen.add(gid)
+        ordered_ids.append(gid)
+        if len(ordered_ids) >= limit:
+            break
+    if not ordered_ids:
+        return []
+    rows = (
+        sb.table("boardgamebuddy_games")
+        .select(
+            "id, bgg_id, name, year_published, min_players, max_players, "
+            "playing_time, thumbnail_url, image_url, theme_color, "
+            "is_expansion, base_game_bgg_id, expansion_color, rulebook_url, "
+            "play_mode"
+        )
+        .in_("id", ordered_ids)
+        .execute()
+        .data
+        or []
+    )
+    by_id = {r["id"]: r for r in rows}
+    return [GameSummary(**by_id[gid]) for gid in ordered_ids if gid in by_id]
+
+
+@router.get(
     "/games/mechanics",
     response_model=list[str],
     status_code=200,

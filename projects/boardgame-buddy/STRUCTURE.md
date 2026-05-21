@@ -1,7 +1,7 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-05-17 (reference guide rebuilt as user-owned "chapters" — migration 018; in-play expansions picker + merged reference guide added the same day)
+> Last updated: 2026-05-21 (game-picker redesign: inline dropdown picker on Gather + "Find a Game that fits" section on the Host/Join landing replaces the standalone game-search view; new `/games/recently-played` endpoint + `?sort=added_at` on `/collection/grid`)
 
 ## What It Does
 A Strava-style log for board game plays. The home view is a chronological feed of plays from the user and their accepted buddies, interspersed with "hot games this week", suggested buddies, and dormant games from the user's own collection. Logging a play is a guided three-screen cascade — Gather → Play → Settle Up — that walks the host through the play and mirrors read-only to non-host joiners (who can score their own column live). The Log tab opens a Host-or-Join chooser; hosting opens a short-code session, joining either enters a code or picks a live session hosted by a buddy. Profiles are fully public and show a Strava-style stats strip + collection grid. The reference-guide system is fully user-driven: each user builds their own per-game guide by adding "chapters" — either creating new ones or browsing the community pool. The pool sorts by popularity. Reports on offensive chapters route to admin review.
@@ -236,7 +236,8 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/profiles/search?q=` — search other users by display name (returns id, display_name, email) for buddy linking
 - `DELETE /api/v1/boardgame_buddy/profile` — delete current user's account and data
 - `GET /api/v1/boardgame_buddy/collection` — flat list (legacy shape, list[CollectionItem])
-- `GET /api/v1/boardgame_buddy/collection/grid` — paginated owned collection sorted by `last_played_at DESC NULLS LAST, added_at DESC`. Supports `search`, `players`, `playtime_min/max`, `play_mode`, `exclude_expansions` (default true), and `user_id` (target user; defaults to the viewer — profiles are public). Two round-trips: collection+game join, then plays for the matching set.
+- `GET /api/v1/boardgame_buddy/collection/grid` — paginated owned collection sorted by `last_played_at DESC NULLS LAST, added_at DESC` by default. Supports `search`, `players`, `playtime_min/max`, `play_mode`, `exclude_expansions` (default true), `sort` (`last_played` / `added_at` / `alphabetical`), and `user_id` (target user; defaults to the viewer — profiles are public). Two round-trips: collection+game join, then plays for the matching set.
+- `GET /api/v1/boardgame_buddy/games/recently-played?limit=6` — distinct games the caller has logged plays for, sorted by latest `played_at DESC`. Used by the inline game-picker dropdown on the host Gather screen for its first-focus suggestions.
 - `POST /api/v1/boardgame_buddy/collection`
 - `PATCH /api/v1/boardgame_buddy/collection/{game_id}`
 - `DELETE /api/v1/boardgame_buddy/collection/{game_id}`

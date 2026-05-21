@@ -1,11 +1,11 @@
 // views/feed-view.js — Strava-style chronological feed.
 //
 // Composition:
-//   - Search pill at the top opens GameSearchView
 //   - Optional "resume play" chip when a PlaySession draft is active
 //   - Mixed cards from /feed: plays (spine) + hot games / suggested buddies /
 //     featured-from-collection (first page only)
 //   - "Load more" tail when next_cursor is set
+//   Game search lives on the Host/Join landing now (Find a Game that fits).
 
 (function () {
   class FeedView extends window.View {
