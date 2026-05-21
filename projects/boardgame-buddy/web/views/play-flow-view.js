@@ -286,12 +286,6 @@
             <span class="cascade-invite__code">${escape(code || "— — — — —")}</span>
             <span class="cascade-invite__hint">Open until you start the game.</span>
           </div>
-          <button class="cascade-invite__join"
-                  onclick="window.router.go('join-session')"
-                  title="Join someone else's session instead">
-            <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
-            <span>Join</span>
-          </button>
         </section>
 
         <section class="cascade-card">
@@ -629,12 +623,16 @@
         cancelLabel: "Keep playing",
       });
       if (!ok) return;
-      if (this._lobby && this._lobby.code) {
-        try { await window.PlaySession.advancePhase(this._lobby.code, "abandoned"); } catch (_) {}
-      }
+      // Tear down locally and navigate FIRST so the UI always responds.
+      // The server-side abandon is fire-and-forget — a slow or hung PATCH
+      // shouldn't strand the user on the gather screen.
+      const code = this._lobby && this._lobby.code;
       this._ps.clear();
       window.store.set("activePlay", null);
-      window.router.go("feed");
+      window.router.go("log-play");
+      if (code) {
+        window.PlaySession.advancePhase(code, "abandoned").catch(() => {});
+      }
     }
 
     // ── Game pick + form fields ─────────────────────────────────────────────

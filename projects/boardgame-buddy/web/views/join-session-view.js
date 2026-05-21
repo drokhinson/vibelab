@@ -177,7 +177,28 @@
       this.render();
       try {
         await window.PlaySession.joinLobby(code);
-        window.router.go("session-viewer", { code });
+        // The host re-entering their own session (via code input or the
+        // joinable list after a disconnect / cache wipe) should land in
+        // host mode, not the read-only viewer. fetchLobby returns the
+        // canonical session row including host_user_id.
+        const session = await window.PlaySession.fetchLobby(code);
+        const me = window.store.get("user");
+        if (me && session && session.host_user_id === me.id) {
+          const ps = window.PlaySession.load() || new window.PlaySession();
+          ps.code = session.code;
+          ps.sessionId = session.id;
+          ps.hostUserId = session.host_user_id;
+          ps.phase = session.phase || "gather";
+          if (session.game) {
+            ps.gameId = session.game.id;
+            ps.gameSnapshot = session.game;
+          }
+          ps.persist();
+          window.store.set("activePlay", ps);
+          window.router.go("play-flow");
+        } else {
+          window.router.go("session-viewer", { code });
+        }
       } catch (e) {
         this._error = e.message || "Failed to join";
       } finally {
