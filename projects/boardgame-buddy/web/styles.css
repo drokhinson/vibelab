@@ -4650,12 +4650,15 @@ body {
    existing position: sticky; top: 0 rule. */
 
 :root {
-  /* Bottom padding inside each cascade-screen so the last card always
-     clears the fixed-position .cascade-cta-wrap. The CTA is 52px tall,
-     pinned at (nav-height + safe + 28px) above the viewport bottom — so
-     CTA-top sits 80px above the bottom. 92px = 80 + 12px breathing
-     room between the last card and the CTA. */
-  --cascade-bottom-pad: 92px;
+  /* Bottom padding inside each cascade-screen — set equal to the
+     .cascade-cta-wrap sticky `bottom` value so the CTA's in-flow
+     natural position (cascade-screen.bottom − padding-bottom) lands
+     exactly on the sticky line when fully scrolled. That gives a
+     smooth sticky → release handoff: the CTA stays pinned above the
+     Play disc while there's content below, then settles in its
+     padded position below the last component at the end of the
+     section. Keep this value in sync with `.cascade-cta-wrap` below. */
+  --cascade-bottom-pad: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 28px);
 }
 
 /* Hard-hide the cascade containers when the router toggles .hidden. The
@@ -4799,23 +4802,21 @@ main[data-view="session-viewer"].hidden {
 /* CTA (Continue / Wrap up / Save play). Sticks to the bottom of each
    screen so the user always sees the next-step button. */
 .cascade-cta-wrap {
-  /* Fixed (not sticky) so the CTA's screen position is invariant under
-     DOM rewrites — re-renders never make it "move," and there's no
-     end-of-section release that briefly tucks it back into flow. The
-     three cascade-screens each render their own CTA inside this wrapper;
-     visibility: hidden on .is-locked screens cascades to their fixed
-     children, so only the active section's CTA is shown.
-     The 28px offset clears the Play disc, which lifts 16px above the
-     64px nav (disc top = nav-height + safe + 30 from bottom). 28 keeps
-     the CTA bottom edge above the disc top with a small breathing gap. */
-  position: fixed;
+  /* Classic sticky-bottom pattern: pinned at this offset above the
+     Play disc while there's content below, then releases to its
+     natural in-flow position at the end of the cascade-screen so the
+     user can scroll past it. `margin-top: auto` inside the flex
+     column pushes the wrapper to the section's end; the cascade-screen
+     `padding-bottom` (--cascade-bottom-pad) is calibrated to the same
+     28px value so the natural release point lands exactly on the
+     sticky line — no visible jump. 28px clears the Play disc
+     (translateY -16px above the 64px nav, so disc top sits ~30px
+     above the nav row's vertical center). */
+  position: sticky;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 28px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 32px);    /* match cascade-screen's 16px gutters */
-  max-width: 448px;             /* 480px app column minus 32px gutters */
-  padding-top: 0;
-  z-index: 35;                  /* above content (z=2), below bottom nav (z=40) */
+  margin-top: auto;
+  padding-top: 8px;
+  z-index: 35;
 }
 .cascade-cta {
   width: 100%;
@@ -4850,15 +4851,11 @@ main[data-view="session-viewer"].hidden {
 .cascade-cta[disabled]:hover { background: var(--polaroid-muted); }
 
 .cascade-error {
-  /* Fixed alongside .cascade-cta-wrap so it floats above the CTA
-     regardless of scroll position. CTA top is at (nav + safe + 80) from
-     viewport bottom, so the error sits 12px above that. */
-  position: fixed;
+  /* Sticky alongside the CTA — sits above it while pinned, releases
+     with the page at the end of the section. */
+  position: sticky;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 92px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 32px);
-  max-width: 448px;
+  margin: 0 16px;
   z-index: 36;
 }
 
