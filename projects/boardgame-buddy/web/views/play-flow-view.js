@@ -337,20 +337,21 @@
 
         <section class="cascade-card">
           <label class="cascade-card__label">Game</label>
-          <div id="play-flow-game-chip">${this._renderPickedGameChip()}</div>
-          <div class="cascade-game-combo">
-            <i data-lucide="search" class="w-4 h-4 cascade-game-combo__icon"></i>
-            <input id="play-flow-game-input"
-                   class="input input-bordered cascade-game-combo__input"
-                   placeholder="${game ? 'Change game…' : 'Search for a game…'}"
-                   autocomplete="off" autocapitalize="off" autocorrect="off"
-                   oninput="window.playFlowView._onGameInput(this.value)"
-                   onfocus="window.playFlowView._openGameDropdown()"
-                   onblur="window.playFlowView._scheduleCloseGameDropdown()"
-                   onkeydown="if(event.key==='Escape'){event.preventDefault();window.playFlowView._closeGameDropdown();}" />
-            <ul id="play-flow-game-dropdown" class="cascade-game-dropdown hidden"
-                onmousedown="event.preventDefault()"></ul>
-          </div>
+          ${game ? this._renderPickedGameChip() : `
+            <div class="cascade-game-combo">
+              <i data-lucide="search" class="w-4 h-4 cascade-game-combo__icon"></i>
+              <input id="play-flow-game-input"
+                     class="input input-bordered cascade-game-combo__input"
+                     placeholder="Search for a game…"
+                     autocomplete="off" autocapitalize="off" autocorrect="off"
+                     oninput="window.playFlowView._onGameInput(this.value)"
+                     onfocus="window.playFlowView._openGameDropdown()"
+                     onblur="window.playFlowView._scheduleCloseGameDropdown()"
+                     onkeydown="if(event.key==='Escape'){event.preventDefault();window.playFlowView._closeGameDropdown();}" />
+              <ul id="play-flow-game-dropdown" class="cascade-game-dropdown hidden"
+                  onmousedown="event.preventDefault()"></ul>
+            </div>
+          `}
         </section>
 
         ${this._renderExpansionsPicker()}
@@ -723,19 +724,6 @@
       `;
     }
 
-    _refreshPickedGameChip() {
-      const wrap = document.getElementById("play-flow-game-chip");
-      if (!wrap) return;
-      wrap.innerHTML = this._renderPickedGameChip();
-      if (window.lucide) window.lucide.createIcons();
-      // Keep the input's placeholder in sync (search vs change game).
-      const input = document.getElementById("play-flow-game-input");
-      if (input) {
-        input.placeholder = this._ps && this._ps.gameSnapshot
-          ? "Change game…" : "Search for a game…";
-      }
-    }
-
     _clearGamePick() {
       const ps = this._ps;
       if (!ps) return;
@@ -747,22 +735,15 @@
       if (ps.code) {
         window.PlaySession.updateLobby(ps.code, { gameId: null }).catch(() => {});
       }
-      this._refreshPickedGameChip();
-      // Continue button enable/disable also depends on gameId — repaint the
-      // sticky CTA without rebuilding the form (innerHTML on the wrapper
-      // would unmount the focused input).
-      this._refreshContinueCta();
-      const input = document.getElementById("play-flow-game-input");
-      if (input) input.focus();
-    }
-
-    _refreshContinueCta() {
-      const gather = document.getElementById("screen-gather");
-      if (!gather) return;
-      const wrap = gather.querySelector(".cascade-cta-wrap");
-      if (!wrap) return;
-      wrap.outerHTML = this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId });
-      if (window.lucide) window.lucide.createIcons();
+      // Invalidate any in-flight search; the input is about to come back.
+      this._gameQueryToken++;
+      this.render();
+      // Focus the freshly-rendered search input so the user lands ready to
+      // type their next pick — no extra tap to refocus.
+      requestAnimationFrame(() => {
+        const input = document.getElementById("play-flow-game-input");
+        if (input) input.focus();
+      });
     }
 
     // Inline picker. The dropdown is the only DOM that gets mutated as the
@@ -1007,15 +988,13 @@
       if (ps.code) {
         window.PlaySession.updateLobby(ps.code, { gameId: game.id }).catch(() => {});
       }
-      // Reload expansions for the newly-picked game; once the list is in,
-      // re-mount the reference guide widget. The dropdown closes, the chip
-      // appears above the input — the input itself stays in place so focus
-      // can return to it for further searches.
-      this._closeGameDropdown();
-      const input = document.getElementById("play-flow-game-input");
-      if (input) input.value = "";
-      this._refreshPickedGameChip();
-      this._refreshContinueCta();
+      // The combo + dropdown disappear once a game is picked — the user
+      // changes the pick by tapping the chip's × (which clears state and
+      // re-renders the search input). Cancel any in-flight search so a
+      // late response can't sneak back into a dropdown that no longer
+      // exists, then render the chip and load expansions.
+      this._gameQueryToken++;
+      this.render();
       this._loadExpansionsIfNeeded().then(() => {
         this.render();
         if (this._guideWidget) this._guideWidget.refresh();
