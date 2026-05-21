@@ -30,6 +30,11 @@
     }
 
     async onMount() {
+      // Sync setup + immediate paint. The persisted draft (game, players,
+      // photo) renders without waiting on the network, so the user sees
+      // their Gather screen the instant they tap Log. Async work (buddies,
+      // expansions, lobby open, live-scores subscribe) folds in via a
+      // second render() once it lands.
       const existing = window.PlaySession.load();
       this._ps = existing || new window.PlaySession();
       this._ensureSelfIncluded();
@@ -38,6 +43,8 @@
       this.listenDom("chapters-changed", () => {
         if (this._guideWidget) this._guideWidget.refresh();
       });
+
+      this.render();
 
       const buddyPromise = window.Buddy.list().catch(() => []);
       const expansionsPromise = this._loadExpansionsIfNeeded();

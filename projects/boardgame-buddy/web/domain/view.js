@@ -26,6 +26,11 @@
       }
       this._mounted = true;
       this.params = params || {};
+      // Paint a synchronous placeholder so the user sees the new view
+      // immediately — even if onMount() does data fetching. Subclasses
+      // override renderLoading() to swap in a skeleton or empty shell;
+      // the default is a no-op so fast views don't flash a spinner.
+      try { this.renderLoading(); } catch (_) {}
       await this.onMount?.();
       this.render();
     }
@@ -53,6 +58,10 @@
       document.addEventListener(event, fn);
       this._unsubs.push(() => document.removeEventListener(event, fn));
     }
+
+    // Synchronous loading placeholder rendered before onMount() runs.
+    // Default is a no-op; override in subclasses that fetch on mount.
+    renderLoading() {}
 
     // Default render() is a no-op — subclasses override.
     render() {}
@@ -82,40 +91,45 @@
         return;
       }
       const prev = this._current;
-      if (prev && prev !== next) {
-        if (!skipPush) {
-          this._stack.push({ name: prev.name, params: prev.params || {} });
-          if (this._stack.length > this._maxStack) this._stack.shift();
-        }
-        await prev.unmount();
+      if (prev && prev !== next && !skipPush) {
+        this._stack.push({ name: prev.name, params: prev.params || {} });
+        if (this._stack.length > this._maxStack) this._stack.shift();
       }
+
+      // Instant UI updates — visibility, active tab, and store all happen
+      // before any awaited work so the user perceives the tap as immediate.
+      // Any data fetching the destination view needs happens in onMount,
+      // backed by renderLoading() for the placeholder. The previous view's
+      // unmount is fire-and-forget so a hung cleanup (e.g. supabase
+      // removeChannel waiting on a never-READY socket) can't freeze nav.
       window.store.set("currentRoute", { name, params: params || {} });
       window.store.set("currentView", name);
 
-      // Toggle DaisyUI containers
       document.querySelectorAll("[data-view]").forEach((el) => {
         el.classList.toggle("hidden", el.dataset.view !== name);
       });
 
-      this._current = next;
-      await next.mount(params);
-
-      // Auth-only chrome visibility
       const authed = !!window.store.get("user");
       document.querySelectorAll("[data-auth-only]").forEach((el) => {
         el.classList.toggle("hidden", !authed);
       });
 
-      // Bottom-nav active state (only when authed). When data-nav-views is
-      // present on a button, it lists every view name that should keep the
-      // tab highlighted — so the Log tab stays active across the chooser,
-      // play-flow, join-session, and session-viewer mirror.
       document.querySelectorAll(".btm-nav button").forEach((btn) => {
         const views = btn.dataset.navViews
           ? btn.dataset.navViews.split(",").map((s) => s.trim())
           : [btn.dataset.nav];
         btn.classList.toggle("active", views.includes(name));
       });
+
+      this._current = next;
+
+      if (prev && prev !== next) {
+        Promise.resolve()
+          .then(() => prev.unmount())
+          .catch((e) => console.warn(`unmount(${prev.name}) failed:`, e));
+      }
+
+      await next.mount(params);
 
       if (window.lucide) window.lucide.createIcons();
       if (window.api) window.api.trackEvent("view:" + name);

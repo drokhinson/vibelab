@@ -4592,7 +4592,12 @@ main[data-view="session-viewer"]:not(.hidden) {
 }
 
 .cascade-scroll {
-  scroll-snap-type: y mandatory;
+  /* Proximity snap, not mandatory — a screen with lots of players /
+     expansions / scoring rows is taller than the viewport, and mandatory
+     snap would force-yank the user back to the screen start, hiding the
+     Continue CTA. Proximity still pulls the next screen into place when
+     the user nudges past a snap point. */
+  scroll-snap-type: y proximity;
   overflow-y: auto;
   overscroll-behavior: contain;
   flex: 1;
@@ -4625,10 +4630,14 @@ main[data-view="session-viewer"]:not(.hidden) {
   pointer-events: none;
 }
 
-/* Screen header — title in Fraunces, monospace step indicator. */
+/* Screen header — title in Fraunces, monospace step indicator. The
+   leading/trailing columns reserve a 44×44 tap target (per the
+   accessibility rule in .claude/rules/web-frontend.md) for the back
+   chevron and close X — generous fingertip-friendly hit area without
+   shrinking the title column. */
 .cascade-screen__header {
   display: grid;
-  grid-template-columns: 32px 1fr 32px;
+  grid-template-columns: 44px 1fr 44px;
   align-items: center;
   gap: 6px;
   margin-bottom: 4px;
@@ -4663,8 +4672,8 @@ main[data-view="session-viewer"]:not(.hidden) {
   background: oklch(var(--b2) / 0.7);
   border: 1px solid oklch(var(--b3));
   border-radius: 999px;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4676,13 +4685,14 @@ main[data-view="session-viewer"]:not(.hidden) {
 .cascade-screen__close:hover {
   background: oklch(var(--b3));
 }
-.cascade-back-spacer { display: inline-block; width: 32px; height: 32px; }
+.cascade-back-spacer { display: inline-block; width: 44px; height: 44px; }
 
 /* Top "back" row used on join-session (single-screen view with a back to
-   the chooser). Same visual weight as .cascade-screen__header. */
+   the chooser). Same visual weight as .cascade-screen__header — 44×44
+   reserved on each side for fingertip-friendly tap targets. */
 .cascade-back-row {
   display: grid;
-  grid-template-columns: 32px 1fr 32px;
+  grid-template-columns: 44px 1fr 44px;
   align-items: center;
   gap: 6px;
   margin-bottom: 10px;
@@ -4784,7 +4794,8 @@ main[data-view="session-viewer"]:not(.hidden) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 10px;
+  padding: 6px 14px;
+  min-height: 44px;
   border-radius: 999px;
   background: transparent;
   border: 1px solid var(--polaroid-line);
@@ -5206,10 +5217,10 @@ main[data-view="session-viewer"]:not(.hidden) {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .polaroid-popup__close {
   position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 32px;
-  height: 32px;
+  top: -14px;
+  right: -14px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   background: var(--polaroid-bg);
   color: var(--polaroid-ink);
