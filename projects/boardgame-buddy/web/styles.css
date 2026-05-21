@@ -5295,13 +5295,12 @@ main[data-view="session-viewer"].hidden {
   padding: 14px 14px 22px;
   box-shadow: 0 22px 48px -14px rgba(0, 0, 0, 0.65),
               0 4px 10px rgba(0, 0, 0, 0.35);
-  transform: rotate(-1.2deg);
   animation: polaroidPopupIn 280ms cubic-bezier(.22, .61, .36, 1) both;
   text-align: center;
 }
 @keyframes polaroidPopupIn {
-  from { opacity: 0; transform: translateY(20px) rotate(-1.2deg); }
-  to   { opacity: 1; transform: translateY(0) rotate(-1.2deg); }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .polaroid-popup__close {
@@ -5446,7 +5445,6 @@ main[data-view="session-viewer"].hidden {
 
 /* Confirm-variant of the polaroid popup (discard-session dialog). */
 .polaroid-popup__card--confirm {
-  transform: rotate(-0.6deg);
   padding: 18px 18px 16px;
 }
 .polaroid-popup__body {
