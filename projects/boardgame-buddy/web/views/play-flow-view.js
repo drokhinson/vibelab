@@ -192,7 +192,7 @@
           <section class="cascade-screen" id="screen-gather">
             ${this._renderScreenHeader("Gather", 1, false)}
             ${this._renderGather()}
-            ${this._renderContinue("Continue to Play", () => "_advanceToPlay()")}
+            ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId })}
           </section>
 
           <section class="cascade-screen ${lockPlay ? "is-locked" : ""}" id="screen-play">
@@ -235,11 +235,12 @@
       `;
     }
 
-    _renderContinue(label, handlerExpr) {
+    _renderContinue(label, handlerExpr, { disabled = false } = {}) {
       const handler = handlerExpr();
       return `
         <div class="cascade-cta-wrap">
           <button class="btn btn-primary cascade-cta"
+                  ${disabled ? "disabled" : ""}
                   onclick="window.playFlowView.${handler}">
             ${escape(label)}
             <i data-lucide="arrow-down" class="w-4 h-4"></i>
