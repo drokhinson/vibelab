@@ -551,6 +551,7 @@
           baseGameId: s.game_id,
           gameIds: [s.game_id],
           expansionMeta,
+          defaultOpen: true,
         });
         this._guideWidget.mount(host);
       } else {

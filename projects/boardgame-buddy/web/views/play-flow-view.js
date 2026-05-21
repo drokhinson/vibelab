@@ -1053,6 +1053,7 @@
           gameIds,
           expansionMeta: meta,
           onAfterMutate: () => this.render(),
+          defaultOpen: true,
         });
         this._guideWidget.mount(host);
       } else {
