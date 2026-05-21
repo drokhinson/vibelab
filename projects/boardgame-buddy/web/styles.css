@@ -5757,9 +5757,7 @@ main[data-view="session-viewer"].hidden {
   display: flex;
   flex-direction: column;
 }
-.lp-find-grid .game-polaroid:nth-child(3n+1) { transform: rotate(-0.5deg); }
-.lp-find-grid .game-polaroid:nth-child(3n+2) { transform: rotate( 0.4deg); }
-.lp-find-grid .game-polaroid:nth-child(3n+3) { transform: rotate(-0.25deg); }
+.lp-find-grid .game-polaroid { transform: none; }
 .no-tilt .game-polaroid { transform: none; }
 .game-polaroid:hover {
   transform: translateY(-2px);
