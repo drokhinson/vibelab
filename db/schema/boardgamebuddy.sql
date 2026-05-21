@@ -73,6 +73,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   bgg_session_user_cookie TEXT,
   bgg_session_pass_cookie TEXT,
   bgg_last_login_at TIMESTAMPTZ,
+  -- Stamp set at the start of POST /bgg/sync. GET /bgg/sync/status counts
+  -- pending-import rows whose created_at >= this value to report
+  -- session-scoped progress (Imported X of Y). Added in migration 027.
+  bgg_last_sync_started_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_profiles ENABLE ROW LEVEL SECURITY;

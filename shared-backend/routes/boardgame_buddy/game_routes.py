@@ -156,6 +156,14 @@ async def list_games(
     play_mode: Optional[PlayMode] = Query(None, description="Filter by scoring style (competitive / coop / team)"),
     owned_only: bool = Query(False, description="Only games in the caller's owned collection (requires auth; ignored otherwise)"),
     exclude_expansions: bool = Query(False, description="Hide expansion rows; only base games appear in results"),
+    prioritize_exact_players: bool = Query(
+        False,
+        description=(
+            "When true AND players is set, surface games whose max_players "
+            "exactly equals players above wider-range games. Off by default "
+            "so the created_at order stays consistent across pages."
+        ),
+    ),
     bgg_ids: Optional[str] = Query(
         None,
         description=(
@@ -242,13 +250,14 @@ async def list_games(
     if exclude_expansions:
         query = query.eq("is_expansion", False)
 
-    # When the player-count filter is set, surface exact-fit games (where
-    # max_players == players) before wider-range ones — a "2 player game"
-    # is more useful when the user picked 2 than a 2–6 player game. Ordering
-    # by max_players ASC achieves this: the gte(max_players, players)
-    # filter above already trimmed everything below players, so the smallest
-    # max in the result set IS the exact match.
-    if players is not None:
+    # Opt-in: when prioritize_exact_players=true AND players is set, surface
+    # games whose max_players exactly equals the picked count before
+    # wider-range ones. Ordering by max_players ASC achieves this — the
+    # gte(max_players, players) filter above already trimmed everything
+    # below players, so the smallest max in the result set IS the exact
+    # match. Off by default so the created_at order stays consistent
+    # across paginated calls.
+    if players is not None and prioritize_exact_players:
         query = query.order("max_players", desc=False)
     query = query.order("created_at", desc=True)
     result = query.range(offset, offset + per_page - 1).execute()

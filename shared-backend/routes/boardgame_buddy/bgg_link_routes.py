@@ -578,6 +578,15 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
     """Pull collection + plays from BGG, materialize knowns, queue unknowns."""
     sb = get_supabase()
 
+    # Stamp the start of this sync on the profile BEFORE we fetch anything.
+    # GET /bgg/sync/status filters pending-import rows by created_at >= this
+    # timestamp to compute session-scoped progress totals. The FE polls that
+    # endpoint to drive an "Imported X of Y" progress bar.
+    sync_started_at = datetime.now(timezone.utc)
+    sb.table("boardgamebuddy_profiles").update(
+        {"bgg_last_sync_started_at": sync_started_at.isoformat()}
+    ).eq("id", user_id).execute()
+
     collection_rows, coll_warm_up = await _fetch_collection_batched(user_id, username)
 
     plays_warm_up = False
@@ -629,12 +638,20 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
     total = coll_imported + coll_pending + plays_imported + plays_pending
     warm_up_retry_pending = (coll_warm_up or plays_warm_up) and total == 0
 
+    # Distinct BGG ids queued for the worker — one /thing fetch per id, so
+    # this is the meaningful "Y" in the FE's "Importing X of Y games" UI.
+    # Collection + play rows can both reference the same missing game, so
+    # naively adding the two pending counts inflates the apparent work.
+    unique_to_import = len({bid for bid, _, _ in collection_rows if bid not in known} |
+                            {p["bgg_id"] for p in play_rows if p["bgg_id"] not in known})
+
     return BggSyncSummary(
         bgg_username=username,
         collection_imported=coll_imported,
         collection_pending=coll_pending,
         plays_imported=plays_imported,
         plays_pending=plays_pending,
+        unique_games_to_import=unique_to_import,
         warm_up_retry_pending=warm_up_retry_pending,
     )
 
@@ -775,7 +792,7 @@ async def get_sync_status(
 
     profile = (
         sb.table("boardgamebuddy_profiles")
-        .select("bgg_username, bgg_password_enc")
+        .select("bgg_username, bgg_password_enc, bgg_last_sync_started_at")
         .eq("id", user.user_id)
         .execute()
     )
@@ -816,10 +833,51 @@ async def get_sync_status(
     if last_q.data and last_q.data[0].get("completed_at"):
         last_completed_at = last_q.data[0]["completed_at"]
 
+    # Session-scoped progress, distinct BGG ids since one /thing call covers
+    # every pending row for the same game. Fetch every row touched by this
+    # sync session in a single query and group in Python — cheaper than
+    # three count="exact" round-trips and small enough to fit comfortably.
+    session_started_at = profile_row.get("bgg_last_sync_started_at")
+    session_total = 0
+    session_done = 0
+    session_errored = 0
+    if session_started_at:
+        rows = (
+            sb.table("boardgamebuddy_bgg_pending_imports")
+            .select("bgg_id, status")
+            .eq("user_id", user.user_id)
+            .gte("created_at", session_started_at)
+            .execute()
+            .data
+            or []
+        )
+        by_id: dict[int, str] = {}
+        for r in rows:
+            bid = r.get("bgg_id")
+            st = r.get("status")
+            if bid is None or st is None:
+                continue
+            # If any row for this bgg_id is still pending, the game isn't
+            # imported yet — pending wins over done/error in the per-id
+            # roll-up. Otherwise error wins over done (so a partially
+            # errored game counts as errored, not done).
+            prev = by_id.get(bid)
+            if prev == "pending":
+                continue
+            if st == "pending" or prev is None or (prev == "done" and st == "error"):
+                by_id[bid] = st
+        session_total = len(by_id)
+        session_done = sum(1 for s in by_id.values() if s == "done")
+        session_errored = sum(1 for s in by_id.values() if s == "error")
+
     return BggSyncStatus(
         bgg_username=bgg_username,
         auth_state=auth_state,
         pending_count=pending_q.count or 0,
         errored_count=errored_q.count or 0,
         last_completed_at=last_completed_at,
+        session_started_at=session_started_at,
+        session_total=session_total,
+        session_done=session_done,
+        session_errored=session_errored,
     )

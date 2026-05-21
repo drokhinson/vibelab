@@ -46,11 +46,6 @@
       // Collection.myStatusMap() on mount; patched live by status-changed
       // CustomEvents fired from the status-picker.
       this._collectionMap = {};
-      // Infinite-scroll plumbing. _loadToken invalidates stale page-2+
-      // fetches whose filter context changed mid-flight; _observer watches
-      // the sentinel at the bottom of the grid and triggers the next page.
-      this._loadToken = 0;
-      this._observer = null;
     }
 
     _emptyFilters() {
@@ -85,8 +80,7 @@
         this._collectionMap = {};
       }
       this.render();
-      this._installScrollObserver();
-      await this._loadGames({ reset: true });
+      await this._loadGames();
       // Honor `focus=find` query param from the Profile FAB → scroll the
       // section into view after the first render completes.
       if (this.params && this.params.focus === "find") {
@@ -97,57 +91,7 @@
       }
     }
 
-    async onUnmount() {
-      this._uninstallScrollObserver();
-    }
-
-    // IntersectionObserver — bottom-of-grid sentinel triggers the next page.
-    // 240px rootMargin gives the user roughly half a viewport of runway
-    // before the next batch lands, so they rarely see an empty space at the
-    // bottom while scrolling. Observer is reattached after every render
-    // because the sentinel DOM node is recreated on each repaint.
-    _installScrollObserver() {
-      if (this._observer) return;
-      this._observer = new IntersectionObserver((entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) this._loadMore();
-        }
-      }, { rootMargin: "240px 0px" });
-      this._observeSentinel();
-    }
-
-    _observeSentinel() {
-      if (!this._observer) return;
-      const el = this.container.querySelector("#lp-find-sentinel");
-      if (el) this._observer.observe(el);
-    }
-
-    _uninstallScrollObserver() {
-      if (this._observer) {
-        this._observer.disconnect();
-        this._observer = null;
-      }
-    }
-
-    _loadMore() {
-      if (this._loading) return;
-      if (this._games.length >= this._total) return;
-      this._page += 1;
-      this._loadGames({ reset: false });
-    }
-
-    // _loadGames({reset}). reset=true wipes _games and fetches page 1 (used
-    // for filter changes, scope toggles, first mount). reset=false appends
-    // the current _page to the existing list (used by the infinite-scroll
-    // sentinel). A bumped _loadToken cancels any stale append whose filter
-    // context changed mid-flight.
-    async _loadGames({ reset = false } = {}) {
-      if (reset) {
-        this._page = 1;
-        this._games = [];
-        this._total = 0;
-      }
-      const token = ++this._loadToken;
+    async _loadGames() {
       this._loading = true;
       this._error = null;
       this.render();
@@ -161,56 +105,33 @@
         if (this._filters.playtimeMax != null) qs.set("playtime_max", String(this._filters.playtimeMax));
         if (this._filters.playMode) qs.set("play_mode", this._filters.playMode);
 
-        let newGames = [];
-        let newTotal = 0;
         if (this._filters.scope === "mine") {
           qs.set("status", "owned");
           qs.set("sort", "added_at");
           const data = await window.api.get("/collection/grid?" + qs.toString());
-          newGames = data && data.items ? data.items.map((it) => it.game) : [];
-          newTotal = (data && data.total) || 0;
+          this._games = (data && data.items ? data.items.map((it) => it.game) : []);
+          this._total = (data && data.total) || 0;
+          // Auto-switch to "All BgB Games" when the user has nothing owned
+          // matching their filters — only on first load (avoid an infinite
+          // toggle loop if the catalog scope also returns nothing).
+          if (this._total === 0 && !this._scopeAutoSwitched && this._activeFilterCount() === 0) {
+            this._scopeAutoSwitched = true;
+            this._filters.scope = "all";
+            await this._loadGames();
+            return;
+          }
         } else {
           const data = await window.api.get("/games?" + qs.toString());
-          newGames = (data && data.games) || [];
-          newTotal = (data && data.total) || 0;
-        }
-
-        if (token !== this._loadToken) return; // stale fetch — filters moved
-
-        this._games = reset ? newGames : [...this._games, ...newGames];
-        this._total = newTotal;
-
-        // Auto-switch scope to "All BgB Games" when the user has nothing
-        // owned matching their unfiltered query — only fires on the first
-        // page of a reset load so the user can opt back to "My Collection"
-        // without ping-ponging.
-        if (reset
-            && this._filters.scope === "mine"
-            && this._total === 0
-            && !this._scopeAutoSwitched
-            && this._activeFilterCount() === 0) {
-          this._scopeAutoSwitched = true;
-          this._filters.scope = "all";
-          await this._loadGames({ reset: true });
-          return;
+          this._games = (data && data.games) || [];
+          this._total = (data && data.total) || 0;
         }
       } catch (e) {
-        if (token !== this._loadToken) return;
         this._error = e.message || "Failed to load games";
-        if (reset) {
-          this._games = [];
-          this._total = 0;
-        } else {
-          // Failed append: roll _page back so the user can scroll past the
-          // sentinel again to retry instead of being stuck.
-          this._page = Math.max(1, this._page - 1);
-        }
+        this._games = [];
+        this._total = 0;
       } finally {
-        if (token === this._loadToken) {
-          this._loading = false;
-          this.render();
-          this._observeSentinel();
-        }
+        this._loading = false;
+        this.render();
       }
     }
 
@@ -288,7 +209,7 @@
           <h2 class="lp-section-title font-display">Find a Game that fits</h2>
           ${this._renderFilters()}
           ${this._renderGrid()}
-          ${this._renderSentinel()}
+          ${this._renderPager()}
         </section>
       `;
       if (window.lucide) window.lucide.createIcons();
@@ -374,29 +295,25 @@
         clickHandler: `window.logPlayView._pickFromGrid('${jsStr(g.id)}')`,
         collectionStatus: this._collectionMap[g.id] || null,
       })).join("");
-      return `<div class="lp-find-grid">${cards}</div>`;
+      return `<div class="lp-find-grid ${this._loading ? "is-reloading" : ""}">${cards}</div>`;
     }
 
-    // Bottom-of-grid sentinel for the IntersectionObserver. Three states:
-    //   • more to load + actively loading → spinner
-    //   • more to load + idle            → empty 1px node the observer
-    //                                       watches (next-page trigger)
-    //   • all loaded                     → "That's all" footer (or nothing
-    //                                       if only one page existed)
-    _renderSentinel() {
-      const hasMore = this._games.length < this._total;
-      if (hasMore) {
-        if (this._loading) {
-          return `<div class="lp-find-sentinel lp-find-sentinel--loading" id="lp-find-sentinel">
-            ${window.buddyLoader({ size: 48, padded: false })}
-          </div>`;
-        }
-        return `<div class="lp-find-sentinel" id="lp-find-sentinel" aria-hidden="true"></div>`;
-      }
-      if (this._games.length > PER_PAGE) {
-        return `<div class="lp-find-sentinel lp-find-sentinel--done">That's all.</div>`;
-      }
-      return "";
+    _renderPager() {
+      const totalPages = Math.max(1, Math.ceil(this._total / PER_PAGE));
+      if (totalPages <= 1) return "";
+      return `
+        <nav class="lp-find-pager">
+          <button class="btn btn-ghost btn-sm" ${this._page <= 1 ? "disabled" : ""}
+                  onclick="window.logPlayView._goPage(${this._page - 1})">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
+          </button>
+          <span class="text-xs opacity-60">Page ${this._page} of ${totalPages}</span>
+          <button class="btn btn-ghost btn-sm" ${this._page >= totalPages ? "disabled" : ""}
+                  onclick="window.logPlayView._goPage(${this._page + 1})">
+            Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </nav>
+      `;
     }
 
     // ── Actions ────────────────────────────────────────────────────────────
@@ -404,14 +321,16 @@
     _setScope(scope) {
       if (this._filters.scope === scope) return;
       this._filters.scope = scope;
+      this._page = 1;
       // Manual scope switch overrides the empty-collection auto-fallback.
       this._scopeAutoSwitched = true;
-      this._loadGames({ reset: true });
+      this._loadGames();
     }
 
     _setFilter(key, value) {
       this._filters[key] = value;
-      this._loadGames({ reset: true });
+      this._page = 1;
+      this._loadGames();
     }
 
     _setPlaytimeBucket(id) {
@@ -420,14 +339,23 @@
       const next = cur && cur.id === id ? null : PLAYTIME_BUCKETS.find((b) => b.id === id);
       f.playtimeMin = next ? next.min : null;
       f.playtimeMax = next ? next.max : null;
-      this._loadGames({ reset: true });
+      this._page = 1;
+      this._loadGames();
     }
 
     _clearFilters() {
       const scope = this._filters.scope;
       this._filters = this._emptyFilters();
       this._filters.scope = scope;
-      this._loadGames({ reset: true });
+      this._page = 1;
+      this._loadGames();
+    }
+
+    _goPage(n) {
+      this._page = n;
+      this._loadGames();
+      const el = this.container.querySelector(".lp-find-section");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     _pickFromGrid(gameId) {

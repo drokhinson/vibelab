@@ -3162,6 +3162,54 @@ body {
 }
 .bgg-link-form { display: flex; flex-direction: column; gap: 0.4rem; }
 
+/* BGG sync progress block. Sits inside .bgg-card as the live readout while
+   the import worker drains the pending queue — "Added N collection / M plays"
+   on top, "Importing X of Y new games" below with a progress bar. The
+   indeterminate variant animates a sliding bar for the brief window before
+   we know how many games need to import. */
+.bgg-progress {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+}
+.bgg-progress--done {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+.bgg-progress__direct {
+  color: oklch(var(--bc) / 0.85);
+}
+.bgg-progress__direct strong {
+  font-weight: 700;
+}
+.bgg-progress__label {
+  color: oklch(var(--bc) / 0.75);
+}
+.bgg-progress__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: oklch(var(--b3));
+  overflow: hidden;
+}
+.bgg-progress__bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+.bgg-progress__bar--indeterminate .bgg-progress__bar-fill {
+  position: absolute;
+  width: 32%;
+  animation: bgg-progress-slide 1.4s ease-in-out infinite;
+}
+@keyframes bgg-progress-slide {
+  0%   { left: -32%; }
+  100% { left: 100%; }
+}
+
 /* ── Profile tabs ─────────────────────────────────────────────────────────── */
 .profile-tabs {
   display: flex; gap: 0.25rem;
@@ -5629,9 +5677,10 @@ main[data-view="session-viewer"].hidden {
 }
 .lp-find-section { padding-bottom: 24px; }
 .lp-section-title {
-  font-size: 22px;
+  font-size: 28px;
+  text-align: center;
   color: oklch(var(--bc));
-  margin: 0 4px 12px;
+  margin: 0 4px 14px;
 }
 .lp-filters {
   display: flex;
@@ -5716,7 +5765,9 @@ main[data-view="session-viewer"].hidden {
   grid-template-columns: repeat(3, 1fr);
   gap: 14px 10px;
   padding: 6px 2px 14px;
+  transition: opacity 160ms ease;
 }
+.lp-find-grid.is-reloading { opacity: 0.6; }
 .lp-find-loading {
   display: flex;
   align-items: center;
@@ -5733,27 +5784,12 @@ main[data-view="session-viewer"].hidden {
   align-items: center;
   gap: 10px;
 }
-/* Infinite-scroll sentinel anchor. The idle (next-page trigger) variant
-   is a 1px-tall invisible div the IntersectionObserver watches. The
-   loading variant inflates to show the buddy loader while a page lands. */
-.lp-find-sentinel {
-  height: 1px;
-  width: 100%;
-}
-.lp-find-sentinel--loading {
-  height: auto;
+.lp-find-pager {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 16px 0 24px;
-}
-.lp-find-sentinel--done {
-  height: auto;
-  text-align: center;
-  padding: 16px 0 24px;
-  font-size: 11px;
-  color: var(--polaroid-muted);
-  font-style: italic;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 2px 12px;
 }
 
 /* ── Polaroid game card (used inside .lp-find-grid) ──────────────────────── */

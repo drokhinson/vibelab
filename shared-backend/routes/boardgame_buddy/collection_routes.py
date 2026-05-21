@@ -512,6 +512,14 @@ async def collection_grid(
         CollectionSort.LAST_PLAYED,
         description="Sort order — last_played (default), added_at, or alphabetical.",
     ),
+    prioritize_exact_players: bool = Query(
+        False,
+        description=(
+            "When true AND players is set, surface games whose max_players "
+            "exactly equals players above wider-range games. Off by default "
+            "so the chosen sort stays consistent across pages."
+        ),
+    ),
     user_id: Optional[str] = Query(
         None,
         description="Target user (profiles are public); defaults to the viewer.",
@@ -686,10 +694,11 @@ async def collection_grid(
         no_plays.sort(key=lambda r: r.get("added_at") or "", reverse=True)
         ordered = has_plays + no_plays
 
-    # When the player-count filter is set, surface exact-fit games (where
-    # max_players == players) before wider-range ones. Stable secondary
-    # sort keeps the chosen `sort` ordering inside each bucket.
-    if players is not None:
+    # Opt-in: when prioritize_exact_players=true AND players is set, surface
+    # exact-fit games (max_players == players) above wider-range ones. The
+    # stable sort preserves the chosen `sort` ordering inside each bucket.
+    # Off by default so the chosen `sort` stays consistent across pages.
+    if players is not None and prioritize_exact_players:
         ordered = sorted(
             ordered,
             key=lambda r: 0 if ((r.get("boardgamebuddy_games") or {}).get("max_players") == players) else 1,
