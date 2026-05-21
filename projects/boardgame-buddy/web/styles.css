@@ -1456,6 +1456,13 @@ body {
    Create disc still rises out of the strip as a deliberate visual lift. */
 
 #app {
+  /* Override Tailwind's min-h-screen (100vh). On mobile, 100vh is the
+     *large* viewport — counted as if the address bar is hidden — so when
+     it's visible #app extends below the visible area, dragging .cascade-scroll
+     with it. The sticky Continue CTA then sticks to that off-screen bottom
+     and disappears behind the fixed nav. 100dvh tracks the live visible
+     viewport so the scroll container always ends right above the nav. */
+  min-height: 100dvh;
   padding-bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
 }
 
