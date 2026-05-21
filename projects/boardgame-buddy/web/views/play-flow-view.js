@@ -198,25 +198,23 @@
       const lockSettle = phase !== "settle";
 
       this.container.innerHTML = `
-        <div class="cascade-scroll" id="play-flow-scroll">
-          <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
-            ${this._renderScreenHeader("Gather", 1, false)}
-            ${this._renderGather()}
-            ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId })}
-          </section>
+        <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
+          ${this._renderScreenHeader("Gather", 1, false)}
+          ${this._renderGather()}
+          ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId })}
+        </section>
 
-          <section class="cascade-screen ${lockPlay ? "is-locked" : ""}" id="screen-play">
-            ${this._renderScreenHeader("Play", 2, true)}
-            ${this._renderPlay()}
-            ${this._renderContinue("Wrap up", () => "_advanceToSettle()")}
-          </section>
+        <section class="cascade-screen ${lockPlay ? "is-locked" : ""}" id="screen-play">
+          ${this._renderScreenHeader("Play", 2, true)}
+          ${this._renderPlay()}
+          ${this._renderContinue("Wrap up", () => "_advanceToSettle()")}
+        </section>
 
-          <section class="cascade-screen ${lockSettle ? "is-locked" : ""}" id="screen-settle">
-            ${this._renderScreenHeader("Settle Up", 3, true)}
-            ${this._renderSettle()}
-            ${this._renderSaveCta()}
-          </section>
-        </div>
+        <section class="cascade-screen ${lockSettle ? "is-locked" : ""}" id="screen-settle">
+          ${this._renderScreenHeader("Settle Up", 3, true)}
+          ${this._renderSettle()}
+          ${this._renderSaveCta()}
+        </section>
         ${this._error ? `<div class="alert alert-error cascade-error">${escape(this._error)}</div>` : ""}
       `;
       if (window.lucide) window.lucide.createIcons();
