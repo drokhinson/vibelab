@@ -146,9 +146,23 @@
             }
             if (playersChanged) this._ps.persist();
           }
-          if (participantsChanged || playersChanged) this.render();
+          // The poll runs every 2s and used to fire a full render() on any
+          // participant change. That rebuilt the cascade DOM via
+          // innerHTML, causing a visible repaint pulse and a brief
+          // sticky/scroll glitch. Instead, the only thing a poll can
+          // change in the host UI is the players list (and only during
+          // Gather, when new joiners get auto-promoted to player rows).
+          // Patch just that subtree — scroll position survives.
+          if (playersChanged) this._refreshPlayersList();
         } catch (_) {}
       }, 2000);
+    }
+
+    _refreshPlayersList() {
+      const ul = this.container.querySelector(".cascade-players");
+      if (!ul) return;
+      ul.innerHTML = this._ps.players.map((p, i) => this._renderPlayerRow(p, i)).join("");
+      if (window.lucide) window.lucide.createIcons();
     }
 
     _stopLobbyPoll() {
@@ -288,9 +302,11 @@
 
     // ── Gather screen ───────────────────────────────────────────────────────
 
-    _renderGather() {
-      const ps = this._ps;
-      const game = ps.gameSnapshot;
+    _renderInviteCard() {
+      // Session code surface. Rendered on Gather AND Play so the host can
+      // always read the code aloud / share it (PR #274 allows late joiners
+      // as spectators, so the lobby is effectively always "open"). Settle
+      // Up drops it — the game is over.
       const code = this._lobby && this._lobby.code;
       return `
         <section class="cascade-card cascade-card--invite">
@@ -300,9 +316,16 @@
           <div class="cascade-invite__body">
             <span class="cascade-invite__title">Session code</span>
             <span class="cascade-invite__code">${escape(code || "— — — — —")}</span>
-            <span class="cascade-invite__hint">Open until you start the game.</span>
           </div>
         </section>
+      `;
+    }
+
+    _renderGather() {
+      const ps = this._ps;
+      const game = ps.gameSnapshot;
+      return `
+        ${this._renderInviteCard()}
 
         <section class="cascade-card">
           <label class="cascade-card__label">Game</label>
@@ -415,6 +438,7 @@
              <span>Rulebook</span>
            </button>`;
       return `
+        ${this._renderInviteCard()}
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
           <div class="cascade-rulebook-row">${rulebookBtn}</div>

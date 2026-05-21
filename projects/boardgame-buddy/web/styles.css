@@ -4650,7 +4650,10 @@ body {
    existing position: sticky; top: 0 rule. */
 
 :root {
-  --cascade-bottom-pad: 24px;  /* inner breathing room above the sticky CTA */
+  /* Bottom padding inside each cascade-screen, so the last card clears
+     the fixed-position .cascade-cta-wrap (52px tall, pinned 12px above
+     the bottom nav). 76px = 52 + 12 + 12 breathing room. */
+  --cascade-bottom-pad: 76px;
 }
 
 /* Hard-hide the cascade containers when the router toggles .hidden. The
@@ -4794,13 +4797,20 @@ main[data-view="session-viewer"].hidden {
 /* CTA (Continue / Wrap up / Save play). Sticks to the bottom of each
    screen so the user always sees the next-step button. */
 .cascade-cta-wrap {
-  position: sticky;
-  /* With document scroll, sticky bottom is relative to the viewport, so
-     the CTA must clear the fixed bottom nav. */
+  /* Fixed (not sticky) so the CTA's screen position is invariant under
+     DOM rewrites — re-renders never make it "move," and there's no
+     end-of-section release that briefly tucks it back into flow. The
+     three cascade-screens each render their own CTA inside this wrapper;
+     visibility: hidden on .is-locked screens cascades to their fixed
+     children, so only the active section's CTA is shown. */
+  position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 12px);
-  margin-top: auto;
-  padding-top: 8px;
-  z-index: 2;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);    /* match cascade-screen's 16px gutters */
+  max-width: 448px;             /* 480px app column minus 32px gutters */
+  padding-top: 0;
+  z-index: 35;                  /* above content (z=2), below bottom nav (z=40) */
 }
 .cascade-cta {
   width: 100%;
@@ -4820,14 +4830,30 @@ main[data-view="session-viewer"].hidden {
   box-shadow: 0 10px 22px -8px rgba(201, 146, 42, 0.55);
 }
 .cascade-cta:hover { background: var(--accent-hover); }
+/* Disabled state — same warm grey + reduced opacity as
+   .cascade-card--expansions.is-disabled so the inactive states across
+   the cascade read consistently. */
+.cascade-cta:disabled,
+.cascade-cta[disabled] {
+  background: var(--polaroid-muted);
+  color: var(--polaroid-bg);
+  box-shadow: none;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.cascade-cta:disabled:hover,
+.cascade-cta[disabled]:hover { background: var(--polaroid-muted); }
 
 .cascade-error {
-  position: sticky;
-  /* Same nav-clearance trick as .cascade-cta-wrap, plus room above the
-     CTA so the error toast lands between the CTA and the last card. */
+  /* Fixed alongside .cascade-cta-wrap so it floats above the CTA
+     regardless of scroll position. */
+  position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 76px);
-  margin: 0 16px;
-  z-index: 3;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 448px;
+  z-index: 36;
 }
 
 /* Invite-code card. Cream polaroid with the brass-orange code centered.
