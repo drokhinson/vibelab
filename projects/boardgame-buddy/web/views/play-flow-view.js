@@ -303,13 +303,6 @@
           `}
         </section>
 
-        <section class="cascade-card">
-          <label class="cascade-card__label">When</label>
-          <input type="date" class="input input-bordered w-full"
-                 value="${escapeAttr(ps.playedAt)}"
-                 onchange="window.playFlowView._setDate(this.value)" />
-        </section>
-
         ${this._renderPlayModeSelector()}
 
         <section class="cascade-card">
@@ -531,7 +524,15 @@
 
     _renderSettle() {
       const url = this._ps.photoPreviewUrl || this._ps.photoUrl;
+      const ps = this._ps;
       return `
+        <section class="cascade-card">
+          <label class="cascade-card__label">When</label>
+          <input type="date" class="input input-bordered w-full"
+                 value="${escapeAttr(ps.playedAt)}"
+                 onchange="window.playFlowView._setDate(this.value)" />
+        </section>
+
         <section class="cascade-card">
           <label class="cascade-card__label">Photo</label>
           ${url ? `
