@@ -79,6 +79,11 @@ class BggSyncSummary(BaseModel):
     collection_pending: int
     plays_imported: int
     plays_pending: int
+    # Count of distinct BGG game ids queued by this sync (one BGG /thing call
+    # per id). Drives the "Importing X of Y" progress bar. Distinct from
+    # collection_pending + plays_pending, which double-count a single game
+    # that needs both a collection row and a play row.
+    unique_games_to_import: int = 0
     # True when BGG kept returning "still preparing" for every batch and the
     # sync ended up with nothing to import. The FE shows a "try again shortly"
     # toast instead of "Imported 0".
@@ -89,9 +94,18 @@ class BggSyncStatus(BaseModel):
     """Result of GET /bgg/sync/status. Used by the FE to poll progress."""
     bgg_username: Optional[str] = None
     auth_state: BggAuthState = BggAuthState.UNLINKED
+    # Lifetime row counters in boardgamebuddy_bgg_pending_imports. Kept for
+    # back-compat with the existing settings header copy.
     pending_count: int = 0
     errored_count: int = 0
     last_completed_at: Optional[datetime] = None
+    # Session-scoped progress, anchored by profiles.bgg_last_sync_started_at.
+    # Counted in distinct BGG game ids so the "X of Y" number matches the
+    # number of /thing calls the worker actually makes.
+    session_started_at: Optional[datetime] = None
+    session_total: int = 0
+    session_done: int = 0
+    session_errored: int = 0
 
 
 # ── Games ─────────────────────────────────────────────────────────────────────

@@ -3162,6 +3162,54 @@ body {
 }
 .bgg-link-form { display: flex; flex-direction: column; gap: 0.4rem; }
 
+/* BGG sync progress block. Sits inside .bgg-card as the live readout while
+   the import worker drains the pending queue — "Added N collection / M plays"
+   on top, "Importing X of Y new games" below with a progress bar. The
+   indeterminate variant animates a sliding bar for the brief window before
+   we know how many games need to import. */
+.bgg-progress {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+}
+.bgg-progress--done {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+.bgg-progress__direct {
+  color: oklch(var(--bc) / 0.85);
+}
+.bgg-progress__direct strong {
+  font-weight: 700;
+}
+.bgg-progress__label {
+  color: oklch(var(--bc) / 0.75);
+}
+.bgg-progress__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: oklch(var(--b3));
+  overflow: hidden;
+}
+.bgg-progress__bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+.bgg-progress__bar--indeterminate .bgg-progress__bar-fill {
+  position: absolute;
+  width: 32%;
+  animation: bgg-progress-slide 1.4s ease-in-out infinite;
+}
+@keyframes bgg-progress-slide {
+  0%   { left: -32%; }
+  100% { left: 100%; }
+}
+
 /* ── Profile tabs ─────────────────────────────────────────────────────────── */
 .profile-tabs {
   display: flex; gap: 0.25rem;

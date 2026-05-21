@@ -26,12 +26,25 @@
       this._bggLinkOpen = false;
       this._bggSyncing = false;
       this._bggSyncResult = null;
+      // BGG sync progress: _bggSummary is the synchronous POST response
+      // (counts of "added immediately" + "queued for import"). _bggPollHandle
+      // drives a 2s interval that re-polls /bgg/sync/status while the worker
+      // drains the pending queue so the FE can render a live progress bar.
+      this._bggSummary = null;
+      this._bggPollHandle = null;
     }
 
     async onMount() {
       this.listen("user", () => this.render());
       this.render();
       await this._loadBggStatus();
+      // Re-attach the poll if the user navigated away mid-sync and came
+      // back — session_total > done+errored means the worker is still busy.
+      if (this._needsPoll()) this._startBggPoll();
+    }
+
+    async onUnmount() {
+      this._stopBggPoll();
     }
 
     async _loadBggStatus() {
@@ -257,7 +270,7 @@
               </div>
               <button class="btn btn-ghost btn-xs" onclick="window.settingsView._unlinkBgg()">Unlink</button>
             </div>
-            ${this._bggSyncResult ? `<div class="text-xs opacity-70 mt-2">${escape(this._bggSyncResult)}</div>` : ""}
+            ${this._renderBggProgress()}
           </div>
         `;
       }
@@ -369,27 +382,143 @@
     }
 
     async _syncBgg() {
-      this._bggSyncing = true; this._bggSyncResult = null; this.render();
+      this._bggSyncing = true;
+      this._bggSyncResult = null;
+      this._bggSummary = null;
+      this._stopBggPoll();
+      this.render();
+      let summary;
       try {
-        const r = await window.Bgg.sync();
-        const parts = [];
-        if (r.collection_imported != null) parts.push(`${r.collection_imported} collection`);
-        if (r.plays_imported != null) parts.push(`${r.plays_imported} plays`);
-        if (r.collection_pending) parts.push(`${r.collection_pending} pending`);
-        this._bggSyncResult = parts.length ? `Imported ${parts.join(", ")}.` : "Sync complete.";
+        summary = await window.Bgg.sync();
       } catch (e) {
-        this._bggSyncResult = e.message || "Sync failed";
-      } finally {
         this._bggSyncing = false;
-        // BGG sync can grow the catalog, shift owned/wishlist, and import
-        // plays — bust every viewer-data cache so the next Profile / Feed /
-        // Game Detail visit picks up the fresh state. (Collection's invalidate
-        // also clears Profile + Game bundle caches, so this is one call's
-        // worth of fan-out.)
+        this._bggSyncResult = e.message || "Sync failed";
+        await this._loadBggStatus();
+        return;
+      }
+      this._bggSummary = summary;
+      if (summary && summary.warm_up_retry_pending) {
+        this._bggSyncing = false;
+        this._bggSyncResult = "BoardGameGeek is still preparing your collection — try again in a minute.";
+        await this._loadBggStatus();
+        return;
+      }
+      // The POST is done — known games already landed in our tables. Pull the
+      // latest status (resets session counters) and either finish immediately
+      // (no unknown games to import) or start polling progress every 2s.
+      await this._loadBggStatus();
+      const needsImport = summary && summary.unique_games_to_import > 0;
+      if (needsImport && this._needsPoll()) {
+        this._startBggPoll();
+        return;
+      }
+      this._bggSyncing = false;
+      this._bggSyncResult = this._buildFinalSummaryMessage();
+      // BGG sync can grow the catalog, shift owned/wishlist, and import plays
+      // — bust every viewer-data cache so the next Profile / Feed / Game
+      // Detail visit picks up the fresh state.
+      window.Collection.invalidateMyStatusMap();
+      window.store.invalidate("feed");
+      this.render();
+    }
+
+    _needsPoll() {
+      const b = this._bgg;
+      if (!b || !b.session_total) return false;
+      return (b.session_done + b.session_errored) < b.session_total;
+    }
+
+    _startBggPoll() {
+      if (this._bggPollHandle) return;
+      this._bggPollHandle = setInterval(() => this._pollBggStatus(), 2000);
+    }
+
+    _stopBggPoll() {
+      if (this._bggPollHandle) {
+        clearInterval(this._bggPollHandle);
+        this._bggPollHandle = null;
+      }
+    }
+
+    async _pollBggStatus() {
+      try {
+        this._bgg = await window.Bgg.status();
+      } catch (_) {
+        // Network hiccup — keep polling; if it persists the user can hit Sync
+        // again to surface the error.
+        return;
+      }
+      if (!this._needsPoll()) {
+        this._stopBggPoll();
+        this._bggSyncing = false;
+        this._bggSyncResult = this._buildFinalSummaryMessage();
+        // Drained — newly imported games may now appear in viewer reads.
         window.Collection.invalidateMyStatusMap();
         window.store.invalidate("feed");
-        await this._loadBggStatus();
       }
+      this.render();
+    }
+
+    _renderBggProgress() {
+      const syncing = this._bggSyncing;
+      const summary = this._bggSummary;
+      const b = this._bgg || {};
+      const total = b.session_total || 0;
+      const done = b.session_done || 0;
+      const errored = b.session_errored || 0;
+      const settled = done + errored;
+      const pct = total > 0 ? Math.min(100, Math.round((settled / total) * 100)) : 0;
+
+      if (syncing) {
+        // Always surface the "added immediately" counts up front so the user
+        // sees feedback even before the import worker kicks in.
+        const direct = summary
+          ? `<div class="bgg-progress__direct">
+               Added <strong>${summary.collection_imported || 0}</strong> games to your collection
+               · <strong>${summary.plays_imported || 0}</strong> plays
+             </div>` : "";
+        if (total > 0) {
+          return `
+            <div class="bgg-progress">
+              ${direct}
+              <div class="bgg-progress__label">
+                Importing <strong>${done}</strong> of <strong>${total}</strong> new game${total === 1 ? "" : "s"} from BoardGameGeek…
+                ${errored > 0 ? ` · <span class="text-warning">${errored} errored</span>` : ""}
+              </div>
+              <div class="bgg-progress__bar"><div class="bgg-progress__bar-fill" style="width:${pct}%"></div></div>
+            </div>
+          `;
+        }
+        return `
+          <div class="bgg-progress">
+            ${direct}
+            <div class="bgg-progress__label">Fetching from BoardGameGeek…</div>
+            <div class="bgg-progress__bar bgg-progress__bar--indeterminate"><div class="bgg-progress__bar-fill"></div></div>
+          </div>
+        `;
+      }
+      if (this._bggSyncResult) {
+        return `<div class="bgg-progress bgg-progress--done">${escape(this._bggSyncResult)}</div>`;
+      }
+      return "";
+    }
+
+    _buildFinalSummaryMessage() {
+      const s = this._bggSummary;
+      const b = this._bgg || {};
+      if (!s) return "Sync complete.";
+      const total = b.session_total || 0;
+      const done = b.session_done || 0;
+      const errored = b.session_errored || 0;
+      const parts = [];
+      if (s.collection_imported) parts.push(`${s.collection_imported} collection`);
+      if (s.plays_imported)      parts.push(`${s.plays_imported} plays`);
+      if (total > 0) {
+        parts.push(`${done} of ${total} new game${total === 1 ? "" : "s"} imported`);
+      }
+      let msg = parts.length ? `Synced ${parts.join(", ")}.` : "Sync complete.";
+      if (errored > 0) msg += ` ${errored} import${errored === 1 ? "" : "s"} failed.`;
+      return msg;
     }
   }
 
