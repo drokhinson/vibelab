@@ -11,3 +11,12 @@
 --   Called by : shared-backend/routes/admin.py
 --   Purpose   : Database storage per table for the admin storage dashboard.
 --               EXECUTE is REVOKEd from PUBLIC by _shared/003_project_roles.sql.
+
+-- analytics_summary_counts()
+--   Signature : () → TABLE(app text, all_time bigint, last_30d bigint, last_7d bigint, last_24h bigint)
+--   Language  : SQL, SECURITY DEFINER, STABLE
+--   Defined in: _shared/007_analytics_summary_rpc.sql
+--   Called by : shared-backend/routes/analytics.py (GET /api/v1/analytics/summary)
+--   Purpose   : Per-app event counts for the admin Usage panel. Aggregates
+--               in SQL so the PostgREST 1000-row cap can't truncate counts
+--               for low-volume / newest apps. EXECUTE REVOKEd from PUBLIC.
