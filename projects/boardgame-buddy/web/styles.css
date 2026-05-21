@@ -15,6 +15,7 @@
   /* Layout */
   --app-max-width: 512px;
   --app-padding:   0;
+  --bgb-nav-height: 64px;
 
   /* Typography — cozy-modern pairing
      Poppins  = friendly geometric sans for UI chrome
@@ -1447,26 +1448,32 @@ body {
   -webkit-line-clamp: 2;
 }
 
-/* ── Bottom nav — floating bar + raised Create button ──────────────────────── */
-/* Mobile-first floating panel that visually separates from the dark
-   feed/profile content. Feed + Profile are flanking pill-tabs; Log is a
-   raised gold disc that reads as a deliberate Create CTA. */
+/* ── Bottom nav — flush full-width strip + raised Create button ─────────────── */
+/* The nav stretches edge-to-edge along the bottom of the viewport, flush
+   to all three edges. Content above it sits inside #app, which reserves
+   exactly the nav height (+ iOS safe area) as its bottom padding so the
+   main scroll area always ends at the top of the nav strip. The raised
+   Create disc still rises out of the strip as a deliberate visual lift. */
+
+#app {
+  padding-bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
+}
 
 .bgb-nav {
   position: fixed;
-  bottom: max(14px, env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 28px);
-  max-width: 452px;
-  height: 64px;
-  border-radius: 26px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: none;
+  height: var(--bgb-nav-height);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-radius: 0;
   background: linear-gradient(180deg, #33240F 0%, #1E1308 100%);
   box-shadow:
-    0 -2px 16px rgba(0, 0, 0, 0.4),
-    0 10px 26px rgba(0, 0, 0, 0.45),
+    0 -2px 16px rgba(0, 0, 0, 0.35),
     inset 0 1px 0 rgba(245, 220, 142, 0.12),
-    inset 0 0 0 1px rgba(205, 162, 63, 0.28);
+    inset 0 0 0 1px rgba(205, 162, 63, 0.18);
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -4630,7 +4637,7 @@ body {
    ReferenceGuideScroll widget keeps its state across back/forward. */
 
 :root {
-  --cascade-bottom-pad: 96px;  /* room for the sticky CTA + iOS safe area */
+  --cascade-bottom-pad: 24px;  /* #app reserves nav height; this is just inner breathing room for the sticky CTA */
 }
 
 /* The cascade lives inside <main data-view="play-flow"> which is flex-1
@@ -4848,7 +4855,7 @@ main[data-view="session-viewer"]:not(.hidden) {
    Trailing slot is the "Join someone else's session instead" pill. */
 .cascade-card--invite {
   display: grid;
-  grid-template-columns: 36px 1fr auto;
+  grid-template-columns: 36px 1fr;
   align-items: center;
   gap: 12px;
 }
