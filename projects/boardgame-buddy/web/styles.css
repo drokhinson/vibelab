@@ -5053,6 +5053,25 @@ main[data-view="session-viewer"]:not(.hidden) {
   border-color: var(--accent);
 }
 
+/* Disabled / placeholder state for the Expansions card: shown on Gather
+   before a game is picked (or when the selected game has no expansions)
+   so hosts know to expect the section. Card is greyed and non-interactive;
+   becomes active once a base game with expansions is selected. */
+.cascade-card--expansions.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.cascade-card--expansions.is-disabled .collapsible-header__title,
+.cascade-card--expansions.is-disabled .cascade-card__hint {
+  color: var(--polaroid-muted);
+}
+.cascade-card--expansions .cascade-card__hint {
+  font-size: 12px;
+  color: var(--polaroid-muted);
+  margin: 6px 0 0;
+}
+.collapsible-header--static { cursor: default; }
+
 /* Reference guide section header inside Play */
 .cascade-card--guide .cascade-rulebook-row { margin-bottom: 8px; }
 .cascade-card--guide #play-flow-guide-mount,

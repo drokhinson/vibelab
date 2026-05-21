@@ -579,10 +579,12 @@ class SessionJoinBody(BaseModel):
 class JoinableSession(BaseModel):
     """A session the calling user can join from the Join chooser screen.
 
-    Surfaces sessions that are still in the gather phase where the viewer
-    is either (a) the host of the session — useful for refresh recovery,
-    (b) already listed as a participant — rejoin after a disconnect, or
-    (c) the host is one of the viewer's accepted buddies.
+    Surfaces any open in-progress session (phase ∈ gather/play/settle)
+    where the viewer is either (a) the host of the session — useful for
+    refresh recovery, (b) already listed as a participant — rejoin after
+    a disconnect, or (c) the host is one of the viewer's accepted
+    buddies. Gather sessions can be joined as a player; Play/Settle
+    sessions are spectator-only. The FE branches on `phase`.
     """
 
     id: str
@@ -591,6 +593,7 @@ class JoinableSession(BaseModel):
     host_display_name: str
     host_avatar_url: Optional[str] = None
     game: Optional[GameSummary] = None
+    phase: SessionPhase = SessionPhase.GATHER
     participant_count: int = 0
     is_participant: bool = False
     is_host_buddy: bool = False

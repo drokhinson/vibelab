@@ -53,6 +53,10 @@
       this._buddies = buddies;
 
       this.render();
+      // Initial scroll to the live phase's section — render() no longer
+      // does this on every paint (the poll-driven re-renders would yank
+      // scroll back continuously), so do it here once on mount instead.
+      this._scrollToCurrentPhase();
       this._startLobbyPoll();
       await this._startLiveScores();
       if (this._guideWidget) this._guideWidget.refresh();
@@ -184,12 +188,18 @@
     render() {
       const ps = this._ps;
       const phase = ps.phase || "gather";
-      const lockPlay = phase === "gather";
+      // Only the screen matching the live phase is unlocked. The other two
+      // collapse to height: 0 (.is-locked), so users can never scroll
+      // between sections — navigation is gated to the Continue CTA and the
+      // top-left back-arrow (which rolls the phase backwards via the
+      // server, see _phaseBack below).
+      const lockGather = phase !== "gather";
+      const lockPlay   = phase !== "play";
       const lockSettle = phase !== "settle";
 
       this.container.innerHTML = `
         <div class="cascade-scroll" id="play-flow-scroll">
-          <section class="cascade-screen" id="screen-gather">
+          <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
             ${this._renderScreenHeader("Gather", 1, false)}
             ${this._renderGather()}
             ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId })}
@@ -211,7 +221,11 @@
       `;
       if (window.lucide) window.lucide.createIcons();
       this._mountReferenceGuide();
-      this._scrollToCurrentPhase();
+      // NOTE: do NOT call _scrollToCurrentPhase() here. render() runs every
+      // 2s via the lobby poll and on every player edit — yanking the scroll
+      // to the top of the active section made long Gather screens feel
+      // un-scrollable. _scrollToCurrentPhase() is now only called when the
+      // active phase actually changes (onMount, _advancePhase, _phaseBack).
     }
 
     _renderScreenHeader(title, step, showBack) {
@@ -219,7 +233,7 @@
         <header class="cascade-screen__header">
           ${showBack ? `
             <button class="cascade-back" title="Back"
-                    onclick="window.playFlowView._scrollToPrev('${escapeAttr(title.toLowerCase())}')">
+                    onclick="window.playFlowView._phaseBack('${escapeAttr(title.toLowerCase())}')">
               <i data-lucide="chevron-up" class="w-4 h-4"></i>
             </button>
           ` : `<span class="cascade-back-spacer"></span>`}
@@ -261,14 +275,17 @@
       });
     }
 
-    _scrollTo(id) {
-      const el = document.getElementById(id);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-
-    _scrollToPrev(currentLower) {
-      if (currentLower === "play") this._scrollTo("screen-gather");
-      else if (currentLower === "settle up") this._scrollTo("screen-play");
+    // Back-arrow handler. Rolls the live session phase one step backward
+    // (Play → Gather, Settle → Play) so the host can re-edit a previous
+    // step. Joiners' read-only mirrors track via the same advancePhase
+    // PATCH the forward Continue button uses. After the round-trip, scroll
+    // to the top of the now-active section.
+    async _phaseBack(currentLower) {
+      let prev = null;
+      if (currentLower === "play") prev = "gather";
+      else if (currentLower === "settle up") prev = "play";
+      if (!prev) return;
+      await this._advancePhase(prev);
     }
 
     // ── Gather screen ───────────────────────────────────────────────────────
@@ -304,6 +321,8 @@
           `}
         </section>
 
+        ${this._renderExpansionsPicker()}
+
         ${this._renderPlayModeSelector()}
 
         <section class="cascade-card">
@@ -328,8 +347,6 @@
             <button class="btn btn-primary" onclick="window.playFlowView._addPlayerFromInput()">Add</button>
           </div>
         </section>
-
-        ${this._renderExpansionsPicker()}
       `;
     }
 
@@ -611,6 +628,7 @@
         this._ps.phase = updated.phase;
         this._ps.persist();
         this.render();
+        this._scrollToCurrentPhase();
       } catch (e) {
         this._error = e.message || "Could not advance to the next screen";
         this.render();
@@ -882,10 +900,35 @@
     }
 
     _renderExpansionsPicker() {
-      if (!this._ps.gameId) return "";
+      // Always render the card so hosts know the section exists. When
+      // there's nothing to pick (no game yet, the game is itself an
+      // expansion, or the game has no expansions), show a greyed-out
+      // placeholder with explanatory copy. Once a base game with
+      // expansions is selected the card becomes interactive and starts
+      // collapsed; the user taps the header to expand the list.
       const snap = this._ps.gameSnapshot;
-      if (snap && snap.is_expansion) return "";
-      if (!this._expansions || this._expansions.length === 0) return "";
+      let disabledHint = null;
+      if (!this._ps.gameId) {
+        disabledHint = "Pick a game first to choose expansions.";
+      } else if (snap && snap.is_expansion) {
+        disabledHint = "This game is itself an expansion.";
+      } else if (!this._expansions || this._expansions.length === 0) {
+        disabledHint = "No expansions for this game.";
+      }
+      if (disabledHint) {
+        return `
+          <section class="cascade-card cascade-card--expansions is-disabled" aria-disabled="true">
+            <div class="collapsible-header collapsible-header--static">
+              <span class="collapsible-header__title">
+                <i data-lucide="puzzle" class="w-4 h-4"></i>
+                Expansions
+              </span>
+              <i data-lucide="chevron-right" class="w-4 h-4 collapsible-header__chev"></i>
+            </div>
+            <p class="cascade-card__hint">${escape(disabledHint)}</p>
+          </section>
+        `;
+      }
       const open = !!this._expansionsOpen;
       const chevron = open ? "chevron-down" : "chevron-right";
       const selected = (this._ps.expansionIds || []).length;
