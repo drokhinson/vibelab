@@ -1,20 +1,36 @@
-// views/reference-guide-add-view.js — add a chapter to the user's
-// reference guide for a game. Two tabs: Create (author new) or Browse
-// (pick from the community pool, sorted by popularity).
+// views/reference-guide-add-view.js — add or edit a chapter in the user's
+// reference guide. Three tabs/modes share one surface:
+//   - "browse" : parchment scroll of community chapters; rows expand inline
+//                to preview content + Add/Added toggle + Report.
+//   - "create" : full Option C editor (Write/Preview toggle, format toolbar,
+//                table picker, color swatches) for authoring a new chapter.
+//   - "edit"   : same Option C editor, prefilled from a stashed chapter; Save
+//                calls PATCH /chapters/{id} instead of POST.
 
 (function () {
+  // Inline color swatches — hex values map straight into the existing
+  // <span style="color:#hex"> markdown renderer (see ui/markdown.js).
+  const COLOR_SWATCHES = [
+    { id: "gold",   hex: "#C9922A" },
+    { id: "green",  hex: "#4A7A4A" },
+    { id: "blue",   hex: "#4A6F94" },
+    { id: "rust",   hex: "#A65D2C" },
+    { id: "purple", hex: "#7A5293" },
+  ];
+
   class ReferenceGuideAddView extends window.View {
     constructor() {
       super("reference-guide-add");
-      this._tab = "browse";          // "browse" | "create"
+      this._tab = "browse";          // "browse" | "create" | "edit"
       this._gameId = null;            // base game uuid (route param)
       this._gameName = "";
+      this._gameThumb = null;         // base game thumbnail_url
       // Optional expansion uuids passed from the in-play guide widget. When
       // present, Browse shows chapters across base + these expansions and the
       // Create tab gets a "Target game" picker so the new chapter can be
       // saved against an expansion's pool.
       this._expansionIds = [];
-      this._expansionMeta = {};       // gameId → {name, color}
+      this._expansionMeta = {};       // gameId → {name, color, thumb}
       this._createTargetGameId = null; // defaults to base game in onMount
 
       // Browse state
@@ -23,59 +39,103 @@
       this._search = "";
       this._typeFilter = "";
 
-      // Create state
+      // Create/Edit form state
       this._types = [];
       this._formType = "";
       this._formTitle = "";
       this._formContent = "";
-      this._createSubTab = "write"; // "write" | "preview"
+      this._editorView = "write"; // "write" | "preview"
       this._saving = false;
       this._error = null;
-
-      // Preview modal: id of the chapter whose full markdown content is
-      // currently shown; null = no modal.
-      this._previewChapterId = null;
-      // Inline edit (creator-only) state. _editing flips the modal body to
-      // a textarea; _savingEdit disables the Save button mid-flight.
-      this._editing = false;
-      this._editTitle = "";
-      this._editContent = "";
-      this._editError = null;
-      this._savingEdit = false;
+      this._editingChapterId = null;  // set when _tab === "edit"
+      // Transient stash: scroll widget drops the chapter here before
+      // routing into edit mode so we don't need an extra GET.
+      this._prefillChapter = null;
+      // Active toolbar popover: null | "table" | "color"
+      this._activePop = null;
+      // Live dimension label for the table picker.
+      this._tablePickLabel = "1 × 1";
     }
 
     async onMount() {
-      this._gameId = (this.params && this.params.gameId) || null;
-      this._gameName = (this.params && this.params.gameName) || "";
-      this._tab = (this.params && this.params.tab) || "browse";
-      const rawExp = (this.params && this.params.expansionIds) || "";
+      const p = this.params || {};
+      this._gameId = p.gameId || null;
+      this._gameName = p.gameName || "";
+      const requestedTab = p.mode === "edit" ? "edit" : (p.tab || "browse");
+      const rawExp = p.expansionIds || "";
       this._expansionIds = rawExp.split(",").map((s) => s.trim()).filter(Boolean);
       this._createTargetGameId = this._gameId;
       this._expansionMeta = this._gameId
-        ? { [this._gameId]: { name: this._gameName, color: null } }
+        ? { [this._gameId]: { name: this._gameName, color: null, thumb: null } }
         : {};
-      // Escape dismisses the preview modal. Auto-removed on view unmount.
+
+      // Global key handlers: Escape closes any open toolbar popover.
       this.listenDom("keydown", (e) => {
-        if (e.key === "Escape" && this._previewChapterId) this._closePreview();
+        if (e.key === "Escape" && this._activePop) {
+          this._activePop = null;
+          this.render();
+        }
       });
+      // Click outside any popover closes it (toolbar buttons stopPropagate).
+      this.listenDom("click", (e) => {
+        if (!this._activePop) return;
+        if (e.target.closest(".chapter-edit__pop")) return;
+        if (e.target.closest("[data-pop-trigger]")) return;
+        this._activePop = null;
+        this.render();
+      });
+
       if (!this._gameId) {
         this.render();
         return;
       }
-      // Always preload chapter types — they're needed by both tabs. When
-      // expansions are in scope, also fetch the base game's expansion list
-      // so we can populate names/colors for the Create-target selector.
+
+      // Always preload chapter types — both create and browse need them.
+      // Fetch game + expansion metadata in parallel so the cream game chip
+      // and the target-game selector can render thumbnails on first paint.
       const typesP = window.Chapter.types().catch(() => []);
+      const gameP = window.api.get(`/games/${this._gameId}`).catch(() => null);
       const expsP = this._expansionIds.length
         ? window.api.get(`/games/${this._gameId}/expansions`).catch(() => [])
         : Promise.resolve([]);
-      const [types, exps] = await Promise.all([typesP, expsP]);
+      const [types, game, exps] = await Promise.all([typesP, gameP, expsP]);
       this._types = types || [];
+      if (game) {
+        this._gameThumb = game.thumbnail_url || game.image_url || null;
+        this._expansionMeta[this._gameId] = {
+          name: game.name || this._gameName,
+          color: null,
+          thumb: this._gameThumb,
+        };
+        if (!this._gameName) this._gameName = game.name || "";
+      }
       for (const e of (exps || [])) {
         if (this._expansionIds.includes(e.expansion_game_id)) {
-          this._expansionMeta[e.expansion_game_id] = { name: e.name, color: e.color || null };
+          this._expansionMeta[e.expansion_game_id] = {
+            name: e.name,
+            color: e.color || null,
+            thumb: e.thumbnail_url || null,
+          };
         }
       }
+
+      // Prefill from the stash if scroll-widget Edit triggered the route.
+      if (requestedTab === "edit" && this._prefillChapter) {
+        const c = this._prefillChapter;
+        this._prefillChapter = null;
+        this._editingChapterId = c.id;
+        this._formTitle = c.title || "";
+        this._formContent = c.content || "";
+        this._formType = c.chapter_type || "";
+        this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
+        this._tab = "edit";
+      } else if (requestedTab === "edit") {
+        // Direct URL into edit mode without the stash → fall back to browse.
+        this._tab = "browse";
+      } else {
+        this._tab = requestedTab;
+      }
+
       if (this._tab === "browse") await this._loadPool();
       this.render();
     }
@@ -92,9 +152,6 @@
           chapterType: this._typeFilter || undefined,
           expansionIds: this._expansionIds.length ? this._expansionIds : undefined,
         });
-        // Show every pool row regardless of in_my_guide — the per-row
-        // toggle button reflects the current state and adds/removes
-        // without hiding the row.
         this._pool = pool || [];
       } catch (e) {
         showToast(e.message || "Failed to load chapter pool", "error");
@@ -105,8 +162,6 @@
       }
     }
 
-    // Mirrors GameDetailView._groupChaptersByType so the user's guide and
-    // the Browse pool read with the same per-type section headers.
     _groupPoolByType(list) {
       const groups = new Map();
       for (const c of list) {
@@ -135,35 +190,87 @@
         `;
         return;
       }
+
+      const isEditing = this._tab === "edit";
+      const isCreating = this._tab === "create";
+      const headerTitle = isEditing ? "Edit chapter" : "Add a chapter";
+
       this.container.innerHTML = `
         <header class="search-topbar">
           <button class="btn btn-ghost btn-sm" onclick="window.router.back('game-detail')">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
-          <h2 class="font-display font-semibold text-lg">Add a chapter</h2>
+          <h2 class="font-display font-semibold text-lg">${escape(headerTitle)}</h2>
           <span></span>
         </header>
-        <p class="text-xs opacity-60 px-1 mb-2">
-          ${escape(this._gameName) || "Reference guide"}
-        </p>
-        <div class="chapter-add__tabs" role="tablist">
-          <button class="chapter-add__tab ${this._tab === "browse" ? "chapter-add__tab--active" : ""}"
-                  onclick="window.referenceGuideAddView._setTab('browse')">
-            <i data-lucide="library" class="w-4 h-4"></i> Browse
-          </button>
-          <button class="chapter-add__tab ${this._tab === "create" ? "chapter-add__tab--active" : ""}"
-                  onclick="window.referenceGuideAddView._setTab('create')">
-            <i data-lucide="plus" class="w-4 h-4"></i> Create new
-          </button>
-        </div>
-        ${this._tab === "browse" ? this._renderBrowse() : this._renderCreate()}
-        ${this._renderPreviewModal()}
+        ${this._renderGameChip()}
+        ${isEditing ? "" : `
+          <div class="chapter-add__tabs" role="tablist">
+            <button class="chapter-add__tab ${this._tab === "browse" ? "chapter-add__tab--active" : ""}"
+                    onclick="window.referenceGuideAddView._setTab('browse')">
+              <i data-lucide="library" class="w-4 h-4"></i> Browse
+            </button>
+            <button class="chapter-add__tab ${this._tab === "create" ? "chapter-add__tab--active" : ""}"
+                    onclick="window.referenceGuideAddView._setTab('create')">
+              <i data-lucide="plus" class="w-4 h-4"></i> Create new
+            </button>
+          </div>
+        `}
+        ${this._tab === "browse"
+            ? this._renderBrowse()
+            : this._renderEditor(isEditing)}
       `;
       if (window.lucide) window.lucide.createIcons();
+
+      // Wire <details> mutex per section (only one open chapter per type).
+      this.container.querySelectorAll(".scroll-chapter-list").forEach((list) => {
+        list.addEventListener("toggle", (ev) => {
+          const opened = ev.target;
+          if (!(opened instanceof HTMLDetailsElement) || !opened.open) return;
+          list.querySelectorAll("details[open]").forEach((d) => {
+            if (d !== opened) d.open = false;
+          });
+        }, true);
+      });
+
+      // Build the table dimension picker grid (lazy — only when popover is
+      // open, to keep the DOM cheap on first paint).
+      if (this._activePop === "table") this._buildTableGrid();
+    }
+
+    // Game chip — cream pill with cover + name, always at top of the screen
+    // so the user knows which game they're authoring/browsing for.
+    _renderGameChip() {
+      const meta = this._expansionMeta[this._gameId] || { name: this._gameName, thumb: this._gameThumb };
+      const name = meta.name || this._gameName || "Reference guide";
+      const thumb = meta.thumb || this._gameThumb;
+      const sub = this._tab === "edit"
+        ? "Editing chapter for this game"
+        : (this._tab === "create" ? "Authoring new chapter" : "Chapters for this game");
+      const cover = thumb
+        ? `<div class="chapter-edit__gamechip-cv"><img src="${escapeAttr(thumb)}" alt="" onerror="this.parentNode.classList.add('chapter-edit__gamechip-cv--blank')"></div>`
+        : `<div class="chapter-edit__gamechip-cv chapter-edit__gamechip-cv--blank"></div>`;
+      return `
+        <div class="chapter-edit__gamechip">
+          ${cover}
+          <div class="chapter-edit__gamechip-text">
+            <div class="chapter-edit__gamechip-name">${escape(name)}</div>
+            <div class="chapter-edit__gamechip-sub">${escape(sub)}</div>
+          </div>
+        </div>
+      `;
     }
 
     async _setTab(t) {
       if (this._tab === t) return;
+      // Leaving edit mode: clear the in-flight buffer.
+      if (this._tab === "edit") {
+        this._editingChapterId = null;
+        this._formTitle = "";
+        this._formContent = "";
+        this._formType = "";
+        this._error = null;
+      }
       this._tab = t;
       if (t === "browse") await this._loadPool();
       this.render();
@@ -182,12 +289,12 @@
         </button>
       `)].join("");
 
-      const body = this._poolLoading
-        ? window.buddyLoader({ size: 80 })
+      const scrollBody = this._poolLoading
+        ? `<div class="scroll-panel__loading">${window.buddyLoader({ size: 60 })}</div>`
         : this._pool.length === 0
-          ? `<div class="text-sm opacity-60 p-6 text-center">
+          ? `<div class="scroll-panel__empty">
                No chapters available${this._search || this._typeFilter ? " for this filter" : " yet"}.
-               <br/><button class="btn btn-primary btn-sm mt-3"
+               <br/><button class="chapter-edit__fbtn chapter-edit__fbtn--save mt-3"
                             onclick="window.referenceGuideAddView._setTab('create')">
                  Create the first one
                </button>
@@ -205,18 +312,22 @@
         <div class="chapter-add__filter-chips" role="tablist">
           ${chipBtns}
         </div>
-        ${body}
+        <div class="scroll-panel chapter-add__pool-scroll">
+          <div class="scroll-panel__body">
+            ${scrollBody}
+          </div>
+        </div>
       `;
     }
 
     _renderPoolSection(group) {
       return `
-        <section class="chapter-add__pool-section" data-type="${escapeAttr(group.type)}">
-          <h4 class="chapter-add__pool-section-header">
+        <section class="scroll-section" data-type="${escapeAttr(group.type)}">
+          <h4 class="scroll-section__header">
             <i data-lucide="${group.icon}" class="w-4 h-4"></i>
             ${escape(group.label)}
           </h4>
-          <ul class="chapter-add__pool">
+          <ul class="scroll-chapter-list">
             ${group.chapters.map((c) => this._renderPoolRow(c)).join("")}
           </ul>
         </section>
@@ -227,229 +338,67 @@
       const icon = c.chapter_type_icon || "book";
       const author = c.created_by_name ? `by ${escape(c.created_by_name)}` : "";
       const inGuide = !!c.in_my_guide;
-      // Only show the source label/dot when this view is aggregating across
-      // multiple games (i.e. the caller passed expansionIds). For a plain
-      // single-game add flow source_game_name is unset and we keep the row
-      // chrome identical to the legacy layout.
-      const sourceLabel = (this._expansionIds.length && c.source_game_name && c.source_color)
-        ? `<span class="chapter-add__pool-source" style="--exp-color:${escapeAttr(c.source_color)}">
-             <span class="chapter-add__pool-source-dot"></span>
-             ${escape(c.source_game_name)}
-           </span>`
+      const me = window.store && window.store.get("user");
+      const isAuthed = !!me;
+      const isOwner = !!(me && c.created_by && me.id === c.created_by);
+      const dot = (this._expansionIds.length && c.source_color)
+        ? `<span class="scroll-chapter__source-dot" style="--exp-color:${escapeAttr(c.source_color)}"
+                 title="${escapeAttr(c.source_game_name || "")}"></span>`
         : "";
-      // Whole row is the open-preview target. Action buttons inside stop
-      // propagation so a tap on +/check/flag doesn't also open the modal.
+
       return `
-        <li class="chapter-add__pool-row chapter-add__pool-row--clickable" data-chapter-id="${c.id}"
-            role="button" tabindex="0"
-            onclick="window.referenceGuideAddView._openPreview('${c.id}')"
-            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.referenceGuideAddView._openPreview('${c.id}')}">
-          <div class="chapter-add__pool-icon"><i data-lucide="${icon}" class="w-4 h-4"></i></div>
-          <div class="chapter-add__pool-body">
-            <div class="chapter-add__pool-title">${escape(c.title)}</div>
-            <div class="chapter-add__pool-meta">
-              <span class="chapter-add__pool-pop" title="${c.popularity} ${c.popularity === 1 ? "person has" : "people have"} this in their guide">
-                <i data-lucide="users" class="w-3 h-3"></i> ${c.popularity}
-              </span>
-              ${sourceLabel}
-              ${author ? `<span class="chapter-add__pool-author">${author}</span>` : ""}
+        <li class="scroll-chapter" data-chapter-id="${c.id}">
+          <details>
+            <summary class="scroll-chapter__summary scroll-chapter__summary--rich">
+              ${dot}
+              <span class="scroll-chapter__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
+              <div class="scroll-chapter__summary-text">
+                <div class="scroll-chapter__title">${escape(c.title)}</div>
+                <div class="scroll-chapter__submeta">
+                  <span class="scroll-chapter__pop" title="${c.popularity} ${c.popularity === 1 ? "person has" : "people have"} this in their guide">
+                    <i data-lucide="users" class="w-3 h-3"></i> ${c.popularity}
+                  </span>
+                  ${author ? `<span class="scroll-chapter__author">${author}</span>` : ""}
+                </div>
+              </div>
+            </summary>
+            <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
+            <div class="scroll-chapter__actions">
+              <button class="chapter-add__pool-toggle ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
+                      onclick="event.preventDefault();window.referenceGuideAddView._toggleInGuide('${c.id}')">
+                ${inGuide
+                  ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
+                  : `<i data-lucide="plus" class="w-4 h-4"></i><span>Add to my guide</span>`}
+              </button>
+              <span class="chapter-add__pool-actions-spacer"></span>
+              ${isOwner ? `
+                <button class="btn btn-ghost btn-xs"
+                        onclick="event.preventDefault();window.referenceGuideAddView._editFromPool('${c.id}')">
+                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit
+                </button>
+              ` : ""}
+              ${isAuthed && !isOwner ? `
+                <button class="btn btn-ghost btn-xs"
+                        onclick="event.preventDefault();window.referenceGuideAddView._reportChapter('${c.id}')">
+                  <i data-lucide="flag" class="w-3.5 h-3.5"></i> Report
+                </button>
+              ` : ""}
             </div>
-          </div>
-          <div class="chapter-add__pool-actions">
-            <button class="chapter-add__pool-toggle ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
-                    title="${inGuide ? "Remove from my guide" : "Add to my guide"}"
-                    onclick="event.stopPropagation();window.referenceGuideAddView._toggleInGuide('${c.id}')">
-              ${inGuide
-                ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
-                : `<i data-lucide="plus" class="w-4 h-4"></i>`}
-            </button>
-          </div>
+          </details>
         </li>
       `;
     }
 
-    // ── Preview modal ────────────────────────────────────────────────────────
-    _renderPreviewModal() {
-      if (!this._previewChapterId) return "";
-      const c = this._pool.find((x) => x.id === this._previewChapterId);
-      if (!c) return "";
-      const icon = c.chapter_type_icon || "book";
-      const author = c.created_by_name ? `by ${escape(c.created_by_name)}` : "";
-      const sourceLabel = (this._expansionIds.length && c.source_game_name && c.source_color)
-        ? `<span class="chapter-add__pool-source" style="--exp-color:${escapeAttr(c.source_color)}">
-             <span class="chapter-add__pool-source-dot"></span>
-             ${escape(c.source_game_name)}
-           </span>`
-        : "";
-      const inGuide = !!c.in_my_guide;
-      const me = window.store && window.store.get("user");
-      const isAuthed = !!me;
-      const isOwner = !!(me && c.created_by && me.id === c.created_by);
-      const editing = !!this._editing;
-
-      // Header title swaps to an input when editing; everything else in the
-      // header stays so meta + close affordance remain visible.
-      const titleHtml = editing
-        ? `<input id="chapter-edit-title"
-                  class="input input-bordered input-sm chapter-add__edit-title"
-                  type="text" maxlength="200"
-                  value="${escapeAttr(this._editTitle)}"
-                  oninput="window.referenceGuideAddView._editTitle = this.value" />`
-        : `<div class="chapter-add__preview-title font-display">${escape(c.title)}</div>`;
-
-      const bodyHtml = editing
-        ? `<div class="chapter-add__preview-body chapter-add__preview-body--editing">
-             <textarea id="chapter-edit-content"
-                       class="textarea textarea-bordered chapter-add__edit-textarea"
-                       rows="14"
-                       oninput="window.referenceGuideAddView._editContent = this.value">${escape(this._editContent)}</textarea>
-             ${this._editError ? `<div class="text-error text-sm mt-2">${escape(this._editError)}</div>` : ""}
-           </div>`
-        : `<div class="chapter-add__preview-body">
-             ${window.renderMarkdown(c.content || "")}
-           </div>`;
-
-      const footerHtml = editing
-        ? `<div class="chapter-add__preview-footer">
-             <div class="chapter-add__preview-actions">
-               <button class="btn btn-ghost btn-sm"
-                       onclick="window.referenceGuideAddView._cancelEdit()">Cancel</button>
-               <button class="chapter-add__pool-toggle"
-                       ${this._savingEdit ? "disabled" : ""}
-                       onclick="window.referenceGuideAddView._saveEdit()">
-                 <i data-lucide="check" class="w-4 h-4"></i>
-                 <span>${this._savingEdit ? "Saving…" : "Save"}</span>
-               </button>
-             </div>
-           </div>`
-        : `<div class="chapter-add__preview-footer">
-             <button class="chapter-add__pool-toggle ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
-                     onclick="window.referenceGuideAddView._toggleInGuide('${c.id}')">
-               ${inGuide
-                 ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
-                 : `<i data-lucide="plus" class="w-4 h-4"></i><span>Add to my guide</span>`}
-             </button>
-             <div class="chapter-add__preview-actions">
-               ${isOwner ? `
-                 <button class="btn btn-ghost btn-sm chapter-add__preview-edit"
-                         title="Edit this chapter"
-                         onclick="window.referenceGuideAddView._startEdit('${c.id}')">
-                   <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-                   <span>Edit</span>
-                 </button>
-               ` : ""}
-               ${isAuthed && !isOwner ? `
-                 <button class="btn btn-ghost btn-sm chapter-add__preview-report"
-                         title="Report this chapter"
-                         onclick="window.referenceGuideAddView._reportChapter('${c.id}')">
-                   <i data-lucide="flag" class="w-3.5 h-3.5"></i>
-                   <span>Report</span>
-                 </button>
-               ` : ""}
-               <button class="btn btn-ghost btn-sm"
-                       onclick="window.referenceGuideAddView._closePreview()">Close</button>
-             </div>
-           </div>`;
-
-      return `
-        <div class="chapter-add__preview-backdrop"
-             onclick="window.referenceGuideAddView._closePreview()">
-          <div class="chapter-add__preview-card" role="dialog" aria-modal="true"
-               onclick="event.stopPropagation()">
-            <div class="chapter-add__preview-header">
-              <div class="chapter-add__preview-icon"><i data-lucide="${icon}" class="w-5 h-5"></i></div>
-              <div class="chapter-add__preview-titlewrap">
-                ${titleHtml}
-                <div class="chapter-add__preview-meta">
-                  <span class="chapter-add__pool-pop">
-                    <i data-lucide="users" class="w-3 h-3"></i> ${c.popularity}
-                  </span>
-                  ${sourceLabel}
-                  ${author ? `<span class="chapter-add__pool-author">${author}</span>` : ""}
-                </div>
-              </div>
-              <button class="chapter-add__preview-close" aria-label="Close"
-                      onclick="window.referenceGuideAddView._closePreview()">
-                <i data-lucide="x" class="w-4 h-4"></i>
-              </button>
-            </div>
-            ${bodyHtml}
-            ${footerHtml}
-          </div>
-        </div>
-      `;
-    }
-
-    _openPreview(chapterId) {
-      this._previewChapterId = chapterId;
-      this._editing = false;
-      this._editError = null;
-      this.render();
-    }
-
-    _closePreview() {
-      this._previewChapterId = null;
-      this._editing = false;
-      this._editError = null;
-      this.render();
-    }
-
-    _startEdit(chapterId) {
+    _editFromPool(chapterId) {
       const c = this._pool.find((x) => x.id === chapterId);
       if (!c) return;
-      const me = window.store && window.store.get("user");
-      // Defensive — the Edit button is hidden for non-owners but a stale
-      // click after the user signs out shouldn't be able to slip through.
-      if (!me || me.id !== c.created_by) return;
-      this._editing = true;
-      this._editTitle = c.title || "";
-      this._editContent = c.content || "";
-      this._editError = null;
-      this._savingEdit = false;
-      this.render();
-    }
-
-    _cancelEdit() {
-      this._editing = false;
-      this._editTitle = "";
-      this._editContent = "";
-      this._editError = null;
-      this.render();
-    }
-
-    async _saveEdit() {
-      if (!this._previewChapterId) return;
-      const c = this._pool.find((x) => x.id === this._previewChapterId);
-      if (!c) return;
-      const title = (this._editTitle || "").trim();
-      const content = (this._editContent || "").trim();
-      if (!title || !content) {
-        this._editError = "Title and content are required.";
-        this.render();
-        return;
-      }
-      this._savingEdit = true;
-      this._editError = null;
-      this.render();
-      try {
-        const updated = await window.Chapter.update(c.id, { title, content });
-        // Patch the pool row in place so popularity / in_my_guide / source_*
-        // tags stay intact — _loadPool would clobber them.
-        c.title = updated.title;
-        c.content = updated.content;
-        c.updated_at = updated.updated_at;
-        this._editing = false;
-        this._savingEdit = false;
-        document.dispatchEvent(new CustomEvent("chapters-changed", {
-          detail: { gameId: c.source_game_id || c.game_id || this._gameId },
-        }));
-        showToast("Chapter updated", "success");
-        this.render();
-      } catch (e) {
-        this._editError = e.message || "Failed to save chapter";
-        this._savingEdit = false;
-        this.render();
-      }
+      this._prefillChapter = c;
+      // Reuse onMount via params change so the edit-mode prefill runs.
+      window.router.go("reference-guide-add", {
+        ...this.params,
+        mode: "edit",
+        gameId: c.source_game_id || c.game_id || this._gameId,
+      });
     }
 
     _onSearchInput(v) {
@@ -466,9 +415,6 @@
     async _toggleInGuide(chapterId) {
       const row = this._pool.find((c) => c.id === chapterId);
       if (!row) return;
-      // When the pool spans base + expansions each chapter carries its own
-      // source_game_id. Single-game pool rows leave source_game_id null, so
-      // we fall back to the base game id.
       const targetGameId = row.source_game_id || row.game_id || this._gameId;
       const targetState = !row.in_my_guide;
       try {
@@ -494,7 +440,6 @@
         "Why are you reporting this chapter? (optional)",
         ""
       );
-      // Null = user cancelled. Empty string = submitted without a reason.
       if (reason === null) return;
       try {
         await window.Chapter.report(chapterId, reason.trim() || null);
@@ -504,77 +449,114 @@
       }
     }
 
-    // ── Create ────────────────────────────────────────────────────────────────
-    _renderCreate() {
+    // ── Create / Edit (shared editor surface) ─────────────────────────────────
+    _renderEditor(isEditing) {
       const typeBtns = this._types.map((t) => `
-        <button class="chapter-add__type-btn ${t.id === this._formType ? "chapter-add__type-btn--active" : ""}"
+        <button type="button"
+                class="chapter-edit__tpill ${t.id === this._formType ? "chapter-edit__tpill--on" : ""}"
                 onclick="window.referenceGuideAddView._pickType('${t.id}')">
           <i data-lucide="${t.icon || "book"}" class="w-4 h-4"></i>
           <span>${escape(t.label)}</span>
         </button>
       `).join("");
 
-      // Content editor: Write tab keeps the existing required textarea
-      // (so HTML5 form validation still works on submit). Preview tab
-      // renders the buffered markdown. Switching is purely visual —
-      // _formContent stays in memory across switches.
-      const isPreview = this._createSubTab === "preview";
-      const editorBody = isPreview
-        ? `<div class="chapter-add__preview">
-             ${this._formContent.trim()
-               ? window.renderMarkdown(this._formContent)
-               : `<p class="opacity-60 text-sm italic">Nothing to preview yet — switch to Write and type some markdown.</p>`}
-           </div>`
-        : `<textarea id="chapter-form-content"
-                      class="textarea textarea-bordered chapter-add__textarea"
-                      rows="14" required
-                      oninput="window.referenceGuideAddView._formContent = this.value"
-                      placeholder="## What you can do on your turn…">${escape(this._formContent)}</textarea>`;
-
-      // Target-game selector only renders when expansions are in scope —
-      // the single-game add flow saves to the base game implicitly.
       const targetSelector = this._expansionIds.length
         ? this._renderCreateTargetSelector()
         : "";
 
+      const isPreview = this._editorView === "preview";
+
+      const editorPanel = isPreview
+        ? `<div class="chapter-edit__preview">
+             ${this._formContent.trim()
+               ? window.renderMarkdown(this._formContent)
+               : `<p class="chapter-edit__preview-empty">Nothing to preview yet — switch to Write and start typing.</p>`}
+           </div>`
+        : `<div class="chapter-edit__write">
+             <div class="chapter-edit__toolbar">
+               <button type="button" class="chapter-edit__tbtn" title="Heading"
+                       onclick="window.referenceGuideAddView._fmt('h')">H</button>
+               <button type="button" class="chapter-edit__tbtn" title="Bold"
+                       onclick="window.referenceGuideAddView._fmt('b')"><b>B</b></button>
+               <button type="button" class="chapter-edit__tbtn chapter-edit__tbtn--ital" title="Italic"
+                       onclick="window.referenceGuideAddView._fmt('i')">I</button>
+               <span class="chapter-edit__tdiv"></span>
+               <button type="button" class="chapter-edit__tbtn" title="Bulleted list"
+                       onclick="window.referenceGuideAddView._fmt('ul')">
+                 <i data-lucide="list" class="w-4 h-4"></i>
+               </button>
+               <button type="button" class="chapter-edit__tbtn" title="Link"
+                       onclick="window.referenceGuideAddView._fmt('link')">
+                 <i data-lucide="link" class="w-4 h-4"></i>
+               </button>
+               <button type="button" class="chapter-edit__tbtn" data-pop-trigger title="Insert table"
+                       onclick="event.stopPropagation();window.referenceGuideAddView._togglePop('table')">
+                 <i data-lucide="table" class="w-4 h-4"></i>
+               </button>
+               <button type="button" class="chapter-edit__tbtn chapter-edit__tbtn--gold"
+                       data-pop-trigger title="Text colour"
+                       onclick="event.stopPropagation();window.referenceGuideAddView._togglePop('color')">
+                 <i data-lucide="palette" class="w-4 h-4"></i>
+               </button>
+             </div>
+             <textarea id="chapter-form-content"
+                       class="chapter-edit__mdarea"
+                       rows="14" required
+                       spellcheck="false"
+                       oninput="window.referenceGuideAddView._formContent = this.value"
+                       placeholder="## What you can do on your turn…">${escape(this._formContent)}</textarea>
+             ${this._renderPopovers()}
+           </div>`;
+
+      const importBtn = isEditing ? "" : `
+        <label class="chapter-edit__import" title="Import a .md file as this chapter">
+          <input type="file" accept=".md,text/markdown,text/plain"
+                 onchange="window.referenceGuideAddView._onImportMd(event)" />
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+          <span>Import .md</span>
+        </label>
+      `;
+
+      const submitLabel = isEditing
+        ? (this._saving ? "Saving…" : "Save changes")
+        : (this._saving ? "Saving…" : "Save chapter");
+
       return `
-        <form class="chapter-add__form" onsubmit="window.referenceGuideAddView._submitCreate(event)">
+        <form class="chapter-edit__form" onsubmit="window.referenceGuideAddView._submitForm(event)">
           ${targetSelector}
-          <div class="chapter-add__field">
-            <label class="chapter-add__label">Chapter type</label>
-            <div class="chapter-add__type-grid">${typeBtns}</div>
-          </div>
-          <div class="chapter-add__field">
-            <label class="chapter-add__label" for="chapter-form-title">Title</label>
-            <input id="chapter-form-title" class="input input-bordered"
+
+          <div class="chapter-edit__titlerow">
+            <input id="chapter-form-title" class="chapter-edit__titlefield"
                    maxlength="200" required
                    value="${escapeAttr(this._formTitle)}"
                    oninput="window.referenceGuideAddView._formTitle = this.value"
-                   placeholder="e.g. Turn Actions" />
+                   placeholder="Chapter title…" />
+            ${importBtn}
           </div>
-          <div class="chapter-add__field">
-            <div class="chapter-add__editor-header">
-              <label class="chapter-add__label">Content (Markdown)</label>
-              <div class="chapter-add__editor-tabs" role="tablist">
-                <button type="button" class="chapter-add__editor-tab ${!isPreview ? "is-active" : ""}"
-                        onclick="window.referenceGuideAddView._setSubTab('write')">
-                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Write
-                </button>
-                <button type="button" class="chapter-add__editor-tab ${isPreview ? "is-active" : ""}"
-                        onclick="window.referenceGuideAddView._setSubTab('preview')">
-                  <i data-lucide="eye" class="w-3.5 h-3.5"></i> Preview
-                </button>
-              </div>
-            </div>
-            ${editorBody}
+
+          <div class="chapter-edit__typescroll">${typeBtns}</div>
+
+          <div class="chapter-edit__seg">
+            <button type="button" class="${!isPreview ? "on" : ""}"
+                    onclick="window.referenceGuideAddView._setEditorView('write')">
+              <i data-lucide="pencil" class="w-4 h-4"></i> Write
+            </button>
+            <button type="button" class="${isPreview ? "on" : ""}"
+                    onclick="window.referenceGuideAddView._setEditorView('preview')">
+              <i data-lucide="eye" class="w-4 h-4"></i> Preview
+            </button>
           </div>
-          ${this._error ? `<div class="text-error text-sm">${escape(this._error)}</div>` : ""}
-          <div class="chapter-add__actions">
-            <button type="button" class="btn btn-ghost"
-                    onclick="window.router.back('game-detail')">Cancel</button>
-            <button type="submit" class="btn btn-primary"
+
+          ${editorPanel}
+
+          ${this._error ? `<div class="text-error text-sm chapter-edit__error">${escape(this._error)}</div>` : ""}
+
+          <div class="chapter-edit__footer">
+            <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
+                    onclick="window.referenceGuideAddView._cancelForm()">Cancel</button>
+            <button type="submit" class="chapter-edit__fbtn chapter-edit__fbtn--save"
                     ${this._saving ? "disabled" : ""}>
-              ${this._saving ? "Saving…" : "Save chapter"}
+              ${escape(submitLabel)}
             </button>
           </div>
         </form>
@@ -582,8 +564,6 @@
     }
 
     _renderCreateTargetSelector() {
-      // Build ordered options: base game first, then expansions in the order
-      // they were passed in via the route param.
       const ids = [this._gameId, ...this._expansionIds];
       const opts = ids.map((id) => {
         const meta = this._expansionMeta[id] || { name: id, color: null };
@@ -600,8 +580,8 @@
         `;
       }).join("");
       return `
-        <div class="chapter-add__field">
-          <label class="chapter-add__label">Save to</label>
+        <div class="chapter-edit__field">
+          <label class="chapter-edit__label">Save to</label>
           <div class="chapter-add__target-grid">${opts}</div>
         </div>
       `;
@@ -617,13 +597,186 @@
       this.render();
     }
 
-    _setSubTab(t) {
-      if (this._createSubTab === t) return;
-      this._createSubTab = t;
+    _setEditorView(v) {
+      if (this._editorView === v) return;
+      this._editorView = v;
+      // Close any open popover when toggling — they're write-mode only.
+      this._activePop = null;
       this.render();
     }
 
-    async _submitCreate(event) {
+    // ── Formatting helpers (ported from the Option C mock) ─────────────────────
+    _getTextarea() {
+      return this.container.querySelector("#chapter-form-content");
+    }
+
+    _applyWrap(before, after) {
+      const ta = this._getTextarea();
+      if (!ta) return;
+      const s = ta.selectionStart, e = ta.selectionEnd;
+      const sel = ta.value.slice(s, e) || "text";
+      const next = ta.value.slice(0, s) + before + sel + after + ta.value.slice(e);
+      ta.value = next;
+      this._formContent = next;
+      ta.focus();
+      ta.selectionStart = s + before.length;
+      ta.selectionEnd = s + before.length + sel.length;
+    }
+
+    _applyLinePrefix(prefix) {
+      const ta = this._getTextarea();
+      if (!ta) return;
+      const s = ta.selectionStart;
+      const lineStart = ta.value.lastIndexOf("\n", s - 1) + 1;
+      const next = ta.value.slice(0, lineStart) + prefix + ta.value.slice(lineStart);
+      ta.value = next;
+      this._formContent = next;
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = s + prefix.length;
+    }
+
+    _insertAt(text) {
+      const ta = this._getTextarea();
+      if (!ta) return;
+      const s = ta.selectionStart;
+      const next = ta.value.slice(0, s) + text + ta.value.slice(s);
+      ta.value = next;
+      this._formContent = next;
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = s + text.length;
+    }
+
+    _fmt(kind) {
+      switch (kind) {
+        case "b":    this._applyWrap("**", "**"); break;
+        case "i":    this._applyWrap("*", "*"); break;
+        case "h":    this._applyLinePrefix("## "); break;
+        case "ul":   this._applyLinePrefix("- "); break;
+        case "link": this._applyWrap("[", "](url)"); break;
+      }
+    }
+
+    _applyColor(hex) {
+      this._applyWrap(`<span style="color:${hex}">`, "</span>");
+      this._activePop = null;
+      this.render();
+    }
+
+    _insertTable(cols, rows) {
+      const head = "| " + Array.from({ length: cols }, (_, i) => "Col " + (i + 1)).join(" | ") + " |\n";
+      const sep  = "| " + Array.from({ length: cols }, () => "---").join(" | ") + " |\n";
+      let body = "";
+      for (let r = 0; r < rows; r++) {
+        body += "| " + Array.from({ length: cols }, () => "   ").join(" | ") + " |\n";
+      }
+      this._insertAt("\n" + head + sep + body + "\n");
+      this._activePop = null;
+      this.render();
+    }
+
+    _togglePop(name) {
+      this._activePop = this._activePop === name ? null : name;
+      this._tablePickLabel = "1 × 1";
+      this.render();
+    }
+
+    _renderPopovers() {
+      if (this._activePop === "table") {
+        return `
+          <div class="chapter-edit__pop chapter-edit__pop--table">
+            <div class="chapter-edit__pop-head">Insert table · <span class="chapter-edit__pop-dim" id="table-pick-label">${escape(this._tablePickLabel)}</span></div>
+            <div class="chapter-edit__tgrid" id="table-pick-grid"></div>
+          </div>
+        `;
+      }
+      if (this._activePop === "color") {
+        return `
+          <div class="chapter-edit__pop chapter-edit__pop--color">
+            <div class="chapter-edit__pop-head">Text colour</div>
+            <div class="chapter-edit__swatches">
+              ${COLOR_SWATCHES.map((s) => `
+                <button type="button" class="chapter-edit__sw"
+                        style="background:${s.hex}"
+                        title="${s.id}"
+                        onclick="event.stopPropagation();window.referenceGuideAddView._applyColor('${s.hex}')"></button>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }
+      return "";
+    }
+
+    _buildTableGrid() {
+      const grid = this.container.querySelector("#table-pick-grid");
+      const label = this.container.querySelector("#table-pick-label");
+      if (!grid || !label) return;
+      grid.innerHTML = "";
+      const ROWS = 6, COLS = 6;
+      for (let r = 1; r <= ROWS; r++) {
+        for (let c = 1; c <= COLS; c++) {
+          const cell = document.createElement("div");
+          cell.className = "chapter-edit__cell";
+          cell.dataset.r = String(r);
+          cell.dataset.c = String(c);
+          cell.addEventListener("mouseenter", () => {
+            grid.querySelectorAll(".chapter-edit__cell").forEach((x) => {
+              x.classList.toggle(
+                "chapter-edit__cell--hot",
+                Number(x.dataset.r) <= r && Number(x.dataset.c) <= c
+              );
+            });
+            label.textContent = c + " × " + r;
+          });
+          cell.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            this._insertTable(c, r);
+          });
+          grid.appendChild(cell);
+        }
+      }
+    }
+
+    _onImportMd(event) {
+      const file = event.target && event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = String(reader.result || "");
+        // Strip BOM, normalize newlines.
+        const lines = text.replace(/^﻿/, "").split(/\r?\n/);
+        // Find first H1 — promote it to the title, drop the rest into content.
+        let titleLine = -1;
+        for (let i = 0; i < lines.length; i++) {
+          if (/^#\s+\S/.test(lines[i])) { titleLine = i; break; }
+          if (lines[i].trim() && !/^\s*$/.test(lines[i])) break;
+        }
+        if (titleLine >= 0) {
+          const title = lines[titleLine].replace(/^#\s+/, "").trim();
+          if (!this._formTitle.trim()) this._formTitle = title.slice(0, 200);
+          const rest = lines.slice(titleLine + 1).join("\n").replace(/^\s+/, "");
+          this._formContent = rest;
+        } else {
+          this._formContent = text;
+        }
+        this.render();
+      };
+      reader.onerror = () => showToast("Failed to read file", "error");
+      reader.readAsText(file);
+      // Reset the input so the same file can be re-imported next time.
+      event.target.value = "";
+    }
+
+    _cancelForm() {
+      if (this._tab === "edit") {
+        // Edit mode arrived from elsewhere — roll the back stack.
+        window.router.back("game-detail");
+      } else {
+        this._setTab("browse");
+      }
+    }
+
+    async _submitForm(event) {
       event.preventDefault();
       this._error = null;
       if (!this._formType) {
@@ -640,25 +793,40 @@
       }
       this._saving = true;
       this.render();
+      const isEditing = this._tab === "edit";
       const targetGameId = this._createTargetGameId || this._gameId;
       try {
-        await window.Chapter.create(targetGameId, {
-          chapter_type: this._formType,
-          title,
-          content,
-          layout: "text",
-        });
-        document.dispatchEvent(new CustomEvent("chapters-changed", {
-          detail: { gameId: targetGameId },
-        }));
-        showToast("Chapter added to your guide", "success");
-        this._formTitle = "";
-        this._formContent = "";
-        this._formType = "";
-        this._saving = false;
-        window.router.back("game-detail");
+        if (isEditing) {
+          await window.Chapter.update(this._editingChapterId, {
+            chapter_type: this._formType,
+            title,
+            content,
+          });
+          document.dispatchEvent(new CustomEvent("chapters-changed", {
+            detail: { gameId: targetGameId },
+          }));
+          showToast("Chapter updated", "success");
+          this._saving = false;
+          window.router.back("game-detail");
+        } else {
+          await window.Chapter.create(targetGameId, {
+            chapter_type: this._formType,
+            title,
+            content,
+            layout: "text",
+          });
+          document.dispatchEvent(new CustomEvent("chapters-changed", {
+            detail: { gameId: targetGameId },
+          }));
+          showToast("Chapter added to your guide", "success");
+          this._formTitle = "";
+          this._formContent = "";
+          this._formType = "";
+          this._saving = false;
+          window.router.back("game-detail");
+        }
       } catch (e) {
-        this._error = e.message || "Failed to create chapter";
+        this._error = e.message || "Failed to save chapter";
         this._saving = false;
         this.render();
       }

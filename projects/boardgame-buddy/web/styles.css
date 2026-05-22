@@ -485,68 +485,18 @@ body {
   margin-bottom: 0.6rem;
 }
 .chapter-add__search { flex: 1; }
-.chapter-add__pool {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+
+/* Browse pool wraps a parchment scroll widget so it reads the same as the
+   user's own reference guide. The pool-scroll variant skips the rolled-edge
+   collapse animation — it's always open, height driven by content. */
+.chapter-add__pool-scroll {
+  margin-top: 0.4rem;
 }
-.chapter-add__pool-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  padding: 10px 12px;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.55rem;
-}
-.chapter-add__pool-icon {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: rgba(201, 146, 42, 0.18);
-  color: var(--accent);
-}
-.chapter-add__pool-body { flex: 1; min-width: 0; }
-.chapter-add__pool-title {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-.chapter-add__pool-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 2px 0 4px;
-  font-size: 0.72rem;
-  opacity: 0.7;
-}
-.chapter-add__pool-pop {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  color: var(--accent);
-  font-weight: 600;
-}
-/* The whole pool row is a tap target — clicking anywhere outside the
-   action buttons opens the markdown-preview modal. */
-.chapter-add__pool-row--clickable {
-  cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
-}
-.chapter-add__pool-row--clickable:hover {
-  background: oklch(var(--b3));
-  border-color: var(--accent);
-}
-.chapter-add__pool-row--clickable:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.chapter-add__pool-scroll .scroll-panel__body {
+  max-height: none;
+  opacity: 1;
+  transform: none;
+  transition: none;
 }
 
 /* Source-game pill on pool rows (only rendered when Browse is showing
@@ -605,186 +555,6 @@ body {
   background: #1a0e02;
 }
 
-/* ── Chapter preview modal ───────────────────────────────────────────────
-   Opened by tapping a Browse pool row. Mirrors the .session-backdrop
-   overlay pattern so dismissals (backdrop tap / Escape) feel familiar. */
-.chapter-add__preview-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-}
-.chapter-add__preview-card {
-  max-width: 460px;
-  width: 100%;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.75rem;
-  padding: 1rem 1rem 0.85rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-}
-.chapter-add__preview-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
-  margin-bottom: 0.65rem;
-}
-.chapter-add__preview-icon {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: rgba(201, 146, 42, 0.18);
-  color: var(--accent);
-}
-.chapter-add__preview-titlewrap { flex: 1; min-width: 0; }
-.chapter-add__preview-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  line-height: 1.25;
-  margin: 2px 0 4px;
-}
-.chapter-add__preview-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  font-size: 0.74rem;
-  opacity: 0.75;
-}
-.chapter-add__preview-close {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  opacity: 0.7;
-}
-.chapter-add__preview-close:hover { opacity: 1; background: oklch(var(--b2)); }
-.chapter-add__preview-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.1rem 0.15rem 0.4rem;
-  font-size: 0.92rem;
-  line-height: 1.55;
-  /* The scroll widget's markdown uses parchment-dark text (#2B1D0A) which
-     reads as black-on-black inside this dark-themed modal. Force the
-     theme's foreground color so the markdown is readable on var(--b1). */
-  color: oklch(var(--bc));
-}
-.chapter-add__preview-body h2,
-.chapter-add__preview-body h3,
-.chapter-add__preview-body h4 {
-  font-family: var(--font-display);
-  font-weight: 700;
-  margin: 0.75rem 0 0.35rem;
-  color: oklch(var(--bc));
-}
-.chapter-add__preview-body h2 { font-size: 1.1rem; }
-.chapter-add__preview-body h3 { font-size: 1rem; }
-.chapter-add__preview-body h4 { font-size: 0.95rem; }
-.chapter-add__preview-body p { margin: 0.5rem 0; }
-.chapter-add__preview-body ul {
-  margin: 0.4rem 0 0.6rem;
-  padding-left: 1.25rem;
-}
-.chapter-add__preview-body li { margin: 0.15rem 0; }
-.chapter-add__preview-body strong { color: oklch(var(--bc)); font-weight: 700; }
-.chapter-add__preview-body em { font-style: italic; opacity: 0.9; }
-.chapter-add__preview-body code {
-  background: oklch(var(--b3));
-  color: oklch(var(--bc));
-  padding: 0 5px;
-  border-radius: 3px;
-  font-size: 0.85em;
-}
-.chapter-add__preview-body .guide-table {
-  margin: 0.55rem 0;
-  width: 100%;
-  font-size: 0.85rem;
-  border-collapse: collapse;
-}
-.chapter-add__preview-body .guide-table th,
-.chapter-add__preview-body .guide-table td {
-  padding: 0.35rem 0.55rem;
-  border-bottom: 1px solid oklch(var(--b3));
-  text-align: left;
-  color: oklch(var(--bc));
-}
-.chapter-add__preview-body .guide-table thead th {
-  font-family: var(--font-display);
-  font-weight: 700;
-  background: oklch(var(--b2));
-}
-
-/* Edit-mode swaps the rendered markdown for a textarea spanning the body. */
-.chapter-add__preview-body--editing { padding: 0.25rem 0; }
-.chapter-add__edit-title {
-  width: 100%;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.05rem;
-}
-.chapter-add__edit-textarea {
-  width: 100%;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.86rem;
-  line-height: 1.45;
-  min-height: 220px;
-}
-
-.chapter-add__preview-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  padding-top: 0.75rem;
-  margin-top: 0.5rem;
-  border-top: 1px solid oklch(var(--b3));
-  flex-wrap: wrap;
-}
-/* Right-aligned group inside the footer holding Edit / Report / Close.
-   Add-to-guide stays left; this cluster floats right via margin-left:auto
-   so the primary action keeps a stable position. */
-.chapter-add__preview-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-left: auto;
-}
-.chapter-add__preview-edit,
-.chapter-add__preview-report {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.chapter-add__pool-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  align-items: flex-end;
-}
-.chapter-add__pool-report { padding: 4px 8px; }
-
 /* Per-row add/remove toggle. The "added" variant flips to a muted
    confirmation pill so the user can tell at a glance which rows are
    already in their guide, and tap again to remove. */
@@ -816,27 +586,6 @@ body {
   color: var(--rust);
   border-color: var(--rust);
 }
-
-/* Per-type section inside the Browse pool. Mirrors the user's-guide
-   `.scroll-section` rhythm so both screens read the same way. */
-.chapter-add__pool-section {
-  margin-bottom: 0.8rem;
-}
-.chapter-add__pool-section:last-child { margin-bottom: 0; }
-.chapter-add__pool-section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0 0 0.4rem;
-  padding: 0 4px;
-  font-family: var(--font-display);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: oklch(var(--bc) / 0.65);
-}
-.chapter-add__pool-section-header [data-lucide] { color: var(--accent); }
 
 /* Horizontally-scrollable chip filter. Fits any phone screen without
    overflowing into other UI. Native scroll, snap-x, hidden scrollbar. */
@@ -876,137 +625,440 @@ body {
 }
 .chapter-add__chip--active [data-lucide] { color: #1a0e02; }
 
-.chapter-add__form {
+/* ── Chapter editor (shared by Create + Edit) ────────────────────────────
+   The "Option C" layout: cream game chip, title field with Import .md,
+   horizontal type pills, segmented Write/Preview, markdown textarea with
+   a format toolbar, gold Save + ghost Cancel footer.
+
+   The same surface renders in both Create-new and Edit modes — only the
+   title at the top and the Save label change. */
+.chapter-edit__form {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.7rem;
 }
-.chapter-add__field {
+.chapter-edit__field {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
-.chapter-add__label {
+.chapter-edit__label {
   font-size: 0.78rem;
   font-weight: 600;
   opacity: 0.75;
 }
-.chapter-add__type-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+.chapter-edit__error { margin-top: -0.2rem; }
+
+/* Cream game chip — cover thumbnail + name. Always shown at the top of
+   any chapter screen so the user can never forget which game the
+   chapter belongs to. */
+.chapter-edit__gamechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.1rem 0 0.55rem;
+  padding: 6px 12px 6px 6px;
+  background: var(--polaroid-bg, #FFFBF1);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+  max-width: 100%;
+}
+.chapter-edit__gamechip-cv {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #c7b58a, #6b532a);
+}
+.chapter-edit__gamechip-cv img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.chapter-edit__gamechip-cv--blank img { display: none; }
+.chapter-edit__gamechip-text { min-width: 0; }
+.chapter-edit__gamechip-name {
+  font-family: var(--font-polaroid, var(--font-display));
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--polaroid-ink, #1D1812);
+  line-height: 1.15;
+}
+.chapter-edit__gamechip-sub {
+  font-size: 0.7rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 600;
+}
+
+/* Title row: large titlefield + Import-.md upload button. */
+.chapter-edit__titlerow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.chapter-edit__titlefield {
+  flex: 1;
+  min-width: 0;
+  background: oklch(var(--b2));
+  border: 1.5px solid oklch(var(--b3));
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: oklch(var(--bc));
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+.chapter-edit__titlefield::placeholder { color: oklch(var(--bc) / 0.4); }
+.chapter-edit__titlefield:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: oklch(var(--b1));
+}
+
+.chapter-edit__import {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 12px;
+  background: transparent;
+  border: 1.5px dashed rgba(201, 146, 42, 0.55);
+  border-radius: 11px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+  white-space: nowrap;
+}
+.chapter-edit__import:hover { background: rgba(201, 146, 42, 0.1); }
+.chapter-edit__import input[type="file"] { display: none; }
+
+/* Horizontal type-pill scroller (replaces the cramped 6-up grid). */
+.chapter-edit__typescroll {
+  display: flex;
+  gap: 0.45rem;
+  margin: 0 -0.5rem 0.05rem;
+  padding: 4px 0.5rem 6px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.chapter-edit__typescroll::-webkit-scrollbar { display: none; }
+.chapter-edit__typescroll { scrollbar-width: none; }
+.chapter-edit__tpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+  padding: 9px 14px;
+  background: oklch(var(--b2));
+  border: 1.5px solid oklch(var(--b3));
+  border-radius: 999px;
+  color: oklch(var(--bc) / 0.75);
+  font-size: 0.83rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.chapter-edit__tpill:hover { color: oklch(var(--bc)); background: oklch(var(--b3)); }
+.chapter-edit__tpill--on {
+  background: radial-gradient(120% 140% at 30% 20%, #F0C662, var(--accent) 60%, var(--accent-hover));
+  border-color: transparent;
+  color: #3a2a08;
+  box-shadow: 0 4px 12px rgba(201, 146, 42, 0.35);
+}
+.chapter-edit__tpill--on [data-lucide] { color: #3a2a08; }
+
+/* Write / Preview segmented control. */
+.chapter-edit__seg {
+  display: flex;
+  background: oklch(var(--b2));
+  border-radius: 13px;
+  padding: 4px;
+  margin-top: 0.15rem;
+}
+.chapter-edit__seg button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: oklch(var(--bc) / 0.65);
+  font-weight: 800;
+  font-size: 0.86rem;
+  padding: 9px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 200ms ease, color 200ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 0.4rem;
 }
-.chapter-add__type-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 8px 10px;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.5rem;
-  color: oklch(var(--bc));
-  font-size: 0.82rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
-}
-.chapter-add__type-btn:hover { border-color: var(--accent); }
-.chapter-add__type-btn--active {
-  background: rgba(201, 146, 42, 0.16);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.chapter-add__textarea {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.85rem;
-  line-height: 1.45;
+.chapter-edit__seg button.on {
+  background: var(--polaroid-bg, #FFFBF1);
+  color: var(--polaroid-ink, #1D1812);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* Write / Preview sub-tabs in the Create form. Compact pill tabs that
-   sit on the same row as the "Content (Markdown)" label. */
-.chapter-add__editor-header {
+/* Write panel: format toolbar above a monospace markdown textarea. */
+.chapter-edit__write {
+  position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-direction: column;
 }
-.chapter-add__editor-tabs {
-  display: inline-flex;
-  gap: 0.25rem;
+.chapter-edit__toolbar {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 7px;
   background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 999px;
-  padding: 2px;
+  border-radius: 13px 13px 0 0;
+  border: 1.5px solid oklch(var(--b3));
+  border-bottom: 1px solid oklch(var(--b3) / 0.6);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.chapter-add__editor-tab {
+.chapter-edit__toolbar::-webkit-scrollbar { display: none; }
+.chapter-edit__tbtn {
+  flex-shrink: 0;
+  min-width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: oklch(var(--b3) / 0.6);
+  color: oklch(var(--bc));
+  font-weight: 800;
+  font-size: 0.88rem;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 4px 12px;
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  color: oklch(var(--bc) / 0.65);
-  font-size: 0.74rem;
-  font-weight: 600;
-  cursor: pointer;
+  justify-content: center;
+  padding: 0 10px;
   transition: background 120ms ease, color 120ms ease;
 }
-.chapter-add__editor-tab:hover { color: oklch(var(--bc)); }
-.chapter-add__editor-tab.is-active {
-  background: var(--accent);
-  color: #1a0e02;
+.chapter-edit__tbtn:hover { background: rgba(201, 146, 42, 0.25); color: oklch(var(--bc)); }
+.chapter-edit__tbtn--ital { font-style: italic; font-family: var(--font-display); }
+.chapter-edit__tbtn--gold { color: var(--accent); }
+.chapter-edit__tdiv {
+  width: 1px;
+  height: 22px;
+  background: oklch(var(--b3));
+  margin: 0 0.2rem;
+  flex-shrink: 0;
 }
 
-/* Preview pane: rendered markdown in the same family as the open scroll
-   so creators see what the chapter will look like in their guide. */
-.chapter-add__preview {
-  min-height: 18rem;
-  padding: 12px 14px;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.55rem;
-  font-size: 0.88rem;
-  line-height: 1.5;
+.chapter-edit__mdarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  border: 1.5px solid oklch(var(--b3));
+  border-top: 0;
+  border-radius: 0 0 13px 13px;
+  background: oklch(var(--b1) / 0.6);
   color: oklch(var(--bc));
+  font-family: var(--font-score, ui-monospace, monospace);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  padding: 14px;
 }
-.chapter-add__preview h2,
-.chapter-add__preview h3,
-.chapter-add__preview h4 {
-  font-family: var(--font-display);
-  font-weight: 700;
-  margin: 0.6rem 0 0.3rem;
+.chapter-edit__mdarea:focus {
+  outline: none;
+  border-color: var(--accent);
 }
-.chapter-add__preview h2 { font-size: 1.05rem; }
-.chapter-add__preview h3 { font-size: 0.95rem; }
-.chapter-add__preview p { margin: 0.4rem 0; }
-.chapter-add__preview ul {
-  margin: 0.3rem 0 0.4rem;
+
+/* Themed rendered preview — matches the parchment-scroll look so creators
+   see exactly how their chapter will read inside the guide. */
+.chapter-edit__preview {
+  min-height: 220px;
+  padding: 16px 18px;
+  background: linear-gradient(160deg, var(--polaroid-bg, #FFFBF1), var(--polaroid-bg-soft, #F5EEDC));
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+  color: var(--polaroid-ink, #1D1812);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.chapter-edit__preview h2,
+.chapter-edit__preview h3,
+.chapter-edit__preview h4 {
+  font-family: var(--font-polaroid, var(--font-display));
+  font-weight: 600;
+  color: var(--accent-hover, #B8820E);
+  margin: 0.85rem 0 0.35rem;
+}
+.chapter-edit__preview h2 { font-size: 1.15rem; }
+.chapter-edit__preview h3 { font-size: 1rem; }
+.chapter-edit__preview h4 { font-size: 0.92rem; }
+.chapter-edit__preview p { margin: 0.5rem 0; color: #4a3c28; }
+.chapter-edit__preview strong { font-weight: 800; color: var(--polaroid-ink, #1D1812); }
+.chapter-edit__preview em { font-style: italic; }
+.chapter-edit__preview ul {
+  margin: 0.45rem 0 0.5rem;
   padding-left: 1.1rem;
 }
-.chapter-add__preview code {
-  background: oklch(var(--b3));
-  padding: 0 4px;
+.chapter-edit__preview li { margin: 0.2rem 0; color: #4a3c28; }
+.chapter-edit__preview code {
+  background: rgba(201, 146, 42, 0.18);
+  padding: 0 5px;
   border-radius: 3px;
   font-size: 0.85em;
 }
-.chapter-add__preview .guide-table {
-  margin: 0.4rem 0;
+.chapter-edit__preview .guide-table {
+  margin: 0.6rem 0;
   width: 100%;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   border-collapse: collapse;
 }
-.chapter-add__preview .guide-table th,
-.chapter-add__preview .guide-table td {
-  border: 1px solid oklch(var(--b3));
-  padding: 4px 8px;
+.chapter-edit__preview .guide-table th {
+  background: rgba(201, 146, 42, 0.18);
+  font-family: var(--font-polaroid, var(--font-display));
+  font-weight: 600;
+  color: var(--polaroid-ink, #1D1812);
+  padding: 6px 9px;
   text-align: left;
+  border: 1px solid rgba(42, 32, 20, 0.18);
 }
-.chapter-add__actions {
+.chapter-edit__preview .guide-table td {
+  padding: 6px 9px;
+  border: 1px solid rgba(42, 32, 20, 0.12);
+  color: #4a3c28;
+}
+.chapter-edit__preview-empty {
+  color: var(--polaroid-muted, #8B7E68);
+  font-style: italic;
+}
+
+/* Toolbar popovers — table dimension picker + colour swatches. */
+.chapter-edit__pop {
+  position: absolute;
+  z-index: 90;
+  top: 50px;
+  background: oklch(var(--b2));
+  border: 1px solid rgba(201, 146, 42, 0.35);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  animation: pop-in 180ms ease;
+}
+.chapter-edit__pop--table { left: 6.5rem; }
+.chapter-edit__pop--color { right: 0.4rem; }
+.chapter-edit__pop-head {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: oklch(var(--bc) / 0.7);
+  text-align: center;
+  margin-bottom: 9px;
+  letter-spacing: 0.04em;
+}
+.chapter-edit__pop-dim { color: var(--accent); }
+.chapter-edit__tgrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+.chapter-edit__cell {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  background: oklch(var(--b3) / 0.7);
+  cursor: pointer;
+  transition: background 80ms ease, box-shadow 80ms ease;
+}
+.chapter-edit__cell--hot {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(201, 146, 42, 0.5);
+}
+.chapter-edit__swatches {
   display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
+  gap: 9px;
 }
+.chapter-edit__sw {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  transition: transform 140ms ease, border-color 140ms ease;
+  padding: 0;
+}
+.chapter-edit__sw:hover {
+  transform: scale(1.15);
+  border-color: #fff;
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Consistent footer: gold primary "Save" + ghost "Cancel". Same pair is
+   used everywhere a chapter is saved (Create or Edit). */
+.chapter-edit__footer {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+.chapter-edit__fbtn {
+  flex: 1;
+  border: 0;
+  border-radius: 14px;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 0.95rem;
+  padding: 13px 16px;
+  cursor: pointer;
+  transition: transform 100ms ease, filter 140ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.chapter-edit__fbtn:active { transform: scale(0.97); }
+.chapter-edit__fbtn--cancel {
+  background: transparent;
+  color: oklch(var(--bc));
+  border: 1.5px solid oklch(var(--b3));
+}
+.chapter-edit__fbtn--cancel:hover { background: oklch(var(--b2)); }
+.chapter-edit__fbtn--save {
+  flex: 1.6;
+  background: radial-gradient(120% 140% at 30% 20%, #F0C662, var(--accent) 55%, var(--accent-hover));
+  color: #3a2a08;
+  box-shadow: 0 8px 20px rgba(201, 146, 42, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.chapter-edit__fbtn--save:hover:not(:disabled) { filter: brightness(1.06); }
+.chapter-edit__fbtn--save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Pool actions — spacer pushes Edit/Report to the right when both
+   Add/Added and an owner-only Edit button are visible. */
+.chapter-add__pool-actions-spacer { flex: 1; }
+
+/* Rich summary used in the browse scroll: title + popularity/author
+   stacked under the icon. The user's-guide summary stays single-line. */
+.scroll-chapter__summary--rich { align-items: flex-start; }
+.scroll-chapter__summary-text { flex: 1; min-width: 0; }
+.scroll-chapter__submeta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 2px;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6B4A1A;
+}
+.scroll-chapter__pop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.scroll-chapter__author { font-weight: 500; opacity: 0.85; }
 
 /* ── Admin reports ──────────────────────────────────────────────────────── */
 .admin-reports__header {

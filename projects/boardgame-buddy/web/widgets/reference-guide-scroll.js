@@ -239,6 +239,17 @@
         ? `<span class="scroll-chapter__source-dot" style="--exp-color:${escapeAttr(c.source_color)}"
                  title="${escapeAttr(c.source_game_name || "")}"></span>`
         : "";
+      // Edit affordance appears only for chapters the current user authored.
+      // Routes through the shared add-view in "edit" mode with the chapter
+      // stashed on the singleton so we don't need an extra GET.
+      const me = window.store && window.store.get("user");
+      const isOwner = !!(me && c.created_by && me.id === c.created_by);
+      const editBtn = isOwner ? `
+        <button class="btn btn-ghost btn-xs"
+                onclick="window.referenceGuideScroll._editChapter('${c.id}', event)">
+          <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit
+        </button>
+      ` : "";
       return `
         <li class="scroll-chapter" data-chapter-id="${c.id}">
           <details>
@@ -253,6 +264,7 @@
                       onclick="window.referenceGuideScroll._removeChapter('${c.id}', '${c.source_game_id || c.game_id}', event)">
                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove from my guide
               </button>
+              ${editBtn}
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._reportChapter('${c.id}', event)">
                 <i data-lucide="flag" class="w-3.5 h-3.5"></i> Report
@@ -261,6 +273,26 @@
           </details>
         </li>
       `;
+    }
+
+    _editChapter(chapterId, event) {
+      if (event) event.preventDefault();
+      const chapter = this._chapters.find((c) => c.id === chapterId);
+      if (!chapter) return;
+      // Stash the chapter on the add-view singleton — onMount picks it up
+      // when mode === "edit" and prefills the editor with the chapter's
+      // home-game id (source_game_id) preserved for the PATCH target.
+      if (window.referenceGuideAddView) {
+        window.referenceGuideAddView._prefillChapter = chapter;
+      }
+      const baseName = (this._expansionMeta[this._baseGameId] || {}).name || "";
+      const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
+      window.router.go("reference-guide-add", {
+        gameId: this._baseGameId,
+        gameName: baseName,
+        expansionIds: expansionIds.join(","),
+        mode: "edit",
+      });
     }
 
     _toggleScroll() {
