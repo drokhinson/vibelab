@@ -3773,9 +3773,9 @@ body {
 .play-detail__edit-score { width: 4.5rem; }
 .play-detail__edit-winner { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.78rem; }
 .play-detail__add-player { display: flex; gap: 0.35rem; margin-top: 0.5rem; }
-.play-detail__save-row { display: flex; gap: 0.5rem; justify-content: flex-end; padding-top: 0.5rem; flex-wrap: wrap; }
 /* Push the destructive action to the far left so it's visibly separated
-   from the positive Cancel/Save pair on the right. */
+   from the positive Cancel/Save pair on the right (now lives in the
+   sticky popup footer, see .play-detail-popup__footer below). */
 .play-detail__delete-btn {
   margin-right: auto;
   color: oklch(0.7 0.18 27);
@@ -6348,4 +6348,69 @@ main[data-view="session-viewer"].hidden {
 .play-detail-popup__card .textarea:focus {
   border-color: var(--polaroid-accent);
   outline-color: var(--polaroid-accent);
+}
+
+/* "A game of <Name>" title — name printed in the polaroid accent (same
+   orange the feed caption uses for winners) so the bubble immediately
+   signals which game this play belongs to. */
+.play-detail-popup__card .play-detail__game-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--polaroid-ink);
+  line-height: 1.2;
+}
+.play-detail-popup__card .play-detail__game-title .play-detail__game-name {
+  font-family: var(--font-display, var(--font-sans));
+  font-weight: 700;
+  color: var(--polaroid-accent);
+  font-size: 1.08rem;
+}
+
+/* Round arrow chip that opens the full game-detail page. Sits at the
+   right edge of the bubble; 44×44 hit area for thumbs even with the
+   smaller visual mark. */
+.play-detail-popup__card .play-detail__game-goto {
+  margin-left: auto;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 999px;
+  color: var(--polaroid-ink);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.play-detail-popup__card .play-detail__game-goto:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: var(--polaroid-accent);
+  color: var(--polaroid-accent);
+}
+
+/* Sticky footer at the bottom of the popup card. Hosts the primary
+   action(s) for the current mode — Edit in view mode, Delete/Cancel/
+   Save in edit mode. Always anchored at the bottom regardless of
+   scroll position so the controls never slide off-screen on a tall
+   play record. */
+.play-detail-popup__footer {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--polaroid-bg-soft, #F5EEDC);
+  flex-shrink: 0;
+}
+
+/* View-mode Edit pill stretches full-width inside the footer so it
+   reads as the sole call-to-action of the popup. */
+.play-detail-popup__edit--full {
+  width: 100%;
+  justify-content: center;
+  min-height: 40px;
+  font-size: 0.95rem;
 }
