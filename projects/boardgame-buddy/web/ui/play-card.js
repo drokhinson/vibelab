@@ -59,6 +59,10 @@
     // recorded. rerenderCard re-enters this function with the raw store card
     // (no __sessionPlayCount) so the cached value keeps strip vs single stable.
     if (card.__sessionPlayCount) s.sessionPlayCount = card.__sessionPlayCount;
+    // Cache the card payload so rerenderCard can flip the card regardless of
+    // which view rendered it (Feed plugs into the feed store; Game Detail
+    // builds its own adapter-shaped card that isn't in any global store).
+    s.lastCard = card;
     const sessionCount = s.sessionPlayCount || 1;
     const variant = sessionCount > 1 ? "strip" : "single";
 
@@ -365,7 +369,11 @@
       `article.play-card[data-play-id="${cssEscape(playId)}"]`
     );
     if (!article) return;
-    const card = findCardById(playId);
+    // Use the cached payload recorded on the last renderPlayCard call —
+    // works for both Feed-rendered cards and Game-Detail-rendered cards
+    // (which build an adapted card that isn't in the feed store).
+    const s = cardState.get(playId);
+    const card = (s && s.lastCard) || findCardById(playId);
     if (!card) return;
     const tmp = document.createElement("div");
     tmp.innerHTML = renderPlayCard(card).trim();
