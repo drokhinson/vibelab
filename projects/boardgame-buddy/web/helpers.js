@@ -72,3 +72,20 @@ function showToast(message, type = "info") {
   toast.classList.remove("hidden");
   setTimeout(() => toast.classList.add("hidden"), 3000);
 }
+
+// Photo size guard. Mirrors the backend's _MAX_PHOTO_BYTES at
+// shared-backend/routes/boardgame_buddy/play_routes.py — if either side
+// changes, the other has to follow. Validating client-side stops a save
+// flow from blowing up after the user already picked the file: rejecting
+// it at the picker lets them choose a smaller image with no other state
+// to recover.
+window.MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MiB
+function validatePhotoFile(file) {
+  if (!file) return { ok: false, error: "No file selected." };
+  if (file.size > window.MAX_PHOTO_BYTES) {
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    return { ok: false, error: `Photo is ${mb} MB — max is 5 MB.` };
+  }
+  return { ok: true };
+}
+window.validatePhotoFile = validatePhotoFile;

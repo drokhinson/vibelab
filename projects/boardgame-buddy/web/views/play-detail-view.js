@@ -219,6 +219,15 @@
     _onPhotoSelect(fileList) {
       const file = fileList && fileList[0];
       if (!file || !this._draft) return;
+      // Reject oversized files at the picker so the save flow can never
+      // hit a 413 from /plays/photo. Backend cap mirrored in helpers.js.
+      const v = window.validatePhotoFile(file);
+      if (!v.ok) {
+        showToast(v.error, "error");
+        const fi = this.container.querySelector('input[type="file"]');
+        if (fi) fi.value = "";
+        return;
+      }
       this._clearPendingPhoto(this._draft);
       this._draft.photoFile = file;
       this._draft.photoPreviewUrl = URL.createObjectURL(file);
@@ -398,23 +407,21 @@
       this._editError = null;
       this.render();
 
-      // Photo upload first so the PUT carries the new URL atomically. The
-      // /plays/photo endpoint returns { photo_url } pointing at the uploaded
-      // blob in storage; we then attach that URL to the play via the regular
-      // PlayUpdate payload. Failures bail before the PUT so the play's
-      // existing photo isn't accidentally nulled out.
+      // Photo upload first so the PUT carries the new URL. On failure,
+      // keep the existing photo_url and proceed with the rest of the
+      // edits — a transient upload error shouldn't drop the user's other
+      // changes. A blocking alert fires after save() so the user can't
+      // navigate away thinking the new photo went through.
       let photoUrl = this._play.photo_url || null;
+      let photoUploadFailed = false;
       if (this._draft.photoFile) {
         try {
           const fd = new FormData();
           fd.append("file", this._draft.photoFile);
           const resp = await window.api.upload("/plays/photo", fd);
           if (resp && resp.photo_url) photoUrl = resp.photo_url;
-        } catch (e) {
-          this._editError = (e && e.message) || "Photo upload failed";
-          this._saving = false;
-          this.render();
-          return;
+        } catch (_) {
+          photoUploadFailed = true;
         }
       }
 
@@ -443,6 +450,15 @@
       } finally {
         this._saving = false;
         this.render();
+      }
+      // Blocking warning AFTER the save resolves so the user has to
+      // acknowledge that their new photo didn't upload before doing
+      // anything else.
+      if (photoUploadFailed && window.PolaroidPopup && window.PolaroidPopup.alert) {
+        await window.PolaroidPopup.alert({
+          title: "Photo couldn't be uploaded",
+          body: "Your play was saved without the new photo. You can add it later from the play card.",
+        });
       }
     }
   }

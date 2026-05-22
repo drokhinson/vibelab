@@ -459,6 +459,16 @@
   function onPhotoSelect(fileList) {
     const file = fileList && fileList[0];
     if (!file || !state.draft) return;
+    // Pre-flight size check — refuse oversized files at the picker so the
+    // save flow can never get tripped up by a 413 from /plays/photo. The
+    // backend cap is 5 MiB; helpers.js mirrors it.
+    const v = window.validatePhotoFile(file);
+    if (!v.ok) {
+      showToast(v.error, "error");
+      const fi = document.querySelector(".play-detail-popup__photo-file");
+      if (fi) fi.value = "";
+      return;
+    }
     clearPendingPhoto(state.draft);
     state.draft.photoFile = file;
     state.draft.photoPreviewUrl = URL.createObjectURL(file);
@@ -498,21 +508,21 @@
     state.editError = null;
     render();
 
-    // Upload photo first so the PUT carries the new URL atomically. If
-    // upload fails, bail before the PUT so the existing photo isn't
-    // accidentally nulled out by the rest of the payload.
+    // Upload photo first so the PUT carries the new URL. On failure,
+    // keep the existing photo_url and proceed with the rest of the edits
+    // — a transient upload error shouldn't drop the user's other
+    // changes. The fallback warning fires after save() so the user
+    // can't navigate away unaware.
     let photoUrl = state.play.photo_url || null;
+    let photoUploadFailed = false;
     if (state.draft.photoFile) {
       try {
         const fd = new FormData();
         fd.append("file", state.draft.photoFile);
         const resp = await window.api.upload("/plays/photo", fd);
         if (resp && resp.photo_url) photoUrl = resp.photo_url;
-      } catch (e) {
-        state.editError = (e && e.message) || "Photo upload failed";
-        state.saving = false;
-        render();
-        return;
+      } catch (_) {
+        photoUploadFailed = true;
       }
     }
 
@@ -541,6 +551,14 @@
     } finally {
       state.saving = false;
       render();
+    }
+    // Blocking alert AFTER the save resolves so the user has to
+    // acknowledge that their photo didn't upload before anything else.
+    if (photoUploadFailed && window.PolaroidPopup && window.PolaroidPopup.alert) {
+      await window.PolaroidPopup.alert({
+        title: "Photo couldn't be uploaded",
+        body: "Your play was saved without the new photo. You can add it later from the play card.",
+      });
     }
   }
 

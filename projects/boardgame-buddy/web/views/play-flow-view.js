@@ -1370,6 +1370,16 @@
 
     _onPhotoSelect(file) {
       if (!file) return;
+      // Reject oversized files at the picker so the save flow can never
+      // hit the 5 MiB backend cap. Backend constant mirrored in
+      // helpers.js — keep them in sync if the server limit ever changes.
+      const v = window.validatePhotoFile(file);
+      if (!v.ok) {
+        showToast(v.error, "error");
+        const fi = this.container && this.container.querySelector('input[type="file"]');
+        if (fi) fi.value = "";
+        return;
+      }
       this._clearPhoto({ keepRender: true });
       this._ps.photoFile = file;
       this._ps.photoPreviewUrl = URL.createObjectURL(file);
@@ -1446,6 +1456,13 @@
       }
       this._saving = true;
       this.render();
+      // Photo upload is best-effort: if it fails, persist the play
+      // without the photo and warn the user with a blocking alert
+      // BEFORE redirect. The bug we're fixing was that the old flow
+      // bailed before the play row was created, and the user assumed
+      // their session had saved without the photo when in fact nothing
+      // saved at all.
+      let photoUploadFailed = false;
       try {
         if (this._ps.photoFile) {
           try {
@@ -1453,11 +1470,9 @@
             fd.append("file", this._ps.photoFile);
             const resp = await window.api.upload("/plays/photo", fd);
             if (resp && resp.photo_url) this._ps.photoUrl = resp.photo_url;
-          } catch (e) {
-            this._error = "Photo upload failed: " + (e.message || "");
-            this._saving = false;
-            this.render();
-            return;
+          } catch (_) {
+            photoUploadFailed = true;
+            this._ps.photoUrl = null;
           }
         }
         const payload = this._ps.toPlayCreate();
@@ -1469,6 +1484,13 @@
         this._ps.clear();
         window.store.set("activePlay", null);
         window.store.invalidate("feed");
+        // Surface the warning before navigating so the user can't miss it.
+        if (photoUploadFailed && window.PolaroidPopup && window.PolaroidPopup.alert) {
+          await window.PolaroidPopup.alert({
+            title: "Photo couldn't be uploaded",
+            body: "Your play was saved without the photo. You can add it later from the play card.",
+          });
+        }
         window.router.go("feed");
       } catch (e) {
         this._error = e.message || "Failed to save";

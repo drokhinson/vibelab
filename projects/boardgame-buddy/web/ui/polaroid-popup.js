@@ -161,6 +161,42 @@
     });
   }
 
+  /**
+   * One-button information modal. Returns a Promise that resolves when the
+   * user acknowledges. Used for warnings the user MUST see (e.g. "your
+   * photo couldn't be uploaded but the rest of the save went through") —
+   * a transient toast risks the user navigating away before they read it.
+   * @param {{title:string, body?:string, label?:string}} opts
+   * @returns {Promise<void>}
+   */
+  function alert({ title, body, label = "OK" }) {
+    return new Promise((resolve) => {
+      dismiss();
+      const root = document.createElement("div");
+      root.id = BACKDROP_ID;
+      root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--confirm";
+      root.innerHTML = `
+        <div class="polaroid-popup__card polaroid-popup__card--confirm"
+             role="alertdialog" aria-modal="true">
+          <div class="polaroid-popup__title">${escape(title)}</div>
+          ${body ? `<p class="polaroid-popup__body">${escape(body)}</p>` : ""}
+          <div class="polaroid-popup__actions">
+            <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escape(label)}</button>
+          </div>
+        </div>
+      `;
+      // Backdrop tap also resolves — the alert is informational, no
+      // destructive consequence to dismissing it any way.
+      root.addEventListener("click", (ev) => {
+        if (ev.target === root) { dismiss(); resolve(); }
+      });
+      document.body.appendChild(root);
+      if (window.lucide) window.lucide.createIcons();
+      const okBtn = root.querySelector(".polaroid-popup__confirm");
+      if (okBtn) okBtn.addEventListener("click", () => { dismiss(); resolve(); });
+    });
+  }
+
   function escape(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -168,5 +204,5 @@
   }
   function escapeAttr(s) { return escape(s); }
 
-  window.PolaroidPopup = { show, update, dismiss, confirm };
+  window.PolaroidPopup = { show, update, dismiss, confirm, alert };
 })();
