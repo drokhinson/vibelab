@@ -26,6 +26,12 @@
   // settled into is-portrait keeps that classification on subsequent renders.
   const aspectCache = new Map();
 
+  // Registry of the latest card payload seen by `renderPlayCard`, keyed by
+  // play_id. `rerenderCard` (called after a flip) looks the card up here so
+  // any surface that renders via the shared component — feed, game-detail,
+  // future hosts — flips correctly regardless of which store it sits in.
+  const cardRegistry = new Map();
+
   function getState(playId) {
     let s = cardState.get(playId);
     if (!s) {
@@ -54,6 +60,11 @@
 
   function renderPlayCard(card) {
     const s = getState(card.play_id);
+    // Cache the card payload so rerenderCard (post-flip) can find it
+    // regardless of which view rendered it. Without this, surfaces that
+    // don't write to window.store.feed (e.g. game-detail's recent_plays
+    // reel) silently fail to flip — state toggles but the DOM never paints.
+    if (card && card.play_id) cardRegistry.set(card.play_id, card);
     const accent = (card.game && card.game.theme_color) || "var(--polaroid-accent)";
     // Prefer the freshly-passed count, fall back to whatever the first render
     // recorded. rerenderCard re-enters this function with the raw store card
@@ -375,11 +386,14 @@
   }
 
   function findCardById(playId) {
+    // Prefer the render-time registry — covers every surface that calls
+    // renderPlayCard (feed, game-detail's recent_plays reel, future hosts).
+    const registered = cardRegistry.get(playId);
+    if (registered) return registered;
+    // Fallback to the feed page store. Kept so any future code path that
+    // mutates the feed cards directly still hits the freshest version.
     const page = window.store && window.store.get && window.store.get("feed");
     if (!page || !page.cards) return null;
-    // The feed store holds the raw, ungrouped page (groupCards runs inside
-    // render). Session play count is recovered from cardState — see the
-    // sessionPlayCount cache inside getState.
     return page.cards.find((c) => c.kind === "play" && c.play_id === playId) || null;
   }
 
