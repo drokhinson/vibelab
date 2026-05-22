@@ -525,29 +525,36 @@ body {
   background: #1a0e02;
 }
 
-/* Per-row add/remove toggle. The "added" variant flips to a muted green
-   confirmation pill so the user can tell at a glance which rows are
-   already in their guide, and tap again to remove. The --compact variant
-   lives in the summary header for one-tap toggle without expanding. */
+/* Per-row add/remove toggle. The default "add" state is an outlined
+   gold pill (transparent fill) so it stays distinct against the cream
+   parchment background — a solid gold pill would dissolve into the
+   scroll. Hover fills with gold for clear tap feedback. The "added"
+   variant flips to a muted green confirmation pill so the user can
+   tell at a glance which rows are already in their guide, and tap
+   again to remove. The --compact variant lives in the summary header
+   for one-tap toggle without expanding. */
 .chapter-add__pool-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   padding: 5px 10px;
-  background: var(--accent);
-  color: #1a0e02;
-  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
   border-radius: 999px;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
   white-space: nowrap;
 }
+.chapter-add__pool-toggle [data-lucide] { color: var(--accent); }
 .chapter-add__pool-toggle:hover {
-  background: var(--accent-hover);
+  background: var(--accent);
+  color: #1a0e02;
   border-color: var(--accent-hover);
 }
+.chapter-add__pool-toggle:hover [data-lucide] { color: #1a0e02; }
 .chapter-add__pool-toggle--compact {
   padding: 4px 9px;
   font-size: 0.72rem;
