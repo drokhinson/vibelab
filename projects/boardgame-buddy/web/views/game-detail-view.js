@@ -173,10 +173,13 @@
       // navigation (game-link, game-thumb, maximize button) all work
       // identically. The bundle's recent_plays shape differs from the feed
       // card shape, so _toFeedPlayCard adapts each row.
+      //
+      // Force the strip variant by passing a session count >1 — on Game
+      // Detail we always want the compact horizontal-scroll size, even
+      // when there's only a single play, so all cards stay uniform.
       if (!this._plays || this._plays.length === 0) return "";
-      const count = this._plays.length;
       const cards = this._plays
-        .map((p) => window.renderPlayCard({ ...this._toFeedPlayCard(p), __sessionPlayCount: count }))
+        .map((p) => window.renderPlayCard({ ...this._toFeedPlayCard(p), __sessionPlayCount: 2 }))
         .join("");
       return `
         <section class="game-detail__section">
