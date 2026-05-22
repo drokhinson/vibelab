@@ -456,36 +456,6 @@ body {
 .collapsible-header:hover .collapsible-header__chev { opacity: 1; }
 
 /* ── Add-chapter view (Create | Browse) ──────────────────────────────────── */
-.chapter-add__tabs {
-  display: flex;
-  gap: 0.4rem;
-  margin-bottom: 0.6rem;
-  border-bottom: 1px solid oklch(var(--b3));
-}
-.chapter-add__tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 8px 14px;
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  color: oklch(var(--bc) / 0.7);
-  font-weight: 600;
-  font-size: 0.88rem;
-  cursor: pointer;
-}
-.chapter-add__tab--active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-.chapter-add__filters {
-  display: flex;
-  gap: 0.4rem;
-  margin-bottom: 0.6rem;
-}
-.chapter-add__search { flex: 1; }
-
 /* Browse pool wraps a parchment scroll widget so it reads the same as the
    user's own reference guide. The pool-scroll variant skips the rolled-edge
    collapse animation — it's always open, height driven by content. */
@@ -555,9 +525,10 @@ body {
   background: #1a0e02;
 }
 
-/* Per-row add/remove toggle. The "added" variant flips to a muted
+/* Per-row add/remove toggle. The "added" variant flips to a muted green
    confirmation pill so the user can tell at a glance which rows are
-   already in their guide, and tap again to remove. */
+   already in their guide, and tap again to remove. The --compact variant
+   lives in the summary header for one-tap toggle without expanding. */
 .chapter-add__pool-toggle {
   display: inline-flex;
   align-items: center;
@@ -571,21 +542,30 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  white-space: nowrap;
 }
 .chapter-add__pool-toggle:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
-.chapter-add__pool-toggle--in {
-  background: transparent;
-  color: oklch(var(--bc) / 0.75);
-  border-color: oklch(var(--b3));
+.chapter-add__pool-toggle--compact {
+  padding: 4px 9px;
+  font-size: 0.72rem;
+  min-height: 28px;
+  flex-shrink: 0;
 }
+.chapter-add__pool-toggle--in {
+  background: rgba(74, 122, 74, 0.20);
+  color: #2F6033;
+  border-color: rgba(74, 122, 74, 0.55);
+}
+.chapter-add__pool-toggle--in [data-lucide] { color: #2F6033; }
 .chapter-add__pool-toggle--in:hover {
-  background: rgba(166, 93, 44, 0.12);
+  background: rgba(166, 93, 44, 0.18);
   color: var(--rust);
   border-color: var(--rust);
 }
+.chapter-add__pool-toggle--in:hover [data-lucide] { color: var(--rust); }
 
 /* Horizontally-scrollable chip filter. Fits any phone screen without
    overflowing into other UI. Native scroll, snap-x, hidden scrollbar. */
@@ -1035,13 +1015,13 @@ body {
   cursor: not-allowed;
 }
 
-/* Pool actions — spacer pushes Edit/Report to the right when both
-   Add/Added and an owner-only Edit button are visible. */
-.chapter-add__pool-actions-spacer { flex: 1; }
-
 /* Rich summary used in the browse scroll: title + popularity/author
-   stacked under the icon. The user's-guide summary stays single-line. */
-.scroll-chapter__summary--rich { align-items: flex-start; }
+   stacked under the icon, with the Add/Added toggle floated to the
+   right for one-tap add/remove without expanding the row. */
+.scroll-chapter__summary--rich {
+  align-items: center;
+  gap: 0.5rem;
+}
 .scroll-chapter__summary-text { flex: 1; min-width: 0; }
 .scroll-chapter__submeta {
   display: flex;
@@ -1059,6 +1039,33 @@ body {
   gap: 0.2rem;
 }
 .scroll-chapter__author { font-weight: 500; opacity: 0.85; }
+
+/* Floating "+ New chapter" action — only visible on the browse screen.
+   Anchored above the bottom nav (var(--bgb-nav-height)) so it never
+   collides with the tab bar. */
+.chapter-add__fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--bgb-nav-height, 64px) + 18px);
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: radial-gradient(120% 140% at 30% 20%, #F0C662, var(--accent) 55%, var(--accent-hover));
+  color: #3a2a08;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 0.92rem;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(201, 146, 42, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition: transform 120ms ease, filter 140ms ease;
+}
+.chapter-add__fab:hover { filter: brightness(1.06); }
+.chapter-add__fab:active { transform: scale(0.97); }
+.chapter-add__fab [data-lucide] { color: #3a2a08; }
 
 /* ── Admin reports ──────────────────────────────────────────────────────── */
 .admin-reports__header {
