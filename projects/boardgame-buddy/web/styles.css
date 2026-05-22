@@ -6188,3 +6188,139 @@ main[data-view="session-viewer"].hidden {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ── Expanded play-detail popup ──────────────────────────────────────────
+   In-place modal opened from the polaroid play-card's maximize button.
+   Holds the full play record + edit form so the user doesn't have to
+   navigate away from whichever surface they're on. Reuses the polaroid
+   backdrop pattern and the .play-detail__* read/edit styles. */
+.play-detail-popup__backdrop {
+  /* The base .polaroid-popup__backdrop already provides the centred dim
+     overlay; this overrides the padding so the larger card has more
+     breathing room on phone widths. */
+  padding: 12px;
+  /* Allow vertical overflow scroll so a tall card on a short viewport
+     can still expose its bottom (Delete + Save). */
+  align-items: flex-start;
+  padding-top: max(env(safe-area-inset-top), 18px);
+}
+.play-detail-popup__card {
+  position: relative;
+  width: min(96vw, 460px);
+  max-height: calc(100dvh - 36px);
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border-radius: 12px;
+  box-shadow: 0 22px 48px -14px rgba(0, 0, 0, 0.65),
+              0 4px 10px rgba(0, 0, 0, 0.35);
+  animation: polaroidPopupIn 280ms cubic-bezier(.22, .61, .36, 1) both;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.play-detail-popup__topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--polaroid-bg-soft, #F5EEDC);
+  min-height: 44px;
+}
+.play-detail-popup__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 8px 12px;
+  min-height: 36px;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.play-detail-popup__edit:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.play-detail-popup__close {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--polaroid-ink);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.play-detail-popup__close:hover { background: rgba(0, 0, 0, 0.08); }
+.play-detail-popup__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 14px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.play-detail-popup__scroll .play-detail {
+  /* The shared .play-detail layout assumes a full-page container with
+     top padding from the topbar. Inside the popup the topbar is sticky,
+     so we just want the section gap. */
+  padding-top: 0.75rem;
+}
+.play-detail-popup__loading,
+.play-detail-popup__error {
+  padding: 36px 18px;
+  text-align: center;
+  color: var(--polaroid-muted);
+  font-size: 0.9rem;
+}
+
+/* "Add a photo" placeholder shown on view mode when photo_url is null
+   and the viewer owns the play. Same affordance as the edit form's
+   pick-photo card, sized for the read-mode slot. */
+.play-detail-popup__add-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 28px 18px;
+  background: rgba(201, 146, 42, 0.08);
+  border: 1.5px dashed rgba(201, 146, 42, 0.55);
+  border-radius: 12px;
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.play-detail-popup__add-photo:hover {
+  background: rgba(201, 146, 42, 0.16);
+  border-color: var(--accent);
+}
+.play-detail-popup__add-photo [data-lucide] { color: var(--accent); }
+.play-detail-popup__add-photo-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.play-detail-popup__add-photo-hint {
+  font-size: 0.78rem;
+  color: var(--polaroid-muted);
+}
+
+/* Tighten the play-detail photo when it renders inside the popup
+   (the page version assumes full-width). */
+.play-detail-popup__card .play-detail__photo {
+  max-height: 38dvh;
+  width: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+}

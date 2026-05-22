@@ -251,7 +251,11 @@
     }
     const players = p.players || [];
     const me = window.store && window.store.get && window.store.get("user");
-    const detailNav = `event.stopPropagation(); window.router.go('play-detail',{playId:'${escapeAttr(card.play_id)}'})`;
+    // Maximize opens the play-detail popup in-place. The legacy
+    // /play-detail route still exists for deep links, but the card-driven
+    // expand stays on the current view so the user keeps their scroll
+    // position and the game-tab layout doesn't break.
+    const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
     const durationMeta = p.duration_minutes
       ? `${p.duration_minutes} min`
       : (p.played_at ? "" : "");

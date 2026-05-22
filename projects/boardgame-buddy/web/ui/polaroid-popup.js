@@ -40,7 +40,10 @@
       viewBtn.addEventListener("click", () => {
         const pid = viewBtn.getAttribute("data-play-id");
         dismiss();
-        if (pid) window.router.go("play-detail", { playId: pid });
+        // Open the in-place expanded polaroid instead of routing to the
+        // play-detail page — keeps the user on whichever surface they
+        // wrapped up from.
+        if (pid && window.PlayDetailPopup) window.PlayDetailPopup.show(pid);
       });
     }
   }
@@ -66,7 +69,10 @@
       viewBtn.addEventListener("click", () => {
         const pid = viewBtn.getAttribute("data-play-id");
         dismiss();
-        if (pid) window.router.go("play-detail", { playId: pid });
+        // Open the in-place expanded polaroid instead of routing to the
+        // play-detail page — keeps the user on whichever surface they
+        // wrapped up from.
+        if (pid && window.PlayDetailPopup) window.PlayDetailPopup.show(pid);
       });
     }
   }
