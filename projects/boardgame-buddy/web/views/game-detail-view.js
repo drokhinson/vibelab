@@ -11,7 +11,6 @@
       this._expansions = [];  // ExpansionListItem[] (only for base games)
       this._loading = false;
       this._error = null;
-      this._expansionsOpen = false;
       this._guide = null;  // ReferenceGuideScroll widget; instantiated on first render
     }
 
@@ -58,7 +57,6 @@
       this._status = null;
       this._plays = [];
       this._expansions = [];
-      this._expansionsOpen = false;
       this._guide = null;
       this._error = null;
       this._loading = true;
@@ -117,26 +115,31 @@
       const accent = g.accentColor();
       const status = this._status;
 
+      const heroSrc = g.image_url || g.thumbnail_url;
       this.container.innerHTML = `
         <article class="game-detail" style="--game-accent:${accent}">
-          <header class="game-detail__hero" id="game-detail-hero">
-            <button class="btn btn-ghost btn-sm game-detail__back" onclick="window.router.back('feed')">
-              <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            </button>
-            ${g.image_url || g.thumbnail_url ? `<img id="game-detail-hero-img" class="game-detail__hero-img" src="${g.image_url || g.thumbnail_url}" alt="" />` : ""}
-            <span class="game-detail__hero-status">
-              ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add" })}
-            </span>
-            <div class="game-detail__hero-veil"></div>
+          <button class="btn btn-ghost btn-sm game-detail__back" onclick="window.router.back('feed')" aria-label="Back">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          </button>
+          <header class="game-detail__cover">
+            <div class="game-detail__polaroid">
+              <div class="game-detail__polaroid-photo${heroSrc ? "" : " game-detail__polaroid-photo--empty"}">
+                ${heroSrc ? `<img src="${heroSrc}" alt="" />` : `<i data-lucide="dice-6" class="w-10 h-10"></i>`}
+              </div>
+              ${g.year_published ? `<div class="game-detail__polaroid-cap">${g.year_published}</div>` : `<div class="game-detail__polaroid-cap">&nbsp;</div>`}
+              <span class="game-detail__polaroid-status">
+                ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add" })}
+              </span>
+            </div>
           </header>
           <div class="game-detail__body">
             <h1 class="game-detail__name font-display">${escape(g.name)}</h1>
             ${this._renderBaseGameLink(g)}
             <div class="game-detail__meta">
-              ${g.is_expansion ? `<span class="game-detail__meta-chip"><i data-lucide="puzzle" class="w-3.5 h-3.5"></i> Expansion</span>` : ""}
-              ${g.year_published ? `<span>${g.year_published}</span>` : ""}
-              ${g.playerRangeText() ? `<span>${g.playerRangeText()}</span>` : ""}
-              ${g.playTimeText() ? `<span>${g.playTimeText()}</span>` : ""}
+              ${g.is_expansion ? `<span class="game-detail__meta-pill"><i data-lucide="puzzle" class="w-3.5 h-3.5"></i> Expansion</span>` : ""}
+              ${g.playerRangeText() ? `<span class="game-detail__meta-pill"><i data-lucide="users" class="w-3.5 h-3.5"></i> ${g.playerRangeText()}</span>` : ""}
+              ${g.playTimeText() ? `<span class="game-detail__meta-pill"><i data-lucide="clock" class="w-3.5 h-3.5"></i> ${g.playTimeText()}</span>` : ""}
+              ${g.play_mode === "cooperative" ? `<span class="game-detail__meta-pill"><i data-lucide="handshake" class="w-3.5 h-3.5"></i> Co-op</span>` : ""}
             </div>
             <div class="game-detail__actions">
               ${g.is_expansion ? "" : `
@@ -162,116 +165,57 @@
       `;
       if (window.lucide) window.lucide.createIcons();
       this._mountGuide();
-      // Defer the canvas sample until after layout so it doesn't block the
-      // synchronous render path. Cache hits short-circuit immediately.
-      requestAnimationFrame(() => this._sampleHeroEdgeColor());
-    }
-
-    // Sample the leftmost + rightmost columns of the hero image and use the
-    // averaged colour as the banner gutter fill. Cached by URL so re-renders
-    // (status flips, route re-mounts) reuse the result. Silent fallback to
-    // the per-game accent if the image can't be read (CORS, load error).
-    _sampleHeroEdgeColor() {
-      const hero = document.getElementById("game-detail-hero");
-      const img = document.getElementById("game-detail-hero-img");
-      if (!hero || !img) return;
-      const url = img.getAttribute("src");
-      if (!url) return;
-      const cached = window.GameDetailView._heroColorCache.get(url);
-      if (cached) {
-        hero.style.setProperty("--hero-edge", cached);
-        return;
-      }
-      // crossOrigin must be set before src for CORS to apply on canvas readback.
-      const sample = new Image();
-      sample.crossOrigin = "anonymous";
-      sample.onload = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          canvas.width = 32; canvas.height = 32;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-          ctx.drawImage(sample, 0, 0, 32, 32);
-          const data = ctx.getImageData(0, 0, 32, 32).data;
-          let r = 0, g = 0, b = 0, n = 0;
-          // Leftmost (x=0) and rightmost (x=31) columns — 32 rows each.
-          for (let y = 0; y < 32; y++) {
-            for (const x of [0, 31]) {
-              const i = (y * 32 + x) * 4;
-              const a = data[i + 3];
-              if (a < 16) continue; // skip transparent pixels
-              r += data[i]; g += data[i + 1]; b += data[i + 2];
-              n++;
-            }
-          }
-          if (n === 0) return;
-          const color = `rgb(${(r / n) | 0}, ${(g / n) | 0}, ${(b / n) | 0})`;
-          window.GameDetailView._heroColorCache.set(url, color);
-          // The hero may have been re-rendered while the sample was in flight;
-          // re-resolve the element before applying.
-          const cur = document.getElementById("game-detail-hero");
-          if (cur) cur.style.setProperty("--hero-edge", color);
-        } catch (_) {
-          /* SecurityError on getImageData → silent fallback to --game-accent. */
-        }
-      };
-      sample.onerror = () => { /* network/CORS error → silent fallback. */ };
-      sample.src = url;
     }
 
     _renderRecentPlays() {
-      // Same `.recent-plays__row` / `__row-inner` chrome the profile uses, so
-      // both lists read identical visually. Top line carries "Logger played"
-      // here because the game name is implicit on this page.
+      // Mirror the Feed's polaroid reel — same `.play-session__scroll`
+      // wrapper + `window.renderPlayCard` so tap-to-flip and the nested
+      // navigation (game-link, game-thumb, maximize button) all work
+      // identically. The bundle's recent_plays shape differs from the feed
+      // card shape, so _toFeedPlayCard adapts each row.
+      if (!this._plays || this._plays.length === 0) return "";
+      const count = this._plays.length;
+      const cards = this._plays
+        .map((p) => window.renderPlayCard({ ...this._toFeedPlayCard(p), __sessionPlayCount: count }))
+        .join("");
       return `
         <section class="game-detail__section">
-          <h3 class="game-detail__section-title">Your plays</h3>
-          ${this._plays.length === 0
-            ? `<div class="text-sm opacity-60 p-3">No plays logged yet.</div>`
-            : `<ul class="recent-plays">${this._plays.map((p) => this._renderRecentPlayRow(p)).join("")}</ul>`}
+          <h3 class="game-detail__section-title">
+            <i data-lucide="dice-6" class="w-4 h-4"></i>
+            Recent plays
+          </h3>
+          <div class="play-session__scroll game-detail__plays-scroll">${cards}</div>
         </section>
       `;
     }
 
-    _renderRecentPlayRow(p) {
-      const winners = (p.players || []).filter((pl) => pl.is_winner);
-      const winnerLabel = winners.map((w) => escape(w.name)).join(", ");
-      const playerCount = (p.players || []).length;
-      const subParts = [];
-      if (winnerLabel) {
-        subParts.push(`<span class="recent-plays__winner"><i data-lucide="trophy" class="w-3 h-3"></i> ${winnerLabel}</span>`);
-      }
-      if (playerCount > 0) {
-        subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
-      }
-      const thumb = p.game_thumbnail || this._game.thumbnail_url;
-      // Tapping the box art routes to game-detail (consistent with every
-      // other place a boardgame image appears). Tapping anywhere else on
-      // the row opens the play.
-      const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${this._game.id}',gameName:'${jsStr(this._game.name || '')}'})`;
-      const statusOverlay = this._game.id
-        ? `<span class="recent-plays__status">${window.renderStatusTag(this._game.id, this._status || null, { compact: true })}</span>`
-        : "";
-      return `
-        <li class="recent-plays__row" data-play-id="${p.id}">
-          <div class="recent-plays__row-inner"
-               onclick="window.router.go('play-detail',{playId:'${p.id}'})">
-            <div class="recent-plays__thumb">
-              ${thumb
-                ? `<img src="${escapeAttr(thumb)}" alt="" onclick="${gameNav}" />`
-                : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
-              ${statusOverlay}
-            </div>
-            <div class="recent-plays__body">
-              <div class="recent-plays__top">
-                <div class="recent-plays__game">${escape(p.logged_by_name)} played</div>
-                <div class="recent-plays__date">${formatDate(p.played_at)}</div>
-              </div>
-              ${subParts.length ? `<div class="recent-plays__sub">${subParts.join(" · ")}</div>` : ""}
-            </div>
-          </div>
-        </li>
-      `;
+    // Adapter: bundle's recent_plays row → feed card shape consumed by
+    // window.renderPlayCard. duration_minutes / full notes live on the BACK
+    // of the card, which hydrates via window.Play.get(play_id) on first flip,
+    // so missing back-face fields self-heal.
+    _toFeedPlayCard(p) {
+      const players = p.players || [];
+      const winners = players.filter((pl) => pl.is_winner).map((w) => w.name);
+      return {
+        kind: "play",
+        play_id: p.id,
+        played_at: p.played_at,
+        photo_url: p.photo_url || null,
+        notes: p.notes || null,
+        play_mode: p.play_mode || "competitive",
+        winner_display_name: winners.length ? winners.join(", ") : null,
+        participant_count: players.length,
+        players,
+        participants: players.map((pl) => ({ user_id: pl.user_id, display_name: pl.name })),
+        user: p.logged_by_id ? { id: p.logged_by_id, display_name: p.logged_by_name } : null,
+        game: {
+          id: this._game.id,
+          name: this._game.name,
+          thumbnail_url: p.game_thumbnail || this._game.thumbnail_url,
+          image_url: this._game.image_url,
+          theme_color: this._game.accentColor(),
+        },
+      };
     }
 
     _renderBaseGameLink(g) {
@@ -288,46 +232,32 @@
 
     _renderExpansions() {
       if (!this._expansions || this._expansions.length === 0) return "";
-      const open = this._expansionsOpen;
-      const chevron = open ? "chevron-down" : "chevron-right";
       return `
         <section class="game-detail__section game-detail__section--expansions">
-          <button class="collapsible-header"
-                  aria-expanded="${open}"
-                  onclick="window.gameDetailView._toggleExpansions()">
-            <span class="collapsible-header__title">
-              <i data-lucide="puzzle" class="w-4 h-4"></i>
-              Expansions (${this._expansions.length})
-            </span>
-            <i data-lucide="${chevron}" class="w-4 h-4 collapsible-header__chev"></i>
-          </button>
-          ${open ? `
-            <ul class="expansion-list">
-              ${this._expansions.map((e) => {
-                const status = (this._statusMap || {})[e.expansion_game_id] || null;
-                return `
-                <li class="expansion-list__row"
-                    onclick="window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || '')}'})"
-                    style="--exp-color:${e.color || "#C9922A"}">
-                  <span class="expansion-list__dot"></span>
-                  ${e.thumbnail_url
-                    ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" class="expansion-list__thumb" loading="lazy" />`
-                    : `<div class="expansion-list__thumb expansion-list__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
-                  <div class="expansion-list__body">
-                    <div class="expansion-list__name">${escape(e.name)}</div>
+          <h3 class="game-detail__section-title">
+            <i data-lucide="puzzle" class="w-4 h-4"></i>
+            Expansions (${this._expansions.length})
+          </h3>
+          <div class="expansion-reel">
+            ${this._expansions.map((e) => {
+              const status = (this._statusMap || {})[e.expansion_game_id] || null;
+              const owned = status === "owned" || status === "played" || status === "wishlist";
+              return `
+                <article class="expansion-polaroid"
+                         onclick="window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || '')}'})">
+                  <div class="expansion-polaroid__photo">
+                    ${e.thumbnail_url
+                      ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" loading="lazy" />`
+                      : `<div class="expansion-polaroid__placeholder"><i data-lucide="dice-6"></i></div>`}
+                    ${owned ? `<span class="expansion-polaroid__check"><i data-lucide="check" class="w-3.5 h-3.5"></i></span>` : ""}
                   </div>
-                  ${window.renderStatusTag(e.expansion_game_id, status, { size: "xs" })}
-                </li>
-              `;}).join("")}
-            </ul>
-          ` : ""}
+                  <div class="expansion-polaroid__cap">${escape(e.name)}</div>
+                </article>
+              `;
+            }).join("")}
+          </div>
         </section>
       `;
-    }
-
-    _toggleExpansions() {
-      this._expansionsOpen = !this._expansionsOpen;
-      this.render();
     }
 
     // ── Reference guide scroll ────────────────────────────────────────────────
@@ -526,10 +456,6 @@
     tmp.innerHTML = s || "";
     return tmp.textContent || "";
   }
-
-  // Class-level cache for hero edge colours, keyed by image URL. Survives
-  // view re-mounts so a return visit to the same game doesn't re-sample.
-  GameDetailView._heroColorCache = new Map();
 
   window.GameDetailView = GameDetailView;
 })();
