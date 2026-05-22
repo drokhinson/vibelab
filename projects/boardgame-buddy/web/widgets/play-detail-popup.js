@@ -142,13 +142,7 @@
     return `
       <div class="play-detail-popup__card" role="dialog" aria-modal="true" aria-label="Play details">
         <div class="play-detail-popup__topbar">
-          ${p.is_own && !state.editing ? `
-            <button class="play-detail-popup__edit" type="button"
-                    onclick="window.PlayDetailPopup._enterEdit()">
-              <i data-lucide="pencil" class="w-4 h-4"></i>
-              <span>Edit</span>
-            </button>
-          ` : `<span></span>`}
+          <span></span>
           <button class="play-detail-popup__close" type="button" aria-label="Close">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
@@ -156,8 +150,46 @@
         <div class="play-detail-popup__scroll">
           ${state.editing ? renderEdit(p) : renderView(p)}
         </div>
+        ${renderFooter(p)}
       </div>
     `;
+  }
+
+  // Footer is sticky-pinned to the bottom of the popup card. It carries
+  // the primary action(s) for the current mode: in edit mode the
+  // Delete/Cancel/Save trio; in view mode (own play) a single Edit pill.
+  // Other-people's plays drop the footer entirely.
+  function renderFooter(p) {
+    if (state.editing) {
+      return `
+        <div class="play-detail-popup__footer play-detail-popup__footer--edit">
+          <button class="btn btn-ghost play-detail__delete-btn" type="button"
+                  ${state.saving ? "disabled" : ""}
+                  onclick="window.PlayDetailPopup._deletePlay()">
+            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
+          </button>
+          <button class="btn btn-ghost" type="button"
+                  onclick="window.PlayDetailPopup._cancelEdit()">Cancel</button>
+          <button class="btn btn-primary" type="button"
+                  ${state.saving ? "disabled" : ""}
+                  onclick="window.PlayDetailPopup._saveEdit()">
+            ${state.saving ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      `;
+    }
+    if (p && p.is_own) {
+      return `
+        <div class="play-detail-popup__footer">
+          <button class="play-detail-popup__edit play-detail-popup__edit--full" type="button"
+                  onclick="window.PlayDetailPopup._enterEdit()">
+            <i data-lucide="pencil" class="w-4 h-4"></i>
+            <span>Edit</span>
+          </button>
+        </div>
+      `;
+    }
+    return "";
   }
 
   // ── View mode ─────────────────────────────────────────────────────────────
@@ -185,20 +217,7 @@
       <article class="play-detail">
         ${photoSlot}
 
-        <div class="play-detail__meta">
-          <div class="play-detail__game-row">
-            ${p.game_thumbnail
-              ? `<img class="play-detail__game-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" />`
-              : ""}
-            <div class="play-detail__game-info">
-              <div class="play-detail__game-name">${escape(p.game_name)}</div>
-              <div class="play-detail__game-when">${formatDate(p.played_at)}</div>
-            </div>
-          </div>
-          <div class="play-detail__logger">
-            Logged by <span class="font-semibold">${escape(p.logged_by_name)}</span>
-          </div>
-        </div>
+        ${renderGameBubble(p, { editing: false })}
 
         ${winners.length > 0 ? `
           <section class="play-detail__section">
@@ -341,19 +360,7 @@
           `}
         </section>
 
-        <div class="play-detail__meta">
-          <div class="play-detail__game-row">
-            ${p.game_thumbnail
-              ? `<img class="play-detail__game-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" />`
-              : ""}
-            <div class="play-detail__game-info">
-              <div class="play-detail__game-name">${escape(p.game_name)}</div>
-              <input id="play-popup-date" type="date" class="input input-bordered input-sm"
-                     value="${escapeAttr(d.played_at)}"
-                     onchange="window.PlayDetailPopup._setDraft('played_at', this.value)" />
-            </div>
-          </div>
-        </div>
+        ${renderGameBubble(p, { editing: true })}
 
         <section class="play-detail__section">
           <h3 class="play-detail__section-title">
@@ -401,22 +408,45 @@
         </section>
 
         ${state.editError ? `<div class="alert alert-error m-3">${escape(state.editError)}</div>` : ""}
-
-        <section class="play-detail__section play-detail__save-row">
-          <button class="btn btn-ghost play-detail__delete-btn" type="button"
-                  ${state.saving ? "disabled" : ""}
-                  onclick="window.PlayDetailPopup._deletePlay()">
-            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
-          </button>
-          <button class="btn btn-ghost" type="button"
-                  onclick="window.PlayDetailPopup._cancelEdit()">Cancel</button>
-          <button class="btn btn-primary" type="button"
-                  ${state.saving ? "disabled" : ""}
-                  onclick="window.PlayDetailPopup._saveEdit()">
-            ${state.saving ? "Saving…" : "Save changes"}
-          </button>
-        </section>
       </article>
+    `;
+  }
+
+  // Shared game bubble for view + edit mode. The title reads "A game of
+  // <name>" with the game name in the polaroid accent (same orange the
+  // feed uses for winners), and the right side hosts a Go-to-game-detail
+  // arrow that dismisses the popup before routing.
+  function renderGameBubble(p, { editing }) {
+    const gameNav = `event.stopPropagation();
+      window.PlayDetailPopup.dismiss();
+      window.router.go('game-detail',{gameId:'${jsStr(p.game_id || "")}',gameName:'${jsStr(p.game_name || "")}'})`;
+    const subline = editing
+      ? `<input id="play-popup-date" type="date" class="input input-bordered input-sm"
+                value="${escapeAttr(state.draft.played_at)}"
+                onchange="window.PlayDetailPopup._setDraft('played_at', this.value)" />`
+      : `<div class="play-detail__game-when">${formatDate(p.played_at)}</div>`;
+    return `
+      <div class="play-detail__meta">
+        <div class="play-detail__game-row">
+          ${p.game_thumbnail
+            ? `<img class="play-detail__game-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" />`
+            : ""}
+          <div class="play-detail__game-info">
+            <div class="play-detail__game-title">
+              A game of <span class="play-detail__game-name">${escape(p.game_name)}</span>
+            </div>
+            ${subline}
+          </div>
+          ${p.game_id ? `
+            <button class="play-detail__game-goto" type="button"
+                    aria-label="Go to game detail page"
+                    title="Go to game detail page"
+                    onclick="${gameNav}">
+              <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+            </button>
+          ` : ""}
+        </div>
+      </div>
     `;
   }
 
