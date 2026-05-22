@@ -374,18 +374,28 @@
   }
 
   // ── Single-card re-render (preserves feed scroll) ───────────────────────────
-
+  //
+  // The router only toggles `.hidden` on view containers (see domain/view.js)
+  // — it never removes old views from the DOM. So the same play_id can appear
+  // simultaneously in the feed's hidden `<main>` and the visible game-detail
+  // reel. `document.querySelector` would resolve to the feed's hidden card
+  // (it comes first in index.html) and the flip would silently paint on an
+  // off-screen node. Update every match so duplicates stay in sync — flip
+  // state is keyed by play_id, so a card flipped on game-detail also reads as
+  // flipped when the user navigates back to feed.
   function rerenderCard(playId) {
-    const article = document.querySelector(
+    const articles = document.querySelectorAll(
       `article.play-card[data-play-id="${cssEscape(playId)}"]`
     );
-    if (!article) return;
+    if (!articles.length) return;
     const card = findCardById(playId);
     if (!card) return;
-    const tmp = document.createElement("div");
-    tmp.innerHTML = renderPlayCard(card).trim();
-    const replacement = tmp.firstElementChild;
-    article.replaceWith(replacement);
+    const html = renderPlayCard(card).trim();
+    articles.forEach((article) => {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html;
+      article.replaceWith(tmp.firstElementChild);
+    });
     if (window.lucide) window.lucide.createIcons();
   }
 
