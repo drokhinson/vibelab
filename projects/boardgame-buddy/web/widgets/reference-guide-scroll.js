@@ -86,6 +86,18 @@
       if (!this._container) return;
       this._container.innerHTML = this._html();
       if (window.lucide) window.lucide.createIcons();
+      // Per-section accordion mutex: opening a chapter inside a
+      // .scroll-chapter-list closes any other open <details> in the same list.
+      // `toggle` doesn't bubble, so listen in capture phase.
+      this._container.querySelectorAll(".scroll-chapter-list").forEach((list) => {
+        list.addEventListener("toggle", (ev) => {
+          const opened = ev.target;
+          if (!(opened instanceof HTMLDetailsElement) || !opened.open) return;
+          list.querySelectorAll("details[open]").forEach((d) => {
+            if (d !== opened) d.open = false;
+          });
+        }, true);
+      });
     }
 
     _html() {
