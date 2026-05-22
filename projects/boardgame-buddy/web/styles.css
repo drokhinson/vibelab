@@ -2387,40 +2387,6 @@ body {
 }
 
 
-/* ── Expansion chips (session bubble + play detail) ────────────────────────── */
-.expansion-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-.expansion-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border: 1px solid oklch(var(--bc) / 0.18);
-  background: oklch(var(--b2));
-  color: oklch(var(--bc) / 0.85);
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, transform 0.08s;
-  line-height: 1.1;
-}
-.expansion-chip:hover { background: oklch(var(--b2) / 0.6); }
-.expansion-chip:active { transform: translateY(1px); }
-.expansion-chip--active {
-  color: oklch(var(--bc));
-  font-weight: 600;
-}
-/* Static (read-only) chip used in the play-detail view. */
-.expansion-chip--static {
-  cursor: default;
-}
-.expansion-chip--static:hover { background: inherit; }
-.expansion-chip--static:active { transform: none; }
-
 /* ── Session photo slot ─────────────────────────────────────────────────────── */
 .session-photo-picker {
   display: inline-flex;
@@ -3043,7 +3009,7 @@ body {
 .play-card__back-error { color: var(--polaroid-accent); }
 
 /* Maximize button — top-right of the back face. Lives on the back so the
-   front stays clean; tap routes straight to play-detail (data-no-flip). */
+   front stays clean; tap opens the in-place play-detail popup (data-no-flip). */
 .play-card__maximize {
   position: absolute;
   top: 10px;
