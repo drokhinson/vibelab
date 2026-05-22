@@ -64,6 +64,10 @@
       this._activePop = null;
       // Live dimension label for the table picker.
       this._tablePickLabel = "1 × 1";
+      // One-shot: when entering edit mode the next render should centre
+      // the selected chapter-type pill in the horizontal scroller so the
+      // user can see what's currently picked without hunting.
+      this._centerTypeScrollOnNext = false;
     }
 
     async onMount() {
@@ -146,6 +150,7 @@
         this._error = null;
         this._tab = "edit";
         this._externalEdit = true;
+        this._centerTypeScrollOnNext = true;
       } else {
         // Fresh mount (or stale edit URL with no stash) lands on browse.
         this._tab = "browse";
@@ -262,6 +267,18 @@
       if (nextChips) nextChips.scrollLeft = prevChipScroll;
       const nextPool = this.container.querySelector(".chapter-add__pool-scroll .scroll-panel__body");
       if (nextPool) nextPool.scrollTop = prevPoolScroll;
+
+      // One-shot centring of the active chapter-type pill when arriving
+      // in edit mode. Without this, a pill toward the end of the row
+      // would be visually off-screen on load.
+      if (this._centerTypeScrollOnNext) {
+        this._centerTypeScrollOnNext = false;
+        const scroller = this.container.querySelector(".chapter-edit__typescroll");
+        const active = scroller && scroller.querySelector(".chapter-edit__tpill--on");
+        if (scroller && active) {
+          scroller.scrollLeft = active.offsetLeft - (scroller.clientWidth - active.offsetWidth) / 2;
+        }
+      }
       if (window.lucide) window.lucide.createIcons();
 
       // Wire <details> mutex per section (only one open chapter per type).
@@ -288,8 +305,8 @@
       const name = meta.name || this._gameName || "Reference guide";
       const thumb = meta.thumb || this._gameThumb;
       const sub = this._tab === "edit"
-        ? "Editing chapter for this game"
-        : (this._tab === "create" ? "New chapter for this game" : "Browse all chapters");
+        ? "Editing chapter"
+        : (this._tab === "create" ? "Creating new chapter" : "Browse all chapters");
       const cover = thumb
         ? `<div class="chapter-edit__gamechip-cv"><img src="${escapeAttr(thumb)}" alt="" onerror="this.parentNode.classList.add('chapter-edit__gamechip-cv--blank')"></div>`
         : `<div class="chapter-edit__gamechip-cv chapter-edit__gamechip-cv--blank"></div>`;
@@ -528,6 +545,7 @@
       this._activePop = null;
       this._tab = "edit";
       this._externalEdit = false;
+      this._centerTypeScrollOnNext = true;
       this.render();
     }
 
@@ -590,7 +608,10 @@
         </button>
       `).join("");
 
-      const targetSelector = this._expansionIds.length
+      // Target-game selector only renders in Create mode + when expansions
+      // are in scope. Edit hides it — the chapter's game is fixed, the
+      // backend update path can't move a chapter between pools.
+      const targetSelector = (!isEditing && this._expansionIds.length)
         ? this._renderCreateTargetSelector()
         : "";
 
