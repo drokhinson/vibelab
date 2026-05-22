@@ -240,9 +240,6 @@
       const isEditing = this._tab === "edit";
       const isCreating = this._tab === "create";
       const isBrowsing = this._tab === "browse";
-      const headerTitle = isEditing ? "Edit chapter"
-                          : isCreating ? "New chapter"
-                          : "Add a chapter";
 
       // Preserve horizontal/vertical scroll positions across re-renders so
       // toggling a filter chip doesn't reset the chip row to the start, and
@@ -250,31 +247,10 @@
       const prevChipScroll = this.container.querySelector(".chapter-add__filter-chips")?.scrollLeft || 0;
       const prevPoolScroll = this.container.querySelector(".chapter-add__pool-scroll .scroll-panel__body")?.scrollTop || 0;
 
-      // Browse keeps a minimal topbar (title only — back is a floating
-      // FAB). Create / Edit use a labeled chip back button in the topbar
-      // so the user knows where Cancel will land them.
-      const topbar = isBrowsing
-        ? `
-          <header class="search-topbar chapter-add__topbar--minimal">
-            <span></span>
-            <h2 class="font-display font-semibold text-lg">${escape(headerTitle)}</h2>
-            <span></span>
-          </header>
-        `
-        : `
-          <header class="search-topbar chapter-add__topbar--editor">
-            <button class="chapter-add__topbar-back"
-                    onclick="window.referenceGuideAddView._backAction()">
-              <i data-lucide="arrow-left" class="w-4 h-4"></i>
-              <span>${escape(this._backLabel())}</span>
-            </button>
-            <h2 class="font-display font-semibold text-lg">${escape(headerTitle)}</h2>
-            <span></span>
-          </header>
-        `;
-
+      // No topbar — the centred game chip is the top element across every
+      // mode. Browse's back affordance is the left-side floating FAB;
+      // create / edit rely on the inline Cancel / Save footer for exit.
       this.container.innerHTML = `
-        ${topbar}
         ${this._renderGameChip()}
         ${isBrowsing
             ? this._renderBrowse()
@@ -671,9 +647,16 @@
         </label>
       `;
 
-      const submitLabel = isEditing
-        ? (this._saving ? "Saving…" : "Save changes")
-        : (this._saving ? "Saving…" : "Save chapter");
+      // No chapter type picked yet → Save reads "Select chapter type" and
+      // is disabled. Once the user taps a type pill the label flips to the
+      // mode-specific verb and the button becomes active.
+      const noType = !this._formType;
+      const submitLabel = this._saving
+        ? "Saving…"
+        : noType
+          ? "Select chapter type"
+          : (isEditing ? "Save changes" : "Save chapter");
+      const submitDisabled = this._saving || noType;
 
       return `
         <form class="chapter-edit__form" onsubmit="window.referenceGuideAddView._submitForm(event)">
@@ -709,7 +692,7 @@
             <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
                     onclick="window.referenceGuideAddView._cancelForm()">Cancel</button>
             <button type="submit" class="chapter-edit__fbtn chapter-edit__fbtn--save"
-                    ${this._saving ? "disabled" : ""}>
+                    ${submitDisabled ? "disabled" : ""}>
               ${escape(submitLabel)}
             </button>
           </div>
