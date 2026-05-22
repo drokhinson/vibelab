@@ -12,6 +12,13 @@
       this._loading = false;
       this._error = null;
       this._guide = null;  // ReferenceGuideScroll widget; instantiated on first render
+      // Recent-plays pagination — initial page comes from the game-detail
+      // bundle; "load more" fires Play.list against the same gameId with
+      // matching per_page so subsequent batches keep the page math aligned.
+      this._playsPerPage = 8;
+      this._playsPage = 1;
+      this._playsHasMore = false;
+      this._playsLoadingMore = false;
     }
 
     async onMount() {
@@ -60,11 +67,14 @@
       this._guide = null;
       this._error = null;
       this._loading = true;
+      this._playsPage = 1;
+      this._playsHasMore = false;
+      this._playsLoadingMore = false;
       this.render();
       try {
         // Single round trip via /games/{id}/bundle (Phase 3) — replaces the
         // serial Game.fetch + parallel status/plays/expansions fan-out.
-        const bundle = await window.Game.detailBundle(id, { playsLimit: 5 });
+        const bundle = await window.Game.detailBundle(id, { playsLimit: this._playsPerPage });
         if (!bundle || !bundle.game) {
           throw new Error("Game not found");
         }
@@ -79,6 +89,11 @@
         this._status = bundle.viewer_status || null;
         this._plays = bundle.recent_plays || [];
         this._expansions = Array.isArray(bundle.expansions) ? bundle.expansions : [];
+        // Optimistic "more exists" signal — if the bundle returned a full
+        // page, assume more plays exist and let the user pull the next
+        // batch via the inline chevron. The actual stop condition is
+        // confirmed against `total` on each Play.list response.
+        this._playsHasMore = this._plays.length >= this._playsPerPage;
         // Defence in depth: pre-migration-023 the bundle's viewer_status was
         // null for games the viewer had only played (no collection row).
         // Derive 'played' from the recent_plays block so the hero banner
@@ -181,15 +196,98 @@
       const cards = this._plays
         .map((p) => window.renderPlayCard({ ...this._toFeedPlayCard(p), __sessionPlayCount: 2 }))
         .join("");
+      const more = this._playsHasMore ? this._renderLoadMoreButton() : "";
       return `
         <section class="game-detail__section">
           <h3 class="game-detail__section-title">
             <i data-lucide="dice-6" class="w-4 h-4"></i>
             Recent plays
           </h3>
-          <div class="play-session__scroll game-detail__plays-scroll">${cards}</div>
+          <div class="play-session__scroll game-detail__plays-scroll">${cards}${more}</div>
         </section>
       `;
+    }
+
+    _renderLoadMoreButton() {
+      return `
+        <button class="game-detail__plays-more"
+                type="button"
+                aria-label="Load more plays"
+                onclick="window.gameDetailView._loadMorePlays()">
+          <span class="game-detail__plays-more-icon">
+            <i data-lucide="chevron-right" class="w-7 h-7"></i>
+          </span>
+          <span class="game-detail__plays-more-label">More</span>
+        </button>
+      `;
+    }
+
+    // Fetch the next page of plays for this game and append the new cards
+    // to the existing reel in-place — re-rendering the whole article would
+    // reset the horizontal scroll position and steal focus from the user's
+    // tap. The reel scrolls right after append so the new cards come into
+    // view without the user having to flick.
+    async _loadMorePlays() {
+      if (this._playsLoadingMore || !this._playsHasMore || !this._game) return;
+      this._playsLoadingMore = true;
+      const btn = this.container && this.container.querySelector(".game-detail__plays-more");
+      if (btn) {
+        btn.classList.add("is-loading");
+        btn.setAttribute("aria-busy", "true");
+        btn.disabled = true;
+      }
+      try {
+        const nextPage = this._playsPage + 1;
+        const resp = await window.Play.list({
+          gameId: this._game.id,
+          page: nextPage,
+          perPage: this._playsPerPage,
+        });
+        const newPlays = (resp && Array.isArray(resp.plays)) ? resp.plays : [];
+        this._plays = this._plays.concat(newPlays);
+        this._playsPage = nextPage;
+        const total = (resp && typeof resp.total === "number") ? resp.total : this._plays.length;
+        this._playsHasMore = newPlays.length >= this._playsPerPage && this._plays.length < total;
+        this._appendMorePlaysDom(newPlays);
+      } catch (e) {
+        // Surface the failure but keep the existing button so the user can
+        // retry on tap. Toast helper is global in this app.
+        if (typeof showToast === "function") showToast(e.message || "Failed to load more plays", "error");
+        if (btn) {
+          btn.classList.remove("is-loading");
+          btn.removeAttribute("aria-busy");
+          btn.disabled = false;
+        }
+      } finally {
+        this._playsLoadingMore = false;
+      }
+    }
+
+    _appendMorePlaysDom(newPlays) {
+      const reel = this.container && this.container.querySelector(".game-detail__plays-scroll");
+      if (!reel) return;
+      const oldBtn = reel.querySelector(".game-detail__plays-more");
+      if (oldBtn) oldBtn.remove();
+      // Append new cards individually so each `<article>` lands as a
+      // direct child of the reel (the nth-child tilt rules depend on it).
+      const tmp = document.createElement("div");
+      tmp.innerHTML = newPlays
+        .map((p) => window.renderPlayCard({ ...this._toFeedPlayCard(p), __sessionPlayCount: 2 }))
+        .join("");
+      const firstNew = tmp.firstElementChild;
+      while (tmp.firstChild) reel.appendChild(tmp.firstChild);
+      if (this._playsHasMore) {
+        const btnTmp = document.createElement("div");
+        btnTmp.innerHTML = this._renderLoadMoreButton();
+        while (btnTmp.firstChild) reel.appendChild(btnTmp.firstChild);
+      }
+      if (window.lucide) window.lucide.createIcons();
+      // Glide the reel rightward so the first new card peeks into view.
+      if (firstNew) {
+        requestAnimationFrame(() => {
+          reel.scrollTo({ left: firstNew.offsetLeft - 24, behavior: "smooth" });
+        });
+      }
     }
 
     // Adapter: bundle's recent_plays row → feed card shape consumed by
