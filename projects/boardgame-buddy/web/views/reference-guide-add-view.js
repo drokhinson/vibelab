@@ -33,9 +33,12 @@
       this._expansionMeta = {};       // gameId → {name, color, thumb}
       this._createTargetGameId = null; // defaults to base game in onMount
 
-      // Browse state
+      // Browse state. `_allPool` holds every chapter for the active game
+      // (+ expansions) — fetched once on mount and re-fetched only after a
+      // create/edit/delete. Type-filter and search are applied client-side
+      // by `_filteredPool` so flipping chips is instant.
       this._poolLoading = false;
-      this._pool = [];
+      this._allPool = [];
       this._search = "";
       this._typeFilter = "";
 
@@ -160,19 +163,49 @@
       this._poolLoading = true;
       this.render();
       try {
+        // Fetch the unfiltered pool — search + chapter_type are applied
+        // client-side via `_filteredPool` so flipping filters is instant.
         const pool = await window.Chapter.pool(this._gameId, {
-          q: this._search || undefined,
-          chapterType: this._typeFilter || undefined,
           expansionIds: this._expansionIds.length ? this._expansionIds : undefined,
         });
-        this._pool = pool || [];
+        this._allPool = pool || [];
       } catch (e) {
         showToast(e.message || "Failed to load chapter pool", "error");
-        this._pool = [];
+        this._allPool = [];
       } finally {
         this._poolLoading = false;
         this.render();
       }
+    }
+
+    // Apply the current search needle and type chip to the cached pool.
+    // Search matches title or content substring; chapter_type is exact.
+    _filteredPool() {
+      const needle = (this._search || "").trim().toLowerCase();
+      const type = this._typeFilter || "";
+      return this._allPool.filter((c) => {
+        if (type && c.chapter_type !== type) return false;
+        if (!needle) return true;
+        return (c.title || "").toLowerCase().includes(needle)
+            || (c.content || "").toLowerCase().includes(needle);
+      });
+    }
+
+    // Distinct chapter types present in the cached pool, sorted by their
+    // declared display_order. The chip row uses this so users never see a
+    // filter pill that leads to an empty list.
+    _distinctTypes() {
+      const seen = new Map();
+      for (const c of this._allPool) {
+        if (!c.chapter_type || seen.has(c.chapter_type)) continue;
+        seen.set(c.chapter_type, {
+          id: c.chapter_type,
+          label: c.chapter_type_label || c.chapter_type,
+          icon: c.chapter_type_icon || "book",
+          order: c.chapter_type_order || 0,
+        });
+      }
+      return [...seen.values()].sort((a, b) => a.order - b.order);
     }
 
     _groupPoolByType(list) {
@@ -210,26 +243,49 @@
       const headerTitle = isEditing ? "Edit chapter"
                           : isCreating ? "New chapter"
                           : "Add a chapter";
-      // Back arrow in browse pops to the prior view (game-detail). In
-      // create/edit it cancels the in-progress draft instead — same
-      // behaviour as the Cancel button, no rogue back-navigation.
-      const backHandler = isBrowsing
-        ? "window.router.back('game-detail')"
-        : "window.referenceGuideAddView._cancelForm()";
+
+      // Preserve horizontal/vertical scroll positions across re-renders so
+      // toggling a filter chip doesn't reset the chip row to the start, and
+      // the chapter list doesn't jump to the top either.
+      const prevChipScroll = this.container.querySelector(".chapter-add__filter-chips")?.scrollLeft || 0;
+      const prevPoolScroll = this.container.querySelector(".chapter-add__pool-scroll .scroll-panel__body")?.scrollTop || 0;
+
+      // Browse keeps a minimal topbar (title only — back is a floating
+      // FAB). Create / Edit use a labeled chip back button in the topbar
+      // so the user knows where Cancel will land them.
+      const topbar = isBrowsing
+        ? `
+          <header class="search-topbar chapter-add__topbar--minimal">
+            <span></span>
+            <h2 class="font-display font-semibold text-lg">${escape(headerTitle)}</h2>
+            <span></span>
+          </header>
+        `
+        : `
+          <header class="search-topbar chapter-add__topbar--editor">
+            <button class="chapter-add__topbar-back"
+                    onclick="window.referenceGuideAddView._backAction()">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+              <span>${escape(this._backLabel())}</span>
+            </button>
+            <h2 class="font-display font-semibold text-lg">${escape(headerTitle)}</h2>
+            <span></span>
+          </header>
+        `;
 
       this.container.innerHTML = `
-        <header class="search-topbar">
-          <button class="btn btn-ghost btn-sm" onclick="${backHandler}">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-          </button>
-          <h2 class="font-display font-semibold text-lg">${escape(headerTitle)}</h2>
-          <span></span>
-        </header>
+        ${topbar}
         ${this._renderGameChip()}
         ${isBrowsing
             ? this._renderBrowse()
             : this._renderEditor(isEditing)}
       `;
+
+      // Restore scroll positions captured before the innerHTML replace.
+      const nextChips = this.container.querySelector(".chapter-add__filter-chips");
+      if (nextChips) nextChips.scrollLeft = prevChipScroll;
+      const nextPool = this.container.querySelector(".chapter-add__pool-scroll .scroll-panel__body");
+      if (nextPool) nextPool.scrollTop = prevPoolScroll;
       if (window.lucide) window.lucide.createIcons();
 
       // Wire <details> mutex per section (only one open chapter per type).
@@ -288,6 +344,43 @@
       this.render();
     }
 
+    // What view the back affordance will land on. Browse pops to whatever
+    // is on the router back-stack (usually game-detail). In-view edit /
+    // create returns to browse. External edit (route arrived with
+    // mode=edit) still pops the router so the user lands where they came
+    // from.
+    _backDestination() {
+      if (this._tab !== "browse" && !this._externalEdit) return "reference-guide-add";
+      const peeker = window.router && window.router.peekBack;
+      if (typeof peeker === "function") return peeker.call(window.router, "game-detail");
+      const stack = (window.router && window.router._stack) || [];
+      return stack.length ? stack[stack.length - 1].name : "game-detail";
+    }
+
+    _backLabel() {
+      const dest = this._backDestination();
+      switch (dest) {
+        case "reference-guide-add": return "Back to chapter browse";
+        case "game-detail":         return "Back to game details";
+        case "play-flow":
+        case "session-viewer":      return "Back to play session";
+        case "log-play":            return "Back to log play";
+        case "feed":                return "Back to home";
+        case "profile-self":
+        case "profile-other":       return "Back to profile";
+        default:                    return "Back";
+      }
+    }
+
+    // One entry-point for all back affordances (topbar chip, browse FAB).
+    // Mirrors `_cancelForm` for create/edit; pops the router otherwise.
+    _backAction() {
+      if (this._tab !== "browse") {
+        return this._cancelForm();
+      }
+      window.router.back("game-detail");
+    }
+
     // Internal exit: returns to browse without disturbing the router stack.
     async _backToBrowse() {
       this._editingChapterId = null;
@@ -303,20 +396,24 @@
 
     // ── Browse ────────────────────────────────────────────────────────────────
     _renderBrowse() {
+      // Chips come from the cached pool — only show types that actually
+      // have chapters in this game. Falls back to nothing while loading.
+      const distinctTypes = this._distinctTypes();
       const chipBtns = [`
         <button class="chapter-add__chip ${!this._typeFilter ? "chapter-add__chip--active" : ""}"
                 onclick="window.referenceGuideAddView._onTypeFilter('')">All</button>
-      `, ...this._types.map((t) => `
+      `, ...distinctTypes.map((t) => `
         <button class="chapter-add__chip ${t.id === this._typeFilter ? "chapter-add__chip--active" : ""}"
                 onclick="window.referenceGuideAddView._onTypeFilter('${t.id}')">
-          <i data-lucide="${t.icon || "book"}" class="w-3.5 h-3.5"></i>
+          <i data-lucide="${t.icon}" class="w-3.5 h-3.5"></i>
           ${escape(t.label)}
         </button>
       `)].join("");
 
+      const filtered = this._filteredPool();
       const scrollBody = this._poolLoading
         ? `<div class="scroll-panel__loading">${window.buddyLoader({ size: 60 })}</div>`
-        : this._pool.length === 0
+        : filtered.length === 0
           ? `<div class="scroll-panel__empty">
                No chapters available${this._search || this._typeFilter ? " for this filter" : " yet"}.
                <br/><button class="chapter-edit__fbtn chapter-edit__fbtn--save mt-3"
@@ -324,8 +421,11 @@
                  Create the first one
                </button>
              </div>`
-          : this._groupPoolByType(this._pool)
+          : this._groupPoolByType(filtered)
               .map((g) => this._renderPoolSection(g)).join("");
+
+      const backLabel = this._backLabel();
+      const backOnClick = "window.referenceGuideAddView._backAction()";
 
       return `
         <div class="chapter-add__filter-chips" role="tablist">
@@ -346,6 +446,13 @@
             ${scrollBody}
           </div>
         </div>
+        <div class="chapter-add__fab-spacer"></div>
+        <button class="chapter-add__fab-back"
+                title="${escapeAttr(backLabel)}"
+                onclick="${backOnClick}">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          <span>${escape(backLabel)}</span>
+        </button>
         <button class="chapter-add__fab"
                 title="Create a new chapter"
                 onclick="window.referenceGuideAddView._enterCreate()">
@@ -433,7 +540,7 @@
     // In-view edit transition: no routing, no _externalEdit flag → Cancel
     // and Save return to browse instead of popping the router stack.
     _editFromPool(chapterId) {
-      const c = this._pool.find((x) => x.id === chapterId);
+      const c = this._allPool.find((x) => x.id === chapterId);
       if (!c) return;
       this._editingChapterId = c.id;
       this._formTitle = c.title || "";
@@ -450,17 +557,17 @@
 
     _onSearchInput(v) {
       this._search = v || "";
-      clearTimeout(this._searchTimer);
-      this._searchTimer = setTimeout(() => this._loadPool(), 220);
+      // Client-side filter is cheap — no debounce, no fetch.
+      this.render();
     }
 
     _onTypeFilter(v) {
       this._typeFilter = v || "";
-      this._loadPool();
+      this.render();
     }
 
     async _toggleInGuide(chapterId) {
-      const row = this._pool.find((c) => c.id === chapterId);
+      const row = this._allPool.find((c) => c.id === chapterId);
       if (!row) return;
       const targetGameId = row.source_game_id || row.game_id || this._gameId;
       const targetState = !row.in_my_guide;

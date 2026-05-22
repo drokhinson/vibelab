@@ -141,6 +141,14 @@
       if (entry) return this.go(entry.name, entry.params, { skipPush: true });
       return this.go(fallback, {}, { skipPush: true });
     }
+
+    // Non-destructive peek at where `back()` would land. Used by views that
+    // want to label a back affordance with the destination name. Returns
+    // the fallback when the stack is empty.
+    peekBack(fallback = "feed") {
+      const entry = this._stack[this._stack.length - 1];
+      return entry ? entry.name : fallback;
+    }
   }
 
   window.View = View;
