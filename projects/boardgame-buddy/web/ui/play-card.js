@@ -8,7 +8,7 @@
 //            notes only render on the single (non-session) variant.
 //   Back   → game title + duration, ranked scoreboard with the winner row
 //            tinted, optional notes, maximize button (top-right) into the
-//            full play-detail page, and a "Tap to flip back" footer.
+//            in-place play-detail popup, and a "Tap to flip back" footer.
 //
 // Clicking the game-name text, the game-thumbnail badge, or the maximize
 // button navigates (data-no-flip). Clicking anywhere else on the card flips
@@ -251,10 +251,10 @@
     }
     const players = p.players || [];
     const me = window.store && window.store.get && window.store.get("user");
-    // Maximize opens the play-detail popup in-place. The legacy
-    // /play-detail route still exists for deep links, but the card-driven
-    // expand stays on the current view so the user keeps their scroll
-    // position and the game-tab layout doesn't break.
+    // Maximize opens the play-detail popup in-place — the popup is the
+    // sole "open a play" surface now (the standalone /play-detail page was
+    // retired). Staying on the current view preserves scroll position and
+    // keeps the game-tab layout intact.
     const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
     const durationMeta = p.duration_minutes
       ? `${p.duration_minutes} min`

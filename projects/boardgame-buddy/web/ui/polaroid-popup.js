@@ -14,8 +14,9 @@
    * @property {string}  gameName
    * @property {string=} gameThumbnail
    * @property {string=} winnerName
-   * @property {string=} playId — when present, X tap routes to play-detail
-   *           instead of the feed. Set by the phase=finalized handler.
+   * @property {string=} playId — when present, the splash adds a "View play"
+   *           CTA that opens the in-place play-detail popup. Set by the
+   *           phase=finalized handler.
    * @property {() => void=} onDismiss — override default feed redirect.
    */
 
@@ -40,9 +41,8 @@
       viewBtn.addEventListener("click", () => {
         const pid = viewBtn.getAttribute("data-play-id");
         dismiss();
-        // Open the in-place expanded polaroid instead of routing to the
-        // play-detail page — keeps the user on whichever surface they
-        // wrapped up from.
+        // Open the in-place play-detail popup so the user stays on
+        // whichever surface they wrapped up from.
         if (pid && window.PlayDetailPopup) window.PlayDetailPopup.show(pid);
       });
     }
@@ -69,9 +69,8 @@
       viewBtn.addEventListener("click", () => {
         const pid = viewBtn.getAttribute("data-play-id");
         dismiss();
-        // Open the in-place expanded polaroid instead of routing to the
-        // play-detail page — keeps the user on whichever surface they
-        // wrapped up from.
+        // Open the in-place play-detail popup so the user stays on
+        // whichever surface they wrapped up from.
         if (pid && window.PlayDetailPopup) window.PlayDetailPopup.show(pid);
       });
     }

@@ -2387,40 +2387,6 @@ body {
 }
 
 
-/* ── Expansion chips (session bubble + play detail) ────────────────────────── */
-.expansion-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-.expansion-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border: 1px solid oklch(var(--bc) / 0.18);
-  background: oklch(var(--b2));
-  color: oklch(var(--bc) / 0.85);
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, transform 0.08s;
-  line-height: 1.1;
-}
-.expansion-chip:hover { background: oklch(var(--b2) / 0.6); }
-.expansion-chip:active { transform: translateY(1px); }
-.expansion-chip--active {
-  color: oklch(var(--bc));
-  font-weight: 600;
-}
-/* Static (read-only) chip used in the play-detail view. */
-.expansion-chip--static {
-  cursor: default;
-}
-.expansion-chip--static:hover { background: inherit; }
-.expansion-chip--static:active { transform: none; }
-
 /* ── Session photo slot ─────────────────────────────────────────────────────── */
 .session-photo-picker {
   display: inline-flex;
@@ -3043,7 +3009,7 @@ body {
 .play-card__back-error { color: var(--polaroid-accent); }
 
 /* Maximize button — top-right of the back face. Lives on the back so the
-   front stays clean; tap routes straight to play-detail (data-no-flip). */
+   front stays clean; tap opens the in-place play-detail popup (data-no-flip). */
 .play-card__maximize {
   position: absolute;
   top: 10px;
@@ -6323,4 +6289,63 @@ main[data-view="session-viewer"].hidden {
   width: 100%;
   object-fit: cover;
   border-radius: 10px;
+}
+
+/* Polaroid theme overrides for play-detail content inside the popup.
+   The shared .play-detail__* surfaces default to DaisyUI's dark base
+   palette (oklch(var(--b2/b3))). Inside the cream popup card those
+   backgrounds print as inky slabs — re-skin every surface (view rows,
+   edit rows, form controls) in polaroid tokens so the popup reads as
+   one consistent piece of stationery. */
+.play-detail-popup__card .play-detail__meta,
+.play-detail-popup__card .play-detail__player,
+.play-detail-popup__card .play-detail__edit-player,
+.play-detail-popup__card .play-detail__notes,
+.play-detail-popup__card .play-detail__expansions li,
+.play-detail-popup__card .play-detail__edit-photo {
+  background: var(--polaroid-bg-soft, #F5EEDC);
+  border-color: var(--polaroid-line);
+  color: var(--polaroid-ink);
+}
+.play-detail-popup__card .play-detail__player.is-winner,
+.play-detail-popup__card .play-detail__edit-player.is-winner {
+  background: linear-gradient(90deg, rgba(229,192,74,0.28), rgba(229,192,74,0.08));
+  border-color: rgba(229,192,74,0.5);
+}
+.play-detail-popup__card .play-detail__player.is-winner .play-detail__player-name,
+.play-detail-popup__card .play-detail__player.is-winner .play-detail__player-score,
+.play-detail-popup__card .play-detail__winners li {
+  color: #C9922A;
+}
+.play-detail-popup__card .play-detail__game-when,
+.play-detail-popup__card .play-detail__logger,
+.play-detail-popup__card .play-detail__edit-photo-pick-hint {
+  color: var(--polaroid-ink-soft);
+  opacity: 1;
+}
+.play-detail-popup__card .play-detail__edit-photo-replace {
+  background: rgba(255, 251, 241, 0.92);
+  border-color: var(--polaroid-line);
+  color: var(--polaroid-ink);
+}
+
+/* DaisyUI input / textarea controls (date picker, score, add-player,
+   notes textarea). Default DaisyUI styling renders them as dark
+   chips against the cream card — re-skin to cream paper with the
+   polaroid hairline border. */
+.play-detail-popup__card .input,
+.play-detail-popup__card .textarea {
+  background: var(--polaroid-bg);
+  border-color: var(--polaroid-line);
+  color: var(--polaroid-ink);
+}
+.play-detail-popup__card .input::placeholder,
+.play-detail-popup__card .textarea::placeholder {
+  color: var(--polaroid-ink-soft);
+  opacity: 0.55;
+}
+.play-detail-popup__card .input:focus,
+.play-detail-popup__card .textarea:focus {
+  border-color: var(--polaroid-accent);
+  outline-color: var(--polaroid-accent);
 }
