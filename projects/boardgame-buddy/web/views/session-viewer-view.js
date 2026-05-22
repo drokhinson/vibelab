@@ -201,7 +201,10 @@
         if (this._popupShown && session.finalized_play_id) {
           if (window.PolaroidPopup) window.PolaroidPopup.update({ playId: session.finalized_play_id });
         } else if (session.finalized_play_id) {
-          window.router.go("play-detail", { playId: session.finalized_play_id });
+          // The legacy /play-detail page is gone. Pop the saved play
+          // in-place; the user stays on the session viewer (or whatever
+          // surface they were on) until they close the modal.
+          if (window.PlayDetailPopup) window.PlayDetailPopup.show(session.finalized_play_id);
         }
         this._stopPolling();
         return;

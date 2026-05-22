@@ -613,7 +613,7 @@ async def upload_play_photo(
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
     if len(data) > _MAX_PHOTO_BYTES:
-        raise HTTPException(status_code=413, detail="Image exceeds 5 MiB limit")
+        raise HTTPException(status_code=413, detail="Image exceeds 5 MB limit")
 
     ext = {
         "image/jpeg": "jpg",

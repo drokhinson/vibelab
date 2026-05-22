@@ -820,7 +820,7 @@
       return `
         <li class="recent-plays__row" data-play-id="${p.id}">
           <div class="recent-plays__row-inner"
-               onclick="window.router.go('play-detail',{playId:'${p.id}'})">
+               onclick="window.PlayDetailPopup.show('${p.id}')">
             <div class="recent-plays__thumb">
               ${p.game_thumbnail
                 ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`

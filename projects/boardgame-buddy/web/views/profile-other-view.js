@@ -423,7 +423,7 @@
           subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
         }
         return `
-          <li onclick="window.router.go('play-detail',{playId:'${p.id}'})">
+          <li onclick="window.PlayDetailPopup.show('${p.id}')">
             ${p.game_thumbnail ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" />` : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
             <div class="recent-plays__body">
               <div class="recent-plays__top">
