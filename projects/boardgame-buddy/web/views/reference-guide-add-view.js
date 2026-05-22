@@ -48,6 +48,12 @@
       this._saving = false;
       this._error = null;
       this._editingChapterId = null;  // set when _tab === "edit"
+      // True only when edit mode was entered via an external route (e.g.
+      // the reference-guide-scroll Edit button on game-detail). Cancel /
+      // Save in that case pops back to the prior view. In-view edit
+      // transitions (FAB / expanded-row Edit) leave this false so the
+      // user returns to browse instead.
+      this._externalEdit = false;
       // Transient stash: scroll widget drops the chapter here before
       // routing into edit mode so we don't need an extra GET.
       this._prefillChapter = null;
@@ -61,7 +67,6 @@
       const p = this.params || {};
       this._gameId = p.gameId || null;
       this._gameName = p.gameName || "";
-      const requestedTab = p.mode === "edit" ? "edit" : (p.tab || "browse");
       const rawExp = p.expansionIds || "";
       this._expansionIds = rawExp.split(",").map((s) => s.trim()).filter(Boolean);
       this._createTargetGameId = this._gameId;
@@ -119,8 +124,14 @@
         }
       }
 
-      // Prefill from the stash if scroll-widget Edit triggered the route.
-      if (requestedTab === "edit" && this._prefillChapter) {
+      // External edit entry: the user clicked Edit on a chapter in their
+      // reference-guide-scroll widget (on a separate view). That route
+      // stashes the chapter and passes mode=edit. Cancel/Save in this case
+      // pops back to the prior view (typically game-detail).
+      // In-view transitions (FAB → create, expanded-row Edit → edit) flip
+      // _tab directly without re-routing, leaving _externalEdit false so
+      // Cancel returns to browse instead of game-detail.
+      if (p.mode === "edit" && this._prefillChapter) {
         const c = this._prefillChapter;
         this._prefillChapter = null;
         this._editingChapterId = c.id;
@@ -128,12 +139,14 @@
         this._formContent = c.content || "";
         this._formType = c.chapter_type || "";
         this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
+        this._editorView = "write";
+        this._error = null;
         this._tab = "edit";
-      } else if (requestedTab === "edit") {
-        // Direct URL into edit mode without the stash → fall back to browse.
-        this._tab = "browse";
+        this._externalEdit = true;
       } else {
-        this._tab = requestedTab;
+        // Fresh mount (or stale edit URL with no stash) lands on browse.
+        this._tab = "browse";
+        this._externalEdit = false;
       }
 
       if (this._tab === "browse") await this._loadPool();
@@ -193,30 +206,27 @@
 
       const isEditing = this._tab === "edit";
       const isCreating = this._tab === "create";
-      const headerTitle = isEditing ? "Edit chapter" : "Add a chapter";
+      const isBrowsing = this._tab === "browse";
+      const headerTitle = isEditing ? "Edit chapter"
+                          : isCreating ? "New chapter"
+                          : "Add a chapter";
+      // Back arrow in browse pops to the prior view (game-detail). In
+      // create/edit it cancels the in-progress draft instead — same
+      // behaviour as the Cancel button, no rogue back-navigation.
+      const backHandler = isBrowsing
+        ? "window.router.back('game-detail')"
+        : "window.referenceGuideAddView._cancelForm()";
 
       this.container.innerHTML = `
         <header class="search-topbar">
-          <button class="btn btn-ghost btn-sm" onclick="window.router.back('game-detail')">
+          <button class="btn btn-ghost btn-sm" onclick="${backHandler}">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="font-display font-semibold text-lg">${escape(headerTitle)}</h2>
           <span></span>
         </header>
         ${this._renderGameChip()}
-        ${isEditing ? "" : `
-          <div class="chapter-add__tabs" role="tablist">
-            <button class="chapter-add__tab ${this._tab === "browse" ? "chapter-add__tab--active" : ""}"
-                    onclick="window.referenceGuideAddView._setTab('browse')">
-              <i data-lucide="library" class="w-4 h-4"></i> Browse
-            </button>
-            <button class="chapter-add__tab ${this._tab === "create" ? "chapter-add__tab--active" : ""}"
-                    onclick="window.referenceGuideAddView._setTab('create')">
-              <i data-lucide="plus" class="w-4 h-4"></i> Create new
-            </button>
-          </div>
-        `}
-        ${this._tab === "browse"
+        ${isBrowsing
             ? this._renderBrowse()
             : this._renderEditor(isEditing)}
       `;
@@ -238,15 +248,16 @@
       if (this._activePop === "table") this._buildTableGrid();
     }
 
-    // Game chip — cream pill with cover + name, always at top of the screen
-    // so the user knows which game they're authoring/browsing for.
+    // Game chip — cream pill with cover + name. Especially important in
+    // create / edit modes so the player can never forget which game the
+    // chapter belongs to.
     _renderGameChip() {
       const meta = this._expansionMeta[this._gameId] || { name: this._gameName, thumb: this._gameThumb };
       const name = meta.name || this._gameName || "Reference guide";
       const thumb = meta.thumb || this._gameThumb;
       const sub = this._tab === "edit"
         ? "Editing chapter for this game"
-        : (this._tab === "create" ? "Authoring new chapter" : "Chapters for this game");
+        : (this._tab === "create" ? "New chapter for this game" : "Chapters for this game");
       const cover = thumb
         ? `<div class="chapter-edit__gamechip-cv"><img src="${escapeAttr(thumb)}" alt="" onerror="this.parentNode.classList.add('chapter-edit__gamechip-cv--blank')"></div>`
         : `<div class="chapter-edit__gamechip-cv chapter-edit__gamechip-cv--blank"></div>`;
@@ -261,19 +272,33 @@
       `;
     }
 
-    async _setTab(t) {
-      if (this._tab === t) return;
-      // Leaving edit mode: clear the in-flight buffer.
-      if (this._tab === "edit") {
-        this._editingChapterId = null;
-        this._formTitle = "";
-        this._formContent = "";
-        this._formType = "";
-        this._error = null;
-      }
-      this._tab = t;
-      if (t === "browse") await this._loadPool();
+    // FAB → create. Clears any leftover form buffer so the editor always
+    // opens clean (the prior flow let create-tab state persist across
+    // browse/create toggles, which made entering Create feel stale).
+    _enterCreate() {
+      this._editingChapterId = null;
+      this._formTitle = "";
+      this._formContent = "";
+      this._formType = "";
+      this._editorView = "write";
+      this._error = null;
+      this._activePop = null;
+      this._tab = "create";
+      this._externalEdit = false;
       this.render();
+    }
+
+    // Internal exit: returns to browse without disturbing the router stack.
+    async _backToBrowse() {
+      this._editingChapterId = null;
+      this._formTitle = "";
+      this._formContent = "";
+      this._formType = "";
+      this._error = null;
+      this._activePop = null;
+      this._tab = "browse";
+      this._externalEdit = false;
+      await this._loadPool();
     }
 
     // ── Browse ────────────────────────────────────────────────────────────────
@@ -295,7 +320,7 @@
           ? `<div class="scroll-panel__empty">
                No chapters available${this._search || this._typeFilter ? " for this filter" : " yet"}.
                <br/><button class="chapter-edit__fbtn chapter-edit__fbtn--save mt-3"
-                            onclick="window.referenceGuideAddView._setTab('create')">
+                            onclick="window.referenceGuideAddView._enterCreate()">
                  Create the first one
                </button>
              </div>`
@@ -303,20 +328,30 @@
               .map((g) => this._renderPoolSection(g)).join("");
 
       return `
-        <div class="chapter-add__filters">
-          <input type="search" class="input input-bordered input-sm chapter-add__search"
-                 placeholder="Search title or content…"
-                 value="${escapeAttr(this._search)}"
-                 oninput="window.referenceGuideAddView._onSearchInput(this.value)" />
-        </div>
         <div class="chapter-add__filter-chips" role="tablist">
           ${chipBtns}
         </div>
         <div class="scroll-panel chapter-add__pool-scroll">
+          <div class="scroll-panel__peek">
+            <div class="scroll-panel__search-row">
+              <i data-lucide="search" class="w-4 h-4 scroll-panel__search-icon"></i>
+              <input class="scroll-panel__search"
+                     type="search"
+                     placeholder="Search chapters…"
+                     value="${escapeAttr(this._search)}"
+                     oninput="window.referenceGuideAddView._onSearchInput(this.value)" />
+            </div>
+          </div>
           <div class="scroll-panel__body">
             ${scrollBody}
           </div>
         </div>
+        <button class="chapter-add__fab"
+                title="Create a new chapter"
+                onclick="window.referenceGuideAddView._enterCreate()">
+          <i data-lucide="plus" class="w-5 h-5"></i>
+          <span>New chapter</span>
+        </button>
       `;
     }
 
@@ -345,6 +380,18 @@
         ? `<span class="scroll-chapter__source-dot" style="--exp-color:${escapeAttr(c.source_color)}"
                  title="${escapeAttr(c.source_game_name || "")}"></span>`
         : "";
+      // Add/Added toggle lives on the right of the summary so a user can
+      // grab a chapter without having to expand it first. preventDefault +
+      // stopPropagation stop the toggle click from also flipping <details>.
+      const toggleBtn = `
+        <button class="chapter-add__pool-toggle chapter-add__pool-toggle--compact ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
+                title="${inGuide ? "Remove from my guide" : "Add to my guide"}"
+                onclick="event.preventDefault();event.stopPropagation();window.referenceGuideAddView._toggleInGuide('${c.id}')">
+          ${inGuide
+            ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
+            : `<i data-lucide="plus" class="w-4 h-4"></i><span>Add</span>`}
+        </button>
+      `;
 
       return `
         <li class="scroll-chapter" data-chapter-id="${c.id}">
@@ -361,16 +408,10 @@
                   ${author ? `<span class="scroll-chapter__author">${author}</span>` : ""}
                 </div>
               </div>
+              ${toggleBtn}
             </summary>
             <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
             <div class="scroll-chapter__actions">
-              <button class="chapter-add__pool-toggle ${inGuide ? "chapter-add__pool-toggle--in" : ""}"
-                      onclick="event.preventDefault();window.referenceGuideAddView._toggleInGuide('${c.id}')">
-                ${inGuide
-                  ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
-                  : `<i data-lucide="plus" class="w-4 h-4"></i><span>Add to my guide</span>`}
-              </button>
-              <span class="chapter-add__pool-actions-spacer"></span>
               ${isOwner ? `
                 <button class="btn btn-ghost btn-xs"
                         onclick="event.preventDefault();window.referenceGuideAddView._editFromPool('${c.id}')">
@@ -389,16 +430,22 @@
       `;
     }
 
+    // In-view edit transition: no routing, no _externalEdit flag → Cancel
+    // and Save return to browse instead of popping the router stack.
     _editFromPool(chapterId) {
       const c = this._pool.find((x) => x.id === chapterId);
       if (!c) return;
-      this._prefillChapter = c;
-      // Reuse onMount via params change so the edit-mode prefill runs.
-      window.router.go("reference-guide-add", {
-        ...this.params,
-        mode: "edit",
-        gameId: c.source_game_id || c.game_id || this._gameId,
-      });
+      this._editingChapterId = c.id;
+      this._formTitle = c.title || "";
+      this._formContent = c.content || "";
+      this._formType = c.chapter_type || "";
+      this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
+      this._editorView = "write";
+      this._error = null;
+      this._activePop = null;
+      this._tab = "edit";
+      this._externalEdit = false;
+      this.render();
     }
 
     _onSearchInput(v) {
@@ -767,13 +814,15 @@
       event.target.value = "";
     }
 
-    _cancelForm() {
-      if (this._tab === "edit") {
-        // Edit mode arrived from elsewhere — roll the back stack.
+    async _cancelForm() {
+      // External edit (arrived via route with mode=edit) pops back to the
+      // prior view. In-view create / in-view edit return to browse.
+      if (this._externalEdit) {
         window.router.back("game-detail");
-      } else {
-        this._setTab("browse");
+        return;
       }
+      await this._backToBrowse();
+      this.render();
     }
 
     async _submitForm(event) {
@@ -794,6 +843,7 @@
       this._saving = true;
       this.render();
       const isEditing = this._tab === "edit";
+      const externalEdit = this._externalEdit;
       const targetGameId = this._createTargetGameId || this._gameId;
       try {
         if (isEditing) {
@@ -802,12 +852,7 @@
             title,
             content,
           });
-          document.dispatchEvent(new CustomEvent("chapters-changed", {
-            detail: { gameId: targetGameId },
-          }));
           showToast("Chapter updated", "success");
-          this._saving = false;
-          window.router.back("game-detail");
         } else {
           await window.Chapter.create(targetGameId, {
             chapter_type: this._formType,
@@ -815,15 +860,19 @@
             content,
             layout: "text",
           });
-          document.dispatchEvent(new CustomEvent("chapters-changed", {
-            detail: { gameId: targetGameId },
-          }));
           showToast("Chapter added to your guide", "success");
-          this._formTitle = "";
-          this._formContent = "";
-          this._formType = "";
-          this._saving = false;
+        }
+        document.dispatchEvent(new CustomEvent("chapters-changed", {
+          detail: { gameId: targetGameId },
+        }));
+        this._saving = false;
+        if (externalEdit) {
+          // Came from the scroll widget on another view — return there so
+          // the user lands back where they started.
           window.router.back("game-detail");
+        } else {
+          await this._backToBrowse();
+          this.render();
         }
       } catch (e) {
         this._error = e.message || "Failed to save chapter";
