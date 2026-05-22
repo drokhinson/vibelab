@@ -192,6 +192,15 @@
     return "";
   }
 
+  // True when there's a multi-round score breakdown worth surfacing —
+  // single-round / no-round plays leave round_scores NULL on the backend
+  // and the grid stays hidden. Used by both view and edit modes.
+  function hasRoundGrid(players, key) {
+    const k = key || "round_scores";
+    return Array.isArray(players)
+      && players.some((pl) => Array.isArray(pl[k]) && pl[k].length > 1);
+  }
+
   // ── View mode ─────────────────────────────────────────────────────────────
   function renderView(p) {
     const winners = (p.players || []).filter((pl) => pl.is_winner);
@@ -230,6 +239,22 @@
                 <li>${escape(w.name)}${w.score != null ? ` <span class="opacity-60">· ${w.score}</span>` : ""}</li>
               `).join("")}
             </ul>
+          </section>` : ""}
+
+        ${hasRoundGrid(p.players) ? `
+          <section class="play-detail__section play-detail__section--rounds">
+            <h3 class="play-detail__section-title">
+              <i data-lucide="layers" class="w-4 h-4"></i> Rounds
+            </h3>
+            ${window.renderRoundGrid(
+              (p.players || []).map((pl) => ({
+                name: pl.name,
+                is_winner: !!pl.is_winner,
+                roundScores: Array.isArray(pl.round_scores) ? pl.round_scores : [],
+              })),
+              "PlayDetailPopup",
+              { editable: false, playMode: p.play_mode || "competitive" }
+            )}
           </section>` : ""}
 
         <section class="play-detail__section">
@@ -316,6 +341,10 @@
         is_winner: !!pl.is_winner,
         score: pl.score != null ? String(pl.score) : "",
         user_id: pl.user_id || null,
+        // Mutable draft copy of the persisted breakdown. Empty array when
+        // the play had ≤1 rounds (column is NULL on the backend) so the
+        // grid handlers can push into it directly when the author opts in.
+        roundScores: Array.isArray(pl.round_scores) ? pl.round_scores.slice() : [],
       })),
       expansion_ids: (p.expansions || []).map((e) => e.expansion_game_id),
       play_mode: p.play_mode,
@@ -362,6 +391,18 @@
 
         ${renderGameBubble(p, { editing: true })}
 
+        ${hasRoundGrid(d.players, "roundScores") ? `
+          <section class="play-detail__section play-detail__section--rounds">
+            <h3 class="play-detail__section-title">
+              <i data-lucide="layers" class="w-4 h-4"></i> Rounds
+            </h3>
+            ${window.renderRoundGrid(d.players, "PlayDetailPopup", {
+              editable: true,
+              playMode: p.play_mode || "competitive",
+            })}
+          </section>
+        ` : ""}
+
         <section class="play-detail__section">
           <h3 class="play-detail__section-title">
             <i data-lucide="users" class="w-4 h-4"></i> Players
@@ -370,10 +411,12 @@
             ${d.players.map((pl, i) => `
               <li class="play-detail__edit-player">
                 <span class="play-detail__edit-player-name">${escape(pl.name)}</span>
-                <input type="number" class="input input-bordered input-sm play-detail__edit-score"
-                       placeholder="Score"
-                       value="${escapeAttr(pl.score)}"
-                       oninput="window.PlayDetailPopup._setPlayerScore(${i}, this.value)" />
+                ${hasRoundGrid(d.players, "roundScores")
+                  ? `<span class="play-detail__edit-score-readout">${escape(sumRounds(pl.roundScores))}</span>`
+                  : `<input type="number" class="input input-bordered input-sm play-detail__edit-score"
+                            placeholder="Score"
+                            value="${escapeAttr(pl.score)}"
+                            oninput="window.PlayDetailPopup._setPlayerScore(${i}, this.value)" />`}
                 <label class="play-detail__edit-winner">
                   <input type="checkbox" ${pl.is_winner ? "checked" : ""}
                          onchange="window.PlayDetailPopup._setPlayerWinner(${i}, this.checked)" />
@@ -397,6 +440,12 @@
             <button class="btn btn-primary btn-sm" type="button"
                     onclick="window.PlayDetailPopup._addPlayer()">Add</button>
           </div>
+          ${hasRoundGrid(d.players, "roundScores") ? "" : `
+            <button class="btn btn-ghost btn-xs play-detail__init-rounds" type="button"
+                    onclick="window.PlayDetailPopup._initRounds()">
+              <i data-lucide="layers" class="w-3.5 h-3.5"></i> Track per-round scores
+            </button>
+          `}
         </section>
 
         <section class="play-detail__section">
@@ -465,6 +514,85 @@
     state.draft.players.splice(i, 1);
     render();
   }
+
+  // ── Round-grid handlers (mirror play-flow-view's signatures so the
+  // shared round-score-grid widget can target either host). ────────────────
+  function setRoundScore(i, r, value) {
+    if (!state.draft) return;
+    const player = state.draft.players[i];
+    if (!player) return;
+    if (!Array.isArray(player.roundScores)) player.roundScores = [];
+    player.roundScores[r] = value === "" ? null : Number(value);
+    player.score = String(sumRounds(player.roundScores));
+    autoSelectWinners();
+    render();
+  }
+  function addRound() {
+    if (!state.draft) return;
+    for (const p of state.draft.players) {
+      if (!Array.isArray(p.roundScores)) p.roundScores = [];
+      p.roundScores.push(null);
+    }
+    render();
+  }
+  function removeRoundAt(r) {
+    if (!state.draft) return;
+    for (const p of state.draft.players) {
+      if (Array.isArray(p.roundScores) && r >= 0 && r < p.roundScores.length) {
+        p.roundScores.splice(r, 1);
+      }
+      p.score = String(sumRounds(p.roundScores));
+    }
+    // When the grid empties out (or drops to a single round), clear the
+    // arrays entirely so the save path lands round_scores=NULL again and
+    // the "Track per-round scores" affordance re-appears.
+    if (!hasRoundGrid(state.draft.players, "roundScores")) {
+      for (const p of state.draft.players) p.roundScores = [];
+    }
+    render();
+  }
+  function toggleWinner(i) {
+    if (!state.draft) return;
+    const player = state.draft.players[i];
+    if (!player) return;
+    player.is_winner = !player.is_winner;
+    render();
+  }
+  function initRounds() {
+    if (!state.draft) return;
+    // Seed two rounds so the grid trips the >1 gate immediately. Single
+    // rounds would render the grid here but stay unpersisted on save —
+    // confusing — so we skip straight to 2.
+    for (const p of state.draft.players) {
+      const existing = Array.isArray(p.roundScores) ? p.roundScores.slice() : [];
+      // Carry the existing single-score forward as round 1 so the author
+      // doesn't lose data when opting in.
+      const initial = existing.length === 1
+        ? existing[0]
+        : (p.score === "" || p.score == null ? null : Number(p.score));
+      p.roundScores = [initial, null];
+      p.score = String(sumRounds(p.roundScores));
+    }
+    render();
+  }
+
+  // Auto-pick winners as the player with the highest round-sum. Mirrors
+  // play-flow-view's competitive-mode behavior; team / co-op semantics
+  // aren't expressible from the popup so we keep it simple. Authors can
+  // still toggle winners manually via the trophy / Won checkbox.
+  function autoSelectWinners() {
+    if (!state.draft) return;
+    const totals = state.draft.players.map((p) => sumRounds(p.roundScores));
+    if (totals.every((t) => t === 0)) return;
+    const max = Math.max(...totals);
+    state.draft.players.forEach((p, i) => { p.is_winner = totals[i] === max; });
+  }
+
+  function sumRounds(rs) {
+    if (!Array.isArray(rs)) return 0;
+    return rs.reduce((a, b) => a + (Number(b) || 0), 0);
+  }
+
   function addPlayer() {
     const input = document.getElementById("play-popup-add-name");
     const name = (input && input.value || "").trim();
@@ -476,11 +604,20 @@
       (p) => (p.name || "").toLowerCase() === name.toLowerCase()
     );
     if (!dupe) {
+      // Match the existing rounds shape so the new row aligns with the
+      // grid (nulls fill the columns that other players already have).
+      const existingRounds = Math.max(
+        0,
+        ...state.draft.players.map((p) => (p.roundScores || []).length)
+      );
       state.draft.players.push({
         name,
         is_winner: false,
         score: "",
         user_id: buddy ? buddy.other_user_id : null,
+        roundScores: existingRounds > 0
+          ? Array.from({ length: existingRounds }, () => null)
+          : [],
       });
     }
     if (input) input.value = "";
@@ -556,18 +693,35 @@
       }
     }
 
+    // Persist the per-round breakdown only when the grid was actually
+    // populated with more than one round — single / no-round plays
+    // round-trip as round_scores=NULL so the simple-score path stays
+    // clean. When the grid IS active, each player's final `score` is
+    // derived from the sum of their rounds, ignoring any stale value
+    // left over from before the author opted into rounds.
+    const gridActive = hasRoundGrid(state.draft.players, "roundScores");
     const payload = {
       played_at: state.draft.played_at,
       notes: state.draft.notes || null,
       photo_url: photoUrl,
       expansion_ids: state.draft.expansion_ids,
       play_mode: state.draft.play_mode || null,
-      players: state.draft.players.map((p) => ({
-        name: p.name,
-        is_winner: !!p.is_winner,
-        score: p.score === "" || p.score == null ? null : Number(p.score),
-        user_id: p.user_id || null,
-      })),
+      players: state.draft.players.map((p) => {
+        const rs = Array.isArray(p.roundScores) ? p.roundScores : [];
+        const round_scores = gridActive && rs.length > 1
+          ? rs.map((v) => (v === "" || v == null ? null : Number(v)))
+          : null;
+        const score = gridActive
+          ? sumRounds(rs)
+          : (p.score === "" || p.score == null ? null : Number(p.score));
+        return {
+          name: p.name,
+          is_winner: !!p.is_winner,
+          score,
+          user_id: p.user_id || null,
+          round_scores,
+        };
+      }),
     };
     try {
       state.play = await window.Play.update(state.play.id, payload);
@@ -620,6 +774,13 @@
     _setPlayerScore: setPlayerScore,
     _removePlayer: removePlayer,
     _addPlayer: addPlayer,
+    // Round-grid handlers (signatures match play-flow-view so the
+    // shared round-score-grid widget can target either host).
+    _setRoundScore: setRoundScore,
+    _addRound: addRound,
+    _removeRoundAt: removeRoundAt,
+    _toggleWinner: toggleWinner,
+    _initRounds: initRounds,
     _onPhotoSelect: onPhotoSelect,
     _deletePlay: deletePlay,
     _saveEdit: saveEdit,

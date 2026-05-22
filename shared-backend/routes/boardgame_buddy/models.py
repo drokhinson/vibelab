@@ -215,6 +215,11 @@ class PlayerEntry(BaseModel):
     # Backend uses it to populate play_players.player_user_id (migration 009)
     # so the new feed RPC can resolve the winner's display name.
     user_id: Optional[str] = None
+    # Per-round score breakdown (migration 028). Only sent when more than
+    # one round was tracked — the FE drops it for ≤1-round plays so the
+    # column stays NULL for the simple-score path. `score` above is still
+    # authoritative for the final total.
+    round_scores: Optional[list[Optional[int]]] = None
 
 
 class PlayExpansionRef(BaseModel):
@@ -259,6 +264,10 @@ class PlayPlayerResponse(BaseModel):
     name: str
     is_winner: bool
     score: Optional[int] = None
+    # Per-round score breakdown (migration 028). NULL for legacy plays
+    # and for any play with ≤1 rounds — the FE only persists the array
+    # when there were multiple rounds.
+    round_scores: Optional[list[Optional[int]]] = None
 
 
 class PlayResponse(BaseModel):

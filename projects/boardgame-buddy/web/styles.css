@@ -6350,6 +6350,52 @@ main[data-view="session-viewer"].hidden {
   outline-color: var(--polaroid-accent);
 }
 
+/* Scoring table inside the cream popup — recolor the DaisyUI tokens to
+   the polaroid palette so the grid reads the same as in the play-flow
+   cream card. Mirrors the .cascade-card--scoring overrides above. */
+.play-detail-popup__card .scoring-table th,
+.play-detail-popup__card .scoring-table td {
+  border-bottom-color: var(--polaroid-line);
+  color: var(--polaroid-ink);
+}
+.play-detail-popup__card .scoring-cell {
+  background: rgba(255, 251, 241, 0.6);
+  border-color: var(--polaroid-line);
+  color: var(--polaroid-ink);
+  font-family: var(--font-score);
+}
+.play-detail-popup__card .scoring-cell:focus { border-color: var(--polaroid-accent); }
+.play-detail-popup__card .scoring-total-row { background: rgba(218, 201, 164, 0.18); }
+.play-detail-popup__card .scoring-total {
+  font-family: var(--font-score);
+  color: var(--polaroid-accent);
+}
+.play-detail-popup__card .scoring-total-cell--winner { background: rgba(201, 146, 42, 0.18); }
+.play-detail-popup__card .scoring-winner-btn { color: rgba(29, 24, 18, 0.4); }
+.play-detail-popup__card .scoring-winner-btn:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+.play-detail-popup__card .scoring-winner-btn.is-winner { color: var(--polaroid-accent); }
+.play-detail-popup__card .scoring-round-remove { color: rgba(29, 24, 18, 0.45); }
+.play-detail-popup__card .scoring-round-remove:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+
+/* Read-only score readout shown next to a player row when the rounds
+   grid is active (score = sum of rounds, no manual override). */
+.play-detail__edit-score-readout {
+  width: 4.5rem;
+  text-align: right;
+  font-family: var(--font-score, var(--font-display));
+  font-weight: 700;
+  color: var(--polaroid-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Track per-round scores" opt-in button — sits below the player list
+   in edit mode when the grid is collapsed. Quiet ghost styling so it
+   reads as an affordance, not a primary action. */
+.play-detail__init-rounds {
+  margin-top: 0.5rem;
+  color: var(--polaroid-ink-soft);
+}
+
 /* "A game of <Name>" title — name printed in the polaroid accent (same
    orange the feed caption uses for winners) so the bubble immediately
    signals which game this play belongs to. */

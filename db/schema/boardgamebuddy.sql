@@ -186,6 +186,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   is_winner BOOLEAN DEFAULT false,
   -- Optional numeric score per player (migration 005). NULL = legacy plays.
   score INTEGER,
+  -- Per-round score breakdown (migration 028). NULL when no rounds were
+  -- tracked (<= 1 round). When populated, `score` is the sum of this
+  -- array (the popup edit form keeps the two in step on save).
+  round_scores JSONB,
   CONSTRAINT bgb_play_players_identity_chk
     CHECK (player_user_id IS NOT NULL OR player_display_name IS NOT NULL)
 );

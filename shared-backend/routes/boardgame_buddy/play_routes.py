@@ -86,7 +86,7 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
 
     pps = (
         sb.table("boardgamebuddy_play_players")
-        .select("play_id, player_user_id, player_display_name, is_winner, score")
+        .select("play_id, player_user_id, player_display_name, is_winner, score, round_scores")
         .in_("play_id", play_ids)
         .execute()
     )
@@ -116,6 +116,7 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
                 name=name,
                 is_winner=row.get("is_winner", False),
                 score=row.get("score"),
+                round_scores=row.get("round_scores"),
             )
         )
     return players_by_play
@@ -176,11 +177,13 @@ def _write_play_players(sb, play_id: str, user_id: str, players: list) -> list[P
         # Keep populating the legacy buddies roster for the current owner so
         # the autocomplete picker in admin tools still has something to show.
         _upsert_buddy(sb, user_id, p.name)
+        round_scores = getattr(p, "round_scores", None)
         row: dict = {
             "play_id": play_id,
             "is_winner": p.is_winner,
             "score": p.score,
             "player_display_name": p.name,
+            "round_scores": round_scores,
         }
         player_uid = getattr(p, "user_id", None)
         if player_uid:
@@ -192,6 +195,7 @@ def _write_play_players(sb, play_id: str, user_id: str, players: list) -> list[P
             name=p.name,
             is_winner=p.is_winner,
             score=p.score,
+            round_scores=round_scores,
         ))
     return out
 
