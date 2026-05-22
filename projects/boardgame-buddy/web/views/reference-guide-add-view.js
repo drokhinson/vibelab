@@ -485,9 +485,9 @@
                        onclick="window.referenceGuideAddView._fmt('ul')">
                  <i data-lucide="list" class="w-4 h-4"></i>
                </button>
-               <button type="button" class="chapter-edit__tbtn" title="Inline code"
-                       onclick="window.referenceGuideAddView._fmt('code')">
-                 <i data-lucide="code" class="w-4 h-4"></i>
+               <button type="button" class="chapter-edit__tbtn" title="Link"
+                       onclick="window.referenceGuideAddView._fmt('link')">
+                 <i data-lucide="link" class="w-4 h-4"></i>
                </button>
                <button type="button" class="chapter-edit__tbtn" data-pop-trigger title="Insert table"
                        onclick="event.stopPropagation();window.referenceGuideAddView._togglePop('table')">
@@ -652,7 +652,7 @@
         case "i":    this._applyWrap("*", "*"); break;
         case "h":    this._applyLinePrefix("## "); break;
         case "ul":   this._applyLinePrefix("- "); break;
-        case "code": this._applyWrap("`", "`"); break;
+        case "link": this._applyWrap("[", "](url)"); break;
       }
     }
 
