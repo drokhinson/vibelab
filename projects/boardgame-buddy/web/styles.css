@@ -633,15 +633,16 @@ body {
    any chapter screen so the user can never forget which game the
    chapter belongs to. */
 .chapter-edit__gamechip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin: 0.1rem 0 0.55rem;
+  margin: 0.1rem auto 0.55rem;
+  width: fit-content;
+  max-width: 100%;
   padding: 6px 12px 6px 6px;
   background: var(--polaroid-bg, #FFFBF1);
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
-  max-width: 100%;
 }
 .chapter-edit__gamechip-cv {
   width: 36px;
@@ -1066,6 +1067,81 @@ body {
 .chapter-add__fab:hover { filter: brightness(1.06); }
 .chapter-add__fab:active { transform: scale(0.97); }
 .chapter-add__fab [data-lucide] { color: #3a2a08; }
+
+/* Mirror back FAB on the left side of the browse screen. Secondary
+   visual treatment (dark cream-on-dark) so the gold "+ New chapter"
+   stays the primary action. Label states the destination explicitly
+   ("Back to game details", etc.). */
+.chapter-add__fab-back {
+  position: fixed;
+  left: 18px;
+  bottom: calc(var(--bgb-nav-height, 64px) + 18px);
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 11px 16px;
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  background: oklch(var(--b2));
+  color: oklch(var(--bc));
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.86rem;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  transition: transform 120ms ease, background 140ms ease, border-color 140ms ease;
+  max-width: calc(100% - 200px); /* keep clear of the right FAB at narrow widths */
+}
+.chapter-add__fab-back:hover {
+  background: oklch(var(--b3));
+  border-color: var(--accent);
+}
+.chapter-add__fab-back:active { transform: scale(0.97); }
+.chapter-add__fab-back [data-lucide] { color: var(--accent); }
+.chapter-add__fab-back span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Spacer at the end of the browse scroll body so the last chapter row
+   isn't hidden behind the floating FABs. ~140px = FAB height (~52px) +
+   bottom anchor (~82px from viewport bottom) + a few px breathing room. */
+.chapter-add__fab-spacer { height: 140px; }
+
+/* Labeled back chip in the create / edit topbar. Replaces the bare arrow
+   button so the user knows where Cancel will land them. */
+.chapter-add__topbar-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 7px 12px;
+  background: transparent;
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  color: oklch(var(--bc));
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease;
+  max-width: 60%;
+}
+.chapter-add__topbar-back:hover {
+  background: oklch(var(--b2));
+  border-color: var(--accent);
+}
+.chapter-add__topbar-back [data-lucide] { color: var(--accent); }
+.chapter-add__topbar-back span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Browse topbar has no back arrow (the FAB takes that role) — centre
+   the title so it doesn't drift to one side. */
+.chapter-add__topbar--minimal { justify-content: center; }
 
 /* ── Admin reports ──────────────────────────────────────────────────────── */
 .admin-reports__header {
