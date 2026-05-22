@@ -16,7 +16,7 @@
   function escapeAttr(s) { return escape(s); }
 
   class ReferenceGuideScroll {
-    constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = false } = {}) {
+    constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = true } = {}) {
       this._baseGameId = baseGameId || (gameIds && gameIds[0]) || null;
       this._gameIds = (gameIds && gameIds.length) ? gameIds.slice() : (this._baseGameId ? [this._baseGameId] : []);
       this._expansionMeta = expansionMeta || {};
