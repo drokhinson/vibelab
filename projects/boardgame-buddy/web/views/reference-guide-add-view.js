@@ -289,7 +289,7 @@
       const thumb = meta.thumb || this._gameThumb;
       const sub = this._tab === "edit"
         ? "Editing chapter for this game"
-        : (this._tab === "create" ? "New chapter for this game" : "Chapters for this game");
+        : (this._tab === "create" ? "New chapter for this game" : "Browse all chapters");
       const cover = thumb
         ? `<div class="chapter-edit__gamechip-cv"><img src="${escapeAttr(thumb)}" alt="" onerror="this.parentNode.classList.add('chapter-edit__gamechip-cv--blank')"></div>`
         : `<div class="chapter-edit__gamechip-cv chapter-edit__gamechip-cv--blank"></div>`;
