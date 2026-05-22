@@ -1117,39 +1117,6 @@ body {
    bottom anchor (~82px from viewport bottom) + a few px breathing room. */
 .chapter-add__fab-spacer { height: 140px; }
 
-/* Labeled back chip in the create / edit topbar. Replaces the bare arrow
-   button so the user knows where Cancel will land them. */
-.chapter-add__topbar-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 7px 12px;
-  background: transparent;
-  border: 1px solid oklch(var(--b3));
-  border-radius: 999px;
-  color: oklch(var(--bc));
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.78rem;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 120ms ease, border-color 120ms ease;
-  max-width: 60%;
-}
-.chapter-add__topbar-back:hover {
-  background: oklch(var(--b2));
-  border-color: var(--accent);
-}
-.chapter-add__topbar-back [data-lucide] { color: var(--accent); }
-.chapter-add__topbar-back span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Browse topbar has no back arrow (the FAB takes that role) — centre
-   the title so it doesn't drift to one side. */
-.chapter-add__topbar--minimal { justify-content: center; }
-
 /* ── Admin reports ──────────────────────────────────────────────────────── */
 .admin-reports__header {
   display: flex;
