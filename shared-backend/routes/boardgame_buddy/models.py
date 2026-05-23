@@ -57,6 +57,10 @@ class ProfileResponse(BaseModel):
     username: str
     avatar: Optional[Avatar] = None
     is_admin: bool = False
+    # TRUE for brand-new accounts that have not yet completed the
+    # "Create your profile" modal (migration 030). Cleared by the first
+    # successful POST /profile.
+    needs_setup: bool = False
     created_at: datetime
 
 

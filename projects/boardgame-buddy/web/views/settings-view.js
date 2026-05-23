@@ -8,10 +8,6 @@
   class SettingsView extends window.View {
     constructor() {
       super("settings");
-      this._editingName = false;
-      this._savingName = false;
-      this._nameError = null;
-
       this._adminFormOpen = false;
       this._adminPromoting = false;
       this._adminError = null;
@@ -126,21 +122,6 @@
         isMe: true,
         extraClass: "set-card__acct-avatar",
       });
-      const body = this._editingName
-        ? `
-          <form class="set-card__acct-edit-form" onsubmit="window.settingsView._saveName(event)">
-            <input id="settings-name-input"
-                   class="input input-bordered input-sm"
-                   value="${escapeAttr(me.display_name)}"
-                   maxlength="40" autocomplete="off" />
-            <button class="btn btn-primary btn-sm" ${this._savingName ? "disabled" : ""}>
-              ${this._savingName ? "…" : "Save"}
-            </button>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="window.settingsView._cancelEditName()">Cancel</button>
-            ${this._nameError ? `<div class="text-error text-xs basis-full">${escape(this._nameError)}</div>` : ""}
-          </form>
-        `
-        : "";
       return `
         <div class="set-card">
           <div class="set-card__acct">
@@ -153,40 +134,48 @@
                   ${escape(me.username)}
                 </div>` : ""}
             </div>
-            <button class="set-card__acct-edit" title="Edit display name"
-                    aria-label="Edit display name"
-                    onclick="window.settingsView._startEditName()">
+            <button class="set-card__acct-edit" title="Edit profile"
+                    aria-label="Edit profile"
+                    onclick="window.settingsView._openEditProfile()">
               <i data-lucide="pencil" class="w-4 h-4"></i>
             </button>
           </div>
-          ${body}
           <button class="set-card__avatar-btn" type="button"
-                  onclick="window.settingsView._openAvatarCustomizer()">
+                  onclick="window.settingsView._openEditProfile()">
             <i data-lucide="palette" class="w-4 h-4"></i>
-            Customize avatar
+            Edit profile
           </button>
           ${me.is_admin ? "" : this._renderBecomeAdminBlock()}
         </div>
       `;
     }
 
-    async _openAvatarCustomizer() {
+    async _openEditProfile() {
       const me = window.store.get("user");
       if (!me) return;
       const picked = await window.PolaroidPopup.avatarCustomizer({
+        headerTitle: "Edit your profile",
+        includeNameField: true,
+        saveLabel: "Save",
         current: me.avatar || null,
         displayName: me.display_name,
       });
       if (!picked) return;
       try {
-        const updated = await window.api.post("/profile", { avatar: picked });
-        // Carry the new avatar onto the in-memory user so the rest of the
-        // app re-renders against it. Store.set() fires listeners → render().
+        const body = {
+          avatar: { icon: picked.icon, iconColor: picked.iconColor, bgColor: picked.bgColor },
+        };
+        if (picked.displayName && picked.displayName !== me.display_name) {
+          body.display_name = picked.displayName;
+        }
+        const updated = await window.api.post("/profile", body);
+        // Carry the new fields onto the in-memory user so the rest of the
+        // app re-renders against them. Store.set() fires listeners → render().
         const next = new window.User({ ...me, ...updated });
         window.store.set("user", next);
       } catch (e) {
         window.PolaroidPopup.alert({
-          title: "Couldn't save avatar",
+          title: "Couldn't save profile",
           body: e && e.message ? String(e.message) : "Please try again.",
         });
       }
@@ -351,31 +340,6 @@
           </p>
         </div>
       `;
-    }
-
-    // ── Display-name edit ─────────────────────────────────────────────────────
-    _startEditName() {
-      this._editingName = true; this._nameError = null;
-      this.render();
-      const el = document.getElementById("settings-name-input");
-      if (el) { el.focus(); el.select(); }
-    }
-    _cancelEditName() { this._editingName = false; this._nameError = null; this.render(); }
-    async _saveName(event) {
-      event.preventDefault();
-      const el = document.getElementById("settings-name-input");
-      const newName = (el && el.value || "").trim();
-      if (!newName) { this._nameError = "Display name can't be empty."; this.render(); return; }
-      this._savingName = true; this._nameError = null; this.render();
-      try {
-        const updated = await window.api.post("/profile", { display_name: newName });
-        window.store.set("user", new window.User(updated));
-        this._editingName = false;
-      } catch (e) {
-        this._nameError = e.message || "Failed to save";
-      } finally {
-        this._savingName = false; this.render();
-      }
     }
 
     // ── Become admin ──────────────────────────────────────────────────────────
@@ -565,7 +529,6 @@
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     }[c]));
   }
-  function escapeAttr(s) { return escape(s); }
   function formatRelative(iso) {
     if (!iso) return "";
     const then = new Date(iso).getTime();

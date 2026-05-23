@@ -59,6 +59,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- NULL = BGB default (brown badge + gold initials), rendered client-side.
   avatar JSONB,
   is_admin BOOLEAN NOT NULL DEFAULT false,
+  -- First-time onboarding gate (migration 030). TRUE for brand-new
+  -- accounts; cleared on the first successful POST /profile so the
+  -- "Create your profile" modal only fires until they save.
+  needs_setup BOOLEAN NOT NULL DEFAULT true,
   -- Linked BoardGameGeek username for collection/plays sync (migration 062).
   -- Unique only when non-null so multiple unlinked profiles can coexist.
   bgg_username TEXT,

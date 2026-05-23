@@ -73,6 +73,9 @@ async def update_profile(
         patch["avatar"] = body.avatar.model_dump() if body.avatar is not None else None
     if not patch:
         raise HTTPException(status_code=400, detail="Nothing to update")
+    # Any successful save retires the first-time onboarding modal — the
+    # user has demonstrably interacted with their profile.
+    patch["needs_setup"] = False
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_profiles")

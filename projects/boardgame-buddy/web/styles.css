@@ -7353,8 +7353,47 @@ main[data-view="session-viewer"].hidden {
    AVATAR CUSTOMIZER — modal embedded in the polaroid popup chrome.
    Markup built by PolaroidPopup.avatarCustomizer() in ui/polaroid-popup.js.
    ───────────────────────────────────────────────────────────────────────────── */
-.avatar-cust { width: min(340px, 92vw); }
+.avatar-cust {
+  width: min(340px, 92vw);
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+}
 .avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
+
+.avatar-cust__name {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 4px;
+  text-align: left;
+}
+.avatar-cust__name-label {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted);
+}
+.avatar-cust__name-input {
+  width: 100%;
+  background: #fff;
+  border: 1px solid rgba(42, 32, 20, 0.18);
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 9px 12px;
+  border-radius: 10px;
+}
+.avatar-cust__name-input:focus {
+  outline: none;
+  border-color: var(--accent, #C9922A);
+  box-shadow: 0 0 0 2px rgba(201, 146, 42, 0.25);
+}
+.avatar-cust__name-error {
+  margin: 0;
+}
 
 .avatar-cust__carousel {
   display: flex;

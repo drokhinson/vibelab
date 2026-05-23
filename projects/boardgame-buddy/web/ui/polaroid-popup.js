@@ -206,17 +206,31 @@
   /**
    * Avatar customizer modal. Reuses the polaroid card chrome (cream bg,
    * close button, backdrop blur) and the confirm-style footer for the
-   * Save / Cancel buttons. Resolves with the chosen avatar config when
-   * the user taps Save, or null on Cancel / backdrop / close.
+   * Save / Cancel buttons. Resolves with the chosen avatar config (plus
+   * the typed displayName when includeNameField is on) when the user
+   * taps Save, or null on Cancel / backdrop / close.
    *
    * @param {Object} opts
    * @param {{icon:string,iconColor:string,bgColor:string}|null} opts.current
    *   The user's existing badge — used as the starting point. null means
    *   "still on BGB default" and we seed with BgbBadge.DEFAULT.
-   * @param {string} opts.displayName  For initials + name slider preview.
-   * @returns {Promise<{icon:string,iconColor:string,bgColor:string}|null>}
+   * @param {string} opts.displayName  Starting display name. Drives the
+   *   initials preview and seeds the name input when includeNameField=true.
+   * @param {string=} opts.headerTitle  Modal title (default "Customize avatar").
+   * @param {boolean=} opts.includeNameField  Render a display-name input
+   *   above the carousel. Typing into it re-paints the "Initials" slot
+   *   live. The resolved object includes a `displayName` field.
+   * @param {string=} opts.saveLabel  Footer save button label
+   *   (default "Save avatar").
+   * @returns {Promise<{icon:string,iconColor:string,bgColor:string,displayName?:string}|null>}
    */
-  function avatarCustomizer({ current, displayName }) {
+  function avatarCustomizer({
+    current,
+    displayName,
+    headerTitle = "Customize avatar",
+    includeNameField = false,
+    saveLabel = "Save avatar",
+  }) {
     return new Promise((resolve) => {
       dismiss();
       const start = current || window.BgbBadge.DEFAULT;
@@ -230,18 +244,32 @@
         iconColor: start.iconColor,
         bgColor: start.bgColor,
         target: "iconColor", // which color the swatch grid is editing
+        displayName: String(displayName || ""),
+        nameError: null,
       };
+
+      const nameFieldHtml = includeNameField ? `
+          <div class="avatar-cust__name">
+            <label class="avatar-cust__name-label" for="avatar-cust-name">Display name</label>
+            <input id="avatar-cust-name" type="text" class="input input-bordered input-sm avatar-cust__name-input"
+                   value="${escapeAttr(state.displayName)}" maxlength="40" autocomplete="off"
+                   placeholder="Your name" />
+            <div class="avatar-cust__name-error text-error text-xs" hidden></div>
+          </div>
+        ` : "";
 
       const root = document.createElement("div");
       root.id = BACKDROP_ID;
       root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--confirm";
       root.innerHTML = `
         <div class="polaroid-popup__card polaroid-popup__card--confirm avatar-cust"
-             role="dialog" aria-modal="true" aria-label="Customize your avatar">
+             role="dialog" aria-modal="true" aria-label="${escapeAttr(headerTitle)}">
           <button class="polaroid-popup__close" aria-label="Close">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
-          <div class="polaroid-popup__title">Customize avatar</div>
+          <div class="polaroid-popup__title">${escape(headerTitle)}</div>
+
+          ${nameFieldHtml}
 
           <div class="avatar-cust__carousel">
             <button class="avatar-cust__arrow" data-step="-1" aria-label="Previous">
@@ -271,7 +299,7 @@
 
           <div class="polaroid-popup__actions">
             <button class="btn btn-ghost btn-sm polaroid-popup__cancel">Cancel</button>
-            <button class="btn btn-primary btn-sm polaroid-popup__confirm">Save avatar</button>
+            <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escape(saveLabel)}</button>
           </div>
         </div>
       `;
@@ -285,6 +313,21 @@
       const noteEl = root.querySelector(".avatar-cust__note");
       const tgIcon = root.querySelector(".avatar-cust__tg--icon");
       const tgBg = root.querySelector(".avatar-cust__tg--bg");
+      const nameInput = root.querySelector(".avatar-cust__name-input");
+      const nameErrorEl = root.querySelector(".avatar-cust__name-error");
+
+      // Initials slot listens to the name input — typing re-paints it live.
+      if (nameInput) {
+        nameInput.addEventListener("input", () => {
+          state.displayName = nameInput.value;
+          if (state.nameError) {
+            state.nameError = null;
+            if (nameErrorEl) { nameErrorEl.hidden = true; nameErrorEl.textContent = ""; }
+          }
+          const initialsSlot = track.querySelector(".avatar-cust__ini");
+          if (initialsSlot) initialsSlot.textContent = initialsForCustomizer(state.displayName);
+        });
+      }
 
       // Build the reel (one slot per icon option) + name track + dot row.
       ITEMS.forEach((it, i) => {
@@ -292,7 +335,7 @@
         slot.className = "avatar-cust__slot";
         slot.dataset.i = String(i);
         slot.innerHTML = it.key === "initials"
-          ? `<span class="avatar-cust__ini">${escape(initialsForCustomizer(displayName))}</span>`
+          ? `<span class="avatar-cust__ini">${escape(initialsForCustomizer(state.displayName))}</span>`
           : `<svg viewBox="0 0 24 24">${window.BgbBadge.ICONS[it.key]}</svg>`;
         slot.addEventListener("click", () => { state.index = i; rerender(); });
         track.appendChild(slot);
@@ -379,14 +422,27 @@
       }
 
       function finish(picked) {
-        dismiss();
         if (picked) {
-          resolve({
+          // Validate the name field when it's part of the modal.
+          const payload = {
             icon: ITEMS[state.index].key,
             iconColor: state.iconColor,
             bgColor: state.bgColor,
-          });
+          };
+          if (includeNameField) {
+            const trimmed = (state.displayName || "").trim();
+            if (!trimmed) {
+              state.nameError = "Display name can't be empty.";
+              if (nameErrorEl) { nameErrorEl.hidden = false; nameErrorEl.textContent = state.nameError; }
+              if (nameInput) nameInput.focus();
+              return;
+            }
+            payload.displayName = trimmed;
+          }
+          dismiss();
+          resolve(payload);
         } else {
+          dismiss();
           resolve(null);
         }
       }
