@@ -125,9 +125,10 @@
     }
 
     // Build the POST /plays body from this draft. Used both for solo logs and
-    // for the host's finalize call (which has the same shape). When per-round
-    // scoring was used, each player's `score` is the sum of their roundScores;
-    // the round breakdown itself isn't persisted server-side.
+    // for the host's finalize call (which has the same shape). Each player's
+    // `score` is the sum of their roundScores when rounds were tracked;
+    // `round_scores` is sent only when more than one round exists so the
+    // simple-score path (no grid) leaves the column NULL on the backend.
     toPlayCreate() {
       return {
         game_id: this.gameId,
@@ -137,6 +138,7 @@
           is_winner: !!p.is_winner,
           score: rollupScore(p),
           user_id: p.user_id || null,
+          round_scores: persistableRounds(p),
         })),
         notes: this.notes || null,
         photo_url: this.photoUrl || null,
@@ -152,6 +154,15 @@
       return rs.reduce((a, b) => a + (Number(b) || 0), 0);
     }
     return p && p.score != null ? p.score : null;
+  }
+
+  // Only persist the per-round breakdown when there were more than one
+  // round. Single-round / no-round plays stay on the simple-score path
+  // and leave the backend column NULL.
+  function persistableRounds(p) {
+    const rs = p && p.roundScores;
+    if (!Array.isArray(rs) || rs.length <= 1) return null;
+    return rs.map((v) => (v === "" || v == null ? null : Number(v)));
   }
 
   window.PlaySession = PlaySession;

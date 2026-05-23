@@ -466,54 +466,22 @@
         return `<section class="cascade-card"><p class="text-sm opacity-70">Add players on the Gather step.</p></section>`;
       }
       const mode = this._resolvePlayMode();
-      const roundCount = Math.max(0, ...ps.players.map((p) => (p.roundScores || []).length));
-      const labelFor = (p) => p.initials || computeInitials(p.name);
+      // Table markup is delegated to the shared round-grid widget so the
+      // play-detail popup paints the same scoreboard. We still own the
+      // cascade-card wrapper + co-op outcome bar above it, and supply the
+      // live-overlay resolvers so realtime joiner scores still win over
+      // the local cache.
+      const grid = window.renderRoundGrid(ps.players, "playFlowView", {
+        editable: true,
+        playMode: mode,
+        getCellValue: (p, r) => this._cellValue(p, r),
+        getPlayerTotal: (p) => this._playerTotal(p),
+      });
       return `
         <section class="cascade-card cascade-card--scoring">
           <label class="cascade-card__label">Scoring</label>
           ${mode === "coop" ? this._renderCoopOutcome() : ""}
-          <div class="scoring-table-wrap">
-            <table class="scoring-table">
-              <thead>
-                <tr>
-                  <th></th>
-                  ${ps.players.map((p) => `<th class="scoring-head" title="${escapeAttr(p.name)}">${escape(labelFor(p))}</th>`).join("")}
-                </tr>
-              </thead>
-              <tbody>
-                ${Array.from({ length: roundCount }).map((_, r) => `
-                  <tr>
-                    <th class="scoring-round-th">
-                      <span class="scoring-round-label">
-                        <button class="scoring-round-remove" title="Remove round"
-                                onclick="window.playFlowView._removeRoundAt(${r})">
-                          <i data-lucide="x" class="w-3 h-3"></i>
-                        </button>
-                        R${r + 1}
-                      </span>
-                    </th>
-                    ${ps.players.map((p, i) => `
-                      <td>
-                        <input type="number" inputmode="numeric"
-                               class="scoring-cell"
-                               value="${escapeAttr(this._cellValue(p, r))}"
-                               oninput="window.playFlowView._setRoundScore(${i}, ${r}, this.value)" />
-                      </td>
-                    `).join("")}
-                  </tr>
-                `).join("")}
-                <tr class="scoring-total-row">
-                  <th>Total</th>
-                  ${ps.players.map((p, i) => this._renderTotalsCell(p, i, mode, this._playerTotal(p))).join("")}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="flex gap-2 mt-1">
-            <button class="btn btn-ghost btn-xs" onclick="window.playFlowView._addRound()">
-              <i data-lucide="plus" class="w-3.5 h-3.5"></i> Round
-            </button>
-          </div>
+          ${grid}
         </section>
       `;
     }
