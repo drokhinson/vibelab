@@ -5367,7 +5367,9 @@ main[data-view="session-viewer"].hidden {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
   list-style: none;
   padding: 4px;
-  z-index: 20;
+  /* Must outrank `.cascade-cta-wrap` (z-index: 35) so the buddy list
+     overlays the sticky Continue-to-Play button when expanded. */
+  z-index: 40;
   max-height: 220px;
   overflow-y: auto;
 }
