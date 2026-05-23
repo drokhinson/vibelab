@@ -3,8 +3,8 @@
 // Identity row → four tappable stat tiles → warm-cream preview cards
 // (Collection / Wishlist / Recent plays / Buddies). Each preview's
 // "See all →" routes to a dedicated full-screen spoke. Settings is
-// reachable via the gear icon in the identity row (or the avatar in
-// the global header). All cards seed from a single /profile/bundle call.
+// reachable via the avatar in the global header. All cards seed from
+// a single /profile/bundle call.
 
 (function () {
   const PREVIEW_COVERS = 4;
@@ -48,6 +48,13 @@
         return;
       }
       const b = this._bundle;
+      if (!b && !this._error) {
+        this.container.innerHTML = `
+          <div class="profile-loading">${window.buddyLoader({ size: 96, label: "Loading profile…" })}</div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
       this.container.innerHTML = `
         ${this._renderIdRow(me)}
         ${this._renderStats(b)}
@@ -77,11 +84,6 @@
             <div class="profile-hub__name font-display">${escape(me.display_name || "")}</div>
             ${me.username ? `<div class="profile-hub__handle">@${escape(me.username)}</div>` : ""}
           </div>
-          <button class="profile-hub__gear" title="Settings"
-                  onclick="window.router.go('settings')"
-                  aria-label="Settings">
-            <i data-lucide="settings" class="w-5 h-5"></i>
-          </button>
         </header>
       `;
     }
