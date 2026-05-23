@@ -3228,53 +3228,80 @@ body {
 }
 .bgg-link-form { display: flex; flex-direction: column; gap: 0.4rem; }
 
-/* BGG sync progress block. Sits inside .bgg-card as the live readout while
-   the import worker drains the pending queue — "Added N collection / M plays"
-   on top, "Importing X of Y new games" below with a progress bar. The
-   indeterminate variant animates a sliding bar for the brief window before
-   we know how many games need to import. */
-.bgg-progress {
+/* BGG sync log. Sits inside .bgg-card as the live readout while the
+   import worker drains the pending queue — each phase appears as its
+   own row with a check / spinner glyph so the user can scan progress
+   like a build log. Unknown-game names stream into the sublist as each
+   /thing call completes. */
+.bgg-log {
   margin-top: 0.6rem;
+  font-size: 0.82rem;
+  color: oklch(var(--bc) / 0.88);
+}
+.bgg-log__steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
+}
+.bgg-log__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  line-height: 1.35;
+}
+.bgg-log__step strong { font-weight: 700; }
+.bgg-log__icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 0.1rem;
+  color: var(--accent, #C9922A);
+}
+.bgg-log__icon--spin { animation: bgg-log-spin 0.9s linear infinite; }
+@keyframes bgg-log-spin { to { transform: rotate(360deg); } }
+.bgg-log__icon--idle {
+  display: block;
+  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  margin: 0.35rem 4px 0;
+  background: oklch(var(--bc) / 0.25);
+}
+.bgg-log__step--active .bgg-log__body { color: oklch(var(--bc) / 0.95); }
+.bgg-log__step--idle   .bgg-log__body { color: oklch(var(--bc) / 0.55); }
+.bgg-log__body { flex: 1; min-width: 0; }
+.bgg-log__sublist {
+  list-style: disc;
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
   font-size: 0.78rem;
+  color: oklch(var(--bc) / 0.78);
 }
-.bgg-progress--done {
-  font-size: 0.75rem;
-  opacity: 0.7;
+.bgg-log__sublist-pending { list-style: none; margin-left: -1.1rem; opacity: 0.65; }
+.bgg-log__sublist-error   { color: oklch(var(--er, 0.66 0.22 25)); }
+.bgg-log__footer {
+  margin-top: 0.55rem;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: oklch(var(--bc) / 0.7);
+  text-align: center;
 }
-.bgg-progress__direct {
-  color: oklch(var(--bc) / 0.85);
-}
-.bgg-progress__direct strong {
-  font-weight: 700;
-}
-.bgg-progress__label {
-  color: oklch(var(--bc) / 0.75);
-}
-.bgg-progress__bar {
-  position: relative;
-  height: 6px;
-  border-radius: 999px;
-  background: oklch(var(--b3));
-  overflow: hidden;
-}
-.bgg-progress__bar-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 999px;
-  transition: width 220ms ease;
-}
-.bgg-progress__bar--indeterminate .bgg-progress__bar-fill {
-  position: absolute;
-  width: 32%;
-  animation: bgg-progress-slide 1.4s ease-in-out infinite;
-}
-@keyframes bgg-progress-slide {
-  0%   { left: -32%; }
-  100% { left: 100%; }
-}
+
+/* Cream-screen variants — Settings sits on the polaroid sheet, so we
+   re-color the glyph and the muted-state body against the cream palette
+   instead of the dark-theme oklch tokens. */
+.bgb-cream-screen .bgg-log { color: var(--polaroid-ink, #1D1812); }
+.bgb-cream-screen .bgg-log__icon { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .bgg-log__icon--idle { background: var(--polaroid-line, #DAC9A4); }
+.bgb-cream-screen .bgg-log__step--idle .bgg-log__body { color: var(--polaroid-muted, #8B7E68); }
+.bgb-cream-screen .bgg-log__sublist { color: var(--polaroid-muted, #8B7E68); }
+.bgb-cream-screen .bgg-log__footer { color: var(--polaroid-muted, #8B7E68); }
 
 /* ── Profile tabs ─────────────────────────────────────────────────────────── */
 .profile-tabs {
@@ -7310,14 +7337,6 @@ main[data-view="session-viewer"].hidden {
 .bgb-cream-screen .settings-bgg-credit__text { color: var(--polaroid-muted, #8B7E68); }
 
 /* BGG sync progress bar reads with proper contrast on the cream surface */
-.bgb-cream-screen .bgg-progress {
-  background: var(--polaroid-bg, #FFFBF1);
-  border: 1px solid var(--polaroid-line, #DAC9A4);
-}
-.bgb-cream-screen .bgg-progress__bar { background: var(--polaroid-line, #DAC9A4); }
-.bgb-cream-screen .bgg-progress__label { color: var(--polaroid-ink, #1D1812); }
-.bgb-cream-screen .bgg-progress__direct { color: var(--polaroid-muted, #8B7E68); }
-
 /* Logout button sits below the cards — keep the destructive red wash but
    bump its border so it reads on cream. */
 .bgb-cream-screen .settings-logout__btn {

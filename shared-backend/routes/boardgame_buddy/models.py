@@ -124,6 +124,12 @@ class BggSyncStatus(BaseModel):
     session_total: int = 0
     session_done: int = 0
     session_errored: int = 0
+    # Display names for games that this sync session has imported (i.e.,
+    # pending rows whose status is now `done`). Ordered by most recently
+    # completed first and capped at 20 so the FE can stream a per-game log
+    # without polling a separate endpoint. Empty until at least one
+    # previously-unknown game has been fetched from BGG.
+    session_game_names: list[str] = []
 
 
 # ── Games ─────────────────────────────────────────────────────────────────────
