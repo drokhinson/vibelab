@@ -22,6 +22,15 @@
     bgColor: "#2a1812",
   });
 
+  // Ghost players (free-text nicknames with no profile) read as a faint
+  // light-grey badge with the same gold initials, signalling "this seat
+  // isn't a linked account yet" at a glance.
+  const GHOST_AVATAR = Object.freeze({
+    icon: "initials",
+    iconColor: "#C9922A",
+    bgColor: "#C9C2B0",
+  });
+
   // 12-swatch palette offered in the customizer. `light` controls the
   // contrast color of the check mark on the active swatch — see CSS.
   const PALETTE = [
@@ -114,8 +123,9 @@
   function render(opts) {
     const size = opts.size || "sm";
     const isGhost = !!opts.isGhost;
-    // Ghost players never have a customized avatar — always default.
-    const av = isGhost ? DEFAULT_AVATAR : (opts.avatar || DEFAULT_AVATAR);
+    // Ghost players never have a customized avatar — always the light
+    // grey baseline so they read as placeholder seats.
+    const av = isGhost ? GHOST_AVATAR : (opts.avatar || DEFAULT_AVATAR);
     const initials = initialsOf(opts.displayName);
     const classes = [
       "user-badge",
