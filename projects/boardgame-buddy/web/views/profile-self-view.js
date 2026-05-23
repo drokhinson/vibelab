@@ -66,7 +66,7 @@
       const initials = new window.User(me).initials();
       return `
         <header class="profile-hub__id">
-          <div class="profile-hub__avatar avatar-bubble">${escape(initials)}</div>
+          <div class="profile-hub__avatar avatar-bubble avatar-bubble--me">${escape(initials)}</div>
           <div class="profile-hub__who">
             <div class="profile-hub__name font-display">${escape(me.display_name || "")}</div>
             ${me.username ? `<div class="profile-hub__handle">@${escape(me.username)}</div>` : ""}
