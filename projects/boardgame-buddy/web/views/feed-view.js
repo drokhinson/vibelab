@@ -215,6 +215,7 @@
       });
       const dateLabel = formatSessionDate(card.played_at);
       const sessionPlayCount = card.plays.length;
+      const isSingle = sessionPlayCount === 1;
       // Annotate each play with the session play count so the polaroid
       // renderer can pick the variant (single vs strip) without re-walking
       // the DOM. The `__`-prefix keeps the field clearly UI-scoped.
@@ -222,7 +223,7 @@
         .map((p) => window.renderPlayCard({ ...p, __sessionPlayCount: sessionPlayCount }))
         .join("");
       return `
-        <section class="play-session">
+        <section class="play-session${isSingle ? " play-session--single" : ""}">
           <header class="play-session__header">
             <span class="play-session__title">${title}</span>
             <span class="play-session__date">${escape(dateLabel)}</span>

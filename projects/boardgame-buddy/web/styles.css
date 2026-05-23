@@ -2675,6 +2675,19 @@ body {
 .no-tilt .play-card--single,
 .no-tilt .play-session__scroll > .play-card--strip { transform: none; }
 
+/* Single-play sessions: the lone polaroid sits flat and centered. The
+   rail's horizontal scroll + scroll-snap don't apply when there's only
+   one card, so we override them to avoid an off-axis anchor. */
+.play-session--single .play-session__scroll {
+  justify-content: center;
+  overflow-x: visible;
+  scroll-snap-type: none;
+}
+.play-session--single .play-session__scroll > .play-card--strip,
+.play-session--single .play-session__scroll > .play-card--single {
+  transform: none;
+}
+
 /* ── Photo frame ──────────────────────────────────────────────────────────
    --photo-aspect is set inline by JS once the natural image dimensions are
    known. Defaults to 1 so the placeholder square renders before decode. */
