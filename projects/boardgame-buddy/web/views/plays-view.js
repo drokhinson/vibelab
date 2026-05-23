@@ -49,6 +49,21 @@
       const activeId = active && active.id;
       const caret = active && active.selectionStart;
 
+      // Cold load — no profile-bundle seed, nothing on screen yet. Show
+      // only the header + bgb logo loader instead of flashing the search
+      // bar and the "No plays logged yet" empty state on top of each
+      // other while the list is still fetching.
+      if (!this._loaded && this._plays.length === 0 && !this._query) {
+        this.container.innerHTML = `
+          ${this._renderHead()}
+          <div class="profile-loading">
+            ${window.buddyLoader({ size: 96, label: "Loading plays…" })}
+          </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
       this.container.innerHTML = `
         ${this._renderHead()}
         ${this._renderSearch()}
