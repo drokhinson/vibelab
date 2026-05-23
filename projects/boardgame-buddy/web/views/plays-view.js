@@ -10,6 +10,10 @@
   class PlaysView extends window.View {
     constructor() {
       super("plays");
+      this._resetState();
+    }
+
+    _resetState() {
       this._plays = [];
       this._total = 0;
       this._page = 1;
@@ -19,10 +23,38 @@
       this._query = "";
       this._searchTimer = null;
       this._statusMap = {};
+      this._targetUserId = null;
+      this._targetProfile = null;
+    }
+
+    _isOther() {
+      const me = window.store.get("user");
+      return !!(this._targetUserId && me && this._targetUserId !== me.id);
     }
 
     async onMount() {
       this.listen("user", () => this.render());
+      await this._initFromParams();
+    }
+
+    async onParamsChange() {
+      await this._initFromParams();
+    }
+
+    async _initFromParams() {
+      // Reset first so prior target's state doesn't paint while the new
+      // fetch is in flight.
+      this._resetState();
+      this._targetUserId = (this.params && this.params.userId) || null;
+      if (this._isOther()) {
+        this._loading = true;
+        this.render();
+        window.User.fetch(this._targetUserId)
+          .then((p) => { this._targetProfile = p; this.render(); })
+          .catch(() => {});
+        await this._load({ reset: true });
+        return;
+      }
       const seed = window.store.get("profileBundle");
       if (seed) {
         this._plays = seed.recent_plays || [];
@@ -84,12 +116,24 @@
     }
 
     _renderHead() {
+      const other = this._isOther();
+      const backJs = other
+        ? `window.router.go('profile-other',{userId:'${escapeAttr(this._targetUserId)}'})`
+        : "window.router.go('profile-self')";
+      const p = this._targetProfile;
+      let titleHtml;
+      if (other && p && p.display_name) {
+        const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm" });
+        titleHtml = `${badge}<span class="spoke-head__title-text">${escape(p.display_name)}'s plays</span>`;
+      } else {
+        titleHtml = `<span class="spoke-head__title-text">Recent plays</span>`;
+      }
       return `
         <header class="spoke-head">
-          <button class="spoke-head__back" onclick="window.router.go('profile-self')" aria-label="Back to profile">
+          <button class="spoke-head__back" onclick="${backJs}" aria-label="Back to profile">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
-          <h2 class="spoke-head__title font-display">Recent plays</h2>
+          <h2 class="spoke-head__title font-display">${titleHtml}</h2>
           <span class="spoke-head__count">${this._total} total</span>
         </header>
       `;
@@ -137,7 +181,7 @@
       const winners = (p.players || []).filter((pl) => pl.is_winner);
       const winnerLabel = winners.map((w) => escape(w.name)).join(", ");
       const playerCount = (p.players || []).length;
-      const youWon = winners.some((w) =>
+      const youWon = !this._isOther() && winners.some((w) =>
         (w.user_id && me && w.user_id === me.id) ||
         (me && (w.name || "") === (me.display_name || ""))
       );
@@ -194,6 +238,7 @@
           page: this._page,
           perPage: PER_PAGE,
           search: this._query || null,
+          userId: this._isOther() ? this._targetUserId : undefined,
         });
         const fresh = (data && data.plays) || [];
         this._total = (data && data.total) || 0;

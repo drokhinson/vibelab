@@ -23,6 +23,10 @@
   class CollectionView extends window.View {
     constructor() {
       super("collection");
+      this._resetState();
+    }
+
+    _resetState() {
       this._mode = MODE_OWNED;
       this._items = { owned: [], played: [] };
       this._total = { owned: 0, played: 0 };
@@ -35,6 +39,13 @@
       this._searchTimer = null;
       this._statusMap = {};
       this._expansionCounts = {};
+      this._targetUserId = null;
+      this._targetProfile = null;
+    }
+
+    _isOther() {
+      const me = window.store.get("user");
+      return !!(this._targetUserId && me && this._targetUserId !== me.id);
     }
 
     async onMount() {
@@ -47,8 +58,36 @@
         else this._statusMap[gameId] = status;
         this.render();
       });
-      // Seed from the bundle the hub just pre-fetched so first paint is
-      // instant on hub → collection tap. Background refresh follows.
+      await this._initFromParams();
+    }
+
+    async onParamsChange() {
+      await this._initFromParams();
+    }
+
+    async _initFromParams() {
+      // The view instance is a singleton across mounts (init.js wires it
+      // once). Reset before reading params so user A's items don't linger
+      // on screen while user B's fetch is in flight.
+      this._resetState();
+      this._targetUserId = (this.params && this.params.userId) || null;
+      if (this._isOther()) {
+        // Fetch the target user's display name for the header. Their
+        // collection grid is loaded by _loadMode below; only the owned
+        // tab is exercised when viewing someone else (no played-not-owned
+        // surface on the public view).
+        this.render();
+        window.User.fetch(this._targetUserId)
+          .then((p) => { this._targetProfile = p; this.render(); })
+          .catch(() => {});
+        this._loading.owned = true;
+        await this._loadMode(MODE_OWNED);
+        // Viewer maps still apply — overlay "you own this" pills on
+        // the other user's tiles.
+        await this._refreshMaps();
+        return;
+      }
+      // Self path — seed from the profile bundle the hub pre-fetched.
       const seed = window.store.get("profileBundle");
       if (seed) {
         this._items.owned = seed.owned_page || [];
@@ -99,14 +138,15 @@
         return;
       }
 
+      const other = this._isOther();
       this.container.innerHTML = `
         ${this._renderHead()}
-        ${this._renderControls()}
-        ${this._renderToggle()}
-        ${this._filtersOpen ? this._renderFilters() : ""}
+        ${other ? "" : this._renderControls()}
+        ${other ? "" : this._renderToggle()}
+        ${!other && this._filtersOpen ? this._renderFilters() : ""}
         ${this._renderBody()}
         ${this._renderPager()}
-        ${this._renderFab()}
+        ${other ? "" : this._renderFab()}
       `;
       if (window.lucide) window.lucide.createIcons();
 
@@ -123,12 +163,24 @@
 
     _renderHead() {
       const total = this._total[this._mode];
+      const other = this._isOther();
+      const backJs = other
+        ? `window.router.go('profile-other',{userId:'${escapeAttr(this._targetUserId)}'})`
+        : "window.router.go('profile-self')";
+      const p = this._targetProfile;
+      let titleHtml;
+      if (other && p && p.display_name) {
+        const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm" });
+        titleHtml = `${badge}<span class="spoke-head__title-text">${escape(p.display_name)}'s collection</span>`;
+      } else {
+        titleHtml = `<span class="spoke-head__title-text">Collection</span>`;
+      }
       return `
         <header class="spoke-head">
-          <button class="spoke-head__back" onclick="window.router.go('profile-self')" aria-label="Back to profile">
+          <button class="spoke-head__back" onclick="${backJs}" aria-label="Back to profile">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
-          <h2 class="spoke-head__title font-display">Collection</h2>
+          <h2 class="spoke-head__title font-display">${titleHtml}</h2>
           <span class="spoke-head__count">${total} game${total === 1 ? "" : "s"}</span>
         </header>
       `;
@@ -231,10 +283,16 @@
       }
       if (items.length === 0) {
         const isSearchingOrFiltering = this._query || this._activeFilterCount() > 0;
-        const empty = mode === MODE_OWNED
-          ? (isSearchingOrFiltering ? "No matches in your collection." : "No owned games yet — tap the + to add one.")
-          : (isSearchingOrFiltering ? "No played-not-owned matches." : "No played-but-uncollected games.");
-        return `<div class="profile-empty">${empty}</div>`;
+        let empty;
+        if (this._isOther()) {
+          const who = (this._targetProfile && this._targetProfile.display_name) || "They";
+          empty = `${who} doesn't own any games yet.`;
+        } else if (mode === MODE_OWNED) {
+          empty = isSearchingOrFiltering ? "No matches in your collection." : "No owned games yet — tap the + to add one.";
+        } else {
+          empty = isSearchingOrFiltering ? "No played-not-owned matches." : "No played-but-uncollected games.";
+        }
+        return `<div class="profile-empty">${escape(empty)}</div>`;
       }
       const reloading = this._loading[mode] ? "is-reloading" : "";
       return `
@@ -298,6 +356,7 @@
         per_page: String(PER_PAGE),
         exclude_expansions: "true",
       });
+      if (this._isOther()) qs.set("user_id", this._targetUserId);
       if (this._query) qs.set("search", this._query);
       const f = this._filters;
       if (f.players) qs.set("players", String(f.players));
