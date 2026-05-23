@@ -221,18 +221,13 @@
       const cards = card.plays
         .map((p) => window.renderPlayCard({ ...p, __sessionPlayCount: sessionPlayCount }))
         .join("");
-      // Single-play sessions drop the horizontal rail and render the lone
-      // polaroid full-width inside a padded wrapper instead.
-      const bodyHtml = sessionPlayCount === 1
-        ? `<div class="play-session__single">${cards}</div>`
-        : `<div class="play-session__scroll">${cards}</div>`;
       return `
         <section class="play-session">
           <header class="play-session__header">
             <span class="play-session__title">${title}</span>
             <span class="play-session__date">${escape(dateLabel)}</span>
           </header>
-          ${bodyHtml}
+          <div class="play-session__scroll">${cards}</div>
         </section>
       `;
     }

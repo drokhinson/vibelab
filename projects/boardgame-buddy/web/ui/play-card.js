@@ -42,8 +42,10 @@
         error: null,
         // Cached at first render so rerenderCard (which looks the card up
         // from the raw, ungrouped feed page) can still pick the strip vs
-        // single variant after a flip.
-        sessionPlayCount: 1,
+        // single variant after a flip. 0 = "not in a session yet"; any
+        // positive value flips the card to the strip variant so single-play
+        // sessions read at the same size as multi-play sessions.
+        sessionPlayCount: 0,
       };
       cardState.set(playId, s);
     }
@@ -70,8 +72,10 @@
     // recorded. rerenderCard re-enters this function with the raw store card
     // (no __sessionPlayCount) so the cached value keeps strip vs single stable.
     if (card.__sessionPlayCount) s.sessionPlayCount = card.__sessionPlayCount;
-    const sessionCount = s.sessionPlayCount || 1;
-    const variant = sessionCount > 1 ? "strip" : "single";
+    // Inside a play_session (any size) → strip variant. Outside (no session
+    // context was ever set) → single. A 1-card session still uses strip so
+    // it reads at the same size as the multi-card rail.
+    const variant = s.sessionPlayCount > 0 ? "strip" : "single";
 
     // Pick photo source — user-uploaded snapshot wins, otherwise the game's
     // own art so the polaroid always has a hero image at natural aspect.

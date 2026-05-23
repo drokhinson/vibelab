@@ -3086,12 +3086,6 @@ body {
 }
 .play-session__scroll::-webkit-scrollbar { display: none; }
 
-/* Single-play session — no rail, just the standalone polaroid centered with
-   breathing room so the tilt doesn't kiss the edge of the column. */
-.play-session__single {
-  padding: 8px 24px 16px;
-}
-
 /* ── Feed rails (hot games / suggested buddies / featured) ─────────────────
    Carry the same cream polaroid surface as the play cards so the feed reads
    as a coherent stack of paper instead of two visual systems. Inner tiles
