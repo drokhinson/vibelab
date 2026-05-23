@@ -93,27 +93,30 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
     rows = pps.data or []
 
     profile_ids = [r["player_user_id"] for r in rows if r.get("player_user_id")]
-    profile_names: dict[str, str] = {}
+    profile_lookup: dict[str, dict] = {}
     if profile_ids:
         prof = (
             sb.table("boardgamebuddy_profiles")
-            .select("id, display_name")
+            .select("id, display_name, avatar")
             .in_("id", list(set(profile_ids)))
             .execute()
         )
-        profile_names = {p["id"]: p["display_name"] for p in (prof.data or [])}
+        profile_lookup = {p["id"]: p for p in (prof.data or [])}
 
     for row in rows:
         uid = row.get("player_user_id")
+        prof_row = profile_lookup.get(uid) if uid else None
         name = (
-            profile_names.get(uid)
-            if uid else None
-        ) or row.get("player_display_name") or "Unknown"
+            (prof_row.get("display_name") if prof_row else None)
+            or row.get("player_display_name")
+            or "Unknown"
+        )
         players_by_play.setdefault(row["play_id"], []).append(
             PlayPlayerResponse(
                 buddy_id=None,
                 user_id=uid,
                 name=name,
+                avatar=(prof_row or {}).get("avatar"),
                 is_winner=row.get("is_winner", False),
                 score=row.get("score"),
                 round_scores=row.get("round_scores"),
