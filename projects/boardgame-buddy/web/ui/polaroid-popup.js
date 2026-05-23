@@ -267,39 +267,41 @@
           <button class="polaroid-popup__close" aria-label="Close">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
-          <div class="polaroid-popup__title">${escape(headerTitle)}</div>
+          <div class="avatar-cust__body">
+            <div class="polaroid-popup__title">${escape(headerTitle)}</div>
 
-          ${nameFieldHtml}
+            ${nameFieldHtml}
 
-          <div class="avatar-cust__carousel">
-            <button class="avatar-cust__arrow" data-step="-1" aria-label="Previous">
-              <i data-lucide="chevron-left" class="w-5 h-5"></i>
-            </button>
-            <div class="avatar-cust__reel">
-              <div class="avatar-cust__badge"></div>
-              <div class="avatar-cust__track"></div>
+            <div class="avatar-cust__carousel">
+              <button class="avatar-cust__arrow" data-step="-1" aria-label="Previous">
+                <i data-lucide="chevron-left" class="w-5 h-5"></i>
+              </button>
+              <div class="avatar-cust__reel">
+                <div class="avatar-cust__badge"></div>
+                <div class="avatar-cust__track"></div>
+              </div>
+              <button class="avatar-cust__arrow" data-step="1" aria-label="Next">
+                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+              </button>
             </div>
-            <button class="avatar-cust__arrow" data-step="1" aria-label="Next">
-              <i data-lucide="chevron-right" class="w-5 h-5"></i>
-            </button>
-          </div>
-          <div class="avatar-cust__name-reel"><div class="avatar-cust__name-track"></div></div>
-          <div class="avatar-cust__dots"></div>
+            <div class="avatar-cust__name-reel"><div class="avatar-cust__name-track"></div></div>
+            <div class="avatar-cust__dots"></div>
 
-          <div class="avatar-cust__target">
-            <button class="avatar-cust__tg avatar-cust__tg--icon on" data-target="iconColor">
-              <span class="avatar-cust__tg-dot"></span>Icon
-            </button>
-            <button class="avatar-cust__tg avatar-cust__tg--bg" data-target="bgColor">
-              <span class="avatar-cust__tg-dot"></span>Background
-            </button>
-          </div>
-          <div class="avatar-cust__swatches"></div>
-          <div class="avatar-cust__note"></div>
+            <div class="avatar-cust__target">
+              <button class="avatar-cust__tg avatar-cust__tg--icon on" data-target="iconColor">
+                <span class="avatar-cust__tg-dot"></span>Icon
+              </button>
+              <button class="avatar-cust__tg avatar-cust__tg--bg" data-target="bgColor">
+                <span class="avatar-cust__tg-dot"></span>Background
+              </button>
+            </div>
+            <div class="avatar-cust__swatches"></div>
+            <div class="avatar-cust__note"></div>
 
-          <div class="polaroid-popup__actions">
-            <button class="btn btn-ghost btn-sm polaroid-popup__cancel">Cancel</button>
-            <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escape(saveLabel)}</button>
+            <div class="polaroid-popup__actions">
+              <button class="btn btn-ghost btn-sm polaroid-popup__cancel">Cancel</button>
+              <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escape(saveLabel)}</button>
+            </div>
           </div>
         </div>
       `;
@@ -366,11 +368,19 @@
 
       function rerender() {
         // Slide the reel so the active slot lands centered on the badge.
+        // The reel can flex-shrink to fit narrow modal widths, so the math
+        // has to read the live rendered width — using a hardcoded 240px
+        // would land the active slot off-badge whenever flex took over.
+        const reelEl = /** @type {HTMLElement} */ (track.parentElement);
+        const reelW = reelEl.getBoundingClientRect().width;
         const activeSlot = /** @type {HTMLElement} */ (track.children[state.index]);
         const slotCenter = activeSlot.offsetLeft + activeSlot.offsetWidth / 2;
-        const reelW = 240;
         const tx = reelW / 2 - slotCenter;
         track.style.transform = `translateX(${tx}px)`;
+        // Name reel uses the same reel width so each name slot occupies one
+        // full reel page; sliding by -index * reelW snaps the active name.
+        const nameSlots = nameTrack.querySelectorAll(".avatar-cust__name-slot");
+        nameSlots.forEach((n) => { /** @type {HTMLElement} */ (n).style.width = reelW + "px"; });
         nameTrack.style.transform = `translateX(${-state.index * reelW}px)`;
 
         // Active styling + colors on the slot SVGs / initials.

@@ -7352,8 +7352,20 @@ main[data-view="session-viewer"].hidden {
    ───────────────────────────────────────────────────────────────────────────── */
 .avatar-cust {
   width: min(340px, 92vw);
+  /* Keep overflow visible so the .polaroid-popup__close button can
+     overhang the top-right corner without triggering scrollbars. The
+     vertical scroll lives on .avatar-cust__body instead. */
+  overflow: visible;
+  /* The polaroid card's default padding doubles up with the inner body's
+     padding; trim it so the body has the whole card to work with. The X
+     button is anchored to the card via top/right offsets, unaffected. */
+  padding: 0;
+}
+.avatar-cust__body {
+  padding: 18px 14px 22px;
   max-height: calc(100vh - 36px);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
 
@@ -7414,7 +7426,14 @@ main[data-view="session-viewer"].hidden {
 .avatar-cust__arrow:active { transform: scale(0.92); }
 .avatar-cust__reel {
   position: relative;
-  width: 240px;
+  /* Flex shrinks the reel to fit narrow modal widths so the right arrow
+     never gets clipped. JS reads the rendered width via
+     getBoundingClientRect() and slides the track to keep the active slot
+     centered. */
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 240px;
+  min-width: 0;
   height: 120px;
   overflow: hidden;
 }
@@ -7469,7 +7488,9 @@ main[data-view="session-viewer"].hidden {
 }
 
 .avatar-cust__name-reel {
-  width: 240px; height: 26px;
+  width: 100%;
+  max-width: 240px;
+  height: 26px;
   overflow: hidden;
   margin: 0 auto;
 }
@@ -7478,7 +7499,7 @@ main[data-view="session-viewer"].hidden {
   transition: transform 0.32s cubic-bezier(0.3, 0.85, 0.3, 1);
 }
 .avatar-cust__name-slot {
-  width: 240px;
+  /* Width is set inline by the rerender to match the live reel width. */
   flex: none;
   text-align: center;
   font-family: var(--font-display, 'Crimson Text', Georgia, serif);
