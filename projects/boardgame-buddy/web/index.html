@@ -47,7 +47,10 @@
       </a>
       <button class="bgb-global-header__avatar" title="Settings"
               onclick="window.router.go('settings')">
-        <span id="bgb-global-avatar" class="avatar-bubble avatar-bubble--me">?</span>
+        <!-- Placeholder; init.js#syncGlobalAvatar replaces this with a BgbBadge
+             once the user store fires. -->
+        <span id="bgb-global-avatar" class="user-badge user-badge--sm"
+              style="background:#2a1812;color:#C9922A">?</span>
       </button>
     </header>
 
@@ -135,7 +138,6 @@
   <script src="ui/play-card.js"></script>
   <script src="ui/game-card.js"></script>
   <script src="ui/status-tag.js"></script>
-  <script src="ui/buddies-panel.js"></script>
   <script src="ui/markdown.js"></script>
   <script src="ui/polaroid-popup.js"></script>
 

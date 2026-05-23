@@ -134,19 +134,18 @@
   function syncGlobalAvatar(user) {
     const el = document.getElementById("bgb-global-avatar");
     if (!el) return;
-    if (!user) {
-      el.textContent = "?";
-      el.removeAttribute("style");
-      el.className = "avatar-bubble avatar-bubble--me";
-      return;
-    }
-    el.outerHTML = window.BgbBadge.render({
-      avatar: user.avatar,
-      displayName: user.display_name,
+    // Single render path: always BgbBadge. Signed-out / logged-out state uses
+    // the default brown+gold badge with "?" initials; signed-in uses the user's
+    // chosen avatar with isMe=true so the gold rim appears on the header.
+    const html = window.BgbBadge.render({
+      avatar: user ? user.avatar : null,
+      displayName: user ? user.display_name : "",
+      initials: user ? null : "?",
       size: "sm",
-      isMe: true,
+      isMe: !!user,
       extraClass: "bgb-global-header__badge",
     }).replace("<span ", '<span id="bgb-global-avatar" ');
+    el.outerHTML = html;
   }
   window.store.subscribe("user", syncGlobalAvatar);
 

@@ -2,17 +2,24 @@
 
 A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code as `path:line` so each finding can be jumped to and verified. The scope is the web frontend only; the React Native app under `app/` is out of scope.
 
+> **Status:** Original audit produced 2026-05-23. **Cleanup pass applied 2026-05-23**: all confirmed-dead JS and CSS deleted; global header avatar migrated to `BgbBadge.render`. See "Cleanup log" at the bottom for the exact set of changes.
+
 ---
 
 ## 1. Executive summary
 
-Three findings drive most of the consistency debt:
+The original audit identified three drivers of consistency debt. After the cleanup pass:
 
-1. **The shared game-tile component is dead.** `renderGameCard` (`ui/game-card.js:11`) and its `.game-card` CSS class are defined but have zero call sites outside the definition file. Every surface that shows a game tile re-implements the markup inline (`.collection-tile`, `.hot-game-tile`, `.preview-card__cover`, `.game-detail__polaroid`, `.plays-list__thumb`, `.game-polaroid`). That is **six distinct game-tile styles** for the same data, none of them sharing a base.
-2. **User avatars are half-migrated.** `BgbBadge.render` (`ui/user-badge.js:131`) is the canonical single-source-of-truth and is used in 30+ call sites. But the global header still ships `.avatar-bubble--me` markup (`index.html:50`, `init.js:140`), and the supporting CSS for `.avatar-bubble` is defined **twice in `styles.css` with conflicting values** (lines 2237 and 2555). The `--me` markup is alive only as a pre-hydration placeholder — `init.js:143` replaces it with a `BgbBadge` element as soon as the user store loads.
-3. **The buddies panel exists in two near-identical copies.** `ui/buddies-panel.js` (483 lines) exports a `BuddiesPanel` class that is never instantiated anywhere; `views/buddies-view.js` (430 lines) is a separate reimplementation of the same UI used by the actual `buddies` route. They share helper structure and most render strings.
+1. ~~**The shared game-tile component is dead.**~~ **Resolved (deletion):** `renderGameCard` and its `.game-card` CSS family have been removed. The six bespoke tiles (`.collection-tile`, `.hot-game-tile`, `.preview-card__cover`, `.game-detail__polaroid`, `.plays-list__thumb`, `.game-polaroid`) still each own their markup. A future change can introduce a single canonical tile with a `variant` parameter; until then, the six implementations stand. See §6.
+2. ~~**User avatars are half-migrated.**~~ **Resolved (migration):** `index.html:50` now renders a `<span class="user-badge">` placeholder which `init.js#syncGlobalAvatar` replaces with `BgbBadge.render(...)` on first user-store fire. All `.avatar-bubble*` CSS has been deleted; the "this is me" gold-rim treatment now lives on `.user-badge--me` inside `.bgb-global-header__avatar`.
+3. ~~**The buddies panel exists in two near-identical copies.**~~ **Resolved (deletion):** `ui/buddies-panel.js` was deleted along with its `<script>` tag in `index.html`. The live route `views/buddies-view.js` is now the single source of truth.
 
-Smaller findings: `.animate-fade` (without `Up`) does not exist (an earlier audit pass had assumed it did); `.admin-tool*`, `.bgb-filter-panel`, and `.book-hint/slot/spine*` CSS classes are unreferenced; `renderStatusTag` is called with three different option shapes (`{ size: "xs" }`, `{ size: "lg", addLabel: ... }`, `{ compact: true }`) depending on the host surface; typography is broadly consistent (Crimson for display, Poppins for chrome, Fraunces for polaroid-style headers, JetBrains Mono for scores) but the `.plays-list__row` view sidesteps the polaroid look entirely.
+Smaller findings remained or are addressed:
+
+- ~~`.admin-tool*`, `.bgb-filter-panel`, `.book-hint/slot/spine*` are unreferenced.~~ **All deleted.** The cleanup also caught additional dead families adjacent to the original `.book-*` finding: the closet/shelf chrome (`.shelf__*`, `.closet-*`, `.skeleton-book`, `.book-spine__exp*`), the swipe gestures (`.swipe-wrap`, `.swipe-hint*`), and the documentation diagram styles (`.card-anatomy*`). All confirmed dead by grep, all removed.
+- `renderStatusTag` is still called with three option shapes (`{ size: "xs" }`, `{ size: "lg", addLabel: ... }`, `{ compact: true }`). Not addressed in this pass; tracked in §6.
+- Typography remains broadly consistent (Crimson for display, Poppins for chrome, Fraunces for polaroid-style headers, JetBrains Mono for scores), but the `.plays-list__row` view still sidesteps the polaroid look. Tracked in §5b / §8.1.
+- `.animate-fade` (without `Up`) does not exist (an earlier audit pass had assumed it did).
 
 ---
 
@@ -48,13 +55,12 @@ Bottom navigation is hard-coded in `index.html` and consists of three slots: Fee
 
 Components are global functions / classes attached to `window`. There is no module system. Reuse counts in this section are produced by grepping each name across `views/`, `widgets/`, `ui/`, `index.html`, and `init.js`; each row is exact.
 
-### 3.1 `renderGameCard` — `ui/game-card.js:11`
-- **Returns:** HTML string (an `<article class="game-card">`).
-- **Reuse count: 0 external call sites.** The only references are the definition (`ui/game-card.js:11`) and the `window` assignment (`ui/game-card.js:75`). Grep across `views/`, `widgets/`, `index.html` returns nothing.
-- **Status:** **DEAD.** Both the JS function and the `.game-card` CSS family (which has no class definitions in `styles.css`) appear orphaned. Cross-reference: `grep -n "\.game-card" styles.css` returns no matches; the only `game-card` styling in `styles.css` is implicit via the never-used class.
-- **What replaced it:** Six separate inline implementations (see §5c).
+### 3.1 ~~`renderGameCard`~~ — DELETED in cleanup pass
+- **Was at:** `ui/game-card.js:11` (now removed).
+- **Reuse count before deletion: 0 external call sites.**
+- **What replaced it:** Six separate inline implementations (see §5c). No JS replacement was introduced — the function was simply orphaned and is now gone.
 
-### 3.2 `renderGamePolaroid` — `ui/game-card.js:44`
+### 3.2 `renderGamePolaroid` — `ui/game-card.js`
 - **Returns:** HTML string (an `<article class="game-polaroid">`).
 - **Reuse count: 1 call site.** `views/log-play-view.js:294` — used to populate the "Find a Game that fits" grid on the Host/Join landing.
 - **Visual style:** Cream Polaroid card (Fraunces caption via `--font-polaroid` in `styles.css:6181`), tilt animation by default, status pill in top-right.
@@ -116,15 +122,10 @@ Components are global functions / classes attached to `window`. There is no modu
 - **How accessed:** Every player surface — feed cards, buddies list, scoring grid, profile headers, header avatar, modals.
 - **Note:** This is the model component for the codebase. It owns its tokens (`DEFAULT_AVATAR`, `GHOST_AVATAR`, `PALETTE`, `ICONS`, `ITEMS`) and exposes them on `window.BgbBadge` so callers like the customizer in `ui/polaroid-popup.js` can render the same items in the same colors. Other components could be reorganized similarly.
 
-### 3.7 `.avatar-bubble` (legacy markup) — `index.html:50`, `init.js:140`
-- **Reuse count: 2 sites.** Used as the initial markup of `#bgb-global-avatar`. `init.js:143` calls `BgbBadge.render` and `outerHTML`-replaces the bubble as soon as the user store fires its first event.
-- **Visual style:** Initially a brown 28px circle (`styles.css:2237` definition wins until the second one fires at `styles.css:2555`).
-- **DUPLICATE CSS DEFINITION:** `.avatar-bubble` is declared twice in `styles.css`:
-  - `styles.css:2237` — 28px square, oklch palette colors, uppercase letter spacing.
-  - `styles.css:2555` — 36px circle (`border-radius: 999px`), different fill, no letter spacing.
-  
-  The later definition (`:2555`) wins in source order. The earlier one is effectively shadowed. `.avatar-bubble--xs` is similarly duplicated at `styles.css:2253` (20px) and `styles.css:4276` (26px).
-- **Recommendation:** Remove the bubble markup from `index.html:50` and let `init.js:143` mount a `BgbBadge.render({ isMe: true, size: "sm" })` directly. Delete both `.avatar-bubble` blocks and `.avatar-bubble--xs` / `--lg` / `--md` from CSS.
+### 3.7 ~~`.avatar-bubble` (legacy markup)~~ — DELETED in cleanup pass
+- **Was at:** `index.html:50` (pre-hydration placeholder) and `init.js:140` (logged-out reset).
+- **Action taken:** Both call sites now use `BgbBadge.render`. The placeholder `<span>` in `index.html:50` is a bare `.user-badge.user-badge--sm` shell that `syncGlobalAvatar` immediately replaces. The "this is me" gold-rim treatment moved to `.user-badge--me` inside `.bgb-global-header__avatar` (`styles.css`).
+- All `.avatar-bubble*` CSS — including the duplicate `:2237 / :2555` blocks, `--xs`, `--lg`, `--md`, and `--me` — has been removed.
 
 ### 3.8 `PolaroidPopup.{show, dismiss, update, confirm, alert, avatarCustomizer}` — `ui/polaroid-popup.js`
 - **Reuse count:** 16 call sites across 10 files.
@@ -162,11 +163,10 @@ Components are global functions / classes attached to `window`. There is no modu
 - **Visual style:** Players × rounds matrix. Numbers in `--font-score` (JetBrains Mono, `styles.css:2826, 2960`). Totals row at bottom; winner total highlighted. `host` arg is the name of the global view instance that owns the score-update handlers (`window.playFlowView`, `window.PlayDetailPopup`).
 - **How accessed:** Live during a play; in the popup when opening any past play.
 
-### 3.13 `BuddiesPanel` (class) — `ui/buddies-panel.js:14`
-- **Reuse count: 0 instantiations.** Grep for `BuddiesPanel\b` (`ui/buddies-panel.js:8, 14, 482`) returns only declarations.
-- **Status:** **DEAD** as a runtime component. The class is fully built and exported (`ui/buddies-panel.js:482`) but no view ever does `new BuddiesPanel(...)`.
-- **What replaced it:** `views/buddies-view.js` (430 lines) is a separate implementation of the same UI used by the actual `buddies` route. The two files share most of their structure (`grep BgbBadge.render ui/buddies-panel.js views/buddies-view.js` shows 6 calls each in the same `buddies-row__avatar` shape). They were either built in parallel or one was kept as a "panel" copy intended for inclusion in another view that never landed.
-- **Recommendation:** Delete `ui/buddies-panel.js` after confirming no embedded use; or, if a panel re-use is planned, delete `views/buddies-view.js` and re-mount `BuddiesPanel` as the route. Today both maintain costs.
+### 3.13 ~~`BuddiesPanel` (class)~~ — DELETED in cleanup pass
+- **Was at:** `ui/buddies-panel.js:14` (entire file removed).
+- **Reuse count before deletion: 0 instantiations.**
+- The corresponding `<script src="ui/buddies-panel.js">` was removed from `index.html`. The live `buddies` route continues to use `views/buddies-view.js` as the single source of truth.
 
 ### 3.14 `PlayDetailPopup` — `widgets/play-detail-popup.js`
 - **Reuse count: 6 call sites.** All `PlayDetailPopup.show(playId)` invocations:
@@ -195,7 +195,7 @@ Components are global functions / classes attached to `window`. There is no modu
 | Group | Representative classes | Lives at | Fonts / tokens | Dead members |
 | --- | --- | --- | --- | --- |
 | Global layout | `.bgb-global-header*`, `.bgb-nav*`, `.bgb-cream-screen` | `styles.css:2451+` | `--font-display`, `--accent`, `--polaroid-bg` | None |
-| Game tile — canonical (DEAD) | `.game-card*` | _no definitions in styles.css_ | n/a | The entire family — the JS renders these classes but no CSS targets them |
+| Game tile — canonical | `.game-card*` | DELETED | n/a | Was never styled or referenced. Function and class family removed in cleanup. |
 | Game tile — Polaroid | `.game-polaroid`, `.game-polaroid__*` | `styles.css:6124–6195` | `--font-polaroid` (Fraunces) | None |
 | Game tile — collection | `.collection-tile`, `.collection-tile__*` | `styles.css:3536–3542`, `:4156–4157` | `--font-sans` | None |
 | Game tile — hot games | `.hot-game-tile`, `.hot-game-tile__*` | Inside feed section | `--font-sans` | None |
@@ -207,7 +207,7 @@ Components are global functions / classes attached to `window`. There is no modu
 | Chapter editor | `.chapter-edit__*`, `.chapter-add__*` | `styles.css:610–940` block | `--font-display` for titles, mono for chapter-edit toolbar icons | None |
 | Status badges | `.status-tag`, `.status-badge`, `.status-badge--owned`, `.status-badge--wishlist`, `.status-badge--played`, `.expansion-count-badge`, `.expansion-dot` | `styles.css:4100+` cluster | `--font-sans`, `--accent`, `--exp-color` (inline) | None |
 | User badges (canonical) | `.user-badge`, `.user-badge--xs`, `.user-badge--sm`, `.user-badge--md`, `.user-badge--lg`, `.user-badge--me`, `.user-badge--ghost`, `.user-badge__initials`, `.user-badge__icon` | `styles.css:7352–7395` | `--font-sans` for initials | None |
-| User badges (LEGACY) | `.avatar-bubble`, `.avatar-bubble--xs`, `.avatar-bubble--lg`, `.avatar-bubble--md`, `.avatar-bubble--me` | **Duplicated:** `:2237` and `:2555` (`.avatar-bubble`), `:2253` and `:4276` (`.avatar-bubble--xs`) | `--font-sans` | `--md` (`:3211`) is referenced only by old bubble markup; once `index.html:50` is migrated this whole group can be deleted |
+| User badges (LEGACY) | `.avatar-bubble*` family | DELETED | n/a | All variants removed in cleanup; visual intent ported to `.user-badge--me` + `.bgb-global-header__avatar .user-badge--me`. |
 | Modal popups | `.polaroid-popup__*`, `.avatar-cust__*` | `styles.css:200–500` block | `--font-polaroid` for title, `--font-display` for body headings | None |
 | Cascade play flow | `.cascade-screen*`, `.cascade-card*`, `.cascade-game-chip`, `.cascade-player`, `.cascade-notes`, `.cascade-photo` | `styles.css:5028+` block | `--font-display` for headings | None |
 | Scoring grid | `.scoring-table`, `.scoring-table-wrap`, `.scoring-cell`, `.scoring-cell--read`, `.scoring-total-row`, `.scoring-total-cell--winner`, `.scoring-head` | Inside scoring section | `--font-score` (JetBrains Mono) for all numbers | None |
@@ -216,9 +216,11 @@ Components are global functions / classes attached to `window`. There is no modu
 | Buddies | `.buddies-row`, `.buddies-row__avatar`, `.buddies-row__avatar--ghost`, `.buddy-tile`, `.buddy-tile__avatar`, `.search-hit` | Inside buddies section | `--font-sans` | None |
 | Animations | `.animate-fadeUp` | `styles.css:88` | n/a | `.animate-fade` (without `Up`) does NOT exist — earlier audit notes that mentioned it as dead were incorrect; there is no class to delete |
 | Admin (used) | `.admin-reports__*` | Inside admin block | `--font-sans` | None |
-| Admin (DEAD) | `.admin-tool`, `.admin-tool-list`, `.admin-tool__icon`, `.admin-tool__body`, `.admin-tool__title`, `.admin-tool__blurb`, `.admin-tool__chev` | `styles.css:3381–3405` | n/a | **All dead** — zero references in any JS/HTML file |
-| Filter (DEAD) | `.bgb-filter-panel` | `styles.css:1712` | n/a | **Dead** — only CSS, no usage |
-| Book metaphor (DEAD) | `.book-hint`, `.book-slot`, `.book-spine`, `.book-spine__art`, `.book-spine__title`, `.book-spine__plays`, `.book-spine.pulling`, `.book-spine__art--blank` | `styles.css:1792–1924+` | n/a | **All dead** — no consuming view |
+| Admin (DEAD) | `.admin-tool*` family | DELETED | n/a | Removed in cleanup. |
+| Filter (DEAD) | `.bgb-filter-panel` | DELETED | n/a | Removed in cleanup. |
+| Book metaphor (DEAD) | `.book-hint*`, `.book-slot*`, `.book-spine*`, `.shelf__*`, `.closet-*`, `.skeleton-book` | DELETED | n/a | Entire "closet/shelf" feature was already non-functional; all CSS removed in cleanup. |
+| Swipe gestures (DEAD) | `.swipe-wrap`, `.swipe-hint`, `.swipe-hint--log`, `.swipe-hint--guide` | DELETED | n/a | No consuming view; removed in cleanup. |
+| Card-anatomy diagram (DEAD) | `.card-anatomy`, `.card-anatomy-diagram`, `.card-anatomy-legend`, `.card-anatomy-num` | DELETED | n/a | Documentation diagram styling with no consumer; removed in cleanup. |
 | Typography helpers | `.font-display` (`styles.css:68`), `.font-score` (used inline via `var(--font-score)`), `.guide-text` | various | declared at `:23–46` | None |
 
 ---
@@ -294,32 +296,28 @@ A list of every place where ad-hoc markup duplicates an available (or intended-t
 
 ## 7. Dead code & low-confidence candidates
 
-### 7.1 Confirmed dead (zero references outside the definition file)
+> All items in §7.1 below were deleted in the cleanup pass. They are retained in this document as a historical record. See "Cleanup log" at the end of the doc for the exact diff summary.
 
-| Symbol / class | Defined at | Grep evidence |
+### 7.1 Confirmed dead (resolved by cleanup)
+
+| Symbol / class | Was at | Resolution |
 | --- | --- | --- |
-| `renderGameCard` function | `ui/game-card.js:11` | Only `:11` (def) and `:75` (window assignment). No view consumers. |
-| `.game-card`, `.game-card__*` CSS | _no definitions in `styles.css`_ | `grep -n "\.game-card" styles.css` returns no matches. The JS function emits the class names but no stylesheet targets them. |
-| `BuddiesPanel` class | `ui/buddies-panel.js:14` | `grep -rn "BuddiesPanel\b"` returns only `:8` (comment), `:14` (class), `:482` (window assignment). |
-| `.admin-tool`, `.admin-tool-list`, `.admin-tool__icon`, `.admin-tool__body`, `.admin-tool__title`, `.admin-tool__blurb`, `.admin-tool__chev` | `styles.css:3381–3405` | Zero JS/HTML references. The admin view uses `.admin-reports__*` only. |
-| `.bgb-filter-panel` | `styles.css:1712` | Zero JS/HTML references. |
-| `.book-hint`, `.book-slot`, `.book-spine`, `.book-spine__art`, `.book-spine__art--blank`, `.book-spine__title`, `.book-spine.pulling`, `.book-spine__plays`, `.book-slot:hover .book-spine`, `.book-spine:focus-visible` | `styles.css:1792–1924+` | Zero JS/HTML references. A "book / spine" pattern that the codebase no longer uses. |
-| Duplicate `.avatar-bubble` CSS | `styles.css:2237` (shadowed by `:2555`) | The first block is unreachable in source order. |
-| Duplicate `.avatar-bubble--xs` CSS | `styles.css:2253` (shadowed by `:4276`) | Same — the earlier block is unreachable. |
+| `renderGameCard` function | `ui/game-card.js:11` | DELETED |
+| `BuddiesPanel` class + file | `ui/buddies-panel.js` | DELETED (entire file + `<script>` tag) |
+| `.admin-tool*` cluster | `styles.css:3378–3405` | DELETED |
+| `.bgb-filter-panel` | `styles.css:1711–1717` | DELETED |
+| `.book-*` family (book-slot/spine/hint/art/title/plays + `book-spine__exp*`) | `styles.css:1791–2053` | DELETED |
+| `.shelf__*`, `.closet-*`, `.skeleton-book` (full "closet" feature) | `styles.css:1719–2018` | DELETED |
+| `.swipe-wrap`, `.swipe-hint*` | `styles.css:2055–2093` | DELETED |
+| `.card-anatomy*` | `styles.css:2259–2305` | DELETED |
+| `.avatar-bubble*` family (including duplicates) | various lines (was 2237/2253/2555/3211/4276/6691/...) | DELETED — visual intent ported to `.user-badge--me` |
 
-### 7.2 Low-confidence — verify before deleting
-
-| Candidate | Why it might be in use | Verification step |
-| --- | --- | --- |
-| `.avatar-bubble`, `.avatar-bubble--me` (the surviving definitions) | Used by `#bgb-global-avatar` pre-hydration. After 50–150ms it is `outerHTML`-replaced (`init.js:143`). Keeping it only matters if the placeholder is visually important during boot. | If you migrate `index.html:50` to render via `BgbBadge` directly, this entire family becomes deletable. |
-| `.avatar-bubble--lg`, `.avatar-bubble--md` | No live JS uses these sizes. Could be referenced by string-built selectors not found by grep. | `grep -rnE 'avatar-bubble--(lg\|md)'` to confirm before deletion. |
-
-### 7.3 Items previously suspected dead that are actually alive (do NOT delete)
+### 7.2 Items previously suspected dead that are actually alive (do NOT delete)
 
 | Item | Citation that proves it is alive |
 | --- | --- |
-| `findCardById` in `ui/play-card.js:405` | Called from `rerenderCard` at `ui/play-card.js:394` (an in-place flip handler). |
-| `.animate-fade` (without `Up`) | Not dead — it simply does not exist. `grep -n "animate-fade" styles.css` only returns `:88` (`.animate-fadeUp`). Earlier audit pass had this listed as a dead class, but there is nothing to delete. |
+| `findCardById` in `ui/play-card.js` | Called from `rerenderCard` (an in-place flip handler). |
+| `.animate-fade` (without `Up`) | Not dead — it simply does not exist. `grep -n "animate-fade" styles.css` only returns `.animate-fadeUp`. Earlier audit pass had this listed as a dead class, but there is nothing to delete. |
 
 ---
 
@@ -395,3 +393,52 @@ grep -nE "font-family|Crimson|Fraunces|Poppins|JetBrains|font-display|font-score
 ```
 
 To reproduce or extend: re-run those greps after any refactor and update the counts in §3 and §6.
+
+---
+
+## Cleanup log
+
+### Pass 1 (initial audit) — 2026-05-23
+Inventory only; no code changes.
+
+### Pass 2 (cleanup) — 2026-05-23
+
+**JS removed:**
+- `renderGameCard` function from `ui/game-card.js` (and its `window` assignment).
+- Whole file `ui/buddies-panel.js` (was 483 lines; the live `views/buddies-view.js` keeps the route).
+- `<script src="ui/buddies-panel.js">` tag from `index.html`.
+
+**HTML / JS migrated to single source of truth:**
+- `index.html` global-header avatar placeholder now uses `<span class="user-badge user-badge--sm">` instead of `.avatar-bubble--me`.
+- `init.js#syncGlobalAvatar` rewritten to render via `BgbBadge.render` for **both** signed-out and signed-in states. The legacy `el.className = "avatar-bubble avatar-bubble--me"` reset path is gone.
+
+**CSS removed:**
+
+| Block | Approximate former lines |
+| --- | --- |
+| `.bgb-filter-panel` | 7 lines |
+| `.shelf__*`, `.skeleton-book`, `@keyframes skeleton-shimmer`, `.book-slot`, `.book-spine*`, `@keyframes pullDown`, `.book-hint*`, `.closet-*`, `.book-spine__exp*` | ~260 lines |
+| `.swipe-wrap`, `.swipe-hint*` | ~38 lines |
+| `.card-anatomy*` and its `@media (min-width: 480px)` companion | ~46 lines |
+| `.admin-tool*` cluster | 26 lines |
+| Duplicate `.avatar-bubble` + `.avatar-bubble--xs` block | 21 lines |
+| Surviving `.avatar-bubble` family (`.avatar-bubble`, `--lg`, `--md`, `--xs`, `--me`, `.bgb-global-header__avatar .avatar-bubble*`) | ~70 lines |
+| Union selectors that joined `.avatar-bubble` with `.user-badge` in the header | 8 lines |
+
+**Net effect on `styles.css`:** 7,664 lines → 7,145 lines (519 lines removed, ~6.8%).
+
+**Visual intent preserved:** The legacy `.avatar-bubble--me` gold-radial-coin treatment was a placeholder-only look on the brief pre-hydration "?" — after hydration, `BgbBadge.render` always rendered `.user-badge--me`. The gold rim on the dark header is now provided by `.bgb-global-header__avatar .user-badge--me` (`styles.css`), so the "me" badge still has its border. The subtle `.user-badge--me` self-highlight ring (defined in `styles.css:7384`-ish) is unchanged.
+
+**Verification commands run after cleanup:**
+
+```
+grep -rn "renderGameCard|BuddiesPanel|buddies-panel|avatar-bubble" projects/boardgame-buddy/web   # → 0 matches
+grep -rnE "admin-tool|bgb-filter-panel|book-(slot|spine|hint)|closet-|shelf__|swipe-(wrap|hint)|card-anatomy" projects/boardgame-buddy/web   # → 0 matches
+wc -l projects/boardgame-buddy/web/styles.css   # → 7145
+```
+
+**Not addressed in this pass (tracked for future work):**
+- The six bespoke game-tile implementations (`.collection-tile`, `.hot-game-tile`, `.preview-card__cover`, `.game-detail__polaroid`, `.plays-list__thumb`, `.game-polaroid`) remain. Consolidating them is a design decision, not a mechanical refactor; see §6 row 1 and the OOD architecture doc (`Docs/ARCHITECTURE.md`).
+- `renderStatusTag` option-shape inconsistency (`compact: true` vs `size: "xs"`). Trivial refactor; out of scope here.
+- `.plays-list__row` typography mismatch with the polaroid family. Design decision required.
+- `PlayDetailPopup` is its own modal rather than a `PolaroidPopup`. Larger refactor.
