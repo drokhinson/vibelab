@@ -120,16 +120,20 @@
       const backJs = other
         ? `window.router.go('profile-other',{userId:'${escapeAttr(this._targetUserId)}'})`
         : "window.router.go('profile-self')";
-      const name = this._targetProfile && this._targetProfile.display_name;
-      const title = other
-        ? (name ? `${escape(name)}'s plays` : "Recent plays")
-        : "Recent plays";
+      const p = this._targetProfile;
+      let titleHtml;
+      if (other && p && p.display_name) {
+        const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm" });
+        titleHtml = `${badge}<span class="spoke-head__title-text">${escape(p.display_name)}'s plays</span>`;
+      } else {
+        titleHtml = `<span class="spoke-head__title-text">Recent plays</span>`;
+      }
       return `
         <header class="spoke-head">
           <button class="spoke-head__back" onclick="${backJs}" aria-label="Back to profile">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
-          <h2 class="spoke-head__title font-display">${title}</h2>
+          <h2 class="spoke-head__title font-display">${titleHtml}</h2>
           <span class="spoke-head__count">${this._total} total</span>
         </header>
       `;

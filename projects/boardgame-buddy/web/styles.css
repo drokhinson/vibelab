@@ -6810,6 +6810,15 @@ main[data-view="session-viewer"].hidden {
   color: var(--accent);
   flex: 1;
   margin: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.spoke-head__title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .spoke-head__count {
   font-size: 0.78rem;
