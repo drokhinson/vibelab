@@ -107,9 +107,17 @@
    * @typedef {Object} BadgeOpts
    * @property {Avatar|null=} avatar       Customization. null → BGB default.
    * @property {string=}      displayName  Used to compute initials.
+   * @property {string=}      initials     Explicit override (1-3 chars). When
+   *   provided, replaces the computed-from-displayName initials. Used by the
+   *   scoring grid where players can hand-edit their initials per-row.
    * @property {'xs'|'sm'|'md'|'lg'=} size Defaults to 'sm'.
    * @property {boolean=}     isGhost      Ghost player → baseline badge + initials.
    * @property {boolean=}     isMe         Adds a subtle highlight ring.
+   * @property {boolean=}     forceInitials Render initials text even when the
+   *   avatar's icon is set to something else. Used by the scoring-grid column
+   *   headers so the bubble stays color-coded by the user's chosen palette
+   *   while reading as identifying initials at the small size where a glyph
+   *   would be illegible.
    * @property {string=}      extraClass   Caller-supplied class(es).
    */
 
@@ -126,7 +134,8 @@
     // Ghost players never have a customized avatar — always the light
     // grey baseline so they read as placeholder seats.
     const av = isGhost ? GHOST_AVATAR : (opts.avatar || DEFAULT_AVATAR);
-    const initials = initialsOf(opts.displayName);
+    const override = opts.initials != null ? String(opts.initials).trim() : "";
+    const initials = override || initialsOf(opts.displayName);
     const classes = [
       "user-badge",
       `user-badge--${size}`,
@@ -136,7 +145,8 @@
     ].filter(Boolean).join(" ");
     const styleBg = `background:${escapeAttr(av.bgColor)}`;
     const styleColor = `color:${escapeAttr(av.iconColor)}`;
-    const inner = (av.icon === "initials" || !ICONS[av.icon])
+    const showInitials = !!opts.forceInitials || av.icon === "initials" || !ICONS[av.icon];
+    const inner = showInitials
       ? `<span class="user-badge__initials">${escape(initials)}</span>`
       : `<svg class="user-badge__icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[av.icon]}</svg>`;
     return `<span class="${classes}" style="${styleBg};${styleColor}" aria-label="${escapeAttr(opts.displayName || "")}">${inner}</span>`;

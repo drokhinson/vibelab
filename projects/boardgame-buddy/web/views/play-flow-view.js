@@ -1067,9 +1067,12 @@
       if (!p) return;
       p.initials = String(value || "").replace(/\s+/g, "").slice(0, 3).toUpperCase();
       this._ps.persist();
+      // Patch the badge's initials text in place — full re-render would
+      // yank focus out of the initials input mid-typing.
       const heads = this.container.querySelectorAll(".scoring-head");
       const label = p.initials || computeInitials(p.name);
-      if (heads[i]) heads[i].textContent = label;
+      const span = heads[i] && heads[i].querySelector(".user-badge__initials");
+      if (span) span.textContent = label;
     }
 
     _setTeam(i, value) {

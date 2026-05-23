@@ -203,7 +203,6 @@
 
   // ── View mode ─────────────────────────────────────────────────────────────
   function renderView(p) {
-    const winners = (p.players || []).filter((pl) => pl.is_winner);
     // Players sorted by score descending so the scoreboard reads top-down
     // by rank. Stable for equal scores (Array.sort is stable in modern JS).
     const ranked = (p.players || []).slice().sort((a, b) => {
@@ -211,6 +210,7 @@
       const sb = b.score == null ? -Infinity : b.score;
       return sb - sa;
     });
+    const me = window.store && window.store.get && window.store.get("user");
     const photoSlot = p.photo_url
       ? `<img class="play-detail-popup__photo" src="${escapeAttr(p.photo_url)}" alt="" />`
       : (p.is_own
@@ -228,19 +228,6 @@
 
         ${renderGameBubble(p, { editing: false })}
 
-        ${winners.length > 0 ? `
-          <section class="play-detail__section">
-            <h3 class="play-detail__section-title">
-              <i data-lucide="trophy" class="w-4 h-4"></i>
-              Winner${winners.length === 1 ? "" : "s"}
-            </h3>
-            <ul class="play-detail__winners">
-              ${winners.map((w) => `
-                <li>${escape(w.name)}${w.score != null ? ` <span class="opacity-60">· ${w.score}</span>` : ""}</li>
-              `).join("")}
-            </ul>
-          </section>` : ""}
-
         ${hasRoundGrid(p.players) ? `
           <section class="play-detail__section play-detail__section--rounds">
             <h3 class="play-detail__section-title">
@@ -250,6 +237,8 @@
               (p.players || []).map((pl) => ({
                 name: pl.name,
                 is_winner: !!pl.is_winner,
+                user_id: pl.user_id || null,
+                avatar: pl.avatar || null,
                 roundScores: Array.isArray(pl.round_scores) ? pl.round_scores : [],
               })),
               "PlayDetailPopup",
@@ -267,8 +256,16 @@
                 ${ranked.map((pl) => `
                   <li class="play-detail__player ${pl.is_winner ? "is-winner" : ""}">
                     <span class="play-detail__player-name">
-                      ${pl.is_winner ? `<i data-lucide="trophy" class="w-3.5 h-3.5"></i> ` : ""}
-                      ${escape(pl.name)}
+                      ${window.BgbBadge ? window.BgbBadge.render({
+                        avatar: pl.avatar || null,
+                        displayName: pl.name,
+                        size: "xs",
+                        isGhost: !pl.user_id,
+                        isMe: !!(me && pl.user_id === me.id),
+                        extraClass: "play-detail__player-badge",
+                      }) : ""}
+                      <span class="play-detail__player-text">${escape(pl.name)}</span>
+                      ${pl.is_winner ? `<i data-lucide="crown" class="w-3.5 h-3.5 play-detail__player-crown"></i>` : ""}
                     </span>
                     <span class="play-detail__player-score">${pl.score != null ? pl.score : ""}</span>
                   </li>
@@ -341,6 +338,7 @@
         is_winner: !!pl.is_winner,
         score: pl.score != null ? String(pl.score) : "",
         user_id: pl.user_id || null,
+        avatar: pl.avatar || null,
         // Mutable draft copy of the persisted breakdown. Empty array when
         // the play had ≤1 rounds (column is NULL on the backend) so the
         // grid handlers can push into it directly when the author opts in.
@@ -615,6 +613,7 @@
         is_winner: false,
         score: "",
         user_id: buddy ? buddy.other_user_id : null,
+        avatar: buddy ? (buddy.other_avatar || null) : null,
         roundScores: existingRounds > 0
           ? Array.from({ length: existingRounds }, () => null)
           : [],
