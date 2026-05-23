@@ -32,8 +32,22 @@ class RefreshImagesResponse(BaseModel):
 
 # ── Profile ───────────────────────────────────────────────────────────────────
 
+class Avatar(BaseModel):
+    """Customizable badge config (migration 029).
+
+    `icon` is either "initials" or a key from the client-side icon library
+    (meeple, die, sword, ...). `iconColor` and `bgColor` are hex strings.
+    A profile with avatar=None renders the BGB default badge client-side.
+    """
+    icon: str = "initials"
+    iconColor: str = "#C9922A"
+    bgColor: str = "#2a1812"
+
+
 class ProfileCreate(BaseModel):
-    display_name: str
+    # Both optional so settings can save name and avatar independently.
+    display_name: Optional[str] = None
+    avatar: Optional[Avatar] = None
 
 
 class ProfileResponse(BaseModel):
@@ -41,8 +55,12 @@ class ProfileResponse(BaseModel):
     display_name: str
     # Stable handle (migration 017). Readonly in the FE; search matches it.
     username: str
-    avatar_url: Optional[str] = None
+    avatar: Optional[Avatar] = None
     is_admin: bool = False
+    # TRUE for brand-new accounts that have not yet completed the
+    # "Create your profile" modal (migration 030). Cleared by the first
+    # successful POST /profile.
+    needs_setup: bool = False
     created_at: datetime
 
 
@@ -332,6 +350,7 @@ class ProfileSearchResult(BaseModel):
     display_name: str
     username: str
     email: Optional[str] = None
+    avatar: Optional[Avatar] = None
 
 
 # ── Reference-guide chapters ──────────────────────────────────────────────────
@@ -453,7 +472,7 @@ class BuddyEdgeResponse(BaseModel):
     id: str
     other_user_id: str
     other_display_name: str
-    other_avatar_url: Optional[str] = None
+    other_avatar: Optional[Avatar] = None
     accepted_at: Optional[datetime] = None
     created_at: datetime
 
@@ -465,7 +484,7 @@ class BuddyRequestResponse(BaseModel):
     direction: Literal["incoming", "outgoing"]
     other_user_id: str
     other_display_name: str
-    other_avatar_url: Optional[str] = None
+    other_avatar: Optional[Avatar] = None
     created_at: datetime
 
 
@@ -485,7 +504,7 @@ class PlayedWithUser(BaseModel):
 
     user_id: str
     display_name: str
-    avatar_url: Optional[str] = None
+    avatar: Optional[Avatar] = None
     play_count: int
     is_buddy: bool = False
     has_pending_request: bool = False
@@ -519,7 +538,7 @@ class PublicProfileResponse(BaseModel):
     id: str
     display_name: str
     username: str
-    avatar_url: Optional[str] = None
+    avatar: Optional[Avatar] = None
     created_at: datetime
     # Whether the viewer has an accepted mutual edge with this profile. The FE
     # uses this to swap the "Add buddy" button for an "Unfriend" affordance.
@@ -558,7 +577,7 @@ class SessionParticipantResponse(BaseModel):
     user_id: Optional[str] = None
     display_name: str
     joined_at: datetime
-    avatar_url: Optional[str] = None
+    avatar: Optional[Avatar] = None
 
 
 class SessionResponse(BaseModel):
@@ -614,7 +633,7 @@ class JoinableSession(BaseModel):
     code: str
     host_user_id: str
     host_display_name: str
-    host_avatar_url: Optional[str] = None
+    host_avatar: Optional[Avatar] = None
     game: Optional[GameSummary] = None
     phase: SessionPhase = SessionPhase.GATHER
     participant_count: int = 0
@@ -654,7 +673,7 @@ class UnifiedSearchResponse(BaseModel):
 class FeedPlayUser(BaseModel):
     id: str
     display_name: str
-    avatar_url: Optional[str] = None
+    avatar: Optional[Avatar] = None
 
 
 class FeedPlayParticipant(BaseModel):
@@ -695,7 +714,7 @@ class FeedHotGamesCard(BaseModel):
 class FeedSuggestedBuddy(BaseModel):
     user_id: str
     display_name: str
-    avatar_url: Optional[str] = None
+    avatar: Optional[Avatar] = None
     mutual_count: int
 
 

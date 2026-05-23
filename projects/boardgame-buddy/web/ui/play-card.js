@@ -304,47 +304,46 @@
     `;
   }
 
-  // Render a single back-side player row: avatar bubble on the left, name
-  // beside it. Registered players get a clickable initials bubble that
-  // routes to their profile (own → profile-self, others → profile-other);
-  // the bubble is the only navigable surface so tapping the name is inert.
-  // Ghost players get a non-clickable bubble with a ghost icon so the row
-  // still aligns at the same avatar column.
+  // Render a single back-side player row: badge on the left, name beside
+  // it. Registered players get a clickable customized badge that routes
+  // to their profile (own → profile-self, others → profile-other); the
+  // badge is the only navigable surface so tapping the name is inert.
+  // Ghost players get a non-clickable baseline badge with their initials.
   function renderPlayerRow(pl, me) {
     const nameHtml = `<span class="play-card__back-player-name">${escapeHtml(pl.name)}</span>`;
     if (!pl.user_id) {
-      return `
-        <span class="play-card__back-player-avatar is-ghost" aria-hidden="true">
-          <i data-lucide="ghost"></i>
-        </span>
-        ${nameHtml}
-      `;
+      const ghostBadge = window.BgbBadge.render({
+        avatar: null,
+        displayName: pl.name,
+        size: "sm",
+        isGhost: true,
+        extraClass: "play-card__back-player-avatar",
+      });
+      return `${ghostBadge}${nameHtml}`;
     }
     const route = (me && me.id === pl.user_id)
       ? `window.router.go('profile-self')`
       : `window.router.go('profile-other',{userId:'${escapeAttr(pl.user_id)}'})`;
-    const avatarBody = pl.avatar_url
-      ? `<img src="${escapeAttr(pl.avatar_url)}" alt="" />`
-      : escapeHtml(initialsOf(pl.name));
+    const badge = window.BgbBadge.render({
+      avatar: pl.avatar || null,
+      displayName: pl.name,
+      size: "sm",
+      isMe: !!(me && me.id === pl.user_id),
+      extraClass: "play-card__back-player-avatar is-link",
+    });
+    // Wrap the badge in a clickable shell so it routes to the player's
+    // profile. The badge is purely visual; navigation lives on the wrapper
+    // so keyboard / aria flow stays on one element.
     return `
-      <span class="play-card__back-player-avatar avatar-bubble is-link"
+      <span class="play-card__back-player-avatar-wrap"
             role="button" tabindex="0" data-no-flip
             aria-label="Open ${escapeAttr(pl.name)}'s profile"
             onclick="event.stopPropagation(); ${route}"
             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();${route};}">
-        ${avatarBody}
+        ${badge}
       </span>
       ${nameHtml}
     `;
-  }
-
-  // Two-letter initials fallback for the avatar bubble. Mirrors the
-  // locally-defined helpers in feed-view.js / buddies-view.js — there's no
-  // shared module so duplicating here matches the existing convention.
-  function initialsOf(name) {
-    const parts = String(name || "").trim().split(/[\s.]+/).filter(Boolean);
-    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return (parts[0] || "?").slice(0, 2).toUpperCase();
   }
 
   // ── Aspect ratio detection ──────────────────────────────────────────────────

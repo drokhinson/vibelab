@@ -2492,11 +2492,14 @@ body {
   cursor: pointer;
   flex-shrink: 0;
 }
-.bgb-global-header__avatar .avatar-bubble {
+.bgb-global-header__avatar .avatar-bubble,
+.bgb-global-header__avatar .user-badge {
   width: 36px; height: 36px;
   border: 2px solid oklch(var(--b3));
 }
-.bgb-global-header__avatar:hover .avatar-bubble { border-color: var(--accent); }
+.bgb-global-header__avatar .user-badge__initials { font-size: 14px; }
+.bgb-global-header__avatar:hover .avatar-bubble,
+.bgb-global-header__avatar:hover .user-badge { border-color: var(--accent); }
 
 /* DaisyUI's .btm-nav is position:fixed left:0 right:0 — fine on a phone but
    on a desktop browser it stretches the full viewport while the app itself
@@ -2888,51 +2891,31 @@ body {
   font-weight: 500;
 }
 
-/* Profile bubble at the start of each player row. Same visual language as
-   .avatar-bubble used elsewhere, sized to fit comfortably inside the gold
-   winner pill without enlarging the row height noticeably. */
-.play-card__back-player-avatar {
-  flex: 0 0 24px;
+/* Badge at the start of each play-card player row. Sized to fit
+   comfortably inside the gold winner pill without enlarging the row
+   height noticeably. Uses the shared .user-badge component for the icon
+   + colors; this rule overrides the default 28px size and lets the
+   wrapper handle clicks. */
+.user-badge.play-card__back-player-avatar {
   width: 24px;
   height: 24px;
-  border-radius: 999px;
+  flex: 0 0 24px;
+}
+.user-badge.play-card__back-player-avatar .user-badge__initials { font-size: 10px; }
+.play-card__back-player-avatar-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.06);
-  color: var(--polaroid-ink);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  overflow: hidden;
-  user-select: none;
-}
-.play-card__back-player-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  cursor: pointer;
+  transition: transform 120ms ease;
   border-radius: 999px;
 }
-.play-card__back-player-avatar.is-link {
-  cursor: pointer;
-  transition: transform 120ms ease, box-shadow 120ms ease;
-}
-.play-card__back-player-avatar.is-link:hover {
+.play-card__back-player-avatar-wrap:hover {
   transform: scale(1.06);
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.06);
 }
-.play-card__back-player-avatar.is-link:focus-visible {
+.play-card__back-player-avatar-wrap:focus-visible {
   outline: 2px solid var(--polaroid-accent);
   outline-offset: 2px;
-}
-.play-card__back-player-avatar.is-ghost {
-  background: var(--polaroid-line);
-  color: var(--polaroid-muted);
-  cursor: default;
-}
-.play-card__back-player-avatar.is-ghost i {
-  width: 14px;
-  height: 14px;
 }
 .play-card__back-player.is-winner {
   font-weight: 700;
@@ -3154,15 +3137,14 @@ body {
   padding: 0.6rem; text-align: center;
   color: var(--polaroid-ink);
 }
-.buddy-tile__avatar {
-  width: 56px; height: 56px; border-radius: 999px;
-  background: var(--polaroid-line);
-  color: var(--polaroid-ink);
+.buddy-tile__avatar-wrap {
+  margin: 0 auto 0.35rem; cursor: pointer;
   display: grid; place-items: center;
-  font-weight: 600; margin: 0 auto 0.35rem; cursor: pointer;
-  overflow: hidden;
 }
-.buddy-tile__avatar img { width: 100%; height: 100%; object-fit: cover; }
+.user-badge.buddy-tile__avatar {
+  width: 56px; height: 56px;
+}
+.user-badge.buddy-tile__avatar .user-badge__initials { font-size: 20px; }
 .buddy-tile__name { font-size: 0.85rem; font-weight: 600; line-height: 1.2; color: var(--polaroid-ink); }
 .buddy-tile__mutual { font-size: 0.72rem; color: var(--polaroid-muted); margin-top: 0.15rem; }
 
@@ -3181,6 +3163,8 @@ body {
   gap: 0.5rem;
 }
 .profile-id { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.user-badge.profile-id__avatar { width: 48px; height: 48px; }
+.user-badge.profile-id__avatar .user-badge__initials { font-size: 18px; }
 .profile-id__text { flex: 1; min-width: 0; }
 .profile-id__name-row {
   display: inline-flex; align-items: center; gap: 0.35rem;
@@ -5272,7 +5256,7 @@ main[data-view="session-viewer"].hidden {
 .cascade-players { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .cascade-player {
   display: grid;
-  grid-template-columns: 1fr 56px auto;
+  grid-template-columns: auto 1fr 56px auto;
   gap: 6px;
   align-items: center;
   padding: 6px 8px;
@@ -5280,7 +5264,14 @@ main[data-view="session-viewer"].hidden {
   border: 1px solid var(--polaroid-line);
   border-radius: 8px;
 }
-.cascade-player--read { grid-template-columns: 1fr auto; }
+/* Team mode adds a team field — fifth column. */
+.cascade-player:has(.cascade-player__team) { grid-template-columns: auto 1fr 56px 64px auto; }
+.cascade-player--read {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cascade-player--read .cascade-player__name { flex: 1; min-width: 0; }
 .cascade-player__name {
   font-weight: 600;
   font-size: 13px;
@@ -6472,11 +6463,13 @@ main[data-view="session-viewer"].hidden {
   padding: 0.5rem 0 0.25rem;
 }
 .profile-hub__avatar {
-  /* Size only — visual look comes from .avatar-bubble--me. */
+  /* Size only — visual look comes from .user-badge / .user-badge--me. */
   width: 64px; height: 64px;
   font-size: 1.4rem;
   flex: none;
 }
+.user-badge.profile-hub__avatar { width: 64px; height: 64px; }
+.user-badge.profile-hub__avatar .user-badge__initials { font-size: 24px; }
 .profile-hub__who { flex: 1; min-width: 0; }
 .profile-hub__name {
   font-family: var(--font-display);
@@ -6748,6 +6741,10 @@ main[data-view="session-viewer"].hidden {
   margin-left: -0.55rem;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
 }
+/* When the bud is a .user-badge, the badge's inline-color background takes
+   over but we still want the overlap + ring look. */
+.user-badge.preview-card__bud { width: 38px; height: 38px; }
+.user-badge.preview-card__bud .user-badge__initials { font-size: 14px; }
 .preview-card__bud:first-child { margin-left: 0; }
 .preview-card__bud--more {
   background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
@@ -6987,6 +6984,30 @@ main[data-view="session-viewer"].hidden {
   padding: 0 0.9rem 0.9rem;
 }
 .set-card__acct-edit-form input { flex: 1; min-width: 0; }
+.set-card__avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0.9rem 0.9rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-hover, #B8820E);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.set-card__avatar-btn:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.set-card__avatar-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .set-card__row {
   display: flex;
@@ -7270,4 +7291,302 @@ main[data-view="session-viewer"].hidden {
    bump its border so it reads on cream. */
 .bgb-cream-screen .settings-logout__btn {
   border: 1.5px solid color-mix(in srgb, var(--rust, #b23b34) 45%, transparent);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USER BADGE — customizable profile icon (icon + colors).
+   Rendered by BgbBadge.render() in ui/user-badge.js, used everywhere a
+   user's display name appears. Background/text color are inline style; the
+   class only sets shape, size and the optional "me" / ghost decorations.
+   ───────────────────────────────────────────────────────────────────────────── */
+.user-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1.5px solid rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  user-select: none;
+}
+.user-badge__initials {
+  font-family: var(--font-display, 'Crimson Text', Georgia, serif);
+  font-weight: 700;
+  line-height: 1;
+  color: inherit;
+}
+.user-badge__icon {
+  width: 60%;
+  height: 60%;
+  color: inherit;
+}
+.user-badge--xs { width: 20px; height: 20px; }
+.user-badge--xs .user-badge__initials { font-size: 9px; }
+.user-badge--sm { width: 28px; height: 28px; }
+.user-badge--sm .user-badge__initials { font-size: 12px; }
+.user-badge--md { width: 40px; height: 40px; }
+.user-badge--md .user-badge__initials { font-size: 16px; }
+.user-badge--lg { width: 72px; height: 72px; }
+.user-badge--lg .user-badge__initials { font-size: 28px; }
+
+/* Self highlight: subtle gold ring so the user spots themselves in lists. */
+.user-badge--me {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 1.5px color-mix(in srgb, var(--accent, #C9922A) 65%, transparent);
+}
+
+/* Settings account card uses a larger badge than the default `md` to keep
+   visual parity with the pre-badge initials bubble. */
+.user-badge.set-card__acct-avatar { width: 54px; height: 54px; }
+.user-badge.set-card__acct-avatar .user-badge__initials { font-size: 20px; }
+
+/* Ghost player: same look as a default-no-customization badge but with a
+   dashed outline so it reads as a placeholder identity. */
+.user-badge--ghost {
+  border-style: dashed;
+  opacity: 0.92;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AVATAR CUSTOMIZER — modal embedded in the polaroid popup chrome.
+   Markup built by PolaroidPopup.avatarCustomizer() in ui/polaroid-popup.js.
+   ───────────────────────────────────────────────────────────────────────────── */
+.avatar-cust {
+  width: min(340px, 92vw);
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+}
+.avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
+
+.avatar-cust__name {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 4px;
+  text-align: left;
+}
+.avatar-cust__name-label {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted);
+}
+.avatar-cust__name-input {
+  width: 100%;
+  background: #fff;
+  border: 1px solid rgba(42, 32, 20, 0.18);
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 9px 12px;
+  border-radius: 10px;
+}
+.avatar-cust__name-input:focus {
+  outline: none;
+  border-color: var(--accent, #C9922A);
+  box-shadow: 0 0 0 2px rgba(201, 146, 42, 0.25);
+}
+.avatar-cust__name-error {
+  margin: 0;
+}
+
+.avatar-cust__carousel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 0 2px;
+}
+.avatar-cust__arrow {
+  width: 44px; height: 44px;
+  flex: none;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: rgba(42, 32, 20, 0.06);
+  color: var(--polaroid-ink);
+  display: grid; place-items: center;
+  transition: background 0.15s, transform 0.1s;
+}
+.avatar-cust__arrow:hover { background: rgba(201, 146, 42, 0.18); }
+.avatar-cust__arrow:active { transform: scale(0.92); }
+.avatar-cust__reel {
+  position: relative;
+  width: 240px;
+  height: 120px;
+  overflow: hidden;
+}
+.avatar-cust__badge {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 96px; height: 96px;
+  border-radius: 50%;
+  z-index: 1;
+  transition: background 0.2s;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35),
+              inset 0 2px 0 rgba(255, 255, 255, 0.18);
+  border: 3px solid rgba(255, 255, 255, 0.18);
+}
+.avatar-cust__track {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  height: 120px;
+  align-items: center;
+  transition: transform 0.32s cubic-bezier(0.3, 0.85, 0.3, 1);
+}
+.avatar-cust__slot {
+  width: 80px; height: 120px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.3s, opacity 0.3s;
+  transform-origin: center center;
+  opacity: 0.55;
+  transform: scale(0.78);
+}
+.avatar-cust__slot svg {
+  width: 50px; height: 50px;
+  color: rgba(42, 32, 20, 0.22);
+  transition: color 0.2s;
+  display: block;
+}
+.avatar-cust__ini {
+  font-family: var(--font-display, 'Crimson Text', Georgia, serif);
+  font-weight: 700;
+  font-size: 30px;
+  color: rgba(42, 32, 20, 0.22);
+  line-height: 1;
+  transition: color 0.2s;
+}
+.avatar-cust__slot--active {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.avatar-cust__name-reel {
+  width: 240px; height: 26px;
+  overflow: hidden;
+  margin: 0 auto;
+}
+.avatar-cust__name-track {
+  display: flex;
+  transition: transform 0.32s cubic-bezier(0.3, 0.85, 0.3, 1);
+}
+.avatar-cust__name-slot {
+  width: 240px;
+  flex: none;
+  text-align: center;
+  font-family: var(--font-display, 'Crimson Text', Georgia, serif);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--polaroid-ink);
+}
+
+.avatar-cust__dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  padding: 8px 0 2px;
+}
+.avatar-cust__dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(42, 32, 20, 0.22);
+  transition: background 0.2s, width 0.2s;
+  cursor: pointer;
+}
+.avatar-cust__dot--on {
+  background: var(--accent, #C9922A);
+  width: 18px;
+  border-radius: 99px;
+}
+
+.avatar-cust__target {
+  display: flex;
+  background: rgba(42, 32, 20, 0.07);
+  border-radius: 12px;
+  padding: 4px;
+  margin: 14px 0 12px;
+}
+.avatar-cust__tg {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--polaroid-muted);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 9px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.avatar-cust__tg.on {
+  background: #fff;
+  color: var(--polaroid-ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.avatar-cust__tg-dot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(42, 32, 20, 0.25);
+}
+
+.avatar-cust__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  justify-content: center;
+}
+.avatar-cust__sw {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.13s;
+  position: relative;
+  border: 2px solid rgba(42, 32, 20, 0.12);
+  padding: 0;
+}
+.avatar-cust__sw:hover:not(:disabled) { transform: scale(1.1); }
+.avatar-cust__sw--on {
+  box-shadow: 0 0 0 3px var(--polaroid-bg, #FFFBF1),
+              0 0 0 5.5px var(--accent, #C9922A);
+}
+.avatar-cust__sw--on::after {
+  content: "\2713";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 900;
+}
+.avatar-cust__sw--light.avatar-cust__sw--on::after { color: #2a2014; }
+.avatar-cust__sw--dark.avatar-cust__sw--on::after { color: #fff; }
+.avatar-cust__sw--taken {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+.avatar-cust__note {
+  font-size: 11.5px;
+  color: var(--polaroid-muted);
+  font-weight: 600;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.avatar-cust .polaroid-popup__actions {
+  margin-top: 16px;
 }

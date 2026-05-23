@@ -27,19 +27,17 @@
 -- bgb_feed_plays(viewer UUID, before_played_at DATE DEFAULT NULL,
 --                before_created_at TIMESTAMPTZ DEFAULT NULL, lim INT DEFAULT 20)
 --   → TABLE (play_id UUID, play_user_id UUID, play_user_name TEXT,
---            play_user_avatar TEXT, game_id UUID, game_name TEXT,
+--            play_user_avatar JSONB, game_id UUID, game_name TEXT,
 --            game_image_url TEXT, game_thumbnail_url TEXT, played_at DATE,
 --            created_at TIMESTAMPTZ, notes TEXT, photo_url TEXT,
 --            play_mode TEXT, winner_display_name TEXT,
 --            participant_count INT, participants JSONB)
 --   Defined in: db/migrations/boardgamebuddy/014_feed_order_by_played_at.sql
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/025_feed_plays_buddies_only.sql
---               (replaced the player_user_ids + player_display_names arrays
---               from 024 with a single `participants` jsonb of
---               {user_id, display_name} objects, filtered to the viewer's
---               buddy circle so non-buddy / ghost identities don't appear
---               in the session header)
+--   Last updated in: db/migrations/boardgamebuddy/029_profile_avatar_config.sql
+--               (play_user_avatar changed from TEXT to JSONB — now carries
+--               the user's badge config {icon, iconColor, bgColor} after
+--               avatar_url → avatar rename on boardgamebuddy_profiles)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Visible plays for the Feed (own + accepted buddies),
 --               pre-joined to game name/image, winner display, and a
@@ -88,11 +86,10 @@
 --                    plays_per_page INT DEFAULT 10)
 --   → JSONB
 --   Defined in: db/migrations/boardgamebuddy/021_profile_and_game_detail_bundles.sql
---   Last updated in: db/migrations/boardgamebuddy/022_profile_bundle_status_map_includes_played.sql
---               (status_map now includes synthetic 'played' entries for the
---               viewer's plays-not-owned games — restores parity with the
---               legacy /collection endpoint so played tiles paint the
---               purple Played pill instead of falling back to "owned")
+--   Last updated in: db/migrations/boardgamebuddy/029_profile_avatar_config.sql
+--               (buddy + buddy-request blocks now emit `other_avatar` JSONB
+--               instead of `other_avatar_url` TEXT, following the
+--               avatar_url → avatar rename on boardgamebuddy_profiles)
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)
 --   Purpose:    Single round-trip Profile Self / Profile Other payload.

@@ -60,8 +60,9 @@
       window.session = sess;
       window.store.set("session", sess);
       if (sess) {
+        let me;
         try {
-          await window.User.current();
+          me = await window.User.current();
         } catch (e) {
           console.error("Failed to load profile:", e);
           window.router.go("auth");
@@ -72,11 +73,48 @@
             window.store.get("currentView") === "auth") {
           window.router.go("feed");
         }
+        // First-time onboarding: a brand-new profile carries needs_setup=true
+        // (migration 030, set by the dependency-side auto-create). Prompt the
+        // user to pick their display name + badge before they start using the
+        // app. Dismissing without saving leaves the flag set so the modal
+        // returns on next load.
+        if (me && me.needs_setup) {
+          maybePromptFirstTimeSetup(me);
+        }
       } else {
         window.store.set("user", null);
         window.router.go("auth");
       }
     });
+  }
+
+  async function maybePromptFirstTimeSetup(me) {
+    // The auto-created display name is the email local-part — usable but not
+    // personal. Seed the input with it so the user can keep it or rewrite.
+    const picked = await window.PolaroidPopup.avatarCustomizer({
+      headerTitle: "Create your profile",
+      includeNameField: true,
+      saveLabel: "Get started",
+      current: me.avatar || null,
+      displayName: me.display_name,
+    });
+    if (!picked) return; // Dismissed; modal returns next load (needs_setup still true).
+    try {
+      const updated = await window.api.post("/profile", {
+        display_name: picked.displayName,
+        avatar: {
+          icon: picked.icon,
+          iconColor: picked.iconColor,
+          bgColor: picked.bgColor,
+        },
+      });
+      window.store.set("user", new window.User({ ...me, ...updated }));
+    } catch (e) {
+      window.PolaroidPopup.alert({
+        title: "Couldn't save your profile",
+        body: (e && e.message) ? String(e.message) : "Please try again from Settings.",
+      });
+    }
   }
 
   // Bottom nav: Feed | Play | Profile (floating bar + raised Create).
@@ -90,13 +128,25 @@
     });
   }
 
-  // Keep the global header's avatar initials in sync with the current user.
-  // Lives at this level (not in a View) because the header persists across
-  // every screen.
+  // Keep the global header's avatar in sync with the current user's
+  // customization. Lives at this level (not in a View) because the
+  // header persists across every screen.
   function syncGlobalAvatar(user) {
     const el = document.getElementById("bgb-global-avatar");
     if (!el) return;
-    el.textContent = user ? new window.User(user).initials() : "?";
+    if (!user) {
+      el.textContent = "?";
+      el.removeAttribute("style");
+      el.className = "avatar-bubble avatar-bubble--me";
+      return;
+    }
+    el.outerHTML = window.BgbBadge.render({
+      avatar: user.avatar,
+      displayName: user.display_name,
+      size: "sm",
+      isMe: true,
+      extraClass: "bgb-global-header__badge",
+    }).replace("<span ", '<span id="bgb-global-avatar" ');
   }
   window.store.subscribe("user", syncGlobalAvatar);
 

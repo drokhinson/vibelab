@@ -57,7 +57,7 @@ def _build_response(sb, session_row: dict[str, Any]) -> SessionResponse:
             user_id=p.get("user_id"),
             display_name=p["display_name"],
             joined_at=p["joined_at"],
-            avatar_url=(profiles.get(p.get("user_id") or "") or {}).get("avatar_url"),
+            avatar=(profiles.get(p.get("user_id") or "") or {}).get("avatar"),
         )
         for p in participants_rows
     ]
@@ -389,7 +389,7 @@ def list_joinable(sb, viewer_id: str) -> list[JoinableSession]:
             code=s["code"],
             host_user_id=s["host_user_id"],
             host_display_name=prof.get("display_name") or "Host",
-            host_avatar_url=prof.get("avatar_url"),
+            host_avatar=prof.get("avatar"),
             game=games.get(s["game_id"]) if s.get("game_id") else None,
             phase=SessionPhase(s.get("phase") or SessionPhase.GATHER.value),
             participant_count=len(plist),

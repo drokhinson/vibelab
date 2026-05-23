@@ -63,10 +63,16 @@
 
     // ── Identity row ──────────────────────────────────────────────────────────
     _renderIdRow(me) {
-      const initials = new window.User(me).initials();
+      const badge = window.BgbBadge.render({
+        avatar: me.avatar,
+        displayName: me.display_name,
+        size: "lg",
+        isMe: true,
+        extraClass: "profile-hub__avatar",
+      });
       return `
         <header class="profile-hub__id">
-          <div class="profile-hub__avatar avatar-bubble avatar-bubble--me">${escape(initials)}</div>
+          ${badge}
           <div class="profile-hub__who">
             <div class="profile-hub__name font-display">${escape(me.display_name || "")}</div>
             ${me.username ? `<div class="profile-hub__handle">@${escape(me.username)}</div>` : ""}
@@ -173,7 +179,12 @@
         const extra = Math.max(0, count - shown.length);
         body = `
           <div class="preview-card__buds">
-            ${shown.map((bud) => `<div class="preview-card__bud">${escape(initialsOf(bud.other_display_name))}</div>`).join("")}
+            ${shown.map((bud) => window.BgbBadge.render({
+              avatar: bud.other_avatar,
+              displayName: bud.other_display_name,
+              size: "sm",
+              extraClass: "preview-card__bud",
+            })).join("")}
             ${extra > 0 ? `<div class="preview-card__bud preview-card__bud--more">+${extra}</div>` : ""}
           </div>
         `;

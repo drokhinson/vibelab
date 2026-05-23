@@ -386,8 +386,19 @@
 
     _renderParticipantRow(p, hostId) {
       const isHost = p.user_id && p.user_id === hostId;
+      const me = window.store.get("user");
+      const isMe = !!(p.user_id && me && p.user_id === me.id);
+      // Ghosts have no user_id; real users get their customized badge.
+      const badge = window.BgbBadge.render({
+        avatar: p.avatar,
+        displayName: p.display_name,
+        size: "sm",
+        isGhost: !p.user_id,
+        isMe,
+      });
       return `
         <li class="cascade-player cascade-player--read">
+          ${badge}
           <span class="cascade-player__name">${escape(p.display_name)}</span>
           ${isHost
             ? `<span class="session-viewer__host-tag"><i data-lucide="crown" class="w-3 h-3"></i> Host</span>`
@@ -432,7 +443,7 @@
               <thead>
                 <tr>
                   <th></th>
-                  ${participants.map((p) => `<th class="scoring-head">${escape(initialsOf(p.display_name))}</th>`).join("")}
+                  ${participants.map((p) => `<th class="scoring-head">${window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm", isMe: !!(myId && p.user_id === myId) })}</th>`).join("")}
                 </tr>
               </thead>
               <tbody>
