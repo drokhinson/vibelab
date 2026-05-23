@@ -24,6 +24,18 @@
 
     async onMount() { await this._load(); }
 
+    _renderTopbar() {
+      return `
+        <header class="search-topbar search-topbar--flush">
+          <button class="btn btn-ghost btn-sm" onclick="window.router.back('profile-self')">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          </button>
+          <h2 class="font-display font-semibold text-lg">Buddies</h2>
+          <span></span>
+        </header>
+      `;
+    }
+
     async _load() {
       this._loading = true;
       this.render();
@@ -52,6 +64,25 @@
       const activeId = active && active.id;
       const caret = active && active.selectionStart;
 
+      // Cold load — show the bgb logo loader instead of flashing every
+      // empty section. We're loading AND nothing is on screen yet.
+      if (this._loading
+          && this._buddies.length === 0
+          && this._requests.incoming.length === 0
+          && this._requests.outgoing.length === 0
+          && (this._playedWith || []).length === 0
+          && (this._ghosts || []).length === 0
+          && !this._q) {
+        this.container.innerHTML = `
+          ${this._renderTopbar()}
+          <div class="profile-loading">
+            ${window.buddyLoader({ size: 96, label: "Gathering buddies…" })}
+          </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
       // Map played-with rows by user_id so the accepted-buddy section can
       // surface a shared-play count without a second backend trip.
       const playCountByUser = {};
@@ -65,17 +96,11 @@
       const playedWithNonBuddies = (this._playedWith || []).filter((p) => !p.is_buddy);
 
       this.container.innerHTML = `
-        <header class="search-topbar">
-          <button class="btn btn-ghost btn-sm" onclick="window.router.back('profile-self')">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-          </button>
-          <h2 class="font-display font-semibold text-lg">Buddies</h2>
-          <span></span>
-        </header>
+        ${this._renderTopbar()}
 
         <section class="buddies-search">
           <input id="buddies-search-input" class="input input-bordered w-full"
-                 placeholder="Find people by display name"
+                 placeholder="Search for buddies"
                  autocomplete="off"
                  onblur="window.buddiesView._searchInput(this.value)"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();window.buddiesView._searchInput(this.value);}"
@@ -86,7 +111,7 @@
                   <div class="search-hit__placeholder"><i data-lucide="user"></i></div>
                   <div class="search-hit__body">
                     <div class="search-hit__name">${escape(u.display_name)}</div>
-                    ${u.email ? `<div class="search-hit__meta">${escape(u.email)}</div>` : ""}
+                    ${u.username ? `<div class="search-hit__meta">@${escape(u.username)}</div>` : ""}
                   </div>
                   <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();window.buddiesView._request('${u.id}', this)">Add</button>
                 </li>

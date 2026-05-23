@@ -3783,6 +3783,15 @@ body {
   padding-bottom: 0.5rem;
   border-bottom: 1px solid oklch(var(--b3));
 }
+/* Buddies view drops the topbar divider — the search bar sits right
+   underneath the header and the extra line crowded both. */
+.search-topbar--flush { border-bottom: none; padding-bottom: 0.25rem; }
+/* Loader sheet shown on cold-load views (no data yet, still fetching). */
+.profile-loading {
+  padding: 2.5rem 0.5rem 1rem;
+  display: grid;
+  place-items: center;
+}
 .search-topbar .btn-sm {
   min-height: 44px; height: 44px;
   padding-inline: 0.75rem;
@@ -3845,7 +3854,8 @@ body {
   padding: 0.4rem 0;
 }
 .search-filters {
-  margin-top: 0.5rem; padding: 0.65rem;
+  margin: 0.5rem 0 0.85rem;
+  padding: 0.65rem;
   background: oklch(var(--b2));
   border: 1px solid oklch(var(--b3));
   border-radius: 0.6rem;
@@ -4474,6 +4484,10 @@ body {
 /* ── Buddies view ─────────────────────────────────────────────────────────── */
 .buddies-search { padding: 0.5rem 0; }
 .buddies-section { padding: 0.75rem 0; border-top: 1px solid oklch(var(--b3)); }
+/* Drop the divider that would otherwise sit immediately below the search
+   bar — the user explicitly wanted the search area free of horizontal
+   lines. Subsequent sections still divide cleanly from each other. */
+.buddies-search + .buddies-section { border-top: none; padding-top: 0.25rem; }
 .buddies-section h3 { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
 /* Section header row: title left, manual refresh button right. The
    refresh icon animates while a refetch is in flight (driven by the
@@ -6831,13 +6845,20 @@ main[data-view="session-viewer"].hidden {
   background: linear-gradient(120deg, #F0C662, var(--accent) 60%, var(--accent-hover));
   color: #3a2a08;
   border-color: transparent;
+  /* Lift the selected pill off the row so the user can tell at a glance
+     which mode they're viewing — the prior inactive/active contrast on
+     the cream sheet read as "two identical tabs" until the gold glow
+     was added back. */
+  box-shadow: 0 6px 14px -4px rgba(201, 146, 42, 0.55),
+              inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  font-weight: 800;
 }
 .spoke-toggle__count {
   font-size: 0.72rem;
   opacity: 0.7;
   font-weight: 800;
 }
-.spoke-toggle__pill.is-active .spoke-toggle__count { opacity: 0.9; }
+.spoke-toggle__pill.is-active .spoke-toggle__count { opacity: 0.95; }
 
 /* ── Plays spoke: cream-card list rows with day-bucket dividers ─────────── */
 .plays-day-divider {
@@ -7223,11 +7244,24 @@ main[data-view="session-viewer"].hidden {
 /* Owned ↔ Played toggle pills */
 .bgb-cream-screen .spoke-toggle__pill {
   background: var(--polaroid-bg-soft, #F5EEDC);
-  color: var(--polaroid-ink, #1D1812);
+  color: var(--polaroid-muted, #8B7E68);
   border-color: var(--polaroid-line, #DAC9A4);
 }
-.bgb-cream-screen .spoke-toggle__pill:hover { border-color: var(--accent); }
-.bgb-cream-screen .spoke-toggle__pill.is-active { color: #3a2a08; }
+.bgb-cream-screen .spoke-toggle__pill:hover {
+  border-color: var(--accent);
+  color: var(--polaroid-ink, #1D1812);
+}
+/* Re-apply the gold gradient active state — the cream-screen base rule
+   above ties on specificity with the dark-theme `.is-active` block and
+   was knocking out its background, so the selected pill was rendering
+   indistinguishable from the inactive one on the Collection screen. */
+.bgb-cream-screen .spoke-toggle__pill.is-active {
+  background: linear-gradient(120deg, #F0C662, var(--accent) 60%, var(--accent-hover));
+  border-color: transparent;
+  color: #3a2a08;
+  box-shadow: 0 6px 14px -4px rgba(201, 146, 42, 0.45),
+              inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
 
 /* Filter chips (player count / playtime / play mode) */
 .bgb-cream-screen .filter-chip {
