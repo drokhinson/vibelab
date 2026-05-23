@@ -138,7 +138,7 @@
       return `
         <div class="set-card">
           <div class="set-card__acct">
-            <div class="set-card__acct-avatar">${escape(initials)}</div>
+            <div class="set-card__acct-avatar avatar-bubble avatar-bubble--me">${escape(initials)}</div>
             <div class="set-card__acct-body">
               <div class="set-card__acct-name">${escape(me.display_name || "")}</div>
               ${me.username ? `

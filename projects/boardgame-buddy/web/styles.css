@@ -6472,9 +6472,9 @@ main[data-view="session-viewer"].hidden {
   padding: 0.5rem 0 0.25rem;
 }
 .profile-hub__avatar {
+  /* Size only — visual look comes from .avatar-bubble--me. */
   width: 64px; height: 64px;
   font-size: 1.4rem;
-  border: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   flex: none;
 }
 .profile-hub__who { flex: 1; min-width: 0; }
@@ -6940,15 +6940,10 @@ main[data-view="session-viewer"].hidden {
   padding: 0.9rem;
 }
 .set-card__acct-avatar {
+  /* Size only — visual look comes from .avatar-bubble--me so the bubble
+     reads identically in the global header, the hub, and Settings. */
   width: 54px; height: 54px;
-  border-radius: 50%;
-  display: grid; place-items: center;
-  font-family: var(--font-display);
-  font-weight: 700;
   font-size: 1.15rem;
-  color: #3a2a08;
-  background: radial-gradient(circle at 35% 30%, #F0C662, var(--accent) 55%, var(--accent-hover));
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5);
   flex: none;
 }
 .set-card__acct-body { flex: 1; min-width: 0; }
@@ -7102,3 +7097,177 @@ main[data-view="session-viewer"].hidden {
   background: #2f8a3e;
 }
 .set-card__bgg-status--warn { color: #b96a1c; }
+
+/* ── Unified "me" avatar bubble ─────────────────────────────────────────────
+   Used by the global-header avatar (top-right), the Profile hub identity
+   row, and the Settings account card so the bubble reads identically in
+   all three places. Provides the visual only — the host class (e.g.
+   .profile-hub__avatar, .set-card__acct-avatar, .bgb-global-header__avatar)
+   sets the size.
+   ──────────────────────────────────────────────────────────────────────── */
+.avatar-bubble--me {
+  background: radial-gradient(circle at 35% 30%,
+    #F0C662,
+    var(--accent, #C9922A) 55%,
+    var(--accent-hover, #B8820E)) !important;
+  color: #3a2a08 !important;
+  font-family: var(--font-display);
+  font-weight: 700;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.18);
+}
+/* Soft gold rim when the bubble sits on the dark global header so it
+   reads as a single coin rather than dissolving into the bar. */
+.bgb-global-header__avatar .avatar-bubble--me {
+  border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Cream screen — secondary views (Settings + spokes)
+   The Profile hub keeps its dark backdrop with cream cards on top, but
+   every spoke the hub routes into (Collection / Wishlist / Plays /
+   Buddies / Settings) reads as one big sheet of cream paper. Inputs,
+   filter pills, list rows, and the collection-tile placeholder all flip
+   to ink-on-cream so they stay legible against the new surface.
+   ────────────────────────────────────────────────────────────────────────── */
+.bgb-cream-screen {
+  background: var(--polaroid-bg, #FFFBF1);
+  color: var(--polaroid-ink, #1D1812);
+}
+
+/* Spoke head chrome (back arrow + title + count) */
+.bgb-cream-screen .spoke-head__back {
+  background: color-mix(in srgb, var(--polaroid-ink) 6%, transparent);
+  color: var(--accent-hover, #B8820E);
+}
+.bgb-cream-screen .spoke-head__back:hover {
+  background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+}
+.bgb-cream-screen .spoke-head__title { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .spoke-head__count { color: var(--polaroid-muted, #8B7E68); }
+
+/* Buddies-view header reuses .search-topbar instead of .spoke-head — match
+   the cream-screen look so the back button doesn't disappear into the
+   bg. */
+.bgb-cream-screen .search-topbar h2 { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .search-topbar .btn-ghost { color: var(--accent-hover, #B8820E); }
+
+/* Cards: drop the cream bg (parent is cream) onto a slightly warmer wash
+   so they still read as discrete elements without floating on dead air. */
+.bgb-cream-screen .set-card,
+.bgb-cream-screen .plays-list__row,
+.bgb-cream-screen .buddies-row {
+  background: var(--polaroid-bg-soft, #F5EEDC);
+  color: var(--polaroid-ink, #1D1812);
+}
+.bgb-cream-screen .buddies-row {
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+}
+.bgb-cream-screen .buddies-row__avatar { background: var(--polaroid-line, #DAC9A4); color: var(--polaroid-ink); }
+.bgb-cream-screen .buddies-row__name { color: var(--polaroid-ink, #1D1812); }
+.bgb-cream-screen .buddies-row__when { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
+.bgb-cream-screen .buddies-section { border-top-color: var(--polaroid-line, #DAC9A4); }
+.bgb-cream-screen .buddies-section h3 { color: var(--accent-hover, #B8820E); }
+
+/* Search-bar + filter-toggle controls — DaisyUI's `.input.input-bordered`
+   defaults to dark theme tones, which renders as a black box on cream.
+   Override scoped to .bgb-cream-screen AND to .set-card so the inline
+   display-name edit form in Settings reads correctly too. */
+.bgb-cream-screen .input,
+.bgb-cream-screen .input.input-bordered,
+.set-card .input,
+.set-card .input.input-bordered {
+  background: var(--polaroid-bg, #FFFBF1);
+  color: var(--polaroid-ink, #1D1812);
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+}
+.bgb-cream-screen .input::placeholder,
+.set-card .input::placeholder { color: var(--polaroid-muted, #8B7E68); }
+.bgb-cream-screen .input:focus,
+.set-card .input:focus,
+.bgb-cream-screen .input.input-bordered:focus,
+.set-card .input.input-bordered:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: var(--accent);
+}
+
+/* DaisyUI ghost buttons (filter toggle, refresh, prev/next) — needs ink
+   strokes on a cream surface or they disappear. */
+.bgb-cream-screen .btn.btn-ghost {
+  color: var(--polaroid-ink, #1D1812);
+}
+.bgb-cream-screen .btn.btn-ghost:hover {
+  background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
+}
+
+/* Owned ↔ Played toggle pills */
+.bgb-cream-screen .spoke-toggle__pill {
+  background: var(--polaroid-bg-soft, #F5EEDC);
+  color: var(--polaroid-ink, #1D1812);
+  border-color: var(--polaroid-line, #DAC9A4);
+}
+.bgb-cream-screen .spoke-toggle__pill:hover { border-color: var(--accent); }
+.bgb-cream-screen .spoke-toggle__pill.is-active { color: #3a2a08; }
+
+/* Filter chips (player count / playtime / play mode) */
+.bgb-cream-screen .filter-chip {
+  background: var(--polaroid-bg, #FFFBF1);
+  border-color: var(--polaroid-line, #DAC9A4);
+  color: var(--polaroid-ink, #1D1812);
+}
+.bgb-cream-screen .filter-chip:hover { border-color: var(--accent); }
+.bgb-cream-screen .filter-chip.is-active {
+  background: var(--accent);
+  color: #3a2a08;
+  border-color: var(--accent);
+}
+.bgb-cream-screen .search-filters {
+  background: var(--polaroid-bg-soft, #F5EEDC);
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+}
+.bgb-cream-screen .search-filter-label { color: var(--polaroid-muted, #8B7E68); }
+.bgb-cream-screen .search-filter-badge { background: var(--accent); color: #3a2a08; }
+
+/* Collection-tile + recent-plays placeholders need cream-tone background
+   instead of the dark theme's `--b2`/`--b3` so they sit cleanly on the
+   cream sheet. */
+.bgb-cream-screen .collection-tile {
+  background: var(--polaroid-bg-soft, #F5EEDC);
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+}
+.bgb-cream-screen .collection-tile__name { color: var(--polaroid-ink, #1D1812); }
+.bgb-cream-screen .collection-tile__placeholder {
+  background: var(--polaroid-line, #DAC9A4);
+  color: var(--polaroid-ink-soft, #4A3F2F);
+}
+
+/* Plays-list typography overrides (the cards still come from the .plays-list
+   block above; these just polish the text contrast on cream). */
+.bgb-cream-screen .plays-day-divider { color: var(--accent-hover, #B8820E); }
+
+/* Empty-state and pager captions */
+.bgb-cream-screen .profile-empty { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
+.bgb-cream-screen .search-pager .text-xs,
+.bgb-cream-screen .opacity-60 { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
+
+/* Settings: section labels + BGG attribution footer */
+.bgb-cream-screen .set-card-label { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .settings-bgg-credit { color: var(--polaroid-muted, #8B7E68); }
+.bgb-cream-screen .settings-bgg-credit__text { color: var(--polaroid-muted, #8B7E68); }
+
+/* BGG sync progress bar reads with proper contrast on the cream surface */
+.bgb-cream-screen .bgg-progress {
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+}
+.bgb-cream-screen .bgg-progress__bar { background: var(--polaroid-line, #DAC9A4); }
+.bgb-cream-screen .bgg-progress__label { color: var(--polaroid-ink, #1D1812); }
+.bgb-cream-screen .bgg-progress__direct { color: var(--polaroid-muted, #8B7E68); }
+
+/* Logout button sits below the cards — keep the destructive red wash but
+   bump its border so it reads on cream. */
+.bgb-cream-screen .settings-logout__btn {
+  border: 1.5px solid color-mix(in srgb, var(--rust, #b23b34) 45%, transparent);
+}
