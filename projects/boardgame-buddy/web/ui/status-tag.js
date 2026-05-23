@@ -39,7 +39,7 @@
    * expansions are associated with it. The semantics depend on caller
    * context (passed in via `opts.context`):
    *   - "owned"  → "N expansion(s) owned" (collection views, profile)
-   *   - "total"  → "N expansion(s) in BoardgameBuddy" (browse/search)
+   *   - "total"  → "N expansion(s) in Boardgame Buddy" (browse/search)
    * Same git-fork icon either way so the chip is recognisable across
    * the app — the tooltip clarifies which sense applies.
    */
@@ -47,7 +47,7 @@
     if (!count || count < 1) return "";
     const noun = `expansion${count === 1 ? "" : "s"}`;
     const tip = opts.context === "total"
-      ? `${count} ${noun} in BoardgameBuddy`
+      ? `${count} ${noun} in Boardgame Buddy`
       : `${count} ${noun} owned`;
     return `
       <span class="expansion-count-badge" title="${tip}">

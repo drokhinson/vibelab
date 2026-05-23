@@ -29,7 +29,7 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* TODO: Replace with your app UI */}
-      <Text style={styles.title}>BoardgameBuddy</Text>
+      <Text style={styles.title}>Boardgame Buddy</Text>
       <Text style={styles.muted}>Replace this with your app content.</Text>
       <Text style={styles.code}>{JSON.stringify(data, null, 2)}</Text>
     </ScrollView>

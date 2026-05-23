@@ -39,7 +39,7 @@
         <div class="flex flex-col items-center justify-center min-h-[60vh] px-4">
           <div class="mb-8 text-center">
             <img src="assets/brand/bgb-logo.svg" alt="" class="w-16 h-16 mx-auto rounded-2xl mb-3" />
-            <h1 class="text-3xl font-bold font-display text-base-content">BoardgameBuddy</h1>
+            <h1 class="text-3xl font-bold font-display text-base-content">Boardgame Buddy</h1>
             <p class="text-base-content/60 mt-2">Plays, buddies, and the games you reach for.</p>
           </div>
           <div class="card bg-base-200 w-full max-w-sm">
@@ -115,7 +115,7 @@
           // they can link with their existing password.
           if (data?.user && (data.user.identities?.length ?? 0) === 0) {
             this._mode = "login";
-            this.setError("An account with this email already exists in another vibelab app. Sign in with your existing password to link BoardgameBuddy.");
+            this.setError("An account with this email already exists in another vibelab app. Sign in with your existing password to link Boardgame Buddy.");
           } else if (data?.session) {
             // Project is configured without email confirmation; the auth
             // state listener will land the user on the feed.

@@ -532,7 +532,7 @@
           : "";
         step3 = step(
           importsResolved ? "done" : "active",
-          `<strong>${missingCount}</strong> missing in BoardgameBuddy${sublist}`
+          `<strong>${missingCount}</strong> missing in Boardgame Buddy${sublist}`
         );
       }
 
