@@ -870,6 +870,52 @@ async def get_sync_status(
         session_done = sum(1 for s in by_id.values() if s == "done")
         session_errored = sum(1 for s in by_id.values() if s == "error")
 
+    # Resolve display names for games that this session has finished
+    # importing. The FE streams these into the sync log as bullet points
+    # below the "{Z} missing" header so the user sees each title land
+    # instead of just a percentage. Names come from boardgamebuddy_games
+    # (which only has rows for already-imported games) joined against the
+    # session's done bgg_ids; we order by the pending row's completed_at
+    # so the most recent imports appear first, capped at 20.
+    session_game_names: list[str] = []
+    if session_started_at and session_done > 0:
+        done_bgg_ids = [bid for bid, st in by_id.items() if st == "done"]
+        if done_bgg_ids:
+            done_rows = (
+                sb.table("boardgamebuddy_bgg_pending_imports")
+                .select("bgg_id, completed_at")
+                .eq("user_id", user.user_id)
+                .eq("status", "done")
+                .in_("bgg_id", done_bgg_ids)
+                .order("completed_at", desc=True)
+                .execute()
+                .data
+                or []
+            )
+            ordered_bgg_ids: list[int] = []
+            seen: set[int] = set()
+            for r in done_rows:
+                bid = r.get("bgg_id")
+                if bid is None or bid in seen:
+                    continue
+                seen.add(bid)
+                ordered_bgg_ids.append(bid)
+                if len(ordered_bgg_ids) >= 20:
+                    break
+            if ordered_bgg_ids:
+                games = (
+                    sb.table("boardgamebuddy_games")
+                    .select("bgg_id, name")
+                    .in_("bgg_id", ordered_bgg_ids)
+                    .execute()
+                    .data
+                    or []
+                )
+                name_by_bgg = {g["bgg_id"]: g["name"] for g in games if g.get("name")}
+                session_game_names = [
+                    name_by_bgg[bid] for bid in ordered_bgg_ids if bid in name_by_bgg
+                ]
+
     return BggSyncStatus(
         bgg_username=bgg_username,
         auth_state=auth_state,
@@ -880,4 +926,5 @@ async def get_sync_status(
         session_total=session_total,
         session_done=session_done,
         session_errored=session_errored,
+        session_game_names=session_game_names,
     )
