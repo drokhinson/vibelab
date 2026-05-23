@@ -3643,9 +3643,6 @@ body {
   margin-bottom: 0.35rem;
 }
 
-.play-detail__winners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
-.play-detail__winners li { font-weight: 600; color: var(--accent); }
-
 .play-detail__players { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
 .play-detail__player {
   display: flex; align-items: center; justify-content: space-between;
@@ -3654,8 +3651,13 @@ body {
   border-radius: 0.45rem;
 }
 .play-detail__player.is-winner { border-color: var(--accent); }
-.play-detail__player-name { font-weight: 500; display: inline-flex; align-items: center; gap: 0.25rem; }
+.play-detail__player-name { font-weight: 500; display: inline-flex; align-items: center; gap: 0.4rem; min-width: 0; }
 .play-detail__player.is-winner .play-detail__player-name { color: var(--accent); }
+.play-detail__player-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Crown sits to the right of the winner's name. Inherits the parent
+   name color so it reads as the accent in both DaisyUI dark and the
+   polaroid popup variants (the parent name already gets re-tinted). */
+.play-detail__player-crown { color: inherit; flex: none; }
 .play-detail__player-score { font-family: var(--font-display); font-weight: 700; }
 
 .play-detail__expansions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
@@ -4376,6 +4378,11 @@ body {
   opacity: 0.75;
   white-space: nowrap;
 }
+/* Column-header bubble. Reuses the standard `xs` badge size but drops
+   the parent th's faded opacity so the player's chosen colors land
+   exactly the way they look elsewhere — the bubble IS the identity. */
+.scoring-table thead th:has(.scoring-head__badge) { opacity: 1; padding: 0.25rem 0.3rem; }
+.scoring-head__badge { vertical-align: middle; }
 .scoring-table tbody th {
   font-weight: 600;
   opacity: 0.7;
@@ -6354,8 +6361,7 @@ main[data-view="session-viewer"].hidden {
   border-color: rgba(229,192,74,0.5);
 }
 .play-detail-popup__card .play-detail__player.is-winner .play-detail__player-name,
-.play-detail-popup__card .play-detail__player.is-winner .play-detail__player-score,
-.play-detail-popup__card .play-detail__winners li {
+.play-detail-popup__card .play-detail__player.is-winner .play-detail__player-score {
   color: #C9922A;
 }
 .play-detail-popup__card .play-detail__game-when,

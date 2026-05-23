@@ -48,7 +48,7 @@
             <tr>
               <th></th>
               ${safePlayers.map((p) => `
-                <th class="scoring-head" title="${escapeAttr(p.name)}">${escape(labelFor(p))}</th>
+                <th class="scoring-head" title="${escapeAttr(p.name)}">${renderHeadBadge(p)}</th>
               `).join("")}
             </tr>
           </thead>
@@ -127,7 +127,29 @@
     return (player.roundScores || []).reduce((a, b) => a + (Number(b) || 0), 0);
   }
 
-  function labelFor(p) {
+  // Column-header badge. Renders the player's colored bubble but FORCES
+  // initials inside (even when the user picked an icon avatar) so the
+  // narrow header column stays scannable while still being color-coded
+  // by the player's own palette.
+  function renderHeadBadge(p) {
+    if (!window.BgbBadge || typeof window.BgbBadge.render !== "function") {
+      // Fallback if user-badge.js failed to load — show the raw initials.
+      return escape(initialsFor(p));
+    }
+    const me = window.store && window.store.get && window.store.get("user");
+    return window.BgbBadge.render({
+      avatar: p.avatar || null,
+      displayName: p.name,
+      initials: p.initials || undefined,
+      size: "xs",
+      isGhost: !p.user_id,
+      isMe: !!(me && p.user_id === me.id),
+      forceInitials: true,
+      extraClass: "scoring-head__badge",
+    });
+  }
+
+  function initialsFor(p) {
     if (p.initials) return p.initials;
     const parts = String(p.name || "").trim().split(/[\s.]+/).filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
