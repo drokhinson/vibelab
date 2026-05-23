@@ -1,65 +1,29 @@
-// views/profile-other-view.js — public view of another user's profile.
+// views/profile-other-view.js — Public profile hub for another user.
 //
-// Header + buddy-relation button + stats strip, then two tabs:
-//   Game Collection | Recent Plays
-// Both panels reuse the /collection/grid and /plays endpoints with
-// ?user_id=<target> so the surface tracks the same UX as the self profile.
+// Mirrors profile-self-view's layout (identity row → four stat tiles →
+// warm-cream preview cards) but trimmed to Collection and Recent plays
+// only — no Wishlist, no Buddies sections. The settings gear slot is
+// replaced by a buddy-relation button (Buddy up / Accept / Request sent
+// / Buddies). "See all →" deep-links into the shared collection / plays
+// views, parameterized by ?userId=<them>. Seeded from one /profile/bundle
+// round trip so first paint is instant.
 
 (function () {
-  const PLAYS_PER_PAGE = 10;
-  const COLLECTION_PER_PAGE = 12;
-  const TAB_COLLECTION = "collection";
-  const TAB_PLAYS = "plays";
+  const PREVIEW_COVERS = 4;
+  const PREVIEW_PLAYS = 2;
 
   class ProfileOtherView extends window.View {
     constructor() {
       super("profile-other");
-      this._activeTab = TAB_COLLECTION;
       this._profile = null;
-      this._stats = null;
+      this._bundle = null;
       this._error = null;
-
-      this._collectionItems = [];
-      this._collectionTotal = 0;
-      this._collectionPage = 1;
-      this._collectionLoading = false;
-      this._collectionError = null;
-
-      this._recentPlays = [];
-      this._recentPlaysTotal = 0;
-      this._recentPlaysPage = 1;
-      this._recentPlaysLoading = false;
-      this._recentPlaysError = null;
-      this._recentPlaysLoaded = false;
     }
 
     async onMount() {
-      this.listen("myCollectionMap", () => this._refreshCollectionData());
-      this.listenDom("status-changed", (e) => {
-        const { gameId, status } = e.detail || {};
-        if (!gameId) return;
-        if (status == null) delete this._statusMap[gameId];
-        else this._statusMap[gameId] = status;
-        this.render();
-      });
-      this._statusMap = {};
-      this._expansionCounts = {};
-      this._refreshCollectionData();
       await this._load();
     }
     async onParamsChange() { await this._load(); }
-
-    async _refreshCollectionData() {
-      try {
-        const [status, exp] = await Promise.all([
-          window.Collection.myStatusMap(),
-          window.Collection.myExpansionCountByBaseBggId(),
-        ]);
-        this._statusMap = status || {};
-        this._expansionCounts = exp || {};
-      } catch (_) {}
-      this.render();
-    }
 
     _userId() {
       return this.params && this.params.userId;
@@ -72,224 +36,88 @@
         this.render();
         return;
       }
-      // Reset section state when the target user changes.
-      this._activeTab = TAB_COLLECTION;
-      this._collectionItems = [];
-      this._collectionTotal = 0;
-      this._collectionPage = 1;
-      this._recentPlays = [];
-      this._recentPlaysTotal = 0;
-      this._recentPlaysPage = 1;
-      this._recentPlaysLoaded = false;
-      // /profile/bundle covers stats + collection-grid for the target user in
-      // one round trip; User.fetch is still needed for the display-name /
-      // avatar / buddy-relation metadata the bundle doesn't carry. Both
-      // requests fire in parallel and hydrate their blocks independently.
-      this._collectionLoading = true;
+      this._profile = null;
+      this._bundle = null;
+      this._error = null;
       this.render();
       const profilePromise = window.User.fetch(userId)
         .then((p) => { this._profile = p; this.render(); })
         .catch((e) => { this._error = e.message || "Failed to load profile"; this.render(); });
-      const bundlePromise = window.Profile.bundle(userId, { colPerPage: COLLECTION_PER_PAGE, playsPerPage: PLAYS_PER_PAGE })
-        .then((b) => { this._hydrateFromBundle(b); })
+      const bundlePromise = window.Profile
+        .bundle(userId, { colPerPage: PREVIEW_COVERS, playsPerPage: PREVIEW_PLAYS })
+        .then((b) => { this._bundle = b; this._seedViewerMaps(b); this.render(); })
         .catch((e) => {
-          // Fall back to the legacy per-call path so the panel still loads
-          // if the bundle endpoint regresses.
-          if (window.console) console.warn("profile bundle failed, falling back", e);
-          return Promise.all([
-            window.Stats.for(userId).then((s) => { this._stats = s; this.render(); }).catch(() => {}),
-            this._loadCollection(),
-          ]);
+          if (window.console) console.warn("profile bundle failed", e);
         });
       await Promise.all([profilePromise, bundlePromise]);
     }
 
-    _hydrateFromBundle(b) {
-      if (!b) return;
-      this._stats = b.stats || null;
-      // The collection panel only renders the owned page on Profile Other —
-      // the existing UI doesn't expose wishlist/played for other users.
-      this._collectionItems = b.owned_page || [];
-      this._collectionTotal = b.owned_total || 0;
-      this._collectionPage = 1;
-      this._collectionLoading = false;
-      // Recent plays are tab-loaded on demand; seed page 1 so the tab paints
-      // instantly when the user clicks it.
-      this._recentPlays = b.recent_plays || [];
-      this._recentPlaysTotal = b.recent_plays_total || 0;
-      this._recentPlaysPage = 1;
-      this._recentPlaysLoaded = true;
-      // Seed the viewer's collection map / expansion counts so tile pills
-      // render the right state without a separate /collection round trip.
-      if (b.status_map && b.expansion_counts) {
+    _seedViewerMaps(b) {
+      // Prime the viewer's own collection maps so the collection spoke
+      // paints "you own this" pills instantly when "See all →" is tapped.
+      if (b && b.status_map && b.expansion_counts && window.Collection && window.Collection.seedFromBundle) {
         window.Collection.seedFromBundle(b.status_map, b.expansion_counts);
-        this._statusMap = b.status_map;
-        this._expansionCounts = b.expansion_counts;
-      }
-      this.render();
-    }
-
-    async _loadCollection() {
-      this._collectionLoading = true;
-      this._collectionError = null;
-      this.render();
-      try {
-        const qs = new URLSearchParams({
-          user_id: this._userId(),
-          page: String(this._collectionPage),
-          per_page: String(COLLECTION_PER_PAGE),
-          exclude_expansions: "true",
-        });
-        const data = await window.api.get("/collection/grid?" + qs.toString());
-        this._collectionItems = (data && data.items) || [];
-        this._collectionTotal = (data && data.total) || 0;
-      } catch (e) {
-        this._collectionError = e.message || "Failed to load";
-        this._collectionItems = [];
-        this._collectionTotal = 0;
-      } finally {
-        this._collectionLoading = false;
-        this.render();
       }
     }
 
-    async _loadRecentPlays() {
-      this._recentPlaysLoading = true;
-      this._recentPlaysError = null;
-      this.render();
-      try {
-        const data = await window.Play.list({
-          userId: this._userId(),
-          page: this._recentPlaysPage,
-          perPage: PLAYS_PER_PAGE,
-        });
-        const fresh = (data && data.plays) || [];
-        this._recentPlaysTotal = (data && data.total) || 0;
-        this._recentPlays = this._recentPlaysPage === 1 ? fresh : [...this._recentPlays, ...fresh];
-      } catch (e) {
-        this._recentPlaysError = e.message || "Failed to load";
-      } finally {
-        this._recentPlaysLoading = false;
-        this._recentPlaysLoaded = true;
-        this.render();
-      }
-    }
+    renderLoading() { this.render(); }
 
     render() {
       if (this._error) {
         this.container.innerHTML = `
-          <div class="p-6">
-            <button class="btn btn-ghost btn-sm mb-3" onclick="window.router.back('feed')">
-              <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
-            </button>
-            <div class="alert alert-error">${escape(this._error)}</div>
-          </div>
+          ${this._renderBack()}
+          <div class="alert alert-error text-sm mt-3">${escape(this._error)}</div>
         `;
         if (window.lucide) window.lucide.createIcons();
         return;
       }
-      if (!this._profile) {
-        this.container.innerHTML = window.buddyLoader({ size: 120 });
+      if (!this._profile || !this._bundle) {
+        this.container.innerHTML = `
+          ${this._renderBack()}
+          <div class="profile-loading">${window.buddyLoader({ size: 96, label: "Loading profile…" })}</div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
-      const p = this._profile;
-      const s = this._stats ? window.Stats.format(this._stats) : null;
+      const b = this._bundle;
       this.container.innerHTML = `
-        <header class="profile-other__top">
-          <button class="btn btn-ghost btn-sm" onclick="window.router.back('feed')">
+        ${this._renderBack()}
+        ${this._renderIdRow(this._profile)}
+        ${this._renderStats(b)}
+        ${this._renderCollectionPreview(b)}
+        ${this._renderPlaysPreview(b)}
+        <div style="height: 1rem"></div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    _renderBack() {
+      return `
+        <header>
+          <button class="btn btn-ghost btn-sm" onclick="window.router.back('feed')" aria-label="Back">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
         </header>
-
-        <section class="profile-header profile-header--row">
-          <div class="profile-id">
-            ${window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "md", extraClass: "profile-id__avatar" })}
-            <div class="profile-id__text">
-              <h2 class="profile-id__name font-display">${escape(p.display_name)}</h2>
-              ${p.username ? `
-                <div class="profile-id__handle">
-                  <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>
-                  <span class="profile-id__handle-value">${escape(p.username)}</span>
-                </div>
-              ` : ""}
-            </div>
-          </div>
-          <div class="profile-header__actions">
-            ${this._renderRelationButton(p)}
-          </div>
-        </section>
-
-        <section class="profile-stats">
-          ${s ? this._statRow(s) : window.buddyLoader({ size: 72, label: "Loading stats" })}
-        </section>
-
-        <nav class="profile-tabs" role="tablist">
-          ${this._renderTab(TAB_COLLECTION, "Game Collection")}
-          ${this._renderTab(TAB_PLAYS,      "Recent Plays")}
-        </nav>
-
-        <div id="profile-other-tab-body" class="profile-tab-body"></div>
-      `;
-      this._renderActiveTab();
-      if (window.lucide) window.lucide.createIcons();
-    }
-
-    _renderTab(id, label) {
-      const isActive = this._activeTab === id;
-      return `
-        <button class="profile-tab ${isActive ? "is-active" : ""}"
-                role="tab" aria-selected="${isActive}"
-                onclick="window.profileOtherView._switchTab('${id}')">
-          ${label}
-        </button>
       `;
     }
 
-    _renderActiveTab() {
-      const body = document.getElementById("profile-other-tab-body");
-      if (!body) return;
-      if (this._activeTab === TAB_COLLECTION) {
-        body.innerHTML = this._renderCollectionPanel();
-      } else {
-        body.innerHTML = this._renderRecentPlaysPanel();
-      }
-      if (window.lucide) window.lucide.createIcons();
-    }
-
-    async _switchTab(id) {
-      if (this._activeTab === id) return;
-      this._activeTab = id;
-      if (id === TAB_PLAYS && !this._recentPlaysLoaded) {
-        this._recentPlaysPage = 1;
-        this._loadRecentPlays();
-        return;
-      }
-      this.render();
-    }
-
-    _statRow(s) {
-      const fav = s.favorite;
-      const favName = fav ? fav.name : "—";
-      const favClick = fav ? `onclick="window.router.go('game-detail',{gameId:'${fav.id}',gameName:'${jsStr(fav.name || '')}'})"` : "";
+    // ── Identity row ──────────────────────────────────────────────────────────
+    _renderIdRow(p) {
+      const badge = window.BgbBadge.render({
+        avatar: p.avatar,
+        displayName: p.display_name,
+        size: "lg",
+        extraClass: "profile-hub__avatar",
+      });
       return `
-        <div class="profile-stats__grid">
-          <div class="profile-stat">
-            <div class="profile-stat__value">${s.games}</div>
-            <div class="profile-stat__label">Played Games</div>
+        <header class="profile-hub__id">
+          ${badge}
+          <div class="profile-hub__who">
+            <div class="profile-hub__name font-display">${escape(p.display_name || "")}</div>
+            ${p.username ? `<div class="profile-hub__handle">@${escape(p.username)}</div>` : ""}
           </div>
-          <div class="profile-stat">
-            <div class="profile-stat__value">${s.owned}</div>
-            <div class="profile-stat__label">Owned Games</div>
-          </div>
-          <div class="profile-stat">
-            <div class="profile-stat__value">${s.wins}</div>
-            <div class="profile-stat__label">Wins</div>
-          </div>
-          <div class="profile-stat profile-stat--fav" ${favClick}>
-            <div class="profile-stat__value profile-stat__value--text" title="${escape(favName)}">${escape(favName)}</div>
-            <div class="profile-stat__label">Favorite</div>
-          </div>
-        </div>
+          ${this._renderRelationButton(p)}
+        </header>
       `;
     }
 
@@ -320,139 +148,119 @@
       await this._load();
     }
 
-    // ── Collection panel ──────────────────────────────────────────────────────
+    // ── Four stat tiles ───────────────────────────────────────────────────────
+    _renderStats(b) {
+      const stats = (b && b.stats) || {};
+      const owned = stats.owned_games || 0;
+      const plays = (b && b.recent_plays_total) || stats.total_plays || 0;
+      const wins = stats.win_count || 0;
+      const fav = stats.favorite_game || null;
+      const favName = fav ? fav.name : "—";
+      const favClick = fav
+        ? `onclick="window.router.go('game-detail',{gameId:'${fav.game_id}',gameName:'${jsStr(fav.name || "")}'})"`
+        : "";
+      return `
+        <section class="profile-hub__stats">
+          <div class="profile-stat-card profile-stat-card--static">
+            <div class="profile-stat-card__v">${owned}</div>
+            <div class="profile-stat-card__k">Games</div>
+          </div>
+          <div class="profile-stat-card profile-stat-card--static">
+            <div class="profile-stat-card__v">${plays}</div>
+            <div class="profile-stat-card__k">Plays</div>
+          </div>
+          <div class="profile-stat-card profile-stat-card--static">
+            <div class="profile-stat-card__v">${wins}</div>
+            <div class="profile-stat-card__k">Wins</div>
+          </div>
+          <button class="profile-stat-card profile-stat-card--fav" ${favClick}>
+            <div class="profile-stat-card__v profile-stat-card__v--text" title="${escapeAttr(favName)}">${escape(favName)}</div>
+            <div class="profile-stat-card__k">Top game</div>
+          </button>
+        </section>
+      `;
+    }
 
-    _renderCollectionPanel() {
-      const totalPages = Math.max(1, Math.ceil(this._collectionTotal / COLLECTION_PER_PAGE));
-      const ownedExp = (this._stats && this._stats.owned_expansions) || 0;
+    // ── Preview cards ─────────────────────────────────────────────────────────
+    _renderCollectionPreview(b) {
+      const items = (b && b.owned_page) || [];
+      const count = (b && b.owned_total) || 0;
+      const ownedExp = (b && b.stats && b.stats.owned_expansions) || 0;
       const subtitle = ownedExp > 0
-        ? `${this._collectionTotal} games · ${ownedExp} expansion${ownedExp === 1 ? "" : "s"}`
-        : `${this._collectionTotal} games`;
+        ? `${count} games · ${ownedExp} expansion${ownedExp === 1 ? "" : "s"}`
+        : `${count} game${count === 1 ? "" : "s"}`;
+      return this._previewCard({
+        icon: "library-big",
+        title: "Collection",
+        sub: subtitle,
+        seeAllJs: "window.profileOtherView._goCollection()",
+        body: items.length
+          ? `<div class="preview-card__covers">${items.slice(0, PREVIEW_COVERS).map((it) => this._cover(it)).join("")}</div>`
+          : `<div class="preview-card__empty">${escape(this._profile.display_name || "They")} doesn't own any games yet.</div>`,
+      });
+    }
+
+    _renderPlaysPreview(b) {
+      const plays = (b && b.recent_plays) || [];
+      const total = (b && b.recent_plays_total) || 0;
+      const body = plays.length
+        ? `<ul class="preview-card__plays">${plays.slice(0, PREVIEW_PLAYS).map((p) => this._playRow(p)).join("")}</ul>`
+        : `<div class="preview-card__empty">${escape(this._profile.display_name || "They")} hasn't logged any plays yet.</div>`;
+      return this._previewCard({
+        icon: "dices",
+        title: "Recent plays",
+        sub: `${total} total`,
+        seeAllJs: "window.profileOtherView._goPlays()",
+        body,
+      });
+    }
+
+    _goCollection() { window.router.go("collection", { userId: this._userId() }); }
+    _goPlays() { window.router.go("plays", { userId: this._userId() }); }
+
+    _previewCard({ icon, title, sub, seeAllJs, body }) {
       return `
-        <div class="profile-panel">
-          <div class="profile-panel__subtitle">${escape(subtitle)}</div>
-          ${this._renderCollectionBody()}
-          ${this._renderCollectionPager(totalPages)}
+        <section class="preview-card">
+          <header class="preview-card__head">
+            <span class="preview-card__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
+            <h3 class="preview-card__title font-display">${escape(title)}</h3>
+            <span class="preview-card__sub">${escape(sub)}</span>
+            <button class="preview-card__seeall" onclick="${seeAllJs}">
+              See all <i data-lucide="chevron-right" class="w-3 h-3"></i>
+            </button>
+          </header>
+          <div class="preview-card__body">${body}</div>
+        </section>
+      `;
+    }
+
+    _cover(item) {
+      const g = item.game || {};
+      const click = `onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})"`;
+      return `
+        <div class="preview-card__cover" ${click} title="${escapeAttr(g.name || "")}">
+          ${g.thumbnail_url
+            ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />`
+            : `<div class="preview-card__cover-fallback">${escape((g.name || "?").slice(0, 14))}</div>`}
         </div>
       `;
     }
 
-    _renderCollectionBody() {
-      if (this._collectionError) {
-        return `<div class="alert alert-error text-sm">${escape(this._collectionError)}</div>`;
-      }
-      if (this._collectionLoading && this._collectionItems.length === 0) {
-        return window.buddyLoader({ size: 88 });
-      }
-      if (this._collectionItems.length === 0) {
-        return `<div class="profile-empty">${escape(this._profile.display_name)} doesn't own any games yet.</div>`;
-      }
+    _playRow(p) {
+      const playerCount = (p.players || []).length;
+      const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
       return `
-        <div class="profile-collection-grid">
-          ${this._collectionItems.map((it) => {
-            const g = it.game || {};
-            const status = this._statusMap[g.id] || null;
-            const expCount = g.bgg_id ? (this._expansionCounts[g.bgg_id] || 0) : 0;
-            return `
-              <div class="collection-tile" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || '')}'})">
-                ${window.renderStatusTag(g.id, status, { size: "xs" })}
-                ${g.thumbnail_url
-                  ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="" loading="lazy" />`
-                  : `<div class="collection-tile__placeholder"><i data-lucide="dice-6"></i></div>`}
-                <div class="collection-tile__name">${escape(g.name || "Unknown")}</div>
-                ${window.renderExpansionBadge(expCount)}
-              </div>
-            `;
-          }).join("")}
-        </div>
+        <li class="preview-card__play" onclick="window.PlayDetailPopup.show('${p.id}')">
+          ${p.game_thumbnail
+            ? `<img class="preview-card__play-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
+            : `<div class="preview-card__play-thumb preview-card__play-thumb--placeholder"><i data-lucide="dice-6" class="w-4 h-4"></i></div>`}
+          <div class="preview-card__play-info">
+            <div class="preview-card__play-name">${escape(p.game_name || "")}</div>
+            ${playerCount > 0 ? `<div class="preview-card__play-meta">${playerCount} ${playerCount === 1 ? "player" : "players"}</div>` : ""}
+          </div>
+          <div class="preview-card__play-date">${formatDateShort(p.played_at)}</div>
+        </li>
       `;
-    }
-
-    _renderCollectionPager(totalPages) {
-      if (totalPages <= 1) return "";
-      return `
-        <nav class="search-pager">
-          <button class="btn btn-ghost btn-xs" ${this._collectionPage <= 1 ? "disabled" : ""}
-                  onclick="window.profileOtherView._goCollectionPage(${this._collectionPage - 1})">
-            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i> Prev
-          </button>
-          <span class="text-xs opacity-60">Page ${this._collectionPage} of ${totalPages}</span>
-          <button class="btn btn-ghost btn-xs" ${this._collectionPage >= totalPages ? "disabled" : ""}
-                  onclick="window.profileOtherView._goCollectionPage(${this._collectionPage + 1})">
-            Next <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
-          </button>
-        </nav>
-      `;
-    }
-
-    _goCollectionPage(n) {
-      this._collectionPage = n;
-      this._loadCollection();
-    }
-
-    // ── Recent plays panel ────────────────────────────────────────────────────
-
-    _renderRecentPlaysPanel() {
-      return `
-        <div class="profile-panel">
-          ${this._renderRecentPlaysBody()}
-          ${this._renderRecentPlaysLoadMore()}
-        </div>
-      `;
-    }
-
-    _renderRecentPlaysBody() {
-      if (this._recentPlaysError) {
-        return `<div class="text-error text-sm">${escape(this._recentPlaysError)}</div>`;
-      }
-      if (!this._recentPlaysLoaded) {
-        return window.buddyLoader({ size: 88 });
-      }
-      if (this._recentPlays.length === 0) {
-        return `<div class="profile-empty">${escape(this._profile.display_name)} hasn't logged any plays yet.</div>`;
-      }
-      return `<ul class="recent-plays">${this._recentPlays.map((p) => {
-        const winners = (p.players || []).filter((pl) => pl.is_winner);
-        const winnerLabel = winners.map((w) => escape(w.name)).join(", ");
-        const playerCount = (p.players || []).length;
-        const subParts = [];
-        if (winnerLabel) {
-          subParts.push(`<span class="recent-plays__winner"><i data-lucide="trophy" class="w-3 h-3"></i> ${winnerLabel}</span>`);
-        }
-        if (playerCount > 0) {
-          subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
-        }
-        return `
-          <li onclick="window.PlayDetailPopup.show('${p.id}')">
-            ${p.game_thumbnail ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" />` : `<div class="recent-plays__placeholder"><i data-lucide="dice-6"></i></div>`}
-            <div class="recent-plays__body">
-              <div class="recent-plays__top">
-                <div class="recent-plays__game">${escape(p.game_name)}</div>
-                <div class="recent-plays__date">${formatDate(p.played_at)}</div>
-              </div>
-              ${subParts.length ? `<div class="recent-plays__sub">${subParts.join(" · ")}</div>` : ""}
-            </div>
-          </li>
-        `;
-      }).join("")}</ul>`;
-    }
-
-    _renderRecentPlaysLoadMore() {
-      const hasMore = this._recentPlays.length < this._recentPlaysTotal;
-      if (!hasMore) return "";
-      return `
-        <div class="text-center mt-2">
-          <button class="btn btn-ghost btn-xs" ${this._recentPlaysLoading ? "disabled" : ""}
-                  onclick="window.profileOtherView._loadMoreRecentPlays()">
-            ${this._recentPlaysLoading ? "Loading…" : "Load more"}
-          </button>
-        </div>
-      `;
-    }
-
-    _loadMoreRecentPlays() {
-      this._recentPlaysPage += 1;
-      this._loadRecentPlays();
     }
   }
 
@@ -462,9 +270,9 @@
     }[c]));
   }
   function escapeAttr(s) { return escape(s); }
-  function formatDate(iso) {
+  function formatDateShort(iso) {
     if (!iso) return "";
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
   window.ProfileOtherView = ProfileOtherView;
