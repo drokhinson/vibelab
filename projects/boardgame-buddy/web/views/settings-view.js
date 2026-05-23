@@ -134,17 +134,13 @@
                   ${escape(me.username)}
                 </div>` : ""}
             </div>
-            <button class="set-card__acct-edit" title="Edit profile"
-                    aria-label="Edit profile"
+            <button class="set-card__avatar-btn" type="button"
+                    title="Edit your profile" aria-label="Edit your profile"
                     onclick="window.settingsView._openEditProfile()">
-              <i data-lucide="pencil" class="w-4 h-4"></i>
+              <i data-lucide="palette" class="w-4 h-4"></i>
+              Edit profile
             </button>
           </div>
-          <button class="set-card__avatar-btn" type="button"
-                  onclick="window.settingsView._openEditProfile()">
-            <i data-lucide="palette" class="w-4 h-4"></i>
-            Edit profile
-          </button>
           ${me.is_admin ? "" : this._renderBecomeAdminBlock()}
         </div>
       `;

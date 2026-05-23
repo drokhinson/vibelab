@@ -6960,22 +6960,6 @@ main[data-view="session-viewer"].hidden {
   align-items: center;
   gap: 0.25rem;
 }
-.set-card__acct-edit {
-  width: 44px; height: 44px;
-  border-radius: 0.7rem;
-  border: none;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent-hover, #B8820E);
-  cursor: pointer;
-  display: grid; place-items: center;
-  transition: background 0.15s;
-  flex: none;
-}
-.set-card__acct-edit:hover { background: color-mix(in srgb, var(--accent) 32%, transparent); }
-.set-card__acct-edit:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 .set-card__acct-edit-form {
   display: flex;
   flex-wrap: wrap;
@@ -6987,17 +6971,17 @@ main[data-view="session-viewer"].hidden {
 .set-card__avatar-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  margin: 0 0.9rem 0.9rem;
-  padding: 0.5rem 0.85rem;
-  border-radius: 0.7rem;
+  gap: 0.35rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.65rem;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent-hover, #B8820E);
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   cursor: pointer;
+  flex: none;
   transition: background 0.15s, border-color 0.15s;
 }
 .set-card__avatar-btn:hover {
