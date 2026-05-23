@@ -82,6 +82,23 @@
       const activeId = active && active.id;
       const caret = active && active.selectionStart;
 
+      // Cold load — no seed from the profile bundle and both lists are
+      // empty + fetching. Show only the header + bgb logo loader instead
+      // of flashing the controls, toggle, and empty body underneath.
+      const coldLoad = this._loading.owned && this._loading.played
+        && (this._items.owned || []).length === 0
+        && (this._items.played || []).length === 0;
+      if (coldLoad) {
+        this.container.innerHTML = `
+          ${this._renderHead()}
+          <div class="profile-loading">
+            ${window.buddyLoader({ size: 96, label: "Loading collection…" })}
+          </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
       this.container.innerHTML = `
         ${this._renderHead()}
         ${this._renderControls()}
@@ -210,7 +227,7 @@
       }
       const items = this._items[mode] || [];
       if (this._loading[mode] && items.length === 0) {
-        return window.buddyLoader({ size: 88 });
+        return `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Loading collection…" })}</div>`;
       }
       if (items.length === 0) {
         const isSearchingOrFiltering = this._query || this._activeFilterCount() > 0;

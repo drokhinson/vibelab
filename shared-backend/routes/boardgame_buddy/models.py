@@ -280,6 +280,10 @@ class PlayPlayerResponse(BaseModel):
     buddy_id: Optional[str] = None
     user_id: Optional[str] = None
     name: str
+    # Linked-account avatar config (migration 029). NULL for ghost players
+    # (player_user_id IS NULL) and for accounts that haven't customized
+    # their badge — the FE renders the BGB default in both cases.
+    avatar: Optional[Avatar] = None
     is_winner: bool
     score: Optional[int] = None
     # Per-round score breakdown (migration 028). NULL for legacy plays

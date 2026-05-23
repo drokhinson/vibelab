@@ -22,6 +22,15 @@
     bgColor: "#2a1812",
   });
 
+  // Ghost players (free-text nicknames with no profile) read as a faint
+  // light-grey badge with the same gold initials, signalling "this seat
+  // isn't a linked account yet" at a glance.
+  const GHOST_AVATAR = Object.freeze({
+    icon: "initials",
+    iconColor: "#C9922A",
+    bgColor: "#C9C2B0",
+  });
+
   // 12-swatch palette offered in the customizer. `light` controls the
   // contrast color of the check mark on the active swatch — see CSS.
   const PALETTE = [
@@ -49,7 +58,7 @@
   // bounding-box midpoint) — bbox-center looks wrong for shapes like crown
   // (heavy base bar + thin spikes) or shield (wide top, tapered point).
   const ICONS = {
-    buddy: '<g transform="translate(0,-2.49)"><path fill="currentColor" d="M12 1.6c-2.6 0-4.7 2.1-4.7 4.7 0 1.6.8 3 2 3.9-2.8.9-4.8 3.5-4.8 6.6v4.8c0 .5.4.9.9.9h13.2c.5 0 .9-.4.9-.9v-4.8c0-3.1-2-5.7-4.8-6.6 1.2-.9 2-2.3 2-3.9 0-2.6-2.1-4.7-4.7-4.7Zm-1.8 5.7a.9.9 0 1 1 1.8 0 .9.9 0 0 1-1.8 0Zm2.7 0a.9.9 0 1 1 1.8 0 .9.9 0 0 1-1.8 0Zm-3.4 3.3c.5.9 1.4 1.5 2.5 1.5s2-.6 2.5-1.5"/></g>',
+    buddy: '<g transform="translate(0,1.27)" fill="currentColor"><path fill-rule="evenodd" d="M8 2.5 H16 A2.5 2.5 0 0 1 18.5 5 V11 A2.5 2.5 0 0 1 16 13.5 H8 A2.5 2.5 0 0 1 5.5 11 V5 A2.5 2.5 0 0 1 8 2.5 Z M9.85 7 A0.85 0.85 0 1 1 8.15 7 A0.85 0.85 0 1 1 9.85 7 Z M15.85 7 A0.85 0.85 0 1 1 14.15 7 A0.85 0.85 0 1 1 15.85 7 Z M9 9.8 Q12 11.6 15 9.8 Q12 10.7 9 9.8 Z"/><circle cx="12" cy="14.5" r="1.5"/><rect x="9" y="15.75" width="6" height="2.75" rx="1"/><rect x="7" y="18.5" width="10" height="2.5" rx="1"/></g>',
     meeple: '<path fill="currentColor" d="M12 2c-1.5 0-2.7 1.2-2.7 2.7 0 .9.5 1.8 1.2 2.3-1.3.4-2.5 1-3.6 1.8C5.4 9.7 3.7 10 3.7 11.4c0 .9.8 1.4 1.7 1.4.8 0 1.6-.2 2.3-.6-.7 1.6-1.3 3.2-1.3 4.7 0 1.4 1.2 1.6 2.5 1.6h6.2c1.3 0 2.5-.2 2.5-1.6 0-1.5-.6-3.1-1.3-4.7.7.4 1.5.6 2.3.6.9 0 1.7-.5 1.7-1.4 0-1.4-1.7-1.7-3.2-2.6-1.1-.8-2.3-1.4-3.6-1.8.7-.5 1.2-1.4 1.2-2.3C14.7 3.2 13.5 2 12 2z"/>',
     die: '<path fill="currentColor" fill-rule="evenodd" d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4Zm1 3.6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm8 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM8 14.4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm8 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/>',
     sword: '<path fill="currentColor" d="M12 1.4 13.4 4v9.2h-2.8V4L12 1.4ZM7.4 13.7h9.2v2.3H7.4v-2.3ZM11 16.4h2v3.8h-2v-3.8Zm1 4a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8Z"/>',
@@ -114,8 +123,9 @@
   function render(opts) {
     const size = opts.size || "sm";
     const isGhost = !!opts.isGhost;
-    // Ghost players never have a customized avatar — always default.
-    const av = isGhost ? DEFAULT_AVATAR : (opts.avatar || DEFAULT_AVATAR);
+    // Ghost players never have a customized avatar — always the light
+    // grey baseline so they read as placeholder seats.
+    const av = isGhost ? GHOST_AVATAR : (opts.avatar || DEFAULT_AVATAR);
     const initials = initialsOf(opts.displayName);
     const classes = [
       "user-badge",
