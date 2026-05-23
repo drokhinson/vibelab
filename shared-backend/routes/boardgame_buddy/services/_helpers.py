@@ -60,7 +60,7 @@ def fetch_profiles_by_ids(sb, user_ids: list[str]) -> dict[str, dict[str, Any]]:
     unique_ids = list(set(user_ids))
     rows = (
         sb.table("boardgamebuddy_profiles")
-        .select("id, display_name, avatar_url, created_at")
+        .select("id, display_name, avatar, created_at")
         .in_("id", unique_ids)
         .execute()
     )

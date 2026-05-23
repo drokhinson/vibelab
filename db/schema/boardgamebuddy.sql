@@ -54,7 +54,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- Readonly in the user-facing UI; new signups derive it on first auth.
   username TEXT NOT NULL
     CHECK (username ~ '^[a-z0-9_]{3,30}$'),
-  avatar_url TEXT,
+  -- Customizable badge config (migration 029): JSONB
+  -- { icon: "initials"|<key>, iconColor: "#hex", bgColor: "#hex" }.
+  -- NULL = BGB default (brown badge + gold initials), rendered client-side.
+  avatar JSONB,
   is_admin BOOLEAN NOT NULL DEFAULT false,
   -- Linked BoardGameGeek username for collection/plays sync (migration 062).
   -- Unique only when non-null so multiple unlinked profiles can coexist.

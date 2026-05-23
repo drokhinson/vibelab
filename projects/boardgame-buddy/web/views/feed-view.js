@@ -263,9 +263,9 @@
     _renderSuggestedBuddiesCard(card) {
       const tiles = (card.suggestions || []).map((s) => `
         <div class="buddy-tile">
-          <div class="buddy-tile__avatar"
+          <div class="buddy-tile__avatar-wrap"
                onclick="window.router.go('profile-other',{userId:'${s.user_id}'})">
-            ${s.avatar_url ? `<img src="${s.avatar_url}" alt="" />` : escape(initialsOf(s.display_name))}
+            ${window.BgbBadge.render({ avatar: s.avatar, displayName: s.display_name, size: "md", extraClass: "buddy-tile__avatar" })}
           </div>
           <div class="buddy-tile__name">${escape(s.display_name)}</div>
           <div class="buddy-tile__mutual">${s.mutual_count} mutual</div>

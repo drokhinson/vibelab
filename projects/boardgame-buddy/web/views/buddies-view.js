@@ -100,7 +100,7 @@
             <ul class="buddies-list">
               ${this._requests.incoming.map((r) => `
                 <li class="buddies-row">
-                  <div class="buddies-row__avatar avatar-bubble">${initials(r.other_display_name)}</div>
+                  ${window.BgbBadge.render({ avatar: r.other_avatar, displayName: r.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
                     <div class="buddies-row__name">${escape(r.other_display_name)}</div>
                     <div class="buddies-row__when">Requested ${formatDate(r.created_at)}</div>
@@ -119,7 +119,7 @@
             <ul class="buddies-list">
               ${this._requests.outgoing.map((r) => `
                 <li class="buddies-row">
-                  <div class="buddies-row__avatar avatar-bubble">${initials(r.other_display_name)}</div>
+                  ${window.BgbBadge.render({ avatar: r.other_avatar, displayName: r.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
                     <div class="buddies-row__name">${escape(r.other_display_name)}</div>
                     <div class="buddies-row__when">Awaiting reply</div>
@@ -142,7 +142,7 @@
                 ].filter(Boolean).join(" · ");
                 return `
                 <li class="buddies-row" onclick="window.router.go('profile-other',{userId:'${b.other_user_id}'})">
-                  <div class="buddies-row__avatar avatar-bubble">${initials(b.other_display_name)}</div>
+                  ${window.BgbBadge.render({ avatar: b.other_avatar, displayName: b.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
                     <div class="buddies-row__name">${escape(b.other_display_name)}</div>
                     <div class="buddies-row__when">${sub}</div>
@@ -215,7 +215,7 @@
       }
       return `
         <li class="buddies-row" onclick="window.router.go('profile-other',{userId:'${p.user_id}'})">
-          <div class="buddies-row__avatar avatar-bubble">${p.avatar_url ? `<img src="${escapeAttr(p.avatar_url)}" alt="" />` : initials(p.display_name)}</div>
+          ${window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm", extraClass: "buddies-row__avatar" })}
           <div class="buddies-row__body">
             <div class="buddies-row__name">
               ${escape(p.display_name)}
@@ -232,7 +232,7 @@
       const isOpen = this._linkingGhost === g.display_name;
       return `
         <li class="buddies-row buddies-row--ghost ${isOpen ? "is-expanded" : ""}">
-          <div class="buddies-row__avatar avatar-bubble buddies-row__avatar--ghost">${initials(g.display_name)}</div>
+          ${window.BgbBadge.render({ avatar: null, displayName: g.display_name, size: "sm", isGhost: true, extraClass: "buddies-row__avatar buddies-row__avatar--ghost" })}
           <div class="buddies-row__body">
             <div class="buddies-row__name">
               ${escape(g.display_name)}
@@ -261,7 +261,7 @@
             <ul class="buddies-link-results">
               ${this._linkResults.map((u) => `
                 <li onclick="window.buddiesView._confirmLink('${jsStr(displayName)}', '${u.id}')">
-                  <span class="avatar-bubble avatar-bubble--xs">${initials(u.display_name)}</span>
+                  ${window.BgbBadge.render({ avatar: u.avatar, displayName: u.display_name, size: "xs" })}
                   <span class="buddies-link-results__name">${escape(u.display_name)}</span>
                   ${u.email ? `<span class="buddies-link-results__email">${escape(u.email)}</span>` : ""}
                 </li>

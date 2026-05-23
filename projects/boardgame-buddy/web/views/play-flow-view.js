@@ -147,6 +147,7 @@
                   is_winner: false,
                   score: null,
                   user_id: part.user_id || null,
+                  avatar: part.avatar || null,
                 });
                 known.add(key);
                 playersChanged = true;
@@ -201,6 +202,7 @@
         is_winner: false,
         score: null,
         user_id: me.id,
+        avatar: me.avatar || null,
       });
       this._ps.persist();
     }
@@ -406,8 +408,17 @@
     _renderPlayerRow(p, i) {
       const isTeamGame = this._isTeamGame();
       const initials = p.initials != null ? p.initials : computeInitials(p.name);
+      const me = window.store.get("user");
+      const badge = window.BgbBadge.render({
+        avatar: p.avatar,
+        displayName: p.name,
+        size: "sm",
+        isGhost: !p.user_id,
+        isMe: !!(me && p.user_id === me.id),
+      });
       return `
         <li class="cascade-player">
+          ${badge}
           <span class="cascade-player__name">${escape(p.name)}</span>
           <input class="cascade-player__init" type="text" maxlength="3"
                  aria-label="Initials"
@@ -1011,7 +1022,7 @@
       this._addPlayer({ name, user_id: buddy ? buddy.other_user_id : null });
     }
 
-    _addPlayer({ name, user_id }) {
+    _addPlayer({ name, user_id, avatar }) {
       const exists = this._ps.players.some(
         (p) => (p.name || "").toLowerCase() === (name || "").toLowerCase()
       );
@@ -1022,12 +1033,26 @@
           is_winner: false,
           score: null,
           user_id: user_id || null,
+          avatar: avatar || null,
           roundScores: Array(currentRounds).fill(null),
         });
         this._ps.persist();
       }
       this._closeBuddyDropdown();
       this.render();
+    }
+
+    // Lookup helper used by the buddy autocomplete dropdown: resolves the
+    // buddy row from this._buddies (so we keep their avatar) and forwards
+    // to _addPlayer.
+    _addBuddy(userId) {
+      const buddy = (this._buddies || []).find((b) => b.other_user_id === userId);
+      if (!buddy) return;
+      this._addPlayer({
+        name: buddy.other_display_name,
+        user_id: buddy.other_user_id,
+        avatar: buddy.other_avatar || null,
+      });
     }
 
     _removePlayer(i) {
@@ -1406,8 +1431,8 @@
       }
       dd.innerHTML = filtered.map((b) => `
         <li class="cascade-buddy-dropdown-item"
-            onclick="window.playFlowView._addPlayer({name:'${escapeAttr(b.other_display_name)}', user_id:'${escapeAttr(b.other_user_id)}'})">
-          <span class="avatar-bubble avatar-bubble--xs">${escape(initialsOf(b.other_display_name))}</span>
+            onclick="window.playFlowView._addBuddy('${escapeAttr(b.other_user_id)}')">
+          ${window.BgbBadge.render({ avatar: b.other_avatar, displayName: b.other_display_name, size: "xs" })}
           <span class="cascade-buddy-dropdown-name">${escape(b.other_display_name)}</span>
         </li>
       `).join("");

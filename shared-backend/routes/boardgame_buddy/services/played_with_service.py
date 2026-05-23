@@ -52,7 +52,7 @@ def fetch_played_with(sb, viewer_id: str) -> list[PlayedWithUser]:
 
     profile_rows = (
         sb.table("boardgamebuddy_profiles")
-        .select("id, display_name, avatar_url")
+        .select("id, display_name, avatar")
         .in_("id", list(counts.keys()))
         .execute()
     )
@@ -66,7 +66,7 @@ def fetch_played_with(sb, viewer_id: str) -> list[PlayedWithUser]:
         out.append(PlayedWithUser(
             user_id=uid,
             display_name=prof["display_name"],
-            avatar_url=prof.get("avatar_url"),
+            avatar=prof.get("avatar"),
             play_count=n,
             is_buddy=bool(rel["is_buddy"]),
             has_pending_request=bool(rel["has_pending_request"]),

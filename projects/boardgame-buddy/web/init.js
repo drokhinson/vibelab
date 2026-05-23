@@ -90,13 +90,25 @@
     });
   }
 
-  // Keep the global header's avatar initials in sync with the current user.
-  // Lives at this level (not in a View) because the header persists across
-  // every screen.
+  // Keep the global header's avatar in sync with the current user's
+  // customization. Lives at this level (not in a View) because the
+  // header persists across every screen.
   function syncGlobalAvatar(user) {
     const el = document.getElementById("bgb-global-avatar");
     if (!el) return;
-    el.textContent = user ? new window.User(user).initials() : "?";
+    if (!user) {
+      el.textContent = "?";
+      el.removeAttribute("style");
+      el.className = "avatar-bubble avatar-bubble--me";
+      return;
+    }
+    el.outerHTML = window.BgbBadge.render({
+      avatar: user.avatar,
+      displayName: user.display_name,
+      size: "sm",
+      isMe: true,
+      extraClass: "bgb-global-header__badge",
+    }).replace("<span ", '<span id="bgb-global-avatar" ');
   }
   window.store.subscribe("user", syncGlobalAvatar);
 

@@ -119,7 +119,13 @@
 
     // ── Account card ──────────────────────────────────────────────────────────
     _renderAccountCard(me) {
-      const initials = new window.User(me).initials();
+      const badge = window.BgbBadge.render({
+        avatar: me.avatar,
+        displayName: me.display_name,
+        size: "md",
+        isMe: true,
+        extraClass: "set-card__acct-avatar",
+      });
       const body = this._editingName
         ? `
           <form class="set-card__acct-edit-form" onsubmit="window.settingsView._saveName(event)">
@@ -138,7 +144,7 @@
       return `
         <div class="set-card">
           <div class="set-card__acct">
-            <div class="set-card__acct-avatar avatar-bubble avatar-bubble--me">${escape(initials)}</div>
+            ${badge}
             <div class="set-card__acct-body">
               <div class="set-card__acct-name">${escape(me.display_name || "")}</div>
               ${me.username ? `
@@ -154,9 +160,36 @@
             </button>
           </div>
           ${body}
+          <button class="set-card__avatar-btn" type="button"
+                  onclick="window.settingsView._openAvatarCustomizer()">
+            <i data-lucide="palette" class="w-4 h-4"></i>
+            Customize avatar
+          </button>
           ${me.is_admin ? "" : this._renderBecomeAdminBlock()}
         </div>
       `;
+    }
+
+    async _openAvatarCustomizer() {
+      const me = window.store.get("user");
+      if (!me) return;
+      const picked = await window.PolaroidPopup.avatarCustomizer({
+        current: me.avatar || null,
+        displayName: me.display_name,
+      });
+      if (!picked) return;
+      try {
+        const updated = await window.api.post("/profile", { avatar: picked });
+        // Carry the new avatar onto the in-memory user so the rest of the
+        // app re-renders against it. Store.set() fires listeners → render().
+        const next = new window.User({ ...me, ...updated });
+        window.store.set("user", next);
+      } catch (e) {
+        window.PolaroidPopup.alert({
+          title: "Couldn't save avatar",
+          body: e && e.message ? String(e.message) : "Please try again.",
+        });
+      }
     }
 
     _renderBecomeAdminBlock() {

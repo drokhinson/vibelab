@@ -203,7 +203,7 @@
 
         <section class="profile-header profile-header--row">
           <div class="profile-id">
-            <div class="profile-id__avatar avatar-bubble avatar-bubble--md">${new window.User(p).initials()}</div>
+            ${window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "md", extraClass: "profile-id__avatar" })}
             <div class="profile-id__text">
               <h2 class="profile-id__name font-display">${escape(p.display_name)}</h2>
               ${p.username ? `

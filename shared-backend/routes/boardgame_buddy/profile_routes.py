@@ -53,18 +53,30 @@ async def get_profile(
     "/profile",
     response_model=ProfileResponse,
     status_code=200,
-    summary="Update display name on the current user's profile",
+    summary="Update display name and/or avatar on the current user's profile",
 )
 async def update_profile(
     body: ProfileCreate,
     user: CurrentUser = Depends(get_current_user),
 ) -> ProfileResponse:
-    """Rename the current user. Username is locked in at signup — only
-    display_name is mutable here."""
+    """Patch the current user's display_name and/or avatar config.
+
+    Either field is independently optional — the settings page saves name
+    and avatar separately. Username is locked in at signup and can't be
+    changed here. Passing avatar=null clears the customization and reverts
+    to the BGB default rendered client-side.
+    """
+    patch: dict[str, Any] = {}
+    if body.display_name is not None:
+        patch["display_name"] = body.display_name
+    if "avatar" in body.model_fields_set:
+        patch["avatar"] = body.avatar.model_dump() if body.avatar is not None else None
+    if not patch:
+        raise HTTPException(status_code=400, detail="Nothing to update")
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_profiles")
-        .update({"display_name": body.display_name})
+        .update(patch)
         .eq("id", user.user_id)
         .execute()
     )
@@ -118,7 +130,7 @@ async def search_profiles(
     needle = q.replace(",", "").replace("(", "").replace(")", "")
     rows = (
         sb.table("boardgamebuddy_profiles")
-        .select("id, display_name, username")
+        .select("id, display_name, username, avatar")
         .or_(f"display_name.ilike.%{needle}%,username.ilike.%{needle}%")
         .neq("id", user.user_id)
         .order("display_name")
@@ -130,6 +142,7 @@ async def search_profiles(
             id=row["id"],
             display_name=row["display_name"],
             username=row["username"],
+            avatar=row.get("avatar"),
         )
         for row in (rows.data or [])
     ]

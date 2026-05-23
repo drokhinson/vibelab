@@ -31,7 +31,7 @@ def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
         user=FeedPlayUser(
             id=row["play_user_id"],
             display_name=row.get("play_user_name") or "Unknown",
-            avatar_url=row.get("play_user_avatar"),
+            avatar=row.get("play_user_avatar"),
         ),
         game=GameSummary(
             id=row["game_id"],
@@ -135,7 +135,7 @@ def fetch_suggested_buddies(sb, viewer_id: str, *, limit: int = 10) -> Suggested
         suggestions.append(FeedSuggestedBuddy(
             user_id=r["user_id"],
             display_name=p["display_name"],
-            avatar_url=p.get("avatar_url"),
+            avatar=p.get("avatar"),
             mutual_count=int(r.get("mutual_count") or 0),
         ))
     return SuggestedBuddiesResponse(suggestions=suggestions)

@@ -203,5 +203,215 @@
   }
   function escapeAttr(s) { return escape(s); }
 
-  window.PolaroidPopup = { show, update, dismiss, confirm, alert };
+  /**
+   * Avatar customizer modal. Reuses the polaroid card chrome (cream bg,
+   * close button, backdrop blur) and the confirm-style footer for the
+   * Save / Cancel buttons. Resolves with the chosen avatar config when
+   * the user taps Save, or null on Cancel / backdrop / close.
+   *
+   * @param {Object} opts
+   * @param {{icon:string,iconColor:string,bgColor:string}|null} opts.current
+   *   The user's existing badge — used as the starting point. null means
+   *   "still on BGB default" and we seed with BgbBadge.DEFAULT.
+   * @param {string} opts.displayName  For initials + name slider preview.
+   * @returns {Promise<{icon:string,iconColor:string,bgColor:string}|null>}
+   */
+  function avatarCustomizer({ current, displayName }) {
+    return new Promise((resolve) => {
+      dismiss();
+      const start = current || window.BgbBadge.DEFAULT;
+      const ITEMS = window.BgbBadge.ITEMS;
+      const PALETTE = window.BgbBadge.PALETTE;
+      // Start the carousel on the user's current pick if we can find it.
+      let index = Math.max(0, ITEMS.findIndex(it => it.key === start.icon));
+      if (index < 0) index = 0;
+      const state = {
+        index,
+        iconColor: start.iconColor,
+        bgColor: start.bgColor,
+        target: "iconColor", // which color the swatch grid is editing
+      };
+
+      const root = document.createElement("div");
+      root.id = BACKDROP_ID;
+      root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--confirm";
+      root.innerHTML = `
+        <div class="polaroid-popup__card polaroid-popup__card--confirm avatar-cust"
+             role="dialog" aria-modal="true" aria-label="Customize your avatar">
+          <button class="polaroid-popup__close" aria-label="Close">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+          <div class="polaroid-popup__title">Customize avatar</div>
+
+          <div class="avatar-cust__carousel">
+            <button class="avatar-cust__arrow" data-step="-1" aria-label="Previous">
+              <i data-lucide="chevron-left" class="w-5 h-5"></i>
+            </button>
+            <div class="avatar-cust__reel">
+              <div class="avatar-cust__badge"></div>
+              <div class="avatar-cust__track"></div>
+            </div>
+            <button class="avatar-cust__arrow" data-step="1" aria-label="Next">
+              <i data-lucide="chevron-right" class="w-5 h-5"></i>
+            </button>
+          </div>
+          <div class="avatar-cust__name-reel"><div class="avatar-cust__name-track"></div></div>
+          <div class="avatar-cust__dots"></div>
+
+          <div class="avatar-cust__target">
+            <button class="avatar-cust__tg avatar-cust__tg--icon on" data-target="iconColor">
+              <span class="avatar-cust__tg-dot"></span>Icon
+            </button>
+            <button class="avatar-cust__tg avatar-cust__tg--bg" data-target="bgColor">
+              <span class="avatar-cust__tg-dot"></span>Background
+            </button>
+          </div>
+          <div class="avatar-cust__swatches"></div>
+          <div class="avatar-cust__note"></div>
+
+          <div class="polaroid-popup__actions">
+            <button class="btn btn-ghost btn-sm polaroid-popup__cancel">Cancel</button>
+            <button class="btn btn-primary btn-sm polaroid-popup__confirm">Save avatar</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(root);
+
+      const track = root.querySelector(".avatar-cust__track");
+      const nameTrack = root.querySelector(".avatar-cust__name-track");
+      const dots = root.querySelector(".avatar-cust__dots");
+      const badge = root.querySelector(".avatar-cust__badge");
+      const swatchEl = root.querySelector(".avatar-cust__swatches");
+      const noteEl = root.querySelector(".avatar-cust__note");
+      const tgIcon = root.querySelector(".avatar-cust__tg--icon");
+      const tgBg = root.querySelector(".avatar-cust__tg--bg");
+
+      // Build the reel (one slot per icon option) + name track + dot row.
+      ITEMS.forEach((it, i) => {
+        const slot = document.createElement("div");
+        slot.className = "avatar-cust__slot";
+        slot.dataset.i = String(i);
+        slot.innerHTML = it.key === "initials"
+          ? `<span class="avatar-cust__ini">${escape(initialsForCustomizer(displayName))}</span>`
+          : `<svg viewBox="0 0 24 24">${window.BgbBadge.ICONS[it.key]}</svg>`;
+        slot.addEventListener("click", () => { state.index = i; rerender(); });
+        track.appendChild(slot);
+
+        const ns = document.createElement("div");
+        ns.className = "avatar-cust__name-slot";
+        ns.textContent = it.name;
+        nameTrack.appendChild(ns);
+
+        const d = document.createElement("div");
+        d.className = "avatar-cust__dot";
+        d.addEventListener("click", () => { state.index = i; rerender(); });
+        dots.appendChild(d);
+      });
+
+      // Arrows step the carousel.
+      root.querySelectorAll(".avatar-cust__arrow").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const dir = Number(btn.getAttribute("data-step")) || 0;
+          state.index = clamp(state.index + dir, 0, ITEMS.length - 1);
+          rerender();
+        });
+      });
+
+      // Icon / Background target toggle.
+      tgIcon.addEventListener("click", () => { state.target = "iconColor"; rerender(); });
+      tgBg.addEventListener("click", () => { state.target = "bgColor"; rerender(); });
+
+      function rerender() {
+        // Slide the reel so the active slot lands centered on the badge.
+        const activeSlot = /** @type {HTMLElement} */ (track.children[state.index]);
+        const slotCenter = activeSlot.offsetLeft + activeSlot.offsetWidth / 2;
+        const reelW = 240;
+        const tx = reelW / 2 - slotCenter;
+        track.style.transform = `translateX(${tx}px)`;
+        nameTrack.style.transform = `translateX(${-state.index * reelW}px)`;
+
+        // Active styling + colors on the slot SVGs / initials.
+        Array.from(track.children).forEach((node, i) => {
+          const s = /** @type {HTMLElement} */ (node);
+          const active = i === state.index;
+          s.classList.toggle("avatar-cust__slot--active", active);
+          const g = s.querySelector("svg");
+          const ini = s.querySelector(".avatar-cust__ini");
+          if (g) /** @type {SVGElement} */ (g).style.color = active ? state.iconColor : "";
+          if (ini) /** @type {HTMLElement} */ (ini).style.color = active ? state.iconColor : "";
+        });
+        badge.style.background = state.bgColor;
+        Array.from(dots.children).forEach((d, i) => {
+          d.classList.toggle("avatar-cust__dot--on", i === state.index);
+        });
+        // Target chip dots reflect the live values.
+        const iconDot = tgIcon.querySelector(".avatar-cust__tg-dot");
+        const bgDot = tgBg.querySelector(".avatar-cust__tg-dot");
+        if (iconDot) /** @type {HTMLElement} */ (iconDot).style.background = state.iconColor;
+        if (bgDot) /** @type {HTMLElement} */ (bgDot).style.background = state.bgColor;
+        tgIcon.classList.toggle("on", state.target === "iconColor");
+        tgBg.classList.toggle("on", state.target === "bgColor");
+        // Swatch grid.
+        swatchEl.innerHTML = "";
+        const other = state.target === "iconColor" ? state.bgColor : state.iconColor;
+        PALETTE.forEach((p) => {
+          const sw = document.createElement("button");
+          const taken = p.hex === other;
+          const on = state[state.target] === p.hex;
+          sw.className = "avatar-cust__sw"
+            + (p.light ? " avatar-cust__sw--light" : " avatar-cust__sw--dark")
+            + (on ? " avatar-cust__sw--on" : "")
+            + (taken ? " avatar-cust__sw--taken" : "");
+          sw.style.background = p.hex;
+          sw.setAttribute("aria-label", p.hex);
+          sw.disabled = taken;
+          if (!taken) {
+            sw.addEventListener("click", () => {
+              state[state.target] = p.hex;
+              rerender();
+            });
+          }
+          swatchEl.appendChild(sw);
+        });
+        noteEl.textContent = state.target === "iconColor"
+          ? "Choosing the icon colour"
+          : "Choosing the background colour";
+      }
+
+      function finish(picked) {
+        dismiss();
+        if (picked) {
+          resolve({
+            icon: ITEMS[state.index].key,
+            iconColor: state.iconColor,
+            bgColor: state.bgColor,
+          });
+        } else {
+          resolve(null);
+        }
+      }
+
+      root.addEventListener("click", (ev) => {
+        if (ev.target === root) finish(false);
+      });
+      const closeBtn = root.querySelector(".polaroid-popup__close");
+      if (closeBtn) closeBtn.addEventListener("click", () => finish(false));
+      const cancelBtn = root.querySelector(".polaroid-popup__cancel");
+      if (cancelBtn) cancelBtn.addEventListener("click", () => finish(false));
+      const saveBtn = root.querySelector(".polaroid-popup__confirm");
+      if (saveBtn) saveBtn.addEventListener("click", () => finish(true));
+
+      if (window.lucide) window.lucide.createIcons();
+      rerender();
+    });
+  }
+
+  function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+  function initialsForCustomizer(name) {
+    return (window.BgbBadge && window.BgbBadge.initialsOf)
+      ? window.BgbBadge.initialsOf(name)
+      : (String(name || "?").trim().slice(0, 2).toUpperCase() || "?");
+  }
+
+  window.PolaroidPopup = { show, update, dismiss, confirm, alert, avatarCustomizer };
 })();

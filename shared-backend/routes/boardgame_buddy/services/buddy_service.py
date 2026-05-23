@@ -26,7 +26,7 @@ def _edge_response(edge: dict[str, Any], viewer_id: str, profiles: dict[str, dic
         id=edge["id"],
         other_user_id=other_id,
         other_display_name=other.get("display_name") or "Unknown",
-        other_avatar_url=other.get("avatar_url"),
+        other_avatar=other.get("avatar"),
         accepted_at=edge.get("accepted_at"),
         created_at=edge["created_at"],
     )
@@ -45,7 +45,7 @@ def _request_response(
         direction=direction,
         other_user_id=other_id,
         other_display_name=other.get("display_name") or "Unknown",
-        other_avatar_url=other.get("avatar_url"),
+        other_avatar=other.get("avatar"),
         created_at=edge["created_at"],
     )
 
@@ -94,7 +94,7 @@ def send_request(sb, viewer_id: str, target_user_id: str) -> BuddyRequestRespons
 
     target = (
         sb.table("boardgamebuddy_profiles")
-        .select("id, display_name, avatar_url")
+        .select("id, display_name, avatar")
         .eq("id", target_user_id)
         .execute()
     )
