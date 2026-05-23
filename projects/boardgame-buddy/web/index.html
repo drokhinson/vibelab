@@ -62,6 +62,9 @@
     <main data-view="reference-guide-add" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="profile-self" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="profile-other" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="collection" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="wishlist" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="plays" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="session-viewer" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="buddies" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="settings" class="hidden flex-1 px-4 py-4"></main>
@@ -92,7 +95,8 @@
       </span>
       <span class="bgb-nav__create-label">Play</span>
     </button>
-    <button class="bgb-nav__tab" data-nav="profile-self">
+    <button class="bgb-nav__tab" data-nav="profile-self"
+            data-nav-views="profile-self,collection,wishlist,plays,buddies,settings">
       <span class="bgb-nav__ico">
         <i data-lucide="user" class="w-5 h-5"></i>
       </span>
@@ -150,6 +154,9 @@
   <script src="views/reference-guide-add-view.js"></script>
   <script src="views/profile-self-view.js"></script>
   <script src="views/profile-other-view.js"></script>
+  <script src="views/collection-view.js"></script>
+  <script src="views/wishlist-view.js"></script>
+  <script src="views/plays-view.js"></script>
   <script src="views/session-viewer-view.js"></script>
   <script src="views/buddies-view.js"></script>
   <script src="views/settings-view.js"></script>

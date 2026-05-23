@@ -1,9 +1,8 @@
 // views/settings-view.js — account settings & integrations.
 //
-// Houses everything that used to live on the Profile chrome (display-name
-// editor, admin shortcut, BoardGameGeek link/sync, logout). The Profile page
-// now reads cleanly as "your data" (collection / plays / buddies); this page
-// reads as "your account".
+// Same five sections as before (Account, Admin tools, Connections, Logout,
+// BGG attribution) re-skinned into the warm-cream card aesthetic. Admin
+// tools now surfaces a live "open chapter reports" badge count.
 
 (function () {
   class SettingsView extends window.View {
@@ -13,12 +12,12 @@
       this._savingName = false;
       this._nameError = null;
 
-      // Become-admin state: a one-shot key-exchange that flips
-      // boardgamebuddy_profiles.is_admin. Form is only shown when the
-      // signed-in user isn't already an admin.
       this._adminFormOpen = false;
       this._adminPromoting = false;
       this._adminError = null;
+
+      // Live count of open chapter reports — fetched only for admins.
+      this._adminReportsCount = null;
 
       this._bgg = null;
       this._bggLoading = false;
@@ -26,10 +25,6 @@
       this._bggLinkOpen = false;
       this._bggSyncing = false;
       this._bggSyncResult = null;
-      // BGG sync progress: _bggSummary is the synchronous POST response
-      // (counts of "added immediately" + "queued for import"). _bggPollHandle
-      // drives a 2s interval that re-polls /bgg/sync/status while the worker
-      // drains the pending queue so the FE can render a live progress bar.
       this._bggSummary = null;
       this._bggPollHandle = null;
     }
@@ -38,8 +33,11 @@
       this.listen("user", () => this.render());
       this.render();
       await this._loadBggStatus();
-      // Re-attach the poll if the user navigated away mid-sync and came
-      // back — session_total > done+errored means the worker is still busy.
+      const me = window.store.get("user");
+      if (me && me.is_admin) {
+        // Don't block the first paint on this — render once on resolve.
+        this._loadAdminReportsCount();
+      }
       if (this._needsPoll()) this._startBggPoll();
     }
 
@@ -59,6 +57,17 @@
       }
     }
 
+    async _loadAdminReportsCount() {
+      try {
+        const reports = await window.api.get("/admin/chapter-reports?status=open");
+        this._adminReportsCount = Array.isArray(reports) ? reports.length : 0;
+      } catch (_) {
+        // Non-fatal — admin tools row just renders without the badge.
+        this._adminReportsCount = null;
+      }
+      this.render();
+    }
+
     render() {
       const me = window.store.get("user");
       if (!me) {
@@ -69,14 +78,19 @@
       const activeId = active && active.id;
       const caret = active && active.selectionStart;
 
-      // Page chrome stays minimal — no header / back button. The global
-      // app header above + the bottom nav are the user's escape hatches.
       this.container.innerHTML = `
-        ${this._renderAccountSection(me)}
-        ${me.is_admin ? this._renderAdminSection() : ""}
-        ${this._renderBggSection()}
-        ${this._renderLogoutSection()}
+        ${this._renderHead()}
+        <div class="set-card-label">Account</div>
+        ${this._renderAccountCard(me)}
+        ${me.is_admin ? `
+          <div class="set-card-label">Admin tools</div>
+          ${this._renderAdminCard()}
+        ` : ""}
+        <div class="set-card-label">Connections</div>
+        ${this._renderBggCard()}
+        ${this._renderLogout()}
         ${this._renderBggAttribution()}
+        <div style="height: 1rem"></div>
       `;
       if (window.lucide) window.lucide.createIcons();
 
@@ -91,54 +105,64 @@
       }
     }
 
-    _renderAccountSection(me) {
-      const nameBlock = this._editingName ? `
-        <form class="profile-id__edit" onsubmit="window.settingsView._saveName(event)">
-          <input id="settings-name-input"
-                 class="input input-bordered input-sm"
-                 value="${escapeAttr(me.display_name)}"
-                 maxlength="40" autocomplete="off" />
-          <button class="btn btn-primary btn-xs" ${this._savingName ? "disabled" : ""}>
-            ${this._savingName ? "…" : "Save"}
-          </button>
-          <button type="button" class="btn btn-ghost btn-xs" onclick="window.settingsView._cancelEditName()">Cancel</button>
-        </form>
-        ${this._nameError ? `<div class="text-error text-xs">${escape(this._nameError)}</div>` : ""}
-      ` : `
-        <div class="profile-id__name-row" onclick="window.settingsView._startEditName()">
-          <h3 class="profile-id__name font-display">${escape(me.display_name)}</h3>
-          <button class="btn btn-ghost btn-xs" title="Edit display name">
-            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-          </button>
-        </div>
-      `;
+    _renderHead() {
       return `
-        <section class="settings-section">
-          <h3 class="settings-section__title">Account Details</h3>
-          <div class="profile-id">
-            <div class="profile-id__avatar avatar-bubble avatar-bubble--md">${new window.User(me).initials()}</div>
-            <div class="profile-id__text">
-              ${nameBlock}
-              ${me.username ? `
-                <span class="profile-id__handle" title="Your username never changes. Buddies can find you with it.">
-                  <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>
-                  <span class="profile-id__handle-value">${escape(me.username)}</span>
-                </span>
-              ` : ""}
-            </div>
-          </div>
-          ${me.is_admin ? "" : this._renderBecomeAdminBlock()}
-        </section>
+        <header class="spoke-head">
+          <button class="spoke-head__back" onclick="window.router.go('profile-self')" aria-label="Back to profile">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          </button>
+          <h2 class="spoke-head__title font-display">Settings</h2>
+          <span></span>
+        </header>
       `;
     }
 
-    // Non-admins keep the inline "Have an admin key?" promotion form here.
-    // Once they're an admin, the standalone Admin tools section appears
-    // instead — this block disappears completely.
+    // ── Account card ──────────────────────────────────────────────────────────
+    _renderAccountCard(me) {
+      const initials = new window.User(me).initials();
+      const body = this._editingName
+        ? `
+          <form class="set-card__acct-edit-form" onsubmit="window.settingsView._saveName(event)">
+            <input id="settings-name-input"
+                   class="input input-bordered input-sm"
+                   value="${escapeAttr(me.display_name)}"
+                   maxlength="40" autocomplete="off" />
+            <button class="btn btn-primary btn-sm" ${this._savingName ? "disabled" : ""}>
+              ${this._savingName ? "…" : "Save"}
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="window.settingsView._cancelEditName()">Cancel</button>
+            ${this._nameError ? `<div class="text-error text-xs basis-full">${escape(this._nameError)}</div>` : ""}
+          </form>
+        `
+        : "";
+      return `
+        <div class="set-card">
+          <div class="set-card__acct">
+            <div class="set-card__acct-avatar">${escape(initials)}</div>
+            <div class="set-card__acct-body">
+              <div class="set-card__acct-name">${escape(me.display_name || "")}</div>
+              ${me.username ? `
+                <div class="set-card__acct-handle" title="Your username never changes. Buddies can find you with it.">
+                  <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>
+                  ${escape(me.username)}
+                </div>` : ""}
+            </div>
+            <button class="set-card__acct-edit" title="Edit display name"
+                    aria-label="Edit display name"
+                    onclick="window.settingsView._startEditName()">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+            </button>
+          </div>
+          ${body}
+          ${me.is_admin ? "" : this._renderBecomeAdminBlock()}
+        </div>
+      `;
+    }
+
     _renderBecomeAdminBlock() {
       if (!this._adminFormOpen) {
         return `
-          <div class="settings-account-admin">
+          <div class="set-card__acct-edit-form" style="padding-top: 0;">
             <button class="btn btn-ghost btn-xs" onclick="window.settingsView._openAdminForm()">
               <i data-lucide="key-round" class="w-3.5 h-3.5"></i> Have an admin key?
             </button>
@@ -146,13 +170,12 @@
         `;
       }
       return `
-        <form class="settings-account-admin settings-admin-form"
-              onsubmit="window.settingsView._becomeAdmin(event)">
+        <form class="set-card__acct-edit-form" onsubmit="window.settingsView._becomeAdmin(event)">
           <input id="settings-admin-key" type="password"
                  class="input input-bordered input-sm w-full"
                  placeholder="Admin key" autocomplete="off" required />
-          ${this._adminError ? `<div class="text-error text-xs">${escape(this._adminError)}</div>` : ""}
-          <div class="flex gap-2 justify-end">
+          ${this._adminError ? `<div class="text-error text-xs basis-full">${escape(this._adminError)}</div>` : ""}
+          <div class="flex gap-2 justify-end basis-full">
             <button type="button" class="btn btn-ghost btn-xs" onclick="window.settingsView._closeAdminForm()">Cancel</button>
             <button type="submit" class="btn btn-primary btn-xs" ${this._adminPromoting ? "disabled" : ""}>
               ${this._adminPromoting ? "…" : "Become admin"}
@@ -162,58 +185,35 @@
       `;
     }
 
-    // Admin-only section. Surfaces a single link to the Admin view, which
-    // hosts the chapter-reports moderation panel.
-    _renderAdminSection() {
+    // ── Admin tools card ──────────────────────────────────────────────────────
+    _renderAdminCard() {
+      const n = this._adminReportsCount;
+      const badge = (n && n > 0) ? `<span class="set-card__badge">${n}</span>` : "";
       return `
-        <section class="settings-section">
-          <h3 class="settings-section__title">Admin tools</h3>
-          <div class="admin-tool-list">
-            <button class="admin-tool" onclick="window.router.go('admin')">
-              <span class="admin-tool__icon"><i data-lucide="flag" class="w-4 h-4"></i></span>
-              <span class="admin-tool__body">
-                <span class="admin-tool__title">Chapter reports</span>
-                <span class="admin-tool__blurb">Moderate community-reported reference-guide chapters.</span>
-              </span>
-              <i data-lucide="chevron-right" class="w-4 h-4 admin-tool__chev"></i>
-            </button>
-          </div>
-        </section>
+        <div class="set-card">
+          <button class="set-card__row" onclick="window.router.go('admin')">
+            <span class="set-card__row-icon"><i data-lucide="flag" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">Chapter reports</span>
+              <span class="set-card__row-sub">Moderate community-reported reference-guide chapters.</span>
+            </span>
+            ${badge}
+            <span class="set-card__row-chev"><i data-lucide="chevron-right" class="w-4 h-4"></i></span>
+          </button>
+        </div>
       `;
     }
 
-    _openAdminForm()  { this._adminFormOpen = true; this._adminError = null; this.render();
-      const el = document.getElementById("settings-admin-key"); if (el) el.focus(); }
-    _closeAdminForm() { this._adminFormOpen = false; this._adminError = null; this.render(); }
-
-    async _becomeAdmin(event) {
-      event.preventDefault();
-      const key = (document.getElementById("settings-admin-key") || {}).value || "";
-      if (!key) { this._adminError = "Admin key required."; this.render(); return; }
-      this._adminPromoting = true; this._adminError = null; this.render();
-      try {
-        const updated = await window.api.post("/profile/become-admin", { admin_key: key });
-        // updated is a ProfileResponse — refresh the store so the Account
-        // Details block flips to the "Admin tools" link without a reload.
-        window.store.set("user", new window.User(updated));
-        this._adminFormOpen = false;
-      } catch (e) {
-        this._adminError = e.message || "Invalid admin key";
-      } finally {
-        this._adminPromoting = false;
-        this.render();
-      }
-    }
-
-    _renderBggSection() {
+    // ── BGG card ──────────────────────────────────────────────────────────────
+    _renderBggCard() {
       const state = (this._bgg && this._bgg.auth_state) || "unlinked";
       const username = (this._bgg && this._bgg.bgg_username) || null;
       const pending = (this._bgg && this._bgg.pending_count) || 0;
       const errored = (this._bgg && this._bgg.errored_count) || 0;
       const lastDone = (this._bgg && this._bgg.last_completed_at) || null;
 
-      const headerSync = (state === "linked" && username) ? `
-        <button class="btn btn-ghost btn-xs" title="Sync from BoardGameGeek"
+      const syncBtn = (state === "linked" && username) ? `
+        <button class="btn btn-ghost btn-sm" title="Sync from BoardGameGeek"
                 ${this._bggSyncing ? "disabled" : ""}
                 onclick="window.settingsView._syncBgg()">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5 ${this._bggSyncing ? "animate-spin" : ""}"></i>
@@ -222,17 +222,17 @@
 
       let body;
       if (this._bggLoading && !this._bgg) {
-        body = window.buddyLoader({ size: 64 });
+        body = `<div class="set-card__bgg-body">${window.buddyLoader({ size: 56, padded: false })}</div>`;
       } else if (state === "unlinked") {
         body = `
-          <div class="bgg-card">
+          <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
             <p class="text-sm opacity-80">
               Link your BoardGameGeek account to import your owned collection,
-              wishlist, and play history. We use your BGG password once to
-              mint a session cookie, then store it encrypted so future syncs
-              run silently in the background.
+              wishlist, and play history. We use your BGG password once to mint
+              a session cookie, then store it encrypted so future syncs run
+              silently in the background.
             </p>
-            <button class="btn btn-primary btn-sm mt-2" onclick="window.settingsView._openBggLink()">
+            <button class="btn btn-primary btn-sm" onclick="window.settingsView._openBggLink()">
               <i data-lucide="link" class="w-4 h-4"></i> Link BoardGameGeek
             </button>
             ${this._bggLinkOpen ? this._renderBggLinkForm() : ""}
@@ -240,11 +240,11 @@
         `;
       } else if (state === "relink_required") {
         body = `
-          <div class="bgg-card">
-            <div class="bgg-card__row">
+          <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
+            <div class="flex items-start justify-between gap-2">
               <div>
-                <div class="bgg-card__handle">@${escape(username || "")}</div>
-                <div class="text-xs text-warning mt-1">
+                <div class="set-card__bgg-handle">@${escape(username || "")}</div>
+                <div class="set-card__bgg-status set-card__bgg-status--warn">
                   Re-link required — your stored credentials no longer work.
                 </div>
               </div>
@@ -258,31 +258,30 @@
         `;
       } else {
         body = `
-          <div class="bgg-card">
-            <div class="bgg-card__row">
-              <div>
-                <div class="bgg-card__handle">@${escape(username || "")}</div>
-                <div class="text-xs opacity-60 mt-1">
-                  ${lastDone ? `Last synced ${formatRelative(lastDone)}` : "Not yet synced"}
-                  ${pending > 0 ? ` · ${pending} pending` : ""}
-                  ${errored > 0 ? ` · ${errored} errored` : ""}
-                </div>
+          <div class="set-card__bgg-body">
+            <div class="set-card__bgg-info">
+              <div class="set-card__bgg-handle">@${escape(username || "")}</div>
+              <div class="set-card__bgg-status">
+                <span class="set-card__bgg-status-dot"></span>
+                ${lastDone ? `Last synced ${formatRelative(lastDone)}` : "Not yet synced"}
+                ${pending > 0 ? ` · ${pending} pending` : ""}
+                ${errored > 0 ? ` · ${errored} errored` : ""}
               </div>
-              <button class="btn btn-ghost btn-xs" onclick="window.settingsView._unlinkBgg()">Unlink</button>
             </div>
-            ${this._renderBggProgress()}
+            <button class="btn btn-ghost btn-xs" onclick="window.settingsView._unlinkBgg()">Unlink</button>
           </div>
+          ${this._renderBggProgress()}
         `;
       }
 
       return `
-        <section class="settings-section">
-          <header class="settings-section__header">
-            <h3 class="settings-section__title">BoardGameGeek</h3>
-            ${headerSync}
-          </header>
+        <div class="set-card">
+          <div class="set-card__bgg-top">
+            <span class="set-card__bgg-mark">BoardGameGeek</span>
+            ${syncBtn}
+          </div>
           ${body}
-        </section>
+        </div>
       `;
     }
 
@@ -300,9 +299,7 @@
       `;
     }
 
-    // Log out gets its own footer row — centered, no section title — so it
-    // reads as the "exit door" rather than a Settings setting.
-    _renderLogoutSection() {
+    _renderLogout() {
       return `
         <div class="settings-logout">
           <button class="btn btn-sm settings-logout__btn" onclick="window.handleLogout()">
@@ -312,9 +309,6 @@
       `;
     }
 
-    // BGG attribution footer below the logout — required by BGG's API ToU
-    // and a useful "what powers this app" cue for users wondering where
-    // the box art comes from.
     _renderBggAttribution() {
       return `
         <div class="settings-bgg-credit">
@@ -327,7 +321,6 @@
     }
 
     // ── Display-name edit ─────────────────────────────────────────────────────
-
     _startEditName() {
       this._editingName = true; this._nameError = null;
       this.render();
@@ -352,8 +345,31 @@
       }
     }
 
-    // ── BGG actions ───────────────────────────────────────────────────────────
+    // ── Become admin ──────────────────────────────────────────────────────────
+    _openAdminForm()  { this._adminFormOpen = true; this._adminError = null; this.render();
+      const el = document.getElementById("settings-admin-key"); if (el) el.focus(); }
+    _closeAdminForm() { this._adminFormOpen = false; this._adminError = null; this.render(); }
 
+    async _becomeAdmin(event) {
+      event.preventDefault();
+      const key = (document.getElementById("settings-admin-key") || {}).value || "";
+      if (!key) { this._adminError = "Admin key required."; this.render(); return; }
+      this._adminPromoting = true; this._adminError = null; this.render();
+      try {
+        const updated = await window.api.post("/profile/become-admin", { admin_key: key });
+        window.store.set("user", new window.User(updated));
+        this._adminFormOpen = false;
+        // Newly promoted — surface the badge count.
+        this._loadAdminReportsCount();
+      } catch (e) {
+        this._adminError = e.message || "Invalid admin key";
+      } finally {
+        this._adminPromoting = false;
+        this.render();
+      }
+    }
+
+    // ── BGG actions ───────────────────────────────────────────────────────────
     _openBggLink()  { this._bggLinkOpen = true; this._bggError = null; this.render();
       const el = document.getElementById("settings-bgg-username"); if (el) el.focus(); }
     _closeBggLink() { this._bggLinkOpen = false; this._bggError = null; this.render(); }
@@ -403,9 +419,6 @@
         await this._loadBggStatus();
         return;
       }
-      // The POST is done — known games already landed in our tables. Pull the
-      // latest status (resets session counters) and either finish immediately
-      // (no unknown games to import) or start polling progress every 2s.
       await this._loadBggStatus();
       const needsImport = summary && summary.unique_games_to_import > 0;
       if (needsImport && this._needsPoll()) {
@@ -414,9 +427,6 @@
       }
       this._bggSyncing = false;
       this._bggSyncResult = this._buildFinalSummaryMessage();
-      // BGG sync can grow the catalog, shift owned/wishlist, and import plays
-      // — bust every viewer-data cache so the next Profile / Feed / Game
-      // Detail visit picks up the fresh state.
       window.Collection.invalidateMyStatusMap();
       window.store.invalidate("feed");
       this.render();
@@ -444,15 +454,12 @@
       try {
         this._bgg = await window.Bgg.status();
       } catch (_) {
-        // Network hiccup — keep polling; if it persists the user can hit Sync
-        // again to surface the error.
         return;
       }
       if (!this._needsPoll()) {
         this._stopBggPoll();
         this._bggSyncing = false;
         this._bggSyncResult = this._buildFinalSummaryMessage();
-        // Drained — newly imported games may now appear in viewer reads.
         window.Collection.invalidateMyStatusMap();
         window.store.invalidate("feed");
       }
@@ -470,8 +477,6 @@
       const pct = total > 0 ? Math.min(100, Math.round((settled / total) * 100)) : 0;
 
       if (syncing) {
-        // Always surface the "added immediately" counts up front so the user
-        // sees feedback even before the import worker kicks in.
         const direct = summary
           ? `<div class="bgg-progress__direct">
                Added <strong>${summary.collection_imported || 0}</strong> games to your collection
@@ -479,7 +484,7 @@
              </div>` : "";
         if (total > 0) {
           return `
-            <div class="bgg-progress">
+            <div class="bgg-progress" style="margin: 0 0.9rem 0.9rem;">
               ${direct}
               <div class="bgg-progress__label">
                 Importing <strong>${done}</strong> of <strong>${total}</strong> new game${total === 1 ? "" : "s"} from BoardGameGeek…
@@ -490,7 +495,7 @@
           `;
         }
         return `
-          <div class="bgg-progress">
+          <div class="bgg-progress" style="margin: 0 0.9rem 0.9rem;">
             ${direct}
             <div class="bgg-progress__label">Fetching from BoardGameGeek…</div>
             <div class="bgg-progress__bar bgg-progress__bar--indeterminate"><div class="bgg-progress__bar-fill"></div></div>
@@ -498,7 +503,7 @@
         `;
       }
       if (this._bggSyncResult) {
-        return `<div class="bgg-progress bgg-progress--done">${escape(this._bggSyncResult)}</div>`;
+        return `<div class="bgg-progress bgg-progress--done" style="margin: 0 0.9rem 0.9rem;">${escape(this._bggSyncResult)}</div>`;
       }
       return "";
     }
