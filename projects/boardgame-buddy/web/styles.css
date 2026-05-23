@@ -6460,3 +6460,651 @@ main[data-view="session-viewer"].hidden {
   min-height: 40px;
   font-size: 0.95rem;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Profile hub — card aesthetic
+   Identity row + four stat tiles + warm-cream preview cards on the hub,
+   with shared chrome (.spoke-head, .spoke-toggle) for the Collection /
+   Wishlist / Plays / Buddies spokes. Settings reuses the same card system.
+   Reuses --polaroid-* tokens so the whole surface matches the parchment /
+   polaroid cards already in the app.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Hub: identity row ─────────────────────────────────────────────────── */
+.profile-hub__id {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.5rem 0 0.25rem;
+}
+.profile-hub__avatar {
+  width: 64px; height: 64px;
+  font-size: 1.4rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  flex: none;
+}
+.profile-hub__who { flex: 1; min-width: 0; }
+.profile-hub__name {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.05;
+  color: oklch(var(--bc));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-hub__handle {
+  font-size: 0.82rem;
+  color: var(--polaroid-muted, #8B7E68);
+  margin-top: 0.2rem;
+  font-weight: 700;
+}
+.profile-hub__gear {
+  width: 44px; height: 44px;
+  border-radius: 0.85rem;
+  border: none;
+  background: rgba(247, 240, 223, 0.06);
+  color: oklch(var(--bc));
+  cursor: pointer;
+  display: grid; place-items: center;
+  transition: background 0.15s, color 0.15s;
+  flex: none;
+}
+.profile-hub__gear:hover { background: rgba(247, 240, 223, 0.14); color: var(--accent); }
+.profile-hub__gear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Hub: 4 stat tiles ─────────────────────────────────────────────────── */
+.profile-hub__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  padding: 0.85rem 0 0.25rem;
+}
+.profile-stat-card {
+  background: var(--polaroid-bg, #FFFBF1);
+  color: var(--polaroid-ink, #1D1812);
+  border: none;
+  border-radius: 0.95rem;
+  padding: 0.65rem 0.3rem 0.55rem;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+.profile-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+}
+.profile-stat-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.profile-stat-card__v {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent-hover, #B8820E);
+}
+.profile-stat-card__v--text {
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.25rem 0.1rem 0.1rem;
+  color: var(--polaroid-ink, #1D1812);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.profile-stat-card__k {
+  font-size: 0.62rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Hub: preview cards (Collection / Wishlist / Plays / Buddies) ──────── */
+.preview-card {
+  background: var(--polaroid-bg, #FFFBF1);
+  color: var(--polaroid-ink, #1D1812);
+  border-radius: 1.1rem;
+  padding: 0.9rem 0.95rem 0.95rem;
+  margin-top: 0.75rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+}
+.preview-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+.preview-card__icon {
+  color: var(--accent-hover, #B8820E);
+  display: grid; place-items: center;
+}
+.preview-card__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--polaroid-ink, #1D1812);
+  margin: 0;
+}
+.preview-card__sub {
+  font-size: 0.72rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 700;
+  flex: 1;
+  margin-left: 0.15rem;
+}
+.preview-card__seeall {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-hover, #B8820E);
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 32px;
+  transition: background 0.15s;
+}
+.preview-card__seeall:hover { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.preview-card__seeall:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.preview-card__empty {
+  font-size: 0.82rem;
+  color: var(--polaroid-muted, #8B7E68);
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+}
+
+/* mini-covers row — Collection + Wishlist preview cards */
+.preview-card__covers {
+  display: flex;
+  gap: 0.5rem;
+}
+.preview-card__cover {
+  flex: 1;
+  aspect-ratio: 3 / 4;
+  border-radius: 0.55rem;
+  overflow: hidden;
+  position: relative;
+  background: var(--polaroid-line, #DAC9A4);
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s;
+}
+.preview-card__cover:hover { transform: translateY(-2px); }
+.preview-card__cover img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.preview-card__cover-fallback {
+  width: 100%; height: 100%;
+  display: grid; place-items: center;
+  padding: 0.4rem;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: var(--polaroid-ink, #1D1812);
+  line-height: 1.05;
+}
+/* Wishlist preview leans visually lighter than Collection — square covers
+   read as a secondary shelf rather than a duplicated mini-collection. */
+.preview-card--wishlist .preview-card__covers { gap: 0.4rem; }
+.preview-card--wishlist .preview-card__cover { aspect-ratio: 1 / 1; border-radius: 0.5rem; }
+
+/* play rows shown in the Recent plays preview card */
+.preview-card__plays {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.preview-card__play {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0;
+  cursor: pointer;
+  min-height: 44px;
+}
+.preview-card__play + .preview-card__play {
+  border-top: 1px solid color-mix(in srgb, var(--polaroid-ink) 10%, transparent);
+}
+.preview-card__play-thumb {
+  width: 42px; height: 42px;
+  border-radius: 0.55rem;
+  object-fit: cover;
+  flex: none;
+  background: var(--polaroid-line, #DAC9A4);
+}
+.preview-card__play-thumb--placeholder {
+  display: grid; place-items: center;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.preview-card__play-info { flex: 1; min-width: 0; }
+.preview-card__play-name {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--polaroid-ink, #1D1812);
+  line-height: 1.15;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.preview-card__play-won,
+.plays-list__won-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: color-mix(in srgb, #1f6b2e 18%, transparent);
+  color: #1f6b2e;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+.preview-card__play-meta {
+  font-size: 0.72rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 600;
+  margin-top: 0.15rem;
+}
+.preview-card__play-date {
+  font-size: 0.7rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* buddy avatar row */
+.preview-card__buds {
+  display: flex;
+  align-items: center;
+}
+.preview-card__bud {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #fff;
+  background: var(--accent-hover, #B8820E);
+  border: 2.5px solid var(--polaroid-bg, #FFFBF1);
+  margin-left: -0.55rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
+}
+.preview-card__bud:first-child { margin-left: 0; }
+.preview-card__bud--more {
+  background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+
+/* ── Spoke shared chrome (back arrow + title + count) ───────────────────── */
+.spoke-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.25rem 0 0.65rem;
+}
+.spoke-head__back {
+  width: 44px; height: 44px;
+  border-radius: 0.7rem;
+  border: none;
+  background: rgba(247, 240, 223, 0.06);
+  color: var(--accent);
+  cursor: pointer;
+  display: grid; place-items: center;
+  flex: none;
+  transition: background 0.15s, transform 0.15s;
+}
+.spoke-head__back:hover { background: rgba(247, 240, 223, 0.14); transform: translateX(-2px); }
+.spoke-head__back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.spoke-head__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.35rem;
+  color: var(--accent);
+  flex: 1;
+  margin: 0;
+}
+.spoke-head__count {
+  font-size: 0.78rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 700;
+}
+
+/* ── Collection: owned ↔ played-not-owned toggle ────────────────────────── */
+.spoke-toggle {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.65rem;
+}
+.spoke-toggle__pill {
+  flex: 1;
+  border-radius: 999px;
+  border: 1.5px solid rgba(247, 240, 223, 0.14);
+  background: rgba(247, 240, 223, 0.05);
+  color: oklch(var(--bc) / 0.72);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.spoke-toggle__pill:hover { color: oklch(var(--bc)); border-color: var(--accent); }
+.spoke-toggle__pill.is-active {
+  background: linear-gradient(120deg, #F0C662, var(--accent) 60%, var(--accent-hover));
+  color: #3a2a08;
+  border-color: transparent;
+}
+.spoke-toggle__count {
+  font-size: 0.72rem;
+  opacity: 0.7;
+  font-weight: 800;
+}
+.spoke-toggle__pill.is-active .spoke-toggle__count { opacity: 0.9; }
+
+/* ── Plays spoke: cream-card list rows with day-bucket dividers ─────────── */
+.plays-day-divider {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0.95rem 0.2rem 0.45rem;
+}
+.plays-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.plays-list__row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: var(--polaroid-bg, #FFFBF1);
+  color: var(--polaroid-ink, #1D1812);
+  border-radius: 0.85rem;
+  padding: 0.65rem 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-height: 64px;
+}
+.plays-list__row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+}
+.plays-list__thumb {
+  width: 50px; height: 50px;
+  border-radius: 0.65rem;
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  background: var(--polaroid-line, #DAC9A4);
+}
+.plays-list__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.plays-list__placeholder {
+  width: 100%; height: 100%;
+  display: grid; place-items: center;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.plays-list__status { position: absolute; top: -3px; right: -3px; z-index: 2; }
+.plays-list__body { flex: 1; min-width: 0; }
+.plays-list__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.plays-list__game {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.98rem;
+  color: var(--polaroid-ink, #1D1812);
+  line-height: 1.15;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.plays-list__date {
+  font-size: 0.72rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.plays-list__sub {
+  font-size: 0.76rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 600;
+  margin-top: 0.2rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.plays-list__winner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--accent-hover, #B8820E);
+  font-weight: 700;
+}
+
+/* ── Settings: card aesthetic ───────────────────────────────────────────── */
+.set-card {
+  background: var(--polaroid-bg, #FFFBF1);
+  color: var(--polaroid-ink, #1D1812);
+  border-radius: 1.1rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+.set-card-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 1rem 0.25rem 0.45rem;
+}
+.set-card-label:first-of-type { margin-top: 0.25rem; }
+
+.set-card__acct {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem;
+}
+.set-card__acct-avatar {
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: #3a2a08;
+  background: radial-gradient(circle at 35% 30%, #F0C662, var(--accent) 55%, var(--accent-hover));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5);
+  flex: none;
+}
+.set-card__acct-body { flex: 1; min-width: 0; }
+.set-card__acct-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: var(--polaroid-ink, #1D1812);
+  line-height: 1;
+}
+.set-card__acct-handle {
+  font-size: 0.78rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 700;
+  margin-top: 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.set-card__acct-edit {
+  width: 44px; height: 44px;
+  border-radius: 0.7rem;
+  border: none;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-hover, #B8820E);
+  cursor: pointer;
+  display: grid; place-items: center;
+  transition: background 0.15s;
+  flex: none;
+}
+.set-card__acct-edit:hover { background: color-mix(in srgb, var(--accent) 32%, transparent); }
+.set-card__acct-edit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.set-card__acct-edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.9rem 0.9rem;
+}
+.set-card__acct-edit-form input { flex: 1; min-width: 0; }
+
+.set-card__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  transition: background 0.15s;
+  min-height: 56px;
+}
+.set-card__row:hover { background: color-mix(in srgb, var(--polaroid-ink) 5%, transparent); }
+.set-card__row + .set-card__row {
+  border-top: 1px solid color-mix(in srgb, var(--polaroid-ink) 10%, transparent);
+}
+.set-card__row-icon {
+  width: 40px; height: 40px;
+  border-radius: 0.65rem;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-hover, #B8820E);
+  flex: none;
+}
+.set-card__row-body { flex: 1; min-width: 0; }
+.set-card__row-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--polaroid-ink, #1D1812);
+  line-height: 1.1;
+  display: block;
+}
+.set-card__row-sub {
+  font-size: 0.74rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 600;
+  margin-top: 0.2rem;
+  line-height: 1.35;
+  display: block;
+}
+.set-card__row-chev {
+  color: var(--polaroid-muted, #8B7E68);
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.set-card__badge {
+  background: var(--accent);
+  color: #3a2a08;
+  border-radius: 999px;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+/* Connections card (BGG) */
+.set-card__bgg-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 0.9rem 0.25rem;
+  gap: 0.5rem;
+}
+.set-card__bgg-mark {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.set-card__bgg-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.9rem 0.9rem;
+  flex-wrap: wrap;
+}
+.set-card__bgg-info { min-width: 0; }
+.set-card__bgg-handle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--polaroid-ink, #1D1812);
+}
+.set-card__bgg-status {
+  font-size: 0.74rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 700;
+  margin-top: 0.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.set-card__bgg-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #2f8a3e;
+}
+.set-card__bgg-status--warn { color: #b96a1c; }

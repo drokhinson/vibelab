@@ -19,6 +19,9 @@
   window.referenceGuideAddView = new window.ReferenceGuideAddView();
   window.profileSelfView = new window.ProfileSelfView();
   window.profileOtherView = new window.ProfileOtherView();
+  window.collectionView  = new window.CollectionView();
+  window.wishlistView    = new window.WishlistView();
+  window.playsView       = new window.PlaysView();
   window.sessionViewerView = new window.SessionViewerView();
   window.buddiesView     = new window.BuddiesView();
   window.settingsView    = new window.SettingsView();
@@ -34,6 +37,9 @@
   window.router.register("reference-guide-add", window.referenceGuideAddView);
   window.router.register("profile-self",  window.profileSelfView);
   window.router.register("profile-other", window.profileOtherView);
+  window.router.register("collection",    window.collectionView);
+  window.router.register("wishlist",      window.wishlistView);
+  window.router.register("plays",         window.playsView);
   window.router.register("session-viewer", window.sessionViewerView);
   window.router.register("buddies",       window.buddiesView);
   window.router.register("settings",      window.settingsView);
