@@ -92,6 +92,10 @@ The "polaroid family" is the project's signature: cream-paper background, soft d
 
 `--game-accent` and `--exp-color` are the only tokens routinely set inline; they have to be because they are data-derived. Every other color comes from the stylesheet.
 
+### 4.2a DaisyUI inputs need an explicit re-skin
+
+The app loads `<html data-theme="luxury">` (DaisyUI's dark theme), so a bare `<input class="input input-bordered">` renders as a near-black chip on the cream polaroid surface — text becomes unreadable. Every new input, textarea, or select must override `background`, `color`, `border-color`, and `::placeholder` color with polaroid tokens (`--polaroid-bg`, `--polaroid-ink`, `--polaroid-line`, `--polaroid-muted`). Scope the override either to the surface (`.bgb-cream-screen .input`, `.cascade-card .input`, `.play-detail-popup__card .input`) or to the component's own class family if it's reused across surfaces (`.game-finder__input`). Existing examples to copy: `styles.css:5403-5425`, `styles.css:6011-6030`, `styles.css:6870-6883`.
+
 ### 4.3 Motion
 
 Two motion patterns are codified in `.claude/rules/web-frontend.md` ("Motion" section) and applied via the `.animate-fadeUp` class with `animation-delay: calc(var(--i) * 40ms)` for staggered entrance. The play card adds a flip animation managed inside `ui/play-card.js` (state Map keyed by `play_id`).

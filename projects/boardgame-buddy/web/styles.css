@@ -5474,6 +5474,14 @@ main[data-view="session-viewer"].hidden {
 .game-finder__input {
   width: 100%;
   padding-left: 36px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border: 1px solid var(--polaroid-line);
+}
+.game-finder__input::placeholder { color: var(--polaroid-muted); }
+.game-finder__input:focus {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
 }
 .game-finder-dropdown {
   position: absolute;

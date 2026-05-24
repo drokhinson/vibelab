@@ -211,14 +211,14 @@
       if (token !== this._queryToken) return;
 
       const hits = (data && data.results) || [];
+      const bggRow = `
+        <li class="game-finder-dropdown-item game-finder-dropdown-item--bgg"
+            data-finder-action="run-bgg" data-finder-query="${escapeAttr(q)}">
+          <i data-lucide="search" class="w-4 h-4"></i>
+          <span>Search BoardGameGeek for "${escape(q)}"</span>
+        </li>`;
       if (hits.length === 0) {
-        dd.innerHTML = `
-          <li class="game-finder-dropdown__hint">No matches in your library.</li>
-          <li class="game-finder-dropdown-item game-finder-dropdown-item--bgg"
-              data-finder-action="run-bgg" data-finder-query="${escapeAttr(q)}">
-            <i data-lucide="search" class="w-4 h-4"></i>
-            <span>Search BoardGameGeek for "${escape(q)}"</span>
-          </li>`;
+        dd.innerHTML = `<li class="game-finder-dropdown__hint">No matches in your library.</li>${bggRow}`;
         this._wireRowClicks(dd);
         if (window.lucide) window.lucide.createIcons();
         return;
@@ -226,7 +226,7 @@
 
       this._gameById.clear();
       hits.forEach((h) => { if (h && h.game) this._gameById.set(h.game.id, h.game); });
-      dd.innerHTML = hits.map((h) => this._renderRow(h.game, "library")).join("");
+      dd.innerHTML = hits.map((h) => this._renderRow(h.game, "library")).join("") + bggRow;
       this._wireRowClicks(dd);
       if (window.lucide) window.lucide.createIcons();
     }
