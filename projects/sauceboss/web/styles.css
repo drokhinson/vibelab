@@ -2439,41 +2439,55 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   font-size: 12px;
   color: var(--text-muted);
 }
-.auth-modal__oauth {
-  width: 100%;
-  display: inline-flex;
+/* OAuth provider buttons + email divider — aligned with the canonical
+   pattern in .claude/rules/auth-ui.md (full-pill radius, "or use email"
+   divider). Class names match the rule so a future /ui-polish migration
+   can drop in the rule's stylesheet wholesale. */
+.auth-oauth-btn {
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 10px 14px;
-  margin-bottom: 8px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
+  width: 100%;
   background: var(--card-bg);
+  color: var(--text-strong);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 11px 16px;
+  font-size: 15px;
   font-weight: 600;
-  font-size: 13px;
   cursor: pointer;
+  margin-bottom: 10px;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
-.auth-modal__oauth:hover { background: #F9FAFB; }
-.auth-modal__oauth--google { color: var(--text-strong); }
-.auth-modal__oauth--apple  { color: var(--card-bg); background: #111827; border-color: #111827; }
-.auth-modal__oauth--apple:hover { background: var(--text-strong); }
-.auth-modal__oauth-logo { width: 18px; height: 18px; flex-shrink: 0; }
-.auth-modal__divider {
+.auth-oauth-btn:hover:not(:disabled) {
+  background: var(--hover-bg);
+  border-color: var(--text-faint);
+}
+.auth-oauth-btn:active:not(:disabled) { transform: translateY(1px); }
+.auth-oauth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.auth-oauth-logo { width: 18px; height: 18px; flex-shrink: 0; }
+.auth-oauth-google { color: var(--text-strong); }
+.auth-oauth-apple { background: #111827; color: var(--card-bg); border-color: #111827; }
+.auth-oauth-apple:hover:not(:disabled) { background: var(--text-strong); border-color: var(--text-strong); }
+.auth-oauth-apple .auth-oauth-logo { color: var(--card-bg); }
+
+.auth-divider {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--text-faint);
-  font-size: 11px;
-  margin: 12px 0;
+  text-align: center;
+  margin: 18px 0 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
 }
-.auth-modal__divider::before,
-.auth-modal__divider::after {
-  content: '';
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
   flex: 1;
-  height: 1px;
-  background: var(--border);
+  border-top: 1px solid var(--border);
 }
+.auth-divider span { padding: 0 12px; }
 .auth-modal__form { display: flex; flex-direction: column; gap: 8px; }
 .auth-modal__label {
   display: flex;
