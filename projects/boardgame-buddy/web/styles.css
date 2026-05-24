@@ -3400,26 +3400,27 @@ body {
 }
 
 /* Fixed pager footer for Collection / Wishlist views.
-   Anchored above the bottom tab nav with a 20px gap so the raised
-   .bgb-nav__create disc has its own visual space below the strip.
-   Centered to match the app's 480px column. */
+   Docked flush against the top of the bottom tab nav and spans the
+   viewport edge-to-edge. The raised .bgb-nav__create gold disc renders
+   on top (nav z-index 40 > pager 35) and pokes up through the bottom
+   of the strip; the centered "Page N of M" sits above the disc's
+   16px intrusion so the label stays readable. */
 .spoke-pager-footer {
   position: fixed;
-  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 20px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 24px);
-  max-width: 456px;
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 1rem;
   background: var(--polaroid-bg, #FFFBF1);
-  border: 1px solid var(--polaroid-line, #DAC9A4);
-  border-radius: 14px;
+  border-top: 1px solid var(--polaroid-line, #DAC9A4);
   box-shadow:
-    0 8px 22px rgba(58, 42, 8, 0.18),
+    0 -2px 12px rgba(58, 42, 8, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.65);
   z-index: 35;
 }
@@ -3443,10 +3444,9 @@ body {
 }
 
 /* When the fixed pager footer is visible, the grid needs extra bottom
-   padding so the last row of tiles isn't hidden behind the footer + the
-   20px gap above the nav. */
+   padding so the last row of tiles isn't hidden behind the docked strip. */
 .profile-collection-grid.is-paginated {
-  padding-bottom: calc(60px + 20px + 12px);
+  padding-bottom: calc(60px + 12px);
 }
 
 .search-pick-banner {
