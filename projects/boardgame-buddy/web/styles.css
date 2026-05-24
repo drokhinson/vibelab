@@ -6886,6 +6886,39 @@ main[data-view="session-viewer"].hidden {
   border-color: var(--accent);
 }
 
+/* Local-cache breakdown rows on the Settings card. Tabular look with the
+   metric flush-right so the eye can scan totals quickly. */
+.set-card__cache-total {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--polaroid-ink, #1D1812);
+  padding: 0.4rem 0 0.3rem;
+  border-bottom: 1px solid var(--polaroid-line, #DAC9A4);
+}
+.set-card__cache-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.25rem 0 0.1rem;
+}
+.set-card__cache-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.78rem;
+}
+.set-card__cache-row-label {
+  color: var(--polaroid-ink, #1D1812);
+  font-weight: 500;
+}
+.set-card__cache-row-meta {
+  color: var(--polaroid-muted, #8B7E68);
+  font-variant-numeric: tabular-nums;
+}
+
 /* DaisyUI ghost buttons (filter toggle, refresh, prev/next) — needs ink
    strokes on a cream surface or they disappear. */
 .bgb-cream-screen .btn.btn-ghost {

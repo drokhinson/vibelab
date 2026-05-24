@@ -320,23 +320,59 @@
     }
 
     // ── Local cache card ──────────────────────────────────────────────────────
+    // Maps each cache namespace to a human-readable bucket. Anything not
+    // listed here falls into "Other" so the total still adds up.
+    static _CACHE_BUCKETS = {
+      "game.bundle": "games",
+      "collection": "games",
+      "feed":       "plays",
+      "buddy":      "buddies",
+    };
+
     _renderCacheCard() {
       const stats = (window.bgbCache && window.bgbCache.stats) ? window.bgbCache.stats() : null;
-      let summary = "Nothing cached yet.";
+      const busy = !!this._cacheRefreshing;
+
+      let totalBytes = 0;
+      const buckets = { games: { entries: 0, bytes: 0 }, plays: { entries: 0, bytes: 0 }, buddies: { entries: 0, bytes: 0 }, other: { entries: 0, bytes: 0 } };
       if (stats) {
-        const namespaces = Object.keys(stats).filter((k) => !k.startsWith("_"));
-        let entries = 0;
-        let bytes = 0;
-        for (const ns of namespaces) {
-          entries += (stats[ns] && stats[ns].entries) || 0;
-          bytes += (stats[ns] && stats[ns].bytes) || 0;
-        }
-        if (entries > 0) {
-          const kb = Math.max(1, Math.round(bytes / 1024));
-          summary = `${entries} entries across ${namespaces.length} namespace${namespaces.length === 1 ? "" : "s"} · ~${kb} KB`;
+        for (const ns of Object.keys(stats)) {
+          if (ns.startsWith("_")) continue;
+          const e = (stats[ns] && stats[ns].entries) || 0;
+          const b = (stats[ns] && stats[ns].bytes) || 0;
+          totalBytes += b;
+          const bucket = SettingsView._CACHE_BUCKETS[ns] || "other";
+          buckets[bucket].entries += e;
+          buckets[bucket].bytes += b;
         }
       }
-      const busy = !!this._cacheRefreshing;
+      const empty = totalBytes === 0;
+
+      const fmt = (bytes) => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      };
+
+      const row = (label, b) => `
+        <div class="set-card__cache-row">
+          <span class="set-card__cache-row-label">${label}</span>
+          <span class="set-card__cache-row-meta">${b.entries} ${b.entries === 1 ? "entry" : "entries"} · ${fmt(b.bytes)}</span>
+        </div>
+      `;
+
+      const breakdown = empty ? `<div class="text-xs opacity-60">Nothing cached yet.</div>` : `
+        <div class="set-card__cache-total">
+          <span>Total</span><span>${fmt(totalBytes)}</span>
+        </div>
+        <div class="set-card__cache-breakdown">
+          ${row("Games", buckets.games)}
+          ${row("Plays", buckets.plays)}
+          ${row("Buddies", buckets.buddies)}
+          ${buckets.other.bytes > 0 ? row("Other", buckets.other) : ""}
+        </div>
+      `;
+
       return `
         <div class="set-card">
           <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
@@ -344,7 +380,7 @@
               Your collection, buddies, and recent feed are kept locally so the
               app loads instantly. Refresh if something looks out of date.
             </p>
-            <div class="text-xs opacity-60" style="margin-top: -0.25rem;">${escape(summary)}</div>
+            ${breakdown}
             <button class="btn btn-primary btn-sm" ${busy ? "disabled" : ""}
                     onclick="window.settingsView._refreshLocalCache()">
               <i data-lucide="refresh-cw" class="w-4 h-4 ${busy ? "animate-spin" : ""}"></i>
