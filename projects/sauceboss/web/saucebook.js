@@ -199,7 +199,7 @@ function _saucebookFabs() {
 
 function _saucebookCuisineGroup(cuisine, rows) {
   const isOpen = state.cuisineSections[cuisine] !== false; // default open
-  return renderAccordionGroup({
+  return renderCuisineGroup({
     label: cuisine,
     count: rows.length,
     isOpen,
@@ -380,10 +380,7 @@ async function saucebookRemoveSauce(sauceId) {
   try {
     await api.removeFromSaucebook(sauceId);
   } catch (err) {
-    await SauceBossPopup.alert({
-      title: "Couldn't remove",
-      body: err.message || String(err),
-    });
+    alert(`Couldn't remove: ${err.message || err}`);
     return;
   }
   state.saucebook = (state.saucebook || []).filter(s => s.id !== sauceId);

@@ -95,7 +95,7 @@ function renderSauceSelector() {
       });
     }).join('') : '';
 
-    return renderAccordionGroup({
+    return renderCuisineGroup({
       label: cuisine,
       emoji,
       count: `${availCount}/${cuisineEntries.length}`,

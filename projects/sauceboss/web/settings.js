@@ -109,11 +109,10 @@ function renderAdmin() {
 
   const typeFilterRow = tab === 'sauces' ? `
     <div class="sm-type-filter">
-      ${renderTypeChips({
-        mode: 'single',
-        activeValue: typeFilter,
-        onPick: "setSauceManagerTypeFilter('$VALUE')",
-      })}
+      <button class="toggle-chip ${typeFilter === 'all' ? 'toggle-chip--active' : ''}" onclick="setSauceManagerTypeFilter('all')">All</button>
+      ${SAUCE_TYPES.map(t => `
+        <button class="toggle-chip ${typeFilter === t.value ? 'toggle-chip--active' : ''}" onclick="setSauceManagerTypeFilter('${t.value}')">${t.label}</button>
+      `).join('')}
     </div>` : '';
 
   let bodyHTML = '';
@@ -197,10 +196,10 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
   });
 
   if (state.adminSauces.length === 0) {
-    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:var(--text-muted)">No sauces found.</p>`;
+    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:#888">No sauces found.</p>`;
   }
   if (filtered.length === 0) {
-    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:var(--text-muted)">No sauces match your filters.</p>`;
+    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:#888">No sauces match your filters.</p>`;
   }
 
   // Merge mode renders flat — every row is a candidate target so nesting
@@ -233,7 +232,7 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
     const rowsHTML = isOpen
       ? grouped[cuisine].rows.map(({ sauce, isVariant }) => renderSauceManagerRow(sauce, isAdmin, merge, isVariant)).join('')
       : '';
-    return renderAccordionGroup({
+    return renderCuisineGroup({
       label: cuisine,
       count: grouped[cuisine].count,
       isOpen,
@@ -326,27 +325,52 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
     </div>`;
 }
 
-// `renderSauceMergePanel` and `renderSauceMergeBar` live in
-// `widgets/sauce-merge-bar.js` — extracted in the 2026-05-24 carve-out.
-// Action handlers (startSauceMerge / toggleSauceMergePick / etc.) stay
-// here for now since they mutate the manager's admin lists.
+function renderSauceMergePanel() {
+  const merge = state.sauceMerge;
+  const keep = (state.adminSauces || []).find(s => s.id === merge.keepId);
+  return `
+    <div class="food-merge-panel">
+      <strong>Variant family parent: ${keep ? keep.name : '(unknown)'}</strong>
+      <div style="font-size:12px;color:#555;margin-top:4px">
+        Tap other sauces to mark them as variants of this one. They'll appear together as a single
+        family in the sauce list, with this recipe as the default version.
+      </div>
+    </div>`;
+}
+
+function renderSauceMergeBar() {
+  const merge = state.sauceMerge;
+  const keep = (state.adminSauces || []).find(s => s.id === merge.keepId);
+  const count = merge.mergeIds.size;
+  const summary = count === 0
+    ? `Long-press other sauces to add — parent: <strong>${keep ? keep.name : '?'}</strong>`
+    : `${count} to assign as ${count === 1 ? 'variant' : 'variants'} of <strong>${keep ? keep.name : '?'}</strong>`;
+  return `
+    <div class="food-merge-bar">
+      <span>${summary}</span>
+      <div style="display:flex;gap:6px">
+        <button class="builder-secondary-btn" onclick="cancelSauceMerge()">Cancel</button>
+        <button class="builder-primary-btn" onclick="submitSauceMerge()" ${count === 0 || merge.saving ? 'disabled' : ''}>
+          ${merge.saving ? '<span class="spinner-sm"></span> Saving…' : 'Assign as variants'}
+        </button>
+      </div>
+      ${merge.error ? `<div class="settings-error" style="flex-basis:100%">${merge.error}</div>` : ''}
+    </div>`;
+}
 
 // ─── Sauce-variant merge state actions ───────────────────────────────────────
 function startSauceMerge(keepId) {
   const sauce = (state.adminSauces || []).find(s => s.id === keepId);
   if (!sauce) return;
   if (sauce.parentSauceId) {
-    SauceBossPopup.alert({
-      title: 'Already a variant',
-      body: `"${sauce.name}" is already a variant of another sauce. Pick the original sauce as the family parent instead.`,
-    });
+    alert(`"${sauce.name}" is already a variant of another sauce. Pick the original sauce as the family parent instead.`);
     return;
   }
   state.sauceMerge = { keepId, mergeIds: new Set(), error: null, saving: false };
   render();
 }
 
-async function toggleSauceMergePick(id) {
+function toggleSauceMergePick(id) {
   const merge = state.sauceMerge;
   if (!merge) return;
   if (id === merge.keepId) return;
@@ -355,13 +379,9 @@ async function toggleSauceMergePick(id) {
   // the UX never shows a target it can't actually save.
   const sauce = (state.adminSauces || []).find(s => s.id === id);
   if (sauce && sauce.parentSauceId && sauce.parentSauceId !== merge.keepId) {
-    const newParent = (state.adminSauces.find(s => s.id === merge.keepId) || {}).name || merge.keepId;
-    const ok = await SauceBossPopup.confirm({
-      title: 'Re-parent variant?',
-      body: `"${sauce.name}" is already a variant of another sauce. Re-parent it to "${newParent}"?`,
-      confirmLabel: 'Re-parent',
-    });
-    if (!ok) return;
+    if (!confirm(`"${sauce.name}" is already a variant of another sauce. Re-parent it to "${(state.adminSauces.find(s => s.id === merge.keepId) || {}).name || merge.keepId}"?`)) {
+      return;
+    }
   }
   if (merge.mergeIds.has(id)) merge.mergeIds.delete(id);
   else merge.mergeIds.add(id);
@@ -436,7 +456,7 @@ function renderDishTab(isAdmin) {
   }
 
   if (q && totalShown === 0) {
-    return '<p style="padding:16px;color:var(--text-muted)">No items match your search.</p>';
+    return '<p style="padding:16px;color:#888">No items match your search.</p>';
   }
 
   return SECTION_META
@@ -456,7 +476,7 @@ function renderDishSection(sec, parents, isAdmin) {
         <button class="add-step-btn" style="margin:12px 16px" onclick="openAddItemForm('${sec.category}', null)">+ Add ${sec.addLabel}</button>
       ` : ''}
     ` : '';
-  return renderAccordionGroup({
+  return renderCuisineGroup({
     label: sec.label,
     count: totalCount,
     isOpen: open,
@@ -465,10 +485,6 @@ function renderDishSection(sec, parents, isAdmin) {
   });
 }
 
-// Dish Manager parent + variant rows delegate to the canonical
-// `renderDishTile` since 2026-05-24 (ui/dish-tile.js). These adapters
-// compute the manager-specific state (expand, inline-edit form, subline
-// formatting) and pass it through.
 function renderParent(parent, sec, isAdmin) {
   const f = state.itemForm;
   const isEditing = f && f.mode === 'edit' && f.id === parent.id;
@@ -479,21 +495,30 @@ function renderParent(parent, sec, isAdmin) {
   const canExpand = hasVariants || isAdmin;
   if (isEditing) return `<div style="padding:0 16px">${renderItemForm()}</div>`;
   const safeName = (parent.name || '').replace(/'/g, "\\'");
-  const variantPart = `${variants.length} variant${variants.length !== 1 ? 's' : ''}`;
-  const cookTimePart = (sec.category === 'carb' || sec.category === 'protein') && parent.cookTimeMinutes
-    ? ` · ${parent.cookTimeMinutes} min` : '';
-  const subline = variantPart + cookTimePart;
-  const parentRow = renderDishTile(parent, {
-    variant: 'manager-row',
-    isAdmin,
-    editMode: state.editMode,
-    expanded,
-    canExpand,
-    onTap: canExpand ? `toggleParentExpansion('${parent.id}')` : '',
-    subline,
-    safeName,
-    hasVariants,
-  });
+  const sub = sec.category === 'carb'
+    ? `${variants.length} variant${variants.length !== 1 ? 's' : ''}${parent.cookTimeMinutes ? ' · ' + parent.cookTimeMinutes + ' min' : ''}`
+    : sec.category === 'protein'
+      ? `${variants.length} variant${variants.length !== 1 ? 's' : ''}${parent.cookTimeMinutes ? ' · ' + parent.cookTimeMinutes + ' min' : ''}`
+      : `${variants.length} variant${variants.length !== 1 ? 's' : ''}`;
+  const parentRowStyle = `padding:10px 16px;border-top:1px solid #f0e6d6;display:flex;align-items:center;gap:8px;cursor:${canExpand ? 'pointer' : 'default'}`;
+  const parentInner = `
+      <span class="parent-chevron" style="display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;${canExpand ? '' : 'visibility:hidden'}"><i data-lucide="${expanded ? 'chevron-down' : 'chevron-right'}"></i></span>
+      <span class="sm-carb-emoji">${parent.emoji || ''}</span>
+      <div class="admin-sauce-info" style="flex:1">
+        <div class="admin-sauce-name">${parent.name}</div>
+        <div class="admin-sauce-carbs">${sub}</div>
+      </div>`;
+  const showSwipe = isAdmin && state.editMode;
+  const parentRow = !showSwipe
+    ? `<div class="admin-parent-row" style="${parentRowStyle}" ${canExpand ? `onclick="toggleParentExpansion('${parent.id}')"` : ''}>${parentInner}</div>`
+    : `<div class="swipe-row" data-swipe
+           ${canExpand ? `data-tap-action="toggleParentExpansion('${parent.id}')"` : ''}
+           data-edit-action="openEditItemFormById('${parent.id}')"
+           data-delete-action="adminDeleteItemAction('${parent.id}','${safeName}',${hasVariants ? 'true' : 'false'})">
+        <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
+        <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
+        <div class="swipe-content admin-parent-row" style="${parentRowStyle}">${parentInner}</div>
+      </div>`;
   return `
     ${parentRow}
     ${expanded ? `
@@ -511,14 +536,24 @@ function renderVariantRow(v, sec, isAdmin) {
   const f = state.itemForm;
   if (f && f.mode === 'edit' && f.id === v.id) return `<div style="padding:0 16px">${renderItemForm()}</div>`;
   const safeName = (v.name || '').replace(/'/g, "\\'");
-  const subline = `${v.cookTimeMinutes ? v.cookTimeMinutes + ' min' : ''}${v.cookTimeMinutes && v.description ? ' · ' : ''}${v.description || ''}`;
-  return renderDishTile(v, {
-    variant: 'variant-row',
-    isAdmin,
-    editMode: state.editMode,
-    subline,
-    safeName,
-  });
+  const sub = `${v.cookTimeMinutes ? v.cookTimeMinutes + ' min' : ''}${v.cookTimeMinutes && v.description ? ' · ' : ''}${v.description || ''}`;
+  const inner = `
+      <span class="sm-carb-emoji">${v.emoji || ''}</span>
+      <div class="admin-sauce-info">
+        <div class="admin-sauce-name">${v.name}</div>
+        <div class="admin-sauce-carbs">${sub}</div>
+      </div>`;
+  if (!isAdmin || !state.editMode) {
+    return `<div class="admin-sauce-row" style="padding-left:38px">${inner}</div>`;
+  }
+  return `
+    <div class="swipe-row" data-swipe
+         data-edit-action="openEditItemFormById('${v.id}')"
+         data-delete-action="adminDeleteItemAction('${v.id}','${safeName}',false)">
+      <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
+      <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
+      <div class="swipe-content admin-sauce-row" style="padding-left:38px">${inner}</div>
+    </div>`;
 }
 
 // ─── Shared Add/Edit Item Form ────────────────────────────────────────────────
@@ -753,13 +788,7 @@ async function submitBecomeAdmin() {
 // Routes to the admin or owner-scoped endpoint based on who's signed in. Both
 // have the same shape; the backend enforces ownership on the public route.
 async function adminDeleteSauce(id, name) {
-  const ok = await SauceBossPopup.confirm({
-    title: `Delete "${name}"?`,
-    body: 'This cannot be undone.',
-    confirmLabel: 'Delete',
-    destructive: true,
-  });
-  if (!ok) return;
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
   const sauce = (state.adminSauces || []).find(s => s.id === id);
   const isAdmin = !!(currentUser && currentUser.is_admin);
   const isOwner = !!(currentUser && sauce && sauce.createdBy === currentUser.id);
@@ -908,15 +937,10 @@ async function adminSaveItemAction() {
 }
 
 async function adminDeleteItemAction(id, name, hasVariants) {
-  const ok = await SauceBossPopup.confirm({
-    title: hasVariants ? `Delete "${name}" and all variants?` : `Delete "${name}"?`,
-    body: hasVariants
-      ? 'All variants of this item will be removed. This cannot be undone.'
-      : 'This cannot be undone.',
-    confirmLabel: 'Delete',
-    destructive: true,
-  });
-  if (!ok) return;
+  const warn = hasVariants
+    ? `Delete "${name}" and ALL its variants? This cannot be undone.`
+    : `Delete "${name}"? This cannot be undone.`;
+  if (!confirm(warn)) return;
   try {
     await adminDeleteItem(id);
     if (state.itemForm && state.itemForm.id === id) state.itemForm = null;
@@ -946,10 +970,10 @@ function renderIngredientsTab(isAdmin, isLoggedIn) {
   }
 
   if (foods.length === 0) {
-    return `${formHTML}<p style="padding:16px;color:var(--text-muted)">No ingredients yet.</p>`;
+    return `${formHTML}<p style="padding:16px;color:#888">No ingredients yet.</p>`;
   }
   if (filtered.length === 0) {
-    return `${formHTML}<p style="padding:16px;color:var(--text-muted)">No ingredients match your search.</p>`;
+    return `${formHTML}<p style="padding:16px;color:#888">No ingredients match your search.</p>`;
   }
 
   const groups = groupFoodsByCategory(filtered);
@@ -1005,7 +1029,7 @@ function renderIngredientCategoryGroup(group, isAdmin, merge, forceOpen) {
   const open = forceOpen || state.ingredientSections[category] === true;
   const safeCat = category.replace(/'/g, "\\'");
   const rowsHTML = open ? items.map(f => renderFoodRow(f, isAdmin, merge)).join('') : '';
-  return renderAccordionGroup({
+  return renderCuisineGroup({
     label: category,
     count: items.length,
     isOpen: open,
@@ -1019,25 +1043,56 @@ function toggleIngredientSection(category) {
   render();
 }
 
-// `renderFoodRow` was collapsed into the canonical `renderIngredientRow`
-// in 2026-05-24 (ui/ingredient-row.js). This adapter computes the manager-
-// specific state (expanded sub-panel, inline edit form) and delegates the
-// actual markup.
 function renderFoodRow(f, isAdmin, merge) {
+  // Inline edit: if this food is being edited, show the form in place
   const form = state.foodForm;
-  const editFormHTML = (isAdmin && form && form.mode === 'edit' && form.id === f.id)
-    ? renderFoodForm() : null;
+  if (isAdmin && form && form.mode === 'edit' && form.id === f.id) {
+    return `<div style="padding:0 16px">${renderFoodForm()}</div>`;
+  }
+  const safeName = (f.name || '').replace(/'/g, "\\'");
+  const usage = f.usageCount || 0;
+  const sauces = f.sauceCount || 0;
+  const sub = sauces === 0
+    ? '<span style="color:#888">unused</span>'
+    : `${sauces} sauce${sauces !== 1 ? 's' : ''}`;
   const mergeMode = !!merge;
+  const isKeep = merge && merge.keepId === f.id;
+  const isPicked = merge && merge.mergeIds.has(f.id);
   const expanded = !mergeMode && state.expandedFoodIds && state.expandedFoodIds.has(f.id);
+  const inner = `
+    <div class="admin-sauce-info" style="flex:1">
+      <div class="admin-sauce-name">${f.name}</div>
+      <div class="admin-sauce-carbs">${sub}</div>
+    </div>
+    ${mergeMode ? `
+      ${isKeep ? '<span class="food-merge-tag food-merge-tag-keep">keep</span>'
+              : isPicked ? '<span class="food-merge-tag food-merge-tag-merge">will merge</span>'
+              : ''}
+    ` : ''}`;
+
+  if (mergeMode) {
+    return `<div class="food-row${isKeep ? ' food-row-keep' : ''}${isPicked ? ' food-row-picked' : ''}"
+                 onclick="toggleFoodMergePick('${f.id}')">${inner}</div>`;
+  }
+
   const panelHTML = expanded ? renderIngredientSaucesPanel(f.id) : '';
-  return renderIngredientRow(f, {
-    mode: 'manager',
-    isAdmin,
-    editMode: state.editMode,
-    merge,
-    panelHTML,
-    editFormHTML,
-  });
+
+  if (!isAdmin || !state.editMode) {
+    return `
+      <div class="food-row" onclick="toggleFoodExpand('${f.id}')">${inner}</div>
+      ${panelHTML}`;
+  }
+  return `
+    <div class="swipe-row" data-swipe
+         data-tap-action="toggleFoodExpand('${f.id}')"
+         data-longpress-action="startFoodMerge('${f.id}')"
+         data-edit-action="openFoodForm('${f.id}')"
+         data-delete-action="adminDeleteIngredientAction('${f.id}','${safeName}',${usage})">
+      <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
+      <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
+      <div class="swipe-content food-row">${inner}</div>
+    </div>
+    ${panelHTML}`;
 }
 
 function renderIngredientSaucesPanel(ingredientId) {
@@ -1046,7 +1101,7 @@ function renderIngredientSaucesPanel(ingredientId) {
     return `<div class="food-sauces-panel"><span class="food-sauces-empty">No sauces use this yet.</span></div>`;
   }
   const chips = sauces.map(s => {
-    const color = (s.color || 'var(--accent)').replace(/"/g, '');
+    const color = (s.color || '#E85D04').replace(/"/g, '');
     return `<button class="food-sauce-chip" style="border-left-color:${color}"
               onclick="event.stopPropagation(); selectSauceFromManager('${s.id}')">${s.name}</button>`;
   }).join('');
@@ -1113,8 +1168,18 @@ function onFoodFormCategoryChange(value) {
   render();
 }
 
-// `renderMergePanel` (ingredient-side) lives in
-// `widgets/ingredient-merge-panel.js` — extracted in the 2026-05-24 carve-out.
+function renderMergePanel() {
+  const merge = state.foodMerge;
+  const keep = (state.adminIngredients || []).find(f => f.id === merge.keepId);
+  return `
+    <div class="food-merge-panel">
+      <strong>Merging into: ${keep ? keep.name : '(unknown)'}</strong>
+      <div style="font-size:12px;color:#555;margin-top:4px">
+        Tap other ingredients in the list to mark them as duplicates of this one.
+        All recipes pointing at the duplicates will be repointed at <em>${keep ? keep.name : ''}</em>.
+      </div>
+    </div>`;
+}
 
 async function refreshAdminFoods() {
   try {
@@ -1192,19 +1257,10 @@ async function submitFoodForm() {
 
 async function adminDeleteIngredientAction(id, name, usage) {
   if (usage > 0) {
-    await SauceBossPopup.alert({
-      title: `Can't delete "${name}"`,
-      body: `It's used by ${usage} recipe step row${usage === 1 ? '' : 's'}. Merge it into another ingredient first.`,
-    });
+    alert(`Cannot delete "${name}" — it's used by ${usage} recipe step row(s). Merge it into another ingredient first.`);
     return;
   }
-  const ok = await SauceBossPopup.confirm({
-    title: `Delete ingredient "${name}"?`,
-    body: 'This cannot be undone.',
-    confirmLabel: 'Delete',
-    destructive: true,
-  });
-  if (!ok) return;
+  if (!confirm(`Delete ingredient "${name}"? This cannot be undone.`)) return;
   try {
     await adminDeleteIngredient(id);
     await refreshAdminFoods();
@@ -1277,31 +1333,22 @@ async function handleImportSauceFile(event) {
   try {
     raw = JSON.parse(await file.text());
   } catch (e) {
-    await SauceBossPopup.alert({ title: 'Invalid JSON', body: `File is not valid JSON: ${e.message}` });
+    alert(`File is not valid JSON: ${e.message}`);
     return;
   }
 
   if (raw && typeof raw === 'object' && Array.isArray(raw.sauces)) {
-    await SauceBossPopup.alert({
-      title: 'Bulk import unsupported',
-      body: "Split the file into per-sauce JSONs and import them one at a time.",
-    });
+    alert("Bulk imports aren't supported — split the file into per-sauce JSONs.");
     return;
   }
   if (raw && raw.version != null && raw.version !== 1) {
-    await SauceBossPopup.alert({
-      title: 'Unsupported export version',
-      body: `This import only handles version 1; the file is version ${raw.version}.`,
-    });
+    alert(`Unsupported export version: ${raw.version}`);
     return;
   }
 
   const inner = (raw && typeof raw.sauce === 'object' && raw.sauce !== null) ? raw.sauce : raw;
   if (!inner || typeof inner !== 'object' || !inner.name || !Array.isArray(inner.steps)) {
-    await SauceBossPopup.alert({
-      title: 'Sauce payload not found',
-      body: "Expected an object with `name` and `steps`.",
-    });
+    alert("Could not locate sauce payload (expected an object with `name` and `steps`).");
     return;
   }
 
@@ -1311,10 +1358,7 @@ async function handleImportSauceFile(event) {
   if (parentSauceId) {
     const known = (state.adminSauces || []).some(s => s.id === parentSauceId);
     if (!known) {
-      await SauceBossPopup.alert({
-        title: 'Parent sauce not found',
-        body: `Parent sauce "${parentSauceId}" isn't in this catalog — the parent link was dropped.`,
-      });
+      alert(`Parent sauce "${parentSauceId}" not found in this catalog — link dropped.`);
       parentSauceId = null;
     }
   }
@@ -1361,10 +1405,7 @@ async function downloadBulkSauceExport() {
     const res = await fetch(`${API}/api/v1/sauceboss/admin/sauces/export.json`, {
       headers: { 'Authorization': `Bearer ${session.access_token}` },
     });
-    if (!res.ok) {
-      await SauceBossPopup.alert({ title: 'Export failed', body: res.statusText });
-      return;
-    }
+    if (!res.ok) { alert(`Export failed: ${res.statusText}`); return; }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1375,6 +1416,6 @@ async function downloadBulkSauceExport() {
     a.remove();
     URL.revokeObjectURL(url);
   } catch (e) {
-    await SauceBossPopup.alert({ title: 'Export failed', body: e.message });
+    alert(`Export failed: ${e.message}`);
   }
 }

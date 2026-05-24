@@ -1461,14 +1461,7 @@ async function builderSave() {
     b.cuisineDraftMode = false;
   }
   if (!b.cuisine) { b.error = 'Select a cuisine before saving.'; render(); return; }
-  if (b.editingId) {
-    const ok = await SauceBossPopup.confirm({
-      title: 'Overwrite recipe?',
-      body: 'You are about to overwrite this recipe.',
-      confirmLabel: 'Overwrite',
-    });
-    if (!ok) return;
-  }
+  if (b.editingId && !confirm('You are about to overwrite this recipe. Continue?')) return;
   b.saving = true;
   b.error = null;
   render();
