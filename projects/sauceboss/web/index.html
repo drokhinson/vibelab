@@ -66,13 +66,15 @@
   <script defer src="widgets/builder-wizard.js"></script>
   <script defer src="auth.js"></script>
   <script defer src="tabs.js"></script>
-  <script defer src="sauces.js"></script>
-  <script defer src="meal.js"></script>
-  <script defer src="recipe.js"></script>
-  <script defer src="settings.js"></script>
-  <script defer src="saucebook.js"></script>
-  <script defer src="browse.js"></script>
-  <script defer src="pantry.js"></script>
+  <!-- views/ — one file per screen route. Each is a thin renderer that
+       composes ui/ + widgets/ helpers. -->
+  <script defer src="views/sauce-selector-view.js"></script>
+  <script defer src="views/meal-flow-view.js"></script>
+  <script defer src="views/recipe-view.js"></script>
+  <script defer src="views/admin-view.js"></script>
+  <script defer src="views/saucebook-view.js"></script>
+  <script defer src="views/browse-view.js"></script>
+  <script defer src="views/pantry-view.js"></script>
   <script defer src="swipe.js"></script>
   <script defer src="init.js"></script>
 </body>
