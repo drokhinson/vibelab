@@ -492,6 +492,10 @@ function renderDishSection(sec, parents, isAdmin) {
   });
 }
 
+// Dish Manager parent + variant rows delegate to the canonical
+// `renderDishTile` since 2026-05-24 (ui/dish-tile.js). These adapters
+// compute the manager-specific state (expand, inline-edit form, subline
+// formatting) and pass it through.
 function renderParent(parent, sec, isAdmin) {
   const f = state.itemForm;
   const isEditing = f && f.mode === 'edit' && f.id === parent.id;
@@ -502,30 +506,21 @@ function renderParent(parent, sec, isAdmin) {
   const canExpand = hasVariants || isAdmin;
   if (isEditing) return `<div style="padding:0 16px">${renderItemForm()}</div>`;
   const safeName = (parent.name || '').replace(/'/g, "\\'");
-  const sub = sec.category === 'carb'
-    ? `${variants.length} variant${variants.length !== 1 ? 's' : ''}${parent.cookTimeMinutes ? ' · ' + parent.cookTimeMinutes + ' min' : ''}`
-    : sec.category === 'protein'
-      ? `${variants.length} variant${variants.length !== 1 ? 's' : ''}${parent.cookTimeMinutes ? ' · ' + parent.cookTimeMinutes + ' min' : ''}`
-      : `${variants.length} variant${variants.length !== 1 ? 's' : ''}`;
-  const parentRowStyle = `padding:10px 16px;border-top:1px solid #f0e6d6;display:flex;align-items:center;gap:8px;cursor:${canExpand ? 'pointer' : 'default'}`;
-  const parentInner = `
-      <span class="parent-chevron" style="display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;${canExpand ? '' : 'visibility:hidden'}"><i data-lucide="${expanded ? 'chevron-down' : 'chevron-right'}"></i></span>
-      <span class="sm-carb-emoji">${parent.emoji || ''}</span>
-      <div class="admin-sauce-info" style="flex:1">
-        <div class="admin-sauce-name">${parent.name}</div>
-        <div class="admin-sauce-carbs">${sub}</div>
-      </div>`;
-  const showSwipe = isAdmin && state.editMode;
-  const parentRow = !showSwipe
-    ? `<div class="admin-parent-row" style="${parentRowStyle}" ${canExpand ? `onclick="toggleParentExpansion('${parent.id}')"` : ''}>${parentInner}</div>`
-    : `<div class="swipe-row" data-swipe
-           ${canExpand ? `data-tap-action="toggleParentExpansion('${parent.id}')"` : ''}
-           data-edit-action="openEditItemFormById('${parent.id}')"
-           data-delete-action="adminDeleteItemAction('${parent.id}','${safeName}',${hasVariants ? 'true' : 'false'})">
-        <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
-        <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
-        <div class="swipe-content admin-parent-row" style="${parentRowStyle}">${parentInner}</div>
-      </div>`;
+  const variantPart = `${variants.length} variant${variants.length !== 1 ? 's' : ''}`;
+  const cookTimePart = (sec.category === 'carb' || sec.category === 'protein') && parent.cookTimeMinutes
+    ? ` · ${parent.cookTimeMinutes} min` : '';
+  const subline = variantPart + cookTimePart;
+  const parentRow = renderDishTile(parent, {
+    variant: 'manager-row',
+    isAdmin,
+    editMode: state.editMode,
+    expanded,
+    canExpand,
+    onTap: canExpand ? `toggleParentExpansion('${parent.id}')` : '',
+    subline,
+    safeName,
+    hasVariants,
+  });
   return `
     ${parentRow}
     ${expanded ? `
@@ -543,24 +538,14 @@ function renderVariantRow(v, sec, isAdmin) {
   const f = state.itemForm;
   if (f && f.mode === 'edit' && f.id === v.id) return `<div style="padding:0 16px">${renderItemForm()}</div>`;
   const safeName = (v.name || '').replace(/'/g, "\\'");
-  const sub = `${v.cookTimeMinutes ? v.cookTimeMinutes + ' min' : ''}${v.cookTimeMinutes && v.description ? ' · ' : ''}${v.description || ''}`;
-  const inner = `
-      <span class="sm-carb-emoji">${v.emoji || ''}</span>
-      <div class="admin-sauce-info">
-        <div class="admin-sauce-name">${v.name}</div>
-        <div class="admin-sauce-carbs">${sub}</div>
-      </div>`;
-  if (!isAdmin || !state.editMode) {
-    return `<div class="admin-sauce-row" style="padding-left:38px">${inner}</div>`;
-  }
-  return `
-    <div class="swipe-row" data-swipe
-         data-edit-action="openEditItemFormById('${v.id}')"
-         data-delete-action="adminDeleteItemAction('${v.id}','${safeName}',false)">
-      <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
-      <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
-      <div class="swipe-content admin-sauce-row" style="padding-left:38px">${inner}</div>
-    </div>`;
+  const subline = `${v.cookTimeMinutes ? v.cookTimeMinutes + ' min' : ''}${v.cookTimeMinutes && v.description ? ' · ' : ''}${v.description || ''}`;
+  return renderDishTile(v, {
+    variant: 'variant-row',
+    isAdmin,
+    editMode: state.editMode,
+    subline,
+    safeName,
+  });
 }
 
 // ─── Shared Add/Edit Item Form ────────────────────────────────────────────────

@@ -75,16 +75,11 @@ function _mealDishGridHTML(categoryId) {
   if (!dishes.length) {
     return `<div class="empty-state">No ${opt.label.toLowerCase()} yet.</div>`;
   }
-  return `<div class="carb-grid">${dishes.map((d, i) => {
-    const subs = Array.isArray(d.subtypes) ? d.subtypes : (d.variants || []);
-    return `
-    <button class="carb-card" style="--i:${i}" onclick="mealPickDish('${escapeHtml(d.id)}')">
-      <span class="carb-emoji">${d.emoji || '🍽'}</span>
-      <div class="carb-name">${escapeHtml(d.name)}</div>
-      ${subs.length > 0 ? `<div class="carb-desc">${subs.length} subtype${subs.length === 1 ? '' : 's'}</div>` :
-        (d.description ? `<div class="carb-desc">${escapeHtml(d.description)}</div>` : '')}
-    </button>`;
-  }).join('')}</div>`;
+  return `<div class="carb-grid">${dishes.map((d, i) => renderDishTile(d, {
+    variant: 'tile',
+    index: i,
+    onClick: `mealPickDish('${escapeHtml(d.id)}')`,
+  })).join('')}</div>`;
 }
 
 // Tab-only swap so the SauceBoss logo + pot illustration don't blink.
@@ -137,17 +132,19 @@ function renderMealSubtype() {
     })}
     <div class="scroll-body scroll-body--padded">
       <div class="carb-grid">
-        <button class="carb-card" style="--i:0" onclick="mealPickSubtype(null)">
-          <span class="carb-emoji">${dish.emoji || '🍽'}</span>
-          <div class="carb-name">Just ${escapeHtml(dish.name)}</div>
-          <div class="carb-desc">No subtype</div>
-        </button>
-        ${subs.map((s, i) => `
-          <button class="carb-card" style="--i:${i + 1}" onclick="mealPickSubtype('${escapeHtml(s.id)}')">
-            <span class="carb-emoji">${s.emoji || dish.emoji || '·'}</span>
-            <div class="carb-name">${escapeHtml(s.name)}</div>
-            ${s.cookTimeMinutes ? `<div class="carb-desc">${s.cookTimeMinutes} min</div>` : ''}
-          </button>`).join('')}
+        ${renderDishTile(
+          { id: null, name: `Just ${dish.name}`, emoji: dish.emoji || '🍽' },
+          { variant: 'subtype-tile', index: 0, subline: 'No subtype', onClick: 'mealPickSubtype(null)' },
+        )}
+        ${subs.map((s, i) => renderDishTile(
+          { ...s, emoji: s.emoji || dish.emoji || '·' },
+          {
+            variant: 'subtype-tile',
+            index: i + 1,
+            subline: s.cookTimeMinutes ? `${s.cookTimeMinutes} min` : '',
+            onClick: `mealPickSubtype('${escapeHtml(s.id)}')`,
+          },
+        )).join('')}
       </div>
     </div>
   `;
