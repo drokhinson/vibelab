@@ -37,10 +37,15 @@ export const COLOR_SWATCHES = [
   '#457B9D', '#7C3AED', '#EA580C', '#15803D', '#B91C1C',
 ];
 
+// SAUCE_TYPES expanded 2026-05-24 with `pillBg` / `pillFg` (the pill swatch
+// in settings.js → renderSauceManagerRow; mirrors the `.sauce-type-${value}`
+// CSS classes) and `recipeSectionBg` (the dark colored bar above the steps
+// in recipe.js → renderRecipe). Keeping these alongside `label` and
+// `category` collapses three previous sources of truth into one.
 export const SAUCE_TYPES = [
-  { value: 'sauce',       label: 'Sauce',       category: 'carb',    pairLabel: 'Carbs'    },
-  { value: 'marinade',    label: 'Marinade',    category: 'protein', pairLabel: 'Proteins' },
-  { value: 'dressing',    label: 'Dressing',    category: 'salad',   pairLabel: 'Salads'   },
+  { value: 'sauce',       label: 'Sauce',       category: 'carb',    pairLabel: 'Carbs',    pillBg: '#FEE7D6', pillFg: '#B43E0A', recipeSectionBg: '#4A0072' },
+  { value: 'marinade',    label: 'Marinade',    category: 'protein', pairLabel: 'Proteins', pillBg: '#FEE2E2', pillFg: '#B91C1C', recipeSectionBg: '#5D4037' },
+  { value: 'dressing',    label: 'Dressing',    category: 'salad',   pairLabel: 'Salads',   pillBg: '#DCFCE7', pillFg: '#166534', recipeSectionBg: '#1B5E20' },
   // Migration 009: dip/spread pairs with carb (bread / crackers / pretzels).
   { value: 'dip',         label: 'Dip/Spread',  category: 'carb',    pairLabel: 'Carbs'    },
   // Migration 011: standalone recipe — not paired with any dish category.
