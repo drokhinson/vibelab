@@ -267,6 +267,8 @@ each missing game from the BGG XML API.
 - `PATCH /api/v1/boardgame_buddy/sessions/{code}` — host updates the lobby (body `{game_id?}`)
 - `PATCH /api/v1/boardgame_buddy/sessions/{code}/phase` — host advances the cascading flow (body `{phase: 'gather'|'play'|'settle'|'finalized'|'abandoned'}`). Transitions enforced: gather→play→settle→finalized, plus any→abandoned. Joiners watch this column via Realtime.
 - `POST /api/v1/boardgame_buddy/sessions/{code}/join` — join a session by code. Returns 409 once the session has moved past phase=gather.
+- `POST /api/v1/boardgame_buddy/sessions/{code}/participants` — host-only. Adds a buddy (with `user_id`) or a ghost (name-only, `user_id=null`) to the lobby roster so joiners see the player. Gather-only.
+- `DELETE /api/v1/boardgame_buddy/sessions/{code}/participants/{participant_id}` — host-only. Removes a participant from the lobby roster. Refuses to remove the host themselves. Gather-only.
 - `DELETE /api/v1/boardgame_buddy/sessions/{code}` — host abandons a session
 - `POST /api/v1/boardgame_buddy/sessions/{code}/finalize` — write a play row from the session. Merges per-player live-scoring rows from `boardgamebuddy_play_session_scores` into the player payload (authed players only; guests keep host-typed scores).
 - `POST /api/v1/boardgame_buddy/bgg/link` — body `{username, password}`; logs into BGG via `POST /login/api/v1`, stores the username + Fernet-encrypted password (`BGG_CREDENTIAL_KEY`) and the returned SessionID/bggusername/bggpassword cookies on the profile. A successful login is also our existence check (BGG returns 401 for both bad passwords and unknown handles, surfaced as a 400 to the client). Returns `{bgg_username}`.

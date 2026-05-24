@@ -17,6 +17,8 @@
       super("play-flow");
       this._ps = null;
       this._buddies = [];
+      this._ghosts = [];
+      this._recent = [];
       this._lobby = null;
       this._expansions = [];
       this._expansionsLoadedFor = null;
@@ -27,6 +29,7 @@
       this._error = null;
       this._saving = false;
       this._lobbyPoll = null;
+      this._buddyInputTimer = null;
       // GameFinder widget instance, lazily constructed in render() when the
       // Gather screen needs the picker. Lives across the 2s lobby-poll
       // re-renders — mount() is idempotent.
@@ -50,11 +53,16 @@
 
       this.render();
 
-      const buddyPromise = window.Buddy.list().catch(() => []);
+      // Preload buddies (accounts), ghosts, and recently-played-with in one
+      // cached call. Powers the player picker's empty-state suggestions and
+      // username search without per-mount round-trips.
+      const buddyPromise = window.Buddy.allBuddies().catch(() => ({ accounts: [], ghosts: [], recent: [] }));
       const expansionsPromise = this._loadExpansionsIfNeeded();
       const lobbyPromise = this._ensureLobbyOpen();
-      const [buddies] = await Promise.all([buddyPromise, expansionsPromise, lobbyPromise]);
-      this._buddies = buddies;
+      const [combined] = await Promise.all([buddyPromise, expansionsPromise, lobbyPromise]);
+      this._buddies = combined.accounts || [];
+      this._ghosts = combined.ghosts || [];
+      this._recent = combined.recent || [];
 
       this.render();
       // Initial scroll to the live phase's section — render() no longer
@@ -133,22 +141,33 @@
           this._lobby = next;
           let playersChanged = false;
           if (this._ps.phase === "gather") {
-            const known = new Set(
-              this._ps.players.map((p) => (p.name || "").toLowerCase())
+            const byName = new Map(
+              this._ps.players.map((p, i) => [(p.name || "").toLowerCase(), i])
             );
             for (const part of nextParts) {
               const key = (part.display_name || "").toLowerCase();
-              if (key && !known.has(key)) {
-                this._ps.players.push({
-                  name: part.display_name,
-                  is_winner: false,
-                  score: null,
-                  user_id: part.user_id || null,
-                  avatar: part.avatar || null,
-                });
-                known.add(key);
-                playersChanged = true;
+              if (!key) continue;
+              if (byName.has(key)) {
+                // Backfill participant_id onto an existing local row (e.g. one
+                // the host added optimistically before the backend round-trip
+                // completed) so _removePlayer can issue a DELETE later.
+                const existing = this._ps.players[byName.get(key)];
+                if (existing && !existing.participant_id) {
+                  existing.participant_id = part.id;
+                  playersChanged = true;
+                }
+                continue;
               }
+              this._ps.players.push({
+                name: part.display_name,
+                is_winner: false,
+                score: null,
+                user_id: part.user_id || null,
+                avatar: part.avatar || null,
+                participant_id: part.id,
+              });
+              byName.set(key, this._ps.players.length - 1);
+              playersChanged = true;
             }
             if (playersChanged) this._ps.persist();
           }
@@ -799,10 +818,16 @@
       const input = document.getElementById("play-flow-buddy-input");
       const name = (input.value || "").trim();
       if (!name) return;
-      const buddy = (this._buddies || []).find(
-        (b) => b.other_display_name.toLowerCase() === name.toLowerCase()
-      );
-      this._addPlayer({ name, user_id: buddy ? buddy.other_user_id : null });
+      // Match the typed name against the unified candidate list (accounts +
+      // ghosts). If we find an account match, attach the user_id + avatar so
+      // the player goes in as an authed buddy; otherwise it's a ghost row.
+      const candidates = this._buddyCandidates();
+      const hit = candidates.find((c) => c.name.toLowerCase() === name.toLowerCase());
+      this._addPlayer({
+        name: hit ? hit.name : name,
+        user_id: hit ? hit.user_id : null,
+        avatar: hit ? hit.avatar : null,
+      });
     }
 
     _addPlayer({ name, user_id, avatar }) {
@@ -820,9 +845,36 @@
           roundScores: Array(currentRounds).fill(null),
         });
         this._ps.persist();
+        // Sync to the backend participants table so other joiners see this
+        // player. Fire-and-forget — _lobbyPoll will reconcile within ~2s and
+        // backfill participant_id onto the local row. On hard failure, drop
+        // the local row and toast so the host knows nothing was added.
+        this._pushParticipantToBackend(name, user_id);
       }
       this._closeBuddyDropdown();
       this.render();
+    }
+
+    async _pushParticipantToBackend(name, userId) {
+      if (!this._lobby || !this._lobby.code) return;
+      try {
+        await window.PlaySession.addParticipant(this._lobby.code, {
+          userId: userId || null,
+          displayName: name,
+        });
+      } catch (e) {
+        // Roll back the optimistic local push so the host's UI doesn't
+        // show a phantom row that no joiner can see.
+        const idx = this._ps.players.findIndex(
+          (p) => (p.name || "").toLowerCase() === (name || "").toLowerCase()
+        );
+        if (idx >= 0) {
+          this._ps.players.splice(idx, 1);
+          this._ps.persist();
+          this.render();
+        }
+        if (window.showToast) window.showToast(`Couldn't add ${name}: ${e.message || "network error"}`, "error");
+      }
     }
 
     // Lookup helper used by the buddy autocomplete dropdown: resolves the
@@ -838,11 +890,27 @@
       });
     }
 
+    // Pick a ghost-buddy from the dropdown — a free-text name the user has
+    // logged before, with no account. Goes in as a name-only participant.
+    _addGhost(displayName) {
+      const name = String(displayName || "").trim();
+      if (!name) return;
+      this._addPlayer({ name, user_id: null, avatar: null });
+    }
+
     _removePlayer(i) {
+      const removed = this._ps.players[i];
       this._ps.players.splice(i, 1);
       this._ps.persist();
       this._autoSelectWinners();
       this.render();
+      // If the row had been confirmed by the backend (carries a
+      // participant_id from _lobbyPoll), tell the server to drop it too.
+      if (removed && removed.participant_id && this._lobby && this._lobby.code) {
+        window.PlaySession.removeParticipant(this._lobby.code, removed.participant_id).catch((e) => {
+          if (window.showToast) window.showToast(`Couldn't remove ${removed.name}: ${e.message || "network error"}`, "error");
+        });
+      }
     }
 
     _setInitials(i, value) {
@@ -1177,7 +1245,10 @@
     // ── Buddy combo ────────────────────────────────────────────────────────
 
     _onBuddyInput(value) {
-      this._renderBuddyDropdown(value);
+      // Debounce typing so we don't re-render the dropdown on every keystroke.
+      // Mirrors the GameFinder pattern (widgets/game-finder.js).
+      if (this._buddyInputTimer) clearTimeout(this._buddyInputTimer);
+      this._buddyInputTimer = setTimeout(() => this._renderBuddyDropdown(value), 180);
     }
 
     _openBuddyDropdown() {
@@ -1197,32 +1268,125 @@
       }
     }
 
+    // Unified candidate list for the player picker: accounts (accepted
+    // buddies, with avatar + username) + ghosts (free-text names from past
+    // plays). Names already in the current draft are excluded. Account rows
+    // win over ghost rows when both share a name.
+    _buddyCandidates() {
+      const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
+      const seen = new Set();
+      const out = [];
+      for (const b of (this._buddies || [])) {
+        const name = b.other_display_name || "";
+        const key = name.toLowerCase();
+        if (!name || already.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          source: "account",
+          user_id: b.other_user_id,
+          name,
+          username: b.other_username || null,
+          avatar: b.other_avatar || null,
+        });
+      }
+      for (const g of (this._ghosts || [])) {
+        const name = g.display_name || "";
+        const key = name.toLowerCase();
+        if (!name || already.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          source: "ghost",
+          user_id: null,
+          name,
+          username: null,
+          avatar: null,
+        });
+      }
+      return out;
+    }
+
     _renderBuddyDropdown(query) {
       const dd = document.getElementById("play-flow-buddy-dropdown");
       if (!dd) return;
       const q = (query || "").trim().toLowerCase();
-      const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
-      const filtered = (this._buddies || [])
-        .filter((b) => {
-          const name = (b.other_display_name || "").toLowerCase();
-          if (already.has(name)) return false;
-          if (!q) return true;
-          return name.includes(q);
-        })
-        .slice(0, 8);
-      if (filtered.length === 0) {
+      const candidates = this._buddyCandidates();
+      let rows = [];
+      let header = "";
+
+      if (!q) {
+        // Empty input: surface recently-played-with people. Cross-reference
+        // recent (real accounts, ordered by play_count) against the
+        // candidates so we keep the unified shape and exclude anyone
+        // already in the draft.
+        const candidatesByUserId = new Map(
+          candidates.filter((c) => c.user_id).map((c) => [c.user_id, c])
+        );
+        for (const r of (this._recent || [])) {
+          const hit = candidatesByUserId.get(r.user_id);
+          if (hit) {
+            rows.push(hit);
+            continue;
+          }
+          // Recent person who isn't a buddy yet — still useful to surface
+          // so the host can add them as a name-only player.
+          const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
+          if (!already.has((r.display_name || "").toLowerCase())) {
+            rows.push({
+              source: "account",
+              user_id: r.user_id,
+              name: r.display_name,
+              username: null,
+              avatar: r.avatar || null,
+            });
+          }
+        }
+        rows = rows.slice(0, 8);
+        if (rows.length > 0) header = "Recently played with";
+      } else {
+        rows = candidates
+          .filter((c) => {
+            const name = c.name.toLowerCase();
+            const username = (c.username || "").toLowerCase();
+            return name.includes(q) || (username && username.includes(q));
+          })
+          .slice(0, 8);
+      }
+
+      if (rows.length === 0) {
         dd.classList.add("hidden");
         dd.innerHTML = "";
         return;
       }
-      dd.innerHTML = filtered.map((b) => `
-        <li class="cascade-buddy-dropdown-item"
-            onclick="window.playFlowView._addBuddy('${escapeAttr(b.other_user_id)}')">
-          ${window.BgbBadge.render({ avatar: b.other_avatar, displayName: b.other_display_name, size: "xs" })}
-          <span class="cascade-buddy-dropdown-name">${escape(b.other_display_name)}</span>
-        </li>
-      `).join("");
+      const headerHtml = header
+        ? `<li class="cascade-buddy-dropdown-header">${escape(header)}</li>`
+        : "";
+      dd.innerHTML = headerHtml + rows.map((c) => {
+        const handler = c.user_id
+          ? `window.playFlowView._addBuddy('${escapeAttr(c.user_id)}')`
+          : `window.playFlowView._addGhost('${escapeAttr(c.name)}')`;
+        const ghostPill = c.source === "ghost"
+          ? `<span class="cascade-buddy-dropdown-pill">ghost</span>`
+          : "";
+        const subtitle = c.username
+          ? `<span class="cascade-buddy-dropdown-sub">@${escape(c.username)}</span>`
+          : "";
+        const badge = window.BgbBadge.render({
+          avatar: c.avatar,
+          displayName: c.name,
+          size: "xs",
+          isGhost: c.source === "ghost",
+        });
+        return `
+          <li class="cascade-buddy-dropdown-item" onclick="${handler}">
+            ${badge}
+            <span class="cascade-buddy-dropdown-name">${escape(c.name)}</span>
+            ${subtitle}
+            ${ghostPill}
+          </li>
+        `;
+      }).join("");
       dd.classList.remove("hidden");
+      if (window.lucide) window.lucide.createIcons();
     }
 
     // ── Save ───────────────────────────────────────────────────────────────
@@ -1274,6 +1438,9 @@
         this._ps.clear();
         window.store.set("activePlay", null);
         window.store.invalidate("feed");
+        // Drop the buddy cache so the next gather screen sees any new ghost
+        // names + updated played-with counts the play just produced.
+        if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
         // Surface the warning before the wrap-up popup so the user can't miss it.
         if (photoUploadFailed && window.PolaroidPopup && window.PolaroidPopup.alert) {
           await window.PolaroidPopup.alert({

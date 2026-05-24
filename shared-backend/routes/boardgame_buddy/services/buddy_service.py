@@ -26,6 +26,7 @@ def _edge_response(edge: dict[str, Any], viewer_id: str, profiles: dict[str, dic
         id=edge["id"],
         other_user_id=other_id,
         other_display_name=other.get("display_name") or "Unknown",
+        other_username=other.get("username"),
         other_avatar=other.get("avatar"),
         accepted_at=edge.get("accepted_at"),
         created_at=edge["created_at"],

@@ -482,6 +482,7 @@ class BuddyEdgeResponse(BaseModel):
     id: str
     other_user_id: str
     other_display_name: str
+    other_username: Optional[str] = None
     other_avatar: Optional[Avatar] = None
     accepted_at: Optional[datetime] = None
     created_at: datetime
@@ -626,6 +627,15 @@ class SessionJoinBody(BaseModel):
     # user joins, the display_name is taken from their profile and this field
     # is ignored.
     display_name: Optional[str] = None
+
+
+class SessionAddParticipantBody(BaseModel):
+    # Host-only "add to lobby" body. Pass user_id when adding a real-account
+    # buddy; leave it null when adding a ghost (name-only) player. display_name
+    # is required either way — for accounts it's the live display name as the
+    # host knows them (idempotent dedup matches on user_id, not name).
+    user_id: Optional[str] = None
+    display_name: str
 
 
 class JoinableSession(BaseModel):

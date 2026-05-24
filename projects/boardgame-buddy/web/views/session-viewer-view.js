@@ -11,9 +11,11 @@
 // the lobby so a missed Realtime event doesn't leave the joiner stuck.
 
 (function () {
-  // Slow polling complements the Realtime channel — Realtime delivers the
-  // 95% case in ~1s; polling is the safety net.
-  const POLL_MS = 15000;
+  // Polling cadence matches the host's lobby poll (play-flow-view.js:124).
+  // Realtime covers phase changes and live scores, but participant joins /
+  // leaves and the host's roster edits are poll-only, so 2s is the minimum
+  // freshness an authenticated joiner can expect for the player list.
+  const POLL_MS = 2000;
 
   class SessionViewerView extends window.View {
     constructor() {
@@ -39,6 +41,7 @@
         return;
       }
       await this._load();
+      this._scrollToCurrentPhase(this._session && this._session.phase);
       this._startPolling();
       await this._subscribePhase();
       await this._maybeStartLiveScores();
@@ -55,6 +58,7 @@
       this._session = null;
       this._popupShown = false;
       await this._load();
+      this._scrollToCurrentPhase(this._session && this._session.phase);
       this._startPolling();
       await this._subscribePhase();
       await this._maybeStartLiveScores();
@@ -124,30 +128,102 @@
       if (!this._code) return;
       try {
         const next = await window.PlaySession.fetchLobby(this._code);
-        const changed = this._diff(this._session, next);
-        const prevPhase = this._session && this._session.phase;
+        const prev = this._session;
+        const prevPhase = prev && prev.phase;
+        const structural = this._structuralDiff(prev, next);
+        const participantsOnly = !structural && this._participantsDiff(prev, next);
         this._session = next;
-        if (changed) this.render();
+        if (structural) {
+          this.render();
+        } else if (participantsOnly) {
+          // At a 2s cadence we cannot afford a full innerHTML rebuild of the
+          // whole cascade on every roster change — it would yank scroll and
+          // destroy DOM focus on the joiner's editable score input. Patch
+          // just the participant surfaces in place instead.
+          this._patchParticipants();
+        }
         if (next.phase !== prevPhase) this._handlePhaseSideEffects(next);
       } catch (_) {
         // Best-effort; let Realtime handle the bulk of updates.
       }
     }
 
-    _diff(prev, next) {
+    _structuralDiff(prev, next) {
       if (!prev || !next) return true;
       if (prev.status !== next.status) return true;
       if (prev.phase !== next.phase) return true;
       if (prev.finalized_play_id !== next.finalized_play_id) return true;
       if (prev.game_id !== next.game_id) return true;
-      const a = prev.participants || [];
-      const b = next.participants || [];
+      return false;
+    }
+
+    _participantsDiff(prev, next) {
+      const a = (prev && prev.participants) || [];
+      const b = (next && next.participants) || [];
       if (a.length !== b.length) return true;
       for (let i = 0; i < a.length; i++) {
         if (a[i].id !== b[i].id) return true;
+        if (a[i].user_id !== b[i].user_id) return true;
         if (a[i].display_name !== b[i].display_name) return true;
+        const aa = a[i].avatar || null;
+        const bb = b[i].avatar || null;
+        if (JSON.stringify(aa) !== JSON.stringify(bb)) return true;
       }
       return false;
+    }
+
+    // Patches the participant lists in place — used when the only thing that
+    // changed since the last poll is the roster. Avoids the scroll-yank +
+    // input-focus loss that a full render() would cause at 2s cadence.
+    _patchParticipants() {
+      const s = this._session;
+      if (!s) return;
+
+      // Lobby (Gather screen) — re-render the whole Gather body. Handles
+      // empty-state ↔ populated transitions cleanly (single CSS selector
+      // can't catch both shapes) and there's nothing focusable here for the
+      // joiner, so a sub-section innerHTML swap has no visible side effects.
+      const gatherScreen = this.container.querySelector("#screen-gather");
+      if (gatherScreen) {
+        gatherScreen.innerHTML = `
+          ${this._renderHeaderRow("Gather", 1, "Waiting on the host")}
+          ${this._renderGather(s)}
+        `;
+      }
+
+      // Play screen — re-render the scoring + guide section while preserving
+      // the user's focused input + cursor (the scoring table includes the
+      // joiner's own editable score column). Re-render the whole Play body
+      // because the scoring card's class set varies between the empty state
+      // and the populated state, so a single CSS selector isn't reliable.
+      const playScreen = this.container.querySelector("#screen-play");
+      const phase = s.phase || "gather";
+      if (playScreen && (phase === "play" || phase === "settle")) {
+        const focused = this.container.querySelector("input.scoring-cell:focus");
+        const snap = focused
+          ? {
+              round: focused.getAttribute("data-round"),
+              selStart: focused.selectionStart,
+              selEnd: focused.selectionEnd,
+            }
+          : null;
+        playScreen.innerHTML = `
+          ${this._renderHeaderRow("Play", 2, this._headerHint(phase))}
+          ${this._renderPlay(s)}
+        `;
+        this._mountReferenceGuide(s);
+        if (snap) {
+          const restored = this.container.querySelector(
+            `input.scoring-cell[data-round="${snap.round}"]`
+          );
+          if (restored) {
+            restored.focus();
+            try { restored.setSelectionRange(snap.selStart, snap.selEnd); } catch (_) {}
+          }
+        }
+      }
+
+      if (window.lucide) window.lucide.createIcons();
     }
 
     async _subscribePhase() {
@@ -155,11 +231,15 @@
       this._phaseOff = await window.SessionPhase.subscribe(
         this._session.id,
         async (phase) => {
+          const prevPhase = this._session && this._session.phase;
           // Patch the cached session in place so render() picks up the new
           // phase without waiting on the slow poll.
           if (this._session) this._session = { ...this._session, phase };
           this.render();
           this._handlePhaseSideEffects(this._session);
+          // Scroll the joiner to the new section now that the phase has
+          // actually changed (render() no longer does this on every paint).
+          if (phase !== prevPhase) this._scrollToCurrentPhase(phase);
           // Lazy-start the live-scores channel when entering Play, lazy-
           // stop when leaving it (we don't need a live socket during Gather).
           if (phase === "play") await this._maybeStartLiveScores();
@@ -293,7 +373,10 @@
       `;
       if (window.lucide) window.lucide.createIcons();
       if (phase === "play" || phase === "settle") this._mountReferenceGuide(s);
-      this._scrollToCurrentPhase(phase);
+      // NOTE: do NOT call _scrollToCurrentPhase() here. At a 2s poll cadence
+      // a render-time scroll yanks the user back to the top of the section
+      // on every tick. Scroll is now invoked explicitly from onMount,
+      // onParamsChange, and _subscribePhase when the phase actually changes.
       this._renderStatusBanner(s);
     }
 

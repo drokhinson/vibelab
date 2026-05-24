@@ -106,6 +106,22 @@
       return window.api.patch(`/sessions/${code}`, { game_id: gameId || null });
     }
 
+    // Host-only. Adds a buddy (with userId) or a ghost (userId=null) to the
+    // backend participants table so other joiners can see them. Without this
+    // call, host-typed players live only in the host's localStorage draft and
+    // never reach joiners.
+    static addParticipant(code, { userId, displayName }) {
+      return window.api.post(`/sessions/${code}/participants`, {
+        user_id: userId || null,
+        display_name: displayName,
+      });
+    }
+
+    // Host-only. Remove a participant row by id.
+    static removeParticipant(code, participantId) {
+      return window.api.del(`/sessions/${code}/participants/${participantId}`);
+    }
+
     static abandonLobby(code) {
       return window.api.del(`/sessions/${code}`);
     }
