@@ -1,8 +1,9 @@
 // views/collection-view.js — Full collection spoke.
 //
 // Toggle between "Owned" and "Played, not owned" + shared search/filters.
-// Wishlist lives at its own /wishlist route. The "+ Game" FAB is rendered
-// here so it's only visible on Collection + Wishlist.
+// Wishlist lives at its own /wishlist route. The "+ Add" button in the
+// header opens the AddGameModal (widgets/add-game-modal.js) for searching
+// the BgB library or importing from BGG.
 
 (function () {
   const PER_PAGE = 12;
@@ -146,7 +147,6 @@
         ${!other && this._filtersOpen ? this._renderFilters() : ""}
         ${this._renderBody()}
         ${this._renderPager()}
-        ${other ? "" : this._renderFab()}
       `;
       if (window.lucide) window.lucide.createIcons();
 
@@ -182,8 +182,22 @@
           </button>
           <h2 class="spoke-head__title font-display">${titleHtml}</h2>
           <span class="spoke-head__count">${total} game${total === 1 ? "" : "s"}</span>
+          ${other ? "" : `
+            <button class="spoke-head__add btn btn-primary btn-sm"
+                    onclick="window.collectionView._openAddGame()"
+                    aria-label="Add a game to your collection">
+              <i data-lucide="plus" class="w-4 h-4"></i><span>Add</span>
+            </button>
+          `}
         </header>
       `;
+    }
+
+    _openAddGame() {
+      window.AddGameModal.open({
+        status: "owned",
+        onAdded: () => { this._loadMode(this._mode); },
+      });
     }
 
     _renderControls() {
@@ -335,16 +349,6 @@
             Next <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
           </button>
         </nav>
-      `;
-    }
-
-    _renderFab() {
-      return `
-        <button class="fab-add-game" onclick="window.router.go('log-play', { focus: 'find' })"
-                aria-label="Add a game to your collection">
-          <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>Game</span>
-        </button>
       `;
     }
 
