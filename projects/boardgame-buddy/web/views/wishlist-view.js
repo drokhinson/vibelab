@@ -1,8 +1,8 @@
 // views/wishlist-view.js — Full wishlist spoke.
 //
 // Mirrors collection-view but pins status='wishlist' and drops the toggle.
-// FAB is rendered here so the "+ Game" CTA stays attached to the screens
-// where adding makes sense.
+// "+ Add" button in the header opens the AddGameModal for searching the
+// BgB library or importing from BGG.
 
 (function () {
   const PER_PAGE = 12;
@@ -76,7 +76,6 @@
         ${this._filtersOpen ? this._renderFilters() : ""}
         ${this._renderBody()}
         ${this._renderPager()}
-        ${this._renderFab()}
       `;
       if (window.lucide) window.lucide.createIcons();
 
@@ -99,8 +98,20 @@
           </button>
           <h2 class="spoke-head__title font-display">Wishlist</h2>
           <span class="spoke-head__count">${this._total} game${this._total === 1 ? "" : "s"}</span>
+          <button class="spoke-head__add btn btn-primary btn-sm"
+                  onclick="window.wishlistView._openAddGame()"
+                  aria-label="Add a game to your wishlist">
+            <i data-lucide="plus" class="w-4 h-4"></i><span>Add</span>
+          </button>
         </header>
       `;
+    }
+
+    _openAddGame() {
+      window.AddGameModal.open({
+        status: "wishlist",
+        onAdded: () => { this._load(); },
+      });
     }
 
     _renderControls() {
@@ -179,7 +190,7 @@
       }
       if (this._items.length === 0) {
         const isSearchingOrFiltering = this._query || this._activeFilterCount() > 0;
-        return `<div class="profile-empty">${isSearchingOrFiltering ? "No wishlist matches." : "Wishlist is empty — tap the + to add a game."}</div>`;
+        return `<div class="profile-empty">${isSearchingOrFiltering ? "No wishlist matches." : "Wishlist is empty — tap the + Add button to add a game."}</div>`;
       }
       const reloading = this._loading ? "is-reloading" : "";
       return `
@@ -220,16 +231,6 @@
             Next <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
           </button>
         </nav>
-      `;
-    }
-
-    _renderFab() {
-      return `
-        <button class="fab-add-game" onclick="window.router.go('log-play', { focus: 'find' })"
-                aria-label="Add a game to your wishlist">
-          <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>Game</span>
-        </button>
       `;
     }
 

@@ -1405,44 +1405,6 @@ body {
     0 0 18px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
-/* ── Collection: extended "+ Game" floating action button ─────────────────
-   Visible only on the Profile → Collection sub-tab. Routes to game-search.
-   Pinned above the bottom nav, matching the .fab-log-play positioning. */
-.fab-add-game {
-  position: fixed;
-  right: max(20px, env(safe-area-inset-right));
-  bottom: calc(88px + env(safe-area-inset-bottom));
-  display: inline-flex; align-items: center; gap: 0.45rem;
-  padding: 0.7rem 1.1rem;
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  background: var(--accent);
-  color: #1a1208;
-  font-weight: 700;
-  font-size: 0.95rem;
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.5),
-    0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
-  cursor: pointer;
-  z-index: 40;
-  transition: transform 120ms ease, background 120ms ease;
-}
-.fab-add-game:hover  { transform: translateY(-2px); background: var(--accent-hover); }
-.fab-add-game:active { transform: translateY(0); }
-.fab-add-game:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-.fab-add-game svg { width: 18px; height: 18px; stroke-width: 2.5; }
-
-/* Pin the FAB to the same 480px column as the bottom nav on desktop so it
-   sits inside the phone shell rather than drifting into the gutter. */
-@media (min-width: 520px) {
-  .fab-add-game {
-    right: max(20px, calc(50vw - 220px));
-  }
-}
-
 /* ── Browse: floating import button ─────────────────────────────────────── */
 .fab-import {
   position: fixed;
@@ -5381,13 +5343,13 @@ main[data-view="session-viewer"].hidden {
 }
 .polaroid-popup__actions .btn-ghost { color: var(--polaroid-ink); }
 
-/* ── Inline game-picker combo (Gather screen) ────────────────────────────── */
-.cascade-game-combo {
+/* ── Game finder widget (Gather screen + Add Game modal) ────────────────── */
+.game-finder {
   position: relative;
   display: flex;
   align-items: center;
 }
-.cascade-game-combo__icon {
+.game-finder__icon {
   position: absolute;
   left: 12px;
   top: 50%;
@@ -5395,11 +5357,11 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-muted);
   pointer-events: none;
 }
-.cascade-game-combo__input {
+.game-finder__input {
   width: 100%;
   padding-left: 36px;
 }
-.cascade-game-dropdown {
+.game-finder-dropdown {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
@@ -5416,7 +5378,7 @@ main[data-view="session-viewer"].hidden {
   max-height: 320px;
   overflow-y: auto;
 }
-.cascade-game-dropdown__header {
+.game-finder-dropdown__header {
   padding: 6px 10px 4px;
   font-family: var(--font-polaroid);
   font-weight: 700;
@@ -5425,13 +5387,13 @@ main[data-view="session-viewer"].hidden {
   text-transform: uppercase;
   color: var(--polaroid-muted);
 }
-.cascade-game-dropdown__hint {
+.game-finder-dropdown__hint {
   padding: 10px 12px;
   font-size: 12px;
   color: var(--polaroid-muted);
   font-style: italic;
 }
-.cascade-game-dropdown-item {
+.game-finder-dropdown-item {
   display: grid;
   grid-template-columns: 36px 1fr auto;
   gap: 10px;
@@ -5441,22 +5403,22 @@ main[data-view="session-viewer"].hidden {
   cursor: pointer;
   min-height: 44px;
 }
-.cascade-game-dropdown-item:hover { background: var(--polaroid-bg-soft); }
-.cascade-game-dropdown-item__thumb {
+.game-finder-dropdown-item:hover { background: var(--polaroid-bg-soft); }
+.game-finder-dropdown-item__thumb {
   width: 36px;
   height: 36px;
   border-radius: 4px;
   object-fit: cover;
   background: var(--polaroid-line);
 }
-.cascade-game-dropdown-item__thumb--placeholder {
+.game-finder-dropdown-item__thumb--placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--polaroid-muted);
 }
-.cascade-game-dropdown-item__body { min-width: 0; }
-.cascade-game-dropdown-item__name {
+.game-finder-dropdown-item__body { min-width: 0; }
+.game-finder-dropdown-item__name {
   font-family: var(--font-polaroid);
   font-weight: 600;
   font-size: 14px;
@@ -5465,20 +5427,45 @@ main[data-view="session-viewer"].hidden {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.cascade-game-dropdown-item__meta {
+.game-finder-dropdown-item__meta {
   font-size: 11px;
   color: var(--polaroid-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.cascade-game-dropdown-item--bgg {
+.game-finder-dropdown-item--bgg {
   border-top: 1px dashed var(--polaroid-line);
   margin-top: 2px;
   padding-top: 10px;
 }
-.cascade-game-dropdown-item--bgg .cascade-game-dropdown-item__name {
+.game-finder-dropdown-item--bgg .game-finder-dropdown-item__name {
   color: var(--polaroid-accent);
+}
+
+/* ── Add-game modal (collection/wishlist header CTA) ────────────────────── */
+.add-game-modal {
+  width: min(92vw, 420px);
+  text-align: left;
+  padding-bottom: 18px;
+}
+.add-game-modal .polaroid-popup__title { text-align: left; }
+.add-game-modal__hint {
+  margin: 4px 0 12px;
+  text-align: left;
+}
+.add-game-modal__body {
+  /* Let the GameFinder own its own spacing — the dropdown sits
+     position:absolute under the input. */
+  position: relative;
+}
+.add-game-modal__note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--polaroid-muted);
+}
+.add-game-modal__note--error {
+  color: #b3492f;
 }
 
 /* Picked-game chip (above the input) */
@@ -6376,6 +6363,18 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-muted, #8B7E68);
   font-weight: 700;
 }
+.spoke-head__add {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.spoke-head__add svg { width: 14px; height: 14px; }
 
 /* ── Collection: owned ↔ played-not-owned toggle ────────────────────────── */
 .spoke-toggle {
