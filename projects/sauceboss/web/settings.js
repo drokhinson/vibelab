@@ -326,38 +326,10 @@ function renderSauceManagerRow(s, isAdmin, merge, isVariantRow = false) {
     </div>`;
 }
 
-function renderSauceMergePanel() {
-  const merge = state.sauceMerge;
-  const keep = (state.adminSauces || []).find(s => s.id === merge.keepId);
-  return `
-    <div class="food-merge-panel">
-      <strong>Variant family parent: ${keep ? keep.name : '(unknown)'}</strong>
-      <div style="font-size:12px;color:var(--text-mid);margin-top:4px">
-        Tap other sauces to mark them as variants of this one. They'll appear together as a single
-        family in the sauce list, with this recipe as the default version.
-      </div>
-    </div>`;
-}
-
-function renderSauceMergeBar() {
-  const merge = state.sauceMerge;
-  const keep = (state.adminSauces || []).find(s => s.id === merge.keepId);
-  const count = merge.mergeIds.size;
-  const summary = count === 0
-    ? `Long-press other sauces to add — parent: <strong>${keep ? keep.name : '?'}</strong>`
-    : `${count} to assign as ${count === 1 ? 'variant' : 'variants'} of <strong>${keep ? keep.name : '?'}</strong>`;
-  return `
-    <div class="food-merge-bar">
-      <span>${summary}</span>
-      <div style="display:flex;gap:6px">
-        <button class="builder-secondary-btn" onclick="cancelSauceMerge()">Cancel</button>
-        <button class="builder-primary-btn" onclick="submitSauceMerge()" ${count === 0 || merge.saving ? 'disabled' : ''}>
-          ${merge.saving ? '<span class="spinner-sm"></span> Saving…' : 'Assign as variants'}
-        </button>
-      </div>
-      ${merge.error ? `<div class="settings-error" style="flex-basis:100%">${merge.error}</div>` : ''}
-    </div>`;
-}
+// `renderSauceMergePanel` and `renderSauceMergeBar` live in
+// `widgets/sauce-merge-bar.js` — extracted in the 2026-05-24 carve-out.
+// Action handlers (startSauceMerge / toggleSauceMergePick / etc.) stay
+// here for now since they mutate the manager's admin lists.
 
 // ─── Sauce-variant merge state actions ───────────────────────────────────────
 function startSauceMerge(keepId) {
@@ -1141,18 +1113,8 @@ function onFoodFormCategoryChange(value) {
   render();
 }
 
-function renderMergePanel() {
-  const merge = state.foodMerge;
-  const keep = (state.adminIngredients || []).find(f => f.id === merge.keepId);
-  return `
-    <div class="food-merge-panel">
-      <strong>Merging into: ${keep ? keep.name : '(unknown)'}</strong>
-      <div style="font-size:12px;color:var(--text-mid);margin-top:4px">
-        Tap other ingredients in the list to mark them as duplicates of this one.
-        All recipes pointing at the duplicates will be repointed at <em>${keep ? keep.name : ''}</em>.
-      </div>
-    </div>`;
-}
+// `renderMergePanel` (ingredient-side) lives in
+// `widgets/ingredient-merge-panel.js` — extracted in the 2026-05-24 carve-out.
 
 async function refreshAdminFoods() {
   try {
