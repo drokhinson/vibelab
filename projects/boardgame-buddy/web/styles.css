@@ -3889,13 +3889,15 @@ body {
   opacity: 0.75;
   white-space: nowrap;
 }
-/* Column-header bubble. Lifts the default `xs` badge size by ~⅓ so the
-   player's identity reads at a glance even in a dense scoring grid; the
+/* Column-header bubble. Sized between user-badge `sm` (28/12) and `md`
+   (40/16) so the player's initials are easily legible in a dense scoring
+   grid without blowing out column widths in 4–6 player tables. The
    surrounding th's faded opacity is dropped so the player's chosen colors
-   land exactly the way they look elsewhere — the bubble IS the identity. */
-.scoring-table thead th:has(.scoring-head__badge) { opacity: 1; padding: 0.3rem 0.35rem; }
-.scoring-head__badge { width: 27px; height: 27px; vertical-align: middle; }
-.scoring-head__badge .user-badge__initials { font-size: 12px; }
+   land exactly the way they look elsewhere — the bubble IS the identity.
+   Shared between display and edit modes via widgets/round-score-grid.js. */
+.scoring-table thead th:has(.scoring-head__badge) { opacity: 1; padding: 0.35rem 0.35rem; }
+.scoring-head__badge { width: 36px; height: 36px; vertical-align: middle; }
+.scoring-head__badge .user-badge__initials { font-size: 16px; }
 .scoring-table tbody th {
   font-weight: 600;
   opacity: 0.7;
