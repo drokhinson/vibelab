@@ -6,6 +6,8 @@ Companion document: `Docs/UI_AUDIT.md` — every UI inconsistency and dead-code 
 
 > **Note:** The existing `Docs/architecture.md` (lowercase) describes the legacy React Native app's screen flow and SQLite data layer. This file (UPPERCASE) is the web-app architecture and supersedes that doc for everything under `projects/sauceboss/web/`.
 
+> **Status (2026-05-24):** The "target" structured layout described in §6.2 is now the current layout. The 13-commit audit-fix pass on branch `claude/boardgamebuddy-ui-audit-7zdmP` landed every recommendation in §6.3. The "Today vs target" framing throughout this doc has been reconciled below.
+
 ---
 
 ## 1. The core idea

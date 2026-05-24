@@ -74,40 +74,8 @@ const fetchProfile             = () => api.getProfile();
 const createProfile            = (displayName) => api.upsertProfile(displayName);
 const becomeAdmin              = (adminKey) => api.becomeAdmin(adminKey);
 
-function availableCuisines() {
-  // Prefer the dynamically loaded list from GET /cuisines.
-  if (state.allCuisines && state.allCuisines.length) {
-    return state.allCuisines.map(c => ({ name: c.cuisine, emoji: c.emoji }));
-  }
-  // Fallback: derive from admin sauces when API hasn't loaded yet.
-  const seen = new Map();
-  for (const s of (state.adminSauces || [])) {
-    if (s.cuisine && !seen.has(s.cuisine)) seen.set(s.cuisine, s.cuisineEmoji || '🍽');
-  }
-  return [...seen].map(([name, emoji]) => ({ name, emoji }));
-}
-
-function saucebookCuisines() {
-  // Derive distinct cuisines from the user's saucebook — only shows cuisines
-  // the user actually has. Falls back to availableCuisines() if saucebook empty.
-  const sauces = state.saucebook || [];
-  if (!sauces.length) return availableCuisines();
-  const seen = new Map();
-  for (const s of sauces) {
-    if (s.cuisine && !seen.has(s.cuisine)) {
-      seen.set(s.cuisine, s.cuisineEmoji || '🍽');
-    }
-  }
-  // Enrich with emoji from allCuisines if available.
-  if (state.allCuisines) {
-    for (const c of state.allCuisines) {
-      if (seen.has(c.cuisine) && seen.get(c.cuisine) === '🍽') {
-        seen.set(c.cuisine, c.emoji);
-      }
-    }
-  }
-  return [...seen].map(([name, emoji]) => ({ name, emoji })).sort((a, b) => a.name.localeCompare(b.name));
-}
+// `availableCuisines` / `saucebookCuisines` live in `domain/cuisine.js` —
+// extracted in the 2026-05-24 carve-out.
 
 // Unit conversion (toTsp, cumulativeStepTsp, tspToDisplay, convertUnit,
 // formatAmount, scaleAmount) lives in shared/units.js and is published to
@@ -122,51 +90,12 @@ function saucebookCuisines() {
 // levenshtein, buildSauceFamilies, withIngredientNames) are exposed directly
 // on `window` by the bridge — call sites use them unchanged.
 
-function isSauceAvailable(sauce) {
-  return SBShared.filter.isSauceAvailable(sauce, state.disabledIngredients);
-}
-
-function missingSauceIngredients(sauce) {
-  return SBShared.filter.missingSauceIngredients(sauce, state.disabledIngredients);
-}
-
-function getSubstitutionText(ingredientName) {
-  return SBShared.filter.getSubstitutionText(ingredientName, state.substitutions);
-}
-
-function getCurrentSauceContext() {
-  return { sauces: state.saucesForCurrentItem, allIngredients: state.allIngredients };
-}
-
-function getIngredientFrequencies() {
-  return SBShared.filter.getIngredientFrequencies(state.saucesForCurrentItem);
-}
-
-function groupIngredientsByCategory() {
-  return SBShared.filter.groupIngredientsByCategory({
-    sauces: state.saucesForCurrentItem,
-    allIngredients: state.allIngredients,
-    ingredientCategories: state.ingredientCategories,
-  });
-}
-
-function fuzzyMatchIngredients(query) {
-  return SBShared.fuzzy.fuzzyMatchIngredients(query, state.ingredientCategories);
-}
-
-function isKnownIngredient(name) {
-  return SBShared.fuzzy.isKnownIngredient(name, state.ingredientCategories);
-}
-
-// Update the local ingredientCategories map immediately so any open recipe /
-// builder view re-renders with the new category. Server-side persistence now
-// happens via api.updateIngredient(id, { category }) — see settings.js
-// submitFoodForm — which requires the ingredient id, not just the name.
-// Builder-side classification only updates the local cache; the category
-// will land in the DB the next time an admin opens the ingredient row.
-function classifyIngredientLocal(name, category) {
-  state.ingredientCategories[name.trim().toLowerCase()] = category;
-}
+// Sauce-side state shims (isSauceAvailable, missingSauceIngredients,
+// getCurrentSauceContext) live in `domain/sauce.js`. Ingredient-side
+// shims (getSubstitutionText, getIngredientFrequencies,
+// groupIngredientsByCategory, fuzzyMatchIngredients, isKnownIngredient,
+// classifyIngredientLocal) live in `domain/ingredient.js`. Both extracted
+// in the 2026-05-24 carve-out.
 
 function togglePieSlice(stepIndex, name) {
   if (!state.hiddenPieSlices[stepIndex]) state.hiddenPieSlices[stepIndex] = new Set();
@@ -304,20 +233,7 @@ function toggleRecipeIngredients() {
 // `ui/accordion-group.js`. `renderFilterChips` → `ui/filter-chips.js`.
 // All extracted in the 2026-05-24 carve-out.
 
-// Count how many of a sauce's ingredients are flagged missing in the user's
-// pantry. Reads `sauce.ingredientNames` (Set<string>), which `listSaucebook`
-// hydrates from the backend's pre-deduped TEXT[] and `allSauces` hydrates
-// from `ingredients[].name` via withIngredientNames. Browse rows don't
-// render this badge, so the missing-Set early-return is fine.
-function sauceMissingCount(sauce) {
-  if (!sauce || !(sauce.ingredientNames instanceof Set)) return 0;
-  if (!state.disabledIngredients || state.disabledIngredients.size === 0) return 0;
-  let n = 0;
-  for (const name of sauce.ingredientNames) {
-    if (state.disabledIngredients.has(name)) n += 1;
-  }
-  return n;
-}
+// `sauceMissingCount` lives in `domain/sauce.js`.
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function render() {

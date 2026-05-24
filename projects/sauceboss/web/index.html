@@ -46,6 +46,11 @@
   <script type="module" src="shared-bridge.js"></script>
   <script defer src="config.js"></script>
   <script defer src="state.js"></script>
+  <!-- domain/ — per-object state shims over shared/*.js. Loaded before
+       helpers.js so the rest of the app sees these as plain globals. -->
+  <script defer src="domain/cuisine.js"></script>
+  <script defer src="domain/sauce.js"></script>
+  <script defer src="domain/ingredient.js"></script>
   <script defer src="helpers.js"></script>
   <!-- ui/ — canonical render functions per object (extracted from helpers.js
        in the 2026-05-24 carve-out). These declare globals (renderEmoji,
