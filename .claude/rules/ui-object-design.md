@@ -82,9 +82,9 @@ If two screens let the user open the same destination, they should use the same 
 
 The boardgame-buddy audit caught one case: `PlayDetailPopup` opens from the play card's maximize button (`ui/play-card.js`) but from a full-row tap in `views/plays-view.js`. Same destination, two affordances.
 
-### 3c. Destructive actions are confirmed through the project's shared modal
+### 3c. Destructive actions are confirmed through one project-wide surface
 
-Every project should expose exactly one confirm-dialog API (e.g. `PolaroidPopup.confirm()` in boardgame-buddy). Use it for: delete, abandon, remove, clear, leave, sign out from another device, link/unlink accounts. Per `.claude/rules/web-frontend.md`, ad-hoc dialogs are not acceptable.
+Every destructive action requires a secondary user confirmation (see `.claude/rules/web-frontend.md`). Pick one confirmation surface for the whole project and use it everywhere: either `window.confirm()` for every destructive gate, or a single shared modal API (e.g. `PolaroidPopup.confirm()` in boardgame-buddy) for every destructive gate. Mixing per-screen bespoke dialogs is the anti-pattern.
 
 ## 4. When duplicates appear
 
