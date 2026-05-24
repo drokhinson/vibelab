@@ -34,15 +34,18 @@
 --            participant_count INT, participants JSONB)
 --   Defined in: db/migrations/boardgamebuddy/014_feed_order_by_played_at.sql
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/029_profile_avatar_config.sql
---               (play_user_avatar changed from TEXT to JSONB — now carries
---               the user's badge config {icon, iconColor, bgColor} after
---               avatar_url → avatar rename on boardgamebuddy_profiles)
+--   Last updated in: db/migrations/boardgamebuddy/031_feed_plays_include_participation.sql
+--               (visibility now also includes plays where the viewer was
+--               tagged as a participant — previously only plays whose
+--               top-level logger was the viewer/buddy were surfaced.
+--               Participant roster widened to show every real-account
+--               participant when the viewer was at the play.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
---   Purpose:    Visible plays for the Feed (own + accepted buddies),
---               pre-joined to game name/image, winner display, and a
---               buddy-filtered participant roster. Ordered by played_at
---               DESC, created_at DESC. Cursor is the last row's
+--   Purpose:    Visible plays for the Feed: own + accepted buddies +
+--               plays where the viewer is tagged as a participant.
+--               Pre-joined to game name/image, winner display, and a
+--               participant-aware roster. Ordered by played_at DESC,
+--               created_at DESC. Cursor is the last row's
 --               (played_at, created_at) for lexicographic tuple comparison.
 
 -- bgb_dormant_collection(uid UUID, days_since INT DEFAULT 60, lim INT DEFAULT 5)

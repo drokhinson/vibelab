@@ -3839,11 +3839,13 @@ body {
   opacity: 0.75;
   white-space: nowrap;
 }
-/* Column-header bubble. Reuses the standard `xs` badge size but drops
-   the parent th's faded opacity so the player's chosen colors land
-   exactly the way they look elsewhere — the bubble IS the identity. */
-.scoring-table thead th:has(.scoring-head__badge) { opacity: 1; padding: 0.25rem 0.3rem; }
-.scoring-head__badge { vertical-align: middle; }
+/* Column-header bubble. Lifts the default `xs` badge size by ~⅓ so the
+   player's identity reads at a glance even in a dense scoring grid; the
+   surrounding th's faded opacity is dropped so the player's chosen colors
+   land exactly the way they look elsewhere — the bubble IS the identity. */
+.scoring-table thead th:has(.scoring-head__badge) { opacity: 1; padding: 0.3rem 0.35rem; }
+.scoring-head__badge { width: 27px; height: 27px; vertical-align: middle; }
+.scoring-head__badge .user-badge__initials { font-size: 12px; }
 .scoring-table tbody th {
   font-weight: 600;
   opacity: 0.7;
