@@ -32,6 +32,12 @@
         target_user_id: targetUserId,
       });
     }
+    static mergeGhosts(sourceDisplayName, targetDisplayName) {
+      return window.api.post("/ghost-players/merge", {
+        source_display_name: sourceDisplayName,
+        target_display_name: targetDisplayName,
+      });
+    }
 
     // Combined preload for the gather-player picker. Accounts (accepted buddy
     // edges), ghosts (free-text players the user has logged before), and

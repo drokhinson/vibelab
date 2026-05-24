@@ -70,11 +70,13 @@
       const activeId = active && active.id;
       const caret = active && active.selectionStart;
 
+      const totalPages = Math.max(1, Math.ceil(this._total / PER_PAGE));
+      const hasPager = totalPages > 1;
       this.container.innerHTML = `
         ${this._renderHead()}
         ${this._renderControls()}
         ${this._filtersOpen ? this._renderFilters() : ""}
-        ${this._renderBody()}
+        ${this._renderBody(hasPager)}
         ${this._renderPager()}
       `;
       if (window.lucide) window.lucide.createIcons();
@@ -181,7 +183,7 @@
       `;
     }
 
-    _renderBody() {
+    _renderBody(hasPager = false) {
       if (this._error) {
         return `<div class="alert alert-error text-sm">${escape(this._error)}</div>`;
       }
@@ -193,8 +195,9 @@
         return `<div class="profile-empty">${isSearchingOrFiltering ? "No wishlist matches." : "Wishlist is empty — tap the + Add button to add a game."}</div>`;
       }
       const reloading = this._loading ? "is-reloading" : "";
+      const paginated = hasPager ? "is-paginated" : "";
       return `
-        <div class="profile-collection-grid ${reloading}">
+        <div class="profile-collection-grid ${reloading} ${paginated}">
           ${this._items.map((it) => this._renderTile(it)).join("")}
         </div>
       `;
@@ -220,15 +223,17 @@
       const totalPages = Math.max(1, Math.ceil(this._total / PER_PAGE));
       if (totalPages <= 1) return "";
       return `
-        <nav class="search-pager">
-          <button class="btn btn-ghost btn-xs" ${this._page <= 1 ? "disabled" : ""}
-                  onclick="window.wishlistView._goPage(${this._page - 1})">
-            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i> Prev
+        <nav class="spoke-pager-footer" aria-label="Wishlist pagination">
+          <button class="btn btn-primary spoke-pager-footer__btn" ${this._page <= 1 ? "disabled" : ""}
+                  onclick="window.wishlistView._goPage(${this._page - 1})"
+                  aria-label="Previous page">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i><span>Prev</span>
           </button>
-          <span class="text-xs opacity-60">Page ${this._page} of ${totalPages}</span>
-          <button class="btn btn-ghost btn-xs" ${this._page >= totalPages ? "disabled" : ""}
-                  onclick="window.wishlistView._goPage(${this._page + 1})">
-            Next <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+          <span class="spoke-pager-footer__page">Page ${this._page} of ${totalPages}</span>
+          <button class="btn btn-primary spoke-pager-footer__btn" ${this._page >= totalPages ? "disabled" : ""}
+                  onclick="window.wishlistView._goPage(${this._page + 1})"
+                  aria-label="Next page">
+            <span>Next</span><i data-lucide="chevron-right" class="w-4 h-4"></i>
           </button>
         </nav>
       `;

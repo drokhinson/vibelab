@@ -253,6 +253,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/played-with` — real-account players the viewer has shared a play with (carries buddy-relation flags so the FE can show a quick-add affordance for non-buddies)
 - `GET /api/v1/boardgame_buddy/ghost-players` — free-text nicknames the viewer recorded in plays without an account, grouped with play counts + last-played date
 - `POST /api/v1/boardgame_buddy/ghost-players/link` — promote a ghost nickname to a real account (body `{display_name, target_user_id}`); stamps player_user_id on every matching play_players row the viewer logged
+- `POST /api/v1/boardgame_buddy/ghost-players/merge` — collapse two ghost spellings into one (body `{source_display_name, target_display_name}`); renames every matching ghost row the viewer logged so duplicates appear as a single ghost
 - `GET /api/v1/boardgame_buddy/feed?cursor=&limit=20` — Strava-style mixed feed (plays + hot games + suggested buddies + featured-from-collection). Cursor-paginated via `created_at`.
 - `GET /api/v1/boardgame_buddy/hot-games?window_days=7` — most-played games in window
 - `GET /api/v1/boardgame_buddy/suggestions/buddies` — friends-of-friends candidates
