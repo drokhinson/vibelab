@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SauceBoss</title>
+  <!-- Pin relative asset URLs to the site root so the /sauce/:id permalink
+       rewrite (vercel.json) doesn't resolve styles.css / scripts against
+       /sauce/, which 404s and leaves the splash unstyled + JS unloaded
+       (looks like a stuck "Authenticating…" screen). -->
+  <base href="/">
   <link rel="icon" type="image/svg+xml" href="assets/brand/sb-logo.svg">
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
