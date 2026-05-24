@@ -34,19 +34,19 @@
 --            participant_count INT, participants JSONB)
 --   Defined in: db/migrations/boardgamebuddy/014_feed_order_by_played_at.sql
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/031_feed_plays_include_participation.sql
---               (visibility now also includes plays where the viewer was
---               tagged as a participant — previously only plays whose
---               top-level logger was the viewer/buddy were surfaced.
---               Participant roster widened to show every real-account
---               participant when the viewer was at the play.)
+--   Last updated in: db/migrations/boardgamebuddy/032_feed_plays_buddy_participation.sql
+--               (visibility predicate widened from "logger ∈ visible OR
+--               viewer ∈ participants" to "any participant ∈ visible",
+--               so plays where a buddy was tagged but the logger is not
+--               a buddy of the viewer now surface in the feed.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
---   Purpose:    Visible plays for the Feed: own + accepted buddies +
---               plays where the viewer is tagged as a participant.
---               Pre-joined to game name/image, winner display, and a
---               participant-aware roster. Ordered by played_at DESC,
---               created_at DESC. Cursor is the last row's
---               (played_at, created_at) for lexicographic tuple comparison.
+--   Purpose:    Visible plays for the Feed: any play where the viewer or
+--               an accepted buddy participated (via boardgamebuddy_play_players),
+--               plus a legacy safety branch for logger ∈ visible. Pre-joined
+--               to game name/image, winner display, and a participant-aware
+--               roster. Ordered by played_at DESC, created_at DESC. Cursor
+--               is the last row's (played_at, created_at) for lexicographic
+--               tuple comparison.
 
 -- bgb_dormant_collection(uid UUID, days_since INT DEFAULT 60, lim INT DEFAULT 5)
 --   → TABLE (game_id UUID, last_played_at DATE)
