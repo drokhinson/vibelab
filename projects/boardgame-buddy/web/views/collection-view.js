@@ -140,12 +140,14 @@
       }
 
       const other = this._isOther();
+      const totalPages = Math.max(1, Math.ceil(this._total[this._mode] / PER_PAGE));
+      const hasPager = totalPages > 1;
       this.container.innerHTML = `
         ${this._renderHead()}
         ${other ? "" : this._renderControls()}
         ${other ? "" : this._renderToggle()}
         ${!other && this._filtersOpen ? this._renderFilters() : ""}
-        ${this._renderBody()}
+        ${this._renderBody(hasPager)}
         ${this._renderPager()}
       `;
       if (window.lucide) window.lucide.createIcons();
@@ -286,7 +288,7 @@
       `;
     }
 
-    _renderBody() {
+    _renderBody(hasPager = false) {
       const mode = this._mode;
       if (this._error[mode]) {
         return `<div class="alert alert-error text-sm">${escape(this._error[mode])}</div>`;
@@ -309,8 +311,9 @@
         return `<div class="profile-empty">${escape(empty)}</div>`;
       }
       const reloading = this._loading[mode] ? "is-reloading" : "";
+      const paginated = hasPager ? "is-paginated" : "";
       return `
-        <div class="profile-collection-grid ${reloading}">
+        <div class="profile-collection-grid ${reloading} ${paginated}">
           ${items.map((it) => this._renderTile(it)).join("")}
         </div>
       `;
@@ -338,15 +341,17 @@
       if (totalPages <= 1) return "";
       const page = this._page[this._mode];
       return `
-        <nav class="search-pager">
-          <button class="btn btn-ghost btn-xs" ${page <= 1 ? "disabled" : ""}
-                  onclick="window.collectionView._goPage(${page - 1})">
-            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i> Prev
+        <nav class="spoke-pager-footer" aria-label="Collection pagination">
+          <button class="btn btn-primary spoke-pager-footer__btn" ${page <= 1 ? "disabled" : ""}
+                  onclick="window.collectionView._goPage(${page - 1})"
+                  aria-label="Previous page">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i><span>Prev</span>
           </button>
-          <span class="text-xs opacity-60">Page ${page} of ${totalPages}</span>
-          <button class="btn btn-ghost btn-xs" ${page >= totalPages ? "disabled" : ""}
-                  onclick="window.collectionView._goPage(${page + 1})">
-            Next <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+          <span class="spoke-pager-footer__page">Page ${page} of ${totalPages}</span>
+          <button class="btn btn-primary spoke-pager-footer__btn" ${page >= totalPages ? "disabled" : ""}
+                  onclick="window.collectionView._goPage(${page + 1})"
+                  aria-label="Next page">
+            <span>Next</span><i data-lucide="chevron-right" class="w-4 h-4"></i>
           </button>
         </nav>
       `;
