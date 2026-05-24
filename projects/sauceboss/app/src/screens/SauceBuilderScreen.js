@@ -155,8 +155,6 @@ export default function SauceBuilderScreen({ navigation, route }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId]);
 
-  const validation = useMemo(() => validateBuilder(builder), [builder]);
-
   // Unit lookup tables derived from refUnits. `units` is the flat list of
   // abbreviations the sheet renders as chips; `qualitativeUnits` is the set
   // of unquantifiable units (e.g. "to taste") that disable the amount input
@@ -173,6 +171,11 @@ export default function SauceBuilderScreen({ navigation, route }) {
           .map((u) => u.abbreviation || u.id),
       ),
     [state.refUnits],
+  );
+
+  const validation = useMemo(
+    () => validateBuilder(builder, { qualitativeUnits }),
+    [builder, qualitativeUnits],
   );
 
   function patch(updates) {
@@ -669,12 +672,14 @@ export default function SauceBuilderScreen({ navigation, route }) {
   // dressing/salad). The pairing step picks the right group internally; we
   // only need `isStandalone` here to drive step skipping + validation.
 
-  // Per-step validation. Each step gates its Continue button based on the
-  // subset of validation.errors that apply to its inputs.
-  function isStepValid(step) {
+  // Per-step validation. Each step gates its Continue button — and renders
+  // its "Fix before continuing" bullet list — from the subset of
+  // validation.errors that apply to its inputs. Pairing errors must not leak
+  // into the instructions step's bullet list, etc.
+  function errorsForStep(step) {
     const e = validation.errors || [];
     if (step === 'info') {
-      return !e.some((m) =>
+      return e.filter((m) =>
         m === 'Sauce needs a name' ||
         m === 'Pick a cuisine' ||
         m === 'Pick a color' ||
@@ -682,7 +687,7 @@ export default function SauceBuilderScreen({ navigation, route }) {
       );
     }
     if (step === 'instructions') {
-      return !e.some((m) =>
+      return e.filter((m) =>
         m === 'At least one step is required' ||
         m.startsWith('Step ') ||
         m.includes('needs an amount') ||
@@ -690,9 +695,13 @@ export default function SauceBuilderScreen({ navigation, route }) {
       );
     }
     if (step === 'pairing') {
-      return isStandalone || !e.some((m) => m === 'Pair with at least one item');
+      if (isStandalone) return [];
+      return e.filter((m) => m === 'Pair with at least one item');
     }
-    return true;
+    return [];
+  }
+  function isStepValid(step) {
+    return errorsForStep(step).length === 0;
   }
 
   // Step navigation. `goNext` jumps to Review when returnToReview is set
@@ -880,7 +889,7 @@ export default function SauceBuilderScreen({ navigation, route }) {
             {!isStepValid(currentStep) ? (
               <View style={styles.errorBlock}>
                 <Text style={styles.errorTitle}>Fix before continuing</Text>
-                {validation.errors.map((e, i) => (
+                {errorsForStep(currentStep).map((e, i) => (
                   <Text key={i} style={styles.errorBullet}>• {e}</Text>
                 ))}
               </View>
