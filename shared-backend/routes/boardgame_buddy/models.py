@@ -541,6 +541,22 @@ class GhostLinkResponse(BaseModel):
     rows_updated: int
 
 
+class GhostMergeRequest(BaseModel):
+    """Rename one ghost nickname to another across the viewer's plays.
+
+    Used when the same friend was logged under slightly different
+    spellings ("Dave" and "Dave Smith") and the user wants to collapse
+    them into a single ghost.
+    """
+
+    source_display_name: str
+    target_display_name: str
+
+
+class GhostMergeResponse(BaseModel):
+    rows_updated: int
+
+
 # ── Public profile view (Strava-style) ────────────────────────────────────────
 
 class PublicProfileResponse(BaseModel):

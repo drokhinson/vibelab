@@ -18,6 +18,8 @@ from .models import (
     BuddyRequestsResponse,
     GhostLinkRequest,
     GhostLinkResponse,
+    GhostMergeRequest,
+    GhostMergeResponse,
     GhostPlayer,
     MessageResponse,
     PlayedWithUser,
@@ -154,3 +156,25 @@ async def link_ghost_player(
         get_supabase(), user.user_id, body.display_name, body.target_user_id
     )
     return GhostLinkResponse(rows_updated=n)
+
+
+@router.post(
+    "/ghost-players/merge",
+    response_model=GhostMergeResponse,
+    status_code=200,
+    summary="Merge one ghost display name into another",
+)
+async def merge_ghost_players(
+    body: GhostMergeRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> GhostMergeResponse:
+    """Rename every viewer-logged ghost row matching `source_display_name`
+    (case-insensitive) to `target_display_name`. Useful when the same
+    friend was typed under different spellings across plays."""
+    n = played_with_service.merge_ghosts(
+        get_supabase(),
+        user.user_id,
+        body.source_display_name,
+        body.target_display_name,
+    )
+    return GhostMergeResponse(rows_updated=n)

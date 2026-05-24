@@ -274,26 +274,47 @@
     }
 
     _renderLinkPanel(displayName) {
+      const q = (this._linkQuery || "").trim().toLowerCase();
+      // Ghosts the viewer has logged that match the query, excluding the
+      // ghost currently being linked. Rendered after accounts so real
+      // buddies take priority in the picker.
+      const ghostMatches = q
+        ? (this._ghosts || []).filter((g) => {
+            const name = (g.display_name || "").toLowerCase();
+            if (name === displayName.toLowerCase()) return false;
+            return name.includes(q);
+          })
+        : [];
+      const hasAccounts = this._linkResults.length > 0;
+      const hasGhosts = ghostMatches.length > 0;
       return `
         <div class="buddies-link-panel" onclick="event.stopPropagation()">
           <input id="ghost-link-input"
                  class="input input-bordered input-sm w-full"
-                 placeholder="Search accounts to link “${escape(displayName)}”"
+                 placeholder="Search buddies or ghosts to link “${escape(displayName)}”"
                  autocomplete="off"
                  oninput="window.buddiesView._linkSearchInput(this.value)"
                  value="${escapeAttr(this._linkQuery)}" />
-          ${this._linkQuery && this._linkResults.length > 0 ? `
+          ${this._linkQuery && (hasAccounts || hasGhosts) ? `
             <ul class="buddies-link-results">
               ${this._linkResults.map((u) => `
                 <li onclick="window.buddiesView._confirmLink('${jsStr(displayName)}', '${u.id}')">
                   ${window.BgbBadge.render({ avatar: u.avatar, displayName: u.display_name, size: "xs" })}
                   <span class="buddies-link-results__name">${escape(u.display_name)}</span>
-                  ${u.email ? `<span class="buddies-link-results__email">${escape(u.email)}</span>` : ""}
+                  <span class="buddies-link-results__chip">Account</span>
+                </li>
+              `).join("")}
+              ${ghostMatches.map((g) => `
+                <li onclick="window.buddiesView._confirmMerge('${jsStr(displayName)}', '${jsStr(g.display_name)}')">
+                  ${window.BgbBadge.render({ avatar: null, displayName: g.display_name, size: "xs", isGhost: true })}
+                  <span class="buddies-link-results__name">${escape(g.display_name)}</span>
+                  <span class="buddies-link-results__email">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}</span>
+                  <span class="buddies-link-results__chip buddies-link-results__chip--ghost">Ghost</span>
                 </li>
               `).join("")}
             </ul>
           ` : (this._linkQuery
-              ? `<div class="text-xs opacity-60 px-1 pt-1">No matching accounts.</div>`
+              ? `<div class="buddies-link-results__empty">No matching buddies or ghosts.</div>`
               : "")}
         </div>
       `;
@@ -397,6 +418,25 @@
       }
       // Reload so the ghost disappears and the played-with people list
       // picks the linked account up.
+      await this._load();
+    }
+
+    async _confirmMerge(sourceDisplayName, targetDisplayName) {
+      try {
+        const res = await window.Buddy.mergeGhosts(sourceDisplayName, targetDisplayName);
+        const n = (res && res.rows_updated) || 0;
+        if (n === 0) {
+          console.warn("No matching ghost rows found to merge.");
+        }
+      } catch (e) {
+        alert(e.message || "Failed to merge");
+        return;
+      } finally {
+        this._closeLinkPanel();
+      }
+      // Buddy.allBuddies() caches the ghost list for the play-flow picker
+      // — invalidate so the renamed/merged ghost shows up there too.
+      if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
       await this._load();
     }
   }

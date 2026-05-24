@@ -167,3 +167,42 @@ def link_ghost(
         .execute()
     )
     return len(res.data or [])
+
+
+def merge_ghosts(
+    sb,
+    viewer_id: str,
+    source_display_name: str,
+    target_display_name: str,
+) -> int:
+    """Rename every ghost row matching `source_display_name` (case-insensitive)
+    to `target_display_name`, scoped to the viewer's own plays. Used to
+    collapse the same friend logged under different spellings into a
+    single ghost. Returns the number of rows updated.
+    """
+    src = (source_display_name or "").strip()
+    tgt = (target_display_name or "").strip()
+    if not src or not tgt:
+        raise HTTPException(status_code=400, detail="Both display names are required")
+    if src.lower() == tgt.lower():
+        raise HTTPException(status_code=400, detail="Source and target ghost must differ")
+
+    own = (
+        sb.table("boardgamebuddy_plays")
+        .select("id")
+        .eq("user_id", viewer_id)
+        .execute()
+    )
+    play_ids = [r["id"] for r in own.data or []]
+    if not play_ids:
+        return 0
+
+    res = (
+        sb.table("boardgamebuddy_play_players")
+        .update({"player_display_name": tgt})
+        .in_("play_id", play_ids)
+        .ilike("player_display_name", src)
+        .is_("player_user_id", "null")
+        .execute()
+    )
+    return len(res.data or [])
