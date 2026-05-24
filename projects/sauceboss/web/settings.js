@@ -1061,56 +1061,25 @@ function toggleIngredientSection(category) {
   render();
 }
 
+// `renderFoodRow` was collapsed into the canonical `renderIngredientRow`
+// in 2026-05-24 (ui/ingredient-row.js). This adapter computes the manager-
+// specific state (expanded sub-panel, inline edit form) and delegates the
+// actual markup.
 function renderFoodRow(f, isAdmin, merge) {
-  // Inline edit: if this food is being edited, show the form in place
   const form = state.foodForm;
-  if (isAdmin && form && form.mode === 'edit' && form.id === f.id) {
-    return `<div style="padding:0 16px">${renderFoodForm()}</div>`;
-  }
-  const safeName = (f.name || '').replace(/'/g, "\\'");
-  const usage = f.usageCount || 0;
-  const sauces = f.sauceCount || 0;
-  const sub = sauces === 0
-    ? '<span style="color:var(--text-muted)">unused</span>'
-    : `${sauces} sauce${sauces !== 1 ? 's' : ''}`;
+  const editFormHTML = (isAdmin && form && form.mode === 'edit' && form.id === f.id)
+    ? renderFoodForm() : null;
   const mergeMode = !!merge;
-  const isKeep = merge && merge.keepId === f.id;
-  const isPicked = merge && merge.mergeIds.has(f.id);
   const expanded = !mergeMode && state.expandedFoodIds && state.expandedFoodIds.has(f.id);
-  const inner = `
-    <div class="admin-sauce-info" style="flex:1">
-      <div class="admin-sauce-name">${f.name}</div>
-      <div class="admin-sauce-carbs">${sub}</div>
-    </div>
-    ${mergeMode ? `
-      ${isKeep ? '<span class="food-merge-tag food-merge-tag-keep">keep</span>'
-              : isPicked ? '<span class="food-merge-tag food-merge-tag-merge">will merge</span>'
-              : ''}
-    ` : ''}`;
-
-  if (mergeMode) {
-    return `<div class="food-row${isKeep ? ' food-row-keep' : ''}${isPicked ? ' food-row-picked' : ''}"
-                 onclick="toggleFoodMergePick('${f.id}')">${inner}</div>`;
-  }
-
   const panelHTML = expanded ? renderIngredientSaucesPanel(f.id) : '';
-
-  if (!isAdmin || !state.editMode) {
-    return `
-      <div class="food-row" onclick="toggleFoodExpand('${f.id}')">${inner}</div>
-      ${panelHTML}`;
-  }
-  return `
-    <div class="swipe-row" data-swipe
-         data-tap-action="toggleFoodExpand('${f.id}')"
-         data-longpress-action="startFoodMerge('${f.id}')"
-         data-edit-action="openFoodForm('${f.id}')"
-         data-delete-action="adminDeleteIngredientAction('${f.id}','${safeName}',${usage})">
-      <div class="swipe-action swipe-action-edit"   aria-hidden="true">Edit</div>
-      <div class="swipe-action swipe-action-delete" aria-hidden="true">Delete</div>
-      <div class="swipe-content food-row">${inner}</div>
-    </div>
-    ${panelHTML}`;
+  return renderIngredientRow(f, {
+    mode: 'manager',
+    isAdmin,
+    editMode: state.editMode,
+    merge,
+    panelHTML,
+    editFormHTML,
+  });
 }
 
 function renderIngredientSaucesPanel(ingredientId) {

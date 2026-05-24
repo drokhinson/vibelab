@@ -102,17 +102,9 @@ function _pantrySection(cat, rows) {
   `;
 }
 
-function _pantryRow(ing) {
-  const missing = !!ing.missing;
-  const rowClass = missing ? 'pantry-row pantry-row--missing' : 'pantry-row';
-  const nameClass = missing ? 'pantry-row__name pantry-row__name--strike' : 'pantry-row__name';
-  return `
-    <div class="${rowClass}" onclick="togglePantryMissing('${escapeHtml(ing.ingredientId)}')">
-      <span class="${nameClass}">${escapeHtml(ing.name || '')}</span>
-      <span class="pantry-row__state">${missing ? 'Missing' : 'In stock'}</span>
-    </div>
-  `;
-}
+// `_pantryRow` was collapsed into the canonical `renderIngredientRow`
+// in 2026-05-24 (ui/ingredient-row.js).
+const _pantryRow = (ing) => renderIngredientRow(ing, { mode: 'pantry' });
 
 function pantryToggleSection(cat) {
   const open = _pantrySectionState();
