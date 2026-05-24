@@ -27,6 +27,7 @@ from .models import (
     MessageResponse,
     PlayCreate,
     PlayResponse,
+    SessionAddParticipantBody,
     SessionCreate,
     SessionJoinBody,
     SessionPhaseUpdate,
@@ -103,6 +104,50 @@ async def join_session(
         user_id=user.user_id,
         user_display_name=user.display_name,
         guest_display_name=body.display_name,
+    )
+
+
+@router.post(
+    "/sessions/{code}/participants",
+    response_model=SessionResponse,
+    status_code=200,
+    summary="Add a participant to a lobby (host-only)",
+)
+async def add_session_participant(
+    body: SessionAddParticipantBody,
+    code: str = Path(..., description="Session code"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionResponse:
+    """Host adds a buddy (with user_id) or a ghost (name-only) to the lobby.
+    Without this endpoint, players the host types in the picker live only in
+    the host's local draft and never appear in joiners' rosters."""
+    return session_service.add_participant(
+        get_supabase(),
+        viewer_id=user.user_id,
+        code=code,
+        user_id=body.user_id,
+        display_name=body.display_name,
+    )
+
+
+@router.delete(
+    "/sessions/{code}/participants/{participant_id}",
+    response_model=SessionResponse,
+    status_code=200,
+    summary="Remove a participant from a lobby (host-only)",
+)
+async def remove_session_participant(
+    code: str = Path(..., description="Session code"),
+    participant_id: str = Path(..., description="Participant UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionResponse:
+    """Host removes a participant from the lobby roster. Refuses to remove
+    the host themselves — use DELETE /sessions/{code} (abandon) instead."""
+    return session_service.remove_participant(
+        get_supabase(),
+        viewer_id=user.user_id,
+        code=code,
+        participant_id=participant_id,
     )
 
 

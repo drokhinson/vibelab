@@ -224,6 +224,100 @@ def join_session(
     return _build_response(sb, session)
 
 
+def add_participant(
+    sb,
+    *,
+    viewer_id: str,
+    code: str,
+    user_id: Optional[str],
+    display_name: str,
+) -> SessionResponse:
+    """Host-only: add a buddy or ghost to the lobby roster.
+
+    Mirrors join_session's dedup semantics but is initiated by the host
+    rather than the joining user. Without this endpoint, players the host
+    types into the picker live only in the host's local draft, so other
+    joiners never see them in their participants list.
+
+    Gather-only — once Play starts the roster is frozen.
+    """
+    session = _fetch_open_session(sb, code)
+    if session["host_user_id"] != viewer_id:
+        raise HTTPException(status_code=403, detail="Only the host can add participants")
+    if (session.get("phase") or SessionPhase.GATHER.value) != SessionPhase.GATHER.value:
+        raise HTTPException(status_code=409, detail="Roster is locked once Play starts")
+    name = (display_name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="display_name is required")
+
+    if user_id:
+        existing = (
+            sb.table("boardgamebuddy_play_session_participants")
+            .select("id")
+            .eq("session_id", session["id"])
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if not existing.data:
+            sb.table("boardgamebuddy_play_session_participants").insert({
+                "session_id": session["id"],
+                "user_id": user_id,
+                "display_name": name,
+            }).execute()
+    else:
+        # Ghost dedup by case-insensitive display_name within the session.
+        existing = (
+            sb.table("boardgamebuddy_play_session_participants")
+            .select("id")
+            .eq("session_id", session["id"])
+            .ilike("display_name", name)
+            .execute()
+        )
+        if not existing.data:
+            sb.table("boardgamebuddy_play_session_participants").insert({
+                "session_id": session["id"],
+                "display_name": name,
+            }).execute()
+
+    return _build_response(sb, session)
+
+
+def remove_participant(
+    sb,
+    *,
+    viewer_id: str,
+    code: str,
+    participant_id: str,
+) -> SessionResponse:
+    """Host-only: remove a participant from the lobby roster. Gather-only.
+
+    Refuses to remove the host themselves — abandon_session is the way to
+    end a session.
+    """
+    session = _fetch_open_session(sb, code)
+    if session["host_user_id"] != viewer_id:
+        raise HTTPException(status_code=403, detail="Only the host can remove participants")
+    if (session.get("phase") or SessionPhase.GATHER.value) != SessionPhase.GATHER.value:
+        raise HTTPException(status_code=409, detail="Roster is locked once Play starts")
+
+    row = (
+        sb.table("boardgamebuddy_play_session_participants")
+        .select("id, user_id")
+        .eq("id", participant_id)
+        .eq("session_id", session["id"])
+        .execute()
+    )
+    if not row.data:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    if row.data[0].get("user_id") == session["host_user_id"]:
+        raise HTTPException(status_code=400, detail="Cannot remove the host")
+
+    sb.table("boardgamebuddy_play_session_participants").delete().eq(
+        "id", participant_id
+    ).eq("session_id", session["id"]).execute()
+    return _build_response(sb, session)
+
+
 def update_session_game(
     sb,
     *,

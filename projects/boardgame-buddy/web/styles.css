@@ -4850,7 +4850,31 @@ main[data-view="session-viewer"].hidden {
   cursor: pointer;
 }
 .cascade-buddy-dropdown-item:hover { background: var(--polaroid-bg-soft); }
-.cascade-buddy-dropdown-name { font-size: 13px; }
+.cascade-buddy-dropdown-name { font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cascade-buddy-dropdown-sub {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+.cascade-buddy-dropdown-pill {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--polaroid-bg-soft);
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-ink);
+  opacity: 0.7;
+}
+.cascade-buddy-dropdown-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 6px 8px 2px;
+  opacity: 0.55;
+  pointer-events: none;
+}
 
 /* Expansions list in Gather reuses the regular expansion-list rows but
    sits inside the cream polaroid card. */

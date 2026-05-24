@@ -68,6 +68,12 @@
           window.router.go("auth");
           return;
         }
+        // Warm the buddy picker cache (accounts + ghosts + recent) so the
+        // gather-screen dropdown opens with zero network round-trips. Fire-
+        // and-forget — splash doesn't block on this.
+        if (window.Buddy && window.Buddy.allBuddies) {
+          window.Buddy.allBuddies().catch(() => {});
+        }
         // Land on the feed after sign-in
         if (window.store.get("currentView") === "splash" ||
             window.store.get("currentView") === "auth") {
