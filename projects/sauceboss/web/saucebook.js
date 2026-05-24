@@ -349,25 +349,15 @@ function saucebookClearFilters() {
 
 function saucebookOpenRecipe(sauceId) {
   // Saucebook rows are slim (no steps / full ingredients) — defer to the
-  // all-sauces path to load the full envelope, same flow Browse uses
-  // (browse.js:browseOpenRecipe).
+  // recipe-family loader which hits /sauces/{id} and caches for 1h.
   if (!state.saucebook.some(s => s.id === sauceId)) return;
   state.loading = 'Loading recipe…';
   render();
-  api.allSauces().then(all => {
+  loadSauceFamily(sauceId).then((family) => {
     state.loading = null;
-    const found = all.find(s => s.id === sauceId);
+    const found = family.find(s => s.id === sauceId);
     if (!found) { render(); return; }
-    const rootId = found.parentSauceId || found.id;
-    const family = all.filter(s => s.id === rootId || s.parentSauceId === rootId);
-    state.selectedSauce = found;
-    state.servings = found.defaultServings || 2;
-    state.selectedSauceFamily = family.length ? family : [found];
-    state.hiddenPieSlices = {};
-    state.selectedItem = null;
-    state.meal = { item: null, prep: null, sauce: null };
-    state.recipeReturnTo = 'tab-shell';
-    navigate('recipe', { path: '/sauce/' + encodeURIComponent(found.id) });
+    _enterRecipeView(found, family, {});
   }).catch(err => {
     state.loading = null;
     console.warn('[sauceboss] saucebook recipe load failed:', err);
@@ -384,6 +374,7 @@ async function saucebookRemoveSauce(sauceId) {
     return;
   }
   state.saucebook = (state.saucebook || []).filter(s => s.id !== sauceId);
+  invalidateSauceFamilyCache(sauceId);
   refreshSaucebookAndPantry();
   render();
 }

@@ -1514,6 +1514,11 @@ async function builderSave() {
     } else {
       result = await createSauce(payload);
     }
+    // Edits / forks change the cached envelope (a fork may even rewrite
+    // the id you opened); wipe the whole sauce-family namespace so the
+    // next open re-fetches. Cache is small; targeted invalidation isn't
+    // worth the bookkeeping when the fork id is only inside `result`.
+    invalidateSauceFamilyCache();
     await refreshSaucebookAndPantry();
     state.builder = null;
     if (state.recipeReturnTo === 'admin') {

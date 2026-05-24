@@ -264,6 +264,15 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
       return sauces.map(withIngredientNames);
     },
 
+    // Fetch a single sauce + every variant in its family. Same envelope shape
+    // as allSauces; recipe-open paths call this so they don't have to fetch
+    // the full sauce table just to render one recipe. 404 surfaces as a
+    // throw from `call()`.
+    sauceFamily: async (sauceId) => {
+      const sauces = await call(`/sauces/${encodeURIComponent(sauceId)}`);
+      return sauces.map(withIngredientNames);
+    },
+
     // ── Profile (auth required) ──────────────────────────────────────────────
     getProfile: () => call('/profile'),
     upsertProfile: (displayName) => call('/profile', { method: 'POST', body: { display_name: displayName } }),

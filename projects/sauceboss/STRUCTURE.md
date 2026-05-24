@@ -106,6 +106,7 @@ All served by `shared-backend/routes/sauceboss/` at prefix `/api/v1/sauceboss`.
 | GET | `/api/v1/sauceboss/initial-load` | None | Carbs, proteins, and salad bases for the home screen |
 | GET | `/api/v1/sauceboss/items/{item_id}/load` | None | Variants, sauces, and ingredients for any item |
 | GET | `/api/v1/sauceboss/sauces` | None | All sauces with steps + ingredients (sauce manager). |
+| GET | `/api/v1/sauceboss/sauces/{sauce_id}` | None | One sauce + its variant family (same envelope as `/sauces`). Recipe-open paths use this so they don't pull every sauce just to render one; web caches the result for 1h. |
 | POST | `/api/v1/sauceboss/sauces` | JWT | Create a sauce. Stores `created_by = current user`. |
 | PATCH | `/api/v1/sauceboss/sauces/{sauce_id}` | JWT (owner OR admin) | Atomic full replace of an existing sauce. |
 | DELETE | `/api/v1/sauceboss/sauces/{sauce_id}` | JWT (owner OR admin) | Delete an owned sauce; admins may delete any. Cascades to steps, ingredients, and item links. |

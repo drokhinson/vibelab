@@ -374,6 +374,34 @@ async def list_all_sauces() -> list[dict]:
 
 
 @router.get(
+    "/sauces/{sauce_id}",
+    response_model=list[dict],
+    status_code=200,
+    summary="One sauce's family (root + variants), same envelope as /sauces",
+)
+async def get_sauce_with_family(
+    sauce_id: str = Path(..., description="Sauce id; family root is resolved from it."),
+) -> list[dict]:
+    """Fetch a single sauce + every variant in its family.
+
+    Same per-sauce envelope as ``GET /sauces`` (steps, ingredients,
+    attachments, compatible items) — recipe-open paths use this to avoid
+    pulling the entire sauce table just to render one recipe. The family is
+    derived server-side from ``parent_sauce_id``; the response is empty when
+    the id is unknown.
+    """
+    sb = get_supabase()
+    try:
+        result = sb.rpc("get_sauceboss_sauce_with_family", {"p_sauce_id": sauce_id}).execute()
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+    family = result.data or []
+    if not family:
+        raise HTTPException(404, "Sauce not found")
+    return family
+
+
+@router.get(
     "/cuisines",
     response_model=list[dict],
     status_code=200,

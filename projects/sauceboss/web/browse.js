@@ -296,6 +296,7 @@ async function browseAddToSaucebook(sauceId, btnEl) {
     // (pantry is derived from saucebook ingredients).
     const row = state.browse.items.find(i => i.id === sauceId);
     if (row) row.inSaucebook = true;
+    invalidateSauceFamilyCache(sauceId);
     refreshSaucebookAndPantry();
     render();
   } catch (err) {
@@ -309,23 +310,15 @@ function browseOpenRecipe(sauceId) {
   // Reuse the standalone recipe view: stash the family in state and navigate.
   const row = state.browse.items.find(i => i.id === sauceId);
   if (!row) return;
-  // Browse rows are lightweight (no steps/ingredients). Defer to the existing
-  // all-sauces path: load the full envelope, then navigate to the recipe view.
+  // Browse rows are lightweight (no steps/ingredients). Defer to the
+  // recipe-family loader which hits /sauces/{id} and caches for 1h.
   state.loading = 'Loading recipe…';
   render();
-  api.allSauces().then(all => {
+  loadSauceFamily(sauceId).then((family) => {
     state.loading = null;
-    const family = all.filter(s => s.id === sauceId || s.parentSauceId === sauceId);
-    const found = family.find(s => s.id === sauceId) || all.find(s => s.id === sauceId);
-    if (!found) { state.loading = null; render(); return; }
-    state.selectedSauce = found;
-    state.servings = found.defaultServings || 2;
-    state.selectedSauceFamily = family.length ? family : [found];
-    state.hiddenPieSlices = {};
-    state.selectedItem = null;
-    state.meal = { item: null, prep: null, sauce: null };
-    state.recipeReturnTo = 'tab-shell';
-    navigate('recipe', { path: '/sauce/' + encodeURIComponent(found.id) });
+    const found = family.find(s => s.id === sauceId);
+    if (!found) { render(); return; }
+    _enterRecipeView(found, family, {});
   }).catch(err => {
     state.loading = null;
     state.browse.error = err?.message || 'Recipe load failed';
