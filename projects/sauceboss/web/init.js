@@ -60,13 +60,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   // If the URL is a `/sauce/<id>` permalink, the recipe view takes over
   // once the sauce loads; the tab underneath is still set so the recipe's
   // back button has a destination.
-  state.screen = 'tab-shell';
-  state.activeTab = currentUser ? 'saucebook' : 'browse';
-  const permalinkMatch = location.pathname.match(/^\/sauce\/([^\/]+)\/?$/);
-  if (permalinkMatch) {
-    openRecipePermalink(decodeURIComponent(permalinkMatch[1]), { push: false });
-  } else {
-    render();
+  //
+  // Wrap this in a try/catch so a throw from render() (or one of the tab
+  // renderers it dispatches into) doesn't strand the user on the
+  // "Authenticating…" splash forever. The splash-exit rAF below runs
+  // unconditionally — any error here surfaces in the console where it can
+  // actually be diagnosed, rather than being hidden behind a hung splash.
+  let permalinkMatch = null;
+  try {
+    state.screen = 'tab-shell';
+    state.activeTab = currentUser ? 'saucebook' : 'browse';
+    permalinkMatch = location.pathname.match(/^\/sauce\/([^\/]+)\/?$/);
+    if (permalinkMatch) {
+      openRecipePermalink(decodeURIComponent(permalinkMatch[1]), { push: false });
+    } else {
+      render();
+    }
+  } catch (err) {
+    console.error('[sauceboss] post-auth render failed', err);
   }
 
   // Background loads (non-blocking). browseEnsureLoaded is idempotent — safe
