@@ -326,37 +326,42 @@
 
   // ── Same-day session grouping ─────────────────────────────────────────────
   //
-  // The backend orders plays by (played_at DESC, created_at DESC) so plays
-  // that share a (date, buddy-set) bucket arrive contiguously. We walk the
-  // play cards once and bucket runs of same-key cards into a synthetic
-  // { kind: "play_session", plays: [...] } card. Single plays also wrap so
-  // every feed item carries the gold-bordered section + clickable header.
-  // Non-play cards (hot games rail etc.) break a run because they're rare
-  // and only ever appear on page 1.
+  // Bucket plays by sessionKey across the whole page. Every play that shares
+  // a (played_at, sorted-participant-set) key collapses into one
+  // { kind: "play_session", plays: [...] } card no matter what non-play
+  // cards (Hot Games, Suggested Buddies, Featured-From-Collection) the
+  // backend interleaves between them. The session card lands at the
+  // position of the FIRST play with that key; non-play cards stay where
+  // the backend put them. Single-play sessions still wrap so every feed
+  // item carries the gold-bordered section + clickable header.
+  //
+  // Before: a strict consecutive walk fragmented sessions whenever the
+  // backend interleaved a non-play card between two same-key plays — a
+  // common case since feed_service.py inserts Featured-From-Collection
+  // and Suggested-Buddies after the first play on page 1, splitting any
+  // game-night whose plays land in the top two slots.
 
   function groupCards(rawCards) {
     const out = [];
-    let i = 0;
-    while (i < rawCards.length) {
-      const card = rawCards[i];
+    const sessionByKey = new Map();
+    for (const card of rawCards) {
       if (card.kind !== "play") {
         out.push(card);
-        i++;
         continue;
       }
       const key = sessionKey(card);
-      let j = i + 1;
-      while (j < rawCards.length && rawCards[j].kind === "play" && sessionKey(rawCards[j]) === key) {
-        j++;
+      let existing = sessionByKey.get(key);
+      if (!existing) {
+        existing = {
+          kind: "play_session",
+          played_at: card.played_at,
+          participants: card.participants || [],
+          plays: [],
+        };
+        sessionByKey.set(key, existing);
+        out.push(existing);
       }
-      const plays = rawCards.slice(i, j);
-      out.push({
-        kind: "play_session",
-        played_at: card.played_at,
-        participants: card.participants || [],
-        plays,
-      });
-      i = j;
+      existing.plays.push(card);
     }
     return out;
   }
