@@ -49,6 +49,18 @@ export const SAUCE_TYPES = [
   { value: 'full_recipe', label: 'Full Recipe', category: null,      pairLabel: null       },
 ];
 
+// Canonical color map for each sauce type. Single source of truth for the pill
+// tint (used by .sauce-type-* CSS) and the recipe section-label dark shade
+// (used by recipe.js). The .sauce-type-* CSS in styles.css must mirror the
+// pillBg / pillFg values here — CSS can't read JS constants. Only types with
+// a dedicated pill surface are listed; dip / full_recipe fall back to `sauce`
+// at the consumer (`SAUCE_TYPE_META[type] || SAUCE_TYPE_META.sauce`).
+export const SAUCE_TYPE_META = {
+  sauce:    { pillBg: '#FEE7D6', pillFg: '#B43E0A', sectionLabel: '#4A0072' },
+  marinade: { pillBg: '#FEE2E2', pillFg: '#B91C1C', sectionLabel: '#5D4037' },
+  dressing: { pillBg: '#DCFCE7', pillFg: '#166534', sectionLabel: '#1B5E20' },
+};
+
 export const PALETTE = [
   '#E85D04', '#F48C06', '#FAA307', '#FFBA08', '#E63946', '#457B9D', '#2A9D8F',
   '#E9C46A', '#9B2226', '#6D6875', '#B5838D', '#264653', '#BB3E03', '#CA6702',

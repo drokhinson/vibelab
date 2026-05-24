@@ -58,9 +58,7 @@ function renderRecipe() {
 
   // Always use colored-tag meal-section style for sauce steps
   const isMarinade = sauce.sauceType === 'marinade';
-  const sauceColor = isMarinade ? '#5D4037'
-                   : sauce.sauceType === 'dressing' ? '#1B5E20'
-                   : '#4A0072';
+  const sauceColor = (SAUCE_TYPE_META[sauce.sauceType] || SAUCE_TYPE_META.sauce).sectionLabel;
   const sauceLabel = isMeal
     ? `${flowMetaFor(item).sauceWord} — ${sauce.name}`
     : `Sauce — ${sauce.name}`;

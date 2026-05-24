@@ -1903,6 +1903,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   border-radius: 999px;
   white-space: nowrap;
 }
+/* Pill tints — must mirror SAUCE_TYPE_META in shared/constants.js (CSS can't
+   read JS constants, so the two are kept in sync by hand). */
 .sauce-type-sauce    { background: #FEE7D6; color: #B43E0A; }
 .sauce-type-marinade { background: #FEE2E2; color: #B91C1C; }
 .sauce-type-dressing { background: #DCFCE7; color: #166534; }
