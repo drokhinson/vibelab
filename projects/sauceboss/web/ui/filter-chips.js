@@ -1,10 +1,39 @@
 'use strict';
 
-// Shared filter-chip block used by Browse and Saucebook (and, after PR 10,
-// the Sauce Manager). Renders three sections: Type pills, Cuisine search +
-// chips, and (optionally) Compatible-Dish search + chips. The caller passes
-// active sets and JS-expression templates with `$NAME` / `$VALUE` / `$ID`
-// placeholders for the per-chip click handlers.
+// Type-chip row — used by Browse, Saucebook (multi-select), and the
+// Sauce Manager (single-select with an explicit "All" pill).
+//
+// opts:
+//   mode: "multi" | "single"     Required.
+//   activeTypes: Set<string>     multi mode — picked SAUCE_TYPES values.
+//   onType: string               multi mode — JS expr template with `$VALUE`.
+//   activeValue: string|"all"    single mode — currently selected value.
+//   onPick: string               single mode — JS expr template with `$VALUE`.
+function renderTypeChips({ mode, activeTypes, onType, activeValue, onPick }) {
+  if (mode === 'single') {
+    const allActive = activeValue === 'all' ? ' toggle-chip--active' : '';
+    const allHandler = onPick.replace('$VALUE', 'all');
+    const head = `<button class="toggle-chip${allActive}" onclick="${allHandler}">All</button>`;
+    const rest = SAUCE_TYPES.map(t => {
+      const active = activeValue === t.value ? ' toggle-chip--active' : '';
+      const handler = onPick.replace('$VALUE', t.value);
+      return `<button class="toggle-chip${active}" onclick="${handler}">${escapeHtml(t.label)}</button>`;
+    }).join('');
+    return head + rest;
+  }
+  // multi mode
+  return SAUCE_TYPES.map(t => {
+    const active = (activeTypes || new Set()).has(t.value) ? ' toggle-chip--active' : '';
+    const handler = onType.replace('$VALUE', t.value);
+    return `<button class="toggle-chip${active}" onclick="${handler}">${escapeHtml(t.label)}</button>`;
+  }).join('');
+}
+
+// Shared filter-chip block used by Browse and Saucebook. Renders three
+// sections: Type pills, Cuisine search + chips, and (optionally)
+// Compatible-Dish search + chips. The caller passes active sets and
+// JS-expression templates with `$NAME` / `$VALUE` / `$ID` placeholders for
+// the per-chip click handlers.
 //
 // opts:
 //   activeCuisines   — Set<string> of currently selected cuisine names
@@ -47,11 +76,11 @@ function renderFilterChips(opts) {
     </div>` : '';
 
   // ── Type: simple toggle chips (short list, no search needed) ───────────
-  const typeChips = SAUCE_TYPES.map(t => {
-    const active = (opts.activeTypes || new Set()).has(t.value) ? ' toggle-chip--active' : '';
-    const handler = opts.onType.replace('$VALUE', t.value);
-    return `<button class="toggle-chip${active}" onclick="${handler}">${escapeHtml(t.label)}</button>`;
-  }).join('');
+  const typeChips = renderTypeChips({
+    mode: 'multi',
+    activeTypes: opts.activeTypes,
+    onType: opts.onType,
+  });
 
   // ── Dish: search-input → dropdown → multi-select chips ────────────────
   let dishHTML = '';

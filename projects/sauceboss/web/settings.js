@@ -109,10 +109,11 @@ function renderAdmin() {
 
   const typeFilterRow = tab === 'sauces' ? `
     <div class="sm-type-filter">
-      <button class="toggle-chip ${typeFilter === 'all' ? 'toggle-chip--active' : ''}" onclick="setSauceManagerTypeFilter('all')">All</button>
-      ${SAUCE_TYPES.map(t => `
-        <button class="toggle-chip ${typeFilter === t.value ? 'toggle-chip--active' : ''}" onclick="setSauceManagerTypeFilter('${t.value}')">${t.label}</button>
-      `).join('')}
+      ${renderTypeChips({
+        mode: 'single',
+        activeValue: typeFilter,
+        onPick: "setSauceManagerTypeFilter('$VALUE')",
+      })}
     </div>` : '';
 
   let bodyHTML = '';
