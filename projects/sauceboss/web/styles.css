@@ -10,14 +10,14 @@
 
 /* ── Reset & Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+html, body { height: 100%; background: var(--main-bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
 /* ── Phone Shell ── */
 #app {
   width: 100%;
   min-height: 100dvh;
   margin: 0 auto;
-  background: #FFF8F0;
+  background: var(--main-bg);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -41,7 +41,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
    Both action buttons (manage, auth) are vertically centered relative to
    the header content block via `align-self: center` on the actions row. */
 .app-header {
-  background: #E85D04;
+  background: var(--accent);
   padding: 16px;
   flex-shrink: 0;
   display: flex;
@@ -179,8 +179,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   height: 32px;
   border-radius: 16px;
   border: none;
-  background: #FFF8F0;
-  color: #E85D04;
+  background: var(--main-bg);
+  color: var(--accent);
   font-size: 18px;
   font-weight: 700;
   cursor: pointer;
@@ -199,16 +199,16 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .unit-toggle {
   background: #FFFFFF;
-  border: 1.5px solid #E85D04;
+  border: 1.5px solid var(--accent);
   border-radius: 999px;
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 700;
-  color: #E85D04;
+  color: var(--accent);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.unit-toggle:hover { background: #FFF8F0; }
+.unit-toggle:hover { background: var(--main-bg); }
 
 /* ─────────────────────────────
    SCREEN 1 — Carb Selector
@@ -231,7 +231,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   -webkit-tap-highlight-color: transparent;
 }
 .carb-card:active { transform: scale(0.96); }
-.carb-card:hover { border-color: #E85D04; box-shadow: 0 4px 14px rgba(232,93,4,0.2); }
+.carb-card:hover { border-color: var(--accent); box-shadow: 0 4px 14px rgba(232,93,4,0.2); }
 .carb-emoji { font-size: 44px; display: block; margin-bottom: 8px; }
 .carb-name { font-size: 15px; font-weight: 700; color: #1A1A2E; }
 .carb-desc { font-size: 11px; color: #6B7280; margin-top: 2px; }
@@ -264,8 +264,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .cat-tab [data-lucide] { width: 22px; height: 22px; stroke-width: 2px; }
 .cat-tab:hover { color: #C94E02; }
 .cat-tab--active {
-  color: #E85D04;
-  border-bottom-color: #E85D04;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 /* ─────────────────────────────
@@ -305,7 +305,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .card-panel__header-text { display: inline-flex; align-items: center; gap: 6px; }
 .card-panel__header-text [data-lucide] { width: 16px; height: 16px; }
 .card-panel__count {
-  background: #E85D04;
+  background: var(--accent);
   color: white;
   font-size: 11px;
   font-weight: 700;
@@ -334,8 +334,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   transition: all 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.toggle-chip:hover { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
-.toggle-chip--active { background: #E85D04; color: white; border-color: #E85D04; }
+.toggle-chip:hover { border-color: var(--accent); background: #FFF3E0; color: var(--accent); }
+.toggle-chip--active { background: var(--accent); color: white; border-color: var(--accent); }
 .ingredient-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   display: inline-flex;
@@ -416,8 +416,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .recipe-action-btn:hover { background: #F5F5F5; }
 .recipe-action-btn [data-lucide] { width: 18px; height: 18px; }
 .recipe-action-btn--active {
-  background: #E85D04;
-  border-color: #E85D04;
+  background: var(--accent);
+  border-color: var(--accent);
   color: white;
 }
 .recipe-action-btn--active:hover { background: #C94E02; }
@@ -431,7 +431,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   color: #555;
 }
 .app-header__actions .recipe-action-btn:hover { background: rgba(0,0,0,0.06); }
-.app-header__actions .recipe-action-btn--active { background: #E85D04; color: white; }
+.app-header__actions .recipe-action-btn--active { background: var(--accent); color: white; }
 .app-header__actions .recipe-action-btn--active:hover { background: #C94E02; }
 .app-header__actions .recipe-action-btn [data-lucide] { width: 18px; height: 18px; }
 
@@ -546,7 +546,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   font-weight: 700;
   letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: #E85D04;
+  color: var(--accent);
   margin-bottom: 4px;
 }
 .step-title { font-size: 16px; font-weight: 700; color: #1A1A2E; }
@@ -593,7 +593,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .legend-name-wrap { flex: 1; display: flex; flex-direction: column; }
 .legend-name { font-size: 13px; color: #374151; font-weight: 500; }
 .legend-disabled .legend-name { text-decoration: line-through; opacity: 0.6; }
-.sub-hint { font-size: 11px; color: #E85D04; font-style: italic; }
+.sub-hint { font-size: 11px; color: var(--accent); font-style: italic; }
 .legend-amount { font-size: 12px; color: #6B7280; font-weight: 600; }
 .legend-pct {
   font-size: 11px;
@@ -629,7 +629,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   background: white;
   color: #1A1A2E;
 }
-.builder-input:focus { outline: none; border-color: #E85D04; }
+.builder-input:focus { outline: none; border-color: var(--accent); }
 .builder-name-input { font-size: 18px; font-weight: 700; padding: 12px 14px; }
 
 /* Unified chip selectors (cuisine, sauce type, ingredient category) */
@@ -669,8 +669,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   transition: all 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.builder-chip:hover { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
-.builder-chip.selected { border-color: #E85D04; background: #FFF3E0; color: #E85D04; }
+.builder-chip:hover { border-color: var(--accent); background: #FFF3E0; color: var(--accent); }
+.builder-chip.selected { border-color: var(--accent); background: #FFF3E0; color: var(--accent); }
 .builder-chip-lg { padding: 10px 18px; font-size: 14px; border-radius: 20px; }
 
 /* New cuisine inline form (builder) */
@@ -695,7 +695,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.new-cuisine-cancel:hover { border-color: #E85D04; color: #E85D04; }
+.new-cuisine-cancel:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Color swatches */
 .color-swatches { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
@@ -728,7 +728,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   margin-bottom: 8px;
   border: 1px solid #E5E7EB;
   border-radius: 12px;
-  background: #FFF8F0;
+  background: var(--main-bg);
   color: #C04C03;
   font-size: 14px;
   font-weight: 700;
@@ -1013,7 +1013,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   margin-bottom: 8px;
   border: 1px solid #E5E7EB;
   border-radius: 12px;
-  background: #FFF8F0;
+  background: var(--main-bg);
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
 }
@@ -1047,7 +1047,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   display: flex; align-items: center; justify-content: center;
 }
 .ing-readonly__edit { color: #6B7280; }
-.ing-readonly__edit:hover { color: #E85D04; background: #fff; border-color: #FBD9B6; }
+.ing-readonly__edit:hover { color: var(--accent); background: #fff; border-color: #FBD9B6; }
 .ing-readonly__edit i { width: 16px; height: 16px; }
 .ing-readonly__remove { color: #991B1B; font-size: 14px; }
 .ing-readonly__remove:hover { background: #FEE2E2; }
@@ -1151,7 +1151,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .ing-sheet__label input:focus,
 .ing-sheet__label select:focus {
   outline: none;
-  border-color: #E85D04;
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(232, 93, 4, 0.15);
 }
 .ing-sheet__row {
@@ -1164,7 +1164,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .ing-sheet__ac-wrap .ac-dropdown {
   top: calc(100% + 2px);
   border-radius: 12px;
-  border-top: 2px solid #E85D04;
+  border-top: 2px solid var(--accent);
 }
 .ing-sheet__classify { padding-top: 4px; }
 .ing-sheet__footer {
@@ -1190,7 +1190,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .ing-sheet__btn--secondary:hover { background: #E5E7EB; }
 .ing-sheet__btn--primary {
-  background: #E85D04;
+  background: var(--accent);
   color: #fff;
 }
 .ing-sheet__btn--primary:hover:not(:disabled) { background: #C04C03; }
@@ -1265,7 +1265,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   left: 0;
   right: 0;
   background: white;
-  border: 2px solid #E85D04;
+  border: 2px solid var(--accent);
   border-top: none;
   border-radius: 0 0 10px 10px;
   z-index: 20;
@@ -1282,7 +1282,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .ac-item:hover, .ac-item.ac-selected {
   background: #FFF3E0;
-  color: #E85D04;
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -1307,11 +1307,11 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   background: white;
   margin-bottom: 10px;
 }
-.ingredient-row .ing-unit:focus { outline: none; border-color: #E85D04; }
+.ingredient-row .ing-unit:focus { outline: none; border-color: var(--accent); }
 
 .add-step-btn {
   background: none; border: none;
-  color: #E85D04; font-size: 13px; font-weight: 700;
+  color: var(--accent); font-size: 13px; font-weight: 700;
   cursor: pointer;
   display: block; width: 100%; text-align: center; padding: 10px;
 }
@@ -1322,7 +1322,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   display: block;
   margin: 10px auto 0;
   padding: 10px 22px;
-  background: #FFF8F0;
+  background: var(--main-bg);
   border: 1.5px dashed #FBD9B6;
   border-radius: 999px;
   color: #C04C03;
@@ -1332,7 +1332,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.add-ing-btn:hover { background: #FFF3E0; border-color: #E85D04; color: #E85D04; }
+.add-ing-btn:hover { background: #FFF3E0; border-color: var(--accent); color: var(--accent); }
 
 /* Primary / secondary buttons */
 .builder-primary-btn {
@@ -1340,7 +1340,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   padding: 14px;
   border-radius: 14px;
   border: none;
-  background: #E85D04;
+  background: var(--accent);
   color: white;
   font-size: 16px;
   font-weight: 700;
@@ -1383,7 +1383,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .review-step-card .step-number { margin-bottom: 2px; }
 .review-step-card .step-title { margin-bottom: 8px; }
 .review-ing-list { display: flex; flex-direction: column; gap: 3px; }
-.review-ing-item { font-size: 13px; color: #6B7280; padding-left: 8px; border-left: 3px solid #E85D04; }
+.review-ing-item { font-size: 13px; color: #6B7280; padding-left: 8px; border-left: 3px solid var(--accent); }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    Wizard: Progress Dots
@@ -1399,7 +1399,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   background: #F3F4F6; border: 2px solid #E5E7EB;
   flex-shrink: 0; transition: all .2s;
 }
-.wizard-dot.active { background: #E85D04; color: white; border-color: #E85D04; }
+.wizard-dot.active { background: var(--accent); color: white; border-color: var(--accent); }
 .wizard-dot.done   { background: #D1FAE5; color: #065F46; border-color: #6EE7B7; }
 .wizard-dot.skipped { opacity: 0.35; }
 .wizard-line {
@@ -1427,7 +1427,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .builder-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 .builder-file-label { cursor: pointer; text-align: center; }
 .builder-download-link {
-  display: block; font-size: 13px; color: #E85D04; margin-top: 8px;
+  display: block; font-size: 13px; color: var(--accent); margin-top: 8px;
   text-decoration: none; font-weight: 500;
 }
 .builder-download-link:hover { text-decoration: underline; }
@@ -1455,8 +1455,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .insert-step-plus {
   width: 26px; height: 26px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px; font-weight: 700; color: #E85D04;
-  background: #FFF3E0; border: 2px solid #E85D04;
+  font-size: 16px; font-weight: 700; color: var(--accent);
+  background: #FFF3E0; border: 2px solid var(--accent);
   margin: 0 8px; flex-shrink: 0;
 }
 
@@ -1487,13 +1487,13 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   transition: all .15s; font-size: 12px;
 }
 .dish-tree-check.checked {
-  background: #E85D04; border-color: #E85D04; color: white;
+  background: var(--accent); border-color: var(--accent); color: white;
 }
 .dish-tree-check.checked::after { content: '✓'; }
 .dish-tree-check.partial {
-  background: #FFF3E0; border-color: #E85D04;
+  background: #FFF3E0; border-color: var(--accent);
 }
-.dish-tree-check.partial::after { content: '–'; color: #E85D04; font-weight: 700; }
+.dish-tree-check.partial::after { content: '–'; color: var(--accent); font-weight: 700; }
 .dish-tree-emoji { font-size: 20px; flex-shrink: 0; }
 .dish-tree-name  { flex: 1; font-size: 14px; color: #1F2937; }
 .dish-tree-count {
@@ -1532,7 +1532,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   margin-left: 4px;
 }
 .review-edit-btn {
-  font-size: 13px; font-weight: 600; color: #E85D04;
+  font-size: 13px; font-weight: 600; color: var(--accent);
   background: none; border: none; cursor: pointer;
   padding: 2px 8px; border-radius: 6px; flex-shrink: 0;
 }
@@ -1589,7 +1589,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   font-size: 13px; font-weight: 500; color: #6B7280;
   text-align: center;
 }
-.builder-back-link:hover { color: #E85D04; }
+.builder-back-link:hover { color: var(--accent); }
 
 .builder-error {
   background: #FEE2E2;
@@ -1638,7 +1638,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .step-time {
   font-size: 12px;
   font-weight: 700;
-  color: #E85D04;
+  color: var(--accent);
   background: #FFF7ED;
   border-radius: 8px;
   padding: 2px 8px;
@@ -1719,7 +1719,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   -webkit-tap-highlight-color: transparent;
 }
 .admin-sauce-row[onclick] { cursor: pointer; }
-.admin-sauce-row[onclick]:hover { background: #FFF8F0; }
+.admin-sauce-row[onclick]:hover { background: var(--main-bg); }
 .admin-sauce-row.unavailable { opacity: 0.4; pointer-events: none; }
 .admin-sauce-row--variant {
   padding-left: 38px; /* 16px gutter + 22px nesting indent */
@@ -1743,8 +1743,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .admin-sauce-row__action {
   flex-shrink: 0;
   background: white;
-  border: 1px solid #E85D04;
-  color: #E85D04;
+  border: 1px solid var(--accent);
+  color: var(--accent);
   border-radius: 999px;
   padding: 6px 12px;
   font-size: 12px;
@@ -1799,7 +1799,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   height: 56px;
   border-radius: 50%;
   border: none;
-  background: #E85D04;
+  background: var(--accent);
   color: #FFFFFF;
   box-shadow: 0 4px 12px rgba(232, 93, 4, 0.35), 0 2px 4px rgba(0, 0, 0, 0.08);
   display: flex;
@@ -1834,8 +1834,8 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   transition: color 0.15s, border-color 0.15s;
 }
 .sm-tab-active {
-  color: #E85D04;
-  border-bottom-color: #E85D04;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 .sm-tab:hover:not(.sm-tab-active) { color: #6B7280; }
 
@@ -1869,7 +1869,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   box-sizing: border-box;
 }
 .sm-search-input:focus {
-  border-color: #E85D04;
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(232, 93, 4, 0.12);
 }
 .sm-search-input::placeholder { color: #9CA3AF; }
@@ -2163,7 +2163,7 @@ body, button, input, select, textarea {
   align-items: center;
   justify-content: center;
   gap: 18px;
-  background: #FFF8F0;
+  background: var(--main-bg);
   pointer-events: none;
 }
 
@@ -2180,7 +2180,7 @@ body, button, input, select, textarea {
 .splash-text {
   font-size: 16px;
   font-weight: 600;
-  color: #E85D04;
+  color: var(--accent);
   letter-spacing: 0.2px;
 }
 .splash-dots span {
@@ -2463,7 +2463,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 }
 .auth-modal__submit {
   margin-top: 6px;
-  background: #E85D04;
+  background: var(--accent);
   color: #fff;
   border: 0;
   padding: 10px 14px;
@@ -2479,7 +2479,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   font-size: 12px;
   color: #6B7280;
 }
-.auth-modal__footer a { color: #E85D04; font-weight: 600; text-decoration: none; }
+.auth-modal__footer a { color: var(--accent); font-weight: 600; text-decoration: none; }
 
 .empty-hint { padding: 16px; color: #888; font-size: 13px; }
 
@@ -2518,7 +2518,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   margin-left: 6px;
   padding: 1px 7px;
   background: #FFF3E6;
-  color: #E85D04;
+  color: var(--accent);
   font-size: 10px;
   font-weight: 700;
   border-radius: 999px;
@@ -2614,7 +2614,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 }
 .edit-mode-toggle:hover { background: rgba(255,255,255,0.3); }
 .edit-mode-toggle.edit-mode-on {
-  background: #E85D04;
+  background: var(--accent);
   color: white;
   box-shadow: 0 0 0 2px rgba(232, 93, 4, 0.35);
 }
@@ -2644,7 +2644,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.sm-tool-btn:hover { background: #FFF3E6; border-color: #E85D04; }
+.sm-tool-btn:hover { background: #FFF3E6; border-color: var(--accent); }
 .sm-tool-btn [data-lucide] { width: 14px; height: 14px; }
 
 /* ─────────────────────────────
@@ -2690,7 +2690,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   transition: color 0.15s;
 }
 .btm-nav-btn:hover { color: #1A1A2E; }
-.btm-nav-btn--active { color: #E85D04; }
+.btm-nav-btn--active { color: var(--accent); }
 .btm-nav-btn--locked { color: #9CA3AF; }
 .btm-nav-icon-wrap { position: relative; display: inline-flex; }
 .btm-nav-btn [data-lucide] { width: 22px; height: 22px; }
@@ -2726,13 +2726,13 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
 .tab-locked [data-lucide] {
   width: 48px;
   height: 48px;
-  color: #E85D04;
+  color: var(--accent);
   margin-bottom: 16px;
 }
 .tab-locked h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
 .tab-locked p { font-size: 14px; color: #6B7280; max-width: 280px; margin-bottom: 20px; line-height: 1.5; }
 .tab-locked .btn-primary {
-  background: #E85D04;
+  background: var(--accent);
   color: white;
   border: 0;
   border-radius: 999px;
@@ -2798,7 +2798,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   display: flex;
   align-items: center;
 }
-.collapse-all-btn:active { color: #E85D04; }
+.collapse-all-btn:active { color: var(--accent); }
 .collapse-all-btn [data-lucide] { width: 18px; height: 18px; }
 
 /* Saucebook FAB cluster (lower-right) */
@@ -2819,7 +2819,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   height: 52px;
   border-radius: 50%;
   border: 0;
-  background: #E85D04;
+  background: var(--accent);
   color: white;
   display: flex;
   align-items: center;
@@ -2888,7 +2888,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   background: white;
   color: #1A1A2E;
 }
-.browse-filters__filter-input:focus { border-color: #E85D04; }
+.browse-filters__filter-input:focus { border-color: var(--accent); }
 .browse-filters__filter-input::placeholder { color: #9CA3AF; }
 
 /* Search-and-select suggestion dropdown (cuisine, dish — same style as author) */
@@ -2957,8 +2957,8 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   align-items: center;
   gap: 6px;
   background: white;
-  border: 1px solid #E85D04;
-  color: #E85D04;
+  border: 1px solid var(--accent);
+  color: var(--accent);
   border-radius: 999px;
   padding: 8px 14px;
   font-size: 13px;
