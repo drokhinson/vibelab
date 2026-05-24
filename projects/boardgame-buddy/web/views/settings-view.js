@@ -84,6 +84,8 @@
         ` : ""}
         <div class="set-card-label">Connections</div>
         ${this._renderBggCard()}
+        <div class="set-card-label">Local cache</div>
+        ${this._renderCacheCard()}
         ${this._renderLogout()}
         ${this._renderBggAttribution()}
         <div style="height: 1rem"></div>
@@ -315,6 +317,77 @@
           </div>
         </form>
       `;
+    }
+
+    // ── Local cache card ──────────────────────────────────────────────────────
+    _renderCacheCard() {
+      const stats = (window.bgbCache && window.bgbCache.stats) ? window.bgbCache.stats() : null;
+      let summary = "Nothing cached yet.";
+      if (stats) {
+        const namespaces = Object.keys(stats).filter((k) => !k.startsWith("_"));
+        let entries = 0;
+        let bytes = 0;
+        for (const ns of namespaces) {
+          entries += (stats[ns] && stats[ns].entries) || 0;
+          bytes += (stats[ns] && stats[ns].bytes) || 0;
+        }
+        if (entries > 0) {
+          const kb = Math.max(1, Math.round(bytes / 1024));
+          summary = `${entries} entries across ${namespaces.length} namespace${namespaces.length === 1 ? "" : "s"} · ~${kb} KB`;
+        }
+      }
+      const busy = !!this._cacheRefreshing;
+      return `
+        <div class="set-card">
+          <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
+            <p class="text-sm opacity-80">
+              Your collection, buddies, and recent feed are kept locally so the
+              app loads instantly. Refresh if something looks out of date.
+            </p>
+            <div class="text-xs opacity-60" style="margin-top: -0.25rem;">${escape(summary)}</div>
+            <button class="btn btn-primary btn-sm" ${busy ? "disabled" : ""}
+                    onclick="window.settingsView._refreshLocalCache()">
+              <i data-lucide="refresh-cw" class="w-4 h-4 ${busy ? "animate-spin" : ""}"></i>
+              ${busy ? "Refreshing…" : "Refresh local cache"}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    async _refreshLocalCache() {
+      if (this._cacheRefreshing) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Refresh local cache?",
+        body: "We'll re-download your collection, buddies, and feed. Anything you've typed but not submitted is unaffected.",
+        confirmLabel: "Refresh",
+        cancelLabel: "Cancel",
+      });
+      if (!ok) return;
+      const me = window.store.get("user");
+      const uid = me && me.id;
+      if (!uid) return;
+      this._cacheRefreshing = true;
+      this.render();
+      try {
+        // Drop everything for this user (in-memory + localStorage), then
+        // re-bind and re-run bootstrap so every namespace re-seeds in one
+        // round trip.
+        window.bgbCache.unbindUser();
+        window.bgbCache.bindUser(uid);
+        if (window.Bootstrap) await window.Bootstrap.load();
+        // Re-notify subscribed views so anything currently mounted re-renders
+        // against the freshly-seeded data.
+        window.store.invalidate("user");
+        window.store.invalidate("feed");
+        window.store.invalidate("myCollectionMap");
+        if (typeof showToast === "function") showToast("Cache refreshed", "success");
+      } catch (e) {
+        if (typeof showToast === "function") showToast(e.message || "Couldn't refresh — check your connection.", "error");
+      } finally {
+        this._cacheRefreshing = false;
+        this.render();
+      }
     }
 
     _renderLogout() {
