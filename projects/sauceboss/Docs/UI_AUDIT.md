@@ -568,41 +568,10 @@ grep -rnE "browse-filters__empty|browse-filters__row--scrollable|builder-import-
 # → 0 matches
 ```
 
-### Pass 3 (full audit fix) — 2026-05-24
+**Not addressed in this pass (tracked in `Docs/ARCHITECTURE.md` §6):**
 
-All items previously listed as "not addressed" landed in a 13-commit
-sequence on the same branch. Final state:
-
-- **Modal:** ✅ `ui/sauce-popup.js` exposes `.confirm` / `.alert` / `.dismiss`.
-  All 18 `confirm()` / `alert()` sites migrated. `grep -nE '\bconfirm\(|\balert\('
-  projects/sauceboss/web | grep -v // | grep -v SauceBossPopup` returns 0.
-- **Ingredient canonical:** ✅ `ui/ingredient-row.js` exposes
-  `renderIngredientRow(ing, { mode })`. `_pantryRow` and `renderFoodRow`
-  collapsed to thin adapters.
-- **Dish canonical:** ✅ `ui/dish-tile.js` exposes `renderDishTile(dish, { variant })`
-  with four variants. Meal-flow tiles + Dish Manager rows now share one source.
-- **Auth modal:** ✅ Classes renamed to `.auth-oauth-btn*` / `.auth-divider`,
-  pill radius `999px`, divider copy "or use email". `.claude/rules/auth-ui.md`
-  "Sauceboss does this" callout removed.
-- **Design tokens:** ✅ `:root` declares 30 semantic tokens. `var(--…)` used
-  at 439 sites in styles.css.
-- **Sauce-type color consolidation:** ✅ `SAUCE_TYPES` entries in
-  `shared/constants.js` carry `pillBg` / `pillFg` / `recipeSectionBg`.
-  `recipe.js` reads from the metadata, not literals.
-- **Sauce Manager filter migration:** ✅ Shared `renderTypeChips` helper
-  with `mode: "multi" | "single"` used by Browse / Saucebook / Sauce Manager.
-- **Structural carve-out:** ✅ Flat layout now matches boardgame-buddy:
-  ```
-  web/
-  ├── domain/      cuisine.js, sauce.js, ingredient.js
-  ├── ui/          accordion-group, app-header, dish-tile, emoji,
-  │                filter-chips, ingredient-row, recipe-views, sauce-popup,
-  │                sauce-row
-  ├── widgets/     builder-wizard, sauce-merge-bar, ingredient-merge-panel
-  ├── views/       browse-view, saucebook-view, pantry-view, meal-flow-view,
-  │                sauce-selector-view, recipe-view, admin-view
-  ├── auth.js, helpers.js, init.js, state.js, tabs.js, swipe.js,
-  └── shared-bridge.js, config.js, serve.js
-  ```
-  `helpers.js` went from 1,047 → 598 lines as canonical render functions
-  and domain shims moved out. Total JS line count unchanged.
+- The 18 `confirm()` / `alert()` sites. Requires a shared modal first; tracked as target-state work.
+- The missing canonical `renderIngredientRow` and `renderDishTile`. Each needs design decisions about variants.
+- The auth-modal class rename to match `.claude/rules/auth-ui.md` (`auth-modal__oauth*` → `auth-oauth-btn*`, radius `10px` → `999px` pill, divider "or" → "or use email"). Touches `auth.js`, `styles.css`, and the rule's stale "Sauceboss does this" callout.
+- The introduction of `:root` design tokens to replace the 80+ hardcoded `#E85D04` / `#FFF8F0` literals.
+- The flat `web/` layout (18 files at root) being carved into `domain/` / `ui/` / `views/` / `widgets/`. Each is a multi-file refactor.

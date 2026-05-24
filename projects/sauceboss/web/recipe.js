@@ -56,12 +56,11 @@ function renderRecipe() {
       ${shareMenuHTML}
     </div>`;
 
-  // Section-header color: SAUCE_TYPES owns the recipeSectionBg for sauce /
-  // marinade / dressing. Anything without an explicit color falls back to
-  // the canonical sauce purple.
+  // Always use colored-tag meal-section style for sauce steps
   const isMarinade = sauce.sauceType === 'marinade';
-  const sauceTypeMeta = SAUCE_TYPES.find(t => t.value === sauce.sauceType);
-  const sauceColor = (sauceTypeMeta && sauceTypeMeta.recipeSectionBg) || '#4A0072';
+  const sauceColor = isMarinade ? '#5D4037'
+                   : sauce.sauceType === 'dressing' ? '#1B5E20'
+                   : '#4A0072';
   const sauceLabel = isMeal
     ? `${flowMetaFor(item).sauceWord} — ${sauce.name}`
     : `Sauce — ${sauce.name}`;
@@ -196,10 +195,7 @@ async function recipeToggleSaucebook(sauceId) {
     try {
       await api.removeFromSaucebook(sauceId);
     } catch (err) {
-      await SauceBossPopup.alert({
-        title: "Couldn't remove",
-        body: err.message || String(err),
-      });
+      alert(`Couldn't remove: ${err.message || err}`);
       return;
     }
     state.saucebook = (state.saucebook || []).filter(s => s.id !== sauceId);
@@ -207,10 +203,7 @@ async function recipeToggleSaucebook(sauceId) {
     try {
       await api.addToSaucebook(sauceId);
     } catch (err) {
-      await SauceBossPopup.alert({
-        title: "Couldn't save",
-        body: err.message || String(err),
-      });
+      alert(`Couldn't save: ${err.message || err}`);
       return;
     }
     // Re-fetch saucebook to get the full envelope

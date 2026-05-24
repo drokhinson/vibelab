@@ -76,7 +76,7 @@ function renderBrowse() {
               <div class="browse-filters__author-suggest">
                 ${b.authorResults.map(a => `
                   <button onclick="browsePickAuthor('${escapeHtml(a.userId)}', '${escapeHtml(a.displayName)}')">
-                    ${escapeHtml(a.displayName)} <span style="color:var(--text-faint)">· ${a.sauceCount}</span>
+                    ${escapeHtml(a.displayName)} <span style="color:#9CA3AF">· ${a.sauceCount}</span>
                   </button>
                 `).join('')}
               </div>
@@ -97,7 +97,7 @@ function renderBrowse() {
             : (b.loading ? 'Loading…' : 'No recipes match your filters.')}
         </div>
 
-        ${b.error ? `<p style="color:var(--danger);padding:8px 0">${escapeHtml(b.error)}</p>` : ''}
+        ${b.error ? `<p style="color:#DC2626;padding:8px 0">${escapeHtml(b.error)}</p>` : ''}
 
         ${b.loading && b.items.length === 0
           ? `<div class="loading-inline"><div class="loading-pot">${potSVG()}</div><p class="loading-text">Saucing…</p></div>`
