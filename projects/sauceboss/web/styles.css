@@ -1,3 +1,13 @@
+/* ── Design tokens ── */
+/* Keep this list narrow: declare a token only when it's actively replacing
+   a hardcoded literal somewhere below. Adding "future use" tokens makes the
+   file harder to reason about. New tokens land in the same commit as the
+   sweep that uses them. */
+:root {
+  --accent:   #E85D04;  /* brand orange — accent borders, hover bg, active-state fill, link color */
+  --main-bg:  #FFF8F0;  /* cream — page background, secondary panel bg */
+}
+
 /* ── Reset & Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
