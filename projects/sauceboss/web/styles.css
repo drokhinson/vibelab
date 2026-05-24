@@ -3074,3 +3074,71 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   background: var(--danger);
   color: var(--card-bg);
 }
+
+/* ── SauceBossPopup — the project's shared confirm / alert modal.
+   See ui/sauce-popup.js. */
+.sauce-popup__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.sauce-popup__card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  max-width: 360px;
+  width: 100%;
+  padding: 22px 22px 18px;
+}
+.sauce-popup__title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.sauce-popup__body {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 18px;
+}
+.sauce-popup__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.sauce-popup__actions--single { justify-content: center; }
+.sauce-popup__btn {
+  min-height: 44px;
+  min-width: 88px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.sauce-popup__btn:active { transform: translateY(1px); }
+.sauce-popup__btn--ghost {
+  background: transparent;
+  color: var(--text-mid);
+  border-color: var(--border);
+}
+.sauce-popup__btn--ghost:hover { background: var(--hover-bg); border-color: var(--text-faint); }
+.sauce-popup__btn--primary {
+  background: var(--accent);
+  color: var(--card-bg);
+}
+.sauce-popup__btn--primary:hover { background: var(--accent-hover); }
+.sauce-popup__btn--danger {
+  background: var(--danger);
+  color: var(--card-bg);
+}
+.sauce-popup__btn--danger:hover { background: var(--danger-strong); }
