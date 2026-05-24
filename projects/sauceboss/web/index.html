@@ -46,17 +46,40 @@
   <script type="module" src="shared-bridge.js"></script>
   <script defer src="config.js"></script>
   <script defer src="state.js"></script>
+  <!-- domain/ — per-object state shims over shared/*.js. Loaded before
+       helpers.js so the rest of the app sees these as plain globals. -->
+  <script defer src="domain/cuisine.js"></script>
+  <script defer src="domain/sauce.js"></script>
+  <script defer src="domain/ingredient.js"></script>
   <script defer src="helpers.js"></script>
+  <!-- ui/ — canonical render functions per object (extracted from helpers.js
+       in the 2026-05-24 carve-out). These declare globals (renderEmoji,
+       renderSauceRow, etc.) that the feature files below consume. -->
+  <script defer src="ui/emoji.js"></script>
+  <script defer src="ui/sauce-row.js"></script>
+  <script defer src="ui/accordion-group.js"></script>
+  <script defer src="ui/filter-chips.js"></script>
+  <script defer src="ui/app-header.js"></script>
+  <script defer src="ui/recipe-views.js"></script>
+  <script defer src="ui/sauce-popup.js"></script>
+  <script defer src="ui/ingredient-row.js"></script>
+  <script defer src="ui/dish-tile.js"></script>
+  <!-- widgets/ — stateful multi-component widgets (extracted from feature
+       files in the 2026-05-24 carve-out). -->
+  <script defer src="widgets/sauce-merge-bar.js"></script>
+  <script defer src="widgets/ingredient-merge-panel.js"></script>
+  <script defer src="widgets/builder-wizard.js"></script>
   <script defer src="auth.js"></script>
   <script defer src="tabs.js"></script>
-  <script defer src="sauces.js"></script>
-  <script defer src="meal.js"></script>
-  <script defer src="recipe.js"></script>
-  <script defer src="builder.js"></script>
-  <script defer src="settings.js"></script>
-  <script defer src="saucebook.js"></script>
-  <script defer src="browse.js"></script>
-  <script defer src="pantry.js"></script>
+  <!-- views/ — one file per screen route. Each is a thin renderer that
+       composes ui/ + widgets/ helpers. -->
+  <script defer src="views/sauce-selector-view.js"></script>
+  <script defer src="views/meal-flow-view.js"></script>
+  <script defer src="views/recipe-view.js"></script>
+  <script defer src="views/admin-view.js"></script>
+  <script defer src="views/saucebook-view.js"></script>
+  <script defer src="views/browse-view.js"></script>
+  <script defer src="views/pantry-view.js"></script>
   <script defer src="swipe.js"></script>
   <script defer src="init.js"></script>
 </body>

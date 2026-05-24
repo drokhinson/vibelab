@@ -92,10 +92,10 @@ The CSS uses `var(--bg)`, `var(--bg-card)`, `var(--text-primary)`, `var(--text-m
 
 ## Anti-patterns
 
-These exist on the branch today (sauceboss, boardgame-buddy) and should be migrated to the canonical pattern whenever those auth screens are next touched:
+These exist on the branch today and should be migrated to the canonical pattern whenever those auth screens are next touched:
 
-- ❌ Text-only OAuth buttons (no logo). Sauceboss does this.
 - ❌ Lucide icons (`<i data-lucide="chrome">`, `<i data-lucide="apple">`) instead of inline SVG. Boardgame-buddy does this. Lucide's `chrome` is not the Google brand mark, and Lucide's `apple` is a fruit, not the logo.
 - ❌ Emoji (🍎, etc.) for provider marks. Looks unprofessional and renders inconsistently.
+- ❌ Text-only OAuth buttons (no logo).
 - ❌ Squared / lightly-rounded buttons. Use the full pill (`border-radius: 999px`).
 - ❌ Divider copy other than "or use email". Keep it consistent across apps.
