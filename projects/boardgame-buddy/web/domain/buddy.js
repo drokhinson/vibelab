@@ -3,7 +3,8 @@
 (function () {
   const CACHE_NS = "buddy";
   const ALL_KEY = "all";
-  const ALL_TTL_MS = 10 * 60 * 1000; // 10 min — see performance-caching.md
+  const FRESH_TTL_MS = 5 * 60 * 1000;
+  const STALE_TTL_MS = 30 * 60 * 1000;
 
   class Buddy {
     constructor(raw) { Object.assign(this, raw || {}); }
@@ -42,23 +43,27 @@
     // Combined preload for the gather-player picker. Accounts (accepted buddy
     // edges), ghosts (free-text players the user has logged before), and
     // recent played-with (real accounts ordered by shared-play count) all
-    // fetched in parallel and cached for 10 min. The picker dropdown serves
-    // from this cache so it opens with zero round-trips after first hit.
-    static async allBuddies() {
-      const hit = window.bgbCache && window.bgbCache.get(CACHE_NS, ALL_KEY);
-      if (hit) return hit;
-      const [accounts, ghosts, recent] = await Promise.all([
-        Buddy.list().catch(() => []),
-        Buddy.ghostPlayers().catch(() => []),
-        Buddy.playedWith().catch(() => []),
-      ]);
-      const combined = {
-        accounts: accounts || [],
-        ghosts: ghosts || [],
-        recent: recent || [],
-      };
-      if (window.bgbCache) window.bgbCache.set(CACHE_NS, ALL_KEY, combined, ALL_TTL_MS);
-      return combined;
+    // fetched in parallel. SWR-cached: 5min fresh, 30min stale. The picker
+    // dropdown serves from this cache so it opens with zero round-trips
+    // after first hit.
+    static allBuddies() {
+      return window.bgbCache.swr(
+        CACHE_NS,
+        ALL_KEY,
+        async () => {
+          const [accounts, ghosts, recent] = await Promise.all([
+            Buddy.list().catch(() => []),
+            Buddy.ghostPlayers().catch(() => []),
+            Buddy.playedWith().catch(() => []),
+          ]);
+          return {
+            accounts: accounts || [],
+            ghosts: ghosts || [],
+            recent: recent || [],
+          };
+        },
+        { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS },
+      );
     }
 
     // Drop the combined cache so the next allBuddies() refetches. Call after

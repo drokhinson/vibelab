@@ -84,6 +84,8 @@
         ` : ""}
         <div class="set-card-label">Connections</div>
         ${this._renderBggCard()}
+        <div class="set-card-label">Local cache</div>
+        ${this._renderCacheCard()}
         ${this._renderLogout()}
         ${this._renderBggAttribution()}
         <div style="height: 1rem"></div>
@@ -315,6 +317,113 @@
           </div>
         </form>
       `;
+    }
+
+    // ── Local cache card ──────────────────────────────────────────────────────
+    // Maps each cache namespace to a human-readable bucket. Anything not
+    // listed here falls into "Other" so the total still adds up.
+    static _CACHE_BUCKETS = {
+      "game.bundle": "games",
+      "collection": "games",
+      "feed":       "plays",
+      "buddy":      "buddies",
+    };
+
+    _renderCacheCard() {
+      const stats = (window.bgbCache && window.bgbCache.stats) ? window.bgbCache.stats() : null;
+      const busy = !!this._cacheRefreshing;
+
+      let totalBytes = 0;
+      const buckets = { games: { entries: 0, bytes: 0 }, plays: { entries: 0, bytes: 0 }, buddies: { entries: 0, bytes: 0 }, other: { entries: 0, bytes: 0 } };
+      if (stats) {
+        for (const ns of Object.keys(stats)) {
+          if (ns.startsWith("_")) continue;
+          const e = (stats[ns] && stats[ns].entries) || 0;
+          const b = (stats[ns] && stats[ns].bytes) || 0;
+          totalBytes += b;
+          const bucket = SettingsView._CACHE_BUCKETS[ns] || "other";
+          buckets[bucket].entries += e;
+          buckets[bucket].bytes += b;
+        }
+      }
+      const empty = totalBytes === 0;
+
+      const fmt = (bytes) => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      };
+
+      const row = (label, b) => `
+        <div class="set-card__cache-row">
+          <span class="set-card__cache-row-label">${label}</span>
+          <span class="set-card__cache-row-meta">${b.entries} ${b.entries === 1 ? "entry" : "entries"} · ${fmt(b.bytes)}</span>
+        </div>
+      `;
+
+      const breakdown = empty ? `<div class="text-xs opacity-60">Nothing cached yet.</div>` : `
+        <div class="set-card__cache-total">
+          <span>Total</span><span>${fmt(totalBytes)}</span>
+        </div>
+        <div class="set-card__cache-breakdown">
+          ${row("Games", buckets.games)}
+          ${row("Plays", buckets.plays)}
+          ${row("Buddies", buckets.buddies)}
+          ${buckets.other.bytes > 0 ? row("Other", buckets.other) : ""}
+        </div>
+      `;
+
+      return `
+        <div class="set-card">
+          <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
+            <p class="text-sm opacity-80">
+              Your collection, buddies, and recent feed are kept locally so the
+              app loads instantly. Refresh if something looks out of date.
+            </p>
+            ${breakdown}
+            <button class="btn btn-primary btn-sm" ${busy ? "disabled" : ""}
+                    onclick="window.settingsView._refreshLocalCache()">
+              <i data-lucide="refresh-cw" class="w-4 h-4 ${busy ? "animate-spin" : ""}"></i>
+              ${busy ? "Refreshing…" : "Refresh local cache"}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    async _refreshLocalCache() {
+      if (this._cacheRefreshing) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Refresh local cache?",
+        body: "We'll re-download your collection, buddies, and feed. Anything you've typed but not submitted is unaffected.",
+        confirmLabel: "Refresh",
+        cancelLabel: "Cancel",
+      });
+      if (!ok) return;
+      const me = window.store.get("user");
+      const uid = me && me.id;
+      if (!uid) return;
+      this._cacheRefreshing = true;
+      this.render();
+      try {
+        // Drop everything for this user (in-memory + localStorage), then
+        // re-bind and re-run bootstrap so every namespace re-seeds in one
+        // round trip.
+        window.bgbCache.unbindUser();
+        window.bgbCache.bindUser(uid);
+        if (window.Bootstrap) await window.Bootstrap.load();
+        // Re-notify subscribed views so anything currently mounted re-renders
+        // against the freshly-seeded data.
+        window.store.invalidate("user");
+        window.store.invalidate("feed");
+        window.store.invalidate("myCollectionMap");
+        if (typeof showToast === "function") showToast("Cache refreshed", "success");
+      } catch (e) {
+        if (typeof showToast === "function") showToast(e.message || "Couldn't refresh — check your connection.", "error");
+      } finally {
+        this._cacheRefreshing = false;
+        this.render();
+      }
     }
 
     _renderLogout() {

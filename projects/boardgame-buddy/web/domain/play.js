@@ -34,6 +34,16 @@
   function _invalidatePlayDeps() {
     if (window.Profile && window.Profile.invalidate) window.Profile.invalidate();
     if (window.Game && window.Game.invalidateBundle) window.Game.invalidateBundle();
+    // Stats live in their own cache namespace now — clear so the next
+    // Profile mount re-pulls accurate plays/wins counts. Feed first page
+    // gets invalidated too so the new play surfaces on next open; the
+    // optimistic Feed.prependPlay() path patches it in-place when the
+    // log-play flow returns the freshly-created play card.
+    if (window.Stats && window.Stats.invalidate) window.Stats.invalidate();
+    // Drop the cached feed first page; the next Feed mount triggers a fresh
+    // fetch. Fire-and-forget.
+    if (window.bgbCache) window.bgbCache.delete("feed", "first");
+    if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
     window.store.invalidate("feed");
   }
 
