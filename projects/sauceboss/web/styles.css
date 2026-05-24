@@ -115,16 +115,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 /* ─────────────────────────────
    MEAL RECIPE
 ───────────────────────────── */
-.meal-timing-banner {
-  background: #FFF3E0;
-  border: 1px solid #FFD180;
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin-bottom: 16px;
-}
-.meal-timing-total { font-size: 14px; font-weight: 700; color: #1A1A2E; }
-.meal-timing-note  { font-size: 12px; color: #E65100; margin-top: 4px; }
-
 .meal-section { margin-bottom: 16px; }
 .meal-section-label {
   color: white;
@@ -399,11 +389,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 /* ─────────────────────────────
    SCREEN 3 — Recipe
 ───────────────────────────── */
-.recipe-action-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
 .recipe-action-btn {
   display: inline-flex;
   align-items: center;
@@ -531,8 +516,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .recipe-ingredient-amount { color: #6B7280; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .recipe-ingredient-amount--qualitative { font-style: italic; }
 
-.steps-container { display: flex; flex-direction: column; gap: 20px; }
-
 .step-card {
   background: white;
   border-radius: 18px;
@@ -617,17 +600,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
    RECIPE BUILDER
 ───────────────────────────── */
 
-/* Sticky header inside builder */
-.builder-sticky-header {
-  position: sticky;
-  top: -1px;
-  z-index: 10;
-  background: #FFF8F0;
-  padding: 0 0 12px;
-  border-bottom: 1px solid #F3F4F6;
-  margin: 0 0 8px;
-}
-
 .builder-label {
   font-size: 11px;
   font-weight: 700;
@@ -649,7 +621,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .builder-input:focus { outline: none; border-color: #E85D04; }
 .builder-name-input { font-size: 18px; font-weight: 700; padding: 12px 14px; }
-.builder-sticky-header > .builder-input { margin-bottom: 8px; }
 
 /* Unified chip selectors (cuisine, sauce type, ingredient category) */
 .builder-chip-row {
@@ -1327,13 +1298,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   margin-bottom: 10px;
 }
 .ingredient-row .ing-unit:focus { outline: none; border-color: #E85D04; }
-.remove-ing-btn {
-  width: 24px; height: 24px; flex-shrink: 0;
-  border-radius: 50%; border: none;
-  background: #FEE2E2; color: #991B1B;
-  font-size: 11px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-}
 
 .add-step-btn {
   background: none; border: none;
@@ -1389,13 +1353,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 
 /* Import-from-URL panel inside builder */
-.builder-import-panel {
-  margin: 8px 0 4px;
-  padding: 10px;
-  background: #FFF3E0;
-  border: 1px dashed #F4B183;
-  border-radius: 12px;
-}
 .builder-import-row { display: flex; gap: 8px; align-items: stretch; }
 .builder-import-url { flex: 1; }
 .builder-import-btn {
@@ -1405,37 +1362,7 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
   white-space: nowrap;
 }
 
-/* Carb checkbox overlay */
-.carb-card-check { position: relative; }
-.carb-card-check.selected { border-color: #E85D04; background: #FFF3E0; }
-.check-mark {
-  position: absolute;
-  top: 8px; right: 8px;
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background: #E85D04; color: white;
-  font-size: 13px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
-}
-
-/* Color dot in header — sits before the title text, flex gap handles
-   horizontal spacing inside .app-header__titles h1. */
-.color-dot-header {
-  display: inline-block;
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
 /* Review screen */
-.review-summary {
-  background: white;
-  border-radius: 14px;
-  padding: 14px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.review-carbs { font-size: 14px; color: #374151; font-weight: 500; }
 .review-step-card {
   background: white;
   border-radius: 14px;
@@ -1481,16 +1408,10 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .source-card--action { cursor: pointer; transition: box-shadow .15s, transform .1s; }
 .source-card--action:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); transform: translateY(-1px); }
 .source-card--action:active { transform: translateY(0); }
-.source-card--disabled { opacity: 0.55; pointer-events: none; position: relative; }
 .source-card-header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
 .source-card-icon { font-size: 28px; flex-shrink: 0; line-height: 1; }
 .source-card-title { font-size: 15px; font-weight: 600; color: #1F2937; }
 .source-card-desc  { font-size: 13px; color: #6B7280; margin-top: 2px; }
-.coming-soon-badge {
-  display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
-  background: #FEF3C7; color: #92400E; border-radius: 6px; padding: 2px 6px;
-  vertical-align: middle; margin-left: 6px; letter-spacing: 0.4px;
-}
 
 /* File input styling */
 .builder-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
@@ -2170,8 +2091,6 @@ body, button, input, select, textarea {
   animation: fadeUp 220ms ease both;
   animation-delay: calc(var(--i, 0) * 50ms);
 }
-.steps-container .step-card {
-}
 
 /* ── Enhanced hover lift ── */
 .carb-card:hover { transform: translateY(-3px); }
@@ -2187,7 +2106,6 @@ body, button, input, select, textarea {
 .chip [data-lucide]               { width: 11px; height: 11px; }
 .section-label-icon [data-lucide] { width: 13px; height: 13px; color: #F59E0B; }
 .step-ref-badge [data-lucide]     { width: 14px; height: 14px; vertical-align: -2px; }
-.meal-timing-banner [data-lucide] { width: 15px; height: 15px; vertical-align: -2px; }
 
 /* ── Inline loading (inside scroll-body) ── */
 .loading-inline {
@@ -2641,11 +2559,6 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   text-transform: uppercase;
 }
 
-/* "Variant of" selector in the builder */
-.variant-of-row {
-  margin-top: 4px;
-  margin-bottom: 8px;
-}
 .builder-hint {
   margin: 6px 2px 0;
   font-size: 11px;
@@ -2996,20 +2909,6 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   border: none;
   border-top: 1px solid #E5E7EB;
   margin: 10px 0;
-}
-
-/* Scrollable chip row — caps height when list is long */
-.browse-filters__row--scrollable {
-  max-height: 120px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Empty state inside a filter row */
-.browse-filters__empty {
-  font-size: 12px;
-  color: #9CA3AF;
-  padding: 4px 0;
 }
 
 .browse-filters__toggle {
