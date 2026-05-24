@@ -479,7 +479,7 @@ function renderSauceRow(sauce, opts = {}) {
   const cls = `admin-sauce-row${opts.rowClass ? ' ' + opts.rowClass : ''}`;
   return `
     <div class="${cls}"${onClickAttr}>
-      <span class="sauce-dot" style="background:${sauce.color || '#E85D04'}"></span>
+      <span class="sauce-dot" style="background:${sauce.color || 'var(--accent)'}"></span>
       <div class="admin-sauce-info">
         <div class="admin-sauce-name">${escapeHtml(sauce.name)}${variantBadge}</div>
         <div class="admin-sauce-meta">${subline}</div>
@@ -717,7 +717,7 @@ function _tabLockedShell(label) {
 }
 
 function _tabPlaceholder(label) {
-  return `<div class="screen-wrap"><div class="scroll-body"><p style="padding:2rem;text-align:center;color:#6B7280">${label} loading…</p></div></div>`;
+  return `<div class="screen-wrap"><div class="scroll-body"><p style="padding:2rem;text-align:center;color:var(--text-muted)">${label} loading…</p></div></div>`;
 }
 
 // Load cuisine + dish + unit lookups for the filter panels (non-blocking, fire once).

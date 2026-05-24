@@ -196,10 +196,10 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
   });
 
   if (state.adminSauces.length === 0) {
-    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:#888">No sauces found.</p>`;
+    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:var(--text-muted)">No sauces found.</p>`;
   }
   if (filtered.length === 0) {
-    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:#888">No sauces match your filters.</p>`;
+    return `${mergePanel}${toolbarHTML}<p style="padding:16px;color:var(--text-muted)">No sauces match your filters.</p>`;
   }
 
   // Merge mode renders flat — every row is a candidate target so nesting
@@ -331,7 +331,7 @@ function renderSauceMergePanel() {
   return `
     <div class="food-merge-panel">
       <strong>Variant family parent: ${keep ? keep.name : '(unknown)'}</strong>
-      <div style="font-size:12px;color:#555;margin-top:4px">
+      <div style="font-size:12px;color:var(--text-mid);margin-top:4px">
         Tap other sauces to mark them as variants of this one. They'll appear together as a single
         family in the sauce list, with this recipe as the default version.
       </div>
@@ -456,7 +456,7 @@ function renderDishTab(isAdmin) {
   }
 
   if (q && totalShown === 0) {
-    return '<p style="padding:16px;color:#888">No items match your search.</p>';
+    return '<p style="padding:16px;color:var(--text-muted)">No items match your search.</p>';
   }
 
   return SECTION_META
@@ -970,10 +970,10 @@ function renderIngredientsTab(isAdmin, isLoggedIn) {
   }
 
   if (foods.length === 0) {
-    return `${formHTML}<p style="padding:16px;color:#888">No ingredients yet.</p>`;
+    return `${formHTML}<p style="padding:16px;color:var(--text-muted)">No ingredients yet.</p>`;
   }
   if (filtered.length === 0) {
-    return `${formHTML}<p style="padding:16px;color:#888">No ingredients match your search.</p>`;
+    return `${formHTML}<p style="padding:16px;color:var(--text-muted)">No ingredients match your search.</p>`;
   }
 
   const groups = groupFoodsByCategory(filtered);
@@ -1053,7 +1053,7 @@ function renderFoodRow(f, isAdmin, merge) {
   const usage = f.usageCount || 0;
   const sauces = f.sauceCount || 0;
   const sub = sauces === 0
-    ? '<span style="color:#888">unused</span>'
+    ? '<span style="color:var(--text-muted)">unused</span>'
     : `${sauces} sauce${sauces !== 1 ? 's' : ''}`;
   const mergeMode = !!merge;
   const isKeep = merge && merge.keepId === f.id;
@@ -1101,7 +1101,7 @@ function renderIngredientSaucesPanel(ingredientId) {
     return `<div class="food-sauces-panel"><span class="food-sauces-empty">No sauces use this yet.</span></div>`;
   }
   const chips = sauces.map(s => {
-    const color = (s.color || '#E85D04').replace(/"/g, '');
+    const color = (s.color || 'var(--accent)').replace(/"/g, '');
     return `<button class="food-sauce-chip" style="border-left-color:${color}"
               onclick="event.stopPropagation(); selectSauceFromManager('${s.id}')">${s.name}</button>`;
   }).join('');
@@ -1174,7 +1174,7 @@ function renderMergePanel() {
   return `
     <div class="food-merge-panel">
       <strong>Merging into: ${keep ? keep.name : '(unknown)'}</strong>
-      <div style="font-size:12px;color:#555;margin-top:4px">
+      <div style="font-size:12px;color:var(--text-mid);margin-top:4px">
         Tap other ingredients in the list to mark them as duplicates of this one.
         All recipes pointing at the duplicates will be repointed at <em>${keep ? keep.name : ''}</em>.
       </div>
