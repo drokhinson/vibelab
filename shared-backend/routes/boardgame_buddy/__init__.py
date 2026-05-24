@@ -24,3 +24,4 @@ from . import chapter_routes   # noqa: F401, E402
 from . import expansion_routes  # noqa: F401, E402
 from . import profile_routes   # noqa: F401, E402
 from . import bgg_link_routes  # noqa: F401, E402
+from . import bootstrap_routes  # noqa: F401, E402

@@ -15,25 +15,21 @@
     }
 
     /**
-     * Single-call Game Detail bundle (Phase 3 / PR #245). Returns the raw
-     * JSON from /games/{id}/bundle: { game, base_game, viewer_status,
-     * recent_plays, expansions, expansion_count_for_viewer }. The `game`
-     * block is cached for 1h since games are immutable post-import; the
-     * dynamic blocks (status / plays / expansions) bypass cache and are
-     * always fresh from the server response.
+     * Single-call Game Detail bundle. Returns the raw JSON from
+     * /games/{id}/bundle: { game, base_game, viewer_status, recent_plays,
+     * expansions, expansion_count_for_viewer }. Pre-warmed for every owned
+     * game by the bootstrap loader; opened games are SWR-refreshed after the
+     * 30-minute fresh window.
      */
     static async detailBundle(id, { force = false, playsLimit = 5 } = {}) {
       const cacheNs = "game.bundle";
-      if (!force) {
-        const hit = window.bgbCache.get(cacheNs, id);
-        if (hit) return hit;
-      }
-      const data = await window.api.get(`/games/${id}/bundle?plays_limit=${playsLimit}`);
-      // Cache for 1 hour. Mutations (status pick) only affect viewer_status
-      // which the FE patches inline; the rest is immutable enough for the
-      // window we care about.
-      window.bgbCache.set(cacheNs, id, data, 60 * 60 * 1000);
-      return data;
+      if (force) window.bgbCache.delete(cacheNs, id);
+      return window.bgbCache.swr(
+        cacheNs,
+        id,
+        () => window.api.get(`/games/${id}/bundle?plays_limit=${playsLimit}`),
+        { freshTtl: 30 * 60 * 1000, staleTtl: 60 * 60 * 1000 },
+      );
     }
 
     /** Invalidate the detailBundle cache for one id, or all when omitted. */

@@ -60,19 +60,38 @@
       window.session = sess;
       window.store.set("session", sess);
       if (sess) {
-        let me;
-        try {
-          me = await window.User.current();
-        } catch (e) {
-          console.error("Failed to load profile:", e);
-          window.router.go("auth");
-          return;
+        // The bootstrap call's get_current_user dependency handles first-time
+        // profile auto-create AND returns the full user row in the response —
+        // we don't need a separate /profile fetch first. We do need a uid
+        // before bindUser; sess.user.id from Supabase matches the profile id.
+        const supaUid = sess.user && sess.user.id;
+        if (window.bgbCache && supaUid) {
+          window.bgbCache.bindUser(supaUid);
         }
-        // Warm the buddy picker cache (accounts + ghosts + recent) so the
-        // gather-screen dropdown opens with zero network round-trips. Fire-
-        // and-forget — splash doesn't block on this.
-        if (window.Buddy && window.Buddy.allBuddies) {
-          window.Buddy.allBuddies().catch(() => {});
+        let me = null;
+        let bootstrapped = false;
+        if (window.Bootstrap) {
+          try {
+            const payload = await window.Bootstrap.load();
+            bootstrapped = true;
+            // Bootstrap._seedStore set window.store('user') to a User instance.
+            me = window.store.get("user");
+            if (!me && payload && payload.current_user) {
+              me = new window.User(payload.current_user);
+              window.store.set("user", me);
+            }
+          } catch (e) {
+            console.warn("Bootstrap failed, falling back to /profile:", e);
+          }
+        }
+        if (!bootstrapped) {
+          try {
+            me = await window.User.current();
+          } catch (e) {
+            console.error("Failed to load profile:", e);
+            window.router.go("auth");
+            return;
+          }
         }
         // Land on the feed after sign-in
         if (window.store.get("currentView") === "splash" ||
@@ -161,9 +180,29 @@
       try { await window.supabaseClient.auth.signOut(); } catch (_) {}
     }
     window.session = null;
+    // Wipe persisted cache for this user BEFORE store.reset() so the unbind
+    // sees the still-bound uid.
+    if (window.bgbCache) window.bgbCache.unbindUser();
     window.store.reset();
     window.router.go("auth");
   };
+
+  // Chunked refresh on tab focus: when the user returns to the tab after a
+  // gap, fire a lightweight SWR-aware refresh of the data most likely to be
+  // stale (feed / stats / collection). swr() no-ops if entries are still
+  // inside their fresh window so this is cheap to call freely. Debounced so
+  // OS focus-flapping doesn't fan out into a refresh storm.
+  let _lastFocusRefresh = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (!window.store.get("user")) return;
+    const now = Date.now();
+    if (now - _lastFocusRefresh < 5000) return;
+    _lastFocusRefresh = now;
+    if (window.Bootstrap && window.Bootstrap.warmRefresh) {
+      window.Bootstrap.warmRefresh().catch(() => {});
+    }
+  });
 
   document.addEventListener("DOMContentLoaded", () => {
     // Restore a previously-active play session, if any.

@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 2026-05-16 (post-012 OOP/Strava redesign RPCs)
+-- Last updated: 2026-05-24 (033 bootstrap bundle for first-paint cache)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -100,3 +100,19 @@
 --               viewer's status_map + expansion_counts. Buddies + pending
 --               requests are included only when viewer = target. Reuses
 --               bgb_user_stats for the stats block.
+
+-- bgb_bootstrap(viewer UUID, owned_plays_limit INT DEFAULT 5,
+--               max_game_bundles INT DEFAULT 250)
+--   → JSONB { bootstrap_version, generated_at, current_user, profile_bundle,
+--             game_detail_bundles (object keyed by game_id), owned_count,
+--             truncated }
+--   Defined in: db/migrations/boardgamebuddy/033_bootstrap_bundle.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/bootstrap_routes.py
+--               (GET /bootstrap)
+--   Purpose:    First-paint client cache warm-up. Composes bgb_profile_bundle
+--               for the viewer and bgb_game_detail_bundle for every owned
+--               game into one JSONB. The FE writes everything into its
+--               localStorage-backed cache so the entire app navigates
+--               without further round trips until cached entries go stale.
+--               bootstrap_version is bumped any time this payload's shape
+--               changes — the FE wipes its cache on mismatch.
