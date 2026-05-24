@@ -5160,6 +5160,18 @@ main[data-view="session-viewer"].hidden {
   padding: 18px;
   animation: fadeIn 200ms ease-out both;
 }
+.polaroid-popup__backdrop--with-headline { flex-direction: column; }
+.polaroid-popup__headline {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.01em;
+  color: var(--polaroid-accent);
+  margin-bottom: 16px;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  animation: polaroidPopupIn 280ms cubic-bezier(.22, .61, .36, 1) both;
+}
 .polaroid-popup__card {
   position: relative;
   width: min(86vw, 320px);

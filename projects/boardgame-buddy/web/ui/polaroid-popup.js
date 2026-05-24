@@ -14,6 +14,9 @@
    * @property {string}  gameName
    * @property {string=} gameThumbnail
    * @property {string=} winnerName
+   * @property {string=} headline — orange display-font line rendered above
+   *           the card (e.g. "Well played!"). Stacks the backdrop into a
+   *           column when set.
    * @property {string=} playId — when present, the splash adds a "View play"
    *           CTA that opens the in-place play-detail popup. Set by the
    *           phase=finalized handler.
@@ -25,8 +28,10 @@
     dismiss(); // singleton — never stack two
     const root = document.createElement("div");
     root.id = BACKDROP_ID;
-    root.className = "polaroid-popup__backdrop";
+    root.className = "polaroid-popup__backdrop"
+      + (opts && opts.headline ? " polaroid-popup__backdrop--with-headline" : "");
     root.innerHTML = renderInner(opts);
+    root.__opts = opts;
     root.addEventListener("click", (ev) => {
       // Click on the backdrop (but not on the card) dismisses.
       if (ev.target === root) handleDismiss(opts);
@@ -95,6 +100,9 @@
 
   function renderInner(opts) {
     const gameName = escape(opts.gameName || "Game over");
+    const headline = opts.headline
+      ? `<div class="polaroid-popup__headline">${escape(opts.headline)}</div>`
+      : "";
     const winner = opts.winnerName
       ? `<div class="polaroid-popup__winner">
            <i data-lucide="trophy" class="w-4 h-4"></i>
@@ -113,6 +121,7 @@
          </button>`
       : "";
     return `
+      ${headline}
       <div class="polaroid-popup__card" role="dialog" aria-modal="true" aria-label="Game wrapped up">
         <button class="polaroid-popup__close" aria-label="Close">
           <i data-lucide="x" class="w-4 h-4"></i>
