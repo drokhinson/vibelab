@@ -292,7 +292,9 @@ The meal-flow tile grid (`meal.js:78–88`) is the prettier of the two — it's 
 
 ### 5d. Destructive actions — **18 sites using browser `confirm()` / `alert()`.**
 
-The `.claude/rules/web-frontend.md` rule states: "Destructive actions are confirmed … Reuse the project's existing modal pattern — don't introduce per-screen ad-hoc dialogs." Sauceboss has no project modal. Every destructive or error message uses `window.confirm()` or `window.alert()`.
+> **Update (rule clarified):** `.claude/rules/web-frontend.md:27` was relaxed to require *secondary user confirmation* and to allow either `window.confirm()` everywhere or a project modal everywhere — the anti-pattern is mixing per-screen bespoke dialogs. Sauceboss uses `window.confirm()` / `window.alert()` consistently across all 18 sites below, so it **satisfies the rule as-is**. Migrating to a single project-themed modal would still be a nice future polish (richer styling, themed destructive accent) but is no longer a compliance gap.
+
+Every destructive or error message uses `window.confirm()` or `window.alert()`:
 
 | File:line | Type | Trigger |
 | --- | --- | --- |
@@ -317,7 +319,7 @@ The `.claude/rules/web-frontend.md` rule states: "Destructive actions are confir
 
 Totals: **5 `confirm()` (destructive gates) + 13 `alert()` (errors)**.
 
-**Not addressed in this audit's cleanup pass** — fixing this requires designing the modal first. Tracked in `Docs/ARCHITECTURE.md` §6 as target-state work.
+**No longer a compliance gap** (see the update at the top of this section). A future `/ui-polish` pass may migrate these to a single shared `ui/sauce-popup.js` for visual consistency, but the current behavior already meets the rule.
 
 ### 5e. Auth surface — matches the standard visually, diverges structurally.
 

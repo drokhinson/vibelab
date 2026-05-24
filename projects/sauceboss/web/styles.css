@@ -2390,7 +2390,7 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   font-size: 12px;
   color: #6B7280;
 }
-.auth-modal__oauth {
+.auth-oauth-btn {
   width: 100%;
   display: inline-flex;
   align-items: center;
@@ -2398,19 +2398,19 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   gap: 10px;
   padding: 10px 14px;
   margin-bottom: 8px;
-  border-radius: 10px;
+  border-radius: 999px;
   border: 1px solid #E5E7EB;
   background: #fff;
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
 }
-.auth-modal__oauth:hover { background: #F9FAFB; }
-.auth-modal__oauth--google { color: #1F2937; }
-.auth-modal__oauth--apple  { color: #fff; background: #111827; border-color: #111827; }
-.auth-modal__oauth--apple:hover { background: #1F2937; }
-.auth-modal__oauth-logo { width: 18px; height: 18px; flex-shrink: 0; }
-.auth-modal__divider {
+.auth-oauth-btn:hover { background: #F9FAFB; }
+.auth-oauth-google { color: #1F2937; }
+.auth-oauth-apple  { color: #fff; background: #111827; border-color: #111827; }
+.auth-oauth-apple:hover { background: #1F2937; }
+.auth-oauth-logo { width: 18px; height: 18px; flex-shrink: 0; }
+.auth-divider {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2418,8 +2418,8 @@ body:not(.is-auth) [data-auth-only] { display: none !important; }
   font-size: 11px;
   margin: 12px 0;
 }
-.auth-modal__divider::before,
-.auth-modal__divider::after {
+.auth-divider::before,
+.auth-divider::after {
   content: '';
   flex: 1;
   height: 1px;
