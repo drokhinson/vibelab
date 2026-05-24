@@ -322,6 +322,13 @@ export function makeApi({ fetchFn, getAuthToken, baseUrl }) {
     // `steps` / full `ingredients` — recipe view fetches the full envelope
     // via /sauces on tap (saucebookOpenRecipe → api.allSauces).
     /**
+     * Slim metadata only — ingredientNames is NOT included by the backend
+     * (migration 026 dropped the expensive ingredient_names_agg CTE). Callers
+     * that need ingredient-availability filtering should hydrate from
+     * api.allSauces() locally; web/auth.js loadSaucebook() is the reference.
+     * withIngredientNames is still applied so each row carries an (initially
+     * empty) Set ready for replacement.
+     *
      * @returns {Promise<Array<{
      *   id: string, name: string, cuisine: string, cuisineEmoji: string,
      *   color: string, sauceType: string, createdBy: (string|null),
