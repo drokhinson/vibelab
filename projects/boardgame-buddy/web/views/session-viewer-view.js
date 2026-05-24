@@ -224,6 +224,7 @@
       const game = session.game || {};
       const winner = this._guessWinnerName(session);
       window.PolaroidPopup.show({
+        headline: "Well played!",
         gameName: game.name || "Game over",
         gameThumbnail: game.thumbnail_url || game.image_url || null,
         winnerName: winner,

@@ -1472,22 +1472,39 @@
           }
         }
         const payload = this._ps.toPlayCreate();
+        let saved;
         if (this._lobby && this._lobby.code) {
-          await window.PlaySession.finalizeLobby(this._lobby.code, payload);
+          saved = await window.PlaySession.finalizeLobby(this._lobby.code, payload);
         } else {
-          await window.Play.create(payload);
+          saved = await window.Play.create(payload);
         }
+        // Snapshot popup inputs from the draft BEFORE we clear it.
+        const game = this._ps.gameSnapshot || {};
+        const winner = this._ps.players.find((p) => p.is_winner);
+        const popupOpts = {
+          headline: "Well played!",
+          gameName: game.name || "Game over",
+          gameThumbnail: game.thumbnail_url || game.image_url || null,
+          winnerName: winner ? winner.name : null,
+          playId: (saved && (saved.id || saved.play_id || (saved.play && saved.play.id))) || null,
+        };
         this._ps.clear();
         window.store.set("activePlay", null);
         window.store.invalidate("feed");
-        // Surface the warning before navigating so the user can't miss it.
+        // Surface the warning before the wrap-up popup so the user can't miss it.
         if (photoUploadFailed && window.PolaroidPopup && window.PolaroidPopup.alert) {
           await window.PolaroidPopup.alert({
             title: "Photo couldn't be uploaded",
             body: "Your play was saved without the photo. You can add it later from the play card.",
           });
         }
-        window.router.go("feed");
+        // Same wrap-up splash non-host joiners get. Default dismiss handler
+        // invalidates the feed cache and routes to /feed.
+        if (window.PolaroidPopup) {
+          window.PolaroidPopup.show(popupOpts);
+        } else {
+          window.router.go("feed");
+        }
       } catch (e) {
         this._error = e.message || "Failed to save";
       } finally {
