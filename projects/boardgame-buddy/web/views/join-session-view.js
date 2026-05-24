@@ -109,7 +109,16 @@
         </section>
 
         <section class="cascade-join__list-wrap">
-          <h2 class="cascade-join__list-title">Active sessions</h2>
+          <div class="cascade-join__list-head">
+            <h2 class="cascade-join__list-title">Active sessions</h2>
+            <button class="cascade-join__refresh"
+                    aria-label="Refresh active sessions"
+                    title="Refresh"
+                    ${this._loading ? "disabled" : ""}
+                    onclick="window.joinSessionView._load()">
+              <i data-lucide="refresh-cw" class="w-4 h-4 ${this._loading ? "cascade-join__refresh-spin" : ""}"></i>
+            </button>
+          </div>
           ${this._loading && sessions.length === 0
             ? `<div class="cascade-join__loading">${window.buddyLoader({ size: 64 })}</div>`
             : sessions.length === 0
