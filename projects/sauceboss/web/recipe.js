@@ -195,7 +195,10 @@ async function recipeToggleSaucebook(sauceId) {
     try {
       await api.removeFromSaucebook(sauceId);
     } catch (err) {
-      alert(`Couldn't remove: ${err.message || err}`);
+      await SauceBossPopup.alert({
+        title: "Couldn't remove",
+        body: err.message || String(err),
+      });
       return;
     }
     state.saucebook = (state.saucebook || []).filter(s => s.id !== sauceId);
@@ -203,7 +206,10 @@ async function recipeToggleSaucebook(sauceId) {
     try {
       await api.addToSaucebook(sauceId);
     } catch (err) {
-      alert(`Couldn't save: ${err.message || err}`);
+      await SauceBossPopup.alert({
+        title: "Couldn't save",
+        body: err.message || String(err),
+      });
       return;
     }
     // Re-fetch saucebook to get the full envelope

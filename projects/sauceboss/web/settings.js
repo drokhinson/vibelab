@@ -363,14 +363,17 @@ function startSauceMerge(keepId) {
   const sauce = (state.adminSauces || []).find(s => s.id === keepId);
   if (!sauce) return;
   if (sauce.parentSauceId) {
-    alert(`"${sauce.name}" is already a variant of another sauce. Pick the original sauce as the family parent instead.`);
+    SauceBossPopup.alert({
+      title: 'Already a variant',
+      body: `"${sauce.name}" is already a variant of another sauce. Pick the original sauce as the family parent instead.`,
+    });
     return;
   }
   state.sauceMerge = { keepId, mergeIds: new Set(), error: null, saving: false };
   render();
 }
 
-function toggleSauceMergePick(id) {
+async function toggleSauceMergePick(id) {
   const merge = state.sauceMerge;
   if (!merge) return;
   if (id === merge.keepId) return;
@@ -379,9 +382,13 @@ function toggleSauceMergePick(id) {
   // the UX never shows a target it can't actually save.
   const sauce = (state.adminSauces || []).find(s => s.id === id);
   if (sauce && sauce.parentSauceId && sauce.parentSauceId !== merge.keepId) {
-    if (!confirm(`"${sauce.name}" is already a variant of another sauce. Re-parent it to "${(state.adminSauces.find(s => s.id === merge.keepId) || {}).name || merge.keepId}"?`)) {
-      return;
-    }
+    const newParent = (state.adminSauces.find(s => s.id === merge.keepId) || {}).name || merge.keepId;
+    const ok = await SauceBossPopup.confirm({
+      title: 'Re-parent variant?',
+      body: `"${sauce.name}" is already a variant of another sauce. Re-parent it to "${newParent}"?`,
+      confirmLabel: 'Re-parent',
+    });
+    if (!ok) return;
   }
   if (merge.mergeIds.has(id)) merge.mergeIds.delete(id);
   else merge.mergeIds.add(id);
@@ -788,7 +795,13 @@ async function submitBecomeAdmin() {
 // Routes to the admin or owner-scoped endpoint based on who's signed in. Both
 // have the same shape; the backend enforces ownership on the public route.
 async function adminDeleteSauce(id, name) {
-  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  const ok = await SauceBossPopup.confirm({
+    title: `Delete "${name}"?`,
+    body: 'This cannot be undone.',
+    confirmLabel: 'Delete',
+    destructive: true,
+  });
+  if (!ok) return;
   const sauce = (state.adminSauces || []).find(s => s.id === id);
   const isAdmin = !!(currentUser && currentUser.is_admin);
   const isOwner = !!(currentUser && sauce && sauce.createdBy === currentUser.id);
@@ -937,10 +950,15 @@ async function adminSaveItemAction() {
 }
 
 async function adminDeleteItemAction(id, name, hasVariants) {
-  const warn = hasVariants
-    ? `Delete "${name}" and ALL its variants? This cannot be undone.`
-    : `Delete "${name}"? This cannot be undone.`;
-  if (!confirm(warn)) return;
+  const ok = await SauceBossPopup.confirm({
+    title: hasVariants ? `Delete "${name}" and all variants?` : `Delete "${name}"?`,
+    body: hasVariants
+      ? 'All variants of this item will be removed. This cannot be undone.'
+      : 'This cannot be undone.',
+    confirmLabel: 'Delete',
+    destructive: true,
+  });
+  if (!ok) return;
   try {
     await adminDeleteItem(id);
     if (state.itemForm && state.itemForm.id === id) state.itemForm = null;
@@ -1257,10 +1275,19 @@ async function submitFoodForm() {
 
 async function adminDeleteIngredientAction(id, name, usage) {
   if (usage > 0) {
-    alert(`Cannot delete "${name}" — it's used by ${usage} recipe step row(s). Merge it into another ingredient first.`);
+    await SauceBossPopup.alert({
+      title: `Can't delete "${name}"`,
+      body: `It's used by ${usage} recipe step row${usage === 1 ? '' : 's'}. Merge it into another ingredient first.`,
+    });
     return;
   }
-  if (!confirm(`Delete ingredient "${name}"? This cannot be undone.`)) return;
+  const ok = await SauceBossPopup.confirm({
+    title: `Delete ingredient "${name}"?`,
+    body: 'This cannot be undone.',
+    confirmLabel: 'Delete',
+    destructive: true,
+  });
+  if (!ok) return;
   try {
     await adminDeleteIngredient(id);
     await refreshAdminFoods();
@@ -1333,22 +1360,31 @@ async function handleImportSauceFile(event) {
   try {
     raw = JSON.parse(await file.text());
   } catch (e) {
-    alert(`File is not valid JSON: ${e.message}`);
+    await SauceBossPopup.alert({ title: 'Invalid JSON', body: `File is not valid JSON: ${e.message}` });
     return;
   }
 
   if (raw && typeof raw === 'object' && Array.isArray(raw.sauces)) {
-    alert("Bulk imports aren't supported — split the file into per-sauce JSONs.");
+    await SauceBossPopup.alert({
+      title: 'Bulk import unsupported',
+      body: "Split the file into per-sauce JSONs and import them one at a time.",
+    });
     return;
   }
   if (raw && raw.version != null && raw.version !== 1) {
-    alert(`Unsupported export version: ${raw.version}`);
+    await SauceBossPopup.alert({
+      title: 'Unsupported export version',
+      body: `This import only handles version 1; the file is version ${raw.version}.`,
+    });
     return;
   }
 
   const inner = (raw && typeof raw.sauce === 'object' && raw.sauce !== null) ? raw.sauce : raw;
   if (!inner || typeof inner !== 'object' || !inner.name || !Array.isArray(inner.steps)) {
-    alert("Could not locate sauce payload (expected an object with `name` and `steps`).");
+    await SauceBossPopup.alert({
+      title: 'Sauce payload not found',
+      body: "Expected an object with `name` and `steps`.",
+    });
     return;
   }
 
@@ -1358,7 +1394,10 @@ async function handleImportSauceFile(event) {
   if (parentSauceId) {
     const known = (state.adminSauces || []).some(s => s.id === parentSauceId);
     if (!known) {
-      alert(`Parent sauce "${parentSauceId}" not found in this catalog — link dropped.`);
+      await SauceBossPopup.alert({
+        title: 'Parent sauce not found',
+        body: `Parent sauce "${parentSauceId}" isn't in this catalog — the parent link was dropped.`,
+      });
       parentSauceId = null;
     }
   }
@@ -1405,7 +1444,10 @@ async function downloadBulkSauceExport() {
     const res = await fetch(`${API}/api/v1/sauceboss/admin/sauces/export.json`, {
       headers: { 'Authorization': `Bearer ${session.access_token}` },
     });
-    if (!res.ok) { alert(`Export failed: ${res.statusText}`); return; }
+    if (!res.ok) {
+      await SauceBossPopup.alert({ title: 'Export failed', body: res.statusText });
+      return;
+    }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1416,6 +1458,6 @@ async function downloadBulkSauceExport() {
     a.remove();
     URL.revokeObjectURL(url);
   } catch (e) {
-    alert(`Export failed: ${e.message}`);
+    await SauceBossPopup.alert({ title: 'Export failed', body: e.message });
   }
 }

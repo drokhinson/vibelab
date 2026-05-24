@@ -380,7 +380,10 @@ async function saucebookRemoveSauce(sauceId) {
   try {
     await api.removeFromSaucebook(sauceId);
   } catch (err) {
-    alert(`Couldn't remove: ${err.message || err}`);
+    await SauceBossPopup.alert({
+      title: "Couldn't remove",
+      body: err.message || String(err),
+    });
     return;
   }
   state.saucebook = (state.saucebook || []).filter(s => s.id !== sauceId);

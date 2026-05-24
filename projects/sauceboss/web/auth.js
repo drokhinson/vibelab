@@ -243,7 +243,10 @@ async function handleLogout() {
 // ─── Auth modal ──────────────────────────────────────────────────────────────
 function openAuthModal() {
   if (!supabaseClient) {
-    alert('Sign-in is not configured for this deployment.');
+    SauceBossPopup.alert({
+      title: 'Sign-in unavailable',
+      body: 'Sign-in is not configured for this deployment.',
+    });
     return;
   }
   state.authModalOpen = true;
