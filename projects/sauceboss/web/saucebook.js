@@ -199,7 +199,7 @@ function _saucebookFabs() {
 
 function _saucebookCuisineGroup(cuisine, rows) {
   const isOpen = state.cuisineSections[cuisine] !== false; // default open
-  return renderCuisineGroup({
+  return renderAccordionGroup({
     label: cuisine,
     count: rows.length,
     isOpen,

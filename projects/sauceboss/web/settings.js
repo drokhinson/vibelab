@@ -232,7 +232,7 @@ function renderSaucesTab(isAdmin, isLoggedIn) {
     const rowsHTML = isOpen
       ? grouped[cuisine].rows.map(({ sauce, isVariant }) => renderSauceManagerRow(sauce, isAdmin, merge, isVariant)).join('')
       : '';
-    return renderCuisineGroup({
+    return renderAccordionGroup({
       label: cuisine,
       count: grouped[cuisine].count,
       isOpen,
@@ -476,7 +476,7 @@ function renderDishSection(sec, parents, isAdmin) {
         <button class="add-step-btn" style="margin:12px 16px" onclick="openAddItemForm('${sec.category}', null)">+ Add ${sec.addLabel}</button>
       ` : ''}
     ` : '';
-  return renderCuisineGroup({
+  return renderAccordionGroup({
     label: sec.label,
     count: totalCount,
     isOpen: open,
@@ -1029,7 +1029,7 @@ function renderIngredientCategoryGroup(group, isAdmin, merge, forceOpen) {
   const open = forceOpen || state.ingredientSections[category] === true;
   const safeCat = category.replace(/'/g, "\\'");
   const rowsHTML = open ? items.map(f => renderFoodRow(f, isAdmin, merge)).join('') : '';
-  return renderCuisineGroup({
+  return renderAccordionGroup({
     label: category,
     count: items.length,
     isOpen: open,
