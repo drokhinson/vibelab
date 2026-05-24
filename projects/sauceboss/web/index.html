@@ -47,6 +47,15 @@
   <script defer src="config.js"></script>
   <script defer src="state.js"></script>
   <script defer src="helpers.js"></script>
+  <!-- ui/ — canonical render functions per object (extracted from helpers.js
+       in the 2026-05-24 carve-out). These declare globals (renderEmoji,
+       renderSauceRow, etc.) that the feature files below consume. -->
+  <script defer src="ui/emoji.js"></script>
+  <script defer src="ui/sauce-row.js"></script>
+  <script defer src="ui/accordion-group.js"></script>
+  <script defer src="ui/filter-chips.js"></script>
+  <script defer src="ui/app-header.js"></script>
+  <script defer src="ui/recipe-views.js"></script>
   <script defer src="auth.js"></script>
   <script defer src="tabs.js"></script>
   <script defer src="sauces.js"></script>

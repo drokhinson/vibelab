@@ -8,17 +8,6 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-// ─── Flag emoji fallback ─────────────────────────────────────────────────────
-const FLAG_SUPPORTED = (() => {
-  try {
-    const ctx = document.createElement('canvas').getContext('2d');
-    ctx.font = '32px Arial';
-    const flagW = ctx.measureText('\u{1F1EB}\u{1F1F7}').width; // 🇫🇷
-    const charW = ctx.measureText('FR').width;
-    return flagW !== charW;
-  } catch { return true; }
-})();
-
 // Backend stores ingredient names lowercased ("jalapeño", "olive oil");
 // surfaces capitalize the first letter of each word for display so users
 // see "Jalapeño" / "Olive Oil". Use anywhere `ing.name` is rendered.
@@ -30,20 +19,9 @@ function capitalizeIngredient(name) {
     .join('');
 }
 
-function flagEmojiToCode(emoji) {
-  const codePoints = [...emoji].map(c => c.codePointAt(0));
-  if (codePoints.length === 2 && codePoints.every(cp => cp >= 0x1F1E6 && cp <= 0x1F1FF)) {
-    return String.fromCharCode(codePoints[0] - 0x1F1E6 + 65, codePoints[1] - 0x1F1E6 + 65).toLowerCase();
-  }
-  return null;
-}
-
-function renderEmoji(emoji) {
-  if (FLAG_SUPPORTED) return emoji;
-  const code = flagEmojiToCode(emoji);
-  if (code) return `<img src="https://flagcdn.com/w40/${code}.png" alt="${emoji}" class="flag-img">`;
-  return emoji;
-}
+// `renderEmoji`, `flagEmojiToCode`, and `FLAG_SUPPORTED` were extracted to
+// `ui/emoji.js` in the 2026-05-24 carve-out. The script-tag load order in
+// index.html keeps them available as globals before any caller fires.
 
 // ─── API fetch helpers ────────────────────────────────────────────────────────
 const API = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || 'http://localhost:8000';
@@ -280,26 +258,11 @@ function prepareItems(items) {
   });
 }
 
-// ─── Shared recipe-view renderers ────────────────────────────────────────────
-// These power the unified recipe layout (recipe.js → renderRecipe) used by
-// both the meal builder and standalone views (browse, saucebook, admin sauce
-// manager). The styling mirrors the React Native ServingsControl + UnitToggle
-// so web and mobile stay in lockstep.
-
-function renderRecipeControls() {
-  const s = state.servings;
-  return `
-    <div class="recipe-controls">
-      <div class="servings-control">
-        <button onclick="setServings(state.servings - 1)" class="serving-btn" ${s <= 1 ? 'disabled' : ''}>−</button>
-        <span class="servings-label">${s} ${s === 1 ? 'serving' : 'servings'}</span>
-        <button onclick="setServings(state.servings + 1)" class="serving-btn" ${s >= 12 ? 'disabled' : ''}>+</button>
-      </div>
-      <button class="unit-toggle" onclick="setUnitSystem(state.unitSystem === 'imperial' ? 'metric' : 'imperial')">
-        ${state.unitSystem === 'imperial' ? 'Imperial' : 'Metric'}
-      </button>
-    </div>`;
-}
+// `renderRecipeControls`, `renderRecipeIngredientPanel`, `renderRecipeStep`,
+// `renderVariantSwitcher`, and `renderItemPrepBlock` were extracted to
+// `ui/recipe-views.js` in the 2026-05-24 carve-out. They depend on the data
+// utilities below (aggregateSauceIngredients, prepareItems, etc.) which stay
+// here.
 
 // Sum a sauce's per-step ingredients into a single shopping-list view,
 // keyed by (name, unit) so different units of the same ingredient stay
@@ -332,284 +295,14 @@ function aggregateSauceIngredients(sauce) {
   return [...buckets.values()];
 }
 
-function renderRecipeIngredientPanel(sauce) {
-  const aggregated = aggregateSauceIngredients(sauce);
-  if (!aggregated.length) return '';
-  const items = prepareItems(aggregated);
-  const isOpen = !!state.recipeIngredientsOpen;
-  const rows = items.map(item => {
-    const isQualitative = QUALITATIVE_UNITS.has(item.unit);
-    const amountHTML = isQualitative
-      ? `<span class="recipe-ingredient-amount recipe-ingredient-amount--qualitative">${item.unit}</span>`
-      : `<span class="recipe-ingredient-amount">${formatAmount(item.amount)} ${item.unit}</span>`;
-    const displayName = item.modifier ? `${item.modifier} ${item.name}` : item.name;
-    return `<li class="recipe-ingredient-item">
-      <span class="recipe-ingredient-name">${escapeHtml(displayName)}</span>
-      ${amountHTML}
-    </li>`;
-  }).join('');
-  return `
-    <div class="card-panel" style="margin-bottom:16px">
-      <button class="card-panel__header" onclick="toggleRecipeIngredients()" aria-expanded="${isOpen}">
-        <span class="card-panel__header-text"><i data-lucide="list"></i> Ingredients<span class="card-panel__count">${items.length}</span></span>
-        <span class="card-panel__chevron ${isOpen ? 'open' : ''}"><i data-lucide="chevron-down"></i></span>
-      </button>
-      <div class="card-panel__body ${isOpen ? 'open' : ''}">
-        <ul class="recipe-ingredient-list">${rows}</ul>
-      </div>
-    </div>`;
-}
-
 function toggleRecipeIngredients() {
   state.recipeIngredientsOpen = !state.recipeIngredientsOpen;
   render();
 }
 
-function renderRecipeStep(step, index, allSteps) {
-  const stepTime = step.estimatedTime || 5;
-  const displayItems = prepareItems(step.ingredients);
-
-  const refs = Array.isArray(step.inputFromSteps) ? step.inputFromSteps : (step.inputFromStep ? [step.inputFromStep] : []);
-  for (const ref of refs) {
-    const refStep = allSteps[ref - 1];
-    if (refStep) {
-      const refTsp = cumulativeStepTsp(allSteps, ref - 1, state.servings, state.selectedSauce?.defaultServings || 2);
-      const disp = tspToDisplay(refTsp);
-      const refName = `Step ${ref} combined`;
-      displayItems.unshift({ name: refName, amount: disp.amount, unit: disp.unit });
-      // Default previous-step sections to hidden so they don't dwarf new ingredients
-      if (!state.hiddenPieSlices[index]) state.hiddenPieSlices[index] = new Set();
-      if (!state.hiddenPieSlices[index]._defaulted) {
-        state.hiddenPieSlices[index].add(refName);
-        state.hiddenPieSlices[index]._defaulted = true;
-      }
-    }
-  }
-
-  return `<div class="step-card" style="--i:${index}" data-shade="${index % 4}">
-    <div class="step-header-row">
-      <div class="step-number">Step ${index + 1}</div>
-      <div class="step-time">~${stepTime}m</div>
-    </div>
-    <div class="step-title-row">
-      <div class="step-title">${step.title}</div>
-      ${step.instructions ? `<button class="step-instr-btn" onclick="this.closest('.step-card').querySelector('.step-instructions-body').toggleAttribute('hidden'); this.classList.toggle('expanded')" title="Toggle instructions"><i data-lucide="notebook-pen"></i></button>` : ''}
-    </div>
-    ${step.instructions ? `<p class="step-instructions-body" hidden>${escapeHtml(step.instructions)}</p>` : ''}
-    <div class="step-viz">
-      ${buildPieChart(displayItems, 80, index)}
-      <div class="step-legend">${buildLegend(displayItems, index)}</div>
-    </div>
-  </div>`;
-}
-
-function renderVariantSwitcher(currentSauceId) {
-  const family = state.selectedSauceFamily || [];
-  if (family.length <= 1) return '';
-  return `
-    <div class="variant-switcher" role="tablist" aria-label="Switch variant">
-      ${family.map(s => `
-        <button class="variant-chip ${s.id === currentSauceId ? 'variant-chip--active' : ''}"
-                role="tab"
-                aria-selected="${s.id === currentSauceId}"
-                onclick="selectVariant('${s.id}')">
-          ${escapeHtml(s.name)}${!s.parentSauceId ? '<span class="variant-chip-tag">original</span>' : ''}
-        </button>
-      `).join('')}
-    </div>`;
-}
-
-function renderItemPrepBlock(item, prep, sauce) {
-  if (!item) return '';
-  const itemPrepLabel = item.category === 'salad'
-    ? `🥗 Toss ${item.name}`
-    : `${item.emoji} ${item.category === 'protein' ? 'Cook' : 'Prep'} ${item.name}${prep ? ` — ${prep.name}` : ''}`;
-  const itemColor = item.category === 'protein' ? '#C94E02'
-                 : item.category === 'salad'   ? '#2D6A4F'
-                 : '#1565C0';
-  const itemCookTime = (prep?.cookTimeMinutes ?? item.cookTimeMinutes) || 0;
-  const itemInstructions = prep?.instructions
-                        || item.instructions
-                        || (item.category === 'salad'
-                            ? `Toss ${item.name} with ${sauce.name} right before serving`
-                            : `Cook ${item.name} per packet instructions`);
-  return `
-    <div class="meal-section">
-      <div class="meal-section-label" style="background:${itemColor}">${itemPrepLabel}</div>
-      <div class="step-card">
-        <div class="step-header-row">
-          <div class="step-number">${item.category === 'protein' ? 'Cook' : item.category === 'salad' ? 'Assemble' : 'Boil / prep'}</div>
-          ${itemCookTime ? `<div class="step-time">~${itemCookTime}m</div>` : ''}
-        </div>
-        <div class="step-title">${itemInstructions}</div>
-      </div>
-    </div>`;
-}
-
-// ─── Shared sauce-list markup ────────────────────────────────────────────────
-// One row component used by Browse, Saucebook, the meal-flow Sauce Selector,
-// and the Sauce Manager → Sauces list. The visual is the flat
-// `.admin-sauce-row` shell (color dot + name + author subline + optional
-// right-slot pill / action). Per-screen extras (saucebook swipe wrapping,
-// sauce-manager type pill / merge tags, browse "+ Saucebook" CTA) are passed
-// in via `opts` so the helper itself stays neutral.
-//
-// `sauce` is a sauce envelope (ingredients optional — Browse rows are slim).
-// Options:
-//   subline       — overrides the default "by &lt;Author&gt;" line.
-//   variantBadge  — pre-rendered HTML appended after the name (e.g. the
-//                   git-branch chip used by Sauce Selector / Sauce Manager).
-//   rightSlot     — pre-rendered HTML inserted before the action button
-//                   (sauce-type pill, missing badge, merge tag, …).
-//   actionLabel / actionHandler / actionDisabled — Browse "+ Saucebook" CTA.
-//   onClick       — JS expression for the row's tap handler.
-//   rowClass      — extra classes on the row (`unavailable`,
-//                   `admin-sauce-row--variant`, …).
-function renderSauceRow(sauce, opts = {}) {
-  const author = sauce.authorName || (sauce.createdBy ? 'Unknown' : 'SauceBoss');
-  const subline = opts.subline != null ? opts.subline : `by ${escapeHtml(author)}`;
-  const variantBadge = opts.variantBadge || '';
-  const rightSlot = opts.rightSlot || '';
-  const actionBtn = opts.actionLabel
-    ? `<button class="admin-sauce-row__action ${opts.actionDisabled ? 'admin-sauce-row__action--added' : ''}"
-                ${opts.actionDisabled ? 'disabled' : ''}
-                onclick="${opts.actionHandler || ''}">${opts.actionLabel}</button>`
-    : '';
-  const onClickAttr = opts.onClick ? ` onclick="${opts.onClick}"` : '';
-  const cls = `admin-sauce-row${opts.rowClass ? ' ' + opts.rowClass : ''}`;
-  return `
-    <div class="${cls}"${onClickAttr}>
-      <span class="sauce-dot" style="background:${sauce.color || 'var(--accent)'}"></span>
-      <div class="admin-sauce-info">
-        <div class="admin-sauce-name">${escapeHtml(sauce.name)}${variantBadge}</div>
-        <div class="admin-sauce-meta">${subline}</div>
-      </div>
-      ${rightSlot}
-      ${actionBtn}
-    </div>
-  `;
-}
-
-// Accordion group shared by Saucebook, Sauce Selector, Sauce Manager, Dish
-// Manager, and Ingredient Manager. Renders the orange uppercase header +
-// flush body using the existing `.ingredient-category-*` classes. `body` is
-// the already-rendered rows HTML (caller decides what to put inside).
-function renderAccordionGroup(opts) {
-  const { label, count, isOpen, onToggle, body, emoji } = opts;
-  const chevron = isOpen ? '▾' : '▸';
-  return `
-    <div class="ingredient-category-group">
-      <div class="ingredient-category-header" onclick="${onToggle}">
-        <span class="ingredient-category-chevron">${chevron}</span>
-        ${emoji ? `<span class="cuisine-flag-emoji">${emoji}</span>` : ''}
-        <span class="ingredient-category-name">${escapeHtml(label)}</span>
-        <span class="ingredient-category-count">${count}</span>
-      </div>
-      ${isOpen ? `<div class="ingredient-category-body">${body}</div>` : ''}
-    </div>
-  `;
-}
-
-// ─── Shared filter chip renderers ─────────────────────────────────────────────
-// Cuisine and Type chip rows are identical across Browse and Saucebook filter
-// panels. This helper renders both sections; the caller provides active state
-// and click handlers.
-//
-// opts:
-//   activeCuisines — Set<string> of currently selected cuisine names
-//   activeTypes    — Set<string> of currently selected type values
-//   onCuisine      — JS expression template; receives `$NAME` placeholder
-//   onType         — JS expression template; receives `$VALUE` placeholder
-function renderFilterChips(opts) {
-  // ── Cuisine: search-input → dropdown → multi-select chips ──────────────
-  const allCuisines = opts.cuisineSource || availableCuisines();
-  const cuisineQ = (opts.cuisineFilterQ || '').trim().toLowerCase();
-  const activeCuisines = opts.activeCuisines || new Set();
-
-  // Selected chips (always visible)
-  const cuisineSelected = [...activeCuisines].map(name => {
-    const c = allCuisines.find(x => x.name === name);
-    const emoji = c ? renderEmoji(c.emoji) + ' ' : '';
-    const handler = opts.onCuisine.replace('$NAME', escapeHtml(name));
-    return `<button class="toggle-chip toggle-chip--active" onclick="${handler}">${emoji}${escapeHtml(name)} ✕</button>`;
-  }).join('');
-
-  // Suggestion dropdown (only when typing, hide already-selected)
-  const cuisineSuggestions = cuisineQ
-    ? allCuisines.filter(c => !activeCuisines.has(c.name) && c.name.toLowerCase().includes(cuisineQ))
-    : [];
-  const cuisineSuggestHTML = cuisineSuggestions.length ? `
-    <div class="browse-filters__suggest">
-      ${cuisineSuggestions.map(c => {
-        const handler = opts.onCuisine.replace('$NAME', escapeHtml(c.name));
-        return `<button onclick="${handler}">${renderEmoji(c.emoji)} ${escapeHtml(c.name)}</button>`;
-      }).join('')}
-    </div>` : '';
-
-  // ── Type: simple toggle chips (short list, no search needed) ───────────
-  const typeChips = SAUCE_TYPES.map(t => {
-    const active = (opts.activeTypes || new Set()).has(t.value) ? ' toggle-chip--active' : '';
-    const handler = opts.onType.replace('$VALUE', t.value);
-    return `<button class="toggle-chip${active}" onclick="${handler}">${escapeHtml(t.label)}</button>`;
-  }).join('');
-
-  // ── Dish: search-input → dropdown → multi-select chips ────────────────
-  let dishHTML = '';
-  if (opts.onDish) {
-    const allDishes = opts.dishSource || (state.allFilterDishes || []);
-    const dishQ = (opts.dishFilterQ || '').trim().toLowerCase();
-    const activeDishes = opts.activeDishes || new Set();
-
-    const dishSelected = [...activeDishes].map(id => {
-      const d = allDishes.find(x => x.id === id);
-      const label = d ? (d.emoji ? renderEmoji(d.emoji) + ' ' : '') + escapeHtml(d.name) : escapeHtml(id);
-      const handler = opts.onDish.replace('$ID', escapeHtml(id));
-      return `<button class="toggle-chip toggle-chip--active" onclick="${handler}">${label} ✕</button>`;
-    }).join('');
-
-    const dishSuggestions = dishQ
-      ? allDishes.filter(d => !activeDishes.has(d.id) && d.name.toLowerCase().includes(dishQ))
-      : [];
-    const dishSuggestHTML = dishSuggestions.length ? `
-      <div class="browse-filters__suggest">
-        ${dishSuggestions.map(d => {
-          const handler = opts.onDish.replace('$ID', escapeHtml(d.id));
-          return `<button onclick="${handler}">${d.emoji ? renderEmoji(d.emoji) + ' ' : ''}${escapeHtml(d.name)}</button>`;
-        }).join('')}
-      </div>` : '';
-
-    dishHTML = `
-      <span class="browse-filters__label" style="margin-top:10px;display:block">Compatible Dish</span>
-      <input
-        type="text"
-        class="browse-filters__filter-input"
-        placeholder="Search dishes\u2026"
-        data-focus-key="${opts.dishFilterKey || 'dish-filter'}"
-        value="${escapeHtml(opts.dishFilterQ || '')}"
-        oninput="${opts.onDishFilterQ}"
-      />
-      ${dishSuggestHTML}
-      ${dishSelected ? `<div class="browse-filters__row" style="margin-top:6px">${dishSelected}</div>` : ''}
-    `;
-  }
-
-  return `
-    <span class="browse-filters__label">Type</span>
-    <div class="browse-filters__row">${typeChips}</div>
-    <span class="browse-filters__label" style="margin-top:10px;display:block">Cuisine</span>
-    <input
-      type="text"
-      class="browse-filters__filter-input"
-      placeholder="Search cuisines\u2026"
-      data-focus-key="${opts.cuisineFilterKey || 'cuisine-filter'}"
-      value="${escapeHtml(opts.cuisineFilterQ || '')}"
-      oninput="${opts.onCuisineFilterQ || ''}"
-    />
-    ${cuisineSuggestHTML}
-    ${cuisineSelected ? `<div class="browse-filters__row" style="margin-top:6px">${cuisineSelected}</div>` : ''}
-    ${dishHTML}
-  `;
-}
+// `renderSauceRow` → `ui/sauce-row.js`. `renderAccordionGroup` →
+// `ui/accordion-group.js`. `renderFilterChips` → `ui/filter-chips.js`.
+// All extracted in the 2026-05-24 carve-out.
 
 // Count how many of a sauce's ingredients are flagged missing in the user's
 // pantry. Reads `sauce.ingredientNames` (Set<string>), which `listSaucebook`
@@ -983,65 +676,7 @@ function computeInitials(name) {
   return (parts[0] || "?").slice(0, 2).toUpperCase();
 }
 
-// Slim app-header used across every screen. Page title (left) + optional
-// subtitle, then a vertically-centered action cluster on the right with
-// (optionally) a Manage pill, plus the auth slot (sign-in or avatar pill).
-// Pass `back: { onClick }` to surface the icon-only back button at the far
-// left of the header. Pass `extraActions` for screen-specific buttons that
-// belong in the right-side cluster (e.g. edit-mode toggle on the Sauce
-// Manager). `manage: 'auto'` (default) shows the pill only for admins;
-// `false` hides it; `true` forces it on.
-function renderAppHeader({ title, subtitle, back, manage, extraActions, titleIcon, titleEmoji, titlePrefix, auth = true } = {}) {
-  const prefixHTML = titlePrefix
-    || (titleEmoji ? `<span class="header-emoji">${titleEmoji}</span>` : '')
-    + (titleIcon ? `<i data-lucide="${titleIcon}"></i>` : '');
-  const titleHTML = prefixHTML
-    ? `${prefixHTML}<span>${title || ''}</span>`
-    : (title || '');
-  const backHTML = back
-    ? `<button class="app-header__back" onclick="${back.onClick}" aria-label="Back"><i data-lucide="chevron-left"></i></button>`
-    : '';
-  const isAdmin = !!(currentUser && currentUser.is_admin);
-  const showManage = auth !== false && (manage === true || (manage !== false && manage !== 'never' && isAdmin));
-  const manageHTML = showManage
-    ? `<button class="sauce-mgr-btn" onclick="openSauceManager()" aria-label="Manage dishes, ingredients, and sauces"><i data-lucide="settings-2"></i><span>Manage</span></button>`
-    : '';
-  return `
-    <div class="app-header">
-      ${backHTML}
-      <div class="app-header__titles">
-        <h1>${titleHTML}</h1>
-        ${subtitle ? `<p class="subtitle">${subtitle}</p>` : ''}
-      </div>
-      <div class="app-header__actions">
-        ${extraActions || ''}
-        ${manageHTML}
-        ${auth !== false ? renderHeaderAuthSlot() : ''}
-      </div>
-    </div>
-  `;
-}
+// `renderAppHeader` and `renderHeaderAuthSlot` live in `ui/app-header.js` —
+// extracted in the 2026-05-24 carve-out. They rely on `computeInitials`
+// above and on the `currentUser` / `supabaseClient` globals (auth.js).
 
-// Top-right slot in the app header. Shows "Sign in" when logged out, an
-// avatar pill with display-name initials when logged in.
-function renderHeaderAuthSlot() {
-  if (!supabaseClient) return '';
-  if (!currentUser) {
-    return `<button class="auth-signin-btn" onclick="openAuthModal()" title="Sign in" aria-label="Sign in"><i data-lucide="log-in"></i></button>`;
-  }
-  const name = currentUser.display_name || 'Saucier';
-  const initials = computeInitials(name);
-  return `
-    <details class="auth-pill">
-      <summary class="auth-pill__summary" title="${name}">
-        <span class="auth-pill__initials">${initials}</span>
-        ${currentUser.is_admin ? '<span class="auth-pill__badge" title="Admin">★</span>' : ''}
-      </summary>
-      <div class="auth-pill__menu" role="menu">
-        <p class="auth-pill__name">${name}</p>
-        ${!currentUser.is_admin ? `<button class="auth-pill__item" onclick="navigate('settings')">Become admin</button>` : ''}
-        <button class="auth-pill__item" onclick="handleLogout()">Sign out</button>
-      </div>
-    </details>
-  `;
-}
