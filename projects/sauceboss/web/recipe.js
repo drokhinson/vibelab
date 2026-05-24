@@ -37,6 +37,13 @@ function renderRecipe() {
     ? `<button class="recipe-action-btn recipe-action-btn--active" onclick="recipeToggleSaucebook('${sauce.id}')" title="Remove from saucebook"><i data-lucide="bookmark-check"></i></button>`
     : `<button class="recipe-action-btn" onclick="recipeToggleSaucebook('${sauce.id}')" title="Save to saucebook"><i data-lucide="bookmark-plus"></i></button>`;
 
+  // Source link — only when the recipe was imported from a URL. <a> rather
+  // than a <button>+window.open so middle-click / cmd-click / "open in new
+  // tab" work normally.
+  const sourceLinkBtnHTML = sauce.sourceUrl
+    ? `<a class="recipe-action-btn" href="${escapeHtml(sauce.sourceUrl)}" target="_blank" rel="noopener noreferrer" title="View original recipe"><i data-lucide="external-link"></i></a>`
+    : '';
+
   // Share menu — replaces the old standalone download. Opens a popover with
   // two options: copy the permalink (via navigator.share when supported,
   // clipboard fallback otherwise) and download the .md export.
@@ -83,7 +90,7 @@ function renderRecipe() {
       back: { onClick: backOnClick },
       auth: false,
       manage: 'never',
-      extraActions: saucebookBtnHTML + shareBtnHTML,
+      extraActions: sourceLinkBtnHTML + saucebookBtnHTML + shareBtnHTML,
     })}
     <div class="scroll-body scroll-body--padded">
       ${renderVariantSwitcher(sauce.id)}

@@ -10,12 +10,13 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  Linking,
 } from 'react-native';
 // expo-file-system top-level export in SDK 54 dropped EncodingType — use
 // the /legacy subpath (same as SauceBuilderScreen) to keep writeAsStringAsync.
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { Lightbulb, ChevronDown, Bookmark, BookmarkCheck, Download } from 'lucide-react-native';
+import { Lightbulb, ChevronDown, Bookmark, BookmarkCheck, Download, ExternalLink } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import StepCard from '../components/StepCard';
 import VariantSwitcher from '../components/VariantSwitcher';
@@ -81,6 +82,16 @@ export default function RecipeScreen({ navigation }) {
       title: sauce.name,
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingRight: 4 }}>
+          {sauce.sourceUrl ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(sauce.sourceUrl)}
+              hitSlop={8}
+              style={{ padding: 8 }}
+              accessibilityLabel="View original recipe"
+            >
+              <ExternalLink size={22} color="#fff" />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             onPress={onToggleBookmark}
             hitSlop={8}
@@ -104,7 +115,7 @@ export default function RecipeScreen({ navigation }) {
         </View>
       ),
     });
-  }, [sauce?.id, sauce?.name, inSaucebook, navigation, onToggleBookmark, onDownload]);
+  }, [sauce?.id, sauce?.name, sauce?.sourceUrl, inSaucebook, navigation, onToggleBookmark, onDownload]);
 
   if (!sauce) {
     return (
