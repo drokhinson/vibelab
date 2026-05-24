@@ -33,14 +33,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Phase 1 — Authenticating: Supabase roundtrip + (if session) /profile.
     await awaitInitialAuth();
 
-    // Phase 2 — Saucing: load saucebook (blocks splash) + start pantry
-    // in parallel so both resolve sooner. Pantry is fire-and-forget here;
-    // saucebook must finish before the splash drops.
+    // Phase 2 — kick off saucebook + pantry as background loads. Neither
+    // blocks the splash: the saucebook tab has its own "Loading your
+    // saucebook…" skeleton (saucebook.js:67-68) and re-renders when
+    // state.saucebookLoaded flips inside loadSaucebook's finally; pantry
+    // re-renders the same way. The splash now drops as soon as auth
+    // resolves so Browse + meal-builder are usable immediately.
     if (currentUser) {
-      setSplashText('Saucing');
-      const pantryP = loadPantry();
-      await loadSaucebook();
-      // pantryP settles in the background — no need to await
+      loadSaucebook();
+      loadPantry();
     }
   } catch (err) {
     console.error('[sauceboss] initial load failed', err);
@@ -60,13 +61,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   // If the URL is a `/sauce/<id>` permalink, the recipe view takes over
   // once the sauce loads; the tab underneath is still set so the recipe's
   // back button has a destination.
-  state.screen = 'tab-shell';
-  state.activeTab = currentUser ? 'saucebook' : 'browse';
-  const permalinkMatch = location.pathname.match(/^\/sauce\/([^\/]+)\/?$/);
-  if (permalinkMatch) {
-    openRecipePermalink(decodeURIComponent(permalinkMatch[1]), { push: false });
-  } else {
-    render();
+  //
+  // Wrap this in a try/catch so a throw from render() (or one of the tab
+  // renderers it dispatches into) doesn't strand the user on the
+  // "Authenticating…" splash forever. The splash-exit rAF below runs
+  // unconditionally — any error here surfaces in the console where it can
+  // actually be diagnosed, rather than being hidden behind a hung splash.
+  let permalinkMatch = null;
+  try {
+    state.screen = 'tab-shell';
+    state.activeTab = currentUser ? 'saucebook' : 'browse';
+    permalinkMatch = location.pathname.match(/^\/sauce\/([^\/]+)\/?$/);
+    if (permalinkMatch) {
+      openRecipePermalink(decodeURIComponent(permalinkMatch[1]), { push: false });
+    } else {
+      render();
+    }
+  } catch (err) {
+    console.error('[sauceboss] post-auth render failed', err);
   }
 
   // Background loads (non-blocking). browseEnsureLoaded is idempotent — safe

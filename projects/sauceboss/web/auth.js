@@ -177,14 +177,49 @@ async function loadProfile() {
   }
 }
 
-// Fetch the user's saucebook (single bulk call returning every row with
-// full ingredients). Caller is responsible for render().
+// Fetch the user's saucebook and hydrate ingredientNames client-side from
+// allSauces. The /saucebook RPC was extended in 017/018 to aggregate per-sauce
+// ingredient names, but that join (sauce_step → sauce_step_ingredient →
+// ingredient with array_agg DISTINCT per sauce) dominated latency for users
+// with many saved sauces (observed 30s+). Migration 026 strips that CTE; we
+// re-derive ingredientNames here from the full envelopes returned by
+// get_sauceboss_all_sauces_full, which is already fast and would have loaded
+// anyway when the user opens a recipe.
 async function loadSaucebook() {
   if (!currentUser) return;
   state.saucebookLoading = true;
   state.saucebookLoaded = false;
+  // Fire allSauces in parallel so its full ingredient data is ready (or
+  // close to it) by the time the slim /saucebook response lands.
+  const allP = api.allSauces().catch((err) => {
+    console.warn('[sauceboss] allSauces (for saucebook hydration) failed:', err);
+    return [];
+  });
   try {
+    // Paint the saucebook as soon as the slim metadata arrives — ingredient
+    // pills / availability filtering activate a moment later once allSauces
+    // settles. api.listSaucebook already applies withIngredientNames so each
+    // row carries an empty Set ready to be replaced by the hydration step.
     state.saucebook = await api.listSaucebook();
+    state.saucebookLoaded = true;
+    render();
+
+    const all = await allP;
+    if (all.length) {
+      const byId = new Map(all.map((s) => [s.id, s]));
+      state.saucebook = state.saucebook.map((s) => {
+        const full = byId.get(s.id);
+        if (!full) return s;
+        // Strip the empty Set attached during the slim pass so
+        // withIngredientNames re-derives from `ingredients[]`.
+        const { ingredientNames: _drop, ...rest } = s;
+        return SBShared.filter.withIngredientNames({
+          ...rest,
+          ingredients: full.ingredients || [],
+        });
+      });
+      render();
+    }
   } catch (err) {
     console.warn('[sauceboss] saucebook load failed:', err);
     // Only clobber to empty on the initial attempt — if a refresh fails

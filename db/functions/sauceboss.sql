@@ -131,10 +131,13 @@
 
 -- get_sauceboss_saucebook(p_user_id UUID)
 --   Signature : (p_user_id UUID) → JSON
---   Language  : plpgsql STABLE
---   Defined in: sauceboss/019_default_servings.sql
+--   Language  : SQL STABLE
+--   Defined in: sauceboss/026_fast_saucebook_rpc.sql
 --   Called by : shared-backend/routes/sauceboss/saucebook_routes.py
---   Purpose   : User's saved sauces with addedAt, variantCount, attachments, ingredientNames.
+--   Purpose   : User's saved sauces with addedAt, variantCount, attachments, compatibleItems.
+--               ingredientNames is NO LONGER returned — the web client derives it from
+--               get_sauceboss_all_sauces_full() locally (much faster than computing per-sauce
+--               ingredient aggregation in this RPC).
 
 -- list_sauceboss_ingredients_with_usage()
 --   Signature : () → JSON
