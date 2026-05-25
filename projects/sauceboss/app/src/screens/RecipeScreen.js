@@ -106,6 +106,7 @@ export default function RecipeScreen({ navigation }) {
       headerRight: undefined,
       headerBackVisible: false,
       headerLeft: () => null,
+      headerTitleAlign: 'center',
     });
   }, [sauce?.id, sauce?.name, navigation]);
 
