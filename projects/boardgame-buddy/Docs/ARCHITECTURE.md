@@ -92,9 +92,25 @@ The "polaroid family" is the project's signature: cream-paper background, soft d
 
 `--game-accent` and `--exp-color` are the only tokens routinely set inline; they have to be because they are data-derived. Every other color comes from the stylesheet.
 
-### 4.2a DaisyUI inputs need an explicit re-skin
+### 4.2a DaisyUI dark tones need an explicit re-skin on cream screens
 
-The app loads `<html data-theme="luxury">` (DaisyUI's dark theme), so a bare `<input class="input input-bordered">` renders as a near-black chip on the cream polaroid surface — text becomes unreadable. Every new input, textarea, or select must override `background`, `color`, `border-color`, and `::placeholder` color with polaroid tokens (`--polaroid-bg`, `--polaroid-ink`, `--polaroid-line`, `--polaroid-muted`). Scope the override either to the surface (`.bgb-cream-screen .input`, `.cascade-card .input`, `.play-detail-popup__card .input`) or to the component's own class family if it's reused across surfaces (`.game-finder__input`). Existing examples to copy: `styles.css:5403-5425`, `styles.css:6011-6030`, `styles.css:6870-6883`.
+The app loads `<html data-theme="luxury">` (DaisyUI's dark theme), so anything that touches `oklch(var(--b1))`, `oklch(var(--b2))`, `oklch(var(--b3))`, or `oklch(var(--bc))` renders in dark-theme colors. On a `.bgb-cream-screen` surface (Buddies, Collection, Wishlist, Plays, Settings) those become **black boxes on cream** — text becomes unreadable.
+
+This is **not just an input problem**. Any element whose default styles reach for the DaisyUI base palette will hit it: inputs, textareas, selects, dropdown menus, suggestion rows, autocomplete items, list rows. Even a card written for the dark feed and then rendered inside a cream screen suffers.
+
+**Rule of thumb:** before placing any element on a `.bgb-cream-screen`, grep its CSS for `oklch(var(--b` — if it's there, add a `.bgb-cream-screen` override (or scope the override to the component's own class family) that maps those tokens to polaroid equivalents (`--polaroid-bg`, `--polaroid-ink`, `--polaroid-line`, `--polaroid-muted`).
+
+Existing canonical overrides to copy:
+
+| Surface | Override location |
+|---|---|
+| `<input class="input input-bordered">` | `styles.css:6895-6912` (`.bgb-cream-screen .input`) |
+| `.search-hit` (profile-search suggestion rows in Buddies) | `styles.css:6878-6889` (`.bgb-cream-screen .search-hit`) |
+| `.cascade-buddy-dropdown` (Play flow → Add player) | `styles.css:4903-4955` (own class family, polaroid by default) |
+| `.game-finder-dropdown` (Log play → pick game) | `styles.css:5486-5566` (own class family, polaroid by default) |
+| `.buddies-link-results` (Buddies → Link ghost) | `styles.css:4122-4163` (own class family, polaroid by default) |
+
+If a component is **only ever used on cream** (like `.search-hit` today), the scoped override pattern is fine. If a component is shared across surfaces (like `.game-finder-*`), define it in polaroid tokens directly in its own class family so it travels.
 
 ### 4.3 Motion
 
