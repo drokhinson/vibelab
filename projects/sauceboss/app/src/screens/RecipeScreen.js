@@ -97,10 +97,16 @@ export default function RecipeScreen({ navigation }) {
 
   // Header: title only. The navigator header stays pinned at the top
   // automatically; the action buttons live in a sticky in-body row
-  // below it so the title row reads cleanly on its own.
+  // below it so the title row reads cleanly on its own. Back affordance
+  // is suppressed — users return via the tab bar / system back gesture.
   useEffect(() => {
     if (!sauce) return;
-    navigation.setOptions({ title: sauce.name, headerRight: undefined });
+    navigation.setOptions({
+      title: sauce.name,
+      headerRight: undefined,
+      headerBackVisible: false,
+      headerLeft: () => null,
+    });
   }, [sauce?.id, sauce?.name, navigation]);
 
   if (!sauce) {

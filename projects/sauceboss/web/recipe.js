@@ -24,13 +24,6 @@ function renderRecipe() {
       ${disabledInRecipe.map(i => `<div>${capitalizeIngredient(i.name)} → <strong>${capitalizeIngredient(i.sub)}</strong></div>`).join('')}
     </div>` : '';
 
-  // Back-button target
-  const backOnClick = isMeal
-    ? "navigate('meal-category')"
-    : (state.recipeReturnTo === 'tab-shell'
-        ? `setActiveTab('${state.activeTab}')`
-        : `navigate('${state.recipeReturnTo || 'admin'}')`);
-
   // Saucebook toggle
   const inSaucebook = !!(currentUser && (state.saucebook || []).some(s => s.id === sauce.id));
   const saucebookBtnHTML = inSaucebook
@@ -97,7 +90,6 @@ function renderRecipe() {
   return `
     ${renderAppHeader({
       title: sauce.name,
-      back: { onClick: backOnClick },
       auth: false,
       manage: 'never',
       secondRow: shareBtnHTML + cookingBtnHTML + sourceLinkBtnHTML + saucebookBtnHTML,
