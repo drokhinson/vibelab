@@ -995,7 +995,11 @@ function computeInitials(name) {
 // belong in the right-side cluster (e.g. edit-mode toggle on the Sauce
 // Manager). `manage: 'auto'` (default) shows the pill only for admins;
 // `false` hides it; `true` forces it on.
-function renderAppHeader({ title, subtitle, back, manage, extraActions, titleIcon, titleEmoji, titlePrefix, auth = true } = {}) {
+// Pass `secondRow` (HTML string) to surface a centered button cluster
+// below the title row — used by the recipe page so the title stays in
+// the always-visible sticky top while the action cluster sits on its
+// own line. When omitted, the header renders as a single row.
+function renderAppHeader({ title, subtitle, back, manage, extraActions, titleIcon, titleEmoji, titlePrefix, auth = true, secondRow } = {}) {
   const prefixHTML = titlePrefix
     || (titleEmoji ? `<span class="header-emoji">${titleEmoji}</span>` : '')
     + (titleIcon ? `<i data-lucide="${titleIcon}"></i>` : '');
@@ -1010,18 +1014,24 @@ function renderAppHeader({ title, subtitle, back, manage, extraActions, titleIco
   const manageHTML = showManage
     ? `<button class="sauce-mgr-btn" onclick="openSauceManager()" aria-label="Manage dishes, ingredients, and sauces"><i data-lucide="settings-2"></i><span>Manage</span></button>`
     : '';
+  const secondRowHTML = secondRow
+    ? `<div class="app-header__row2">${secondRow}</div>`
+    : '';
   return `
-    <div class="app-header">
-      ${backHTML}
-      <div class="app-header__titles">
-        <h1>${titleHTML}</h1>
-        ${subtitle ? `<p class="subtitle">${subtitle}</p>` : ''}
+    <div class="app-header${secondRow ? ' app-header--stacked' : ''}">
+      <div class="app-header__row1">
+        ${backHTML}
+        <div class="app-header__titles">
+          <h1>${titleHTML}</h1>
+          ${subtitle ? `<p class="subtitle">${subtitle}</p>` : ''}
+        </div>
+        <div class="app-header__actions">
+          ${extraActions || ''}
+          ${manageHTML}
+          ${auth !== false ? renderHeaderAuthSlot() : ''}
+        </div>
       </div>
-      <div class="app-header__actions">
-        ${extraActions || ''}
-        ${manageHTML}
-        ${auth !== false ? renderHeaderAuthSlot() : ''}
-      </div>
+      ${secondRowHTML}
     </div>
   `;
 }

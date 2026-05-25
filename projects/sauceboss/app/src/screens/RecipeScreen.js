@@ -17,7 +17,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { Lightbulb, ChevronDown, Bookmark, BookmarkCheck, Download, ExternalLink } from 'lucide-react-native';
+import { Lightbulb, ChevronDown, Bookmark, BookmarkCheck, Download, ExternalLink, Pencil } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import StepCard from '../components/StepCard';
 import VariantSwitcher from '../components/VariantSwitcher';
@@ -95,56 +95,13 @@ export default function RecipeScreen({ navigation }) {
     }
   }, [sauce]);
 
-  // Header: title + bookmark + download. Re-runs whenever the saucebook
-  // membership flips or the user signs in/out so the icon stays in sync.
+  // Header: title only. The navigator header stays pinned at the top
+  // automatically; the action buttons live in a sticky in-body row
+  // below it so the title row reads cleanly on its own.
   useEffect(() => {
     if (!sauce) return;
-    navigation.setOptions({
-      title: sauce.name,
-      headerRight: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingRight: 4 }}>
-          {sauce.sourceUrl ? (
-            <TouchableOpacity
-              onPress={() => Linking.openURL(sauce.sourceUrl)}
-              hitSlop={8}
-              style={{ padding: 8 }}
-              accessibilityLabel="View original recipe"
-            >
-              <ExternalLink size={22} color="#fff" />
-            </TouchableOpacity>
-          ) : null}
-          <TouchableOpacity
-            onPress={onToggleCookingMode}
-            hitSlop={8}
-            style={{ padding: 8 }}
-            accessibilityLabel={cookingMode ? 'Turn off cooking mode' : 'Keep screen on while cooking'}
-          >
-            <Lightbulb size={22} color={cookingMode ? COLORS.accent : '#fff'} fill={cookingMode ? COLORS.accent : 'none'} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onToggleBookmark}
-            hitSlop={8}
-            style={{ padding: 8 }}
-            accessibilityLabel={inSaucebook ? 'Remove from saucebook' : 'Save to saucebook'}
-          >
-            {inSaucebook ? (
-              <BookmarkCheck size={22} color="#fff" />
-            ) : (
-              <Bookmark size={22} color="#fff" />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onDownload}
-            hitSlop={8}
-            style={{ padding: 8 }}
-            accessibilityLabel="Download recipe"
-          >
-            <Download size={22} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      ),
-    });
-  }, [sauce?.id, sauce?.name, sauce?.sourceUrl, inSaucebook, cookingMode, navigation, onToggleBookmark, onToggleCookingMode, onDownload]);
+    navigation.setOptions({ title: sauce.name, headerRight: undefined });
+  }, [sauce?.id, sauce?.name, navigation]);
 
   if (!sauce) {
     return (
@@ -244,84 +201,145 @@ export default function RecipeScreen({ navigation }) {
     </View>
   );
 
+  const isAuthor = !!(state.currentUser?.id && sauce.createdBy && sauce.createdBy === state.currentUser.id);
+
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
-        {family && family.length > 1 ? (
-          <View style={styles.variantWrap}>
-            <VariantSwitcher family={family} currentId={sauce.id} onSelect={onPickVariant} />
-          </View>
-        ) : null}
-
-        <View style={styles.controlsRow}>
-          <ServingsControl value={state.servings} onChange={(v) => actions.setServings(v)} />
-          <UnitToggle value={state.unitSystem} onChange={(v) => actions.setUnitSystem(v)} />
+      <ScrollView
+        contentContainerStyle={styles.scrollBody}
+        stickyHeaderIndices={[0]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            onPress={onDownload}
+            hitSlop={8}
+            style={styles.actionBtn}
+            accessibilityLabel="Download recipe"
+          >
+            <Download size={22} color={COLORS.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onToggleCookingMode}
+            hitSlop={8}
+            style={[styles.actionBtn, cookingMode && styles.actionBtnCookingOn]}
+            accessibilityLabel={cookingMode ? 'Turn off cooking mode' : 'Keep screen on while cooking'}
+          >
+            <Lightbulb
+              size={22}
+              color={cookingMode ? '#1A1A1A' : COLORS.text}
+              fill={cookingMode ? '#FFD60A' : 'none'}
+            />
+          </TouchableOpacity>
+          {sauce.sourceUrl ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(sauce.sourceUrl)}
+              hitSlop={8}
+              style={styles.actionBtn}
+              accessibilityLabel="View original recipe"
+            >
+              <ExternalLink size={22} color={COLORS.text} />
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            onPress={onToggleBookmark}
+            hitSlop={8}
+            style={[styles.actionBtn, inSaucebook && styles.actionBtnActive]}
+            accessibilityLabel={inSaucebook ? 'Remove from saucebook' : 'Save to saucebook'}
+          >
+            {inSaucebook ? (
+              <BookmarkCheck size={22} color={COLORS.primary} />
+            ) : (
+              <Bookmark size={22} color={COLORS.text} />
+            )}
+          </TouchableOpacity>
         </View>
 
-        {aggregatedItems.length > 0 ? (
-          <View style={styles.ingPanel}>
-            <TouchableOpacity
-              style={styles.ingPanelHeader}
-              onPress={actions.toggleRecipeIngredients}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.ingPanelTitle}>
-                Ingredients · {aggregatedItems.length}
+        <View style={styles.bodyPad}>
+          {family && family.length > 1 ? (
+            <View style={styles.variantWrap}>
+              <VariantSwitcher family={family} currentId={sauce.id} onSelect={onPickVariant} />
+            </View>
+          ) : null}
+
+          <View style={styles.controlsRow}>
+            <ServingsControl value={state.servings} onChange={(v) => actions.setServings(v)} />
+            <UnitToggle value={state.unitSystem} onChange={(v) => actions.setUnitSystem(v)} />
+          </View>
+
+          {aggregatedItems.length > 0 ? (
+            <View style={styles.ingPanel}>
+              <TouchableOpacity
+                style={styles.ingPanelHeader}
+                onPress={actions.toggleRecipeIngredients}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.ingPanelTitle}>
+                  Ingredients · {aggregatedItems.length}
+                </Text>
+                <ChevronDown
+                  size={16}
+                  color={COLORS.textSecondary}
+                  style={{
+                    transform: [
+                      { rotate: state.recipeIngredientsOpen ? '180deg' : '0deg' },
+                    ],
+                  }}
+                />
+              </TouchableOpacity>
+              {state.recipeIngredientsOpen ? (
+                <View style={styles.ingPanelBody}>
+                  {aggregatedItems.map((it, i) => {
+                    // Falsy amount → qualitative unit (to taste / splash /
+                    // pinch / etc.). Render just the unit name, not "0 X".
+                    const isQual = !it.amount;
+                    return (
+                      <View key={`${it.name}-${i}`} style={styles.ingPanelRow}>
+                        <Text style={styles.ingPanelName} numberOfLines={1}>
+                          {it.modifier ? `${capitalizeIngredient(it.modifier)} ` : ''}{capitalizeIngredient(it.name)}
+                        </Text>
+                        <Text style={styles.ingPanelQty}>
+                          {isQual ? it.unit : `${formatAmount(it.amount)} ${it.unit}`}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {isMeal && isMarinade ? (
+            <>
+              {sauceSection}
+              {itemSection}
+            </>
+          ) : isMeal ? (
+            <>
+              {itemSection}
+              {sauceSection}
+            </>
+          ) : (
+            sauceSection
+          )}
+
+          {sauce.authorName ? (
+            <View style={styles.footnote}>
+              <Text style={styles.footnoteAuthor} numberOfLines={1}>
+                Authored by {sauce.authorName}
               </Text>
-              <ChevronDown
-                size={16}
-                color={COLORS.textSecondary}
-                style={{
-                  transform: [
-                    { rotate: state.recipeIngredientsOpen ? '180deg' : '0deg' },
-                  ],
-                }}
-              />
-            </TouchableOpacity>
-            {state.recipeIngredientsOpen ? (
-              <View style={styles.ingPanelBody}>
-                {aggregatedItems.map((it, i) => {
-                  // Falsy amount → qualitative unit (to taste / splash /
-                  // pinch / etc.). Render just the unit name, not "0 X".
-                  const isQual = !it.amount;
-                  return (
-                    <View key={`${it.name}-${i}`} style={styles.ingPanelRow}>
-                      <Text style={styles.ingPanelName} numberOfLines={1}>
-                        {it.modifier ? `${capitalizeIngredient(it.modifier)} ` : ''}{capitalizeIngredient(it.name)}
-                      </Text>
-                      <Text style={styles.ingPanelQty}>
-                        {isQual ? it.unit : `${formatAmount(it.amount)} ${it.unit}`}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {isMeal && isMarinade ? (
-          <>
-            {sauceSection}
-            {itemSection}
-          </>
-        ) : isMeal ? (
-          <>
-            {itemSection}
-            {sauceSection}
-          </>
-        ) : (
-          sauceSection
-        )}
-
-        <View style={styles.tipCard}>
-          <Lightbulb size={16} color={COLORS.primary} />
-          <View style={styles.tipBody}>
-            <Text style={styles.tipTitle}>How to read the chart</Text>
-            <Text style={styles.tipText}>
-              Each slice is proportional to that ingredient's amount in the bowl. Larger slice = more of it.
-            </Text>
-          </View>
+              {isAuthor ? (
+                <TouchableOpacity
+                  style={styles.editBtn}
+                  onPress={() => navigation.navigate('SauceBuilder', { sauceId: sauce.id })}
+                  accessibilityLabel="Open this recipe in the editor"
+                >
+                  <Pencil size={14} color="#fff" />
+                  <Text style={styles.editBtnText}>Edit recipe</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </View>
@@ -331,8 +349,48 @@ export default function RecipeScreen({ navigation }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background },
   scrollBody: {
-    padding: 16,
     paddingBottom: 32,
+  },
+  // Sticky cluster of recipe action buttons. Sits as ScrollView child 0
+  // with stickyHeaderIndices=[0] so it pins beneath the navigator header
+  // while the rest of the recipe scrolls. Solid background occludes
+  // content scrolling underneath.
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surfaceSubtle,
+  },
+  actionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.card,
+    ...SHADOWS.sm,
+  },
+  actionBtnActive: {
+    backgroundColor: '#FFE6D1',
+  },
+  // Cooking-on halo — bright yellow pill with soft glow so the lit
+  // lightbulb reads as unmistakably "on".
+  actionBtnCookingOn: {
+    backgroundColor: '#FFD60A',
+    shadowColor: '#FFD60A',
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  bodyPad: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   variantWrap: {
     marginBottom: 8,
@@ -433,27 +491,36 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 20,
   },
-  tipCard: {
+  footnote: {
+    marginTop: 24,
+    paddingTop: 16,
+    paddingBottom: 4,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceSubtle,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: COLORS.info,
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 6,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  tipBody: {
-    marginLeft: 8,
+  footnoteAuthor: {
     flex: 1,
-  },
-  tipTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.infoText,
-    marginBottom: 2,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
   },
-  tipText: {
-    fontSize: 12,
-    color: COLORS.infoText,
-    lineHeight: 16,
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+    minHeight: 36,
+  },
+  editBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
