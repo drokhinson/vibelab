@@ -44,6 +44,13 @@ function renderRecipe() {
     ? `<a class="recipe-action-btn" href="${escapeHtml(sauce.sourceUrl)}" target="_blank" rel="noopener noreferrer" title="View original recipe"><i data-lucide="external-link"></i></a>`
     : '';
 
+  // Cooking mode — Wake Lock API holds the screen on while the user follows
+  // the recipe. Hidden in browsers without the API (older Safari, some in-app
+  // browsers) since a non-functional toggle would just confuse users.
+  const cookingBtnHTML = cookingModeAvailable()
+    ? `<button class="recipe-action-btn${state.cookingMode ? ' recipe-action-btn--active' : ''}" onclick="recipeToggleCookingMode()" title="${state.cookingMode ? 'Turn off cooking mode' : 'Keep screen on while cooking'}"><i data-lucide="lightbulb"></i></button>`
+    : '';
+
   // Share menu — replaces the old standalone download. Opens a popover with
   // two options: copy the permalink (via navigator.share when supported,
   // clipboard fallback otherwise) and download the .md export.
@@ -90,7 +97,7 @@ function renderRecipe() {
       back: { onClick: backOnClick },
       auth: false,
       manage: 'never',
-      extraActions: sourceLinkBtnHTML + saucebookBtnHTML + shareBtnHTML,
+      extraActions: sourceLinkBtnHTML + cookingBtnHTML + saucebookBtnHTML + shareBtnHTML,
     })}
     <div class="scroll-body scroll-body--padded">
       ${renderVariantSwitcher(sauce.id)}
@@ -102,6 +109,53 @@ function renderRecipe() {
   `;
 }
 
+// ── Sauce-family fetch + cache ────────────────────────────────────────────
+// Recipe-open paths (permalink, saucebook tap, browse tap) all need the
+// same data: the target sauce plus its variant family. Goes through
+// /sauces/{id} (sauceFamily) instead of the global /sauces list so opening
+// one recipe doesn't pull every sauce in the DB. Local 1h TTL cache keeps
+// re-opens instant; mutations invalidate via invalidateSauceFamilyCache().
+const SAUCE_FAMILY_TTL_MS = 60 * 60 * 1000;
+
+async function loadSauceFamily(sauceId) {
+  const cached = sbCache.get('sauce-family', sauceId, SAUCE_FAMILY_TTL_MS);
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    return cached.map(SBShared.filter.withIngredientNames);
+  }
+  const fresh = await api.sauceFamily(sauceId);
+  // Sets don't survive JSON.stringify; strip the derived ingredientNames
+  // before storing. withIngredientNames re-derives it from ingredients[]
+  // when the entry is read back out.
+  const forCache = fresh.map((s) => {
+    const { ingredientNames: _drop, ...rest } = s;
+    return rest;
+  });
+  sbCache.set('sauce-family', sauceId, forCache);
+  return fresh;
+}
+
+function invalidateSauceFamilyCache(sauceId) {
+  if (sauceId) {
+    sbCache.delete('sauce-family', sauceId);
+  } else {
+    sbCache.clear('sauce-family');
+  }
+}
+
+// Activate the recipe view for `found` against its family. Pure state mutation
+// + navigation — used by all three openers below after they've resolved the
+// sauce list.
+function _enterRecipeView(found, family, navOpts) {
+  state.selectedSauce = found;
+  state.servings = found.defaultServings || 2;
+  state.selectedSauceFamily = family.length ? family : [found];
+  state.hiddenPieSlices = {};
+  state.selectedItem = null;
+  state.meal = { item: null, prep: null, sauce: null };
+  state.recipeReturnTo = 'tab-shell';
+  navigate('recipe', { path: '/sauce/' + encodeURIComponent(found.id), ...navOpts });
+}
+
 // Load a sauce by id and open the recipe view. Used by the boot path when
 // the URL is a `/sauce/<id>` permalink, and by popstate when the user
 // navigates back/forward into a recipe entry.
@@ -109,9 +163,9 @@ function openRecipePermalink(sauceId, opts = {}) {
   const { push = true } = opts;
   state.loading = 'Loading recipe…';
   render();
-  api.allSauces().then(all => {
+  loadSauceFamily(sauceId).then((family) => {
     state.loading = null;
-    const found = all.find(s => s.id === sauceId);
+    const found = family.find(s => s.id === sauceId);
     if (!found) {
       // Unknown id — drop the user on the default tab and clear the URL so
       // a stale permalink doesn't trap them on an empty screen.
@@ -124,16 +178,7 @@ function openRecipePermalink(sauceId, opts = {}) {
       render();
       return;
     }
-    const rootId = found.parentSauceId || found.id;
-    const family = all.filter(s => s.id === rootId || s.parentSauceId === rootId);
-    state.selectedSauce = found;
-    state.servings = found.defaultServings || 2;
-    state.selectedSauceFamily = family.length ? family : [found];
-    state.hiddenPieSlices = {};
-    state.selectedItem = null;
-    state.meal = { item: null, prep: null, sauce: null };
-    state.recipeReturnTo = 'tab-shell';
-    navigate('recipe', { path: '/sauce/' + encodeURIComponent(found.id), push, replace: !push });
+    _enterRecipeView(found, family, { push, replace: !push });
   }).catch(err => {
     state.loading = null;
     console.warn('[sauceboss] recipe permalink load failed:', err);
@@ -213,6 +258,79 @@ async function recipeToggleSaucebook(sauceId) {
     }
     // Re-fetch saucebook to get the full envelope
   }
+  // Saucebook membership is baked into the cached envelope's `inSaucebook`
+  // field; drop the cache so the next open reflects the new state.
+  invalidateSauceFamilyCache(sauceId);
   refreshSaucebookAndPantry();
   render();
+}
+
+// ── Cooking mode (screen wake lock) ───────────────────────────────────────
+// Per-recipe toggle. The Wake Lock API releases automatically when the tab
+// goes background; we re-acquire on visibilitychange so resuming a backgrounded
+// tab still keeps the screen on if cooking mode is on. Releases on every
+// recipe-screen exit (navigate, popstate, render-to-other-screen).
+let _cookingWakeLock = null;
+
+function cookingModeAvailable() {
+  return typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+}
+
+async function _requestWakeLock() {
+  if (!cookingModeAvailable()) return false;
+  try {
+    _cookingWakeLock = await navigator.wakeLock.request('screen');
+    _cookingWakeLock.addEventListener('release', () => { _cookingWakeLock = null; });
+    return true;
+  } catch (err) {
+    console.warn('[sauceboss] wake lock request failed:', err);
+    return false;
+  }
+}
+
+function _releaseWakeLock() {
+  if (!_cookingWakeLock) return;
+  const lock = _cookingWakeLock;
+  _cookingWakeLock = null;
+  lock.release().catch(() => {});
+}
+
+async function recipeToggleCookingMode() {
+  if (state.cookingMode) {
+    state.cookingMode = false;
+    _releaseWakeLock();
+    render();
+    return;
+  }
+  const ok = await _requestWakeLock();
+  state.cookingMode = ok;
+  render();
+}
+
+// Re-acquire the lock when the tab becomes visible again — browsers release
+// screen locks when the tab is hidden, but the user's cookingMode preference
+// is still on.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.cookingMode && !_cookingWakeLock) {
+      _requestWakeLock().then((ok) => {
+        // If reacquire failed (rare), drop the user-visible toggle so it
+        // doesn't lie about the state.
+        if (!ok) { state.cookingMode = false; render(); }
+      });
+    }
+  });
+}
+
+// Auto-release whenever the user leaves the recipe screen (back nav, tab
+// switch, anything that changes state.screen). render() runs on every state
+// flip so this is a cheap guard.
+function _releaseWakeLockIfOffRecipe() {
+  if (state.screen !== 'recipe' && (state.cookingMode || _cookingWakeLock)) {
+    state.cookingMode = false;
+    _releaseWakeLock();
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('sb:rendered', _releaseWakeLockIfOffRecipe);
 }

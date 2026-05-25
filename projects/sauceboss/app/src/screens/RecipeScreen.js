@@ -2,7 +2,7 @@
 // meal-builder flows. When state.meal has item + sauce, the dish prep block
 // is shown after the controls. Otherwise it's sauce-only.
 
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
 // the /legacy subpath (same as SauceBuilderScreen) to keep writeAsStringAsync.
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Lightbulb, ChevronDown, Bookmark, BookmarkCheck, Download, ExternalLink } from 'lucide-react-native';
 import { useAppActions, useAppState } from '../store/AppContext';
 import StepCard from '../components/StepCard';
@@ -56,6 +57,26 @@ export default function RecipeScreen({ navigation }) {
     }
   }, [sauce, isSignedIn, inSaucebook, actions]);
 
+  // Cooking mode — keeps the device screen on while the user follows the
+  // recipe. Per-recipe toggle, off by default. The cleanup deactivates the
+  // wake lock on unmount (back nav, screen swap, app backgrounded) so it
+  // never leaks past the recipe view. Tag isolates this lock from other
+  // screens that might use expo-keep-awake later.
+  const KEEP_AWAKE_TAG = 'sauceboss-recipe';
+  const [cookingMode, setCookingMode] = useState(false);
+  useEffect(() => {
+    if (cookingMode) {
+      activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
+    } else {
+      deactivateKeepAwake(KEEP_AWAKE_TAG);
+    }
+    return () => deactivateKeepAwake(KEEP_AWAKE_TAG);
+  }, [cookingMode]);
+
+  const onToggleCookingMode = useCallback(() => {
+    setCookingMode((prev) => !prev);
+  }, []);
+
   const onDownload = useCallback(async () => {
     if (!sauce) return;
     try {
@@ -93,6 +114,14 @@ export default function RecipeScreen({ navigation }) {
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
+            onPress={onToggleCookingMode}
+            hitSlop={8}
+            style={{ padding: 8 }}
+            accessibilityLabel={cookingMode ? 'Turn off cooking mode' : 'Keep screen on while cooking'}
+          >
+            <Lightbulb size={22} color={cookingMode ? COLORS.accent : '#fff'} fill={cookingMode ? COLORS.accent : 'none'} />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={onToggleBookmark}
             hitSlop={8}
             style={{ padding: 8 }}
@@ -115,7 +144,7 @@ export default function RecipeScreen({ navigation }) {
         </View>
       ),
     });
-  }, [sauce?.id, sauce?.name, sauce?.sourceUrl, inSaucebook, navigation, onToggleBookmark, onDownload]);
+  }, [sauce?.id, sauce?.name, sauce?.sourceUrl, inSaucebook, cookingMode, navigation, onToggleBookmark, onToggleCookingMode, onDownload]);
 
   if (!sauce) {
     return (

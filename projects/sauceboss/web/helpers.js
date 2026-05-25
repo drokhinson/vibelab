@@ -683,6 +683,10 @@ function render() {
       }
     }
   }
+
+  // Post-render hook. Used by recipe.js to release the cooking-mode wake
+  // lock when the user navigates off the recipe screen.
+  window.dispatchEvent(new CustomEvent('sb:rendered'));
 }
 
 // Tab-shell dispatcher. Each tab renderer is defined in its own module

@@ -145,6 +145,12 @@ let state = {
   // Recipe-view share menu: open when the user taps the share button in the
   // recipe header. Toggles between "Copy link" and "Download (.md)".
   shareMenuOpen: false,
+
+  // Cooking mode: per-recipe toggle that requests a screen wake lock so the
+  // display doesn't dim while the user follows the recipe. Reset on every
+  // navigate away from the recipe screen; the wake lock module also releases
+  // the underlying browser lock.
+  cookingMode: false,
 };
 
 // disabledIngredients: Set<ingredientName> — kept as a real mutable Set so

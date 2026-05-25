@@ -401,6 +401,8 @@ async function submitSauceMerge() {
   render();
   try {
     await adminAssignSauceVariants(merge.keepId, [...merge.mergeIds]);
+    // Restructures family relationships — all cached envelopes are suspect.
+    invalidateSauceFamilyCache();
     state.sauceMerge = null;
     // fetchAllSauces (not fetchAdminSauces) — the admin endpoint omits ingredients/steps, which would crash the recipe view on tap.
     state.adminSauces = await fetchAllSauces();
@@ -802,6 +804,7 @@ async function adminDeleteSauce(id, name) {
     }
     state.adminSauces = state.adminSauces.filter(s => s.id !== id);
     state.adminError = null;
+    invalidateSauceFamilyCache(id);
     // Saucebook FK cascades will have removed any saucebook entries for this
     // sauce; pantry is derived from saucebook, so refresh both.
     refreshSaucebookAndPantry();

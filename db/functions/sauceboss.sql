@@ -81,6 +81,15 @@
 --               Each ingredient row emits modifier (prep state); aggregated
 --               ingredients key on (name, modifier) so fresh/dried split cleanly.
 
+-- get_sauceboss_sauce_with_family(p_sauce_id TEXT)
+--   Signature : (p_sauce_id TEXT) → JSON
+--   Language  : SQL STABLE
+--   Defined in: sauceboss/027_get_sauce_with_family.sql
+--   Called by : shared-backend/routes/sauceboss/public_routes.py (GET /sauces/{id})
+--   Purpose   : Single sauce's family (root + variants), same envelope as
+--               get_sauceboss_all_sauces_full so recipe-open paths can skip
+--               fetching every sauce in the DB. Cached client-side for 1h.
+
 -- get_sauceboss_ingredient_categories()
 --   Signature : () → JSON
 --   Language  : SQL STABLE
