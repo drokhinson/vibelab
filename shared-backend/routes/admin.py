@@ -125,6 +125,10 @@ async def _delete_boardgamebuddy_user(sb, user_id: str):
     return await _delete_supabase_auth_user(sb, user_id, "boardgamebuddy_profiles")
 
 
+async def _delete_sauceboss_user(sb, user_id: str):
+    return await _delete_supabase_auth_user(sb, user_id, "sauceboss_user_profiles")
+
+
 # Per-app config. `kind` selects the listing + reset-code path:
 #   - "legacy_users": app keeps a custom <prefix>_users table (bcrypt + recovery_hash)
 #   - "supabase_auth": identity lives in auth.users; profile fields in <prefix>_profiles
@@ -155,6 +159,11 @@ APPS_WITH_USERS = {
         "profile_table": "boardgamebuddy_profiles",
         "delete_handler": _delete_boardgamebuddy_user,
     },
+    "sauceboss": {
+        "kind": "supabase_auth",
+        "profile_table": "sauceboss_user_profiles",
+        "delete_handler": _delete_sauceboss_user,
+    },
 }
 
 
@@ -166,7 +175,7 @@ def _list_supabase_auth_users(sb, profile_table: str):
     """
     rows = (
         sb.table(profile_table)
-        .select("id, display_name, avatar_url, created_at")
+        .select("id, display_name, created_at")
         .order("created_at", desc=True)
         .execute()
         .data
