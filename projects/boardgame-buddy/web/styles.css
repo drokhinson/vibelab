@@ -6871,6 +6871,23 @@ main[data-view="session-viewer"].hidden {
 .bgb-cream-screen .buddies-section { border-top-color: var(--polaroid-line, #DAC9A4); }
 .bgb-cream-screen .buddies-section h3 { color: var(--accent-hover, #B8820E); }
 
+/* Profile-search suggestion rows under the buddies-view search bar —
+   .search-hit defaults to DaisyUI's dark base tones, which render as
+   black boxes on cream. Match the warm-wash polaroid look used by
+   .buddies-row so the suggestions stay legible. */
+.bgb-cream-screen .search-hit {
+  background: var(--polaroid-bg-soft, #F5EEDC);
+  color: var(--polaroid-ink, #1D1812);
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+}
+.bgb-cream-screen .search-hit:hover { border-color: var(--accent); }
+.bgb-cream-screen .search-hit__placeholder {
+  background: var(--polaroid-line, #DAC9A4);
+  color: var(--polaroid-ink, #1D1812);
+}
+.bgb-cream-screen .search-hit__name { color: var(--polaroid-ink, #1D1812); }
+.bgb-cream-screen .search-hit__meta { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
+
 /* Search-bar + filter-toggle controls — DaisyUI's `.input.input-bordered`
    defaults to dark theme tones, which renders as a black box on cream.
    Override scoped to .bgb-cream-screen AND to .set-card so the inline
