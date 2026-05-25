@@ -47,8 +47,11 @@ function renderRecipe() {
   // Cooking mode — Wake Lock API holds the screen on while the user follows
   // the recipe. Hidden in browsers without the API (older Safari, some in-app
   // browsers) since a non-functional toggle would just confuse users.
+  // On-state pairs --active (orange fallback) with --cooking-on (yellow halo)
+  // so the lightbulb reads as unmistakably "on".
+  const cookingOnClasses = state.cookingMode ? ' recipe-action-btn--active recipe-action-btn--cooking-on' : '';
   const cookingBtnHTML = cookingModeAvailable()
-    ? `<button class="recipe-action-btn${state.cookingMode ? ' recipe-action-btn--active' : ''}" onclick="recipeToggleCookingMode()" title="${state.cookingMode ? 'Turn off cooking mode' : 'Keep screen on while cooking'}"><i data-lucide="lightbulb"></i></button>`
+    ? `<button class="recipe-action-btn${cookingOnClasses}" onclick="recipeToggleCookingMode()" title="${state.cookingMode ? 'Turn off cooking mode' : 'Keep screen on while cooking'}"><i data-lucide="lightbulb"></i></button>`
     : '';
 
   // Share menu — replaces the old standalone download. Opens a popover with
@@ -97,7 +100,7 @@ function renderRecipe() {
       back: { onClick: backOnClick },
       auth: false,
       manage: 'never',
-      extraActions: sourceLinkBtnHTML + cookingBtnHTML + saucebookBtnHTML + shareBtnHTML,
+      secondRow: shareBtnHTML + cookingBtnHTML + sourceLinkBtnHTML + saucebookBtnHTML,
     })}
     <div class="scroll-body scroll-body--padded">
       ${renderVariantSwitcher(sauce.id)}
@@ -105,8 +108,28 @@ function renderRecipe() {
       ${renderRecipeIngredientPanel(sauce)}
       ${subBannerHTML}
       ${stepsHTML}
+      ${renderRecipeAuthorFootnote(sauce)}
     </div>
   `;
+}
+
+// Author credit at the bottom of the recipe. The Edit button is gated on
+// authorship — only the user whose id matches sauce.createdBy sees it.
+// openBuilderEdit() (settings.js) is the existing owner-or-admin edit
+// gate; we keep its admin behaviour intact but only surface the button
+// here to the actual author.
+function renderRecipeAuthorFootnote(sauce) {
+  const name = (sauce.authorName || '').trim();
+  if (!name) return '';
+  const isOwner = !!(currentUser && sauce.createdBy && sauce.createdBy === currentUser.id);
+  const editBtn = isOwner
+    ? `<button class="recipe-edit-btn" onclick="openBuilderEdit('${sauce.id}')" title="Open this recipe in the editor"><i data-lucide="pencil"></i><span>Edit recipe</span></button>`
+    : '';
+  return `
+    <footer class="recipe-footnote">
+      <span class="recipe-footnote__author">Authored by ${escapeHtml(name)}</span>
+      ${editBtn}
+    </footer>`;
 }
 
 // ── Sauce-family fetch + cache ────────────────────────────────────────────

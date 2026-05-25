@@ -45,11 +45,12 @@
 -- get_sauceboss_sauces_for_target(p_category TEXT, p_dish_id TEXT, p_subtype_id TEXT)
 --   Signature : (p_category TEXT, p_dish_id TEXT, p_subtype_id TEXT) → JSON
 --   Language  : SQL STABLE
---   Defined in: sauceboss/023_ingredient_modifiers.sql  (latest; first in 014)
+--   Defined in: sauceboss/028_sauce_author_name.sql  (latest; first in 014)
 --   Purpose   : Fully assembled sauce objects for a category/dish/subtype target.
 --   Notes     : Steps include both inputFromStep (compat) and inputFromSteps (array).
 --               Each ingredient row emits modifier (prep state); aggregated
 --               ingredients key on (name, modifier) so fresh/dried split cleanly.
+--               Envelope includes authorName (display_name of created_by, '' for seeds).
 
 -- get_sauceboss_ingredients_for_item(p_item_id TEXT)
 --   Signature : (p_item_id TEXT) → JSON
@@ -73,22 +74,24 @@
 -- get_sauceboss_all_sauces_full()
 --   Signature : () → JSON
 --   Language  : SQL STABLE
---   Defined in: sauceboss/023_ingredient_modifiers.sql  (latest; first in 001)
+--   Defined in: sauceboss/028_sauce_author_name.sql  (latest; first in 001)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py
 --              shared-backend/routes/sauceboss/import_export_routes.py
 --   Purpose   : Full sauces grid with normalized ingredients, steps, and dish links.
 --   Notes     : Steps include both inputFromStep (compat) and inputFromSteps (array).
 --               Each ingredient row emits modifier (prep state); aggregated
 --               ingredients key on (name, modifier) so fresh/dried split cleanly.
+--               Envelope includes authorName (display_name of created_by, '' for seeds).
 
 -- get_sauceboss_sauce_with_family(p_sauce_id TEXT)
 --   Signature : (p_sauce_id TEXT) → JSON
 --   Language  : SQL STABLE
---   Defined in: sauceboss/027_get_sauce_with_family.sql
+--   Defined in: sauceboss/028_sauce_author_name.sql  (latest; first in 027)
 --   Called by : shared-backend/routes/sauceboss/public_routes.py (GET /sauces/{id})
 --   Purpose   : Single sauce's family (root + variants), same envelope as
 --               get_sauceboss_all_sauces_full so recipe-open paths can skip
 --               fetching every sauce in the DB. Cached client-side for 1h.
+--   Notes     : Envelope includes authorName (display_name of created_by, '' for seeds).
 
 -- get_sauceboss_ingredient_categories()
 --   Signature : () → JSON
