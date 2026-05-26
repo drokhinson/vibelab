@@ -48,7 +48,8 @@
       this.inputId = `game-finder-input-${this._id}`;
       this.dropdownId = `game-finder-dropdown-${this._id}`;
       this._container = null;
-      this._recentGames = null;     // lazy-loaded seed list
+      this._recentGames = null;     // null = not loaded yet; [] = loaded, empty
+      this._recentGamesPromise = null; // in-flight load, single-flight + retry-on-error
       this._queryToken = 0;         // increments on every search; stale responses are dropped
       this._searchTimer = null;
       this._bggMode = false;
@@ -99,6 +100,10 @@
         document.addEventListener("click", this._outsideHandler, true);
         this._docHandlerBound = true;
       }
+      // Eagerly start loading recently-played so the dropdown is ready
+      // before the user focuses. Failure leaves _recentGames as null so
+      // the next focus retries instead of caching an empty list forever.
+      this._ensureRecentGamesLoad();
     }
 
     unmount() {
@@ -145,13 +150,41 @@
       }, 180);
     }
 
-    async _open() {
-      if (this._opts.includeRecentlyPlayed !== false && this._recentGames === null) {
+    _ensureRecentGamesLoad() {
+      if (this._opts.includeRecentlyPlayed === false) return null;
+      if (this._recentGames !== null) return null;
+      if (this._recentGamesPromise) return this._recentGamesPromise;
+      this._recentGamesPromise = (async () => {
         try {
-          this._recentGames = await window.Game.recentlyPlayed(6);
+          const res = await window.Game.recentlyPlayed(6);
+          this._recentGames = Array.isArray(res) ? res : [];
         } catch (_) {
-          this._recentGames = [];
+          // Leave _recentGames null so the next focus retries.
+        } finally {
+          this._recentGamesPromise = null;
         }
+      })();
+      return this._recentGamesPromise;
+    }
+
+    async _open() {
+      // If recents aren't loaded yet, show a synchronous loading hint so
+      // the user sees the dropdown immediately, then await the load and
+      // render the real list.
+      const needsLoad =
+        this._opts.includeRecentlyPlayed !== false && this._recentGames === null;
+      if (needsLoad) {
+        const dd = document.getElementById(this.dropdownId);
+        if (dd) {
+          dd.innerHTML = `<li class="game-finder-dropdown__hint">Loading recent games…</li>`;
+          dd.classList.remove("hidden");
+        }
+        const p = this._ensureRecentGamesLoad();
+        if (p) {
+          try { await p; } catch (_) {}
+        }
+        const input = /** @type {HTMLInputElement|null} */ (document.getElementById(this.inputId));
+        if (!input || document.activeElement !== input) return;
       }
       const input = /** @type {HTMLInputElement|null} */ (document.getElementById(this.inputId));
       const q = input ? (input.value || "").trim() : "";
