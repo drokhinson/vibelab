@@ -57,6 +57,7 @@ def _invalidate_game_caches(bgg_id: Optional[int] = None) -> None:
 from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
 from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
 from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse, RulebookUrlUpdate
+from .services import game_service
 
 logger = logging.getLogger(__name__)
 
@@ -426,44 +427,7 @@ async def recently_played_games(
     user: CurrentUser = Depends(get_current_user),
 ) -> list[GameSummary]:
     """Distinct games the caller has plays for, sorted by latest played_at DESC."""
-    sb = get_supabase()
-    plays = (
-        sb.table("boardgamebuddy_plays")
-        .select("game_id, played_at")
-        .eq("user_id", user.user_id)
-        .order("played_at", desc=True)
-        .limit(200)
-        .execute()
-        .data
-        or []
-    )
-    seen: set[str] = set()
-    ordered_ids: list[str] = []
-    for p in plays:
-        gid = p["game_id"]
-        if gid in seen:
-            continue
-        seen.add(gid)
-        ordered_ids.append(gid)
-        if len(ordered_ids) >= limit:
-            break
-    if not ordered_ids:
-        return []
-    rows = (
-        sb.table("boardgamebuddy_games")
-        .select(
-            "id, bgg_id, name, year_published, min_players, max_players, "
-            "playing_time, thumbnail_url, image_url, theme_color, "
-            "is_expansion, base_game_bgg_id, expansion_color, rulebook_url, "
-            "play_mode"
-        )
-        .in_("id", ordered_ids)
-        .execute()
-        .data
-        or []
-    )
-    by_id = {r["id"]: r for r in rows}
-    return [GameSummary(**by_id[gid]) for gid in ordered_ids if gid in by_id]
+    return game_service.recently_played(get_supabase(), user.user_id, limit)
 
 
 @router.get(
