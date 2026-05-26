@@ -355,14 +355,19 @@
         const inc = (this._requests.incoming || []).find((r) => r.other_user_id === userId);
         if (inc) await window.Buddy.accept(inc.id);
       } catch (_) {}
+      window.Buddy.invalidate();
       await this._load();
     }
 
-    async _accept(id)  { try { await window.Buddy.accept(id); } finally { await this._load(); } }
+    async _accept(id)  {
+      try { await window.Buddy.accept(id); }
+      finally { window.Buddy.invalidate(); await this._load(); }
+    }
     async _reject(id)  { try { await window.Buddy.reject(id); } finally { await this._load(); } }
     async _unfriend(id) {
       if (!confirm("Remove this buddy?")) return;
-      try { await window.Buddy.unfriend(id); } finally { await this._load(); }
+      try { await window.Buddy.unfriend(id); }
+      finally { window.Buddy.invalidate(); await this._load(); }
     }
 
     // ── Ghost → account linking ─────────────────────────────────────────────

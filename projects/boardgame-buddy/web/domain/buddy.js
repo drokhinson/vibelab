@@ -3,8 +3,13 @@
 (function () {
   const CACHE_NS = "buddy";
   const ALL_KEY = "all";
-  const FRESH_TTL_MS = 5 * 60 * 1000;
-  const STALE_TTL_MS = 30 * 60 * 1000;
+  // 24h fresh / 7d stale: the combined buddies/ghosts/recent bundle only
+  // mutates when the user finalizes a play (new ghost names, bumped
+  // played-with counts) or edits the friend graph (accept / unfriend /
+  // link / merge ghost). Each of those mutation sites calls
+  // Buddy.invalidate(), so the cache is the source of truth between them.
+  const FRESH_TTL_MS = 24 * 60 * 60 * 1000;
+  const STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
   class Buddy {
     constructor(raw) { Object.assign(this, raw || {}); }

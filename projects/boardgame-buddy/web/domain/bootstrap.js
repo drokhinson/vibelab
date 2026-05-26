@@ -7,15 +7,17 @@
 // The /bootstrap response shape (composed in bootstrap_routes.py + the
 // bgb_bootstrap RPC):
 //   {
-//     bootstrap_version: int,       // bump → FE wipes cache + rehydrates
-//     generated_at:      timestamp,
-//     current_user:      profile row,
-//     profile_bundle:    bgb_profile_bundle output for self,
-//     game_detail_bundles: { gameId: bgb_game_detail_bundle output },
-//     owned_count:       int,
-//     truncated:         bool,      // true if >max_game_bundles owned
-//     feed_first_page:   FeedPageResponse,
-//     feed_cursor:       string|null,
+//     bootstrap_version:    int,       // bump → FE wipes cache + rehydrates
+//     generated_at:         timestamp,
+//     current_user:         profile row,
+//     profile_bundle:       bgb_profile_bundle output for self,
+//     game_detail_bundles:  { gameId: bgb_game_detail_bundle output },
+//     owned_count:          int,
+//     truncated:            bool,      // true if >max_game_bundles owned
+//     feed_first_page:      FeedPageResponse,
+//     feed_cursor:          string|null,
+//     recently_played_games: GameSummary[],  // host flow game-picker seed
+//     play_partners:        { accounts, ghosts, recent },  // host player-picker seed
 //   }
 
 (function () {
@@ -25,11 +27,14 @@
 
   // TTL pairs (freshTtl, staleTtl) per namespace. Fresh = get() returns it,
   // no refresh. Stale = swr() returns it AND fires a background refresh.
+  // hostSeed = 24h fresh / 7d stale — these lists only mutate on play
+  // finalize or buddy graph edits, both of which invalidate explicitly.
   const TTLS = {
     profile:     { fresh: 60 * 1000,        stale: 5 * 60 * 1000 },
     gameBundle:  { fresh: 30 * 60 * 1000,   stale: 60 * 60 * 1000 },
     feedFirst:   { fresh: 60 * 1000,        stale: 10 * 60 * 1000 },
     stats:       { fresh: 60 * 1000,        stale: 10 * 60 * 1000 },
+    hostSeed:    { fresh: 24 * 60 * 60 * 1000, stale: 7 * 24 * 60 * 60 * 1000 },
   };
 
   class Bootstrap {
@@ -128,6 +133,27 @@
           "first",
           payload.feed_first_page,
           { freshTtl: TTLS.feedFirst.fresh, staleTtl: TTLS.feedFirst.stale },
+        );
+      }
+
+      // Host flow seeds. The Gather screen's game picker reads game.recent;
+      // the player picker reads buddy:all. Both render off cache on first
+      // paint instead of paying for a network round-trip on every host tap.
+      // Re-warmed after _finalizeSave() in play-flow-view.js.
+      if (Array.isArray(payload.recently_played_games)) {
+        cache.setWithTtls(
+          "game.recent",
+          "self",
+          payload.recently_played_games,
+          { freshTtl: TTLS.hostSeed.fresh, staleTtl: TTLS.hostSeed.stale },
+        );
+      }
+      if (payload.play_partners) {
+        cache.setWithTtls(
+          "buddy",
+          "all",
+          payload.play_partners,
+          { freshTtl: TTLS.hostSeed.fresh, staleTtl: TTLS.hostSeed.stale },
         );
       }
 

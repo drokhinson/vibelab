@@ -49,9 +49,22 @@
     }
 
     // Caller's most-recently-played distinct games (seed for the inline
-    // game-picker dropdown on Gather).
+    // game-picker dropdown on Gather). Cached under "game.recent":"self" so
+    // bootstrap can seed it on login and the Gather screen renders without
+    // a round-trip. Invalidated by Game.invalidateRecent() after play save.
     static recentlyPlayed(limit = 6) {
-      return window.api.get("/games/recently-played", { limit });
+      return window.bgbCache.swr(
+        "game.recent",
+        "self",
+        () => window.api.get("/games/recently-played", { limit }),
+        { freshTtl: 24 * 60 * 60 * 1000, staleTtl: 7 * 24 * 60 * 60 * 1000 },
+      );
+    }
+
+    /** Drop the recently-played cache so the next call refetches. Call after
+     *  saving a play — the new game should appear at the top of the list. */
+    static invalidateRecent() {
+      if (window.bgbCache) window.bgbCache.clear("game.recent");
     }
 
     // Import a BGG game into the catalog and return the new GameSummary.

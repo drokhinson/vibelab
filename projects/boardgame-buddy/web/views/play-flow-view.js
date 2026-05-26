@@ -51,6 +51,20 @@
         if (this._guideWidget) this._guideWidget.refresh();
       });
 
+      // Synchronously pull the host-flow seeds bootstrap warmed up at login
+      // so the first paint already has the player + game picker dropdowns
+      // populated. The async preload below still runs to kick SWR's
+      // background refresh, but the user never sees an empty dropdown.
+      if (window.bgbCache) {
+        const seededBuddies = window.bgbCache.get("buddy", "all");
+        if (seededBuddies) {
+          this._buddies = seededBuddies.accounts || [];
+          this._ghosts = seededBuddies.ghosts || [];
+          this._recent = seededBuddies.recent || [];
+          this._buddyDataReady = true;
+        }
+      }
+
       this.render();
 
       // Preload buddies (accounts), ghosts, and recently-played-with in one
@@ -1504,9 +1518,15 @@
         this._ps.clear();
         window.store.set("activePlay", null);
         window.store.invalidate("feed");
-        // Drop the buddy cache so the next gather screen sees any new ghost
-        // names + updated played-with counts the play just produced.
+        // Drop the host-flow caches so the next gather screen sees the new
+        // ghost names + updated played-with counts + the just-played game at
+        // the top of the recents dropdown. Re-warm in the background so the
+        // user returns to instant data without paying for a round-trip on
+        // the next host tap.
         if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
+        if (window.Game && window.Game.invalidateRecent) window.Game.invalidateRecent();
+        if (window.Buddy && window.Buddy.allBuddies) window.Buddy.allBuddies().catch(() => {});
+        if (window.Game && window.Game.recentlyPlayed) window.Game.recentlyPlayed(6).catch(() => {});
         // Surface the warning before the wrap-up popup so the user can't miss it.
         if (photoUploadFailed && window.PolaroidPopup && window.PolaroidPopup.alert) {
           await window.PolaroidPopup.alert({

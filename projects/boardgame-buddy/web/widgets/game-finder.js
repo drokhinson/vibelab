@@ -100,6 +100,14 @@
         document.addEventListener("click", this._outsideHandler, true);
         this._docHandlerBound = true;
       }
+      // Synchronously pick up the bootstrap-seeded recents so a tap-and-focus
+      // before the microtask flush still renders the list. The async load
+      // below covers the cold-cache case (no bootstrap seed) and refreshes
+      // when the entry has fallen into the SWR stale window.
+      if (this._opts.includeRecentlyPlayed !== false && window.bgbCache) {
+        const seeded = window.bgbCache.get("game.recent", "self");
+        if (Array.isArray(seeded)) this._recentGames = seeded;
+      }
       // Eagerly start loading recently-played so the dropdown is ready
       // before the user focuses. Failure leaves _recentGames as null so
       // the next focus retries instead of caching an empty list forever.
