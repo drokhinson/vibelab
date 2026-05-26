@@ -56,10 +56,26 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 .app-header--stacked .app-header__titles h1 { justify-content: center; }
 .app-header__row2 {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-evenly;
+  gap: 8px;
   width: 100%;
+}
+/* Stacked icon + label cluster used by the recipe page's second header
+   row. The wrapper lets each action keep its label directly under the
+   circular button while still participating in the row's even spacing. */
+.recipe-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.recipe-action-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 .app-header__titles {
   flex: 1;
@@ -513,14 +529,6 @@ html, body { height: 100%; background: #FFF8F0; font-family: -apple-system, Blin
 }
 .recipe-edit-btn:hover { background: #C94E02; }
 .recipe-edit-btn [data-lucide] { width: 14px; height: 14px; }
-
-/* Share-menu dropdown in the recipe second-row sits below a centered
-   button cluster — anchor it to the LEFT edge of the share button so
-   it opens into the visible area instead of overflowing leftward. */
-.app-header__row2 .share-menu__dropdown {
-  right: auto;
-  left: 0;
-}
 
 /* Share menu — popover anchored under the share button in the recipe header.
    Wrapping div keeps the button + dropdown positioned together; outside-click
