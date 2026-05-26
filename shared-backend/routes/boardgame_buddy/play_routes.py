@@ -215,19 +215,12 @@ def _write_play_expansions(sb, play_id: str, expansion_ids: list[str]) -> None:
 
 
 async def _user_can_view_play(sb, user, play_row: dict) -> bool:
-    """Allow the play's owner or any participant resolved to a real account."""
-    if play_row["user_id"] == user.user_id:
-        return True
-    # After migration 009, play_players carries player_user_id directly — no
-    # need to go through the legacy per-owner buddies table.
-    pp = (
-        sb.table("boardgamebuddy_play_players")
-        .select("play_id")
-        .eq("play_id", play_row["id"])
-        .eq("player_user_id", user.user_id)
-        .execute()
-    )
-    return bool(pp.data)
+    """Any authenticated user can read a play — feed surfaces a friend's play
+    even when the viewer wasn't a participant, and tapping through should
+    succeed. Writes/deletes stay owner-only (gated inline in update_play /
+    delete_play). The `is_own` flag on the response distinguishes the owner
+    so the frontend can hide edit affordances for non-owners."""
+    return True
 
 
 @router.get(
