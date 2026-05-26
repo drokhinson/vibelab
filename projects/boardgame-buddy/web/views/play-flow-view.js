@@ -55,14 +55,32 @@
 
       // Preload buddies (accounts), ghosts, and recently-played-with in one
       // cached call. Powers the player picker's empty-state suggestions and
-      // username search without per-mount round-trips.
-      const buddyPromise = window.Buddy.allBuddies().catch(() => ({ accounts: [], ghosts: [], recent: [] }));
+      // username search without per-mount round-trips. Tracked on `this`
+      // so the buddy dropdown can show a loading state and re-render if
+      // the user focuses the input before this lands.
+      this._buddyDataReady = false;
+      this._buddyPreloadPromise = (async () => {
+        let combined;
+        try {
+          combined = await window.Buddy.allBuddies();
+        } catch (_) {
+          combined = { accounts: [], ghosts: [], recent: [] };
+        }
+        this._buddies = combined.accounts || [];
+        this._ghosts = combined.ghosts || [];
+        this._recent = combined.recent || [];
+        this._buddyDataReady = true;
+        // If the buddy input is currently focused, refresh the dropdown
+        // so recents appear without the user having to refocus.
+        const input = document.getElementById("play-flow-buddy-input");
+        if (input && document.activeElement === input) {
+          this._renderBuddyDropdown(input.value || "");
+        }
+        return combined;
+      })();
       const expansionsPromise = this._loadExpansionsIfNeeded();
       const lobbyPromise = this._ensureLobbyOpen();
-      const [combined] = await Promise.all([buddyPromise, expansionsPromise, lobbyPromise]);
-      this._buddies = combined.accounts || [];
-      this._ghosts = combined.ghosts || [];
-      this._recent = combined.recent || [];
+      await Promise.all([this._buddyPreloadPromise, expansionsPromise, lobbyPromise]);
 
       this.render();
       // Initial scroll to the live phase's section — render() no longer
@@ -241,7 +259,7 @@
         <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
           ${this._renderScreenHeader("Gather", 1, false)}
           ${this._renderGather()}
-          ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId })}
+          ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId || !(this._lobby && this._lobby.code) })}
         </section>
 
         <section class="cascade-screen ${lockPlay ? "is-locked" : ""}" id="screen-play">
@@ -362,7 +380,11 @@
       // always read the code aloud / share it (PR #274 allows late joiners
       // as spectators, so the lobby is effectively always "open"). Settle
       // Up drops it — the game is over.
-      const code = this._lobby && this._lobby.code;
+      // Prefer the live lobby's code; on first paint after a reopen (cold
+      // reload, nav back, or join-session "Reopen" path) the persisted
+      // draft already carries the same code, so fall back to it instead
+      // of flashing "— — — — —" until _ensureLobbyOpen resolves.
+      const code = (this._lobby && this._lobby.code) || (this._ps && this._ps.code) || null;
       return `
         <section class="cascade-card cascade-card--invite">
           <span class="cascade-invite__icon">
@@ -1305,7 +1327,30 @@
       return out;
     }
 
-    _renderBuddyDropdown(query) {
+    async _renderBuddyDropdown(query) {
+      // If the buddy preload from onMount hasn't landed yet, show a loading
+      // hint synchronously, await the preload, then continue with the real
+      // render. Bails if the user moved focus elsewhere during the wait.
+      if (!this._buddyDataReady) {
+        const ddLoading = document.getElementById("play-flow-buddy-dropdown");
+        if (ddLoading) {
+          ddLoading.innerHTML = `<li class="cascade-buddy-dropdown-header">Loading…</li>`;
+          ddLoading.classList.remove("hidden");
+        }
+        if (this._buddyPreloadPromise) {
+          try { await this._buddyPreloadPromise; } catch (_) {}
+        }
+        const input = document.getElementById("play-flow-buddy-input");
+        if (!input || document.activeElement !== input) {
+          const ddPost = document.getElementById("play-flow-buddy-dropdown");
+          if (ddPost) {
+            ddPost.innerHTML = "";
+            ddPost.classList.add("hidden");
+          }
+          return;
+        }
+        query = input.value || "";
+      }
       const dd = document.getElementById("play-flow-buddy-dropdown");
       if (!dd) return;
       const q = (query || "").trim().toLowerCase();
