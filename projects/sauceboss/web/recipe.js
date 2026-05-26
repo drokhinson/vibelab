@@ -26,15 +26,22 @@ function renderRecipe() {
 
   // Saucebook toggle
   const inSaucebook = !!(currentUser && (state.saucebook || []).some(s => s.id === sauce.id));
-  const saucebookBtnHTML = inSaucebook
-    ? `<button class="recipe-action-btn recipe-action-btn--active" onclick="recipeToggleSaucebook('${sauce.id}')" title="Remove from saucebook"><i data-lucide="bookmark-check"></i></button>`
-    : `<button class="recipe-action-btn" onclick="recipeToggleSaucebook('${sauce.id}')" title="Save to saucebook"><i data-lucide="bookmark-plus"></i></button>`;
+  const saucebookActionHTML = `
+    <div class="recipe-action">
+      ${inSaucebook
+        ? `<button class="recipe-action-btn recipe-action-btn--active" onclick="recipeToggleSaucebook('${sauce.id}')" title="Remove from saucebook"><i data-lucide="bookmark-check"></i></button>`
+        : `<button class="recipe-action-btn" onclick="recipeToggleSaucebook('${sauce.id}')" title="Save to saucebook"><i data-lucide="bookmark-plus"></i></button>`}
+      <span class="recipe-action-label">${inSaucebook ? 'Saved' : 'Save'}</span>
+    </div>`;
 
   // Source link — only when the recipe was imported from a URL. <a> rather
   // than a <button>+window.open so middle-click / cmd-click / "open in new
   // tab" work normally.
-  const sourceLinkBtnHTML = sauce.sourceUrl
-    ? `<a class="recipe-action-btn" href="${escapeHtml(sauce.sourceUrl)}" target="_blank" rel="noopener noreferrer" title="View original recipe"><i data-lucide="external-link"></i></a>`
+  const sourceActionHTML = sauce.sourceUrl
+    ? `<div class="recipe-action">
+         <a class="recipe-action-btn" href="${escapeHtml(sauce.sourceUrl)}" target="_blank" rel="noopener noreferrer" title="View original recipe"><i data-lucide="external-link"></i></a>
+         <span class="recipe-action-label">Source</span>
+       </div>`
     : '';
 
   // Cooking mode — Wake Lock API holds the screen on while the user follows
@@ -43,8 +50,11 @@ function renderRecipe() {
   // On-state pairs --active (orange fallback) with --cooking-on (yellow halo)
   // so the lightbulb reads as unmistakably "on".
   const cookingOnClasses = state.cookingMode ? ' recipe-action-btn--active recipe-action-btn--cooking-on' : '';
-  const cookingBtnHTML = cookingModeAvailable()
-    ? `<button class="recipe-action-btn${cookingOnClasses}" onclick="recipeToggleCookingMode()" title="${state.cookingMode ? 'Turn off cooking mode' : 'Keep screen on while cooking'}"><i data-lucide="lightbulb"></i></button>`
+  const cookingActionHTML = cookingModeAvailable()
+    ? `<div class="recipe-action">
+         <button class="recipe-action-btn${cookingOnClasses}" onclick="recipeToggleCookingMode()" title="${state.cookingMode ? 'Turn off cooking mode' : 'Keep screen on while cooking'}"><i data-lucide="lightbulb"></i></button>
+         <span class="recipe-action-label">Cooking</span>
+       </div>`
     : '';
 
   // Share menu — replaces the old standalone download. Opens a popover with
@@ -60,10 +70,13 @@ function renderRecipe() {
         <i data-lucide="download"></i><span>Download (.md)</span>
       </a>
     </div>` : '';
-  const shareBtnHTML = `
-    <div class="share-menu">
-      <button class="recipe-action-btn${state.shareMenuOpen ? ' recipe-action-btn--active' : ''}" onclick="toggleShareMenu(event)" title="Share recipe" aria-haspopup="menu" aria-expanded="${state.shareMenuOpen}"><i data-lucide="share-2"></i></button>
-      ${shareMenuHTML}
+  const shareActionHTML = `
+    <div class="recipe-action">
+      <div class="share-menu">
+        <button class="recipe-action-btn${state.shareMenuOpen ? ' recipe-action-btn--active' : ''}" onclick="toggleShareMenu(event)" title="Share recipe" aria-haspopup="menu" aria-expanded="${state.shareMenuOpen}"><i data-lucide="share-2"></i></button>
+        ${shareMenuHTML}
+      </div>
+      <span class="recipe-action-label">Share</span>
     </div>`;
 
   // Always use colored-tag meal-section style for sauce steps
@@ -92,7 +105,7 @@ function renderRecipe() {
       title: sauce.name,
       auth: false,
       manage: 'never',
-      secondRow: shareBtnHTML + cookingBtnHTML + sourceLinkBtnHTML + saucebookBtnHTML,
+      secondRow: cookingActionHTML + saucebookActionHTML + shareActionHTML + sourceActionHTML,
     })}
     <div class="scroll-body scroll-body--padded">
       ${renderVariantSwitcher(sauce.id)}
