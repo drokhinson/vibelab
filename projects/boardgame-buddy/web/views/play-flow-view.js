@@ -29,6 +29,11 @@
       this._error = null;
       this._saving = false;
       this._lobbyPoll = null;
+      // Counts in-flight participant DELETEs. While > 0 the lobby poll
+      // skips its tick — see _startLobbyPoll. Prevents the brief window
+      // between optimistic local removal and server confirmation from
+      // snapping the player back into the grid via a stale poll.
+      this._pendingDeletes = 0;
       this._buddyInputTimer = null;
       // GameFinder widget instance, lazily constructed in render() when the
       // Gather screen needs the picker. Lives across the 2s lobby-poll
@@ -163,6 +168,10 @@
       if (this._lobbyPoll || !this._lobby) return;
       this._lobbyPoll = setInterval(async () => {
         if (!this._lobby) return;
+        // Skip the tick while a participant DELETE is in flight — the
+        // server still has the row, and the merge logic below would
+        // re-add it as a "new" participant.
+        if (this._pendingDeletes > 0) return;
         try {
           const next = await window.PlaySession.fetchLobby(this._lobby.code);
           const prevIds = new Set((this._lobby.participants || []).map((p) => p.id));
@@ -943,9 +952,12 @@
       // If the row had been confirmed by the backend (carries a
       // participant_id from _lobbyPoll), tell the server to drop it too.
       if (removed && removed.participant_id && this._lobby && this._lobby.code) {
-        window.PlaySession.removeParticipant(this._lobby.code, removed.participant_id).catch((e) => {
-          if (window.showToast) window.showToast(`Couldn't remove ${removed.name}: ${e.message || "network error"}`, "error");
-        });
+        this._pendingDeletes++;
+        window.PlaySession.removeParticipant(this._lobby.code, removed.participant_id)
+          .catch((e) => {
+            if (window.showToast) window.showToast(`Couldn't remove ${removed.name}: ${e.message || "network error"}`, "error");
+          })
+          .finally(() => { this._pendingDeletes--; });
       }
     }
 
