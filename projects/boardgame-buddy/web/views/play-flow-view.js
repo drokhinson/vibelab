@@ -259,7 +259,7 @@
         <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
           ${this._renderScreenHeader("Gather", 1, false)}
           ${this._renderGather()}
-          ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId })}
+          ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId || !(this._lobby && this._lobby.code) })}
         </section>
 
         <section class="cascade-screen ${lockPlay ? "is-locked" : ""}" id="screen-play">
@@ -380,7 +380,11 @@
       // always read the code aloud / share it (PR #274 allows late joiners
       // as spectators, so the lobby is effectively always "open"). Settle
       // Up drops it — the game is over.
-      const code = this._lobby && this._lobby.code;
+      // Prefer the live lobby's code; on first paint after a reopen (cold
+      // reload, nav back, or join-session "Reopen" path) the persisted
+      // draft already carries the same code, so fall back to it instead
+      // of flashing "— — — — —" until _ensureLobbyOpen resolves.
+      const code = (this._lobby && this._lobby.code) || (this._ps && this._ps.code) || null;
       return `
         <section class="cascade-card cascade-card--invite">
           <span class="cascade-invite__icon">
