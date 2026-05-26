@@ -1399,33 +1399,54 @@
       }
       this._saving = true;
       this.render();
-      // Photo upload is best-effort: if it fails, persist the play
-      // without the photo and warn the user with a blocking alert
-      // BEFORE redirect. The bug we're fixing was that the old flow
-      // bailed before the play row was created, and the user assumed
-      // their session had saved without the photo when in fact nothing
-      // saved at all.
-      let photoUploadFailed = false;
+      // Save-then-photo. Persist the play first so a flaky upload can't
+      // strand the user with no record of the game. Photo upload + the
+      // follow-up PUT to attach it are best-effort; if either fails the
+      // play stays saved and we warn before the wrap-up splash.
+      let saved;
       try {
-        if (this._ps.photoFile) {
-          try {
-            const fd = new FormData();
-            fd.append("file", this._ps.photoFile);
-            const resp = await window.api.upload("/plays/photo", fd);
-            if (resp && resp.photo_url) this._ps.photoUrl = resp.photo_url;
-          } catch (_) {
-            photoUploadFailed = true;
-            this._ps.photoUrl = null;
-          }
-        }
         const payload = this._ps.toPlayCreate();
-        let saved;
         if (this._lobby && this._lobby.code) {
           saved = await window.PlaySession.finalizeLobby(this._lobby.code, payload);
         } else {
           saved = await window.Play.create(payload);
         }
-        // Snapshot popup inputs from the draft BEFORE we clear it.
+      } catch (e) {
+        this._error = e.message || "Failed to save";
+        this._saving = false;
+        this.render();
+        return;
+      }
+
+      const savedId = (saved && (saved.id || saved.play_id || (saved.play && saved.play.id))) || null;
+
+      // PUT /plays/{id} requires owner. Both solo and lobby-host paths
+      // are owned by the current user, so the attach call succeeds.
+      // Revisit if joiners ever finalize.
+      let photoUploadFailed = false;
+      if (this._ps.photoFile) {
+        if (!savedId) {
+          photoUploadFailed = true;
+        } else {
+          try {
+            const fd = new FormData();
+            fd.append("file", this._ps.photoFile);
+            const resp = await window.api.upload("/plays/photo", fd);
+            const uploadedUrl = resp && resp.photo_url;
+            if (uploadedUrl) {
+              const createPayload = this._ps.toPlayCreate();
+              const { game_id, ...rest } = createPayload;
+              await window.Play.update(savedId, { ...rest, photo_url: uploadedUrl });
+            } else {
+              photoUploadFailed = true;
+            }
+          } catch (_) {
+            photoUploadFailed = true;
+          }
+        }
+      }
+
+      try {
         const game = this._ps.gameSnapshot || {};
         const winner = this._ps.players.find((p) => p.is_winner);
         const popupOpts = {
@@ -1433,7 +1454,7 @@
           gameName: game.name || "Game over",
           gameThumbnail: game.thumbnail_url || game.image_url || null,
           winnerName: winner ? winner.name : null,
-          playId: (saved && (saved.id || saved.play_id || (saved.play && saved.play.id))) || null,
+          playId: savedId,
         };
         this._ps.clear();
         window.store.set("activePlay", null);
@@ -1455,8 +1476,6 @@
         } else {
           window.router.go("feed");
         }
-      } catch (e) {
-        this._error = e.message || "Failed to save";
       } finally {
         this._saving = false;
         this.render();
