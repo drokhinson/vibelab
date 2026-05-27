@@ -101,6 +101,26 @@ db/migrations/plantplanner/001_baseline.sql … 014_planter_geometry.sql
 - `POST /api/v1/plant_planner/gardens/{garden_id}/shortlist/{plant_cache_id}` — Atomically append a cache_id to the garden's shortlist (idempotent). Also upserts a wishlist row in the user's library. Returns `{status, shortlist_plant_cache_ids}`.
 - `GET  /api/v1/plant_planner/companions` — List companion-planting relationships `[{plant_a_id, plant_b_id, relationship, reason}]` (symmetric pairs; client stores both directions)
 
+## Routes & URL Map
+
+> **Routing mechanism:** URL-less — `helpers.js`'s `showView(name)` updates `currentView` and calls `render()`. No History API, no URL changes; refresh always lands on the auth or default view.
+>
+> **Target after migration** (`.claude/rules/web-frontend.md` § Routing & URLs): path-based History API routing. The target paths below show what each should be once migrated. Garden / plant identifiers should move from global vars (`currentGarden`, `currentPlant`) into the URL so individual gardens / plants are deep-linkable.
+
+| View name (current) | Target path | Notes |
+|---|---|---|
+| `auth` | `/auth` | Login / signup / recovery. |
+| `gardens` | `/gardens` | Main hub: list of user's gardens. |
+| `wizard` | `/gardens/new` (or `/gardens/:gardenId/edit`) | Multi-step garden creation/configuration. Currently driven by `wizardDraft` global. |
+| `garden` (detail) | `/gardens/:gardenId` | Single-garden view (currently uses `currentGarden` global). |
+| `builder` | `/gardens/:gardenId/builder` | 3D/2D garden layout designer. Disposes the 3D scene on view exit — keep that in the migrated `onUnmount`. |
+| `shopping` | `/gardens/:gardenId/shopping` | Ingredient shopping list scoped to a garden. |
+| `library` | `/library` | User's saved plant varieties (search + categorization). |
+| `browser` | `/plants` | Browse global plant catalog with filters. |
+| `import` | `/plants/import` | Bulk plant import from file/data. |
+
+**Bottom-nav grouping** (informational): browser/import, library, and gardens/wizard/shopping/builder are visually grouped under "My Gardens"; the route table stays flat — group only the nav buttons.
+
 ## Screen / Page Flow
 
 ```

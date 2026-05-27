@@ -241,6 +241,24 @@ All routes under `/api/v1/wealthmate/`. Auth: most endpoints require `Authorizat
 
 ---
 
+## Routes & URL Map
+
+> **Routing mechanism:** URL-less — `showView(name)` toggles `.display` on view containers. No History API, no URL changes; refresh always lands on the login screen.
+>
+> **Target after migration** (`.claude/rules/web-frontend.md` § Routing & URLs): path-based History API routing. The target paths below show what each should be once migrated.
+
+| View name (current) | Target path | Notes |
+|---|---|---|
+| `login` | `/login` | Email/password login. |
+| `register` | `/register` | Signup. |
+| `forgot-password` | `/forgot` | Password recovery. |
+| `dashboard` | `/` (or `/dashboard`) | Net worth summary, quick-add check-in, continue-check-in. Default landing view after auth. |
+| `accounts` | `/accounts` | List of accounts by type (assets / liabilities); add / edit / close. Future: `/accounts/:id` for a single-account drill-in. |
+| `checkin` | `/checkin` | Multi-step financial-snapshot wizard. Step is internal state today; could expose as `/checkin/{step}` once URL-routed. |
+| `expenses` | `/expenses` | Categorized expense groups with detail view. |
+| `history` | `/history` | Monthly historical transactions log. |
+| `settings` | `/settings` | User settings, recovery code, theme toggle, CSV import/export. |
+
 ## Screen / Page Flow
 
 ```

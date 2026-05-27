@@ -52,8 +52,25 @@ Example:
 
 - `GET /api/v1/{{PROJECT_ID}}/health` — Health check. No auth.
 
+## Routes & URL Map
+<!-- One row per view. Path is the canonical URL the History API pushes;
+     "params" are path-template placeholders (e.g. :gameId); extras land
+     as querystring. See `.claude/rules/web-frontend.md` § Routing & URLs
+     for the required pattern (path-based History API routing, popstate
+     handler, vercel.json fallback). -->
+
+| Path | Route name | Params | Notes |
+|---|---|---|---|
+| `/` | `home` | — | Default landing view. |
+| `/auth` | `auth` | — | Sign-in / sign-up. |
+
+<!-- Add a row for every route the user can land on. For deep-linkable
+     items (e.g. /items/:id), put the identifier in the path; for
+     view-state hints (mode=edit, filter=foo) use querystring. -->
+
 ## Screen / Page Flow
-<!-- Describe navigation in plain English or ASCII diagram -->
+<!-- Narrative companion to the table above. Describe navigation in plain
+     English. -->
 
 ```
 Landing (index.html) → ...

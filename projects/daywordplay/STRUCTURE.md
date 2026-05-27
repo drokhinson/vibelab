@@ -124,6 +124,20 @@ All routes at `/api/v1/daywordplay/...`. Supabase Auth Bearer token required unl
 - `POST /words/{id}/bookmark` — Bookmark a word (idempotent).
 - `DELETE /words/{id}/bookmark` — Remove bookmark.
 
+## Routes & URL Map
+
+> **Routing mechanism:** URL-less — `showView(name)` updates a `currentView` variable and toggles `.hidden` on view containers. No History API, no URL changes; refresh always lands on the home view.
+>
+> **Target after migration** (`.claude/rules/web-frontend.md` § Routing & URLs): path-based History API routing. The target paths below show what each should be once migrated.
+
+| View name (current) | Target path | Notes |
+|---|---|---|
+| `home` | `/` (or `/today`) | Today's word + vote/skip buttons. `activeWordTab` (`today` \| `vote`) is local state — promote to `/today/vote` if it's worth deep-linking. |
+| `dictionary` | `/dictionary` | Past-words browser with status filter + search. |
+| `leaderboard` | `/leaderboard` | Group stats: top voters, most-played words, streaks. |
+| `profile` | `/profile` | User settings, group membership, join requests. |
+| `admin` | `/admin` | Admin tools (visible only when the current user is an admin). |
+
 ## Screen / Page Flow
 
 ```
