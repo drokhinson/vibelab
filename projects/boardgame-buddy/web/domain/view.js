@@ -68,32 +68,159 @@
   }
 
   // Router ──────────────────────────────────────────────────────────────────────
-  // Maintains its own back stack — the SPA never touches the browser history,
-  // so history.back() doesn't work and we model it ourselves. router.back()
-  // pops the most recent entry; falls back to a caller-chosen default
-  // (e.g. 'feed') when the stack is empty.
+  // Browser-URL aware: every router.go() pushes a History API entry so refresh
+  // survives, deep links work (/play/{code}, /u/{userId}, /game/{id}, etc.),
+  // and the device back button is wired up. We still maintain an internal
+  // _stack alongside history because the browser doesn't expose history entry
+  // metadata — peekBack() and back-affordance labels need it. The two stay in
+  // sync: every push to _stack is matched by a pushState, every pop matches
+  // a back() / popstate.
+  //
+  // Route → path mapping lives in _routes below. matchPath() resolves an
+  // incoming URL (initial load, popstate); pathFor() builds the URL for a
+  // route name + params. Params not consumed by a path template become
+  // querystring so deep-link entries still hydrate the destination view
+  // with extras like gameName, expansionIds, mode, etc.
   class Router {
     constructor() {
       this._views = new Map();
       this._current = null;
       this._stack = [];          // [{name, params}, ...]
       this._maxStack = 20;
+      this._routes = this._buildRoutes();
+      window.addEventListener("popstate", (ev) => this._onPopstate(ev));
+    }
+
+    _buildRoutes() {
+      // Order matters: longest / most specific patterns first so e.g.
+      // /game/:id/chapters wins over /game/:id, and /play/:code wins over
+      // /play. Routes without `pattern` are pathFor-only (e.g. session-viewer
+      // shares /play/:code with play-flow — match resolves to play-flow and
+      // the view layer decides host-vs-joiner from the lobby fetch).
+      // Note: `splash` is intentionally absent. It's a transient loading
+      // view that should never appear in URLs or the back stack — pathFor
+      // returns null for unknown names and go() skips pushState in that case.
+      return [
+        { name: "auth",                pattern: /^\/auth\/?$/,                    build: () => "/auth" },
+        { name: "join-session",        pattern: /^\/join\/?$/,                    build: () => "/join" },
+        { name: "reference-guide-add", pattern: /^\/game\/([^/]+)\/chapters\/?$/,
+          consume: ["gameId"],
+          extract: (m) => ({ gameId: decodeURIComponent(m[1]) }),
+          build: (p) => `/game/${encodeURIComponent(p.gameId || "")}/chapters` },
+        { name: "play-flow",           pattern: /^\/play\/([^/]+)\/?$/,
+          consume: ["code"],
+          extract: (m) => ({ code: decodeURIComponent(m[1]) }),
+          build: (p) => p.code ? `/play/${encodeURIComponent(p.code)}` : "/play" },
+        { name: "session-viewer",
+          consume: ["code"],
+          build: (p) => p.code ? `/play/${encodeURIComponent(p.code)}` : "/play" },
+        { name: "log-play",            pattern: /^\/play\/?$/,                    build: () => "/play" },
+        { name: "game-detail",         pattern: /^\/game\/([^/]+)\/?$/,
+          consume: ["gameId"],
+          extract: (m) => ({ gameId: decodeURIComponent(m[1]) }),
+          build: (p) => `/game/${encodeURIComponent(p.gameId || "")}` },
+        { name: "collection",          pattern: /^\/profile\/collection\/?$/,     build: () => "/profile/collection" },
+        { name: "wishlist",            pattern: /^\/profile\/wishlist\/?$/,       build: () => "/profile/wishlist" },
+        { name: "plays",               pattern: /^\/profile\/plays\/?$/,          build: () => "/profile/plays" },
+        { name: "buddies",             pattern: /^\/profile\/buddies\/?$/,        build: () => "/profile/buddies" },
+        { name: "profile-self",        pattern: /^\/profile\/?$/,                 build: () => "/profile" },
+        { name: "profile-other",       pattern: /^\/u\/([^/]+)\/?$/,
+          consume: ["userId"],
+          extract: (m) => ({ userId: decodeURIComponent(m[1]) }),
+          build: (p) => `/u/${encodeURIComponent(p.userId || "")}` },
+        { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
+        { name: "admin",               pattern: /^\/admin\/?$/,                   build: () => "/admin" },
+        { name: "feed",                pattern: /^\/(feed)?\/?$/,                 build: () => "/feed" },
+      ];
     }
 
     register(name, view) {
       this._views.set(name, view);
     }
 
-    async go(name, params, { skipPush = false } = {}) {
+    // Resolve a URL pathname to {name, params} or null. Querystring values
+    // are merged into params so /game/x?gameName=Catan hydrates both.
+    matchPath(pathname) {
+      const path = (pathname || "/").split("?")[0];
+      for (const r of this._routes) {
+        if (!r.pattern) continue;
+        const m = path.match(r.pattern);
+        if (m) {
+          const params = r.extract ? r.extract(m) : {};
+          return { name: r.name, params };
+        }
+      }
+      return null;
+    }
+
+    // Build a URL for `go(name, params)`. Path params (those in `consume`)
+    // populate the template; the rest become querystring.
+    pathFor(name, params) {
+      const entry = this._routes.find((r) => r.name === name);
+      if (!entry || !entry.build) return null;
+      const p = params || {};
+      let url = entry.build(p);
+      const consumed = entry.consume || [];
+      const extras = new URLSearchParams();
+      for (const [k, v] of Object.entries(p)) {
+        if (consumed.includes(k)) continue;
+        if (v == null || v === "") continue;
+        extras.set(k, String(v));
+      }
+      const qs = extras.toString();
+      return qs ? `${url}?${qs}` : url;
+    }
+
+    // Update the browser URL to match the current route + params without
+    // navigating. Useful when state catches up to a route — e.g. play-flow's
+    // host doesn't have the lobby code at navigation time, but once
+    // _ensureLobbyOpen resolves we want /play/{code} in the address bar so
+    // a refresh resumes the session.
+    replaceUrl(name, params) {
+      const url = this.pathFor(name, params);
+      if (!url) return;
+      const stateName = name;
+      const stateParams = params || {};
+      try {
+        history.replaceState({ name: stateName, params: stateParams }, "", url);
+      } catch (_) {}
+      // Keep the store entry consistent with the new URL.
+      window.store.set("currentRoute", { name: stateName, params: stateParams });
+    }
+
+    async go(name, params, { skipPush = false, fromPopstate = false } = {}) {
       const next = this._views.get(name);
       if (!next) {
         console.error("Unknown view:", name);
         return;
       }
       const prev = this._current;
-      if (prev && prev !== next && !skipPush) {
+      // Push the *previous* view onto the back-stack only when this is a
+      // forward navigation (i.e. not an unconscious popstate / boot replay).
+      // splash is transient and never a meaningful back destination — drop it.
+      if (prev && prev !== next && !skipPush && !fromPopstate && prev.name !== "splash") {
         this._stack.push({ name: prev.name, params: prev.params || {} });
         if (this._stack.length > this._maxStack) this._stack.shift();
+      }
+
+      // History.pushState mirrors _stack: every forward navigation lands a
+      // new history entry whose state lets popstate replay the route. On
+      // boot / popstate we explicitly skip this so we don't pile up
+      // duplicate entries. If the URL already matches the target (e.g. the
+      // post-auth navigation arriving at the deep-link the user typed),
+      // replaceState avoids a duplicate adjacent entry.
+      if (!skipPush && !fromPopstate) {
+        const url = this.pathFor(name, params);
+        if (url) {
+          const current = window.location.pathname + window.location.search;
+          try {
+            if (current === url) {
+              history.replaceState({ name, params: params || {} }, "", url);
+            } else {
+              history.pushState({ name, params: params || {} }, "", url);
+            }
+          } catch (_) {}
+        }
       }
 
       // Instant UI updates — visibility, active tab, and store all happen
@@ -136,9 +263,20 @@
     }
 
     async back(fallback = "feed") {
-      const entry = this._stack.pop();
-      // skipPush so back→forward→back doesn't keep growing the stack.
-      if (entry) return this.go(entry.name, entry.params, { skipPush: true });
+      // Prefer the browser history's back so the URL and our _stack stay in
+      // sync — popstate (below) will pop _stack and call go(). When _stack
+      // is empty we have nowhere to go back to, so fall through to the
+      // caller-supplied fallback and replace the URL.
+      if (this._stack.length > 0) {
+        try {
+          history.back();
+          return;
+        } catch (_) { /* fall through */ }
+      }
+      const url = this.pathFor(fallback, {});
+      if (url) {
+        try { history.replaceState({ name: fallback, params: {} }, "", url); } catch (_) {}
+      }
       return this.go(fallback, {}, { skipPush: true });
     }
 
@@ -148,6 +286,22 @@
     peekBack(fallback = "feed") {
       const entry = this._stack[this._stack.length - 1];
       return entry ? entry.name : fallback;
+    }
+
+    async _onPopstate(ev) {
+      const state = ev && ev.state;
+      let target = null;
+      if (state && state.name) {
+        target = { name: state.name, params: state.params || {} };
+      } else {
+        // Direct URL load or hash-only change — resolve from pathname.
+        target = this.matchPath(window.location.pathname);
+      }
+      if (!target) return;
+      // Mirror the browser's pop on our internal stack so peekBack stays
+      // accurate. Use fromPopstate to suppress the duplicate pushState.
+      this._stack.pop();
+      await this.go(target.name, target.params, { skipPush: true, fromPopstate: true });
     }
   }
 
