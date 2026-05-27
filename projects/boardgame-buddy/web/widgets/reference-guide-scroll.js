@@ -262,7 +262,7 @@
             <div class="scroll-chapter__actions">
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._removeChapter('${c.id}', '${c.source_game_id || c.game_id}', event)">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove from my guide
+                <i data-lucide="book-minus" class="w-3.5 h-3.5"></i> Remove
               </button>
               ${editBtn}
               <button class="btn btn-ghost btn-xs"
