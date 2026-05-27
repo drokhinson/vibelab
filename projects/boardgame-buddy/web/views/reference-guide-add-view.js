@@ -21,7 +21,6 @@
   class ReferenceGuideAddView extends window.View {
     constructor() {
       super("reference-guide-add");
-      this._tab = "browse";          // "browse" | "create" | "edit"
       this._gameId = null;            // base game uuid (route param)
       this._gameName = "";
       this._gameThumb = null;         // base game thumbnail_url
@@ -33,44 +32,82 @@
       this._expansionMeta = {};       // gameId → {name, color, thumb}
       this._createTargetGameId = null; // defaults to base game in onMount
 
-      // Browse state. `_allPool` holds every chapter for the active game
+      // Browse pool — `_allPool` holds every chapter for the active game
       // (+ expansions) — fetched once on mount and re-fetched only after a
-      // create/edit/delete. Type-filter and search are applied client-side
-      // by `_filteredPool` so flipping chips is instant.
+      // create/edit/delete. Type-filter and search applied client-side by
+      // `_filteredPool` so flipping chips is instant. These caches survive
+      // across mounts (keyed by gameId) so cheap re-entries don't refetch.
       this._poolLoading = false;
       this._allPool = [];
-      this._search = "";
-      this._typeFilter = "";
-
-      // Create/Edit form state
       this._types = [];
-      this._formType = "";
+
+      // Transient stash: scroll widget drops the chapter here before
+      // routing into edit mode so we don't need an extra GET. Consumed
+      // in onMount when mode === "edit", cleared in onUnmount otherwise.
+      this._prefillChapter = null;
+
+      // Form / tab / popover state — all owned by _resetFormState() so a
+      // single source of truth governs what "clean" looks like. Initialize
+      // here so render() never sees `undefined` on first paint.
+      this._resetFormState();
+    }
+
+    // Single source of truth for the editor's transient state. Called from
+    // the constructor, onMount (top), onUnmount, _enterCreate, _backToBrowse
+    // and the external-success path of _submitForm. Anything an in-progress
+    // edit or filter session leaks into the singleton MUST be reset here so
+    // a fresh mount can't show stale form fields under the new render().
+    _resetFormState() {
+      // Tab + mode
+      this._tab = "browse";          // "browse" | "create" | "edit"
+      this._externalEdit = false;    // true only when arrived via mode=edit route
+      // Editor form fields
+      this._editingChapterId = null; // set when _tab === "edit"
       this._formTitle = "";
       this._formContent = "";
-      this._editorView = "write"; // "write" | "preview"
-      this._saving = false;
+      this._formType = "";
+      this._editorView = "write";    // "write" | "preview"
       this._error = null;
-      this._editingChapterId = null;  // set when _tab === "edit"
-      // True only when edit mode was entered via an external route (e.g.
-      // the reference-guide-scroll Edit button on game-detail). Cancel /
-      // Save in that case pops back to the prior view. In-view edit
-      // transitions (FAB / expanded-row Edit) leave this false so the
-      // user returns to browse instead.
-      this._externalEdit = false;
-      // Transient stash: scroll widget drops the chapter here before
-      // routing into edit mode so we don't need an extra GET.
-      this._prefillChapter = null;
-      // Active toolbar popover: null | "table" | "color"
-      this._activePop = null;
-      // Live dimension label for the table picker.
+      this._saving = false;
+      // Toolbar popover + one-shots
+      this._activePop = null;        // null | "table" | "color"
       this._tablePickLabel = "1 × 1";
-      // One-shot: when entering edit mode the next render should centre
-      // the selected chapter-type pill in the horizontal scroller so the
-      // user can see what's currently picked without hunting.
       this._centerTypeScrollOnNext = false;
+      // Browse filters
+      this._search = "";
+      this._typeFilter = "";
+    }
+
+    // Synchronous placeholder — runs BEFORE onMount (see domain/view.js). Must
+    // read this.params (set by the base class), NOT instance fields, because
+    // a singleton view's prior state is still on `this` at this point. Without
+    // this override, the container's innerHTML would show the previous
+    // render's edit form while onMount awaits its Promise.all of fetches —
+    // which is exactly the "Add a chapter opened the previously-edited
+    // chapter" bug the user hit on re-auth.
+    renderLoading() {
+      const p = this.params || {};
+      const name = p.gameName || "Reference guide";
+      const loader = (window.buddyLoader && window.buddyLoader({ size: 64 })) || "";
+      this.container.innerHTML = `
+        <div class="chapter-edit__gamechip">
+          <div class="chapter-edit__gamechip-cv chapter-edit__gamechip-cv--blank"></div>
+          <div class="chapter-edit__gamechip-text">
+            <div class="chapter-edit__gamechip-name">${escape(name)}</div>
+            <div class="chapter-edit__gamechip-sub">Loading…</div>
+          </div>
+        </div>
+        <div class="p-8 grid place-items-center">${loader}</div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
     }
 
     async onMount() {
+      // Singletons survive logout/login and back-stack pops — anything from a
+      // prior edit (form buffer, _tab=edit) must be wiped before we look at
+      // the new params, so a fresh route can never inherit stale state.
+      this._resetFormState();
+
       const p = this.params || {};
       this._gameId = p.gameId || null;
       this._gameName = p.gameName || "";
@@ -146,22 +183,26 @@
         this._formContent = c.content || "";
         this._formType = c.chapter_type || "";
         this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
-        this._editorView = "write";
-        this._error = null;
         this._tab = "edit";
         this._externalEdit = true;
         this._centerTypeScrollOnNext = true;
-      } else {
-        // Fresh mount (or stale edit URL with no stash) lands on browse.
-        this._tab = "browse";
-        this._externalEdit = false;
       }
+      // else: fresh mount stays on browse — _resetFormState() at the top of
+      // onMount already set _tab = "browse" and cleared the form buffer.
 
       if (this._tab === "browse") await this._loadPool();
       this.render();
     }
 
     async onParamsChange() { await this.onMount(); }
+
+    async onUnmount() {
+      // Safety net: clear the transient stash so a route that sets
+      // `_prefillChapter` but completes elsewhere can't leak into the next
+      // mount. Also drop any open toolbar popover.
+      this._prefillChapter = null;
+      this._activePop = null;
+    }
 
     async _loadPool() {
       if (!this._gameId) return;
@@ -325,15 +366,8 @@
     // opens clean (the prior flow let create-tab state persist across
     // browse/create toggles, which made entering Create feel stale).
     _enterCreate() {
-      this._editingChapterId = null;
-      this._formTitle = "";
-      this._formContent = "";
-      this._formType = "";
-      this._editorView = "write";
-      this._error = null;
-      this._activePop = null;
+      this._resetFormState();
       this._tab = "create";
-      this._externalEdit = false;
       this.render();
     }
 
@@ -376,14 +410,7 @@
 
     // Internal exit: returns to browse without disturbing the router stack.
     async _backToBrowse() {
-      this._editingChapterId = null;
-      this._formTitle = "";
-      this._formContent = "";
-      this._formType = "";
-      this._error = null;
-      this._activePop = null;
-      this._tab = "browse";
-      this._externalEdit = false;
+      this._resetFormState();
       await this._loadPool();
     }
 
@@ -929,6 +956,7 @@
       // External edit (arrived via route with mode=edit) pops back to the
       // prior view. In-view create / in-view edit return to browse.
       if (this._externalEdit) {
+        this._resetFormState();
         window.router.back("game-detail");
         return;
       }
@@ -979,7 +1007,10 @@
         this._saving = false;
         if (externalEdit) {
           // Came from the scroll widget on another view — return there so
-          // the user lands back where they started.
+          // the user lands back where they started. Clear the editor buffer
+          // before popping so a later re-entry can't show stale form fields
+          // during the brief window before the next mount's render().
+          this._resetFormState();
           window.router.back("game-detail");
         } else {
           await this._backToBrowse();
