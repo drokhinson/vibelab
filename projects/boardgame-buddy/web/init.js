@@ -93,10 +93,19 @@
             return;
           }
         }
-        // Land on the feed after sign-in
-        if (window.store.get("currentView") === "splash" ||
-            window.store.get("currentView") === "auth") {
-          window.router.go("feed");
+        // Land where the user requested (deep link) or feed by default.
+        // pendingRoute is stashed on boot from window.location.pathname so a
+        // hard refresh on /play/{code}, /game/{id}, etc. resumes there
+        // instead of dropping back to the feed.
+        const currentView = window.store.get("currentView");
+        if (currentView === "splash" || currentView === "auth") {
+          const pending = window.store.get("pendingRoute");
+          window.store.set("pendingRoute", null);
+          if (pending && pending.name && pending.name !== "auth" && pending.name !== "splash") {
+            window.router.go(pending.name, pending.params || {});
+          } else {
+            window.router.go("feed");
+          }
         }
         // First-time onboarding: a brand-new profile carries needs_setup=true
         // (migration 030, set by the dependency-side auto-create). Prompt the
@@ -211,8 +220,25 @@
       window.store.set("activePlay", ps);
     }
 
-    // First paint = splash. initSupabase() flips us forward.
-    window.router.go("splash");
+    // Resolve the initial URL → route so a deep-link / refresh on
+    // /play/{code}, /game/{id}, /profile/collection, etc. resumes there
+    // after auth. Querystring values are merged onto params by the route
+    // table; we also pull anything not consumed by the path template here.
+    const initialMatch = window.router.matchPath(window.location.pathname);
+    if (initialMatch) {
+      try {
+        const qs = new URLSearchParams(window.location.search);
+        for (const [k, v] of qs.entries()) {
+          if (initialMatch.params[k] == null) initialMatch.params[k] = v;
+        }
+      } catch (_) {}
+      window.store.set("pendingRoute", initialMatch);
+    }
+
+    // First paint = splash. initSupabase() flips us forward to either
+    // the pending deep-link route or the feed. skipPush keeps the original
+    // URL in the bar (and out of the back-stack) until auth resolves.
+    window.router.go("splash", {}, { skipPush: true });
     wireBottomNav();
     initSupabase();
 
