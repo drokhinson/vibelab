@@ -1,0 +1,34 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- boardgamebuddy/034_grant_data_api_access_to_authenticated.sql
+-- Explicit Data API grants for tables accessed directly from the client.
+--
+-- Background: Supabase is removing the historical default that auto-grants
+-- public.* to the API roles (anon, authenticated). The change lands for new
+-- projects on 2026-05-30 and for existing projects (this one) on 2026-10-30.
+-- After that, tables without an explicit GRANT are invisible to PostgREST
+-- and Realtime.
+--
+-- Two tables in this project are reached from the client via supabase-js
+-- (anon key + user JWT), so they need explicit grants to the `authenticated`
+-- role. RLS policies (migration 026) already authorize the rows themselves;
+-- the grants below are what makes the tables visible to the Data API at all.
+--
+--   boardgamebuddy_play_session_scores
+--     read + upsert from web/domain/live-scores.js (live scoring grid)
+--     Realtime subscription on INSERT/UPDATE/DELETE
+--
+--   boardgamebuddy_play_sessions
+--     Realtime subscription only (UPDATE events for phase transitions,
+--     from web/domain/session-phase.js). No direct .from() reads/writes.
+--
+-- All other boardgamebuddy_* tables are touched only by the FastAPI backend
+-- using SUPABASE_SERVICE_ROLE_KEY, which bypasses grants — they don't need
+-- API-role grants.
+--
+-- Idempotent: GRANT is naturally idempotent.
+--
+-- Run in: Supabase Dashboard → SQL Editor → New Query → Run
+-- ─────────────────────────────────────────────────────────────────────────────
+
+GRANT SELECT, INSERT, UPDATE ON public.boardgamebuddy_play_session_scores TO authenticated;
+GRANT SELECT                  ON public.boardgamebuddy_play_sessions       TO authenticated;
