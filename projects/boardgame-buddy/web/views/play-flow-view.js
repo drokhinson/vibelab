@@ -49,6 +49,30 @@
       // second render() once it lands.
       const existing = window.PlaySession.load();
       this._ps = existing || new window.PlaySession();
+      // Deep-link entry: URL was /play/{code}. If the localStorage draft is
+      // for a different code (or empty), adopt the URL's code so
+      // _ensureLobbyOpen fetches the right lobby. If the current user turns
+      // out not to be the host of that lobby, hop to session-viewer.
+      const urlCode = this.params && this.params.code;
+      if (urlCode && this._ps.code !== urlCode) {
+        try {
+          const s = await window.PlaySession.fetchLobby(urlCode);
+          const me = window.store.get("user");
+          if (s && me && s.host_user_id && s.host_user_id !== me.id) {
+            window.router.go("session-viewer", { code: urlCode });
+            return;
+          }
+          // Host (or unknown user — fall through to the host path which
+          // will re-validate and either resume or open a fresh lobby).
+          this._ps.code = urlCode;
+          if (s && s.game_id) this._ps.gameId = s.game_id;
+          this._ps.persist();
+        } catch (_) {
+          // Lobby fetch failed — treat as a regular play-flow open and let
+          // _ensureLobbyOpen handle the recovery.
+          this._ps.code = urlCode;
+        }
+      }
       this._ensureSelfIncluded();
       window.store.set("activePlay", this._ps);
 
@@ -145,6 +169,7 @@
             this._ps.hostUserId = s.host_user_id;
             this._ps.phase = s.phase;
             this._ps.persist();
+            this._syncUrlToCode();
             return;
           }
         } catch (_) {
@@ -159,8 +184,20 @@
         this._ps.hostUserId = session.host_user_id;
         this._ps.phase = session.phase || "gather";
         this._ps.persist();
+        this._syncUrlToCode();
       } catch (e) {
         this._error = e.message || "Could not start a session";
+      }
+    }
+
+    // Once we know the lobby code, rewrite the address bar from /play to
+    // /play/{code} so a refresh resumes the session (and the URL is
+    // shareable). Uses replaceState — we don't want a back-press from the
+    // session to land on a /play entry that would re-create a fresh lobby.
+    _syncUrlToCode() {
+      if (!this._ps || !this._ps.code) return;
+      if (window.router && window.router.replaceUrl) {
+        window.router.replaceUrl("play-flow", { code: this._ps.code });
       }
     }
 
