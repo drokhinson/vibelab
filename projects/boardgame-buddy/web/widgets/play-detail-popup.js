@@ -622,22 +622,29 @@
     if (input) input.value = "";
     render();
   }
-  function onPhotoSelect(fileList) {
+  async function onPhotoSelect(fileList) {
     const file = fileList && fileList[0];
     if (!file || !state.draft) return;
-    // Pre-flight size check — refuse oversized files at the picker so the
-    // save flow can never get tripped up by a 413 from /plays/photo. The
-    // backend cap is 5 MiB; helpers.js mirrors it.
-    const v = window.validatePhotoFile(file);
+    // Auto-compress large photos so the save flow can never get tripped up
+    // by a 413 from /plays/photo. Also normalizes HEIC from iOS Safari to
+    // JPEG. The backend cap is 5 MiB; helpers.js mirrors it.
+    const v = await window.preparePhotoForUpload(file);
     if (!v.ok) {
       showToast(v.error, "error");
       const fi = document.querySelector(".play-detail-popup__photo-file");
       if (fi) fi.value = "";
       return;
     }
+    if (!state.draft) return;
+    if (v.compressed) {
+      showToast(
+        `Photo compressed from ${(v.originalSize / 1048576).toFixed(1)} MB to ${(v.compressedSize / 1048576).toFixed(1)} MB`,
+        "info"
+      );
+    }
     clearPendingPhoto(state.draft);
-    state.draft.photoFile = file;
-    state.draft.photoPreviewUrl = URL.createObjectURL(file);
+    state.draft.photoFile = v.file;
+    state.draft.photoPreviewUrl = URL.createObjectURL(v.file);
     render();
   }
 

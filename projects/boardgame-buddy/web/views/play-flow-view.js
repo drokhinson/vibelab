@@ -1263,21 +1263,28 @@
 
     // ── Photo ───────────────────────────────────────────────────────────────
 
-    _onPhotoSelect(file) {
+    async _onPhotoSelect(file) {
       if (!file) return;
-      // Reject oversized files at the picker so the save flow can never
-      // hit the 5 MiB backend cap. Backend constant mirrored in
-      // helpers.js — keep them in sync if the server limit ever changes.
-      const v = window.validatePhotoFile(file);
+      // Auto-compress large photos client-side so the save flow can never
+      // hit the 5 MiB backend cap. Also normalizes HEIC from iOS Safari to
+      // JPEG so the MIME whitelist accepts it. Backend constants mirrored
+      // in helpers.js — keep them in sync if the server limit ever changes.
+      const v = await window.preparePhotoForUpload(file);
       if (!v.ok) {
         showToast(v.error, "error");
         const fi = this.container && this.container.querySelector('input[type="file"]');
         if (fi) fi.value = "";
         return;
       }
+      if (v.compressed) {
+        showToast(
+          `Photo compressed from ${(v.originalSize / 1048576).toFixed(1)} MB to ${(v.compressedSize / 1048576).toFixed(1)} MB`,
+          "info"
+        );
+      }
       this._clearPhoto({ keepRender: true });
-      this._ps.photoFile = file;
-      this._ps.photoPreviewUrl = URL.createObjectURL(file);
+      this._ps.photoFile = v.file;
+      this._ps.photoPreviewUrl = URL.createObjectURL(v.file);
       this.render();
     }
 
