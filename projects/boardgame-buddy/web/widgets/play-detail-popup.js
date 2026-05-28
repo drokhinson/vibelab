@@ -224,26 +224,32 @@
 
     return `
       <article class="play-detail">
-        ${photoSlot}
-
         ${renderGameBubble(p, { editing: false })}
 
-        ${hasRoundGrid(p.players) ? `
-          <section class="play-detail__section play-detail__section--rounds">
+        ${(p.expansions || []).length > 0 ? `
+          <section class="play-detail__section">
             <h3 class="play-detail__section-title">
-              <i data-lucide="layers" class="w-4 h-4"></i> Rounds
+              <i data-lucide="puzzle" class="w-4 h-4"></i> Expansions
             </h3>
-            ${window.renderRoundGrid(
-              (p.players || []).map((pl) => ({
-                name: pl.name,
-                is_winner: !!pl.is_winner,
-                user_id: pl.user_id || null,
-                avatar: pl.avatar || null,
-                roundScores: Array.isArray(pl.round_scores) ? pl.round_scores : [],
-              })),
-              "PlayDetailPopup",
-              { editable: false, playMode: p.play_mode || "competitive" }
-            )}
+            <ul class="play-detail__expansions">
+              ${(p.expansions || []).map((e) => `
+                <li onclick="window.PlayDetailPopup.dismiss();window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || "")}'})"
+                    style="--exp-color:${e.color || "#C9922A"}">
+                  <span class="play-detail__expansion-dot"></span>
+                  ${escape(e.name)}
+                </li>
+              `).join("")}
+            </ul>
+          </section>` : ""}
+
+        ${photoSlot}
+
+        ${p.notes ? `
+          <section class="play-detail__section">
+            <h3 class="play-detail__section-title">
+              <i data-lucide="sticky-note" class="w-4 h-4"></i> Notes
+            </h3>
+            <p class="play-detail__notes">${escape(p.notes)}</p>
           </section>` : ""}
 
         <section class="play-detail__section">
@@ -273,28 +279,22 @@
               </ul>`}
         </section>
 
-        ${(p.expansions || []).length > 0 ? `
-          <section class="play-detail__section">
+        ${hasRoundGrid(p.players) ? `
+          <section class="play-detail__section play-detail__section--rounds">
             <h3 class="play-detail__section-title">
-              <i data-lucide="puzzle" class="w-4 h-4"></i> Expansions
+              <i data-lucide="layers" class="w-4 h-4"></i> Rounds
             </h3>
-            <ul class="play-detail__expansions">
-              ${(p.expansions || []).map((e) => `
-                <li onclick="window.PlayDetailPopup.dismiss();window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || "")}'})"
-                    style="--exp-color:${e.color || "#C9922A"}">
-                  <span class="play-detail__expansion-dot"></span>
-                  ${escape(e.name)}
-                </li>
-              `).join("")}
-            </ul>
-          </section>` : ""}
-
-        ${p.notes ? `
-          <section class="play-detail__section">
-            <h3 class="play-detail__section-title">
-              <i data-lucide="sticky-note" class="w-4 h-4"></i> Notes
-            </h3>
-            <p class="play-detail__notes">${escape(p.notes)}</p>
+            ${window.renderRoundGrid(
+              (p.players || []).map((pl) => ({
+                name: pl.name,
+                is_winner: !!pl.is_winner,
+                user_id: pl.user_id || null,
+                avatar: pl.avatar || null,
+                roundScores: Array.isArray(pl.round_scores) ? pl.round_scores : [],
+              })),
+              "PlayDetailPopup",
+              { editable: false, playMode: p.play_mode || "competitive" }
+            )}
           </section>` : ""}
       </article>
     `;
