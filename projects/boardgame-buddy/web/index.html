@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Resolve every relative URL (scripts, styles, assets/, the buddyLoader
+       mark) against the deploy root, not the current route. The History-API
+       router (domain/view.js) puts multi-segment paths like /game/:id/chapters
+       and /play/:code in the address bar; without this, relative refs resolve
+       against /game/:id/ and 404 — broken loader images, and dead scripts on a
+       cold deep-link refresh. Source files keep their relative paths per
+       .claude/rules/assets.md; only resolution changes. -->
+  <base href="/" />
   <title>Boardgame Buddy</title>
   <link rel="icon" type="image/svg+xml" href="assets/brand/bgb-logo.svg" />
 
