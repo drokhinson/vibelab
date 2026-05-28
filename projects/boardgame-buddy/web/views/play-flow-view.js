@@ -172,8 +172,29 @@
             this._syncUrlToCode();
             return;
           }
-        } catch (_) {
-          // Stale — fall through and create a new one.
+          // Reached the server and it says the lobby is gone/closed — fall
+          // through to open a fresh one.
+        } catch (e) {
+          // Distinguish "lobby is definitively gone" (404/410) from a transient
+          // network/server blip (no status, or 5xx) — common right after the
+          // phone wakes. On a blip we must NOT mint a new code: that would
+          // abandon the real session and force the host to re-navigate. Keep
+          // the persisted code, render from the draft, and let the 2s poll
+          // (backed by the API's 401 refresh-retry) reconnect.
+          const gone = e && (e.status === 404 || e.status === 410);
+          if (!gone) {
+            this._lobby = {
+              code: this._ps.code,
+              id: this._ps.sessionId,
+              host_user_id: this._ps.hostUserId,
+              phase: this._ps.phase || "gather",
+              status: "open",
+              participants: (this._lobby && this._lobby.participants) || [],
+            };
+            this._syncUrlToCode();
+            return;
+          }
+          // Definitively gone — fall through and create a new one.
         }
       }
       try {
@@ -462,12 +483,12 @@
       const ps = this._ps;
       const game = ps.gameSnapshot;
       return `
-        ${this._renderInviteCard()}
-
         <section class="cascade-card">
           <label class="cascade-card__label">Game</label>
           ${game ? this._renderPickedGameChip() : `<div id="play-flow-game-finder-mount"></div>`}
         </section>
+
+        ${this._renderInviteCard()}
 
         ${this._renderExpansionsPicker()}
 
@@ -807,6 +828,11 @@
             ? `<img class="cascade-game-chip__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />`
             : `<div class="cascade-game-chip__thumb cascade-game-chip__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
           <div class="cascade-game-chip__name">${escape(game.name)}</div>
+          <button class="cascade-game-chip__details" type="button"
+                  title="View game details" aria-label="View game details"
+                  onclick="window.playFlowView._openGameDetails()">
+            <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+          </button>
           <button class="cascade-game-chip__clear" type="button"
                   title="Change game" aria-label="Clear pick"
                   onclick="window.playFlowView._clearGamePick()">
@@ -814,6 +840,15 @@
           </button>
         </div>
       `;
+    }
+
+    _openGameDetails() {
+      const ps = this._ps;
+      if (!ps || !ps.gameId) return;
+      window.router.go("game-detail", {
+        gameId: ps.gameId,
+        gameName: (ps.gameSnapshot || {}).name || "",
+      });
     }
 
     _clearGamePick() {
@@ -849,6 +884,8 @@
       ps.playMode = game.play_mode || ps.playMode || null;
       ps.persist();
       window.store.set("activePlay", ps);
+      // Warm the reference-guide cache for the new pick (base game only).
+      window.Chapter.prefetchMyChapters(game.id);
       // Push the pick to the lobby so joiners' read-only mirrors swap too.
       if (ps.code) {
         window.PlaySession.updateLobby(ps.code, { gameId: game.id }).catch(() => {});
@@ -1278,6 +1315,7 @@
       const host = document.getElementById("play-flow-guide-mount");
       if (!host) return;
       const meta = this._buildExpansionMetaMap();
+      const gameImage = (this._ps.gameSnapshot || {}).thumbnail_url || null;
       const gameIds = [this._ps.gameId, ...(this._ps.expansionIds || [])];
       if (this._guideWidget && this._guideWidget._baseGameId !== this._ps.gameId) {
         this._guideWidget = null;
@@ -1287,6 +1325,7 @@
           baseGameId: this._ps.gameId,
           gameIds,
           expansionMeta: meta,
+          gameImage,
           onAfterMutate: () => this.render(),
           defaultOpen: true,
         });
@@ -1294,6 +1333,7 @@
       } else {
         this._guideWidget.mount(host);
         this._guideWidget.setExpansionMeta(meta);
+        this._guideWidget.setGameImage(gameImage);
         this._guideWidget.setGameIds(gameIds);
       }
     }

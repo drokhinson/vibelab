@@ -599,6 +599,7 @@
           await window.Chapter.remove(targetGameId, chapterId);
         }
         row.in_my_guide = targetState;
+        window.Chapter.invalidateChaptersCache();
         document.dispatchEvent(new CustomEvent("chapters-changed", {
           detail: { gameId: targetGameId },
         }));
@@ -1001,6 +1002,7 @@
           });
           showToast("Chapter added to your guide", "success");
         }
+        window.Chapter.invalidateChaptersCache();
         document.dispatchEvent(new CustomEvent("chapters-changed", {
           detail: { gameId: targetGameId },
         }));

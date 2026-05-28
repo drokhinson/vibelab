@@ -18,7 +18,32 @@
       return tok ? { Authorization: "Bearer " + tok } : {};
     }
 
-    async _request(method, path, { body, query, headers, raw } = {}) {
+    // Refresh the Supabase access token and re-publish it on window.session.
+    // Returns true when a usable session is in hand afterwards. Used to recover
+    // transparently from a 401 (e.g. a token that expired while the phone was
+    // asleep) so a stale token never cascades into a forced sign-out.
+    async _refreshSession() {
+      const client = window.supabaseClient;
+      if (!client) return false;
+      try {
+        // getSession() auto-refreshes an expired token from the refresh token.
+        let { data } = await client.auth.getSession();
+        let sess = data && data.session;
+        if (!sess) {
+          const r = await client.auth.refreshSession();
+          if (r.error) return false;
+          sess = r.data && r.data.session;
+        }
+        if (sess) {
+          window.session = sess;
+          if (window.store) window.store.set("session", sess);
+          return true;
+        }
+      } catch (_) {}
+      return false;
+    }
+
+    async _request(method, path, { body, query, headers, raw, _retried } = {}) {
       const url = new URL(this.base + this.prefix + path);
       if (query) {
         for (const [k, v] of Object.entries(query)) {
@@ -38,6 +63,12 @@
       }
       const res = await fetch(url.toString(), init);
       if (!res.ok) {
+        // A 401 usually means the access token expired (commonly after the
+        // device slept). Refresh once and retry before surfacing the error so
+        // the caller — and the user — never sees the blip.
+        if (res.status === 401 && !_retried && await this._refreshSession()) {
+          return this._request(method, path, { body, query, headers, raw, _retried: true });
+        }
         let detail = res.statusText;
         try {
           const j = await res.json();
@@ -59,7 +90,7 @@
     del(path)                { return this._request("DELETE", path); }
 
     // For multipart bodies (play photo upload). Caller passes a FormData.
-    async upload(path, formData) {
+    async upload(path, formData, _retried) {
       const url = this.base + this.prefix + path;
       const res = await fetch(url, {
         method: "POST",
@@ -67,6 +98,9 @@
         body: formData,
       });
       if (!res.ok) {
+        if (res.status === 401 && !_retried && await this._refreshSession()) {
+          return this.upload(path, formData, true);
+        }
         let detail = res.statusText;
         try { detail = (await res.json()).detail || detail; } catch (_) {}
         const err = new Error(detail);

@@ -64,6 +64,26 @@ function buddyLoader({ size = 96, label = null, padded = true } = {}) {
   `;
 }
 
+// Game-art loader. Same surround as buddyLoader, but the mark is the board
+// game's own cover/thumbnail (with a gentle breathing pulse) so a guide that's
+// loading chapters shows the game being loaded. Falls back to the bouncing
+// buddy when no image is available (e.g. a game with no art).
+function gameLoader({ image, size = 96, label = null, padded = true } = {}) {
+  if (!image) return buddyLoader({ size, label, padded });
+  const safeLabel = String(label || "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+  const safeSrc = String(image).replace(/"/g, "&quot;");
+  return `
+    <div class="buddy-loader game-loader ${padded ? "buddy-loader--padded" : ""}">
+      <img src="${safeSrc}" alt="Loading"
+           class="game-loader__mark"
+           style="width:${size}px;height:${size}px;" />
+      ${label ? `<div class="buddy-loader__label">${safeLabel}</div>` : ""}
+    </div>
+  `;
+}
+
 function showToast(message, type = "info") {
   const toast = document.getElementById("toast");
   if (!toast) return;
