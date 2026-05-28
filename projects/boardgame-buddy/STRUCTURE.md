@@ -296,6 +296,34 @@ each missing game from the BGG XML API.
 ### Admin UI
 - Promote via **Settings** screen → "Have an admin key?" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the **Admin** screen with the chapter-reports moderation panel.
 
+## Routes & URL Map
+
+Path-based routing via the History API (`projects/boardgame-buddy/web/domain/view.js` → `Router`). On boot, `init.js` parses `window.location.pathname` via `matchPath()`, stashes the resolved route in `store("pendingRoute")`, and restores it once Supabase auth resolves so deep links survive refresh. `vercel.json` rewrites every path to `/index.html` for the SPA fallback.
+
+| Path | Route name | Path params | Querystring (optional) | Notes |
+|---|---|---|---|---|
+| `/feed` (also `/`) | `feed` | — | — | Home: chronological play feed + rails. Bottom-nav Feed tab. |
+| `/auth` | `auth` | — | — | Sign-in / sign-up. Pushed when Supabase reports no session. |
+| `/play` | `log-play` | — | — | Host-or-Join chooser. Bottom-nav Play tab without an active lobby. |
+| `/play/:code` | `play-flow` (host) **or** `session-viewer` (joiner) | `code` | — | Active session. URL is shared by host & joiners — play-flow's onMount fetches the lobby and hops to session-viewer if `host_user_id` isn't the current user. `_ensureLobbyOpen` calls `router.replaceUrl("play-flow", { code })` once the host's lobby opens so `/play` becomes `/play/{code}` without a back-stack entry. |
+| `/join` | `join-session` | — | — | Code entry + active-session chooser for joiners. |
+| `/game/:gameId` | `game-detail` | `gameId` | `gameName` | Game hero, status toggle, reference scroll, recent plays. |
+| `/game/:gameId/chapters` | `reference-guide-add` | `gameId` | `gameName`, `expansionIds`, `mode` (`"edit"` for prefill), `chapterId` | Three-mode chapter editor (browse / create / edit). When opened with `mode=edit`, the scroll widget stashes the chapter on the view singleton (`_prefillChapter`) so the deep-link parent never re-fetches it. |
+| `/profile` | `profile-self` | — | — | Own profile: stats strip + collection grid + recent plays. Bottom-nav Profile tab. |
+| `/profile/collection` | `collection` | — | `userId` (when viewing another user — though `/u/:userId` is preferred for that) | Collection grid. |
+| `/profile/wishlist` | `wishlist` | — | `userId` | Wishlist grid. |
+| `/profile/plays` | `plays` | — | `userId` | Plays log. |
+| `/profile/buddies` | `buddies` | — | — | Accepted buddies + pending requests + search. |
+| `/u/:userId` | `profile-other` | `userId` | — | Public profile for another account. Distinct from `/profile/*` so userId can't collide with a subpage name. |
+| `/settings` | `settings` | — | — | Account / theme / logout. |
+| `/admin` | `admin` | — | — | Chapter-reports moderation. Only reachable when `is_admin=true`. |
+
+**Routes intentionally not in the URL:**
+
+- `splash` — transient loading view between boot and Supabase auth resolving. Never pushed to history, never appears in the back stack.
+
+**Back-stack semantics:** `router.back()` defers to `history.back()`; the popstate handler replays the entry's state (or falls back to `matchPath()` for direct loads). An internal `_stack` is kept in parallel only because the browser doesn't expose history-entry metadata — `peekBack()` reads it to label back affordances ("Back to game details", etc.).
+
 ## Screen Flow
 Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
 

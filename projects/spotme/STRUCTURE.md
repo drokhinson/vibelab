@@ -91,6 +91,21 @@ Proficiency levels: want_to_learn, beginner, intermediate, advanced, expert
 - `PUT /api/v1/spotme/me/hobbies/{id}` — (authed) update {proficiency?, notes?, is_active?}
 - `DELETE /api/v1/spotme/me/hobbies/{id}` — (authed) remove
 
+## Routes & URL Map
+
+> **Routing mechanism:** URL-less — `showView(name)` toggles `.display` on view containers. No History API, no URL changes; refresh always lands on login.
+>
+> **Target after migration** (`.claude/rules/web-frontend.md` § Routing & URLs): path-based History API routing. The target paths below show what each should be once migrated.
+
+| View name (current) | Target path | Notes |
+|---|---|---|
+| `login` | `/login` | Email/password login. |
+| `register` | `/register` | Signup with username, email, display name. |
+| `forgot-password` | `/forgot` | Password recovery. |
+| `profile` | `/profile` | User profile + hobby list (hobbies loaded on view mount). |
+| `hobbies` | `/hobbies` | Hobby management with proficiency levels. |
+| `settings` | `/settings` | Account settings, recovery code, logout, delete account. |
+
 ## Screen Flow
 
 ```

@@ -131,6 +131,23 @@ All served by `shared-backend/routes/sauceboss/` at prefix `/api/v1/sauceboss`.
 | GET | `/api/v1/sauceboss/sauces/{sauce_id}/export.md` | None | Download a single sauce as a human-readable Markdown document (one-way; not re-importable). |
 | GET | `/api/v1/sauceboss/admin/sauces/export.json` | JWT + `is_admin` | Bulk download of every sauce in one JSON file (`{version, exportedAt, count, sauces[]}`). |
 
+## Routes & URL Map
+
+> **Routing mechanism:** Hash-based — `tabs.js` and `recipe.js` call `history.replaceState({...}, '', '#<name>')` to record the active tab/screen in the URL fragment. `vercel.json` only rewrites `/sauce/:id` to `/index.html` (one deep-link form).
+>
+> **Target after migration** (`.claude/rules/web-frontend.md` § Routing & URLs): path-based History API routing, no hashes. The target paths below show what each should be once migrated. Update `vercel.json` to rewrite `/(.*) → /index.html` so every deep link works.
+
+| Current URL | Route name | Target path | Notes |
+|---|---|---|---|
+| `#browse` | `tab-shell:browse` | `/browse` | Read-only sauce catalog (anonymous-accessible). Default landing tab. |
+| `#saucebook` | `tab-shell:saucebook` | `/saucebook` | Current user's saved sauce library (requires auth). |
+| `#pantry` | `tab-shell:pantry` | `/pantry` | Missing-ingredients list (requires auth). |
+| `/sauce/:id` | `recipe` | `/sauce/:id` | Full recipe view with cooking mode + share menu. Already path-routed. |
+| `#meal-category` → `#meal-subtype` → `#sauce-selector` | `meal-builder` (3 steps) | `/meal/new`, `/meal/new/subtype`, `/meal/new/pick` | Meal-builder wizard. Step state is currently in module-locals; once URL-routed, step transitions are real navigations. |
+| `#builder-source` → `#builder-info` → `#builder-review` | `builder` (3 steps) | `/builder/source`, `/builder/info`, `/builder/review` | Recipe-builder wizard (manual / URL / reel import). Same step-state migration as meal-builder. |
+| `#admin` | `admin` | `/admin` | Admin panel (admins only). |
+| `#settings` | `settings` | `/settings` | User settings. |
+
 ## Screen / Page Flow
 ```
 CarbSelectorScreen

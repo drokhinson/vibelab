@@ -40,6 +40,22 @@ Owner-only dashboard for monitoring all vibelab apps. Tracks app usage (open cou
 - `POST /api/v1/admin/users/{user_id}/reset-code?app=wealthmate` — Generate recovery code (admin-only)
 - `GET /api/v1/admin/storage` — Per-app and per-table DB storage (admin-only)
 
+## Routes & URL Map
+
+> **Routing mechanism:** URL-less — `showView(name)` toggles `.display` between `view-login` and `view-dashboard`. The dashboard switches among inner tab panels via local state, also without changing the URL. Refresh always lands on login (then dashboard if a key is cached in `sessionStorage`).
+>
+> **Target after migration** (`.claude/rules/web-frontend.md` § Routing & URLs): path-based History API routing with one URL per view. The target paths below show what each should be once migrated.
+
+| View name (current) | Target path | Notes |
+|---|---|---|
+| `login` | `/login` (or `/` redirecting to dashboard when authed) | Admin key entry form. |
+| `dashboard:usage` | `/usage` | App-by-app usage stats (24h / 7d / 30d / all-time). Default tab after login. |
+| `dashboard:users` | `/users` | User management — per-app filter, reset code, delete. |
+| `dashboard:storage` | `/storage` | DB storage breakdown by table prefix. |
+| `dashboard:api` | `/api` | External-API call log with grouping + filtering + body viewer. |
+
+No deep-linkable identifiers today (no `/users/:id` etc.). When a row drill-in lands, add it as a path param then, not a modal.
+
 ## Screen / Page Flow
 
 ```

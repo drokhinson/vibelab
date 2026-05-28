@@ -22,9 +22,34 @@ paths:
 
 ## Interaction & Accessibility
 
-- **Navigation feels instantaneous.** A tap on a tab, nav item, or in-app link must update the active state, the visible screen, and the URL/store *in the same synchronous frame as the tap*. Any data fetching the destination view needs runs AFTER the visibility flip. Show a skeleton or loading spinner inside the destination view while the data loads — never block the navigation itself behind a `fetch()`. Concretely: the router toggles `.hidden` and the active-tab class before `await`-ing anything, and the destination view's `mount()` paints a placeholder (via `renderLoading()` or an early `render()` against empty state) before kicking off async work.
+- **Navigation feels instantaneous.** A tap on a tab, nav item, or in-app link must update the active state, the visible screen, and the URL (via `history.pushState` — see Routing & URLs below) *in the same synchronous frame as the tap*. Any data fetching the destination view needs runs AFTER the visibility flip. Show a skeleton or loading spinner inside the destination view while the data loads — never block the navigation itself behind a `fetch()`. Concretely: the router toggles `.hidden` and the active-tab class before `await`-ing anything, and the destination view's `mount()` paints a placeholder (via `renderLoading()` or an early `render()` against empty state) before kicking off async work.
 - **Tap targets ≥ 44×44 px.** Every interactive element — buttons, icons, list rows, nav tabs, close X's, dropdown items — must have at least a 44×44 px hit area (Apple HIG / WCAG 2.5.5 AAA). For small visual marks (e.g. a 14×14 lucide X), pad the wrapping button to 44×44 even when the glyph is smaller. Verify with DevTools' "Show layout" or by tapping with a fingertip on a real device, not just a mouse cursor. Adjacent tappables get ≥ 8 px of clear spacing between hit zones so users don't fat-finger the wrong one.
 - **Destructive actions require secondary user confirmation.** Anything that loses user data — discarding a draft, deleting a play, abandoning a session, removing a friend, clearing a list — must require an explicit second tap before firing. The confirmation surface states (a) what will be lost, (b) whether the action is reversible, and (c) offers a Cancel that is the default focus / first read order. **Pick one confirmation surface for the whole project and use it everywhere:** either `window.confirm()` for every destructive gate, or a single project-themed modal (e.g. boardgame-buddy's `PolaroidPopup.confirm()`) for every destructive gate. Do **not** introduce per-screen bespoke dialogs — mixing surfaces within one project is the anti-pattern. If using a custom modal, the destructive button uses the project's destructive accent (e.g. rust / red) so the affordance reads as dangerous at a glance. Non-destructive irreversible actions (publishing, sharing) get a confirm too unless the project decides the cost of the confirm outweighs the cost of an accidental tap.
+
+## Routing & URLs
+
+Every view has a real path. The address bar reflects what the user is looking at; the back button works; deep links survive refresh; sessions and profiles are shareable. The canonical implementation is `projects/boardgame-buddy/web/domain/view.js` — copy that `Router` class and adapt the path table.
+
+**Required:**
+
+- **Use the History API (`pushState` / `replaceState` / `popstate`).** Never hash-route (`location.hash`, `'#' + view`) for view changes, and never run a "URL-less" SPA that only toggles `.hidden` on `data-view` containers. Hash routing breaks the bookmarkable-URL contract and confuses the browser back button; URL-less routing makes refresh land everyone on the same starting view.
+- **Declare a single path table** in the router: route name → URL template (`/play/:code`, `/game/:id`, `/u/:userId`, `/profile/{collection,wishlist,plays,buddies}`, etc.). Provide both directions — `pathFor(name, params)` builds a URL for a navigation, `matchPath(pathname)` resolves an incoming URL on initial load and popstate. One declarative array drives both so they can't drift.
+- **Path params for identity, querystring for extras.** `/game/:gameId` is in the path because it determines what the page is. Display hints (`gameName`, `expansionIds`, `mode=edit`) ride as querystring so deep-link entries still hydrate the destination view's optional params without bloating the path template.
+- **Restore the URL across auth.** On boot, parse `window.location.pathname` → stash the resolved route in store (`pendingRoute`) → show splash with `skipPush` so the original URL stays in the address bar → after Supabase auth resolves, route to the pending route (or the default landing view if none). A user who pastes `/play/{code}` while signed out must bounce through `/auth` and land back on `/play/{code}`.
+- **SPA fallback at the host.** Ship a `vercel.json` (or equivalent for whatever static host the project uses) that rewrites every path to `/index.html`. Without it, refresh on `/play/{code}` returns 404. Use:
+  ```json
+  { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
+  ```
+- **Browser back works.** `router.back()` defers to `history.back()`; a `popstate` listener replays the route from the state object (`{ name, params }` stashed at pushState time), falling back to `matchPath()` for entries that have no state (direct loads, browser-supplied history). Keep a parallel internal `_stack` only because the browser doesn't expose entry metadata — `peekBack()` reads it to label back affordances.
+- **`replaceState` when the URL is already correct.** Common cases: post-auth landing on the user-typed deep link (don't push a duplicate adjacent entry), and per-view state catching up to identity it didn't know at navigation time (e.g. play-flow's host opens a lobby and only then knows the code — call `router.replaceUrl("play-flow", { code })`). Reserve `pushState` for forward navigations the user initiated.
+- **Transient views stay out of the URL.** Loading splashes, auth-bounce screens, and other passive intermediates should not appear in the path or the back stack. Leave them out of the path table entirely so `pathFor` returns null and nothing pushes.
+
+**Anti-patterns to refactor away when touching a project:**
+
+- `'#' + name` hash routing (currently in `projects/sauceboss/web/tabs.js`).
+- A `showView(name)` helper that only toggles `.hidden` and never touches the URL (currently in `projects/plant-planner/web/helpers.js`).
+
+Both should migrate to the History-API pattern next time the project gets meaningful work — same `Router` class, same path table approach.
 
 ## Modular Frontend File Structure
 
