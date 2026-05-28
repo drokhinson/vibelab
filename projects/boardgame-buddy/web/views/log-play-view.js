@@ -373,6 +373,9 @@
       ps.playMode = g.play_mode || ps.playMode || null;
       ps.persist();
       window.store.set("activePlay", ps);
+      // Warm the reference-guide cache in the background so the guide is
+      // instant once the host lands on the Play screen (or opens game detail).
+      window.Chapter.prefetchMyChapters(g.id);
       // If a lobby is already open (e.g. user came back after starting a
       // host session), push the swap to the server so joiners see it.
       if (ps.code) {

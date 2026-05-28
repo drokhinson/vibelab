@@ -288,6 +288,7 @@
           baseGameId: this._game.id,
           gameIds: [this._game.id],
           expansionMeta: { [this._game.id]: { name: this._game.name, color: null } },
+          gameImage: this._game.image_url || this._game.thumbnail_url || null,
           onAfterMutate: () => this.render(),
         });
       } else {

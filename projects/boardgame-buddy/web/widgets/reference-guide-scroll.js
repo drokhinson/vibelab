@@ -16,11 +16,13 @@
   function escapeAttr(s) { return escape(s); }
 
   class ReferenceGuideScroll {
-    constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = true } = {}) {
+    constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = true, gameImage = null } = {}) {
       this._baseGameId = baseGameId || (gameIds && gameIds[0]) || null;
       this._gameIds = (gameIds && gameIds.length) ? gameIds.slice() : (this._baseGameId ? [this._baseGameId] : []);
       this._expansionMeta = expansionMeta || {};
       this._onAfterMutate = onAfterMutate || (() => {});
+      // Base game's cover art — shown (pulsing) while chapters load.
+      this._gameImage = gameImage || null;
 
       this._container = null;
       this._scrollOpen = !!defaultOpen;
@@ -59,6 +61,10 @@
       this._render();
     }
 
+    setGameImage(url) {
+      this._gameImage = url || null;
+    }
+
     refresh() { return this._fetch(); }
 
     async _fetch() {
@@ -69,13 +75,30 @@
         this._render();
         return;
       }
-      this._loading = true;
-      this._render();
       const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
+      // Seed instantly from the localStorage cache when present (no loader),
+      // then always revalidate below so a stale list is corrected within one
+      // render. Cold case: show the loader while the first fetch lands.
+      let seeded = false;
+      const cached = window.Chapter && window.Chapter.cachedMyChapters
+        ? window.Chapter.cachedMyChapters(this._baseGameId, expansionIds)
+        : null;
+      if (cached) {
+        this._chapters = cached;
+        this._loading = false;
+        seeded = true;
+      } else {
+        this._loading = true;
+      }
+      this._render();
       try {
-        this._chapters = await window.Chapter.myChapters(this._baseGameId, { expansionIds }) || [];
+        const fresh = await window.Chapter.myChapters(this._baseGameId, { expansionIds }) || [];
+        this._chapters = fresh;
+        if (window.Chapter && window.Chapter.cacheMyChapters) {
+          window.Chapter.cacheMyChapters(this._baseGameId, expansionIds, fresh);
+        }
       } catch (_) {
-        this._chapters = [];
+        if (!seeded) this._chapters = [];
       } finally {
         this._loading = false;
         this._render();
@@ -149,7 +172,7 @@
         : this._chapters;
 
       const bodyInner = this._loading
-        ? `<div class="scroll-panel__loading">${window.buddyLoader({ size: 60 })}</div>`
+        ? `<div class="scroll-panel__loading">${window.gameLoader({ image: this._gameImage, size: 72, label: "Loading guide…" })}</div>`
         : (filtered.length > 0
             ? this._groupChaptersByType(filtered)
                 .map((g) => this._renderChapterSection(g)).join("")
@@ -325,6 +348,7 @@
       try {
         await window.Chapter.remove(sourceGameId, chapterId);
         this._chapters = this._chapters.filter((c) => c.id !== chapterId);
+        window.Chapter.invalidateChaptersCache();
         if (typeof showToast === "function") showToast("Removed from your guide", "info");
         this._render();
         this._onAfterMutate();

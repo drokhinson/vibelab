@@ -2098,6 +2098,19 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* Game-art loader — the mark is the board game's own cover, breathing in place
+   while its reference-guide chapters load. (helpers.js#gameLoader) */
+.game-loader__mark {
+  border-radius: 14%;
+  object-fit: cover;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  animation: game-loader-pulse 1.3s ease-in-out infinite;
+}
+@keyframes game-loader-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.6; }
+  50%      { transform: scale(1.06); opacity: 1;   }
+}
+
 /* ── Play card — Polaroid ──────────────────────────────────────────────────
    The card reads like an instant photo pinned to the page: cream surface,
    soft drop shadow, slight tilt, photo at the top in its natural aspect
@@ -5593,7 +5606,7 @@ main[data-view="session-viewer"].hidden {
 /* Picked-game chip (above the input) */
 .cascade-game-chip {
   display: grid;
-  grid-template-columns: 40px 1fr 44px;
+  grid-template-columns: 40px 1fr 44px 44px;
   gap: 10px;
   align-items: center;
   padding: 6px 8px;
@@ -5624,7 +5637,8 @@ main[data-view="session-viewer"].hidden {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.cascade-game-chip__clear {
+.cascade-game-chip__clear,
+.cascade-game-chip__details {
   width: 44px;
   height: 44px;
   display: inline-flex;
@@ -5636,7 +5650,9 @@ main[data-view="session-viewer"].hidden {
   border: 0;
   cursor: pointer;
 }
-.cascade-game-chip__clear:hover { background: rgba(0, 0, 0, 0.06); color: var(--polaroid-ink); }
+.cascade-game-chip__clear:hover,
+.cascade-game-chip__details:hover { background: rgba(0, 0, 0, 0.06); color: var(--polaroid-ink); }
+.cascade-game-chip__details { color: var(--polaroid-ink); }
 
 /* ── "Find a Game that fits" section on the Host/Join landing ────────────── */
 .lp-divider {
