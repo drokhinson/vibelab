@@ -34,6 +34,15 @@
       // between optimistic local removal and server confirmation from
       // snapping the player back into the grid via a stale poll.
       this._pendingDeletes = 0;
+      // Monotonic token for phase-change PATCHes. After a call's PATCH
+      // resolves it only reconciles state if it is still the latest — a
+      // stale earlier PATCH resolving after a newer navigation must not yank
+      // the phase back (the rapid-tap "jump back to a previous screen" bug).
+      this._phaseSeq = 0;
+      // Counts in-flight phase PATCHes. While > 0 the lobby poll skips its
+      // tick so it can't clobber this._lobby (incl. a stale phase) mid
+      // transition. Mirrors _pendingDeletes.
+      this._pendingPhase = 0;
       this._buddyInputTimer = null;
       // GameFinder widget instance, lazily constructed in render() when the
       // Gather screen needs the picker. Lives across the 2s lobby-poll
@@ -230,6 +239,10 @@
         // server still has the row, and the merge logic below would
         // re-add it as a "new" participant.
         if (this._pendingDeletes > 0) return;
+        // Skip while a phase change is in flight — the response below would
+        // overwrite this._lobby with a row whose phase may not yet reflect
+        // the transition the host just kicked off.
+        if (this._pendingPhase > 0) return;
         try {
           const next = await window.PlaySession.fetchLobby(this._lobby.code);
           const prevIds = new Set((this._lobby.participants || []).map((p) => p.id));
@@ -775,12 +788,19 @@
       // surface the error and roll the phase back. This also keeps the
       // Continue/Wrap-up/back-arrow taps feeling instant on a slow link.
       const prevPhase = this._ps.phase;
+      // Token this invocation. If the user navigates again before our PATCH
+      // resolves, a newer call bumps _phaseSeq past `seq` and we must NOT
+      // reconcile against this (now-stale) response — otherwise an older
+      // PATCH resolving last snaps the screen back to its phase.
+      const seq = ++this._phaseSeq;
       this._ps.phase = next;
       this._ps.persist();
       this.render();
       this._scrollToCurrentPhase();
+      this._pendingPhase++;
       try {
         const updated = await window.PlaySession.advancePhase(this._lobby.code, next);
+        if (seq !== this._phaseSeq) return; // a newer phase change owns the state now
         this._lobby = updated;
         if (updated.phase && updated.phase !== this._ps.phase) {
           // Server overrode (shouldn't normally happen). Sync local view.
@@ -789,11 +809,14 @@
           this.render();
         }
       } catch (e) {
+        if (seq !== this._phaseSeq) return; // superseded — let the newer call own state
         this._ps.phase = prevPhase;
         this._ps.persist();
         this._error = e.message || "Could not advance to the next screen";
         this.render();
         this._scrollToCurrentPhase();
+      } finally {
+        this._pendingPhase--;
       }
     }
 
