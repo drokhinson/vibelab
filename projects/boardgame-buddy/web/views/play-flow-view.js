@@ -172,8 +172,29 @@
             this._syncUrlToCode();
             return;
           }
-        } catch (_) {
-          // Stale — fall through and create a new one.
+          // Reached the server and it says the lobby is gone/closed — fall
+          // through to open a fresh one.
+        } catch (e) {
+          // Distinguish "lobby is definitively gone" (404/410) from a transient
+          // network/server blip (no status, or 5xx) — common right after the
+          // phone wakes. On a blip we must NOT mint a new code: that would
+          // abandon the real session and force the host to re-navigate. Keep
+          // the persisted code, render from the draft, and let the 2s poll
+          // (backed by the API's 401 refresh-retry) reconnect.
+          const gone = e && (e.status === 404 || e.status === 410);
+          if (!gone) {
+            this._lobby = {
+              code: this._ps.code,
+              id: this._ps.sessionId,
+              host_user_id: this._ps.hostUserId,
+              phase: this._ps.phase || "gather",
+              status: "open",
+              participants: (this._lobby && this._lobby.participants) || [],
+            };
+            this._syncUrlToCode();
+            return;
+          }
+          // Definitively gone — fall through and create a new one.
         }
       }
       try {
