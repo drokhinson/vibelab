@@ -644,23 +644,34 @@
       `;
     }
 
-    _cellValue(player, roundIndex) {
-      // Prefer live-scoring source-of-truth (Realtime) when the player is
-      // a real account; fall back to the local roundScores array.
+    // Resolved score for one (player, round) cell: the live-scoring overlay
+    // (Realtime) wins for authed players, else the local roundScores value.
+    // Returns number|null. Both the cell renderer and the column total go
+    // through this so the displayed cells and the Total can never disagree.
+    _resolvedScore(player, roundIndex) {
       if (this._liveScores && player.user_id) {
         const live = this._liveScores.getScore(player.user_id, roundIndex);
-        if (live != null) return String(live);
+        if (live != null) return live;
       }
       const local = player.roundScores && player.roundScores[roundIndex];
-      return local != null ? String(local) : "";
+      return local != null ? Number(local) : null;
+    }
+
+    _cellValue(player, roundIndex) {
+      const v = this._resolvedScore(player, roundIndex);
+      return v == null ? "" : String(v);
     }
 
     _playerTotal(player) {
-      if (this._liveScores && player.user_id) {
-        const live = this._liveScores.totalFor(player.user_id);
-        if (live > 0) return live;
-      }
-      return (player.roundScores || []).reduce((a, b) => a + (Number(b) || 0), 0);
+      // Sum the same per-round resolved values the grid renders, so the
+      // Total always equals the sum of the visible cells. roundScores.length
+      // is the authoritative round count: _addRound pushes a null for every
+      // player before any cell is editable, so every live-written round index
+      // has a matching local slot.
+      const n = (player.roundScores || []).length;
+      let total = 0;
+      for (let r = 0; r < n; r++) total += Number(this._resolvedScore(player, r)) || 0;
+      return total;
     }
 
     _renderTotalsCell(p, i, mode, total) {
