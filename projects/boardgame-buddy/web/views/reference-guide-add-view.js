@@ -72,6 +72,10 @@
       // Toolbar popover + one-shots
       this._activePop = null;        // null | "table" | "color"
       this._tablePickLabel = "1 × 1";
+      // Caret captured when a popover opens — the re-render that shows the
+      // popover recreates the textarea and resets its caret to 0, so inserts
+      // fired from a popover (table / colour) must restore it.
+      this._popCaret = null;         // null | { start, end }
       this._centerTypeScrollOnNext = false;
       // Browse filters
       this._search = "";
@@ -796,10 +800,19 @@
       return this.container.querySelector("#chapter-form-content");
     }
 
+    // Resolve the active selection. Popover-driven inserts (table / colour)
+    // re-render before firing, which resets the textarea caret to 0 — fall
+    // back to the caret captured when the popover opened.
+    _selRange(ta) {
+      const r = this._popCaret || { start: ta.selectionStart, end: ta.selectionEnd };
+      this._popCaret = null;
+      return r;
+    }
+
     _applyWrap(before, after) {
       const ta = this._getTextarea();
       if (!ta) return;
-      const s = ta.selectionStart, e = ta.selectionEnd;
+      const { start: s, end: e } = this._selRange(ta);
       const sel = ta.value.slice(s, e) || "text";
       const next = ta.value.slice(0, s) + before + sel + after + ta.value.slice(e);
       ta.value = next;
@@ -812,7 +825,7 @@
     _applyLinePrefix(prefix) {
       const ta = this._getTextarea();
       if (!ta) return;
-      const s = ta.selectionStart;
+      const { start: s } = this._selRange(ta);
       const lineStart = ta.value.lastIndexOf("\n", s - 1) + 1;
       const next = ta.value.slice(0, lineStart) + prefix + ta.value.slice(lineStart);
       ta.value = next;
@@ -824,7 +837,7 @@
     _insertAt(text) {
       const ta = this._getTextarea();
       if (!ta) return;
-      const s = ta.selectionStart;
+      const { start: s } = this._selRange(ta);
       const next = ta.value.slice(0, s) + text + ta.value.slice(s);
       ta.value = next;
       this._formContent = next;
@@ -838,7 +851,7 @@
         case "i":    this._applyWrap("*", "*"); break;
         case "h":    this._applyLinePrefix("## "); break;
         case "ul":   this._applyLinePrefix("- "); break;
-        case "link": this._applyWrap("[", "](url)"); break;
+        case "link": this._applyWrap("[", "](https://)"); break;
       }
     }
 
@@ -861,7 +874,14 @@
     }
 
     _togglePop(name) {
-      this._activePop = this._activePop === name ? null : name;
+      const opening = this._activePop !== name;
+      // Snapshot the caret while the live textarea still exists — the render
+      // below recreates it and resets the caret to 0.
+      const ta = this._getTextarea();
+      this._popCaret = (opening && ta)
+        ? { start: ta.selectionStart, end: ta.selectionEnd }
+        : null;
+      this._activePop = opening ? name : null;
       this._tablePickLabel = "1 × 1";
       this.render();
     }
@@ -899,21 +919,25 @@
       if (!grid || !label) return;
       grid.innerHTML = "";
       const ROWS = 6, COLS = 6;
+      // Highlight every cell inside the rectangle anchored at the top-left
+      // corner up to (r, c), and update the dimension label. Shared by mouse
+      // hover and touch drag.
+      const paint = (r, c) => {
+        grid.querySelectorAll(".chapter-edit__cell").forEach((x) => {
+          x.classList.toggle(
+            "chapter-edit__cell--hot",
+            Number(x.dataset.r) <= r && Number(x.dataset.c) <= c
+          );
+        });
+        label.textContent = c + " × " + r;
+      };
       for (let r = 1; r <= ROWS; r++) {
         for (let c = 1; c <= COLS; c++) {
           const cell = document.createElement("div");
           cell.className = "chapter-edit__cell";
           cell.dataset.r = String(r);
           cell.dataset.c = String(c);
-          cell.addEventListener("mouseenter", () => {
-            grid.querySelectorAll(".chapter-edit__cell").forEach((x) => {
-              x.classList.toggle(
-                "chapter-edit__cell--hot",
-                Number(x.dataset.r) <= r && Number(x.dataset.c) <= c
-              );
-            });
-            label.textContent = c + " × " + r;
-          });
+          cell.addEventListener("mouseenter", () => paint(r, c));
           cell.addEventListener("click", (ev) => {
             ev.stopPropagation();
             this._insertTable(c, r);
@@ -921,6 +945,28 @@
           grid.appendChild(cell);
         }
       }
+
+      // Touch: drag a finger across the grid to highlight from the top-left
+      // corner, lift to insert. mouseenter never fires mid-touch, so resolve
+      // the cell under the finger via elementFromPoint. preventDefault keeps
+      // the popover / page from scrolling during the drag.
+      let touchSel = null;
+      const touchPaint = (ev) => {
+        ev.preventDefault();
+        const t = ev.touches[0];
+        if (!t) return;
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && el.classList.contains("chapter-edit__cell")) {
+          touchSel = { r: Number(el.dataset.r), c: Number(el.dataset.c) };
+          paint(touchSel.r, touchSel.c);
+        }
+      };
+      grid.addEventListener("touchstart", touchPaint, { passive: false });
+      grid.addEventListener("touchmove", touchPaint, { passive: false });
+      grid.addEventListener("touchend", (ev) => {
+        ev.preventDefault();
+        if (touchSel) this._insertTable(touchSel.c, touchSel.r);
+      });
     }
 
     _onImportMd(event) {

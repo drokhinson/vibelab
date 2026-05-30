@@ -27,6 +27,14 @@
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/(?<![*])\*([^*\n]+)\*(?![*])/g, "<em>$1</em>")
+      // [text](url) links. escape() only encodes & < > " ' so the bracket /
+      // paren syntax survives intact. Only http(s), mailto, and root-relative
+      // URLs are allowed through — anything else (e.g. javascript:) is left as
+      // literal text so the markdown can't smuggle an unsafe href.
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, url) =>
+        /^(https?:\/\/|mailto:|\/)/i.test(url)
+          ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`
+          : m)
       // Re-allow color spans after escape: only hex colors are accepted, and
       // the inner text is already escaped so wrapping it in a real <span> is
       // safe. Anything that doesn't match (named colors, other attributes,
