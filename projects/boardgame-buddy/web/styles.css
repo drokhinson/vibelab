@@ -348,6 +348,12 @@ body {
 .scroll-chapter__content ul {
   margin: 0.3rem 0 0.4rem;
   padding-left: 1.1rem;
+  list-style: disc outside;
+}
+.scroll-chapter__content a {
+  color: var(--accent-hover, #B8820E);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .scroll-chapter__content code {
   background: rgba(139, 111, 60, 0.18);
@@ -886,8 +892,14 @@ body {
 .chapter-edit__preview ul {
   margin: 0.45rem 0 0.5rem;
   padding-left: 1.1rem;
+  list-style: disc outside;
 }
 .chapter-edit__preview li { margin: 0.2rem 0; color: #4a3c28; }
+.chapter-edit__preview a {
+  color: var(--accent-hover, #B8820E);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .chapter-edit__preview code {
   background: rgba(201, 146, 42, 0.18);
   padding: 0 5px;
@@ -917,6 +929,35 @@ body {
 .chapter-edit__preview-empty {
   color: var(--polaroid-muted, #8B7E68);
   font-style: italic;
+}
+
+/* Authoring-guide modal — reuses the polaroid-popup backdrop + the chapter
+   preview markdown styles, sized wider than the confirm card with a scroll
+   body for the multi-section guide. Combined selector overrides the base
+   .polaroid-popup__card width / text-align defined later in this file. */
+.polaroid-popup__card.chapter-guide__card {
+  width: calc(100vw - 32px);
+  max-width: 460px;
+  padding: 20px 18px 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chapter-guide__body {
+  min-height: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: none;
+  margin: 0;
+}
+.chapter-guide__actions {
+  margin-top: 2px;
+}
+.chapter-guide__actions .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Toolbar popovers — table dimension picker + colour swatches. */

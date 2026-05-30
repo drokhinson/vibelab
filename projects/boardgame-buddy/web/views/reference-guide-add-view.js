@@ -18,6 +18,58 @@
     { id: "purple", hex: "#7A5293" },
   ];
 
+  // Authoring guide shown by the toolbar info button and offered as a .md
+  // download. Written for an AI (or person) drafting a chapter. Keep this in
+  // sync with what ui/markdown.js actually renders — every component named
+  // under "Supported formatting" is handled by renderMarkdown/renderInline;
+  // anything not listed shows up as literal text.
+  //
+  // NOTE: this string is both rendered in-app (the modal) AND downloaded as
+  // raw .md. markdown.js has no escape syntax, so tokens like **bold** can't be
+  // shown literally in the rendered view — instead each feature is named in
+  // prose (which renders cleanly) and the raw .md carries the exact source for
+  // an AI to read. Heading/bullet/table tokens shown in backticks are safe
+  // (the inline renderer leaves them untouched inside code spans).
+  const CHAPTER_AUTHORING_GUIDE = `## Writing a BoardgameBuddy chapter
+
+A **chapter** is one focused slice of a game's rules — Setup, Your Turn,
+Scoring, a card reference, tips, or a variant. Players open it mid-game to
+answer one question fast, so a chapter is a **quick-reference card, not the
+rulebook**. Pick the matching chapter type, give it a short title, and write
+the body using the markdown below.
+
+## What to focus on
+
+- **Simplicity** — one topic per chapter. If you are explaining two things, write two chapters.
+- **Quick reference** — a player is mid-turn, so lead with the answer; use short headings, tight bullets, and tables for any lookup.
+- **Brevity** — trim every sentence that isn't load-bearing.
+- **Bold the keywords** so the eye can jump straight to them.
+
+## Supported formatting
+
+Only these components render — anything else shows up as plain text.
+
+- **Headings** — start a line with \`## \`, \`### \`, or \`#### \`. There is no H1 (\`# \`); the chapter title field is the H1, so begin body sections at \`## \`.
+- **Bullet lists** — start each line with \`- \` (or \`* \`), one item per line.
+- **Bold** — wrap text in double asterisks, like **this**.
+- **Italic** — wrap text in single asterisks, like *this*.
+- **Inline code** — wrap text in backticks, like \`this\`.
+- **Links** — write \`[label](https://example.com)\`. Only http(s), \`mailto:\`, and root-relative (\`/path\`) links are allowed; anything else stays literal text. Links open in a new tab.
+- **Coloured text** — \`<span style="color:#C9922A">text</span>\` (hex colours only). The colour button in the toolbar inserts one for you.
+- **Tables** — a header row, a \`---\` separator row, then data rows, like:
+
+| Symbol | Means  |
+| ---    | ---    |
+| sword  | Attack |
+| shield | Defend |
+
+## Not supported
+
+Numbered lists, blockquotes, images, code fences, and raw HTML (other than the
+colour span) are **not** rendered — they appear exactly as typed. Stick to the
+components above.
+`;
+
   class ReferenceGuideAddView extends window.View {
     constructor() {
       super("reference-guide-add");
@@ -72,6 +124,11 @@
       // Toolbar popover + one-shots
       this._activePop = null;        // null | "table" | "color"
       this._tablePickLabel = "1 × 1";
+      this._showGuide = false;       // authoring-guide modal open?
+      // Caret captured when a popover opens — the re-render that shows the
+      // popover recreates the textarea and resets its caret to 0, so inserts
+      // fired from a popover (table / colour) must restore it.
+      this._popCaret = null;         // null | { start, end }
       this._centerTypeScrollOnNext = false;
       // Browse filters
       this._search = "";
@@ -677,6 +734,11 @@
                        onclick="event.stopPropagation();window.referenceGuideAddView._togglePop('color')">
                  <i data-lucide="palette" class="w-4 h-4"></i>
                </button>
+               <span class="chapter-edit__tdiv"></span>
+               <button type="button" class="chapter-edit__tbtn" title="Authoring guide"
+                       onclick="window.referenceGuideAddView._toggleGuide()">
+                 <i data-lucide="info" class="w-4 h-4"></i>
+               </button>
              </div>
              <textarea id="chapter-form-content"
                        class="chapter-edit__mdarea"
@@ -746,7 +808,57 @@
             </button>
           </div>
         </form>
+        ${this._renderGuideModal()}
       `;
+    }
+
+    // Authoring-guide modal — rendered at form level so it's available from
+    // both Write and Preview. Reuses the polaroid-popup backdrop styling and
+    // the chapter preview markdown styles (so headings / bullets / links /
+    // tables look identical to the live preview), plus a scroll container.
+    _renderGuideModal() {
+      if (!this._showGuide) return "";
+      return `
+        <div class="polaroid-popup__backdrop polaroid-popup__backdrop--confirm chapter-guide__backdrop"
+             onclick="if(event.target===this)window.referenceGuideAddView._toggleGuide()">
+          <div class="polaroid-popup__card chapter-guide__card" role="dialog" aria-modal="true"
+               aria-label="Chapter authoring guide">
+            <button type="button" class="polaroid-popup__close" aria-label="Close"
+                    onclick="window.referenceGuideAddView._toggleGuide()">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+            <div class="chapter-edit__preview chapter-guide__body">
+              ${window.renderMarkdown(CHAPTER_AUTHORING_GUIDE)}
+            </div>
+            <div class="polaroid-popup__actions chapter-guide__actions">
+              <button type="button" class="btn btn-ghost btn-sm"
+                      onclick="window.referenceGuideAddView._toggleGuide()">Close</button>
+              <button type="button" class="btn btn-primary btn-sm"
+                      onclick="window.referenceGuideAddView._downloadGuide()">
+                <i data-lucide="download" class="w-4 h-4"></i> Download .md
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    _toggleGuide() {
+      this._showGuide = !this._showGuide;
+      this.render();
+    }
+
+    _downloadGuide() {
+      const blob = new Blob([CHAPTER_AUTHORING_GUIDE], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "boardgamebuddy-chapter-guide.md";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast("Guide downloaded", "success");
     }
 
     _renderCreateTargetSelector() {
@@ -796,10 +908,19 @@
       return this.container.querySelector("#chapter-form-content");
     }
 
+    // Resolve the active selection. Popover-driven inserts (table / colour)
+    // re-render before firing, which resets the textarea caret to 0 — fall
+    // back to the caret captured when the popover opened.
+    _selRange(ta) {
+      const r = this._popCaret || { start: ta.selectionStart, end: ta.selectionEnd };
+      this._popCaret = null;
+      return r;
+    }
+
     _applyWrap(before, after) {
       const ta = this._getTextarea();
       if (!ta) return;
-      const s = ta.selectionStart, e = ta.selectionEnd;
+      const { start: s, end: e } = this._selRange(ta);
       const sel = ta.value.slice(s, e) || "text";
       const next = ta.value.slice(0, s) + before + sel + after + ta.value.slice(e);
       ta.value = next;
@@ -812,7 +933,7 @@
     _applyLinePrefix(prefix) {
       const ta = this._getTextarea();
       if (!ta) return;
-      const s = ta.selectionStart;
+      const { start: s } = this._selRange(ta);
       const lineStart = ta.value.lastIndexOf("\n", s - 1) + 1;
       const next = ta.value.slice(0, lineStart) + prefix + ta.value.slice(lineStart);
       ta.value = next;
@@ -824,7 +945,7 @@
     _insertAt(text) {
       const ta = this._getTextarea();
       if (!ta) return;
-      const s = ta.selectionStart;
+      const { start: s } = this._selRange(ta);
       const next = ta.value.slice(0, s) + text + ta.value.slice(s);
       ta.value = next;
       this._formContent = next;
@@ -838,7 +959,7 @@
         case "i":    this._applyWrap("*", "*"); break;
         case "h":    this._applyLinePrefix("## "); break;
         case "ul":   this._applyLinePrefix("- "); break;
-        case "link": this._applyWrap("[", "](url)"); break;
+        case "link": this._applyWrap("[", "](https://)"); break;
       }
     }
 
@@ -861,7 +982,14 @@
     }
 
     _togglePop(name) {
-      this._activePop = this._activePop === name ? null : name;
+      const opening = this._activePop !== name;
+      // Snapshot the caret while the live textarea still exists — the render
+      // below recreates it and resets the caret to 0.
+      const ta = this._getTextarea();
+      this._popCaret = (opening && ta)
+        ? { start: ta.selectionStart, end: ta.selectionEnd }
+        : null;
+      this._activePop = opening ? name : null;
       this._tablePickLabel = "1 × 1";
       this.render();
     }
@@ -899,21 +1027,25 @@
       if (!grid || !label) return;
       grid.innerHTML = "";
       const ROWS = 6, COLS = 6;
+      // Highlight every cell inside the rectangle anchored at the top-left
+      // corner up to (r, c), and update the dimension label. Shared by mouse
+      // hover and touch drag.
+      const paint = (r, c) => {
+        grid.querySelectorAll(".chapter-edit__cell").forEach((x) => {
+          x.classList.toggle(
+            "chapter-edit__cell--hot",
+            Number(x.dataset.r) <= r && Number(x.dataset.c) <= c
+          );
+        });
+        label.textContent = c + " × " + r;
+      };
       for (let r = 1; r <= ROWS; r++) {
         for (let c = 1; c <= COLS; c++) {
           const cell = document.createElement("div");
           cell.className = "chapter-edit__cell";
           cell.dataset.r = String(r);
           cell.dataset.c = String(c);
-          cell.addEventListener("mouseenter", () => {
-            grid.querySelectorAll(".chapter-edit__cell").forEach((x) => {
-              x.classList.toggle(
-                "chapter-edit__cell--hot",
-                Number(x.dataset.r) <= r && Number(x.dataset.c) <= c
-              );
-            });
-            label.textContent = c + " × " + r;
-          });
+          cell.addEventListener("mouseenter", () => paint(r, c));
           cell.addEventListener("click", (ev) => {
             ev.stopPropagation();
             this._insertTable(c, r);
@@ -921,6 +1053,28 @@
           grid.appendChild(cell);
         }
       }
+
+      // Touch: drag a finger across the grid to highlight from the top-left
+      // corner, lift to insert. mouseenter never fires mid-touch, so resolve
+      // the cell under the finger via elementFromPoint. preventDefault keeps
+      // the popover / page from scrolling during the drag.
+      let touchSel = null;
+      const touchPaint = (ev) => {
+        ev.preventDefault();
+        const t = ev.touches[0];
+        if (!t) return;
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && el.classList.contains("chapter-edit__cell")) {
+          touchSel = { r: Number(el.dataset.r), c: Number(el.dataset.c) };
+          paint(touchSel.r, touchSel.c);
+        }
+      };
+      grid.addEventListener("touchstart", touchPaint, { passive: false });
+      grid.addEventListener("touchmove", touchPaint, { passive: false });
+      grid.addEventListener("touchend", (ev) => {
+        ev.preventDefault();
+        if (touchSel) this._insertTable(touchSel.c, touchSel.r);
+      });
     }
 
     _onImportMd(event) {
