@@ -18,6 +18,58 @@
     { id: "purple", hex: "#7A5293" },
   ];
 
+  // Authoring guide shown by the toolbar info button and offered as a .md
+  // download. Written for an AI (or person) drafting a chapter. Keep this in
+  // sync with what ui/markdown.js actually renders — every component named
+  // under "Supported formatting" is handled by renderMarkdown/renderInline;
+  // anything not listed shows up as literal text.
+  //
+  // NOTE: this string is both rendered in-app (the modal) AND downloaded as
+  // raw .md. markdown.js has no escape syntax, so tokens like **bold** can't be
+  // shown literally in the rendered view — instead each feature is named in
+  // prose (which renders cleanly) and the raw .md carries the exact source for
+  // an AI to read. Heading/bullet/table tokens shown in backticks are safe
+  // (the inline renderer leaves them untouched inside code spans).
+  const CHAPTER_AUTHORING_GUIDE = `## Writing a BoardgameBuddy chapter
+
+A **chapter** is one focused slice of a game's rules — Setup, Your Turn,
+Scoring, a card reference, tips, or a variant. Players open it mid-game to
+answer one question fast, so a chapter is a **quick-reference card, not the
+rulebook**. Pick the matching chapter type, give it a short title, and write
+the body using the markdown below.
+
+## What to focus on
+
+- **Simplicity** — one topic per chapter. If you are explaining two things, write two chapters.
+- **Quick reference** — a player is mid-turn, so lead with the answer; use short headings, tight bullets, and tables for any lookup.
+- **Brevity** — trim every sentence that isn't load-bearing.
+- **Bold the keywords** so the eye can jump straight to them.
+
+## Supported formatting
+
+Only these components render — anything else shows up as plain text.
+
+- **Headings** — start a line with \`## \`, \`### \`, or \`#### \`. There is no H1 (\`# \`); the chapter title field is the H1, so begin body sections at \`## \`.
+- **Bullet lists** — start each line with \`- \` (or \`* \`), one item per line.
+- **Bold** — wrap text in double asterisks, like **this**.
+- **Italic** — wrap text in single asterisks, like *this*.
+- **Inline code** — wrap text in backticks, like \`this\`.
+- **Links** — write \`[label](https://example.com)\`. Only http(s), \`mailto:\`, and root-relative (\`/path\`) links are allowed; anything else stays literal text. Links open in a new tab.
+- **Coloured text** — \`<span style="color:#C9922A">text</span>\` (hex colours only). The colour button in the toolbar inserts one for you.
+- **Tables** — a header row, a \`---\` separator row, then data rows, like:
+
+| Symbol | Means  |
+| ---    | ---    |
+| sword  | Attack |
+| shield | Defend |
+
+## Not supported
+
+Numbered lists, blockquotes, images, code fences, and raw HTML (other than the
+colour span) are **not** rendered — they appear exactly as typed. Stick to the
+components above.
+`;
+
   class ReferenceGuideAddView extends window.View {
     constructor() {
       super("reference-guide-add");
@@ -72,6 +124,7 @@
       // Toolbar popover + one-shots
       this._activePop = null;        // null | "table" | "color"
       this._tablePickLabel = "1 × 1";
+      this._showGuide = false;       // authoring-guide modal open?
       // Caret captured when a popover opens — the re-render that shows the
       // popover recreates the textarea and resets its caret to 0, so inserts
       // fired from a popover (table / colour) must restore it.
@@ -681,6 +734,11 @@
                        onclick="event.stopPropagation();window.referenceGuideAddView._togglePop('color')">
                  <i data-lucide="palette" class="w-4 h-4"></i>
                </button>
+               <span class="chapter-edit__tdiv"></span>
+               <button type="button" class="chapter-edit__tbtn" title="Authoring guide"
+                       onclick="window.referenceGuideAddView._toggleGuide()">
+                 <i data-lucide="info" class="w-4 h-4"></i>
+               </button>
              </div>
              <textarea id="chapter-form-content"
                        class="chapter-edit__mdarea"
@@ -750,7 +808,57 @@
             </button>
           </div>
         </form>
+        ${this._renderGuideModal()}
       `;
+    }
+
+    // Authoring-guide modal — rendered at form level so it's available from
+    // both Write and Preview. Reuses the polaroid-popup backdrop styling and
+    // the chapter preview markdown styles (so headings / bullets / links /
+    // tables look identical to the live preview), plus a scroll container.
+    _renderGuideModal() {
+      if (!this._showGuide) return "";
+      return `
+        <div class="polaroid-popup__backdrop polaroid-popup__backdrop--confirm chapter-guide__backdrop"
+             onclick="if(event.target===this)window.referenceGuideAddView._toggleGuide()">
+          <div class="polaroid-popup__card chapter-guide__card" role="dialog" aria-modal="true"
+               aria-label="Chapter authoring guide">
+            <button type="button" class="polaroid-popup__close" aria-label="Close"
+                    onclick="window.referenceGuideAddView._toggleGuide()">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+            <div class="chapter-edit__preview chapter-guide__body">
+              ${window.renderMarkdown(CHAPTER_AUTHORING_GUIDE)}
+            </div>
+            <div class="polaroid-popup__actions chapter-guide__actions">
+              <button type="button" class="btn btn-ghost btn-sm"
+                      onclick="window.referenceGuideAddView._toggleGuide()">Close</button>
+              <button type="button" class="btn btn-primary btn-sm"
+                      onclick="window.referenceGuideAddView._downloadGuide()">
+                <i data-lucide="download" class="w-4 h-4"></i> Download .md
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    _toggleGuide() {
+      this._showGuide = !this._showGuide;
+      this.render();
+    }
+
+    _downloadGuide() {
+      const blob = new Blob([CHAPTER_AUTHORING_GUIDE], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "boardgamebuddy-chapter-guide.md";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast("Guide downloaded", "success");
     }
 
     _renderCreateTargetSelector() {

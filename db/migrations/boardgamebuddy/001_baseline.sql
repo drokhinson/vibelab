@@ -217,7 +217,7 @@ ALTER TABLE public.boardgamebuddy_chunk_types ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_chunk_types TO boardgamebuddy_role;
 
 INSERT INTO public.boardgamebuddy_chunk_types (id, label, icon, display_order) VALUES
-  ('setup',          'Setup',          'settings',  10),
+  ('setup',          'Setup',          'box',       10),
   ('player_turn',    'Player Turn',    'gamepad-2', 20),
   ('scoring',        'Scoring',        'trophy',    30),
   ('card_reference', 'Card Reference', 'layers',    40),
