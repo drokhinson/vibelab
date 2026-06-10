@@ -48,12 +48,6 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": null
-      }
-    },
-    "owner": "drokhinson"
+    }
   }
 }
