@@ -30,8 +30,8 @@
       "tags": ["games", "hobbies", "social"],
       "webUrl": "https://vibelab-boardgamebuddy.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
-      "hasNativeApp": false,
-      "expoSlug": null,
+      "hasNativeApp": true,
+      "expoSlug": "boardgame-buddy",
       "createdAt": "2026-03-27",
       "icon": "🎲",
       "featured": true

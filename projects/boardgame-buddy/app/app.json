@@ -4,6 +4,7 @@
     "slug": "boardgame-buddy",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "boardgamebuddy",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
@@ -11,22 +12,42 @@
       "resizeMode": "contain",
       "backgroundColor": "#0d0d14"
     },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Boardgame Buddy uses your photos to attach a snapshot to a logged play."
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.vibelab.boardgame-buddy"
+      "bundleIdentifier": "com.vibelab.boardgame-buddy",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Boardgame Buddy uses your photos to attach a snapshot to a logged play.",
+        "CFBundleURLTypes": [
+          { "CFBundleURLSchemes": ["boardgamebuddy"] }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0d0d14"
       },
-      "package": "com.vibelab.boardgame-buddy"
+      "package": "com.vibelab.boardgame-buddy",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT", "BROWSABLE"],
+          "data": [{ "scheme": "boardgamebuddy" }]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "apiUrl": "http://localhost:8000"
     }
   }
 }
