@@ -13,8 +13,8 @@ import AvatarCustomizer from '../components/AvatarCustomizer';
 import { confirm, alert as alertModal } from '../components/ConfirmModal';
 import api from '../api/client';
 
-const PRIVACY_URL = 'https://boardgame-buddy.vercel.app/privacy.html';
-const DELETE_URL = 'https://boardgame-buddy.vercel.app/delete-account.html';
+const PRIVACY_URL = 'https://vibelab-boardgamebuddy.vercel.app/privacy.html';
+const DELETE_URL = 'https://vibelab-boardgamebuddy.vercel.app/delete-account.html';
 
 export default function SettingsScreen({ navigation }) {
   const state = useAppState();

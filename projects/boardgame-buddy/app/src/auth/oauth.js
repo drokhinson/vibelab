@@ -16,7 +16,7 @@ import { supabase, isAuthConfigured } from './supabase';
 WebBrowser.maybeCompleteAuthSession();
 
 const WEB_BRIDGE_URL = (process.env.EXPO_PUBLIC_AUTH_CALLBACK_URL
-  || 'https://boardgame-buddy.vercel.app/auth-callback.html').replace(/\/+$/, '');
+  || 'https://vibelab-boardgamebuddy.vercel.app/auth-callback.html').replace(/\/+$/, '');
 
 export function getNativeRedirectUri() {
   return makeRedirectUri({ scheme: 'boardgamebuddy', path: 'auth-callback' });

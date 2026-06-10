@@ -104,7 +104,7 @@ function BootGate({ children }) {
 }
 
 const linking = {
-  prefixes: [Linking.createURL('/'), 'boardgamebuddy://', 'https://boardgame-buddy.vercel.app'],
+  prefixes: [Linking.createURL('/'), 'boardgamebuddy://', 'https://vibelab-boardgamebuddy.vercel.app'],
   config: {
     screens: {
       Home: { screens: { FeedTab: 'feed', PlayTab: 'play', ProfileTab: 'profile' } },
