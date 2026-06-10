@@ -21,13 +21,13 @@ try {
   bootError = e;
 }
 
-function BootErrorScreen({ error }) {
+function BootErrorScreen({ error, label = 'Boot error' }) {
   const message = error?.message || String(error);
   const stack = error?.stack || '(no stack)';
   return (
     <View style={{ flex: 1, backgroundColor: '#0d0d14', paddingTop: 56, paddingHorizontal: 16 }}>
       <Text style={{ fontSize: 18, fontWeight: '800', color: '#E07A5F', marginBottom: 8 }}>
-        Boot error
+        {label}
       </Text>
       <Text style={{ fontSize: 13, color: '#FFFBF1', marginBottom: 12 }}>{message}</Text>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 60 }}>
@@ -39,10 +39,32 @@ function BootErrorScreen({ error }) {
   );
 }
 
+// Runtime error boundary — catches errors thrown DURING render/lifecycle of the
+// app tree (the import-time try/catch above only covers module load). Without
+// this, a render-phase throw falls through to Expo Go's opaque "Something went
+// wrong" screen; here we surface the real message + stack on-device instead.
+class RootErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) return <BootErrorScreen error={this.state.error} label="Render error" />;
+    return this.props.children;
+  }
+}
+
 function App() {
   if (bootError) return <BootErrorScreen error={bootError} />;
   if (!RealApp) return <BootErrorScreen error={new Error('MainApp is null with no recorded error')} />;
-  return <RealApp />;
+  return (
+    <RootErrorBoundary>
+      <RealApp />
+    </RootErrorBoundary>
+  );
 }
 
 registerRootComponent(App);
