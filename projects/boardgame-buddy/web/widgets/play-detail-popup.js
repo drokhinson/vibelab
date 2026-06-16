@@ -391,12 +391,16 @@
 
         ${hasRoundGrid(d.players, "roundScores") ? `
           <section class="play-detail__section play-detail__section--rounds">
-            <h3 class="play-detail__section-title">
-              <i data-lucide="layers" class="w-4 h-4"></i> Rounds
-            </h3>
+            <div class="scoring-section__head">
+              <h3 class="play-detail__section-title">
+                <i data-lucide="layers" class="w-4 h-4"></i> Rounds
+              </h3>
+              ${window.RoundGridSign.renderToggle("PlayDetailPopup")}
+            </div>
             ${window.renderRoundGrid(d.players, "PlayDetailPopup", {
               editable: true,
               playMode: p.play_mode || "competitive",
+              showSign: window.RoundGridSign.enabled(),
             })}
           </section>
         ` : ""}
@@ -520,9 +524,31 @@
     const player = state.draft.players[i];
     if (!player) return;
     if (!Array.isArray(player.roundScores)) player.roundScores = [];
-    player.roundScores[r] = value === "" ? null : Number(value);
+    // Sanitized string ("-5") so a leading minus survives; null for empty.
+    const clean = window.sanitizeRoundScore(value);
+    player.roundScores[r] = clean === "" ? null : clean;
     player.score = String(sumRounds(player.roundScores));
     autoSelectWinners();
+    render();
+  }
+  // Per-cell +/− button: cycle "" → "-" → cleared, or flip the sign.
+  function toggleRoundSign(i, r) {
+    if (!state.draft) return;
+    const player = state.draft.players[i];
+    if (!player) return;
+    if (!Array.isArray(player.roundScores)) player.roundScores = [];
+    const cur = player.roundScores[r] == null ? "" : String(player.roundScores[r]);
+    const next = window.nextSignToggle(cur);
+    player.roundScores[r] = next === "" ? null : next;
+    player.score = String(sumRounds(player.roundScores));
+    autoSelectWinners();
+    render();
+    const el = document.getElementById(`rg-PlayDetailPopup-${i}-${r}`);
+    if (el && el.focus) el.focus();
+  }
+  // Header pill: flip the global "± Negative" preference and repaint.
+  function toggleSignButtons() {
+    window.RoundGridSign.toggle();
     render();
   }
   function addRound() {
@@ -715,7 +741,7 @@
       players: state.draft.players.map((p) => {
         const rs = Array.isArray(p.roundScores) ? p.roundScores : [];
         const round_scores = gridActive && rs.length > 1
-          ? rs.map((v) => (v === "" || v == null ? null : Number(v)))
+          ? rs.map((v) => window.parseRoundScore(v))
           : null;
         const score = gridActive
           ? sumRounds(rs)
@@ -783,6 +809,8 @@
     // Round-grid handlers (signatures match play-flow-view so the
     // shared round-score-grid widget can target either host).
     _setRoundScore: setRoundScore,
+    _toggleRoundSign: toggleRoundSign,
+    _toggleSignButtons: toggleSignButtons,
     _addRound: addRound,
     _removeRoundAt: removeRoundAt,
     _toggleWinner: toggleWinner,
