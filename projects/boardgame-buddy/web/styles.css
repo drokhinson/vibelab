@@ -3970,6 +3970,51 @@ body {
   font-size: 0.8rem;
 }
 .scoring-cell:focus { outline: none; border-color: var(--accent); }
+
+/* ── Negative scores: per-cell sign toggle + header on/off pill ───────────
+   The grid only ever renders on the cream polaroid surfaces (the play-flow
+   cascade card and the play-detail popup), so these read from the polaroid
+   tokens directly. Rust (#b4472b) marks the active/negative state. */
+.scoring-section__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem; margin-bottom: 0.35rem;
+}
+.scoring-cell-wrap {
+  display: flex; align-items: center; gap: 0.25rem; min-width: 0;
+}
+.scoring-cell-wrap .scoring-cell { flex: 1 1 auto; min-width: 2.4rem; }
+.scoring-cell-wrap.is-neg .scoring-cell { color: #b4472b; }
+.scoring-sign-btn {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.7rem; height: 1.9rem; padding: 0;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 0.4rem;
+  background: rgba(255, 251, 241, 0.6);
+  color: rgba(29, 24, 18, 0.55);
+  font-size: 1.15rem; font-weight: 800; line-height: 1; cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.scoring-sign-btn:hover { color: var(--polaroid-ink); }
+.scoring-sign-btn.is-neg {
+  background: #b4472b; border-color: #b4472b; color: #fff;
+}
+.scoring-sign-toggle {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 999px; padding: 0.2rem 0.6rem;
+  font-size: 0.72rem; font-weight: 700; line-height: 1;
+  background: transparent; color: rgba(29, 24, 18, 0.6);
+  cursor: pointer; white-space: nowrap;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.scoring-sign-toggle:hover { color: var(--polaroid-ink); }
+.scoring-sign-toggle.is-on {
+  background: #b4472b; border-color: #b4472b; color: #fff;
+}
+.scoring-sign-toggle__glyph { font-size: 0.95rem; line-height: 1; }
+.scoring-total.is-neg { color: #b4472b; }
+
 .scoring-total-row { background: oklch(var(--b2) / 0.5); }
 .scoring-total {
   font-family: var(--font-display);

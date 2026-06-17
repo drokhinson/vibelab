@@ -178,7 +178,13 @@
   function persistableRounds(p) {
     const rs = p && p.roundScores;
     if (!Array.isArray(rs) || rs.length <= 1) return null;
-    return rs.map((v) => (v === "" || v == null ? null : Number(v)));
+    // Cells may be sanitized strings ("-5") incl. a transient "-" — coerce to
+    // int, treating empty / lone-minus as null. Negative scores persist fine.
+    return rs.map((v) => {
+      if (v === "" || v === "-" || v == null) return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    });
   }
 
   window.PlaySession = PlaySession;

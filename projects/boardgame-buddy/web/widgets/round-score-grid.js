@@ -36,6 +36,7 @@
     const o = opts || {};
     const editable = o.editable !== false;
     const mode = o.playMode || "competitive";
+    const showSign = !!o.showSign;
     const getCell = o.getCellValue || defaultCellValue;
     const getTotal = o.getPlayerTotal || defaultPlayerTotal;
     const safePlayers = Array.isArray(players) ? players : [];
@@ -69,10 +70,7 @@
                 ${safePlayers.map((p, i) => `
                   <td>
                     ${editable
-                      ? `<input type="number" inputmode="numeric"
-                                class="scoring-cell"
-                                value="${escapeAttr(getCell(p, r))}"
-                                oninput="window.${host}._setRoundScore(${i}, ${r}, this.value)" />`
+                      ? renderEditableCell(getCell(p, r), i, r, host, showSign)
                       : `<span class="scoring-cell scoring-cell--read">${escape(getCell(p, r))}</span>`}
                   </td>
                 `).join("")}
@@ -95,12 +93,34 @@
     `;
   }
 
+  // One editable cell: a sanitized text input (so a leading "-" survives —
+  // `type=number` strips it on some engines) plus an optional +/− sign button.
+  // The sign button is gated by the host's "± Negative" toggle so that, by
+  // default, phones whose keyboard already has a minus key aren't cluttered.
+  function renderEditableCell(rawValue, i, r, host, showSign) {
+    const val = rawValue == null ? "" : String(rawValue);
+    const neg = val.charAt(0) === "-";
+    return `<div class="scoring-cell-wrap${neg ? " is-neg" : ""}">
+      ${showSign
+        ? `<button type="button" class="scoring-sign-btn${neg ? " is-neg" : ""}" tabindex="-1"
+                   aria-label="Toggle positive or negative"
+                   onclick="window.${host}._toggleRoundSign(${i}, ${r})">${neg ? "−" : "+"}</button>`
+        : ""}
+      <input type="text" inputmode="numeric" pattern="-?[0-9]*"
+             id="rg-${host}-${i}-${r}" data-score-cell="${i}-${r}"
+             class="scoring-cell"
+             value="${escapeAttr(val)}"
+             oninput="window.${host}._setRoundScore(${i}, ${r}, this.value)" />
+    </div>`;
+  }
+
   function renderTotalsCell(p, i, mode, total, host, editable) {
     // Co-op: the whole table wins or loses together, no per-player trophy.
+    const negClass = Number(total) < 0 ? " is-neg" : "";
     if (mode === "coop") {
       return `<td class="${p.is_winner ? "scoring-total-cell--winner" : ""}">
         <div class="scoring-total-cell">
-          <span class="scoring-total">${escape(total)}</span>
+          <span class="scoring-total${negClass}">${escape(total)}</span>
         </div>
       </td>`;
     }
@@ -113,7 +133,7 @@
               <i data-lucide="${p.is_winner ? "trophy" : "circle"}" class="w-4 h-4"></i>
             </button>`
           : (p.is_winner ? `<i data-lucide="trophy" class="w-4 h-4"></i>` : "")}
-        <span class="scoring-total">${escape(total)}</span>
+        <span class="scoring-total${negClass}">${escape(total)}</span>
       </div>
     </td>`;
   }
@@ -163,5 +183,65 @@
   }
   function escapeAttr(s) { return escape(s); }
 
+  // ── Score value helpers (shared by every grid host) ──────────────────────
+  // Cells are stored as STRINGS ("", "-", "-5", "12") so a leading minus and
+  // the transient "-"-only state survive editing. These helpers convert to a
+  // clean string for storage / display and to a number|null for math.
+
+  // Strip anything that isn't a digit or a leading minus.
+  function sanitizeRoundScore(raw) {
+    return String(raw == null ? "" : raw)
+      .replace(/[^0-9-]/g, "")
+      .replace(/(?!^)-/g, "");
+  }
+
+  // "" / "-" / null → null ; otherwise the integer value.
+  function parseRoundScore(v) {
+    if (v == null || v === "" || v === "-") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // Sign-toggle transition: "" → "-", "-" → "", "-5" → "5", "5" → "-5".
+  function nextSignToggle(v) {
+    const s = String(v == null ? "" : v);
+    if (s === "") return "-";
+    if (s === "-") return "";
+    return s.charAt(0) === "-" ? s.slice(1) : "-" + s;
+  }
+
+  // Persisted user preference for whether the per-cell +/− sign buttons show.
+  // Defaults OFF — many phone keyboards already expose a minus key, so the
+  // toggle is opt-in for the ones that don't.
+  const SIGN_PREF_KEY = "bgb.scoring.showSign";
+  const RoundGridSign = {
+    enabled() {
+      try { return localStorage.getItem(SIGN_PREF_KEY) === "1"; } catch (_) { return false; }
+    },
+    set(on) {
+      try { localStorage.setItem(SIGN_PREF_KEY, on ? "1" : "0"); } catch (_) {}
+    },
+    toggle() {
+      const next = !this.enabled();
+      this.set(next);
+      return next;
+    },
+    // Header pill that flips the preference. `host` is the global object name
+    // (e.g. "playFlowView") whose `_toggleSignButtons()` re-renders the grid.
+    renderToggle(host) {
+      const on = this.enabled();
+      return `<button type="button" class="scoring-sign-toggle${on ? " is-on" : ""}"
+                aria-pressed="${on}" title="Show +/− sign toggles on each score cell"
+                onclick="window.${host}._toggleSignButtons()">
+                <span class="scoring-sign-toggle__glyph">±</span>
+                <span>Negative ${on ? "on" : "off"}</span>
+              </button>`;
+    },
+  };
+
   window.renderRoundGrid = renderRoundGrid;
+  window.sanitizeRoundScore = sanitizeRoundScore;
+  window.parseRoundScore = parseRoundScore;
+  window.nextSignToggle = nextSignToggle;
+  window.RoundGridSign = RoundGridSign;
 })();

@@ -632,16 +632,64 @@
       const grid = window.renderRoundGrid(ps.players, "playFlowView", {
         editable: true,
         playMode: mode,
+        showSign: window.RoundGridSign.enabled(),
         getCellValue: (p, r) => this._cellValue(p, r),
         getPlayerTotal: (p) => this._playerTotal(p),
       });
       return `
         <section class="cascade-card cascade-card--scoring">
-          <label class="cascade-card__label">Scoring</label>
+          <div class="scoring-section__head">
+            <label class="cascade-card__label">Scoring</label>
+            ${window.RoundGridSign.renderToggle("playFlowView")}
+          </div>
           ${mode === "coop" ? this._renderCoopOutcome() : ""}
           ${grid}
         </section>
       `;
+    }
+
+    // Re-render just the scoring section in place (cheaper than a full view
+    // render) after a sign-toggle change, restoring focus to a cell if asked.
+    _refreshScoringSection(focusCell) {
+      const sec = this.container.querySelector(".cascade-card--scoring");
+      if (!sec) { this.render(); return; }
+      sec.outerHTML = this._renderScoringSection();
+      if (window.lucide) window.lucide.createIcons();
+      if (focusCell) {
+        const el = this.container.querySelector(`input[data-score-cell="${focusCell}"]`);
+        if (el) {
+          el.focus();
+          const n = el.value.length;
+          try { el.setSelectionRange(n, n); } catch (_) {}
+        }
+      }
+    }
+
+    // Flip the global "± Negative" preference and repaint the grid so cells
+    // gain/lose their per-cell sign buttons.
+    _toggleSignButtons() {
+      window.RoundGridSign.toggle();
+      this._refreshScoringSection();
+    }
+
+    // Sign button on a single cell: cycle "" → "-" → cleared, or flip an
+    // existing value's sign. Repaints the section so the button glyph and
+    // negative colouring update, then refocuses the cell for fast entry.
+    _toggleRoundSign(playerIndex, roundIndex) {
+      const p = this._ps.players[playerIndex];
+      if (!p) return;
+      if (!Array.isArray(p.roundScores)) p.roundScores = [];
+      const cur = p.roundScores[roundIndex] == null ? "" : String(p.roundScores[roundIndex]);
+      const next = window.nextSignToggle(cur);
+      p.roundScores[roundIndex] = next === "" ? null : next;
+      this._ps.persist();
+      if (this._liveScores && p.user_id) {
+        this._liveScores
+          .setAnyScore(p.user_id, roundIndex, window.parseRoundScore(next))
+          .catch(() => {});
+      }
+      this._autoSelectWinners();
+      this._refreshScoringSection(`${playerIndex}-${roundIndex}`);
     }
 
     // Resolved score for one (player, round) cell: the live-scoring overlay
@@ -654,7 +702,7 @@
         if (live != null) return live;
       }
       const local = player.roundScores && player.roundScores[roundIndex];
-      return local != null ? Number(local) : null;
+      return window.parseRoundScore(local);
     }
 
     _cellValue(player, roundIndex) {
@@ -675,10 +723,11 @@
     }
 
     _renderTotalsCell(p, i, mode, total) {
+      const negClass = Number(total) < 0 ? " is-neg" : "";
       if (mode === "coop") {
         return `<td class="${p.is_winner ? "scoring-total-cell--winner" : ""}">
           <div class="scoring-total-cell">
-            <span class="scoring-total">${total}</span>
+            <span class="scoring-total${negClass}">${total}</span>
           </div>
         </td>`;
       }
@@ -689,7 +738,7 @@
                   onclick="window.playFlowView._toggleWinner(${i})">
             <i data-lucide="${p.is_winner ? "trophy" : "circle"}" class="w-4 h-4"></i>
           </button>
-          <span class="scoring-total">${total}</span>
+          <span class="scoring-total${negClass}">${total}</span>
         </div>
       </td>`;
     }
@@ -1135,13 +1184,25 @@
       const p = this._ps.players[playerIndex];
       if (!p) return;
       if (!Array.isArray(p.roundScores)) p.roundScores = [];
-      p.roundScores[roundIndex] = value === "" ? null : Number(value);
+      // Keep cells as sanitized strings so a leading "-" survives; store null
+      // for an empty cell. A lone "-" is kept until digits arrive.
+      const clean = window.sanitizeRoundScore(value);
+      p.roundScores[roundIndex] = clean === "" ? null : clean;
+      // The text input doesn't auto-reject stray characters the way type=number
+      // did — write the sanitized value back when they differ (e.g. a pasted
+      // letter), preserving the caret.
+      const input = this.container.querySelector(`input[data-score-cell="${playerIndex}-${roundIndex}"]`);
+      if (input && input.value !== clean) {
+        const pos = input.selectionStart;
+        input.value = clean;
+        try { input.setSelectionRange(pos, pos); } catch (_) {}
+      }
       this._ps.persist();
       // Mirror authed-player edits into the live-scores table so joiners
       // see the host's override. Guest players stay local-only.
       if (this._liveScores && p.user_id) {
         try {
-          await this._liveScores.setAnyScore(p.user_id, roundIndex, p.roundScores[roundIndex]);
+          await this._liveScores.setAnyScore(p.user_id, roundIndex, window.parseRoundScore(clean));
         } catch (_) {}
       }
       this._autoSelectWinners();
