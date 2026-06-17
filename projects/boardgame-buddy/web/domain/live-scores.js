@@ -43,15 +43,7 @@
       if (!window.supabaseClient || !this.sessionId) return;
       // Initial backfill so the grid renders with last-known cells before
       // the first Realtime event arrives.
-      try {
-        const { data } = await window.supabaseClient
-          .from("boardgamebuddy_play_session_scores")
-          .select("session_id, player_user_id, round_index, score")
-          .eq("session_id", this.sessionId);
-        for (const row of data || []) this._ingest(row);
-      } catch (_) {
-        // Best-effort; subscription below will catch us up.
-      }
+      await this.refresh();
       this._channel = window.supabaseClient
         .channel(`scores:${this.sessionId}`)
         .on(
@@ -90,6 +82,51 @@
       this._channel = null;
       this._listeners.clear();
       this._byPlayer.clear();
+    }
+
+    /**
+     * Re-read the whole scores table for this session and re-ingest it, then
+     * notify subscribers. Used both for the initial backfill (start) and as a
+     * Realtime fallback: the joiner calls this on its poll tick so a row the
+     * host wrote while Realtime was asleep (e.g. a new round) still surfaces.
+     */
+    async refresh() {
+      if (!window.supabaseClient || !this.sessionId) return;
+      try {
+        const { data } = await window.supabaseClient
+          .from("boardgamebuddy_play_session_scores")
+          .select("session_id, player_user_id, round_index, score")
+          .eq("session_id", this.sessionId);
+        for (const row of data || []) this._ingest(row);
+      } catch (_) {
+        // Best-effort; the Realtime subscription will catch us up otherwise.
+      }
+      this._emit();
+    }
+
+    /**
+     * Host-only. Delete every score row at a round index for this session so
+     * a round the host removed disappears from joiners' grids (the joiner
+     * sizes its grid from the highest round_index it has seen). Mirrors the
+     * null placeholder the host writes on add-round.
+     * @param {number} roundIndex
+     */
+    async deleteRound(roundIndex) {
+      if (!this.isHost) throw new Error("Only the host can remove a round");
+      const idx = Number(roundIndex);
+      // Drop locally first so maxRound() updates immediately, then persist.
+      for (const m of this._byPlayer.values()) m.delete(idx);
+      this._emit();
+      if (!window.supabaseClient || !this.sessionId) return;
+      try {
+        await window.supabaseClient
+          .from("boardgamebuddy_play_session_scores")
+          .delete()
+          .eq("session_id", this.sessionId)
+          .eq("round_index", idx);
+      } catch (_) {
+        // Best-effort; a stale row will be re-read on the next refresh.
+      }
     }
 
     /**

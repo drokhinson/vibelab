@@ -3952,6 +3952,21 @@ body {
 .scoring-table thead th:has(.scoring-head__badge) { opacity: 1; padding: 0.35rem 0.35rem; }
 .scoring-head__badge { width: 36px; height: 36px; vertical-align: middle; }
 .scoring-head__badge .user-badge__initials { font-size: 16px; }
+/* Tap the column-header bubble to toggle that header between the bubble and
+   the player's display name. Pure DOM class toggle (round-score-grid.js). */
+.scoring-head__toggle {
+  background: none; border: none; padding: 4px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.scoring-head__name {
+  display: none;
+  font-family: var(--font-score);
+  font-size: 0.72rem;
+  max-width: 5.5rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scoring-head.is-named .scoring-head__bubble { display: none; }
+.scoring-head.is-named .scoring-head__name { display: inline-block; }
 .scoring-table tbody th {
   font-weight: 600;
   opacity: 0.7;
@@ -5459,6 +5474,13 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-ink);
   opacity: 0.85;
 }
+
+/* Other players' columns on the joiner's grid are read-only — grey the whole
+   column (header + cells + total) so it's clear only your own column is
+   editable. The header bubble keeps its own color (it's the player identity). */
+.scoring-col--read { background: rgba(120, 113, 100, 0.10); }
+.scoring-col--read .scoring-cell--read,
+.scoring-col--read .scoring-total { color: var(--polaroid-muted); opacity: 0.7; }
 
 /* Scoring table inside a cream polaroid card — recolor to fit the
    parchment surface (the legacy version sat on the dark page bg). */

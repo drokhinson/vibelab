@@ -49,7 +49,7 @@
             <tr>
               <th></th>
               ${safePlayers.map((p) => `
-                <th class="scoring-head" title="${escapeAttr(p.name)}">${renderHeadBadge(p)}</th>
+                <th class="scoring-head" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
               `).join("")}
             </tr>
           </thead>
@@ -169,6 +169,18 @@
     });
   }
 
+  // Wraps a column-header badge in a button that toggles the header cell
+  // between the colored bubble and the player's display name. Pure DOM toggle
+  // (no re-render, no host method) so it works identically in the host grid,
+  // the joiner grid, and the play-detail popup. Shared via window export.
+  function renderScoringHead(badgeHtml, name) {
+    return `<button type="button" class="scoring-head__toggle" title="${escapeAttr(name)}"
+              onclick="this.closest('.scoring-head').classList.toggle('is-named')">
+              <span class="scoring-head__bubble">${badgeHtml}</span>
+              <span class="scoring-head__name">${escape(name)}</span>
+            </button>`;
+  }
+
   function initialsFor(p) {
     if (p.initials) return p.initials;
     const parts = String(p.name || "").trim().split(/[\s.]+/).filter(Boolean);
@@ -240,6 +252,7 @@
   };
 
   window.renderRoundGrid = renderRoundGrid;
+  window.renderScoringHead = renderScoringHead;
   window.sanitizeRoundScore = sanitizeRoundScore;
   window.parseRoundScore = parseRoundScore;
   window.nextSignToggle = nextSignToggle;
