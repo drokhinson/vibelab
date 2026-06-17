@@ -1162,7 +1162,24 @@
       }
       this._ps.persist();
       this._autoSelectWinners();
+      // Surface the new (still empty) round to joiners. Their grid is sized
+      // from the highest round_index seen in live scores, so without a row
+      // an empty round is invisible to them. Write a null placeholder on the
+      // host's own column; the Realtime echo grows maxRound() everywhere.
+      if (this._liveScores) {
+        const me = window.store.get("user");
+        const newIndex = this._maxRoundCount() - 1;
+        if (me && newIndex >= 0) {
+          this._liveScores.setAnyScore(me.id, newIndex, null).catch(() => {});
+        }
+      }
       this.render();
+    }
+
+    // Highest roundScores length across players — the authoritative round
+    // count after _addRound pushes a null to every player.
+    _maxRoundCount() {
+      return Math.max(0, ...this._ps.players.map((p) => (p.roundScores || []).length));
     }
 
     _removeRoundAt(r) {
@@ -1176,6 +1193,9 @@
       if (removed) {
         this._ps.persist();
         this._autoSelectWinners();
+        // Drop the round's live rows too so it disappears from joiners'
+        // grids (counterpart to the placeholder written on _addRound).
+        if (this._liveScores) this._liveScores.deleteRound(r).catch(() => {});
         this.render();
       }
     }

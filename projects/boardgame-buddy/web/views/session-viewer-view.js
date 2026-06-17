@@ -126,6 +126,14 @@
 
     async _poll() {
       if (!this._code) return;
+      // Realtime is the fast path for live scores, but it can drop an event
+      // (backgrounded tab, socket hiccup). Re-sync the scores table on every
+      // poll tick during Play so a round the host added while Realtime was
+      // asleep still surfaces within one tick (≤2s). The refresh _emit()s
+      // through _onLiveScoresChange(), which grows the grid if needed.
+      if (this._liveScores && this._session && this._session.phase === "play") {
+        this._liveScores.refresh();
+      }
       try {
         const next = await window.PlaySession.fetchLobby(this._code);
         const prev = this._session;
@@ -261,7 +269,41 @@
         currentUserId: me ? me.id : null,
       });
       await this._liveScores.start();
-      this._liveOff = this._liveScores.subscribe(() => this._refreshTotalsCells());
+      this._liveOff = this._liveScores.subscribe(() => this._onLiveScoresChange());
+    }
+
+    // Live-scores tick. If the round count changed (the host added or removed
+    // a round), re-render the scoring grid so the new rows appear; otherwise
+    // just patch the totals row in place. Splitting these keeps the common
+    // case (a score edit) cheap while still growing the grid when needed.
+    _onLiveScoresChange() {
+      const rounds = this._liveScores ? Math.max(1, this._liveScores.maxRound() + 1) : 1;
+      if (rounds !== this._renderedRounds) {
+        this._refreshScoringSection();
+      } else {
+        this._refreshTotalsCells();
+      }
+    }
+
+    // Re-render just the scoring card (cheaper than a full cascade render and
+    // doesn't yank scroll). Preserves the joiner's focused score input + caret
+    // across the swap, mirroring the snapshot pattern in _patchParticipants.
+    _refreshScoringSection() {
+      const sec = this.container.querySelector(".cascade-card--scoring");
+      if (!sec || !this._session) return;
+      const focused = this.container.querySelector("input.scoring-cell:focus");
+      const snap = focused
+        ? { round: focused.getAttribute("data-round"), selStart: focused.selectionStart, selEnd: focused.selectionEnd }
+        : null;
+      sec.outerHTML = this._renderViewerScoring(this._session);
+      if (window.lucide) window.lucide.createIcons();
+      if (snap) {
+        const restored = this.container.querySelector(`input.scoring-cell[data-round="${snap.round}"]`);
+        if (restored) {
+          restored.focus();
+          try { restored.setSelectionRange(snap.selStart, snap.selEnd); } catch (_) {}
+        }
+      }
     }
 
     async _maybeStopLiveScores() {
@@ -353,12 +395,18 @@
       }
 
       const phase = s.phase || "gather";
-      const lockPlay = phase === "gather";
+      // Lock every non-active screen to height: 0 (.is-locked) so the cascade
+      // snaps to one screen at a time — mirrors the host's PlayFlowView
+      // (play-flow-view.js:348-350). Previously only the Play/Settle screens
+      // locked, so during Play both Gather (step 1) and Play (step 2) were
+      // visible and the joiner scrolled between them.
+      const lockGather = phase !== "gather";
+      const lockPlay = phase !== "play";
       const lockSettle = phase !== "settle" && phase !== "finalized";
 
       this.container.innerHTML = `
         ${this._renderTopbar(s)}
-        <section class="cascade-screen" id="screen-gather">
+        <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
           ${this._renderHeaderRow("Gather", 1, "Waiting on the host")}
           ${this._renderGather(s)}
         </section>
@@ -515,19 +563,27 @@
       const me = window.store.get("user");
       const myId = me && me.id;
       // Round count is unknown to the joiner — fall back to the maximum
-      // round_index we've seen in live scores so far, defaulting to 1.
+      // round_index we've seen in live scores so far, defaulting to 1. The
+      // host writes a null placeholder row on _addRound (play-flow-view.js)
+      // so an empty new round still grows maxRound() here.
       const maxRound = this._liveScores ? this._liveScores.maxRound() : -1;
       const rounds = Math.max(1, maxRound + 1);
+      // Remember what we just sized the grid to, so the live-scores callback
+      // can tell when the host added/removed a round and re-render the rows.
+      this._renderedRounds = rounds;
+      // Other players' columns are read-only; flag them so the whole column
+      // (header + cells + total) reads as greyed-out (the current user's
+      // column stays the normal editable look).
+      const colClass = (p) => (myId && p.user_id === myId ? "" : " scoring-col--read");
       return `
         <section class="cascade-card cascade-card--scoring">
           <label class="cascade-card__label">Scoring</label>
-          <p class="text-xs opacity-60 mb-1">You can edit your own column. Other cells are read-only.</p>
           <div class="scoring-table-wrap">
             <table class="scoring-table">
               <thead>
                 <tr>
                   <th></th>
-                  ${participants.map((p) => `<th class="scoring-head">${window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm", isMe: !!(myId && p.user_id === myId) })}</th>`).join("")}
+                  ${participants.map((p) => `<th class="scoring-head${colClass(p)}">${window.renderScoringHead(window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm", isMe: !!(myId && p.user_id === myId) }), p.display_name)}</th>`).join("")}
                 </tr>
               </thead>
               <tbody>
@@ -540,7 +596,7 @@
                 <tr class="scoring-total-row">
                   <th>Total</th>
                   ${participants.map((p) => `
-                    <td><div class="scoring-total-cell">
+                    <td class="${colClass(p).trim()}"><div class="scoring-total-cell">
                       <span class="scoring-total">${this._liveScores ? this._liveScores.totalFor(p.user_id) : 0}</span>
                     </div></td>
                   `).join("")}
@@ -568,7 +624,7 @@
         `;
       }
       return `
-        <td>
+        <td class="scoring-col--read">
           <span class="scoring-cell scoring-cell--read">${escape(value)}</span>
         </td>
       `;
@@ -577,17 +633,16 @@
     _refreshTotalsCells() {
       const totalsRow = this.container.querySelector(".scoring-total-row");
       if (!totalsRow || !this._session) return;
+      const me = window.store.get("user");
+      const myId = me && me.id;
       const participants = (this._session.participants || []).filter((p) => p.user_id);
       totalsRow.innerHTML =
         `<th>Total</th>` +
         participants.map((p) => `
-          <td><div class="scoring-total-cell">
+          <td class="${myId && p.user_id === myId ? "" : "scoring-col--read"}"><div class="scoring-total-cell">
             <span class="scoring-total">${this._liveScores ? this._liveScores.totalFor(p.user_id) : 0}</span>
           </div></td>
         `).join("");
-      // Refresh read-only cells for other players too.
-      const cells = this.container.querySelectorAll(".scoring-cell--read");
-      cells.forEach(() => {});  // visual refresh on next render tick
     }
 
     async _setMyScore(roundIndex, value) {
