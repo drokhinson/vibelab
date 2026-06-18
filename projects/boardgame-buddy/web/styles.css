@@ -5463,13 +5463,21 @@ main[data-view="session-viewer"].hidden {
 }
 .polaroid-popup__view { margin-top: 10px; color: var(--polaroid-ink); }
 
-/* Read-only scoring cell on the joiner's grid. */
+/* Read-only scoring cell on the joiner's grid. Shares the .scoring-cell box
+   (min-width, padding, border, radius) so a read-only column lines up exactly
+   with the editable input column beside it. min-height keeps an empty cell
+   from collapsing, and right alignment matches the editable input. */
 .scoring-cell--read {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
   width: 100%;
-  text-align: center;
+  /* Match the wrapped editable input (.scoring-cell-wrap .scoring-cell) so a
+     read-only column is exactly as wide as the editable one beside it. */
+  min-width: 2.4rem;
+  min-height: 1.85rem;
+  text-align: right;
   font-family: var(--font-score);
   color: var(--polaroid-ink);
   opacity: 0.85;

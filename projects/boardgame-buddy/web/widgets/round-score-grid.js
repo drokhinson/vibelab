@@ -40,7 +40,22 @@
     const getCell = o.getCellValue || defaultCellValue;
     const getTotal = o.getPlayerTotal || defaultPlayerTotal;
     const safePlayers = Array.isArray(players) ? players : [];
-    const roundCount = Math.max(0, ...safePlayers.map((p) => (p.roundScores || []).length));
+    // Viewer mode (joiner's read-only mirror): exactly one column — the
+    // current user's — stays editable, every other column renders greyed-out
+    // read-only cells and the host-only controls (add/remove round, winner
+    // trophy) are hidden. The host grid leaves editableColumnId unset and
+    // keeps its all-editable behavior.
+    const viewerMode = !!o.editableColumnId;
+    const showControls = editable && !viewerMode;
+    const colEditable = (p) =>
+      viewerMode ? !!(p.user_id && p.user_id === o.editableColumnId) : editable;
+    const colRead = (p) => viewerMode && !colEditable(p);
+    // Joiner sizes its grid from the live-scores round count, not from each
+    // player's local roundScores array (which it doesn't have).
+    const roundCount =
+      o.roundCount != null
+        ? o.roundCount
+        : Math.max(0, ...safePlayers.map((p) => (p.roundScores || []).length));
 
     return `
       <div class="scoring-table-wrap">
@@ -49,7 +64,7 @@
             <tr>
               <th></th>
               ${safePlayers.map((p) => `
-                <th class="scoring-head" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
+                <th class="scoring-head${colRead(p) ? " scoring-col--read" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
               `).join("")}
             </tr>
           </thead>
@@ -58,7 +73,7 @@
               <tr>
                 <th class="scoring-round-th">
                   <span class="scoring-round-label">
-                    ${editable ? `
+                    ${showControls ? `
                       <button class="scoring-round-remove" title="Remove round"
                               onclick="window.${host}._removeRoundAt(${r})">
                         <i data-lucide="x" class="w-3 h-3"></i>
@@ -68,22 +83,22 @@
                   </span>
                 </th>
                 ${safePlayers.map((p, i) => `
-                  <td>
-                    ${editable
+                  <td class="${colRead(p) ? "scoring-col--read" : ""}">
+                    ${colEditable(p)
                       ? renderEditableCell(getCell(p, r), i, r, host, showSign)
-                      : `<span class="scoring-cell scoring-cell--read">${escape(getCell(p, r))}</span>`}
+                      : `<span class="scoring-cell scoring-cell--read" data-score-cell="${i}-${r}">${escape(getCell(p, r))}</span>`}
                   </td>
                 `).join("")}
               </tr>
             `).join("")}
             <tr class="scoring-total-row">
               <th>Total</th>
-              ${safePlayers.map((p, i) => renderTotalsCell(p, i, mode, getTotal(p), host, editable)).join("")}
+              ${safePlayers.map((p, i) => renderTotalsCell(p, i, mode, getTotal(p), host, showControls, colRead(p) ? "scoring-col--read" : "")).join("")}
             </tr>
           </tbody>
         </table>
       </div>
-      ${editable ? `
+      ${showControls ? `
         <div class="flex gap-2 mt-1">
           <button class="btn btn-ghost btn-xs" onclick="window.${host}._addRound()">
             <i data-lucide="plus" class="w-3.5 h-3.5"></i> Round
@@ -114,19 +129,22 @@
     </div>`;
   }
 
-  function renderTotalsCell(p, i, mode, total, host, editable) {
+  function renderTotalsCell(p, i, mode, total, host, showWinner, readClass) {
     // Co-op: the whole table wins or loses together, no per-player trophy.
     const negClass = Number(total) < 0 ? " is-neg" : "";
+    const tdClass = [p.is_winner ? "scoring-total-cell--winner" : "", readClass || ""]
+      .filter(Boolean)
+      .join(" ");
     if (mode === "coop") {
-      return `<td class="${p.is_winner ? "scoring-total-cell--winner" : ""}">
+      return `<td class="${tdClass}">
         <div class="scoring-total-cell">
           <span class="scoring-total${negClass}">${escape(total)}</span>
         </div>
       </td>`;
     }
-    return `<td class="${p.is_winner ? "scoring-total-cell--winner" : ""}">
+    return `<td class="${tdClass}">
       <div class="scoring-total-cell">
-        ${editable
+        ${showWinner
           ? `<button class="scoring-winner-btn ${p.is_winner ? "is-winner" : ""}"
                      title="${p.is_winner ? "Winner" : "Mark as winner"}"
                      onclick="window.${host}._toggleWinner(${i})">

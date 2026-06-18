@@ -210,7 +210,7 @@
         const focused = this.container.querySelector("input.scoring-cell:focus");
         const snap = focused
           ? {
-              round: focused.getAttribute("data-round"),
+              cell: focused.getAttribute("data-score-cell"),
               selStart: focused.selectionStart,
               selEnd: focused.selectionEnd,
             }
@@ -220,9 +220,9 @@
           ${this._renderPlay(s)}
         `;
         this._mountReferenceGuide(s);
-        if (snap) {
+        if (snap && snap.cell) {
           const restored = this.container.querySelector(
-            `input.scoring-cell[data-round="${snap.round}"]`
+            `input.scoring-cell[data-score-cell="${snap.cell}"]`
           );
           if (restored) {
             restored.focus();
@@ -279,8 +279,13 @@
     _onLiveScoresChange() {
       const rounds = this._liveScores ? Math.max(1, this._liveScores.maxRound() + 1) : 1;
       if (rounds !== this._renderedRounds) {
+        // Round count changed (host added/removed a round) — rebuild the rows.
         this._refreshScoringSection();
       } else {
+        // Common case: a score changed. Patch the per-round cells in place so
+        // other players' cells update too (not just the Total), without
+        // disturbing the cell the joiner is currently typing in.
+        this._patchScoringCells();
         this._refreshTotalsCells();
       }
     }
@@ -293,17 +298,40 @@
       if (!sec || !this._session) return;
       const focused = this.container.querySelector("input.scoring-cell:focus");
       const snap = focused
-        ? { round: focused.getAttribute("data-round"), selStart: focused.selectionStart, selEnd: focused.selectionEnd }
+        ? { cell: focused.getAttribute("data-score-cell"), selStart: focused.selectionStart, selEnd: focused.selectionEnd }
         : null;
       sec.outerHTML = this._renderViewerScoring(this._session);
       if (window.lucide) window.lucide.createIcons();
-      if (snap) {
-        const restored = this.container.querySelector(`input.scoring-cell[data-round="${snap.round}"]`);
+      if (snap && snap.cell) {
+        const restored = this.container.querySelector(`input.scoring-cell[data-score-cell="${snap.cell}"]`);
         if (restored) {
           restored.focus();
           try { restored.setSelectionRange(snap.selStart, snap.selEnd); } catch (_) {}
         }
       }
+    }
+
+    // Patch every per-round cell value in place from the live-scores overlay,
+    // skipping the input the joiner is currently editing (so their caret and
+    // in-progress digits survive the Realtime echo). The widget keys cells by
+    // data-score-cell="i-r" where i is the column (participant) index.
+    _patchScoringCells() {
+      if (!this._session) return;
+      const focused = this.container.querySelector("input.scoring-cell:focus");
+      const participants = this._session.participants || [];
+      participants.forEach((p, i) => {
+        for (let r = 0; r < this._renderedRounds; r++) {
+          const el = this.container.querySelector(`.scoring-table [data-score-cell="${i}-${r}"]`);
+          if (!el || el === focused) continue;
+          const live = this._liveScores ? this._liveScores.getScore(p.user_id, r) : null;
+          const text = live == null ? "" : String(live);
+          if (el.tagName === "INPUT") {
+            if (el.value !== text) el.value = text;
+          } else if (el.textContent !== text) {
+            el.textContent = text;
+          }
+        }
+      });
     }
 
     async _maybeStopLiveScores() {
@@ -555,10 +583,15 @@
       `;
     }
 
+    // Render the joiner's scoreboard through the SAME shared widget the host
+    // uses (widgets/round-score-grid.js) so the grid looks identical — only
+    // the joiner's own column is editable; every other column renders greyed
+    // out and read-only via the widget's viewer mode. Ghost (guest) players
+    // appear too, but their scores aren't synced so their cells stay blank.
     _renderViewerScoring(s) {
-      const participants = (s.participants || []).filter((p) => p.user_id);
+      const participants = s.participants || [];
       if (participants.length === 0) {
-        return `<section class="cascade-card"><p class="text-sm opacity-70">No authenticated players yet — scores will appear once players join.</p></section>`;
+        return `<section class="cascade-card"><p class="text-sm opacity-70">No players yet — scores will appear once players join.</p></section>`;
       }
       const me = window.store.get("user");
       const myId = me && me.id;
@@ -571,78 +604,64 @@
       // Remember what we just sized the grid to, so the live-scores callback
       // can tell when the host added/removed a round and re-render the rows.
       this._renderedRounds = rounds;
-      // Other players' columns are read-only; flag them so the whole column
-      // (header + cells + total) reads as greyed-out (the current user's
-      // column stays the normal editable look).
-      const colClass = (p) => (myId && p.user_id === myId ? "" : " scoring-col--read");
+      // Map participants into the widget's player shape. Cell values + totals
+      // come from the live-scores overlay, not local roundScores.
+      const players = participants.map((p) => ({
+        name: p.display_name,
+        user_id: p.user_id,
+        avatar: p.avatar,
+        roundScores: [],
+      }));
+      const grid = window.renderRoundGrid(players, "sessionViewerView", {
+        editableColumnId: myId,
+        roundCount: rounds,
+        showSign: false,
+        getCellValue: (p, r) => {
+          const v = this._liveScores ? this._liveScores.getScore(p.user_id, r) : null;
+          return v == null ? "" : String(v);
+        },
+        getPlayerTotal: (p) => (this._liveScores ? this._liveScores.totalFor(p.user_id) : 0),
+      });
       return `
         <section class="cascade-card cascade-card--scoring">
           <label class="cascade-card__label">Scoring</label>
-          <div class="scoring-table-wrap">
-            <table class="scoring-table">
-              <thead>
-                <tr>
-                  <th></th>
-                  ${participants.map((p) => `<th class="scoring-head${colClass(p)}">${window.renderScoringHead(window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm", isMe: !!(myId && p.user_id === myId) }), p.display_name)}</th>`).join("")}
-                </tr>
-              </thead>
-              <tbody>
-                ${Array.from({ length: rounds }).map((_, r) => `
-                  <tr>
-                    <th class="scoring-round-th"><span class="scoring-round-label">R${r + 1}</span></th>
-                    ${participants.map((p) => this._renderViewerCell(p, r, myId)).join("")}
-                  </tr>
-                `).join("")}
-                <tr class="scoring-total-row">
-                  <th>Total</th>
-                  ${participants.map((p) => `
-                    <td class="${colClass(p).trim()}"><div class="scoring-total-cell">
-                      <span class="scoring-total">${this._liveScores ? this._liveScores.totalFor(p.user_id) : 0}</span>
-                    </div></td>
-                  `).join("")}
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          ${grid}
         </section>
       `;
     }
 
-    _renderViewerCell(participant, roundIndex, myId) {
-      const live = this._liveScores ? this._liveScores.getScore(participant.user_id, roundIndex) : null;
-      const value = live == null ? "" : String(live);
-      const editable = participant.user_id === myId;
-      if (editable) {
-        return `
-          <td>
-            <input type="number" inputmode="numeric"
-                   class="scoring-cell"
-                   data-round="${roundIndex}"
-                   value="${escapeAttr(value)}"
-                   oninput="window.sessionViewerView._setMyScore(${roundIndex}, this.value)" />
-          </td>
-        `;
-      }
-      return `
-        <td class="scoring-col--read">
-          <span class="scoring-cell scoring-cell--read">${escape(value)}</span>
-        </td>
-      `;
+    // Patch the per-player totals in place by column index. The totals row is
+    // rendered by the shared widget (one .scoring-total span per participant,
+    // in order), so we just refresh the numbers without rebuilding the row —
+    // keeping the read/grey column classes the widget set on first paint.
+    _refreshTotalsCells() {
+      if (!this._session) return;
+      const totals = this.container.querySelectorAll(".scoring-total-row .scoring-total");
+      if (!totals.length) return;
+      const participants = this._session.participants || [];
+      participants.forEach((p, i) => {
+        const span = totals[i];
+        if (!span) return;
+        const v = this._liveScores ? this._liveScores.totalFor(p.user_id) : 0;
+        const text = String(v);
+        if (span.textContent !== text) span.textContent = text;
+      });
     }
 
-    _refreshTotalsCells() {
-      const totalsRow = this.container.querySelector(".scoring-total-row");
-      if (!totalsRow || !this._session) return;
-      const me = window.store.get("user");
-      const myId = me && me.id;
-      const participants = (this._session.participants || []).filter((p) => p.user_id);
-      totalsRow.innerHTML =
-        `<th>Total</th>` +
-        participants.map((p) => `
-          <td class="${myId && p.user_id === myId ? "" : "scoring-col--read"}"><div class="scoring-total-cell">
-            <span class="scoring-total">${this._liveScores ? this._liveScores.totalFor(p.user_id) : 0}</span>
-          </div></td>
-        `).join("");
+    // The shared grid's editable cell calls window.sessionViewerView._setRoundScore.
+    // Only the joiner's own column is editable, so every call maps to "my" score.
+    _setRoundScore(playerIndex, roundIndex, value) {
+      const clean = window.sanitizeRoundScore(value);
+      // The text input doesn't auto-reject stray characters — write the
+      // sanitized value back when they differ (e.g. a pasted letter),
+      // preserving the caret. Mirrors play-flow-view._setRoundScore.
+      const input = this.container.querySelector(`input[data-score-cell="${playerIndex}-${roundIndex}"]`);
+      if (input && input.value !== clean) {
+        const pos = input.selectionStart;
+        input.value = clean;
+        try { input.setSelectionRange(pos, pos); } catch (_) {}
+      }
+      this._setMyScore(roundIndex, clean);
     }
 
     async _setMyScore(roundIndex, value) {
