@@ -318,7 +318,36 @@
         currentUserId: me ? me.id : null,
       });
       await this._liveScores.start();
-      this._liveOff = this._liveScores.subscribe(() => this._refreshTotalsCells());
+      this._liveOff = this._liveScores.subscribe(() => this._onLiveScoresChange());
+    }
+
+    // A live-scores tick (Realtime echo or poll refresh): patch the per-round
+    // cells AND the totals so a joiner's edit shows up in the matching cell on
+    // the host's grid — not just in the Total. The cell the host is currently
+    // editing is skipped so their caret/keystrokes survive the echo.
+    _onLiveScoresChange() {
+      this._patchScoringCells();
+      this._refreshTotalsCells();
+    }
+
+    _patchScoringCells() {
+      const focused = this.container.querySelector("input.scoring-cell:focus");
+      const players = this._ps.players;
+      for (let i = 0; i < players.length; i++) {
+        const p = players[i];
+        const n = (p.roundScores || []).length;
+        for (let r = 0; r < n; r++) {
+          const input = this.container.querySelector(`input[data-score-cell="${i}-${r}"]`);
+          if (!input || input === focused) continue;
+          const v = this._resolvedScore(p, r);
+          const text = v == null ? "" : String(v);
+          // Programmatic .value assignment does not fire `oninput`, so the
+          // cell's _setRoundScore handler is untouched (no feedback loop).
+          if (input.value !== text) input.value = text;
+          const wrap = input.closest(".scoring-cell-wrap");
+          if (wrap) wrap.classList.toggle("is-neg", text.charAt(0) === "-");
+        }
+      }
     }
 
     _ensureSelfIncluded() {

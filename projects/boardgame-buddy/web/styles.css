@@ -5463,13 +5463,21 @@ main[data-view="session-viewer"].hidden {
 }
 .polaroid-popup__view { margin-top: 10px; color: var(--polaroid-ink); }
 
-/* Read-only scoring cell on the joiner's grid. */
+/* Read-only scoring cell on the joiner's grid. Shares the .scoring-cell box
+   (min-width, padding, border, radius) so a read-only column lines up exactly
+   with the editable input column beside it. min-height keeps an empty cell
+   from collapsing, and right alignment matches the editable input. */
 .scoring-cell--read {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
   width: 100%;
-  text-align: center;
+  /* Match the wrapped editable input (.scoring-cell-wrap .scoring-cell) so a
+     read-only column is exactly as wide as the editable one beside it. */
+  min-width: 2.4rem;
+  min-height: 1.85rem;
+  text-align: right;
   font-family: var(--font-score);
   color: var(--polaroid-ink);
   opacity: 0.85;
@@ -6438,7 +6446,10 @@ main[data-view="session-viewer"].hidden {
   gap: 0.5rem;
 }
 .preview-card__cover {
-  flex: 1;
+  /* Always size to the 4-up width so 1/2/3 covers stay at their final size
+     and leave empty space to the right, instead of stretching to fill the
+     row (a lone cover would otherwise blow up large + pixelated). */
+  flex: 0 0 calc((100% - 3 * 0.5rem) / 4);
   aspect-ratio: 3 / 4;
   border-radius: 0.55rem;
   overflow: hidden;
@@ -6466,7 +6477,11 @@ main[data-view="session-viewer"].hidden {
 /* Wishlist preview leans visually lighter than Collection — square covers
    read as a secondary shelf rather than a duplicated mini-collection. */
 .preview-card--wishlist .preview-card__covers { gap: 0.4rem; }
-.preview-card--wishlist .preview-card__cover { aspect-ratio: 1 / 1; border-radius: 0.5rem; }
+.preview-card--wishlist .preview-card__cover {
+  flex-basis: calc((100% - 3 * 0.4rem) / 4);
+  aspect-ratio: 1 / 1;
+  border-radius: 0.5rem;
+}
 
 /* play rows shown in the Recent plays preview card */
 .preview-card__plays {
