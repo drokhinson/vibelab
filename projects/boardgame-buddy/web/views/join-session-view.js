@@ -147,12 +147,12 @@
         : `<div class="cascade-join__row-thumb cascade-join__row-thumb--placeholder">
              <i data-lucide="dice-6" class="w-4 h-4"></i>
            </div>`;
+      // Sessions past Gather are spectator-only — the user lands in the
+      // read-only session-viewer and isn't added to the host's player list.
+      const spectate = s.phase && s.phase !== "gather";
       const badges = [];
       if (s.is_participant) badges.push(`<span class="cascade-join__badge cascade-join__badge--rejoin">Rejoin</span>`);
       if (s.is_host_buddy && !s.is_participant) badges.push(`<span class="cascade-join__badge">Buddy</span>`);
-      // Sessions past Gather are spectator-only — the user lands in the
-      // read-only session-viewer and isn't added to the host's player list.
-      if (s.phase && s.phase !== "gather") badges.push(`<span class="cascade-join__badge">Spectate</span>`);
       return `
         <li class="cascade-card cascade-join__row"
             onclick="window.joinSessionView._joinSession('${escapeAttr(s.code)}')">
@@ -171,6 +171,10 @@
             </div>
             ${badges.length ? `<div class="cascade-join__row-badges">${badges.join("")}</div>` : ""}
           </div>
+          <button type="button" class="btn btn-primary cascade-join__row-action"
+                  onclick="event.stopPropagation(); window.joinSessionView._joinSession('${escapeAttr(s.code)}')">
+            ${spectate ? "Spectate" : "Join"}
+          </button>
         </li>
       `;
     }
