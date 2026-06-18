@@ -6446,7 +6446,10 @@ main[data-view="session-viewer"].hidden {
   gap: 0.5rem;
 }
 .preview-card__cover {
-  flex: 1;
+  /* Always size to the 4-up width so 1/2/3 covers stay at their final size
+     and leave empty space to the right, instead of stretching to fill the
+     row (a lone cover would otherwise blow up large + pixelated). */
+  flex: 0 0 calc((100% - 3 * 0.5rem) / 4);
   aspect-ratio: 3 / 4;
   border-radius: 0.55rem;
   overflow: hidden;
@@ -6474,7 +6477,11 @@ main[data-view="session-viewer"].hidden {
 /* Wishlist preview leans visually lighter than Collection — square covers
    read as a secondary shelf rather than a duplicated mini-collection. */
 .preview-card--wishlist .preview-card__covers { gap: 0.4rem; }
-.preview-card--wishlist .preview-card__cover { aspect-ratio: 1 / 1; border-radius: 0.5rem; }
+.preview-card--wishlist .preview-card__cover {
+  flex-basis: calc((100% - 3 * 0.4rem) / 4);
+  aspect-ratio: 1 / 1;
+  border-radius: 0.5rem;
+}
 
 /* play rows shown in the Recent plays preview card */
 .preview-card__plays {
