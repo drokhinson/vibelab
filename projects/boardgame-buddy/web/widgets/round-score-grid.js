@@ -261,10 +261,10 @@
     renderToggle(host) {
       const on = this.enabled();
       return `<button type="button" class="scoring-sign-toggle${on ? " is-on" : ""}"
-                aria-pressed="${on}" title="Show +/− sign toggles on each score cell"
+                aria-pressed="${on}" title="Toggle +/− sign buttons on each score cell"
                 onclick="window.${host}._toggleSignButtons()">
                 <span class="scoring-sign-toggle__glyph">±</span>
-                <span>Negative ${on ? "on" : "off"}</span>
+                <span>toggle</span>
               </button>`;
     },
   };
