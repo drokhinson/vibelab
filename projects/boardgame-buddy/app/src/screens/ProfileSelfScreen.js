@@ -1,125 +1,95 @@
-// ProfileSelfScreen — own profile hub (also the ProfileTab). Avatar + stats +
-// collection preview + recent plays + nav into Collection/Wishlist/Plays/
-// Buddies/Settings/Admin. Mirrors web/views/profile-self-view.js.
+// src/screens/ProfileSelfScreen.js — own profile. Phase 1 ships a functional
+// shell: identity badge + sign-out (so the auth round-trip is testable). The
+// stats strip, collection grid, and avatar customizer land in Phase 4.
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Settings, ChevronRight, LibraryBig, Star, History, Users, Shield } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../theme';
-import { useAppState } from '../store/AppContext';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { LogOut } from 'lucide-react-native';
+import AppHeader from '../components/AppHeader';
 import UserBadge from '../components/UserBadge';
-import StatsStrip from '../components/StatsStrip';
-import GameTile from '../components/GameTile';
-import EmptyState from '../components/EmptyState';
-import api from '../api/client';
+import { useAppState, useAppActions } from '../store/AppContext';
+import { useConfirm } from '../components/ConfirmModal';
+import { COLORS, FONTS, FONT_SIZES, SPACING, RADII } from '../theme';
 
-export default function ProfileSelfScreen({ navigation }) {
-  const state = useAppState();
-  const me = state.currentUser;
-  const [stats, setStats] = useState(state.stats);
-  const [preview, setPreview] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
+export default function ProfileSelfScreen() {
+  const { currentUser, session } = useAppState();
+  const actions = useAppActions();
+  const confirm = useConfirm();
 
-  const load = useCallback(async () => {
-    if (!me) return;
-    const [s, grid] = await Promise.all([
-      api.myStats().catch(() => null),
-      api.collectionGrid({ status: 'owned', page: 1, per_page: 6, exclude_expansions: true }).catch(() => ({ items: [] })),
-    ]);
-    if (s) setStats(s);
-    setPreview(grid.items || []);
-  }, [me]);
+  const name = (currentUser && currentUser.display_name)
+    || (session && session.user && session.user.email)
+    || 'You';
+  const email = session && session.user && session.user.email;
 
-  useEffect(() => { load(); }, [load]);
-
-  async function onRefresh() {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }
-
-  if (!me) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <EmptyState title="Your profile" body="Sign in to track your plays, shelf, and buddies." ctaLabel="Sign in" onCta={() => navigation.navigate('Auth')} />
-      </SafeAreaView>
-    );
+  async function onSignOut() {
+    const ok = await confirm({
+      title: 'Sign out?',
+      body: "You'll need to sign back in to see your shelf and plays.",
+      confirmLabel: 'Sign out',
+      destructive: true,
+    });
+    if (ok) actions.signOut();
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />}>
-        <View style={styles.headerRow}>
-          <View style={styles.identity}>
-            <UserBadge avatar={me.avatar} displayName={me.display_name} size="lg" isMe />
-            <View style={styles.nameBlock}>
-              <Text style={styles.name}>{me.display_name}</Text>
-              {me.username ? <Text style={styles.username}>@{me.username}</Text> : null}
-            </View>
-          </View>
-          <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('Settings')} hitSlop={8}>
-            <Settings size={22} color={COLORS.textSoft} />
-          </Pressable>
-        </View>
+    <View style={styles.flex}>
+      <AppHeader title="Profile" />
+      <View style={styles.body}>
+        <UserBadge avatar={currentUser && currentUser.avatar} displayName={name} size="lg" isMe />
+        <Text style={styles.name}>{name}</Text>
+        {email ? <Text style={styles.email}>{email}</Text> : null}
 
-        <StatsStrip stats={stats} />
+        <Text style={styles.note}>
+          Stats, your collection, and avatar customization arrive in a later build.
+        </Text>
 
-        <View style={styles.previewHead}>
-          <Text style={styles.sectionTitle}>Your shelf</Text>
-          <Pressable onPress={() => navigation.navigate('Collection', { status: 'owned' })} hitSlop={8}>
-            <Text style={styles.seeAll}>See all</Text>
-          </Pressable>
-        </View>
-        {preview && preview.length ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewScroll}>
-            {preview.map((it) => {
-              const g = it.game || it;
-              return <View key={g.id} style={styles.previewCell}><GameTile game={g} variant="preview" onPress={() => navigation.navigate('GameDetail', { gameId: g.id, gameName: g.name })} /></View>;
-            })}
-          </ScrollView>
-        ) : (
-          <Text style={styles.muted}>No owned games yet.</Text>
-        )}
-
-        <View style={styles.links}>
-          <LinkRow Icon={LibraryBig} label="Collection" onPress={() => navigation.navigate('Collection', { status: 'owned' })} />
-          <LinkRow Icon={Star} label="Wishlist" onPress={() => navigation.navigate('Collection', { status: 'wishlist' })} />
-          <LinkRow Icon={History} label="Plays" onPress={() => navigation.navigate('Plays')} />
-          <LinkRow Icon={Users} label="Buddies" onPress={() => navigation.navigate('Buddies')} />
-          {me.is_admin ? <LinkRow Icon={Shield} label="Admin tools" onPress={() => navigation.navigate('Admin')} /> : null}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function LinkRow({ Icon, label, onPress }) {
-  return (
-    <Pressable style={styles.linkRow} onPress={onPress}>
-      <Icon size={20} color={COLORS.accent} />
-      <Text style={styles.linkLabel}>{label}</Text>
-      <ChevronRight size={18} color={COLORS.textMuted} />
-    </Pressable>
+        <TouchableOpacity style={styles.signOut} onPress={onSignOut} activeOpacity={0.85}>
+          <LogOut size={18} color={COLORS.danger} />
+          <Text style={styles.signOutText}>Sign out</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bg },
-  body: { padding: SPACING.lg, paddingBottom: 40 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.lg },
-  identity: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, flex: 1 },
-  nameBlock: { flex: 1 },
-  name: { fontFamily: FONTS.displayBold, color: COLORS.text, fontSize: 24 },
-  username: { fontFamily: FONTS.sans, color: COLORS.textMuted, fontSize: 13 },
-  iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  previewHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SPACING.xl, marginBottom: SPACING.sm },
-  sectionTitle: { fontFamily: FONTS.display, color: COLORS.text, fontSize: 18 },
-  seeAll: { fontFamily: FONTS.sansSemibold, color: COLORS.accent, fontSize: 13 },
-  previewScroll: { gap: SPACING.md, paddingRight: SPACING.lg },
-  previewCell: { width: 96 },
-  muted: { fontFamily: FONTS.sans, color: COLORS.textMuted, fontSize: 14 },
-  links: { marginTop: SPACING.xl, backgroundColor: COLORS.card, borderRadius: RADII.lg, borderWidth: 1, borderColor: COLORS.borderSoft, overflow: 'hidden' },
-  linkRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: 14, paddingHorizontal: SPACING.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border },
-  linkLabel: { flex: 1, fontFamily: FONTS.sansSemibold, color: COLORS.text, fontSize: 15 },
+  flex: { flex: 1, backgroundColor: COLORS.background },
+  body: { flex: 1, alignItems: 'center', paddingTop: SPACING.xxl, paddingHorizontal: SPACING.xl },
+  name: {
+    fontFamily: FONTS.displayBold,
+    fontSize: FONT_SIZES.xxl,
+    color: COLORS.text,
+    marginTop: SPACING.md,
+  },
+  email: {
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+  },
+  note: {
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: SPACING.xl,
+    maxWidth: 300,
+    lineHeight: 20,
+  },
+  signOut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginTop: SPACING.xxl,
+    borderWidth: 1.5,
+    borderColor: COLORS.danger,
+    borderRadius: RADII.pill,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+  },
+  signOutText: {
+    fontFamily: FONTS.semibold,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.danger,
+  },
 });

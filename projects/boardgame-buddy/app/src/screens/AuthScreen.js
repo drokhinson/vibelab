@@ -1,114 +1,224 @@
-// AuthScreen — Supabase email/password sign-in/up + Google OAuth. Mirrors
-// web/views/auth-view.js. Apple deferred. Closes itself once a session lands
-// (AppContext flips currentUser → the auth-gated screen the user wanted shows).
+// src/screens/AuthScreen.js — sign in / sign up. Email + password plus Google
+// OAuth (via the web bridge). Shown by MainApp whenever there's no session.
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { X } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../theme';
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppState, useAppActions } from '../store/AppContext';
 import OAuthButtons from '../components/OAuthButtons';
+import UserBadge from '../components/UserBadge';
+import { COLORS, FONTS, FONT_SIZES, SPACING, RADII } from '../theme';
 
-export default function AuthScreen({ navigation }) {
-  const state = useAppState();
+export default function AuthScreen() {
+  const { authBusy, authError } = useAppState();
   const actions = useAppActions();
+  const insets = useSafeAreaInsets();
+
   const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(null);
+  const [localError, setLocalError] = useState(null);
 
-  // Once signed in, dismiss the auth modal.
-  useEffect(() => {
-    if (state.currentUser) navigation.goBack();
-  }, [state.currentUser]);
+  const isSignup = mode === 'signup';
+  const error = localError || authError;
 
   async function submit() {
-    setNotice('');
+    setLocalError(null);
+    setNotice(null);
     if (!email.trim() || !password) {
-      setNotice('Enter your email and password.');
+      setLocalError('Enter your email and password.');
       return;
     }
-    const r = mode === 'signin'
-      ? await actions.signInEmail(email.trim(), password)
-      : await actions.signUpEmail(email.trim(), password);
-    if (r.ok && r.needsConfirm) setNotice('Check your email to confirm your account, then sign in.');
+    if (isSignup && password.length < 6) {
+      setLocalError('Password must be at least 6 characters.');
+      return;
+    }
+    const res = isSignup
+      ? await actions.signUpEmail(email, password)
+      : await actions.signInEmail(email, password);
+    if (res.ok && res.needsConfirm) {
+      setNotice('Check your email to confirm your account, then sign in.');
+      setMode('signin');
+    }
+  }
+
+  function switchMode(next) {
+    actions.clearAuthError();
+    setLocalError(null);
+    setNotice(null);
+    setMode(next);
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Pressable style={styles.close} onPress={() => navigation.goBack()} hitSlop={10}>
-            <X size={24} color={COLORS.textSoft} />
-          </Pressable>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + SPACING.xxl }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.brand}>
+          <UserBadge avatar={{ icon: 'die', iconColor: '#C9922A', bgColor: '#2a1812' }} size="lg" />
+          <Text style={styles.wordmark}>BoardgameBuddy</Text>
+          <Text style={styles.tagline}>Track plays. Build your shelf. Play together.</Text>
+        </View>
 
-          <Text style={styles.brand}>Boardgame Buddy</Text>
-          <Text style={styles.tagline}>Log your plays. Track your shelf. Find your people.</Text>
+        <View style={styles.card}>
+          <Text style={styles.heading}>{isSignup ? 'Create your account' : 'Welcome back'}</Text>
 
-          <View style={styles.card}>
-            <OAuthButtons onGoogle={actions.signInGoogle} disabled={state.authBusy} />
+          <OAuthButtons onGoogle={() => actions.signInGoogle()} busy={authBusy} disabled={authBusy} />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={COLORS.textMuted}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={COLORS.textMuted}
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-
-            {(notice || state.authError) ? (
-              <Text style={styles.error}>{notice || state.authError}</Text>
-            ) : null}
-
-            <Pressable style={[styles.primary, state.authBusy && styles.disabled]} onPress={submit} disabled={state.authBusy}>
-              <Text style={styles.primaryLabel}>{mode === 'signin' ? 'Sign in' : 'Create account'}</Text>
-            </Pressable>
-
-            <Pressable onPress={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setNotice(''); }}>
-              <Text style={styles.switch}>
-                {mode === 'signin' ? "New here? Create an account" : 'Already have an account? Sign in'}
-              </Text>
-            </Pressable>
+          <View style={styles.dividerRow}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>or use email</Text>
+            <View style={styles.divider} />
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor={COLORS.textMuted}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            textContentType="emailAddress"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor={COLORS.textMuted}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            textContentType={isSignup ? 'newPassword' : 'password'}
+          />
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+
+          <TouchableOpacity
+            style={[styles.submit, authBusy && styles.submitDisabled]}
+            onPress={submit}
+            disabled={authBusy}
+            activeOpacity={0.85}
+          >
+            {authBusy ? (
+              <ActivityIndicator color={COLORS.brown} />
+            ) : (
+              <Text style={styles.submitText}>{isSignup ? 'Sign up' : 'Sign in'}</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.switch}
+            onPress={() => switchMode(isSignup ? 'signin' : 'signup')}
+          >
+            <Text style={styles.switchText}>
+              {isSignup ? 'Already have an account? Sign in' : "New here? Create an account"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bg },
-  scroll: { padding: SPACING.xl, paddingTop: SPACING.xxl, flexGrow: 1, justifyContent: 'center' },
-  close: { position: 'absolute', top: SPACING.md, right: SPACING.md, padding: 8 },
-  brand: { fontFamily: FONTS.displayBold, color: COLORS.accent, fontSize: 32, textAlign: 'center' },
-  tagline: { fontFamily: FONTS.sans, color: COLORS.textSoft, fontSize: 14, textAlign: 'center', marginTop: SPACING.sm, marginBottom: SPACING.xl },
-  card: { backgroundColor: COLORS.card, borderRadius: RADII.lg, padding: SPACING.lg, borderWidth: 1, borderColor: COLORS.border },
-  input: {
-    backgroundColor: COLORS.bgElevated,
-    borderRadius: RADII.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
+  flex: { flex: 1, backgroundColor: COLORS.background },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xxl,
+  },
+  brand: { alignItems: 'center', marginBottom: SPACING.xl },
+  wordmark: {
+    fontFamily: FONTS.displayBold,
+    fontSize: FONT_SIZES.display,
     color: COLORS.text,
-    fontFamily: FONTS.sans,
-    fontSize: 15,
-    marginTop: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  tagline: {
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+    textAlign: 'center',
+  },
+  card: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADII.lg,
+    padding: SPACING.xl,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  error: { fontFamily: FONTS.sans, color: COLORS.rustText, fontSize: 13, marginTop: SPACING.sm },
-  primary: { backgroundColor: COLORS.accent, borderRadius: RADII.md, paddingVertical: 13, alignItems: 'center', marginTop: SPACING.lg },
-  disabled: { opacity: 0.6 },
-  primaryLabel: { fontFamily: FONTS.sansBold, color: COLORS.bg, fontSize: 16 },
-  switch: { fontFamily: FONTS.sansMedium, color: COLORS.accent, fontSize: 13, textAlign: 'center', marginTop: SPACING.lg },
+  heading: {
+    fontFamily: FONTS.display,
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: SPACING.lg,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  divider: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  dividerText: {
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+  },
+  input: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: RADII.md,
+    paddingHorizontal: SPACING.md,
+    minHeight: 50,
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+  },
+  error: {
+    fontFamily: FONTS.medium,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.danger,
+    marginBottom: SPACING.sm,
+  },
+  notice: {
+    fontFamily: FONTS.medium,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.owned,
+    marginBottom: SPACING.sm,
+  },
+  submit: {
+    backgroundColor: COLORS.accent,
+    minHeight: 52,
+    borderRadius: RADII.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SPACING.sm,
+  },
+  submitDisabled: { opacity: 0.7 },
+  submitText: {
+    fontFamily: FONTS.bold,
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.brown,
+  },
+  switch: { alignItems: 'center', marginTop: SPACING.lg, padding: SPACING.sm },
+  switchText: {
+    fontFamily: FONTS.medium,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.accentHover,
+  },
 });

@@ -28,6 +28,7 @@ export const secureStorage = {
 
   async setItem(key, value) {
     if (tooLarge(value)) {
+      // Mirror to AsyncStorage and clear any SecureStore copy so reads stay consistent.
       try { await SecureStore.deleteItemAsync(key); } catch {}
       return AsyncStorage.setItem(key, value);
     }
