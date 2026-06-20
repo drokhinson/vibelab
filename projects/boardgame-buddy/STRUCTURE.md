@@ -13,32 +13,9 @@ Prototype
 
 ## Tech Stack
 - **Frontend (web):** Vanilla HTML/CSS/JS, DaisyUI v4 + Tailwind CDN, Lucide icons, Supabase JS SDK (CDN)
-- **Native app (`app/`):** React Native / Expo (SDK 54, RN 0.81, React 19), React Navigation
-  (native-stack + bottom-tabs), Context + useReducer state, Supabase Auth (secure-store, PKCE),
-  Supabase Realtime for live sessions. Self-contained — theme/api/components live under `app/src`
-  (no `shared/` layer; the web app is untouched). See "Native app" below.
 - **Backend:** Python FastAPI, Supabase (DB + Auth)
 - **Auth:** Supabase Auth (email/password + Google OAuth) — pilot for the whole monorepo
 - **External API:** BoardGameGeek XML API v2 (for live search fallback)
-
-### Native app (`app/`)
-Full feature-parity React Native build. Organized around the repo's one-canonical-component-per-
-core-object rule (`.claude/rules/ui-object-design.md`):
-- **Core-object components** (`app/src/components/`): `GameTile` (variants tile/preview/hero/thumb),
-  `PlayCard` (flip card), `UserBadge` (avatars + 11 icon glyphs), `BuddyRow`, `StatusTag`/
-  `ExpansionBadge`. Shared chrome: `AppHeader`, `LoadingState`, `EmptyState`, `ConfirmModal`
-  (the single app-wide destructive-confirm surface), `OAuthButtons`, `Markdown`, `AvatarCustomizer`,
-  `StatsStrip`.
-- **Widgets** (`app/src/widgets/`): `ReferenceGuideScroll`, `RoundScoreGrid`, `GameFinder`,
-  `PlayDetailPopup` (the single "open a play" destination).
-- **Realtime** (`app/src/realtime/`): `liveScores`, `sessionPhase` (Supabase channels for the live
-  host/join cascade); draft model in `app/src/models/playSession.js` (AsyncStorage-persisted).
-- **API client** (`app/src/api/client.js`): all ~80 endpoints, 401 refresh-retry, multipart photo
-  upload. Boot seeds first paint via `GET /bootstrap`.
-- **Auth/OAuth prerequisites (web-side, not in `app/`):** Google sign-in routes through a hosted
-  `web/auth-callback.html` bridge page on the BGB Vercel deploy, allowlisted in Supabase → Auth →
-  URL Configuration. Store submission also needs `web/privacy.html` + `web/delete-account.html`.
-  Apple Sign-In is deferred.
 
 ## Data Model
 
