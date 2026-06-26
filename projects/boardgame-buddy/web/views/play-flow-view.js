@@ -624,23 +624,23 @@
       }
       const game = this._ps.gameSnapshot || {};
       const rulebookUrl = game.rulebook_url;
-      const rulebookBtn = rulebookUrl
-        ? `<a href="${escapeAttr(rulebookUrl)}" target="_blank" rel="noopener"
-              class="btn btn-outline btn-sm cascade-rulebook-cta">
-             <i data-lucide="book-open" class="w-4 h-4"></i>
-             <span>Rulebook</span>
-             <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-           </a>`
-        : `<button class="btn btn-outline btn-sm cascade-rulebook-cta" disabled
-              title="No rulebook available">
-             <i data-lucide="book-open" class="w-4 h-4"></i>
-             <span>Rulebook</span>
-           </button>`;
+      // No rulebook for this game → omit the button (and its row) entirely;
+      // the reference scroll below still carries user-authored chapters.
+      const rulebookRow = rulebookUrl
+        ? `<div class="cascade-rulebook-row">
+             <a href="${escapeAttr(rulebookUrl)}" target="_blank" rel="noopener"
+                class="btn btn-outline btn-sm cascade-rulebook-cta">
+               <i data-lucide="book-open" class="w-4 h-4"></i>
+               <span>Rulebook</span>
+               <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+             </a>
+           </div>`
+        : "";
       return `
         ${this._renderInviteCard()}
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
-          <div class="cascade-rulebook-row">${rulebookBtn}</div>
+          ${rulebookRow}
           <div id="play-flow-guide-mount"></div>
         </section>
         ${this._renderScoringSection()}
