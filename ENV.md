@@ -32,8 +32,8 @@ Set in Repo → Settings → Secrets and variables → Actions.
 
 | Secret | Source | Purpose | Used by |
 |---|---|---|---|
-| `VIBELAB_SUPABASE_URL` | Supabase dashboard | Injected into web `config.js` at deploy | `deploy-frontend.yml`, `deploy-frontend-all.yml` |
-| `VIBELAB_SUPABASE_ANON_KEY` | Supabase dashboard | Injected into web `config.js` at deploy | `deploy-frontend.yml`, `deploy-frontend-all.yml` |
+| `VIBELAB_SUPABASE_URL` | Supabase dashboard | Injected into web `config.js` at deploy; keep-alive ping target | `deploy-frontend.yml`, `deploy-frontend-all.yml`, `supabase-keepalive.yml` |
+| `VIBELAB_SUPABASE_ANON_KEY` | Supabase dashboard | Injected into web `config.js` at deploy; keep-alive ping auth | `deploy-frontend.yml`, `deploy-frontend-all.yml`, `supabase-keepalive.yml` |
 | `VERCEL_TOKEN` | Vercel → Account Settings → Tokens | CLI auth for `vercel pull` / `vercel deploy` | all `deploy-*.yml` |
 | `VERCEL_ORG_ID` | Vercel → Settings → General | Target Vercel org for the CLI | all `deploy-*.yml` |
 | `VERCEL_LANDING_PROJECT_ID` | Vercel → landing project → Settings | Target Vercel project for landing | `deploy-landing.yml` |

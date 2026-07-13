@@ -1,0 +1,25 @@
+name: Supabase Keep-Alive
+
+# Prevents Supabase free-tier auto-pause (projects freeze after ~7 days of
+# inactivity). An anon-key PostgREST select reaches Postgres even when RLS
+# filters out every row, which is enough to reset the inactivity timer —
+# a 200 with an empty array still counts.
+#
+# Note: GitHub disables scheduled workflows after 60 days without repo
+# activity. If pings stop, re-enable from the Actions tab.
+
+on:
+  schedule:
+    - cron: "17 9 */2 * *" # every 2 days at 09:17 UTC (off top-of-hour congestion)
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase via PostgREST
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -H "apikey: ${{ secrets.VIBELAB_SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.VIBELAB_SUPABASE_ANON_KEY }}" \
+            "${{ secrets.VIBELAB_SUPABASE_URL }}/rest/v1/boardgamebuddy_games?select=id&limit=1"
