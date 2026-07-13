@@ -116,3 +116,51 @@
 --               without further round trips until cached entries go stale.
 --               bootstrap_version is bumped any time this payload's shape
 --               changes — the FE wipes its cache on mismatch.
+
+-- bgb_session_bundle(p_session_id UUID)
+--   → JSONB shaped like models.SessionResponse { id, code, status, phase,
+--     host_user_id, game_id, game, participants[], created_at, expires_at,
+--     finalized_play_id } or {"error": "not_found"}
+--   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (_build_response — the response builder for every session
+--               endpoint; also invoked internally by the three RPCs below)
+--   Purpose:    Single round-trip lobby payload: session row + participant
+--               roster with profile avatars + optional GameSummary. Replaced
+--               the 3-4 sequential PostgREST selects _build_response used
+--               to fan out.
+
+-- bgb_create_session(p_host UUID, p_host_display_name TEXT,
+--                    p_game UUID DEFAULT NULL)
+--   → JSONB (SessionResponse bundle) or {"error": "code_allocation_failed"}
+--   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (create_session — POST /sessions)
+--   Purpose:    One-call lobby open: abandons the host's stale open sessions,
+--               allocates a unique 5-char Crockford code (≤6 retries against
+--               the partial unique index on (code) WHERE status='open'),
+--               seats the host as participant #1. Code alphabet/length
+--               mirror constants.py — keep in step.
+
+-- bgb_get_session(p_code TEXT)
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired"}
+--   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (get_session — GET /sessions/{code}, the 2s lobby poll)
+--   Purpose:    Open/expiry-gated session fetch. Expired sessions are marked
+--               status='abandoned' (status only, matching the old
+--               _fetch_open_session) and reported as expired → 410.
+
+-- bgb_join_session(p_code TEXT, p_user UUID DEFAULT NULL,
+--                  p_user_display_name TEXT DEFAULT NULL,
+--                  p_guest_display_name TEXT DEFAULT NULL)
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
+--     "guest_name_required"}
+--   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (join_session — POST /sessions/{code}/join)
+--   Purpose:    Idempotent one-call join. During Gather, adds authed callers
+--               by user_id and guests by trimmed case-insensitive
+--               display_name; after Gather the roster is untouched
+--               (spectator). Same semantics the Python service had, minus
+--               the 3-4 extra round trips.

@@ -4,9 +4,15 @@ Owns boardgamebuddy_play_sessions + participants. The host's phone calls
 create_session(); other phones call join_session(code, ...). When the host
 hits Save, finalize_session() writes the canonical boardgamebuddy_plays row
 (via play_routes' existing logic) and marks the session 'finalized'.
+
+The hot paths (create / join / the 2s GET poll) are single Postgres RPCs
+(migration 036) — each previously fanned out 4-6 sequential PostgREST
+round trips, which made host/join taps crawl at cross-region RTTs. The
+RPCs return SessionResponse-shaped JSONB, or {"error": "<code>"} for gate
+failures, which _bundle_to_response maps to the same HTTPExceptions the
+routes have always raised.
 """
 
-import secrets
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -15,87 +21,45 @@ from fastapi import HTTPException
 from ..constants import (
     ALLOWED_PHASE_TRANSITIONS,
     BuddyEdgeStatus,
-    PLAY_SESSION_CODE_ALPHABET,
-    PLAY_SESSION_CODE_LENGTH,
     PlaySessionStatus,
     SessionPhase,
 )
 from ..models import (
     JoinableSession,
     PlayerEntry,
-    SessionParticipantResponse,
     SessionResponse,
 )
 from ._helpers import fetch_games_by_ids, fetch_profiles_by_ids
 
 
-_MAX_CODE_ATTEMPTS = 6
+_BUNDLE_ERROR_STATUS: dict[str, tuple[int, str]] = {
+    "not_found": (404, "Session not found"),
+    "expired": (410, "Session expired"),
+    "guest_name_required": (400, "display_name is required for guests"),
+    "code_allocation_failed": (503, "Could not allocate session code"),
+}
 
 
-def _generate_code() -> str:
-    return "".join(
-        secrets.choice(PLAY_SESSION_CODE_ALPHABET)
-        for _ in range(PLAY_SESSION_CODE_LENGTH)
-    )
+def _bundle_to_response(data: Any) -> SessionResponse:
+    """Parse a session-RPC JSONB payload, mapping error codes to HTTP."""
+    if not isinstance(data, dict) or not data:
+        raise HTTPException(status_code=502, detail="Empty session RPC response")
+    error = data.get("error")
+    if error:
+        status, detail = _BUNDLE_ERROR_STATUS.get(
+            error, (500, f"Session RPC error: {error}")
+        )
+        raise HTTPException(status_code=status, detail=detail)
+    return SessionResponse.model_validate(data)
 
 
 def _build_response(sb, session_row: dict[str, Any]) -> SessionResponse:
-    participants_rows = (
-        sb.table("boardgamebuddy_play_session_participants")
-        .select("id, user_id, display_name, joined_at")
-        .eq("session_id", session_row["id"])
-        .order("joined_at")
+    data = (
+        sb.rpc("bgb_session_bundle", {"p_session_id": session_row["id"]})
         .execute()
         .data
-        or []
     )
-    profile_ids = [p["user_id"] for p in participants_rows if p.get("user_id")]
-    profiles = fetch_profiles_by_ids(sb, profile_ids)
-    participants = [
-        SessionParticipantResponse(
-            id=p["id"],
-            user_id=p.get("user_id"),
-            display_name=p["display_name"],
-            joined_at=p["joined_at"],
-            avatar=(profiles.get(p.get("user_id") or "") or {}).get("avatar"),
-        )
-        for p in participants_rows
-    ]
-
-    game_summary = None
-    if session_row.get("game_id"):
-        games = fetch_games_by_ids(sb, [session_row["game_id"]])
-        game_summary = games.get(session_row["game_id"])
-
-    return SessionResponse(
-        id=session_row["id"],
-        code=session_row["code"],
-        status=PlaySessionStatus(session_row["status"]),
-        phase=SessionPhase(session_row.get("phase") or SessionPhase.GATHER.value),
-        host_user_id=session_row["host_user_id"],
-        game_id=session_row.get("game_id"),
-        game=game_summary,
-        participants=participants,
-        created_at=session_row["created_at"],
-        expires_at=session_row["expires_at"],
-        finalized_play_id=session_row.get("finalized_play_id"),
-    )
-
-
-def _close_open_sessions_for_host(sb, host_user_id: str) -> None:
-    """Abandon any pre-existing open sessions owned by this host.
-
-    The Log Play tab always opens a new session on entry to Gather, so a
-    host who navigates away and comes back would otherwise leave orphan
-    rows accumulating. Run before insert in create_session() to keep the
-    table tidy without relying solely on the 2h expires_at cleanup.
-    """
-    sb.table("boardgamebuddy_play_sessions").update({
-        "status": PlaySessionStatus.ABANDONED.value,
-        "phase": SessionPhase.ABANDONED.value,
-    }).eq("host_user_id", host_user_id).eq(
-        "status", PlaySessionStatus.OPEN.value
-    ).execute()
+    return _bundle_to_response(data)
 
 
 def create_session(
@@ -105,36 +69,22 @@ def create_session(
     *,
     game_id: Optional[str] = None,
 ) -> SessionResponse:
-    """Allocate a short code and seat the host as participant #1."""
-    _close_open_sessions_for_host(sb, host_user_id)
-    last_err: Optional[Exception] = None
-    for _ in range(_MAX_CODE_ATTEMPTS):
-        code = _generate_code()
-        try:
-            inserted = (
-                sb.table("boardgamebuddy_play_sessions")
-                .insert({
-                    "code": code,
-                    "host_user_id": host_user_id,
-                    "game_id": game_id,
-                    "status": PlaySessionStatus.OPEN.value,
-                    "phase": SessionPhase.GATHER.value,
-                })
-                .execute()
-            )
-            row = inserted.data[0]
-            sb.table("boardgamebuddy_play_session_participants").insert({
-                "session_id": row["id"],
-                "user_id": host_user_id,
-                "display_name": host_display_name,
-            }).execute()
-            return _build_response(sb, row)
-        except Exception as exc:
-            # The partial unique index on (code) WHERE status='open' rejects
-            # collisions; retry with a new code.
-            last_err = exc
-            continue
-    raise HTTPException(status_code=503, detail=f"Could not allocate session code: {last_err}")
+    """Allocate a short code and seat the host as participant #1.
+
+    One RPC: bgb_create_session abandons the host's stale open sessions,
+    generates a code (retrying against the partial unique index on (code)
+    WHERE status='open'), seats the host, and returns the lobby bundle.
+    """
+    data = (
+        sb.rpc("bgb_create_session", {
+            "p_host": host_user_id,
+            "p_host_display_name": host_display_name,
+            "p_game": game_id,
+        })
+        .execute()
+        .data
+    )
+    return _bundle_to_response(data)
 
 
 _SESSION_SELECT = (
@@ -165,8 +115,9 @@ def _fetch_open_session(sb, code: str) -> dict[str, Any]:
 
 
 def get_session(sb, code: str) -> SessionResponse:
-    session = _fetch_open_session(sb, code)
-    return _build_response(sb, session)
+    """The 2s poll target — one RPC instead of four round trips."""
+    data = sb.rpc("bgb_get_session", {"p_code": code}).execute().data
+    return _bundle_to_response(data)
 
 
 def join_session(
@@ -184,44 +135,19 @@ def join_session(
     Joining after Gather (Play / Settle) is allowed too but does NOT touch
     the participants table: the caller is a spectator with the same
     read-only session-viewer view as joiners-during-gather, just absent
-    from the host's player list.
+    from the host's player list. All of that lives in bgb_join_session.
     """
-    session = _fetch_open_session(sb, code)
-    in_gather = (session.get("phase") or SessionPhase.GATHER.value) == SessionPhase.GATHER.value
-
-    if in_gather and user_id:
-        existing = (
-            sb.table("boardgamebuddy_play_session_participants")
-            .select("id")
-            .eq("session_id", session["id"])
-            .eq("user_id", user_id)
-            .execute()
-        )
-        if not existing.data:
-            sb.table("boardgamebuddy_play_session_participants").insert({
-                "session_id": session["id"],
-                "user_id": user_id,
-                "display_name": user_display_name or "Player",
-            }).execute()
-    elif in_gather:
-        name = (guest_display_name or "").strip()
-        if not name:
-            raise HTTPException(status_code=400, detail="display_name is required for guests")
-        # Dedup guests by case-insensitive display_name within the session.
-        existing = (
-            sb.table("boardgamebuddy_play_session_participants")
-            .select("id")
-            .eq("session_id", session["id"])
-            .ilike("display_name", name)
-            .execute()
-        )
-        if not existing.data:
-            sb.table("boardgamebuddy_play_session_participants").insert({
-                "session_id": session["id"],
-                "display_name": name,
-            }).execute()
-
-    return _build_response(sb, session)
+    data = (
+        sb.rpc("bgb_join_session", {
+            "p_code": code,
+            "p_user": user_id,
+            "p_user_display_name": user_display_name,
+            "p_guest_display_name": guest_display_name,
+        })
+        .execute()
+        .data
+    )
+    return _bundle_to_response(data)
 
 
 def add_participant(
