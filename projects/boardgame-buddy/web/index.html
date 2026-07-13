@@ -14,15 +14,19 @@
   <title>Boardgame Buddy</title>
   <link rel="icon" type="image/svg+xml" href="assets/brand/bgb-logo.svg" />
 
-  <!-- DaisyUI v4 + Tailwind CSS (no build step) -->
+  <!-- DaisyUI v4 + Tailwind CSS (no build step). Local dev only: the deploy
+       workflow (.github/workflows/deploy-frontend*.yml) swaps this CDN pair
+       for a precompiled assets/bgb-tw.css in the deployed artifact. Keep the
+       Tailwind CDN script un-deferred — the runtime JIT compiler must run
+       before first paint locally. -->
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <!-- Lucide Icons (deferred — init.js waits for DOMContentLoaded) -->
+  <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
-  <!-- Supabase JS Client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase JS Client (deferred — only used from DOMContentLoaded onward) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Google Fonts: Poppins (UI) + Crimson Text (display) + Fraunces / JetBrains Mono (polaroid card) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
