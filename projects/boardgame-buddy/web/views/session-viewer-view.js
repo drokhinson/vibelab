@@ -14,7 +14,9 @@
   // Polling cadence matches the host's lobby poll (play-flow-view.js:124).
   // Realtime covers phase changes and live scores, but participant joins /
   // leaves and the host's roster edits are poll-only, so 2s is the minimum
-  // freshness an authenticated joiner can expect for the player list.
+  // freshness an authenticated joiner can expect for the player list during
+  // Gather. During play/settle the poll drops to a Realtime fallback — see
+  // the gating at the top of _poll().
   const POLL_MS = 2000;
 
   class SessionViewerView extends window.View {
@@ -30,6 +32,12 @@
       this._liveOff = null;
       this._phaseOff = null;
       this._popupShown = false;
+      // Poll-gating state: tick counter for the play/settle fallback cadence
+      // and the timestamp of the last Realtime event (phase change or live
+      // score). While Realtime is flowing, the fallback fetches are skipped.
+      this._pollTick = 0;
+      this._lastRealtimeAt = 0;
+      this._refreshingScores = false;
     }
 
     async onMount() {
@@ -40,6 +48,13 @@
         this.render();
         return;
       }
+      // The poll skips its ticks while the tab is hidden — fire one
+      // immediate catch-up tick when it becomes visible again (only while
+      // the poll is armed; finalize/abandon stop it). Auto-removed on
+      // unmount via listenDom.
+      this.listenDom("visibilitychange", () => {
+        if (!document.hidden && this._pollHandle) this._poll(true);
+      });
       await this._load();
       this._scrollToCurrentPhase(this._session && this._session.phase);
       this._startPolling();
@@ -124,15 +139,31 @@
       }
     }
 
-    async _poll() {
+    async _poll(catchUp = false) {
       if (!this._code) return;
+      // Hidden tab: skip the fetch — the visibilitychange listener (onMount)
+      // fires one catch-up tick the moment the tab is visible again.
+      if (document.hidden) return;
+      const phase = this._session && this._session.phase;
+      if ((phase === "play" || phase === "settle") && !catchUp) {
+        // During play/settle, Realtime (phase channel + live scores) carries
+        // the updates and the poll is only a fallback: fetch every 5th tick
+        // (10s), and only when no Realtime event landed within the last 10s.
+        // Gather keeps the full 2s cadence — roster joins/leaves are
+        // poll-only.
+        this._pollTick++;
+        if (this._pollTick % 5 !== 0) return;
+        if (Date.now() - this._lastRealtimeAt < 10000) return;
+      }
       // Realtime is the fast path for live scores, but it can drop an event
-      // (backgrounded tab, socket hiccup). Re-sync the scores table on every
-      // poll tick during Play so a round the host added while Realtime was
-      // asleep still surfaces within one tick (≤2s). The refresh _emit()s
-      // through _onLiveScoresChange(), which grows the grid if needed.
+      // (backgrounded tab, socket hiccup). On fallback/catch-up ticks,
+      // re-sync the scores table so a round the host added while Realtime
+      // was asleep still surfaces. The refresh _emit()s through
+      // _onLiveScoresChange(), which grows the grid if needed.
       if (this._liveScores && this._session && this._session.phase === "play") {
-        this._liveScores.refresh();
+        this._refreshingScores = true;
+        try { await this._liveScores.refresh(); }
+        finally { this._refreshingScores = false; }
       }
       try {
         const next = await window.PlaySession.fetchLobby(this._code);
@@ -231,7 +262,7 @@
         }
       }
 
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     async _subscribePhase() {
@@ -239,6 +270,8 @@
       this._phaseOff = await window.SessionPhase.subscribe(
         this._session.id,
         async (phase) => {
+          // Realtime is alive — the poll's play/settle fallback stands down.
+          this._lastRealtimeAt = Date.now();
           const prevPhase = this._session && this._session.phase;
           // Patch the cached session in place so render() picks up the new
           // phase without waiting on the slow poll.
@@ -269,7 +302,13 @@
         currentUserId: me ? me.id : null,
       });
       await this._liveScores.start();
-      this._liveOff = this._liveScores.subscribe(() => this._onLiveScoresChange());
+      this._liveOff = this._liveScores.subscribe(() => {
+        // Realtime is alive — the poll's play/settle fallback stands down.
+        // Skip the stamp when the emit came from our own poll-triggered
+        // refresh(), which would otherwise defer the next fallback forever.
+        if (!this._refreshingScores) this._lastRealtimeAt = Date.now();
+        this._onLiveScoresChange();
+      });
     }
 
     // Live-scores tick. If the round count changed (the host added or removed
@@ -301,7 +340,7 @@
         ? { cell: focused.getAttribute("data-score-cell"), selStart: focused.selectionStart, selEnd: focused.selectionEnd }
         : null;
       sec.outerHTML = this._renderViewerScoring(this._session);
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
       if (snap && snap.cell) {
         const restored = this.container.querySelector(`input.scoring-cell[data-score-cell="${snap.cell}"]`);
         if (restored) {
@@ -410,7 +449,7 @@
           ${this._renderTopbar(null)}
           <div class="p-6 alert alert-error">${escape(this._error)}</div>
         `;
-        if (window.lucide) window.lucide.createIcons();
+        this.refreshIcons();
         return;
       }
       if (!s) {
@@ -418,7 +457,7 @@
           ${this._renderTopbar(null)}
           ${window.buddyLoader({ size: 96 })}
         `;
-        if (window.lucide) window.lucide.createIcons();
+        this.refreshIcons();
         return;
       }
 
@@ -447,7 +486,7 @@
           ${this._renderSettlePlaceholder()}
         </section>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
       if (phase === "play" || phase === "settle") this._mountReferenceGuide(s);
       // NOTE: do NOT call _scrollToCurrentPhase() here. At a 2s poll cadence
       // a render-time scroll yanks the user back to the top of the section
@@ -701,7 +740,7 @@
         // banner above the first cascade-screen so it reads at the top.
         const firstScreen = this.container.querySelector(".cascade-screen");
         if (firstScreen) firstScreen.insertAdjacentHTML("beforebegin", banner);
-        if (window.lucide) window.lucide.createIcons();
+        this.refreshIcons();
       }
     }
 

@@ -66,7 +66,7 @@
           </div>
         </div>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     switchMode(mode) {

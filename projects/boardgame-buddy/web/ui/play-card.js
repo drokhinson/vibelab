@@ -397,9 +397,12 @@
     articles.forEach((article) => {
       const tmp = document.createElement("div");
       tmp.innerHTML = html;
-      article.replaceWith(tmp.firstElementChild);
+      const fresh = tmp.firstElementChild;
+      article.replaceWith(fresh);
+      // Scope the icon pass to the card just patched — a document-wide
+      // walk here would re-scan every mounted (hidden) view per flip.
+      if (window.lucide) window.lucide.createIcons({ root: fresh });
     });
-    if (window.lucide) window.lucide.createIcons();
   }
 
   function findCardById(playId) {

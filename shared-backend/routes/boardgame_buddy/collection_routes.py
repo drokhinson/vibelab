@@ -61,15 +61,15 @@ async def get_collection(
     result = query.execute()
 
     # When the caller only wants owned/wishlist, we don't need the full
-    # cross-user play visibility map — just the plays whose game_id appears
-    # on the shelf, so we can populate last_played_at / play_count on each
-    # tile. Skipping the unscoped fetch is a 2-query saving on the hot path.
+    # cross-user play visibility map — just stats for the games already on
+    # the shelf, so we can populate last_played_at / play_count on each tile.
     shelf_game_ids: set[str] = {row["game_id"] for row in (result.data or [])}
     if status is None or status == CollectionStatus.PLAYED:
-        plays_data = _plays_visible_to_user(sb, user.user_id)
+        last_played_by_game, play_counts = _play_stats(sb, user.user_id)
     else:
-        plays_data = _plays_visible_to_user(sb, user.user_id, list(shelf_game_ids))
-    last_played_by_game, play_counts = _index_plays(plays_data)
+        last_played_by_game, play_counts = _play_stats(
+            sb, user.user_id, list(shelf_game_ids)
+        )
 
     items: list[CollectionItem] = []
     owned_game_ids: set[str] = set()
@@ -119,73 +119,33 @@ async def get_collection(
     return items
 
 
-def _plays_visible_to_user(
+def _play_stats(
     sb: Client,
     user_id: str,
     game_ids: Optional[list[str]] = None,
-) -> list[dict]:
-    """All plays the user has been part of: ones they logged themselves
-    plus ones a friend logged where a buddy linked to this user was a
-    participant. Mirrors the visibility rule the play log uses (see
-    list_plays in play_routes.py) so a play that shows up in History
-    also drives the Played shelf in the Closet.
+) -> tuple[dict[str, str], dict[str, int]]:
+    """last_played-by-game and play-count-by-game maps for every play the
+    user has been part of (logged themselves, or appears as a participant —
+    the same visibility rule the play log uses, so a play that shows up in
+    History also drives the Played shelf in the Closet).
 
-    `game_ids`, when provided, scopes both branches to those games — used
-    by /collection for owned/wishlist where we only need play stats for the
-    games already on the shelf and not the full derivation set.
+    One bgb_play_stats RPC (migration 039, SQL GROUP BY). The old path
+    fetched EVERY visible play row across up to 3 round trips and counted
+    them in Python — unbounded for BGG-synced users with thousands of plays.
 
-    Returns rows projected as {id, game_id, played_at}, newest first.
+    `game_ids`, when provided, scopes the stats to those games — used by
+    /collection for owned/wishlist where we only need the shelf's own tiles.
     """
-    own_q = (
-        sb.table("boardgamebuddy_plays")
-        .select("id, game_id, played_at")
-        .eq("user_id", user_id)
-    )
-    if game_ids is not None:
-        if not game_ids:
-            return []
-        own_q = own_q.in_("game_id", game_ids)
-    own = own_q.execute()
-    own_rows = own.data or []
-
-    # Shared plays: current user appears as a play participant via the new
-    # player_user_id column (post-migration-009 — replaces the legacy lookup
-    # through boardgamebuddy_buddies.linked_user_id which migration 013 drops).
-    shared_rows: list[dict] = []
-    shared_pp = (
-        sb.table("boardgamebuddy_play_players")
-        .select("play_id")
-        .eq("player_user_id", user_id)
+    if game_ids is not None and not game_ids:
+        return {}, {}
+    rows = (
+        sb.rpc("bgb_play_stats", {"p_viewer": user_id, "p_game_ids": game_ids})
         .execute()
+        .data
+        or []
     )
-    candidate = {r["play_id"] for r in shared_pp.data or []}
-    own_ids = {r["id"] for r in own_rows}
-    shared_play_ids = candidate - own_ids
-    if shared_play_ids:
-        shared_q = (
-            sb.table("boardgamebuddy_plays")
-            .select("id, game_id, played_at")
-            .in_("id", list(shared_play_ids))
-        )
-        if game_ids is not None:
-            shared_q = shared_q.in_("game_id", game_ids)
-        shared = shared_q.execute()
-        shared_rows = shared.data or []
-
-    merged = own_rows + shared_rows
-    merged.sort(key=lambda r: r.get("played_at") or "", reverse=True)
-    return merged
-
-
-def _index_plays(plays: list[dict]) -> tuple[dict[str, str], dict[str, int]]:
-    """Build last_played-by-game and play-count-by-game maps from raw play rows."""
-    last_played: dict[str, str] = {}
-    counts: dict[str, int] = {}
-    for p in plays:
-        gid = p["game_id"]
-        counts[gid] = counts.get(gid, 0) + 1
-        if gid not in last_played:
-            last_played[gid] = p["played_at"]
+    last_played = {r["game_id"]: r["last_played_at"] for r in rows}
+    counts = {r["game_id"]: int(r["play_count"] or 0) for r in rows}
     return last_played, counts
 
 
@@ -282,9 +242,7 @@ async def get_collection_shelf(
     sb = get_supabase()
     offset = (page - 1) * per_page
 
-    last_played_by_game, play_counts = _index_plays(
-        _plays_visible_to_user(sb, user.user_id)
-    )
+    last_played_by_game, play_counts = _play_stats(sb, user.user_id)
 
     if status == CollectionStatus.PLAYED:
         owned = (

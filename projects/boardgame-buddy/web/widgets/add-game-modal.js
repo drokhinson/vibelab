@@ -60,7 +60,7 @@
       if (ev.target === root) dismiss();
     });
     document.body.appendChild(root);
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons({ root });
 
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => dismiss());

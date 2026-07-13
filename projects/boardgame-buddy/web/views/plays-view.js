@@ -73,7 +73,7 @@
         ${this._renderHead()}
         <div class="p-4 grid place-items-center">${window.buddyLoader({ size: 64 })}</div>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     render() {
@@ -92,7 +92,7 @@
             ${window.buddyLoader({ size: 96, label: "Loading plays…" })}
           </div>
         `;
-        if (window.lucide) window.lucide.createIcons();
+        this.refreshIcons();
         return;
       }
 
@@ -102,7 +102,7 @@
         ${this._renderBody()}
         ${this._renderLoadMore()}
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
 
       if (activeId) {
         const el = document.getElementById(activeId);

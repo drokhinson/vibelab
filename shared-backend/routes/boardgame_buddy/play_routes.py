@@ -153,33 +153,36 @@ def _fetch_play_expansions(
     return out
 
 
-def _upsert_buddy(sb, user_id: str, name: str) -> dict:
-    """Find or create a buddy row for (owner_id=user_id, name)."""
-    result = (
-        sb.table("boardgamebuddy_buddies")
-        .upsert(
-            {"owner_id": user_id, "name": name},
-            on_conflict="owner_id,name",
-        )
-        .execute()
-    )
-    return result.data[0]
-
-
 def _write_play_players(sb, play_id: str, user_id: str, players: list) -> list[PlayPlayerResponse]:
-    """Insert one play_players row per player.
+    """Insert the play_players rows for a play in TWO bulk statements.
 
     Writes go through the new (post-migration-009) columns directly:
     player_user_id for real-account players, player_display_name as the
     free-text label. The legacy boardgamebuddy_buddies upsert is kept so the
     Plays-by-buddy filter in the legacy admin tools still has a roster to
-    pick from, but the play_players row no longer references it.
+    pick from, but the play_players row no longer references it. Both writes
+    were previously one round trip PER PLAYER (a 5-player log = 10 round
+    trips, paid again by every session finalize).
     """
     out: list[PlayPlayerResponse] = []
+    if not players:
+        return out
+
+    # Legacy buddies roster in one bulk upsert. Dedup names first — the same
+    # (owner_id, name) twice in one statement would trip Postgres's
+    # "ON CONFLICT cannot affect row a second time" error.
+    seen_names: set[str] = set()
+    buddy_rows: list[dict] = []
     for p in players:
-        # Keep populating the legacy buddies roster for the current owner so
-        # the autocomplete picker in admin tools still has something to show.
-        _upsert_buddy(sb, user_id, p.name)
+        if p.name not in seen_names:
+            seen_names.add(p.name)
+            buddy_rows.append({"owner_id": user_id, "name": p.name})
+    sb.table("boardgamebuddy_buddies").upsert(
+        buddy_rows, on_conflict="owner_id,name"
+    ).execute()
+
+    rows: list[dict] = []
+    for p in players:
         round_scores = getattr(p, "round_scores", None)
         row: dict = {
             "play_id": play_id,
@@ -191,7 +194,7 @@ def _write_play_players(sb, play_id: str, user_id: str, players: list) -> list[P
         player_uid = getattr(p, "user_id", None)
         if player_uid:
             row["player_user_id"] = player_uid
-        sb.table("boardgamebuddy_play_players").insert(row).execute()
+        rows.append(row)
         out.append(PlayPlayerResponse(
             buddy_id=None,
             user_id=player_uid,
@@ -200,6 +203,7 @@ def _write_play_players(sb, play_id: str, user_id: str, players: list) -> list[P
             score=p.score,
             round_scores=round_scores,
         ))
+    sb.table("boardgamebuddy_play_players").insert(rows).execute()
     return out
 
 
@@ -246,144 +250,31 @@ async def list_plays(
 ) -> PlayListResponse:
     """List plays the target user logged + participated in (paginated, latest first)."""
     sb = get_supabase()
-    offset = (page - 1) * per_page
     target_user_id = user_id or user.user_id
 
-    # Pre-compute the set of play_ids that match the free-text search across
-    # game names and player display names. Done in one pass each so the main
-    # own_q / shared_q queries can just intersect.
-    search_play_ids: set[str] | None = None
-    if search and search.strip():
-        s = search.strip()
-        game_match_play_ids: set[str] = set()
-        game_rows = (
-            sb.table("boardgamebuddy_games")
-            .select("id")
-            .ilike("name", f"%{s}%")
-            .execute()
-        )
-        game_ids_match = [g["id"] for g in (game_rows.data or [])]
-        if game_ids_match:
-            gp = (
-                sb.table("boardgamebuddy_plays")
-                .select("id")
-                .in_("game_id", game_ids_match)
-                .execute()
-            )
-            game_match_play_ids = {r["id"] for r in (gp.data or [])}
-        player_match = (
-            sb.table("boardgamebuddy_play_players")
-            .select("play_id")
-            .ilike("player_display_name", f"%{s}%")
-            .execute()
-        )
-        player_match_play_ids = {r["play_id"] for r in (player_match.data or [])}
-        search_play_ids = game_match_play_ids | player_match_play_ids
-        if not search_play_ids:
-            return PlayListResponse(plays=[], total=0, page=page, per_page=per_page)
-
-    # Pre-fetch play_ids where the filtered player participated (used as an
-    # ID filter below). The query param is named buddy_id for FE compat but
-    # is now treated as a player_user_id lookup post-migration-009.
-    buddy_play_ids: set[str] | None = None
-    if buddy_id:
-        bpp = (
-            sb.table("boardgamebuddy_play_players")
-            .select("play_id")
-            .eq("player_user_id", buddy_id)
-            .execute()
-        )
-        buddy_play_ids = {r["play_id"] for r in bpp.data or []}
-        if not buddy_play_ids:
-            return PlayListResponse(plays=[], total=0, page=page, per_page=per_page)
-
-    # ── Collect lightweight (id, played_at, created_at, is_own) tuples ────────
-    own_q = (
-        sb.table("boardgamebuddy_plays")
-        .select("id, played_at, created_at")
-        .eq("user_id", target_user_id)
-    )
-    if game_id:
-        own_q = own_q.eq("game_id", game_id)
-    if buddy_play_ids is not None:
-        own_q = own_q.in_("id", list(buddy_play_ids))
-    if search_play_ids is not None:
-        own_q = own_q.in_("id", list(search_play_ids))
-    own_tuples: list[tuple[str, str, str, bool]] = [
-        (r["id"], r["played_at"], r["created_at"], True)
-        for r in (own_q.execute().data or [])
-    ]
-    own_ids_set = {t[0] for t in own_tuples}
-
-    # Shared plays: target user appears as a play participant (via
-    # player_user_id, set by either the new write path or the migration-009
-    # backfill from buddies.linked_user_id).
-    shared_tuples: list[tuple[str, str, str, bool]] = []
-    shared_pp = (
-        sb.table("boardgamebuddy_play_players")
-        .select("play_id")
-        .eq("player_user_id", target_user_id)
+    # Single RPC (migration 039). The old path fetched EVERY visible play
+    # tuple, merged/sorted/paginated in Python, then hydrated players and
+    # expansions — 8-11 sequential round trips per History-tab page.
+    data = (
+        sb.rpc("bgb_plays_page", {
+            "p_target": target_user_id,
+            "p_page": page,
+            "p_per_page": per_page,
+            "p_game": game_id,
+            "p_buddy": buddy_id,
+            "p_search": search,
+        })
         .execute()
+        .data
+        or {}
     )
-    shared_play_ids_raw = {r["play_id"] for r in shared_pp.data or []}
-    if shared_play_ids_raw:
-        candidate_ids = shared_play_ids_raw - own_ids_set
-        if buddy_play_ids is not None:
-            candidate_ids &= buddy_play_ids
-        if search_play_ids is not None:
-            candidate_ids &= search_play_ids
-        if candidate_ids:
-            shared_q = (
-                sb.table("boardgamebuddy_plays")
-                .select("id, played_at, created_at")
-                .in_("id", list(candidate_ids))
-                .neq("user_id", target_user_id)
-            )
-            if game_id:
-                shared_q = shared_q.eq("game_id", game_id)
-            shared_tuples = [
-                (r["id"], r["played_at"], r["created_at"], False)
-                for r in (shared_q.execute().data or [])
-            ]
-
-    # ── Merge, sort, paginate ────────────────────────────────────────────────
-    all_tuples = own_tuples + shared_tuples
-    all_tuples.sort(key=lambda t: (t[1], t[2]), reverse=True)
-    total = len(all_tuples)
-    page_tuples = all_tuples[offset : offset + per_page]
-
-    if not page_tuples:
-        return PlayListResponse(plays=[], total=total, page=page, per_page=per_page)
-
-    # ── Fetch full rows only for this page ───────────────────────────────────
-    page_own_ids = [t[0] for t in page_tuples if t[3]]
-    page_shared_ids = [t[0] for t in page_tuples if not t[3]]
-
-    rows_by_id: dict[str, tuple[dict, bool]] = {}
-    if page_own_ids:
-        res = sb.table("boardgamebuddy_plays").select(_SELECT_PLAY).in_("id", page_own_ids).execute()
-        for r in res.data or []:
-            rows_by_id[r["id"]] = (r, True)
-    if page_shared_ids:
-        res = sb.table("boardgamebuddy_plays").select(_SELECT_PLAY).in_("id", page_shared_ids).execute()
-        for r in res.data or []:
-            rows_by_id[r["id"]] = (r, False)
-
-    page_ids = [t[0] for t in page_tuples]
-    players_by_play = _fetch_players(sb, page_ids)
-    expansions_by_play = _fetch_play_expansions(sb, page_ids)
-
-    result = []
-    for play_id, _, _, _ in page_tuples:
-        if play_id in rows_by_id:
-            row, is_own = rows_by_id[play_id]
-            result.append(_build_play_response(
-                row,
-                is_own=is_own,
-                players_by_play=players_by_play,
-                expansions_by_play=expansions_by_play,
-            ))
-    return PlayListResponse(plays=result, total=total, page=page, per_page=per_page)
+    plays = [PlayResponse.model_validate(p) for p in data.get("plays") or []]
+    return PlayListResponse(
+        plays=plays,
+        total=data.get("total") or 0,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.get(
@@ -691,29 +582,22 @@ async def get_game_plays(
     """Return plays the current user logged for a specific game, newest first."""
     sb = get_supabase()
 
-    rows = (
-        sb.table("boardgamebuddy_plays")
-        .select(_SELECT_PLAY)
-        .eq("user_id", user.user_id)
-        .eq("game_id", game_id)
-        .order("played_at", desc=True)
-        .order("created_at", desc=True)
+    # Same RPC as list_plays with p_own_only (this endpoint has never
+    # included shared plays). per_page bounds what was previously an
+    # unbounded fetch; 500 plays of one game is far past any real history.
+    data = (
+        sb.rpc("bgb_plays_page", {
+            "p_target": user.user_id,
+            "p_page": 1,
+            "p_per_page": 500,
+            "p_game": game_id,
+            "p_own_only": True,
+        })
         .execute()
+        .data
+        or {}
     )
-
-    play_ids = [r["id"] for r in rows.data or []]
-    players_by_play = _fetch_players(sb, play_ids)
-    expansions_by_play = _fetch_play_expansions(sb, play_ids)
-
-    return [
-        _build_play_response(
-            r,
-            is_own=True,
-            players_by_play=players_by_play,
-            expansions_by_play=expansions_by_play,
-        )
-        for r in rows.data or []
-    ]
+    return [PlayResponse.model_validate(p) for p in data.get("plays") or []]
 
 
 # Legacy buddy endpoints (GET/POST /buddies, POST /buddies/{id}/link) have

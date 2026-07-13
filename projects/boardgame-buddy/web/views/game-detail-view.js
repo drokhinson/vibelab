@@ -102,7 +102,7 @@
           </header>
           <div class="p-6 alert alert-error">${escape(this._error)}</div>
         `;
-        if (window.lucide) window.lucide.createIcons();
+        this.refreshIcons();
         return;
       }
       if (!this._game) {
@@ -163,7 +163,7 @@
           </div>
         </article>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
       this._mountGuide();
     }
 

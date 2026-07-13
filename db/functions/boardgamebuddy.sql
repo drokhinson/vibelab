@@ -136,6 +136,11 @@
 --                    p_game UUID DEFAULT NULL)
 --   → JSONB (SessionResponse bundle) or {"error": "code_allocation_failed"}
 --   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
+--   Last updated in: db/migrations/boardgamebuddy/038_fix_session_code_entropy.sql
+--               (code entropy from uuid_send(gen_random_uuid()) — 036's
+--               gen_random_bytes failed on Supabase because pgcrypto lives
+--               in the `extensions` schema, outside the function's
+--               search_path = public)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (create_session — POST /sessions)
 --   Purpose:    One-call lobby open: abandons the host's stale open sessions,
@@ -186,3 +191,43 @@
 --               phase gather/play/settle visible to the viewer (own hosted,
 --               already-joined, or hosted by an accepted buddy). Replaced
 --               the 5 sequential PostgREST selects list_joinable fanned out.
+
+-- bgb_plays_page(p_target UUID, p_page INT DEFAULT 1, p_per_page INT DEFAULT 20,
+--                p_game UUID DEFAULT NULL, p_buddy UUID DEFAULT NULL,
+--                p_search TEXT DEFAULT NULL, p_own_only BOOLEAN DEFAULT false)
+--   → JSONB { plays: [models.PlayResponse-shaped...], total }
+--   Defined in: db/migrations/boardgamebuddy/039_perf_rpcs_and_indexes.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
+--               (list_plays — GET /plays; get_game_plays — GET /games/{id}/plays
+--               with p_own_only=true)
+--   Purpose:    One-call History page. Visibility = plays the target logged
+--               plus plays where they appear as a participant. Filters
+--               (game / buddy participant / free-text over game_name +
+--               player_display_name), sort, LIMIT/OFFSET, and player +
+--               expansion aggregation all in SQL. Replaced an 8-11 round
+--               trip Python path that fetched every visible play tuple.
+--               Reads denormalized plays.game_* columns (020).
+
+-- bgb_play_stats(p_viewer UUID, p_game_ids UUID[] DEFAULT NULL)
+--   → JSONB [ { game_id, play_count, last_played_at } ... ]
+--   Defined in: db/migrations/boardgamebuddy/039_perf_rpcs_and_indexes.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
+--               (_play_stats — GET /collection, GET /collection/shelf)
+--   Purpose:    Per-game play_count / last_played_at via SQL GROUP BY over
+--               the viewer's visible plays (own + participant). Replaced
+--               _plays_visible_to_user + _index_plays, which shipped every
+--               play row to Python to count — unbounded post-BGG-sync.
+
+-- bgb_bgg_sync_status(p_user UUID)
+--   → JSONB { bgg_username, has_credentials, pending_count, errored_count,
+--             last_completed_at, session_started_at, session_total,
+--             session_done, session_errored, session_game_names[] }
+--   Defined in: db/migrations/boardgamebuddy/039_perf_rpcs_and_indexes.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/bgg_link_routes.py
+--               (get_sync_status — GET /bgg/sync/status, FE poll target)
+--   Purpose:    One-call import-progress poll (was up to 7 round trips per
+--               poll). Session roll-up per distinct bgg_id mirrors the old
+--               Python precedence (pending > error > done); names are the
+--               20 most recently completed. has_credentials mirrors
+--               bgg_client.has_stored_credentials so auth_state derives
+--               without shipping the encrypted secret.

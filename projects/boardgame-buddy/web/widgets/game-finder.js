@@ -79,7 +79,7 @@
               onmousedown="event.preventDefault()"></ul>
         </div>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons({ root: containerEl });
 
       const input = document.getElementById(this.inputId);
       if (input) {
@@ -233,7 +233,7 @@
         }
         dd.classList.remove("hidden");
         this._wireRowClicks(dd);
-        if (window.lucide) window.lucide.createIcons();
+        if (window.lucide) window.lucide.createIcons({ root: dd });
         return;
       }
 
@@ -261,7 +261,7 @@
       if (hits.length === 0) {
         dd.innerHTML = `<li class="game-finder-dropdown__hint">No matches in your library.</li>${bggRow}`;
         this._wireRowClicks(dd);
-        if (window.lucide) window.lucide.createIcons();
+        if (window.lucide) window.lucide.createIcons({ root: dd });
         return;
       }
 
@@ -269,7 +269,7 @@
       hits.forEach((h) => { if (h && h.game) this._gameById.set(h.game.id, h.game); });
       dd.innerHTML = hits.map((h) => this._renderRow(h.game, "library")).join("") + bggRow;
       this._wireRowClicks(dd);
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons({ root: dd });
     }
 
     _renderRow(game, source) {
@@ -367,7 +367,7 @@
           </li>
         `).join("");
       this._wireRowClicks(dd);
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons({ root: dd });
     }
 
     async _importBgg(bggId, name, rowEl) {

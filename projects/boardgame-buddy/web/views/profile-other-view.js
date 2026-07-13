@@ -68,7 +68,7 @@
           ${this._renderBack()}
           <div class="alert alert-error text-sm mt-3">${escape(this._error)}</div>
         `;
-        if (window.lucide) window.lucide.createIcons();
+        this.refreshIcons();
         return;
       }
       if (!this._profile || !this._bundle) {
@@ -76,7 +76,7 @@
           ${this._renderBack()}
           <div class="profile-loading">${window.buddyLoader({ size: 96, label: "Loading profile…" })}</div>
         `;
-        if (window.lucide) window.lucide.createIcons();
+        this.refreshIcons();
         return;
       }
       const b = this._bundle;
@@ -88,7 +88,7 @@
         ${this._renderPlaysPreview(b)}
         <div style="height: 1rem"></div>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     _renderBack() {

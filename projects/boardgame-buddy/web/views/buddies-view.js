@@ -20,6 +20,10 @@
       this._linkingGhost = null;
       this._linkQuery = "";
       this._linkResults = [];
+      // Debounce timer + monotonic token for the link-panel profile search
+      // — see _linkSearchInput.
+      this._linkSearchTimer = null;
+      this._linkSearchSeq = 0;
     }
 
     async onMount() { await this._load(); }
@@ -39,21 +43,27 @@
     async _load() {
       this._loading = true;
       this.render();
+      // Requests aren't part of the cached bundle — always fetch fresh, in
+      // parallel with the bundle, and fold in below without blocking the
+      // first paint on the round-trip.
+      const requestsPromise = window.Buddy.requests()
+        .catch(() => ({ incoming: [], outgoing: [] }));
       try {
-        const [buddies, requests, playedWith, ghosts] = await Promise.all([
-          window.Buddy.list().catch(() => []),
-          window.Buddy.requests().catch(() => ({ incoming: [], outgoing: [] })),
-          window.Buddy.playedWith().catch(() => []),
-          window.Buddy.ghostPlayers().catch(() => []),
-        ]);
-        this._buddies = buddies || [];
-        this._requests = requests || { incoming: [], outgoing: [] };
-        this._playedWith = playedWith || [];
-        this._ghosts = ghosts || [];
+        // Buddies + ghosts + played-with come from the SWR-cached aggregate
+        // (seeded by /bootstrap as 'buddy:all'): usually resolves straight
+        // from cache and re-fetches in the background when stale, so the
+        // view paints immediately instead of firing three uncached calls.
+        const combined = await window.Buddy.allBuddies()
+          .catch(() => ({ accounts: [], ghosts: [], recent: [] }));
+        this._buddies = combined.accounts || [];
+        this._ghosts = combined.ghosts || [];
+        this._playedWith = combined.recent || [];
       } finally {
         this._loading = false;
         this.render();
       }
+      this._requests = (await requestsPromise) || { incoming: [], outgoing: [] };
+      this.render();
     }
 
     render() {
@@ -79,7 +89,7 @@
             ${window.buddyLoader({ size: 96, label: "Gathering buddies…" })}
           </div>
         `;
-        if (window.lucide) window.lucide.createIcons();
+        this.refreshIcons();
         return;
       }
 
@@ -184,7 +194,7 @@
 
         ${this._renderPlayedWithSection(playedWithNonBuddies)}
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
 
       // Restore focus + caret for the input that was active before re-render.
       if (activeId) {
@@ -342,6 +352,9 @@
       try {
         await window.Buddy.sendRequest(userId);
         btn.textContent = "Sent";
+        // The pending-request flag lives on the cached played-with rows —
+        // drop the bundle so _load refetches instead of serving stale chips.
+        window.Buddy.invalidate();
         await this._load();
       } catch (e) {
         btn.disabled = false;
@@ -394,17 +407,27 @@
 
     async _linkSearchInput(q) {
       this._linkQuery = q;
+      clearTimeout(this._linkSearchTimer);
       if (!q) {
         this._linkResults = [];
         this.render();
         return;
       }
-      try {
-        this._linkResults = await window.Buddy.searchProfiles(q);
-      } catch (_) {
-        this._linkResults = [];
-      }
-      this.render();
+      // Debounce keystrokes (mirrors collection-view's search input) and
+      // stamp each request with a monotonic token captured before the await
+      // so an out-of-order response can't clobber newer results.
+      this._linkSearchTimer = setTimeout(async () => {
+        const seq = ++this._linkSearchSeq;
+        let results;
+        try {
+          results = await window.Buddy.searchProfiles(q);
+        } catch (_) {
+          results = [];
+        }
+        if (seq !== this._linkSearchSeq) return; // stale — a newer search owns state
+        this._linkResults = results || [];
+        this.render();
+      }, 300);
     }
 
     async _confirmLink(displayName, targetUserId) {
@@ -422,7 +445,9 @@
         this._closeLinkPanel();
       }
       // Reload so the ghost disappears and the played-with people list
-      // picks the linked account up.
+      // picks the linked account up. The bundle cache still holds the old
+      // ghost row — invalidate first so _load refetches.
+      if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
       await this._load();
     }
 

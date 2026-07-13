@@ -38,6 +38,9 @@
       this._filters = { players: null, playtimeMin: null, playtimeMax: null, playMode: null };
       this._filtersOpen = false;
       this._searchTimer = null;
+      // Modes whose grid is stale because a search/filter change happened
+      // while the other tab was active — _setMode refetches lazily.
+      this._staleModes = { owned: false, played: false };
       this._statusMap = {};
       this._expansionCounts = {};
       this._targetUserId = null;
@@ -114,7 +117,7 @@
         ${this._renderHead()}
         <div class="p-4 grid place-items-center">${window.buddyLoader({ size: 64 })}</div>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     render() {
@@ -135,7 +138,7 @@
             ${window.buddyLoader({ size: 96, label: "Loading collection…" })}
           </div>
         `;
-        if (window.lucide) window.lucide.createIcons();
+        this.refreshIcons();
         return;
       }
 
@@ -150,7 +153,7 @@
         ${this._renderBody(hasPager)}
         ${this._renderPager()}
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
 
       if (activeId) {
         const el = document.getElementById(activeId);
@@ -410,7 +413,12 @@
     _setMode(mode) {
       if (this._mode === mode) return;
       this._mode = mode;
-      if (this._items[mode].length === 0 && !this._loading[mode]) {
+      if (this._staleModes[mode]) {
+        // A search/filter change happened while this tab was inactive —
+        // its grid was skipped then (see _reloadBoth), so refetch now.
+        this._staleModes[mode] = false;
+        this._loadMode(mode);
+      } else if (this._items[mode].length === 0 && !this._loading[mode]) {
         this._loadMode(mode);
       } else {
         this.render();
@@ -448,10 +456,14 @@
     }
     _reloadBoth() {
       // Search/filter changes reset both sides so the toggle never lands
-      // on a stale page index.
+      // on a stale page index — but only the visible grid refetches here.
+      // The inactive mode is marked stale and _setMode lazy-reloads it if
+      // the user actually switches tabs.
       this._page.owned = 1;
       this._page.played = 1;
-      Promise.all([this._loadMode(MODE_OWNED), this._loadMode(MODE_PLAYED)]);
+      const other = this._mode === MODE_OWNED ? MODE_PLAYED : MODE_OWNED;
+      this._staleModes[other] = true;
+      this._loadMode(this._mode);
     }
     _goPage(n) {
       this._page[this._mode] = n;

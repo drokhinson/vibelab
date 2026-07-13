@@ -42,7 +42,6 @@ from .bgg_client import (
     BggWarmUpError,
     clear_user_session,
     fetch_bgg_as_user,
-    has_stored_credentials,
     parse_bgg_xml,
     store_user_credentials,
 )
@@ -790,141 +789,34 @@ async def get_sync_status(
     """Return linked username, auth_state, and pending/errored counts for FE polling."""
     sb = get_supabase()
 
-    profile = (
-        sb.table("boardgamebuddy_profiles")
-        .select("bgg_username, bgg_password_enc, bgg_last_sync_started_at")
-        .eq("id", user.user_id)
+    # Single RPC (migration 039) — this endpoint is POLLED by the FE for the
+    # whole duration of an import and previously cost up to 7 round trips
+    # per poll (profile + two counts + last-done + session roll-up + name
+    # resolution). The SQL mirrors the old per-bgg_id precedence exactly
+    # (pending wins over error wins over done).
+    data = (
+        sb.rpc("bgb_bgg_sync_status", {"p_user": user.user_id})
         .execute()
+        .data
+        or {}
     )
-    profile_row = (profile.data or [None])[0] or {}
-    bgg_username = profile_row.get("bgg_username")
+    bgg_username = data.get("bgg_username")
     if not bgg_username:
         auth_state = BggAuthState.UNLINKED
-    elif has_stored_credentials(profile_row):
+    elif data.get("has_credentials"):
         auth_state = BggAuthState.LINKED
     else:
         auth_state = BggAuthState.RELINK_REQUIRED
 
-    pending_q = (
-        sb.table("boardgamebuddy_bgg_pending_imports")
-        .select("id", count="exact")
-        .eq("user_id", user.user_id)
-        .eq("status", "pending")
-        .execute()
-    )
-    errored_q = (
-        sb.table("boardgamebuddy_bgg_pending_imports")
-        .select("id", count="exact")
-        .eq("user_id", user.user_id)
-        .eq("status", "error")
-        .execute()
-    )
-
-    last_q = (
-        sb.table("boardgamebuddy_bgg_pending_imports")
-        .select("completed_at")
-        .eq("user_id", user.user_id)
-        .eq("status", "done")
-        .order("completed_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    last_completed_at = None
-    if last_q.data and last_q.data[0].get("completed_at"):
-        last_completed_at = last_q.data[0]["completed_at"]
-
-    # Session-scoped progress, distinct BGG ids since one /thing call covers
-    # every pending row for the same game. Fetch every row touched by this
-    # sync session in a single query and group in Python — cheaper than
-    # three count="exact" round-trips and small enough to fit comfortably.
-    session_started_at = profile_row.get("bgg_last_sync_started_at")
-    session_total = 0
-    session_done = 0
-    session_errored = 0
-    if session_started_at:
-        rows = (
-            sb.table("boardgamebuddy_bgg_pending_imports")
-            .select("bgg_id, status")
-            .eq("user_id", user.user_id)
-            .gte("created_at", session_started_at)
-            .execute()
-            .data
-            or []
-        )
-        by_id: dict[int, str] = {}
-        for r in rows:
-            bid = r.get("bgg_id")
-            st = r.get("status")
-            if bid is None or st is None:
-                continue
-            # If any row for this bgg_id is still pending, the game isn't
-            # imported yet — pending wins over done/error in the per-id
-            # roll-up. Otherwise error wins over done (so a partially
-            # errored game counts as errored, not done).
-            prev = by_id.get(bid)
-            if prev == "pending":
-                continue
-            if st == "pending" or prev is None or (prev == "done" and st == "error"):
-                by_id[bid] = st
-        session_total = len(by_id)
-        session_done = sum(1 for s in by_id.values() if s == "done")
-        session_errored = sum(1 for s in by_id.values() if s == "error")
-
-    # Resolve display names for games that this session has finished
-    # importing. The FE streams these into the sync log as bullet points
-    # below the "{Z} missing" header so the user sees each title land
-    # instead of just a percentage. Names come from boardgamebuddy_games
-    # (which only has rows for already-imported games) joined against the
-    # session's done bgg_ids; we order by the pending row's completed_at
-    # so the most recent imports appear first, capped at 20.
-    session_game_names: list[str] = []
-    if session_started_at and session_done > 0:
-        done_bgg_ids = [bid for bid, st in by_id.items() if st == "done"]
-        if done_bgg_ids:
-            done_rows = (
-                sb.table("boardgamebuddy_bgg_pending_imports")
-                .select("bgg_id, completed_at")
-                .eq("user_id", user.user_id)
-                .eq("status", "done")
-                .in_("bgg_id", done_bgg_ids)
-                .order("completed_at", desc=True)
-                .execute()
-                .data
-                or []
-            )
-            ordered_bgg_ids: list[int] = []
-            seen: set[int] = set()
-            for r in done_rows:
-                bid = r.get("bgg_id")
-                if bid is None or bid in seen:
-                    continue
-                seen.add(bid)
-                ordered_bgg_ids.append(bid)
-                if len(ordered_bgg_ids) >= 20:
-                    break
-            if ordered_bgg_ids:
-                games = (
-                    sb.table("boardgamebuddy_games")
-                    .select("bgg_id, name")
-                    .in_("bgg_id", ordered_bgg_ids)
-                    .execute()
-                    .data
-                    or []
-                )
-                name_by_bgg = {g["bgg_id"]: g["name"] for g in games if g.get("name")}
-                session_game_names = [
-                    name_by_bgg[bid] for bid in ordered_bgg_ids if bid in name_by_bgg
-                ]
-
     return BggSyncStatus(
         bgg_username=bgg_username,
         auth_state=auth_state,
-        pending_count=pending_q.count or 0,
-        errored_count=errored_q.count or 0,
-        last_completed_at=last_completed_at,
-        session_started_at=session_started_at,
-        session_total=session_total,
-        session_done=session_done,
-        session_errored=session_errored,
-        session_game_names=session_game_names,
+        pending_count=data.get("pending_count") or 0,
+        errored_count=data.get("errored_count") or 0,
+        last_completed_at=data.get("last_completed_at"),
+        session_started_at=data.get("session_started_at"),
+        session_total=data.get("session_total") or 0,
+        session_done=data.get("session_done") or 0,
+        session_errored=data.get("session_errored") or 0,
+        session_game_names=data.get("session_game_names") or [],
     )

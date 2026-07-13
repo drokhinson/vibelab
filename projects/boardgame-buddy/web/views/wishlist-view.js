@@ -62,7 +62,7 @@
         ${this._renderHead()}
         <div class="p-4 grid place-items-center">${window.buddyLoader({ size: 64 })}</div>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     render() {
@@ -79,7 +79,7 @@
         ${this._renderBody(hasPager)}
         ${this._renderPager()}
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
 
       if (activeId) {
         const el = document.getElementById(activeId);

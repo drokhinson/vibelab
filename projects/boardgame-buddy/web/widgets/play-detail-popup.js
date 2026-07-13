@@ -101,7 +101,7 @@
     const caret = active && active.selectionStart;
 
     root.innerHTML = renderCard();
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide) window.lucide.createIcons({ root });
 
     const closeBtn = root.querySelector(".play-detail-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", dismiss);

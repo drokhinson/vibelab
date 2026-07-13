@@ -136,7 +136,7 @@
           ${this._renderMissingImagesPanel()}
         </section>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     _renderMissingImagesPanel() {

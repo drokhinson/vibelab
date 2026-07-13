@@ -145,7 +145,7 @@
           </button>`);
       }
       this._el.innerHTML = parts.join("");
-      if (window.lucide) window.lucide.createIcons({ nodes: [this._el] });
+      if (window.lucide) window.lucide.createIcons({ root: this._el });
     }
 
     openFor(event, gameId, currentStatus) {

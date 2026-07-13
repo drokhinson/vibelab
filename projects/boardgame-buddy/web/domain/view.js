@@ -59,6 +59,18 @@
       this._unsubs.push(() => document.removeEventListener(event, fn));
     }
 
+    // Scoped Lucide refresh: replace [data-lucide] placeholders under `root`
+    // (default: this view's container) instead of re-walking the whole
+    // document — full-document scans get expensive with every view kept
+    // mounted in the DOM. Falls back to a document-wide pass only when no
+    // container exists.
+    refreshIcons(root) {
+      if (!window.lucide) return;
+      const el = root || this.container;
+      if (el) window.lucide.createIcons({ root: el });
+      else window.lucide.createIcons();
+    }
+
     // Synchronous loading placeholder rendered before onMount() runs.
     // Default is a no-op; override in subclasses that fetch on mount.
     renderLoading() {}
@@ -258,7 +270,10 @@
 
       await next.mount(params);
 
-      if (window.lucide) window.lucide.createIcons();
+      // Scope the icon pass to the destination view — the static shell's
+      // icons (bottom nav) are created once at boot by init.js.
+      if (next.refreshIcons) next.refreshIcons();
+      else if (window.lucide) window.lucide.createIcons();
       if (window.api) window.api.trackEvent("view:" + name);
     }
 
