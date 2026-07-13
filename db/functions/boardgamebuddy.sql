@@ -122,6 +122,8 @@
 --     host_user_id, game_id, game, participants[], created_at, expires_at,
 --     finalized_play_id } or {"error": "not_found"}
 --   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
+--   Last updated in: db/migrations/boardgamebuddy/037_joinable_sessions_rpc.sql
+--               (game block delegated to bgb_game_summary; output unchanged)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (_build_response — the response builder for every session
 --               endpoint; also invoked internally by the three RPCs below)
@@ -164,3 +166,23 @@
 --               display_name; after Gather the roster is untouched
 --               (spectator). Same semantics the Python service had, minus
 --               the 3-4 extra round trips.
+
+-- bgb_game_summary(p_game_id UUID)
+--   → JSONB shaped like models.GameSummary (bgg_url / expansion_count are
+--     computed/defaulted Pydantic-side), or NULL for NULL/unknown ids
+--   Defined in: db/migrations/boardgamebuddy/037_joinable_sessions_rpc.sql
+--   Called by:  (SQL-internal only) bgb_session_bundle, bgb_joinable_sessions
+--   Purpose:    Canonical GameSummary JSON builder so every session RPC
+--               emits the same game shape. Keys mirror _helpers._GAME_SELECT.
+
+-- bgb_joinable_sessions(p_viewer UUID)
+--   → JSONB array of models.JoinableSession { id, code, host_user_id,
+--     host_display_name, host_avatar, game, phase, participant_count,
+--     is_participant, is_host_buddy, created_at }, newest first
+--   Defined in: db/migrations/boardgamebuddy/037_joinable_sessions_rpc.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (list_joinable — GET /sessions/joinable, the Join chooser)
+--   Purpose:    One-call Join chooser payload: open unexpired sessions in
+--               phase gather/play/settle visible to the viewer (own hosted,
+--               already-joined, or hosted by an accepted buddy). Replaced
+--               the 5 sequential PostgREST selects list_joinable fanned out.

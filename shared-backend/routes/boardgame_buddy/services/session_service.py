@@ -20,7 +20,6 @@ from fastapi import HTTPException
 
 from ..constants import (
     ALLOWED_PHASE_TRANSITIONS,
-    BuddyEdgeStatus,
     PlaySessionStatus,
     SessionPhase,
 )
@@ -29,7 +28,6 @@ from ..models import (
     PlayerEntry,
     SessionResponse,
 )
-from ._helpers import fetch_games_by_ids, fetch_profiles_by_ids
 
 
 _BUNDLE_ERROR_STATUS: dict[str, tuple[int, str]] = {
@@ -338,86 +336,12 @@ def list_joinable(sb, viewer_id: str) -> list[JoinableSession]:
     Gather sessions can be joined as a player; Play/Settle sessions are
     spectator-only — the FE surfaces a "Spectate" badge so the user
     knows what they're stepping into. Finalized and abandoned sessions
-    are excluded.
+    are excluded. All the filtering (visibility, expiry, buddy edges)
+    lives in bgb_joinable_sessions (migration 037) — one RPC instead of
+    the five queries this used to fan out.
     """
-    now_iso = datetime.now(timezone.utc).isoformat()
-    rows = (
-        sb.table("boardgamebuddy_play_sessions")
-        .select(_SESSION_SELECT)
-        .eq("status", PlaySessionStatus.OPEN.value)
-        .in_(
-            "phase",
-            [
-                SessionPhase.GATHER.value,
-                SessionPhase.PLAY.value,
-                SessionPhase.SETTLE.value,
-            ],
-        )
-        .gt("expires_at", now_iso)
-        .order("created_at", desc=True)
-        .execute()
-    )
-    sessions_rows = rows.data or []
-    if not sessions_rows:
-        return []
-
-    session_ids = [s["id"] for s in sessions_rows]
-    host_ids = [s["host_user_id"] for s in sessions_rows]
-    game_ids = [s["game_id"] for s in sessions_rows if s.get("game_id")]
-
-    # Bulk lookup: hosts, games, and participant rows in three queries.
-    profiles = fetch_profiles_by_ids(sb, host_ids)
-    games = fetch_games_by_ids(sb, game_ids)
-    parts = (
-        sb.table("boardgamebuddy_play_session_participants")
-        .select("session_id, user_id")
-        .in_("session_id", session_ids)
-        .execute()
-        .data
-        or []
-    )
-    participants_by_session: dict[str, list[dict[str, Any]]] = {}
-    for p in parts:
-        participants_by_session.setdefault(p["session_id"], []).append(p)
-
-    # Buddy edges with the viewer — one query, both directions.
-    edges = (
-        sb.table("boardgamebuddy_buddy_edges")
-        .select("user_a, user_b")
-        .eq("status", BuddyEdgeStatus.ACCEPTED.value)
-        .or_(f"user_a.eq.{viewer_id},user_b.eq.{viewer_id}")
-        .execute()
-        .data
-        or []
-    )
-    buddy_ids: set[str] = set()
-    for e in edges:
-        buddy_ids.add(e["user_b"] if e["user_a"] == viewer_id else e["user_a"])
-
-    out: list[JoinableSession] = []
-    for s in sessions_rows:
-        sid = s["id"]
-        plist = participants_by_session.get(sid, [])
-        is_participant = any(p.get("user_id") == viewer_id for p in plist)
-        is_host = s["host_user_id"] == viewer_id
-        is_host_buddy = s["host_user_id"] in buddy_ids
-        if not (is_participant or is_host or is_host_buddy):
-            continue
-        prof = profiles.get(s["host_user_id"]) or {}
-        out.append(JoinableSession(
-            id=sid,
-            code=s["code"],
-            host_user_id=s["host_user_id"],
-            host_display_name=prof.get("display_name") or "Host",
-            host_avatar=prof.get("avatar"),
-            game=games.get(s["game_id"]) if s.get("game_id") else None,
-            phase=SessionPhase(s.get("phase") or SessionPhase.GATHER.value),
-            participant_count=len(plist),
-            is_participant=is_participant,
-            is_host_buddy=is_host_buddy,
-            created_at=s["created_at"],
-        ))
-    return out
+    data = sb.rpc("bgb_joinable_sessions", {"p_viewer": viewer_id}).execute().data
+    return [JoinableSession.model_validate(item) for item in (data or [])]
 
 
 def merge_live_scores_into_players(
