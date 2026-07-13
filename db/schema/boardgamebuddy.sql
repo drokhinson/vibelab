@@ -443,3 +443,15 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_session_participants_session
 -- Live scoring (migration 026).
 CREATE INDEX IF NOT EXISTS idx_bgb_play_session_scores_session
   ON public.boardgamebuddy_play_session_scores (session_id, round_index);
+
+-- Trigram substring-search indexes (migration 039). pg_trgm lives in the
+-- `extensions` schema on Supabase — opclass is schema-qualified on purpose.
+CREATE INDEX IF NOT EXISTS idx_bgb_games_name_trgm
+  ON public.boardgamebuddy_games
+  USING gin (name extensions.gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_bgb_play_players_display_name_trgm
+  ON public.boardgamebuddy_play_players
+  USING gin (player_display_name extensions.gin_trgm_ops);
+-- Sync-status session roll-up predicate (migration 039).
+CREATE INDEX IF NOT EXISTS idx_bgb_pending_imports_user_created
+  ON public.boardgamebuddy_bgg_pending_imports (user_id, created_at);
