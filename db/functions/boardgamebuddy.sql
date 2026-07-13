@@ -136,6 +136,11 @@
 --                    p_game UUID DEFAULT NULL)
 --   → JSONB (SessionResponse bundle) or {"error": "code_allocation_failed"}
 --   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
+--   Last updated in: db/migrations/boardgamebuddy/038_fix_session_code_entropy.sql
+--               (code entropy from uuid_send(gen_random_uuid()) — 036's
+--               gen_random_bytes failed on Supabase because pgcrypto lives
+--               in the `extensions` schema, outside the function's
+--               search_path = public)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (create_session — POST /sessions)
 --   Purpose:    One-call lobby open: abandons the host's stale open sessions,
