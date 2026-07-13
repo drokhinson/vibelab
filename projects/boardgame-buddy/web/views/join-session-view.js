@@ -20,6 +20,12 @@
     }
 
     async onMount() {
+      // The poll skips its ticks while the tab is hidden — fire one
+      // immediate catch-up tick when it becomes visible again. Auto-removed
+      // on unmount via listenDom.
+      this.listenDom("visibilitychange", () => {
+        if (!document.hidden) this._pollTick();
+      });
       await this._load();
       this._startPolling();
     }
@@ -46,18 +52,23 @@
 
     _startPolling() {
       if (this._pollHandle) return;
-      this._pollHandle = setInterval(async () => {
-        try {
-          const resp = await window.PlaySession.listJoinable();
-          const next = (resp && resp.sessions) || [];
-          if (this._shouldRerender(next)) {
-            this._sessions = next;
-            this.render();
-          } else {
-            this._sessions = next;
-          }
-        } catch (_) {}
-      }, POLL_MS);
+      this._pollHandle = setInterval(() => this._pollTick(), POLL_MS);
+    }
+
+    async _pollTick() {
+      // Hidden tab: skip the fetch — the visibilitychange listener (onMount)
+      // fires one catch-up tick the moment the tab is visible again.
+      if (document.hidden) return;
+      try {
+        const resp = await window.PlaySession.listJoinable();
+        const next = (resp && resp.sessions) || [];
+        if (this._shouldRerender(next)) {
+          this._sessions = next;
+          this.render();
+        } else {
+          this._sessions = next;
+        }
+      } catch (_) {}
     }
 
     _stopPolling() {
@@ -128,7 +139,7 @@
                  </ul>`}
         </section>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     _renderEmpty() {

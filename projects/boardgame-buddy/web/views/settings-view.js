@@ -27,6 +27,13 @@
 
     async onMount() {
       this.listen("user", () => this.render());
+      // The BGG import poll skips its ticks while the tab is hidden — fire
+      // one immediate catch-up tick when it becomes visible again (only
+      // while a poll is actually armed). Auto-removed on unmount via
+      // listenDom.
+      this.listenDom("visibilitychange", () => {
+        if (!document.hidden && this._bggPollHandle) this._pollBggStatus();
+      });
       this.render();
       await this._loadBggStatus();
       const me = window.store.get("user");
@@ -90,7 +97,7 @@
         ${this._renderBggAttribution()}
         <div style="height: 1rem"></div>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
 
       if (activeId) {
         const el = document.getElementById(activeId);
@@ -554,6 +561,9 @@
     }
 
     async _pollBggStatus() {
+      // Hidden tab: skip the fetch — the visibilitychange listener (onMount)
+      // fires one catch-up tick the moment the tab is visible again.
+      if (document.hidden) return;
       try {
         this._bgg = await window.Bgg.status();
       } catch (_) {

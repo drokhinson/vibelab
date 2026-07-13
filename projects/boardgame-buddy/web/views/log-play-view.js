@@ -212,7 +212,7 @@
           ${this._renderPager()}
         </section>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     _renderFilters() {

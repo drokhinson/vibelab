@@ -48,6 +48,10 @@
       // Gather screen needs the picker. Lives across the 2s lobby-poll
       // re-renders — mount() is idempotent.
       this._gameFinder = null;
+      // Lobby row already fetched by onMount's deep-link host-vs-joiner
+      // check. _ensureLobbyOpen consumes (and clears) it so the same code
+      // isn't fetched twice back-to-back on a deep-link entry.
+      this._prefetchedLobby = null;
     }
 
     async onMount() {
@@ -76,6 +80,9 @@
           this._ps.code = urlCode;
           if (s && s.game_id) this._ps.gameId = s.game_id;
           this._ps.persist();
+          // Hand the row we just fetched to _ensureLobbyOpen so it doesn't
+          // immediately re-fetch the same code.
+          this._prefetchedLobby = s || null;
         } catch (_) {
           // Lobby fetch failed — treat as a regular play-flow open and let
           // _ensureLobbyOpen handle the recovery.
@@ -87,6 +94,13 @@
 
       this.listenDom("chapters-changed", () => {
         if (this._guideWidget) this._guideWidget.refresh();
+      });
+
+      // The lobby poll skips its ticks while the tab is hidden — fire one
+      // immediate catch-up tick when it becomes visible again. Auto-removed
+      // on unmount via listenDom.
+      this.listenDom("visibilitychange", () => {
+        if (!document.hidden) this._lobbyPollTick();
       });
 
       // Synchronously pull the host-flow seeds bootstrap warmed up at login
@@ -170,8 +184,16 @@
       // Already have a valid lobby in the persisted draft? Re-validate via
       // a fetch — if the server abandoned it we open a fresh one.
       if (this._ps.code) {
+        // onMount's deep-link path may have just fetched this exact lobby
+        // for the host-vs-joiner check — consume that row instead of a
+        // second round-trip. One-shot: cleared here so later re-validations
+        // (resume, reconnect) still hit the server.
+        const pre = this._prefetchedLobby;
+        this._prefetchedLobby = null;
         try {
-          const s = await window.PlaySession.fetchLobby(this._ps.code);
+          const s = (pre && pre.code === this._ps.code)
+            ? pre
+            : await window.PlaySession.fetchLobby(this._ps.code);
           if (s && s.status === "open" && s.phase && s.phase !== "abandoned") {
             this._lobby = s;
             this._ps.sessionId = s.id;
@@ -233,73 +255,83 @@
 
     _startLobbyPoll() {
       if (this._lobbyPoll || !this._lobby) return;
-      this._lobbyPoll = setInterval(async () => {
-        if (!this._lobby) return;
-        // Skip the tick while a participant DELETE is in flight — the
-        // server still has the row, and the merge logic below would
-        // re-add it as a "new" participant.
-        if (this._pendingDeletes > 0) return;
-        // Skip while a phase change is in flight — the response below would
-        // overwrite this._lobby with a row whose phase may not yet reflect
-        // the transition the host just kicked off.
-        if (this._pendingPhase > 0) return;
-        try {
-          const next = await window.PlaySession.fetchLobby(this._lobby.code);
-          const prevIds = new Set((this._lobby.participants || []).map((p) => p.id));
-          const nextParts = next.participants || [];
-          const participantsChanged =
-            nextParts.length !== prevIds.size ||
-            nextParts.some((p) => !prevIds.has(p.id));
-          this._lobby = next;
-          let playersChanged = false;
-          if (this._ps.phase === "gather") {
-            const byName = new Map(
-              this._ps.players.map((p, i) => [(p.name || "").toLowerCase(), i])
-            );
-            for (const part of nextParts) {
-              const key = (part.display_name || "").toLowerCase();
-              if (!key) continue;
-              if (byName.has(key)) {
-                // Backfill participant_id onto an existing local row (e.g. one
-                // the host added optimistically before the backend round-trip
-                // completed) so _removePlayer can issue a DELETE later.
-                const existing = this._ps.players[byName.get(key)];
-                if (existing && !existing.participant_id) {
-                  existing.participant_id = part.id;
-                  playersChanged = true;
-                }
-                continue;
+      this._lobbyPoll = setInterval(() => this._lobbyPollTick(), 2000);
+    }
+
+    async _lobbyPollTick() {
+      if (!this._lobby) return;
+      // Hidden tab: skip the fetch — the visibilitychange listener (onMount)
+      // fires one catch-up tick the moment the tab is visible again.
+      if (document.hidden) return;
+      // The poll's only real effect is Gather-time joiner auto-promotion, so
+      // outside Gather skip the fetch entirely. The interval stays armed:
+      // the back arrow can roll the phase back to gather, and the next tick
+      // in gather resumes fetching.
+      if (this._ps.phase !== "gather") return;
+      // Skip the tick while a participant DELETE is in flight — the
+      // server still has the row, and the merge logic below would
+      // re-add it as a "new" participant.
+      if (this._pendingDeletes > 0) return;
+      // Skip while a phase change is in flight — the response below would
+      // overwrite this._lobby with a row whose phase may not yet reflect
+      // the transition the host just kicked off.
+      if (this._pendingPhase > 0) return;
+      try {
+        const next = await window.PlaySession.fetchLobby(this._lobby.code);
+        const prevIds = new Set((this._lobby.participants || []).map((p) => p.id));
+        const nextParts = next.participants || [];
+        const participantsChanged =
+          nextParts.length !== prevIds.size ||
+          nextParts.some((p) => !prevIds.has(p.id));
+        this._lobby = next;
+        let playersChanged = false;
+        if (this._ps.phase === "gather") {
+          const byName = new Map(
+            this._ps.players.map((p, i) => [(p.name || "").toLowerCase(), i])
+          );
+          for (const part of nextParts) {
+            const key = (part.display_name || "").toLowerCase();
+            if (!key) continue;
+            if (byName.has(key)) {
+              // Backfill participant_id onto an existing local row (e.g. one
+              // the host added optimistically before the backend round-trip
+              // completed) so _removePlayer can issue a DELETE later.
+              const existing = this._ps.players[byName.get(key)];
+              if (existing && !existing.participant_id) {
+                existing.participant_id = part.id;
+                playersChanged = true;
               }
-              this._ps.players.push({
-                name: part.display_name,
-                is_winner: false,
-                score: null,
-                user_id: part.user_id || null,
-                avatar: part.avatar || null,
-                participant_id: part.id,
-              });
-              byName.set(key, this._ps.players.length - 1);
-              playersChanged = true;
+              continue;
             }
-            if (playersChanged) this._ps.persist();
+            this._ps.players.push({
+              name: part.display_name,
+              is_winner: false,
+              score: null,
+              user_id: part.user_id || null,
+              avatar: part.avatar || null,
+              participant_id: part.id,
+            });
+            byName.set(key, this._ps.players.length - 1);
+            playersChanged = true;
           }
-          // The poll runs every 2s and used to fire a full render() on any
-          // participant change. That rebuilt the cascade DOM via
-          // innerHTML, causing a visible repaint pulse and a brief
-          // sticky/scroll glitch. Instead, the only thing a poll can
-          // change in the host UI is the players list (and only during
-          // Gather, when new joiners get auto-promoted to player rows).
-          // Patch just that subtree — scroll position survives.
-          if (playersChanged) this._refreshPlayersList();
-        } catch (_) {}
-      }, 2000);
+          if (playersChanged) this._ps.persist();
+        }
+        // The poll runs every 2s and used to fire a full render() on any
+        // participant change. That rebuilt the cascade DOM via
+        // innerHTML, causing a visible repaint pulse and a brief
+        // sticky/scroll glitch. Instead, the only thing a poll can
+        // change in the host UI is the players list (and only during
+        // Gather, when new joiners get auto-promoted to player rows).
+        // Patch just that subtree — scroll position survives.
+        if (playersChanged) this._refreshPlayersList();
+      } catch (_) {}
     }
 
     _refreshPlayersList() {
       const ul = this.container.querySelector(".cascade-players");
       if (!ul) return;
       ul.innerHTML = this._ps.players.map((p, i) => this._renderPlayerRow(p, i)).join("");
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     _stopLobbyPoll() {
@@ -398,7 +430,7 @@
         </section>
         ${this._error ? `<div class="alert alert-error cascade-error">${escape(this._error)}</div>` : ""}
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
       this._mountReferenceGuide();
       this._mountGameFinder();
       // NOTE: do NOT call _scrollToCurrentPhase() here. render() runs every
@@ -683,7 +715,7 @@
       const sec = this.container.querySelector(".cascade-card--scoring");
       if (!sec) { this.render(); return; }
       sec.outerHTML = this._renderScoringSection();
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
       if (focusCell) {
         const el = this.container.querySelector(`input[data-score-cell="${focusCell}"]`);
         if (el) {
@@ -1040,7 +1072,20 @@
       this._ps.playMode = mode;
       this._ps.persist();
       this._autoSelectWinners();
-      this.render();
+      // Patch the three surfaces the mode actually touches instead of
+      // rebuilding the full cascade: the selector's active pill, the Gather
+      // player rows (team column appears in team mode), and the scoring
+      // section (coop outcome bar + winner buttons + grid shape).
+      const selector = this.container.querySelector(".play-mode-selector");
+      const card = selector && selector.closest(".cascade-card");
+      if (card) {
+        card.outerHTML = this._renderPlayModeSelector();
+        this.refreshIcons(
+          this.container.querySelector(".play-mode-selector")
+        );
+      }
+      this._refreshPlayersList();
+      this._refreshScoringSection();
     }
 
     // ── Players ─────────────────────────────────────────────────────────────
@@ -1267,7 +1312,7 @@
         this._ps.players
           .map((pl, i) => this._renderTotalsCell(pl, i, mode, this._playerTotal(pl)))
           .join("");
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     _autoSelectWinners() {
@@ -1314,13 +1359,23 @@
         p.is_winner = next;
       }
       ps.persist();
-      this.render();
+      // Winner state only surfaces in the totals row (trophy buttons +
+      // winner-cell highlight) — patch it in place instead of rebuilding
+      // the full three-screen cascade.
+      this._refreshTotalsCells();
     }
 
     _setCoopOutcome(won) {
       for (const p of this._ps.players) p.is_winner = !!won;
       this._ps.persist();
-      this.render();
+      // Patch in place: swap the outcome button group and refresh the
+      // winner highlight on the totals row — no full cascade rebuild.
+      const outcome = this.container.querySelector(".coop-outcome");
+      if (outcome) {
+        outcome.outerHTML = this._renderCoopOutcome();
+        this.refreshIcons(this.container.querySelector(".coop-outcome"));
+      }
+      this._refreshTotalsCells();
     }
 
     // ── Expansions ──────────────────────────────────────────────────────────
@@ -1685,7 +1740,7 @@
         `;
       }).join("");
       dd.classList.remove("hidden");
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     // ── Save ───────────────────────────────────────────────────────────────

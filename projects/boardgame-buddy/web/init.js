@@ -308,6 +308,9 @@
     // URL in the bar (and out of the back-stack) until auth resolves.
     window.router.go("splash", {}, { skipPush: true });
     wireBottomNav();
+    // One document-wide icon pass for the static shell (bottom nav, header).
+    // Views refresh their own subtree via View.refreshIcons() from here on.
+    if (window.lucide) window.lucide.createIcons();
     initSupabase();
 
     if (window.api) window.api.trackEvent("page_view");

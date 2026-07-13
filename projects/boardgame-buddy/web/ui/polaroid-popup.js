@@ -37,7 +37,7 @@
       if (ev.target === root) handleDismiss(opts);
     });
     document.body.appendChild(root);
-    if (window.lucide) window.lucide.createIcons({ icons: undefined });
+    if (window.lucide) window.lucide.createIcons({ root });
     // Wire the close button + (optional) View play link.
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => handleDismiss(opts));
@@ -66,7 +66,7 @@
     const merged = { ...(root.__opts || {}), ...partial };
     root.innerHTML = renderInner(merged);
     root.__opts = merged;
-    if (window.lucide) window.lucide.createIcons({ icons: undefined });
+    if (window.lucide) window.lucide.createIcons({ root });
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => handleDismiss(merged));
     const viewBtn = root.querySelector(".polaroid-popup__view");
@@ -161,7 +161,7 @@
         if (ev.target === root) { dismiss(); resolve(false); }
       });
       document.body.appendChild(root);
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons({ root });
       const cancelBtn = root.querySelector(".polaroid-popup__cancel");
       const confirmBtn = root.querySelector(".polaroid-popup__confirm");
       if (cancelBtn) cancelBtn.addEventListener("click", () => { dismiss(); resolve(false); });
@@ -199,7 +199,7 @@
         if (ev.target === root) { dismiss(); resolve(); }
       });
       document.body.appendChild(root);
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons({ root });
       const okBtn = root.querySelector(".polaroid-popup__confirm");
       if (okBtn) okBtn.addEventListener("click", () => { dismiss(); resolve(); });
     });
@@ -476,7 +476,7 @@
       const saveBtn = root.querySelector(".polaroid-popup__confirm");
       if (saveBtn) saveBtn.addEventListener("click", () => finish(true));
 
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons({ root });
       rerender();
     });
   }

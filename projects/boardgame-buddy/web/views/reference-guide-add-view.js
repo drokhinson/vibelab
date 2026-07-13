@@ -156,7 +156,7 @@ components above.
         </div>
         <div class="p-8 grid place-items-center">${loader}</div>
       `;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
     }
 
     async onMount() {
@@ -377,7 +377,7 @@ components above.
           scroller.scrollLeft = active.offsetLeft - (scroller.clientWidth - active.offsetWidth) / 2;
         }
       }
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
 
       // Wire <details> mutex per section (only one open chapter per type).
       this.container.querySelectorAll(".scroll-chapter-list").forEach((list) => {

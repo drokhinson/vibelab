@@ -108,7 +108,7 @@
     _render() {
       if (!this._container) return;
       this._container.innerHTML = this._html();
-      if (window.lucide) window.lucide.createIcons();
+      if (window.lucide) window.lucide.createIcons({ root: this._container });
       // Per-section accordion mutex: opening a chapter inside a
       // .scroll-chapter-list closes any other open <details> in the same list.
       // `toggle` doesn't bubble, so listen in capture phase.

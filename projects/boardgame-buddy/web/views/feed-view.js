@@ -121,7 +121,7 @@
         </div>
       `;
       this.container.innerHTML = html;
-      if (window.lucide) window.lucide.createIcons();
+      this.refreshIcons();
       // The sentinel div is replaced on every render — re-observe the
       // new node so infinite scroll keeps firing.
       this._observeSentinel();
