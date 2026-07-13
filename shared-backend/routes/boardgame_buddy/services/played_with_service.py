@@ -6,12 +6,51 @@ free-text nicknames the viewer logged without an account; the link endpoint
 promotes them by stamping player_user_id on every matching row.
 """
 
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import HTTPException
 
+from ..constants import BuddyEdgeStatus
 from ..models import GhostPlayer, PlayedWithUser
-from . import buddy_service
+
+
+_NO_RELATION: dict[str, Any] = {
+    "is_buddy": False,
+    "has_pending_request": False,
+    "pending_request_direction": None,
+}
+
+
+def _relations_for_viewer(sb, viewer_id: str) -> dict[str, dict[str, Any]]:
+    """Relationship flags for every user the viewer has an edge with, in ONE
+    query. Replaces a per-co-player relation_to() N+1 that ran inside every
+    /bootstrap (unbounded — one round trip per person ever played with)."""
+    edges = (
+        sb.table("boardgamebuddy_buddy_edges")
+        .select("user_a, user_b, status, requested_by")
+        .or_(f"user_a.eq.{viewer_id},user_b.eq.{viewer_id}")
+        .in_("status", [BuddyEdgeStatus.ACCEPTED.value, BuddyEdgeStatus.PENDING.value])
+        .execute()
+    )
+    relations: dict[str, dict[str, Any]] = {}
+    for e in edges.data or []:
+        other = e["user_b"] if e["user_a"] == viewer_id else e["user_a"]
+        if e["status"] == BuddyEdgeStatus.ACCEPTED.value:
+            relations[other] = {
+                "is_buddy": True,
+                "has_pending_request": False,
+                "pending_request_direction": None,
+            }
+        else:  # pending
+            direction: Optional[str] = (
+                "outgoing" if e["requested_by"] == viewer_id else "incoming"
+            )
+            relations[other] = {
+                "is_buddy": False,
+                "has_pending_request": True,
+                "pending_request_direction": direction,
+            }
+    return relations
 
 
 def fetch_played_with(sb, viewer_id: str) -> list[PlayedWithUser]:
@@ -57,12 +96,13 @@ def fetch_played_with(sb, viewer_id: str) -> list[PlayedWithUser]:
         .execute()
     )
     profiles = {p["id"]: p for p in (profile_rows.data or [])}
+    relations = _relations_for_viewer(sb, viewer_id)
     out: list[PlayedWithUser] = []
     for uid, n in counts.items():
         prof = profiles.get(uid)
         if not prof:
             continue
-        rel = buddy_service.relation_to(sb, viewer_id, uid)
+        rel = relations.get(uid, _NO_RELATION)
         out.append(PlayedWithUser(
             user_id=uid,
             display_name=prof["display_name"],
