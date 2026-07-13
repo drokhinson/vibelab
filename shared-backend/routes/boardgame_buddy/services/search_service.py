@@ -16,32 +16,38 @@ logger = logging.getLogger(__name__)
 
 
 def _collection_hits(sb, viewer_id: str, query: str, limit: int) -> list[UnifiedSearchHit]:
+    """Name-match the viewer's collection, filtered in SQL.
+
+    This runs per keystroke; the old version fetched the viewer's ENTIRE
+    collection every call and substring-filtered in Python. The !inner hint
+    makes the embedded-game ilike apply to the parent collection rows, and
+    the trigram index from migration 039 serves the ILIKE.
+    """
+    if limit <= 0:
+        return []
     rows = (
         sb.table("boardgamebuddy_collections")
         .select(
             "status, game_id, "
-            f"boardgamebuddy_games!boardgamebuddy_collections_game_id_fkey({game_select_clause()})"
+            f"boardgamebuddy_games!boardgamebuddy_collections_game_id_fkey!inner({game_select_clause()})"
         )
         .eq("user_id", viewer_id)
+        .ilike("boardgamebuddy_games.name", f"%{query}%")
+        .limit(limit)
         .execute()
         .data
         or []
     )
-    q = query.lower()
     hits: list[UnifiedSearchHit] = []
     for r in rows:
         g = r.get("boardgamebuddy_games") or {}
         if not g or not g.get("name"):
-            continue
-        if q not in g["name"].lower():
             continue
         hits.append(UnifiedSearchHit(
             source="collection",
             game=game_summary_from_row(g),
             collection_status=r["status"],
         ))
-        if len(hits) >= limit:
-            break
     hits.sort(key=lambda h: h.game.name.lower())
     return hits
 
