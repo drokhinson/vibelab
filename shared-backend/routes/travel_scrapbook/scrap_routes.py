@@ -158,6 +158,12 @@ async def update_scrap(
             merged["place_name"], merged.get("place_city"), merged.get("place_country")
         )
 
+    # "Fill in by hand" recovery: a failed scrap the user gives a place name to
+    # is now usable, so clear the failed state and render it as a saved place.
+    if existing.get("status") == ScrapStatus.FAILED and merged.get("place_name"):
+        update["status"] = ScrapStatus.READY
+        update["error_kind"] = None
+
     if not update:
         return ScrapResponse(**existing)
     update["updated_at"] = "now()"
