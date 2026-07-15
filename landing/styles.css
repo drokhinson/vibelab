@@ -374,9 +374,9 @@ body {
   letter-spacing: -0.01em;
 }
 .brand-travel-scrapbook .featured-desc { color: #6B6478; }
-.brand-travel-scrapbook .status-live {
-  background: rgba(190, 231, 208, 0.55);
-  color: #3E7A5A;
+.brand-travel-scrapbook .status-wip {
+  background: rgba(244, 169, 136, 0.22);
+  color: #C4704F;
 }
 .brand-travel-scrapbook .featured-pill {
   background: rgba(91, 84, 104, 0.06);
