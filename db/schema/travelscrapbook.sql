@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_sources (
   captured_via   TEXT        NOT NULL DEFAULT 'paste'
     CHECK (captured_via IN ('paste', 'bookmarklet', 'share', 'shortcut')),
   shared_text    TEXT,                   -- share-sheet caption; extra LLM context
+  capture_notes  TEXT,                   -- user's note at capture; copied onto created scraps
   trip_hint_id   UUID        REFERENCES public.travelscrapbook_trips(id) ON DELETE SET NULL,
   og_title       TEXT,
   og_description TEXT,

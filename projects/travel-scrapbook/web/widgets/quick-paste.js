@@ -26,9 +26,9 @@ function bindQuickPaste(container, { onCreated } = {}) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-      await window.ScrapDomain.create(form.dataset.tripId, url);
+      await window.ScrapDomain.capture(form.dataset.tripId, url);
       input.value = '';
-      toast('Scrapped! Reading the page…');
+      toast('Scrapped! Reading the page — it may add more than one place.');
       onCreated?.();
     } catch (err) {
       toast(err.message || 'Could not save that link', { error: true });

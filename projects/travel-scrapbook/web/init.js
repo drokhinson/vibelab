@@ -12,15 +12,34 @@
     router.register('login', new LoginView());
     router.register('trips', new TripsView());
     router.register('trip', new TripView());
+    router.register('inbox', new InboxView());
     router.register('scrap', new ScrapPopupView());
+    router.register('share', new ShareView());
     router.register('settings', new SettingsView());
 
-    // The /scrap popup hides all chrome from the first paint.
-    if (window.location.pathname.startsWith('/scrap')) {
+    // The /scrap popup and /share target hide all chrome from the first paint.
+    if (window.location.pathname.startsWith('/scrap') ||
+        window.location.pathname.startsWith('/share')) {
       document.body.classList.add('popup-mode');
     }
 
+    // A registered service worker (plus manifest.json) makes Chrome treat the
+    // site as installable — which is what puts it in the Android share sheet.
+    try { navigator.serviceWorker?.register('/sw.js').catch(() => {}); } catch (_) {}
+
     initSupabase();
+
+    // Inbox badge: refresh on auth and whenever the count changes in store.
+    const badge = document.getElementById('inbox-badge');
+    window.store.subscribe('inboxCount', () => {
+      const n = window.store.get('inboxCount') || 0;
+      if (!badge) return;
+      badge.textContent = n > 99 ? '99+' : String(n);
+      badge.classList.toggle('hidden', n === 0);
+    });
+    window.store.subscribe('user', () => {
+      if (window.store.get('user')) window.SourceDomain.refreshInboxCount();
+    });
 
     // Header nav (static shell — bound once).
     document.querySelectorAll('[data-route]').forEach((el) => {
@@ -36,9 +55,10 @@
     const target = router.matchPath(window.location.pathname) || { name: 'trips', params: {} };
     const authed = !!window.store.get('user');
 
-    if (!authed && target.name !== 'scrap' && target.name !== 'login') {
-      // /scrap handles its own signed-out state (compact OAuth) so the
-      // bookmarklet flow never bounces through the full login page.
+    if (!authed && target.name !== 'scrap' && target.name !== 'share' && target.name !== 'login') {
+      // /scrap and /share handle their own signed-out state (compact OAuth) so
+      // the bookmarklet and share-sheet flows never bounce through the full
+      // login page.
       await router.go('login', {}, { skipPush: target.name === 'trips' });
       return;
     }

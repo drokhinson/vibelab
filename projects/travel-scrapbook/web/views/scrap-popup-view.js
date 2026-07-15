@@ -117,7 +117,10 @@ class ScrapPopupView extends View {
           tripId = trip.id;
         }
         const note = this.container.querySelector('#sp-note').value.trim() || null;
-        await window.api.createScrap({ trip_id: tripId, url, notes: note });
+        await window.api.capture({
+          url, title: this.params.title || null, trip_id: tripId,
+          via: 'bookmarklet', notes: note,
+        });
         try { localStorage.removeItem(SCRAP_STASH_KEY); } catch (_) {}
         this._showSuccess();
       } catch (err) {
@@ -133,7 +136,7 @@ class ScrapPopupView extends View {
       <div class="scrap-popup__success">
         <img src="/assets/illustrations/travel-scrapbook-success.svg" alt="" />
         <h2 style="font-size:2rem;margin:0;">Scrapped!</h2>
-        <p class="scrap-card__sub">We're reading the page and pinning it on the map.</p>
+        <p class="scrap-card__sub">We're reading the page — if it mentions several places, each one gets its own scrap.</p>
       </div>
     `;
     // window.close() works because the bookmarklet opened this window.

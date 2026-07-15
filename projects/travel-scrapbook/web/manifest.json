@@ -1,0 +1,36 @@
+{
+  "name": "Travel Scrapbook",
+  "short_name": "Scrapbook",
+  "description": "Save travel links from anywhere — we figure out what place they are.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF9F2",
+  "theme_color": "#FFF9F2",
+  "icons": [
+    {
+      "src": "/assets/brand/travel-scrapbook-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/brand/travel-scrapbook-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/brand/travel-scrapbook-icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "url": "url",
+      "text": "text",
+      "title": "title"
+    }
+  }
+}

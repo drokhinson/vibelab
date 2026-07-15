@@ -152,6 +152,7 @@ async def capture(
         "status": SourceStatus.PROCESSING,
         "captured_via": body.via,
         "shared_text": shared_text,
+        "capture_notes": body.notes,
         "trip_hint_id": body.trip_id,
     }
     created = sb.table("travelscrapbook_sources").insert(row).execute()

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- Empty state: an open mail tray, everything already sorted — one heart-stamped
+       postcard tucked in, sparkles of a job well done -->
+  <g stroke="#5B5468" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="100" cy="124" rx="60" ry="7" fill="#5B5468" opacity="0.08" stroke="none"/>
+    <!-- tray body -->
+    <path d="M48 70h104v38a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V70z" fill="#BEE7D0" stroke-width="3"/>
+    <!-- tray mouth -->
+    <path d="M48 70l14-22h76l14 22H48z" fill="#FFF9F2" stroke-width="3"/>
+    <path d="M48 70h30l8 10h28l8-10h30" fill="none" stroke-width="3"/>
+    <!-- postcard peeking out -->
+    <g transform="rotate(-6 100 52)">
+      <rect x="72" y="30" width="56" height="34" rx="3" fill="#FFF9F2" stroke-width="2.5"/>
+      <line x1="100" y1="34" x2="100" y2="60" stroke-width="1.6" opacity="0.5"/>
+      <rect x="77" y="37" width="17" height="4" rx="2" fill="#F9C5D1" stroke="none"/>
+      <rect x="77" y="45" width="13" height="3.5" rx="1.75" fill="#BDE0FE" stroke="none"/>
+      <rect x="106" y="35" width="15" height="11" rx="1.5" fill="#FDE9A9" stroke-width="1.6"/>
+      <path d="M113.5 43.4c-2-1.4-3-2.4-3-3.6a1.6 1.6 0 0 1 3-.7 1.6 1.6 0 0 1 3 .7c0 1.2-1 2.2-3 3.6z" fill="#F4A988" stroke-width="0.9"/>
+    </g>
+    <!-- washi tape on the tray -->
+    <rect x="126" y="88" width="20" height="8" rx="1.5" transform="rotate(18 136 92)" fill="#DCD0F2" opacity="0.9" stroke="none"/>
+    <!-- sparkles -->
+    <path d="M40 34l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z" fill="#FDE9A9" stroke-width="1.2"/>
+    <path d="M162 44l1.2 3.2 3.2 1.2-3.2 1.2-1.2 3.2-1.2-3.2-3.2-1.2 3.2-1.2z" fill="#BDE0FE" stroke-width="1.1"/>
+  </g>
+</svg>

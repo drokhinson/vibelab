@@ -110,6 +110,7 @@ async def _materialize_place(
         "place_id": place["id"],
         "trip_id": None,
         "status": ScrapStatus.INBOX,
+        "notes": source.get("capture_notes"),
     }
     if source.get("trip_hint_id"):
         # The user picked the trip at capture time — no review needed.
@@ -126,7 +127,7 @@ async def process_source(source_id: str) -> None:
     sb = get_supabase()
     row = (
         sb.table("travelscrapbook_sources")
-        .select("id, user_id, url, shared_text, trip_hint_id")
+        .select("id, user_id, url, shared_text, capture_notes, trip_hint_id")
         .eq("id", source_id)
         .execute()
     )

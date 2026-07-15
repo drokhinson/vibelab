@@ -197,15 +197,13 @@ a:hover { color: var(--accent-hover); }
 }
 .confidence-hint { font-size: 0.72rem; color: var(--ink-muted); font-style: italic; }
 
-/* pending shimmer */
-.scrap-card--pending .scrap-card__photo,
+/* processing shimmer (source cards, skeletons) */
 .shimmer {
   background: linear-gradient(100deg, var(--paper) 40%, #FFFFFF 50%, var(--paper) 60%);
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
 }
 @keyframes shimmer { to { background-position: -200% 0; } }
-.scrap-card--failed { border-color: #F0B9B9; background: #FFF7F5; }
 
 /* ── Route panel ────────────────────────────────────────────────────────────── */
 .route-stop { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.5rem 0; }
@@ -341,3 +339,19 @@ body.popup-mode { max-width: 420px; }
 .icon-sm [data-lucide] { width: 16px; height: 16px; }
 .icon-md [data-lucide] { width: 20px; height: 20px; }
 .icon-lg [data-lucide] { width: 24px; height: 24px; }
+
+/* ── Source cards (inbox: processing / failed capture events) ───────────────── */
+.source-card--processing { min-height: 64px; }
+.source-card--failed { border-color: #F0B9B9; background: #FFF7F5; }
+
+/* Staged scraps awaiting review get a lavender "hold" tint. */
+.scrap-card--staged { border-color: var(--lavender); background: #FBF9FF; }
+.washi--lavender::before { background: var(--lavender); }
+
+/* Inbox nav badge (unsorted finds count). */
+.nav-badge {
+  position: absolute; top: 2px; right: 2px; min-width: 17px; height: 17px;
+  padding: 0 4px; border-radius: 999px; background: var(--blush-deep);
+  color: #FFFFFF; font-size: 0.62rem; font-weight: 800; line-height: 17px;
+  text-align: center; pointer-events: none;
+}
