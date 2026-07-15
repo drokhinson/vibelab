@@ -53,6 +53,7 @@ function initSupabase() {
   supabaseClient.auth.onAuthStateChange(async (event, sess) => {
     const isFirst = !_initialAuthSettled;
     session = sess;
+    let defer = false;
     try {
       if (sess) {
         await loadProfile();
@@ -61,13 +62,14 @@ function initSupabase() {
         window.store.set('user', null);
       } else if (isFirst) {
         // No session yet. If the URL carries OAuth params a SIGNED_IN event
-        // follows after the PKCE exchange — don't resolve early.
+        // follows after the PKCE exchange — don't resolve early (a bare
+        // `return` still runs finally, so flag it and gate the resolve).
         const hasAuthParams = window.location.search.includes('code=') ||
           window.location.hash.includes('access_token=');
-        if (hasAuthParams) return;
+        if (hasAuthParams) { defer = true; return; }
       }
     } finally {
-      _resolveInitialAuth();
+      if (!defer) _resolveInitialAuth();
     }
   });
 
