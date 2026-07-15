@@ -27,7 +27,11 @@
       "name": "Boardgame Buddy",
       "description": "Build your board game closet, track plays, and quick-reference game guides.",
       "status": "live",
-      "tags": ["games", "hobbies", "social"],
+      "tags": [
+        "games",
+        "hobbies",
+        "social"
+      ],
       "webUrl": "https://vibelab-boardgamebuddy.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": true,
@@ -129,6 +133,27 @@
       "createdAt": "2026-03-15",
       "icon": "🛠️",
       "isAdminTool": true
+    },
+    {
+      "id": "travel-scrapbook",
+      "name": "Travel Scrapbook",
+      "description": "Collect travel links, auto-extract places, and plan cute optimized routes",
+      "status": "prototype",
+      "tags": [
+        "travel",
+        "planning",
+        "ai"
+      ],
+      "webUrl": null,
+      "backendUrl": "https://vibelab-production-2119.up.railway.app",
+      "hasNativeApp": false,
+      "androidStatus": "not-started",
+      "androidUrl": null,
+      "iosStatus": "not-started",
+      "iosUrl": null,
+      "expoSlug": null,
+      "createdAt": "2026-07-15",
+      "icon": "🧳"
     }
   ]
 }
