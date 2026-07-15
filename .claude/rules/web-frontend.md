@@ -15,8 +15,8 @@ paths:
 - Use `fetch()` for all data. Never inline data in JS globals.
 - Mobile-first responsive. Max width 480px for single-column apps, 900px for dashboards.
 - Loading states and error handling are required on every `fetch()`.
-- **Icons:** Use Lucide SVG icons for all UI chrome (nav, buttons, back arrows, action icons). Keep emojis for content/data (food, plants, animals — things that *are* the data).
-- **Illustrations:** Every empty state, loading screen, and app header should include an SVG illustration. Source from undraw.co (free, MIT). Download the SVG, inline it in the relevant JS render function, and customize the primary fill color to match the project accent.
+- **Icons:** Use Lucide SVG icons for all UI chrome (nav, buttons, back arrows, action icons). **Do not use generic emojis anywhere in the UI** — not for content/data, not in headings, not in copy. Content/data marks (food, plants, animals, categories — things that *are* the data) get **custom-built SVG sprites** under `web/assets/sprites/` per `.claude/rules/assets.md`. (Older projects that still render emoji data marks are grandfathered; migrate opportunistically via `/ui-polish`.)
+- **Illustrations:** Every empty state, loading screen, and app header should include an SVG illustration. Prefer custom-built SVGs under `web/assets/illustrations/` that match the project's visual identity; undraw.co (free, MIT) is an acceptable fallback — download the SVG and customize the primary fill color to match the project accent. Never substitute an emoji for an illustration.
 - **Motion:** All card lists get entrance animations (`fadeUp` keyframe). Cards get hover lift (`translateY(-2px)` + shadow increase). Stagger list items with `animation-delay: calc(var(--i) * 40ms)`.
 - **Design reference:** Use v0.app to generate visual mockups for complex screens. Do not copy its React code — extract the layout, spacing, and component structure decisions and implement them in DaisyUI + vanilla JS.
 
