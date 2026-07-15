@@ -45,7 +45,12 @@ function initSupabase() {
     _resolveInitialAuth();
     return;
   }
-  supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  // Pin the PKCE flow explicitly so the OAuth exchange is deterministic
+  // regardless of the floating @supabase/supabase-js@2 CDN pin. persistSession
+  // keeps the session + code_verifier in localStorage across the redirect.
+  supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+    auth: { flowType: 'pkce', detectSessionInUrl: true, persistSession: true, autoRefreshToken: true },
+  });
 
   // Hard cap so a misbehaving auth subscription can't strand the splash.
   setTimeout(_resolveInitialAuth, 3000);
@@ -85,9 +90,11 @@ function initSupabase() {
 
 async function handleOAuthSignIn(provider) {
   if (!supabaseClient) { toast('Sign-in is not configured', { error: true }); return; }
-  // Return to the current path so the /scrap popup lands back on itself.
-  const redirectTo = window.location.origin + '/auth-callback' +
-    '?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+  // Return straight to the current page (matching sauceboss/daywordplay) so
+  // supabase-js completes the PKCE exchange in a single load — no intermediate
+  // callback hop. pathname preserves /scrap, and scrap-popup-view restores the
+  // scrap target from its localStorage stash after the round-trip.
+  const redirectTo = window.location.origin + window.location.pathname;
   const { error } = await supabaseClient.auth.signInWithOAuth({ provider, options: { redirectTo } });
   if (error) toast(error.message, { error: true });
 }

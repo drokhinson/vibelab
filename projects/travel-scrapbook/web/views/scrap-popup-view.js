@@ -17,7 +17,7 @@ class ScrapPopupView extends View {
     this._saved = false;
 
     // Preserve the target across an OAuth round-trip: /scrap → login →
-    // auth-callback → /scrap (params restored from the stash).
+    // (OAuth redirects straight back to) /scrap (params restored from the stash).
     if (this.params.url) {
       try { localStorage.setItem(SCRAP_STASH_KEY, JSON.stringify({ url: this.params.url, title: this.params.title || '' })); } catch (_) {}
     } else {

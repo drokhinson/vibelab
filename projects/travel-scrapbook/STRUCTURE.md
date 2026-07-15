@@ -30,7 +30,6 @@ Travel Scrapbook is for people who research trips by collecting links — a Redd
 projects/travel-scrapbook/
 ├── web/
 │   ├── index.html            — app shell (script order: config → store → helpers → auth → domain → ui → widgets → views → init)
-│   ├── auth-callback.html    — OAuth redirect lander
 │   ├── vercel.json           — SPA rewrites for History API routing
 │   ├── styles.css            — scrapbook theme (paper bg, sticker cards, washi tape)
 │   ├── config.js             — window.APP_CONFIG { apiBase, supabaseUrl, supabaseAnonKey, project }
@@ -94,7 +93,7 @@ All under `/api/v1/travel_scrapbook`, Supabase bearer auth (profile auto-created
 ## Screen / Page Flow
 
 ```
-/login → (OAuth/email) → auth-callback.html → / (trips grid)
+/login → (OAuth/email, redirects straight back) → / (trips grid)
 / → tap trip card → /trip/:id
 /trip/:id → paste link in quick-paste → scrap card appears (pending shimmer) → polls → ready
 /trip/:id → "Sort my route" → ordered stop list + "Open leg in Google Maps" buttons + "Download CSV"
