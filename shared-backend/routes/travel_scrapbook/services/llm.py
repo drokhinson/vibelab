@@ -1,9 +1,9 @@
-"""Place extraction via Claude Haiku.
+"""Place extraction via Google Gemini (free tier).
 
 Given whatever context we managed to scrape (possibly only the URL, when the
-source site blocks us), ask Haiku to identify the single main place the page
+source site blocks us), ask Gemini to identify the single main place the page
 is about and produce a Nominatim-friendly geocode query. ~500 input / ~150
-output tokens per call.
+output tokens per call — comfortably inside Gemini's free tier.
 """
 
 import json
@@ -12,16 +12,20 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-import anthropic
+import httpx
 
 from api_logger import log_external_call
 
-from ..constants import APP_NAME, HAIKU_MODEL
+from ..constants import APP_NAME, GEMINI_MODEL
 from .scraper import PageContent
 
 MAX_TOKENS = 300
+_ENDPOINT = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    f"{GEMINI_MODEL}:generateContent"
+)
 
-_client: Optional[anthropic.AsyncAnthropic] = None
+_client: Optional[httpx.AsyncClient] = None
 
 
 class LLMError(Exception):
@@ -38,12 +42,17 @@ class PlaceExtraction:
     confident: bool
 
 
-def _get_client() -> anthropic.AsyncAnthropic:
+def _get_api_key() -> str:
+    key = os.environ.get("GEMINI_API_KEY")
+    if not key:
+        raise LLMError("GEMINI_API_KEY is not set")
+    return key
+
+
+def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            raise LLMError("ANTHROPIC_API_KEY is not set")
-        _client = anthropic.AsyncAnthropic()
+        _client = httpx.AsyncClient(timeout=30.0)
     return _client
 
 
@@ -95,36 +104,58 @@ def _parse_json(text: str) -> dict:
     return json.loads(text[start : end + 1])
 
 
+def _extract_text(payload: dict) -> str:
+    """Pull the model's text out of Gemini's generateContent response."""
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        # No candidate = safety block or empty reply. Surface the reason if any.
+        reason = payload.get("promptFeedback", {}).get("blockReason", "no candidates")
+        raise LLMError(f"Gemini returned no usable output ({reason})")
+    parts = candidates[0].get("content", {}).get("parts") or []
+    text = "".join(p.get("text", "") for p in parts)
+    if not text:
+        raise LLMError("Gemini returned an empty response")
+    return text
+
+
 async def extract_place(
     url: str, page: Optional[PageContent], categories: list[str]
 ) -> PlaceExtraction:
-    """Ask Haiku what place the page is about. Raises LLMError on failure."""
+    """Ask Gemini what place the page is about. Raises LLMError on failure."""
+    api_key = _get_api_key()
     client = _get_client()
     prompt = _build_prompt(url, page, categories)
+    body = {
+        "system_instruction": {"parts": [{"text": _SYSTEM}]},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "maxOutputTokens": MAX_TOKENS,
+            "temperature": 0,
+        },
+    }
 
+    # The API key rides in a header (never in the logged URL/params).
     async with log_external_call(
         app=APP_NAME,
-        api_name="anthropic-haiku",
+        api_name="gemini",
         method="POST",
-        url="https://api.anthropic.com/v1/messages",
-        params={"model": HAIKU_MODEL, "source_url": url},
+        url=_ENDPOINT,
+        params={"model": GEMINI_MODEL, "source_url": url},
     ) as record:
         try:
-            response = await client.messages.create(
-                model=HAIKU_MODEL,
-                max_tokens=MAX_TOKENS,
-                system=_SYSTEM,
-                messages=[{"role": "user", "content": prompt}],
+            resp = await client.post(
+                _ENDPOINT,
+                headers={"x-goog-api-key": api_key},
+                json=body,
             )
-        except anthropic.APIError as exc:
-            raise LLMError(f"Anthropic API error: {exc}") from exc
-        text = next((b.text for b in response.content if b.type == "text"), "")
-        record.status_code = 200
-        record.body_excerpt = text[:1000]
-        record.extra = {
-            "input_tokens": response.usage.input_tokens,
-            "output_tokens": response.usage.output_tokens,
-        }
+        except httpx.HTTPError as exc:
+            raise LLMError(f"Gemini request failed: {exc}") from exc
+        record.attach_response(resp)
+        if resp.status_code != 200:
+            raise LLMError(f"Gemini API error {resp.status_code}: {resp.text[:300]}")
+        payload = resp.json()
+        text = _extract_text(payload)
 
     data = _parse_json(text)
     category = data.get("category")

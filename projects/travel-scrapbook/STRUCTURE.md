@@ -131,4 +131,4 @@ npx serve projects/travel-scrapbook/web
 
 ## Active Development Notes
 
-- 2026-07-15 — Initial build: migrations, backend package, web prototype, custom SVG asset set (no-emoji policy). Pending user actions: run migrations in Supabase, add ANTHROPIC_API_KEY to Railway, create Vercel project + VERCEL_TRAVEL_SCRAPBOOK_PROJECT_ID secret, add domain to ALLOWED_ORIGINS.
+- 2026-07-15 — Initial build: migrations, backend package, web prototype, custom SVG asset set (no-emoji policy). Pending user actions: run migrations in Supabase, add GEMINI_API_KEY to Railway, create Vercel project + VERCEL_TRAVEL_SCRAPBOOK_PROJECT_ID secret, add domain to ALLOWED_ORIGINS.
