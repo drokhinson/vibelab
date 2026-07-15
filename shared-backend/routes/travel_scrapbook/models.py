@@ -3,9 +3,9 @@
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, model_validator
 
-from .constants import AnchorRole, GeocodeConfidence, ScrapStatus
+from .constants import AnchorRole, AnchorType, GeocodeConfidence, ScrapStatus
 
 
 # ── Shared ────────────────────────────────────────────────────────────────────
@@ -39,14 +39,31 @@ class ProfileUpdateRequest(BaseModel):
 
 class AnchorCreateRequest(BaseModel):
     role: AnchorRole
-    label: str = Field(..., min_length=1, max_length=120)
-    query: str = Field(..., min_length=2, max_length=300,
-                       description="Freeform place text to geocode, e.g. 'Narita Airport'")
+    label: Optional[str] = Field(None, min_length=1, max_length=120)
+    query: Optional[str] = Field(None, min_length=2, max_length=300,
+                                 description="Freeform place text to geocode, e.g. 'Narita Airport'")
+    type: Optional[AnchorType] = Field(
+        None, description="How you arrive/depart (start/end anchors only)")
+    stay_date: Optional[date] = Field(
+        None, description="Check-in day for a stay anchor; a day within the trip's dates")
+    same_as_start: bool = Field(
+        False,
+        description="Copy the trip's start anchor (location + type) into this end anchor; skips geocoding")
+
+    @model_validator(mode="after")
+    def _require_place(self) -> "AnchorCreateRequest":
+        # label/query are copied from the start anchor when same_as_start is set;
+        # otherwise the user must supply both to geocode a real place.
+        if not self.same_as_start and (not self.label or not self.query):
+            raise ValueError("label and query are required unless same_as_start is set")
+        return self
 
 
 class AnchorUpdateRequest(BaseModel):
     label: Optional[str] = Field(None, min_length=1, max_length=120)
     query: Optional[str] = Field(None, min_length=2, max_length=300)
+    type: Optional[AnchorType] = None
+    stay_date: Optional[date] = None
 
 
 class AnchorResponse(BaseModel):
@@ -58,6 +75,8 @@ class AnchorResponse(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     geocode_confidence: GeocodeConfidence = GeocodeConfidence.NONE
+    type: Optional[AnchorType] = None
+    stay_date: Optional[date] = None
     created_at: datetime
 
 

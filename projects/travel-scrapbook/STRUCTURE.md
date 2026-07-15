@@ -61,7 +61,7 @@ All tables RLS-enabled, granted to `travelscrapbook_role`; backend-only access v
 - **travelscrapbook_profiles** — Supabase Auth profile. `id uuid PK → auth.users ON DELETE CASCADE`, `display_name text`, `username text UNIQUE`, `is_admin bool`, `created_at`.
 - **travelscrapbook_categories** — seeded option set. `slug text PK` (restaurant, cafe, bar, sight, activity, shop, lodging, other), `label text`, `icon text` (sprite slug → `assets/sprites/categories/travel-scrapbook-cat-<icon>.svg`), `sort_order int`.
 - **travelscrapbook_trips** — `id uuid PK`, `user_id → profiles CASCADE`, `name text`, `destination text`, `cover_icon text DEFAULT 'plane'` (sprite slug), `start_date date`, `end_date date`, `notes text`, timestamps. Index `(user_id)`.
-- **travelscrapbook_anchors** — route endpoints/stays. `id uuid PK`, `trip_id → trips CASCADE`, `role text CHECK ('start','end','stay')`, `label text`, `query text` (geocode input), `lat/lng double precision`, `geocode_confidence text CHECK ('high','medium','low','none')`, `created_at`. Partial unique `(trip_id, role) WHERE role IN ('start','end')`.
+- **travelscrapbook_anchors** — route endpoints/stays. `id uuid PK`, `trip_id → trips CASCADE`, `role text CHECK ('start','end','stay')`, `label text`, `query text` (geocode input), `lat/lng double precision`, `geocode_confidence text CHECK ('high','medium','low','none')`, `type text CHECK ('airport','train_station','car_rental','other')` (start/end only — how you arrive/depart), `stay_date date` (stay only — check-in day, seeds a future day-by-day timeline), `created_at`. Partial unique `(trip_id, role) WHERE role IN ('start','end')`. Arrival and departure are often the same place, so the end anchor can be created with `same_as_start` to copy the start's location + type (no re-geocode).
 - **travelscrapbook_scraps** — the saved links. `id uuid PK`, `trip_id → trips CASCADE`, `user_id → profiles CASCADE`, `source_url text`, `source_domain text`, `status text CHECK ('pending','ready','failed')`, `error_kind text` (network/blocked/llm/geocode), `og_title/og_description/og_image_url text`, `place_name/place_city/place_country text`, `category → categories(slug) DEFAULT 'other'`, `lat/lng`, `geocode_confidence`, `geocode_display_name text` (Nominatim's resolved address, shown so users can spot mis-geocodes), `maps_url text`, `notes text`, `is_favorite bool`, `route_position int` (last computed route order), timestamps. Indexes `(trip_id)`, `(user_id)`.
 
 ## API Endpoints
@@ -71,7 +71,7 @@ All under `/api/v1/travel_scrapbook`, Supabase bearer auth (profile auto-created
 - `GET /health` — health check, no auth
 - `GET /me` — profile bootstrap + category list; `PATCH /me` — update display_name
 - `GET /trips` — list with scrap counts; `POST /trips`; `GET /trips/{id}` — trip + anchors + scraps bundle; `PATCH /trips/{id}`; `DELETE /trips/{id}`
-- `POST /trips/{id}/anchors` — create + geocode synchronously; `PATCH /anchors/{id}` — edit (re-geocodes if query changed); `DELETE /anchors/{id}`
+- `POST /trips/{id}/anchors` — create + geocode synchronously (accepts `type` for start/end, `stay_date` for stay, or `same_as_start` on an end anchor to copy the start's place + type without geocoding); `PATCH /anchors/{id}` — edit (re-geocodes if query changed); `DELETE /anchors/{id}`
 - `POST /scraps` — `{trip_id, url, notes?}` → inserts `pending` row, returns 201 immediately, enrichment runs via FastAPI BackgroundTasks
 - `GET /scraps/{id}` — poll one; `GET /trips/{id}/scraps` — list (frontend polls while pending)
 - `PATCH /scraps/{id}` — user edits place fields/category/notes/favorite; body flag `regeocode: true` re-runs Nominatim synchronously
@@ -132,3 +132,4 @@ npx serve projects/travel-scrapbook/web
 ## Active Development Notes
 
 - 2026-07-15 — Initial build: migrations, backend package, web prototype, custom SVG asset set (no-emoji policy). Pending user actions: run migrations in Supabase, add GEMINI_API_KEY to Railway, create Vercel project + VERCEL_TRAVEL_SCRAPBOOK_PROJECT_ID secret, add domain to ALLOWED_ORIGINS.
+- 2026-07-15 — Anchor upgrades (migration `003`): location `type` (airport/train_station/car_rental/other) on start/end anchors, `stay_date` check-in day on stay anchors, and a "Same as arrival" shortcut that copies the start anchor into the end. **Pending user action: run `db/migrations/travelscrapbook/003_anchor_type_and_stay_date.sql` in Supabase.**

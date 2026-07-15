@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Travel Scrapbook — current schema snapshot
--- Last updated: 2026-07-15 (matches db/migrations/travelscrapbook/001_baseline.sql)
+-- Last updated: 2026-07-15 (matches db/migrations/travelscrapbook/003_anchor_type_and_stay_date.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_anchors (
   lng                DOUBLE PRECISION,
   geocode_confidence TEXT             NOT NULL DEFAULT 'none'
     CHECK (geocode_confidence IN ('high', 'medium', 'low', 'none')),
+  type               TEXT             -- start/end only: airport | train_station | car_rental | other
+    CHECK (type IS NULL OR type IN ('airport', 'train_station', 'car_rental', 'other')),
+  stay_date          DATE,            -- stay only: a check-in day within the trip's date range
   created_at         TIMESTAMPTZ      NOT NULL DEFAULT now()
 );
 -- idx_ts_anchors_trip (trip_id)

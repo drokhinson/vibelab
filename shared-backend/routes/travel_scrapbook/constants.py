@@ -36,6 +36,14 @@ class AnchorRole(StrEnum):
     STAY = "stay"
 
 
+class AnchorType(StrEnum):
+    """How you arrive at / depart from a start or end anchor."""
+    AIRPORT = "airport"
+    TRAIN_STATION = "train_station"
+    CAR_RENTAL = "car_rental"
+    OTHER = "other"
+
+
 class EnrichErrorKind(StrEnum):
     NETWORK = "network"   # page unreachable AND no LLM result possible
     BLOCKED = "blocked"   # page refused us (403/login wall) and URL-only pass failed

@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Path
 from db import get_supabase
 
 from . import router
+from .constants import AnchorRole
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     AnchorCreateRequest,
@@ -46,6 +47,34 @@ async def _geocode_anchor(query: str) -> dict[str, Any]:
             "geocode_confidence": GeocodeConfidence.HIGH,
         }
     return {"lat": None, "lng": None, "geocode_confidence": GeocodeConfidence.NONE}
+
+
+def _get_start_anchor(sb, trip_id: str) -> dict[str, Any] | None:
+    """The trip's start anchor, if one exists (used to copy into the end)."""
+    rows = (
+        sb.table("travelscrapbook_anchors")
+        .select("*")
+        .eq("trip_id", trip_id)
+        .eq("role", AnchorRole.START)
+        .execute()
+    )
+    return rows.data[0] if rows.data else None
+
+
+def _validate_stay_date(trip: dict[str, Any], stay_date: str | None) -> None:
+    """Reject a stay's check-in day that falls outside the trip's dates.
+
+    Lenient when either trip bound is unset. Dates are ISO 'YYYY-MM-DD' strings,
+    so lexical comparison is chronological.
+    """
+    if not stay_date:
+        return
+    start, end = trip.get("start_date"), trip.get("end_date")
+    if (start and stay_date < start) or (end and stay_date > end):
+        raise HTTPException(
+            status_code=400,
+            detail="Check-in day must fall within the trip's dates",
+        )
 
 
 @router.get(
@@ -183,16 +212,48 @@ async def create_anchor(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> AnchorResponse:
-    """Add a start/end/stay anchor; the query is geocoded synchronously."""
+    """Add a start/end/stay anchor.
+
+    Normal anchors geocode their query synchronously. An end anchor with
+    ``same_as_start`` copies the start anchor's place + type instead (arrival and
+    departure are often the same spot), skipping the geocode entirely.
+    """
     sb = get_supabase()
-    get_owned_trip(sb, trip_id, user.user_id)
-    row = {
-        "trip_id": trip_id,
-        "role": body.role,
-        "label": body.label,
-        "query": body.query,
-        **(await _geocode_anchor(body.query)),
-    }
+    trip = get_owned_trip(sb, trip_id, user.user_id)
+
+    if body.same_as_start:
+        if body.role != AnchorRole.END:
+            raise HTTPException(
+                status_code=400, detail="Only the end anchor can copy the start")
+        start = _get_start_anchor(sb, trip_id)
+        if not start:
+            raise HTTPException(status_code=400, detail="Add a start anchor first")
+        row = {
+            "trip_id": trip_id,
+            "role": AnchorRole.END,
+            "label": start["label"],
+            "query": start["query"],
+            "lat": start.get("lat"),
+            "lng": start.get("lng"),
+            "geocode_confidence": start.get("geocode_confidence", GeocodeConfidence.NONE),
+            "type": start.get("type"),
+        }
+    else:
+        row = {
+            "trip_id": trip_id,
+            "role": body.role,
+            "label": body.label,
+            "query": body.query,
+            **(await _geocode_anchor(body.query)),
+            # type only applies to route endpoints; stay_date only to lodging.
+            "type": body.type if body.role in (AnchorRole.START, AnchorRole.END) else None,
+            "stay_date": (
+                body.stay_date.isoformat()
+                if body.role == AnchorRole.STAY and body.stay_date else None
+            ),
+        }
+        _validate_stay_date(trip, row["stay_date"])
+
     try:
         created = sb.table("travelscrapbook_anchors").insert(row).execute()
     except Exception as exc:
@@ -233,7 +294,10 @@ async def update_anchor(
     """Edit label/query; a changed query is re-geocoded synchronously."""
     sb = get_supabase()
     existing = _get_owned_anchor(sb, anchor_id, user.user_id)
-    update = body.model_dump(exclude_unset=True)
+    update = {
+        k: (v.isoformat() if hasattr(v, "isoformat") else v)
+        for k, v in body.model_dump(exclude_unset=True).items()
+    }
     if "query" in update and update["query"] != existing["query"]:
         update.update(await _geocode_anchor(update["query"]))
     updated = (
