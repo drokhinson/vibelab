@@ -231,6 +231,13 @@ a:hover { color: var(--accent-hover); }
 }
 .anchor-chip [data-lucide] { width: 15px; height: 15px; }
 .anchor-chip__role { color: var(--ink-muted); font-weight: 800; font-size: 0.7rem; text-transform: uppercase; }
+.anchor-chip__type { opacity: 0.55; }
+.anchor-chip__day {
+  color: var(--ink-muted); font-weight: 700; font-size: 0.72rem;
+  background: var(--border); border-radius: 999px; padding: 1px 8px;
+}
+.anchor-same__hint { color: var(--ink-muted); font-weight: 700; }
+.anchor-same__note { color: var(--ink-muted); font-size: 0.78rem; margin: 0.35rem 0 0; }
 
 /* ── Toast ──────────────────────────────────────────────────────────────────── */
 #toast-root { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; }
