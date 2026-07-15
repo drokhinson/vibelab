@@ -3,7 +3,7 @@
 // bottom tabs (wrapped in a native-stack so later phases push detail screens).
 
 import React, { useEffect } from 'react';
-import { View } from 'react-native';
+import { View, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import { NavigationContainer } from '@react-navigation/native';
@@ -24,7 +24,7 @@ import {
   CrimsonText_700Bold,
 } from '@expo-google-fonts/crimson-text';
 
-import { AppProvider, useAppState } from './store/AppContext';
+import { AppProvider, useAppState, useAppActions } from './store/AppContext';
 import { ConfirmProvider } from './components/ConfirmModal';
 import { handleAuthDeepLink } from './auth/oauth';
 import { api } from './api/client';
@@ -53,26 +53,17 @@ function HomeTabs() {
       <Tab.Screen
         name="FeedTab"
         component={FeedScreen}
-        options={{
-          title: 'Feed',
-          tabBarIcon: ({ color, size }) => <Newspaper size={size} color={color} />,
-        }}
+        options={{ title: 'Feed', tabBarIcon: ({ color, size }) => <Newspaper size={size} color={color} /> }}
       />
       <Tab.Screen
         name="LogTab"
         component={LogPlayScreen}
-        options={{
-          title: 'Log',
-          tabBarIcon: ({ color, size }) => <Dice5 size={size} color={color} />,
-        }}
+        options={{ title: 'Log', tabBarIcon: ({ color, size }) => <Dice5 size={size} color={color} /> }}
       />
       <Tab.Screen
         name="ProfileTab"
         component={ProfileSelfScreen}
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <CircleUser size={size} color={color} />,
-        }}
+        options={{ title: 'Profile', tabBarIcon: ({ color, size }) => <CircleUser size={size} color={color} /> }}
       />
     </Tab.Navigator>
   );
@@ -80,6 +71,16 @@ function HomeTabs() {
 
 function Root() {
   const { authReady, session } = useAppState();
+  const actions = useAppActions();
+
+  // Tab-focus / app-foreground warm refresh (RN AppState in place of the web's
+  // visibilitychange listener): serve cache immediately, refresh live blocks.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active' && session && actions.warmRefresh) actions.warmRefresh();
+    });
+    return () => sub.remove();
+  }, [session, actions]);
 
   if (!authReady) {
     return (
@@ -121,16 +122,10 @@ export default function MainApp() {
     const sub = Linking.addEventListener('url', ({ url }) => {
       if (url) handleAuthDeepLink(url).catch(() => {});
     });
-    return () => {
-      active = false;
-      sub?.remove?.();
-    };
+    return () => { active = false; sub?.remove?.(); };
   }, []);
 
-  // Fire-and-forget analytics ping per app open (mirrors the web tracking ping).
-  useEffect(() => {
-    api.trackEvent('app_open');
-  }, []);
+  useEffect(() => { api.trackEvent('app_open'); }, []);
 
   if (!fontsLoaded) {
     return (
