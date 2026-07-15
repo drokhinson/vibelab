@@ -362,6 +362,41 @@ body {
   border-color: transparent;
 }
 
+/* ── Travel Scrapbook brand (cream paper + blush / coral / mint) ─────────── */
+.brand-travel-scrapbook {
+  background: linear-gradient(135deg, #FFF6F2 0%, #FCE4EA 55%, #F9C5D1 100%);
+  border-color: rgba(91, 84, 104, 0.28);
+  color: #5B5468;
+}
+.brand-travel-scrapbook .featured-name {
+  color: #4A4455;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.brand-travel-scrapbook .featured-desc { color: #6B6478; }
+.brand-travel-scrapbook .status-live {
+  background: rgba(190, 231, 208, 0.55);
+  color: #3E7A5A;
+}
+.brand-travel-scrapbook .featured-pill {
+  background: rgba(91, 84, 104, 0.06);
+  border-color: rgba(91, 84, 104, 0.28);
+  color: #5B5468;
+}
+.brand-travel-scrapbook .featured-pill:hover:not(.featured-pill--disabled) {
+  background: rgba(91, 84, 104, 0.12);
+  border-color: rgba(91, 84, 104, 0.5);
+}
+.brand-travel-scrapbook .featured-pill--web {
+  background: #F4A988;
+  color: #FFF6F2;
+  border-color: transparent;
+}
+.brand-travel-scrapbook .featured-pill--web:hover:not(.featured-pill--disabled) {
+  background: #E8926E;
+  border-color: transparent;
+}
+
 /* ── Project grid (compact / WIP cards) ──────────────────────────────────── */
 .projects-grid {
   display: grid;

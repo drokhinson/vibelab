@@ -40,12 +40,14 @@ function sauceBossPotSVG()  { return heroImg("sb-hero.svg",  "pot"); }
 function buddySVG()         { return heroImg("bgb-hero.svg", "buddy"); }
 function plantPlannerSVG()  { return heroImg("pp-hero.svg",  "sprout"); }
 function dwpBookSVG()       { return heroImg("dwp-hero.svg", "book"); }
+function travelScrapbookSVG() { return heroImg("travel-scrapbook-hero.svg", "scrap"); }
 
 const FEATURED_THEMES = {
-  "sauceboss":       { brandClass: "brand-sauceboss", art: sauceBossPotSVG },
-  "boardgame-buddy": { brandClass: "brand-bgb",       art: buddySVG },
-  "daywordplay":     { brandClass: "brand-dwp",       art: dwpBookSVG },
-  "plant-planner":   { brandClass: "brand-pp",        art: plantPlannerSVG },
+  "sauceboss":        { brandClass: "brand-sauceboss",        art: sauceBossPotSVG },
+  "boardgame-buddy":  { brandClass: "brand-bgb",              art: buddySVG },
+  "daywordplay":      { brandClass: "brand-dwp",              art: dwpBookSVG },
+  "plant-planner":    { brandClass: "brand-pp",               art: plantPlannerSVG },
+  "travel-scrapbook": { brandClass: "brand-travel-scrapbook", art: travelScrapbookSVG },
 };
 
 // Status sort order — live first, then in-progress, then deferred. Within
