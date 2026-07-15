@@ -1,9 +1,10 @@
 """Place extraction via Google Gemini (free tier).
 
 Given whatever context we managed to scrape (possibly only the URL, when the
-source site blocks us), ask Gemini to identify the single main place the page
-is about and produce a Nominatim-friendly geocode query. ~500 input / ~150
-output tokens per call — comfortably inside Gemini's free tier.
+source site blocks us — plus any share-sheet caption the phone sent along),
+ask Gemini for EVERY distinct place the page mentions. One reel or listicle
+can fan out into several places; a single-place page returns a one-element
+list. ~500 input / ~150–800 output tokens per call — inside Gemini's free tier.
 """
 
 import json
@@ -16,10 +17,8 @@ import httpx
 
 from api_logger import log_external_call
 
-from ..constants import APP_NAME, GEMINI_MODEL
+from ..constants import APP_NAME, GEMINI_MODEL, LLM_MAX_TOKENS_MULTI, MAX_PLACES_PER_SOURCE
 from .scraper import PageContent
-
-MAX_TOKENS = 300
 _ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     f"{GEMINI_MODEL}:generateContent"
@@ -62,8 +61,17 @@ _SYSTEM = (
 )
 
 
-def _build_prompt(url: str, page: Optional[PageContent], categories: list[str]) -> str:
+def _build_prompt(
+    url: str,
+    page: Optional[PageContent],
+    categories: list[str],
+    shared_text: Optional[str] = None,
+) -> str:
     lines = [f"URL: {url}"]
+    if shared_text:
+        # Share-sheet caption from the user's phone — often the only usable
+        # context when the source site (Instagram etc.) blocks server fetches.
+        lines.append(f"Share-sheet text from the user's app: {shared_text}")
     if page:
         if page.title:
             lines.append(f"Page title: {page.title}")
@@ -75,21 +83,28 @@ def _build_prompt(url: str, page: Optional[PageContent], categories: list[str]) 
             lines.append(f"Page text (truncated): {page.text_excerpt}")
     else:
         lines.append(
-            "The page could not be fetched. Infer the place from the URL "
-            "alone (path slugs often contain the place name)."
+            "The page could not be fetched. Infer the place(s) from the URL "
+            "and any share-sheet text (path slugs often contain the place name)."
         )
     lines.append(
-        "\nExtract the single main place this page is about. If it lists "
-        "several, pick the most prominent. Reply with this exact JSON shape:\n"
+        "\nExtract EVERY distinct real-world place a traveler would want to "
+        "save from this page (restaurants, bars, sights, shops, lodging...). "
+        "A page may be about one place or list many (e.g. '10 best ramen "
+        "shops'). Reply with this exact JSON shape:\n"
         "{\n"
-        '  "place_name": string or null,\n'
-        '  "city": string or null,\n'
-        '  "country": string or null,\n'
-        f'  "category": one of {json.dumps(categories)},\n'
-        '  "geocode_query": string or null  // best search string for OpenStreetMap Nominatim,\n'
-        '  "confident": boolean\n'
+        '  "places": [\n'
+        "    {\n"
+        '      "place_name": string,\n'
+        '      "city": string or null,\n'
+        '      "country": string or null,\n'
+        f'      "category": one of {json.dumps(categories)},\n'
+        '      "geocode_query": string or null  // best search string for OpenStreetMap Nominatim,\n'
+        '      "confident": boolean\n'
+        "    }\n"
+        "  ]\n"
         "}\n"
-        "If no specific place is identifiable, set place_name to null."
+        f"Order by prominence. Include at most {MAX_PLACES_PER_SOURCE}. "
+        'If no specific place is identifiable, return {"places": []}.'
     )
     return "\n".join(lines)
 
@@ -118,19 +133,53 @@ def _extract_text(payload: dict) -> str:
     return text
 
 
-async def extract_place(
-    url: str, page: Optional[PageContent], categories: list[str]
-) -> PlaceExtraction:
-    """Ask Gemini what place the page is about. Raises LLMError on failure."""
+def _coerce_places(data: dict, categories: list[str]) -> list[PlaceExtraction]:
+    """Accept {"places": [...]} (canonical) or a bare single-place object
+    (belt-and-braces for model drift); drop unusable entries; clamp count."""
+    raw = data.get("places")
+    if raw is None:
+        raw = [data]  # bare single object
+    if not isinstance(raw, list):
+        raise LLMError(f"unexpected LLM reply shape: {str(data)[:200]}")
+
+    places: list[PlaceExtraction] = []
+    for item in raw[:MAX_PLACES_PER_SOURCE]:
+        if not isinstance(item, dict):
+            continue
+        name = (item.get("place_name") or "").strip() if item.get("place_name") else ""
+        if not name:
+            continue
+        category = item.get("category")
+        if category not in categories:
+            category = "other"
+        places.append(PlaceExtraction(
+            place_name=name,
+            city=item.get("city") or None,
+            country=item.get("country") or None,
+            category=category,
+            geocode_query=item.get("geocode_query") or None,
+            confident=bool(item.get("confident", False)),
+        ))
+    return places
+
+
+async def extract_places(
+    url: str,
+    page: Optional[PageContent],
+    categories: list[str],
+    shared_text: Optional[str] = None,
+) -> list[PlaceExtraction]:
+    """Ask Gemini for every place the page mentions. Raises LLMError on
+    failure; an empty list means the page has no identifiable places."""
     api_key = _get_api_key()
     client = _get_client()
-    prompt = _build_prompt(url, page, categories)
+    prompt = _build_prompt(url, page, categories, shared_text)
     body = {
         "system_instruction": {"parts": [{"text": _SYSTEM}]},
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "maxOutputTokens": MAX_TOKENS,
+            "maxOutputTokens": LLM_MAX_TOKENS_MULTI,
             "temperature": 0,
         },
     }
@@ -157,15 +206,4 @@ async def extract_place(
         payload = resp.json()
         text = _extract_text(payload)
 
-    data = _parse_json(text)
-    category = data.get("category")
-    if category not in categories:
-        category = "other"
-    return PlaceExtraction(
-        place_name=data.get("place_name") or None,
-        city=data.get("city") or None,
-        country=data.get("country") or None,
-        category=category,
-        geocode_query=data.get("geocode_query") or None,
-        confident=bool(data.get("confident", False)),
-    )
+    return _coerce_places(_parse_json(text), categories)
