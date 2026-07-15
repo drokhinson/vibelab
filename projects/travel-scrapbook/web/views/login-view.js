@@ -10,11 +10,15 @@ class LoginView extends View {
   }
 
   onMount() {
-    this.listen('user', (user) => {
+    const redirectIfAuthed = (user) => {
       if (user && window.store.get('currentRoute')?.name === 'login') {
         window.router.go('trips', {}, { skipPush: true });
       }
-    });
+    };
+    this.listen('user', redirectIfAuthed);
+    // subscribe() only fires on future set()s — replay the current value so a
+    // login that resolved just before this view mounted still redirects.
+    redirectIfAuthed(window.store.get('user'));
   }
 
   render() {
@@ -56,15 +60,21 @@ class LoginView extends View {
 
     this.container.querySelector('#login-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
+      // Read the inputs BEFORE render() — render() rebuilds innerHTML and
+      // destroys these fields, so reading after would send empty credentials
+      // (Supabase then rejects the blank signUp as an anonymous sign-in).
+      const email = this.container.querySelector('#login-email').value.trim();
+      const password = this.container.querySelector('#login-password').value;
+      if (!email || !password) {
+        this._error = 'Enter your email and password';
+        this.render();
+        return;
+      }
       this._busy = true;
       this._error = null;
       this.render();
       try {
-        await handleEmailAuth(
-          this._mode,
-          this.container.querySelector('#login-email').value.trim(),
-          this.container.querySelector('#login-password').value,
-        );
+        await handleEmailAuth(this._mode, email, password);
         if (this._mode === 'signup') toast('Check your inbox to confirm your email');
       } catch (err) {
         this._error = err.message || 'Sign-in failed';
