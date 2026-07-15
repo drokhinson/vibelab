@@ -29,7 +29,15 @@ async function loadProfile() {
     window.store.set('user', currentUser);
     window.store.set('categories', currentUser.categories || []);
   } catch (err) {
+    // A valid Supabase session exists but the backend profile call failed
+    // (server unreachable / CORS / 5xx). Without `user`, the app strands the
+    // signed-in visitor on the login screen — so surface the failure instead
+    // of only logging it, otherwise it reads as "login silently did nothing".
     console.warn('[travel-scrapbook] /me failed:', err);
+    if (session) {
+      const detail = err?.message || 'the server could not be reached';
+      toast(`Signed in, but couldn't load your profile — ${detail}`, { error: true });
+    }
   }
 }
 
