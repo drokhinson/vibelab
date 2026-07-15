@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Trip cover: food tour — fork, knife, plate -->
+  <circle cx="32" cy="32" r="30" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="27" fill="#F9C5D1"/>
+  <g stroke="#5B5468" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="32" cy="32" r="13" fill="#FFF9F2"/>
+    <circle cx="32" cy="32" r="7" fill="#BEE7D0"/>
+    <path d="M13 20v8a3 3 0 0 0 3 3v13M13 20v8M16 20v8" fill="none"/>
+    <path d="M50 20c-2 0-3 6-3 10a2 2 0 0 0 2 2v12" fill="none"/>
+  </g>
+</svg>

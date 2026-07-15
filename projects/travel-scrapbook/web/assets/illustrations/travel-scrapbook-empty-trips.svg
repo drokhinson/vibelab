@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- Empty state: open suitcase with scattered polaroids -->
+  <g stroke="#5B5468" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="100" cy="122" rx="70" ry="8" fill="#5B5468" opacity="0.08" stroke="none"/>
+    <!-- open lid -->
+    <path d="M55 62l8-34a6 6 0 0 1 6-4h62a6 6 0 0 1 6 4l8 34" fill="#FBDCE4" stroke-width="3"/>
+    <path d="M69 30l-6 30h74l-6-30" fill="#FFF9F2" stroke-width="2"/>
+    <!-- base -->
+    <rect x="50" y="62" width="100" height="52" rx="10" fill="#F9C5D1" stroke-width="3"/>
+    <line x1="72" y1="62" x2="72" y2="114" stroke-width="3"/>
+    <line x1="128" y1="62" x2="128" y2="114" stroke-width="3"/>
+    <!-- polaroids tumbling out -->
+    <g transform="rotate(-14 40 52)">
+      <rect x="24" y="40" width="26" height="30" rx="2" fill="#FFFFFF" stroke-width="2"/>
+      <rect x="27" y="43" width="20" height="17" fill="#BDE0FE" stroke="none"/>
+      <path d="M29 57l5-6 4 4 3-3 6 5" fill="none" stroke="#5B5468" stroke-width="1.5"/>
+    </g>
+    <g transform="rotate(12 166 58)">
+      <rect x="152" y="44" width="26" height="30" rx="2" fill="#FFFFFF" stroke-width="2"/>
+      <rect x="155" y="47" width="20" height="17" fill="#BEE7D0" stroke="none"/>
+      <circle cx="165" cy="53" r="3" fill="#FDE9A9" stroke="#5B5468" stroke-width="1.2"/>
+    </g>
+    <!-- washi tape on the case -->
+    <rect x="88" y="56" width="26" height="9" rx="2" transform="rotate(-6 101 60)" fill="#BDE0FE" opacity="0.85" stroke="none"/>
+    <!-- sparkles -->
+    <path d="M36 20l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z" fill="#FDE9A9" stroke-width="1.2"/>
+    <path d="M170 16l1.2 3.2 3.2 1.2-3.2 1.2-1.2 3.2-1.2-3.2-3.2-1.2 3.2-1.2z" fill="#F4A988" stroke-width="1.2"/>
+  </g>
+</svg>

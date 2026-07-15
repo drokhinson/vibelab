@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Sight: camera sticker -->
+  <circle cx="32" cy="32" r="30" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="27" fill="#BDE0FE"/>
+  <g stroke="#5B5468" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="14" y="22" width="36" height="24" rx="5" fill="#FFF9F2"/>
+    <path d="M24 22l3-5h10l3 5" fill="#FFF9F2"/>
+    <circle cx="32" cy="34" r="8" fill="#BEE7D0"/>
+    <circle cx="32" cy="34" r="3.5" fill="#FFF9F2"/>
+    <circle cx="44" cy="27" r="1.6" fill="#F4A988" stroke="none"/>
+  </g>
+  <ellipse cx="32" cy="49" rx="13" ry="2.2" fill="#5B5468" opacity="0.12"/>
+</svg>
