@@ -26,6 +26,8 @@ jobs:
             projectKey: WEALTHMATE
           - project: boardgame-buddy
             projectKey: BOARDGAME_BUDDY
+          - project: travel-scrapbook
+            projectKey: TRAVEL_SCRAPBOOK
     steps:
       - uses: actions/checkout@v4
 

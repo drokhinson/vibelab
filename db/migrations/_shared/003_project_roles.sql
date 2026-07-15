@@ -45,7 +45,8 @@ BEGIN
     ('wealthmate_role',     'wealthmate_'),
     ('daywordplay_role',    'daywordplay_'),
     ('plantplanner_role',   'plantplanner_'),
-    ('boardgamebuddy_role', 'boardgamebuddy_')
+    ('boardgamebuddy_role', 'boardgamebuddy_'),
+    ('travelscrapbook_role', 'travelscrapbook_')
   ) AS t(role_name, prefix) LOOP
 
     pwd := replace(gen_random_uuid()::text, '-', '');

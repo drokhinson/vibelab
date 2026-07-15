@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Travel Scrapbook brand mark: sticker-style suitcase with a heart tag -->
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <!-- die-cut sticker halo -->
+    <rect x="7" y="17" width="50" height="38" rx="10" fill="#FFFFFF"/>
+    <!-- suitcase body -->
+    <rect x="10" y="20" width="44" height="32" rx="8" fill="#F9C5D1" stroke="#5B5468" stroke-width="2.5"/>
+    <!-- handle -->
+    <path d="M25 20v-4a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v4" fill="none" stroke="#5B5468" stroke-width="2.5"/>
+    <!-- straps -->
+    <line x1="21" y1="20" x2="21" y2="52" stroke="#5B5468" stroke-width="2.5"/>
+    <line x1="43" y1="20" x2="43" y2="52" stroke="#5B5468" stroke-width="2.5"/>
+    <!-- washi tape corner -->
+    <rect x="42" y="14" width="16" height="7" rx="1.5" transform="rotate(24 50 17)" fill="#BEE7D0" opacity="0.9"/>
+    <!-- heart luggage tag -->
+    <circle cx="16" cy="46" r="8.5" fill="#FFFFFF"/>
+    <circle cx="16" cy="46" r="7" fill="#FDE9A9" stroke="#5B5468" stroke-width="2"/>
+    <path d="M16 49.5c-2.6-1.9-4-3.2-4-4.8a2.1 2.1 0 0 1 4-.9 2.1 2.1 0 0 1 4 .9c0 1.6-1.4 2.9-4 4.8z" fill="#F4A988" stroke="#5B5468" stroke-width="1.2"/>
+    <!-- sparkle -->
+    <path d="M50 8l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z" fill="#BDE0FE" stroke="#5B5468" stroke-width="1"/>
+  </g>
+</svg>

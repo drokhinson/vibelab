@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- Empty state: scissors about to clip a ticket -->
+  <g stroke="#5B5468" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="100" cy="122" rx="64" ry="7" fill="#5B5468" opacity="0.08" stroke="none"/>
+    <!-- ticket -->
+    <g transform="rotate(-8 100 78)">
+      <path d="M50 60h100a0 0 0 0 1 0 0v36a0 0 0 0 1 0 0H50a0 0 0 0 1 0 0V60z" fill="#FFF9F2" stroke-width="3"/>
+      <circle cx="50" cy="78" r="7" fill="#FFF6EC" stroke-width="3"/>
+      <circle cx="150" cy="78" r="7" fill="#FFF6EC" stroke-width="3"/>
+      <line x1="108" y1="62" x2="108" y2="94" stroke-dasharray="3 4" stroke-width="2"/>
+      <rect x="60" y="68" width="34" height="6" rx="3" fill="#F9C5D1" stroke="none"/>
+      <rect x="60" y="80" width="24" height="5" rx="2.5" fill="#BEE7D0" stroke="none"/>
+      <path d="M118 70l14 8-14 8z" fill="#BDE0FE" stroke-width="2"/>
+    </g>
+    <!-- scissors -->
+    <g transform="rotate(28 60 34)">
+      <circle cx="44" cy="26" r="6" fill="#DCD0F2" stroke-width="2.5"/>
+      <circle cx="44" cy="44" r="6" fill="#DCD0F2" stroke-width="2.5"/>
+      <path d="M49 29L86 38M49 41L86 32" stroke-width="3"/>
+      <circle cx="62" cy="35" r="2" fill="#5B5468" stroke="none"/>
+    </g>
+    <!-- dotted cut line -->
+    <path d="M96 34c14-4 34-4 48 2" fill="none" stroke-dasharray="2 6" stroke-width="2.5" opacity="0.6"/>
+    <path d="M158 26l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5z" fill="#FDE9A9" stroke-width="1.2"/>
+  </g>
+</svg>

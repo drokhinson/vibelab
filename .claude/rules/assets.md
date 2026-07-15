@@ -36,6 +36,16 @@ Why prefixed even though the path already namespaces? So files survive being cop
 
 The brand mark is always called `<prefix>-logo.svg`. If a separate small-scale favicon mark is needed, use `<prefix>-favicon.svg`. By default the same `<prefix>-logo.svg` serves both.
 
+## Custom Images, Not Generic Emojis
+
+**Do not use generic emojis as visual assets anywhere in an app** — not as data-art (category markers, item icons, cover art), not in empty states, not in UI copy, not as loading/success flourishes. Every visual mark is either a Lucide chrome icon (per `web-frontend.md`) or a **custom-built SVG** that belongs to the project's visual identity:
+
+- Data-art marks (one image per category/item kind) → `web/assets/sprites/<group>/<prefix>-<group>-<name>.svg` (e.g. `travel-scrapbook-cat-restaurant.svg` under `sprites/categories/`).
+- Cover/decoration stickers users pick from → also `sprites/`, one file per option; store the option's slug in the DB, derive the file path from the slug in the render fn.
+- Empty states, success animations, hero art → `illustrations/`.
+
+DB seed tables for option sets store an `icon` **slug** (text), never an emoji character. Existing projects that ship emoji data marks are grandfathered — migrate them opportunistically via `/ui-polish`, and never introduce new emoji usage. The one exception: `registry.json`'s landing-page `icon` field keeps its existing emoji convention until the landing page migrates.
+
 ## Inline SVG vs File SVG
 
 Keep the existing rule from `web-frontend.md`:

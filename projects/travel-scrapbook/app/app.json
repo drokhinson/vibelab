@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Travel Scrapbook",
+    "slug": "travel-scrapbook",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0d0d14"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vibelab.travel-scrapbook"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0d0d14"
+      },
+      "package": "com.vibelab.travel-scrapbook"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "apiUrl": "http://localhost:8000"
+    }
+  }
+}

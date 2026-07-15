@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Cafe: coffee cup sticker -->
+  <circle cx="32" cy="32" r="30" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="27" fill="#FDE9A9"/>
+  <g stroke="#5B5468" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 26h24v10a10 10 0 0 1-10 10h-4a10 10 0 0 1-10-10z" fill="#FFF9F2"/>
+    <path d="M42 28h4a5 5 0 0 1 0 10h-4" fill="none"/>
+    <path d="M25 20c-1.5-2.5 1.5-3.5 0-6M32 20c-1.5-2.5 1.5-3.5 0-6" fill="none" stroke-width="2" opacity="0.7"/>
+    <path d="M22 33c3 2 13 2 16-1" fill="none" stroke="#F4A988" stroke-width="3"/>
+  </g>
+  <ellipse cx="30" cy="49" rx="11" ry="2.2" fill="#5B5468" opacity="0.12"/>
+</svg>

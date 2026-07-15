@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Shop: shopping bag sticker -->
+  <circle cx="32" cy="32" r="30" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="27" fill="#F4A988"/>
+  <g stroke="#5B5468" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 24h28l-2.5 24h-23z" fill="#FFF9F2"/>
+    <path d="M25 29v-8a7 7 0 0 1 14 0v8" fill="none"/>
+    <circle cx="25" cy="30" r="1.8" fill="#F9C5D1" stroke="none"/>
+    <circle cx="39" cy="30" r="1.8" fill="#F9C5D1" stroke="none"/>
+    <path d="M26 38c3 2.5 9 2.5 12 0" fill="none" stroke="#BEE7D0" stroke-width="3"/>
+  </g>
+  <ellipse cx="32" cy="51" rx="12" ry="2.2" fill="#5B5468" opacity="0.12"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <!-- Success flourish: stamped heart seal with sparkles ("Scrapped!") -->
+  <g stroke="#5B5468" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="60" cy="62" r="34" fill="#FFFFFF"/>
+    <circle cx="60" cy="62" r="30" fill="#F9C5D1" stroke-width="3"/>
+    <circle cx="60" cy="62" r="24" fill="none" stroke-width="2" stroke-dasharray="2 5"/>
+    <path d="M60 74c-8.5-6-13-10.3-13-15.6A6.7 6.7 0 0 1 60 55a6.7 6.7 0 0 1 13 3.4C73 63.7 68.5 68 60 74z" fill="#FFF9F2" stroke-width="2.5"/>
+    <path d="M22 24l2 5.5 5.5 2-5.5 2-2 5.5-2-5.5-5.5-2 5.5-2z" fill="#FDE9A9" stroke-width="1.5"/>
+    <path d="M98 30l1.6 4.2 4.2 1.6-4.2 1.6-1.6 4.2-1.6-4.2-4.2-1.6 4.2-1.6z" fill="#BDE0FE" stroke-width="1.5"/>
+    <path d="M96 88l1.2 3.2 3.2 1.2-3.2 1.2-1.2 3.2-1.2-3.2-3.2-1.2 3.2-1.2z" fill="#BEE7D0" stroke-width="1.2"/>
+    <circle cx="26" cy="88" r="3" fill="#F4A988" stroke-width="1.2"/>
+  </g>
+</svg>
