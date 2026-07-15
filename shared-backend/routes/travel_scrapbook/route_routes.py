@@ -8,6 +8,7 @@ from . import router
 from .constants import AnchorRole, ScrapStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import RouteLeg, RouteOptimizeRequest, RouteOptimizeResponse, ScrapResponse
+from .services.hydrate import hydrate_scraps
 from .services.optimizer import Point, optimize
 from .trip_routes import get_owned_trip
 
@@ -40,13 +41,16 @@ async def optimize_route(
     sb = get_supabase()
     get_owned_trip(sb, trip_id, user.user_id)
 
-    scraps = (
-        sb.table("travelscrapbook_scraps")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .eq("status", ScrapStatus.READY)
-        .execute()
-    ).data or []
+    scraps = hydrate_scraps(
+        sb,
+        (
+            sb.table("travelscrapbook_scraps")
+            .select("*")
+            .eq("trip_id", trip_id)
+            .eq("status", ScrapStatus.APPROVED)
+            .execute()
+        ).data or [],
+    )
     if body.scrap_ids is not None:
         wanted = set(body.scrap_ids)
         scraps = [s for s in scraps if s["id"] in wanted]
@@ -66,8 +70,7 @@ async def optimize_route(
     end = _anchor_point(anchors, AnchorRole.END)
 
     points = [
-        Point(id=s["id"], label=s["place_name"] or s["og_title"] or s["source_domain"] or "Stop",
-              lat=s["lat"], lng=s["lng"])
+        Point(id=s["id"], label=s["place_name"] or "Stop", lat=s["lat"], lng=s["lng"])
         for s in routable
     ]
     ordered, leg_km, total_km = optimize(points, start=start, end=end)

@@ -13,6 +13,7 @@ router = APIRouter(
 # Import sub-modules so their routes register on the router.
 from . import profile_routes  # noqa: F401, E402
 from . import trip_routes     # noqa: F401, E402
+from . import source_routes   # noqa: F401, E402
 from . import scrap_routes    # noqa: F401, E402
 from . import route_routes    # noqa: F401, E402
 from . import export_routes   # noqa: F401, E402

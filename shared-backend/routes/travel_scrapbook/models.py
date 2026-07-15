@@ -5,7 +5,14 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, HttpUrl, model_validator
 
-from .constants import AnchorRole, AnchorType, GeocodeConfidence, ScrapStatus
+from .constants import (
+    AnchorRole,
+    AnchorType,
+    CapturedVia,
+    GeocodeConfidence,
+    ScrapStatus,
+    SourceStatus,
+)
 
 
 # ── Shared ────────────────────────────────────────────────────────────────────
@@ -80,13 +87,55 @@ class AnchorResponse(BaseModel):
     created_at: datetime
 
 
-# ── Scraps ────────────────────────────────────────────────────────────────────
+# ── Capture / sources ─────────────────────────────────────────────────────────
 
-class ScrapCreateRequest(BaseModel):
-    trip_id: str
-    url: HttpUrl
+class CaptureRequest(BaseModel):
+    """A shared/pasted URL. Android share sheets often put the URL inside
+    `text`, so either field may carry it; the first http(s) URL wins."""
+    url: Optional[HttpUrl] = None
+    text: Optional[str] = Field(None, max_length=4000,
+                                description="Share-sheet text; may contain the URL and a caption")
+    title: Optional[str] = Field(None, max_length=300)
+    trip_id: Optional[str] = Field(None, description="Explicit trip pick — skips staging review")
+    via: CapturedVia = Field(CapturedVia.PASTE,
+                             description="How the URL arrived (token-authed requests force 'shortcut')")
     notes: Optional[str] = Field(None, max_length=2000)
 
+
+class SourceRef(BaseModel):
+    """Compact source chip shown on a scrap card."""
+    id: str
+    url: str
+    source_domain: Optional[str] = None
+    og_title: Optional[str] = None
+
+
+class SourceResponse(BaseModel):
+    id: str
+    url: str
+    source_domain: Optional[str] = None
+    status: SourceStatus
+    error_kind: Optional[str] = None
+    captured_via: CapturedVia = CapturedVia.PASTE
+    og_title: Optional[str] = None
+    og_image_url: Optional[str] = None
+    trip_hint_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CaptureTokenCreateResponse(BaseModel):
+    token: str = Field(..., description="Shown once — store it in the iOS Shortcut")
+    created_at: datetime
+
+
+class CaptureTokenStatusResponse(BaseModel):
+    active: bool
+    created_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+
+
+# ── Scraps ────────────────────────────────────────────────────────────────────
 
 class ScrapUpdateRequest(BaseModel):
     place_name: Optional[str] = Field(None, max_length=200)
@@ -99,29 +148,55 @@ class ScrapUpdateRequest(BaseModel):
 
 
 class ScrapResponse(BaseModel):
+    """A saved place, in a trip or the inbox. Place fields are flattened from
+    the canonical place row; sources list how the user stumbled on it."""
     id: str
-    trip_id: str
-    source_url: str
-    source_domain: Optional[str] = None
+    trip_id: Optional[str] = None
+    place_id: str
     status: ScrapStatus
-    error_kind: Optional[str] = None
-    og_title: Optional[str] = None
-    og_description: Optional[str] = None
-    og_image_url: Optional[str] = None
     place_name: Optional[str] = None
     place_city: Optional[str] = None
     place_country: Optional[str] = None
-    category: str
+    category: str = "other"
     lat: Optional[float] = None
     lng: Optional[float] = None
     geocode_confidence: GeocodeConfidence = GeocodeConfidence.NONE
     geocode_display_name: Optional[str] = None
     maps_url: Optional[str] = None
+    og_image_url: Optional[str] = None
+    sources: list[SourceRef] = []
     notes: Optional[str] = None
     is_favorite: bool = False
     route_position: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+
+
+class AssignRequest(BaseModel):
+    trip_id: str
+
+
+# ── Inbox ─────────────────────────────────────────────────────────────────────
+
+class TripSuggestion(BaseModel):
+    trip_id: str
+    name: str
+    cover_icon: str = "plane"
+    distance_km: float
+
+
+class InboxScrapResponse(ScrapResponse):
+    suggestions: list[TripSuggestion] = []
+
+
+class InboxResponse(BaseModel):
+    processing_sources: list[SourceResponse] = []
+    failed_sources: list[SourceResponse] = []
+    scraps: list[InboxScrapResponse] = []
+
+
+class InboxCountResponse(BaseModel):
+    count: int
 
 
 # ── Trips ─────────────────────────────────────────────────────────────────────
@@ -164,10 +239,14 @@ class TripResponse(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     notes: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    geocode_display_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     anchors: list[AnchorResponse] = []
-    scraps: list[ScrapResponse] = []
+    scraps: list[ScrapResponse] = []           # approved
+    staged_scraps: list[ScrapResponse] = []    # auto-matched, awaiting review
 
 
 class TripListResponse(BaseModel):
