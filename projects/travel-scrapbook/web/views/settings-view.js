@@ -24,7 +24,16 @@ class SettingsView extends View {
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Settings</h1>
 
-      <div class="sticker-card washi" style="padding-top:1.3rem;">
+      <button class="sticker-card card-lift" id="open-tutorial" style="width:100%;text-align:left;display:flex;align-items:center;gap:0.8rem;cursor:pointer;border:2px solid var(--border);">
+        <img src="/assets/illustrations/travel-scrapbook-tutorial-welcome.svg" alt="" style="width:56px;height:56px;flex-shrink:0;" />
+        <span style="min-width:0;">
+          <span style="display:block;font-weight:800;font-size:1.05rem;">How Travel Scrapbook works</span>
+          <span class="scrap-card__sub">New here? Take the two-minute tour.</span>
+        </span>
+        <i data-lucide="chevron-right" style="margin-left:auto;flex-shrink:0;"></i>
+      </button>
+
+      <div class="sticker-card washi" style="padding-top:1.3rem;margin-top:1rem;">
         <h2 style="font-size:1.5rem;margin:0 0 0.3rem;">The Scrap-It button</h2>
         <p class="scrap-card__sub">Save any page to your scrapbook in two taps — no extension needed.</p>
         <ol style="font-size:0.88rem;padding-left:1.2rem;margin:0.7rem 0;line-height:1.7;">
@@ -62,6 +71,8 @@ class SettingsView extends View {
       </button>
     `;
     this.refreshIcons();
+
+    this.container.querySelector('#open-tutorial')?.addEventListener('click', () => TutorialCarousel.open());
 
     this.container.querySelector('#copy-bookmarklet')?.addEventListener('click', async () => {
       try {

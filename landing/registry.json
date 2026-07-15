@@ -138,13 +138,13 @@
       "id": "travel-scrapbook",
       "name": "Travel Scrapbook",
       "description": "Collect travel links, auto-extract places, and plan cute optimized routes",
-      "status": "prototype",
+      "status": "live",
       "tags": [
         "travel",
         "planning",
         "ai"
       ],
-      "webUrl": null,
+      "webUrl": "https://travelscrapbook.vercel.app",
       "backendUrl": "https://vibelab-production-2119.up.railway.app",
       "hasNativeApp": false,
       "androidStatus": "not-started",
