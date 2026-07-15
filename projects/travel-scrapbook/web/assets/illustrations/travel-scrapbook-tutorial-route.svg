@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- Tutorial: sort route — numbered stops connected by a dotted path, flag at the end -->
+  <g stroke="#5B5468" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="100" cy="122" rx="66" ry="7" fill="#5B5468" opacity="0.08" stroke="none"/>
+    <path d="M32 96C60 70 70 110 100 78S150 46 172 40" fill="none" stroke-dasharray="1 7" stroke-width="2.6" opacity="0.75"/>
+    <g transform="translate(20 82)">
+      <circle r="13" fill="#FDE9A9" stroke-width="2.5"/>
+      <path d="M-4 -2l3 5 5-8" fill="none" stroke-width="2"/>
+    </g>
+    <g transform="translate(88 66)">
+      <circle r="13" fill="#BEE7D0" stroke-width="2.5"/>
+      <text x="0" y="5" text-anchor="middle" font-family="Nunito, sans-serif" font-size="14" font-weight="800" fill="#5B5468" stroke="none">2</text>
+    </g>
+    <g transform="translate(140 36)">
+      <circle r="13" fill="#BEE7D0" stroke-width="2.5"/>
+      <text x="0" y="5" text-anchor="middle" font-family="Nunito, sans-serif" font-size="14" font-weight="800" fill="#5B5468" stroke="none">3</text>
+    </g>
+    <g transform="translate(174 30)">
+      <circle r="13" fill="#F9C5D1" stroke-width="2.5"/>
+      <path d="M-4 5V-6l10 3-4 3 4 3z" fill="#FFF9F2" stroke-width="1.4"/>
+    </g>
+  </g>
+</svg>

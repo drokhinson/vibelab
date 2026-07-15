@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- Tutorial: welcome — links flying into an open scrapbook -->
+  <g stroke="#5B5468" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="100" cy="122" rx="66" ry="7" fill="#5B5468" opacity="0.08" stroke="none"/>
+    <!-- open book -->
+    <path d="M100 46v66" stroke-width="2.5"/>
+    <path d="M100 46c-14-10-34-12-46-8v66c12-4 32-2 46 8z" fill="#F9C5D1" stroke-width="3"/>
+    <path d="M100 46c14-10 34-12 46-8v66c-12-4-32-2-46 8z" fill="#BDE0FE" stroke-width="3"/>
+    <path d="M62 56c8-2 18-1 26 3M62 68c8-2 18-1 26 3M62 80c8-2 18-1 26 3" fill="none" stroke-width="1.6" opacity="0.55"/>
+    <path d="M112 56c8-4 18-5 26-3M112 68c8-4 18-5 26-3M112 80c8-4 18-5 26-3" fill="none" stroke-width="1.6" opacity="0.55"/>
+    <!-- flying link cards -->
+    <g transform="rotate(-12 34 30)">
+      <rect x="20" y="18" width="28" height="20" rx="4" fill="#FFFFFF" stroke-width="2.5"/>
+      <path d="M26 24h16M26 30h10" stroke-width="2" opacity="0.6"/>
+    </g>
+    <g transform="rotate(10 168 34)">
+      <rect x="154" y="20" width="28" height="20" rx="4" fill="#FFFFFF" stroke-width="2.5"/>
+      <circle cx="162" cy="30" r="3" fill="#BEE7D0" stroke="none"/>
+      <path d="M170 26h6M170 32h8" stroke-width="2" opacity="0.6"/>
+    </g>
+    <path d="M34 40c14 4 26 10 30 14M168 42c-12 4-22 10-26 14" fill="none" stroke-dasharray="1 6" stroke-width="2.2" opacity="0.7"/>
+    <path d="M100 16l1.6 4.2 4.2 1.6-4.2 1.6-1.6 4.2-1.6-4.2-4.2-1.6 4.2-1.6z" fill="#FDE9A9" stroke-width="1.2"/>
+  </g>
+</svg>
