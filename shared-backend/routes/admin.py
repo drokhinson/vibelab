@@ -129,6 +129,10 @@ async def _delete_sauceboss_user(sb, user_id: str):
     return await _delete_supabase_auth_user(sb, user_id, "sauceboss_user_profiles")
 
 
+async def _delete_travelscrapbook_user(sb, user_id: str):
+    return await _delete_supabase_auth_user(sb, user_id, "travelscrapbook_profiles")
+
+
 # Per-app config. `kind` selects the listing + reset-code path:
 #   - "legacy_users": app keeps a custom <prefix>_users table (bcrypt + recovery_hash)
 #   - "supabase_auth": identity lives in auth.users; profile fields in <prefix>_profiles
@@ -163,6 +167,11 @@ APPS_WITH_USERS = {
         "kind": "supabase_auth",
         "profile_table": "sauceboss_user_profiles",
         "delete_handler": _delete_sauceboss_user,
+    },
+    "travel-scrapbook": {
+        "kind": "supabase_auth",
+        "profile_table": "travelscrapbook_profiles",
+        "delete_handler": _delete_travelscrapbook_user,
     },
 }
 

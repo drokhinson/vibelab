@@ -23,6 +23,7 @@ from routes import spotme
 from routes import daywordplay
 from routes import plant_planner
 from routes import boardgame_buddy
+from routes import travel_scrapbook
 
 # Infrastructure routers
 from routes import analytics
@@ -43,6 +44,7 @@ app = FastAPI(
         {"name": "plant_planner", "description": "Plant Planner — garden layout and companion planting"},
         {"name": "analytics", "description": "Cross-app analytics tracking"},
         {"name": "boardgame_buddy", "description": "BoardgameBuddy — board game collection, play logging, and quick-reference guides"},
+        {"name": "travel_scrapbook", "description": "Travel Scrapbook — save travel links to trips, AI-extract places, and plan optimized routes"},
         {"name": "admin", "description": "Admin dashboard and user management"},
     ],
 )
@@ -75,6 +77,9 @@ _APP_PREFIX_MAP = [
     ("/api/v1/wealthmate/",      "wealthmate"),
     ("/api/v1/daywordplay/",     "daywordplay"),
     ("/api/v1/spotme/",          "spotme"),
+    # NOTE: matches the router's real underscore prefix (unlike some legacy
+    # hyphenated entries above, which predate this observation).
+    ("/api/v1/travel_scrapbook/", "travel-scrapbook"),
 ]
 
 
@@ -121,6 +126,7 @@ app.include_router(spotme.router)
 app.include_router(daywordplay.router)
 app.include_router(plant_planner.router)
 app.include_router(boardgame_buddy.router)
+app.include_router(travel_scrapbook.router)
 
 # ── Infrastructure routers ────────────────────────────────────────────────
 app.include_router(analytics.router)
