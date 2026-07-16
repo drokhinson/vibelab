@@ -16,11 +16,12 @@ function _confidenceHint(scrap) {
   return '';
 }
 
-// City · Region · Country, dropping empties and adjacent duplicates (a
-// city-centroid geocode often repeats the name across tiers, e.g. Singapore).
+// City, Country, dropping empties and an adjacent duplicate (a city-centroid
+// geocode sometimes repeats the name, e.g. Singapore). Region is a grouping of
+// countries (macro-region), used only for grouping — not shown inline.
 function _locationLine(scrap) {
   const parts = [];
-  for (const seg of [scrap.place_city, scrap.place_region, scrap.place_country]) {
+  for (const seg of [scrap.place_city, scrap.place_country]) {
     if (seg && seg !== parts[parts.length - 1]) parts.push(seg);
   }
   return parts.join(', ');

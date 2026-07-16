@@ -3,7 +3,11 @@
 'use strict';
 
 class VisitedView extends View {
-  constructor() { super('visited'); }
+  constructor() {
+    super('visited');
+    this._groupBy = localStorage.getItem('ts.visited.groupBy') || 'region';
+    this._collapsed = new Set();
+  }
 
   renderLoading() {
     this.container.innerHTML = `
@@ -42,8 +46,11 @@ class VisitedView extends View {
           <p class="empty-title">Nothing visited yet</p>
           <p class="empty-desc">Mark a saved place as visited — from your wishlist or a trip — and it collects here.</p>
         </div>` : `
-        <div class="card-grid card-grid--2col visited-grid">
-          ${scraps.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip' })).join('')}
+        <div class="visited-grid">
+          ${renderGroupedList(scraps, {
+            dims: ['region', 'country', 'city'], active: this._groupBy,
+            collapsed: this._collapsed, variant: 'trip', name: 'visited-groupby',
+          })}
         </div>`}
     `;
     this.refreshIcons();
@@ -52,6 +59,16 @@ class VisitedView extends View {
 
   _bind(scraps) {
     const c = this.container;
+    bindScrapGroups(c, {
+      name: 'visited-groupby',
+      collapsed: this._collapsed,
+      onChange: (dim) => {
+        this._groupBy = dim;
+        this._collapsed = new Set();
+        localStorage.setItem('ts.visited.groupBy', dim);
+        this.render();
+      },
+    });
     c.querySelectorAll('[data-scrap-id]').forEach((el) => {
       const scrap = scraps.find((s) => s.id === el.dataset.scrapId);
       if (!scrap) return;

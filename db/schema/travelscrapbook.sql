@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Travel Scrapbook — current schema snapshot
--- Last updated: 2026-07-16 (matches db/migrations/travelscrapbook/005_region_scope_visited.sql)
+-- Last updated: 2026-07-16 (matches db/migrations/travelscrapbook/006_country_regions.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -21,6 +21,13 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_categories (
 );
 -- Seeded (002_seed.sql): restaurant, cafe, bar, sight, activity, shop, lodging, other
 
+-- country_code (ISO-3166 alpha-2) → macro-region (UN M49 subregion). Reference
+-- data seeded in 006; read backend-only to tag places/trips with a region.
+CREATE TABLE IF NOT EXISTS public.travelscrapbook_regions (
+  country_code TEXT PRIMARY KEY,
+  region       TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_trips (
   id                      UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id                 UUID             NOT NULL REFERENCES public.travelscrapbook_profiles(id) ON DELETE CASCADE,
@@ -35,8 +42,9 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_trips (
   scope_level             TEXT             NOT NULL DEFAULT 'city'
     CHECK (scope_level IN ('region', 'country', 'city')),
   dest_city               TEXT,            -- from destination geocode (address.city)
-  dest_region             TEXT,            -- from destination geocode (address.state)
+  dest_region             TEXT,            -- macro-region (UN subregion) via travelscrapbook_regions
   dest_country            TEXT,            -- from destination geocode (address.country)
+  dest_country_code       TEXT,            -- ISO-3166 alpha-2 (region lookup key)
   lat                     DOUBLE PRECISION,  -- geocoded destination (trip matching)
   lng                     DOUBLE PRECISION,
   geocode_confidence      TEXT             NOT NULL DEFAULT 'none'
@@ -100,8 +108,9 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_places (
   name                 TEXT             NOT NULL,
   name_normalized      TEXT             NOT NULL,  -- dedupe key (accent/case/punct-folded)
   city                 TEXT,
-  region               TEXT,            -- admin-1 (state/province), from geocode
+  region               TEXT,            -- macro-region (UN subregion) via travelscrapbook_regions
   country              TEXT,
+  country_code         TEXT,            -- ISO-3166 alpha-2 (region lookup key)
   category             TEXT             NOT NULL DEFAULT 'other'
     REFERENCES public.travelscrapbook_categories(slug),
   lat                  DOUBLE PRECISION,

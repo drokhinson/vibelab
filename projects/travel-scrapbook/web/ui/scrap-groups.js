@@ -66,6 +66,18 @@ function groupScraps(scraps, dimension) {
 }
 
 /**
+ * Keep only dimensions that actually split the list (≥2 groups). A single-value
+ * dimension is pointless — e.g. "Region" on a one-country trip, or "Country" on
+ * a list that's all one country — so it's dropped from the toggle.
+ * @param {Array} scraps
+ * @param {string[]} dims — candidate dimension keys, in preferred order
+ * @returns {string[]}
+ */
+function availableGroupDims(scraps, dims) {
+  return dims.filter((d) => groupScraps(scraps, d).length >= 2);
+}
+
+/**
  * Segmented "group by" control. Reuses the .ts-segmented styling.
  * @param {string[]} dims — dimension keys to offer, in order
  * @param {string} active — currently selected dimension
@@ -110,6 +122,27 @@ function renderScrapGroups(scraps, opts = {}) {
   }).join('');
 }
 
+/**
+ * Full grouped list: a "group by" toggle (only dimensions that split the list)
+ * plus collapsible grouped sections. When no dimension splits the list (e.g. a
+ * handful of items all in one country), it renders a plain flat grid with no
+ * toggle. The chosen `active` dimension falls back to the first available one.
+ * @param {Array} scraps
+ * @param {{dims:string[], active:string, collapsed?:Set<string>, variant?:string, tripId?:(string|null), name:string}} opts
+ */
+function renderGroupedList(scraps, opts = {}) {
+  const { dims, active, collapsed = new Set(), variant = 'inbox', tripId = null, name } = opts;
+  const avail = availableGroupDims(scraps, dims);
+  if (!avail.length) {
+    return `<div class="card-grid card-grid--2col">${
+      scraps.map((s, i) => renderScrapCard(s, { index: i, variant, tripId })).join('')
+    }</div>`;
+  }
+  const eff = avail.includes(active) ? active : avail[0];
+  return renderGroupByToggle(avail, eff, name) +
+    renderScrapGroups(scraps, { dimension: eff, collapsed, variant, tripId });
+}
+
 // Wire the group-by radios + the <details> collapse state into a view. Call
 // from a view's _bind after setting innerHTML.
 //  - onChange(dim): the view stores the new dimension, clears collapsed, re-renders
@@ -127,6 +160,8 @@ function bindScrapGroups(container, { name, collapsed, onChange }) {
 }
 
 window.groupScraps = groupScraps;
+window.availableGroupDims = availableGroupDims;
 window.renderGroupByToggle = renderGroupByToggle;
 window.renderScrapGroups = renderScrapGroups;
+window.renderGroupedList = renderGroupedList;
 window.bindScrapGroups = bindScrapGroups;

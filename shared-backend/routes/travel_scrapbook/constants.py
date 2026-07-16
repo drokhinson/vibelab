@@ -17,11 +17,14 @@ GEMINI_MODEL = "gemini-flash-lite-latest"
 
 # Cache namespaces (shared-backend/cache.py)
 CACHE_NS_CATEGORIES = "ts.categories"
-# v2: GeocodeResult gained structured address components (city/region/country);
-# a fresh namespace avoids serving pre-upgrade cached results that lack them.
-CACHE_NS_GEOCODE = "ts.geocode2"
+CACHE_NS_REGIONS = "ts.regions"
+# v2: GeocodeResult gained structured address components (city/region/country).
+# v3: results now requested in English (accept-language=en) — a fresh namespace
+# avoids serving pre-upgrade cached results (local-language, missing components).
+CACHE_NS_GEOCODE = "ts.geocode3"
 
 CATEGORIES_TTL_SECONDS = 60 * 60          # 1 hour
+REGIONS_TTL_SECONDS = 60 * 60             # 1 hour (country→subregion seed table)
 GEOCODE_TTL_SECONDS = 60 * 60 * 24 * 30   # 30 days
 
 # ── Capture / places pipeline parameters ─────────────────────────────────────

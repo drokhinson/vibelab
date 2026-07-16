@@ -80,6 +80,9 @@ async def geocode(query: str) -> Optional[GeocodeResult]:
             "format": "jsonv2",
             "limit": "1",
             "addressdetails": "1",
+            # Return names in English where an exonym exists (falls back to the
+            # local name otherwise) so cards/groupings read "Greece" not "Ελλάς".
+            "accept-language": "en",
         }
         try:
             async with log_external_call(
