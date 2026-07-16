@@ -3,12 +3,15 @@ main.py — vibelab shared FastAPI backend
 ONE service handles ALL projects. Each project registers its own router.
 Routes are namespaced: /api/v1/{project}/...
 """
+import logging
 import os
 import truststore
 truststore.inject_into_ssl()  # use OS certificate store instead of certifi bundle
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from postgrest.exceptions import APIError
 from dotenv import load_dotenv
 
 from api_logger import set_request_user
@@ -62,6 +65,27 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# ── Supabase/PostgREST error handler ──────────────────────────────────────────
+# A raw APIError (bad query, schema drift after a migration, RLS, etc.) is
+# otherwise unhandled → Starlette's ServerErrorMiddleware returns a 500 that
+# never passes back through CORSMiddleware, so the browser sees no CORS headers
+# and reports an opaque "Failed to fetch" on EVERY page. Handling it here (the
+# handler runs inside the exception middleware, i.e. *below* CORS) means the 500
+# carries CORS headers and the frontend shows a real error. Detail is logged
+# server-side, never leaked to the client.
+_log = logging.getLogger("vibelab")
+
+
+@app.exception_handler(APIError)
+async def _handle_supabase_api_error(request: Request, exc: APIError) -> JSONResponse:
+    """Turn an unhandled Supabase error into a clean, CORS-bearing 500."""
+    _log.error("Supabase APIError on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "A server error occurred. Please try again in a moment."},
+    )
 
 
 # ── api_logger user-context middleware ────────────────────────────────────────

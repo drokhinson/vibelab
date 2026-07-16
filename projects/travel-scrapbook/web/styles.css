@@ -225,7 +225,8 @@ a:hover { color: var(--accent-hover); }
 .trip-heading { display: flex; align-items: center; gap: 0.8rem; margin-top: 0.9rem; }
 
 /* ── Scrap card specifics ───────────────────────────────────────────────────── */
-/* Media wrapper positions the type-pill overlay over the photo's top-left. */
+/* Media wrapper anchors the type bubble (top-left) + pencil (top-right) to the
+   photo's corners so they read as a matched, aligned pair. */
 .scrap-card__media { position: relative; }
 .scrap-card__photo {
   display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover;
@@ -237,14 +238,37 @@ a:hover { color: var(--accent-hover); }
   border-radius: 12px; border: 2px dashed var(--border);
   display: grid; place-items: center; background: var(--paper);
 }
-/* Type pill floated on the photo's corner. Hidden when the image failed and
-   fell back to the category sprite (the sprite already shows the type). */
-.scrap-card__cat-overlay { position: absolute; top: 8px; left: 8px; z-index: 1; }
-.scrap-card__cat-overlay .category-badge {
-  background: rgba(255, 249, 242, 0.94);
+/* Type bubble on the photo's top-left: the category sprite only, until tapped —
+   then it wobbles and the label unrolls to the right, holds, and slides shut
+   (TypeBubble.pop toggles .is-open). Hidden when the image failed and fell back
+   to the sprite (the sprite already shows the type). */
+.cat-bubble {
+  position: absolute; top: 8px; left: 8px; z-index: 2;
+  display: inline-flex; align-items: center; cursor: pointer;
+  max-width: calc(100% - 16px);
+  padding: 3px; border-radius: 999px;
+  border: 1.5px solid var(--border); background: rgba(255, 249, 242, 0.96);
   box-shadow: 1.5px 1.5px 0 rgba(91, 84, 104, 0.18);
+  font-size: 0.74rem; font-weight: 800; color: var(--ink);
 }
-.scrap-card__media.is-fallback .scrap-card__cat-overlay { display: none; }
+.cat-bubble .ts-sprite { flex-shrink: 0; }
+.cat-bubble__label {
+  max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+  transition: max-width 0.35s ease, opacity 0.25s ease, margin 0.35s ease;
+}
+/* Open: the label unrolls; the bubble rises above the pencil so its opaque pill
+   simply covers it for the ~2s it's shown, then slides shut and the pencil
+   reappears. */
+.cat-bubble.is-open { z-index: 4; animation: cat-wobble 0.5s ease; }
+.cat-bubble.is-open .cat-bubble__label { max-width: 160px; opacity: 1; margin: 0 5px 0 3px; }
+.scrap-card__media.is-fallback .cat-bubble { display: none; }
+@keyframes cat-wobble {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-7deg); }
+  45% { transform: rotate(6deg); }
+  70% { transform: rotate(-3deg); }
+  85% { transform: rotate(2deg); }
+}
 /* Icon-only source / maps buttons, side by side under the card. */
 /* Source + Maps buttons each take half the card width, side by side. */
 .scrap-card__links { gap: 0.5rem; }
@@ -280,10 +304,10 @@ a:hover { color: var(--accent-hover); }
 .att-row:hover { border-color: var(--ink-muted); }
 .att-row input { width: 18px; height: 18px; flex-shrink: 0; }
 .att-row .ts-sprite { flex-shrink: 0; }
-/* Pencil edit affordance, top-right over the media. Carries no handler — a
-   click bubbles to the card's own click-to-edit listener. */
+/* Pencil edit affordance at the whole card's top-right corner. Carries no
+   handler — a click bubbles to the card's own click-to-edit listener. */
 .scrap-card__edit {
-  position: absolute; top: 10px; right: 10px; z-index: 2;
+  position: absolute; top: 10px; right: 10px; z-index: 3;
   display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; border-radius: 999px;
   border: 1.5px solid var(--border); cursor: pointer;

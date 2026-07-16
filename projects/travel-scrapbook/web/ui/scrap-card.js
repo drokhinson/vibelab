@@ -110,6 +110,21 @@ function _sourceButton(scrap) {
     </button>`;
 }
 
+// Collapsed type bubble for the photo's top-left corner: just the category
+// sprite until tapped, when it wobbles and the label unrolls (TypeBubble.pop).
+// stopPropagation keeps the tap from opening the card editor.
+function _catBubble(scrap) {
+  const categories = window.store.get('categories') || [];
+  const cat = categories.find((c) => c.slug === scrap.category)
+    || { slug: 'other', label: 'Other', icon: 'other' };
+  return `
+    <button type="button" class="cat-bubble" aria-label="Type: ${escapeAttr(cat.label)}"
+            onclick="event.stopPropagation(); TypeBubble.pop(this)">
+      ${renderSprite('category', cat.icon, { size: 'sm', alt: '' })}
+      <span class="cat-bubble__label">${escapeHtml(cat.label)}</span>
+    </button>`;
+}
+
 // Icon-only Maps button. Confirms before leaving the app for Google Maps.
 function _mapsButton(scrap) {
   if (!scrap.maps_url) return '';
@@ -180,13 +195,24 @@ function renderScrapCard(scrap, opts = {}) {
   const imgSrc = scrap.og_image_url ||
     (scrap.lat != null ? staticMapUrl(scrap.lat, scrap.lng) : null);
   const spriteFallback = `<div class="scrap-card__sprite-fallback">${renderSprite('category', catIcon, { size: 'lg' })}</div>`;
-  // When there's a real image, the type pill overlays its top-left corner. When
-  // there isn't, the category sprite IS the image, so no separate pill is shown.
+  // Only the owner can open the editor (place edits are owner-only server-side),
+  // so others' cards on a shared trip aren't tappable-to-edit.
+  const editable = mine && (variant === 'trip' || variant === 'inbox' || variant === 'candidate');
+  // Pencil (creator only) sits at the whole card's top-right corner. It opens
+  // the full editor (which houses delete) — it carries no handler; a click
+  // bubbles to the card's own click-to-edit listener (wired in every editable
+  // view).
+  const editBtn = editable
+    ? '<button class="scrap-card__edit" type="button" aria-label="Edit place" title="Edit"><i data-lucide="pencil"></i></button>'
+    : '';
+  // When there's a real image, the type bubble sits on its top-left corner —
+  // icon only until tapped, then it wobbles and unrolls its label. When there's
+  // no image the category sprite IS the image, so no separate bubble is shown.
   const media = imgSrc
     ? `<div class="scrap-card__media">
          <img class="scrap-card__photo" src="${escapeAttr(imgSrc)}" alt="" loading="lazy"
            onerror="this.closest('.scrap-card__media').classList.add('is-fallback');this.outerHTML='${spriteFallback.replaceAll("'", "\\'").replaceAll('"', '&quot;')}'" />
-         <span class="scrap-card__cat-overlay">${renderCategoryBadge(scrap.category)}</span>
+         ${_catBubble(scrap)}
        </div>`
     : `<div class="scrap-card__media">${spriteFallback}</div>`;
 
@@ -256,9 +282,6 @@ function renderScrapCard(scrap, opts = {}) {
       </span>`;
   }
 
-  // Only the owner can open the editor (place edits are owner-only server-side),
-  // so others' cards on a shared trip aren't tappable-to-edit.
-  const editable = mine && (variant === 'trip' || variant === 'inbox' || variant === 'candidate');
   const addedBy = (shared && !mine && scrap.added_by_display_name)
     ? `<span class="added-by"><i data-lucide="user"></i>${escapeHtml(scrap.added_by_display_name)}</span>`
     : '';
@@ -283,12 +306,6 @@ function renderScrapCard(scrap, opts = {}) {
   // Row 2: note chip + priority/vibe chip, together spanning the card width.
   const metaRow = noteChip + chip;
   const consensus = (variant === 'trip' && shared && scrap.trip_id) ? _renderConsensus(scrap) : '';
-  // Pencil (top-right, creator only) — opens the full editor, which houses the
-  // red delete. It carries no handler: a click bubbles to the card's own
-  // click-to-edit listener (wired in every editable view), so no extra wiring.
-  const editBtn = editable
-    ? '<button class="scrap-card__edit" type="button" aria-label="Edit place" title="Edit"><i data-lucide="pencil"></i></button>'
-    : '';
 
   return `
     <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
