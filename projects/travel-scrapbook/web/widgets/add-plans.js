@@ -153,7 +153,7 @@ const AddPlans = {
           ? '<div class="sticker-card shimmer" style="height:80px;"></div>'
           : this._community.length
             ? `<div class="card-grid card-grid--2col" style="margin:0;">
-                ${this._community.map((p, i) => renderPlaceCard(p, { index: i })).join('')}
+                ${this._community.map((p, i) => renderScrapCard(p, { index: i, variant: 'community' })).join('')}
               </div>`
             : `<p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">Nothing from other travelers${dest ? ` in ${escapeHtml(dest)}` : ''} yet${this._communityQ ? ' for that search' : ''}.</p>`}
       </div>

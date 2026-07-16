@@ -124,11 +124,13 @@ function _mapsButton(scrap) {
 
 /**
  * @param {Scrap} scrap
- * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select',
- *          tripId?: string, selected?: boolean, fits?: boolean,
+ * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select'|'community',
+ *          tripId?: string, selected?: boolean, fits?: boolean, saved?: boolean,
  *          shared?: boolean, currentUserId?: (string|null), canWrite?: boolean}} opts
- *   variant preview — read-only display (share success screen)
- *   variant select  — read-only + selection checkbox (Wander-List picker)
+ *   variant preview   — read-only display (share success screen)
+ *   variant select    — read-only + selection checkbox (Wander-List picker)
+ *   variant community — anonymized community-pool place (CommunityPlaceResponse) + Add button
+ *   saved             — community place already on the viewer's lists (shows a check)
  *   shared        — trip has other members (show consensus + "added by")
  *   currentUserId — the viewer, to derive their own vibe + scrap ownership
  *   canWrite      — false for viewers (hides add/edit/delete affordances)
@@ -136,14 +138,34 @@ function _mapsButton(scrap) {
 function renderScrapCard(scrap, opts = {}) {
   const {
     index = 0, variant = 'trip', tripId = null, selected = false, fits = false,
-    shared = false, currentUserId = null, canWrite = true,
+    shared = false, currentUserId = null, canWrite = true, saved = false,
   } = opts;
   // 'preview' = read-only display (share success screen). 'select' = read-only
-  // with a selection checkbox (the trip's "add from Wander List" picker). Both
-  // suppress the normal actions/toggles/click-to-edit.
+  // with a selection checkbox (the trip's "add from Wander List" picker).
+  // 'community' = an anonymized aggregate place from the community pool. All
+  // three are read-only (no owner actions / click-to-edit).
   const isPreview = variant === 'preview';
   const isSelect = variant === 'select';
-  const readOnly = isPreview || isSelect;
+  const isCommunity = variant === 'community';
+  // A community place (CommunityPlaceResponse) has place-level field names and
+  // its own id/save-count. Capture the community-only bits, then map it onto the
+  // scrap shape so the one card component renders it identically to a scrap.
+  const savedByCount = isCommunity ? (scrap.saved_by_count || 1) : 0;
+  const placeId = isCommunity ? scrap.ref_place_id : null;
+  if (isCommunity) {
+    scrap = {
+      id: scrap.ref_place_id,
+      place_name: scrap.name,
+      place_city: scrap.city,
+      place_country: scrap.country,
+      category: scrap.category,
+      og_image_url: scrap.og_image_url,
+      lat: scrap.lat, lng: scrap.lng,
+      sources: scrap.sample_sources || [],
+      maps_url: scrap.maps_url,
+    };
+  }
+  const readOnly = isPreview || isSelect || isCommunity;
   const catIcon = _scrapCategoryIcon(scrap);
   // "Mine" governs owner-only actions (rating/visited/edit/delete). On solo
   // trips and the inbox added_by is the viewer (or unset), so this stays true.
@@ -199,6 +221,14 @@ function renderScrapCard(scrap, opts = {}) {
                 data-scrap-id="${escapeAttr(scrap.id)}" data-trip-id="${escapeAttr(tripId)}">
           <i data-lucide="plus"></i>Add to this trip
         </button>
+      </div>`;
+  } else if (isCommunity) {
+    // Anonymized pool place — a single full-width "Add to my Wander List" action.
+    footer = `
+      <div class="scrap-card__row" style="margin-top:0.6rem;">
+        ${saved
+          ? '<span class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__addtrip" aria-disabled="true" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>'
+          : `<button class="ts-btn ts-btn--sm ts-btn--mint scrap-card__addtrip" data-action="save-community" data-place-id="${escapeAttr(placeId)}"><i data-lucide="plus"></i>Add</button>`}
       </div>`;
   }
 
@@ -269,6 +299,7 @@ function renderScrapCard(scrap, opts = {}) {
       ${media}
       <p class="scrap-card__title">${escapeHtml(title)}</p>
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}
+      ${isCommunity ? `<p class="scrap-card__sub scrap-card__saved-by"><i data-lucide="users"></i>Saved by ${savedByCount} traveler${savedByCount === 1 ? '' : 's'}</p>` : ''}
       ${addedBy}
       ${linksRow ? `<div class="scrap-card__row scrap-card__links">${linksRow}</div>` : ''}
       ${metaRow ? `<div class="scrap-card__row scrap-card__meta">${metaRow}</div>` : ''}

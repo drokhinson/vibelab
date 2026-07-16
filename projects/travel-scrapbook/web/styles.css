@@ -251,8 +251,11 @@ a:hover { color: var(--accent-hover); }
 .scrap-card__meta > .note-chip { flex: 0 0 auto; }
 .scrap-card__meta > .priority-chip,
 .scrap-card__meta > .rating-badge { flex: 1 1 auto; min-width: 0; justify-content: center; }
-/* "Add to trips" spans the card width. */
+/* "Add to trips" / community "Add" spans the card width. */
 .scrap-card__addtrip { width: 100%; }
+/* Community "Saved by N travelers" line. */
+.scrap-card__saved-by { display: flex; align-items: center; gap: 4px; }
+.scrap-card__saved-by [data-lucide] { width: 13px; height: 13px; }
 /* Pencil edit affordance, top-right over the media. Carries no handler — a
    click bubbles to the card's own click-to-edit listener. */
 .scrap-card__edit {

@@ -69,7 +69,7 @@ class CommunityView extends View {
           <p class="empty-desc">The pool fills up as travelers scrap places. Yours count too!</p>
         </div>` : this._items.length ? `
         <div class="card-grid card-grid--2col">
-          ${this._items.map((p, i) => renderPlaceCard(p, { index: i })).join('')}
+          ${this._items.map((p, i) => renderScrapCard(p, { index: i, variant: 'community' })).join('')}
         </div>` : `
         <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">No community places match — clear a filter to widen the view.</p>`}
       ${this._items.length < this._total ? `
