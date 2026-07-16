@@ -55,6 +55,7 @@ function renderRoutePanel(trip, { route = null, geocodedCount = 0, canWrite = tr
         </button>` : ''}
       </div>
       ${body}
+      <p class="scrap-card__sub" style="margin-top:0.5rem;">Visited plans are left out of the route and exports.</p>
     </div>
   `;
 }

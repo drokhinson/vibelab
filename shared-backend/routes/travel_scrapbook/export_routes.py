@@ -1,6 +1,6 @@
 """Trip exports: Google Maps directions links and My Maps CSV."""
 
-from fastapi import Depends, Path, Response
+from fastapi import Depends, Path, Query, Response
 
 from db import get_supabase
 
@@ -13,23 +13,24 @@ from .access import get_accessible_trip
 from .services.hydrate import hydrate_scraps
 
 
-def _approved_scraps(sb, trip_id: str) -> list[dict]:
-    return hydrate_scraps(
-        sb,
-        (
-            sb.table("travelscrapbook_scraps")
-            .select("*")
-            .eq("trip_id", trip_id)
-            .eq("status", ScrapStatus.APPROVED)
-            .execute()
-        ).data or [],
+def _approved_scraps(sb, trip_id: str, *, include_visited: bool = False) -> list[dict]:
+    """A trip's approved scraps, hydrated. Visited places sit out of routes
+    and exports by default — you've already been there."""
+    query = (
+        sb.table("travelscrapbook_scraps")
+        .select("*")
+        .eq("trip_id", trip_id)
+        .eq("status", ScrapStatus.APPROVED)
     )
+    if not include_visited:
+        query = query.is_("visited_at", "null")
+    return hydrate_scraps(sb, query.execute().data or [])
 
 
-def _ordered_stops(sb, trip_id: str) -> list[Stop]:
+def _ordered_stops(sb, trip_id: str, *, include_visited: bool = False) -> list[Stop]:
     """Geocoded scraps in route order (falling back to created order),
     bracketed by the start/end anchors when they exist."""
-    scraps = _approved_scraps(sb, trip_id)
+    scraps = _approved_scraps(sb, trip_id, include_visited=include_visited)
     routable = [s for s in scraps if s["lat"] is not None and s["lng"] is not None]
     routable.sort(
         key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])
@@ -70,13 +71,15 @@ def _ordered_stops(sb, trip_id: str) -> list[Stop]:
 )
 async def export_maps_links(
     trip_id: str = Path(..., description="Trip UUID"),
+    include_visited: bool = Query(False, description="Include places already marked visited"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MapsLinksResponse:
     """Multi-stop google.com/maps/dir/ URLs for the trip route, split into
-    ~10-stop legs that overlap at the seams."""
+    ~10-stop legs that overlap at the seams. Visited places are left out
+    unless include_visited is set."""
     sb = get_supabase()
     get_accessible_trip(sb, trip_id, user.user_id)
-    legs = build_dir_links(_ordered_stops(sb, trip_id))
+    legs = build_dir_links(_ordered_stops(sb, trip_id, include_visited=include_visited))
     return MapsLinksResponse(
         legs=[MapsLeg(label=l.label, url=l.url, stop_count=l.stop_count) for l in legs]
     )
@@ -90,13 +93,15 @@ async def export_maps_links(
 )
 async def export_csv(
     trip_id: str = Path(..., description="Trip UUID"),
+    include_visited: bool = Query(False, description="Include places already marked visited"),
     user: CurrentUser = Depends(get_current_user),
 ) -> Response:
     """CSV download (name, category, address, lat, lng, notes, url) that
-    imports directly into a Google My Maps layer."""
+    imports directly into a Google My Maps layer. Visited places are left
+    out unless include_visited is set."""
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    scraps = _approved_scraps(sb, trip_id)
+    scraps = _approved_scraps(sb, trip_id, include_visited=include_visited)
     scraps.sort(
         key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])
     )

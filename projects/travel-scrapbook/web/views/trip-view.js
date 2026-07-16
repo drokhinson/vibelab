@@ -95,7 +95,11 @@ class TripView extends View {
     const shared = !isOwner || acceptedCount > 1;
     const cardOpts = { shared, currentUserId, canWrite };
 
-    const allScraps = trip.scraps || [];
+    // Visited plans stay visible but greyed out and sorted to the bottom
+    // (stable sort keeps each half in its original order).
+    const allScraps = [...(trip.scraps || [])].sort(
+      (a, b) => (a.visited_at ? 1 : 0) - (b.visited_at ? 1 : 0)
+    );
     const staged = trip.staged_scraps || [];
     const isPriority = (s) => s.rating === 'booked' || s.rating === 'must_do';
     const scraps = this._priorityOnly ? allScraps.filter(isPriority) : allScraps;

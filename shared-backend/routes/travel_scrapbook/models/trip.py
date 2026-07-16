@@ -138,6 +138,8 @@ class RouteOptimizeRequest(BaseModel):
         None, description="Restrict to these scraps; default = all geocoded scraps in the trip")
     priority_only: bool = Field(
         False, description="Route only booked / must-do plans")
+    include_visited: bool = Field(
+        False, description="Include places already marked visited (skipped by default)")
 
 
 class RouteLeg(BaseModel):

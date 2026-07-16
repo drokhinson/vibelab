@@ -56,6 +56,8 @@ async def optimize_route(
         scraps = [s for s in scraps if s["id"] in wanted]
     if body.priority_only:
         scraps = [s for s in scraps if s.get("rating") in (TripVibe.BOOKED, TripVibe.MUST_DO)]
+    if not body.include_visited:
+        scraps = [s for s in scraps if not s.get("visited_at")]
 
     routable = [s for s in scraps if s["lat"] is not None and s["lng"] is not None]
     skipped = [s["id"] for s in scraps if s["lat"] is None or s["lng"] is None]
