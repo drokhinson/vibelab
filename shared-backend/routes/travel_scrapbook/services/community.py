@@ -14,6 +14,8 @@ from typing import Any, Optional
 
 from supabase import Client
 
+from .places import geo_facets, geo_match
+
 MAX_SAMPLE_SOURCES = 3
 
 
@@ -37,16 +39,23 @@ def aggregate_places(
     sb: Client,
     *,
     q: Optional[str] = None,
+    region: Optional[str] = None,
     country: Optional[str] = None,
+    city: Optional[str] = None,
     category: Optional[str] = None,
-    limit: int = 60,
-) -> list[dict[str, Any]]:
-    """Community catalog entries matching the filters, most-saved first.
+    limit: int = 24,
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], int, dict[str, list[str]]]:
+    """One page of community catalog entries matching the filters (most-saved
+    first), the filtered total, and the geo drill-down facets.
 
-    Only geocoded places qualify (a pin keeps catalog quality up). Each entry
-    carries the representative place's canonical fields plus saved_by_count
-    (distinct users), source_count, up to MAX_SAMPLE_SOURCES sample source
-    chips, and a cover og_image_url — no user identity, notes, or ratings.
+    Only geocoded places qualify (a pin keeps catalog quality up). Geo
+    filtering happens Python-side AFTER grouping so the facets (regions →
+    countries with data → cities) reflect the whole q/category-matched pool.
+    Each entry carries the representative place's canonical fields plus
+    saved_by_count (distinct users), source_count, up to MAX_SAMPLE_SOURCES
+    sample source chips, and a cover og_image_url — no user identity, notes,
+    or ratings. Source chips are attached for the returned page only.
     """
     query = (
         sb.table("travelscrapbook_places")
@@ -56,8 +65,6 @@ def aggregate_places(
     )
     if q:
         query = query.or_(f"name.ilike.%{q}%,city.ilike.%{q}%")
-    if country:
-        query = query.ilike("country", f"%{country}%")
     if category:
         query = query.eq("category", category)
     rows = query.limit(2000).execute().data or []
@@ -82,13 +89,24 @@ def aggregate_places(
             "saved_by_count": len({m["user_id"] for m in members}),
             "_place_ids": [m["id"] for m in members],
         })
-    entries.sort(key=lambda e: (-e["saved_by_count"], e["name"] or ""))
-    entries = entries[:limit]
 
-    _attach_sources(sb, entries)
-    for e in entries:
+    # geo_facets/geo_match read place_-prefixed keys; alias the entry fields.
+    def geo_view(e: dict[str, Any]) -> dict[str, Any]:
+        return {"place_region": e["region"], "place_country": e["country"],
+                "place_city": e["city"]}
+
+    facets = geo_facets([geo_view(e) for e in entries], region=region, country=country)
+    filtered = [
+        e for e in entries
+        if geo_match(geo_view(e), region=region, country=country, city=city)
+    ]
+    filtered.sort(key=lambda e: (-e["saved_by_count"], e["name"] or ""))
+    page = filtered[offset:offset + limit]
+
+    _attach_sources(sb, page)
+    for e in page:
         e.pop("_place_ids", None)
-    return entries
+    return page, len(filtered), facets
 
 
 def _attach_sources(sb: Client, entries: list[dict[str, Any]]) -> None:
