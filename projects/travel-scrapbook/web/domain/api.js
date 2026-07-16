@@ -215,6 +215,18 @@
     listInvitations: () => call('/invitations'),
     respondInvitation: (tripId, action) => call(`/trips/${tripId}/invitation/respond`, { method: 'POST', body: { action } }),
 
+    // ── Community pool ────────────────────────────────────────────────────
+    /** Aggregated places across all users (facts only, no user data). @returns {Promise<{places: object[]}>} */
+    communityPlaces: (params = {}) => {
+      const qs = new URLSearchParams(
+        Object.entries(params).filter(([, v]) => v != null && v !== '')
+      ).toString();
+      return call(`/community/places${qs ? `?${qs}` : ''}`);
+    },
+    /** Save a community place to a trip (or the Wander List). @returns {Promise<Scrap>} */
+    saveCommunityPlace: (placeId, tripId) =>
+      call(`/community/places/${placeId}/save`, { method: 'POST', body: { trip_id: tripId || null } }),
+
     // ── Rating (owner's own priority) ─────────────────────────────────────
     /** @returns {Promise<Scrap>} */
     setRating: (scrapId, level) => call(`/scraps/${scrapId}/rating`, { method: 'PUT', body: { level } }),

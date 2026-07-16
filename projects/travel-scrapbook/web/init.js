@@ -14,6 +14,7 @@
     router.register('trip', new TripView());
     router.register('inbox', new InboxView());
     router.register('visited', new VisitedView());
+    router.register('community', new CommunityView());
     router.register('scrap', new ScrapPopupView());
     router.register('share', new ShareView());
     router.register('settings', new SettingsView());
