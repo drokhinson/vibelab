@@ -123,7 +123,19 @@
       headers['Content-Type'] = 'application/json';
       body = JSON.stringify(body);
     }
-    const res = await fetch(`${BASE}${PREFIX}${path}`, { ...opts, headers, body });
+    // A cold Railway backend with no cap here can hang a view's loading state
+    // (or the boot splash's own /me call) indefinitely with no visible error.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    let res;
+    try {
+      res = await fetch(`${BASE}${PREFIX}${path}`, { ...opts, headers, body, signal: controller.signal });
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error('The server is taking too long to respond');
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) {
       let detail = '';
       try { detail = formatErrorDetail((await res.json()).detail); } catch (_) {}
