@@ -9,19 +9,27 @@ from .constants import AnchorRole, ScrapStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import MapsLeg, MapsLinksResponse
 from .services.exports import Stop, build_csv, build_dir_links
+from .services.hydrate import hydrate_scraps
 from .trip_routes import get_owned_trip
+
+
+def _approved_scraps(sb, trip_id: str) -> list[dict]:
+    return hydrate_scraps(
+        sb,
+        (
+            sb.table("travelscrapbook_scraps")
+            .select("*")
+            .eq("trip_id", trip_id)
+            .eq("status", ScrapStatus.APPROVED)
+            .execute()
+        ).data or [],
+    )
 
 
 def _ordered_stops(sb, trip_id: str) -> list[Stop]:
     """Geocoded scraps in route order (falling back to created order),
     bracketed by the start/end anchors when they exist."""
-    scraps = (
-        sb.table("travelscrapbook_scraps")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .eq("status", ScrapStatus.READY)
-        .execute()
-    ).data or []
+    scraps = _approved_scraps(sb, trip_id)
     routable = [s for s in scraps if s["lat"] is not None and s["lng"] is not None]
     routable.sort(
         key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])
@@ -45,11 +53,7 @@ def _ordered_stops(sb, trip_id: str) -> list[Stop]:
     if start:
         stops.append(start)
     stops.extend(
-        Stop(
-            label=s["place_name"] or s["og_title"] or s["source_domain"] or "Stop",
-            lat=s["lat"],
-            lng=s["lng"],
-        )
+        Stop(label=s["place_name"] or "Stop", lat=s["lat"], lng=s["lng"])
         for s in routable
     )
     end = anchor_stop(AnchorRole.END)
@@ -92,25 +96,20 @@ async def export_csv(
     imports directly into a Google My Maps layer."""
     sb = get_supabase()
     trip = get_owned_trip(sb, trip_id, user.user_id)
-    scraps = (
-        sb.table("travelscrapbook_scraps")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .eq("status", ScrapStatus.READY)
-        .execute()
-    ).data or []
+    scraps = _approved_scraps(sb, trip_id)
     scraps.sort(
         key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])
     )
     rows = [
         {
-            "name": s["place_name"] or s["og_title"] or s["source_url"],
+            "name": s["place_name"] or "Stop",
             "category": s["category"],
             "address": s["geocode_display_name"] or "",
             "latitude": s["lat"] if s["lat"] is not None else "",
             "longitude": s["lng"] if s["lng"] is not None else "",
             "notes": s["notes"] or "",
-            "url": s["source_url"],
+            # The place's primary source link (newest); maps_url covers navigation.
+            "url": s["sources"][0]["url"] if s["sources"] else (s["maps_url"] or ""),
         }
         for s in scraps
     ]

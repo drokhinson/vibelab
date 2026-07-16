@@ -49,10 +49,7 @@ class TripView extends View {
 
   async _load() {
     try {
-      const trip = await window.TripDomain.load(this._tripId);
-      if ((trip.scraps || []).some((s) => s.status === 'pending')) {
-        window.ScrapDomain.startPolling(this._tripId);
-      }
+      await window.TripDomain.load(this._tripId);
     } catch (err) {
       this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load trip')}</div>`;
       this.refreshIcons();
@@ -63,8 +60,9 @@ class TripView extends View {
     const trip = window.store.get('trip:' + this._tripId);
     if (!trip) return;
     const allScraps = trip.scraps || [];
+    const staged = trip.staged_scraps || [];
     const scraps = this._favoritesOnly ? allScraps.filter((s) => s.is_favorite) : allScraps;
-    const geocodedCount = allScraps.filter((s) => s.lat != null && s.status === 'ready').length;
+    const geocodedCount = allScraps.filter((s) => s.lat != null).length;
     const dates = formatDateRange(trip.start_date, trip.end_date);
 
     this.container.innerHTML = `
@@ -79,6 +77,7 @@ class TripView extends View {
       </div>
       ${renderAnchorsStrip(trip)}
       ${renderQuickPaste(trip.id)}
+      ${this._renderStaging(staged)}
       ${this._renderRoutePanel(trip, geocodedCount)}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1.2rem;">
         <h2 style="font-size:1.5rem;margin:0;">Scraps</h2>
@@ -103,6 +102,26 @@ class TripView extends View {
     this._bind(trip);
   }
 
+  _renderStaging(staged) {
+    if (!staged.length) return '';
+    return `
+      <div class="sticker-card washi washi--lavender" style="padding-top:1.2rem;margin-top:1.1rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+          <div>
+            <h2 style="font-size:1.5rem;margin:0;">Needs review</h2>
+            <p class="scrap-card__sub">We think these belong in this trip — keep or move them.</p>
+          </div>
+          <button class="ts-btn ts-btn--mint ts-btn--sm" id="approve-all-staged">
+            <i data-lucide="check-check"></i>Keep all ${staged.length}
+          </button>
+        </div>
+        <div class="card-grid card-grid--2col" style="margin-top:0.8rem;">
+          ${staged.map((s, i) => renderScrapCard(s, { index: i, variant: 'staged' })).join('')}
+        </div>
+      </div>
+    `;
+  }
+
   _renderRoutePanel(trip, geocodedCount) {
     if (geocodedCount < 2 && !this._route) return '';
     let body = '';
@@ -114,7 +133,7 @@ class TripView extends View {
                     anchors.find((a) => a.role === 'stay' && a.lat != null);
       const end = anchors.find((a) => a.role === 'end' && a.lat != null);
       if (start) stops.push({ label: start.label, isAnchor: true });
-      r.ordered_scraps.forEach((s) => stops.push({ label: s.place_name || s.og_title || 'Stop' }));
+      r.ordered_scraps.forEach((s) => stops.push({ label: s.place_name || 'Stop' }));
       if (end) stops.push({ label: end.label, isAnchor: true });
       let n = 0;
       body = `
@@ -177,10 +196,22 @@ class TripView extends View {
       });
     });
 
-    // Scrap card actions (edit opens the editor; favorite/retry/delete are inline).
+    // Staged review: keep all in one tap.
+    c.querySelector('#approve-all-staged')?.addEventListener('click', async (ev) => {
+      ev.target.disabled = true;
+      try {
+        await window.ScrapDomain.approveAll(trip.id);
+        toast('All kept — welcome aboard!');
+      } catch (err) { toast(err.message, { error: true }); }
+    });
+
+    // Scrap card actions (edit opens the editor; the rest are inline buttons).
+    const findScrap = (id) =>
+      (trip.scraps || []).find((s) => s.id === id) ||
+      (trip.staged_scraps || []).find((s) => s.id === id);
     c.querySelectorAll('[data-scrap-id]').forEach((el) => {
       const scrapId = el.dataset.scrapId;
-      const scrap = (trip.scraps || []).find((s) => s.id === scrapId);
+      const scrap = findScrap(scrapId);
       if (!scrap) return;
       const action = el.dataset.action;
       if (el.classList.contains('sticker-card') && action === 'edit') {
@@ -192,9 +223,12 @@ class TripView extends View {
           try {
             if (action === 'favorite') {
               await window.ScrapDomain.update(scrapId, trip.id, { is_favorite: !scrap.is_favorite });
-            } else if (action === 'retry') {
-              await window.ScrapDomain.retry(scrapId, trip.id);
-              toast('Trying again…');
+            } else if (action === 'approve') {
+              await window.ScrapDomain.approve(scrapId, trip.id);
+              toast('Kept!');
+            } else if (action === 'unassign') {
+              await window.ScrapDomain.unassign(scrapId, trip.id);
+              toast('Moved to your inbox');
             } else if (action === 'edit') {
               ScrapEditor.open(scrap, trip.id);
             } else if (action === 'delete') {

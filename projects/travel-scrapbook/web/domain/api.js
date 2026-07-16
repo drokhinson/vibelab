@@ -3,15 +3,37 @@
 'use strict';
 
 /**
- * @typedef {Object} Scrap
+ * @typedef {Object} SourceRef
+ *   Compact chip: how the user stumbled on a place.
  * @property {string} id
- * @property {string} trip_id
- * @property {string} source_url
+ * @property {string} url
  * @property {(string|null)=} source_domain
- * @property {'pending'|'ready'|'failed'} status
+ * @property {(string|null)=} og_title
+ */
+
+/**
+ * @typedef {Object} Source
+ *   One capture event (a shared/pasted URL) and its processing state.
+ * @property {string} id
+ * @property {string} url
+ * @property {(string|null)=} source_domain
+ * @property {'processing'|'ready'|'failed'} status
  * @property {(string|null)=} error_kind
+ * @property {'paste'|'bookmarklet'|'share'|'shortcut'} captured_via
  * @property {(string|null)=} og_title
  * @property {(string|null)=} og_image_url
+ * @property {(string|null)=} trip_hint_id
+ * @property {string} created_at
+ */
+
+/**
+ * @typedef {Object} Scrap
+ *   A saved place — in a trip or the inbox. Place fields are flattened from
+ *   the canonical place row; `sources` lists every URL that mentioned it.
+ * @property {string} id
+ * @property {(string|null)} trip_id  null = inbox
+ * @property {string} place_id
+ * @property {'inbox'|'staged'|'approved'} status
  * @property {(string|null)=} place_name
  * @property {(string|null)=} place_city
  * @property {(string|null)=} place_country
@@ -21,9 +43,20 @@
  * @property {'high'|'medium'|'low'|'none'} geocode_confidence
  * @property {(string|null)=} geocode_display_name
  * @property {(string|null)=} maps_url
+ * @property {(string|null)=} og_image_url
+ * @property {SourceRef[]} sources
  * @property {(string|null)=} notes
  * @property {boolean} is_favorite
  * @property {(number|null)=} route_position
+ * @property {TripSuggestion[]=} suggestions  inbox responses only
+ */
+
+/**
+ * @typedef {Object} TripSuggestion
+ * @property {string} trip_id
+ * @property {string} name
+ * @property {string} cover_icon
+ * @property {number} distance_km
  */
 
 (function () {
@@ -79,15 +112,36 @@
     updateAnchor: (anchorId, body) => call(`/anchors/${anchorId}`, { method: 'PATCH', body }),
     deleteAnchor: (anchorId) => call(`/anchors/${anchorId}`, { method: 'DELETE' }),
 
-    /** @returns {Promise<Scrap>} */
-    createScrap: (body) => call('/scraps', { method: 'POST', body }),
+    /** Silent capture of a shared/pasted URL. @returns {Promise<Source>} */
+    capture: (body) => call('/capture', { method: 'POST', body }),
+    /** @returns {Promise<{processing_sources: Source[], failed_sources: Source[], scraps: Scrap[]}>} */
+    getInbox: () => call('/inbox'),
+    /** @returns {Promise<{count: number}>} */
+    inboxCount: () => call('/inbox/count'),
+    /** @returns {Promise<Source>} */
+    retrySource: (sourceId) => call(`/sources/${sourceId}/retry`, { method: 'POST' }),
+    deleteSource: (sourceId) => call(`/sources/${sourceId}`, { method: 'DELETE' }),
+
+    /** @returns {Promise<{token: string, created_at: string}>} */
+    createCaptureToken: () => call('/capture-token', { method: 'POST' }),
+    /** @returns {Promise<{active: boolean, created_at?: string, last_used_at?: string}>} */
+    getCaptureToken: () => call('/capture-token'),
+    revokeCaptureToken: () => call('/capture-token', { method: 'DELETE' }),
+
     /** @returns {Promise<Scrap>} */
     getScrap: (scrapId) => call(`/scraps/${scrapId}`),
     /** @returns {Promise<{scraps: Scrap[]}>} */
     listScraps: (tripId) => call(`/trips/${tripId}/scraps`),
     updateScrap: (scrapId, body) => call(`/scraps/${scrapId}`, { method: 'PATCH', body }),
-    retryScrap: (scrapId) => call(`/scraps/${scrapId}/retry`, { method: 'POST' }),
     deleteScrap: (scrapId) => call(`/scraps/${scrapId}`, { method: 'DELETE' }),
+    /** @returns {Promise<Scrap>} */
+    assignScrap: (scrapId, tripId) => call(`/scraps/${scrapId}/assign`, { method: 'POST', body: { trip_id: tripId } }),
+    /** @returns {Promise<Scrap>} */
+    approveScrap: (scrapId) => call(`/scraps/${scrapId}/approve`, { method: 'POST' }),
+    /** @returns {Promise<Scrap>} */
+    unassignScrap: (scrapId) => call(`/scraps/${scrapId}/unassign`, { method: 'POST' }),
+    /** @returns {Promise<{scraps: Scrap[]}>} */
+    approveAllStaged: (tripId) => call(`/trips/${tripId}/approve-all`, { method: 'POST' }),
 
     optimizeRoute: (tripId, body) => call(`/trips/${tripId}/route/optimize`, { method: 'POST', body: body || {} }),
     exportMapsLinks: (tripId) => call(`/trips/${tripId}/export/maps-links`),

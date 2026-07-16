@@ -1,10 +1,11 @@
-"""Scrap enrichment orchestrator: fetch page → Haiku extract → geocode.
+"""Source enrichment orchestrator: fetch page → Gemini extract → places → scraps.
 
-Runs as a FastAPI background task after POST /scraps returns 201. Never
-raises — every failure path writes status='failed' + error_kind so the
-frontend can offer a retry. Partial success (e.g. place extracted but not
-geocoded) still lands as 'ready' with geocode_confidence='none'; the user
-can edit fields and re-geocode.
+Runs as a FastAPI background task after POST /capture returns 202. Never
+raises — every failure path writes the source's status='failed' + error_kind
+so the frontend can offer a retry. One source fans out into N places; each
+place the user hasn't saved yet becomes a scrap that is auto-staged onto a
+nearby trip (awaiting review), approved directly when the capture carried an
+explicit trip hint, or dropped into the inbox.
 """
 
 import logging
@@ -13,8 +14,13 @@ from urllib.parse import quote
 
 from db import get_supabase
 
-from ..constants import EnrichErrorKind, GeocodeConfidence, ScrapStatus
-from . import llm, nominatim, scraper
+from ..constants import (
+    EnrichErrorKind,
+    GeocodeConfidence,
+    ScrapStatus,
+    SourceStatus,
+)
+from . import llm, nominatim, places, scraper
 
 logger = logging.getLogger("travel_scrapbook.enrichment")
 
@@ -63,23 +69,77 @@ def _load_category_slugs(sb) -> list[str]:
     return [r["slug"] for r in (rows.data or [])] or ["other"]
 
 
-async def enrich_scrap(scrap_id: str) -> None:
-    """Full enrichment pipeline for one scrap. Safe to re-run (retry)."""
+def _user_has_scrap_for_place(sb, user_id: str, place_id: str) -> bool:
+    rows = (
+        sb.table("travelscrapbook_scraps")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("place_id", place_id)
+        .limit(1)
+        .execute()
+    )
+    return bool(rows.data)
+
+
+async def _materialize_place(
+    sb,
+    source: dict[str, Any],
+    extraction: llm.PlaceExtraction,
+) -> None:
+    """One extraction → deduped place + source link (+ scrap if new to the user)."""
+    geo, confidence = await _geocode_with_fallback(extraction)
+    maps_url = build_maps_url(extraction.place_name, extraction.city, extraction.country)
+
+    place, _created = places.find_or_create_place(
+        sb, source["user_id"], extraction, geo, confidence, maps_url
+    )
+
+    # Attach the source to the place regardless of scrap dedupe — collecting
+    # "how the user stumbled on this" across many URLs IS the point.
+    sb.table("travelscrapbook_place_sources").upsert(
+        {"place_id": place["id"], "source_id": source["id"]},
+        on_conflict="place_id,source_id",
+        ignore_duplicates=True,
+    ).execute()
+
+    if _user_has_scrap_for_place(sb, source["user_id"], place["id"]):
+        return  # already saved — the new source chip is the only change
+
+    scrap: dict[str, Any] = {
+        "user_id": source["user_id"],
+        "place_id": place["id"],
+        "trip_id": None,
+        "status": ScrapStatus.INBOX,
+        "notes": source.get("capture_notes"),
+    }
+    if source.get("trip_hint_id"):
+        # The user picked the trip at capture time — no review needed.
+        scrap.update({"trip_id": source["trip_hint_id"], "status": ScrapStatus.APPROVED})
+    elif place["lat"] is not None and extraction.confident:
+        match = places.match_trip(sb, source["user_id"], place["lat"], place["lng"])
+        if match:
+            scrap.update({"trip_id": match["id"], "status": ScrapStatus.STAGED})
+    sb.table("travelscrapbook_scraps").insert(scrap).execute()
+
+
+async def process_source(source_id: str) -> None:
+    """Full enrichment pipeline for one source. Safe to re-run (retry)."""
     sb = get_supabase()
     row = (
-        sb.table("travelscrapbook_scraps")
-        .select("id, source_url")
-        .eq("id", scrap_id)
+        sb.table("travelscrapbook_sources")
+        .select("id, user_id, url, shared_text, capture_notes, trip_hint_id")
+        .eq("id", source_id)
         .execute()
     )
     if not row.data:
         return  # deleted while queued
-    url = row.data[0]["source_url"]
+    source = row.data[0]
+    url = source["url"]
 
     update: dict[str, Any] = {}
     try:
         # 1. Fetch the page — degradable. Blocked/unreachable pages still get
-        #    a URL-only LLM pass (slugs often name the place).
+        #    a URL-only LLM pass (slugs + share-sheet text often name places).
         page: Optional[scraper.PageContent] = None
         fetch_error: Optional[scraper.ScrapeError] = None
         try:
@@ -91,14 +151,16 @@ async def enrich_scrap(scrap_id: str) -> None:
             })
         except scraper.ScrapeError as exc:
             fetch_error = exc
-            logger.info("scrap %s: page fetch degraded (%s)", scrap_id, exc.kind)
+            logger.info("source %s: page fetch degraded (%s)", source_id, exc.kind)
 
         # 2. LLM place extraction — required. If this fails we mark failed.
         try:
             categories = _load_category_slugs(sb)
-            extraction = await llm.extract_place(url, page, categories)
+            extractions = await llm.extract_places(
+                url, page, categories, shared_text=source.get("shared_text")
+            )
         except llm.LLMError as exc:
-            logger.warning("scrap %s: LLM failed: %s", scrap_id, exc)
+            logger.warning("source %s: LLM failed: %s", source_id, exc)
             kind = EnrichErrorKind.LLM
             if fetch_error is not None:
                 kind = (
@@ -106,39 +168,32 @@ async def enrich_scrap(scrap_id: str) -> None:
                     if fetch_error.kind == scraper.ScrapeErrorKind.NETWORK
                     else EnrichErrorKind.BLOCKED
                 )
-            update.update({"status": ScrapStatus.FAILED, "error_kind": kind})
+            update.update({"status": SourceStatus.FAILED, "error_kind": kind})
             return
 
-        update.update({
-            "place_name": extraction.place_name,
-            "place_city": extraction.city,
-            "place_country": extraction.country,
-            "category": extraction.category,
-        })
+        if not extractions:
+            update.update({
+                "status": SourceStatus.FAILED,
+                "error_kind": EnrichErrorKind.NO_PLACE,
+            })
+            return
 
-        # 3. Geocode — best-effort.
-        if extraction.place_name or extraction.city:
-            result, confidence = await _geocode_with_fallback(extraction)
-            if result:
-                update.update({
-                    "lat": result.lat,
-                    "lng": result.lng,
-                    "geocode_confidence": confidence,
-                    "geocode_display_name": result.display_name,
-                })
+        # 3. Fan out: place per extraction, serially — the Nominatim throttle
+        #    (≥1.1s spacing) makes serial the polite and simple choice.
+        for extraction in extractions:
+            try:
+                await _materialize_place(sb, source, extraction)
+            except Exception:
+                logger.exception(
+                    "source %s: failed to materialize %r", source_id, extraction.place_name
+                )
 
-        # 4. Maps link (name-based reads better than raw coordinates).
-        if extraction.place_name:
-            update["maps_url"] = build_maps_url(
-                extraction.place_name, extraction.city, extraction.country
-            )
-
-        update.update({"status": ScrapStatus.READY, "error_kind": None})
+        update.update({"status": SourceStatus.READY, "error_kind": None})
     except Exception:
         # Absolute backstop — background tasks must never explode silently
-        # into uvicorn logs without moving the row out of 'pending'.
-        logger.exception("scrap %s: unexpected enrichment failure", scrap_id)
-        update.update({"status": ScrapStatus.FAILED, "error_kind": EnrichErrorKind.LLM})
+        # into uvicorn logs without moving the row out of 'processing'.
+        logger.exception("source %s: unexpected enrichment failure", source_id)
+        update.update({"status": SourceStatus.FAILED, "error_kind": EnrichErrorKind.LLM})
     finally:
         update["updated_at"] = "now()"
-        sb.table("travelscrapbook_scraps").update(update).eq("id", scrap_id).execute()
+        sb.table("travelscrapbook_sources").update(update).eq("id", source_id).execute()

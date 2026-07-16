@@ -6,10 +6,12 @@
 const ScrapEditor = {
   _scrap: null,
   _tripId: null,
+  _onSaved: null,
 
-  open(scrap, tripId) {
+  open(scrap, tripId, { onSaved } = {}) {
     this._scrap = scrap;
     this._tripId = tripId;
+    this._onSaved = onSaved || null;
     this._render();
   },
 
@@ -29,10 +31,15 @@ const ScrapEditor = {
       <div class="ts-modal__backdrop" onclick="ScrapEditor.close()"></div>
       <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Edit scrap">
         <button class="ts-modal__close" onclick="ScrapEditor.close()" aria-label="Close"><i data-lucide="x"></i></button>
-        <h2 class="ts-modal__title">Edit this scrap</h2>
-        <p class="scrap-card__sub" style="overflow-wrap:anywhere;">
-          <a href="${escapeAttr(s.source_url)}" target="_blank" rel="noopener">${escapeHtml(s.source_url)}</a>
-        </p>
+        <h2 class="ts-modal__title">Edit this place</h2>
+        ${(s.sources || []).length ? `
+          <div class="scrap-card__row" style="margin-top:0.2rem;">
+            ${(s.sources || []).map((src) => `
+              <a class="source-badge" href="${escapeAttr(src.url)}" target="_blank" rel="noopener"
+                 title="${escapeAttr(src.og_title || src.url)}">
+                <i data-lucide="link-2"></i>${escapeHtml(src.source_domain || 'link')}
+              </a>`).join('')}
+          </div>` : ''}
         <form id="scrap-editor-form">
           <label class="ts-label" for="se-name">Place name</label>
           <input class="ts-input" id="se-name" value="${escapeAttr(s.place_name || '')}" placeholder="e.g. Ichiran Ramen" />
@@ -84,6 +91,7 @@ const ScrapEditor = {
       try {
         await window.ScrapDomain.update(s.id, this._tripId, fields);
         toast('Saved');
+        this._onSaved?.();
         this.close();
       } catch (err) {
         toast(err.message || 'Save failed', { error: true });
@@ -95,6 +103,7 @@ const ScrapEditor = {
       try {
         await window.ScrapDomain.remove(s.id, this._tripId);
         toast('Scrap deleted');
+        this._onSaved?.();
         this.close();
       } catch (err) {
         toast(err.message || 'Delete failed', { error: true });

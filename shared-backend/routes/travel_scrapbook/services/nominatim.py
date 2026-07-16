@@ -39,6 +39,10 @@ class GeocodeResult:
     lat: float
     lng: float
     display_name: str
+    # OSM identity of the matched feature — the future key for global
+    # (cross-user) place dedupe. Optional: not every response carries it.
+    osm_type: Optional[str] = None
+    osm_id: Optional[int] = None
 
 
 async def geocode(query: str) -> Optional[GeocodeResult]:
@@ -96,6 +100,8 @@ async def geocode(query: str) -> Optional[GeocodeResult]:
             lat=float(row["lat"]),
             lng=float(row["lon"]),
             display_name=str(row.get("display_name", "")),
+            osm_type=str(row["osm_type"]) if row.get("osm_type") else None,
+            osm_id=int(row["osm_id"]) if row.get("osm_id") is not None else None,
         )
     except (KeyError, TypeError, ValueError):
         return None

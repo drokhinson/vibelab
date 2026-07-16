@@ -2,18 +2,19 @@
 
 from typing import Any
 
-from fastapi import Depends, HTTPException, Path
+from fastapi import BackgroundTasks, Depends, HTTPException, Path
 
 from db import get_supabase
 
 from . import router
-from .constants import AnchorRole
+from .constants import AnchorRole, GeocodeConfidence, ScrapStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     AnchorCreateRequest,
     AnchorResponse,
     AnchorUpdateRequest,
     MessageResponse,
+    ScrapResponse,
     TripCreateRequest,
     TripListResponse,
     TripResponse,
@@ -21,7 +22,8 @@ from .models import (
     TripUpdateRequest,
 )
 from .services import nominatim
-from .services.enrichment import GeocodeConfidence
+from .services.hydrate import hydrate_scraps
+from .services.places import geocode_trip_destination
 
 
 def get_owned_trip(sb, trip_id: str, user_id: str) -> dict[str, Any]:
@@ -77,28 +79,53 @@ def _validate_stay_date(trip: dict[str, Any], stay_date: str | None) -> None:
         )
 
 
+async def _backfill_trip_geocodes(trip_ids: list[str]) -> None:
+    """Lazy backfill: geocode destinations that have never been attempted.
+    Serial — nominatim.py enforces the courtesy throttle."""
+    sb = get_supabase()
+    for trip_id in trip_ids:
+        rows = (
+            sb.table("travelscrapbook_trips")
+            .select("id, destination, destination_geocoded_at")
+            .eq("id", trip_id)
+            .execute()
+        ).data
+        if rows and rows[0].get("destination") and not rows[0].get("destination_geocoded_at"):
+            await geocode_trip_destination(sb, rows[0])
+
+
 @router.get(
     "/trips",
     response_model=TripListResponse,
     status_code=200,
     summary="List my trips",
 )
-async def list_trips(user: CurrentUser = Depends(get_current_user)) -> TripListResponse:
+async def list_trips(
+    background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(get_current_user),
+) -> TripListResponse:
     """All trips for the current user, newest first, with scrap counts."""
     sb = get_supabase()
     rows = (
         sb.table("travelscrapbook_trips")
         .select("id, name, destination, cover_icon, start_date, end_date, created_at, "
-                "travelscrapbook_scraps(count)")
+                "destination_geocoded_at, travelscrapbook_scraps(count)")
         .eq("user_id", user.user_id)
         .order("created_at", desc=True)
         .execute()
     )
     trips = []
+    pending_geocode = []
     for r in rows.data or []:
         counts = r.pop("travelscrapbook_scraps", [])
+        if r.get("destination") and not r.pop("destination_geocoded_at", None):
+            pending_geocode.append(r["id"])
+        else:
+            r.pop("destination_geocoded_at", None)
         scrap_count = counts[0]["count"] if counts else 0
         trips.append(TripSummaryResponse(**r, scrap_count=scrap_count))
+    if pending_geocode:
+        background_tasks.add_task(_backfill_trip_geocodes, pending_geocode)
     return TripListResponse(trips=trips)
 
 
@@ -124,7 +151,12 @@ async def create_trip(
         "notes": body.notes,
     }
     created = sb.table("travelscrapbook_trips").insert(row).execute()
-    return TripSummaryResponse(**created.data[0], scrap_count=0)
+    trip = created.data[0]
+    if body.destination:
+        # Sync, like anchors — one Nominatim call so staging auto-match works
+        # for scraps captured right after trip creation.
+        trip = await geocode_trip_destination(sb, trip)
+    return TripSummaryResponse(**trip, scrap_count=0)
 
 
 @router.get(
@@ -137,7 +169,8 @@ async def get_trip(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> TripResponse:
-    """Trip with its anchors and scraps — everything the trip view needs."""
+    """Trip with its anchors and scraps (approved and staged split out) —
+    everything the trip view needs."""
     sb = get_supabase()
     trip = get_owned_trip(sb, trip_id, user.user_id)
     anchors = (
@@ -147,14 +180,22 @@ async def get_trip(
         .order("created_at")
         .execute()
     )
-    scraps = (
-        sb.table("travelscrapbook_scraps")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .order("created_at", desc=True)
-        .execute()
+    scraps = hydrate_scraps(
+        sb,
+        (
+            sb.table("travelscrapbook_scraps")
+            .select("*")
+            .eq("trip_id", trip_id)
+            .order("created_at", desc=True)
+            .execute()
+        ).data or [],
     )
-    return TripResponse(**trip, anchors=anchors.data or [], scraps=scraps.data or [])
+    return TripResponse(
+        **trip,
+        anchors=anchors.data or [],
+        scraps=[ScrapResponse(**s) for s in scraps if s["status"] == ScrapStatus.APPROVED],
+        staged_scraps=[ScrapResponse(**s) for s in scraps if s["status"] == ScrapStatus.STAGED],
+    )
 
 
 @router.patch(
@@ -168,9 +209,10 @@ async def update_trip(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> TripSummaryResponse:
-    """Edit trip fields; only provided fields change."""
+    """Edit trip fields; only provided fields change. A changed destination is
+    re-geocoded synchronously."""
     sb = get_supabase()
-    get_owned_trip(sb, trip_id, user.user_id)
+    existing = get_owned_trip(sb, trip_id, user.user_id)
     update = {
         k: (v.isoformat() if hasattr(v, "isoformat") else v)
         for k, v in body.model_dump(exclude_unset=True).items()
@@ -179,7 +221,10 @@ async def update_trip(
     updated = (
         sb.table("travelscrapbook_trips").update(update).eq("id", trip_id).execute()
     )
-    return TripSummaryResponse(**updated.data[0], scrap_count=0)
+    trip = updated.data[0]
+    if "destination" in update and update["destination"] != existing.get("destination"):
+        trip = await geocode_trip_destination(sb, trip)
+    return TripSummaryResponse(**trip, scrap_count=0)
 
 
 @router.delete(
