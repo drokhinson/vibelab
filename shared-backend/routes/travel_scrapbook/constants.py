@@ -6,8 +6,14 @@ APP_NAME = "travel-scrapbook"
 
 # Gemini model used for place extraction. This is a tiny structured-extraction
 # task (~500 in / ~150 out tokens per scrap) that sits well inside the free
-# tier. Swap to gemini-2.5-flash-lite / gemini-2.0-flash for higher free RPM.
-GEMINI_MODEL = "gemini-2.5-flash"
+# tier. We use the Google-maintained "-latest" alias rather than a pinned model
+# ID: the previously pinned gemini-2.5-flash was pulled from the API on
+# 2026-07-09 (ahead of its announced shutdown), 404-ing every request. The alias
+# hot-swaps to the current Flash-Lite release (gemini-3.1-flash-lite as of
+# 2026-07) with a 2-week email notice before any behavior change, so a silent
+# early deprecation can't take the app down again. Swap to gemini-flash-latest
+# for a stronger (still free-tier) model if extraction quality needs it.
+GEMINI_MODEL = "gemini-flash-lite-latest"
 
 # Cache namespaces (shared-backend/cache.py)
 CACHE_NS_CATEGORIES = "ts.categories"
