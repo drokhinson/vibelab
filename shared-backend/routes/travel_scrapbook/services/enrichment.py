@@ -180,14 +180,25 @@ async def process_source(source_id: str) -> None:
 
         # 3. Fan out: place per extraction, serially — the Nominatim throttle
         #    (≥1.1s spacing) makes serial the polite and simple choice.
+        errors = 0
         for extraction in extractions:
             try:
                 await _materialize_place(sb, source, extraction)
             except Exception:
+                errors += 1
                 logger.exception(
                     "source %s: failed to materialize %r", source_id, extraction.place_name
                 )
 
+        if errors and errors == len(extractions):
+            # Every place hit a real error (e.g. a schema/DB failure) — don't
+            # pretend success. Surface it in the inbox "Couldn't read" pile so a
+            # broken import is visible and retryable instead of vanishing.
+            update.update({
+                "status": SourceStatus.FAILED,
+                "error_kind": EnrichErrorKind.INTERNAL,
+            })
+            return
         update.update({"status": SourceStatus.READY, "error_kind": None})
     except Exception:
         # Absolute backstop — background tasks must never explode silently
