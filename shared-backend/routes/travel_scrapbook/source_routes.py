@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import BackgroundTasks, Depends, HTTPException, Path
+from fastapi import BackgroundTasks, Depends, HTTPException, Path, Query
 
 from db import get_supabase
 
@@ -261,9 +261,18 @@ def _sweep_stale_processing(sb, user_id: str, sources: list[dict[str, Any]]) -> 
     status_code=200,
     summary="Get the inbox",
 )
-async def get_inbox(user: CurrentUser = Depends(get_current_user)) -> InboxResponse:
+async def get_inbox(
+    region: Optional[str] = Query(None, max_length=120, description="Filter: macro-region"),
+    country: Optional[str] = Query(None, max_length=120, description="Filter: country (within the region)"),
+    city: Optional[str] = Query(None, max_length=120, description="Filter: city (within the country)"),
+    limit: int = Query(24, ge=1, le=100, description="Page size"),
+    offset: int = Query(0, ge=0, description="Page start"),
+    user: CurrentUser = Depends(get_current_user),
+) -> InboxResponse:
     """Everything awaiting the user's attention: sources still processing,
-    sources that failed, and unassigned scraps with trip suggestions."""
+    sources that failed, and one filtered PAGE of unassigned scraps with trip
+    suggestions — plus drill-down facets (regions → countries → cities) and
+    the filtered total. Hydration and suggestions run only for the page."""
     sb = get_supabase()
     sources = (
         sb.table("travelscrapbook_sources")
@@ -275,16 +284,39 @@ async def get_inbox(user: CurrentUser = Depends(get_current_user)) -> InboxRespo
     ).data or []
     _sweep_stale_processing(sb, user.user_id, sources)
 
-    scraps = (
+    # Geo fields ride along on the scrap rows so facets + filtering happen
+    # BEFORE hydration — only the returned page pays for places/sources/
+    # suggestion lookups.
+    rows = (
         sb.table("travelscrapbook_scraps")
-        .select("*")
+        .select("*, travelscrapbook_places(region, country, city)")
         .eq("user_id", user.user_id)
         .eq("status", ScrapStatus.INBOX)
         .is_("visited_at", "null")   # visited places move to the Visited view
         .order("created_at", desc=True)
         .execute()
     ).data or []
-    hydrated = hydrate_scraps(sb, scraps)
+    geo_rows = []
+    for r in rows:
+        place = r.pop("travelscrapbook_places", None) or {}
+        geo_rows.append({
+            **r,
+            "place_region": place.get("region"),
+            "place_country": place.get("country"),
+            "place_city": place.get("city"),
+        })
+    facets = places_svc.geo_facets(geo_rows, region=region, country=country)
+    filtered = [
+        r for r in geo_rows
+        if places_svc.geo_match(r, region=region, country=country, city=city)
+    ]
+    page = filtered[offset:offset + limit]
+
+    hydrated = hydrate_scraps(sb, [
+        {k: v for k, v in r.items()
+         if k not in ("place_region", "place_country", "place_city")}
+        for r in page
+    ])
     inbox_scraps = [
         InboxScrapResponse(
             **s,
@@ -305,6 +337,8 @@ async def get_inbox(user: CurrentUser = Depends(get_current_user)) -> InboxRespo
             SourceResponse(**s) for s in sources if s["status"] == SourceStatus.FAILED
         ],
         scraps=inbox_scraps,
+        total=len(filtered),
+        facets=facets,
     )
 
 

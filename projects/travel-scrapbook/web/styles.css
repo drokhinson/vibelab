@@ -211,6 +211,65 @@ a:hover { color: var(--accent-hover); }
 .scrap-card__sub { font-size: 0.82rem; color: var(--ink-muted); overflow-wrap: anywhere; }
 .scrap-card__row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
 .scrap-card__actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+/* ── Scrap footer (the always-there capture box) ────────────────────────────── */
+.scrap-footer {
+  position: sticky; bottom: 0; z-index: 30;
+  display: flex; gap: 0.5rem; align-items: center;
+  margin-top: 1.2rem;
+  padding: 0.7rem 0.6rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+  background: var(--paper);
+  border-top: 2px solid var(--border);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -6px 16px rgba(91, 84, 104, 0.10);
+}
+
+/* ── Geo drill-down filter bar (browse views) ───────────────────────────────── */
+.filter-bar {
+  display: flex; align-items: center; gap: 0.5rem;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  padding: 0.6rem 0 0.4rem; margin-top: 0.2rem;
+  scrollbar-width: none;
+}
+.filter-bar::-webkit-scrollbar { display: none; }
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  min-height: 34px; padding: 0.15rem 0.35rem 0.15rem 0.7rem;
+  border: 1.5px solid var(--ink); border-radius: 999px;
+  background: var(--card); color: var(--ink);
+  font-size: 0.76rem; font-weight: 800; white-space: nowrap;
+  box-shadow: 1.5px 1.5px 0 var(--ink);
+}
+.filter-chip [data-lucide] { width: 14px; height: 14px; }
+.filter-chip__x {
+  width: 28px; height: 28px; margin-left: 2px; border: none; border-radius: 999px;
+  background: var(--paper); color: var(--ink-muted); cursor: pointer;
+  display: grid; place-items: center;
+}
+.filter-chip__x:hover { color: var(--ink); }
+.filter-bar__select {
+  flex-shrink: 0; min-height: 34px; max-width: 46vw;
+  padding: 0.15rem 0.7rem; border: 1.5px dashed var(--border); border-radius: 999px;
+  background: transparent; color: var(--ink-muted);
+  font-size: 0.76rem; font-weight: 800; cursor: pointer;
+}
+.filter-bar__select:hover { border-color: var(--ink-muted); color: var(--ink); }
+
+/* Note chip — the note itself lives in the NotePopup. */
+.note-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 1px;
+  min-width: 34px; min-height: 26px; padding: 0 8px; border-radius: 999px;
+  border: 1.5px dashed var(--border); background: transparent;
+  color: var(--ink-muted); cursor: pointer; font-size: 0.72rem; font-weight: 800;
+}
+.note-chip [data-lucide] { width: 14px; height: 14px; }
+.note-chip .note-chip__plus { width: 10px; height: 10px; }
+.note-chip:hover { border-color: var(--ink-muted); color: var(--ink); }
+.note-chip.is-filled {
+  border-style: solid; border-color: var(--ink);
+  background: var(--butter, #FDE9A9); color: var(--ink);
+}
+span.note-chip { cursor: default; }
+
 /* Read-only rating chip (Visited view + anywhere the control is hidden). */
 .rating-badge {
   display: inline-flex; align-items: center; gap: 4px; margin-top: 0.5rem;
@@ -469,7 +528,36 @@ body.popup-mode { max-width: 420px; }
 }
 .added-by i { width: 13px; height: 13px; }
 
-/* ── Trip timeline (day cards: markers + scheduled plans) ───────────────────── */
+/* ── Trip timeline (endpoint bookends, day cards, suggested rows) ───────────── */
+.tl-endpoint { display: flex; align-items: center; gap: 0.7rem; }
+.tl-endpoint__icon {
+  width: 40px; height: 40px; border-radius: 999px; border: 2px solid var(--border);
+  background: var(--sky, #BDE0FE); display: grid; place-items: center; flex-shrink: 0;
+}
+.tl-endpoint__icon [data-lucide] { width: 20px; height: 20px; }
+.tl-endpoint__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tl-endpoint__role {
+  font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--ink-muted);
+}
+.tl-endpoint__name { font-weight: 800; overflow-wrap: anywhere; }
+.tl-add-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+  min-height: 48px; width: 100%; border-radius: 14px;
+  border: 2px dashed var(--border); background: transparent;
+  color: var(--ink-muted); font-weight: 800; font-size: 0.9rem; cursor: pointer;
+}
+.tl-add-btn:hover { border-color: var(--ink-muted); color: var(--ink); }
+.tl-add-btn [data-lucide] { width: 17px; height: 17px; }
+.tl-row--suggested { border-style: dotted; opacity: 0.92; background: var(--paper); }
+.tl-suggested-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+  border: 1.5px dashed var(--border); font-size: 0.66rem; font-weight: 800;
+  color: var(--ink-muted);
+}
+.tl-row__btn--pin { background: var(--mint, #BEE7D0); color: var(--ink); }
+
+
 .tl-day__head { display: flex; align-items: baseline; gap: 0.6rem; }
 .tl-day__num { font-family: var(--font-display, 'Caveat', cursive); font-size: 1.5rem; font-weight: 700; }
 .tl-day__rows { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
@@ -497,31 +585,46 @@ body.popup-mode { max-width: 420px; }
   background: var(--vibe-booked); font-size: 0.68rem; font-weight: 800;
 }
 
-/* The 4-way priority/vibe control on scrap cards — icon-only, 4 across, so it
-   fits a half-width card; labels ride on title/aria. */
-.vibe-control {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem;
-  margin-top: 0.6rem;
-}
-.vibe-seg {
-  display: flex; align-items: center; justify-content: center; gap: 4px;
-  min-height: 44px; padding: 0.2rem 0.3rem;
-  border: 1.5px solid var(--border); border-radius: 10px;
-  background: var(--paper); color: var(--ink-muted);
-  font-size: 0.7rem; font-weight: 800; cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.08s;
-}
-.vibe-seg i { width: 17px; height: 17px; }
-.vibe-seg:hover { border-color: var(--ink-muted); }
-.vibe-seg:active { transform: translateY(1px); }
-.vibe-seg.is-on {
-  color: var(--ink); border-color: var(--ink);
+/* Priority/vibe chip on scrap cards: one chip showing the current level;
+   tapping opens the PriorityPicker popup. */
+.priority-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-height: 34px; padding: 0.15rem 0.7rem;
+  border: 1.5px solid var(--ink); border-radius: 999px;
+  color: var(--ink); font-size: 0.74rem; font-weight: 800; cursor: pointer;
   box-shadow: 1.5px 1.5px 0 var(--ink);
+  transition: transform 0.08s;
 }
-.vibe-seg--booked.is-on { background: var(--vibe-booked); }
-.vibe-seg--must_do.is-on { background: var(--vibe-must_do); }
-.vibe-seg--interested.is-on { background: var(--vibe-interested); }
-.vibe-seg--could_skip.is-on { background: var(--vibe-could_skip); }
+.priority-chip:active { transform: translateY(1px); box-shadow: none; }
+.priority-chip [data-lucide] { width: 15px; height: 15px; }
+.priority-chip--booked { background: var(--vibe-booked); }
+.priority-chip--must_do { background: var(--vibe-must_do); }
+.priority-chip--interested { background: var(--vibe-interested); }
+.priority-chip--could_skip { background: var(--vibe-could_skip); }
+.priority-chip--ghost {
+  border: 1.5px dashed var(--border); color: var(--ink-muted);
+  background: transparent; box-shadow: none;
+}
+.priority-chip--ghost:hover { border-color: var(--ink-muted); color: var(--ink); }
+
+/* The picker popup's option rows. */
+.priority-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem; }
+.priority-option {
+  display: flex; align-items: center; gap: 0.6rem;
+  min-height: 48px; padding: 0.3rem 0.8rem;
+  border: 1.5px solid var(--border); border-radius: 12px;
+  background: var(--paper); color: var(--ink);
+  font-size: 0.9rem; font-weight: 800; cursor: pointer; text-align: left;
+}
+.priority-option [data-lucide] { width: 18px; height: 18px; }
+.priority-option:hover { border-color: var(--ink-muted); }
+.priority-option.is-on { border-color: var(--ink); box-shadow: 1.5px 1.5px 0 var(--ink); }
+.priority-option--booked.is-on, .priority-option--booked:hover { background: var(--vibe-booked); }
+.priority-option--must_do.is-on, .priority-option--must_do:hover { background: var(--vibe-must_do); }
+.priority-option--interested.is-on, .priority-option--interested:hover { background: var(--vibe-interested); }
+.priority-option--could_skip.is-on, .priority-option--could_skip:hover { background: var(--vibe-could_skip); }
+.priority-option--clear { color: var(--ink-muted); border-style: dashed; }
+.priority-option__check { margin-left: auto; }
 
 /* Group consensus: one avatar chip per traveler + a headline. */
 .vibe-consensus {

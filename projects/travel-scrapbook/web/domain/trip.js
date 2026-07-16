@@ -36,6 +36,12 @@ const TripDomain = {
     return anchor;
   },
 
+  async updateAnchor(tripId, anchorId, fields) {
+    const anchor = await window.api.updateAnchor(anchorId, fields);
+    await this.load(tripId);
+    return anchor;
+  },
+
   async removeAnchor(tripId, anchorId) {
     await window.api.deleteAnchor(anchorId);
     await this.load(tripId);

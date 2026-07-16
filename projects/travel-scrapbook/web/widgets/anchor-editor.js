@@ -54,11 +54,18 @@ function renderAnchorsStrip(trip, { readOnly = false } = {}) {
 const AnchorEditor = {
   _tripId: null,
 
-  open(trip) {
+  // Create mode by default; `role` preselects (the timeline's "+ Arrival"/
+  // "+ Departure"/"+ Add a stay" buttons); `anchor` switches to EDIT mode —
+  // role locked, fields prefilled, submit PATCHes instead of creating.
+  open(trip, { anchor = null, role = null } = {}) {
     this._tripId = trip.id;
     this.close();
+    const editing = !!anchor;
     const taken = new Set((trip.anchors || []).filter((a) => a.role !== 'stay').map((a) => a.role));
-    const options = ANCHOR_ROLES.filter((r) => r.role === 'stay' || !taken.has(r.role));
+    const options = editing
+      ? ANCHOR_ROLES.filter((r) => r.role === anchor.role)
+      : ANCHOR_ROLES.filter((r) => r.role === 'stay' || !taken.has(r.role));
+    const preselect = editing ? anchor.role : role;
     const start = (trip.anchors || []).find((a) => a.role === 'start');
     const dateBounds = `${trip.start_date ? `min="${escapeAttr(trip.start_date)}"` : ''} ${trip.end_date ? `max="${escapeAttr(trip.end_date)}"` : ''}`;
     const modal = document.createElement('div');
@@ -66,15 +73,17 @@ const AnchorEditor = {
     modal.id = 'anchor-editor-modal';
     modal.innerHTML = `
       <div class="ts-modal__backdrop" onclick="AnchorEditor.close()"></div>
-      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Add anchor">
+      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="${editing ? 'Edit anchor' : 'Add anchor'}">
         <button class="ts-modal__close" onclick="AnchorEditor.close()" aria-label="Close"><i data-lucide="x"></i></button>
-        <h2 class="ts-modal__title">Pin your route</h2>
-        <p class="scrap-card__sub">Airports and stays shape how the route gets sorted — the route starts at your Start and finishes at your End.</p>
+        <h2 class="ts-modal__title">${editing ? `Edit ${escapeHtml((ANCHOR_ROLES.find((r) => r.role === anchor.role) || {}).label || 'anchor')}` : 'Pin your route'}</h2>
+        <p class="scrap-card__sub">Airports and stays shape the route and the timeline — the trip starts at your Start and finishes at your End.</p>
         <form id="anchor-editor-form">
-          <label class="ts-label" for="ae-role">What is it?</label>
-          <select class="ts-select" id="ae-role">
-            ${options.map((r) => `<option value="${r.role}">${r.label} — ${r.hint}</option>`).join('')}
-          </select>
+          <div ${editing ? 'hidden' : ''}>
+            <label class="ts-label" for="ae-role">What is it?</label>
+            <select class="ts-select" id="ae-role">
+              ${options.map((r) => `<option value="${r.role}" ${r.role === preselect ? 'selected' : ''}>${r.label} — ${r.hint}</option>`).join('')}
+            </select>
+          </div>
 
           <div id="ae-same-row" hidden style="margin-top:0.8rem;">
             <label class="anchor-same" style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;">
@@ -125,7 +134,7 @@ const AnchorEditor = {
           </div>
 
           <button class="ts-btn ts-btn--mint" type="submit" style="width:100%;margin-top:1.1rem;">
-            <i data-lucide="map-pin"></i>Pin it
+            <i data-lucide="${editing ? 'check' : 'map-pin'}"></i>${editing ? 'Save' : 'Pin it'}
           </button>
         </form>
       </div>
@@ -160,15 +169,16 @@ const AnchorEditor = {
 
     // Show only the fields relevant to the selected role. The arrival/departure
     // day stays visible for a same-as-arrival end anchor — the place is copied,
-    // the departure date is not.
+    // the departure date is not. In edit mode the same-as-arrival shortcut is
+    // hidden (the anchor already has its own place).
     const syncRoleFields = () => {
       const role = roleSelect.value;
-      sameRow.hidden = role !== 'end';
+      sameRow.hidden = editing || role !== 'end';
       if (role !== 'end') sameCheckbox.checked = false;
       stayDateRow.hidden = role !== 'stay';
       whenRow.hidden = role === 'stay';
       dateLabel.textContent = role === 'end' ? 'Departure day' : 'Arrival day';
-      const sameActive = role === 'end' && sameCheckbox.checked;
+      const sameActive = !editing && role === 'end' && sameCheckbox.checked;
       setPlaceFieldsActive(!sameActive);
     };
 
@@ -176,14 +186,29 @@ const AnchorEditor = {
     sameCheckbox.addEventListener('change', () => setPlaceFieldsActive(!sameCheckbox.checked));
     syncRoleFields();
 
+    // Edit mode: prefill from the existing anchor.
+    if (editing) {
+      labelInput.value = anchor.label || '';
+      queryInput.value = anchor.query || '';
+      queryInput.dataset.touched = '1'; // don't mirror label edits into the query
+      if (anchor.type) modal.querySelector('#ae-type').value = anchor.type;
+      if (anchor.role === 'stay') {
+        modal.querySelector('#ae-stay-date').value = anchor.stay_date || '';
+        modal.querySelector('#ae-stay-end-date').value = anchor.stay_end_date || '';
+      } else {
+        modal.querySelector('#ae-date').value = anchor.anchor_date || '';
+        modal.querySelector('#ae-time').value = (anchor.anchor_time || '').slice(0, 5);
+      }
+    }
+
     modal.querySelector('#anchor-editor-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const btn = modal.querySelector('button[type=submit]');
       btn.disabled = true;
       try {
         const role = roleSelect.value;
-        const sameAsStart = role === 'end' && sameCheckbox.checked;
-        const body = { role };
+        const sameAsStart = !editing && role === 'end' && sameCheckbox.checked;
+        const body = editing ? {} : { role };
         if (sameAsStart) {
           body.same_as_start = true;
         } else {
@@ -200,13 +225,15 @@ const AnchorEditor = {
           body.anchor_date = modal.querySelector('#ae-date').value || null;
           body.anchor_time = modal.querySelector('#ae-time').value || null;
         }
-        const anchor = await window.TripDomain.addAnchor(this._tripId, body);
-        toast(anchor.geocode_confidence === 'none'
-          ? 'Added — but couldn\'t find it on the map. Try a fuller name.'
-          : 'Pinned!');
+        const saved = editing
+          ? await window.TripDomain.updateAnchor(this._tripId, anchor.id, body)
+          : await window.TripDomain.addAnchor(this._tripId, body);
+        toast(saved.geocode_confidence === 'none'
+          ? `${editing ? 'Saved' : 'Added'} — but couldn't find it on the map. Try a fuller name.`
+          : (editing ? 'Saved!' : 'Pinned!'));
         this.close();
       } catch (err) {
-        toast(err.message || 'Could not add that', { error: true });
+        toast(err.message || 'Could not save that', { error: true });
         btn.disabled = false;
       }
     });

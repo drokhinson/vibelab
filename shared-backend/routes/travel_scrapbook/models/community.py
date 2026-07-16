@@ -4,6 +4,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from .core import GeoFacets
+
 
 class CommunitySourceRef(BaseModel):
     """A public source chip on a community place — the URL is already public
@@ -32,7 +34,9 @@ class CommunityPlaceResponse(BaseModel):
 
 
 class CommunityPlacesResponse(BaseModel):
-    places: list[CommunityPlaceResponse] = []
+    places: list[CommunityPlaceResponse] = []     # one filtered page
+    total: int = 0                                # filtered count across pages
+    facets: GeoFacets = GeoFacets()
 
 
 class CommunitySaveRequest(BaseModel):

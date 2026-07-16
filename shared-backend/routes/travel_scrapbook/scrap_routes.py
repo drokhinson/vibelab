@@ -5,9 +5,9 @@ several scraps. Trip-plan management (adding scraps to trips, staging review)
 lives in plan_routes.py.
 """
 
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import Depends, HTTPException, Path
+from fastapi import Depends, HTTPException, Path, Query
 
 from db import get_supabase
 
@@ -17,8 +17,8 @@ from .constants import GeocodeConfidence
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     MessageResponse,
+    PagedScrapsResponse,
     RatingRequest,
-    ScrapListResponse,
     ScrapResponse,
     ScrapUpdateRequest,
     VibeRequest,
@@ -26,7 +26,12 @@ from .models import (
 from .services import nominatim
 from .services.enrichment import build_maps_url
 from .services.hydrate import hydrate_scraps
-from .services.places import normalize_place_name, region_for_country_code
+from .services.places import (
+    geo_facets,
+    geo_match,
+    normalize_place_name,
+    region_for_country_code,
+)
 
 
 def get_owned_scrap(sb, scrap_id: str, user_id: str) -> dict[str, Any]:
@@ -63,26 +68,53 @@ async def get_scrap(
 
 @router.get(
     "/visited",
-    response_model=ScrapListResponse,
+    response_model=PagedScrapsResponse,
     status_code=200,
     summary="Places you've marked visited",
 )
 async def list_visited(
+    region: Optional[str] = Query(None, max_length=120, description="Filter: macro-region"),
+    country: Optional[str] = Query(None, max_length=120, description="Filter: country (within the region)"),
+    city: Optional[str] = Query(None, max_length=120, description="Filter: city (within the country)"),
+    limit: int = Query(24, ge=1, le=100, description="Page size"),
+    offset: int = Query(0, ge=0, description="Page start"),
     user: CurrentUser = Depends(get_current_user),
-) -> ScrapListResponse:
-    """Every scrap the user marked visited (any trip or the wishlist),
-    most-recently-visited first — the Visited view."""
+) -> PagedScrapsResponse:
+    """One filtered page of the scraps the user marked visited (any trip or
+    the wishlist), most-recently-visited first, plus drill-down facets
+    (regions → countries → cities) and the filtered total."""
     sb = get_supabase()
     rows = (
         sb.table("travelscrapbook_scraps")
-        .select("*")
+        .select("*, travelscrapbook_places(region, country, city)")
         .eq("user_id", user.user_id)
         .not_.is_("visited_at", "null")
         .order("visited_at", desc=True)
         .execute()
     ).data or []
-    return ScrapListResponse(
-        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, rows)]
+    geo_rows = []
+    for r in rows:
+        place = r.pop("travelscrapbook_places", None) or {}
+        geo_rows.append({
+            **r,
+            "place_region": place.get("region"),
+            "place_country": place.get("country"),
+            "place_city": place.get("city"),
+        })
+    facets = geo_facets(geo_rows, region=region, country=country)
+    filtered = [
+        r for r in geo_rows
+        if geo_match(r, region=region, country=country, city=city)
+    ]
+    page = hydrate_scraps(sb, [
+        {k: v for k, v in r.items()
+         if k not in ("place_region", "place_country", "place_city")}
+        for r in filtered[offset:offset + limit]
+    ])
+    return PagedScrapsResponse(
+        scraps=[ScrapResponse(**s) for s in page],
+        total=len(filtered),
+        facets=facets,
     )
 
 
