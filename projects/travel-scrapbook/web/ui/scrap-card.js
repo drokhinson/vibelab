@@ -26,21 +26,26 @@ function _myVibe(scrap, currentUserId) {
   return mine ? mine.level : null;
 }
 
-// A 4-way segmented control for the place's priority. `action` decides what a
-// tap means: 'rate' writes the scrap's own rating (owner), 'vibe' writes the
-// viewer's vibe on someone else's shared-trip scrap. Tapping the active
-// segment again clears it (handled in the view).
-function renderPriorityControl(scrap, { action = 'rate', activeLevel = null } = {}) {
-  const label = action === 'rate' ? 'Your priority on this place' : 'Your vibe on this place';
+// One chip showing the current priority/vibe. `action` decides what a tap
+// means: 'rate-open' opens the picker for the scrap's own rating (owner),
+// 'vibe-open' for the viewer's vibe on someone else's shared-trip scrap.
+// Ghost "+ Priority"/"+ Vibe" when nothing is set yet.
+function _renderPriorityChip(scrap, { action = 'rate-open', activeLevel = null } = {}) {
+  const verb = action === 'vibe-open' ? 'Vibe' : 'Priority';
+  const meta = VIBE_META.find((v) => v.level === activeLevel);
+  if (!meta) {
+    return `
+      <button class="priority-chip priority-chip--ghost" data-action="${action}"
+              data-scrap-id="${escapeAttr(scrap.id)}" aria-label="Set ${verb.toLowerCase()}" title="Set ${verb.toLowerCase()}">
+        <i data-lucide="plus"></i>${verb}
+      </button>`;
+  }
   return `
-    <div class="vibe-control" role="group" aria-label="${label}">
-      ${VIBE_META.map((v) => `
-        <button class="vibe-seg vibe-seg--${v.level} ${activeLevel === v.level ? 'is-on' : ''}"
-                data-action="${action}" data-scrap-id="${escapeAttr(scrap.id)}" data-level="${v.level}"
-                aria-pressed="${activeLevel === v.level}" aria-label="${v.label}" title="${v.label}">
-          <i data-lucide="${v.icon}"></i>
-        </button>`).join('')}
-    </div>`;
+    <button class="priority-chip priority-chip--${meta.level}" data-action="${action}"
+            data-scrap-id="${escapeAttr(scrap.id)}"
+            aria-label="${verb}: ${meta.label} — tap to change" title="Change ${verb.toLowerCase()}">
+      <i data-lucide="${meta.icon}"></i>${meta.label}
+    </button>`;
 }
 
 // Read-only rating chip for surfaces without the control (e.g. Visited).
@@ -196,18 +201,20 @@ function renderScrapCard(scrap, opts = {}) {
   const addedBy = (shared && !mine && scrap.added_by_display_name)
     ? `<span class="added-by"><i data-lucide="user"></i>${escapeHtml(scrap.added_by_display_name)}</span>`
     : '';
-  // Priority control: my own scraps get the rating control (Wander List and
-  // trips alike); someone else's shared-trip scrap gets the vibe control so I
-  // can weigh in on the consensus. Visited places show a read-only badge
-  // instead — re-prioritizing a place you've been to is a no-op.
-  let vibeUi = '';
+  // Priority chip: my own scraps get the rating chip (Wander List and trips
+  // alike); someone else's shared-trip scrap gets the vibe chip so I can
+  // weigh in on the consensus. Tapping opens the PriorityPicker popup.
+  // Visited places show a read-only badge instead — re-prioritizing a place
+  // you've been to is a no-op.
+  let chip = '';
   if (!readOnly && !isVisited && canWrite && mine && (variant === 'trip' || variant === 'inbox')) {
-    vibeUi = renderPriorityControl(scrap, { action: 'rate', activeLevel: scrap.rating || null });
+    chip = _renderPriorityChip(scrap, { action: 'rate-open', activeLevel: scrap.rating || null });
   } else if (!readOnly && !isVisited && variant === 'trip' && !mine && currentUserId && scrap.trip_id) {
-    vibeUi = renderPriorityControl(scrap, { action: 'vibe', activeLevel: _myVibe(scrap, currentUserId) });
+    chip = _renderPriorityChip(scrap, { action: 'vibe-open', activeLevel: _myVibe(scrap, currentUserId) });
   } else if (scrap.rating && mine) {
-    vibeUi = _renderRatingBadge(scrap);
+    chip = _renderRatingBadge(scrap);
   }
+  let vibeUi = chip ? `<div class="scrap-card__row" style="margin-top:0.45rem;">${chip}</div>` : '';
   if (variant === 'trip' && shared && scrap.trip_id) vibeUi += _renderConsensus(scrap);
 
   return `

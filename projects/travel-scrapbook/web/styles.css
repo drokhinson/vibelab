@@ -526,31 +526,46 @@ body.popup-mode { max-width: 420px; }
   background: var(--vibe-booked); font-size: 0.68rem; font-weight: 800;
 }
 
-/* The 4-way priority/vibe control on scrap cards — icon-only, 4 across, so it
-   fits a half-width card; labels ride on title/aria. */
-.vibe-control {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem;
-  margin-top: 0.6rem;
-}
-.vibe-seg {
-  display: flex; align-items: center; justify-content: center; gap: 4px;
-  min-height: 44px; padding: 0.2rem 0.3rem;
-  border: 1.5px solid var(--border); border-radius: 10px;
-  background: var(--paper); color: var(--ink-muted);
-  font-size: 0.7rem; font-weight: 800; cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.08s;
-}
-.vibe-seg i { width: 17px; height: 17px; }
-.vibe-seg:hover { border-color: var(--ink-muted); }
-.vibe-seg:active { transform: translateY(1px); }
-.vibe-seg.is-on {
-  color: var(--ink); border-color: var(--ink);
+/* Priority/vibe chip on scrap cards: one chip showing the current level;
+   tapping opens the PriorityPicker popup. */
+.priority-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-height: 34px; padding: 0.15rem 0.7rem;
+  border: 1.5px solid var(--ink); border-radius: 999px;
+  color: var(--ink); font-size: 0.74rem; font-weight: 800; cursor: pointer;
   box-shadow: 1.5px 1.5px 0 var(--ink);
+  transition: transform 0.08s;
 }
-.vibe-seg--booked.is-on { background: var(--vibe-booked); }
-.vibe-seg--must_do.is-on { background: var(--vibe-must_do); }
-.vibe-seg--interested.is-on { background: var(--vibe-interested); }
-.vibe-seg--could_skip.is-on { background: var(--vibe-could_skip); }
+.priority-chip:active { transform: translateY(1px); box-shadow: none; }
+.priority-chip [data-lucide] { width: 15px; height: 15px; }
+.priority-chip--booked { background: var(--vibe-booked); }
+.priority-chip--must_do { background: var(--vibe-must_do); }
+.priority-chip--interested { background: var(--vibe-interested); }
+.priority-chip--could_skip { background: var(--vibe-could_skip); }
+.priority-chip--ghost {
+  border: 1.5px dashed var(--border); color: var(--ink-muted);
+  background: transparent; box-shadow: none;
+}
+.priority-chip--ghost:hover { border-color: var(--ink-muted); color: var(--ink); }
+
+/* The picker popup's option rows. */
+.priority-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem; }
+.priority-option {
+  display: flex; align-items: center; gap: 0.6rem;
+  min-height: 48px; padding: 0.3rem 0.8rem;
+  border: 1.5px solid var(--border); border-radius: 12px;
+  background: var(--paper); color: var(--ink);
+  font-size: 0.9rem; font-weight: 800; cursor: pointer; text-align: left;
+}
+.priority-option [data-lucide] { width: 18px; height: 18px; }
+.priority-option:hover { border-color: var(--ink-muted); }
+.priority-option.is-on { border-color: var(--ink); box-shadow: 1.5px 1.5px 0 var(--ink); }
+.priority-option--booked.is-on, .priority-option--booked:hover { background: var(--vibe-booked); }
+.priority-option--must_do.is-on, .priority-option--must_do:hover { background: var(--vibe-must_do); }
+.priority-option--interested.is-on, .priority-option--interested:hover { background: var(--vibe-interested); }
+.priority-option--could_skip.is-on, .priority-option--could_skip:hover { background: var(--vibe-could_skip); }
+.priority-option--clear { color: var(--ink-muted); border-style: dashed; }
+.priority-option__check { margin-left: auto; }
 
 /* Group consensus: one avatar chip per traveler + a headline. */
 .vibe-consensus {

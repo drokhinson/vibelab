@@ -51,26 +51,19 @@ const ScrapDomain = {
     await window.TripDomain.load(tripId);
   },
 
-  // Set / clear my vibe on a place (booked | must_do | interested | could_skip).
-  // Tapping the current vibe again clears it. Reloads the trip for fresh consensus.
-  async setVibe(scrapId, tripId, level, currentLevel) {
-    if (level === currentLevel) {
-      await window.api.clearVibe(scrapId);
-    } else {
-      await window.api.setVibe(scrapId, level);
-    }
+  // Set (level) or clear (null) my vibe on a place — explicit target state
+  // from the PriorityPicker popup. Reloads the trip for fresh consensus.
+  async applyVibe(scrapId, tripId, level) {
+    if (level) await window.api.setVibe(scrapId, level);
+    else await window.api.clearVibe(scrapId);
     if (tripId) await window.TripDomain.load(tripId);
   },
 
-  // Set / clear the owner's own rating on a place — same toggle semantics as
-  // vibes. On in-trip scraps the server also syncs the owner's vibe row, so we
-  // reload the trip for fresh consensus.
-  async setRating(scrapId, tripId, level, currentLevel) {
-    if (level === currentLevel) {
-      await window.api.clearRating(scrapId);
-    } else {
-      await window.api.setRating(scrapId, level);
-    }
+  // Set/clear the owner's own rating on a place. On in-trip scraps the server
+  // also syncs the owner's vibe row, so we reload the trip for fresh consensus.
+  async applyRating(scrapId, tripId, level) {
+    if (level) await window.api.setRating(scrapId, level);
+    else await window.api.clearRating(scrapId);
     if (tripId) await window.TripDomain.load(tripId);
   },
 

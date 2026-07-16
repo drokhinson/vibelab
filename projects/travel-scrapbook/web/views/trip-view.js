@@ -328,8 +328,15 @@ class TripView extends View {
         el.addEventListener('click', async (ev) => {
           ev.stopPropagation();
           try {
-            if (action === 'rate') {
-              await window.ScrapDomain.setRating(scrapId, trip.id, el.dataset.level, scrap.rating);
+            if (action === 'rate-open') {
+              PriorityPicker.open({
+                activeLevel: scrap.rating || null,
+                verb: 'priority',
+                onPick: async (level) => {
+                  try { await window.ScrapDomain.applyRating(scrapId, trip.id, level); }
+                  catch (err) { toast(err.message, { error: true }); }
+                },
+              });
             } else if (action === 'visited') {
               await window.ScrapDomain.toggleVisited(scrapId, trip.id, !!scrap.visited_at);
               toast(scrap.visited_at ? 'Back on your wishlist' : 'Marked visited');
@@ -348,10 +355,17 @@ class TripView extends View {
               window.SourceDomain?.refreshInboxCount();
             } else if (action === 'edit') {
               ScrapEditor.open(scrap, trip.id);
-            } else if (action === 'vibe') {
+            } else if (action === 'vibe-open') {
               const user = window.store.get('user');
               const myVibe = (scrap.vibes || []).find((v) => v.user_id === (user && user.user_id));
-              await window.ScrapDomain.setVibe(scrapId, trip.id, el.dataset.level, myVibe ? myVibe.level : null);
+              PriorityPicker.open({
+                activeLevel: myVibe ? myVibe.level : null,
+                verb: 'vibe',
+                onPick: async (level) => {
+                  try { await window.ScrapDomain.applyVibe(scrapId, trip.id, level); }
+                  catch (err) { toast(err.message, { error: true }); }
+                },
+              });
             } else if (action === 'slot') {
               // One-tap "add to Day N" from a timeline suggestion chip.
               await window.api.updateScrap(scrapId, { plan_date: el.dataset.date });

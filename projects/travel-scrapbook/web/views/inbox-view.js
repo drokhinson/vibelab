@@ -141,9 +141,17 @@ class InboxView extends View {
       el.addEventListener('click', async (ev) => {
         ev.stopPropagation();
         try {
-          if (action === 'rate') {
-            await window.ScrapDomain.setRating(scrapId, null, el.dataset.level, scrap.rating);
-            await window.SourceDomain.loadInbox();
+          if (action === 'rate-open') {
+            PriorityPicker.open({
+              activeLevel: scrap.rating || null,
+              verb: 'priority',
+              onPick: async (level) => {
+                try {
+                  await window.ScrapDomain.applyRating(scrapId, null, level);
+                  await window.SourceDomain.loadInbox();
+                } catch (err) { toast(err.message, { error: true }); }
+              },
+            });
           } else if (action === 'visited') {
             await window.ScrapDomain.toggleVisited(scrapId, null, !!scrap.visited_at);
             toast('Marked visited — see it under Visited');
