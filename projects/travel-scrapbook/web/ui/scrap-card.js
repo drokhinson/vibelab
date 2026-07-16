@@ -38,13 +38,16 @@ function _sourceChips(scrap) {
 
 /**
  * @param {Scrap} scrap
- * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview', tripId?: string}} opts
+ * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select', tripId?: string, selected?: boolean, fits?: boolean}} opts
  */
 function renderScrapCard(scrap, opts = {}) {
-  const { index = 0, variant = 'trip', tripId = null } = opts;
-  // 'preview' = read-only display (e.g. the share success screen): no actions,
-  // toggles, or click-to-edit, since it has no trip/store context.
+  const { index = 0, variant = 'trip', tripId = null, selected = false, fits = false } = opts;
+  // 'preview' = read-only display (share success screen). 'select' = read-only
+  // with a selection checkbox (the trip's "add from Wander List" picker). Both
+  // suppress the normal actions/toggles/click-to-edit.
   const isPreview = variant === 'preview';
+  const isSelect = variant === 'select';
+  const readOnly = isPreview || isSelect;
   const catIcon = _scrapCategoryIcon(scrap);
 
   const title = scrap.place_name || 'Saved place';
@@ -68,7 +71,7 @@ function renderScrapCard(scrap, opts = {}) {
           <i data-lucide="check"></i>Keep it
         </button>
         <button class="ts-btn ts-btn--sm ts-btn--ghost" data-action="unassign" data-scrap-id="${escapeAttr(scrap.id)}">
-          <i data-lucide="inbox"></i>Move to inbox
+          <i data-lucide="heart"></i>To Wander List
         </button>
       </div>`;
   } else if (variant === 'inbox') {
@@ -100,7 +103,7 @@ function renderScrapCard(scrap, opts = {}) {
   // Favorite (trip only) + visited toggle (trip + wishlist) live in the corner.
   const showFav = variant === 'trip';
   const showVisited = variant === 'trip' || variant === 'inbox';
-  const isVisited = !!scrap.visited_at && !isPreview;
+  const isVisited = !!scrap.visited_at && !readOnly;
   const actions = (showFav || showVisited) ? `
     <div class="scrap-card__actions">
       ${showVisited ? `
@@ -118,9 +121,11 @@ function renderScrapCard(scrap, opts = {}) {
     </div>` : '';
 
   return `
-    <div class="sticker-card ${isPreview ? '' : 'card-lift'} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
-         style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isPreview ? 'none' : 'edit'}">
+    <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
+         style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : isPreview ? 'none' : 'edit'}">
       ${actions}
+      ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
+      ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
       ${isVisited ? '<span class="scrap-card__visited-badge"><i data-lucide="check"></i>Visited</span>' : ''}
       ${photo}
       <p class="scrap-card__title">${escapeHtml(title)}</p>

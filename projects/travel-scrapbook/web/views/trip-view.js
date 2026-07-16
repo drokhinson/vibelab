@@ -93,6 +93,7 @@ class TripView extends View {
           <h1 style="font-size:2.1rem;margin:0;">${escapeHtml(trip.name)}</h1>
           <p class="scrap-card__sub">${escapeHtml([trip.destination, dates].filter(Boolean).join(' · '))}</p>
         </div>
+        <button class="ts-header__nav-btn ts-btn ts-btn--ghost ts-btn--sm" id="trip-edit" aria-label="Edit trip"><i data-lucide="pencil"></i></button>
         <button class="ts-header__nav-btn ts-btn ts-btn--ghost ts-btn--sm" id="trip-delete" aria-label="Delete trip"><i data-lucide="trash-2"></i></button>
       </div>
       ${renderAnchorsStrip(trip)}
@@ -100,20 +101,23 @@ class TripView extends View {
       ${this._renderStaging(staged)}
       ${this._renderCandidates()}
       ${this._renderRoutePanel(trip, geocodedCount)}
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1.2rem;">
-        <h2 style="font-size:1.5rem;margin:0;">Scraps</h2>
-        <button class="ts-btn ts-btn--ghost ts-btn--sm ${this._favoritesOnly ? 'is-fav' : ''}" id="fav-filter"
-                style="${this._favoritesOnly ? 'border-color:var(--blush);color:#E4557A;' : ''}">
-          <i data-lucide="heart"></i>${this._favoritesOnly ? 'All scraps' : 'Favorites'}
-        </button>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;margin-top:1.2rem;flex-wrap:wrap;">
+        <h2 style="font-size:1.5rem;margin:0;">Plans</h2>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="ts-btn ts-btn--blush ts-btn--sm" id="add-plans"><i data-lucide="plus"></i>Add plans</button>
+          <button class="ts-btn ts-btn--ghost ts-btn--sm ${this._favoritesOnly ? 'is-fav' : ''}" id="fav-filter"
+                  style="${this._favoritesOnly ? 'border-color:var(--blush);color:#E4557A;' : ''}">
+            <i data-lucide="heart"></i>${this._favoritesOnly ? 'All' : 'Favorites'}
+          </button>
+        </div>
       </div>
       ${scraps.length === 0 ? `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-scraps.svg" alt="" />
-          <p class="empty-title">${this._favoritesOnly ? 'No favorites yet' : 'Paste your first link'}</p>
+          <p class="empty-title">${this._favoritesOnly ? 'No favorites yet' : 'No plans yet'}</p>
           <p class="empty-desc">${this._favoritesOnly
-            ? 'Tap the heart on scraps you love and they collect here.'
-            : 'Found something on Reddit or Instagram? Paste it above — we\'ll figure out what place it is.'}</p>
+            ? 'Tap the heart on plans you love and they collect here.'
+            : 'Tap “Add plans” to pick from your Wander List or add a place — or paste a link above.'}</p>
         </div>` : `
         ${renderGroupedList(scraps, {
           dims: ['category', 'region', 'country', 'city'], active: this._groupBy,
@@ -150,8 +154,8 @@ class TripView extends View {
     return `
       <div class="sticker-card washi washi--sky" style="padding-top:1.2rem;margin-top:1.1rem;">
         <div>
-          <h2 style="font-size:1.5rem;margin:0;">From your wishlist</h2>
-          <p class="scrap-card__sub">Places you've saved that fit this trip — tap to add.</p>
+          <h2 style="font-size:1.5rem;margin:0;">Suggested plans</h2>
+          <p class="scrap-card__sub">From your Wander List, matching this trip — tap to add.</p>
         </div>
         <div class="card-grid card-grid--2col" style="margin-top:0.8rem;">
           ${cands.map((s, i) => renderScrapCard(s, { index: i, variant: 'candidate', tripId: this._tripId })).join('')}
@@ -221,6 +225,18 @@ class TripView extends View {
     c.querySelector('#fav-filter')?.addEventListener('click', () => {
       this._favoritesOnly = !this._favoritesOnly;
       this.render();
+    });
+    c.querySelector('#trip-edit')?.addEventListener('click', () => {
+      TripEditor.open(trip, { onSaved: () => this._loadCandidates() });
+    });
+    c.querySelector('#add-plans')?.addEventListener('click', () => {
+      AddPlans.open(trip, {
+        onSaved: async () => {
+          await window.TripDomain.load(trip.id);
+          this._loadCandidates();
+          window.SourceDomain?.refreshInboxCount();
+        },
+      });
     });
 
     bindScrapGroups(c, {
