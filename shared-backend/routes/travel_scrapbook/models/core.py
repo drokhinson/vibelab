@@ -34,6 +34,8 @@ class ProfileResponse(BaseModel):
     display_name: str
     username: str
     is_admin: bool
+    tutorial_seen: bool = Field(
+        False, description="False → the web app auto-launches the tour once")
     categories: list[CategoryResponse]
 
 

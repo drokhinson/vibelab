@@ -43,6 +43,25 @@
       if (window.store.get('user')) window.SourceDomain.refreshInboxCount();
     });
 
+    // First-run tour: auto-launch once when the profile arrives with
+    // tutorial_seen=false — except in the chrome-less popup/share/login flows,
+    // where a modal tour would be hostile. Dismissing counts as seen.
+    let tutorialLaunched = false;
+    window.store.subscribe('user', () => {
+      const user = window.store.get('user');
+      if (!user || user.tutorial_seen || tutorialLaunched) return;
+      const route = window.store.get('currentRoute')?.name;
+      if (route === 'scrap' || route === 'share' || route === 'login') return;
+      tutorialLaunched = true;
+      TutorialCarousel.open({
+        firstRun: true,
+        onDone: () => {
+          window.store.set('user', { ...user, tutorial_seen: true });
+          window.api.markTutorialSeen().catch(() => {});
+        },
+      });
+    });
+
     // Header nav (static shell — bound once).
     document.querySelectorAll('[data-route]').forEach((el) => {
       el.addEventListener('click', (ev) => {

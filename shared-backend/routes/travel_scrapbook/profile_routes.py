@@ -55,6 +55,7 @@ async def get_me(user: CurrentUser = Depends(get_current_user)) -> ProfileRespon
         display_name=user.display_name,
         username=user.username,
         is_admin=user.is_admin,
+        tutorial_seen=user.tutorial_seen,
         categories=load_categories(),
     )
 
@@ -79,5 +80,31 @@ async def update_me(
         display_name=body.display_name,
         username=user.username,
         is_admin=user.is_admin,
+        tutorial_seen=user.tutorial_seen,
+        categories=load_categories(),
+    )
+
+
+@router.post(
+    "/me/tutorial-seen",
+    response_model=ProfileResponse,
+    status_code=200,
+    summary="Mark the tour as seen",
+)
+async def mark_tutorial_seen(
+    user: CurrentUser = Depends(get_current_user),
+) -> ProfileResponse:
+    """Record that the user finished (or dismissed) the first-run tour so it
+    never auto-launches again. Idempotent."""
+    sb = get_supabase()
+    sb.table("travelscrapbook_profiles").update(
+        {"tutorial_seen_at": "now()"}
+    ).eq("id", user.user_id).execute()
+    return ProfileResponse(
+        user_id=user.user_id,
+        display_name=user.display_name,
+        username=user.username,
+        is_admin=user.is_admin,
+        tutorial_seen=True,
         categories=load_categories(),
     )

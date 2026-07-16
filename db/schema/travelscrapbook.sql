@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_profiles (
   display_name TEXT        NOT NULL,
   username     TEXT        UNIQUE NOT NULL,
   is_admin     BOOLEAN     NOT NULL DEFAULT false,
+  tutorial_seen_at TIMESTAMPTZ,                  -- NULL = auto-launch the tour once (010)
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

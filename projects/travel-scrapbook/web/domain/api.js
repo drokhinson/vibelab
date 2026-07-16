@@ -143,6 +143,8 @@
     health: () => call('/health'),
     me: () => call('/me'),
     updateMe: (body) => call('/me', { method: 'PATCH', body }),
+    /** Never auto-launch the tour again (idempotent). */
+    markTutorialSeen: () => call('/me/tutorial-seen', { method: 'POST' }),
 
     listTrips: () => call('/trips'),
     createTrip: (body) => call('/trips', { method: 'POST', body }),

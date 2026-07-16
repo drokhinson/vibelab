@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- Tutorial: the community pool — a globe ringed by other travelers' place pins -->
+  <g stroke="#5B5468" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="100" cy="126" rx="62" ry="7" fill="#5B5468" opacity="0.08" stroke="none"/>
+
+    <!-- globe -->
+    <circle cx="100" cy="74" r="34" fill="#BDE0FE" stroke-width="2.8"/>
+    <ellipse cx="100" cy="74" rx="14" ry="34" fill="none" stroke-width="1.8" opacity="0.65"/>
+    <line x1="66" y1="74" x2="134" y2="74" stroke-width="1.8" opacity="0.65"/>
+    <path d="M70 56c8 6 52 6 60 0M70 92c8-6 52-6 60 0" fill="none" stroke-width="1.8" opacity="0.65"/>
+    <!-- landmasses -->
+    <path d="M84 60c6-4 12-2 13 3s-4 8-9 7-8-6-4-10z" fill="#BEE7D0" stroke-width="1.8"/>
+    <path d="M108 80c5-2 10 1 9 5s-7 6-11 3-2-6 2-8z" fill="#BEE7D0" stroke-width="1.8"/>
+
+    <!-- pins dropped by other travelers -->
+    <g transform="translate(64 36)">
+      <path d="M0-9c4.5 0 7.6 3.2 7.6 7.2C7.6 3.6 0 10 0 10s-7.6-6.4-7.6-11.8C-7.6-5.8-4.5-9 0-9z" fill="#F9C5D1" stroke-width="2.2"/>
+      <circle cy="-2" r="2.4" fill="#FFF9F2" stroke-width="1.4"/>
+    </g>
+    <g transform="translate(140 42)">
+      <path d="M0-9c4.5 0 7.6 3.2 7.6 7.2C7.6 3.6 0 10 0 10s-7.6-6.4-7.6-11.8C-7.6-5.8-4.5-9 0-9z" fill="#FDE9A9" stroke-width="2.2"/>
+      <circle cy="-2" r="2.4" fill="#FFF9F2" stroke-width="1.4"/>
+    </g>
+    <g transform="translate(150 92)">
+      <path d="M0-9c4.5 0 7.6 3.2 7.6 7.2C7.6 3.6 0 10 0 10s-7.6-6.4-7.6-11.8C-7.6-5.8-4.5-9 0-9z" fill="#DCD0F2" stroke-width="2.2"/>
+      <circle cy="-2" r="2.4" fill="#FFF9F2" stroke-width="1.4"/>
+    </g>
+
+    <!-- little traveler chips passing places around -->
+    <g transform="translate(40 96)">
+      <circle r="9" fill="#FFFFFF" stroke-width="2.2"/>
+      <circle cy="-2.5" r="3" fill="#F4A988" stroke-width="1.5"/>
+      <path d="M-4.5 5c1-3.4 8-3.4 9 0" fill="none" stroke-width="1.5"/>
+    </g>
+    <path d="M52 92c8-4 14-6 22-7" fill="none" stroke-width="2" stroke-dasharray="1 6"/>
+    <path d="M72 83l6-1-3 6z" fill="#5B5468" stroke-width="1"/>
+
+    <!-- sparkles -->
+    <path d="M162 62l1.4 3.6 3.6 1.4-3.6 1.4-1.4 3.6-1.4-3.6-3.6-1.4 3.6-1.4z" fill="#BEE7D0" stroke-width="1.1"/>
+    <path d="M36 56l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z" fill="#F9C5D1" stroke-width="1.1"/>
+  </g>
+</svg>
