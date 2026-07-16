@@ -76,6 +76,7 @@ class VisitedView extends View {
         <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
           <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
         </button>` : ''}
+      ${renderQuickPaste()}
     `;
     this.refreshIcons();
     this._bind();
@@ -83,6 +84,7 @@ class VisitedView extends View {
 
   _bind() {
     const c = this.container;
+    bindQuickPaste(c);
     bindFilterBar(c, {
       geo: this._geo,
       onChange: (geo) => { this._geo = geo; this._load(); },

@@ -150,7 +150,6 @@ class TripView extends View {
         ${isOwner ? `<button class="ts-header__nav-btn ts-btn ts-btn--ghost ts-btn--sm" id="trip-delete" aria-label="Delete trip"><i data-lucide="trash-2"></i></button>` : ''}
       </div>
       ${renderAnchorsStrip(trip, { readOnly: !canWrite })}
-      ${canWrite ? renderQuickPaste(trip.id) : ''}
       <div class="ts-segmented" role="tablist" aria-label="Trip view" style="margin-top:0.9rem;">
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="plans" ${this._tab === 'plans' ? 'checked' : ''} /><span>Plans</span></label>
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="timeline" ${this._tab === 'timeline' ? 'checked' : ''} /><span>Timeline</span></label>
@@ -184,6 +183,7 @@ class TripView extends View {
           collapsed: this._collapsed, variant: 'trip', name: 'trip-groupby', ...cardOpts,
         })}`}
       `}
+      ${canWrite ? renderQuickPaste(trip.id) : ''}
     `;
     this.refreshIcons();
     this._bind(trip, { isOwner, canWrite });

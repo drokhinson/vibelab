@@ -90,6 +90,7 @@ class CommunityView extends View {
         <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
           <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
         </button>` : ''}
+      ${renderQuickPaste()}
     `;
     this.refreshIcons();
     this._bind();
@@ -97,6 +98,7 @@ class CommunityView extends View {
 
   _bind() {
     const c = this.container;
+    bindQuickPaste(c);
     const q = c.querySelector('#community-q');
     q?.addEventListener('input', () => {
       this._q = q.value.trim();

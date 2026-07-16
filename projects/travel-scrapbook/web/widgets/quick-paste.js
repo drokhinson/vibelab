@@ -1,15 +1,24 @@
-// widgets/quick-paste.js — the paste-a-link box on the trip view.
+// widgets/quick-paste.js — the "scrap a link" box, rendered as a sticky
+// footer at the bottom of the browse views (Wander List, Visited, Community)
+// and the trip view, so capture is always one glance away. With a tripId the
+// capture lands straight on that trip (and the trip polls for the results);
+// without one it lands on the Wander List.
 'use strict';
 
-function renderQuickPaste(tripId) {
+// Discovery + recording mark: a place pin being added. Older lucide builds
+// may not know map-pin-plus, so fall back to bookmark-plus at icon time.
+const QUICK_PASTE_ICON =
+  (window.lucide?.icons && !window.lucide.icons.MapPinPlus && !window.lucide.icons['map-pin-plus'])
+    ? 'bookmark-plus' : 'map-pin-plus';
+
+function renderQuickPaste(tripId = null) {
   return `
-    <form class="sticker-card washi--mint washi" id="quick-paste-form" data-trip-id="${escapeAttr(tripId)}"
-          style="display:flex;gap:0.5rem;align-items:center;margin:1.1rem 0;padding-top:1.1rem;">
+    <form class="scrap-footer" id="quick-paste-form" ${tripId ? `data-trip-id="${escapeAttr(tripId)}"` : ''}>
       <input class="ts-input" id="quick-paste-input" type="url" required
              placeholder="Paste a link — Reddit, Instagram, a blog…"
-             style="flex:1;" inputmode="url" autocomplete="off" />
+             style="flex:1;margin:0;" inputmode="url" autocomplete="off" />
       <button class="ts-btn ts-btn--blush" type="submit" aria-label="Scrap it">
-        <i data-lucide="scissors"></i><span class="hidden sm:inline">Scrap it</span>
+        <i data-lucide="${QUICK_PASTE_ICON}"></i><span class="hidden sm:inline">Scrap it</span>
       </button>
     </form>
   `;
@@ -26,7 +35,14 @@ function bindQuickPaste(container, { onCreated } = {}) {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-      await window.ScrapDomain.capture(form.dataset.tripId, url);
+      const tripId = form.dataset.tripId;
+      if (tripId) {
+        // Trip capture: the trip polls until the new scraps land.
+        await window.ScrapDomain.capture(tripId, url);
+      } else {
+        await window.api.capture({ url, via: 'paste' });
+        window.SourceDomain?.refreshInboxCount();
+      }
       input.value = '';
       toast('Scrapped! Reading the page — it may add more than one place.');
       onCreated?.();

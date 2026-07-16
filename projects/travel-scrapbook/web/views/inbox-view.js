@@ -124,6 +124,7 @@ class InboxView extends View {
             <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
           </button>` : ''}
       `}
+      ${renderQuickPaste()}
     `;
     this.refreshIcons();
     this._bind();
@@ -132,6 +133,7 @@ class InboxView extends View {
 
   _bind() {
     const c = this.container;
+    bindQuickPaste(c, { onCreated: () => this._load() });
 
     bindFilterBar(c, {
       geo: this._geo,
