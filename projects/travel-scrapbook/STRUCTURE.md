@@ -1,7 +1,7 @@
 # Travel Scrapbook — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-07-15
+> Last updated: 2026-07-16
 
 ## What This App Does
 
@@ -42,7 +42,7 @@ projects/travel-scrapbook/
 │   ├── domain/               — store.js, api.js (makeApi), view.js (Router), trip.js, scrap.js, source.js, route.js
 │   ├── ui/                   — canonical render fns: trip-card, scrap-card, source-card, route-stop, category-badge, oauth-buttons, sprites.js
 │   ├── widgets/              — quick-paste, scrap-editor, anchor-editor, tutorial-carousel
-│   ├── views/                — login, trips, trip, inbox, scrap-popup (bookmarklet), share (share target), settings
+│   ├── views/                — login, trips, trip, inbox (Wander List), visited, scrap-popup (bookmarklet), share (share target), settings
 │   ├── init.js               — router boot, SW registration, inbox badge
 │   └── assets/
 │       ├── brand/travel-scrapbook-logo.svg + travel-scrapbook-icon-{192,512,512-maskable}.png
@@ -52,7 +52,7 @@ projects/travel-scrapbook/
 └── STRUCTURE.md
 
 shared-backend/routes/travel_scrapbook/   — FastAPI package (see below)
-db/migrations/travelscrapbook/001_baseline.sql … 004_places_sources.sql
+db/migrations/travelscrapbook/001_baseline.sql … 005_region_scope_visited.sql
 db/schema/travelscrapbook.sql, db/functions/travelscrapbook.sql
 ```
 
@@ -64,13 +64,13 @@ All tables RLS-enabled, granted to `travelscrapbook_role`; backend-only access v
 
 - **travelscrapbook_profiles** — Supabase Auth profile. `id uuid PK → auth.users ON DELETE CASCADE`, `display_name text`, `username text UNIQUE`, `is_admin bool`, `created_at`.
 - **travelscrapbook_categories** — seeded option set. `slug text PK` (restaurant, cafe, bar, sight, activity, shop, lodging, other), `label text`, `icon text` (sprite slug → `assets/sprites/categories/travel-scrapbook-cat-<icon>.svg`), `sort_order int`.
-- **travelscrapbook_trips** — `id uuid PK`, `user_id → profiles CASCADE`, `name text`, `destination text`, `cover_icon text DEFAULT 'plane'` (sprite slug), `start_date date`, `end_date date`, `notes text`, **geocoded destination** `lat/lng`, `geocode_confidence`, `geocode_display_name`, `destination_geocoded_at` (NULL = never attempted; drives lazy backfill), timestamps. Index `(user_id)`.
+- **travelscrapbook_trips** — `id uuid PK`, `user_id → profiles CASCADE`, `name text`, `destination text`, `cover_icon text DEFAULT 'plane'` (sprite slug), **geographic scope** `scope_level text CHECK ('region','country','city') DEFAULT 'city'` + `dest_city/dest_region/dest_country` (match values derived from the destination geocode), `start_date date`, `end_date date`, `notes text`, **geocoded destination** `lat/lng`, `geocode_confidence`, `geocode_display_name`, `destination_geocoded_at` (NULL = never attempted; drives lazy backfill), timestamps. Index `(user_id)`. Scope drives tag-based staging + the trip candidates panel; city scope stays distance-based.
 - **travelscrapbook_anchors** — route endpoints/stays. `id uuid PK`, `trip_id → trips CASCADE`, `role text CHECK ('start','end','stay')`, `label text`, `query text` (geocode input), `lat/lng double precision`, `geocode_confidence text CHECK ('high','medium','low','none')`, `type text CHECK ('airport','train_station','car_rental','other')` (start/end only — how you arrive/depart), `stay_date date` (stay only — check-in day, seeds a future day-by-day timeline), `created_at`. Partial unique `(trip_id, role) WHERE role IN ('start','end')`. Arrival and departure are often the same place, so the end anchor can be created with `same_as_start` to copy the start's location + type (no re-geocode).
 - **travelscrapbook_sources** — one capture event. `id uuid PK`, `user_id → profiles CASCADE`, `url text`, `url_normalized text` (tracking params/fragment stripped; UNIQUE per user), `source_domain`, `status CHECK ('processing','ready','failed')`, `error_kind` (network/blocked/llm/no_place), `captured_via CHECK ('paste','bookmarklet','share','shortcut')`, `shared_text` (share-sheet caption — extra LLM context, key for blocked Instagram pages), `capture_notes` (user note at capture, copied onto created scraps), `trip_hint_id → trips SET NULL`, `og_title/og_description/og_image_url`, timestamps.
-- **travelscrapbook_places** — canonical place, per-user (osm identity recorded for future global/cross-user dedupe). `id uuid PK`, `user_id → profiles CASCADE`, `name text`, `name_normalized text` (accent/case/punct-folded dedupe key), `city/country`, `category → categories DEFAULT 'other'`, `lat/lng`, `geocode_confidence`, `geocode_display_name`, `osm_type/osm_id`, `maps_url`, timestamps. Index `(user_id, name_normalized)`.
+- **travelscrapbook_places** — canonical place, per-user (osm identity recorded for future global/cross-user dedupe). `id uuid PK`, `user_id → profiles CASCADE`, `name text`, `name_normalized text` (accent/case/punct-folded dedupe key), `city/region/country` (region = admin-1 state/province, auto-filled from the geocode's address components), `category → categories DEFAULT 'other'`, `lat/lng`, `geocode_confidence`, `geocode_display_name`, `osm_type/osm_id`, `maps_url`, timestamps. Index `(user_id, name_normalized)`.
 - **travelscrapbook_place_sources** — N sources ↔ N places join (`place_id`, `source_id`, PK both, CASCADE both).
 - **travelscrapbook_capture_tokens** — iOS Shortcut auth. `id uuid PK`, `user_id → profiles CASCADE`, `token_hash text UNIQUE` (sha256 hex — deterministic so /capture can look up BY token; safe for 256-bit random tokens), `created_at`, `last_used_at`, `revoked_at` (soft revoke; one active per user, enforced app-side).
-- **travelscrapbook_scraps** — the user's saved place. `id uuid PK`, `trip_id → trips CASCADE` **nullable** (NULL = inbox), `user_id → profiles CASCADE`, `place_id → places CASCADE`, `status CHECK ('inbox','staged','approved')` (staged = auto-matched to a trip, awaiting review; only approved scraps route/export), `notes`, `is_favorite`, `route_position`, timestamps. Indexes `(trip_id)`, `(user_id)`, `(user_id, status)`, `(place_id)`.
+- **travelscrapbook_scraps** — the user's saved place. `id uuid PK`, `trip_id → trips CASCADE` **nullable** (NULL = wishlist/inbox), `user_id → profiles CASCADE`, `place_id → places CASCADE`, `status CHECK ('inbox','staged','approved')` (staged = auto-matched to a trip, awaiting review; only approved scraps route/export), `notes`, `is_favorite`, `visited_at timestamptz` (NULL = on the wishlist; set = visited → surfaces in the Visited view, excluded from the wishlist + nav badge), `route_position`, timestamps. Indexes `(trip_id)`, `(user_id)`, `(user_id, status)`, `(place_id)`, `(user_id, visited_at)`.
 
 ## API Endpoints
 
@@ -78,14 +78,16 @@ All under `/api/v1/travel_scrapbook`, Supabase bearer auth (profile auto-created
 
 - `GET /health` — health check, no auth
 - `GET /me` — profile bootstrap + category list; `PATCH /me` — update display_name
-- `GET /trips` — list with scrap counts (lazily backfills destination geocodes); `POST /trips` (geocodes destination synchronously); `GET /trips/{id}` — trip + anchors + `scraps` (approved) + `staged_scraps` bundle; `PATCH /trips/{id}` (re-geocodes a changed destination); `DELETE /trips/{id}`
+- `GET /trips` — list with scrap counts (lazily backfills destination geocodes + `dest_*` components, inferring legacy scope); `POST /trips` (accepts `scope_level`; geocodes destination synchronously, inferring scope from the destination when none given); `GET /trips/{id}` — trip + anchors + `scraps` (approved) + `staged_scraps` bundle; `PATCH /trips/{id}` (re-geocodes a changed destination, honors `scope_level`); `DELETE /trips/{id}`
 - `POST /trips/{id}/anchors` — create + geocode synchronously (accepts `type` for start/end, `stay_date` for stay, or `same_as_start` on an end anchor to copy the start's place + type without geocoding); `PATCH /anchors/{id}` — edit (re-geocodes if query changed); `DELETE /anchors/{id}`
 - `POST /capture` → 202 — the single silent-capture entry: `{url?, text?, title?, trip_id?, via?, notes?}`; URL taken from `url` or extracted from `text` (Android share sheets put it there); dedupes on `(user, url_normalized)` (re-capture reuses the source; failed/stale resets and re-runs); processing via BackgroundTasks
 - `POST /capture-token` → 201 (plaintext shown once; replaces prior token); `GET /capture-token` — status; `DELETE /capture-token` — revoke
-- `GET /inbox` — `{processing_sources, failed_sources, scraps}` (inbox scraps carry `suggestions`: nearest ≤3 trips within 200 km); sweeps sources stuck processing >10 min → failed; `GET /inbox/count` — nav badge
+- `GET /inbox` — the wishlist: `{processing_sources, failed_sources, scraps}` (only unvisited inbox scraps; each carries `suggestions`: nearest ≤3 trips within 200 km, plus country/region trips by tag match); sweeps sources stuck processing >10 min → failed; `GET /inbox/count` — nav badge (unvisited only)
+- `GET /visited` — every scrap with `visited_at` set (any trip or the wishlist), most-recently-visited first — the Visited view
 - `POST /sources/{id}/retry` → 202; `DELETE /sources/{id}` — dismiss
-- `GET /scraps/{id}`; `GET /trips/{id}/scraps` — hydrated with place fields + source chips
-- `PATCH /scraps/{id}` — place-field/category edits write to the canonical **place** row; notes/favorite stay on the scrap; `regeocode: true` re-runs Nominatim synchronously
+- `GET /scraps/{id}`; `GET /trips/{id}/scraps` — hydrated with place fields (incl. `place_region`) + source chips
+- `GET /trips/{id}/candidates` — unvisited wishlist scraps whose location matches the trip's scope (city/country/region), for the "From your wishlist" panel; same predicate as auto-staging
+- `PATCH /scraps/{id}` — place-field/category edits (incl. `place_region`) write to the canonical **place** row; notes/favorite/`visited` stay on the scrap (`visited` → `visited_at` now()/NULL); `regeocode: true` re-runs Nominatim synchronously (also refreshes region)
 - `POST /scraps/{id}/assign` `{trip_id}` → approved; `POST /scraps/{id}/approve` (staged only, else 409); `POST /scraps/{id}/unassign` → back to inbox; `POST /trips/{id}/approve-all` — approve every staged scrap; `DELETE /scraps/{id}`
 - `POST /trips/{id}/route/optimize` — `{scrap_ids?, favorites_only?}`; NN + 2-opt with start/end anchors; **approved scraps only**; persists `route_position`; returns ordered scraps + leg/total km + skipped (ungeocoded)
 - `GET /trips/{id}/export/maps-links` — JSON `{legs: [{label, url, stop_count}]}` of `google.com/maps/dir/...` URLs (≤10 stops/leg, legs overlap at endpoints)
@@ -97,7 +99,8 @@ All under `/api/v1/travel_scrapbook`, Supabase bearer auth (profile auto-created
 |---|---|---|---|
 | `/` | `trips` | — | Trip grid (default landing, auth required). |
 | `/trip/:tripId` | `trip` | `tripId` | Trip detail: anchors, quick-paste, staging review, scraps, route panel. |
-| `/inbox` | `inbox` | — | Captured finds: processing, failed (retry), needs-a-home (suggestion chips). |
+| `/inbox` | `inbox` | — | Wander List (wishlist): processing, failed (retry), want-to-go places (suggestion chips + mark-visited). |
+| `/visited` | `visited` | — | Places marked visited (any trip or the wishlist); tap the check to move one back. |
 | `/scrap` | `scrap-popup` | `?url=&title=` | Bookmarklet popup — chrome-less trip picker + save. |
 | `/share` | `share` | `?url=&text=&title=` | Android share-target landing — silent capture + instant "Saved". |
 | `/settings` | `settings` | — | Profile, phone capture (Shortcut token + PWA hint), bookmarklet, logout. |
@@ -157,3 +160,4 @@ npx serve projects/travel-scrapbook/web
 - 2026-07-15 — Tutorial carousel rewritten around the capture-first flow (welcome → collect scraps via share sheet → build a trip → anchor it → export to Google Maps); new `tutorial-collect` / `tutorial-anchors` illustrations, orphaned quick-paste/bookmarklet/organize art deleted.
 - 2026-07-15 — Phone capture + places/sources split (migration `004`): silent capture from the phone share sheet (Android PWA share_target at `/share`; iPhone Shortcut → `POST /capture` with a personal `tsc_` token), places/sources data model (place = source of truth, deduped across URLs; one reel fans out into many places), inbox + trip staging ("Needs review"), Gemini multi-place prompt, trip destination geocoding. **Pending user action: run `db/migrations/travelscrapbook/004_places_sources.sql` in Supabase** (take a backup first — it restructures scraps and deletes pending/failed rows).
 - 2026-07-16 — Fix: every link failed to process with Gemini API `404 NotFound`. Google pulled the pinned `gemini-2.5-flash` model on 2026-07-09 (ahead of its announced shutdown). Switched `GEMINI_MODEL` to the `gemini-flash-lite-latest` alias so future deprecations hot-swap (with 2-week notice) instead of 404-ing. No migration or user action needed — Railway auto-deploys on merge.
+- 2026-07-16 — Region tags + trip scope + wishlist/visited (migration `005`): (1) `places.region` (admin-1 state/province) auto-filled from Nominatim address components — `GeocodeResult` now parses the `address` object (geocode cache namespace bumped to `ts.geocode2`); (2) trips gain `scope_level` (city/country/region, picked in the New Trip modal) + derived `dest_*`, a single `place_matches_trip_scope` predicate powering auto-staging, inbox suggestions, and a new "From your wishlist" candidates panel (`GET /trips/{id}/candidates`); city = distance (unchanged), country/region = tag match; (3) the inbox is reframed as the **Wander List** (label/copy only — enum + `/inbox` unchanged), scraps gain `visited_at`, a new **Visited** view (`GET /visited`, `/visited` route) collects them, mark-visited toggle on wishlist/trip cards + editor. **Pending user action: run `db/migrations/travelscrapbook/005_region_scope_visited.sql` in Supabase** (it re-arms destination geocoding so existing trips backfill `dest_*` + infer scope on next `/trips` load; existing places gain a region only when re-pinned/re-captured).
