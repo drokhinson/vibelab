@@ -195,6 +195,26 @@ function renderScrapCard(scrap, opts = {}) {
       </button>
     </div>` : '';
 
+  // Notes live in a popup; the card shows only a chip — filled when a note
+  // exists, ghost otherwise. Interactive on the owner's editable variants;
+  // read-only surfaces show a static filled chip only when there's a note.
+  const noteEditable = !readOnly && mine && (variant === 'trip' || variant === 'inbox');
+  let noteChip = '';
+  if (noteEditable) {
+    noteChip = `
+      <button class="note-chip ${scrap.notes ? 'is-filled' : ''}" data-action="notes"
+              data-scrap-id="${escapeAttr(scrap.id)}"
+              aria-label="${scrap.notes ? 'View note' : 'Add a note'}"
+              title="${scrap.notes ? escapeAttr(scrap.notes) : 'Add a note'}">
+        <i data-lucide="sticky-note"></i>${scrap.notes ? '' : '<i data-lucide="plus" class="note-chip__plus"></i>'}
+      </button>`;
+  } else if (scrap.notes) {
+    noteChip = `
+      <span class="note-chip is-filled" title="${escapeAttr(scrap.notes)}">
+        <i data-lucide="sticky-note"></i>
+      </span>`;
+  }
+
   // Only the owner can open the editor (place edits are owner-only server-side),
   // so others' cards on a shared trip aren't tappable-to-edit.
   const editable = mine && (variant === 'trip' || variant === 'inbox' || variant === 'candidate');
@@ -232,9 +252,9 @@ function renderScrapCard(scrap, opts = {}) {
         ${renderCategoryBadge(scrap.category)}
         ${_sourceChips(scrap)}
         ${scrap.maps_url ? `<a class="source-badge" href="${escapeAttr(scrap.maps_url)}" target="_blank" rel="noopener" data-action="none" onclick="event.stopPropagation()"><i data-lucide="map-pin"></i>Maps</a>` : ''}
+        ${noteChip}
       </div>
       ${hint ? `<div class="confidence-hint" style="margin-top:0.4rem;">${escapeHtml(hint)}</div>` : ''}
-      ${scrap.notes ? `<p class="scrap-card__sub" style="margin-top:0.4rem;">${escapeHtml(scrap.notes)}</p>` : ''}
       ${vibeUi}
       ${footer}
     </div>

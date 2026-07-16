@@ -337,6 +337,8 @@ class TripView extends View {
                   catch (err) { toast(err.message, { error: true }); }
                 },
               });
+            } else if (action === 'notes') {
+              NotePopup.open(scrap, { onSaved: () => window.TripDomain.load(trip.id) });
             } else if (action === 'visited') {
               await window.ScrapDomain.toggleVisited(scrapId, trip.id, !!scrap.visited_at);
               toast(scrap.visited_at ? 'Back on your wishlist' : 'Marked visited');

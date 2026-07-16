@@ -211,6 +211,22 @@ a:hover { color: var(--accent-hover); }
 .scrap-card__sub { font-size: 0.82rem; color: var(--ink-muted); overflow-wrap: anywhere; }
 .scrap-card__row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
 .scrap-card__actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+/* Note chip — the note itself lives in the NotePopup. */
+.note-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 1px;
+  min-width: 34px; min-height: 26px; padding: 0 8px; border-radius: 999px;
+  border: 1.5px dashed var(--border); background: transparent;
+  color: var(--ink-muted); cursor: pointer; font-size: 0.72rem; font-weight: 800;
+}
+.note-chip [data-lucide] { width: 14px; height: 14px; }
+.note-chip .note-chip__plus { width: 10px; height: 10px; }
+.note-chip:hover { border-color: var(--ink-muted); color: var(--ink); }
+.note-chip.is-filled {
+  border-style: solid; border-color: var(--ink);
+  background: var(--butter, #FDE9A9); color: var(--ink);
+}
+span.note-chip { cursor: default; }
+
 /* Read-only rating chip (Visited view + anywhere the control is hidden). */
 .rating-badge {
   display: inline-flex; align-items: center; gap: 4px; margin-top: 0.5rem;

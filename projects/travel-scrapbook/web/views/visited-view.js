@@ -86,6 +86,8 @@ class VisitedView extends View {
             await window.ScrapDomain.toggleVisited(scrap.id, scrap.trip_id || null, true);
             toast('Back on your wishlist');
             await this._load();
+          } else if (action === 'notes') {
+            NotePopup.open(scrap, { onSaved: () => this._load() });
           }
         } catch (err) { toast(err.message, { error: true }); }
       });

@@ -152,6 +152,8 @@ class InboxView extends View {
                 } catch (err) { toast(err.message, { error: true }); }
               },
             });
+          } else if (action === 'notes') {
+            NotePopup.open(scrap, { onSaved: () => window.SourceDomain.loadInbox().catch(() => {}) });
           } else if (action === 'visited') {
             await window.ScrapDomain.toggleVisited(scrapId, null, !!scrap.visited_at);
             toast('Marked visited — see it under Visited');
