@@ -304,11 +304,10 @@ a:hover { color: var(--accent-hover); }
 .att-row:hover { border-color: var(--ink-muted); }
 .att-row input { width: 18px; height: 18px; flex-shrink: 0; }
 .att-row .ts-sprite { flex-shrink: 0; }
-/* Pencil edit affordance on the photo's top-right corner (mirrors the type
-   bubble on the left). Carries no handler — a click bubbles to the card's own
-   click-to-edit listener. */
+/* Pencil edit affordance at the whole card's top-right corner. Carries no
+   handler — a click bubbles to the card's own click-to-edit listener. */
 .scrap-card__edit {
-  position: absolute; top: 8px; right: 8px; z-index: 3;
+  position: absolute; top: 10px; right: 10px; z-index: 3;
   display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; border-radius: 999px;
   border: 1.5px solid var(--border); cursor: pointer;

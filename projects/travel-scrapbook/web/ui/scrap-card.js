@@ -198,10 +198,10 @@ function renderScrapCard(scrap, opts = {}) {
   // Only the owner can open the editor (place edits are owner-only server-side),
   // so others' cards on a shared trip aren't tappable-to-edit.
   const editable = mine && (variant === 'trip' || variant === 'inbox' || variant === 'candidate');
-  // The type bubble and the pencil sit on the image's top-left / top-right
-  // corners so they read as a matched pair. Pencil (creator only) opens the full
-  // editor (which houses delete) — it carries no handler; a click bubbles to the
-  // card's own click-to-edit listener (wired in every editable view).
+  // Pencil (creator only) sits at the whole card's top-right corner. It opens
+  // the full editor (which houses delete) — it carries no handler; a click
+  // bubbles to the card's own click-to-edit listener (wired in every editable
+  // view).
   const editBtn = editable
     ? '<button class="scrap-card__edit" type="button" aria-label="Edit place" title="Edit"><i data-lucide="pencil"></i></button>'
     : '';
@@ -213,9 +213,8 @@ function renderScrapCard(scrap, opts = {}) {
          <img class="scrap-card__photo" src="${escapeAttr(imgSrc)}" alt="" loading="lazy"
            onerror="this.closest('.scrap-card__media').classList.add('is-fallback');this.outerHTML='${spriteFallback.replaceAll("'", "\\'").replaceAll('"', '&quot;')}'" />
          ${_catBubble(scrap)}
-         ${editBtn}
        </div>`
-    : `<div class="scrap-card__media">${spriteFallback}${editBtn}</div>`;
+    : `<div class="scrap-card__media">${spriteFallback}</div>`;
 
   let footer = '';
   if (variant === 'staged') {
@@ -313,6 +312,7 @@ function renderScrapCard(scrap, opts = {}) {
          style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : isPreview ? 'none' : (editable ? 'edit' : 'none')}">
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
+      ${editBtn}
       ${media}
       <p class="scrap-card__title">${escapeHtml(title)}</p>
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}
