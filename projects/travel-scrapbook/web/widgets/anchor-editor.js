@@ -1,15 +1,19 @@
-// widgets/anchor-editor.js — start/end/stay anchors strip + add modal.
+// widgets/anchor-editor.js — the checkpoint editor modal (create + edit).
+// A checkpoint is an anchor: a STAY (lodging, check-in/out dates) or TRAVEL —
+// the trip's arrival (start) / departure (end), or a mid-trip leg for
+// multi-city trips (role 'travel', any number per trip).
 'use strict';
 
 const ANCHOR_ROLES = [
-  { role: 'start', label: 'Start', hint: 'e.g. arrival airport', lucide: 'plane-landing' },
-  { role: 'end', label: 'End', hint: 'e.g. departure airport', lucide: 'plane-takeoff' },
   { role: 'stay', label: 'Stay', hint: 'hotel or Airbnb', lucide: 'home' },
+  { role: 'travel', label: 'Travel', hint: 'flight, train, ferry to the next city', lucide: 'plane' },
+  { role: 'start', label: 'Arrival', hint: 'where the trip starts', lucide: 'plane-landing' },
+  { role: 'end', label: 'Departure', hint: 'where the trip ends', lucide: 'plane-takeoff' },
 ];
 
-// How you arrive at / depart from a start or end point. Frontend-owned icon map
-// mirroring ANCHOR_ROLES (matches the backend AnchorType enum). Lucide chrome
-// icons — no sprites, since these are UI marks not data art.
+// How you travel at a start/end/travel checkpoint. Frontend-owned icon map
+// (matches the backend AnchorType enum). Lucide chrome icons — no sprites,
+// since these are UI marks not data art.
 const ANCHOR_TYPES = [
   { type: 'airport', label: 'Airport', lucide: 'plane' },
   { type: 'train_station', label: 'Train station', lucide: 'train-front' },
@@ -17,55 +21,26 @@ const ANCHOR_TYPES = [
   { type: 'other', label: 'Other', lucide: 'map-pin' },
 ];
 
-// readOnly (viewers): show the anchors but hide the add/remove affordances.
-function renderAnchorsStrip(trip, { readOnly = false } = {}) {
-  const anchors = trip.anchors || [];
-  if (readOnly && !anchors.length) return '';
-  const chips = anchors.map((a) => {
-    const meta = ANCHOR_ROLES.find((r) => r.role === a.role) || ANCHOR_ROLES[2];
-    const typeMeta = a.type ? ANCHOR_TYPES.find((t) => t.type === a.type) : null;
-    const unpinned = a.geocode_confidence === 'none' ? ' title="Couldn\'t find this on the map — remove and retry with a fuller name"' : '';
-    return `
-      <span class="anchor-chip"${unpinned}>
-        <i data-lucide="${meta.lucide}"></i>
-        <span class="anchor-chip__role">${meta.label}</span>
-        <span>${escapeHtml(a.label)}</span>
-        ${typeMeta ? `<i data-lucide="${typeMeta.lucide}" class="anchor-chip__type" title="${escapeAttr(typeMeta.label)}"></i>` : ''}
-        ${a.role === 'stay' && a.stay_date ? `<span class="anchor-chip__day">${escapeHtml(formatDateRange(a.stay_date, a.stay_end_date || null))}</span>` : ''}
-        ${a.role !== 'stay' && a.anchor_date ? `<span class="anchor-chip__day">${escapeHtml(formatDateRange(a.anchor_date, null))}${a.anchor_time ? ' · ' + escapeHtml(a.anchor_time.slice(0, 5)) : ''}</span>` : ''}
-        ${a.geocode_confidence === 'none' ? '<i data-lucide="map-pin-off" style="opacity:0.5;"></i>' : ''}
-        ${readOnly ? '' : `<button data-action="remove-anchor" data-anchor-id="${escapeAttr(a.id)}" aria-label="Remove ${escapeAttr(a.label)}"
-                style="border:none;background:none;cursor:pointer;display:grid;place-items:center;width:24px;height:24px;color:var(--ink-muted);">
-          <i data-lucide="x"></i>
-        </button>`}
-      </span>
-    `;
-  }).join('');
-  return `
-    <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin:0.6rem 0;">
-      ${chips}
-      ${readOnly ? '' : `<button class="ts-btn ts-btn--ghost ts-btn--sm" data-action="add-anchor">
-        <i data-lucide="anchor"></i>Airports &amp; stays
-      </button>`}
-    </div>
-  `;
-}
+// Roles that carry anchor_date/anchor_time + type (everything except lodging).
+const TRAVEL_ROLES = ['start', 'end', 'travel'];
 
 const AnchorEditor = {
   _tripId: null,
 
-  // Create mode by default; `role` preselects (the timeline's "+ Arrival"/
-  // "+ Departure"/"+ Add a stay" buttons); `anchor` switches to EDIT mode —
-  // role locked, fields prefilled, submit PATCHes instead of creating.
-  open(trip, { anchor = null, role = null } = {}) {
+  // Create mode by default; `role` preselects (the timeline bookends and the
+  // "+ Checkpoint" buttons); `prefill` seeds the date fields (gap
+  // placeholders); `anchor` switches to EDIT mode — role locked, fields
+  // prefilled, submit PATCHes instead of creating.
+  open(trip, { anchor = null, role = null, prefill = null } = {}) {
     this._tripId = trip.id;
     this.close();
     const editing = !!anchor;
-    const taken = new Set((trip.anchors || []).filter((a) => a.role !== 'stay').map((a) => a.role));
+    const taken = new Set((trip.anchors || []).filter((a) => a.role === 'start' || a.role === 'end').map((a) => a.role));
     const options = editing
       ? ANCHOR_ROLES.filter((r) => r.role === anchor.role)
-      : ANCHOR_ROLES.filter((r) => r.role === 'stay' || !taken.has(r.role));
-    const preselect = editing ? anchor.role : role;
+      : ANCHOR_ROLES.filter((r) => r.role === 'stay' || r.role === 'travel' || !taken.has(r.role));
+    const preselect = editing ? anchor.role : (role || 'stay');
+    const roleLabel = (r) => (ANCHOR_ROLES.find((m) => m.role === r) || {}).label || 'checkpoint';
     const start = (trip.anchors || []).find((a) => a.role === 'start');
     const dateBounds = `${trip.start_date ? `min="${escapeAttr(trip.start_date)}"` : ''} ${trip.end_date ? `max="${escapeAttr(trip.end_date)}"` : ''}`;
     const modal = document.createElement('div');
@@ -73,10 +48,10 @@ const AnchorEditor = {
     modal.id = 'anchor-editor-modal';
     modal.innerHTML = `
       <div class="ts-modal__backdrop" onclick="AnchorEditor.close()"></div>
-      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="${editing ? 'Edit anchor' : 'Add anchor'}">
+      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="${editing ? 'Edit checkpoint' : 'Add a checkpoint'}">
         <button class="ts-modal__close" onclick="AnchorEditor.close()" aria-label="Close"><i data-lucide="x"></i></button>
-        <h2 class="ts-modal__title">${editing ? `Edit ${escapeHtml((ANCHOR_ROLES.find((r) => r.role === anchor.role) || {}).label || 'anchor')}` : 'Pin your route'}</h2>
-        <p class="scrap-card__sub">Airports and stays shape the route and the timeline — the trip starts at your Start and finishes at your End.</p>
+        <h2 class="ts-modal__title">${editing ? `Edit ${escapeHtml(roleLabel(anchor.role))}` : 'Add a checkpoint'}</h2>
+        <p class="scrap-card__sub">Stays and travel are your trip's checkpoints — they frame the timeline and the route.</p>
         <form id="anchor-editor-form">
           <div ${editing ? 'hidden' : ''}>
             <label class="ts-label" for="ae-role">What is it?</label>
@@ -90,7 +65,7 @@ const AnchorEditor = {
               <input type="checkbox" id="ae-same-as-start" ${start ? '' : 'disabled'} />
               <span>Same as arrival${start ? ` <span class="anchor-same__hint">(${escapeHtml(start.label)})</span>` : ''}</span>
             </label>
-            ${start ? '' : '<p class="anchor-same__note">Add an arrival point first to reuse it here.</p>'}
+            ${start ? '' : '<p class="anchor-same__note">Add an arrival checkpoint first to reuse it here.</p>'}
           </div>
 
           <div id="ae-place-fields">
@@ -101,7 +76,7 @@ const AnchorEditor = {
           </div>
 
           <div id="ae-type-row">
-            <label class="ts-label" for="ae-type">Getting there by</label>
+            <label class="ts-label" for="ae-type">Travelling by</label>
             <select class="ts-select" id="ae-type">
               ${ANCHOR_TYPES.map((t) => `<option value="${t.type}">${t.label}</option>`).join('')}
             </select>
@@ -167,17 +142,18 @@ const AnchorEditor = {
       queryInput.required = active;
     };
 
-    // Show only the fields relevant to the selected role. The arrival/departure
-    // day stays visible for a same-as-arrival end anchor — the place is copied,
-    // the departure date is not. In edit mode the same-as-arrival shortcut is
-    // hidden (the anchor already has its own place).
+    // Show only the fields relevant to the selected role. The travel day stays
+    // visible for a same-as-arrival end checkpoint — the place is copied, the
+    // departure date is not. In edit mode the same-as-arrival shortcut is
+    // hidden (the checkpoint already has its own place).
+    const DATE_LABELS = { start: 'Arrival day', end: 'Departure day', travel: 'Travel day' };
     const syncRoleFields = () => {
       const role = roleSelect.value;
       sameRow.hidden = editing || role !== 'end';
       if (role !== 'end') sameCheckbox.checked = false;
       stayDateRow.hidden = role !== 'stay';
       whenRow.hidden = role === 'stay';
-      dateLabel.textContent = role === 'end' ? 'Departure day' : 'Arrival day';
+      dateLabel.textContent = DATE_LABELS[role] || 'Day';
       const sameActive = !editing && role === 'end' && sameCheckbox.checked;
       setPlaceFieldsActive(!sameActive);
     };
@@ -186,7 +162,7 @@ const AnchorEditor = {
     sameCheckbox.addEventListener('change', () => setPlaceFieldsActive(!sameCheckbox.checked));
     syncRoleFields();
 
-    // Edit mode: prefill from the existing anchor.
+    // Edit mode: prefill from the existing checkpoint.
     if (editing) {
       labelInput.value = anchor.label || '';
       queryInput.value = anchor.query || '';
@@ -199,6 +175,11 @@ const AnchorEditor = {
         modal.querySelector('#ae-date').value = anchor.anchor_date || '';
         modal.querySelector('#ae-time').value = (anchor.anchor_time || '').slice(0, 5);
       }
+    } else if (prefill) {
+      // Gap placeholder: seed the dates of the uncovered stretch.
+      if (prefill.stay_date) modal.querySelector('#ae-stay-date').value = prefill.stay_date;
+      if (prefill.stay_end_date) modal.querySelector('#ae-stay-end-date').value = prefill.stay_end_date;
+      if (prefill.anchor_date) modal.querySelector('#ae-date').value = prefill.anchor_date;
     }
 
     modal.querySelector('#anchor-editor-form').addEventListener('submit', async (ev) => {
@@ -214,14 +195,14 @@ const AnchorEditor = {
         } else {
           body.label = labelInput.value.trim();
           body.query = queryInput.value.trim();
-          if (role === 'start' || role === 'end') body.type = modal.querySelector('#ae-type').value;
+          if (TRAVEL_ROLES.includes(role)) body.type = modal.querySelector('#ae-type').value;
           if (role === 'stay') {
             body.stay_date = modal.querySelector('#ae-stay-date').value || null;
             body.stay_end_date = modal.querySelector('#ae-stay-end-date').value || null;
           }
         }
-        // Departure day applies even when the place is copied from arrival.
-        if (role === 'start' || role === 'end') {
+        // The travel day applies even when the place is copied from arrival.
+        if (TRAVEL_ROLES.includes(role)) {
           body.anchor_date = modal.querySelector('#ae-date').value || null;
           body.anchor_time = modal.querySelector('#ae-time').value || null;
         }

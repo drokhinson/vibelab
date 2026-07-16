@@ -2,11 +2,14 @@
 // The card shows one chip with the current level; tapping it opens this
 // picker with the four levels plus Clear. onPick receives the chosen level
 // (or null for clear) — explicit target state, no toggle semantics.
+// withVisited adds a fifth "Visited" option (own ratings only, not vibes) —
+// visited is a chip state like any priority, not a separate card control.
 'use strict';
 
 const PriorityPicker = {
-  open({ activeLevel = null, verb = 'priority', onPick } = {}) {
+  open({ activeLevel = null, verb = 'priority', withVisited = false, onPick } = {}) {
     this.close();
+    const options = withVisited ? [...VIBE_META, VISITED_META] : VIBE_META;
     const modal = document.createElement('div');
     modal.className = 'ts-modal';
     modal.id = 'priority-picker-modal';
@@ -16,7 +19,7 @@ const PriorityPicker = {
         <button class="ts-modal__close" onclick="PriorityPicker.close()" aria-label="Close"><i data-lucide="x"></i></button>
         <h2 class="ts-modal__title">${verb === 'vibe' ? 'Your vibe' : 'How badly do you want this?'}</h2>
         <div class="priority-options">
-          ${VIBE_META.map((v) => `
+          ${options.map((v) => `
             <button class="priority-option priority-option--${v.level} ${activeLevel === v.level ? 'is-on' : ''}"
                     data-level="${v.level}" aria-pressed="${activeLevel === v.level}">
               <i data-lucide="${v.icon}"></i><span>${v.label}</span>

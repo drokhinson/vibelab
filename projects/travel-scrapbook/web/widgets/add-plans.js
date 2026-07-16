@@ -1,4 +1,4 @@
-// widgets/add-plans.js — the trip's "+ Add plans" modal. Two sources:
+// widgets/add-plans.js — the trip's "+ Todo" modal (add plans). Two sources:
 //   • Wander List — multi-select your saved places (scope-fits sort first,
 //     but you can add anything).
 //   • Community — places other travelers have scrapped, searchable, one-tap
@@ -68,9 +68,9 @@ const AddPlans = {
     modal.id = 'add-plans-modal';
     modal.innerHTML = `
       <div class="ts-modal__backdrop" onclick="AddPlans.close()"></div>
-      <div class="ts-modal__card add-plans" role="dialog" aria-modal="true" aria-label="Add plans">
+      <div class="ts-modal__card add-plans" role="dialog" aria-modal="true" aria-label="Add todos">
         <button class="ts-modal__close" onclick="AddPlans.close()" aria-label="Close"><i data-lucide="x"></i></button>
-        <h2 class="ts-modal__title">Add plans</h2>
+        <h2 class="ts-modal__title">Add todos</h2>
         <div class="ts-segmented ts-segmented--sm" role="tablist" style="margin:0.6rem 0 0.9rem;">
           <label class="ts-segmented__opt"><input type="radio" name="ap-tab" value="wishlist" ${this._tab === 'wishlist' ? 'checked' : ''} /><span>Wander List</span></label>
           <label class="ts-segmented__opt"><input type="radio" name="ap-tab" value="community" ${this._tab === 'community' ? 'checked' : ''} /><span>Community</span></label>

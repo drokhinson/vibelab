@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from .core import ScrapResponse
 
-MarkerKind = Literal["arrival", "checkin", "checkout", "departure"]
+MarkerKind = Literal["arrival", "checkin", "checkout", "departure", "travel"]
 
 
 class TimelineMarker(BaseModel):

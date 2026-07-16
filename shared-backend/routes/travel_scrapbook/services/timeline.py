@@ -21,7 +21,8 @@ def _iso(d: Any) -> Optional[str]:
 def _markers_from_anchors(anchors: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Flatten anchors into dated timeline markers. A stay contributes a
     check-in and (when set) a check-out; start/end contribute arrival and
-    departure. Undated anchors simply don't appear on the timeline."""
+    departure; a travel checkpoint contributes its leg day. Undated anchors
+    simply don't appear on the timeline."""
     markers: list[dict[str, Any]] = []
 
     def add(kind: str, a: dict[str, Any], day: Optional[str], time_: Optional[str]) -> None:
@@ -43,6 +44,8 @@ def _markers_from_anchors(anchors: list[dict[str, Any]]) -> list[dict[str, Any]]
             add("arrival", a, _iso(a.get("anchor_date")), _iso(a.get("anchor_time")))
         elif role == AnchorRole.END:
             add("departure", a, _iso(a.get("anchor_date")), _iso(a.get("anchor_time")))
+        elif role == AnchorRole.TRAVEL:
+            add("travel", a, _iso(a.get("anchor_date")), _iso(a.get("anchor_time")))
         elif role == AnchorRole.STAY:
             add("checkin", a, _iso(a.get("stay_date")), None)
             add("checkout", a, _iso(a.get("stay_end_date")), None)

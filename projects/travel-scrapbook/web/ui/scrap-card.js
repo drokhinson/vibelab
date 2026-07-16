@@ -15,6 +15,11 @@ const VIBE_META = [
 ];
 const VIBE_LABEL = Object.fromEntries(VIBE_META.map((v) => [v.level, v.label]));
 
+// "Visited" rides in the same picker as the priority levels (one chip, one
+// popup — no separate visited toggle on the card). It maps to visited_at,
+// not scraps.rating; ScrapDomain.applyPriority routes it.
+const VISITED_META = { level: 'visited', label: 'Visited', icon: 'circle-check' };
+
 function _scrapCategoryIcon(scrap) {
   const categories = window.store.get('categories') || [];
   return (categories.find((c) => c.slug === scrap.category) || { icon: 'other' }).icon;
@@ -32,7 +37,9 @@ function _myVibe(scrap, currentUserId) {
 // Ghost "+ Priority"/"+ Vibe" when nothing is set yet.
 function _renderPriorityChip(scrap, { action = 'rate-open', activeLevel = null } = {}) {
   const verb = action === 'vibe-open' ? 'Vibe' : 'Priority';
-  const meta = VIBE_META.find((v) => v.level === activeLevel);
+  const meta = activeLevel === 'visited'
+    ? VISITED_META
+    : VIBE_META.find((v) => v.level === activeLevel);
   if (!meta) {
     return `
       <button class="priority-chip priority-chip--ghost" data-action="${action}"
@@ -180,20 +187,9 @@ function renderScrapCard(scrap, opts = {}) {
       </div>`;
   }
 
-  // Visited toggle (trip + wishlist) lives in the corner. It writes to the
-  // scrap's own row, so only its owner sees it; the read-only preview/select
-  // variants suppress it via the variant check.
-  const showVisited = (variant === 'trip' && mine) || variant === 'inbox';
+  // Visited is a priority-picker level, not a separate control — the one chip
+  // carries rating OR visited state, keeping the card down to a single element.
   const isVisited = !!scrap.visited_at && !readOnly;
-  const actions = showVisited ? `
-    <div class="scrap-card__actions">
-      <button class="scrap-card__visited ${isVisited ? 'is-visited' : ''}" data-action="visited"
-              data-scrap-id="${escapeAttr(scrap.id)}"
-              aria-label="${isVisited ? 'Mark not visited' : 'Mark visited'}"
-              title="${isVisited ? 'Visited — tap to undo' : 'Mark visited'}">
-        <i data-lucide="circle-check"></i>
-      </button>
-    </div>` : '';
 
   // Notes live in a popup; the card shows only a chip — filled when a note
   // exists, ghost otherwise. Interactive on the owner's editable variants;
@@ -222,13 +218,15 @@ function renderScrapCard(scrap, opts = {}) {
     ? `<span class="added-by"><i data-lucide="user"></i>${escapeHtml(scrap.added_by_display_name)}</span>`
     : '';
   // Priority chip: my own scraps get the rating chip (Wander List and trips
-  // alike); someone else's shared-trip scrap gets the vibe chip so I can
-  // weigh in on the consensus. Tapping opens the PriorityPicker popup.
-  // Visited places show a read-only badge instead — re-prioritizing a place
-  // you've been to is a no-op.
+  // alike) — showing "Visited" once I've been there; someone else's
+  // shared-trip scrap gets the vibe chip so I can weigh in on the consensus.
+  // Tapping opens the PriorityPicker popup.
   let chip = '';
-  if (!readOnly && !isVisited && canWrite && mine && (variant === 'trip' || variant === 'inbox')) {
-    chip = _renderPriorityChip(scrap, { action: 'rate-open', activeLevel: scrap.rating || null });
+  if (!readOnly && canWrite && mine && (variant === 'trip' || variant === 'inbox')) {
+    chip = _renderPriorityChip(scrap, {
+      action: 'rate-open',
+      activeLevel: isVisited ? 'visited' : (scrap.rating || null),
+    });
   } else if (!readOnly && !isVisited && variant === 'trip' && !mine && currentUserId && scrap.trip_id) {
     chip = _renderPriorityChip(scrap, { action: 'vibe-open', activeLevel: _myVibe(scrap, currentUserId) });
   } else if (scrap.rating && mine) {
@@ -240,10 +238,8 @@ function renderScrapCard(scrap, opts = {}) {
   return `
     <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
          style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : isPreview ? 'none' : (editable ? 'edit' : 'none')}">
-      ${actions}
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
-      ${isVisited ? '<span class="scrap-card__visited-badge"><i data-lucide="check"></i>Visited</span>' : ''}
       ${photo}
       <p class="scrap-card__title">${escapeHtml(title)}</p>
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}

@@ -65,31 +65,31 @@ def geo_facets(
     region: Optional[str] = None,
     country: Optional[str] = None,
 ) -> dict[str, list[str]]:
-    """Drill-down filter options for a set of geo rows (place_region /
-    place_country / place_city fields).
+    """Filter options for a set of geo rows (place_region / place_country /
+    place_city fields). All three levels are always populated so the filter
+    bar can show Region, Country, and City dropdowns side by side:
 
-    regions   — distinct regions across the whole set (the first pick);
-    countries — distinct countries within the selected region (empty until
-                a region is picked);
-    cities    — distinct cities within the selected country (empty until a
-                country is picked).
+    regions   — distinct regions across the whole set;
+    countries — distinct countries, narrowed to the selected region when one
+                is given, else across the whole set;
+    cities    — distinct cities, narrowed to the selected country (or, absent
+                one, the selected region) when given, else the whole set.
     """
     def norm(v: Optional[str]) -> str:
         return (v or "").strip().lower()
 
     regions = sorted({r["place_region"] for r in rows if r.get("place_region")})
-    countries: list[str] = []
-    cities: list[str] = []
-    if region:
-        countries = sorted({
-            r["place_country"] for r in rows
-            if r.get("place_country") and norm(r.get("place_region")) == norm(region)
-        })
-    if country:
-        cities = sorted({
-            r["place_city"] for r in rows
-            if r.get("place_city") and norm(r.get("place_country")) == norm(country)
-        })
+    countries = sorted({
+        r["place_country"] for r in rows
+        if r.get("place_country")
+        and (not region or norm(r.get("place_region")) == norm(region))
+    })
+    cities = sorted({
+        r["place_city"] for r in rows
+        if r.get("place_city")
+        and (not region or norm(r.get("place_region")) == norm(region))
+        and (not country or norm(r.get("place_country")) == norm(country))
+    })
     return {"regions": regions, "countries": countries, "cities": cities}
 
 

@@ -15,7 +15,7 @@ function renderQuickPaste(tripId = null) {
   return `
     <form class="scrap-footer" id="quick-paste-form" ${tripId ? `data-trip-id="${escapeAttr(tripId)}"` : ''}>
       <input class="ts-input" id="quick-paste-input" type="url" required
-             placeholder="Paste a link — Reddit, Instagram, a blog…"
+             placeholder="${tripId ? 'Paste a link — a place, or a hotel/travel booking…' : 'Paste a link — Reddit, Instagram, a blog…'}"
              style="flex:1;margin:0;" inputmode="url" autocomplete="off" />
       <button class="ts-btn ts-btn--blush" type="submit" aria-label="Scrap it">
         <i data-lucide="${QUICK_PASTE_ICON}"></i><span class="hidden sm:inline">Scrap it</span>
@@ -44,7 +44,9 @@ function bindQuickPaste(container, { onCreated } = {}) {
         window.SourceDomain?.refreshInboxCount();
       }
       input.value = '';
-      toast('Scrapped! Reading the page — it may add more than one place.');
+      toast(tripId
+        ? 'Scrapped! Reading the link — places land as plans, bookings as checkpoints.'
+        : 'Scrapped! Reading the page — it may add more than one place.');
       onCreated?.();
     } catch (err) {
       toast(err.message || 'Could not save that link', { error: true });

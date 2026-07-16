@@ -1,6 +1,7 @@
 // views/visited-view.js — places you've marked visited (any trip or the
 // wishlist), with the geo drill-down filter bar and load-more paging.
-// Tapping the check moves a place back to the wishlist.
+// The Visited chip opens the priority picker — picking a rating (or Clear)
+// moves the place back to the wishlist.
 'use strict';
 
 class VisitedView extends View {
@@ -60,7 +61,6 @@ class VisitedView extends View {
     const filtered = !!(this._geo.region || this._geo.country || this._geo.city);
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Visited</h1>
-      <p class="scrap-card__sub" style="margin-top:-0.4rem;">Places you've been. Tap the check to move one back to your wishlist.</p>
       ${renderFilterBar(this._geo, this._facets)}
       ${this._total === 0 && !filtered ? `
         <div class="empty-state">
@@ -106,10 +106,19 @@ class VisitedView extends View {
       el.addEventListener('click', async (ev) => {
         ev.stopPropagation();
         try {
-          if (action === 'visited') {
-            await window.ScrapDomain.toggleVisited(scrap.id, scrap.trip_id || null, true);
-            toast('Back on your wishlist');
-            await this._load();
+          if (action === 'rate-open') {
+            PriorityPicker.open({
+              activeLevel: 'visited',
+              verb: 'priority',
+              withVisited: true,
+              onPick: async (level) => {
+                try {
+                  await window.ScrapDomain.applyPriority(scrap.id, scrap.trip_id || null, level, true);
+                  if (level !== 'visited') toast('Back on your wishlist');
+                  await this._load();
+                } catch (err) { toast(err.message, { error: true }); }
+              },
+            });
           } else if (action === 'notes') {
             NotePopup.open(scrap, { onSaved: () => this._load() });
           }

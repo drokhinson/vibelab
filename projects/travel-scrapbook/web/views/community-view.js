@@ -1,7 +1,7 @@
 // views/community-view.js — browse the community place pool (places any
-// traveler has scrapped, aggregated + anonymized) with search, a category
-// select, the geo drill-down filter bar, and load-more paging. Saves go to
-// your own Wander List.
+// traveler has scrapped, aggregated + anonymized) with the same geo filter
+// bar as the Wander List and Visited views, and load-more paging. Saves go
+// to your own Wander List.
 'use strict';
 
 class CommunityView extends View {
@@ -12,15 +12,12 @@ class CommunityView extends View {
   }
 
   _resetState() {
-    this._q = '';
-    this._category = '';
     this._geo = { region: null, country: null, city: null };
     this._items = [];
     this._total = 0;
     this._facets = {};
     this._loaded = false;
     this._seq = 0;
-    this._debounce = null;
   }
 
   renderLoading() {
@@ -42,8 +39,6 @@ class CommunityView extends View {
     const seq = ++this._seq;
     try {
       const res = await window.api.communityPlaces({
-        q: this._q || undefined,
-        category: this._category || undefined,
         ...this._geo,
         limit: this.PAGE_SIZE,
         offset: append ? this._items.length : 0,
@@ -63,18 +58,9 @@ class CommunityView extends View {
 
   render() {
     if (!this._loaded) return;
-    const categories = window.store.get('categories') || [];
-    const narrowed = !!(this._q || this._category || this._geo.region || this._geo.country || this._geo.city);
+    const narrowed = !!(this._geo.region || this._geo.country || this._geo.city);
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Community</h1>
-      <p class="scrap-card__sub" style="margin-top:-0.4rem;">Places other travelers have scrapped — only the places are shared, never their notes or ratings.</p>
-      <div style="display:flex;gap:0.5rem;margin-top:0.8rem;">
-        <input class="ts-input" id="community-q" placeholder="Search a place or city…" value="${escapeAttr(this._q)}" style="flex:1;margin:0;" />
-        <select class="ts-select" id="community-category" style="width:auto;margin:0;">
-          <option value="">All types</option>
-          ${categories.map((c) => `<option value="${escapeAttr(c.slug)}" ${c.slug === this._category ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
-        </select>
-      </div>
       ${renderFilterBar(this._geo, this._facets)}
       ${this._total === 0 && !narrowed ? `
         <div class="empty-state">
@@ -85,7 +71,7 @@ class CommunityView extends View {
         <div class="card-grid card-grid--2col">
           ${this._items.map((p, i) => renderPlaceCard(p, { index: i })).join('')}
         </div>` : `
-        <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">No community places match — clear a filter or widen the search.</p>`}
+        <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">No community places match — clear a filter to widen the view.</p>`}
       ${this._items.length < this._total ? `
         <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
           <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
@@ -99,16 +85,6 @@ class CommunityView extends View {
   _bind() {
     const c = this.container;
     bindQuickPaste(c);
-    const q = c.querySelector('#community-q');
-    q?.addEventListener('input', () => {
-      this._q = q.value.trim();
-      clearTimeout(this._debounce);
-      this._debounce = setTimeout(() => this._load(), 300);
-    });
-    c.querySelector('#community-category')?.addEventListener('change', (ev) => {
-      this._category = ev.target.value;
-      this._load();
-    });
     bindFilterBar(c, {
       geo: this._geo,
       onChange: (geo) => { this._geo = geo; this._load(); },

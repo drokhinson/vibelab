@@ -111,7 +111,6 @@ class InboxView extends View {
           <div class="card-grid">
             ${this._failed.map((s, i) => renderSourceCard(s, { index: i, variant: 'failed' })).join('')}
           </div>` : ''}
-        <h2 style="font-size:1.3rem;margin:1.1rem 0 0.4rem;">Want to go</h2>
         ${renderFilterBar(this._geo, this._facets)}
         ${this._items.length ? `
           <div class="card-grid card-grid--2col">
@@ -175,21 +174,19 @@ class InboxView extends View {
         try {
           if (action === 'rate-open') {
             PriorityPicker.open({
-              activeLevel: scrap.rating || null,
+              activeLevel: scrap.visited_at ? 'visited' : (scrap.rating || null),
               verb: 'priority',
+              withVisited: true,
               onPick: async (level) => {
                 try {
-                  await window.ScrapDomain.applyRating(scrapId, null, level);
+                  await window.ScrapDomain.applyPriority(scrapId, null, level, !!scrap.visited_at);
+                  if (level === 'visited') toast('Marked visited — see it under Visited');
                   await this._load();
                 } catch (err) { toast(err.message, { error: true }); }
               },
             });
           } else if (action === 'notes') {
             NotePopup.open(scrap, { onSaved: () => this._load() });
-          } else if (action === 'visited') {
-            await window.ScrapDomain.toggleVisited(scrapId, null, !!scrap.visited_at);
-            toast('Marked visited — see it under Visited');
-            await this._load();
           } else if (action === 'assign') {
             await window.SourceDomain.assignScrap(scrapId, el.dataset.tripId);
             toast('Added to the trip');

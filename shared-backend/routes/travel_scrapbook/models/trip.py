@@ -23,9 +23,9 @@ class AnchorCreateRequest(BaseModel):
     query: Optional[str] = Field(None, min_length=2, max_length=300,
                                  description="Freeform place text to geocode, e.g. 'Narita Airport'")
     type: Optional[AnchorType] = Field(
-        None, description="How you arrive/depart (start/end anchors only)")
+        None, description="How you travel (start/end/travel anchors only)")
     anchor_date: Optional[date] = Field(
-        None, description="Start: arrival day; end: departure day (timeline marker)")
+        None, description="Start: arrival day; end: departure day; travel: leg day (timeline marker)")
     anchor_time: Optional[time] = Field(
         None, description="Optional time on anchor_date; omit for an all-day point marker")
     stay_date: Optional[date] = Field(
@@ -65,7 +65,7 @@ class AnchorResponse(BaseModel):
     lng: Optional[float] = None
     geocode_confidence: GeocodeConfidence = GeocodeConfidence.NONE
     type: Optional[AnchorType] = None
-    anchor_date: Optional[date] = None            # start: arrival; end: departure
+    anchor_date: Optional[date] = None            # start: arrival; end: departure; travel: leg day
     anchor_time: Optional[time] = None            # NULL = all-day point marker
     stay_date: Optional[date] = None              # stay: check-in
     stay_end_date: Optional[date] = None          # stay: check-out

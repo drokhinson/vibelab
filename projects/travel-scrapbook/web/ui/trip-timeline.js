@@ -5,6 +5,8 @@
 // interleaving stay markers with plans — user-scheduled plans render solid;
 // unscheduled plans auto-place into their SUGGESTED day as dashed rows until
 // the user pins or moves them. Plans with no suggestion collect in "Anytime".
+// A "+ Checkpoint" affordance (stay or travel leg) sits mid-timeline, and
+// every checkpoint marker carries an edit pencil.
 // Render-only; trip-view binds the [data-action=...] buttons.
 'use strict';
 
@@ -13,6 +15,7 @@ const TIMELINE_MARKER_META = {
   checkin: { icon: 'home', label: 'Check in' },
   checkout: { icon: 'log-out', label: 'Check out' },
   departure: { icon: 'plane-takeoff', label: 'Depart' },
+  travel: { icon: 'plane', label: 'Travel' },
 };
 
 const TL_ENDPOINT_META = {
@@ -60,7 +63,7 @@ function _tlEndpoint(trip, role, { canWrite = true } = {}) {
     </div>`;
 }
 
-function _tlMarkerRow(m) {
+function _tlMarkerRow(m, { canWrite = true } = {}) {
   const meta = TIMELINE_MARKER_META[m.kind] || TIMELINE_MARKER_META.checkin;
   const time = _tlTime(m.time);
   return `
@@ -68,6 +71,11 @@ function _tlMarkerRow(m) {
       <span class="tl-row__time">${time ? escapeHtml(time) : 'all day'}</span>
       <i data-lucide="${meta.icon}"></i>
       <span class="tl-row__label"><b>${meta.label}</b> · ${escapeHtml(m.label)}</span>
+      ${canWrite ? `
+        <button class="tl-row__btn" data-action="edit-anchor" data-anchor-id="${escapeAttr(m.anchor_id)}"
+                aria-label="Edit ${escapeAttr(m.label)}" title="Edit checkpoint">
+          <i data-lucide="pencil"></i>
+        </button>` : ''}
     </div>`;
 }
 
@@ -159,10 +167,11 @@ function renderTripTimeline(trip, data, { canWrite = true } = {}) {
     list.sort((a, b) => a.suggestion.distance_km - b.suggestion.distance_km));
 
   const dayCards = days.map((d, i) => {
-    // Arrival/departure live in the bookends, not the day rows.
-    const stayMarkers = d.markers.filter((m) => m.kind === 'checkin' || m.kind === 'checkout');
+    // Arrival/departure live in the bookends, not the day rows; stays and
+    // mid-trip travel legs render inside their day.
+    const dayMarkers = d.markers.filter((m) => m.kind !== 'arrival' && m.kind !== 'departure');
     const rows = [
-      ...stayMarkers.map((m) => ({ html: _tlMarkerRow(m), time: m.time, order: 0 })),
+      ...dayMarkers.map((m) => ({ html: _tlMarkerRow(m, { canWrite }), time: m.time, order: 0 })),
       ...d.plans.map((p) => ({ html: _tlPlanRow(p, { canWrite }), time: p.plan_time, order: 1 })),
     ].sort((a, b) =>
       ((a.time == null) - (b.time == null)) ||
@@ -192,8 +201,8 @@ function renderTripTimeline(trip, data, { canWrite = true } = {}) {
           ${canWrite ? '<button class="ts-btn ts-btn--ghost ts-btn--sm" id="tl-edit-trip" style="margin-left:0.4rem;"><i data-lucide="pencil"></i>Add trip dates</button>' : ''}
         </p>` : ''}
       ${canWrite ? `
-        <button class="tl-add-btn" data-action="add-anchor-role" data-role="stay">
-          <i data-lucide="plus"></i>Add a stay
+        <button class="tl-add-btn" data-action="add-checkpoint">
+          <i data-lucide="plus"></i>Checkpoint — a stay or travel leg
         </button>` : ''}
       ${_tlEndpoint(trip, 'end', { canWrite })}
     </div>
