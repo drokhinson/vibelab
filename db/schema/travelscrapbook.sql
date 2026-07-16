@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Travel Scrapbook — current schema snapshot
--- Last updated: 2026-07-15 (matches db/migrations/travelscrapbook/004_places_sources.sql)
+-- Last updated: 2026-07-16 (matches db/migrations/travelscrapbook/005_region_scope_visited.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_trips (
   start_date              DATE,
   end_date                DATE,
   notes                   TEXT,
+  -- Geographic scope: user picks the level, match values derived from geocoding
+  -- the destination (dest_*). Drives tag-based staging + the candidates panel.
+  scope_level             TEXT             NOT NULL DEFAULT 'city'
+    CHECK (scope_level IN ('region', 'country', 'city')),
+  dest_city               TEXT,            -- from destination geocode (address.city)
+  dest_region             TEXT,            -- from destination geocode (address.state)
+  dest_country            TEXT,            -- from destination geocode (address.country)
   lat                     DOUBLE PRECISION,  -- geocoded destination (trip matching)
   lng                     DOUBLE PRECISION,
   geocode_confidence      TEXT             NOT NULL DEFAULT 'none'
@@ -93,6 +100,7 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_places (
   name                 TEXT             NOT NULL,
   name_normalized      TEXT             NOT NULL,  -- dedupe key (accent/case/punct-folded)
   city                 TEXT,
+  region               TEXT,            -- admin-1 (state/province), from geocode
   country              TEXT,
   category             TEXT             NOT NULL DEFAULT 'other'
     REFERENCES public.travelscrapbook_categories(slug),
@@ -143,9 +151,11 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scraps (
     CHECK (status IN ('inbox', 'staged', 'approved')),
   notes          TEXT,
   is_favorite    BOOLEAN     NOT NULL DEFAULT false,
+  visited_at     TIMESTAMPTZ,                        -- NULL = on the wishlist; set = visited
   route_position INTEGER,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- idx_ts_scraps_trip (trip_id), idx_ts_scraps_user (user_id)
 -- idx_ts_scraps_user_status (user_id, status), idx_ts_scraps_place (place_id)
+-- idx_ts_scraps_user_visited (user_id, visited_at)
