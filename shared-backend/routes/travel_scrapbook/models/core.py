@@ -102,11 +102,23 @@ class ScrapUpdateRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=2000)
     visited: Optional[bool] = Field(
         None, description="Mark visited (been there) or move back to the wishlist")
+    # plan_date/plan_time are per-trip now — see PlanScheduleRequest and
+    # PATCH /scraps/{id}/trips/{trip_id}/schedule.
+    regeocode: bool = Field(False, description="Re-run Nominatim on the edited place fields")
+
+
+class PlanScheduleRequest(BaseModel):
+    """A place's timeline slot on ONE trip (per-membership). Null clears."""
     plan_date: Optional[date] = Field(
-        None, description="Day this plan is slotted on (trip scraps only); null clears")
+        None, description="Day this plan is slotted on; null clears")
     plan_time: Optional[time] = Field(
         None, description="Optional time on plan_date; null clears")
-    regeocode: bool = Field(False, description="Re-run Nominatim on the edited place fields")
+
+
+class SetTripsRequest(BaseModel):
+    """The exact set of trips a place belongs to — the multi-select 'Add to
+    trips' picker. Memberships are diffed to match (added / removed)."""
+    trip_ids: list[str] = Field(default_factory=list)
 
 
 class RatingRequest(BaseModel):
@@ -134,9 +146,13 @@ class ScrapResponse(BaseModel):
     trips, `added_by_*` names the collaborator who saved it and `vibes`/
     `consensus` carry every traveler's take."""
     id: str
+    # Current-trip context — populated from the membership row on trip surfaces
+    # (trip detail, route, timeline, export); null on the Wander List / Visited.
     trip_id: Optional[str] = None
+    scrap_trip_id: Optional[str] = None           # membership id (per-trip vibe/schedule key)
+    trip_ids: list[str] = []                      # every trip this place is in (Wander List picker)
     place_id: str
-    status: ScrapStatus
+    status: Optional[ScrapStatus] = None          # membership status on trip surfaces
     place_name: Optional[str] = None
     place_city: Optional[str] = None
     place_region: Optional[str] = None

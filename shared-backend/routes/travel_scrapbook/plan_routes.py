@@ -1,8 +1,11 @@
 """Trip plan management: listing a trip's scraps, wishlist candidates,
-adding scraps to a trip, and staging review.
+adding/removing scraps to/from trips, and staging review.
 
-A "plan" is a scrap filed into a trip. Every plan arrives via a URL capture
-(or, later, the community pool) — there is no manual place entry.
+A "plan" is a place filed into a trip — a row in travelscrapbook_scrap_trips
+linking the owner's scrap to the trip (with that trip's status / route position
+/ timeline slot). A place can be a plan on several trips at once; it stays on the
+owner's Wander List regardless (it only leaves when visited). Every place still
+arrives via a URL capture (or the community pool) — there is no manual entry.
 Scrap-level reads/edits/vibes live in scrap_routes.py.
 """
 
@@ -11,20 +14,46 @@ from fastapi import Depends, HTTPException, Path
 from db import get_supabase
 
 from . import router
-from .access import get_accessible_trip
-from .constants import ScrapStatus
+from .access import get_accessible_membership, get_accessible_trip
+from .constants import MembershipStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     AssignManyRequest,
     AssignRequest,
+    MessageResponse,
     ScrapListResponse,
     ScrapResponse,
+    SetTripsRequest,
     TripWishlistResponse,
     TripWishlistScrap,
 )
-from .scrap_routes import _hydrated_scrap, get_owned_scrap
-from .services.hydrate import hydrate_scraps
+from .scrap_routes import _hydrated_membership, get_owned_scrap
+from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 from .services.places import place_matches_trip_scope
+
+
+def _trip_memberships(sb, trip_id: str) -> list[dict]:
+    """All memberships of a trip (join rows embedding their scrap), newest first."""
+    return (
+        sb.table("travelscrapbook_scrap_trips")
+        .select("*, travelscrapbook_scraps(*)")
+        .eq("trip_id", trip_id)
+        .order("created_at", desc=True)
+        .execute()
+    ).data or []
+
+
+def _trip_scrap_ids(sb, trip_id: str) -> set[str]:
+    """The scrap ids already a member of a trip (to exclude from 'add' pickers)."""
+    return {
+        m["scrap_id"]
+        for m in (
+            sb.table("travelscrapbook_scrap_trips")
+            .select("scrap_id")
+            .eq("trip_id", trip_id)
+            .execute()
+        ).data or []
+    }
 
 
 @router.get(
@@ -37,19 +66,13 @@ async def list_scraps(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapListResponse:
-    """All scraps in a trip (approved and staged), newest first. Readable by
-    the owner and any member."""
+    """All places in a trip (approved and staged), newest first. Readable by the
+    owner and any member. Each carries this trip's per-membership context."""
     sb = get_supabase()
     get_accessible_trip(sb, trip_id, user.user_id)
-    rows = (
-        sb.table("travelscrapbook_scraps")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .order("created_at", desc=True)
-        .execute()
-    )
+    flat = membership_rows_to_scraps(_trip_memberships(sb, trip_id))
     return ScrapListResponse(
-        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, rows.data or [], with_vibes=True)]
+        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, flat, with_vibes=True)]
     )
 
 
@@ -63,20 +86,23 @@ async def list_trip_candidates(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapListResponse:
-    """Unvisited wishlist scraps whose location matches this trip's geographic
-    scope (city/country/region) — the 'from your wishlist' panel. Same match
-    predicate as auto-staging, so suggestions stay consistent."""
+    """Unvisited wishlist places NOT already in this trip whose location matches
+    its geographic scope (city/country/region) — the 'from your wishlist' panel.
+    Same match predicate as auto-staging, so suggestions stay consistent."""
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    rows = (
-        sb.table("travelscrapbook_scraps")
-        .select("*")
-        .eq("user_id", user.user_id)
-        .eq("status", ScrapStatus.INBOX)
-        .is_("visited_at", "null")
-        .order("created_at", desc=True)
-        .execute()
-    ).data or []
+    already = _trip_scrap_ids(sb, trip_id)
+    rows = [
+        r for r in (
+            sb.table("travelscrapbook_scraps")
+            .select("*")
+            .eq("user_id", user.user_id)
+            .is_("visited_at", "null")
+            .order("created_at", desc=True)
+            .execute()
+        ).data or []
+        if r["id"] not in already
+    ]
     hydrated = hydrate_scraps(sb, rows)
     candidates = [
         s for s in hydrated
@@ -100,21 +126,24 @@ async def list_trip_wishlist(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> TripWishlistResponse:
-    """Every unvisited wishlist scrap, each flagged whether it fits this trip's
-    scope — powers the trip's 'Add from your Wander List' picker. Unlike
-    /candidates this is NOT scope-filtered: you can add anything; matches just
-    sort first."""
+    """Every unvisited wishlist place NOT already in this trip, each flagged
+    whether it fits the trip's scope — powers the 'Add from your Wander List'
+    picker. Unlike /candidates this is NOT scope-filtered: you can add anything;
+    matches just sort first."""
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    rows = (
-        sb.table("travelscrapbook_scraps")
-        .select("*")
-        .eq("user_id", user.user_id)
-        .eq("status", ScrapStatus.INBOX)
-        .is_("visited_at", "null")
-        .order("created_at", desc=True)
-        .execute()
-    ).data or []
+    already = _trip_scrap_ids(sb, trip_id)
+    rows = [
+        r for r in (
+            sb.table("travelscrapbook_scraps")
+            .select("*")
+            .eq("user_id", user.user_id)
+            .is_("visited_at", "null")
+            .order("created_at", desc=True)
+            .execute()
+        ).data or []
+        if r["id"] not in already
+    ]
     hydrated = hydrate_scraps(sb, rows)
     scored = [
         TripWishlistScrap(
@@ -133,6 +162,21 @@ async def list_trip_wishlist(
     return TripWishlistResponse(scraps=scored)
 
 
+def _upsert_memberships(sb, trip_id: str, scrap_ids: list[str]) -> None:
+    """Add memberships for the given owned scraps to a trip (approved), leaving
+    any that already exist untouched."""
+    if not scrap_ids:
+        return
+    sb.table("travelscrapbook_scrap_trips").upsert(
+        [
+            {"scrap_id": sid, "trip_id": trip_id, "status": MembershipStatus.APPROVED}
+            for sid in scrap_ids
+        ],
+        on_conflict="scrap_id,trip_id",
+        ignore_duplicates=True,
+    ).execute()
+
+
 @router.post(
     "/trips/{trip_id}/assign-scraps",
     response_model=ScrapListResponse,
@@ -145,120 +189,153 @@ async def assign_scraps(
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapListResponse:
     """Bulk 'add to trip' from the Wander List picker — files the owned scraps
-    into the trip as approved (scope is not enforced; the user chose them)."""
+    into the trip as approved (scope is not enforced; the user chose them). The
+    places stay on the Wander List."""
     sb = get_supabase()
     get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
-    owned = (
-        sb.table("travelscrapbook_scraps")
-        .select("id")
-        .eq("user_id", user.user_id)
-        .in_("id", body.scrap_ids)
-        .execute()
-    ).data or []
-    ids = [r["id"] for r in owned]
+    ids = [
+        r["id"]
+        for r in (
+            sb.table("travelscrapbook_scraps")
+            .select("id")
+            .eq("user_id", user.user_id)
+            .in_("id", body.scrap_ids)
+            .execute()
+        ).data or []
+    ]
     if not ids:
         return ScrapListResponse(scraps=[])
-    updated = (
-        sb.table("travelscrapbook_scraps")
-        .update({
-            "trip_id": trip_id,
-            "status": ScrapStatus.APPROVED,
-            "updated_at": "now()",
-        })
-        .eq("user_id", user.user_id)
-        .in_("id", ids)
+    _upsert_memberships(sb, trip_id, ids)
+    rows = (
+        sb.table("travelscrapbook_scrap_trips")
+        .select("*, travelscrapbook_scraps(*)")
+        .eq("trip_id", trip_id)
+        .in_("scrap_id", ids)
         .execute()
-    )
+    ).data or []
+    flat = membership_rows_to_scraps(rows)
     return ScrapListResponse(
-        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, updated.data or [])]
+        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, flat, with_vibes=True)]
     )
 
 
-# ── Staging / assignment ─────────────────────────────────────────────────────
+# ── Membership assignment / staging ──────────────────────────────────────────
 
 @router.post(
     "/scraps/{scrap_id}/assign",
     response_model=ScrapResponse,
     status_code=200,
-    summary="Assign a scrap to a trip",
+    summary="Add a scrap to a trip",
 )
 async def assign_scrap(
     body: AssignRequest,
     scrap_id: str = Path(..., description="Scrap UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
-    """File an inbox (or staged) scrap into a trip as approved — the tap on a
-    suggestion chip or the manual trip picker. You may file your own scrap onto
-    any trip you own or collaborate on."""
+    """Add an owned place to a trip as approved — the tap on a suggestion chip or
+    a single trip pick. Additive: the place keeps any other trip memberships and
+    stays on the Wander List."""
     sb = get_supabase()
     get_owned_scrap(sb, scrap_id, user.user_id)
     get_accessible_trip(sb, body.trip_id, user.user_id, need_write=True)
-    updated = (
-        sb.table("travelscrapbook_scraps")
-        .update({
-            "trip_id": body.trip_id,
-            "status": ScrapStatus.APPROVED,
-            "updated_at": "now()",
-        })
-        .eq("id", scrap_id)
-        .execute()
-    )
-    return _hydrated_scrap(sb, updated.data[0])
+    _upsert_memberships(sb, body.trip_id, [scrap_id])
+    return _hydrated_membership(sb, scrap_id, body.trip_id)
+
+
+@router.put(
+    "/scraps/{scrap_id}/trips",
+    response_model=ScrapResponse,
+    status_code=200,
+    summary="Set exactly which trips a place is in",
+)
+async def set_scrap_trips(
+    body: SetTripsRequest,
+    scrap_id: str = Path(..., description="Scrap UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapResponse:
+    """Reconcile a place's trip memberships to the given set (the multi-select
+    'Add to trips' picker). Adds new memberships (approved), removes dropped ones
+    (their per-trip schedule + vibes cascade away). Every affected trip must be
+    one the caller can write to. The place stays on the Wander List throughout."""
+    sb = get_supabase()
+    get_owned_scrap(sb, scrap_id, user.user_id)
+    requested = set(body.trip_ids)
+    current = {
+        m["trip_id"]
+        for m in (
+            sb.table("travelscrapbook_scrap_trips")
+            .select("trip_id")
+            .eq("scrap_id", scrap_id)
+            .execute()
+        ).data or []
+    }
+    to_add = requested - current
+    to_remove = current - requested
+    for tid in to_add | to_remove:
+        get_accessible_trip(sb, tid, user.user_id, need_write=True)
+    if to_add:
+        sb.table("travelscrapbook_scrap_trips").upsert(
+            [
+                {"scrap_id": scrap_id, "trip_id": tid, "status": MembershipStatus.APPROVED}
+                for tid in to_add
+            ],
+            on_conflict="scrap_id,trip_id",
+            ignore_duplicates=True,
+        ).execute()
+    if to_remove:
+        sb.table("travelscrapbook_scrap_trips").delete().eq(
+            "scrap_id", scrap_id
+        ).in_("trip_id", list(to_remove)).execute()
+    # Return the (Wander-List) scrap with its refreshed trip membership set.
+    scrap = get_owned_scrap(sb, scrap_id, user.user_id)
+    return ScrapResponse(**hydrate_scraps(sb, [scrap], with_trip_ids=True)[0])
 
 
 @router.post(
-    "/scraps/{scrap_id}/approve",
+    "/scraps/{scrap_id}/trips/{trip_id}/approve",
     response_model=ScrapResponse,
     status_code=200,
-    summary="Approve a staged scrap",
+    summary="Approve a staged membership",
 )
 async def approve_scrap(
     scrap_id: str = Path(..., description="Scrap UUID"),
+    trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
-    """Confirm an auto-staged scrap into its trip."""
+    """Confirm an auto-staged place into its trip (staged → approved)."""
     sb = get_supabase()
-    existing = get_owned_scrap(sb, scrap_id, user.user_id)
-    if existing["status"] != ScrapStatus.STAGED:
-        raise HTTPException(status_code=409, detail="Scrap is not staged")
-    updated = (
-        sb.table("travelscrapbook_scraps")
-        .update({"status": ScrapStatus.APPROVED, "updated_at": "now()"})
-        .eq("id", scrap_id)
-        .execute()
+    membership, _ = get_accessible_membership(
+        sb, scrap_id, trip_id, user.user_id, need_write=True
     )
-    return _hydrated_scrap(sb, updated.data[0])
+    if membership["status"] != MembershipStatus.STAGED:
+        raise HTTPException(status_code=409, detail="This place isn't staged on that trip")
+    sb.table("travelscrapbook_scrap_trips").update(
+        {"status": MembershipStatus.APPROVED}
+    ).eq("id", membership["id"]).execute()
+    return _hydrated_membership(sb, scrap_id, trip_id)
 
 
-@router.post(
-    "/scraps/{scrap_id}/unassign",
-    response_model=ScrapResponse,
+@router.delete(
+    "/scraps/{scrap_id}/trips/{trip_id}",
+    response_model=MessageResponse,
     status_code=200,
-    summary="Move a scrap back to the inbox",
+    summary="Remove a place from a trip",
 )
 async def unassign_scrap(
     scrap_id: str = Path(..., description="Scrap UUID"),
+    trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
-) -> ScrapResponse:
-    """Remove a scrap from its trip (staging 'remove' or pulling an approved
-    scrap back out); it returns to the inbox. Trip-specific state — route
-    position and timeline slot — clears with it."""
+) -> MessageResponse:
+    """Remove a place from ONE trip (staging 'remove', or pulling an approved
+    plan back out). The membership's route position, timeline slot, and vibes
+    cascade away; the place stays on the Wander List and in any other trips."""
     sb = get_supabase()
     get_owned_scrap(sb, scrap_id, user.user_id)
-    updated = (
-        sb.table("travelscrapbook_scraps")
-        .update({
-            "trip_id": None,
-            "status": ScrapStatus.INBOX,
-            "route_position": None,
-            "plan_date": None,
-            "plan_time": None,
-            "updated_at": "now()",
-        })
-        .eq("id", scrap_id)
-        .execute()
-    )
-    return _hydrated_scrap(sb, updated.data[0])
+    get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
+    sb.table("travelscrapbook_scrap_trips").delete().eq(
+        "scrap_id", scrap_id
+    ).eq("trip_id", trip_id).execute()
+    return MessageResponse(message="Removed from the trip")
 
 
 @router.post(
@@ -271,19 +348,27 @@ async def approve_all_staged(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapListResponse:
-    """One-tap review: every staged scrap the caller added to the trip becomes
+    """One-tap review: every place the caller staged onto the trip becomes
     approved. Scoped to the caller's own scraps so one collaborator can't
     approve another's staged places."""
     sb = get_supabase()
     get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
-    updated = (
-        sb.table("travelscrapbook_scraps")
-        .update({"status": ScrapStatus.APPROVED, "updated_at": "now()"})
+    staged = (
+        sb.table("travelscrapbook_scrap_trips")
+        .select("id, travelscrapbook_scraps(user_id)")
         .eq("trip_id", trip_id)
-        .eq("user_id", user.user_id)
-        .eq("status", ScrapStatus.STAGED)
+        .eq("status", MembershipStatus.STAGED)
         .execute()
-    )
+    ).data or []
+    mine = [
+        m["id"] for m in staged
+        if (m.get("travelscrapbook_scraps") or {}).get("user_id") == user.user_id
+    ]
+    if mine:
+        sb.table("travelscrapbook_scrap_trips").update(
+            {"status": MembershipStatus.APPROVED}
+        ).in_("id", mine).execute()
+    flat = membership_rows_to_scraps(_trip_memberships(sb, trip_id))
     return ScrapListResponse(
-        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, updated.data or [])]
+        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, flat, with_vibes=True)]
     )

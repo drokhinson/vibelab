@@ -5,10 +5,10 @@ from fastapi import Depends, Path
 from db import get_supabase
 
 from . import router
-from .constants import AnchorRole, ScrapStatus, TripVibe
+from .constants import AnchorRole, MembershipStatus, TripVibe
 from .dependencies import CurrentUser, get_current_user
 from .models import RouteLeg, RouteOptimizeRequest, RouteOptimizeResponse, ScrapResponse
-from .services.hydrate import hydrate_scraps
+from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 from .access import get_accessible_trip
 from .services.optimizer import Point, optimize
 
@@ -43,13 +43,15 @@ async def optimize_route(
 
     scraps = hydrate_scraps(
         sb,
-        (
-            sb.table("travelscrapbook_scraps")
-            .select("*")
-            .eq("trip_id", trip_id)
-            .eq("status", ScrapStatus.APPROVED)
-            .execute()
-        ).data or [],
+        membership_rows_to_scraps(
+            (
+                sb.table("travelscrapbook_scrap_trips")
+                .select("*, travelscrapbook_scraps(*)")
+                .eq("trip_id", trip_id)
+                .eq("status", MembershipStatus.APPROVED)
+                .execute()
+            ).data or []
+        ),
     )
     if body.scrap_ids is not None:
         wanted = set(body.scrap_ids)
@@ -86,9 +88,9 @@ async def optimize_route(
         if p.id in anchor_ids:
             continue
         position += 1
-        sb.table("travelscrapbook_scraps").update(
+        sb.table("travelscrapbook_scrap_trips").update(
             {"route_position": position}
-        ).eq("id", p.id).execute()
+        ).eq("id", by_id[p.id]["scrap_trip_id"]).execute()
         row = {**by_id[p.id], "route_position": position}
         ordered_scraps.append(ScrapResponse(**row))
 

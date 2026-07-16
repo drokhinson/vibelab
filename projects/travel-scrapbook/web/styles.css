@@ -270,6 +270,16 @@ a:hover { color: var(--accent-hover); }
 /* Community "Saved by N travelers" line. */
 .scrap-card__saved-by { display: flex; align-items: center; gap: 4px; }
 .scrap-card__saved-by [data-lucide] { width: 13px; height: 13px; }
+
+/* "Add to trips" multi-select picker (AddToTrips widget). */
+.att-list { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.6rem; max-height: 50vh; overflow-y: auto; }
+.att-row {
+  display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 700;
+  padding: 0.5rem 0.6rem; border: 1.5px solid var(--border); border-radius: 12px;
+}
+.att-row:hover { border-color: var(--ink-muted); }
+.att-row input { width: 18px; height: 18px; flex-shrink: 0; }
+.att-row .ts-sprite { flex-shrink: 0; }
 /* Pencil edit affordance, top-right over the media. Carries no handler — a
    click bubbles to the card's own click-to-edit listener. */
 .scrap-card__edit {

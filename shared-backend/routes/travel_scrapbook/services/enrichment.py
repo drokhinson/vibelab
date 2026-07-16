@@ -24,7 +24,7 @@ from ..constants import (
     BookingKind,
     EnrichErrorKind,
     GeocodeConfidence,
-    ScrapStatus,
+    MembershipStatus,
     SourceStatus,
 )
 from . import llm, nominatim, places, scraper
@@ -112,21 +112,38 @@ async def _materialize_place(
     if _user_has_scrap_for_place(sb, source["user_id"], place["id"]):
         return  # already saved — the new source chip is the only change
 
-    scrap: dict[str, Any] = {
-        "user_id": source["user_id"],
-        "place_id": place["id"],
-        "trip_id": None,
-        "status": ScrapStatus.INBOX,
-        "notes": source.get("capture_notes"),
-    }
+    # The scrap is just the saved place now — its trip links live in
+    # travelscrapbook_scrap_trips.
+    inserted = (
+        sb.table("travelscrapbook_scraps")
+        .insert({
+            "user_id": source["user_id"],
+            "place_id": place["id"],
+            "notes": source.get("capture_notes"),
+        })
+        .execute()
+    ).data
+    scrap_id = inserted[0]["id"] if inserted else None
+    if not scrap_id:
+        return
+
+    # Attach a trip membership: the user's explicit pick (approved, no review) or
+    # an auto-matched trip by scope (staged, awaiting review).
+    membership: Optional[dict[str, Any]] = None
     if source.get("trip_hint_id"):
-        # The user picked the trip at capture time — no review needed.
-        scrap.update({"trip_id": source["trip_hint_id"], "status": ScrapStatus.APPROVED})
+        membership = {
+            "scrap_id": scrap_id, "trip_id": source["trip_hint_id"],
+            "status": MembershipStatus.APPROVED,
+        }
     elif place["lat"] is not None and extraction.confident:
         match = places.match_trip(sb, source["user_id"], place)
         if match:
-            scrap.update({"trip_id": match["id"], "status": ScrapStatus.STAGED})
-    sb.table("travelscrapbook_scraps").insert(scrap).execute()
+            membership = {
+                "scrap_id": scrap_id, "trip_id": match["id"],
+                "status": MembershipStatus.STAGED,
+            }
+    if membership:
+        sb.table("travelscrapbook_scrap_trips").insert(membership).execute()
 
 
 async def _materialize_checkpoint(

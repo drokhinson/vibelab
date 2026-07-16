@@ -413,11 +413,12 @@ class TripView extends View {
               });
             } else if (action === 'slot') {
               // One-tap "add to Day N" from a timeline suggestion chip.
-              await window.api.updateScrap(scrapId, { plan_date: el.dataset.date });
+              await window.api.scheduleScrap(scrapId, trip.id, { plan_date: el.dataset.date });
               toast('Slotted in');
               this._refreshTimeline(trip.id);
             } else if (action === 'schedule') {
               PlanScheduler.open(scrap, {
+                tripId: trip.id,
                 days: (this._timeline?.days || []).map((d) => ({ date: d.date, day_number: d.day_number })),
                 tripBounds: { start: trip.start_date, end: trip.end_date },
                 onSaved: () => { toast('Scheduled'); this._refreshTimeline(trip.id); },

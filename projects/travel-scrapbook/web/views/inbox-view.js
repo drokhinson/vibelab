@@ -192,46 +192,10 @@ class InboxView extends View {
             toast('Added to the trip');
             await this._load();
           } else if (action === 'pick-trip') {
-            this._openTripPicker(scrap);
+            // Multi-select: a place can be in several trips at once, and stays
+            // on the Wander List regardless.
+            AddToTrips.open(scrap, { onSaved: () => this._load() });
           }
-        } catch (err) { toast(err.message, { error: true }); }
-      });
-    });
-  }
-
-  _openTripPicker(scrap) {
-    const trips = window.store.get('trips') || [];
-    document.getElementById('inbox-trip-picker')?.remove();
-    const modal = document.createElement('div');
-    modal.className = 'ts-modal';
-    modal.id = 'inbox-trip-picker';
-    modal.innerHTML = `
-      <div class="ts-modal__backdrop"></div>
-      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Pick a trip">
-        <button class="ts-modal__close" aria-label="Close"><i data-lucide="x"></i></button>
-        <h2 class="ts-modal__title">Add "${escapeHtml(scrap.place_name || 'this place')}" to…</h2>
-        ${trips.length ? `
-          <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.6rem;">
-            ${trips.map((t) => `
-              <button class="ts-btn ts-btn--ghost" data-pick-trip="${escapeAttr(t.id)}" style="justify-content:flex-start;">
-                ${renderSprite('cover', t.cover_icon, { size: 'sm', alt: '' })}${escapeHtml(t.name)}
-              </button>`).join('')}
-          </div>` : `
-          <p class="scrap-card__sub" style="margin-top:0.6rem;">No trips yet — create one from the Trips page first.</p>`}
-      </div>
-    `;
-    document.body.appendChild(modal);
-    window.lucide?.createIcons({ root: modal });
-    const close = () => modal.remove();
-    modal.querySelector('.ts-modal__backdrop').addEventListener('click', close);
-    modal.querySelector('.ts-modal__close').addEventListener('click', close);
-    modal.querySelectorAll('[data-pick-trip]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        try {
-          await window.SourceDomain.assignScrap(scrap.id, btn.dataset.pickTrip);
-          toast('Added to the trip');
-          close();
-          await this._load();
         } catch (err) { toast(err.message, { error: true }); }
       });
     });
