@@ -23,7 +23,7 @@ Travel Scrapbook is for people who research trips by collecting links — a Redd
 | Database | Supabase (shared project) | Tables prefixed `travelscrapbook_` |
 | Native app | React Native / Expo | Not started |
 | Auth | Supabase Auth | `travelscrapbook_profiles`, pilot pattern (like boardgame-buddy); plus per-user capture tokens for the iOS Shortcut |
-| LLM | Gemini free tier (`gemini-2.5-flash`) | Multi-place extraction from scraped pages; `GEMINI_API_KEY` in Railway |
+| LLM | Gemini free tier (`gemini-flash-lite-latest` alias) | Multi-place extraction from scraped pages; `GEMINI_API_KEY` in Railway. Alias (not a pinned ID) so a model deprecation can't 404 every request — `gemini-2.5-flash` was pulled early on 2026-07-09 |
 | Geocoding | Nominatim (OpenStreetMap) | Free, no key; 1 req/s courtesy limit + 30-day cache; osm_type/osm_id recorded for future global dedupe |
 | Storage | Supabase Storage | Not used (og:images hotlinked in v1) |
 
@@ -155,3 +155,4 @@ npx serve projects/travel-scrapbook/web
 - 2026-07-15 — Initial build: migrations, backend package, web prototype, custom SVG asset set (no-emoji policy). Pending user actions: run migrations in Supabase, add GEMINI_API_KEY to Railway, create Vercel project + VERCEL_TRAVEL_SCRAPBOOK_PROJECT_ID secret, add domain to ALLOWED_ORIGINS.
 - 2026-07-15 — Anchor upgrades (migration `003`): location `type` (airport/train_station/car_rental/other) on start/end anchors, `stay_date` check-in day on stay anchors, and a "Same as arrival" shortcut that copies the start anchor into the end. **Pending user action: run `db/migrations/travelscrapbook/003_anchor_type_and_stay_date.sql` in Supabase.**
 - 2026-07-15 — Phone capture + places/sources split (migration `004`): silent capture from the phone share sheet (Android PWA share_target at `/share`; iPhone Shortcut → `POST /capture` with a personal `tsc_` token), places/sources data model (place = source of truth, deduped across URLs; one reel fans out into many places), inbox + trip staging ("Needs review"), Gemini multi-place prompt, trip destination geocoding. **Pending user action: run `db/migrations/travelscrapbook/004_places_sources.sql` in Supabase** (take a backup first — it restructures scraps and deletes pending/failed rows).
+- 2026-07-16 — Fix: every link failed to process with Gemini API `404 NotFound`. Google pulled the pinned `gemini-2.5-flash` model on 2026-07-09 (ahead of its announced shutdown). Switched `GEMINI_MODEL` to the `gemini-flash-lite-latest` alias so future deprecations hot-swap (with 2-week notice) instead of 404-ing. No migration or user action needed — Railway auto-deploys on merge.
