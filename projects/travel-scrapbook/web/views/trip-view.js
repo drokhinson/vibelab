@@ -37,7 +37,12 @@ class TripView extends View {
   async onMount() {
     this._resetState();
     this._tripId = this.params.tripId;
-    this.listen('trip:' + this._tripId, () => this.render());
+    // Anchor/plan changes reload the trip → keep the timeline data in step
+    // (sequence-guarded, so bursts collapse to the latest response).
+    this.listen('trip:' + this._tripId, () => {
+      this.render();
+      if (this._tab === 'timeline') this._loadTimeline();
+    });
     this.listen('members:' + this._tripId, () => this.render());
     this.listen('pollTimedOut:' + this._tripId, () => this.render());
     await this._load();
@@ -145,7 +150,6 @@ class TripView extends View {
         ${isOwner ? `<button class="ts-header__nav-btn ts-btn ts-btn--ghost ts-btn--sm" id="trip-delete" aria-label="Delete trip"><i data-lucide="trash-2"></i></button>` : ''}
       </div>
       ${renderAnchorsStrip(trip, { readOnly: !canWrite })}
-      ${canWrite ? renderQuickPaste(trip.id) : ''}
       <div class="ts-segmented" role="tablist" aria-label="Trip view" style="margin-top:0.9rem;">
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="plans" ${this._tab === 'plans' ? 'checked' : ''} /><span>Plans</span></label>
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="timeline" ${this._tab === 'timeline' ? 'checked' : ''} /><span>Timeline</span></label>
@@ -179,6 +183,7 @@ class TripView extends View {
           collapsed: this._collapsed, variant: 'trip', name: 'trip-groupby', ...cardOpts,
         })}`}
       `}
+      ${canWrite ? renderQuickPaste(trip.id) : ''}
     `;
     this.refreshIcons();
     this._bind(trip, { isOwner, canWrite });
@@ -278,6 +283,17 @@ class TripView extends View {
     bindQuickPaste(c);
 
     c.querySelector('[data-action=add-anchor]')?.addEventListener('click', () => AnchorEditor.open(trip));
+    // Timeline bookends + middle add: create with a preselected role, or edit
+    // an existing endpoint in place.
+    c.querySelectorAll('[data-action=add-anchor-role]').forEach((btn) => {
+      btn.addEventListener('click', () => AnchorEditor.open(trip, { role: btn.dataset.role }));
+    });
+    c.querySelectorAll('[data-action=edit-anchor]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const anchor = (trip.anchors || []).find((a) => a.id === btn.dataset.anchorId);
+        if (anchor) AnchorEditor.open(trip, { anchor });
+      });
+    });
     c.querySelectorAll('[data-action=remove-anchor]').forEach((btn) => {
       btn.addEventListener('click', async (ev) => {
         ev.stopPropagation();
@@ -312,8 +328,17 @@ class TripView extends View {
         el.addEventListener('click', async (ev) => {
           ev.stopPropagation();
           try {
-            if (action === 'rate') {
-              await window.ScrapDomain.setRating(scrapId, trip.id, el.dataset.level, scrap.rating);
+            if (action === 'rate-open') {
+              PriorityPicker.open({
+                activeLevel: scrap.rating || null,
+                verb: 'priority',
+                onPick: async (level) => {
+                  try { await window.ScrapDomain.applyRating(scrapId, trip.id, level); }
+                  catch (err) { toast(err.message, { error: true }); }
+                },
+              });
+            } else if (action === 'notes') {
+              NotePopup.open(scrap, { onSaved: () => window.TripDomain.load(trip.id) });
             } else if (action === 'visited') {
               await window.ScrapDomain.toggleVisited(scrapId, trip.id, !!scrap.visited_at);
               toast(scrap.visited_at ? 'Back on your wishlist' : 'Marked visited');
@@ -332,10 +357,17 @@ class TripView extends View {
               window.SourceDomain?.refreshInboxCount();
             } else if (action === 'edit') {
               ScrapEditor.open(scrap, trip.id);
-            } else if (action === 'vibe') {
+            } else if (action === 'vibe-open') {
               const user = window.store.get('user');
               const myVibe = (scrap.vibes || []).find((v) => v.user_id === (user && user.user_id));
-              await window.ScrapDomain.setVibe(scrapId, trip.id, el.dataset.level, myVibe ? myVibe.level : null);
+              PriorityPicker.open({
+                activeLevel: myVibe ? myVibe.level : null,
+                verb: 'vibe',
+                onPick: async (level) => {
+                  try { await window.ScrapDomain.applyVibe(scrapId, trip.id, level); }
+                  catch (err) { toast(err.message, { error: true }); }
+                },
+              });
             } else if (action === 'slot') {
               // One-tap "add to Day N" from a timeline suggestion chip.
               await window.api.updateScrap(scrapId, { plan_date: el.dataset.date });

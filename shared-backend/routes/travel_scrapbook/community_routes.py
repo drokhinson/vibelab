@@ -25,19 +25,25 @@ from .services.community import aggregate_places, copy_place_for_user
 )
 async def list_community_places(
     q: str | None = Query(None, max_length=120, description="Search name or city"),
-    country: str | None = Query(None, max_length=120, description="Filter by country name"),
+    region: str | None = Query(None, max_length=120, description="Filter: macro-region"),
+    country: str | None = Query(None, max_length=120, description="Filter: country (within the region)"),
+    city: str | None = Query(None, max_length=120, description="Filter: city (within the country)"),
     category: str | None = Query(None, max_length=40, description="Filter by category slug"),
-    limit: int = Query(60, ge=1, le=200, description="Max aggregated places"),
+    limit: int = Query(24, ge=1, le=200, description="Page size"),
+    offset: int = Query(0, ge=0, description="Page start"),
     user: CurrentUser = Depends(get_current_user),
 ) -> CommunityPlacesResponse:
-    """Places any traveler has scrapped, aggregated across users (geocoded
-    only), most-saved first. Only canonical facts are shared — names, pins,
-    categories, save counts, and public source URLs; never notes, ratings,
-    or who saved what."""
+    """One filtered page of places any traveler has scrapped, aggregated
+    across users (geocoded only), most-saved first — plus drill-down facets
+    (regions → countries with data → cities) and the filtered total. Only
+    canonical facts are shared — names, pins, categories, save counts, and
+    public source URLs; never notes, ratings, or who saved what."""
     sb = get_supabase()
-    return CommunityPlacesResponse(
-        places=aggregate_places(sb, q=q, country=country, category=category, limit=limit)
+    places, total, facets = aggregate_places(
+        sb, q=q, region=region, country=country, city=city,
+        category=category, limit=limit, offset=offset,
     )
+    return CommunityPlacesResponse(places=places, total=total, facets=facets)
 
 
 @router.post(

@@ -183,8 +183,23 @@ class TripWishlistResponse(BaseModel):
     scraps: list[TripWishlistScrap] = []
 
 
+class GeoFacets(BaseModel):
+    """Drill-down filter options: pick a region → countries (with data) →
+    cities. Deeper levels stay empty until their parent is selected."""
+    regions: list[str] = []
+    countries: list[str] = []
+    cities: list[str] = []
+
+
 class ScrapListResponse(BaseModel):
     scraps: list[ScrapResponse]
+
+
+class PagedScrapsResponse(ScrapListResponse):
+    """A filtered page of scraps + the drill-down options for the current
+    selection (the Visited view)."""
+    total: int = 0
+    facets: GeoFacets = GeoFacets()
 
 
 class SourceScrapsResponse(BaseModel):
@@ -211,7 +226,9 @@ class InboxScrapResponse(ScrapResponse):
 class InboxResponse(BaseModel):
     processing_sources: list[SourceResponse] = []
     failed_sources: list[SourceResponse] = []
-    scraps: list[InboxScrapResponse] = []
+    scraps: list[InboxScrapResponse] = []         # one filtered page
+    total: int = 0                                # filtered count across pages
+    facets: GeoFacets = GeoFacets()
 
 
 class InboxCountResponse(BaseModel):
