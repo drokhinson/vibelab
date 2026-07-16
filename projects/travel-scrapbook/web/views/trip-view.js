@@ -37,7 +37,12 @@ class TripView extends View {
   async onMount() {
     this._resetState();
     this._tripId = this.params.tripId;
-    this.listen('trip:' + this._tripId, () => this.render());
+    // Anchor/plan changes reload the trip → keep the timeline data in step
+    // (sequence-guarded, so bursts collapse to the latest response).
+    this.listen('trip:' + this._tripId, () => {
+      this.render();
+      if (this._tab === 'timeline') this._loadTimeline();
+    });
     this.listen('members:' + this._tripId, () => this.render());
     this.listen('pollTimedOut:' + this._tripId, () => this.render());
     await this._load();
@@ -278,6 +283,17 @@ class TripView extends View {
     bindQuickPaste(c);
 
     c.querySelector('[data-action=add-anchor]')?.addEventListener('click', () => AnchorEditor.open(trip));
+    // Timeline bookends + middle add: create with a preselected role, or edit
+    // an existing endpoint in place.
+    c.querySelectorAll('[data-action=add-anchor-role]').forEach((btn) => {
+      btn.addEventListener('click', () => AnchorEditor.open(trip, { role: btn.dataset.role }));
+    });
+    c.querySelectorAll('[data-action=edit-anchor]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const anchor = (trip.anchors || []).find((a) => a.id === btn.dataset.anchorId);
+        if (anchor) AnchorEditor.open(trip, { anchor });
+      });
+    });
     c.querySelectorAll('[data-action=remove-anchor]').forEach((btn) => {
       btn.addEventListener('click', async (ev) => {
         ev.stopPropagation();

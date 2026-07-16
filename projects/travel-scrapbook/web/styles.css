@@ -469,7 +469,36 @@ body.popup-mode { max-width: 420px; }
 }
 .added-by i { width: 13px; height: 13px; }
 
-/* ── Trip timeline (day cards: markers + scheduled plans) ───────────────────── */
+/* ── Trip timeline (endpoint bookends, day cards, suggested rows) ───────────── */
+.tl-endpoint { display: flex; align-items: center; gap: 0.7rem; }
+.tl-endpoint__icon {
+  width: 40px; height: 40px; border-radius: 999px; border: 2px solid var(--border);
+  background: var(--sky, #BDE0FE); display: grid; place-items: center; flex-shrink: 0;
+}
+.tl-endpoint__icon [data-lucide] { width: 20px; height: 20px; }
+.tl-endpoint__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tl-endpoint__role {
+  font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--ink-muted);
+}
+.tl-endpoint__name { font-weight: 800; overflow-wrap: anywhere; }
+.tl-add-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+  min-height: 48px; width: 100%; border-radius: 14px;
+  border: 2px dashed var(--border); background: transparent;
+  color: var(--ink-muted); font-weight: 800; font-size: 0.9rem; cursor: pointer;
+}
+.tl-add-btn:hover { border-color: var(--ink-muted); color: var(--ink); }
+.tl-add-btn [data-lucide] { width: 17px; height: 17px; }
+.tl-row--suggested { border-style: dotted; opacity: 0.92; background: var(--paper); }
+.tl-suggested-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+  border: 1.5px dashed var(--border); font-size: 0.66rem; font-weight: 800;
+  color: var(--ink-muted);
+}
+.tl-row__btn--pin { background: var(--mint, #BEE7D0); color: var(--ink); }
+
+
 .tl-day__head { display: flex; align-items: baseline; gap: 0.6rem; }
 .tl-day__num { font-family: var(--font-display, 'Caveat', cursive); font-size: 1.5rem; font-weight: 700; }
 .tl-day__rows { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
