@@ -10,36 +10,26 @@ const SourceDomain = {
       .catch(() => {});
   },
 
-  async loadInbox() {
-    const inbox = await window.api.getInbox();
-    window.store.set('inbox', inbox);
-    window.store.set(
-      'inboxCount',
-      (inbox.scraps || []).length +
-        (inbox.processing_sources || []).length +
-        (inbox.failed_sources || []).length
-    );
-    return inbox;
-  },
-
+  // The inbox view owns its own (filtered, paginated) data — these mutations
+  // just hit the API and refresh the badge; the caller reloads its list.
   async retry(sourceId) {
     await window.api.retrySource(sourceId);
-    return this.loadInbox();
+    this.refreshInboxCount();
   },
 
   async dismiss(sourceId) {
     await window.api.deleteSource(sourceId);
-    return this.loadInbox();
+    this.refreshInboxCount();
   },
 
   async assignScrap(scrapId, tripId) {
     await window.api.assignScrap(scrapId, tripId);
-    return this.loadInbox();
+    this.refreshInboxCount();
   },
 
   async removeScrap(scrapId) {
     await window.api.deleteScrap(scrapId);
-    return this.loadInbox();
+    this.refreshInboxCount();
   },
 };
 window.SourceDomain = SourceDomain;

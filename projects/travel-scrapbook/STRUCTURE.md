@@ -116,9 +116,9 @@ All under `/api/v1/travel_scrapbook`, Supabase bearer auth (profile auto-created
 |---|---|---|---|
 | `/` | `trips` | — | Trip grid (default landing, auth required). |
 | `/trip/:tripId` | `trip` | `tripId` | Trip detail: anchors, quick-paste, then a **Plans | Timeline** tab (persisted in localStorage). Plans = staging review, suggestions, route panel, grouped plans; Timeline = day cards + unscheduled pile. |
-| `/inbox` | `inbox` | — | Wander List (wishlist): processing, failed (retry), want-to-go places (suggestion chips + mark-visited). |
-| `/visited` | `visited` | — | Places marked visited (any trip or the wishlist); tap the check to move one back. |
-| `/community` | `community` | — | Browse the cross-user community place pool (search + category filter); save finds to your Wander List. |
+| `/inbox` | `inbox` | — | Wander List (wishlist): processing, failed (retry), then one filtered page of want-to-go places — geo drill-down filter bar + load-more. |
+| `/visited` | `visited` | — | Places marked visited (any trip or the wishlist), geo drill-down + load-more; tap the check to move one back. |
+| `/community` | `community` | — | Browse the cross-user community place pool: search + category select + geo drill-down + load-more; save finds to your Wander List. |
 | `/scrap` | `scrap-popup` | `?url=&title=` | Bookmarklet popup — chrome-less trip picker + save. |
 | `/share` | `share` | `?url=&text=&title=` | Android share-target landing — silent capture + instant "Saved". |
 | `/settings` | `settings` | — | Profile, phone capture (Shortcut token + PWA hint), bookmarklet, logout. |
@@ -179,6 +179,7 @@ npx serve projects/travel-scrapbook/web
 
 ## Active Development Notes
 
+- 2026-07-16 — Geo drill-down filters + pagination on the browse views: the Wander List, Visited, and Community views drop the load-everything group-by sections for a **focused drill-down**: pick a Region → a Country dropdown appears (only countries with data) → picking a country swaps it for a City selector; selections render as removable chips in a horizontal-scroll **filter bar** (`ui/filter-bar.js`; clearing a chip clears deeper levels too) and lists page via a **"Load more (showing X of Y)"** button (24/page). Backend: the three endpoints gained `region/country/city/limit/offset` + `total` + `facets`; inbox/visited hydrate (and inbox computes suggestions) only for the returned page. `ui/scrap-groups.js` group-by remains on the trip view only.
 - 2026-07-16 — Timeline bookends + card popups (no migration, frontend only): (1) the timeline is bookended by its endpoints (ghost "+ Arrival"/"+ Departure" until set, then editable anchor cards; "+ Add a stay" mid-timeline; anchor-editor gains **edit mode** + `TripDomain.updateAnchor`); (2) unscheduled plans **auto-place into their suggested day** as dashed rows with a one-tap pin, "Anytime" replaces the Unscheduled pile; (3) the 4-segment priority control becomes a **single chip + PriorityPicker popup** (4 levels + Clear; `ScrapDomain.applyRating/applyVibe` explicit set-or-clear); (4) notes leave the card body for a **note chip + NotePopup** (view/edit/remove).
 - 2026-07-15 — Initial build: migrations, backend package, web prototype, custom SVG asset set (no-emoji policy). Pending user actions: run migrations in Supabase, add GEMINI_API_KEY to Railway, create Vercel project + VERCEL_TRAVEL_SCRAPBOOK_PROJECT_ID secret, add domain to ALLOWED_ORIGINS.
 - 2026-07-15 — Anchor upgrades (migration `003`): location `type` (airport/train_station/car_rental/other) on start/end anchors, `stay_date` check-in day on stay anchors, and a "Same as arrival" shortcut that copies the start anchor into the end. **Pending user action: run `db/migrations/travelscrapbook/003_anchor_type_and_stay_date.sql` in Supabase.**

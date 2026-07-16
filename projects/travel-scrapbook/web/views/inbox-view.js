@@ -1,17 +1,29 @@
-// views/inbox-view.js — captured links land here: sources still processing,
-// sources that failed, and scraps that need a home (with trip suggestions).
+// views/inbox-view.js — the Wander List: sources still processing, sources
+// that failed, and one filtered page of want-to-go places. A geo drill-down
+// filter bar (region → country → city) keeps the view focused; "Load more"
+// pages through the rest.
 'use strict';
 
 class InboxView extends View {
   constructor() {
     super('inbox');
-    this._pollTimer = null;
-    this._pollStartedAt = 0;
+    this._resetState();
     this.POLL_INTERVAL_MS = 2000;
     this.POLL_TIMEOUT_MS = 45000;
-    // Group the "want to go" list by geography so a big list stays scannable.
-    this._groupBy = localStorage.getItem('ts.wishlist.groupBy') || 'region';
-    this._collapsed = new Set();
+    this.PAGE_SIZE = 24;
+  }
+
+  _resetState() {
+    this._pollTimer = null;
+    this._pollStartedAt = 0;
+    this._geo = { region: null, country: null, city: null };
+    this._items = [];
+    this._total = 0;
+    this._facets = {};
+    this._processing = [];
+    this._failed = [];
+    this._loaded = false;
+    this._seq = 0;
   }
 
   renderLoading() {
@@ -23,32 +35,50 @@ class InboxView extends View {
   }
 
   async onMount() {
-    this.listen('inbox', () => this.render());
-    try {
-      await window.SourceDomain.loadInbox();
-      try { await window.TripDomain.loadAll(); } catch (_) {}
-    } catch (err) {
-      this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load inbox')}</div>`;
-      this.refreshIcons();
-    }
+    this._resetState();
+    // Trips power the suggestion chips + the trip picker; non-blocking.
+    window.TripDomain.loadAll().catch(() => {});
+    await this._load();
   }
 
   async onUnmount() {
     this._stopPolling();
   }
 
+  // Fetch one page with the current filters. append=true pages forward;
+  // otherwise the list resets to page 0 (filter change / mutation reload).
+  async _load({ append = false } = {}) {
+    const seq = ++this._seq;
+    try {
+      const res = await window.api.getInbox({
+        ...this._geo,
+        limit: this.PAGE_SIZE,
+        offset: append ? this._items.length : 0,
+      });
+      if (seq !== this._seq) return;
+      this._processing = res.processing_sources || [];
+      this._failed = res.failed_sources || [];
+      this._items = append ? [...this._items, ...(res.scraps || [])] : (res.scraps || []);
+      this._total = res.total || 0;
+      this._facets = res.facets || {};
+      this._loaded = true;
+      this.render();
+      window.SourceDomain.refreshInboxCount();
+    } catch (err) {
+      if (seq !== this._seq) return;
+      this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load inbox')}</div>`;
+      this.refreshIcons();
+    }
+  }
+
   _startPollingIfProcessing() {
-    const inbox = window.store.get('inbox');
-    const hasProcessing = (inbox?.processing_sources || []).length > 0;
-    if (!hasProcessing) { this._stopPolling(); return; }
+    if (!this._processing.length) { this._stopPolling(); return; }
     if (this._pollTimer) return; // already running
     this._pollStartedAt = Date.now();
     this._pollTimer = setInterval(async () => {
       if (Date.now() - this._pollStartedAt > this.POLL_TIMEOUT_MS) { this._stopPolling(); return; }
-      try {
-        const inbox2 = await window.SourceDomain.loadInbox();
-        if (!(inbox2.processing_sources || []).length) this._stopPolling();
-      } catch (_) {}
+      await this._load();
+      if (!this._processing.length) this._stopPolling();
     }, this.POLL_INTERVAL_MS);
   }
 
@@ -58,12 +88,9 @@ class InboxView extends View {
   }
 
   render() {
-    const inbox = window.store.get('inbox');
-    if (!inbox) return;
-    const processing = inbox.processing_sources || [];
-    const failed = inbox.failed_sources || [];
-    const scraps = inbox.scraps || [];
-    const empty = !processing.length && !failed.length && !scraps.length;
+    if (!this._loaded) return;
+    const filtered = !!(this._geo.region || this._geo.country || this._geo.city);
+    const empty = !this._processing.length && !this._failed.length && !this._total && !filtered;
 
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Wander List</h1>
@@ -74,67 +101,70 @@ class InboxView extends View {
           <p class="empty-desc">Share a link from Instagram, Reddit, or Maps — new finds land here
             (or straight onto a matching trip).</p>
         </div>` : `
-        ${processing.length ? `
+        ${this._processing.length ? `
           <h2 style="font-size:1.3rem;margin:1.1rem 0 0.5rem;">Reading…</h2>
           <div class="card-grid">
-            ${processing.map((s, i) => renderSourceCard(s, { index: i, variant: 'processing' })).join('')}
+            ${this._processing.map((s, i) => renderSourceCard(s, { index: i, variant: 'processing' })).join('')}
           </div>` : ''}
-        ${failed.length ? `
+        ${this._failed.length ? `
           <h2 style="font-size:1.3rem;margin:1.1rem 0 0.5rem;">Couldn't read</h2>
           <div class="card-grid">
-            ${failed.map((s, i) => renderSourceCard(s, { index: i, variant: 'failed' })).join('')}
+            ${this._failed.map((s, i) => renderSourceCard(s, { index: i, variant: 'failed' })).join('')}
           </div>` : ''}
-        ${scraps.length ? `
-          <h2 style="font-size:1.3rem;margin:1.1rem 0 0.4rem;">Want to go</h2>
-          ${renderGroupedList(scraps, {
-            dims: ['region', 'country', 'city'], active: this._groupBy,
-            collapsed: this._collapsed, variant: 'inbox', name: 'wishlist-groupby',
-          })}
-          ` : ''}
+        <h2 style="font-size:1.3rem;margin:1.1rem 0 0.4rem;">Want to go</h2>
+        ${renderFilterBar(this._geo, this._facets)}
+        ${this._items.length ? `
+          <div class="card-grid card-grid--2col">
+            ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox' })).join('')}
+          </div>` : `
+          <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">
+            ${filtered ? 'Nothing here matches — clear a filter to widen the view.' : 'Nothing waiting right now.'}</p>`}
+        ${this._items.length < this._total ? `
+          <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
+            <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
+          </button>` : ''}
       `}
     `;
     this.refreshIcons();
-    this._bind(scraps, failed);
+    this._bind();
     this._startPollingIfProcessing();
   }
 
-  _bind(scraps, failed) {
+  _bind() {
     const c = this.container;
 
-    bindScrapGroups(c, {
-      name: 'wishlist-groupby',
-      collapsed: this._collapsed,
-      onChange: (dim) => {
-        this._groupBy = dim;
-        this._collapsed = new Set();   // group keys differ per dimension
-        localStorage.setItem('ts.wishlist.groupBy', dim);
-        this.render();
-      },
+    bindFilterBar(c, {
+      geo: this._geo,
+      onChange: (geo) => { this._geo = geo; this._load(); },
+    });
+    c.querySelector('[data-action=load-more]')?.addEventListener('click', (ev) => {
+      ev.target.disabled = true;
+      this._load({ append: true });
     });
 
     c.querySelectorAll('[data-action=retry-source]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
-        try { await window.SourceDomain.retry(btn.dataset.sourceId); toast('Trying again…'); }
+        try { await window.SourceDomain.retry(btn.dataset.sourceId); toast('Trying again…'); await this._load(); }
         catch (err) { toast(err.message, { error: true }); btn.disabled = false; }
       });
     });
     c.querySelectorAll('[data-action=dismiss-source]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (!confirmDestructive('Dismiss this link? This can\'t be undone.')) return;
-        try { await window.SourceDomain.dismiss(btn.dataset.sourceId); }
+        try { await window.SourceDomain.dismiss(btn.dataset.sourceId); await this._load(); }
         catch (err) { toast(err.message, { error: true }); }
       });
     });
 
     c.querySelectorAll('[data-scrap-id]').forEach((el) => {
       const scrapId = el.dataset.scrapId;
-      const scrap = scraps.find((s) => s.id === scrapId);
+      const scrap = this._items.find((s) => s.id === scrapId);
       if (!scrap) return;
       const action = el.dataset.action;
       if (el.classList.contains('sticker-card') && action === 'edit') {
         el.addEventListener('click', () => ScrapEditor.open(scrap, null, {
-          onSaved: () => window.SourceDomain.loadInbox().catch(() => {}),
+          onSaved: () => this._load(),
         }));
       }
       if (el.tagName !== 'BUTTON') return;
@@ -148,24 +178,26 @@ class InboxView extends View {
               onPick: async (level) => {
                 try {
                   await window.ScrapDomain.applyRating(scrapId, null, level);
-                  await window.SourceDomain.loadInbox();
+                  await this._load();
                 } catch (err) { toast(err.message, { error: true }); }
               },
             });
           } else if (action === 'notes') {
-            NotePopup.open(scrap, { onSaved: () => window.SourceDomain.loadInbox().catch(() => {}) });
+            NotePopup.open(scrap, { onSaved: () => this._load() });
           } else if (action === 'visited') {
             await window.ScrapDomain.toggleVisited(scrapId, null, !!scrap.visited_at);
             toast('Marked visited — see it under Visited');
-            await window.SourceDomain.loadInbox();
+            await this._load();
           } else if (action === 'assign') {
             await window.SourceDomain.assignScrap(scrapId, el.dataset.tripId);
             toast('Added to the trip');
+            await this._load();
           } else if (action === 'pick-trip') {
             this._openTripPicker(scrap);
           } else if (action === 'delete') {
             if (!confirmDestructive('Delete this find? This can\'t be undone.')) return;
             await window.SourceDomain.removeScrap(scrapId);
+            await this._load();
           }
         } catch (err) { toast(err.message, { error: true }); }
       });
@@ -204,6 +236,7 @@ class InboxView extends View {
           await window.SourceDomain.assignScrap(scrap.id, btn.dataset.pickTrip);
           toast('Added to the trip');
           close();
+          await this._load();
         } catch (err) { toast(err.message, { error: true }); }
       });
     });

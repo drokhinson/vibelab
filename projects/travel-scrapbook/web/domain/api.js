@@ -116,6 +116,14 @@
     return JSON.stringify(detail);
   }
 
+  // ?key=value string from the non-empty entries of a params object.
+  function qs(params = {}) {
+    const s = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v != null && v !== '')
+    ).toString();
+    return s ? `?${s}` : '';
+  }
+
   async function call(path, opts = {}) {
     const headers = { ...(opts.headers || {}) };
     const token = getAuthToken();
@@ -158,8 +166,8 @@
 
     /** Silent capture of a shared/pasted URL. @returns {Promise<Source>} */
     capture: (body) => call('/capture', { method: 'POST', body }),
-    /** @returns {Promise<{processing_sources: Source[], failed_sources: Source[], scraps: Scrap[]}>} */
-    getInbox: () => call('/inbox'),
+    /** One filtered page + geo facets. @returns {Promise<{processing_sources: Source[], failed_sources: Source[], scraps: Scrap[], total: number, facets: object}>} */
+    getInbox: (params = {}) => call(`/inbox${qs(params)}`),
     /** @returns {Promise<{count: number}>} */
     inboxCount: () => call('/inbox/count'),
     /** A capture's live status + the scraps it produced. @returns {Promise<{status: string, error_kind: (string|null), scraps: Scrap[]}>} */
@@ -184,8 +192,8 @@
     tripWishlist: (tripId) => call(`/trips/${tripId}/wishlist`),
     /** Bulk-add wishlist scraps to a trip. @returns {Promise<{scraps: Scrap[]}>} */
     assignScraps: (tripId, scrapIds) => call(`/trips/${tripId}/assign-scraps`, { method: 'POST', body: { scrap_ids: scrapIds } }),
-    /** Places marked visited (any trip or the wishlist). @returns {Promise<{scraps: Scrap[]}>} */
-    listVisited: () => call('/visited'),
+    /** One filtered page of visited places + geo facets. @returns {Promise<{scraps: Scrap[], total: number, facets: object}>} */
+    listVisited: (params = {}) => call(`/visited${qs(params)}`),
     updateScrap: (scrapId, body) => call(`/scraps/${scrapId}`, { method: 'PATCH', body }),
     deleteScrap: (scrapId) => call(`/scraps/${scrapId}`, { method: 'DELETE' }),
     /** @returns {Promise<Scrap>} */
@@ -218,13 +226,8 @@
     respondInvitation: (tripId, action) => call(`/trips/${tripId}/invitation/respond`, { method: 'POST', body: { action } }),
 
     // ── Community pool ────────────────────────────────────────────────────
-    /** Aggregated places across all users (facts only, no user data). @returns {Promise<{places: object[]}>} */
-    communityPlaces: (params = {}) => {
-      const qs = new URLSearchParams(
-        Object.entries(params).filter(([, v]) => v != null && v !== '')
-      ).toString();
-      return call(`/community/places${qs ? `?${qs}` : ''}`);
-    },
+    /** One filtered page of aggregated places (facts only, no user data). @returns {Promise<{places: object[], total: number, facets: object}>} */
+    communityPlaces: (params = {}) => call(`/community/places${qs(params)}`),
     /** Save a community place to a trip (or the Wander List). @returns {Promise<Scrap>} */
     saveCommunityPlace: (placeId, tripId) =>
       call(`/community/places/${placeId}/save`, { method: 'POST', body: { trip_id: tripId || null } }),

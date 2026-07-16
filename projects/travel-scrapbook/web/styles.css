@@ -211,6 +211,37 @@ a:hover { color: var(--accent-hover); }
 .scrap-card__sub { font-size: 0.82rem; color: var(--ink-muted); overflow-wrap: anywhere; }
 .scrap-card__row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
 .scrap-card__actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+/* ── Geo drill-down filter bar (browse views) ───────────────────────────────── */
+.filter-bar {
+  display: flex; align-items: center; gap: 0.5rem;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  padding: 0.6rem 0 0.4rem; margin-top: 0.2rem;
+  scrollbar-width: none;
+}
+.filter-bar::-webkit-scrollbar { display: none; }
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  min-height: 34px; padding: 0.15rem 0.35rem 0.15rem 0.7rem;
+  border: 1.5px solid var(--ink); border-radius: 999px;
+  background: var(--card); color: var(--ink);
+  font-size: 0.76rem; font-weight: 800; white-space: nowrap;
+  box-shadow: 1.5px 1.5px 0 var(--ink);
+}
+.filter-chip [data-lucide] { width: 14px; height: 14px; }
+.filter-chip__x {
+  width: 28px; height: 28px; margin-left: 2px; border: none; border-radius: 999px;
+  background: var(--paper); color: var(--ink-muted); cursor: pointer;
+  display: grid; place-items: center;
+}
+.filter-chip__x:hover { color: var(--ink); }
+.filter-bar__select {
+  flex-shrink: 0; min-height: 34px; max-width: 46vw;
+  padding: 0.15rem 0.7rem; border: 1.5px dashed var(--border); border-radius: 999px;
+  background: transparent; color: var(--ink-muted);
+  font-size: 0.76rem; font-weight: 800; cursor: pointer;
+}
+.filter-bar__select:hover { border-color: var(--ink-muted); color: var(--ink); }
+
 /* Note chip — the note itself lives in the NotePopup. */
 .note-chip {
   display: inline-flex; align-items: center; justify-content: center; gap: 1px;
