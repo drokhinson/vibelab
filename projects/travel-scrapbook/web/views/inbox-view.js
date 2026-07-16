@@ -10,7 +10,7 @@ class InboxView extends View {
     this.POLL_INTERVAL_MS = 2000;
     this.POLL_TIMEOUT_MS = 45000;
     // Group the "want to go" list by geography so a big list stays scannable.
-    this._groupBy = localStorage.getItem('ts.wishlist.groupBy') || 'country';
+    this._groupBy = localStorage.getItem('ts.wishlist.groupBy') || 'region';
     this._collapsed = new Set();
   }
 
@@ -87,8 +87,10 @@ class InboxView extends View {
           </div>` : ''}
         ${scraps.length ? `
           <h2 style="font-size:1.3rem;margin:1.1rem 0 0.4rem;">Want to go</h2>
-          ${renderGroupByToggle(['city', 'region', 'country'], this._groupBy, 'wishlist-groupby')}
-          ${renderScrapGroups(scraps, { dimension: this._groupBy, collapsed: this._collapsed, variant: 'inbox' })}
+          ${renderGroupedList(scraps, {
+            dims: ['region', 'country', 'city'], active: this._groupBy,
+            collapsed: this._collapsed, variant: 'inbox', name: 'wishlist-groupby',
+          })}
           ` : ''}
       `}
     `;

@@ -115,8 +115,10 @@ class TripView extends View {
             ? 'Tap the heart on scraps you love and they collect here.'
             : 'Found something on Reddit or Instagram? Paste it above — we\'ll figure out what place it is.'}</p>
         </div>` : `
-        ${renderGroupByToggle(['category', 'city', 'region', 'country'], this._groupBy, 'trip-groupby')}
-        ${renderScrapGroups(scraps, { dimension: this._groupBy, collapsed: this._collapsed, variant: 'trip' })}`}
+        ${renderGroupedList(scraps, {
+          dims: ['category', 'region', 'country', 'city'], active: this._groupBy,
+          collapsed: this._collapsed, variant: 'trip', name: 'trip-groupby',
+        })}`}
     `;
     this.refreshIcons();
     this._bind(trip);
