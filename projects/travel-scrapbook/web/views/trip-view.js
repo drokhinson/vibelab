@@ -15,6 +15,10 @@ class TripView extends View {
     this._routeBusy = false;
     this._candidates = [];
     this._candidatesSeq = 0;
+    // Plans (default) or the day-by-day Timeline.
+    this._tab = localStorage.getItem('ts.trip.tab') || 'plans';
+    this._timeline = null; // null = not loaded yet
+    this._timelineSeq = 0;
     // Group the trip's scraps by activity type (default) or geography.
     this._groupBy = localStorage.getItem('ts.trip.groupBy') || 'category';
     this._collapsed = new Set();
@@ -60,11 +64,32 @@ class TripView extends View {
       const trip = await window.TripDomain.load(this._tripId);
       // Collaborators can add from their wishlist; viewers can't.
       if (trip.role !== 'viewer') this._loadCandidates();
+      if (this._tab === 'timeline') this._loadTimeline();
       window.ShareDomain.loadMembers(this._tripId).catch(() => {});
     } catch (err) {
       this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load trip')}</div>`;
       this.refreshIcons();
     }
+  }
+
+  // After a schedule change: fresh timeline + fresh trip (plan_date rides on
+  // the scraps the Plans tab shows too).
+  _refreshTimeline(tripId) {
+    this._loadTimeline();
+    window.TripDomain.load(tripId).catch(() => {});
+  }
+
+  // Lazy-load the timeline for the Timeline tab. Sequence-guarded like
+  // _loadCandidates so a stale response never paints another trip's days.
+  async _loadTimeline() {
+    const seq = ++this._timelineSeq;
+    const tripId = this._tripId;
+    try {
+      const data = await window.api.tripTimeline(tripId);
+      if (seq !== this._timelineSeq || this._tripId !== tripId) return;
+      this._timeline = data;
+      this.render();
+    } catch (_) { /* tab keeps its skeleton; a retap retries */ }
   }
 
   // Wishlist places that fit this trip's scope. Non-blocking (per the
@@ -121,6 +146,11 @@ class TripView extends View {
       </div>
       ${renderAnchorsStrip(trip, { readOnly: !canWrite })}
       ${canWrite ? renderQuickPaste(trip.id) : ''}
+      <div class="ts-segmented" role="tablist" aria-label="Trip view" style="margin-top:0.9rem;">
+        <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="plans" ${this._tab === 'plans' ? 'checked' : ''} /><span>Plans</span></label>
+        <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="timeline" ${this._tab === 'timeline' ? 'checked' : ''} /><span>Timeline</span></label>
+      </div>
+      ${this._tab === 'timeline' ? renderTripTimeline(trip, this._timeline, { canWrite }) : `
       ${this._renderStaging(staged, cardOpts)}
       ${canWrite ? this._renderCandidates(cardOpts) : ''}
       ${renderRoutePanel(trip, { route: this._route, geocodedCount, canWrite, routeBusy: this._routeBusy })}
@@ -148,6 +178,7 @@ class TripView extends View {
           dims: ['category', 'region', 'country', 'city'], active: this._groupBy,
           collapsed: this._collapsed, variant: 'trip', name: 'trip-groupby', ...cardOpts,
         })}`}
+      `}
     `;
     this.refreshIcons();
     this._bind(trip, { isOwner, canWrite });
@@ -192,6 +223,21 @@ class TripView extends View {
   _bind(trip, { isOwner = true, canWrite = true } = {}) {
     const c = this.container;
     c.querySelector('#trip-back')?.addEventListener('click', () => window.router.back('trips'));
+
+    // Plans | Timeline tab. The timeline lazy-loads on first switch.
+    c.querySelectorAll('input[name=trip-tab]').forEach((r) => {
+      r.addEventListener('change', () => {
+        if (!r.checked) return;
+        this._tab = r.value;
+        localStorage.setItem('ts.trip.tab', this._tab);
+        this.render();
+        if (this._tab === 'timeline' && !this._timeline) this._loadTimeline();
+      });
+    });
+    // Timeline empty state → open the trip editor to add dates.
+    c.querySelector('#tl-edit-trip')?.addEventListener('click', () => {
+      TripEditor.open(trip, { onSaved: () => { this._timeline = null; this._loadTimeline(); } });
+    });
     c.querySelector('#trip-share')?.addEventListener('click', () => TripShare.open(trip, { isOwner }));
     c.querySelector('#trip-delete')?.addEventListener('click', async () => {
       if (!confirmDestructive(`Delete "${trip.name}" and all its scraps? This can't be undone.`)) return;
@@ -290,6 +336,17 @@ class TripView extends View {
               const user = window.store.get('user');
               const myVibe = (scrap.vibes || []).find((v) => v.user_id === (user && user.user_id));
               await window.ScrapDomain.setVibe(scrapId, trip.id, el.dataset.level, myVibe ? myVibe.level : null);
+            } else if (action === 'slot') {
+              // One-tap "add to Day N" from a timeline suggestion chip.
+              await window.api.updateScrap(scrapId, { plan_date: el.dataset.date });
+              toast('Slotted in');
+              this._refreshTimeline(trip.id);
+            } else if (action === 'schedule') {
+              PlanScheduler.open(scrap, {
+                days: (this._timeline?.days || []).map((d) => ({ date: d.date, day_number: d.day_number })),
+                tripBounds: { start: trip.start_date, end: trip.end_date },
+                onSaved: () => { toast('Scheduled'); this._refreshTimeline(trip.id); },
+              });
             } else if (action === 'delete') {
               if (!confirmDestructive('Delete this scrap? This can\'t be undone.')) return;
               await window.ScrapDomain.remove(scrapId, trip.id);

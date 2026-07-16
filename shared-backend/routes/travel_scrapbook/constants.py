@@ -44,6 +44,10 @@ LLM_MAX_TOKENS_MULTI = 1000
 # Trip suggestions offered on inbox cards reach a bit beyond the auto-stage radius.
 TRIP_SUGGEST_RADIUS_KM = 2 * TRIP_MATCH_RADIUS_KM
 MAX_TRIP_SUGGESTIONS = 3
+# An unscheduled plan within this distance of a dated timeline marker gets a
+# "near your Day N stay" slot suggestion. 25 km ≈ same city/day-trip range;
+# tune as real trips exercise it.
+TIMELINE_SUGGEST_RADIUS_KM = 25.0
 # A source stuck in 'processing' longer than this lost its BackgroundTask
 # (deploy/restart) — GET /inbox sweeps it to failed so retry is offered.
 SOURCE_PROCESSING_TIMEOUT_SECONDS = 10 * 60

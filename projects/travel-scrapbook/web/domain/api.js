@@ -195,6 +195,9 @@
     /** @returns {Promise<{scraps: Scrap[]}>} */
     approveAllStaged: (tripId) => call(`/trips/${tripId}/approve-all`, { method: 'POST' }),
 
+    /** Day-by-day timeline: days with markers + scheduled plans, and unscheduled plans with slot suggestions. */
+    tripTimeline: (tripId) => call(`/trips/${tripId}/timeline`),
+
     optimizeRoute: (tripId, body) => call(`/trips/${tripId}/route/optimize`, { method: 'POST', body: body || {} }),
     exportMapsLinks: (tripId) => call(`/trips/${tripId}/export/maps-links`),
     /** @returns {Promise<Blob>} */

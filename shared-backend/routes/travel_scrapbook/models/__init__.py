@@ -1,9 +1,10 @@
 """Pydantic request/response models for Travel Scrapbook.
 
 Split by domain to stay under the ~300-line file budget:
-  core.py   — profile, capture/sources, scraps, inbox
-  trip.py   — anchors, trips, route optimization, exports
-  social.py — trip members, invitations, vibes
+  core.py     — profile, capture/sources, scraps, inbox
+  trip.py     — anchors, trips, route optimization, exports
+  timeline.py — day-by-day timeline markers/days/suggestions
+  social.py   — trip members, invitations, vibes
 
 Everything is re-exported here so `from .models import X` keeps working.
 """
@@ -48,6 +49,13 @@ from .trip import (  # noqa: F401
     TripResponse,
     TripSummaryResponse,
     TripUpdateRequest,
+)
+from .timeline import (  # noqa: F401
+    TimelineDay,
+    TimelineMarker,
+    TimelineResponse,
+    TimelineSuggestion,
+    UnscheduledPlan,
 )
 from .social import (  # noqa: F401
     InvitationResponse,

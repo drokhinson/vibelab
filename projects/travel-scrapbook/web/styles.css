@@ -469,6 +469,34 @@ body.popup-mode { max-width: 420px; }
 }
 .added-by i { width: 13px; height: 13px; }
 
+/* ── Trip timeline (day cards: markers + scheduled plans) ───────────────────── */
+.tl-day__head { display: flex; align-items: baseline; gap: 0.6rem; }
+.tl-day__num { font-family: var(--font-display, 'Caveat', cursive); font-size: 1.5rem; font-weight: 700; }
+.tl-day__rows { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
+.tl-row {
+  display: flex; align-items: center; gap: 0.5rem; min-height: 44px;
+  padding: 0.3rem 0.5rem; border-radius: 10px; flex-wrap: wrap;
+}
+.tl-row [data-lucide] { width: 16px; height: 16px; flex-shrink: 0; }
+.tl-row--marker { background: var(--paper); font-size: 0.85rem; }
+.tl-row--plan { border: 1.5px dashed var(--border); font-size: 0.85rem; }
+.tl-row--plan.is-visited { opacity: 0.6; }
+.tl-row--booked { border-style: solid; border-color: var(--vibe-booked); background: color-mix(in srgb, var(--vibe-booked) 18%, transparent); }
+.tl-row__time {
+  min-width: 44px; text-align: center; font-weight: 800; font-size: 0.72rem;
+  color: var(--ink-muted); flex-shrink: 0;
+}
+.tl-row__label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tl-row__btn {
+  width: 44px; height: 44px; border-radius: 999px; border: 2px solid var(--border);
+  background: var(--card); color: var(--ink-muted); cursor: pointer;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.tl-booked-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+  background: var(--vibe-booked); font-size: 0.68rem; font-weight: 800;
+}
+
 /* The 4-way priority/vibe control on scrap cards — icon-only, 4 across, so it
    fits a half-width card; labels ride on title/aria. */
 .vibe-control {
