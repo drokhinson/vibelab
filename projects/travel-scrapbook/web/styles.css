@@ -211,15 +211,19 @@ a:hover { color: var(--accent-hover); }
 .scrap-card__sub { font-size: 0.82rem; color: var(--ink-muted); overflow-wrap: anywhere; }
 .scrap-card__row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
 .scrap-card__actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
-.scrap-card__fav {
-  width: 36px; height: 36px; border-radius: 999px; border: 2px solid var(--border);
-  background: var(--card); color: var(--ink-muted); cursor: pointer;
-  display: grid; place-items: center;
+/* Read-only rating chip (Visited view + anywhere the control is hidden). */
+.rating-badge {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 0.5rem;
+  padding: 2px 10px; border-radius: 999px; border: 2px solid var(--border);
+  font-size: 0.74rem; font-weight: 800; color: var(--ink);
 }
-.scrap-card__fav.is-fav { color: #E4557A; border-color: var(--blush); background: #FFF0F4; }
-.scrap-card__fav [data-lucide] { width: 18px; height: 18px; }
+.rating-badge [data-lucide] { width: 13px; height: 13px; }
+.rating-badge--booked { background: var(--vibe-booked); }
+.rating-badge--must_do { background: var(--vibe-must_do); }
+.rating-badge--interested { background: var(--vibe-interested); }
+.rating-badge--could_skip { background: var(--vibe-could_skip); }
 
-/* Visited toggle — matches the favorite corner button; fills green when set. */
+/* Visited toggle — corner button; fills green when set. */
 .scrap-card__visited {
   width: 36px; height: 36px; border-radius: 999px; border: 2px solid var(--border);
   background: var(--card); color: var(--ink-muted); cursor: pointer;

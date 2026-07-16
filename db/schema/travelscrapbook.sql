@@ -159,7 +159,8 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scraps (
   status         TEXT        NOT NULL DEFAULT 'inbox'
     CHECK (status IN ('inbox', 'staged', 'approved')),
   notes          TEXT,
-  is_favorite    BOOLEAN     NOT NULL DEFAULT false,
+  rating         TEXT                                -- owner's own priority (NULL = unrated)
+    CHECK (rating IS NULL OR rating IN ('booked', 'must_do', 'interested', 'could_skip')),
   visited_at     TIMESTAMPTZ,                        -- NULL = on the wishlist; set = visited
   route_position INTEGER,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),

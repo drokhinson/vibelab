@@ -62,6 +62,18 @@ const ScrapDomain = {
     if (tripId) await window.TripDomain.load(tripId);
   },
 
+  // Set / clear the owner's own rating on a place — same toggle semantics as
+  // vibes. On in-trip scraps the server also syncs the owner's vibe row, so we
+  // reload the trip for fresh consensus.
+  async setRating(scrapId, tripId, level, currentLevel) {
+    if (level === currentLevel) {
+      await window.api.clearRating(scrapId);
+    } else {
+      await window.api.setRating(scrapId, level);
+    }
+    if (tripId) await window.TripDomain.load(tripId);
+  },
+
   // Staging "remove" / pulling a scrap out of a trip — it returns to the inbox.
   async unassign(scrapId, tripId) {
     await window.api.unassignScrap(scrapId);

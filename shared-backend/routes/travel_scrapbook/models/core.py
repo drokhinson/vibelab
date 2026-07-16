@@ -98,10 +98,14 @@ class ScrapUpdateRequest(BaseModel):
     place_country: Optional[str] = Field(None, max_length=120)
     category: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=2000)
-    is_favorite: Optional[bool] = None
     visited: Optional[bool] = Field(
         None, description="Mark visited (been there) or move back to the wishlist")
     regeocode: bool = Field(False, description="Re-run Nominatim on the edited place fields")
+
+
+class RatingRequest(BaseModel):
+    """The owner's own priority on a saved place (same levels as trip vibes)."""
+    level: TripVibe
 
 
 class ScrapVibe(BaseModel):
@@ -140,7 +144,7 @@ class ScrapResponse(BaseModel):
     og_image_url: Optional[str] = None
     sources: list[SourceRef] = []
     notes: Optional[str] = None
-    is_favorite: bool = False
+    rating: Optional[TripVibe] = None             # owner's own priority
     visited_at: Optional[datetime] = None
     route_position: Optional[int] = None
     added_by_user_id: Optional[str] = None       # scrap owner (who saved it)

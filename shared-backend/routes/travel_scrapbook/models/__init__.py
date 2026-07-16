@@ -22,6 +22,7 @@ from .core import (  # noqa: F401
     PlanCreateRequest,
     ProfileResponse,
     ProfileUpdateRequest,
+    RatingRequest,
     ScrapConsensus,
     ScrapListResponse,
     ScrapResponse,

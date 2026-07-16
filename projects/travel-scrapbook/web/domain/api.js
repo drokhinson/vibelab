@@ -47,7 +47,7 @@
  * @property {(string|null)=} og_image_url
  * @property {SourceRef[]} sources
  * @property {(string|null)=} notes
- * @property {boolean} is_favorite
+ * @property {('booked'|'must_do'|'interested'|'could_skip'|null)=} rating  owner's own priority
  * @property {(string|null)=} visited_at  null = on the wishlist; set = visited
  * @property {(number|null)=} route_position
  * @property {(string|null)=} added_by_user_id     who saved it (shared trips)
@@ -211,6 +211,12 @@
     /** @returns {Promise<{invitations: Invitation[]}>} */
     listInvitations: () => call('/invitations'),
     respondInvitation: (tripId, action) => call(`/trips/${tripId}/invitation/respond`, { method: 'POST', body: { action } }),
+
+    // ── Rating (owner's own priority) ─────────────────────────────────────
+    /** @returns {Promise<Scrap>} */
+    setRating: (scrapId, level) => call(`/scraps/${scrapId}/rating`, { method: 'PUT', body: { level } }),
+    /** @returns {Promise<Scrap>} */
+    clearRating: (scrapId) => call(`/scraps/${scrapId}/rating`, { method: 'DELETE' }),
 
     // ── Vibes ─────────────────────────────────────────────────────────────
     /** @returns {Promise<Scrap>} */

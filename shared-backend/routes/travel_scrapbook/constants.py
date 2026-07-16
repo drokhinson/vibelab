@@ -141,3 +141,9 @@ class TripVibe(StrEnum):
     MUST_DO = "must_do"        # top priority
     INTERESTED = "interested"  # keen but flexible
     COULD_SKIP = "could_skip"  # fine to drop
+
+
+# A scrap's own priority rating (scraps.rating) deliberately shares the vibe
+# value set: the owner's rating doubles as their consensus input on shared
+# trips (setting a rating upserts the owner's vibe row server-side).
+ScrapRating = TripVibe

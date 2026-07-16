@@ -17,6 +17,7 @@ from .constants import GeocodeConfidence
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     MessageResponse,
+    RatingRequest,
     ScrapListResponse,
     ScrapResponse,
     ScrapUpdateRequest,
@@ -96,8 +97,8 @@ async def update_scrap(
     scrap_id: str = Path(..., description="Scrap UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
-    """Edit place fields, category, notes, or favorite flag. Place edits write
-    to the scrap's canonical place row (safe — places are per-user). Pass
+    """Edit place fields, category, or notes. Place edits write to the
+    scrap's canonical place row (safe — places are per-user). Pass
     regeocode=true to re-run Nominatim on the (possibly edited) place."""
     sb = get_supabase()
     existing = get_owned_scrap(sb, scrap_id, user.user_id)
@@ -110,7 +111,7 @@ async def update_scrap(
 
     update = body.model_dump(exclude_unset=True, exclude={"regeocode"})
 
-    scrap_update = {k: update[k] for k in ("notes", "is_favorite") if k in update}
+    scrap_update = {k: update[k] for k in ("notes",) if k in update}
     # visited is a soft timestamp flag, not a 1:1 column — map true→now(), false→NULL.
     if "visited" in update:
         scrap_update["visited_at"] = "now()" if update["visited"] else None
@@ -195,6 +196,70 @@ async def delete_scrap(
     get_owned_scrap(sb, scrap_id, user.user_id)
     sb.table("travelscrapbook_scraps").delete().eq("id", scrap_id).execute()
     return MessageResponse(message="Scrap deleted")
+
+
+# ── Rating (the owner's own priority on a place) ─────────────────────────────
+
+@router.put(
+    "/scraps/{scrap_id}/rating",
+    response_model=ScrapResponse,
+    status_code=200,
+    summary="Rate a place",
+)
+async def set_rating(
+    body: RatingRequest,
+    scrap_id: str = Path(..., description="Scrap UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapResponse:
+    """Set the owner's priority on their saved place (booked / must do /
+    interested / could skip) — from the Wander List or any trip. When the
+    scrap is in a trip, the rating also upserts the owner's vibe row so the
+    group consensus includes them without a second control."""
+    sb = get_supabase()
+    scrap = get_owned_scrap(sb, scrap_id, user.user_id)
+    sb.table("travelscrapbook_scraps").update(
+        {"rating": body.level, "updated_at": "now()"}
+    ).eq("id", scrap_id).execute()
+    scrap["rating"] = body.level
+    in_trip = bool(scrap.get("trip_id"))
+    if in_trip:
+        sb.table("travelscrapbook_scrap_vibes").upsert(
+            {
+                "scrap_id": scrap_id,
+                "user_id": user.user_id,
+                "level": body.level,
+                "updated_at": "now()",
+            },
+            on_conflict="scrap_id,user_id",
+        ).execute()
+    return _hydrated_scrap(sb, scrap, with_vibes=in_trip)
+
+
+@router.delete(
+    "/scraps/{scrap_id}/rating",
+    response_model=ScrapResponse,
+    status_code=200,
+    summary="Clear a place's rating",
+)
+async def clear_rating(
+    scrap_id: str = Path(..., description="Scrap UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapResponse:
+    """Remove the owner's priority on their place (back to unrated). Also
+    clears the owner's vibe row when the scrap is in a trip, mirroring
+    set_rating's sync."""
+    sb = get_supabase()
+    scrap = get_owned_scrap(sb, scrap_id, user.user_id)
+    sb.table("travelscrapbook_scraps").update(
+        {"rating": None, "updated_at": "now()"}
+    ).eq("id", scrap_id).execute()
+    scrap["rating"] = None
+    in_trip = bool(scrap.get("trip_id"))
+    if in_trip:
+        sb.table("travelscrapbook_scrap_vibes").delete().eq(
+            "scrap_id", scrap_id
+        ).eq("user_id", user.user_id).execute()
+    return _hydrated_scrap(sb, scrap, with_vibes=in_trip)
 
 
 # ── Vibes (per-traveler consensus input) ─────────────────────────────────────

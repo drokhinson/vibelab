@@ -136,7 +136,8 @@ class TripListResponse(BaseModel):
 class RouteOptimizeRequest(BaseModel):
     scrap_ids: Optional[list[str]] = Field(
         None, description="Restrict to these scraps; default = all geocoded scraps in the trip")
-    favorites_only: bool = False
+    priority_only: bool = Field(
+        False, description="Route only booked / must-do plans")
 
 
 class RouteLeg(BaseModel):

@@ -10,7 +10,7 @@ class TripView extends View {
 
   _resetState() {
     this._tripId = null;
-    this._favoritesOnly = false;
+    this._priorityOnly = false;
     this._route = null;
     this._routeBusy = false;
     this._candidates = [];
@@ -97,7 +97,8 @@ class TripView extends View {
 
     const allScraps = trip.scraps || [];
     const staged = trip.staged_scraps || [];
-    const scraps = this._favoritesOnly ? allScraps.filter((s) => s.is_favorite) : allScraps;
+    const isPriority = (s) => s.rating === 'booked' || s.rating === 'must_do';
+    const scraps = this._priorityOnly ? allScraps.filter(isPriority) : allScraps;
     const geocodedCount = allScraps.filter((s) => s.lat != null).length;
     const dates = formatDateRange(trip.start_date, trip.end_date);
 
@@ -123,18 +124,18 @@ class TripView extends View {
         <h2 style="font-size:1.5rem;margin:0;">Plans</h2>
         <div style="display:flex;gap:0.5rem;">
           ${canWrite ? `<button class="ts-btn ts-btn--blush ts-btn--sm" id="add-plans"><i data-lucide="plus"></i>Add plans</button>` : ''}
-          <button class="ts-btn ts-btn--ghost ts-btn--sm ${this._favoritesOnly ? 'is-fav' : ''}" id="fav-filter"
-                  style="${this._favoritesOnly ? 'border-color:var(--blush);color:#E4557A;' : ''}">
-            <i data-lucide="heart"></i>${this._favoritesOnly ? 'All' : 'Favorites'}
+          <button class="ts-btn ts-btn--ghost ts-btn--sm" id="priority-filter"
+                  style="${this._priorityOnly ? 'border-color:var(--butter-deep, #C9A227);color:#8A6D1A;' : ''}">
+            <i data-lucide="star"></i>${this._priorityOnly ? 'All' : 'Must-dos'}
           </button>
         </div>
       </div>
       ${scraps.length === 0 ? `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-scraps.svg" alt="" />
-          <p class="empty-title">${this._favoritesOnly ? 'No favorites yet' : 'No plans yet'}</p>
-          <p class="empty-desc">${this._favoritesOnly
-            ? 'Tap the heart on plans you love and they collect here.'
+          <p class="empty-title">${this._priorityOnly ? 'No must-dos yet' : 'No plans yet'}</p>
+          <p class="empty-desc">${this._priorityOnly
+            ? 'Rate plans “Must do” or “Booked” and they collect here.'
             : (canWrite
               ? 'Tap “Add plans” to pick from your Wander List or add a place — or paste a link above.'
               : 'When the crew adds places, they’ll show up here for you to vibe on.')}</p>
@@ -196,8 +197,8 @@ class TripView extends View {
         window.router.go('trips');
       } catch (err) { toast(err.message, { error: true }); }
     });
-    c.querySelector('#fav-filter')?.addEventListener('click', () => {
-      this._favoritesOnly = !this._favoritesOnly;
+    c.querySelector('#priority-filter')?.addEventListener('click', () => {
+      this._priorityOnly = !this._priorityOnly;
       this.render();
     });
     c.querySelector('#trip-edit')?.addEventListener('click', () => {
@@ -261,8 +262,8 @@ class TripView extends View {
         el.addEventListener('click', async (ev) => {
           ev.stopPropagation();
           try {
-            if (action === 'favorite') {
-              await window.ScrapDomain.update(scrapId, trip.id, { is_favorite: !scrap.is_favorite });
+            if (action === 'rate') {
+              await window.ScrapDomain.setRating(scrapId, trip.id, el.dataset.level, scrap.rating);
             } else if (action === 'visited') {
               await window.ScrapDomain.toggleVisited(scrapId, trip.id, !!scrap.visited_at);
               toast(scrap.visited_at ? 'Back on your wishlist' : 'Marked visited');
@@ -298,7 +299,7 @@ class TripView extends View {
       this._routeBusy = true;
       this.render();
       try {
-        this._route = await window.RouteDomain.optimize(trip.id, { favorites_only: this._favoritesOnly });
+        this._route = await window.RouteDomain.optimize(trip.id, { priority_only: this._priorityOnly });
       } catch (err) {
         toast(err.message || 'Route sorting failed', { error: true });
       } finally {
