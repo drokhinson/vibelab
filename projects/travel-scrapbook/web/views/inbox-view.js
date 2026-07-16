@@ -193,10 +193,6 @@ class InboxView extends View {
             await this._load();
           } else if (action === 'pick-trip') {
             this._openTripPicker(scrap);
-          } else if (action === 'delete') {
-            if (!confirmDestructive('Delete this find? This can\'t be undone.')) return;
-            await window.SourceDomain.removeScrap(scrapId);
-            await this._load();
           }
         } catch (err) { toast(err.message, { error: true }); }
       });

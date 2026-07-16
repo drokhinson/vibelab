@@ -185,16 +185,13 @@ function renderScrapCard(scrap, opts = {}) {
               data-scrap-id="${escapeAttr(scrap.id)}" data-trip-id="${escapeAttr(sug.trip_id)}">
         <i data-lucide="plus"></i>${escapeHtml(sug.name)} · ${formatKm(sug.distance_km)}
       </button>`).join('');
+    // Delete lives in the editor popup now (pencil → red delete). The
+    // "add to trips" button spans the card width; suggestion chips sit above it.
     footer = `
-      <div class="scrap-card__row" style="margin-top:0.6rem;">
-        ${chips}
-        <button class="ts-btn ts-btn--sm ts-btn--ghost" data-action="pick-trip" data-scrap-id="${escapeAttr(scrap.id)}">
-          <i data-lucide="folder-plus"></i>Pick a trip
-        </button>
-        <button class="ts-btn ts-btn--sm ts-btn--ghost" data-action="delete" data-scrap-id="${escapeAttr(scrap.id)}" aria-label="Delete">
-          <i data-lucide="trash-2"></i>
-        </button>
-      </div>`;
+      ${chips ? `<div class="scrap-card__row" style="margin-top:0.6rem;">${chips}</div>` : ''}
+      <button class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__addtrip" data-action="pick-trip" data-scrap-id="${escapeAttr(scrap.id)}">
+        <i data-lucide="folder-plus"></i>Add to trips
+      </button>`;
   } else if (variant === 'candidate') {
     footer = `
       <div class="scrap-card__row" style="margin-top:0.6rem;">
@@ -251,23 +248,30 @@ function renderScrapCard(scrap, opts = {}) {
     chip = _renderRatingBadge(scrap);
   }
 
-  // Row 1: icon-only source + maps buttons, side by side.
+  // Row 1: icon-only source + maps buttons, each half the card width.
   const linksRow = _sourceButton(scrap) + _mapsButton(scrap);
-  // Row 2: note chip + priority/vibe chip, side by side.
+  // Row 2: note chip + priority/vibe chip, together spanning the card width.
   const metaRow = noteChip + chip;
   const consensus = (variant === 'trip' && shared && scrap.trip_id) ? _renderConsensus(scrap) : '';
+  // Pencil (top-right, creator only) — opens the full editor, which houses the
+  // red delete. It carries no handler: a click bubbles to the card's own
+  // click-to-edit listener (wired in every editable view), so no extra wiring.
+  const editBtn = editable
+    ? '<button class="scrap-card__edit" type="button" aria-label="Edit place" title="Edit"><i data-lucide="pencil"></i></button>'
+    : '';
 
   return `
     <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
          style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : isPreview ? 'none' : (editable ? 'edit' : 'none')}">
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
+      ${editBtn}
       ${media}
       <p class="scrap-card__title">${escapeHtml(title)}</p>
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}
       ${addedBy}
       ${linksRow ? `<div class="scrap-card__row scrap-card__links">${linksRow}</div>` : ''}
-      ${metaRow ? `<div class="scrap-card__row">${metaRow}</div>` : ''}
+      ${metaRow ? `<div class="scrap-card__row scrap-card__meta">${metaRow}</div>` : ''}
       ${consensus}
       ${footer}
     </div>

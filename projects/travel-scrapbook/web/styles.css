@@ -232,7 +232,9 @@ a:hover { color: var(--accent-hover); }
 }
 .scrap-card__media.is-fallback .scrap-card__cat-overlay { display: none; }
 /* Icon-only source / maps buttons, side by side under the card. */
+/* Source + Maps buttons each take half the card width, side by side. */
 .scrap-card__links { gap: 0.5rem; }
+.scrap-card__links > .link-icon-btn { flex: 1; }
 .link-icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 46px; height: 40px; border-radius: 12px;
@@ -242,6 +244,28 @@ a:hover { color: var(--accent-hover); }
 .link-icon-btn:hover { border-color: var(--ink-muted); color: var(--ink); }
 .link-icon-btn:active { transform: translateY(1px); }
 .link-icon-btn [data-lucide] { width: 18px; height: 18px; }
+/* Note + priority together span the card width: the note chip stays compact,
+   the priority/rating chip fills the rest (so long labels don't wrap on the
+   narrow 2-col card). */
+.scrap-card__meta { flex-wrap: nowrap; }
+.scrap-card__meta > .note-chip { flex: 0 0 auto; }
+.scrap-card__meta > .priority-chip,
+.scrap-card__meta > .rating-badge { flex: 1 1 auto; min-width: 0; justify-content: center; }
+/* "Add to trips" spans the card width. */
+.scrap-card__addtrip { width: 100%; }
+/* Pencil edit affordance, top-right over the media. Carries no handler — a
+   click bubbles to the card's own click-to-edit listener. */
+.scrap-card__edit {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 999px;
+  border: 1.5px solid var(--border); cursor: pointer;
+  background: rgba(255, 249, 242, 0.94); color: var(--ink);
+  box-shadow: 1.5px 1.5px 0 rgba(91, 84, 104, 0.18);
+}
+.scrap-card__edit:hover { border-color: var(--ink-muted); }
+.scrap-card__edit:active { transform: translateY(1px); }
+.scrap-card__edit [data-lucide] { width: 16px; height: 16px; }
 /* Source picker list (SourceLinks.open) */
 .source-links__list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.6rem; }
 .source-links__item { justify-content: flex-start; }
