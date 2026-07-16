@@ -99,16 +99,21 @@ function renderGroupByToggle(dims, active, name) {
  * Native <details> gives free, accessible collapse; `collapsed` (a Set of group
  * keys) persists open/closed state across re-renders.
  * @param {Array} scraps
- * @param {{dimension?:string, collapsed?:Set<string>, variant?:string, tripId?:(string|null)}} opts
+ * @param {{dimension?:string, collapsed?:Set<string>, variant?:string, tripId?:(string|null),
+ *          shared?:boolean, currentUserId?:(string|null), canWrite?:boolean}} opts
+ *   shared/currentUserId/canWrite forward to renderScrapCard (trip vibe + gating).
  */
 function renderScrapGroups(scraps, opts = {}) {
-  const { dimension = 'country', collapsed = new Set(), variant = 'inbox', tripId = null } = opts;
+  const {
+    dimension = 'country', collapsed = new Set(), variant = 'inbox', tripId = null,
+    shared = false, currentUserId = null, canWrite = true,
+  } = opts;
   const groups = groupScraps(scraps, dimension);
   if (!groups.length) return '';
   let i = 0;
   return groups.map((g) => {
     const cards = g.items
-      .map((s) => renderScrapCard(s, { index: i++, variant, tripId }))
+      .map((s) => renderScrapCard(s, { index: i++, variant, tripId, shared, currentUserId, canWrite }))
       .join('');
     return `
       <details class="scrap-group" data-group-key="${escapeAttr(g.key)}" ${collapsed.has(g.key) ? '' : 'open'}>
@@ -128,19 +133,24 @@ function renderScrapGroups(scraps, opts = {}) {
  * handful of items all in one country), it renders a plain flat grid with no
  * toggle. The chosen `active` dimension falls back to the first available one.
  * @param {Array} scraps
- * @param {{dims:string[], active:string, collapsed?:Set<string>, variant?:string, tripId?:(string|null), name:string}} opts
+ * @param {{dims:string[], active:string, collapsed?:Set<string>, variant?:string, tripId?:(string|null),
+ *          name:string, shared?:boolean, currentUserId?:(string|null), canWrite?:boolean}} opts
  */
 function renderGroupedList(scraps, opts = {}) {
-  const { dims, active, collapsed = new Set(), variant = 'inbox', tripId = null, name } = opts;
+  const {
+    dims, active, collapsed = new Set(), variant = 'inbox', tripId = null, name,
+    shared = false, currentUserId = null, canWrite = true,
+  } = opts;
+  const card = { variant, tripId, shared, currentUserId, canWrite };
   const avail = availableGroupDims(scraps, dims);
   if (!avail.length) {
     return `<div class="card-grid card-grid--2col">${
-      scraps.map((s, i) => renderScrapCard(s, { index: i, variant, tripId })).join('')
+      scraps.map((s, i) => renderScrapCard(s, { index: i, ...card })).join('')
     }</div>`;
   }
   const eff = avail.includes(active) ? active : avail[0];
   return renderGroupByToggle(avail, eff, name) +
-    renderScrapGroups(scraps, { dimension: eff, collapsed, variant, tripId });
+    renderScrapGroups(scraps, { dimension: eff, collapsed, ...card });
 }
 
 // Wire the group-by radios + the <details> collapse state into a view. Call

@@ -17,3 +17,4 @@ from . import source_routes   # noqa: F401, E402
 from . import scrap_routes    # noqa: F401, E402
 from . import route_routes    # noqa: F401, E402
 from . import export_routes   # noqa: F401, E402
+from . import member_routes   # noqa: F401, E402

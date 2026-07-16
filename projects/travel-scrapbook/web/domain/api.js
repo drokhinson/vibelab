@@ -50,7 +50,45 @@
  * @property {boolean} is_favorite
  * @property {(string|null)=} visited_at  null = on the wishlist; set = visited
  * @property {(number|null)=} route_position
+ * @property {(string|null)=} added_by_user_id     who saved it (shared trips)
+ * @property {(string|null)=} added_by_display_name
+ * @property {ScrapVibe[]=} vibes                  per-traveler takes (trip surfaces)
+ * @property {(ScrapConsensus|null)=} consensus    group roll-up
  * @property {TripSuggestion[]=} suggestions  inbox responses only
+ */
+
+/**
+ * @typedef {Object} ScrapVibe  One traveler's vibe on a place.
+ * @property {string} user_id
+ * @property {string} display_name
+ * @property {'booked'|'must_do'|'interested'|'could_skip'} level
+ */
+
+/**
+ * @typedef {Object} ScrapConsensus  Group roll-up of a scrap's vibes.
+ * @property {Object<string, number>} counts  level → count
+ * @property {number} total
+ * @property {string} headline
+ */
+
+/**
+ * @typedef {Object} TripMember
+ * @property {string} user_id
+ * @property {string} username
+ * @property {string} display_name
+ * @property {'owner'|'collaborator'|'viewer'} role
+ * @property {'pending'|'accepted'|'declined'} status
+ */
+
+/**
+ * @typedef {Object} Invitation
+ * @property {string} trip_id
+ * @property {string} trip_name
+ * @property {string} cover_icon
+ * @property {'collaborator'|'viewer'} role
+ * @property {(string|null)=} owner_display_name
+ * @property {(string|null)=} invited_by_display_name
+ * @property {string} created_at
  */
 
 /**
@@ -161,6 +199,24 @@
     exportMapsLinks: (tripId) => call(`/trips/${tripId}/export/maps-links`),
     /** @returns {Promise<Blob>} */
     exportCsv: (tripId) => call(`/trips/${tripId}/export/csv`),
+
+    // ── Trip sharing ──────────────────────────────────────────────────────
+    /** @returns {Promise<{members: TripMember[]}>} */
+    listMembers: (tripId) => call(`/trips/${tripId}/members`),
+    /** @returns {Promise<TripMember>} */
+    inviteMember: (tripId, body) => call(`/trips/${tripId}/members`, { method: 'POST', body }),
+    /** @returns {Promise<TripMember>} */
+    updateMember: (tripId, userId, body) => call(`/trips/${tripId}/members/${userId}`, { method: 'PATCH', body }),
+    removeMember: (tripId, userId) => call(`/trips/${tripId}/members/${userId}`, { method: 'DELETE' }),
+    /** @returns {Promise<{invitations: Invitation[]}>} */
+    listInvitations: () => call('/invitations'),
+    respondInvitation: (tripId, action) => call(`/trips/${tripId}/invitation/respond`, { method: 'POST', body: { action } }),
+
+    // ── Vibes ─────────────────────────────────────────────────────────────
+    /** @returns {Promise<Scrap>} */
+    setVibe: (scrapId, level) => call(`/scraps/${scrapId}/vibe`, { method: 'PUT', body: { level } }),
+    /** @returns {Promise<Scrap>} */
+    clearVibe: (scrapId) => call(`/scraps/${scrapId}/vibe`, { method: 'DELETE' }),
 
     trackEvent: (name) => {
       fetch(`${BASE}/api/v1/analytics/track`, {

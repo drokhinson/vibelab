@@ -51,6 +51,17 @@ const ScrapDomain = {
     await window.TripDomain.load(tripId);
   },
 
+  // Set / clear my vibe on a place (booked | must_do | interested | could_skip).
+  // Tapping the current vibe again clears it. Reloads the trip for fresh consensus.
+  async setVibe(scrapId, tripId, level, currentLevel) {
+    if (level === currentLevel) {
+      await window.api.clearVibe(scrapId);
+    } else {
+      await window.api.setVibe(scrapId, level);
+    }
+    if (tripId) await window.TripDomain.load(tripId);
+  },
+
   // Staging "remove" / pulling a scrap out of a trip — it returns to the inbox.
   async unassign(scrapId, tripId) {
     await window.api.unassignScrap(scrapId);

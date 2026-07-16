@@ -23,6 +23,11 @@ function renderTripCard(trip, opts = {}) {
     `;
   }
 
+  // Trips shared with the viewer (role != owner) get a "Shared by X" ribbon.
+  const sharedChip = (trip.role && trip.role !== 'owner')
+    ? `<span class="source-badge"><i data-lucide="users"></i>${escapeHtml(trip.owner_display_name ? `Shared by ${trip.owner_display_name}` : 'Shared')}</span>`
+    : '';
+
   return `
     <div class="sticker-card ${washi} card-lift" data-trip-id="${escapeAttr(trip.id)}" style="--i:${index};text-align:center;padding-top:1.4rem;">
       ${renderSprite('cover', trip.cover_icon, { size: 'lg', alt: '' })}
@@ -31,6 +36,7 @@ function renderTripCard(trip, opts = {}) {
       <div class="scrap-card__row" style="justify-content:center;">
         ${dates ? `<span class="source-badge"><i data-lucide="calendar"></i>${escapeHtml(dates)}</span>` : ''}
         <span class="source-badge"><i data-lucide="paperclip"></i>${count} scrap${count === 1 ? '' : 's'}</span>
+        ${sharedChip}
       </div>
     </div>
   `;

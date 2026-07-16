@@ -17,8 +17,10 @@ const ANCHOR_TYPES = [
   { type: 'other', label: 'Other', lucide: 'map-pin' },
 ];
 
-function renderAnchorsStrip(trip) {
+// readOnly (viewers): show the anchors but hide the add/remove affordances.
+function renderAnchorsStrip(trip, { readOnly = false } = {}) {
   const anchors = trip.anchors || [];
+  if (readOnly && !anchors.length) return '';
   const chips = anchors.map((a) => {
     const meta = ANCHOR_ROLES.find((r) => r.role === a.role) || ANCHOR_ROLES[2];
     const typeMeta = a.type ? ANCHOR_TYPES.find((t) => t.type === a.type) : null;
@@ -31,19 +33,19 @@ function renderAnchorsStrip(trip) {
         ${typeMeta ? `<i data-lucide="${typeMeta.lucide}" class="anchor-chip__type" title="${escapeAttr(typeMeta.label)}"></i>` : ''}
         ${a.role === 'stay' && a.stay_date ? `<span class="anchor-chip__day">${escapeHtml(formatDateRange(a.stay_date, null))}</span>` : ''}
         ${a.geocode_confidence === 'none' ? '<i data-lucide="map-pin-off" style="opacity:0.5;"></i>' : ''}
-        <button data-action="remove-anchor" data-anchor-id="${escapeAttr(a.id)}" aria-label="Remove ${escapeAttr(a.label)}"
+        ${readOnly ? '' : `<button data-action="remove-anchor" data-anchor-id="${escapeAttr(a.id)}" aria-label="Remove ${escapeAttr(a.label)}"
                 style="border:none;background:none;cursor:pointer;display:grid;place-items:center;width:24px;height:24px;color:var(--ink-muted);">
           <i data-lucide="x"></i>
-        </button>
+        </button>`}
       </span>
     `;
   }).join('');
   return `
     <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin:0.6rem 0;">
       ${chips}
-      <button class="ts-btn ts-btn--ghost ts-btn--sm" data-action="add-anchor">
+      ${readOnly ? '' : `<button class="ts-btn ts-btn--ghost ts-btn--sm" data-action="add-anchor">
         <i data-lucide="anchor"></i>Airports &amp; stays
-      </button>
+      </button>`}
     </div>
   `;
 }

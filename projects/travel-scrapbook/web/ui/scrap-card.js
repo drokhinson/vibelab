@@ -4,9 +4,58 @@
 // move-to-inbox row), 'inbox' (trip-suggestion chips + picker hooks).
 'use strict';
 
+// Vibe = each traveler's take on a place, rolled up into a group consensus.
+// Order = most-committed → least (matches the backend TripVibe ordering).
+const VIBE_META = [
+  { level: 'booked', label: 'Booked', icon: 'calendar-check' },
+  { level: 'must_do', label: 'Must do', icon: 'star' },
+  { level: 'interested', label: 'Interested', icon: 'thumbs-up' },
+  { level: 'could_skip', label: 'Could skip', icon: 'circle-slash' },
+];
+const VIBE_LABEL = Object.fromEntries(VIBE_META.map((v) => [v.level, v.label]));
+
 function _scrapCategoryIcon(scrap) {
   const categories = window.store.get('categories') || [];
   return (categories.find((c) => c.slug === scrap.category) || { icon: 'other' }).icon;
+}
+
+// The current traveler's own vibe on this scrap (null if they haven't set one).
+function _myVibe(scrap, currentUserId) {
+  const mine = (scrap.vibes || []).find((v) => v.user_id === currentUserId);
+  return mine ? mine.level : null;
+}
+
+// A 4-way segmented control; the caller's current vibe is highlighted. Tapping
+// it again clears it (handled in the view). Shown on every trip scrap so even a
+// solo traveler can mark places booked / must-do / etc.
+function _renderVibeControl(scrap, currentUserId) {
+  const my = _myVibe(scrap, currentUserId);
+  return `
+    <div class="vibe-control" role="group" aria-label="Your vibe on this place">
+      ${VIBE_META.map((v) => `
+        <button class="vibe-seg vibe-seg--${v.level} ${my === v.level ? 'is-on' : ''}"
+                data-action="vibe" data-scrap-id="${escapeAttr(scrap.id)}" data-level="${v.level}"
+                aria-pressed="${my === v.level}" title="${v.label}">
+          <i data-lucide="${v.icon}"></i><span>${v.label}</span>
+        </button>`).join('')}
+    </div>`;
+}
+
+// Group roll-up: one chip per traveler (initial + their vibe color) plus the
+// consensus headline. Only meaningful once more than one person is on the trip.
+function _renderConsensus(scrap) {
+  const c = scrap.consensus;
+  const vibes = scrap.vibes || [];
+  if (!c || !c.total) return '';
+  const chips = vibes.map((v) => `
+    <span class="vibe-chip vibe-chip--${v.level}" title="${escapeAttr(v.display_name)}: ${VIBE_LABEL[v.level] || v.level}">
+      ${escapeHtml((v.display_name || '?').trim().charAt(0).toUpperCase() || '?')}
+    </span>`).join('');
+  return `
+    <div class="vibe-consensus">
+      <div class="vibe-consensus__chips">${chips}</div>
+      <span class="vibe-consensus__headline">${escapeHtml(c.headline)}</span>
+    </div>`;
 }
 
 function _confidenceHint(scrap) {
@@ -38,10 +87,20 @@ function _sourceChips(scrap) {
 
 /**
  * @param {Scrap} scrap
- * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select', tripId?: string, selected?: boolean, fits?: boolean}} opts
+ * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select',
+ *          tripId?: string, selected?: boolean, fits?: boolean,
+ *          shared?: boolean, currentUserId?: (string|null), canWrite?: boolean}} opts
+ *   variant preview — read-only display (share success screen)
+ *   variant select  — read-only + selection checkbox (Wander-List picker)
+ *   shared        — trip has other members (show consensus + "added by")
+ *   currentUserId — the viewer, to derive their own vibe + scrap ownership
+ *   canWrite      — false for viewers (hides add/edit/delete affordances)
  */
 function renderScrapCard(scrap, opts = {}) {
-  const { index = 0, variant = 'trip', tripId = null, selected = false, fits = false } = opts;
+  const {
+    index = 0, variant = 'trip', tripId = null, selected = false, fits = false,
+    shared = false, currentUserId = null, canWrite = true,
+  } = opts;
   // 'preview' = read-only display (share success screen). 'select' = read-only
   // with a selection checkbox (the trip's "add from Wander List" picker). Both
   // suppress the normal actions/toggles/click-to-edit.
@@ -49,6 +108,9 @@ function renderScrapCard(scrap, opts = {}) {
   const isSelect = variant === 'select';
   const readOnly = isPreview || isSelect;
   const catIcon = _scrapCategoryIcon(scrap);
+  // "Mine" governs owner-only actions (favorite/visited/edit/delete). On solo
+  // trips and the inbox added_by is the viewer (or unset), so this stays true.
+  const mine = !scrap.added_by_user_id || scrap.added_by_user_id === currentUserId;
 
   const title = scrap.place_name || 'Saved place';
   const sub = _locationLine(scrap);
@@ -101,8 +163,10 @@ function renderScrapCard(scrap, opts = {}) {
   }
 
   // Favorite (trip only) + visited toggle (trip + wishlist) live in the corner.
-  const showFav = variant === 'trip';
-  const showVisited = variant === 'trip' || variant === 'inbox';
+  // Favorite/visited write to the scrap's own row, so only its owner sees them;
+  // the read-only preview/select variants suppress them via the variant check.
+  const showFav = variant === 'trip' && mine;
+  const showVisited = (variant === 'trip' && mine) || variant === 'inbox';
   const isVisited = !!scrap.visited_at && !readOnly;
   const actions = (showFav || showVisited) ? `
     <div class="scrap-card__actions">
@@ -120,9 +184,21 @@ function renderScrapCard(scrap, opts = {}) {
         </button>` : ''}
     </div>` : '';
 
+  // Only the owner can open the editor (place edits are owner-only server-side),
+  // so others' cards on a shared trip aren't tappable-to-edit.
+  const editable = mine && (variant === 'trip' || variant === 'inbox' || variant === 'candidate');
+  const addedBy = (shared && !mine && scrap.added_by_display_name)
+    ? `<span class="added-by"><i data-lucide="user"></i>${escapeHtml(scrap.added_by_display_name)}</span>`
+    : '';
+  // Vibe control on every in-trip scrap (only the trip view passes currentUserId,
+  // so retrospective lists like Visited don't get it); consensus only when shared.
+  const vibeUi = (variant === 'trip' && currentUserId && scrap.trip_id)
+    ? `${_renderVibeControl(scrap, currentUserId)}${shared ? _renderConsensus(scrap) : ''}`
+    : '';
+
   return `
     <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
-         style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : isPreview ? 'none' : 'edit'}">
+         style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : isPreview ? 'none' : (editable ? 'edit' : 'none')}">
       ${actions}
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
@@ -130,6 +206,7 @@ function renderScrapCard(scrap, opts = {}) {
       ${photo}
       <p class="scrap-card__title">${escapeHtml(title)}</p>
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}
+      ${addedBy}
       <div class="scrap-card__row">
         ${renderCategoryBadge(scrap.category)}
         ${_sourceChips(scrap)}
@@ -137,6 +214,7 @@ function renderScrapCard(scrap, opts = {}) {
       </div>
       ${hint ? `<div class="confidence-hint" style="margin-top:0.4rem;">${escapeHtml(hint)}</div>` : ''}
       ${scrap.notes ? `<p class="scrap-card__sub" style="margin-top:0.4rem;">${escapeHtml(scrap.notes)}</p>` : ''}
+      ${vibeUi}
       ${footer}
     </div>
   `;

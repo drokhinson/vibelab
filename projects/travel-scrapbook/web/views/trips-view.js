@@ -14,20 +14,62 @@ class TripsView extends View {
 
   async onMount() {
     this.listen('trips', () => this.render());
+    this.listen('invitations', () => this.render());
     try {
       await window.TripDomain.loadAll();
+      window.ShareDomain.loadInvitations().catch(() => {});
     } catch (err) {
       this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load trips')}</div>`;
       this.refreshIcons();
     }
   }
 
+  _renderInvitations() {
+    const invites = window.store.get('invitations') || [];
+    if (!invites.length) return '';
+    return `
+      <div class="sticker-card washi washi--mint" style="padding-top:1.1rem;margin-bottom:1rem;">
+        <h2 style="font-size:1.3rem;margin:0 0 0.6rem;"><i data-lucide="mail"></i> Trip invites</h2>
+        ${invites.map((inv) => `
+          <div class="crew-row" data-invite-trip="${escapeAttr(inv.trip_id)}">
+            ${renderSprite('cover', inv.cover_icon, { size: 'md', alt: '' })}
+            <div style="min-width:0;flex:1;">
+              <div style="font-weight:700;">${escapeHtml(inv.trip_name)}</div>
+              <div class="scrap-card__sub">${escapeHtml(inv.owner_display_name ? `from ${inv.owner_display_name}` : '')} · as ${escapeHtml(inv.role)}</div>
+            </div>
+            <button class="ts-btn ts-btn--mint ts-btn--sm" data-invite-accept="${escapeAttr(inv.trip_id)}"><i data-lucide="check"></i>Join</button>
+            <button class="ts-btn ts-btn--ghost ts-btn--sm" data-invite-decline="${escapeAttr(inv.trip_id)}" aria-label="Decline"><i data-lucide="x"></i></button>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  _bindInvitations() {
+    this.container.querySelectorAll('[data-invite-accept]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await window.ShareDomain.respond(btn.dataset.inviteAccept, 'accept');
+          toast('Joined the trip!');
+        } catch (err) { toast(err.message, { error: true }); }
+      });
+    });
+    this.container.querySelectorAll('[data-invite-decline]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await window.ShareDomain.respond(btn.dataset.inviteDecline, 'decline');
+          toast('Invite declined');
+        } catch (err) { toast(err.message, { error: true }); }
+      });
+    });
+  }
+
   render() {
     const trips = window.store.get('trips');
     if (!trips) return;
+    const invitesHtml = this._renderInvitations();
 
     if (trips.length === 0) {
       this.container.innerHTML = `
+        ${invitesHtml}
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-trips.svg" alt="" />
           <p class="empty-title">Where to first?</p>
@@ -37,6 +79,7 @@ class TripsView extends View {
       `;
     } else {
       this.container.innerHTML = `
+        ${invitesHtml}
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <h1 style="font-size:2rem;margin:0;">My trips</h1>
           <button class="ts-btn ts-btn--blush ts-btn--sm" id="new-trip-btn"><i data-lucide="plus"></i>New trip</button>
@@ -47,6 +90,7 @@ class TripsView extends View {
       `;
     }
     this.refreshIcons();
+    this._bindInvitations();
 
     this.container.querySelector('#new-trip-btn')?.addEventListener('click', () => this._openNewTripModal());
     this.container.querySelectorAll('[data-trip-id]').forEach((el) => {
