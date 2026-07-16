@@ -10,6 +10,7 @@ let currentUser = null; // { user_id, display_name, username, is_admin, categori
 let _initialAuthResolve = null;
 const _initialAuthReady = new Promise((resolve) => { _initialAuthResolve = resolve; });
 let _initialAuthSettled = false;
+let _profileLoadInFlight = false;
 
 function awaitInitialAuth() { return _initialAuthReady; }
 
@@ -23,21 +24,28 @@ function getAuthToken() { return session?.access_token || null; }
 
 async function loadProfile() {
   // Backend auth confirmation — auto-creates the profile row on first login
-  // and returns the category option set the UI needs everywhere.
+  // and returns the category option set the UI needs everywhere. Runs in the
+  // background off the session (see onAuthStateChange), so guard against
+  // overlapping calls when several auth events land in quick succession. A
+  // failed load leaves currentUser null so a later event can retry.
+  if (_profileLoadInFlight || currentUser) return;
+  _profileLoadInFlight = true;
   try {
     currentUser = await window.api.me();
     window.store.set('user', currentUser);
     window.store.set('categories', currentUser.categories || []);
   } catch (err) {
     // A valid Supabase session exists but the backend profile call failed
-    // (server unreachable / CORS / 5xx). Without `user`, the app strands the
-    // signed-in visitor on the login screen — so surface the failure instead
-    // of only logging it, otherwise it reads as "login silently did nothing".
+    // (server unreachable / CORS / 5xx). Auth still succeeded (we route off
+    // the session, not the profile), so surface the hiccup instead of only
+    // logging it — otherwise the header/user-gated UI silently stays empty.
     console.warn('[travel-scrapbook] /me failed:', err);
     if (session) {
       const detail = err?.message || 'the server could not be reached';
       toast(`Signed in, but couldn't load your profile — ${detail}`, { error: true });
     }
+  } finally {
+    _profileLoadInFlight = false;
   }
 }
 
@@ -63,27 +71,34 @@ function initSupabase() {
   // Hard cap so a misbehaving auth subscription can't strand the splash.
   setTimeout(_resolveInitialAuth, 3000);
 
-  supabaseClient.auth.onAuthStateChange(async (event, sess) => {
-    const isFirst = !_initialAuthSettled;
+  supabaseClient.auth.onAuthStateChange((event, sess) => {
     session = sess;
-    let defer = false;
-    try {
-      if (sess) {
-        await loadProfile();
-      } else if (event === 'SIGNED_OUT') {
-        currentUser = null;
-        window.store.set('user', null);
-      } else if (isFirst) {
-        // No session yet. If the URL carries OAuth params a SIGNED_IN event
-        // follows after the PKCE exchange — don't resolve early (a bare
-        // `return` still runs finally, so flag it and gate the resolve).
-        const hasAuthParams = window.location.search.includes('code=') ||
-          window.location.hash.includes('access_token=');
-        if (hasAuthParams) { defer = true; return; }
-      }
-    } finally {
-      if (!defer) _resolveInitialAuth();
+    if (sess) {
+      // A restored session already means the visitor is authenticated — the
+      // /me call only enriches their profile. Drop the splash on the local
+      // session immediately and load the profile in the BACKGROUND. Blocking
+      // the splash on /me strands boot behind a network round-trip: when the
+      // Railway backend is cold-starting (>3s) the 3s cap fires with `user`
+      // still null, so a signed-in visitor refreshing a /trip/:id deep link
+      // gets bounced off their trip to /login. Route off the session instead.
+      window.store.set('authed', true);
+      _resolveInitialAuth();
+      loadProfile();
+      return;
     }
+    if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      window.store.set('authed', false);
+      window.store.set('user', null);
+      _resolveInitialAuth();
+      return;
+    }
+    // No session yet. If the URL carries OAuth params, a SIGNED_IN event
+    // follows once the PKCE exchange completes — wait for it (the 3s cap is
+    // the safety net). Otherwise this is an anonymous visitor.
+    const hasAuthParams = window.location.search.includes('code=') ||
+      window.location.hash.includes('access_token=');
+    if (!hasAuthParams) { window.store.set('authed', false); _resolveInitialAuth(); }
   });
 
   // Kick session restoration; onAuthStateChange delivers the result.
@@ -91,7 +106,7 @@ function initSupabase() {
     if (!data?.session) {
       const hasAuthParams = window.location.search.includes('code=') ||
         window.location.hash.includes('access_token=');
-      if (!hasAuthParams) _resolveInitialAuth();
+      if (!hasAuthParams) { window.store.set('authed', false); _resolveInitialAuth(); }
     }
   }).catch(() => _resolveInitialAuth());
 }
@@ -122,6 +137,7 @@ async function handleLogout() {
   try { await supabaseClient?.auth.signOut(); } catch (_) {}
   currentUser = null;
   session = null;
+  window.store.set('authed', false);
   window.store.set('user', null);
   window.router.go('login');
 }

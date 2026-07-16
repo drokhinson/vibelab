@@ -130,7 +130,10 @@
       document.querySelectorAll('[data-view]').forEach((el) => {
         el.classList.toggle('hidden', el.dataset.view !== name);
       });
-      const authed = !!window.store.get('user');
+      // `authed` reflects the session (store 'authed'), which is known before
+      // the profile ('user') finishes loading in the background — so the header
+      // shows on a deep-link refresh without waiting on /me.
+      const authed = !!(window.store.get('authed') || window.store.get('user'));
       document.querySelectorAll('[data-auth-only]').forEach((el) => {
         el.classList.toggle('hidden', !authed || document.body.classList.contains('popup-mode'));
       });
