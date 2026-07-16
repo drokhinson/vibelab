@@ -101,13 +101,22 @@ function initSupabase() {
     if (!hasAuthParams) { window.store.set('authed', false); _resolveInitialAuth(); }
   });
 
-  // Kick session restoration; onAuthStateChange delivers the result.
+  // Kick session restoration directly off getSession()'s own result instead
+  // of only reacting to !session — onAuthStateChange firing for a restored
+  // session is a separate async path on the same client with no guarantee
+  // it lands (version/timing dependent), which previously left a valid
+  // session unresolved until the 3s cap, with `authed` never set true.
   supabaseClient.auth.getSession().then(({ data }) => {
-    if (!data?.session) {
-      const hasAuthParams = window.location.search.includes('code=') ||
-        window.location.hash.includes('access_token=');
-      if (!hasAuthParams) { window.store.set('authed', false); _resolveInitialAuth(); }
+    if (data?.session) {
+      session = data.session;
+      window.store.set('authed', true);
+      _resolveInitialAuth();
+      loadProfile();
+      return;
     }
+    const hasAuthParams = window.location.search.includes('code=') ||
+      window.location.hash.includes('access_token=');
+    if (!hasAuthParams) { window.store.set('authed', false); _resolveInitialAuth(); }
   }).catch(() => _resolveInitialAuth());
 }
 

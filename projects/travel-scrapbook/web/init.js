@@ -71,7 +71,14 @@
     });
     window.lucide?.createIcons();
 
-    await awaitInitialAuth();
+    // Backstop so a boot-time hang (a stalled auth listener, a future
+    // regression, anything) can never strand the splash with no way out —
+    // auth.js's own cap is 3s, this is a longer outer ceiling in case that
+    // path itself never resolves for some unforeseen reason.
+    await Promise.race([
+      awaitInitialAuth(),
+      new Promise((resolve) => setTimeout(resolve, 6000)),
+    ]);
 
     const target = router.matchPath(window.location.pathname) || { name: 'trips', params: {} };
     // Route off the restored session, not the loaded profile: `user` may still
@@ -90,5 +97,21 @@
     await router.go(target.name, target.params, { skipPush: true });
   }
 
-  document.addEventListener('DOMContentLoaded', boot);
+  function showBootError() {
+    const splash = document.querySelector('[data-view="splash"] .ts-splash');
+    if (!splash) return;
+    splash.innerHTML = `
+      <img src="/assets/brand/travel-scrapbook-logo.svg" alt="" class="ts-splash__logo" />
+      <p class="ts-splash__text">Something went wrong loading your scrapbook.</p>
+      <button class="ts-btn ts-btn--mint" id="boot-retry">Retry</button>
+    `;
+    splash.querySelector('#boot-retry')?.addEventListener('click', () => window.location.reload());
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    boot().catch((err) => {
+      console.error('[travel-scrapbook] boot failed:', err);
+      showBootError();
+    });
+  });
 })();
