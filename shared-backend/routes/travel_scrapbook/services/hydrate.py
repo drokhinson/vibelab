@@ -52,6 +52,7 @@ def hydrate_scraps(sb: Client, scraps: list[dict[str, Any]]) -> list[dict[str, A
             **scrap,
             "place_name": place.get("name"),
             "place_city": place.get("city"),
+            "place_region": place.get("region"),
             "place_country": place.get("country"),
             "category": place.get("category") or "other",
             "lat": place.get("lat"),

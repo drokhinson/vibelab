@@ -17,7 +17,9 @@ GEMINI_MODEL = "gemini-flash-lite-latest"
 
 # Cache namespaces (shared-backend/cache.py)
 CACHE_NS_CATEGORIES = "ts.categories"
-CACHE_NS_GEOCODE = "ts.geocode"
+# v2: GeocodeResult gained structured address components (city/region/country);
+# a fresh namespace avoids serving pre-upgrade cached results that lack them.
+CACHE_NS_GEOCODE = "ts.geocode2"
 
 CATEGORIES_TTL_SECONDS = 60 * 60          # 1 hour
 GEOCODE_TTL_SECONDS = 60 * 60 * 24 * 30   # 30 days
@@ -44,6 +46,14 @@ MAX_TRIP_SUGGESTIONS = 3
 SOURCE_PROCESSING_TIMEOUT_SECONDS = 10 * 60
 # Personal capture tokens (iOS Shortcut) are prefixed for recognizability.
 CAPTURE_TOKEN_PREFIX = "tsc_"
+
+
+class TripScope(StrEnum):
+    """A trip's geographic granularity. The match value at each level is derived
+    from geocoding the destination (trips.dest_city/dest_region/dest_country)."""
+    REGION = "region"    # admin-1 (state/province), e.g. Tuscany, Hokkaido
+    COUNTRY = "country"  # a whole country
+    CITY = "city"        # a single city (distance-matched, legacy default)
 
 
 class ScrapStatus(StrEnum):

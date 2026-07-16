@@ -277,6 +277,7 @@ async def get_inbox(user: CurrentUser = Depends(get_current_user)) -> InboxRespo
         .select("*")
         .eq("user_id", user.user_id)
         .eq("status", ScrapStatus.INBOX)
+        .is_("visited_at", "null")   # visited places move to the Visited view
         .order("created_at", desc=True)
         .execute()
     ).data or []
@@ -284,7 +285,12 @@ async def get_inbox(user: CurrentUser = Depends(get_current_user)) -> InboxRespo
     inbox_scraps = [
         InboxScrapResponse(
             **s,
-            suggestions=places_svc.suggest_trips(sb, user.user_id, s["lat"], s["lng"]),
+            suggestions=places_svc.suggest_trips(
+                sb, user.user_id,
+                lat=s["lat"], lng=s["lng"],
+                city=s.get("place_city"), region=s.get("place_region"),
+                country=s.get("place_country"),
+            ),
         )
         for s in hydrated
     ]
@@ -313,6 +319,7 @@ async def get_inbox_count(user: CurrentUser = Depends(get_current_user)) -> Inbo
         .select("id", count="exact")
         .eq("user_id", user.user_id)
         .eq("status", ScrapStatus.INBOX)
+        .is_("visited_at", "null")
         .execute()
     )
     sources = (

@@ -12,6 +12,7 @@ from .constants import (
     GeocodeConfidence,
     ScrapStatus,
     SourceStatus,
+    TripScope,
 )
 
 
@@ -140,10 +141,13 @@ class CaptureTokenStatusResponse(BaseModel):
 class ScrapUpdateRequest(BaseModel):
     place_name: Optional[str] = Field(None, max_length=200)
     place_city: Optional[str] = Field(None, max_length=120)
+    place_region: Optional[str] = Field(None, max_length=120)
     place_country: Optional[str] = Field(None, max_length=120)
     category: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=2000)
     is_favorite: Optional[bool] = None
+    visited: Optional[bool] = Field(
+        None, description="Mark visited (been there) or move back to the wishlist")
     regeocode: bool = Field(False, description="Re-run Nominatim on the edited place fields")
 
 
@@ -156,6 +160,7 @@ class ScrapResponse(BaseModel):
     status: ScrapStatus
     place_name: Optional[str] = None
     place_city: Optional[str] = None
+    place_region: Optional[str] = None
     place_country: Optional[str] = None
     category: str = "other"
     lat: Optional[float] = None
@@ -167,6 +172,7 @@ class ScrapResponse(BaseModel):
     sources: list[SourceRef] = []
     notes: Optional[str] = None
     is_favorite: bool = False
+    visited_at: Optional[datetime] = None
     route_position: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -206,6 +212,8 @@ class TripCreateRequest(BaseModel):
     destination: Optional[str] = Field(None, max_length=160)
     cover_icon: str = Field("plane", max_length=40,
                             description="Cover sticker sprite slug")
+    scope_level: Optional[TripScope] = Field(
+        None, description="Geographic granularity; inferred from the destination when omitted")
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     notes: Optional[str] = Field(None, max_length=4000)
@@ -215,6 +223,7 @@ class TripUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=120)
     destination: Optional[str] = Field(None, max_length=160)
     cover_icon: Optional[str] = Field(None, max_length=40)
+    scope_level: Optional[TripScope] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     notes: Optional[str] = Field(None, max_length=4000)
@@ -225,6 +234,10 @@ class TripSummaryResponse(BaseModel):
     name: str
     destination: Optional[str] = None
     cover_icon: str
+    scope_level: TripScope = TripScope.CITY
+    dest_city: Optional[str] = None
+    dest_region: Optional[str] = None
+    dest_country: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     scrap_count: int = 0
@@ -236,6 +249,10 @@ class TripResponse(BaseModel):
     name: str
     destination: Optional[str] = None
     cover_icon: str
+    scope_level: TripScope = TripScope.CITY
+    dest_city: Optional[str] = None
+    dest_region: Optional[str] = None
+    dest_country: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     notes: Optional[str] = None

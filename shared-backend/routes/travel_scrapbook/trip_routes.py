@@ -91,7 +91,9 @@ async def _backfill_trip_geocodes(trip_ids: list[str]) -> None:
             .execute()
         ).data
         if rows and rows[0].get("destination") and not rows[0].get("destination_geocoded_at"):
-            await geocode_trip_destination(sb, rows[0])
+            # Backfill (incl. the post-005 dest_* re-arm): infer a legacy trip's
+            # scope from its destination since it predates the scope picker.
+            await geocode_trip_destination(sb, rows[0], infer_scope=True)
 
 
 @router.get(
@@ -109,6 +111,7 @@ async def list_trips(
     rows = (
         sb.table("travelscrapbook_trips")
         .select("id, name, destination, cover_icon, start_date, end_date, created_at, "
+                "scope_level, dest_city, dest_region, dest_country, "
                 "destination_geocoded_at, travelscrapbook_scraps(count)")
         .eq("user_id", user.user_id)
         .order("created_at", desc=True)
@@ -150,12 +153,16 @@ async def create_trip(
         "end_date": body.end_date.isoformat() if body.end_date else None,
         "notes": body.notes,
     }
+    if body.scope_level is not None:
+        row["scope_level"] = body.scope_level
     created = sb.table("travelscrapbook_trips").insert(row).execute()
     trip = created.data[0]
     if body.destination:
         # Sync, like anchors — one Nominatim call so staging auto-match works
-        # for scraps captured right after trip creation.
-        trip = await geocode_trip_destination(sb, trip)
+        # for scraps captured right after trip creation. Infer the scope level
+        # from the destination only when the user didn't pick one.
+        trip = await geocode_trip_destination(
+            sb, trip, infer_scope=body.scope_level is None)
     return TripSummaryResponse(**trip, scrap_count=0)
 
 
