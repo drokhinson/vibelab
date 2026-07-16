@@ -8,32 +8,27 @@ const TUTORIAL_STEPS = [
   {
     illustration: 'travel-scrapbook-tutorial-welcome',
     title: 'Welcome to your scrapbook',
-    body: 'Stop losing links in Word docs. Save anything you find while planning a trip — Reddit threads, Instagram reels, blog posts — and we’ll turn them into a real itinerary.',
+    body: 'Spotted somewhere amazing while scrolling? Send it here. We turn the links you save into places on a map — and the places into a real itinerary.',
+  },
+  {
+    illustration: 'travel-scrapbook-tutorial-collect',
+    title: 'Collect scraps',
+    body: 'Share cool travel finds straight to your scrapbook — from Facebook, reels, Reddit, or any travel website. We read each link and figure out what places it mentions. Set up phone sharing in Settings → “Save from your phone”.',
   },
   {
     illustration: 'travel-scrapbook-tutorial-new-trip',
-    title: 'Start a trip',
-    body: 'Give it a name, pick dates and a cover sticker. Everything you scrap gets filed under the trip it belongs to.',
+    title: 'Build a trip',
+    body: 'Start a trip and collect your scraps into it. Finds near your destination sort themselves in — you just approve them from the “Needs review” pile or the inbox.',
   },
   {
-    illustration: 'travel-scrapbook-tutorial-quick-paste',
-    title: 'Paste any link',
-    body: 'Found something worth remembering? Paste the URL into a trip. We read the page, figure out what place it is, and pin it on the map — automatically.',
-  },
-  {
-    illustration: 'travel-scrapbook-tutorial-bookmarklet',
-    title: 'Scrap it from anywhere',
-    body: 'Drag the “Scrap it” button from Settings into your bookmarks bar. Now you can save a link straight from any site — no copy-pasting.',
-  },
-  {
-    illustration: 'travel-scrapbook-tutorial-organize',
-    title: 'Tidy up your scraps',
-    body: 'Tap a scrap to fix its name, city, or category if we got it wrong. Heart your favorites and re-pin the map location any time.',
+    illustration: 'travel-scrapbook-tutorial-anchors',
+    title: 'Anchor your trip',
+    body: 'Add your arrival and departure points, plus any hotel stays. Anchors give the trip structure — and put your scraps in the right order between them.',
   },
   {
     illustration: 'travel-scrapbook-tutorial-route',
-    title: 'Sort the perfect route',
-    body: 'Add your start/end airport or a hotel, then hit “Sort my route” — we’ll order every stop into the shortest path. Open it in Google Maps or download a CSV for My Maps.',
+    title: 'See it in Google Maps',
+    body: 'Export your waypoints to Google Maps at any time to see how the trip looks — or download a CSV that drops straight into Google My Maps.',
   },
 ];
 
