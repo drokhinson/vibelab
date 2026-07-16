@@ -210,6 +210,13 @@ a:hover { color: var(--accent-hover); }
 }
 .scrap-group__grid { margin: 0.7rem 0 0.4rem; }
 
+/* Trips list: Upcoming / Past section headers. */
+.trips-section { display: flex; align-items: center; gap: 0.5rem; font-size: 1.5rem; margin: 1.4rem 0 0.6rem; }
+.trips-section__count {
+  font-weight: 800; font-size: 0.78rem; color: var(--ink-muted); font-family: var(--font-sans);
+  background: var(--paper); border: 1.5px solid var(--border); border-radius: 999px; padding: 1px 10px;
+}
+
 /* ── Scrap card specifics ───────────────────────────────────────────────────── */
 /* Media wrapper positions the type-pill overlay over the photo's top-left. */
 .scrap-card__media { position: relative; }

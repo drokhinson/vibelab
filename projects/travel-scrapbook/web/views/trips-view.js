@@ -78,15 +78,23 @@ class TripsView extends View {
         </div>
       `;
     } else {
+      const { upcoming, past } = this._partitionTrips(trips);
+      // One running index across both sections so washi rotation + entrance
+      // stagger stay continuous (renderTripCard keys animation on it).
+      let idx = 0;
+      const section = (label, list) => list.length ? `
+        <h2 class="trips-section"><span>${label}</span><span class="trips-section__count">${list.length}</span></h2>
+        <div class="card-grid card-grid--2col">
+          ${list.map((t) => renderTripCard(t, { index: idx++ })).join('')}
+        </div>` : '';
       this.container.innerHTML = `
         ${invitesHtml}
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <h1 style="font-size:2rem;margin:0;">My trips</h1>
           <button class="ts-btn ts-btn--blush ts-btn--sm" id="new-trip-btn"><i data-lucide="plus"></i>New trip</button>
         </div>
-        <div class="card-grid card-grid--2col">
-          ${trips.map((t, i) => renderTripCard(t, { index: i })).join('')}
-        </div>
+        ${section('Upcoming', upcoming)}
+        ${section('Past', past)}
       `;
     }
     this.refreshIcons();
@@ -96,6 +104,38 @@ class TripsView extends View {
     this.container.querySelectorAll('[data-trip-id]').forEach((el) => {
       el.addEventListener('click', () => window.router.go('trip', { tripId: el.dataset.tripId }));
     });
+  }
+
+  // A trip's sortable timestamp (start preferred, else end); null if undated.
+  _tripStamp(t) {
+    const d = t.start_date || t.end_date;
+    return d ? new Date(d + 'T00:00:00').getTime() : null;
+  }
+
+  // Past = the trip's end (or start, if no end) is before today. Undated trips
+  // are still-being-planned, so they stay in Upcoming (per product decision).
+  _partitionTrips(trips) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+    const upcoming = [];
+    const past = [];
+    for (const t of trips) {
+      const end = t.end_date || t.start_date;
+      const isPast = !!end && new Date(end + 'T00:00:00').getTime() < todayMs;
+      (isPast ? past : upcoming).push(t);
+    }
+    // Upcoming: soonest first, undated last. Past: most recent first.
+    upcoming.sort((a, b) => {
+      const ka = this._tripStamp(a);
+      const kb = this._tripStamp(b);
+      if (ka == null && kb == null) return 0;
+      if (ka == null) return 1;
+      if (kb == null) return -1;
+      return ka - kb;
+    });
+    past.sort((a, b) => (this._tripStamp(b) || 0) - (this._tripStamp(a) || 0));
+    return { upcoming, past };
   }
 
   _openNewTripModal() {
