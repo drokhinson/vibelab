@@ -24,7 +24,11 @@ from .models import (
 from .services import nominatim
 from .services.enrichment import build_maps_url
 from .services.hydrate import hydrate_scraps
-from .services.places import normalize_place_name, place_matches_trip_scope
+from .services.places import (
+    normalize_place_name,
+    place_matches_trip_scope,
+    region_for_country_code,
+)
 from .trip_routes import get_owned_trip
 
 
@@ -182,8 +186,6 @@ async def update_scrap(
         place_update["name_normalized"] = normalize_place_name(update["place_name"])
     if "place_city" in update:
         place_update["city"] = update["place_city"]
-    if "place_region" in update:
-        place_update["region"] = update["place_region"]
     if "place_country" in update:
         place_update["country"] = update["place_country"]
     if update.get("category"):
@@ -206,11 +208,12 @@ async def update_scrap(
                 "geocode_display_name": result.display_name,
                 "osm_type": result.osm_type,
                 "osm_id": result.osm_id,
+                # Re-pinning refreshes the country_code + derived macro-region
+                # (and, via accept-language=en, English names) — the path that
+                # fixes older local-language places.
+                "country_code": result.country_code,
+                "region": region_for_country_code(sb, result.country_code),
             })
-            # Refresh region from the authoritative geocode unless the user typed
-            # one explicitly in this same edit.
-            if "place_region" not in update and result.region:
-                place_update["region"] = result.region
         else:
             place_update.update({
                 "lat": None,

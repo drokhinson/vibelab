@@ -17,10 +17,14 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from supabase import Client
 
+import cache
+
 from ..constants import (
+    CACHE_NS_REGIONS,
     GeocodeConfidence,
     MAX_TRIP_SUGGESTIONS,
     PLACE_DEDUPE_RADIUS_KM,
+    REGIONS_TTL_SECONDS,
     TRIP_MATCH_RADIUS_KM,
     TRIP_SUGGEST_RADIUS_KM,
     TripScope,
@@ -30,6 +34,24 @@ from .llm import PlaceExtraction
 from .optimizer import haversine_km
 
 logger = logging.getLogger("travel_scrapbook.places")
+
+
+def region_for_country_code(sb: Client, country_code: Optional[str]) -> Optional[str]:
+    """Map an ISO-3166 alpha-2 code to its macro-region (UN subregion), via the
+    seeded travelscrapbook_regions table. The whole table is small and static,
+    so it's cached as one dict."""
+    if not country_code:
+        return None
+    cached = cache.get(CACHE_NS_REGIONS, "map")
+    if cached is None:
+        rows = (
+            sb.table("travelscrapbook_regions")
+            .select("country_code, region")
+            .execute()
+        ).data or []
+        cached = {r["country_code"].lower(): r["region"] for r in rows}
+        cache.set(CACHE_NS_REGIONS, "map", cached, REGIONS_TTL_SECONDS)
+    return cached.get(country_code.lower())
 
 # Tracking params stripped during URL normalization (never identity-bearing).
 _TRACKING_PARAMS = re.compile(r"^(utm_\w+|fbclid|gclid|igsh|igshid|si|ref|ref_src)$", re.I)
@@ -85,11 +107,12 @@ def find_or_create_place(
 
     # Nominatim is authoritative for a geocoded point, so prefer its structured
     # address components; fall back to the (noisier) LLM city/country where the
-    # geocode is missing a field. region has no LLM source — it stays NULL on a
-    # geocode miss, which just means no region-scope match until re-pinned.
+    # geocode is missing a field. region is the macro-region (UN subregion) for
+    # the country_code — NULL when ungeocoded or the country isn't in the seed.
     resolved_city = (geo.city if geo and geo.city else None) or extraction.city
-    resolved_region = geo.region if geo and geo.region else None
     resolved_country = (geo.country if geo and geo.country else None) or extraction.country
+    resolved_country_code = geo.country_code if geo else None
+    resolved_region = region_for_country_code(sb, resolved_country_code)
 
     candidates = (
         sb.table("travelscrapbook_places")
@@ -119,6 +142,8 @@ def find_or_create_place(
             fills["region"] = resolved_region
         if cand.get("country") is None and resolved_country:
             fills["country"] = resolved_country
+        if cand.get("country_code") is None and resolved_country_code:
+            fills["country_code"] = resolved_country_code
         if cand["lat"] is None and new_lat is not None:
             fills.update({
                 "lat": new_lat,
@@ -148,6 +173,7 @@ def find_or_create_place(
         "city": resolved_city,
         "region": resolved_region,
         "country": resolved_country,
+        "country_code": resolved_country_code,
         "category": extraction.category,
         "lat": new_lat,
         "lng": new_lng,
@@ -186,11 +212,13 @@ def _geo_eq(a: Optional[str], b: Optional[str]) -> bool:
 
 
 def scope_from_addresstype(addresstype: Optional[str]) -> TripScope:
-    """Infer a trip's default scope from the geocoded destination's feature level."""
+    """Infer a trip's default scope from the geocoded destination's feature level.
+
+    Region here is a grouping of countries, which no address feature maps to, so
+    it is never inferred (user-selected only): a country destination → country
+    scope, anything narrower → city (distance-based)."""
     if addresstype == "country":
         return TripScope.COUNTRY
-    if addresstype in ("state", "region", "province", "state_district"):
-        return TripScope.REGION
     return TripScope.CITY
 
 
@@ -214,11 +242,11 @@ def place_matches_trip_scope(
     if level == TripScope.COUNTRY:
         return _geo_eq(country, trip.get("dest_country"))
     if level == TripScope.REGION:
-        if not _geo_eq(region, trip.get("dest_region")):
-            return False
-        # Lenient when either country is unknown; strict when both are present.
-        dest_country = trip.get("dest_country")
-        return not country or not dest_country or _geo_eq(country, dest_country)
+        # region is a macro-region (UN subregion) — a globally unique label that
+        # deliberately spans several countries, so equality alone is right (no
+        # country guard, or a Southern-Europe trip couldn't match both Italy and
+        # Greece).
+        return _geo_eq(region, trip.get("dest_region"))
     # city (default): within the destination-centroid radius, OR the same city
     # name (country-guarded) — the latter catches places whose geocode centroid
     # drifted past the radius but that are clearly in the trip's city.
@@ -316,6 +344,7 @@ async def geocode_trip_destination(
         "dest_city": None,
         "dest_region": None,
         "dest_country": None,
+        "dest_country_code": None,
     }
     destination = (trip.get("destination") or "").strip()
     if destination:
@@ -327,8 +356,11 @@ async def geocode_trip_destination(
                 "geocode_confidence": GeocodeConfidence.HIGH,
                 "geocode_display_name": result.display_name,
                 "dest_city": result.city,
-                "dest_region": result.region,
+                # dest_region is the macro-region (UN subregion) of the country,
+                # so a region-scoped trip matches every place in that grouping.
+                "dest_region": region_for_country_code(sb, result.country_code),
                 "dest_country": result.country,
+                "dest_country_code": result.country_code,
             })
             if infer_scope:
                 update["scope_level"] = scope_from_addresstype(result.addresstype)

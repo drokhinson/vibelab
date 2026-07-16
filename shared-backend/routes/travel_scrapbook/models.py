@@ -141,7 +141,7 @@ class CaptureTokenStatusResponse(BaseModel):
 class ScrapUpdateRequest(BaseModel):
     place_name: Optional[str] = Field(None, max_length=200)
     place_city: Optional[str] = Field(None, max_length=120)
-    place_region: Optional[str] = Field(None, max_length=120)
+    # region is derived from the country (macro-region), never user-set.
     place_country: Optional[str] = Field(None, max_length=120)
     category: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=2000)
