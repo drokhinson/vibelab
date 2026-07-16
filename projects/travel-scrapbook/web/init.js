@@ -53,7 +53,11 @@
     await awaitInitialAuth();
 
     const target = router.matchPath(window.location.pathname) || { name: 'trips', params: {} };
-    const authed = !!window.store.get('user');
+    // Route off the restored session, not the loaded profile: `user` may still
+    // be null here because loadProfile() runs in the background (see auth.js).
+    // Gating on it would bounce a signed-in visitor off a deep link to /login
+    // whenever /me is slow (cold backend).
+    const authed = !!window.store.get('authed');
 
     if (!authed && target.name !== 'scrap' && target.name !== 'share' && target.name !== 'login') {
       // /scrap and /share handle their own signed-out state (compact OAuth) so
