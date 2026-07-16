@@ -9,8 +9,8 @@ from .constants import AnchorRole, ScrapStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import MapsLeg, MapsLinksResponse
 from .services.exports import Stop, build_csv, build_dir_links
+from .access import get_accessible_trip
 from .services.hydrate import hydrate_scraps
-from .trip_routes import get_owned_trip
 
 
 def _approved_scraps(sb, trip_id: str) -> list[dict]:
@@ -75,7 +75,7 @@ async def export_maps_links(
     """Multi-stop google.com/maps/dir/ URLs for the trip route, split into
     ~10-stop legs that overlap at the seams."""
     sb = get_supabase()
-    get_owned_trip(sb, trip_id, user.user_id)
+    get_accessible_trip(sb, trip_id, user.user_id)
     legs = build_dir_links(_ordered_stops(sb, trip_id))
     return MapsLinksResponse(
         legs=[MapsLeg(label=l.label, url=l.url, stop_count=l.stop_count) for l in legs]
@@ -95,7 +95,7 @@ async def export_csv(
     """CSV download (name, category, address, lat, lng, notes, url) that
     imports directly into a Google My Maps layer."""
     sb = get_supabase()
-    trip = get_owned_trip(sb, trip_id, user.user_id)
+    trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
     scraps = _approved_scraps(sb, trip_id)
     scraps.sort(
         key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])

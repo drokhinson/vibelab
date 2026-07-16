@@ -12,6 +12,7 @@ from fastapi import Depends, HTTPException, Path
 from db import get_supabase
 
 from . import router
+from .access import get_accessible_scrap, get_accessible_trip
 from .constants import GeocodeConfidence, ScrapStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import (
@@ -24,6 +25,7 @@ from .models import (
     ScrapUpdateRequest,
     TripWishlistResponse,
     TripWishlistScrap,
+    VibeRequest,
 )
 from .services import nominatim
 from .services.enrichment import (
@@ -39,7 +41,6 @@ from .services.places import (
     place_matches_trip_scope,
     region_for_country_code,
 )
-from .trip_routes import get_owned_trip
 
 
 def get_owned_scrap(sb, scrap_id: str, user_id: str) -> dict[str, Any]:
@@ -55,8 +56,8 @@ def get_owned_scrap(sb, scrap_id: str, user_id: str) -> dict[str, Any]:
     return rows.data[0]
 
 
-def _hydrated_scrap(sb, scrap: dict[str, Any]) -> ScrapResponse:
-    return ScrapResponse(**hydrate_scraps(sb, [scrap])[0])
+def _hydrated_scrap(sb, scrap: dict[str, Any], *, with_vibes: bool = False) -> ScrapResponse:
+    return ScrapResponse(**hydrate_scraps(sb, [scrap], with_vibes=with_vibes)[0])
 
 
 @router.get(
@@ -84,9 +85,10 @@ async def list_scraps(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapListResponse:
-    """All scraps in a trip (approved and staged), newest first."""
+    """All scraps in a trip (approved and staged), newest first. Readable by
+    the owner and any member."""
     sb = get_supabase()
-    get_owned_trip(sb, trip_id, user.user_id)
+    get_accessible_trip(sb, trip_id, user.user_id)
     rows = (
         sb.table("travelscrapbook_scraps")
         .select("*")
@@ -95,7 +97,7 @@ async def list_scraps(
         .execute()
     )
     return ScrapListResponse(
-        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, rows.data or [])]
+        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, rows.data or [], with_vibes=True)]
     )
 
 
@@ -138,7 +140,7 @@ async def list_trip_candidates(
     scope (city/country/region) — the 'from your wishlist' panel. Same match
     predicate as auto-staging, so suggestions stay consistent."""
     sb = get_supabase()
-    trip = get_owned_trip(sb, trip_id, user.user_id)
+    trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
     rows = (
         sb.table("travelscrapbook_scraps")
         .select("*")
@@ -176,7 +178,7 @@ async def list_trip_wishlist(
     /candidates this is NOT scope-filtered: you can add anything; matches just
     sort first."""
     sb = get_supabase()
-    trip = get_owned_trip(sb, trip_id, user.user_id)
+    trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
     rows = (
         sb.table("travelscrapbook_scraps")
         .select("*")
@@ -218,7 +220,7 @@ async def assign_scraps(
     """Bulk 'add to trip' from the Wander List picker — files the owned scraps
     into the trip as approved (scope is not enforced; the user chose them)."""
     sb = get_supabase()
-    get_owned_trip(sb, trip_id, user.user_id)
+    get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
     owned = (
         sb.table("travelscrapbook_scraps")
         .select("id")
@@ -260,7 +262,7 @@ async def create_plan(
     canonical place, and attach it to the trip as approved. Reuses an existing
     scrap for the same place if the user already has one."""
     sb = get_supabase()
-    get_owned_trip(sb, trip_id, user.user_id)
+    get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
 
     categories = _load_category_slugs(sb)
     category = body.category if body.category in categories else "other"
@@ -417,10 +419,11 @@ async def assign_scrap(
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
     """File an inbox (or staged) scrap into a trip as approved — the tap on a
-    suggestion chip or the manual trip picker."""
+    suggestion chip or the manual trip picker. You may file your own scrap onto
+    any trip you own or collaborate on."""
     sb = get_supabase()
     get_owned_scrap(sb, scrap_id, user.user_id)
-    get_owned_trip(sb, body.trip_id, user.user_id)
+    get_accessible_trip(sb, body.trip_id, user.user_id, need_write=True)
     updated = (
         sb.table("travelscrapbook_scraps")
         .update({
@@ -496,13 +499,16 @@ async def approve_all_staged(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapListResponse:
-    """One-tap review: every staged scrap in the trip becomes approved."""
+    """One-tap review: every staged scrap the caller added to the trip becomes
+    approved. Scoped to the caller's own scraps so one collaborator can't
+    approve another's staged places."""
     sb = get_supabase()
-    get_owned_trip(sb, trip_id, user.user_id)
+    get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
     updated = (
         sb.table("travelscrapbook_scraps")
         .update({"status": ScrapStatus.APPROVED, "updated_at": "now()"})
         .eq("trip_id", trip_id)
+        .eq("user_id", user.user_id)
         .eq("status", ScrapStatus.STAGED)
         .execute()
     )
@@ -526,3 +532,52 @@ async def delete_scrap(
     get_owned_scrap(sb, scrap_id, user.user_id)
     sb.table("travelscrapbook_scraps").delete().eq("id", scrap_id).execute()
     return MessageResponse(message="Scrap deleted")
+
+
+# ── Vibes (per-traveler consensus input) ─────────────────────────────────────
+
+@router.put(
+    "/scraps/{scrap_id}/vibe",
+    response_model=ScrapResponse,
+    status_code=200,
+    summary="Set my vibe on a place",
+)
+async def set_vibe(
+    body: VibeRequest,
+    scrap_id: str = Path(..., description="Scrap UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapResponse:
+    """Record (or change) the current traveler's vibe on a saved place. Any
+    member of the trip may set their own — including viewers — so everyone
+    contributes to the group consensus."""
+    sb = get_supabase()
+    scrap = get_accessible_scrap(sb, scrap_id, user.user_id)
+    sb.table("travelscrapbook_scrap_vibes").upsert(
+        {
+            "scrap_id": scrap_id,
+            "user_id": user.user_id,
+            "level": body.level,
+            "updated_at": "now()",
+        },
+        on_conflict="scrap_id,user_id",
+    ).execute()
+    return _hydrated_scrap(sb, scrap, with_vibes=True)
+
+
+@router.delete(
+    "/scraps/{scrap_id}/vibe",
+    response_model=ScrapResponse,
+    status_code=200,
+    summary="Clear my vibe on a place",
+)
+async def clear_vibe(
+    scrap_id: str = Path(..., description="Scrap UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapResponse:
+    """Remove the current traveler's vibe on a place (back to no opinion)."""
+    sb = get_supabase()
+    scrap = get_accessible_scrap(sb, scrap_id, user.user_id)
+    sb.table("travelscrapbook_scrap_vibes").delete().eq(
+        "scrap_id", scrap_id
+    ).eq("user_id", user.user_id).execute()
+    return _hydrated_scrap(sb, scrap, with_vibes=True)

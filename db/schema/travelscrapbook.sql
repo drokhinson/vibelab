@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Travel Scrapbook — current schema snapshot
--- Last updated: 2026-07-16 (matches db/migrations/travelscrapbook/006_country_regions.sql)
+-- Last updated: 2026-07-16 (matches db/migrations/travelscrapbook/007_trip_sharing_vibes.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -168,3 +168,34 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scraps (
 -- idx_ts_scraps_trip (trip_id), idx_ts_scraps_user (user_id)
 -- idx_ts_scraps_user_status (user_id, status), idx_ts_scraps_place (place_id)
 -- idx_ts_scraps_user_visited (user_id, visited_at)
+
+-- Trip sharing: the owner stays on trips.user_id; everyone else is a row here.
+-- role = viewer (read + vibe) | collaborator (read + vibe + add places).
+-- status carries invite → accept: pending | accepted (has access) | declined.
+CREATE TABLE IF NOT EXISTS public.travelscrapbook_trip_members (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id      UUID        NOT NULL REFERENCES public.travelscrapbook_trips(id) ON DELETE CASCADE,
+  user_id      UUID        NOT NULL REFERENCES public.travelscrapbook_profiles(id) ON DELETE CASCADE,
+  role         TEXT        NOT NULL CHECK (role IN ('viewer', 'collaborator')),
+  status       TEXT        NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'accepted', 'declined')),
+  invited_by   UUID        REFERENCES public.travelscrapbook_profiles(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  responded_at TIMESTAMPTZ,
+  UNIQUE (trip_id, user_id)
+);
+-- idx_ts_trip_members_user (user_id, status), idx_ts_trip_members_trip (trip_id)
+
+-- Per-user "Vibe" on a saved place — the consensus input. One per person per
+-- scrap; booked | must_do | interested | could_skip. Present on all trips.
+CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_vibes (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  scrap_id   UUID        NOT NULL REFERENCES public.travelscrapbook_scraps(id) ON DELETE CASCADE,
+  user_id    UUID        NOT NULL REFERENCES public.travelscrapbook_profiles(id) ON DELETE CASCADE,
+  level      TEXT        NOT NULL
+    CHECK (level IN ('booked', 'must_do', 'interested', 'could_skip')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (scrap_id, user_id)
+);
+-- idx_ts_scrap_vibes_scrap (scrap_id)

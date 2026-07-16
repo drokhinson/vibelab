@@ -38,8 +38,8 @@ from .models import (
 )
 from .services import places as places_svc
 from .services.enrichment import process_source
+from .access import get_accessible_trip
 from .services.hydrate import hydrate_scraps
-from .trip_routes import get_owned_trip
 
 _URL_RE = re.compile(r"https?://\S+")
 
@@ -88,7 +88,8 @@ async def capture(
     sb = get_supabase()
     url = _resolve_capture_url(body)
     if body.trip_id:
-        get_owned_trip(sb, body.trip_id, user.user_id)
+        # Collaborators (and the owner) can capture straight onto a shared trip.
+        get_accessible_trip(sb, body.trip_id, user.user_id, need_write=True)
 
     # Keep the caption for LLM context, minus the URL itself.
     shared_text: Optional[str] = None

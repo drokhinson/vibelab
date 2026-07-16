@@ -10,9 +10,13 @@ from .constants import (
     AnchorType,
     CapturedVia,
     GeocodeConfidence,
+    InviteAction,
+    MemberStatus,
     ScrapStatus,
     SourceStatus,
+    TripMemberRole,
     TripScope,
+    TripVibe,
 )
 
 
@@ -151,9 +155,25 @@ class ScrapUpdateRequest(BaseModel):
     regeocode: bool = Field(False, description="Re-run Nominatim on the edited place fields")
 
 
+class ScrapVibe(BaseModel):
+    """One traveler's vibe on a scrap (a single consensus input)."""
+    user_id: str
+    display_name: str
+    level: TripVibe
+
+
+class ScrapConsensus(BaseModel):
+    """Group roll-up of a scrap's vibes, computed in hydrate.py."""
+    counts: dict[TripVibe, int] = {}
+    total: int = 0
+    headline: str = ""
+
+
 class ScrapResponse(BaseModel):
     """A saved place, in a trip or the inbox. Place fields are flattened from
-    the canonical place row; sources list how the user stumbled on it."""
+    the canonical place row; sources list how the user stumbled on it. On shared
+    trips, `added_by_*` names the collaborator who saved it and `vibes`/
+    `consensus` carry every traveler's take."""
     id: str
     trip_id: Optional[str] = None
     place_id: str
@@ -174,6 +194,10 @@ class ScrapResponse(BaseModel):
     is_favorite: bool = False
     visited_at: Optional[datetime] = None
     route_position: Optional[int] = None
+    added_by_user_id: Optional[str] = None       # scrap owner (who saved it)
+    added_by_display_name: Optional[str] = None
+    vibes: list[ScrapVibe] = []                   # populated on trip surfaces only
+    consensus: Optional[ScrapConsensus] = None
     created_at: datetime
     updated_at: datetime
 
@@ -266,6 +290,9 @@ class TripSummaryResponse(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     scrap_count: int = 0
+    role: TripMemberRole = TripMemberRole.OWNER   # caller's role on this trip
+    owner_user_id: Optional[str] = None
+    owner_display_name: Optional[str] = None      # set for trips shared with the caller
     created_at: datetime
 
 
@@ -286,6 +313,9 @@ class TripResponse(BaseModel):
     geocode_display_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    role: TripMemberRole = TripMemberRole.OWNER   # caller's role on this trip
+    owner_user_id: Optional[str] = None
+    owner_display_name: Optional[str] = None
     anchors: list[AnchorResponse] = []
     scraps: list[ScrapResponse] = []           # approved
     staged_scraps: list[ScrapResponse] = []    # auto-matched, awaiting review
@@ -293,6 +323,68 @@ class TripResponse(BaseModel):
 
 class TripListResponse(BaseModel):
     trips: list[TripSummaryResponse]
+
+
+# ── Trip sharing (members + invitations) ──────────────────────────────────────
+
+class MemberInviteRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=30,
+                          description="Handle of the user to invite")
+    role: TripMemberRole = Field(
+        TripMemberRole.COLLABORATOR, description="viewer or collaborator")
+
+    @model_validator(mode="after")
+    def _reject_owner(self) -> "MemberInviteRequest":
+        if self.role == TripMemberRole.OWNER:
+            raise ValueError("role must be viewer or collaborator")
+        return self
+
+
+class MemberRoleUpdateRequest(BaseModel):
+    role: TripMemberRole
+
+    @model_validator(mode="after")
+    def _reject_owner(self) -> "MemberRoleUpdateRequest":
+        if self.role == TripMemberRole.OWNER:
+            raise ValueError("role must be viewer or collaborator")
+        return self
+
+
+class InviteRespondRequest(BaseModel):
+    action: InviteAction
+
+
+class TripMemberResponse(BaseModel):
+    user_id: str
+    username: str
+    display_name: str
+    role: TripMemberRole
+    status: MemberStatus = MemberStatus.ACCEPTED   # owner row is always 'accepted'
+
+
+class TripMembersResponse(BaseModel):
+    members: list[TripMemberResponse]              # owner first
+
+
+class InvitationResponse(BaseModel):
+    """A pending invite shown to the invitee."""
+    trip_id: str
+    trip_name: str
+    cover_icon: str = "plane"
+    role: TripMemberRole
+    owner_display_name: Optional[str] = None
+    invited_by_display_name: Optional[str] = None
+    created_at: datetime
+
+
+class InvitationsResponse(BaseModel):
+    invitations: list[InvitationResponse]
+
+
+# ── Vibes ─────────────────────────────────────────────────────────────────────
+
+class VibeRequest(BaseModel):
+    level: TripVibe
 
 
 class ScrapListResponse(BaseModel):

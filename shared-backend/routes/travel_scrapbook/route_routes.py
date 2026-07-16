@@ -9,8 +9,8 @@ from .constants import AnchorRole, ScrapStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import RouteLeg, RouteOptimizeRequest, RouteOptimizeResponse, ScrapResponse
 from .services.hydrate import hydrate_scraps
+from .access import get_accessible_trip
 from .services.optimizer import Point, optimize
-from .trip_routes import get_owned_trip
 
 
 def _anchor_point(anchors: list[dict], role: AnchorRole) -> Point | None:
@@ -39,7 +39,7 @@ async def optimize_route(
     as skipped.
     """
     sb = get_supabase()
-    get_owned_trip(sb, trip_id, user.user_id)
+    get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
 
     scraps = hydrate_scraps(
         sb,

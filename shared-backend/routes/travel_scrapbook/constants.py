@@ -109,3 +109,35 @@ class EnrichErrorKind(StrEnum):
     GEOCODE = "geocode"   # reserved: geocode hard-failed (soft misses stay 'ready')
     NO_PLACE = "no_place" # LLM succeeded but found zero places on the page
     INTERNAL = "internal" # every place failed to materialize (e.g. DB/schema error)
+
+
+# ── Trip sharing ──────────────────────────────────────────────────────────────
+
+class TripMemberRole(StrEnum):
+    """A user's relationship to a trip. OWNER is synthesized in responses from
+    trips.user_id — it is never stored in travelscrapbook_trip_members."""
+    OWNER = "owner"                # the trip's creator (trips.user_id)
+    COLLABORATOR = "collaborator"  # read + add places + edit shared route
+    VIEWER = "viewer"              # read + set their own vibe only
+
+
+class MemberStatus(StrEnum):
+    """Invite lifecycle for a shared trip. Only ACCEPTED grants access."""
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+
+
+class InviteAction(StrEnum):
+    """How an invitee responds to a trip invitation."""
+    ACCEPT = "accept"
+    DECLINE = "decline"
+
+
+class TripVibe(StrEnum):
+    """A traveler's own take on a saved place — the group-consensus input.
+    Ordered most-committed → least for consensus tie-breaking."""
+    BOOKED = "booked"          # locked in / reserved
+    MUST_DO = "must_do"        # top priority
+    INTERESTED = "interested"  # keen but flexible
+    COULD_SKIP = "could_skip"  # fine to drop
