@@ -172,6 +172,29 @@ a:hover { color: var(--accent-hover); }
 }
 .ts-segmented__opt input:checked + span { border-color: var(--blush-deep); background: var(--blush); color: #8a3350; }
 .ts-segmented__opt input:focus-visible + span { box-shadow: 0 0 0 3px rgba(240, 163, 184, 0.25); }
+/* Compact variant for the in-list "group by" toolbar. */
+.ts-segmented--sm { gap: 0.35rem; }
+.ts-segmented--sm .ts-segmented__opt span { min-height: 40px; font-size: 0.82rem; border-radius: 12px; }
+
+/* Collapsible group section (Wander List + trip scraps grouped by location /
+   activity). Native <details>/<summary> for free, accessible collapse. */
+.scrap-groupby { margin: 0.6rem 0 0.9rem; }
+.scrap-group { margin-bottom: 0.5rem; }
+.scrap-group__summary {
+  display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+  list-style: none; padding: 0.5rem 0.2rem; min-height: 44px;
+  border-bottom: 2px dashed var(--border);
+}
+.scrap-group__summary::-webkit-details-marker { display: none; }
+.scrap-group__chev { display: grid; place-items: center; color: var(--ink-muted); transition: transform 0.15s; }
+.scrap-group__chev [data-lucide] { width: 18px; height: 18px; }
+.scrap-group[open] > .scrap-group__summary .scrap-group__chev { transform: rotate(90deg); }
+.scrap-group__label { font-weight: 800; font-size: 1.05rem; color: var(--ink); }
+.scrap-group__count {
+  margin-left: auto; font-weight: 800; font-size: 0.78rem; color: var(--ink-muted);
+  background: var(--paper); border: 1.5px solid var(--border); border-radius: 999px; padding: 1px 10px;
+}
+.scrap-group__grid { margin: 0.7rem 0 0.4rem; }
 
 /* ── Scrap card specifics ───────────────────────────────────────────────────── */
 .scrap-card__photo {

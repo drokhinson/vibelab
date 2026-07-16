@@ -14,6 +14,9 @@ class TripView extends View {
     this._routeBusy = false;
     this._candidates = [];
     this._candidatesSeq = 0;
+    // Group the trip's scraps by activity type (default) or geography.
+    this._groupBy = localStorage.getItem('ts.trip.groupBy') || 'category';
+    this._collapsed = new Set();
   }
 
   renderLoading() {
@@ -112,9 +115,8 @@ class TripView extends View {
             ? 'Tap the heart on scraps you love and they collect here.'
             : 'Found something on Reddit or Instagram? Paste it above — we\'ll figure out what place it is.'}</p>
         </div>` : `
-        <div class="card-grid card-grid--2col">
-          ${scraps.map((s, i) => renderScrapCard(s, { index: i })).join('')}
-        </div>`}
+        ${renderGroupByToggle(['category', 'city', 'region', 'country'], this._groupBy, 'trip-groupby')}
+        ${renderScrapGroups(scraps, { dimension: this._groupBy, collapsed: this._collapsed, variant: 'trip' })}`}
     `;
     this.refreshIcons();
     this._bind(trip);
@@ -217,6 +219,17 @@ class TripView extends View {
     c.querySelector('#fav-filter')?.addEventListener('click', () => {
       this._favoritesOnly = !this._favoritesOnly;
       this.render();
+    });
+
+    bindScrapGroups(c, {
+      name: 'trip-groupby',
+      collapsed: this._collapsed,
+      onChange: (dim) => {
+        this._groupBy = dim;
+        this._collapsed = new Set();
+        localStorage.setItem('ts.trip.groupBy', dim);
+        this.render();
+      },
     });
 
     bindQuickPaste(c);
