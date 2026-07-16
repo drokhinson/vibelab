@@ -46,8 +46,13 @@ function renderScrapCard(scrap, opts = {}) {
   const title = scrap.place_name || 'Saved place';
   const sub = _locationLine(scrap);
   const hint = _confidenceHint(scrap);
-  const photo = scrap.og_image_url
-    ? `<img class="scrap-card__photo" src="${escapeAttr(scrap.og_image_url)}" alt="" loading="lazy"
+  // Prefer the source's og:image; else a static map of the pin (geocoded places
+  // only); else the category sprite. The onerror covers a provider hiccup or a
+  // dead image URL by swapping in the sprite.
+  const imgSrc = scrap.og_image_url ||
+    (scrap.lat != null ? staticMapUrl(scrap.lat, scrap.lng) : null);
+  const photo = imgSrc
+    ? `<img class="scrap-card__photo" src="${escapeAttr(imgSrc)}" alt="" loading="lazy"
          onerror="this.outerHTML='<div class=&quot;scrap-card__sprite-fallback&quot;>${renderSprite('category', catIcon, { size: 'lg' }).replaceAll('"', '&quot;')}</div>'" />`
     : `<div class="scrap-card__sprite-fallback">${renderSprite('category', catIcon, { size: 'lg' })}</div>`;
 

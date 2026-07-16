@@ -9,6 +9,9 @@ class InboxView extends View {
     this._pollStartedAt = 0;
     this.POLL_INTERVAL_MS = 2000;
     this.POLL_TIMEOUT_MS = 45000;
+    // Group the "want to go" list by geography so a big list stays scannable.
+    this._groupBy = localStorage.getItem('ts.wishlist.groupBy') || 'country';
+    this._collapsed = new Set();
   }
 
   renderLoading() {
@@ -83,10 +86,10 @@ class InboxView extends View {
             ${failed.map((s, i) => renderSourceCard(s, { index: i, variant: 'failed' })).join('')}
           </div>` : ''}
         ${scraps.length ? `
-          <h2 style="font-size:1.3rem;margin:1.1rem 0 0.5rem;">Want to go</h2>
-          <div class="card-grid card-grid--2col">
-            ${scraps.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox' })).join('')}
-          </div>` : ''}
+          <h2 style="font-size:1.3rem;margin:1.1rem 0 0.4rem;">Want to go</h2>
+          ${renderGroupByToggle(['city', 'region', 'country'], this._groupBy, 'wishlist-groupby')}
+          ${renderScrapGroups(scraps, { dimension: this._groupBy, collapsed: this._collapsed, variant: 'inbox' })}
+          ` : ''}
       `}
     `;
     this.refreshIcons();
@@ -96,6 +99,17 @@ class InboxView extends View {
 
   _bind(scraps, failed) {
     const c = this.container;
+
+    bindScrapGroups(c, {
+      name: 'wishlist-groupby',
+      collapsed: this._collapsed,
+      onChange: (dim) => {
+        this._groupBy = dim;
+        this._collapsed = new Set();   // group keys differ per dimension
+        localStorage.setItem('ts.wishlist.groupBy', dim);
+        this.render();
+      },
+    });
 
     c.querySelectorAll('[data-action=retry-source]').forEach((btn) => {
       btn.addEventListener('click', async () => {
