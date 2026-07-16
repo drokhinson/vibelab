@@ -217,6 +217,13 @@ a:hover { color: var(--accent-hover); }
   background: var(--paper); border: 1.5px solid var(--border); border-radius: 999px; padding: 1px 10px;
 }
 
+/* Trip detail: toolbar row (back + edit/collaborators/delete), then the
+   title/subtitle span the full width on their own row below. */
+.trip-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.trip-toolbar__actions { display: flex; align-items: center; gap: 0.35rem; }
+.trip-toolbar__btn { padding: 0; width: 40px; min-width: 40px; min-height: 40px; }
+.trip-heading { display: flex; align-items: center; gap: 0.8rem; margin-top: 0.9rem; }
+
 /* ── Scrap card specifics ───────────────────────────────────────────────────── */
 /* Media wrapper positions the type-pill overlay over the photo's top-left. */
 .scrap-card__media { position: relative; }
