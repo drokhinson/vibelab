@@ -1,5 +1,6 @@
-// views/trip-view.js — trip detail: anchors, quick-paste, scraps, route panel
-// (rendered by ui/route-panel.js; share modal lives in widgets/trip-share.js).
+// views/trip-view.js — trip detail: plans (todos), checkpoints (stays/travel),
+// quick-paste, route panel (rendered by ui/route-panel.js; share modal lives
+// in widgets/trip-share.js).
 'use strict';
 
 class TripView extends View {
@@ -149,7 +150,6 @@ class TripView extends View {
         <button class="ts-header__nav-btn ts-btn ts-btn--ghost ts-btn--sm" id="trip-share" aria-label="Share trip"><i data-lucide="users"></i></button>
         ${isOwner ? `<button class="ts-header__nav-btn ts-btn ts-btn--ghost ts-btn--sm" id="trip-delete" aria-label="Delete trip"><i data-lucide="trash-2"></i></button>` : ''}
       </div>
-      ${renderAnchorsStrip(trip, { readOnly: !canWrite })}
       <div class="ts-segmented" role="tablist" aria-label="Trip view" style="margin-top:0.9rem;">
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="plans" ${this._tab === 'plans' ? 'checked' : ''} /><span>Plans</span></label>
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="timeline" ${this._tab === 'timeline' ? 'checked' : ''} /><span>Timeline</span></label>
@@ -161,7 +161,9 @@ class TripView extends View {
       <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;margin-top:1.2rem;flex-wrap:wrap;">
         <h2 style="font-size:1.5rem;margin:0;">Plans</h2>
         <div style="display:flex;gap:0.5rem;">
-          ${canWrite ? `<button class="ts-btn ts-btn--blush ts-btn--sm" id="add-plans"><i data-lucide="plus"></i>Add plans</button>` : ''}
+          ${canWrite ? `
+            <button class="ts-btn ts-btn--blush ts-btn--sm" id="add-plans"><i data-lucide="plus"></i>Todo</button>
+            <button class="ts-btn ts-btn--sky ts-btn--sm" data-action="add-checkpoint"><i data-lucide="plus"></i>Checkpoint</button>` : ''}
           <button class="ts-btn ts-btn--ghost ts-btn--sm" id="priority-filter"
                   style="${this._priorityOnly ? 'border-color:var(--butter-deep, #C9A227);color:#8A6D1A;' : ''}">
             <i data-lucide="star"></i>${this._priorityOnly ? 'All' : 'Must-dos'}
@@ -175,18 +177,37 @@ class TripView extends View {
           <p class="empty-desc">${this._priorityOnly
             ? 'Rate plans “Must do” or “Booked” and they collect here.'
             : (canWrite
-              ? 'Tap “Add plans” to pick from your Wander List — or paste a link above.'
+              ? 'Tap “+ Todo” to pick from your Wander List — or paste a link below.'
               : 'When the crew adds places, they’ll show up here for you to vibe on.')}</p>
         </div>` : `
         ${renderGroupedList(scraps, {
           dims: ['category', 'region', 'country', 'city'], active: this._groupBy,
           collapsed: this._collapsed, variant: 'trip', name: 'trip-groupby', ...cardOpts,
         })}`}
+      ${this._renderCheckpoints(trip, { canWrite })}
       `}
       ${canWrite ? renderQuickPaste(trip.id) : ''}
     `;
     this.refreshIcons();
     this._bind(trip, { isOwner, canWrite });
+  }
+
+  // The trip's checkpoints — stays and travel — as simple typed cards under
+  // the plans list, chronological, with gap placeholders between dated ones.
+  _renderCheckpoints(trip, { canWrite = true } = {}) {
+    const anchors = trip.anchors || [];
+    if (!anchors.length && !canWrite) return '';
+    return `
+      <div style="margin-top:1.4rem;">
+        <h2 style="font-size:1.5rem;margin:0;">Checkpoints</h2>
+        <p class="scrap-card__sub">Stays and travel that frame the trip.</p>
+        ${anchors.length
+          ? renderCheckpointList(anchors, { canWrite })
+          : `<button class="checkpoint-gap" data-action="add-checkpoint" style="margin-top:0.6rem;">
+               <i data-lucide="plus"></i>Add your first checkpoint — a stay or travel leg
+             </button>`}
+      </div>
+    `;
   }
 
   _renderStaging(staged, cardOpts = {}) {
@@ -282,14 +303,29 @@ class TripView extends View {
 
     bindQuickPaste(c);
 
-    c.querySelector('[data-action=add-anchor]')?.addEventListener('click', () => AnchorEditor.open(trip));
-    // Timeline bookends + middle add: create with a preselected role, or edit
-    // an existing endpoint in place.
+    // Checkpoints: the "+ Checkpoint" buttons (Plans header + mid-timeline)
+    // open the editor defaulting to a stay — the role select flips to travel.
+    c.querySelectorAll('[data-action=add-checkpoint]').forEach((btn) => {
+      btn.addEventListener('click', () => AnchorEditor.open(trip, { role: 'stay' }));
+    });
+    // A gap placeholder between two dated checkpoints prefills the empty dates.
+    c.querySelectorAll('[data-action=add-checkpoint-gap]').forEach((btn) => {
+      btn.addEventListener('click', () => AnchorEditor.open(trip, {
+        role: 'stay',
+        prefill: {
+          stay_date: btn.dataset.start,
+          stay_end_date: btn.dataset.end,
+          anchor_date: btn.dataset.start,
+        },
+      }));
+    });
+    // Timeline bookends: create the arrival/departure with the role preset.
     c.querySelectorAll('[data-action=add-anchor-role]').forEach((btn) => {
       btn.addEventListener('click', () => AnchorEditor.open(trip, { role: btn.dataset.role }));
     });
     c.querySelectorAll('[data-action=edit-anchor]').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
         const anchor = (trip.anchors || []).find((a) => a.id === btn.dataset.anchorId);
         if (anchor) AnchorEditor.open(trip, { anchor });
       });
@@ -297,6 +333,8 @@ class TripView extends View {
     c.querySelectorAll('[data-action=remove-anchor]').forEach((btn) => {
       btn.addEventListener('click', async (ev) => {
         ev.stopPropagation();
+        const anchor = (trip.anchors || []).find((a) => a.id === btn.dataset.anchorId);
+        if (!confirmDestructive(`Remove the "${anchor ? anchor.label : 'this'}" checkpoint? This can't be undone.`)) return;
         try { await window.TripDomain.removeAnchor(trip.id, btn.dataset.anchorId); }
         catch (err) { toast(err.message, { error: true }); }
       });
@@ -330,18 +368,19 @@ class TripView extends View {
           try {
             if (action === 'rate-open') {
               PriorityPicker.open({
-                activeLevel: scrap.rating || null,
+                activeLevel: scrap.visited_at ? 'visited' : (scrap.rating || null),
                 verb: 'priority',
+                withVisited: true,
                 onPick: async (level) => {
-                  try { await window.ScrapDomain.applyRating(scrapId, trip.id, level); }
-                  catch (err) { toast(err.message, { error: true }); }
+                  try {
+                    await window.ScrapDomain.applyPriority(scrapId, trip.id, level, !!scrap.visited_at);
+                    if (level === 'visited') toast('Marked visited');
+                    else if (scrap.visited_at) toast('Back on your wishlist');
+                  } catch (err) { toast(err.message, { error: true }); }
                 },
               });
             } else if (action === 'notes') {
               NotePopup.open(scrap, { onSaved: () => window.TripDomain.load(trip.id) });
-            } else if (action === 'visited') {
-              await window.ScrapDomain.toggleVisited(scrapId, trip.id, !!scrap.visited_at);
-              toast(scrap.visited_at ? 'Back on your wishlist' : 'Marked visited');
             } else if (action === 'approve') {
               await window.ScrapDomain.approve(scrapId, trip.id);
               toast('Kept!');

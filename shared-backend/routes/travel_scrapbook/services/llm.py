@@ -17,7 +17,14 @@ import httpx
 
 from api_logger import log_external_call
 
-from ..constants import APP_NAME, GEMINI_MODEL, LLM_MAX_TOKENS_MULTI, MAX_PLACES_PER_SOURCE
+from ..constants import (
+    APP_NAME,
+    AnchorType,
+    BookingKind,
+    GEMINI_MODEL,
+    LLM_MAX_TOKENS_MULTI,
+    MAX_PLACES_PER_SOURCE,
+)
 from .scraper import PageContent
 _ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -39,6 +46,19 @@ class PlaceExtraction:
     category: str
     geocode_query: Optional[str]
     confident: bool
+
+
+@dataclass
+class BookingExtraction:
+    """The page is itself a lodging/transport booking (or listing) — captured
+    with a trip context it becomes a checkpoint instead of a place scrap."""
+    kind: str                        # BookingKind: 'stay' | 'travel'
+    label: str                       # e.g. "Hotel Doma" / "Flight to Athens"
+    location: Optional[str]          # geocodable place string
+    start_date: Optional[str]        # ISO date — stay: check-in; travel: leg day
+    end_date: Optional[str]          # ISO date — stay only: check-out
+    time: Optional[str]              # HH:MM — travel only: departure time
+    transport_type: Optional[str]    # AnchorType — travel only
 
 
 def _get_api_key() -> str:
@@ -90,7 +110,12 @@ def _build_prompt(
         "\nExtract EVERY distinct real-world place a traveler would want to "
         "save from this page (restaurants, bars, sights, shops, lodging...). "
         "A page may be about one place or list many (e.g. '10 best ramen "
-        "shops'). Reply with this exact JSON shape:\n"
+        "shops'). Additionally, decide whether the page IS a lodging or "
+        "transport booking: a hotel/Airbnb reservation, confirmation, or "
+        "listing page ('stay'), or a flight/train/ferry/bus/car-rental "
+        "booking or itinerary ('travel'). If so fill in \"booking\"; for any "
+        "other page (articles, reels, maps, reviews) set \"booking\" to null. "
+        "Reply with this exact JSON shape:\n"
         "{\n"
         '  "places": [\n'
         "    {\n"
@@ -101,10 +126,20 @@ def _build_prompt(
         '      "geocode_query": string or null  // best search string for OpenStreetMap Nominatim,\n'
         '      "confident": boolean\n'
         "    }\n"
-        "  ]\n"
+        "  ],\n"
+        '  "booking": null or {\n'
+        '    "kind": "stay" or "travel",\n'
+        '    "label": string,  // e.g. "Hotel Doma" or "Flight to Athens (ATH)",\n'
+        '    "location": string or null,  // geocodable: property + city, or the destination airport/station,\n'
+        '    "start_date": "YYYY-MM-DD" or null,  // stay: check-in; travel: departure day,\n'
+        '    "end_date": "YYYY-MM-DD" or null,  // stay only: check-out,\n'
+        '    "time": "HH:MM" or null,  // travel only: departure time,\n'
+        '    "transport_type": one of ["airport", "train_station", "car_rental", "other"] or null  // travel only\n'
+        "  }\n"
         "}\n"
-        f"Order by prominence. Include at most {MAX_PLACES_PER_SOURCE}. "
-        'If no specific place is identifiable, return {"places": []}.'
+        "For a booking page, still list the lodging or destination as a place "
+        f"entry in \"places\". Order by prominence. Include at most {MAX_PLACES_PER_SOURCE}. "
+        'If no specific place is identifiable, return {"places": [], "booking": null}.'
     )
     return "\n".join(lines)
 
@@ -163,14 +198,49 @@ def _coerce_places(data: dict, categories: list[str]) -> list[PlaceExtraction]:
     return places
 
 
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_TIME_RE = re.compile(r"^\d{2}:\d{2}(:\d{2})?$")
+
+
+def _coerce_booking(data: dict) -> Optional[BookingExtraction]:
+    """Validate the optional booking classification; None on anything off."""
+    raw = data.get("booking")
+    if not isinstance(raw, dict):
+        return None
+    kind = raw.get("kind")
+    label = (raw.get("label") or "").strip()
+    if kind not in (BookingKind.STAY, BookingKind.TRAVEL) or not label:
+        return None
+
+    def _date(v: object) -> Optional[str]:
+        return v if isinstance(v, str) and _DATE_RE.match(v) else None
+
+    time_ = raw.get("time")
+    if not (isinstance(time_, str) and _TIME_RE.match(time_)):
+        time_ = None
+    transport = raw.get("transport_type")
+    if transport not in tuple(AnchorType):
+        transport = None
+    return BookingExtraction(
+        kind=kind,
+        label=label[:120],
+        location=(raw.get("location") or None),
+        start_date=_date(raw.get("start_date")),
+        end_date=_date(raw.get("end_date")),
+        time=time_,
+        transport_type=transport,
+    )
+
+
 async def extract_places(
     url: str,
     page: Optional[PageContent],
     categories: list[str],
     shared_text: Optional[str] = None,
-) -> list[PlaceExtraction]:
-    """Ask Gemini for every place the page mentions. Raises LLMError on
-    failure; an empty list means the page has no identifiable places."""
+) -> tuple[list[PlaceExtraction], Optional[BookingExtraction]]:
+    """Ask Gemini for every place the page mentions, plus whether the page is
+    itself a lodging/transport booking. Raises LLMError on failure; an empty
+    place list means the page has no identifiable places."""
     api_key = _get_api_key()
     client = _get_client()
     prompt = _build_prompt(url, page, categories, shared_text)
@@ -206,4 +276,5 @@ async def extract_places(
         payload = resp.json()
         text = _extract_text(payload)
 
-    return _coerce_places(_parse_json(text), categories)
+    data = _parse_json(text)
+    return _coerce_places(data, categories), _coerce_booking(data)

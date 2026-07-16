@@ -8,7 +8,14 @@ from db import get_supabase
 
 from . import router
 from .access import get_accessible_trip
-from .constants import AnchorRole, GeocodeConfidence, MemberStatus, ScrapStatus, TripMemberRole
+from .constants import (
+    AnchorRole,
+    GeocodeConfidence,
+    MemberStatus,
+    ScrapStatus,
+    TRAVEL_ROLES,
+    TripMemberRole,
+)
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     AnchorCreateRequest,
@@ -77,7 +84,7 @@ def _validate_anchor_dates(trip: dict[str, Any], row: dict[str, Any]) -> None:
                 detail=f"{label} must fall within the trip's dates",
             )
 
-    in_trip(row.get("anchor_date"), "Arrival/departure day")
+    in_trip(row.get("anchor_date"), "Arrival/departure/travel day")
     in_trip(row.get("stay_date"), "Check-in day")
     in_trip(row.get("stay_end_date"), "Check-out day")
     stay, stay_end = row.get("stay_date"), row.get("stay_end_date")
@@ -330,7 +337,8 @@ async def create_anchor(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> AnchorResponse:
-    """Add a start/end/stay anchor.
+    """Add a checkpoint (start/end/stay/travel anchor). start and end are
+    unique per trip; a trip can hold any number of stay and travel anchors.
 
     Normal anchors geocode their query synchronously. An end anchor with
     ``same_as_start`` copies the start anchor's place + type instead (arrival and
@@ -343,12 +351,12 @@ async def create_anchor(
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
 
-    is_endpoint = body.role in (AnchorRole.START, AnchorRole.END)
-    # Timeline marker fields: anchor_date/time only on start/end; stay dates
-    # only on lodging.
+    is_travel = body.role in TRAVEL_ROLES
+    # Timeline marker fields: anchor_date/time + type on the travel roles
+    # (start/end/travel); stay dates only on lodging.
     marker_fields = {
-        "anchor_date": body.anchor_date.isoformat() if is_endpoint and body.anchor_date else None,
-        "anchor_time": body.anchor_time.isoformat() if is_endpoint and body.anchor_time else None,
+        "anchor_date": body.anchor_date.isoformat() if is_travel and body.anchor_date else None,
+        "anchor_time": body.anchor_time.isoformat() if is_travel and body.anchor_time else None,
         "stay_date": (
             body.stay_date.isoformat()
             if body.role == AnchorRole.STAY and body.stay_date else None
@@ -384,7 +392,7 @@ async def create_anchor(
             "label": body.label,
             "query": body.query,
             **(await _geocode_anchor(body.query)),
-            "type": body.type if is_endpoint else None,
+            "type": body.type if is_travel else None,
             **marker_fields,
         }
     _validate_anchor_dates(trip, row)

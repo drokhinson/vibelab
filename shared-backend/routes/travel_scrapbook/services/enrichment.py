@@ -6,6 +6,10 @@ so the frontend can offer a retry. One source fans out into N places; each
 place the user hasn't saved yet becomes a scrap that is auto-staged onto a
 nearby trip (awaiting review), approved directly when the capture carried an
 explicit trip hint, or dropped into the inbox.
+
+A URL the LLM classifies as a lodging/transport BOOKING (hotel reservation,
+flight itinerary...) captured with a trip context becomes a checkpoint (a
+stay/travel anchor) on that trip instead, with its dates filled in.
 """
 
 import logging
@@ -15,6 +19,9 @@ from urllib.parse import quote
 from db import get_supabase
 
 from ..constants import (
+    AnchorRole,
+    AnchorType,
+    BookingKind,
     EnrichErrorKind,
     GeocodeConfidence,
     ScrapStatus,
@@ -122,6 +129,60 @@ async def _materialize_place(
     sb.table("travelscrapbook_scraps").insert(scrap).execute()
 
 
+async def _materialize_checkpoint(
+    sb, source: dict[str, Any], booking: llm.BookingExtraction
+) -> bool:
+    """A booking link captured with a trip context becomes a checkpoint (a
+    stay/travel anchor) on that trip, dates filled in from the page. Without a
+    trip there is nowhere to hang it — the caller falls back to the place flow.
+    Re-capturing the same booking updates the existing checkpoint in place.
+    Returns True when a checkpoint row was written."""
+    trip_id = source.get("trip_hint_id")
+    if not trip_id:
+        return False
+
+    role = AnchorRole.STAY if booking.kind == BookingKind.STAY else AnchorRole.TRAVEL
+    query = booking.location or booking.label
+    geo = await nominatim.geocode(query)
+    row: dict[str, Any] = {
+        "trip_id": trip_id,
+        "role": role,
+        "label": booking.label,
+        "query": query,
+        "lat": geo.lat if geo else None,
+        "lng": geo.lng if geo else None,
+        "geocode_confidence": GeocodeConfidence.HIGH if geo else GeocodeConfidence.NONE,
+    }
+    if role == AnchorRole.STAY:
+        row.update({
+            "stay_date": booking.start_date,
+            "stay_end_date": booking.end_date,
+        })
+    else:
+        row.update({
+            "type": booking.transport_type or AnchorType.OTHER,
+            "anchor_date": booking.start_date,
+            "anchor_time": booking.time,
+        })
+
+    existing = (
+        sb.table("travelscrapbook_anchors")
+        .select("id, label")
+        .eq("trip_id", trip_id)
+        .eq("role", role)
+        .execute()
+    ).data or []
+    match = next(
+        (a for a in existing if (a.get("label") or "").casefold() == booking.label.casefold()),
+        None,
+    )
+    if match:
+        sb.table("travelscrapbook_anchors").update(row).eq("id", match["id"]).execute()
+    else:
+        sb.table("travelscrapbook_anchors").insert(row).execute()
+    return True
+
+
 async def process_source(source_id: str) -> None:
     """Full enrichment pipeline for one source. Safe to re-run (retry)."""
     sb = get_supabase()
@@ -156,7 +217,7 @@ async def process_source(source_id: str) -> None:
         # 2. LLM place extraction — required. If this fails we mark failed.
         try:
             categories = _load_category_slugs(sb)
-            extractions = await llm.extract_places(
+            extractions, booking = await llm.extract_places(
                 url, page, categories, shared_text=source.get("shared_text")
             )
         except llm.LLMError as exc:
@@ -171,7 +232,22 @@ async def process_source(source_id: str) -> None:
             update.update({"status": SourceStatus.FAILED, "error_kind": kind})
             return
 
-        if not extractions:
+        # 2b. Booking pages (hotel/flight/train reservations or listings)
+        #     captured onto a trip become a checkpoint with dates filled in.
+        #     Without a trip context the booking falls through to the normal
+        #     place flow (the LLM lists the lodging/destination in places too).
+        checkpoint_created = False
+        if booking is not None:
+            try:
+                checkpoint_created = await _materialize_checkpoint(sb, source, booking)
+            except Exception:
+                logger.exception("source %s: failed to materialize booking", source_id)
+        if checkpoint_created:
+            # The page is about the stay/leg itself — the checkpoint replaces
+            # the place scraps so the hotel doesn't double as a plan.
+            extractions = []
+
+        if not extractions and not checkpoint_created:
             update.update({
                 "status": SourceStatus.FAILED,
                 "error_kind": EnrichErrorKind.NO_PLACE,

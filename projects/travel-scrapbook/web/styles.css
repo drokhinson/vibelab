@@ -210,7 +210,6 @@ a:hover { color: var(--accent-hover); }
 .scrap-card__title { font-weight: 800; font-size: 1rem; margin: 0.55rem 0 0.1rem; overflow-wrap: anywhere; }
 .scrap-card__sub { font-size: 0.82rem; color: var(--ink-muted); overflow-wrap: anywhere; }
 .scrap-card__row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
-.scrap-card__actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
 /* ── Scrap footer (the always-there capture box) ────────────────────────────── */
 .scrap-footer {
   position: sticky; bottom: 0; z-index: 30;
@@ -282,30 +281,11 @@ span.note-chip { cursor: default; }
 .rating-badge--interested { background: var(--vibe-interested); }
 .rating-badge--could_skip { background: var(--vibe-could_skip); }
 
-/* Visited toggle — corner button; fills green when set. */
-.scrap-card__visited {
-  width: 36px; height: 36px; border-radius: 999px; border: 2px solid var(--border);
-  background: var(--card); color: var(--ink-muted); cursor: pointer;
-  display: grid; place-items: center;
-}
-.scrap-card__visited.is-visited { color: #2F8F5B; border-color: var(--mint); background: #EAF7EF; }
-.scrap-card__visited [data-lucide] { width: 18px; height: 18px; }
-
-/* Visited state on the card itself: a corner ribbon + a gentle dim so been-there
-   places read as done without disappearing. */
+/* Visited state on the card: the priority chip shows green "Visited" and the
+   card gently dims so been-there places read as done without disappearing. */
 .sticker-card.is-visited { opacity: 0.72; }
-.scrap-card__visited-badge {
-  position: absolute; top: 10px; left: 10px; z-index: 1;
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 0.68rem; font-weight: 900; letter-spacing: 0.02em;
-  color: #2F8F5B; background: #EAF7EF; border: 1.5px solid var(--mint);
-  border-radius: 999px; padding: 2px 9px;
-}
-.scrap-card__visited-badge [data-lucide] { width: 13px; height: 13px; }
-/* Inside the Visited view every card is visited, so drop the redundant dim +
-   ribbon; the green corner check still reads as "tap to un-visit". */
+/* Inside the Visited view every card is visited, so drop the redundant dim. */
 .visited-grid .sticker-card.is-visited { opacity: 1; }
-.visited-grid .scrap-card__visited-badge { display: none; }
 
 /* Selectable card (trip "add from Wander List" picker). Whole card toggles. */
 .scrap-card--select { cursor: pointer; }
@@ -366,19 +346,32 @@ span.note-chip { cursor: default; }
   font-size: 0.78rem; color: var(--ink-muted);
 }
 
-/* ── Anchors strip ──────────────────────────────────────────────────────────── */
-.anchor-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--card); border: 2px solid var(--border); border-radius: 999px;
-  padding: 6px 12px; font-size: 0.82rem; font-weight: 700;
+/* ── Checkpoints (stay/travel cards in the Plans tab) ───────────────────────── */
+.checkpoint-list { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.7rem; }
+.checkpoint-card { display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 0.9rem; }
+.checkpoint-card__icon {
+  width: 40px; height: 40px; border-radius: 999px; border: 2px solid var(--border);
+  display: grid; place-items: center; flex-shrink: 0;
 }
-.anchor-chip [data-lucide] { width: 15px; height: 15px; }
-.anchor-chip__role { color: var(--ink-muted); font-weight: 800; font-size: 0.7rem; text-transform: uppercase; }
-.anchor-chip__type { opacity: 0.55; }
-.anchor-chip__day {
-  color: var(--ink-muted); font-weight: 700; font-size: 0.72rem;
-  background: var(--border); border-radius: 999px; padding: 1px 8px;
+.checkpoint-card__icon--travel { background: var(--sky, #BDE0FE); }
+.checkpoint-card__icon--stay { background: var(--mint, #BEE7D0); }
+.checkpoint-card__icon [data-lucide] { width: 20px; height: 20px; }
+.checkpoint-card__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.checkpoint-card__type {
+  font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--ink-muted);
 }
+.checkpoint-card__name { font-weight: 800; overflow-wrap: anywhere; }
+/* Dashed placeholder for the uncovered dates between two dated checkpoints. */
+.checkpoint-gap {
+  display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+  min-height: 44px; width: 100%; border-radius: 14px;
+  border: 2px dashed var(--border); background: transparent;
+  color: var(--ink-muted); font-weight: 800; font-size: 0.84rem; cursor: pointer;
+}
+.checkpoint-gap:hover { border-color: var(--ink-muted); color: var(--ink); }
+.checkpoint-gap [data-lucide] { width: 16px; height: 16px; }
+
 .anchor-same__hint { color: var(--ink-muted); font-weight: 700; }
 .anchor-same__note { color: var(--ink-muted); font-size: 0.78rem; margin: 0.35rem 0 0; }
 
@@ -601,6 +594,7 @@ body.popup-mode { max-width: 420px; }
 .priority-chip--must_do { background: var(--vibe-must_do); }
 .priority-chip--interested { background: var(--vibe-interested); }
 .priority-chip--could_skip { background: var(--vibe-could_skip); }
+.priority-chip--visited { background: #EAF7EF; border-color: #2F8F5B; color: #2F8F5B; box-shadow: 1.5px 1.5px 0 #2F8F5B; }
 .priority-chip--ghost {
   border: 1.5px dashed var(--border); color: var(--ink-muted);
   background: transparent; box-shadow: none;
@@ -623,6 +617,8 @@ body.popup-mode { max-width: 420px; }
 .priority-option--must_do.is-on, .priority-option--must_do:hover { background: var(--vibe-must_do); }
 .priority-option--interested.is-on, .priority-option--interested:hover { background: var(--vibe-interested); }
 .priority-option--could_skip.is-on, .priority-option--could_skip:hover { background: var(--vibe-could_skip); }
+.priority-option--visited.is-on, .priority-option--visited:hover { background: #EAF7EF; }
+.priority-option--visited { color: #2F8F5B; }
 .priority-option--clear { color: var(--ink-muted); border-style: dashed; }
 .priority-option__check { margin-left: auto; }
 

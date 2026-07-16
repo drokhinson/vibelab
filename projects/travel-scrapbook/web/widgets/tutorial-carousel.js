@@ -28,8 +28,8 @@ const TUTORIAL_STEPS = [
   },
   {
     illustration: 'travel-scrapbook-tutorial-timeline',
-    title: 'Anchor it, then watch the timeline',
-    body: 'Add your flights and stays with dates, and the trip becomes a day-by-day timeline. Unplanned stops get slotted in — “near your Day 2 hotel” — and booked plans show up right on time.',
+    title: 'Checkpoints build the timeline',
+    body: 'Add checkpoints — stays and travel with dates, even paste a booking link — and the trip becomes a day-by-day timeline. Unplanned stops get slotted in — “near your Day 2 hotel” — and booked plans show up right on time.',
   },
   {
     illustration: 'travel-scrapbook-tutorial-community',

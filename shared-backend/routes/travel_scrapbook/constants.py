@@ -40,7 +40,7 @@ TRIP_MATCH_RADIUS_KM = 100.0
 PLACE_DEDUPE_RADIUS_KM = 0.5
 # One listicle/reel fans out into at most this many places.
 MAX_PLACES_PER_SOURCE = 8
-LLM_MAX_TOKENS_MULTI = 1000
+LLM_MAX_TOKENS_MULTI = 1200  # 8 places + the optional booking object
 # Trip suggestions offered on inbox cards reach a bit beyond the auto-stage radius.
 TRIP_SUGGEST_RADIUS_KM = 2 * TRIP_MATCH_RADIUS_KM
 MAX_TRIP_SUGGESTIONS = 3
@@ -93,17 +93,32 @@ class GeocodeConfidence(StrEnum):
 
 
 class AnchorRole(StrEnum):
+    """Anchors are surfaced in the UI as "checkpoints" — the stay/travel combo
+    that frames a trip. start/end are the trip's arrival/departure travel
+    checkpoints; travel is a mid-trip leg (multi-city); stay is lodging."""
     START = "start"
     END = "end"
     STAY = "stay"
+    TRAVEL = "travel"
+
+
+# Roles that use anchor_date/anchor_time + type (everything except lodging).
+TRAVEL_ROLES = (AnchorRole.START, AnchorRole.END, AnchorRole.TRAVEL)
 
 
 class AnchorType(StrEnum):
-    """How you arrive at / depart from a start or end anchor."""
+    """How you travel at a start/end/travel checkpoint."""
     AIRPORT = "airport"
     TRAIN_STATION = "train_station"
     CAR_RENTAL = "car_rental"
     OTHER = "other"
+
+
+class BookingKind(StrEnum):
+    """A captured URL classified as a booking becomes a checkpoint of this
+    kind (stay = lodging, travel = transport) instead of a place scrap."""
+    STAY = "stay"
+    TRAVEL = "travel"
 
 
 class EnrichErrorKind(StrEnum):

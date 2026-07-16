@@ -67,6 +67,21 @@ const ScrapDomain = {
     if (tripId) await window.TripDomain.load(tripId);
   },
 
+  // One entry point for the priority picker, where "Visited" is a level like
+  // any other: 'visited' marks the place visited; a rating (or Clear) on a
+  // visited place moves it back to the wishlist first, then applies.
+  async applyPriority(scrapId, tripId, level, currentlyVisited) {
+    if (level === 'visited') {
+      if (!currentlyVisited) await this.toggleVisited(scrapId, tripId, false);
+      return;
+    }
+    if (currentlyVisited) {
+      await window.api.updateScrap(scrapId, { visited: false });
+      window.SourceDomain?.refreshInboxCount();
+    }
+    await this.applyRating(scrapId, tripId, level);
+  },
+
   // Staging "remove" / pulling a scrap out of a trip — it returns to the inbox.
   async unassign(scrapId, tripId) {
     await window.api.unassignScrap(scrapId);
@@ -76,12 +91,17 @@ const ScrapDomain = {
 
   // Poll the trip while a capture is processing. A monotonic trip guard stops
   // a stale loop from clobbering another trip's state after navigation.
+  // Scraps AND anchors count toward the baseline — a booking link lands as a
+  // checkpoint (anchor), not a scrap, and should stop the poll too.
+  _tripItemCount(trip) {
+    return (trip.scraps || []).length + (trip.staged_scraps || []).length +
+      (trip.anchors || []).length;
+  },
+
   startPolling(tripId) {
     this.stopPolling();
     const trip = window.store.get('trip:' + tripId);
-    this._pollBaseline = trip
-      ? (trip.scraps || []).length + (trip.staged_scraps || []).length
-      : 0;
+    this._pollBaseline = trip ? this._tripItemCount(trip) : 0;
     this._pollTripId = tripId;
     this._pollStartedAt = Date.now();
     this._pollTimer = setInterval(() => this._tick(tripId), this.POLL_INTERVAL_MS);
@@ -107,7 +127,7 @@ const ScrapDomain = {
       const trip = await window.api.getTrip(tripId);
       if (this._pollTripId !== tripId) return; // navigated away mid-fetch
       window.store.set('trip:' + tripId, trip);
-      const count = (trip.scraps || []).length + (trip.staged_scraps || []).length;
+      const count = this._tripItemCount(trip);
       if (count > this._pollBaseline) {
         this.stopPolling();
         window.SourceDomain?.refreshInboxCount();

@@ -60,18 +60,18 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_trips (
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_anchors (
   id                 UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
   trip_id            UUID             NOT NULL REFERENCES public.travelscrapbook_trips(id) ON DELETE CASCADE,
-  role               TEXT             NOT NULL CHECK (role IN ('start', 'end', 'stay')),
+  role               TEXT             NOT NULL CHECK (role IN ('start', 'end', 'stay', 'travel')),  -- travel = mid-trip leg (012)
   label              TEXT             NOT NULL,
   query              TEXT             NOT NULL,
   lat                DOUBLE PRECISION,
   lng                DOUBLE PRECISION,
   geocode_confidence TEXT             NOT NULL DEFAULT 'none'
     CHECK (geocode_confidence IN ('high', 'medium', 'low', 'none')),
-  type               TEXT             -- start/end only: airport | train_station | car_rental | other
+  type               TEXT             -- start/end/travel: airport | train_station | car_rental | other
     CHECK (type IS NULL OR type IN ('airport', 'train_station', 'car_rental', 'other')),
   stay_date          DATE,            -- stay only: a check-in day within the trip's date range
   stay_end_date      DATE,            -- stay only: check-out day (009)
-  anchor_date        DATE,            -- start: arrival day; end: departure day (009)
+  anchor_date        DATE,            -- start: arrival; end: departure; travel: leg day (009/012)
   anchor_time        TIME,            -- optional; NULL = all-day point marker (009)
   created_at         TIMESTAMPTZ      NOT NULL DEFAULT now()
 );
