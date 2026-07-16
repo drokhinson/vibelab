@@ -219,7 +219,15 @@ def place_matches_trip_scope(
         # Lenient when either country is unknown; strict when both are present.
         dest_country = trip.get("dest_country")
         return not country or not dest_country or _geo_eq(country, dest_country)
-    # city (default): within the destination-centroid radius.
+    # city (default): within the destination-centroid radius, OR the same city
+    # name (country-guarded) — the latter catches places whose geocode centroid
+    # drifted past the radius but that are clearly in the trip's city.
+    dest_country = trip.get("dest_country")
+    if (
+        _geo_eq(city, trip.get("dest_city"))
+        and (not country or not dest_country or _geo_eq(country, dest_country))
+    ):
+        return True
     if lat is None or lng is None or trip.get("lat") is None:
         return False
     return haversine_km(lat, lng, trip["lat"], trip["lng"]) <= TRIP_MATCH_RADIUS_KM
