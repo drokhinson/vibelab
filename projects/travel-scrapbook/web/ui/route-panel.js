@@ -34,7 +34,7 @@ function renderRoutePanel(trip, { route = null, geocodedCount = 0, canWrite = tr
           return renderRouteStop(stop, n, { legKm });
         }).join('')}
         <p class="scrap-card__sub" style="margin-top:0.5rem;">Total: ${formatKm(r.total_km)}
-          ${r.skipped_scrap_ids.length ? ` · ${r.skipped_scrap_ids.length} scrap${r.skipped_scrap_ids.length === 1 ? '' : 's'} skipped (no map pin yet)` : ''}</p>
+          ${r.skipped_scrap_ids.length ? ` · ${r.skipped_scrap_ids.length} plan${r.skipped_scrap_ids.length === 1 ? '' : 's'} skipped (no map pin yet)` : ''}</p>
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:0.7rem;">
           <button class="ts-btn ts-btn--sky ts-btn--sm" id="route-maps"><i data-lucide="map"></i>Open in Google Maps</button>
           <button class="ts-btn ts-btn--ghost ts-btn--sm" id="route-csv"><i data-lucide="download"></i>CSV for My Maps</button>

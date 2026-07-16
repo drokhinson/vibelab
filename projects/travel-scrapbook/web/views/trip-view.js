@@ -240,7 +240,7 @@ class TripView extends View {
     });
     c.querySelector('#trip-share')?.addEventListener('click', () => TripShare.open(trip, { isOwner }));
     c.querySelector('#trip-delete')?.addEventListener('click', async () => {
-      if (!confirmDestructive(`Delete "${trip.name}" and all its scraps? This can't be undone.`)) return;
+      if (!confirmDestructive(`Delete "${trip.name}" and all its plans? This can't be undone.`)) return;
       try {
         await window.TripDomain.remove(trip.id);
         toast('Trip deleted');
@@ -348,7 +348,7 @@ class TripView extends View {
                 onSaved: () => { toast('Scheduled'); this._refreshTimeline(trip.id); },
               });
             } else if (action === 'delete') {
-              if (!confirmDestructive('Delete this scrap? This can\'t be undone.')) return;
+              if (!confirmDestructive('Delete this place? This can\'t be undone.')) return;
               await window.ScrapDomain.remove(scrapId, trip.id);
             }
           } catch (err) { toast(err.message, { error: true }); }

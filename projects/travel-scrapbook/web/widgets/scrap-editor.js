@@ -29,7 +29,7 @@ const ScrapEditor = {
     modal.id = 'scrap-editor-modal';
     modal.innerHTML = `
       <div class="ts-modal__backdrop" onclick="ScrapEditor.close()"></div>
-      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Edit scrap">
+      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Edit place">
         <button class="ts-modal__close" onclick="ScrapEditor.close()" aria-label="Close"><i data-lucide="x"></i></button>
         <h2 class="ts-modal__title">Edit this place</h2>
         ${(s.sources || []).length ? `
@@ -74,7 +74,7 @@ const ScrapEditor = {
           </label>
           <div style="display:flex;gap:0.6rem;margin-top:1.1rem;">
             <button class="ts-btn ts-btn--mint" type="submit" style="flex:1;"><i data-lucide="check"></i>Save</button>
-            <button class="ts-btn ts-btn--danger" type="button" id="se-delete" aria-label="Delete scrap"><i data-lucide="trash-2"></i></button>
+            <button class="ts-btn ts-btn--danger" type="button" id="se-delete" aria-label="Delete place"><i data-lucide="trash-2"></i></button>
           </div>
         </form>
       </div>
@@ -104,7 +104,7 @@ const ScrapEditor = {
     });
 
     modal.querySelector('#se-delete').addEventListener('click', async () => {
-      if (!confirmDestructive('Delete this scrap? This can\'t be undone.')) return;
+      if (!confirmDestructive('Delete this place? This can\'t be undone.')) return;
       try {
         await window.ScrapDomain.remove(s.id, this._tripId);
         toast('Scrap deleted');
