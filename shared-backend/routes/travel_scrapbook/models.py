@@ -274,6 +274,14 @@ class ScrapListResponse(BaseModel):
     scraps: list[ScrapResponse]
 
 
+class SourceScrapsResponse(BaseModel):
+    """A capture's live progress: its processing status + the scraps it created
+    so far — drives the 'watch it import' cards on the share success screen."""
+    status: SourceStatus
+    error_kind: Optional[str] = None
+    scraps: list[ScrapResponse] = []
+
+
 # ── Route optimization ────────────────────────────────────────────────────────
 
 class RouteOptimizeRequest(BaseModel):
