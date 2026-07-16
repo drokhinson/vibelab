@@ -86,9 +86,6 @@ class VisitedView extends View {
             await window.ScrapDomain.toggleVisited(scrap.id, scrap.trip_id || null, true);
             toast('Back on your wishlist');
             await this._load();
-          } else if (action === 'favorite') {
-            await window.api.updateScrap(scrap.id, { is_favorite: !scrap.is_favorite });
-            await this._load();
           }
         } catch (err) { toast(err.message, { error: true }); }
       });

@@ -47,9 +47,11 @@
  * @property {(string|null)=} og_image_url
  * @property {SourceRef[]} sources
  * @property {(string|null)=} notes
- * @property {boolean} is_favorite
+ * @property {('booked'|'must_do'|'interested'|'could_skip'|null)=} rating  owner's own priority
  * @property {(string|null)=} visited_at  null = on the wishlist; set = visited
  * @property {(number|null)=} route_position
+ * @property {(string|null)=} plan_date  YYYY-MM-DD timeline slot (trip scraps only)
+ * @property {(string|null)=} plan_time  HH:MM:SS, optional time within the day
  * @property {(string|null)=} added_by_user_id     who saved it (shared trips)
  * @property {(string|null)=} added_by_display_name
  * @property {ScrapVibe[]=} vibes                  per-traveler takes (trip surfaces)
@@ -141,6 +143,8 @@
     health: () => call('/health'),
     me: () => call('/me'),
     updateMe: (body) => call('/me', { method: 'PATCH', body }),
+    /** Never auto-launch the tour again (idempotent). */
+    markTutorialSeen: () => call('/me/tutorial-seen', { method: 'POST' }),
 
     listTrips: () => call('/trips'),
     createTrip: (body) => call('/trips', { method: 'POST', body }),
@@ -180,8 +184,6 @@
     tripWishlist: (tripId) => call(`/trips/${tripId}/wishlist`),
     /** Bulk-add wishlist scraps to a trip. @returns {Promise<{scraps: Scrap[]}>} */
     assignScraps: (tripId, scrapIds) => call(`/trips/${tripId}/assign-scraps`, { method: 'POST', body: { scrap_ids: scrapIds } }),
-    /** Manually add a plan to a trip by name. @returns {Promise<Scrap>} */
-    addPlan: (tripId, body) => call(`/trips/${tripId}/plans`, { method: 'POST', body }),
     /** Places marked visited (any trip or the wishlist). @returns {Promise<{scraps: Scrap[]}>} */
     listVisited: () => call('/visited'),
     updateScrap: (scrapId, body) => call(`/scraps/${scrapId}`, { method: 'PATCH', body }),
@@ -194,6 +196,9 @@
     unassignScrap: (scrapId) => call(`/scraps/${scrapId}/unassign`, { method: 'POST' }),
     /** @returns {Promise<{scraps: Scrap[]}>} */
     approveAllStaged: (tripId) => call(`/trips/${tripId}/approve-all`, { method: 'POST' }),
+
+    /** Day-by-day timeline: days with markers + scheduled plans, and unscheduled plans with slot suggestions. */
+    tripTimeline: (tripId) => call(`/trips/${tripId}/timeline`),
 
     optimizeRoute: (tripId, body) => call(`/trips/${tripId}/route/optimize`, { method: 'POST', body: body || {} }),
     exportMapsLinks: (tripId) => call(`/trips/${tripId}/export/maps-links`),
@@ -211,6 +216,24 @@
     /** @returns {Promise<{invitations: Invitation[]}>} */
     listInvitations: () => call('/invitations'),
     respondInvitation: (tripId, action) => call(`/trips/${tripId}/invitation/respond`, { method: 'POST', body: { action } }),
+
+    // ── Community pool ────────────────────────────────────────────────────
+    /** Aggregated places across all users (facts only, no user data). @returns {Promise<{places: object[]}>} */
+    communityPlaces: (params = {}) => {
+      const qs = new URLSearchParams(
+        Object.entries(params).filter(([, v]) => v != null && v !== '')
+      ).toString();
+      return call(`/community/places${qs ? `?${qs}` : ''}`);
+    },
+    /** Save a community place to a trip (or the Wander List). @returns {Promise<Scrap>} */
+    saveCommunityPlace: (placeId, tripId) =>
+      call(`/community/places/${placeId}/save`, { method: 'POST', body: { trip_id: tripId || null } }),
+
+    // ── Rating (owner's own priority) ─────────────────────────────────────
+    /** @returns {Promise<Scrap>} */
+    setRating: (scrapId, level) => call(`/scraps/${scrapId}/rating`, { method: 'PUT', body: { level } }),
+    /** @returns {Promise<Scrap>} */
+    clearRating: (scrapId) => call(`/scraps/${scrapId}/rating`, { method: 'DELETE' }),
 
     // ── Vibes ─────────────────────────────────────────────────────────────
     /** @returns {Promise<Scrap>} */

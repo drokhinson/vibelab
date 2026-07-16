@@ -1,7 +1,9 @@
-// widgets/add-plans.js — the trip's "+ Add plans" modal. Two ways to add:
-//   • From your Wander List — multi-select saved places (scope-fits sort first,
+// widgets/add-plans.js — the trip's "+ Add plans" modal. Two sources:
+//   • Wander List — multi-select your saved places (scope-fits sort first,
 //     but you can add anything).
-//   • Add manually — type a place name; it geocodes into a plan.
+//   • Community — places other travelers have scrapped, searchable, one-tap
+//     add straight into the trip.
+// Everything else enters the app via a URL capture — no manual place entry.
 'use strict';
 
 const AddPlans = {
@@ -9,7 +11,10 @@ const AddPlans = {
   _onSaved: null,
   _tab: 'wishlist',
   _selected: new Set(),
-  _wishlist: null, // null = loading
+  _wishlist: null,   // null = loading
+  _community: null,  // null = loading
+  _communityQ: '',
+  _communitySeq: 0,
 
   open(trip, { onSaved } = {}) {
     this._trip = trip;
@@ -17,6 +22,8 @@ const AddPlans = {
     this._tab = 'wishlist';
     this._selected = new Set();
     this._wishlist = null;
+    this._community = null;
+    this._communityQ = '';
     this._render();
     this._loadWishlist();
   },
@@ -36,6 +43,24 @@ const AddPlans = {
     if (document.getElementById('add-plans-modal')) this._renderBody();
   },
 
+  // Community search, pre-filtered to the trip's destination country.
+  // Sequence-guarded: typing fast fires overlapping fetches.
+  async _loadCommunity() {
+    const seq = ++this._communitySeq;
+    try {
+      const res = await window.api.communityPlaces({
+        q: this._communityQ || undefined,
+        country: this._trip.dest_country || undefined,
+      });
+      if (seq !== this._communitySeq) return;
+      this._community = res.places || [];
+    } catch (_) {
+      if (seq !== this._communitySeq) return;
+      this._community = [];
+    }
+    if (document.getElementById('add-plans-modal') && this._tab === 'community') this._renderBody();
+  },
+
   _render() {
     this.close();
     const modal = document.createElement('div');
@@ -47,8 +72,8 @@ const AddPlans = {
         <button class="ts-modal__close" onclick="AddPlans.close()" aria-label="Close"><i data-lucide="x"></i></button>
         <h2 class="ts-modal__title">Add plans</h2>
         <div class="ts-segmented ts-segmented--sm" role="tablist" style="margin:0.6rem 0 0.9rem;">
-          <label class="ts-segmented__opt"><input type="radio" name="ap-tab" value="wishlist" ${this._tab === 'wishlist' ? 'checked' : ''} /><span>From Wander List</span></label>
-          <label class="ts-segmented__opt"><input type="radio" name="ap-tab" value="manual" ${this._tab === 'manual' ? 'checked' : ''} /><span>Add manually</span></label>
+          <label class="ts-segmented__opt"><input type="radio" name="ap-tab" value="wishlist" ${this._tab === 'wishlist' ? 'checked' : ''} /><span>Wander List</span></label>
+          <label class="ts-segmented__opt"><input type="radio" name="ap-tab" value="community" ${this._tab === 'community' ? 'checked' : ''} /><span>Community</span></label>
         </div>
         <div id="add-plans-body"></div>
       </div>
@@ -56,7 +81,12 @@ const AddPlans = {
     document.body.appendChild(modal);
     window.lucide?.createIcons({ root: modal });
     modal.querySelectorAll('input[name=ap-tab]').forEach((r) => {
-      r.addEventListener('change', () => { if (r.checked) { this._tab = r.value; this._renderBody(); } });
+      r.addEventListener('change', () => {
+        if (!r.checked) return;
+        this._tab = r.value;
+        if (this._tab === 'community' && this._community === null) this._loadCommunity();
+        this._renderBody();
+      });
     });
     this._renderBody();
   },
@@ -64,7 +94,7 @@ const AddPlans = {
   _renderBody() {
     const body = document.getElementById('add-plans-body');
     if (!body) return;
-    if (this._tab === 'manual') { this._renderManual(body); return; }
+    if (this._tab === 'community') { this._renderCommunity(body); return; }
 
     // From Wander List
     if (this._wishlist === null) {
@@ -72,7 +102,7 @@ const AddPlans = {
       return;
     }
     if (!this._wishlist.length) {
-      body.innerHTML = `<p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">Your Wander List is empty — import some places first, or add one manually.</p>`;
+      body.innerHTML = `<p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">Your Wander List is empty — scrap a few links first, or paste one straight into the trip.</p>`;
       return;
     }
     const fitCount = this._wishlist.filter((s) => s.fits_scope).length;
@@ -113,44 +143,40 @@ const AddPlans = {
     });
   },
 
-  _renderManual(body) {
-    const categories = window.store.get('categories') || [];
+  _renderCommunity(body) {
+    const dest = this._trip.dest_country;
     body.innerHTML = `
-      <form id="ap-manual-form">
-        <label class="ts-label" for="ap-name">Place name</label>
-        <input class="ts-input" id="ap-name" required maxlength="200" placeholder="e.g. Cave of Zeus" />
-        <div style="display:flex;gap:0.6rem;">
-          <div style="flex:1;"><label class="ts-label" for="ap-city">City</label><input class="ts-input" id="ap-city" placeholder="optional" /></div>
-          <div style="flex:1;"><label class="ts-label" for="ap-country">Country</label><input class="ts-input" id="ap-country" placeholder="optional" /></div>
-        </div>
-        <label class="ts-label" for="ap-category">Category</label>
-        <select class="ts-select" id="ap-category">
-          ${categories.map((c) => `<option value="${escapeAttr(c.slug)}" ${c.slug === 'sight' ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
-        </select>
-        <label class="ts-label" for="ap-notes">Note (optional)</label>
-        <input class="ts-input" id="ap-notes" maxlength="500" placeholder="why you're adding it…" />
-        <button class="ts-btn ts-btn--mint" type="submit" style="width:100%;margin-top:1rem;"><i data-lucide="plus"></i>Add plan</button>
-      </form>
+      <input class="ts-input" id="ap-community-q" placeholder="Search places${dest ? ` in ${escapeAttr(dest)}` : ''}…"
+             value="${escapeAttr(this._communityQ)}" style="margin-bottom:0.7rem;" />
+      <div id="ap-community-results">
+        ${this._community === null
+          ? '<div class="sticker-card shimmer" style="height:80px;"></div>'
+          : this._community.length
+            ? `<div class="card-grid card-grid--2col" style="margin:0;">
+                ${this._community.map((p, i) => renderPlaceCard(p, { index: i })).join('')}
+              </div>`
+            : `<p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">Nothing from other travelers${dest ? ` in ${escapeHtml(dest)}` : ''} yet${this._communityQ ? ' for that search' : ''}.</p>`}
+      </div>
     `;
     window.lucide?.createIcons({ root: body });
-    body.querySelector('#ap-manual-form').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const name = body.querySelector('#ap-name').value.trim();
-      if (!name) return;
-      const btn = body.querySelector('button[type=submit]');
-      btn.disabled = true;
-      try {
-        await window.api.addPlan(this._trip.id, {
-          name,
-          city: body.querySelector('#ap-city').value.trim() || null,
-          country: body.querySelector('#ap-country').value.trim() || null,
-          category: body.querySelector('#ap-category').value,
-          notes: body.querySelector('#ap-notes').value.trim() || null,
-        });
-        toast('Plan added');
-        this._onSaved?.();
-        this.close();
-      } catch (err) { toast(err.message || 'Could not add', { error: true }); btn.disabled = false; }
+    const input = body.querySelector('#ap-community-q');
+    let debounce = null;
+    input.addEventListener('input', () => {
+      this._communityQ = input.value.trim();
+      clearTimeout(debounce);
+      debounce = setTimeout(() => this._loadCommunity(), 300);
+    });
+    body.querySelectorAll('[data-action=save-community]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await window.api.saveCommunityPlace(btn.dataset.placeId, this._trip.id);
+          toast('Added to the trip');
+          this._onSaved?.();
+          btn.outerHTML = '<span class="ts-btn ts-btn--ghost ts-btn--sm" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>';
+          window.lucide?.createIcons({ root: body });
+        } catch (err) { toast(err.message || 'Could not add', { error: true }); btn.disabled = false; }
+      });
     });
   },
 };

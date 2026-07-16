@@ -31,7 +31,8 @@ function renderAnchorsStrip(trip, { readOnly = false } = {}) {
         <span class="anchor-chip__role">${meta.label}</span>
         <span>${escapeHtml(a.label)}</span>
         ${typeMeta ? `<i data-lucide="${typeMeta.lucide}" class="anchor-chip__type" title="${escapeAttr(typeMeta.label)}"></i>` : ''}
-        ${a.role === 'stay' && a.stay_date ? `<span class="anchor-chip__day">${escapeHtml(formatDateRange(a.stay_date, null))}</span>` : ''}
+        ${a.role === 'stay' && a.stay_date ? `<span class="anchor-chip__day">${escapeHtml(formatDateRange(a.stay_date, a.stay_end_date || null))}</span>` : ''}
+        ${a.role !== 'stay' && a.anchor_date ? `<span class="anchor-chip__day">${escapeHtml(formatDateRange(a.anchor_date, null))}${a.anchor_time ? ' · ' + escapeHtml(a.anchor_time.slice(0, 5)) : ''}</span>` : ''}
         ${a.geocode_confidence === 'none' ? '<i data-lucide="map-pin-off" style="opacity:0.5;"></i>' : ''}
         ${readOnly ? '' : `<button data-action="remove-anchor" data-anchor-id="${escapeAttr(a.id)}" aria-label="Remove ${escapeAttr(a.label)}"
                 style="border:none;background:none;cursor:pointer;display:grid;place-items:center;width:24px;height:24px;color:var(--ink-muted);">
@@ -97,9 +98,30 @@ const AnchorEditor = {
             </select>
           </div>
 
+          <div id="ae-when-row">
+            <div style="display:flex;gap:0.6rem;">
+              <div style="flex:1;">
+                <label class="ts-label" for="ae-date" id="ae-date-label">Arrival day</label>
+                <input class="ts-input" type="date" id="ae-date" ${dateBounds} />
+              </div>
+              <div style="flex:1;">
+                <label class="ts-label" for="ae-time">Time (optional)</label>
+                <input class="ts-input" type="time" id="ae-time" />
+              </div>
+            </div>
+          </div>
+
           <div id="ae-stay-date-row" hidden>
-            <label class="ts-label" for="ae-stay-date">Check-in day</label>
-            <input class="ts-input" type="date" id="ae-stay-date" ${dateBounds} />
+            <div style="display:flex;gap:0.6rem;">
+              <div style="flex:1;">
+                <label class="ts-label" for="ae-stay-date">Check-in day</label>
+                <input class="ts-input" type="date" id="ae-stay-date" ${dateBounds} />
+              </div>
+              <div style="flex:1;">
+                <label class="ts-label" for="ae-stay-end-date">Check-out day</label>
+                <input class="ts-input" type="date" id="ae-stay-end-date" ${dateBounds} />
+              </div>
+            </div>
           </div>
 
           <button class="ts-btn ts-btn--mint" type="submit" style="width:100%;margin-top:1.1rem;">
@@ -116,6 +138,8 @@ const AnchorEditor = {
     const queryInput = modal.querySelector('#ae-query');
     const placeFields = modal.querySelector('#ae-place-fields');
     const typeRow = modal.querySelector('#ae-type-row');
+    const whenRow = modal.querySelector('#ae-when-row');
+    const dateLabel = modal.querySelector('#ae-date-label');
     const stayDateRow = modal.querySelector('#ae-stay-date-row');
     const sameRow = modal.querySelector('#ae-same-row');
     const sameCheckbox = modal.querySelector('#ae-same-as-start');
@@ -134,12 +158,16 @@ const AnchorEditor = {
       queryInput.required = active;
     };
 
-    // Show only the fields relevant to the selected role.
+    // Show only the fields relevant to the selected role. The arrival/departure
+    // day stays visible for a same-as-arrival end anchor — the place is copied,
+    // the departure date is not.
     const syncRoleFields = () => {
       const role = roleSelect.value;
       sameRow.hidden = role !== 'end';
       if (role !== 'end') sameCheckbox.checked = false;
       stayDateRow.hidden = role !== 'stay';
+      whenRow.hidden = role === 'stay';
+      dateLabel.textContent = role === 'end' ? 'Departure day' : 'Arrival day';
       const sameActive = role === 'end' && sameCheckbox.checked;
       setPlaceFieldsActive(!sameActive);
     };
@@ -162,7 +190,15 @@ const AnchorEditor = {
           body.label = labelInput.value.trim();
           body.query = queryInput.value.trim();
           if (role === 'start' || role === 'end') body.type = modal.querySelector('#ae-type').value;
-          if (role === 'stay') body.stay_date = modal.querySelector('#ae-stay-date').value || null;
+          if (role === 'stay') {
+            body.stay_date = modal.querySelector('#ae-stay-date').value || null;
+            body.stay_end_date = modal.querySelector('#ae-stay-end-date').value || null;
+          }
+        }
+        // Departure day applies even when the place is copied from arrival.
+        if (role === 'start' || role === 'end') {
+          body.anchor_date = modal.querySelector('#ae-date').value || null;
+          body.anchor_time = modal.querySelector('#ae-time').value || null;
         }
         const anchor = await window.TripDomain.addAnchor(this._tripId, body);
         toast(anchor.geocode_confidence === 'none'

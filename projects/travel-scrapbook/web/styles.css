@@ -211,15 +211,19 @@ a:hover { color: var(--accent-hover); }
 .scrap-card__sub { font-size: 0.82rem; color: var(--ink-muted); overflow-wrap: anywhere; }
 .scrap-card__row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
 .scrap-card__actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
-.scrap-card__fav {
-  width: 36px; height: 36px; border-radius: 999px; border: 2px solid var(--border);
-  background: var(--card); color: var(--ink-muted); cursor: pointer;
-  display: grid; place-items: center;
+/* Read-only rating chip (Visited view + anywhere the control is hidden). */
+.rating-badge {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 0.5rem;
+  padding: 2px 10px; border-radius: 999px; border: 2px solid var(--border);
+  font-size: 0.74rem; font-weight: 800; color: var(--ink);
 }
-.scrap-card__fav.is-fav { color: #E4557A; border-color: var(--blush); background: #FFF0F4; }
-.scrap-card__fav [data-lucide] { width: 18px; height: 18px; }
+.rating-badge [data-lucide] { width: 13px; height: 13px; }
+.rating-badge--booked { background: var(--vibe-booked); }
+.rating-badge--must_do { background: var(--vibe-must_do); }
+.rating-badge--interested { background: var(--vibe-interested); }
+.rating-badge--could_skip { background: var(--vibe-could_skip); }
 
-/* Visited toggle — matches the favorite corner button; fills green when set. */
+/* Visited toggle — corner button; fills green when set. */
 .scrap-card__visited {
   width: 36px; height: 36px; border-radius: 999px; border: 2px solid var(--border);
   background: var(--card); color: var(--ink-muted); cursor: pointer;
@@ -415,8 +419,18 @@ body.popup-mode { max-width: 420px; }
   padding: 0.75rem 1rem; color: #B4485E; font-size: 0.875rem; margin: 1rem 0;
   display: flex; align-items: center; gap: 0.5rem;
 }
-.card-grid { display: grid; gap: 1rem; margin: 1rem 0; }
-@media (min-width: 480px) { .card-grid--2col { grid-template-columns: 1fr 1fr; } }
+.card-grid { display: grid; gap: 0.8rem; margin: 1rem 0; }
+/* Two cards per row everywhere — cards are condensed to fit half-width.
+   Only truly tiny screens fall back to a single column. */
+.card-grid--2col { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 339px) { .card-grid--2col { grid-template-columns: 1fr; } }
+.card-grid--2col > .sticker-card { padding: 0.7rem; }
+.card-grid--2col .scrap-card__title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card-grid--2col .sticker-card .scrap-card__sub {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 [data-lucide] { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 .icon-sm [data-lucide] { width: 16px; height: 16px; }
 .icon-md [data-lucide] { width: 20px; height: 20px; }
@@ -455,20 +469,49 @@ body.popup-mode { max-width: 420px; }
 }
 .added-by i { width: 13px; height: 13px; }
 
-/* The 4-way vibe control on each in-trip scrap card. */
+/* ── Trip timeline (day cards: markers + scheduled plans) ───────────────────── */
+.tl-day__head { display: flex; align-items: baseline; gap: 0.6rem; }
+.tl-day__num { font-family: var(--font-display, 'Caveat', cursive); font-size: 1.5rem; font-weight: 700; }
+.tl-day__rows { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
+.tl-row {
+  display: flex; align-items: center; gap: 0.5rem; min-height: 44px;
+  padding: 0.3rem 0.5rem; border-radius: 10px; flex-wrap: wrap;
+}
+.tl-row [data-lucide] { width: 16px; height: 16px; flex-shrink: 0; }
+.tl-row--marker { background: var(--paper); font-size: 0.85rem; }
+.tl-row--plan { border: 1.5px dashed var(--border); font-size: 0.85rem; }
+.tl-row--plan.is-visited { opacity: 0.6; }
+.tl-row--booked { border-style: solid; border-color: var(--vibe-booked); background: color-mix(in srgb, var(--vibe-booked) 18%, transparent); }
+.tl-row__time {
+  min-width: 44px; text-align: center; font-weight: 800; font-size: 0.72rem;
+  color: var(--ink-muted); flex-shrink: 0;
+}
+.tl-row__label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tl-row__btn {
+  width: 44px; height: 44px; border-radius: 999px; border: 2px solid var(--border);
+  background: var(--card); color: var(--ink-muted); cursor: pointer;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.tl-booked-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+  background: var(--vibe-booked); font-size: 0.68rem; font-weight: 800;
+}
+
+/* The 4-way priority/vibe control on scrap cards — icon-only, 4 across, so it
+   fits a half-width card; labels ride on title/aria. */
 .vibe-control {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.3rem;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem;
   margin-top: 0.6rem;
 }
 .vibe-seg {
   display: flex; align-items: center; justify-content: center; gap: 4px;
-  min-height: 34px; padding: 0.2rem 0.4rem;
+  min-height: 44px; padding: 0.2rem 0.3rem;
   border: 1.5px solid var(--border); border-radius: 10px;
   background: var(--paper); color: var(--ink-muted);
   font-size: 0.7rem; font-weight: 800; cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.08s;
 }
-.vibe-seg i { width: 14px; height: 14px; }
+.vibe-seg i { width: 17px; height: 17px; }
 .vibe-seg:hover { border-color: var(--ink-muted); }
 .vibe-seg:active { transform: translateY(1px); }
 .vibe-seg.is-on {

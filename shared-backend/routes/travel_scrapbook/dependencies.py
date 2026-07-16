@@ -66,6 +66,7 @@ class CurrentUser(BaseModel):
     display_name: str
     username: str
     is_admin: bool = False
+    tutorial_seen: bool = False
 
 
 def _resolve_profile(sb, user_id: str, email: Optional[str]) -> CurrentUser:
@@ -73,7 +74,7 @@ def _resolve_profile(sb, user_id: str, email: Optional[str]) -> CurrentUser:
     first login (shared by JWT and capture-token auth paths)."""
     result = (
         sb.table("travelscrapbook_profiles")
-        .select("id, display_name, username, is_admin")
+        .select("id, display_name, username, is_admin, tutorial_seen_at")
         .eq("id", user_id)
         .execute()
     )
@@ -85,6 +86,7 @@ def _resolve_profile(sb, user_id: str, email: Optional[str]) -> CurrentUser:
             display_name=row["display_name"],
             username=row["username"],
             is_admin=bool(row.get("is_admin", False)),
+            tutorial_seen=row.get("tutorial_seen_at") is not None,
         )
 
     display_name = email.split("@")[0] if email else "traveler"
@@ -99,6 +101,7 @@ def _resolve_profile(sb, user_id: str, email: Optional[str]) -> CurrentUser:
         display_name=display_name,
         username=username,
         is_admin=False,
+        tutorial_seen=False,
     )
 
 

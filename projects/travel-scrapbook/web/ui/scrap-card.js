@@ -4,7 +4,8 @@
 // move-to-inbox row), 'inbox' (trip-suggestion chips + picker hooks).
 'use strict';
 
-// Vibe = each traveler's take on a place, rolled up into a group consensus.
+// One value set for both a scrap's own rating (the owner's priority) and the
+// per-traveler vibes on shared trips.
 // Order = most-committed → least (matches the backend TripVibe ordering).
 const VIBE_META = [
   { level: 'booked', label: 'Booked', icon: 'calendar-check' },
@@ -25,20 +26,32 @@ function _myVibe(scrap, currentUserId) {
   return mine ? mine.level : null;
 }
 
-// A 4-way segmented control; the caller's current vibe is highlighted. Tapping
-// it again clears it (handled in the view). Shown on every trip scrap so even a
-// solo traveler can mark places booked / must-do / etc.
-function _renderVibeControl(scrap, currentUserId) {
-  const my = _myVibe(scrap, currentUserId);
+// A 4-way segmented control for the place's priority. `action` decides what a
+// tap means: 'rate' writes the scrap's own rating (owner), 'vibe' writes the
+// viewer's vibe on someone else's shared-trip scrap. Tapping the active
+// segment again clears it (handled in the view).
+function renderPriorityControl(scrap, { action = 'rate', activeLevel = null } = {}) {
+  const label = action === 'rate' ? 'Your priority on this place' : 'Your vibe on this place';
   return `
-    <div class="vibe-control" role="group" aria-label="Your vibe on this place">
+    <div class="vibe-control" role="group" aria-label="${label}">
       ${VIBE_META.map((v) => `
-        <button class="vibe-seg vibe-seg--${v.level} ${my === v.level ? 'is-on' : ''}"
-                data-action="vibe" data-scrap-id="${escapeAttr(scrap.id)}" data-level="${v.level}"
-                aria-pressed="${my === v.level}" title="${v.label}">
-          <i data-lucide="${v.icon}"></i><span>${v.label}</span>
+        <button class="vibe-seg vibe-seg--${v.level} ${activeLevel === v.level ? 'is-on' : ''}"
+                data-action="${action}" data-scrap-id="${escapeAttr(scrap.id)}" data-level="${v.level}"
+                aria-pressed="${activeLevel === v.level}" aria-label="${v.label}" title="${v.label}">
+          <i data-lucide="${v.icon}"></i>
         </button>`).join('')}
     </div>`;
+}
+
+// Read-only rating chip for surfaces without the control (e.g. Visited).
+function _renderRatingBadge(scrap) {
+  if (!scrap.rating) return '';
+  const meta = VIBE_META.find((v) => v.level === scrap.rating);
+  if (!meta) return '';
+  return `
+    <span class="rating-badge rating-badge--${meta.level}">
+      <i data-lucide="${meta.icon}"></i>${meta.label}
+    </span>`;
 }
 
 // Group roll-up: one chip per traveler (initial + their vibe color) plus the
@@ -108,7 +121,7 @@ function renderScrapCard(scrap, opts = {}) {
   const isSelect = variant === 'select';
   const readOnly = isPreview || isSelect;
   const catIcon = _scrapCategoryIcon(scrap);
-  // "Mine" governs owner-only actions (favorite/visited/edit/delete). On solo
+  // "Mine" governs owner-only actions (rating/visited/edit/delete). On solo
   // trips and the inbox added_by is the viewer (or unset), so this stays true.
   const mine = !scrap.added_by_user_id || scrap.added_by_user_id === currentUserId;
 
@@ -162,26 +175,19 @@ function renderScrapCard(scrap, opts = {}) {
       </div>`;
   }
 
-  // Favorite (trip only) + visited toggle (trip + wishlist) live in the corner.
-  // Favorite/visited write to the scrap's own row, so only its owner sees them;
-  // the read-only preview/select variants suppress them via the variant check.
-  const showFav = variant === 'trip' && mine;
+  // Visited toggle (trip + wishlist) lives in the corner. It writes to the
+  // scrap's own row, so only its owner sees it; the read-only preview/select
+  // variants suppress it via the variant check.
   const showVisited = (variant === 'trip' && mine) || variant === 'inbox';
   const isVisited = !!scrap.visited_at && !readOnly;
-  const actions = (showFav || showVisited) ? `
+  const actions = showVisited ? `
     <div class="scrap-card__actions">
-      ${showVisited ? `
-        <button class="scrap-card__visited ${isVisited ? 'is-visited' : ''}" data-action="visited"
-                data-scrap-id="${escapeAttr(scrap.id)}"
-                aria-label="${isVisited ? 'Mark not visited' : 'Mark visited'}"
-                title="${isVisited ? 'Visited — tap to undo' : 'Mark visited'}">
-          <i data-lucide="circle-check"></i>
-        </button>` : ''}
-      ${showFav ? `
-        <button class="scrap-card__fav ${scrap.is_favorite ? 'is-fav' : ''}" data-action="favorite"
-                data-scrap-id="${escapeAttr(scrap.id)}" aria-label="Favorite">
-          <i data-lucide="heart"></i>
-        </button>` : ''}
+      <button class="scrap-card__visited ${isVisited ? 'is-visited' : ''}" data-action="visited"
+              data-scrap-id="${escapeAttr(scrap.id)}"
+              aria-label="${isVisited ? 'Mark not visited' : 'Mark visited'}"
+              title="${isVisited ? 'Visited — tap to undo' : 'Mark visited'}">
+        <i data-lucide="circle-check"></i>
+      </button>
     </div>` : '';
 
   // Only the owner can open the editor (place edits are owner-only server-side),
@@ -190,11 +196,19 @@ function renderScrapCard(scrap, opts = {}) {
   const addedBy = (shared && !mine && scrap.added_by_display_name)
     ? `<span class="added-by"><i data-lucide="user"></i>${escapeHtml(scrap.added_by_display_name)}</span>`
     : '';
-  // Vibe control on every in-trip scrap (only the trip view passes currentUserId,
-  // so retrospective lists like Visited don't get it); consensus only when shared.
-  const vibeUi = (variant === 'trip' && currentUserId && scrap.trip_id)
-    ? `${_renderVibeControl(scrap, currentUserId)}${shared ? _renderConsensus(scrap) : ''}`
-    : '';
+  // Priority control: my own scraps get the rating control (Wander List and
+  // trips alike); someone else's shared-trip scrap gets the vibe control so I
+  // can weigh in on the consensus. Visited places show a read-only badge
+  // instead — re-prioritizing a place you've been to is a no-op.
+  let vibeUi = '';
+  if (!readOnly && !isVisited && canWrite && mine && (variant === 'trip' || variant === 'inbox')) {
+    vibeUi = renderPriorityControl(scrap, { action: 'rate', activeLevel: scrap.rating || null });
+  } else if (!readOnly && !isVisited && variant === 'trip' && !mine && currentUserId && scrap.trip_id) {
+    vibeUi = renderPriorityControl(scrap, { action: 'vibe', activeLevel: _myVibe(scrap, currentUserId) });
+  } else if (scrap.rating && mine) {
+    vibeUi = _renderRatingBadge(scrap);
+  }
+  if (variant === 'trip' && shared && scrap.trip_id) vibeUi += _renderConsensus(scrap);
 
   return `
     <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"

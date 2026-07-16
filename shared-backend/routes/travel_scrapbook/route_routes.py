@@ -5,7 +5,7 @@ from fastapi import Depends, Path
 from db import get_supabase
 
 from . import router
-from .constants import AnchorRole, ScrapStatus
+from .constants import AnchorRole, ScrapStatus, TripVibe
 from .dependencies import CurrentUser, get_current_user
 from .models import RouteLeg, RouteOptimizeRequest, RouteOptimizeResponse, ScrapResponse
 from .services.hydrate import hydrate_scraps
@@ -54,8 +54,10 @@ async def optimize_route(
     if body.scrap_ids is not None:
         wanted = set(body.scrap_ids)
         scraps = [s for s in scraps if s["id"] in wanted]
-    if body.favorites_only:
-        scraps = [s for s in scraps if s["is_favorite"]]
+    if body.priority_only:
+        scraps = [s for s in scraps if s.get("rating") in (TripVibe.BOOKED, TripVibe.MUST_DO)]
+    if not body.include_visited:
+        scraps = [s for s in scraps if not s.get("visited_at")]
 
     routable = [s for s in scraps if s["lat"] is not None and s["lng"] is not None]
     skipped = [s["id"] for s in scraps if s["lat"] is None or s["lng"] is None]

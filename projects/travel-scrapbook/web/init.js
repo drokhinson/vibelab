@@ -14,6 +14,7 @@
     router.register('trip', new TripView());
     router.register('inbox', new InboxView());
     router.register('visited', new VisitedView());
+    router.register('community', new CommunityView());
     router.register('scrap', new ScrapPopupView());
     router.register('share', new ShareView());
     router.register('settings', new SettingsView());
@@ -40,6 +41,25 @@
     });
     window.store.subscribe('user', () => {
       if (window.store.get('user')) window.SourceDomain.refreshInboxCount();
+    });
+
+    // First-run tour: auto-launch once when the profile arrives with
+    // tutorial_seen=false — except in the chrome-less popup/share/login flows,
+    // where a modal tour would be hostile. Dismissing counts as seen.
+    let tutorialLaunched = false;
+    window.store.subscribe('user', () => {
+      const user = window.store.get('user');
+      if (!user || user.tutorial_seen || tutorialLaunched) return;
+      const route = window.store.get('currentRoute')?.name;
+      if (route === 'scrap' || route === 'share' || route === 'login') return;
+      tutorialLaunched = true;
+      TutorialCarousel.open({
+        firstRun: true,
+        onDone: () => {
+          window.store.set('user', { ...user, tutorial_seen: true });
+          window.api.markTutorialSeen().catch(() => {});
+        },
+      });
     });
 
     // Header nav (static shell — bound once).

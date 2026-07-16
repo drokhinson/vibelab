@@ -62,6 +62,7 @@
         { name: 'share',    pattern: /^\/share\/?$/,          build: () => '/share' },
         { name: 'inbox',    pattern: /^\/inbox\/?$/,          build: () => '/inbox' },
         { name: 'visited',  pattern: /^\/visited\/?$/,        build: () => '/visited' },
+        { name: 'community', pattern: /^\/community\/?$/,     build: () => '/community' },
         { name: 'settings', pattern: /^\/settings\/?$/,       build: () => '/settings' },
         { name: 'trip',     pattern: /^\/trip\/([^/]+)\/?$/,
           consume: ['tripId'],

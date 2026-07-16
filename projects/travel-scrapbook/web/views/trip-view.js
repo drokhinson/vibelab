@@ -1,4 +1,5 @@
-// views/trip-view.js — trip detail: anchors, quick-paste, scraps, route panel.
+// views/trip-view.js — trip detail: anchors, quick-paste, scraps, route panel
+// (rendered by ui/route-panel.js; share modal lives in widgets/trip-share.js).
 'use strict';
 
 class TripView extends View {
@@ -9,11 +10,15 @@ class TripView extends View {
 
   _resetState() {
     this._tripId = null;
-    this._favoritesOnly = false;
+    this._priorityOnly = false;
     this._route = null;
     this._routeBusy = false;
     this._candidates = [];
     this._candidatesSeq = 0;
+    // Plans (default) or the day-by-day Timeline.
+    this._tab = localStorage.getItem('ts.trip.tab') || 'plans';
+    this._timeline = null; // null = not loaded yet
+    this._timelineSeq = 0;
     // Group the trip's scraps by activity type (default) or geography.
     this._groupBy = localStorage.getItem('ts.trip.groupBy') || 'category';
     this._collapsed = new Set();
@@ -59,11 +64,32 @@ class TripView extends View {
       const trip = await window.TripDomain.load(this._tripId);
       // Collaborators can add from their wishlist; viewers can't.
       if (trip.role !== 'viewer') this._loadCandidates();
+      if (this._tab === 'timeline') this._loadTimeline();
       window.ShareDomain.loadMembers(this._tripId).catch(() => {});
     } catch (err) {
       this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load trip')}</div>`;
       this.refreshIcons();
     }
+  }
+
+  // After a schedule change: fresh timeline + fresh trip (plan_date rides on
+  // the scraps the Plans tab shows too).
+  _refreshTimeline(tripId) {
+    this._loadTimeline();
+    window.TripDomain.load(tripId).catch(() => {});
+  }
+
+  // Lazy-load the timeline for the Timeline tab. Sequence-guarded like
+  // _loadCandidates so a stale response never paints another trip's days.
+  async _loadTimeline() {
+    const seq = ++this._timelineSeq;
+    const tripId = this._tripId;
+    try {
+      const data = await window.api.tripTimeline(tripId);
+      if (seq !== this._timelineSeq || this._tripId !== tripId) return;
+      this._timeline = data;
+      this.render();
+    } catch (_) { /* tab keeps its skeleton; a retap retries */ }
   }
 
   // Wishlist places that fit this trip's scope. Non-blocking (per the
@@ -94,9 +120,14 @@ class TripView extends View {
     const shared = !isOwner || acceptedCount > 1;
     const cardOpts = { shared, currentUserId, canWrite };
 
-    const allScraps = trip.scraps || [];
+    // Visited plans stay visible but greyed out and sorted to the bottom
+    // (stable sort keeps each half in its original order).
+    const allScraps = [...(trip.scraps || [])].sort(
+      (a, b) => (a.visited_at ? 1 : 0) - (b.visited_at ? 1 : 0)
+    );
     const staged = trip.staged_scraps || [];
-    const scraps = this._favoritesOnly ? allScraps.filter((s) => s.is_favorite) : allScraps;
+    const isPriority = (s) => s.rating === 'booked' || s.rating === 'must_do';
+    const scraps = this._priorityOnly ? allScraps.filter(isPriority) : allScraps;
     const geocodedCount = allScraps.filter((s) => s.lat != null).length;
     const dates = formatDateRange(trip.start_date, trip.end_date);
 
@@ -115,33 +146,39 @@ class TripView extends View {
       </div>
       ${renderAnchorsStrip(trip, { readOnly: !canWrite })}
       ${canWrite ? renderQuickPaste(trip.id) : ''}
+      <div class="ts-segmented" role="tablist" aria-label="Trip view" style="margin-top:0.9rem;">
+        <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="plans" ${this._tab === 'plans' ? 'checked' : ''} /><span>Plans</span></label>
+        <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="timeline" ${this._tab === 'timeline' ? 'checked' : ''} /><span>Timeline</span></label>
+      </div>
+      ${this._tab === 'timeline' ? renderTripTimeline(trip, this._timeline, { canWrite }) : `
       ${this._renderStaging(staged, cardOpts)}
       ${canWrite ? this._renderCandidates(cardOpts) : ''}
-      ${this._renderRoutePanel(trip, geocodedCount, canWrite)}
+      ${renderRoutePanel(trip, { route: this._route, geocodedCount, canWrite, routeBusy: this._routeBusy })}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;margin-top:1.2rem;flex-wrap:wrap;">
         <h2 style="font-size:1.5rem;margin:0;">Plans</h2>
         <div style="display:flex;gap:0.5rem;">
           ${canWrite ? `<button class="ts-btn ts-btn--blush ts-btn--sm" id="add-plans"><i data-lucide="plus"></i>Add plans</button>` : ''}
-          <button class="ts-btn ts-btn--ghost ts-btn--sm ${this._favoritesOnly ? 'is-fav' : ''}" id="fav-filter"
-                  style="${this._favoritesOnly ? 'border-color:var(--blush);color:#E4557A;' : ''}">
-            <i data-lucide="heart"></i>${this._favoritesOnly ? 'All' : 'Favorites'}
+          <button class="ts-btn ts-btn--ghost ts-btn--sm" id="priority-filter"
+                  style="${this._priorityOnly ? 'border-color:var(--butter-deep, #C9A227);color:#8A6D1A;' : ''}">
+            <i data-lucide="star"></i>${this._priorityOnly ? 'All' : 'Must-dos'}
           </button>
         </div>
       </div>
       ${scraps.length === 0 ? `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-scraps.svg" alt="" />
-          <p class="empty-title">${this._favoritesOnly ? 'No favorites yet' : 'No plans yet'}</p>
-          <p class="empty-desc">${this._favoritesOnly
-            ? 'Tap the heart on plans you love and they collect here.'
+          <p class="empty-title">${this._priorityOnly ? 'No must-dos yet' : 'No plans yet'}</p>
+          <p class="empty-desc">${this._priorityOnly
+            ? 'Rate plans “Must do” or “Booked” and they collect here.'
             : (canWrite
-              ? 'Tap “Add plans” to pick from your Wander List or add a place — or paste a link above.'
+              ? 'Tap “Add plans” to pick from your Wander List — or paste a link above.'
               : 'When the crew adds places, they’ll show up here for you to vibe on.')}</p>
         </div>` : `
         ${renderGroupedList(scraps, {
           dims: ['category', 'region', 'country', 'city'], active: this._groupBy,
           collapsed: this._collapsed, variant: 'trip', name: 'trip-groupby', ...cardOpts,
         })}`}
+      `}
     `;
     this.refreshIcons();
     this._bind(trip, { isOwner, canWrite });
@@ -183,67 +220,35 @@ class TripView extends View {
     `;
   }
 
-  _renderRoutePanel(trip, geocodedCount, canWrite = true) {
-    if (geocodedCount < 2 && !this._route) return '';
-    let body = '';
-    if (this._route) {
-      const r = this._route;
-      const stops = [];
-      const anchors = trip.anchors || [];
-      const start = anchors.find((a) => a.role === 'start' && a.lat != null) ||
-                    anchors.find((a) => a.role === 'stay' && a.lat != null);
-      const end = anchors.find((a) => a.role === 'end' && a.lat != null);
-      if (start) stops.push({ label: start.label, isAnchor: true });
-      r.ordered_scraps.forEach((s) => stops.push({ label: s.place_name || 'Stop' }));
-      if (end) stops.push({ label: end.label, isAnchor: true });
-      let n = 0;
-      body = `
-        <div style="margin-top:0.8rem;">
-          ${stops.map((stop, i) => {
-            if (!stop.isAnchor) n += 1;
-            const legKm = i < r.legs.length ? r.legs[i].distance_km : null;
-            return renderRouteStop(stop, n, { legKm });
-          }).join('')}
-          <p class="scrap-card__sub" style="margin-top:0.5rem;">Total: ${formatKm(r.total_km)}
-            ${r.skipped_scrap_ids.length ? ` · ${r.skipped_scrap_ids.length} scrap${r.skipped_scrap_ids.length === 1 ? '' : 's'} skipped (no map pin yet)` : ''}</p>
-          <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:0.7rem;">
-            <button class="ts-btn ts-btn--sky ts-btn--sm" id="route-maps"><i data-lucide="map"></i>Open in Google Maps</button>
-            <button class="ts-btn ts-btn--ghost ts-btn--sm" id="route-csv"><i data-lucide="download"></i>CSV for My Maps</button>
-          </div>
-          <div id="route-legs" style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.5rem;"></div>
-        </div>
-      `;
-    }
-    return `
-      <div class="sticker-card washi washi--butter" style="padding-top:1.2rem;margin-top:1.1rem;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;">
-          <div>
-            <h2 style="font-size:1.5rem;margin:0;">Route</h2>
-            <p class="scrap-card__sub">${geocodedCount} place${geocodedCount === 1 ? '' : 's'} on the map</p>
-          </div>
-          ${canWrite ? `<button class="ts-btn ts-btn--mint ts-btn--sm" id="route-optimize" ${this._routeBusy ? 'disabled' : ''}>
-            <i data-lucide="wand-2"></i>${this._route ? 'Re-sort' : 'Sort my route'}
-          </button>` : ''}
-        </div>
-        ${body}
-      </div>
-    `;
-  }
-
   _bind(trip, { isOwner = true, canWrite = true } = {}) {
     const c = this.container;
     c.querySelector('#trip-back')?.addEventListener('click', () => window.router.back('trips'));
-    c.querySelector('#trip-share')?.addEventListener('click', () => this._openShareModal(trip, { isOwner }));
+
+    // Plans | Timeline tab. The timeline lazy-loads on first switch.
+    c.querySelectorAll('input[name=trip-tab]').forEach((r) => {
+      r.addEventListener('change', () => {
+        if (!r.checked) return;
+        this._tab = r.value;
+        localStorage.setItem('ts.trip.tab', this._tab);
+        this.render();
+        if (this._tab === 'timeline' && !this._timeline) this._loadTimeline();
+      });
+    });
+    // Timeline empty state → open the trip editor to add dates.
+    c.querySelector('#tl-edit-trip')?.addEventListener('click', () => {
+      TripEditor.open(trip, { onSaved: () => { this._timeline = null; this._loadTimeline(); } });
+    });
+    c.querySelector('#trip-share')?.addEventListener('click', () => TripShare.open(trip, { isOwner }));
     c.querySelector('#trip-delete')?.addEventListener('click', async () => {
-      if (!confirmDestructive(`Delete "${trip.name}" and all its scraps? This can't be undone.`)) return;
+      if (!confirmDestructive(`Delete "${trip.name}" and all its plans? This can't be undone.`)) return;
       try {
         await window.TripDomain.remove(trip.id);
         toast('Trip deleted');
         window.router.go('trips');
       } catch (err) { toast(err.message, { error: true }); }
     });
-    c.querySelector('#fav-filter')?.addEventListener('click', () => {
-      this._favoritesOnly = !this._favoritesOnly;
+    c.querySelector('#priority-filter')?.addEventListener('click', () => {
+      this._priorityOnly = !this._priorityOnly;
       this.render();
     });
     c.querySelector('#trip-edit')?.addEventListener('click', () => {
@@ -307,8 +312,8 @@ class TripView extends View {
         el.addEventListener('click', async (ev) => {
           ev.stopPropagation();
           try {
-            if (action === 'favorite') {
-              await window.ScrapDomain.update(scrapId, trip.id, { is_favorite: !scrap.is_favorite });
+            if (action === 'rate') {
+              await window.ScrapDomain.setRating(scrapId, trip.id, el.dataset.level, scrap.rating);
             } else if (action === 'visited') {
               await window.ScrapDomain.toggleVisited(scrapId, trip.id, !!scrap.visited_at);
               toast(scrap.visited_at ? 'Back on your wishlist' : 'Marked visited');
@@ -331,8 +336,19 @@ class TripView extends View {
               const user = window.store.get('user');
               const myVibe = (scrap.vibes || []).find((v) => v.user_id === (user && user.user_id));
               await window.ScrapDomain.setVibe(scrapId, trip.id, el.dataset.level, myVibe ? myVibe.level : null);
+            } else if (action === 'slot') {
+              // One-tap "add to Day N" from a timeline suggestion chip.
+              await window.api.updateScrap(scrapId, { plan_date: el.dataset.date });
+              toast('Slotted in');
+              this._refreshTimeline(trip.id);
+            } else if (action === 'schedule') {
+              PlanScheduler.open(scrap, {
+                days: (this._timeline?.days || []).map((d) => ({ date: d.date, day_number: d.day_number })),
+                tripBounds: { start: trip.start_date, end: trip.end_date },
+                onSaved: () => { toast('Scheduled'); this._refreshTimeline(trip.id); },
+              });
             } else if (action === 'delete') {
-              if (!confirmDestructive('Delete this scrap? This can\'t be undone.')) return;
+              if (!confirmDestructive('Delete this place? This can\'t be undone.')) return;
               await window.ScrapDomain.remove(scrapId, trip.id);
             }
           } catch (err) { toast(err.message, { error: true }); }
@@ -344,7 +360,7 @@ class TripView extends View {
       this._routeBusy = true;
       this.render();
       try {
-        this._route = await window.RouteDomain.optimize(trip.id, { favorites_only: this._favoritesOnly });
+        this._route = await window.RouteDomain.optimize(trip.id, { priority_only: this._priorityOnly });
       } catch (err) {
         toast(err.message || 'Route sorting failed', { error: true });
       } finally {
@@ -376,127 +392,6 @@ class TripView extends View {
         toast('CSV downloaded — import it in Google My Maps');
       } catch (err) { toast(err.message, { error: true }); }
     });
-  }
-
-  // Share panel: invite by username (owner), manage roles, remove/leave.
-  _openShareModal(trip, { isOwner = true } = {}) {
-    document.getElementById('share-modal')?.remove();
-    const tripId = trip.id;
-    const user = window.store.get('user');
-    const meId = user ? user.user_id : null;
-    const ROLE_LABEL = { owner: 'Owner', collaborator: 'Collaborator', viewer: 'Viewer' };
-
-    const modal = document.createElement('div');
-    modal.className = 'ts-modal';
-    modal.id = 'share-modal';
-    document.body.appendChild(modal);
-    const close = () => modal.remove();
-
-    const memberRow = (m) => {
-      const initial = (m.display_name || '?').trim().charAt(0).toUpperCase() || '?';
-      const pending = m.status === 'pending';
-      const canManage = isOwner && m.role !== 'owner';
-      return `
-        <div class="crew-row" data-user-id="${escapeAttr(m.user_id)}">
-          <span class="crew-avatar">${escapeHtml(initial)}</span>
-          <div style="min-width:0;flex:1;">
-            <div style="font-weight:700;">${escapeHtml(m.display_name)}${m.user_id === meId ? ' <span class="scrap-card__sub" style="font-weight:600;">(you)</span>' : ''}</div>
-            <div class="scrap-card__sub">@${escapeHtml(m.username || '')}${pending ? ' · invite pending' : ''}</div>
-          </div>
-          ${canManage ? `
-            <select class="ts-input crew-role" data-user-id="${escapeAttr(m.user_id)}" style="width:auto;padding:0.3rem 0.5rem;margin:0;">
-              <option value="collaborator" ${m.role === 'collaborator' ? 'selected' : ''}>Collaborator</option>
-              <option value="viewer" ${m.role === 'viewer' ? 'selected' : ''}>Viewer</option>
-            </select>
-            <button class="crew-remove" data-user-id="${escapeAttr(m.user_id)}" aria-label="Remove ${escapeAttr(m.display_name)}"><i data-lucide="x"></i></button>`
-            : `<span class="crew-role-badge">${ROLE_LABEL[m.role] || m.role}</span>`}
-        </div>`;
-    };
-
-    const paint = () => {
-      const members = window.store.get('members:' + tripId) || [];
-      modal.innerHTML = `
-        <div class="ts-modal__backdrop"></div>
-        <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Share trip">
-          <button class="ts-modal__close" aria-label="Close"><i data-lucide="x"></i></button>
-          <h2 class="ts-modal__title">Trip crew</h2>
-          <p class="scrap-card__sub" style="margin-top:-0.4rem;">Everyone here can add their vibe on each place; collaborators can also add places.</p>
-          <div class="crew-list">${members.map(memberRow).join('')}</div>
-          ${isOwner ? `
-            <form id="invite-form" style="margin-top:1rem;">
-              <label class="ts-label" for="invite-username">Invite by username</label>
-              <div style="display:flex;gap:0.5rem;align-items:flex-end;">
-                <input class="ts-input" id="invite-username" placeholder="their @username" maxlength="30" style="flex:1;margin:0;" />
-                <select class="ts-input" id="invite-role" style="width:auto;margin:0;">
-                  <option value="collaborator">Collaborator</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-              </div>
-              <button class="ts-btn ts-btn--mint" type="submit" style="width:100%;margin-top:0.8rem;">
-                <i data-lucide="user-plus"></i>Send invite
-              </button>
-            </form>`
-          : `
-            <button class="ts-btn ts-btn--ghost" id="leave-trip" style="width:100%;margin-top:1rem;color:#E4557A;border-color:var(--blush);">
-              <i data-lucide="log-out"></i>Leave this trip
-            </button>`}
-        </div>`;
-      window.lucide?.createIcons({ root: modal });
-      bind();
-    };
-
-    const bind = () => {
-      modal.querySelector('.ts-modal__backdrop')?.addEventListener('click', close);
-      modal.querySelector('.ts-modal__close')?.addEventListener('click', close);
-
-      modal.querySelector('#invite-form')?.addEventListener('submit', async (ev) => {
-        ev.preventDefault();
-        const username = modal.querySelector('#invite-username').value.trim().replace(/^@/, '');
-        const role = modal.querySelector('#invite-role').value;
-        if (!username) return;
-        try {
-          await window.ShareDomain.invite(tripId, username, role);
-          toast(`Invited @${username}`);
-          paint();
-        } catch (err) { toast(err.message || 'Could not invite', { error: true }); }
-      });
-
-      modal.querySelectorAll('.crew-role').forEach((sel) => {
-        sel.addEventListener('change', async () => {
-          try {
-            await window.ShareDomain.changeRole(tripId, sel.dataset.userId, sel.value);
-            toast('Role updated');
-            paint();
-          } catch (err) { toast(err.message, { error: true }); paint(); }
-        });
-      });
-
-      modal.querySelectorAll('.crew-remove').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          if (!confirmDestructive('Remove this traveler from the trip?')) return;
-          try {
-            await window.ShareDomain.removeMember(tripId, btn.dataset.userId);
-            toast('Removed');
-            paint();
-          } catch (err) { toast(err.message, { error: true }); }
-        });
-      });
-
-      modal.querySelector('#leave-trip')?.addEventListener('click', async () => {
-        if (!confirmDestructive(`Leave "${trip.name}"? You'll lose access unless you're re-invited.`)) return;
-        try {
-          await window.ShareDomain.removeMember(tripId, meId);
-          await window.TripDomain.loadAll();
-          close();
-          toast('You left the trip');
-          window.router.go('trips');
-        } catch (err) { toast(err.message, { error: true }); }
-      });
-    };
-
-    paint();
-    // Refresh the crew from the server in case it changed since the trip loaded.
-    window.ShareDomain.loadMembers(tripId).then(paint).catch(() => {});
   }
 }
 window.TripView = TripView;

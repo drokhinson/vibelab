@@ -141,7 +141,10 @@ class InboxView extends View {
       el.addEventListener('click', async (ev) => {
         ev.stopPropagation();
         try {
-          if (action === 'visited') {
+          if (action === 'rate') {
+            await window.ScrapDomain.setRating(scrapId, null, el.dataset.level, scrap.rating);
+            await window.SourceDomain.loadInbox();
+          } else if (action === 'visited') {
             await window.ScrapDomain.toggleVisited(scrapId, null, !!scrap.visited_at);
             toast('Marked visited — see it under Visited');
             await window.SourceDomain.loadInbox();

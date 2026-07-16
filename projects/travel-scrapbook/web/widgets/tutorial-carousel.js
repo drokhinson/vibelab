@@ -1,49 +1,67 @@
-// widgets/tutorial-carousel.js — "How it works" onboarding carousel, opened
-// from Settings. Cards are navigable with prev/next buttons, dot indicators,
-// keyboard arrows, and touch swipe. All visual aids are custom SVGs — no
-// emojis (see .claude/rules/assets.md).
+// widgets/tutorial-carousel.js — "How it works" onboarding carousel.
+// Auto-launches once on first login (open({firstRun: true}) from init.js);
+// replayable anytime from Settings. Cards are navigable with prev/next
+// buttons, dot indicators, keyboard arrows, and touch swipe. All visual aids
+// are custom SVGs — no emojis (see .claude/rules/assets.md).
 'use strict';
 
 const TUTORIAL_STEPS = [
   {
     illustration: 'travel-scrapbook-tutorial-welcome',
     title: 'Welcome to your scrapbook',
-    body: 'Spotted somewhere amazing while scrolling? Send it here. We turn the links you save into places on a map — and the places into a real itinerary.',
+    body: 'Every travel find you save becomes a real place on a map — rated, planned into trips, and ready to walk with you day by day.',
   },
   {
     illustration: 'travel-scrapbook-tutorial-collect',
-    title: 'Collect scraps',
-    body: 'Share cool travel finds straight to your scrapbook — from Facebook, reels, Reddit, or any travel website. We read each link and figure out what places it mentions. Set up phone sharing in Settings → “Save from your phone”.',
+    title: 'Scrap it from anywhere',
+    body: 'See somewhere great in a reel, a thread, or an article? Share it straight here from any app. We read the link and pull out every place it mentions — one good listicle can drop five pins at once. Set it up in Settings → “Save from your phone”.',
+  },
+  {
+    illustration: 'travel-scrapbook-tutorial-rating',
+    title: 'Your Wander List',
+    body: 'New finds land on your Wander List. Rate each one — Booked, Must do, Interested, Could skip — and jot a note so future-you remembers why.',
   },
   {
     illustration: 'travel-scrapbook-tutorial-new-trip',
     title: 'Build a trip',
-    body: 'Start a trip and collect your scraps into it. Finds near your destination sort themselves in — you just approve them from the “Needs review” pile or your Wander List.',
+    body: 'Start a trip with a destination and we’ll do the sorting: finds near it stage themselves under “Needs review”, and your Wander List suggests matching plans. Add the rest with one tap.',
   },
   {
-    illustration: 'travel-scrapbook-tutorial-anchors',
-    title: 'Anchor your trip',
-    body: 'Add your arrival and departure points, plus any hotel stays. Anchors give the trip structure — and put your scraps in the right order between them.',
+    illustration: 'travel-scrapbook-tutorial-timeline',
+    title: 'Anchor it, then watch the timeline',
+    body: 'Add your flights and stays with dates, and the trip becomes a day-by-day timeline. Unplanned stops get slotted in — “near your Day 2 hotel” — and booked plans show up right on time.',
+  },
+  {
+    illustration: 'travel-scrapbook-tutorial-community',
+    title: 'Explore the community pool',
+    body: 'Browse places other travelers have scrapped near your destination and add them in a tap. Only the places are shared — your notes and ratings stay yours.',
   },
   {
     illustration: 'travel-scrapbook-tutorial-route',
-    title: 'See it in Google Maps',
-    body: 'Export your waypoints to Google Maps at any time to see how the trip looks — or download a CSV that drops straight into Google My Maps.',
+    title: 'Been there? Check it off — then take it with you',
+    body: 'Mark places visited and they step politely to the back of the trip. When you’re set, sort the shortest route and open it in Google Maps, or download a CSV for My Maps. Replay this tour anytime from Settings.',
   },
 ];
 
 const TutorialCarousel = {
   _step: 0,
   _touchStartX: null,
+  _onDone: null,
 
-  open() {
+  // firstRun: dismissing still counts as done (never nag twice) — onDone
+  // fires on Got-it, the X, and the backdrop alike.
+  open({ firstRun = false, onDone = null } = {}) {
     this._step = 0;
+    this._onDone = onDone;
     this._render();
   },
 
   close() {
     document.removeEventListener('keydown', this._onKeydown);
     document.getElementById('tutorial-modal')?.remove();
+    const done = this._onDone;
+    this._onDone = null;
+    done?.();
   },
 
   _go(delta) {
