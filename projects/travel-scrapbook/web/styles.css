@@ -58,14 +58,28 @@ a { color: var(--blush-deep); font-weight: 700; }
 a:hover { color: var(--accent-hover); }
 
 /* ── Header ─────────────────────────────────────────────────────────────────── */
+/* Phones: brand (logo + one-line title) sits on top, nav spreads on its own
+   row below. A full-size "Travel Scrapbook" + five 44px nav buttons can't share
+   one line on a phone, so stacking keeps the wordmark on a single line. Wide
+   screens (≥520px) have room to put them side by side. */
 .ts-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0.25rem 0 1rem;
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 0.5rem; padding: 0.25rem 0 1rem;
 }
-.ts-header__brand { display: flex; align-items: center; gap: 0.5rem; text-decoration: none; }
-.ts-header__logo { width: 40px; height: 40px; }
-.ts-header__title { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; color: var(--ink); }
-.ts-header__nav { display: flex; gap: 0.25rem; }
+.ts-header__brand {
+  display: flex; align-items: center; gap: 0.45rem; text-decoration: none;
+  min-width: 0;
+}
+.ts-header__logo { width: 40px; height: 40px; flex-shrink: 0; }
+.ts-header__title {
+  font-family: var(--font-display); font-size: 1.7rem; font-weight: 700;
+  color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ts-header__nav { display: flex; gap: 0.25rem; justify-content: space-between; }
+@media (min-width: 520px) {
+  .ts-header { flex-direction: row; align-items: center; justify-content: space-between; }
+  .ts-header__nav { justify-content: flex-end; }
+}
 .ts-header__nav button {
   width: 44px; height: 44px; border-radius: 14px; border: 2px solid transparent;
   background: transparent; color: var(--ink); cursor: pointer;
@@ -197,8 +211,10 @@ a:hover { color: var(--accent-hover); }
 .scrap-group__grid { margin: 0.7rem 0 0.4rem; }
 
 /* ── Scrap card specifics ───────────────────────────────────────────────────── */
+/* Media wrapper positions the type-pill overlay over the photo's top-left. */
+.scrap-card__media { position: relative; }
 .scrap-card__photo {
-  width: 100%; aspect-ratio: 16/9; object-fit: cover;
+  display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover;
   border-radius: 12px; border: 2px solid var(--border);
   background: var(--paper);
 }
@@ -207,6 +223,28 @@ a:hover { color: var(--accent-hover); }
   border-radius: 12px; border: 2px dashed var(--border);
   display: grid; place-items: center; background: var(--paper);
 }
+/* Type pill floated on the photo's corner. Hidden when the image failed and
+   fell back to the category sprite (the sprite already shows the type). */
+.scrap-card__cat-overlay { position: absolute; top: 8px; left: 8px; z-index: 1; }
+.scrap-card__cat-overlay .category-badge {
+  background: rgba(255, 249, 242, 0.94);
+  box-shadow: 1.5px 1.5px 0 rgba(91, 84, 104, 0.18);
+}
+.scrap-card__media.is-fallback .scrap-card__cat-overlay { display: none; }
+/* Icon-only source / maps buttons, side by side under the card. */
+.scrap-card__links { gap: 0.5rem; }
+.link-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 46px; height: 40px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: var(--paper);
+  color: var(--ink-muted); cursor: pointer;
+}
+.link-icon-btn:hover { border-color: var(--ink-muted); color: var(--ink); }
+.link-icon-btn:active { transform: translateY(1px); }
+.link-icon-btn [data-lucide] { width: 18px; height: 18px; }
+/* Source picker list (SourceLinks.open) */
+.source-links__list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.6rem; }
+.source-links__item { justify-content: flex-start; }
 .scrap-card__title { font-weight: 800; font-size: 1rem; margin: 0.55rem 0 0.1rem; overflow-wrap: anywhere; }
 .scrap-card__sub { font-size: 0.82rem; color: var(--ink-muted); overflow-wrap: anywhere; }
 .scrap-card__row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }

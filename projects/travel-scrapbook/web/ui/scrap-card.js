@@ -83,13 +83,6 @@ function _renderConsensus(scrap) {
     </div>`;
 }
 
-function _confidenceHint(scrap) {
-  if (scrap.geocode_confidence === 'none') return 'not on the map yet — tap to edit';
-  if (scrap.geocode_confidence === 'low') return 'rough location (city only)';
-  if (scrap.geocode_confidence === 'medium') return 'approximate location';
-  return '';
-}
-
 // City, Country, dropping empties and an adjacent duplicate (a city-centroid
 // geocode sometimes repeats the name, e.g. Singapore). Region is a grouping of
 // countries (macro-region), used only for grouping — not shown inline.
@@ -101,13 +94,32 @@ function _locationLine(scrap) {
   return parts.join(', ');
 }
 
-function _sourceChips(scrap) {
-  const sources = scrap.sources || [];
-  return sources.map((src) => `
-    <a class="source-badge" href="${escapeAttr(src.url)}" target="_blank" rel="noopener"
-       title="${escapeAttr(src.og_title || src.url)}" onclick="event.stopPropagation()">
-      <i data-lucide="link-2"></i>${escapeHtml(src.source_domain || 'link')}
-    </a>`).join('');
+// Icon-only source button. Opens the SourceLinks picker (website names, not
+// full URLs) so the traveler chooses which capture to open. Data rides in a
+// data attribute so the button is self-wiring across every surface — no view
+// needs to bind it. Rendered only when the scrap has at least one source.
+function _sourceButton(scrap) {
+  const sources = (scrap.sources || []).map((s) => ({ name: s.source_domain || 'link', url: s.url }));
+  if (!sources.length) return '';
+  return `
+    <button type="button" class="link-icon-btn" data-action="sources"
+            aria-label="View sources" title="View sources"
+            data-sources="${escapeAttr(JSON.stringify(sources))}"
+            onclick='event.stopPropagation(); SourceLinks.open(this.getAttribute("data-sources"))'>
+      <i data-lucide="link-2"></i>
+    </button>`;
+}
+
+// Icon-only Maps button. Confirms before leaving the app for Google Maps.
+function _mapsButton(scrap) {
+  if (!scrap.maps_url) return '';
+  return `
+    <button type="button" class="link-icon-btn" data-action="maps"
+            aria-label="Open in Google Maps" title="Open in Maps"
+            data-maps-url="${escapeAttr(scrap.maps_url)}"
+            onclick='event.stopPropagation(); SourceLinks.openMaps(this.getAttribute("data-maps-url"))'>
+      <i data-lucide="map-pin"></i>
+    </button>`;
 }
 
 /**
@@ -139,16 +151,22 @@ function renderScrapCard(scrap, opts = {}) {
 
   const title = scrap.place_name || 'Saved place';
   const sub = _locationLine(scrap);
-  const hint = _confidenceHint(scrap);
   // Prefer the source's og:image; else a static map of the pin (geocoded places
   // only); else the category sprite. The onerror covers a provider hiccup or a
-  // dead image URL by swapping in the sprite.
+  // dead image URL by swapping in the sprite (and drops the type overlay, since
+  // the sprite already shows the category).
   const imgSrc = scrap.og_image_url ||
     (scrap.lat != null ? staticMapUrl(scrap.lat, scrap.lng) : null);
-  const photo = imgSrc
-    ? `<img class="scrap-card__photo" src="${escapeAttr(imgSrc)}" alt="" loading="lazy"
-         onerror="this.outerHTML='<div class=&quot;scrap-card__sprite-fallback&quot;>${renderSprite('category', catIcon, { size: 'lg' }).replaceAll('"', '&quot;')}</div>'" />`
-    : `<div class="scrap-card__sprite-fallback">${renderSprite('category', catIcon, { size: 'lg' })}</div>`;
+  const spriteFallback = `<div class="scrap-card__sprite-fallback">${renderSprite('category', catIcon, { size: 'lg' })}</div>`;
+  // When there's a real image, the type pill overlays its top-left corner. When
+  // there isn't, the category sprite IS the image, so no separate pill is shown.
+  const media = imgSrc
+    ? `<div class="scrap-card__media">
+         <img class="scrap-card__photo" src="${escapeAttr(imgSrc)}" alt="" loading="lazy"
+           onerror="this.closest('.scrap-card__media').classList.add('is-fallback');this.outerHTML='${spriteFallback.replaceAll("'", "\\'").replaceAll('"', '&quot;')}'" />
+         <span class="scrap-card__cat-overlay">${renderCategoryBadge(scrap.category)}</span>
+       </div>`
+    : `<div class="scrap-card__media">${spriteFallback}</div>`;
 
   let footer = '';
   if (variant === 'staged') {
@@ -232,26 +250,25 @@ function renderScrapCard(scrap, opts = {}) {
   } else if (scrap.rating && mine) {
     chip = _renderRatingBadge(scrap);
   }
-  let vibeUi = chip ? `<div class="scrap-card__row" style="margin-top:0.45rem;">${chip}</div>` : '';
-  if (variant === 'trip' && shared && scrap.trip_id) vibeUi += _renderConsensus(scrap);
+
+  // Row 1: icon-only source + maps buttons, side by side.
+  const linksRow = _sourceButton(scrap) + _mapsButton(scrap);
+  // Row 2: note chip + priority/vibe chip, side by side.
+  const metaRow = noteChip + chip;
+  const consensus = (variant === 'trip' && shared && scrap.trip_id) ? _renderConsensus(scrap) : '';
 
   return `
     <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
          style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : isPreview ? 'none' : (editable ? 'edit' : 'none')}">
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
-      ${photo}
+      ${media}
       <p class="scrap-card__title">${escapeHtml(title)}</p>
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}
       ${addedBy}
-      <div class="scrap-card__row">
-        ${renderCategoryBadge(scrap.category)}
-        ${_sourceChips(scrap)}
-        ${scrap.maps_url ? `<a class="source-badge" href="${escapeAttr(scrap.maps_url)}" target="_blank" rel="noopener" data-action="none" onclick="event.stopPropagation()"><i data-lucide="map-pin"></i>Maps</a>` : ''}
-        ${noteChip}
-      </div>
-      ${hint ? `<div class="confidence-hint" style="margin-top:0.4rem;">${escapeHtml(hint)}</div>` : ''}
-      ${vibeUi}
+      ${linksRow ? `<div class="scrap-card__row scrap-card__links">${linksRow}</div>` : ''}
+      ${metaRow ? `<div class="scrap-card__row">${metaRow}</div>` : ''}
+      ${consensus}
       ${footer}
     </div>
   `;
