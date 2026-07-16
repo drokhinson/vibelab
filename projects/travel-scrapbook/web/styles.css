@@ -244,6 +244,27 @@ a:hover { color: var(--accent-hover); }
 .visited-grid .sticker-card.is-visited { opacity: 1; }
 .visited-grid .scrap-card__visited-badge { display: none; }
 
+/* Selectable card (trip "add from Wander List" picker). Whole card toggles. */
+.scrap-card--select { cursor: pointer; }
+.scrap-card--select.is-selected { border-color: var(--mint); box-shadow: 0 0 0 3px rgba(190, 231, 208, 0.55); }
+.scrap-card__check { position: absolute; top: 10px; right: 10px; z-index: 1; color: var(--ink-muted); }
+.scrap-card--select.is-selected .scrap-card__check { color: #2F8F5B; }
+.scrap-card__check [data-lucide] { width: 22px; height: 22px; }
+.scrap-card__fits-badge {
+  position: absolute; top: 10px; left: 10px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.68rem; font-weight: 900; color: #8a3350;
+  background: var(--blush); border: 1.5px solid var(--blush-deep);
+  border-radius: 999px; padding: 2px 9px;
+}
+.scrap-card__fits-badge [data-lucide] { width: 13px; height: 13px; }
+
+/* "Add plans" picker modal: tall, its list scrolls, footer stays put. */
+.ts-modal__card.add-plans { max-height: 86vh; display: flex; flex-direction: column; }
+.ts-modal__card.add-plans #add-plans-body { overflow-y: auto; }
+.add-plans__footer { position: sticky; bottom: 0; padding-top: 0.7rem; margin-top: 0.4rem; background: var(--card); }
+.add-plans__footer .ts-btn { width: 100%; }
+
 .source-badge {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 0.72rem; font-weight: 800; color: var(--ink-muted);

@@ -182,6 +182,31 @@ class AssignRequest(BaseModel):
     trip_id: str
 
 
+class AssignManyRequest(BaseModel):
+    """Bulk-add several wishlist scraps to a trip (the 'From your Wander List'
+    multi-select)."""
+    scrap_ids: list[str] = Field(..., min_length=1)
+
+
+class PlanCreateRequest(BaseModel):
+    """Manually add a plan to a trip by name — geocoded server-side, no URL."""
+    name: str = Field(..., min_length=1, max_length=200)
+    city: Optional[str] = Field(None, max_length=120)
+    country: Optional[str] = Field(None, max_length=120)
+    category: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=2000)
+
+
+class TripWishlistScrap(ScrapResponse):
+    """A wishlist scrap annotated with whether it matches the trip's scope, for
+    the trip's 'add plans' picker (scope-matches sort first)."""
+    fits_scope: bool = False
+
+
+class TripWishlistResponse(BaseModel):
+    scraps: list[TripWishlistScrap] = []
+
+
 # ── Inbox ─────────────────────────────────────────────────────────────────────
 
 class TripSuggestion(BaseModel):
@@ -272,6 +297,14 @@ class TripListResponse(BaseModel):
 
 class ScrapListResponse(BaseModel):
     scraps: list[ScrapResponse]
+
+
+class SourceScrapsResponse(BaseModel):
+    """A capture's live progress: its processing status + the scraps it created
+    so far — drives the 'watch it import' cards on the share success screen."""
+    status: SourceStatus
+    error_kind: Optional[str] = None
+    scraps: list[ScrapResponse] = []
 
 
 # ── Route optimization ────────────────────────────────────────────────────────

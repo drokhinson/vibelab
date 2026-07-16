@@ -108,3 +108,4 @@ class EnrichErrorKind(StrEnum):
     LLM = "llm"           # LLM call failed (missing key, API error)
     GEOCODE = "geocode"   # reserved: geocode hard-failed (soft misses stay 'ready')
     NO_PLACE = "no_place" # LLM succeeded but found zero places on the page
+    INTERNAL = "internal" # every place failed to materialize (e.g. DB/schema error)

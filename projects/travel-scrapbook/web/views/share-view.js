@@ -12,6 +12,11 @@ class ShareView extends View {
   constructor() {
     super('share');
     this._state = 'idle'; // idle | saving | saved | error
+    this._sourceId = null;
+    this._importScraps = [];
+    this._importStatus = 'processing';
+    this._pollTimer = null;
+    this._pollSeq = 0;
   }
 
   _targetUrl() {
@@ -23,6 +28,9 @@ class ShareView extends View {
   async onMount() {
     document.body.classList.add('popup-mode');
     this._state = 'idle';
+    this._sourceId = null;
+    this._importScraps = [];
+    this._importStatus = 'processing';
 
     // Survive an OAuth round-trip, same pattern as the bookmarklet popup.
     if (this.params.url || this.params.text) {
@@ -47,6 +55,7 @@ class ShareView extends View {
 
   async onUnmount() {
     document.body.classList.remove('popup-mode');
+    this._stopImportPoll();
   }
 
   async _save() {
@@ -55,12 +64,13 @@ class ShareView extends View {
     this._state = 'saving';
     this.render();
     try {
-      await window.api.capture({
+      const src = await window.api.capture({
         url,
         text: this.params.text || null,
         title: this.params.title || null,
         via: 'share',
       });
+      this._sourceId = src?.id || null;
       try { localStorage.removeItem(SHARE_STASH_KEY); } catch (_) {}
       this._state = 'saved';
       window.SourceDomain?.refreshInboxCount();
@@ -128,17 +138,68 @@ class ShareView extends View {
         <img src="/assets/illustrations/travel-scrapbook-success.svg" alt="" />
         <h2 style="font-size:2rem;margin:0;">Saved!</h2>
         <p class="scrap-card__sub">We're finding the places in it. They'll be sorted into a trip
-          or waiting in your inbox — you can switch back to your app.</p>
-        <button class="ts-btn ts-btn--sky ts-btn--sm" id="share-open-inbox" style="margin-top:0.8rem;">
-          <i data-lucide="inbox"></i>View inbox
+          or added to your Wander List — you can switch back to your app.</p>
+        <button class="ts-btn ts-btn--blush ts-btn--sm" id="share-open-inbox" style="margin-top:0.8rem;">
+          <i data-lucide="heart"></i>View Wander List
         </button>
       </div>
+      <div id="share-import-cards" style="margin-top:1.2rem;"></div>
     `;
     this.refreshIcons();
     this.container.querySelector('#share-open-inbox')?.addEventListener('click', () => {
       document.body.classList.remove('popup-mode');
       window.router.go('inbox');
     });
+    this._renderImportCards();
+    if (this._sourceId) this._startImportPoll();
+  }
+
+  // Poll the just-captured source and show its scraps as they're extracted, so
+  // the user watches the import happen (and a stuck/failed one is visible).
+  _startImportPoll() {
+    this._stopImportPoll();
+    const seq = ++this._pollSeq;
+    const startedAt = Date.now();
+    const tick = async () => {
+      if (seq !== this._pollSeq || !this._sourceId) return;
+      try {
+        const res = await window.api.sourceScraps(this._sourceId);
+        if (seq !== this._pollSeq) return;         // navigated / re-saved
+        this._importScraps = res.scraps || [];
+        this._importStatus = res.status;
+        this._renderImportCards();
+        const done = res.status === 'ready' || res.status === 'failed';
+        if (done || Date.now() - startedAt > 60000) this._stopImportPoll();
+      } catch (_) { /* transient — keep polling */ }
+    };
+    tick();
+    this._pollTimer = setInterval(tick, 2000);
+  }
+
+  _stopImportPoll() {
+    if (this._pollTimer) clearInterval(this._pollTimer);
+    this._pollTimer = null;
+  }
+
+  _renderImportCards() {
+    const host = this.container.querySelector('#share-import-cards');
+    if (!host) return;
+    const scraps = this._importScraps || [];
+    const stillReading = this._importStatus === 'processing';
+    const failed = this._importStatus === 'failed';
+    host.innerHTML = `
+      ${scraps.length ? `
+        <div class="card-grid card-grid--2col">
+          ${scraps.map((s, i) => renderScrapCard(s, { index: i, variant: 'preview' })).join('')}
+        </div>` : ''}
+      ${stillReading ? `
+        <p class="scrap-card__sub" style="text-align:center;margin-top:0.6rem;">
+          <span class="shimmer" style="display:inline-block;width:16px;height:16px;border-radius:50%;vertical-align:-3px;"></span>
+          Finding places…</p>` : ''}
+      ${!scraps.length && failed ? `
+        <p class="scrap-card__sub" style="text-align:center;">Couldn't read that one — it'll show in your Wander List to retry.</p>` : ''}
+    `;
+    this.refreshIcons(host);
   }
 }
 window.ShareView = ShareView;

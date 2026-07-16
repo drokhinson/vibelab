@@ -15,16 +15,26 @@ from . import router
 from .constants import GeocodeConfidence, ScrapStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import (
+    AssignManyRequest,
     AssignRequest,
     MessageResponse,
+    PlanCreateRequest,
     ScrapListResponse,
     ScrapResponse,
     ScrapUpdateRequest,
+    TripWishlistResponse,
+    TripWishlistScrap,
 )
 from .services import nominatim
-from .services.enrichment import build_maps_url
+from .services.enrichment import (
+    _geocode_with_fallback,
+    _load_category_slugs,
+    build_maps_url,
+)
+from .services.llm import PlaceExtraction
 from .services.hydrate import hydrate_scraps
 from .services.places import (
+    find_or_create_place,
     normalize_place_name,
     place_matches_trip_scope,
     region_for_country_code,
@@ -149,6 +159,153 @@ async def list_trip_candidates(
         )
     ]
     return ScrapListResponse(scraps=[ScrapResponse(**s) for s in candidates])
+
+
+@router.get(
+    "/trips/{trip_id}/wishlist",
+    response_model=TripWishlistResponse,
+    status_code=200,
+    summary="Wishlist places to add to a trip (with a scope-fit flag)",
+)
+async def list_trip_wishlist(
+    trip_id: str = Path(..., description="Trip UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> TripWishlistResponse:
+    """Every unvisited wishlist scrap, each flagged whether it fits this trip's
+    scope — powers the trip's 'Add from your Wander List' picker. Unlike
+    /candidates this is NOT scope-filtered: you can add anything; matches just
+    sort first."""
+    sb = get_supabase()
+    trip = get_owned_trip(sb, trip_id, user.user_id)
+    rows = (
+        sb.table("travelscrapbook_scraps")
+        .select("*")
+        .eq("user_id", user.user_id)
+        .eq("status", ScrapStatus.INBOX)
+        .is_("visited_at", "null")
+        .order("created_at", desc=True)
+        .execute()
+    ).data or []
+    hydrated = hydrate_scraps(sb, rows)
+    scored = [
+        TripWishlistScrap(
+            **s,
+            fits_scope=place_matches_trip_scope(
+                trip,
+                lat=s.get("lat"), lng=s.get("lng"),
+                city=s.get("place_city"), region=s.get("place_region"),
+                country=s.get("place_country"),
+            ),
+        )
+        for s in hydrated
+    ]
+    # Scope-matches first; stable sort preserves newest-first within each group.
+    scored.sort(key=lambda w: not w.fits_scope)
+    return TripWishlistResponse(scraps=scored)
+
+
+@router.post(
+    "/trips/{trip_id}/assign-scraps",
+    response_model=ScrapListResponse,
+    status_code=200,
+    summary="Add several wishlist scraps to a trip",
+)
+async def assign_scraps(
+    body: AssignManyRequest,
+    trip_id: str = Path(..., description="Trip UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapListResponse:
+    """Bulk 'add to trip' from the Wander List picker — files the owned scraps
+    into the trip as approved (scope is not enforced; the user chose them)."""
+    sb = get_supabase()
+    get_owned_trip(sb, trip_id, user.user_id)
+    owned = (
+        sb.table("travelscrapbook_scraps")
+        .select("id")
+        .eq("user_id", user.user_id)
+        .in_("id", body.scrap_ids)
+        .execute()
+    ).data or []
+    ids = [r["id"] for r in owned]
+    if not ids:
+        return ScrapListResponse(scraps=[])
+    updated = (
+        sb.table("travelscrapbook_scraps")
+        .update({
+            "trip_id": trip_id,
+            "status": ScrapStatus.APPROVED,
+            "updated_at": "now()",
+        })
+        .eq("user_id", user.user_id)
+        .in_("id", ids)
+        .execute()
+    )
+    return ScrapListResponse(
+        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, updated.data or [])]
+    )
+
+
+@router.post(
+    "/trips/{trip_id}/plans",
+    response_model=ScrapResponse,
+    status_code=201,
+    summary="Manually add a plan to a trip by name",
+)
+async def create_plan(
+    body: PlanCreateRequest,
+    trip_id: str = Path(..., description="Trip UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapResponse:
+    """Add a plan by typing a place name (no URL): geocode it, dedupe into a
+    canonical place, and attach it to the trip as approved. Reuses an existing
+    scrap for the same place if the user already has one."""
+    sb = get_supabase()
+    get_owned_trip(sb, trip_id, user.user_id)
+
+    categories = _load_category_slugs(sb)
+    category = body.category if body.category in categories else "other"
+    extraction = PlaceExtraction(
+        place_name=body.name, city=body.city, country=body.country,
+        category=category, geocode_query=None, confident=True,
+    )
+    geo, confidence = await _geocode_with_fallback(extraction)
+    maps_url = build_maps_url(body.name, body.city, body.country)
+    place, _created = find_or_create_place(
+        sb, user.user_id, extraction, geo, confidence, maps_url
+    )
+
+    existing = (
+        sb.table("travelscrapbook_scraps")
+        .select("*")
+        .eq("user_id", user.user_id)
+        .eq("place_id", place["id"])
+        .limit(1)
+        .execute()
+    ).data
+    if existing:
+        row = (
+            sb.table("travelscrapbook_scraps")
+            .update({
+                "trip_id": trip_id,
+                "status": ScrapStatus.APPROVED,
+                "updated_at": "now()",
+            })
+            .eq("id", existing[0]["id"])
+            .execute()
+        ).data[0]
+    else:
+        row = (
+            sb.table("travelscrapbook_scraps")
+            .insert({
+                "user_id": user.user_id,
+                "place_id": place["id"],
+                "trip_id": trip_id,
+                "status": ScrapStatus.APPROVED,
+                "notes": body.notes,
+            })
+            .execute()
+        ).data[0]
+    return _hydrated_scrap(sb, row)
 
 
 @router.patch(

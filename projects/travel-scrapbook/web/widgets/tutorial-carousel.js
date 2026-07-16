@@ -18,7 +18,7 @@ const TUTORIAL_STEPS = [
   {
     illustration: 'travel-scrapbook-tutorial-new-trip',
     title: 'Build a trip',
-    body: 'Start a trip and collect your scraps into it. Finds near your destination sort themselves in — you just approve them from the “Needs review” pile or the inbox.',
+    body: 'Start a trip and collect your scraps into it. Finds near your destination sort themselves in — you just approve them from the “Needs review” pile or your Wander List.',
   },
   {
     illustration: 'travel-scrapbook-tutorial-anchors',

@@ -32,7 +32,9 @@ from .models import (
     InboxResponse,
     InboxScrapResponse,
     MessageResponse,
+    ScrapResponse,
     SourceResponse,
+    SourceScrapsResponse,
 )
 from .services import places as places_svc
 from .services.enrichment import process_source
@@ -330,6 +332,48 @@ async def get_inbox_count(user: CurrentUser = Depends(get_current_user)) -> Inbo
         .execute()
     )
     return InboxCountResponse(count=(scraps.count or 0) + (sources.count or 0))
+
+
+# ── Source progress ───────────────────────────────────────────────────────────
+
+@router.get(
+    "/sources/{source_id}/scraps",
+    response_model=SourceScrapsResponse,
+    status_code=200,
+    summary="A source's processing status + the scraps it created",
+)
+async def get_source_scraps(
+    source_id: str = Path(..., description="Source UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SourceScrapsResponse:
+    """Poll a capture in flight: the source's status plus the scraps extracted
+    from it so far (via place_sources), so the share screen can show cards as
+    they land."""
+    sb = get_supabase()
+    source = _get_owned_source(sb, source_id, user.user_id)
+    links = (
+        sb.table("travelscrapbook_place_sources")
+        .select("place_id")
+        .eq("source_id", source_id)
+        .execute()
+    ).data or []
+    place_ids = sorted({l["place_id"] for l in links if l.get("place_id")})
+    scraps: list[dict[str, Any]] = []
+    if place_ids:
+        rows = (
+            sb.table("travelscrapbook_scraps")
+            .select("*")
+            .eq("user_id", user.user_id)
+            .in_("place_id", place_ids)
+            .order("created_at", desc=True)
+            .execute()
+        ).data or []
+        scraps = hydrate_scraps(sb, rows)
+    return SourceScrapsResponse(
+        status=source["status"],
+        error_kind=source.get("error_kind"),
+        scraps=[ScrapResponse(**s) for s in scraps],
+    )
 
 
 # ── Source retry / dismiss ────────────────────────────────────────────────────

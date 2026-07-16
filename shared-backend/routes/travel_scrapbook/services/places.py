@@ -44,11 +44,17 @@ def region_for_country_code(sb: Client, country_code: Optional[str]) -> Optional
         return None
     cached = cache.get(CACHE_NS_REGIONS, "map")
     if cached is None:
-        rows = (
-            sb.table("travelscrapbook_regions")
-            .select("country_code, region")
-            .execute()
-        ).data or []
+        try:
+            rows = (
+                sb.table("travelscrapbook_regions")
+                .select("country_code, region")
+                .execute()
+            ).data or []
+        except Exception:
+            # Defensive: a missing/broken regions table must not kill capture —
+            # degrade region to null. (The real dependency is migration 006.)
+            logger.exception("region lookup failed; treating region as unknown")
+            return None
         cached = {r["country_code"].lower(): r["region"] for r in rows}
         cache.set(CACHE_NS_REGIONS, "map", cached, REGIONS_TTL_SECONDS)
     return cached.get(country_code.lower())
