@@ -42,6 +42,18 @@ function formatKm(km) {
   return km >= 10 ? `${Math.round(km)} km` : `${km.toFixed(1)} km`;
 }
 
+// Static-map thumbnail for a geocoded place that has no source photo. Keyless
+// (OSM-based), so it fits this app's no-Google-key design. Centralized here so
+// the provider swaps in ONE place; if a styled pin / guaranteed uptime is ever
+// needed, point this at a referrer-restricted free-tier provider (Geoapify /
+// LocationIQ) — the key is safe client-side. Callers always pair it with an
+// onerror → sprite fallback, so a provider hiccup degrades gracefully.
+function staticMapUrl(lat, lng, { w = 400, h = 220, zoom = 15 } = {}) {
+  if (lat == null || lng == null) return null;
+  return `https://staticmap.openstreetmap.de/staticmap.php` +
+    `?center=${lat},${lng}&zoom=${zoom}&size=${w}x${h}&markers=${lat},${lng},lightblue1`;
+}
+
 // Project-wide destructive-action confirmation surface (one surface per
 // project, per web-frontend.md): native confirm() everywhere.
 function confirmDestructive(message) {
