@@ -1,6 +1,6 @@
 """Trip models: anchors, trips, route optimization, and exports."""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -24,11 +24,17 @@ class AnchorCreateRequest(BaseModel):
                                  description="Freeform place text to geocode, e.g. 'Narita Airport'")
     type: Optional[AnchorType] = Field(
         None, description="How you arrive/depart (start/end anchors only)")
+    anchor_date: Optional[date] = Field(
+        None, description="Start: arrival day; end: departure day (timeline marker)")
+    anchor_time: Optional[time] = Field(
+        None, description="Optional time on anchor_date; omit for an all-day point marker")
     stay_date: Optional[date] = Field(
         None, description="Check-in day for a stay anchor; a day within the trip's dates")
+    stay_end_date: Optional[date] = Field(
+        None, description="Check-out day for a stay anchor (≥ stay_date)")
     same_as_start: bool = Field(
         False,
-        description="Copy the trip's start anchor (location + type) into this end anchor; skips geocoding")
+        description="Copy the trip's start anchor (location + type, not the date) into this end anchor; skips geocoding")
 
     @model_validator(mode="after")
     def _require_place(self) -> "AnchorCreateRequest":
@@ -43,7 +49,10 @@ class AnchorUpdateRequest(BaseModel):
     label: Optional[str] = Field(None, min_length=1, max_length=120)
     query: Optional[str] = Field(None, min_length=2, max_length=300)
     type: Optional[AnchorType] = None
+    anchor_date: Optional[date] = None
+    anchor_time: Optional[time] = None
     stay_date: Optional[date] = None
+    stay_end_date: Optional[date] = None
 
 
 class AnchorResponse(BaseModel):
@@ -56,7 +65,10 @@ class AnchorResponse(BaseModel):
     lng: Optional[float] = None
     geocode_confidence: GeocodeConfidence = GeocodeConfidence.NONE
     type: Optional[AnchorType] = None
-    stay_date: Optional[date] = None
+    anchor_date: Optional[date] = None            # start: arrival; end: departure
+    anchor_time: Optional[time] = None            # NULL = all-day point marker
+    stay_date: Optional[date] = None              # stay: check-in
+    stay_end_date: Optional[date] = None          # stay: check-out
     created_at: datetime
 
 

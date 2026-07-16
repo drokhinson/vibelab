@@ -97,9 +97,11 @@ async def update_scrap(
     scrap_id: str = Path(..., description="Scrap UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
-    """Edit place fields, category, or notes. Place edits write to the
-    scrap's canonical place row (safe — places are per-user). Pass
-    regeocode=true to re-run Nominatim on the (possibly edited) place."""
+    """Edit place fields, category, notes, or the plan's timeline slot
+    (plan_date/plan_time — trip scraps only; explicit null clears). Place
+    edits write to the scrap's canonical place row (safe — places are
+    per-user). Pass regeocode=true to re-run Nominatim on the (possibly
+    edited) place."""
     sb = get_supabase()
     existing = get_owned_scrap(sb, scrap_id, user.user_id)
     place = (
@@ -115,6 +117,28 @@ async def update_scrap(
     # visited is a soft timestamp flag, not a 1:1 column — map true→now(), false→NULL.
     if "visited" in update:
         scrap_update["visited_at"] = "now()" if update["visited"] else None
+    # Timeline slot: only plans in a trip can be scheduled.
+    if "plan_date" in update or "plan_time" in update:
+        if not existing.get("trip_id"):
+            raise HTTPException(
+                status_code=400, detail="Only plans in a trip can be scheduled")
+        for k in ("plan_date", "plan_time"):
+            if k in update:
+                v = update[k]
+                scrap_update[k] = v.isoformat() if v is not None else None
+        plan_date = scrap_update.get("plan_date")
+        if plan_date:
+            trip = (
+                sb.table("travelscrapbook_trips")
+                .select("start_date, end_date")
+                .eq("id", existing["trip_id"])
+                .execute()
+            ).data[0]
+            start, end = trip.get("start_date"), trip.get("end_date")
+            if (start and plan_date < start) or (end and plan_date > end):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Plan day must fall within the trip's dates")
     place_update: dict[str, Any] = {}
     if update.get("place_name"):
         place_update["name"] = update["place_name"]

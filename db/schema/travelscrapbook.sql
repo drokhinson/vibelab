@@ -69,6 +69,9 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_anchors (
   type               TEXT             -- start/end only: airport | train_station | car_rental | other
     CHECK (type IS NULL OR type IN ('airport', 'train_station', 'car_rental', 'other')),
   stay_date          DATE,            -- stay only: a check-in day within the trip's date range
+  stay_end_date      DATE,            -- stay only: check-out day (009)
+  anchor_date        DATE,            -- start: arrival day; end: departure day (009)
+  anchor_time        TIME,            -- optional; NULL = all-day point marker (009)
   created_at         TIMESTAMPTZ      NOT NULL DEFAULT now()
 );
 -- idx_ts_anchors_trip (trip_id)
@@ -163,6 +166,8 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scraps (
     CHECK (rating IS NULL OR rating IN ('booked', 'must_do', 'interested', 'could_skip')),
   visited_at     TIMESTAMPTZ,                        -- NULL = on the wishlist; set = visited
   route_position INTEGER,
+  plan_date      DATE,                               -- day this plan is slotted on (trip scraps only, 009)
+  plan_time      TIME,                               -- optional time within the day (009)
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );

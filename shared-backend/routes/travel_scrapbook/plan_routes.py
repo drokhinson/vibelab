@@ -241,7 +241,8 @@ async def unassign_scrap(
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
     """Remove a scrap from its trip (staging 'remove' or pulling an approved
-    scrap back out); it returns to the inbox."""
+    scrap back out); it returns to the inbox. Trip-specific state — route
+    position and timeline slot — clears with it."""
     sb = get_supabase()
     get_owned_scrap(sb, scrap_id, user.user_id)
     updated = (
@@ -250,6 +251,8 @@ async def unassign_scrap(
             "trip_id": None,
             "status": ScrapStatus.INBOX,
             "route_position": None,
+            "plan_date": None,
+            "plan_time": None,
             "updated_at": "now()",
         })
         .eq("id", scrap_id)

@@ -1,6 +1,6 @@
 """Core models: profile, capture/sources, scraps, and the inbox."""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 
 from pydantic import BaseModel, Field, HttpUrl
@@ -100,6 +100,10 @@ class ScrapUpdateRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=2000)
     visited: Optional[bool] = Field(
         None, description="Mark visited (been there) or move back to the wishlist")
+    plan_date: Optional[date] = Field(
+        None, description="Day this plan is slotted on (trip scraps only); null clears")
+    plan_time: Optional[time] = Field(
+        None, description="Optional time on plan_date; null clears")
     regeocode: bool = Field(False, description="Re-run Nominatim on the edited place fields")
 
 
@@ -147,6 +151,8 @@ class ScrapResponse(BaseModel):
     rating: Optional[TripVibe] = None             # owner's own priority
     visited_at: Optional[datetime] = None
     route_position: Optional[int] = None
+    plan_date: Optional[date] = None              # timeline slot (trip scraps only)
+    plan_time: Optional[time] = None              # optional time within the day
     added_by_user_id: Optional[str] = None       # scrap owner (who saved it)
     added_by_display_name: Optional[str] = None
     vibes: list[ScrapVibe] = []                   # populated on trip surfaces only

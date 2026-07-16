@@ -61,20 +61,29 @@ def _get_start_anchor(sb, trip_id: str) -> dict[str, Any] | None:
     return rows.data[0] if rows.data else None
 
 
-def _validate_stay_date(trip: dict[str, Any], stay_date: str | None) -> None:
-    """Reject a stay's check-in day that falls outside the trip's dates.
+def _validate_anchor_dates(trip: dict[str, Any], row: dict[str, Any]) -> None:
+    """Reject anchor dates that fall outside the trip's dates, or a stay whose
+    check-out precedes its check-in.
 
     Lenient when either trip bound is unset. Dates are ISO 'YYYY-MM-DD' strings,
     so lexical comparison is chronological.
     """
-    if not stay_date:
-        return
     start, end = trip.get("start_date"), trip.get("end_date")
-    if (start and stay_date < start) or (end and stay_date > end):
+
+    def in_trip(d: str | None, label: str) -> None:
+        if d and ((start and d < start) or (end and d > end)):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{label} must fall within the trip's dates",
+            )
+
+    in_trip(row.get("anchor_date"), "Arrival/departure day")
+    in_trip(row.get("stay_date"), "Check-in day")
+    in_trip(row.get("stay_end_date"), "Check-out day")
+    stay, stay_end = row.get("stay_date"), row.get("stay_end_date")
+    if stay and stay_end and stay_end < stay:
         raise HTTPException(
-            status_code=400,
-            detail="Check-in day must fall within the trip's dates",
-        )
+            status_code=400, detail="Check-out can't be before check-in")
 
 
 async def _backfill_trip_geocodes(trip_ids: list[str]) -> None:
@@ -325,12 +334,30 @@ async def create_anchor(
 
     Normal anchors geocode their query synchronously. An end anchor with
     ``same_as_start`` copies the start anchor's place + type instead (arrival and
-    departure are often the same spot), skipping the geocode entirely.
+    departure are often the same spot), skipping the geocode entirely — but NOT
+    its date: departure day ≠ arrival day, so the request's own
+    anchor_date/anchor_time still apply.
 
     Collaborators may edit the shared route, so this needs write access.
     """
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
+
+    is_endpoint = body.role in (AnchorRole.START, AnchorRole.END)
+    # Timeline marker fields: anchor_date/time only on start/end; stay dates
+    # only on lodging.
+    marker_fields = {
+        "anchor_date": body.anchor_date.isoformat() if is_endpoint and body.anchor_date else None,
+        "anchor_time": body.anchor_time.isoformat() if is_endpoint and body.anchor_time else None,
+        "stay_date": (
+            body.stay_date.isoformat()
+            if body.role == AnchorRole.STAY and body.stay_date else None
+        ),
+        "stay_end_date": (
+            body.stay_end_date.isoformat()
+            if body.role == AnchorRole.STAY and body.stay_end_date else None
+        ),
+    }
 
     if body.same_as_start:
         if body.role != AnchorRole.END:
@@ -348,6 +375,7 @@ async def create_anchor(
             "lng": start.get("lng"),
             "geocode_confidence": start.get("geocode_confidence", GeocodeConfidence.NONE),
             "type": start.get("type"),
+            **marker_fields,
         }
     else:
         row = {
@@ -356,14 +384,10 @@ async def create_anchor(
             "label": body.label,
             "query": body.query,
             **(await _geocode_anchor(body.query)),
-            # type only applies to route endpoints; stay_date only to lodging.
-            "type": body.type if body.role in (AnchorRole.START, AnchorRole.END) else None,
-            "stay_date": (
-                body.stay_date.isoformat()
-                if body.role == AnchorRole.STAY and body.stay_date else None
-            ),
+            "type": body.type if is_endpoint else None,
+            **marker_fields,
         }
-        _validate_stay_date(trip, row["stay_date"])
+    _validate_anchor_dates(trip, row)
 
     try:
         created = sb.table("travelscrapbook_anchors").insert(row).execute()
@@ -403,13 +427,16 @@ async def update_anchor(
     anchor_id: str = Path(..., description="Anchor UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> AnchorResponse:
-    """Edit label/query; a changed query is re-geocoded synchronously."""
+    """Edit label/query/dates; a changed query is re-geocoded synchronously."""
     sb = get_supabase()
     existing = _get_writable_anchor(sb, anchor_id, user.user_id)
     update = {
         k: (v.isoformat() if hasattr(v, "isoformat") else v)
         for k, v in body.model_dump(exclude_unset=True).items()
     }
+    if any(k in update for k in ("anchor_date", "stay_date", "stay_end_date")):
+        trip, _ = get_accessible_trip(sb, existing["trip_id"], user.user_id)
+        _validate_anchor_dates(trip, {**existing, **update})
     if "query" in update and update["query"] != existing["query"]:
         update.update(await _geocode_anchor(update["query"]))
     updated = (

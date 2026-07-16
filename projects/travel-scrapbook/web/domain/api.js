@@ -50,6 +50,8 @@
  * @property {('booked'|'must_do'|'interested'|'could_skip'|null)=} rating  owner's own priority
  * @property {(string|null)=} visited_at  null = on the wishlist; set = visited
  * @property {(number|null)=} route_position
+ * @property {(string|null)=} plan_date  YYYY-MM-DD timeline slot (trip scraps only)
+ * @property {(string|null)=} plan_time  HH:MM:SS, optional time within the day
  * @property {(string|null)=} added_by_user_id     who saved it (shared trips)
  * @property {(string|null)=} added_by_display_name
  * @property {ScrapVibe[]=} vibes                  per-traveler takes (trip surfaces)
