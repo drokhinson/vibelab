@@ -32,10 +32,11 @@
     </a>
     <nav class="ts-header__nav">
       <button data-nav="trips" data-route="trips" aria-label="My trips"><i data-lucide="map"></i></button>
-      <button data-nav="inbox" data-route="inbox" aria-label="Inbox" style="position:relative;">
-        <i data-lucide="inbox"></i>
+      <button data-nav="inbox" data-route="inbox" aria-label="Wander List" style="position:relative;">
+        <i data-lucide="heart"></i>
         <span class="nav-badge hidden" id="inbox-badge"></span>
       </button>
+      <button data-nav="visited" data-route="visited" aria-label="Visited"><i data-lucide="circle-check"></i></button>
       <button data-nav="settings" data-route="settings" aria-label="Settings"><i data-lucide="settings-2"></i></button>
     </nav>
   </header>
@@ -45,6 +46,7 @@
     <section data-view="trips" class="hidden"></section>
     <section data-view="trip" class="hidden"></section>
     <section data-view="inbox" class="hidden"></section>
+    <section data-view="visited" class="hidden"></section>
     <section data-view="scrap" class="hidden"></section>
     <section data-view="share" class="hidden"></section>
     <section data-view="settings" class="hidden"></section>
@@ -85,6 +87,7 @@
   <script src="views/trips-view.js"></script>
   <script src="views/trip-view.js"></script>
   <script src="views/inbox-view.js"></script>
+  <script src="views/visited-view.js"></script>
   <script src="views/scrap-popup-view.js"></script>
   <script src="views/share-view.js"></script>
   <script src="views/settings-view.js"></script>

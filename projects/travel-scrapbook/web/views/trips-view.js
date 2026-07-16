@@ -70,6 +70,15 @@ class TripsView extends View {
           <input class="ts-input" id="nt-name" required placeholder="e.g. Tokyo, spring!" maxlength="120" />
           <label class="ts-label" for="nt-dest">Destination</label>
           <input class="ts-input" id="nt-dest" placeholder="e.g. Tokyo, Japan" maxlength="160" />
+          <label class="ts-label">Trip covers a whole…</label>
+          <div id="nt-scope" class="ts-segmented" role="radiogroup" aria-label="Trip scope">
+            ${[['city', 'City'], ['region', 'Region'], ['country', 'Country']].map(([val, label], i) => `
+              <label class="ts-segmented__opt">
+                <input type="radio" name="nt-scope" value="${val}" ${i === 0 ? 'checked' : ''} />
+                <span>${label}</span>
+              </label>`).join('')}
+          </div>
+          <p class="confidence-hint" style="margin-top:0.3rem;">Filters which of your saved places fit this trip. City matches nearby spots; Region/Country pulls in everything you've tagged there.</p>
           <label class="ts-label">Cover sticker</label>
           <div id="nt-covers" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             ${covers.map((c, i) => `
@@ -113,6 +122,7 @@ class TripsView extends View {
         const trip = await window.TripDomain.create({
           name: modal.querySelector('#nt-name').value.trim(),
           destination: modal.querySelector('#nt-dest').value.trim() || null,
+          scope_level: modal.querySelector('input[name=nt-scope]:checked').value,
           cover_icon: modal.querySelector('input[name=nt-cover]:checked').value,
           start_date: modal.querySelector('#nt-start').value || null,
           end_date: modal.querySelector('#nt-end').value || null,

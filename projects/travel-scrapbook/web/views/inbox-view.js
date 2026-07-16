@@ -13,7 +13,7 @@ class InboxView extends View {
 
   renderLoading() {
     this.container.innerHTML = `
-      <h1 style="font-size:2rem;">Inbox</h1>
+      <h1 style="font-size:2rem;">Wander List</h1>
       <div class="sticker-card shimmer" style="height:80px;"></div>
       <div class="sticker-card shimmer" style="height:80px;margin-top:0.8rem;"></div>
     `;
@@ -63,12 +63,12 @@ class InboxView extends View {
     const empty = !processing.length && !failed.length && !scraps.length;
 
     this.container.innerHTML = `
-      <h1 style="font-size:2rem;">Inbox</h1>
-      <p class="scrap-card__sub" style="margin-top:-0.4rem;">Everything you've saved that isn't in a trip yet.</p>
+      <h1 style="font-size:2rem;">Wander List</h1>
+      <p class="scrap-card__sub" style="margin-top:-0.4rem;">Places you've saved because you want to go. Tap the check once you've been.</p>
       ${empty ? `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-inbox.svg" alt="" />
-          <p class="empty-title">All sorted!</p>
+          <p class="empty-title">Your list is wide open</p>
           <p class="empty-desc">Share a link from Instagram, Reddit, or Maps — new finds land here
             (or straight onto a matching trip).</p>
         </div>` : `
@@ -83,7 +83,7 @@ class InboxView extends View {
             ${failed.map((s, i) => renderSourceCard(s, { index: i, variant: 'failed' })).join('')}
           </div>` : ''}
         ${scraps.length ? `
-          <h2 style="font-size:1.3rem;margin:1.1rem 0 0.5rem;">Needs a home</h2>
+          <h2 style="font-size:1.3rem;margin:1.1rem 0 0.5rem;">Want to go</h2>
           <div class="card-grid card-grid--2col">
             ${scraps.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox' })).join('')}
           </div>` : ''}
@@ -126,7 +126,11 @@ class InboxView extends View {
       el.addEventListener('click', async (ev) => {
         ev.stopPropagation();
         try {
-          if (action === 'assign') {
+          if (action === 'visited') {
+            await window.ScrapDomain.toggleVisited(scrapId, null, !!scrap.visited_at);
+            toast('Marked visited — see it under Visited');
+            await window.SourceDomain.loadInbox();
+          } else if (action === 'assign') {
             await window.SourceDomain.assignScrap(scrapId, el.dataset.tripId);
             toast('Added to the trip');
           } else if (action === 'pick-trip') {

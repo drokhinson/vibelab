@@ -16,6 +16,16 @@ function _confidenceHint(scrap) {
   return '';
 }
 
+// City · Region · Country, dropping empties and adjacent duplicates (a
+// city-centroid geocode often repeats the name across tiers, e.g. Singapore).
+function _locationLine(scrap) {
+  const parts = [];
+  for (const seg of [scrap.place_city, scrap.place_region, scrap.place_country]) {
+    if (seg && seg !== parts[parts.length - 1]) parts.push(seg);
+  }
+  return parts.join(', ');
+}
+
 function _sourceChips(scrap) {
   const sources = scrap.sources || [];
   return sources.map((src) => `
@@ -27,14 +37,14 @@ function _sourceChips(scrap) {
 
 /**
  * @param {Scrap} scrap
- * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'}} opts
+ * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate', tripId?: string}} opts
  */
 function renderScrapCard(scrap, opts = {}) {
-  const { index = 0, variant = 'trip' } = opts;
+  const { index = 0, variant = 'trip', tripId = null } = opts;
   const catIcon = _scrapCategoryIcon(scrap);
 
   const title = scrap.place_name || 'Saved place';
-  const sub = [scrap.place_city, scrap.place_country].filter(Boolean).join(', ');
+  const sub = _locationLine(scrap);
   const hint = _confidenceHint(scrap);
   const photo = scrap.og_image_url
     ? `<img class="scrap-card__photo" src="${escapeAttr(scrap.og_image_url)}" alt="" loading="lazy"
@@ -68,20 +78,41 @@ function renderScrapCard(scrap, opts = {}) {
           <i data-lucide="trash-2"></i>
         </button>
       </div>`;
+  } else if (variant === 'candidate') {
+    footer = `
+      <div class="scrap-card__row" style="margin-top:0.6rem;">
+        <button class="ts-btn ts-btn--sm ts-btn--mint" data-action="assign"
+                data-scrap-id="${escapeAttr(scrap.id)}" data-trip-id="${escapeAttr(tripId)}">
+          <i data-lucide="plus"></i>Add to this trip
+        </button>
+      </div>`;
   }
 
-  const favBtn = variant === 'trip' ? `
+  // Favorite (trip only) + visited toggle (trip + wishlist) live in the corner.
+  const showFav = variant === 'trip';
+  const showVisited = variant === 'trip' || variant === 'inbox';
+  const isVisited = !!scrap.visited_at;
+  const actions = (showFav || showVisited) ? `
     <div class="scrap-card__actions">
-      <button class="scrap-card__fav ${scrap.is_favorite ? 'is-fav' : ''}" data-action="favorite"
-              data-scrap-id="${escapeAttr(scrap.id)}" aria-label="Favorite">
-        <i data-lucide="heart"></i>
-      </button>
+      ${showVisited ? `
+        <button class="scrap-card__visited ${isVisited ? 'is-visited' : ''}" data-action="visited"
+                data-scrap-id="${escapeAttr(scrap.id)}"
+                aria-label="${isVisited ? 'Mark not visited' : 'Mark visited'}"
+                title="${isVisited ? 'Visited — tap to undo' : 'Mark visited'}">
+          <i data-lucide="circle-check"></i>
+        </button>` : ''}
+      ${showFav ? `
+        <button class="scrap-card__fav ${scrap.is_favorite ? 'is-fav' : ''}" data-action="favorite"
+                data-scrap-id="${escapeAttr(scrap.id)}" aria-label="Favorite">
+          <i data-lucide="heart"></i>
+        </button>` : ''}
     </div>` : '';
 
   return `
-    <div class="sticker-card card-lift ${variant === 'staged' ? 'scrap-card--staged' : ''}"
+    <div class="sticker-card card-lift ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
          style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="edit">
-      ${favBtn}
+      ${actions}
+      ${isVisited ? '<span class="scrap-card__visited-badge"><i data-lucide="check"></i>Visited</span>' : ''}
       ${photo}
       <p class="scrap-card__title">${escapeHtml(title)}</p>
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}

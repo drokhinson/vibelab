@@ -32,6 +32,15 @@ const ScrapDomain = {
     if (tripId) await window.TripDomain.load(tripId);
   },
 
+  // Mark a place visited / un-visited. Visited places leave the wishlist and
+  // surface in the Visited view. Callers reload their own list after; we reload
+  // the trip (if any) and refresh the wishlist badge here.
+  async toggleVisited(scrapId, tripId, currentlyVisited) {
+    await window.api.updateScrap(scrapId, { visited: !currentlyVisited });
+    if (tripId) await window.TripDomain.load(tripId);
+    window.SourceDomain?.refreshInboxCount();
+  },
+
   async approve(scrapId, tripId) {
     await window.api.approveScrap(scrapId);
     if (tripId) await window.TripDomain.load(tripId);
