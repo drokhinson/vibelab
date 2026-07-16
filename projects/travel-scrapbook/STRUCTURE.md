@@ -85,7 +85,7 @@ All under `/api/v1/travel_scrapbook`, Supabase bearer auth (profile auto-created
 - `POST /capture-token` → 201 (plaintext shown once; replaces prior token); `GET /capture-token` — status; `DELETE /capture-token` — revoke
 - `GET /inbox` — the wishlist: `{processing_sources, failed_sources, scraps}` (only unvisited inbox scraps; each carries `suggestions`: nearest ≤3 trips within 200 km, plus country/region trips by tag match); sweeps sources stuck processing >10 min → failed; `GET /inbox/count` — nav badge (unvisited only)
 - `GET /visited` — every scrap with `visited_at` set (any trip or the wishlist), most-recently-visited first — the Visited view
-- `POST /sources/{id}/retry` → 202; `DELETE /sources/{id}` — dismiss
+- `POST /sources/{id}/retry` → 202; `DELETE /sources/{id}` — dismiss; `GET /sources/{id}/scraps` — a capture's live `{status, error_kind, scraps}` (drives the "watch it import" cards on the share success screen)
 - `GET /scraps/{id}`; `GET /trips/{id}/scraps` — hydrated with place fields (incl. `place_region`) + source chips
 - `GET /trips/{id}/candidates` — unvisited wishlist scraps whose location matches the trip's scope (city/country/region), for the "From your wishlist" panel; same predicate as auto-staging
 - `PATCH /scraps/{id}` — place-field/category edits (incl. `place_region`) write to the canonical **place** row; notes/favorite/`visited` stay on the scrap (`visited` → `visited_at` now()/NULL); `regeocode: true` re-runs Nominatim synchronously (also refreshes region)
