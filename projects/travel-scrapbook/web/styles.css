@@ -222,7 +222,7 @@ a:hover { color: var(--accent-hover); }
   box-shadow: 0 -6px 16px rgba(91, 84, 104, 0.10);
 }
 
-/* ── Geo drill-down filter bar (browse views) ───────────────────────────────── */
+/* ── Geo filter bar: Region / Country / City selects (browse views) ─────────── */
 .filter-bar {
   display: flex; align-items: center; gap: 0.5rem;
   overflow-x: auto; -webkit-overflow-scrolling: touch;
@@ -230,21 +230,6 @@ a:hover { color: var(--accent-hover); }
   scrollbar-width: none;
 }
 .filter-bar::-webkit-scrollbar { display: none; }
-.filter-chip {
-  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
-  min-height: 34px; padding: 0.15rem 0.35rem 0.15rem 0.7rem;
-  border: 1.5px solid var(--ink); border-radius: 999px;
-  background: var(--card); color: var(--ink);
-  font-size: 0.76rem; font-weight: 800; white-space: nowrap;
-  box-shadow: 1.5px 1.5px 0 var(--ink);
-}
-.filter-chip [data-lucide] { width: 14px; height: 14px; }
-.filter-chip__x {
-  width: 28px; height: 28px; margin-left: 2px; border: none; border-radius: 999px;
-  background: var(--paper); color: var(--ink-muted); cursor: pointer;
-  display: grid; place-items: center;
-}
-.filter-chip__x:hover { color: var(--ink); }
 .filter-bar__select {
   flex-shrink: 0; min-height: 34px; max-width: 46vw;
   padding: 0.15rem 0.7rem; border: 1.5px dashed var(--border); border-radius: 999px;
@@ -252,6 +237,11 @@ a:hover { color: var(--accent-hover); }
   font-size: 0.76rem; font-weight: 800; cursor: pointer;
 }
 .filter-bar__select:hover { border-color: var(--ink-muted); color: var(--ink); }
+/* A select with an active filter reads like a set chip. */
+.filter-bar__select.is-active {
+  border: 1.5px solid var(--ink); background: var(--card); color: var(--ink);
+  box-shadow: 1.5px 1.5px 0 var(--ink);
+}
 
 /* Note chip — the note itself lives in the NotePopup. */
 .note-chip {

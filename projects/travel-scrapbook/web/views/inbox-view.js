@@ -111,7 +111,6 @@ class InboxView extends View {
           <div class="card-grid">
             ${this._failed.map((s, i) => renderSourceCard(s, { index: i, variant: 'failed' })).join('')}
           </div>` : ''}
-        <h2 style="font-size:1.3rem;margin:1.1rem 0 0.4rem;">Want to go</h2>
         ${renderFilterBar(this._geo, this._facets)}
         ${this._items.length ? `
           <div class="card-grid card-grid--2col">
