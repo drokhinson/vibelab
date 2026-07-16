@@ -6,14 +6,14 @@ from db import get_supabase
 
 from . import router
 from .access import get_accessible_trip
-from .constants import ScrapStatus
+from .constants import MembershipStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     CommunityPlacesResponse,
     CommunitySaveRequest,
     ScrapResponse,
 )
-from .scrap_routes import _hydrated_scrap
+from .scrap_routes import _hydrated_membership, _hydrated_scrap
 from .services.community import aggregate_places, copy_place_for_user
 
 
@@ -83,21 +83,21 @@ async def save_community_place(
         .limit(1)
         .execute()
     ).data
-    fields = {
-        "trip_id": body.trip_id,
-        "status": ScrapStatus.APPROVED if body.trip_id else ScrapStatus.INBOX,
-    }
     if existing:
-        row = (
-            sb.table("travelscrapbook_scraps")
-            .update({**fields, "updated_at": "now()"})
-            .eq("id", existing[0]["id"])
-            .execute()
-        ).data[0]
+        row = existing[0]
     else:
         row = (
             sb.table("travelscrapbook_scraps")
-            .insert({"user_id": user.user_id, "place_id": place["id"], **fields})
+            .insert({"user_id": user.user_id, "place_id": place["id"]})
             .execute()
         ).data[0]
+    # Onto a trip → add a membership (the place also stays on the Wander List).
+    if body.trip_id:
+        sb.table("travelscrapbook_scrap_trips").upsert(
+            {"scrap_id": row["id"], "trip_id": body.trip_id,
+             "status": MembershipStatus.APPROVED},
+            on_conflict="scrap_id,trip_id",
+            ignore_duplicates=True,
+        ).execute()
+        return _hydrated_membership(sb, row["id"], body.trip_id)
     return _hydrated_scrap(sb, row)

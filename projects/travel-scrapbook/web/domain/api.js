@@ -31,9 +31,11 @@
  *   A saved place — in a trip or the inbox. Place fields are flattened from
  *   the canonical place row; `sources` lists every URL that mentioned it.
  * @property {string} id
- * @property {(string|null)} trip_id  null = inbox
+ * @property {(string|null)=} trip_id  current trip context (trip surfaces); null on the Wander List
+ * @property {(string|null)=} scrap_trip_id  membership id (per-trip vibe/schedule key)
+ * @property {string[]=} trip_ids  every trip this place is in (Wander List picker)
  * @property {string} place_id
- * @property {'inbox'|'staged'|'approved'} status
+ * @property {('staged'|'approved'|null)=} status  membership status on trip surfaces
  * @property {(string|null)=} place_name
  * @property {(string|null)=} place_city
  * @property {(string|null)=} place_region
@@ -208,12 +210,16 @@
     listVisited: (params = {}) => call(`/visited${qs(params)}`),
     updateScrap: (scrapId, body) => call(`/scraps/${scrapId}`, { method: 'PATCH', body }),
     deleteScrap: (scrapId) => call(`/scraps/${scrapId}`, { method: 'DELETE' }),
-    /** @returns {Promise<Scrap>} */
+    /** Add a place to one trip (additive membership). @returns {Promise<Scrap>} */
     assignScrap: (scrapId, tripId) => call(`/scraps/${scrapId}/assign`, { method: 'POST', body: { trip_id: tripId } }),
-    /** @returns {Promise<Scrap>} */
-    approveScrap: (scrapId) => call(`/scraps/${scrapId}/approve`, { method: 'POST' }),
-    /** @returns {Promise<Scrap>} */
-    unassignScrap: (scrapId) => call(`/scraps/${scrapId}/unassign`, { method: 'POST' }),
+    /** Set the exact set of trips a place is in (multi-select). @returns {Promise<Scrap>} */
+    setScrapTrips: (scrapId, tripIds) => call(`/scraps/${scrapId}/trips`, { method: 'PUT', body: { trip_ids: tripIds } }),
+    /** Approve a staged membership on a trip. @returns {Promise<Scrap>} */
+    approveScrap: (scrapId, tripId) => call(`/scraps/${scrapId}/trips/${tripId}/approve`, { method: 'POST' }),
+    /** Remove a place from one trip. @returns {Promise<{message: string}>} */
+    unassignScrap: (scrapId, tripId) => call(`/scraps/${scrapId}/trips/${tripId}`, { method: 'DELETE' }),
+    /** Set/clear a plan's timeline slot on one trip. @returns {Promise<Scrap>} */
+    scheduleScrap: (scrapId, tripId, body) => call(`/scraps/${scrapId}/trips/${tripId}/schedule`, { method: 'PATCH', body }),
     /** @returns {Promise<{scraps: Scrap[]}>} */
     approveAllStaged: (tripId) => call(`/trips/${tripId}/approve-all`, { method: 'POST' }),
 
@@ -250,11 +256,11 @@
     /** @returns {Promise<Scrap>} */
     clearRating: (scrapId) => call(`/scraps/${scrapId}/rating`, { method: 'DELETE' }),
 
-    // ── Vibes ─────────────────────────────────────────────────────────────
+    // ── Vibes (per traveler, per trip) ────────────────────────────────────
     /** @returns {Promise<Scrap>} */
-    setVibe: (scrapId, level) => call(`/scraps/${scrapId}/vibe`, { method: 'PUT', body: { level } }),
+    setVibe: (scrapId, tripId, level) => call(`/scraps/${scrapId}/trips/${tripId}/vibe`, { method: 'PUT', body: { level } }),
     /** @returns {Promise<Scrap>} */
-    clearVibe: (scrapId) => call(`/scraps/${scrapId}/vibe`, { method: 'DELETE' }),
+    clearVibe: (scrapId, tripId) => call(`/scraps/${scrapId}/trips/${tripId}/vibe`, { method: 'DELETE' }),
 
     trackEvent: (name) => {
       fetch(`${BASE}/api/v1/analytics/track`, {

@@ -1,10 +1,12 @@
 // widgets/plan-scheduler.js — pick a day (and optional time) for a plan.
 // Days come from the trip's timeline; falls back to a raw date input when the
-// trip has no day range yet. Saving PATCHes plan_date/plan_time on the scrap.
+// trip has no day range yet. Saving PATCHes the plan's per-trip timeline slot
+// (plan_date/plan_time live on the scrap↔trip membership), so a tripId is
+// required.
 'use strict';
 
 const PlanScheduler = {
-  open(scrap, { days = [], tripBounds = {}, onSaved } = {}) {
+  open(scrap, { tripId = null, days = [], tripBounds = {}, onSaved } = {}) {
     this.close();
     const modal = document.createElement('div');
     modal.className = 'ts-modal';
@@ -47,7 +49,7 @@ const PlanScheduler = {
 
     const save = async (fields) => {
       try {
-        await window.api.updateScrap(scrap.id, fields);
+        await window.api.scheduleScrap(scrap.id, tripId || scrap.trip_id, fields);
         this.close();
         onSaved?.();
       } catch (err) { toast(err.message || 'Could not schedule', { error: true }); }

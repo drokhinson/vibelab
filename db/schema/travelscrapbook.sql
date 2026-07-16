@@ -152,29 +152,52 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_capture_tokens (
 );
 -- idx_ts_capture_tokens_user (user_id)
 
--- A scrap = the user's saved place, in a trip or in the inbox.
--- status: inbox (no trip) | staged (auto-matched to a trip, awaiting review)
---       | approved (a normal trip scrap — the only status routes/exports use).
+-- A scrap = the user's saved place. Since 013 it's just the place (owner fields
+-- notes/rating/visited_at); its membership in each trip lives in
+-- travelscrapbook_scrap_trips (a place can be in many trips at once). It stays on
+-- the Wander List (GET /inbox = visited_at IS NULL) regardless of trips.
+-- The five legacy single-trip columns below (trip_id/status/route_position/
+-- plan_date/plan_time) are UNUSED after 013 and get dropped in 014; trip_id's FK
+-- was re-pointed to ON DELETE SET NULL in 013 so deleting a trip can't delete a
+-- place that lives in other trips.
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_scraps (
   id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  trip_id        UUID        REFERENCES public.travelscrapbook_trips(id) ON DELETE CASCADE,  -- NULL = inbox
+  trip_id        UUID        REFERENCES public.travelscrapbook_trips(id) ON DELETE SET NULL,  -- LEGACY (013→014)
   user_id        UUID        NOT NULL REFERENCES public.travelscrapbook_profiles(id) ON DELETE CASCADE,
   place_id       UUID        NOT NULL REFERENCES public.travelscrapbook_places(id) ON DELETE CASCADE,
-  status         TEXT        NOT NULL DEFAULT 'inbox'
+  status         TEXT        NOT NULL DEFAULT 'inbox'                             -- LEGACY (013→014)
     CHECK (status IN ('inbox', 'staged', 'approved')),
   notes          TEXT,
   rating         TEXT                                -- owner's own priority (NULL = unrated)
     CHECK (rating IS NULL OR rating IN ('booked', 'must_do', 'interested', 'could_skip')),
-  visited_at     TIMESTAMPTZ,                        -- NULL = on the wishlist; set = visited
-  route_position INTEGER,
-  plan_date      DATE,                               -- day this plan is slotted on (trip scraps only, 009)
-  plan_time      TIME,                               -- optional time within the day (009)
+  visited_at     TIMESTAMPTZ,                        -- NULL = on the Wander List; set = visited
+  route_position INTEGER,                            -- LEGACY (013→014) → scrap_trips.route_position
+  plan_date      DATE,                               -- LEGACY (013→014) → scrap_trips.plan_date
+  plan_time      TIME,                               -- LEGACY (013→014) → scrap_trips.plan_time
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- idx_ts_scraps_trip (trip_id), idx_ts_scraps_user (user_id)
 -- idx_ts_scraps_user_status (user_id, status), idx_ts_scraps_place (place_id)
 -- idx_ts_scraps_user_visited (user_id, visited_at)
+
+-- Scrap ↔ trip membership (013): a place's presence on one trip, carrying that
+-- trip's status + route position + timeline slot. Absence of a row = not in the
+-- trip. Deleting the scrap OR the trip cascades the membership (and its vibes).
+CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trips (
+  id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  scrap_id       UUID        NOT NULL REFERENCES public.travelscrapbook_scraps(id) ON DELETE CASCADE,
+  trip_id        UUID        NOT NULL REFERENCES public.travelscrapbook_trips(id)  ON DELETE CASCADE,
+  status         TEXT        NOT NULL DEFAULT 'approved'
+    CHECK (status IN ('staged', 'approved')),
+  route_position INTEGER,
+  plan_date      DATE,
+  plan_time      TIME,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (scrap_id, trip_id)
+);
+-- idx_ts_scrap_trips_trip (trip_id, status), idx_ts_scrap_trips_scrap (scrap_id)
+-- idx_ts_scrap_trips_trip_plan_date (trip_id, plan_date)
 
 -- Trip sharing: the owner stays on trips.user_id; everyone else is a row here.
 -- role = viewer (read + vibe) | collaborator (read + vibe + add places).
@@ -193,16 +216,20 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_trip_members (
 );
 -- idx_ts_trip_members_user (user_id, status), idx_ts_trip_members_trip (trip_id)
 
--- Per-user "Vibe" on a saved place — the consensus input. One per person per
--- scrap; booked | must_do | interested | could_skip. Present on all trips.
+-- Per-user "Vibe" on a saved place FOR A TRIP — the consensus input. One per
+-- person per membership; booked | must_do | interested | could_skip. Since 013
+-- it keys on the membership (scrap_trip_id) so a place in >1 trip has independent
+-- consensus per trip. scrap_id is LEGACY (nullable; dropped in 014).
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_vibes (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  scrap_id   UUID        NOT NULL REFERENCES public.travelscrapbook_scraps(id) ON DELETE CASCADE,
-  user_id    UUID        NOT NULL REFERENCES public.travelscrapbook_profiles(id) ON DELETE CASCADE,
-  level      TEXT        NOT NULL
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  scrap_id      UUID        REFERENCES public.travelscrapbook_scraps(id) ON DELETE CASCADE,       -- LEGACY (013→014)
+  scrap_trip_id UUID        NOT NULL REFERENCES public.travelscrapbook_scrap_trips(id) ON DELETE CASCADE,
+  user_id       UUID        NOT NULL REFERENCES public.travelscrapbook_profiles(id) ON DELETE CASCADE,
+  level         TEXT        NOT NULL
     CHECK (level IN ('booked', 'must_do', 'interested', 'could_skip')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (scrap_id, user_id)
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (scrap_trip_id, user_id)
 );
--- idx_ts_scrap_vibes_scrap (scrap_id)
+-- idx_ts_scrap_vibes_membership_user (scrap_trip_id, user_id) UNIQUE
+-- idx_ts_scrap_vibes_membership (scrap_trip_id)

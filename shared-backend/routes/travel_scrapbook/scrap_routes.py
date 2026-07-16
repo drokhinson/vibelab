@@ -12,12 +12,13 @@ from fastapi import Depends, HTTPException, Path, Query
 from db import get_supabase
 
 from . import router
-from .access import get_accessible_scrap
+from .access import get_accessible_membership
 from .constants import GeocodeConfidence
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     MessageResponse,
     PagedScrapsResponse,
+    PlanScheduleRequest,
     RatingRequest,
     ScrapResponse,
     ScrapUpdateRequest,
@@ -25,7 +26,7 @@ from .models import (
 )
 from .services import nominatim
 from .services.enrichment import build_maps_url
-from .services.hydrate import hydrate_scraps
+from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 from .services.places import (
     geo_facets,
     geo_match,
@@ -49,6 +50,24 @@ def get_owned_scrap(sb, scrap_id: str, user_id: str) -> dict[str, Any]:
 
 def _hydrated_scrap(sb, scrap: dict[str, Any], *, with_vibes: bool = False) -> ScrapResponse:
     return ScrapResponse(**hydrate_scraps(sb, [scrap], with_vibes=with_vibes)[0])
+
+
+def _hydrated_membership(
+    sb, scrap_id: str, trip_id: str, *, with_vibes: bool = True
+) -> ScrapResponse:
+    """Return a scrap in ONE trip's context (membership fields + per-trip vibes).
+    Used by the membership-scoped endpoints (assign / approve / schedule / vibe)."""
+    rows = (
+        sb.table("travelscrapbook_scrap_trips")
+        .select("*, travelscrapbook_scraps(*)")
+        .eq("scrap_id", scrap_id)
+        .eq("trip_id", trip_id)
+        .execute()
+    ).data or []
+    flat = membership_rows_to_scraps(rows)
+    if not flat:
+        raise HTTPException(status_code=404, detail="This place isn't on that trip")
+    return ScrapResponse(**hydrate_scraps(sb, flat, with_vibes=with_vibes)[0])
 
 
 @router.get(
@@ -129,11 +148,11 @@ async def update_scrap(
     scrap_id: str = Path(..., description="Scrap UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
-    """Edit place fields, category, notes, or the plan's timeline slot
-    (plan_date/plan_time — trip scraps only; explicit null clears). Place
-    edits write to the scrap's canonical place row (safe — places are
-    per-user). Pass regeocode=true to re-run Nominatim on the (possibly
-    edited) place."""
+    """Edit place fields, category, or notes (and the visited flag). Place edits
+    write to the scrap's canonical place row (safe — places are per-user). A
+    plan's per-trip timeline slot is set separately via
+    PATCH /scraps/{id}/trips/{trip_id}/schedule. Pass regeocode=true to re-run
+    Nominatim on the (possibly edited) place."""
     sb = get_supabase()
     existing = get_owned_scrap(sb, scrap_id, user.user_id)
     place = (
@@ -149,28 +168,6 @@ async def update_scrap(
     # visited is a soft timestamp flag, not a 1:1 column — map true→now(), false→NULL.
     if "visited" in update:
         scrap_update["visited_at"] = "now()" if update["visited"] else None
-    # Timeline slot: only plans in a trip can be scheduled.
-    if "plan_date" in update or "plan_time" in update:
-        if not existing.get("trip_id"):
-            raise HTTPException(
-                status_code=400, detail="Only plans in a trip can be scheduled")
-        for k in ("plan_date", "plan_time"):
-            if k in update:
-                v = update[k]
-                scrap_update[k] = v.isoformat() if v is not None else None
-        plan_date = scrap_update.get("plan_date")
-        if plan_date:
-            trip = (
-                sb.table("travelscrapbook_trips")
-                .select("start_date, end_date")
-                .eq("id", existing["trip_id"])
-                .execute()
-            ).data[0]
-            start, end = trip.get("start_date"), trip.get("end_date")
-            if (start and plan_date < start) or (end and plan_date > end):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Plan day must fall within the trip's dates")
     place_update: dict[str, Any] = {}
     if update.get("place_name"):
         place_update["name"] = update["place_name"]
@@ -254,6 +251,52 @@ async def delete_scrap(
     return MessageResponse(message="Scrap deleted")
 
 
+# ── Timeline slot (per-trip plan schedule) ──────────────────────────────────
+
+@router.patch(
+    "/scraps/{scrap_id}/trips/{trip_id}/schedule",
+    response_model=ScrapResponse,
+    status_code=200,
+    summary="Set a plan's timeline slot on a trip",
+)
+async def schedule_plan(
+    body: PlanScheduleRequest,
+    scrap_id: str = Path(..., description="Scrap UUID"),
+    trip_id: str = Path(..., description="Trip UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapResponse:
+    """Set or clear a place's day (and optional time) on ONE trip's timeline —
+    per-membership, so the same place can sit on different days across trips.
+    Collaborator-or-owner only; plan_date must fall within the trip's dates."""
+    sb = get_supabase()
+    membership, _ = get_accessible_membership(
+        sb, scrap_id, trip_id, user.user_id, need_write=True
+    )
+    update = body.model_dump(exclude_unset=True)
+    m_update: dict[str, Any] = {}
+    for k in ("plan_date", "plan_time"):
+        if k in update:
+            v = update[k]
+            m_update[k] = v.isoformat() if v is not None else None
+    plan_date = m_update.get("plan_date")
+    if plan_date:
+        trip = (
+            sb.table("travelscrapbook_trips")
+            .select("start_date, end_date")
+            .eq("id", trip_id)
+            .execute()
+        ).data[0]
+        start, end = trip.get("start_date"), trip.get("end_date")
+        if (start and plan_date < start) or (end and plan_date > end):
+            raise HTTPException(
+                status_code=400, detail="Plan day must fall within the trip's dates")
+    if m_update:
+        sb.table("travelscrapbook_scrap_trips").update(m_update).eq(
+            "id", membership["id"]
+        ).execute()
+    return _hydrated_membership(sb, scrap_id, trip_id)
+
+
 # ── Rating (the owner's own priority on a place) ─────────────────────────────
 
 @router.put(
@@ -268,8 +311,8 @@ async def set_rating(
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
     """Set the owner's priority on their saved place (booked / must do /
-    interested / could skip) — from the Wander List or any trip. When the
-    scrap is in a trip, the rating also upserts the owner's vibe row so the
+    interested / could skip) — from the Wander List or any trip. The rating
+    doubles as the owner's vibe on EVERY trip the place is in, so each trip's
     group consensus includes them without a second control."""
     sb = get_supabase()
     scrap = get_owned_scrap(sb, scrap_id, user.user_id)
@@ -277,18 +320,23 @@ async def set_rating(
         {"rating": body.level, "updated_at": "now()"}
     ).eq("id", scrap_id).execute()
     scrap["rating"] = body.level
-    in_trip = bool(scrap.get("trip_id"))
-    if in_trip:
+    memberships = (
+        sb.table("travelscrapbook_scrap_trips")
+        .select("id")
+        .eq("scrap_id", scrap_id)
+        .execute()
+    ).data or []
+    for m in memberships:
         sb.table("travelscrapbook_scrap_vibes").upsert(
             {
-                "scrap_id": scrap_id,
+                "scrap_trip_id": m["id"],
                 "user_id": user.user_id,
                 "level": body.level,
                 "updated_at": "now()",
             },
-            on_conflict="scrap_id,user_id",
+            on_conflict="scrap_trip_id,user_id",
         ).execute()
-    return _hydrated_scrap(sb, scrap, with_vibes=in_trip)
+    return _hydrated_scrap(sb, scrap)
 
 
 @router.delete(
@@ -301,67 +349,76 @@ async def clear_rating(
     scrap_id: str = Path(..., description="Scrap UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
-    """Remove the owner's priority on their place (back to unrated). Also
-    clears the owner's vibe row when the scrap is in a trip, mirroring
-    set_rating's sync."""
+    """Remove the owner's priority on their place (back to unrated). Also clears
+    the owner's vibe row on every trip the place is in, mirroring set_rating."""
     sb = get_supabase()
     scrap = get_owned_scrap(sb, scrap_id, user.user_id)
     sb.table("travelscrapbook_scraps").update(
         {"rating": None, "updated_at": "now()"}
     ).eq("id", scrap_id).execute()
     scrap["rating"] = None
-    in_trip = bool(scrap.get("trip_id"))
-    if in_trip:
-        sb.table("travelscrapbook_scrap_vibes").delete().eq(
-            "scrap_id", scrap_id
+    membership_ids = [
+        m["id"]
+        for m in (
+            sb.table("travelscrapbook_scrap_trips")
+            .select("id")
+            .eq("scrap_id", scrap_id)
+            .execute()
+        ).data or []
+    ]
+    if membership_ids:
+        sb.table("travelscrapbook_scrap_vibes").delete().in_(
+            "scrap_trip_id", membership_ids
         ).eq("user_id", user.user_id).execute()
-    return _hydrated_scrap(sb, scrap, with_vibes=in_trip)
+    return _hydrated_scrap(sb, scrap)
 
 
-# ── Vibes (per-traveler consensus input) ─────────────────────────────────────
+# ── Vibes (per-traveler, per-trip consensus input) ───────────────────────────
 
 @router.put(
-    "/scraps/{scrap_id}/vibe",
+    "/scraps/{scrap_id}/trips/{trip_id}/vibe",
     response_model=ScrapResponse,
     status_code=200,
-    summary="Set my vibe on a place",
+    summary="Set my vibe on a place for a trip",
 )
 async def set_vibe(
     body: VibeRequest,
     scrap_id: str = Path(..., description="Scrap UUID"),
+    trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
-    """Record (or change) the current traveler's vibe on a saved place. Any
-    member of the trip may set their own — including viewers — so everyone
-    contributes to the group consensus."""
+    """Record (or change) the current traveler's vibe on a place for ONE trip.
+    Any member of the trip may set their own — including viewers — so everyone
+    contributes to that trip's group consensus."""
     sb = get_supabase()
-    scrap = get_accessible_scrap(sb, scrap_id, user.user_id)
+    membership, _ = get_accessible_membership(sb, scrap_id, trip_id, user.user_id)
     sb.table("travelscrapbook_scrap_vibes").upsert(
         {
-            "scrap_id": scrap_id,
+            "scrap_trip_id": membership["id"],
             "user_id": user.user_id,
             "level": body.level,
             "updated_at": "now()",
         },
-        on_conflict="scrap_id,user_id",
+        on_conflict="scrap_trip_id,user_id",
     ).execute()
-    return _hydrated_scrap(sb, scrap, with_vibes=True)
+    return _hydrated_membership(sb, scrap_id, trip_id)
 
 
 @router.delete(
-    "/scraps/{scrap_id}/vibe",
+    "/scraps/{scrap_id}/trips/{trip_id}/vibe",
     response_model=ScrapResponse,
     status_code=200,
-    summary="Clear my vibe on a place",
+    summary="Clear my vibe on a place for a trip",
 )
 async def clear_vibe(
     scrap_id: str = Path(..., description="Scrap UUID"),
+    trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
-    """Remove the current traveler's vibe on a place (back to no opinion)."""
+    """Remove the current traveler's vibe on a place for one trip."""
     sb = get_supabase()
-    scrap = get_accessible_scrap(sb, scrap_id, user.user_id)
+    membership, _ = get_accessible_membership(sb, scrap_id, trip_id, user.user_id)
     sb.table("travelscrapbook_scrap_vibes").delete().eq(
-        "scrap_id", scrap_id
+        "scrap_trip_id", membership["id"]
     ).eq("user_id", user.user_id).execute()
-    return _hydrated_scrap(sb, scrap, with_vibes=True)
+    return _hydrated_membership(sb, scrap_id, trip_id)

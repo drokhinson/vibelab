@@ -11,8 +11,8 @@ from .access import get_accessible_trip
 from .constants import (
     AnchorRole,
     GeocodeConfidence,
+    MembershipStatus,
     MemberStatus,
-    ScrapStatus,
     TRAVEL_ROLES,
     TripMemberRole,
 )
@@ -30,7 +30,7 @@ from .models import (
     TripUpdateRequest,
 )
 from .services import nominatim
-from .services.hydrate import hydrate_scraps
+from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 from .services.places import geocode_trip_destination
 
 
@@ -125,7 +125,7 @@ async def list_trips(
     sb = get_supabase()
     _cols = ("id, name, destination, cover_icon, start_date, end_date, created_at, "
              "user_id, scope_level, dest_city, dest_region, dest_country, "
-             "destination_geocoded_at, travelscrapbook_scraps(count)")
+             "destination_geocoded_at, travelscrapbook_scrap_trips(count)")
 
     owned = (
         sb.table("travelscrapbook_trips")
@@ -172,7 +172,7 @@ async def list_trips(
     trips = []
     pending_geocode = []
     for r in [*owned, *shared]:
-        counts = r.pop("travelscrapbook_scraps", [])
+        counts = r.pop("travelscrapbook_scrap_trips", [])
         owner_id = r.pop("user_id")
         role = shared_roles.get(r["id"], TripMemberRole.OWNER)
         if r.get("destination") and not r.pop("destination_geocoded_at", None):
@@ -258,13 +258,15 @@ async def get_trip(
     )
     scraps = hydrate_scraps(
         sb,
-        (
-            sb.table("travelscrapbook_scraps")
-            .select("*")
-            .eq("trip_id", trip_id)
-            .order("created_at", desc=True)
-            .execute()
-        ).data or [],
+        membership_rows_to_scraps(
+            (
+                sb.table("travelscrapbook_scrap_trips")
+                .select("*, travelscrapbook_scraps(*)")
+                .eq("trip_id", trip_id)
+                .order("created_at", desc=True)
+                .execute()
+            ).data or []
+        ),
         with_vibes=True,
     )
     return TripResponse(
@@ -273,8 +275,8 @@ async def get_trip(
         owner_user_id=trip["user_id"],
         owner_display_name=owner_display_name,
         anchors=anchors.data or [],
-        scraps=[ScrapResponse(**s) for s in scraps if s["status"] == ScrapStatus.APPROVED],
-        staged_scraps=[ScrapResponse(**s) for s in scraps if s["status"] == ScrapStatus.STAGED],
+        scraps=[ScrapResponse(**s) for s in scraps if s["status"] == MembershipStatus.APPROVED],
+        staged_scraps=[ScrapResponse(**s) for s in scraps if s["status"] == MembershipStatus.STAGED],
     )
 
 

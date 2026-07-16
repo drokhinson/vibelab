@@ -65,21 +65,21 @@ def get_accessible_trip(
     return trip, role
 
 
-def get_accessible_scrap(sb, scrap_id: str, user_id: str) -> dict[str, Any]:
-    """Fetch a scrap the caller can access via its trip (used by vibe endpoints
-    so any traveler on a trip can rate any place on it). 404 if the scrap is
-    missing, has no trip, or the caller can't access that trip."""
+def get_accessible_membership(
+    sb, scrap_id: str, trip_id: str, user_id: str, *, need_write: bool = False
+) -> tuple[dict[str, Any], TripMemberRole]:
+    """Return (membership_row, caller_role) for a place's membership on a trip
+    the caller can access. 404 if the place isn't on that trip or the trip isn't
+    accessible. Used by the per-trip vibe / schedule endpoints so any traveler on
+    a trip can weigh in on any place on it (read access is enough to set a vibe)."""
     rows = (
-        sb.table("travelscrapbook_scraps")
+        sb.table("travelscrapbook_scrap_trips")
         .select("*")
-        .eq("id", scrap_id)
+        .eq("scrap_id", scrap_id)
+        .eq("trip_id", trip_id)
         .execute()
-    )
-    if not rows.data:
-        raise HTTPException(status_code=404, detail="Scrap not found")
-    scrap = rows.data[0]
-    if not scrap.get("trip_id"):
-        raise HTTPException(status_code=400, detail="Add this place to a trip before setting a vibe")
-    # Read access is enough to rate — raises 404 if the caller isn't on the trip.
-    get_accessible_trip(sb, scrap["trip_id"], user_id)
-    return scrap
+    ).data
+    if not rows:
+        raise HTTPException(status_code=404, detail="This place isn't on that trip")
+    _, role = get_accessible_trip(sb, trip_id, user_id, need_write=need_write)
+    return rows[0], role

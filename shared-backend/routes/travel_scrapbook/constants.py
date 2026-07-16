@@ -64,11 +64,19 @@ class TripScope(StrEnum):
 
 
 class ScrapStatus(StrEnum):
-    """A scrap is the user's saved place — in the inbox, staged on a trip
-    awaiting review, or approved into a trip."""
+    """Legacy single-trip scrap status (scraps.status). Kept while the multi-trip
+    migration (013/014) soaks; new code uses MembershipStatus on the join row."""
     INBOX = "inbox"
     STAGED = "staged"
     APPROVED = "approved"
+
+
+class MembershipStatus(StrEnum):
+    """A scrap↔trip membership's status (travelscrapbook_scrap_trips.status).
+    There is no 'inbox' — the absence of a membership row means the place is not
+    in that trip (but it still lives on the owner's Wander List until visited)."""
+    STAGED = "staged"        # auto-matched to the trip, awaiting the user's review
+    APPROVED = "approved"    # a confirmed plan on the trip
 
 
 class SourceStatus(StrEnum):

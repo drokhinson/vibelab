@@ -5,26 +5,29 @@ from fastapi import Depends, Path, Query, Response
 from db import get_supabase
 
 from . import router
-from .constants import AnchorRole, ScrapStatus
+from .constants import AnchorRole, MembershipStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import MapsLeg, MapsLinksResponse
 from .services.exports import Stop, build_csv, build_dir_links
 from .access import get_accessible_trip
-from .services.hydrate import hydrate_scraps
+from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 
 
 def _approved_scraps(sb, trip_id: str, *, include_visited: bool = False) -> list[dict]:
     """A trip's approved scraps, hydrated. Visited places sit out of routes
     and exports by default — you've already been there."""
-    query = (
-        sb.table("travelscrapbook_scraps")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .eq("status", ScrapStatus.APPROVED)
+    flat = membership_rows_to_scraps(
+        (
+            sb.table("travelscrapbook_scrap_trips")
+            .select("*, travelscrapbook_scraps(*)")
+            .eq("trip_id", trip_id)
+            .eq("status", MembershipStatus.APPROVED)
+            .execute()
+        ).data or []
     )
     if not include_visited:
-        query = query.is_("visited_at", "null")
-    return hydrate_scraps(sb, query.execute().data or [])
+        flat = [s for s in flat if not s.get("visited_at")]
+    return hydrate_scraps(sb, flat)
 
 
 def _ordered_stops(sb, trip_id: str, *, include_visited: bool = False) -> list[Stop]:

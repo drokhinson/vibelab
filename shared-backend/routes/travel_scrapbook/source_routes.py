@@ -13,7 +13,7 @@ from . import router
 from .constants import (
     CAPTURE_TOKEN_PREFIX,
     CapturedVia,
-    ScrapStatus,
+    MembershipStatus,
     SOURCE_PROCESSING_TIMEOUT_SECONDS,
     SourceStatus,
     EnrichErrorKind,
@@ -111,8 +111,9 @@ async def capture(
         source = existing[0]
         if source["status"] == SourceStatus.READY:
             if body.trip_id:
-                # Re-shared straight into a trip: move this source's inbox
-                # scraps there, already approved (explicit user intent).
+                # Re-shared straight into a trip: add this source's places to
+                # that trip as approved memberships (explicit user intent). The
+                # places stay on the Wander List.
                 place_ids = [
                     l["place_id"]
                     for l in (
@@ -123,12 +124,26 @@ async def capture(
                     ).data or []
                 ]
                 if place_ids:
-                    sb.table("travelscrapbook_scraps").update({
-                        "trip_id": body.trip_id,
-                        "status": ScrapStatus.APPROVED,
-                        "updated_at": "now()",
-                    }).eq("user_id", user.user_id).eq("status", ScrapStatus.INBOX) \
-                      .in_("place_id", place_ids).execute()
+                    scrap_ids = [
+                        s["id"]
+                        for s in (
+                            sb.table("travelscrapbook_scraps")
+                            .select("id")
+                            .eq("user_id", user.user_id)
+                            .in_("place_id", place_ids)
+                            .execute()
+                        ).data or []
+                    ]
+                    if scrap_ids:
+                        sb.table("travelscrapbook_scrap_trips").upsert(
+                            [
+                                {"scrap_id": sid, "trip_id": body.trip_id,
+                                 "status": MembershipStatus.APPROVED}
+                                for sid in scrap_ids
+                            ],
+                            on_conflict="scrap_id,trip_id",
+                            ignore_duplicates=True,
+                        ).execute()
             return SourceResponse(**source)
         # failed or stale processing → reset and re-run
         update = {
@@ -287,11 +302,12 @@ async def get_inbox(
     # Geo fields ride along on the scrap rows so facets + filtering happen
     # BEFORE hydration — only the returned page pays for places/sources/
     # suggestion lookups.
+    # The Wander List is every saved place NOT yet visited — a place stays here
+    # no matter how many trips it's in; it only leaves when marked visited.
     rows = (
         sb.table("travelscrapbook_scraps")
         .select("*, travelscrapbook_places(region, country, city)")
         .eq("user_id", user.user_id)
-        .eq("status", ScrapStatus.INBOX)
         .is_("visited_at", "null")   # visited places move to the Visited view
         .order("created_at", desc=True)
         .execute()
@@ -316,7 +332,7 @@ async def get_inbox(
         {k: v for k, v in r.items()
          if k not in ("place_region", "place_country", "place_city")}
         for r in page
-    ])
+    ], with_trip_ids=True)
     inbox_scraps = [
         InboxScrapResponse(
             **s,
@@ -355,7 +371,6 @@ async def get_inbox_count(user: CurrentUser = Depends(get_current_user)) -> Inbo
         sb.table("travelscrapbook_scraps")
         .select("id", count="exact")
         .eq("user_id", user.user_id)
-        .eq("status", ScrapStatus.INBOX)
         .is_("visited_at", "null")
         .execute()
     )

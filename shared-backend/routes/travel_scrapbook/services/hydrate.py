@@ -39,19 +39,47 @@ def _consensus(levels: list[str]) -> dict[str, Any]:
     return {"counts": dict(counts), "total": total, "headline": headline}
 
 
+def membership_rows_to_scraps(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten travelscrapbook_scrap_trips rows (each embedding its scrap via
+    ``travelscrapbook_scraps(*)``) into scrap-shaped dicts carrying the per-trip
+    membership context (scrap_trip_id / trip_id / status / route_position /
+    plan_date / plan_time). ``id`` stays the scrap id so cards key on it."""
+    out: list[dict[str, Any]] = []
+    for m in rows:
+        scrap = m.get("travelscrapbook_scraps") or {}
+        if not scrap:
+            continue
+        out.append({
+            **scrap,
+            "scrap_trip_id": m["id"],
+            "trip_id": m["trip_id"],
+            "status": m.get("status"),
+            "route_position": m.get("route_position"),
+            "plan_date": m.get("plan_date"),
+            "plan_time": m.get("plan_time"),
+        })
+    return out
+
+
 def hydrate_scraps(
     sb: Client,
     scraps: list[dict[str, Any]],
     *,
     with_vibes: bool = False,
+    with_trip_ids: bool = False,
 ) -> list[dict[str, Any]]:
     """Return scrap rows with place fields flattened in and sources attached.
 
     og_image_url is the first non-null image among the place's sources
     (newest first), giving cards a photo without storing one on the place.
 
-    When with_vibes is set (trip surfaces only), also attach each traveler's
-    ``vibes``, the ``added_by_*`` owner, and a ``consensus`` roll-up.
+    When with_vibes is set (trip surfaces only — rows must carry
+    ``scrap_trip_id``), also attach each traveler's ``vibes``, the
+    ``added_by_*`` owner, and a ``consensus`` roll-up (keyed per membership).
+
+    When with_trip_ids is set (Wander List / inbox), attach ``trip_ids`` — every
+    trip the place currently belongs to — so the multi-select picker can
+    pre-check them.
     """
     if not scraps:
         return []
@@ -80,7 +108,19 @@ def hydrate_scraps(
         if src:
             sources_by_place.setdefault(link["place_id"], []).append(src)
 
-    vibes_by_scrap, names = _load_vibes(sb, scraps) if with_vibes else ({}, {})
+    vibes_by_membership, names = _load_vibes(sb, scraps) if with_vibes else ({}, {})
+
+    trip_ids_by_scrap: dict[str, list[str]] = {}
+    if with_trip_ids:
+        scrap_ids = sorted({s["id"] for s in scraps if s.get("id")})
+        if scrap_ids:
+            for m in (
+                sb.table("travelscrapbook_scrap_trips")
+                .select("scrap_id, trip_id")
+                .in_("scrap_id", scrap_ids)
+                .execute()
+            ).data or []:
+                trip_ids_by_scrap.setdefault(m["scrap_id"], []).append(m["trip_id"])
 
     hydrated = []
     for scrap in scraps:
@@ -111,9 +151,11 @@ def hydrate_scraps(
                 for s in sources
             ],
         }
+        if with_trip_ids:
+            row["trip_ids"] = trip_ids_by_scrap.get(scrap.get("id"), [])
         if with_vibes:
             owner_id = scrap.get("user_id")
-            scrap_vibes = vibes_by_scrap.get(scrap["id"], [])
+            scrap_vibes = vibes_by_membership.get(scrap.get("scrap_trip_id"), [])
             row["added_by_user_id"] = owner_id
             row["added_by_display_name"] = names.get(owner_id)
             row["vibes"] = [
@@ -132,18 +174,22 @@ def hydrate_scraps(
 def _load_vibes(
     sb: Client, scraps: list[dict[str, Any]]
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
-    """Fetch every scrap's vibe rows + the display names needed for the cards
-    (scrap owners + raters) in two round-trips."""
-    scrap_ids = sorted({s["id"] for s in scraps})
+    """Fetch every membership's vibe rows + the display names needed for the
+    cards (scrap owners + raters) in two round-trips. Vibes are per (scrap,
+    trip), so they key on the membership id (scrap_trip_id)."""
+    membership_ids = sorted({s["scrap_trip_id"] for s in scraps if s.get("scrap_trip_id")})
     vibe_rows = (
-        sb.table("travelscrapbook_scrap_vibes")
-        .select("scrap_id, user_id, level")
-        .in_("scrap_id", scrap_ids)
-        .execute()
-    ).data or []
-    vibes_by_scrap: dict[str, list[dict[str, Any]]] = {}
+        (
+            sb.table("travelscrapbook_scrap_vibes")
+            .select("scrap_trip_id, user_id, level")
+            .in_("scrap_trip_id", membership_ids)
+            .execute()
+        ).data or []
+        if membership_ids else []
+    )
+    vibes_by_membership: dict[str, list[dict[str, Any]]] = {}
     for v in vibe_rows:
-        vibes_by_scrap.setdefault(v["scrap_id"], []).append(v)
+        vibes_by_membership.setdefault(v["scrap_trip_id"], []).append(v)
 
     user_ids = {s.get("user_id") for s in scraps if s.get("user_id")}
     user_ids.update(v["user_id"] for v in vibe_rows)
@@ -159,4 +205,4 @@ def _load_vibes(
                 .execute()
             ).data or []
         }
-    return vibes_by_scrap, names
+    return vibes_by_membership, names

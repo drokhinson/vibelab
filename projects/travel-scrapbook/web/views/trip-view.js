@@ -138,17 +138,21 @@ class TripView extends View {
     const dates = formatDateRange(trip.start_date, trip.end_date);
 
     this.container.innerHTML = `
-      <button class="ts-btn ts-btn--ghost ts-btn--sm" id="trip-back"><i data-lucide="arrow-left"></i>Trips</button>
-      <div style="display:flex;align-items:center;gap:0.8rem;margin-top:0.8rem;">
+      <div class="trip-toolbar">
+        <button class="ts-btn ts-btn--ghost ts-btn--sm" id="trip-back"><i data-lucide="arrow-left"></i>Trips</button>
+        <div class="trip-toolbar__actions">
+          ${isOwner ? `<button class="ts-btn ts-btn--ghost ts-btn--sm trip-toolbar__btn" id="trip-edit" aria-label="Edit trip"><i data-lucide="pencil"></i></button>` : ''}
+          <button class="ts-btn ts-btn--ghost ts-btn--sm trip-toolbar__btn" id="trip-share" aria-label="Collaborators"><i data-lucide="users"></i></button>
+          ${isOwner ? `<button class="ts-btn ts-btn--ghost ts-btn--sm trip-toolbar__btn" id="trip-delete" aria-label="Delete trip"><i data-lucide="trash-2"></i></button>` : ''}
+        </div>
+      </div>
+      <div class="trip-heading">
         ${renderSprite('cover', trip.cover_icon, { size: 'lg', alt: '' })}
         <div style="min-width:0;flex:1;">
           <h1 style="font-size:2.1rem;margin:0;">${escapeHtml(trip.name)}</h1>
           <p class="scrap-card__sub">${escapeHtml([trip.destination, dates].filter(Boolean).join(' · '))}</p>
           ${!isOwner && trip.owner_display_name ? `<span class="added-by"><i data-lucide="user"></i>Shared by ${escapeHtml(trip.owner_display_name)}</span>` : ''}
         </div>
-        ${isOwner ? `<button class="ts-header__nav-btn ts-btn ts-btn--ghost ts-btn--sm" id="trip-edit" aria-label="Edit trip"><i data-lucide="pencil"></i></button>` : ''}
-        <button class="ts-header__nav-btn ts-btn ts-btn--ghost ts-btn--sm" id="trip-share" aria-label="Share trip"><i data-lucide="users"></i></button>
-        ${isOwner ? `<button class="ts-header__nav-btn ts-btn ts-btn--ghost ts-btn--sm" id="trip-delete" aria-label="Delete trip"><i data-lucide="trash-2"></i></button>` : ''}
       </div>
       <div class="ts-segmented" role="tablist" aria-label="Trip view" style="margin-top:0.9rem;">
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="plans" ${this._tab === 'plans' ? 'checked' : ''} /><span>Plans</span></label>
@@ -409,11 +413,12 @@ class TripView extends View {
               });
             } else if (action === 'slot') {
               // One-tap "add to Day N" from a timeline suggestion chip.
-              await window.api.updateScrap(scrapId, { plan_date: el.dataset.date });
+              await window.api.scheduleScrap(scrapId, trip.id, { plan_date: el.dataset.date });
               toast('Slotted in');
               this._refreshTimeline(trip.id);
             } else if (action === 'schedule') {
               PlanScheduler.open(scrap, {
+                tripId: trip.id,
                 days: (this._timeline?.days || []).map((d) => ({ date: d.date, day_number: d.day_number })),
                 tripBounds: { start: trip.start_date, end: trip.end_date },
                 onSaved: () => { toast('Scheduled'); this._refreshTimeline(trip.id); },

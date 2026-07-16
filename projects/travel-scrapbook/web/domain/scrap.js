@@ -42,7 +42,7 @@ const ScrapDomain = {
   },
 
   async approve(scrapId, tripId) {
-    await window.api.approveScrap(scrapId);
+    await window.api.approveScrap(scrapId, tripId);
     if (tripId) await window.TripDomain.load(tripId);
   },
 
@@ -51,11 +51,18 @@ const ScrapDomain = {
     await window.TripDomain.load(tripId);
   },
 
-  // Set (level) or clear (null) my vibe on a place — explicit target state
-  // from the PriorityPicker popup. Reloads the trip for fresh consensus.
+  // Set/clear a plan's per-trip timeline slot (day + optional time).
+  async schedule(scrapId, tripId, fields) {
+    await window.api.scheduleScrap(scrapId, tripId, fields);
+    if (tripId) await window.TripDomain.load(tripId);
+  },
+
+  // Set (level) or clear (null) my vibe on a place FOR ONE TRIP — explicit
+  // target state from the PriorityPicker popup. Reloads the trip for fresh
+  // consensus. Vibes are per (place, trip), so tripId is required.
   async applyVibe(scrapId, tripId, level) {
-    if (level) await window.api.setVibe(scrapId, level);
-    else await window.api.clearVibe(scrapId);
+    if (level) await window.api.setVibe(scrapId, tripId, level);
+    else await window.api.clearVibe(scrapId, tripId);
     if (tripId) await window.TripDomain.load(tripId);
   },
 
@@ -82,9 +89,10 @@ const ScrapDomain = {
     await this.applyRating(scrapId, tripId, level);
   },
 
-  // Staging "remove" / pulling a scrap out of a trip — it returns to the inbox.
+  // Staging "remove" / pulling a place out of ONE trip. The place stays on the
+  // Wander List and in any other trips.
   async unassign(scrapId, tripId) {
-    await window.api.unassignScrap(scrapId);
+    await window.api.unassignScrap(scrapId, tripId);
     if (tripId) await window.TripDomain.load(tripId);
     window.SourceDomain?.refreshInboxCount();
   },

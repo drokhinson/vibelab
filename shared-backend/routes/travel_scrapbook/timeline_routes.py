@@ -6,10 +6,10 @@ from db import get_supabase
 
 from . import router
 from .access import get_accessible_trip
-from .constants import ScrapStatus
+from .constants import MembershipStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import TimelineResponse
-from .services.hydrate import hydrate_scraps
+from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 from .services.timeline import build_timeline
 
 
@@ -37,13 +37,15 @@ async def get_timeline(
     ).data or []
     scraps = hydrate_scraps(
         sb,
-        (
-            sb.table("travelscrapbook_scraps")
-            .select("*")
-            .eq("trip_id", trip_id)
-            .eq("status", ScrapStatus.APPROVED)
-            .execute()
-        ).data or [],
+        membership_rows_to_scraps(
+            (
+                sb.table("travelscrapbook_scrap_trips")
+                .select("*, travelscrapbook_scraps(*)")
+                .eq("trip_id", trip_id)
+                .eq("status", MembershipStatus.APPROVED)
+                .execute()
+            ).data or []
+        ),
         with_vibes=True,
     )
     return TimelineResponse(**build_timeline(trip, anchors, scraps))
