@@ -141,7 +141,7 @@ class TripView extends View {
           <p class="empty-desc">${this._priorityOnly
             ? 'Rate plans “Must do” or “Booked” and they collect here.'
             : (canWrite
-              ? 'Tap “Add plans” to pick from your Wander List or add a place — or paste a link above.'
+              ? 'Tap “Add plans” to pick from your Wander List — or paste a link above.'
               : 'When the crew adds places, they’ll show up here for you to vibe on.')}</p>
         </div>` : `
         ${renderGroupedList(scraps, {

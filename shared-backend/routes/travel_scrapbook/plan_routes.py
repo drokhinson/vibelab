@@ -1,8 +1,9 @@
 """Trip plan management: listing a trip's scraps, wishlist candidates,
-adding scraps to a trip, staging review, and manual plan creation.
+adding scraps to a trip, and staging review.
 
-A "plan" is a scrap filed into a trip. Scrap-level reads/edits/vibes live in
-scrap_routes.py.
+A "plan" is a scrap filed into a trip. Every plan arrives via a URL capture
+(or, later, the community pool) — there is no manual place entry.
+Scrap-level reads/edits/vibes live in scrap_routes.py.
 """
 
 from fastapi import Depends, HTTPException, Path
@@ -16,21 +17,14 @@ from .dependencies import CurrentUser, get_current_user
 from .models import (
     AssignManyRequest,
     AssignRequest,
-    PlanCreateRequest,
     ScrapListResponse,
     ScrapResponse,
     TripWishlistResponse,
     TripWishlistScrap,
 )
 from .scrap_routes import _hydrated_scrap, get_owned_scrap
-from .services.enrichment import (
-    _geocode_with_fallback,
-    _load_category_slugs,
-    build_maps_url,
-)
 from .services.hydrate import hydrate_scraps
-from .services.llm import PlaceExtraction
-from .services.places import find_or_create_place, place_matches_trip_scope
+from .services.places import place_matches_trip_scope
 
 
 @router.get(
@@ -178,69 +172,6 @@ async def assign_scraps(
     return ScrapListResponse(
         scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, updated.data or [])]
     )
-
-
-@router.post(
-    "/trips/{trip_id}/plans",
-    response_model=ScrapResponse,
-    status_code=201,
-    summary="Manually add a plan to a trip by name",
-)
-async def create_plan(
-    body: PlanCreateRequest,
-    trip_id: str = Path(..., description="Trip UUID"),
-    user: CurrentUser = Depends(get_current_user),
-) -> ScrapResponse:
-    """Add a plan by typing a place name (no URL): geocode it, dedupe into a
-    canonical place, and attach it to the trip as approved. Reuses an existing
-    scrap for the same place if the user already has one."""
-    sb = get_supabase()
-    get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
-
-    categories = _load_category_slugs(sb)
-    category = body.category if body.category in categories else "other"
-    extraction = PlaceExtraction(
-        place_name=body.name, city=body.city, country=body.country,
-        category=category, geocode_query=None, confident=True,
-    )
-    geo, confidence = await _geocode_with_fallback(extraction)
-    maps_url = build_maps_url(body.name, body.city, body.country)
-    place, _created = find_or_create_place(
-        sb, user.user_id, extraction, geo, confidence, maps_url
-    )
-
-    existing = (
-        sb.table("travelscrapbook_scraps")
-        .select("*")
-        .eq("user_id", user.user_id)
-        .eq("place_id", place["id"])
-        .limit(1)
-        .execute()
-    ).data
-    if existing:
-        row = (
-            sb.table("travelscrapbook_scraps")
-            .update({
-                "trip_id": trip_id,
-                "status": ScrapStatus.APPROVED,
-                "updated_at": "now()",
-            })
-            .eq("id", existing[0]["id"])
-            .execute()
-        ).data[0]
-    else:
-        row = (
-            sb.table("travelscrapbook_scraps")
-            .insert({
-                "user_id": user.user_id,
-                "place_id": place["id"],
-                "trip_id": trip_id,
-                "status": ScrapStatus.APPROVED,
-                "notes": body.notes,
-            })
-            .execute()
-        ).data[0]
-    return _hydrated_scrap(sb, row)
 
 
 # ── Staging / assignment ─────────────────────────────────────────────────────

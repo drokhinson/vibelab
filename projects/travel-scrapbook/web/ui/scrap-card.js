@@ -37,8 +37,8 @@ function renderPriorityControl(scrap, { action = 'rate', activeLevel = null } = 
       ${VIBE_META.map((v) => `
         <button class="vibe-seg vibe-seg--${v.level} ${activeLevel === v.level ? 'is-on' : ''}"
                 data-action="${action}" data-scrap-id="${escapeAttr(scrap.id)}" data-level="${v.level}"
-                aria-pressed="${activeLevel === v.level}" title="${v.label}">
-          <i data-lucide="${v.icon}"></i><span>${v.label}</span>
+                aria-pressed="${activeLevel === v.level}" aria-label="${v.label}" title="${v.label}">
+          <i data-lucide="${v.icon}"></i>
         </button>`).join('')}
     </div>`;
 }

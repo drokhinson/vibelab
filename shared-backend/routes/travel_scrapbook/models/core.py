@@ -165,15 +165,6 @@ class AssignManyRequest(BaseModel):
     scrap_ids: list[str] = Field(..., min_length=1)
 
 
-class PlanCreateRequest(BaseModel):
-    """Manually add a plan to a trip by name — geocoded server-side, no URL."""
-    name: str = Field(..., min_length=1, max_length=200)
-    city: Optional[str] = Field(None, max_length=120)
-    country: Optional[str] = Field(None, max_length=120)
-    category: Optional[str] = None
-    notes: Optional[str] = Field(None, max_length=2000)
-
-
 class TripWishlistScrap(ScrapResponse):
     """A wishlist scrap annotated with whether it matches the trip's scope, for
     the trip's 'add plans' picker (scope-matches sort first)."""

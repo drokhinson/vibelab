@@ -180,8 +180,6 @@
     tripWishlist: (tripId) => call(`/trips/${tripId}/wishlist`),
     /** Bulk-add wishlist scraps to a trip. @returns {Promise<{scraps: Scrap[]}>} */
     assignScraps: (tripId, scrapIds) => call(`/trips/${tripId}/assign-scraps`, { method: 'POST', body: { scrap_ids: scrapIds } }),
-    /** Manually add a plan to a trip by name. @returns {Promise<Scrap>} */
-    addPlan: (tripId, body) => call(`/trips/${tripId}/plans`, { method: 'POST', body }),
     /** Places marked visited (any trip or the wishlist). @returns {Promise<{scraps: Scrap[]}>} */
     listVisited: () => call('/visited'),
     updateScrap: (scrapId, body) => call(`/scraps/${scrapId}`, { method: 'PATCH', body }),

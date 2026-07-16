@@ -19,7 +19,6 @@ from .core import (  # noqa: F401
     InboxResponse,
     InboxScrapResponse,
     MessageResponse,
-    PlanCreateRequest,
     ProfileResponse,
     ProfileUpdateRequest,
     RatingRequest,
