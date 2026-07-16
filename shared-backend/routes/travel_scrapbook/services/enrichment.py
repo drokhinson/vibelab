@@ -116,7 +116,7 @@ async def _materialize_place(
         # The user picked the trip at capture time — no review needed.
         scrap.update({"trip_id": source["trip_hint_id"], "status": ScrapStatus.APPROVED})
     elif place["lat"] is not None and extraction.confident:
-        match = places.match_trip(sb, source["user_id"], place["lat"], place["lng"])
+        match = places.match_trip(sb, source["user_id"], place)
         if match:
             scrap.update({"trip_id": match["id"], "status": ScrapStatus.STAGED})
     sb.table("travelscrapbook_scraps").insert(scrap).execute()

@@ -12,6 +12,8 @@ class TripView extends View {
     this._favoritesOnly = false;
     this._route = null;
     this._routeBusy = false;
+    this._candidates = [];
+    this._candidatesSeq = 0;
   }
 
   renderLoading() {
@@ -50,10 +52,25 @@ class TripView extends View {
   async _load() {
     try {
       await window.TripDomain.load(this._tripId);
+      this._loadCandidates();
     } catch (err) {
       this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load trip')}</div>`;
       this.refreshIcons();
     }
+  }
+
+  // Wishlist places that fit this trip's scope. Non-blocking (per the
+  // instantaneous-nav rule); a monotonic guard drops stale results after a
+  // navigation or a newer refresh.
+  async _loadCandidates() {
+    const seq = ++this._candidatesSeq;
+    const tripId = this._tripId;
+    try {
+      const res = await window.api.tripCandidates(tripId);
+      if (seq !== this._candidatesSeq || this._tripId !== tripId) return;
+      this._candidates = res.scraps || [];
+      this.render();
+    } catch (_) { /* panel just stays hidden */ }
   }
 
   render() {
@@ -78,6 +95,7 @@ class TripView extends View {
       ${renderAnchorsStrip(trip)}
       ${renderQuickPaste(trip.id)}
       ${this._renderStaging(staged)}
+      ${this._renderCandidates()}
       ${this._renderRoutePanel(trip, geocodedCount)}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1.2rem;">
         <h2 style="font-size:1.5rem;margin:0;">Scraps</h2>
@@ -117,6 +135,22 @@ class TripView extends View {
         </div>
         <div class="card-grid card-grid--2col" style="margin-top:0.8rem;">
           ${staged.map((s, i) => renderScrapCard(s, { index: i, variant: 'staged' })).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  _renderCandidates() {
+    const cands = this._candidates || [];
+    if (!cands.length) return '';
+    return `
+      <div class="sticker-card washi washi--sky" style="padding-top:1.2rem;margin-top:1.1rem;">
+        <div>
+          <h2 style="font-size:1.5rem;margin:0;">From your wishlist</h2>
+          <p class="scrap-card__sub">Places you've saved that fit this trip — tap to add.</p>
+        </div>
+        <div class="card-grid card-grid--2col" style="margin-top:0.8rem;">
+          ${cands.map((s, i) => renderScrapCard(s, { index: i, variant: 'candidate', tripId: this._tripId })).join('')}
         </div>
       </div>
     `;
@@ -208,7 +242,8 @@ class TripView extends View {
     // Scrap card actions (edit opens the editor; the rest are inline buttons).
     const findScrap = (id) =>
       (trip.scraps || []).find((s) => s.id === id) ||
-      (trip.staged_scraps || []).find((s) => s.id === id);
+      (trip.staged_scraps || []).find((s) => s.id === id) ||
+      (this._candidates || []).find((s) => s.id === id);
     c.querySelectorAll('[data-scrap-id]').forEach((el) => {
       const scrapId = el.dataset.scrapId;
       const scrap = findScrap(scrapId);
@@ -223,12 +258,22 @@ class TripView extends View {
           try {
             if (action === 'favorite') {
               await window.ScrapDomain.update(scrapId, trip.id, { is_favorite: !scrap.is_favorite });
+            } else if (action === 'visited') {
+              await window.ScrapDomain.toggleVisited(scrapId, trip.id, !!scrap.visited_at);
+              toast(scrap.visited_at ? 'Back on your wishlist' : 'Marked visited');
             } else if (action === 'approve') {
               await window.ScrapDomain.approve(scrapId, trip.id);
               toast('Kept!');
             } else if (action === 'unassign') {
               await window.ScrapDomain.unassign(scrapId, trip.id);
-              toast('Moved to your inbox');
+              toast('Moved to your wishlist');
+              this._loadCandidates();
+            } else if (action === 'assign') {
+              await window.api.assignScrap(scrapId, el.dataset.tripId || trip.id);
+              toast('Added to the trip');
+              await window.TripDomain.load(trip.id);
+              this._loadCandidates();
+              window.SourceDomain?.refreshInboxCount();
             } else if (action === 'edit') {
               ScrapEditor.open(scrap, trip.id);
             } else if (action === 'delete') {

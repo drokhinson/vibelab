@@ -49,10 +49,12 @@ const ScrapEditor = {
               <input class="ts-input" id="se-city" value="${escapeAttr(s.place_city || '')}" />
             </div>
             <div style="flex:1;">
-              <label class="ts-label" for="se-country">Country</label>
-              <input class="ts-input" id="se-country" value="${escapeAttr(s.place_country || '')}" />
+              <label class="ts-label" for="se-region">Region</label>
+              <input class="ts-input" id="se-region" value="${escapeAttr(s.place_region || '')}" placeholder="state / province" />
             </div>
           </div>
+          <label class="ts-label" for="se-country">Country</label>
+          <input class="ts-input" id="se-country" value="${escapeAttr(s.place_country || '')}" />
           <label class="ts-label" for="se-category">Category</label>
           <select class="ts-select" id="se-category">
             ${categories.map((c) => `<option value="${escapeAttr(c.slug)}" ${c.slug === s.category ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
@@ -64,6 +66,10 @@ const ScrapEditor = {
               Pinned as: ${escapeHtml(s.geocode_display_name)}
             </p>` : `
             <p class="confidence-hint" style="margin-top:0.7rem;">Not on the map yet.</p>`}
+          <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.7rem;font-size:0.85rem;font-weight:700;">
+            <input type="checkbox" id="se-visited" ${s.visited_at ? 'checked' : ''} style="width:18px;height:18px;" />
+            I've been here (visited)
+          </label>
           <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem;font-size:0.85rem;font-weight:700;">
             <input type="checkbox" id="se-regeocode" checked style="width:18px;height:18px;" />
             Re-pin on the map from these fields
@@ -83,9 +89,11 @@ const ScrapEditor = {
       const fields = {
         place_name: modal.querySelector('#se-name').value.trim() || null,
         place_city: modal.querySelector('#se-city').value.trim() || null,
+        place_region: modal.querySelector('#se-region').value.trim() || null,
         place_country: modal.querySelector('#se-country').value.trim() || null,
         category: modal.querySelector('#se-category').value,
         notes: modal.querySelector('#se-notes').value.trim() || null,
+        visited: modal.querySelector('#se-visited').checked,
         regeocode: modal.querySelector('#se-regeocode').checked,
       };
       try {

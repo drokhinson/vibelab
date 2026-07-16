@@ -36,6 +36,7 @@
  * @property {'inbox'|'staged'|'approved'} status
  * @property {(string|null)=} place_name
  * @property {(string|null)=} place_city
+ * @property {(string|null)=} place_region
  * @property {(string|null)=} place_country
  * @property {string} category
  * @property {(number|null)=} lat
@@ -47,6 +48,7 @@
  * @property {SourceRef[]} sources
  * @property {(string|null)=} notes
  * @property {boolean} is_favorite
+ * @property {(string|null)=} visited_at  null = on the wishlist; set = visited
  * @property {(number|null)=} route_position
  * @property {TripSuggestion[]=} suggestions  inbox responses only
  */
@@ -132,6 +134,10 @@
     getScrap: (scrapId) => call(`/scraps/${scrapId}`),
     /** @returns {Promise<{scraps: Scrap[]}>} */
     listScraps: (tripId) => call(`/trips/${tripId}/scraps`),
+    /** Wishlist places matching a trip's scope. @returns {Promise<{scraps: Scrap[]}>} */
+    tripCandidates: (tripId) => call(`/trips/${tripId}/candidates`),
+    /** Places marked visited (any trip or the wishlist). @returns {Promise<{scraps: Scrap[]}>} */
+    listVisited: () => call('/visited'),
     updateScrap: (scrapId, body) => call(`/scraps/${scrapId}`, { method: 'PATCH', body }),
     deleteScrap: (scrapId) => call(`/scraps/${scrapId}`, { method: 'DELETE' }),
     /** @returns {Promise<Scrap>} */

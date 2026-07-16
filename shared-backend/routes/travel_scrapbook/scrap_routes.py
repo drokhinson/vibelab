@@ -24,7 +24,7 @@ from .models import (
 from .services import nominatim
 from .services.enrichment import build_maps_url
 from .services.hydrate import hydrate_scraps
-from .services.places import normalize_place_name
+from .services.places import normalize_place_name, place_matches_trip_scope
 from .trip_routes import get_owned_trip
 
 
@@ -85,6 +85,68 @@ async def list_scraps(
     )
 
 
+@router.get(
+    "/visited",
+    response_model=ScrapListResponse,
+    status_code=200,
+    summary="Places you've marked visited",
+)
+async def list_visited(
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapListResponse:
+    """Every scrap the user marked visited (any trip or the wishlist),
+    most-recently-visited first — the Visited view."""
+    sb = get_supabase()
+    rows = (
+        sb.table("travelscrapbook_scraps")
+        .select("*")
+        .eq("user_id", user.user_id)
+        .not_.is_("visited_at", "null")
+        .order("visited_at", desc=True)
+        .execute()
+    ).data or []
+    return ScrapListResponse(
+        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, rows)]
+    )
+
+
+@router.get(
+    "/trips/{trip_id}/candidates",
+    response_model=ScrapListResponse,
+    status_code=200,
+    summary="Wishlist places that fit a trip's scope",
+)
+async def list_trip_candidates(
+    trip_id: str = Path(..., description="Trip UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapListResponse:
+    """Unvisited wishlist scraps whose location matches this trip's geographic
+    scope (city/country/region) — the 'from your wishlist' panel. Same match
+    predicate as auto-staging, so suggestions stay consistent."""
+    sb = get_supabase()
+    trip = get_owned_trip(sb, trip_id, user.user_id)
+    rows = (
+        sb.table("travelscrapbook_scraps")
+        .select("*")
+        .eq("user_id", user.user_id)
+        .eq("status", ScrapStatus.INBOX)
+        .is_("visited_at", "null")
+        .order("created_at", desc=True)
+        .execute()
+    ).data or []
+    hydrated = hydrate_scraps(sb, rows)
+    candidates = [
+        s for s in hydrated
+        if place_matches_trip_scope(
+            trip,
+            lat=s.get("lat"), lng=s.get("lng"),
+            city=s.get("place_city"), region=s.get("place_region"),
+            country=s.get("place_country"),
+        )
+    ]
+    return ScrapListResponse(scraps=[ScrapResponse(**s) for s in candidates])
+
+
 @router.patch(
     "/scraps/{scrap_id}",
     response_model=ScrapResponse,
@@ -111,12 +173,17 @@ async def update_scrap(
     update = body.model_dump(exclude_unset=True, exclude={"regeocode"})
 
     scrap_update = {k: update[k] for k in ("notes", "is_favorite") if k in update}
+    # visited is a soft timestamp flag, not a 1:1 column — map true→now(), false→NULL.
+    if "visited" in update:
+        scrap_update["visited_at"] = "now()" if update["visited"] else None
     place_update: dict[str, Any] = {}
     if update.get("place_name"):
         place_update["name"] = update["place_name"]
         place_update["name_normalized"] = normalize_place_name(update["place_name"])
     if "place_city" in update:
         place_update["city"] = update["place_city"]
+    if "place_region" in update:
+        place_update["region"] = update["place_region"]
     if "place_country" in update:
         place_update["country"] = update["place_country"]
     if update.get("category"):
@@ -140,6 +207,10 @@ async def update_scrap(
                 "osm_type": result.osm_type,
                 "osm_id": result.osm_id,
             })
+            # Refresh region from the authoritative geocode unless the user typed
+            # one explicitly in this same edit.
+            if "place_region" not in update and result.region:
+                place_update["region"] = result.region
         else:
             place_update.update({
                 "lat": None,

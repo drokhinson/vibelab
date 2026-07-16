@@ -43,6 +43,16 @@ class GeocodeResult:
     # (cross-user) place dedupe. Optional: not every response carries it.
     osm_type: Optional[str] = None
     osm_id: Optional[int] = None
+    # Structured address components (from Nominatim addressdetails=1). Nominatim
+    # is authoritative for a geocoded point, so these seed a place's
+    # city/region/country and a trip's derived scope. region == admin-1 (state /
+    # province / named region). addresstype names the matched feature's level
+    # (e.g. 'country', 'state', 'city') — used to infer a trip's scope level.
+    city: Optional[str] = None
+    region: Optional[str] = None
+    country: Optional[str] = None
+    country_code: Optional[str] = None
+    addresstype: Optional[str] = None
 
 
 async def geocode(query: str) -> Optional[GeocodeResult]:
@@ -95,6 +105,7 @@ async def geocode(query: str) -> Optional[GeocodeResult]:
         return None
 
     row = rows[0]
+    address = row.get("address") or {}
     try:
         result = GeocodeResult(
             lat=float(row["lat"]),
@@ -102,6 +113,21 @@ async def geocode(query: str) -> Optional[GeocodeResult]:
             display_name=str(row.get("display_name", "")),
             osm_type=str(row["osm_type"]) if row.get("osm_type") else None,
             osm_id=int(row["osm_id"]) if row.get("osm_id") is not None else None,
+            city=(
+                address.get("city")
+                or address.get("town")
+                or address.get("village")
+                or address.get("municipality")
+            ),
+            region=(
+                address.get("state")
+                or address.get("region")
+                or address.get("province")
+                or address.get("state_district")
+            ),
+            country=address.get("country"),
+            country_code=address.get("country_code"),
+            addresstype=row.get("addresstype"),
         )
     except (KeyError, TypeError, ValueError):
         return None
