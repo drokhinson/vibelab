@@ -38,10 +38,13 @@ function _sourceChips(scrap) {
 
 /**
  * @param {Scrap} scrap
- * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate', tripId?: string}} opts
+ * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview', tripId?: string}} opts
  */
 function renderScrapCard(scrap, opts = {}) {
   const { index = 0, variant = 'trip', tripId = null } = opts;
+  // 'preview' = read-only display (e.g. the share success screen): no actions,
+  // toggles, or click-to-edit, since it has no trip/store context.
+  const isPreview = variant === 'preview';
   const catIcon = _scrapCategoryIcon(scrap);
 
   const title = scrap.place_name || 'Saved place';
@@ -97,7 +100,7 @@ function renderScrapCard(scrap, opts = {}) {
   // Favorite (trip only) + visited toggle (trip + wishlist) live in the corner.
   const showFav = variant === 'trip';
   const showVisited = variant === 'trip' || variant === 'inbox';
-  const isVisited = !!scrap.visited_at;
+  const isVisited = !!scrap.visited_at && !isPreview;
   const actions = (showFav || showVisited) ? `
     <div class="scrap-card__actions">
       ${showVisited ? `
@@ -115,8 +118,8 @@ function renderScrapCard(scrap, opts = {}) {
     </div>` : '';
 
   return `
-    <div class="sticker-card card-lift ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
-         style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="edit">
+    <div class="sticker-card ${isPreview ? '' : 'card-lift'} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
+         style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isPreview ? 'none' : 'edit'}">
       ${actions}
       ${isVisited ? '<span class="scrap-card__visited-badge"><i data-lucide="check"></i>Visited</span>' : ''}
       ${photo}

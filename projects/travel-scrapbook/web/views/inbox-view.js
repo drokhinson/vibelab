@@ -67,7 +67,6 @@ class InboxView extends View {
 
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Wander List</h1>
-      <p class="scrap-card__sub" style="margin-top:-0.4rem;">Places you've saved because you want to go. Tap the check once you've been.</p>
       ${empty ? `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-inbox.svg" alt="" />

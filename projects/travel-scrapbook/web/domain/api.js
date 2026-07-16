@@ -120,6 +120,8 @@
     getInbox: () => call('/inbox'),
     /** @returns {Promise<{count: number}>} */
     inboxCount: () => call('/inbox/count'),
+    /** A capture's live status + the scraps it produced. @returns {Promise<{status: string, error_kind: (string|null), scraps: Scrap[]}>} */
+    sourceScraps: (sourceId) => call(`/sources/${sourceId}/scraps`),
     /** @returns {Promise<Source>} */
     retrySource: (sourceId) => call(`/sources/${sourceId}/retry`, { method: 'POST' }),
     deleteSource: (sourceId) => call(`/sources/${sourceId}`, { method: 'DELETE' }),
