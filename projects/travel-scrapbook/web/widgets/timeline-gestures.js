@@ -20,6 +20,10 @@ const TimelineGestures = (function () {
   const MOVE_TOLERANCE = 8;   // px of movement that ends the "is it a hold?" window
   const SWIPE_COMMIT = 72;    // px past which a swipe fires its action
   const SWIPE_MAX = 132;      // px clamp on how far the row slides
+  const GRIP_HOLD_MS = 120;   // grip is an explicit handle → pick up fast
+  const GRIP_MOVE = 3;        // px of movement from the grip that starts a drag
+  const EDGE = 80;            // px from viewport edge that auto-scrolls while dragging
+  const SCROLL_MAX = 14;      // px/frame auto-scroll speed at the very edge
 
   function bindRow(swipeEl, handlers, canWrite) {
     const fg = swipeEl.querySelector('.tl-row');
@@ -31,7 +35,9 @@ const TimelineGestures = (function () {
     let mode = 'idle';           // idle | pending | swipe | drag
     let pointerId = null;
     let pressTimer = null;
+    let fromGrip = false;        // did this gesture start on the drag handle?
     let clone = null, grabX = 0, grabY = 0, dropDayEl = null;
+    let rafId = null, lastClientX = 0, lastClientY = 0;
 
     const clearTimer = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
 
@@ -54,9 +60,26 @@ const TimelineGestures = (function () {
       dropDayEl = dayEl;
     };
 
+    // While dragging, scroll the page when the finger nears the top/bottom edge
+    // so off-screen days (e.g. Anytime → Day 2) become reachable. The clone is
+    // position:fixed, so it stays under the finger as the page scrolls beneath.
+    const autoScrollTick = () => {
+      if (mode !== 'drag') { rafId = null; return; }
+      const h = window.innerHeight;
+      let step = 0;
+      if (lastClientY < EDGE) step = -Math.ceil(SCROLL_MAX * (EDGE - lastClientY) / EDGE);
+      else if (lastClientY > h - EDGE) step = Math.ceil(SCROLL_MAX * (lastClientY - (h - EDGE)) / EDGE);
+      if (step) {
+        window.scrollBy(0, step);
+        highlightDay({ clientX: lastClientX, clientY: lastClientY });
+      }
+      rafId = requestAnimationFrame(autoScrollTick);
+    };
+
     const startDrag = (e) => {
       mode = 'drag';
       swipeEl.classList.add('is-dragging');
+      fg.style.touchAction = 'none';   // best-effort for the body long-press path
       const r = fg.getBoundingClientRect();
       grabX = e.clientX - r.left;
       grabY = e.clientY - r.top;
@@ -64,28 +87,35 @@ const TimelineGestures = (function () {
       clone.classList.add('tl-drag-clone');
       clone.style.width = `${r.width}px`;
       document.body.appendChild(clone);   // icons are already rendered SVGs — clone carries them
+      lastClientX = e.clientX; lastClientY = e.clientY;
       positionClone(e);
       highlightDay(e);
       navigator.vibrate?.(10);
+      if (!rafId) rafId = requestAnimationFrame(autoScrollTick);
     };
 
     const cleanupDrag = () => {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
       dropDayEl?.classList.remove('tl-day--drop');
       dropDayEl = null;
       if (clone) { clone.remove(); clone = null; }
       swipeEl.classList.remove('is-dragging');
+      fg.style.touchAction = '';
+      fromGrip = false;
     };
 
     const onDown = (e) => {
       if (!canWrite || mode !== 'idle') return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       if (e.target.closest('button')) return;   // checkbox / pin keep their click
+      fromGrip = !!e.target.closest('.tl-row__grip');   // the explicit drag handle
       pointerId = e.pointerId;
       startX = e.clientX; startY = e.clientY; dx = 0; dy = 0;
       mode = 'pending';
       fg.style.transition = 'none';
       clearTimer();
-      pressTimer = setTimeout(() => { if (mode === 'pending') startDrag(e); }, LONGPRESS_MS);
+      pressTimer = setTimeout(() => { if (mode === 'pending') startDrag(e); },
+                              fromGrip ? GRIP_HOLD_MS : LONGPRESS_MS);
       try { fg.setPointerCapture(e.pointerId); } catch { /* older engines */ }
     };
 
@@ -94,6 +124,15 @@ const TimelineGestures = (function () {
       dx = e.clientX - startX;
       dy = e.clientY - startY;
       if (mode === 'pending') {
+        if (fromGrip) {
+          // The grip (touch-action:none) is an explicit handle — any real move,
+          // in any direction, picks the card up. No swipe/scroll disambiguation.
+          if (Math.abs(dx) <= GRIP_MOVE && Math.abs(dy) <= GRIP_MOVE) return;
+          clearTimer();
+          e.preventDefault();
+          startDrag(e);   // positions the clone; skip the swipe/idle branches
+          return;
+        }
         if (Math.abs(dx) <= MOVE_TOLERANCE && Math.abs(dy) <= MOVE_TOLERANCE) return;
         clearTimer();
         if (Math.abs(dx) > Math.abs(dy)) {
@@ -118,6 +157,7 @@ const TimelineGestures = (function () {
         swipeEl.classList.toggle('is-swipe-remove', d < 0);
       } else if (mode === 'drag') {
         e.preventDefault();
+        lastClientX = e.clientX; lastClientY = e.clientY;
         positionClone(e);
         highlightDay(e);
       }
@@ -131,6 +171,7 @@ const TimelineGestures = (function () {
       const dropDate = dropDayEl?.dataset.dayDate || null;
       mode = 'idle';
       pointerId = null;
+      fromGrip = false;
       if (wasMode === 'swipe') {
         const commit = Math.abs(dx) >= SWIPE_COMMIT;
         snapBack();
