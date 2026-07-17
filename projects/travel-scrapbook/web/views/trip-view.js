@@ -331,8 +331,16 @@ class TripView extends View {
       });
     });
     c.querySelector('#trip-download')?.addEventListener('click', () => {
-      const geocodedCount = this._visibleScraps(trip).filter((s) => s.lat != null).length;
-      ExportMenu.open({ tripId: trip.id, tripName: trip.name, geocodedCount });
+      // Mapped-pin counts per day (and trip-wide) drive the export scope
+      // picker: "points" = geocoded, non-visited plans, matching the exports.
+      const tl = buildTimeline(trip, trip.anchors || [], trip.scraps || []);
+      const days = (tl.days || []).map((d) => ({
+        date: d.date,
+        day_number: d.day_number,
+        points: d.plans.filter((p) => p.lat != null && !p.visited_at).length,
+      }));
+      const allPoints = (trip.scraps || []).filter((s) => s.lat != null && !s.visited_at).length;
+      ExportMenu.open({ tripId: trip.id, tripName: trip.name, days, allPoints });
     });
     c.querySelector('#trip-share')?.addEventListener('click', () => TripShare.open(trip, { isOwner }));
     c.querySelector('#trip-delete')?.addEventListener('click', async () => {

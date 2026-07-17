@@ -15,20 +15,28 @@ const ExportDomain = {
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   },
 
-  _stem(name) {
-    return (name || 'trip').replace(/[^\w\- ]+/g, '').trim() || 'trip';
+  // Filename stem: sanitized trip name, plus a " - Day N" suffix on a
+  // single-day export so the four files never collide in the download folder.
+  _stem(name, suffix) {
+    const base = (name || 'trip').replace(/[^\w\- ]+/g, '').trim() || 'trip';
+    return suffix ? `${base} - ${suffix}` : base;
   },
 
-  async downloadCsv(tripId, tripName) {
-    await this._saveBlob(await window.api.exportCsv(tripId), `${this._stem(tripName)}.csv`);
+  // A single day sends ?date=YYYY-MM-DD; whole-trip sends nothing.
+  _params(date) {
+    return date ? { date } : {};
   },
 
-  async downloadMarkdown(tripId, tripName) {
-    await this._saveBlob(await window.api.exportMarkdown(tripId), `${this._stem(tripName)}.md`);
+  async downloadCsv(tripId, tripName, { date, suffix } = {}) {
+    await this._saveBlob(await window.api.exportCsv(tripId, this._params(date)), `${this._stem(tripName, suffix)}.csv`);
   },
 
-  async downloadKml(tripId, tripName) {
-    await this._saveBlob(await window.api.exportKml(tripId), `${this._stem(tripName)}.kml`);
+  async downloadMarkdown(tripId, tripName, { date, suffix } = {}) {
+    await this._saveBlob(await window.api.exportMarkdown(tripId, this._params(date)), `${this._stem(tripName, suffix)}.md`);
+  },
+
+  async downloadKml(tripId, tripName, { date, suffix } = {}) {
+    await this._saveBlob(await window.api.exportKml(tripId, this._params(date)), `${this._stem(tripName, suffix)}.kml`);
   },
 };
 window.ExportDomain = ExportDomain;

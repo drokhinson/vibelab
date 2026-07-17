@@ -812,6 +812,9 @@ body.popup-mode { max-width: 420px; }
 .priority-option__check { margin-left: auto; }
 
 /* Export/download picker (widgets/export-menu.js) */
+.export-scope { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.8rem; }
+.export-scope__label { font-size: 0.78rem; font-weight: 700; color: var(--ink-muted); }
+.export-scope__select { width: 100%; }
 .export-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem; }
 .export-option {
   display: flex; align-items: center; gap: 0.7rem;
