@@ -110,8 +110,9 @@ def build_timeline(trip: dict[str, Any], anchors: list[dict[str, Any]],
 
     Returns {days, unscheduled, reason?}: each day carries its markers and
     scheduled plans in chronological order (untimed items after timed ones);
-    unscheduled plans (unvisited only) carry a proximity suggestion when a
-    located marker is within TIMELINE_SUGGEST_RADIUS_KM.
+    unscheduled plans carry a proximity suggestion when a located marker is
+    within TIMELINE_SUGGEST_RADIUS_KM. Every approved plan stays in the trip —
+    completed (visited/skipped) plans are kept too, never dropped.
     """
     markers = _markers_from_anchors(anchors)
     days = _day_range(trip, markers, scraps)
@@ -125,8 +126,8 @@ def build_timeline(trip: dict[str, Any], anchors: list[dict[str, Any]],
         plan_date = _iso(s.get("plan_date"))
         if plan_date and plan_date in day_numbers:
             plans_by_day.setdefault(plan_date, []).append(s)
-        elif not s.get("visited_at"):
-            # Unscheduled, not yet visited → offer a slot suggestion.
+        else:
+            # Unscheduled → collect in Anytime with a slot suggestion.
             unscheduled.append({**s, "suggestion": _suggest(s, markers, day_numbers)})
 
     day_payloads = []

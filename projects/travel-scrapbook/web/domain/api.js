@@ -51,6 +51,7 @@
  * @property {(string|null)=} notes
  * @property {('booked'|'must_do'|'interested'|'could_skip'|null)=} rating  owner's own priority
  * @property {(string|null)=} visited_at  null = on the wishlist; set = visited
+ * @property {string=} created_at  ISO import time — drives the "new since last visit" tag
  * @property {(number|null)=} route_position
  * @property {(string|null)=} plan_date  YYYY-MM-DD timeline slot (trip scraps only)
  * @property {(string|null)=} plan_time  HH:MM:SS, optional time within the day
@@ -184,8 +185,9 @@
     capture: (body) => call('/capture', { method: 'POST', body }),
     /** One filtered page + geo facets + the global badge count. @returns {Promise<{processing_sources: Source[], failed_sources: Source[], scraps: Scrap[], total: number, facets: object, inbox_count: number}>} */
     getInbox: (params = {}) => call(`/inbox${qs(params)}`),
-    /** @returns {Promise<{count: number}>} */
-    inboxCount: () => call('/inbox/count'),
+    /** Nav badge count. Pass `{ since }` (ISO) for the "new since last visit"
+     *  count; omit for the full pending count. @returns {Promise<{count: number}>} */
+    inboxCount: (params = {}) => call(`/inbox/count${qs(params)}`),
     /** A capture's live status + the scraps it produced. @returns {Promise<{status: string, error_kind: (string|null), scraps: Scrap[]}>} */
     sourceScraps: (sourceId) => call(`/sources/${sourceId}/scraps`),
     /** @returns {Promise<Source>} */

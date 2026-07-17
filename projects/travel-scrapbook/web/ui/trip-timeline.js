@@ -156,14 +156,14 @@ function _tlPlanRow(scrap, { canWrite = true, mode = 'scheduled' } = {}) {
       </div>` : ''}
       <div class="${rowCls}">
         ${_tlCheckbox(scrap, canWrite)}
-        <span class="tl-row__time">${time ? escapeHtml(time) : '·'}</span>
+        <span class="tl-row__time">${time ? escapeHtml(time) : ''}</span>
         <span class="tl-row__label">${escapeHtml(scrap.place_name || 'Saved place')}
           ${booked ? '<span class="tl-booked-badge">Booked</span>' : ''}
-          ${mode === 'suggested' && sug ? `
+          ${mode === 'suggested' && sug && !outcome ? `
             <span class="tl-suggested-badge" title="Near ${escapeAttr(sug.marker_label)} (${formatKm(sug.distance_km)})">
               Suggested · near ${escapeHtml(sug.marker_label)}</span>` : ''}
           ${meta ? `<span class="tl-outcome-badge tl-outcome-badge--${outcome}">${meta.tag}</span>` : ''}</span>
-        ${mode === 'suggested' && canWrite && sug ? `
+        ${mode === 'suggested' && canWrite && sug && !outcome ? `
           <button class="tl-row__btn tl-row__btn--pin" data-action="slot"
                   data-scrap-id="${escapeAttr(scrap.id)}" data-date="${escapeAttr(sug.suggested_date)}"
                   aria-label="Keep ${escapeAttr(scrap.place_name || 'plan')} on Day ${sug.day_number}" title="Keep it here">

@@ -12,8 +12,9 @@
   const BrowsePages = {
     DEFAULT_GEO,
 
-    /** One Wander List page. Also feeds the nav badge from the bundle's
-     *  inbox_count (no separate /inbox/count call). */
+    /** One Wander List page. The nav badge counts only places imported since
+     *  the last visit (not the bundle's raw total), so refresh it via the
+     *  since-aware count endpoint rather than piggybacking res.inbox_count. */
     async loadInbox({ geo = DEFAULT_GEO, limit = 24, offset = 0 } = {}) {
       const res = await window.api.getInbox({ ...geo, limit, offset });
       const page = {
@@ -24,8 +25,7 @@
         facets: res.facets || {},
       };
       if (offset === 0) window.tsCache?.set('inbox', key(geo), page);
-      if (res.inbox_count != null) window.store.set('inboxCount', res.inbox_count);
-      else window.SourceDomain?.refreshInboxCount();
+      window.SourceDomain?.refreshInboxCount();
       return page;
     },
 

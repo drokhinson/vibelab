@@ -141,7 +141,8 @@ function _mapsButton(scrap) {
  * @param {Scrap} scrap
  * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select'|'community',
  *          tripId?: string, selected?: boolean, fits?: boolean, saved?: boolean,
- *          shared?: boolean, currentUserId?: (string|null), canWrite?: boolean}} opts
+ *          isNew?: boolean, shared?: boolean, currentUserId?: (string|null), canWrite?: boolean}} opts
+ *   isNew         — Wander List: imported since the last visit (shows a "New" tag)
  *   variant preview   — read-only display (share success screen)
  *   variant select    — read-only + selection checkbox (Wander-List picker)
  *   variant community — anonymized community-pool place (CommunityPlaceResponse) + Add button
@@ -153,7 +154,7 @@ function _mapsButton(scrap) {
 function renderScrapCard(scrap, opts = {}) {
   const {
     index = 0, variant = 'trip', tripId = null, selected = false, fits = false,
-    shared = false, currentUserId = null, canWrite = true, saved = false,
+    isNew = false, shared = false, currentUserId = null, canWrite = true, saved = false,
   } = opts;
   // 'preview' = read-only display (share success screen). 'select' = read-only
   // with a selection checkbox (the trip's "add from Wander List" picker).
@@ -307,8 +308,9 @@ function renderScrapCard(scrap, opts = {}) {
   const consensus = (variant === 'trip' && shared && scrap.trip_id) ? _renderConsensus(scrap) : '';
 
   return `
-    <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isVisited ? 'is-visited' : ''}"
+    <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isNew ? 'scrap-card--new' : ''} ${isVisited ? 'is-visited' : ''}"
          style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : isPreview ? 'none' : (editable ? 'edit' : 'none')}">
+      ${isNew ? '<span class="scrap-card__new-badge"><i data-lucide="sparkles"></i>New</span>' : ''}
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
       ${editBtn}
