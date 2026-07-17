@@ -104,6 +104,10 @@ a:hover { color: var(--accent-hover); }
   animation: fadeUp 220ms ease both;
   animation-delay: calc(var(--i, 0) * 40ms);
 }
+/* Entrance animation plays on a visit's first paint only — re-renders from
+   background revalidates / poll ticks / mutation patches would otherwise
+   replay the stagger as a visible blink (View.settleMotion sets the class). */
+.view-settled .card-list > *, .view-settled .card-grid > * { animation: none; }
 .card-lift { transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
 .card-lift:hover { transform: translateY(-3px) rotate(0deg) !important; box-shadow: 0 10px 24px rgba(91, 84, 104, 0.16); }
 .card-lift:active { transform: translateY(0); }

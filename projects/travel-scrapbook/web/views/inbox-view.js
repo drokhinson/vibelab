@@ -64,33 +64,31 @@ class InboxView extends View {
     this._loaded = true;
   }
 
-  // Fetch one page with the current filters. append=true pages forward;
+  // Fetch one page with the current filters (via the shared loader, which
+  // also caches page 0 and feeds the nav badge). append=true pages forward;
   // otherwise the list resets to page 0 (filter change / mutation reload).
   async _load({ append = false } = {}) {
     const seq = ++this._seq;
     try {
-      const res = await window.api.getInbox({
-        ...this._geo,
+      const page = await window.BrowsePages.loadInbox({
+        geo: this._geo,
         limit: this.PAGE_SIZE,
         offset: append ? this._items.length : 0,
       });
       if (seq !== this._seq) return;
-      this._processing = res.processing_sources || [];
-      this._failed = res.failed_sources || [];
-      this._items = append ? [...this._items, ...(res.scraps || [])] : (res.scraps || []);
-      this._total = res.total || 0;
-      this._facets = res.facets || {};
+      // A revalidate that changed nothing must not repaint (the rebuild
+      // replays entrance animations — the "blink").
+      if (!append && this._loaded && JSON.stringify(page) === JSON.stringify({
+        processing: this._processing, failed: this._failed,
+        items: this._items, total: this._total, facets: this._facets,
+      })) return;
+      this._processing = page.processing;
+      this._failed = page.failed;
+      this._items = append ? [...this._items, ...page.items] : page.items;
+      this._total = page.total;
+      this._facets = page.facets;
       this._loaded = true;
-      if (!append) {
-        window.tsCache?.set('inbox', this._cacheKey(), {
-          processing: this._processing, failed: this._failed,
-          items: this._items, total: this._total, facets: this._facets,
-        });
-      }
       this.render();
-      // The bundle carries the badge count — no extra /inbox/count round trip.
-      if (res.inbox_count != null) window.store.set('inboxCount', res.inbox_count);
-      else window.SourceDomain.refreshInboxCount();
     } catch (err) {
       if (seq !== this._seq || this._loaded) return; // keep stale content on a failed refresh
       this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load inbox')}</div>`;
@@ -153,6 +151,7 @@ class InboxView extends View {
       ${renderQuickPaste()}
     `;
     this.refreshIcons();
+    this.settleMotion();
     this._bind();
     this._startPollingIfProcessing();
   }

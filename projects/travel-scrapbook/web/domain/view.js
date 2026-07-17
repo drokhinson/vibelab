@@ -22,6 +22,7 @@
       }
       this._mounted = true;
       this.params = params || {};
+      this._painted = false; // fresh visit → entrance animation plays once
       try { this.renderLoading(); } catch (_) {}
       await this.onMount?.();
       this.render();
@@ -44,6 +45,18 @@
       const el = root || this.container;
       if (el) window.lucide.createIcons({ root: el });
       else window.lucide.createIcons();
+    }
+
+    // Card entrance animations should play on a visit's FIRST paint only —
+    // background revalidates, poll ticks, and mutation patches rebuild the
+    // markup, and replaying the staggered fadeUp reads as a "blink". Views
+    // call this at the end of render(); the .view-settled class kills the
+    // animation on every subsequent paint of the same visit.
+    settleMotion() {
+      const c = this.container;
+      if (!c) return;
+      c.classList.toggle('view-settled', this._painted === true);
+      this._painted = true;
     }
 
     renderLoading() {}

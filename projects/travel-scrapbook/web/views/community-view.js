@@ -51,20 +51,19 @@ class CommunityView extends View {
   async _load({ append = false } = {}) {
     const seq = ++this._seq;
     try {
-      const res = await window.api.communityPlaces({
-        ...this._geo,
+      const page = await window.BrowsePages.loadCommunity({
+        geo: this._geo,
         limit: this.PAGE_SIZE,
         offset: append ? this._items.length : 0,
       });
       if (seq !== this._seq) return;
-      this._items = append ? [...this._items, ...(res.places || [])] : (res.places || []);
-      this._total = res.total || 0;
-      this._facets = res.facets || {};
+      // Unchanged revalidate → no repaint (avoids the entrance-anim blink).
+      if (!append && this._loaded && JSON.stringify(page) === JSON.stringify(
+        { items: this._items, total: this._total, facets: this._facets })) return;
+      this._items = append ? [...this._items, ...page.items] : page.items;
+      this._total = page.total;
+      this._facets = page.facets;
       this._loaded = true;
-      if (!append) {
-        window.tsCache?.set('community', this._cacheKey(),
-          { items: this._items, total: this._total, facets: this._facets });
-      }
       this.render();
     } catch (err) {
       if (seq !== this._seq || this._loaded) return; // keep stale content on a failed refresh
@@ -96,6 +95,7 @@ class CommunityView extends View {
       ${renderQuickPaste()}
     `;
     this.refreshIcons();
+    this.settleMotion();
     this._bind();
   }
 

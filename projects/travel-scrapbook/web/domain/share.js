@@ -27,9 +27,13 @@ const ShareDomain = {
   },
 
   // Pending invitations addressed to the current user, cached under 'invitations'.
+  // Skips the emission when nothing changed — the trips view re-renders off
+  // this key, and a no-op revalidate repaint reads as a card "blink".
   async loadInvitations() {
     const res = await window.api.listInvitations();
-    window.store.set('invitations', res.invitations);
+    if (JSON.stringify(res.invitations) !== JSON.stringify(window.store.get('invitations'))) {
+      window.store.set('invitations', res.invitations);
+    }
     return res.invitations;
   },
 

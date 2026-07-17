@@ -20,6 +20,7 @@ class TripView extends View {
     // Group the trip's scraps by activity type (default) or geography.
     this._groupBy = localStorage.getItem('ts.trip.groupBy') || 'category';
     this._collapsed = new Set();
+    this._painted = false; // a different trip is a fresh visit → animate once
   }
 
   renderLoading() {
@@ -167,6 +168,7 @@ class TripView extends View {
       ${canWrite ? renderQuickPaste(trip.id) : ''}
     `;
     this.refreshIcons();
+    this.settleMotion();
     this._bind(trip, { isOwner, canWrite });
   }
 
