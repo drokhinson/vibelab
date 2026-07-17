@@ -103,10 +103,13 @@
 
     const plansByDay = {};
     const unscheduled = [];
+    // Every approved plan stays in the trip — a scheduled plan sits on its day,
+    // an unscheduled one collects in Anytime. Completed (visited/skipped) plans
+    // are kept too (greyed + sunk to the bottom by the renderer), never dropped.
     for (const s of scraps) {
       if (s.plan_date && s.plan_date in dayNumbers) {
         (plansByDay[s.plan_date] ??= []).push(s);
-      } else if (!s.visited_at) {
+      } else {
         unscheduled.push({ ...s, suggestion: suggest(s, markers, dayNumbers) });
       }
     }
