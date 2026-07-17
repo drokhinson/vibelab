@@ -423,6 +423,18 @@ span.note-chip { cursor: default; }
   border-radius: 999px; padding: 2px 9px;
 }
 .scrap-card__fits-badge [data-lucide] { width: 13px; height: 13px; }
+/* "New" tag — a place imported since the user last opened the Wander List.
+   Sits on the media's top-left; the category bubble slides right to clear it. */
+.scrap-card__new-badge {
+  position: absolute; top: 8px; left: 8px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.68rem; font-weight: 900; letter-spacing: 0.02em; color: #FFFFFF;
+  background: var(--blush-deep); border: 1.5px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px; padding: 2px 9px;
+  box-shadow: 1.5px 1.5px 0 rgba(91, 84, 104, 0.18);
+}
+.scrap-card__new-badge [data-lucide] { width: 13px; height: 13px; }
+.scrap-card--new .cat-bubble { left: 58px; }
 
 /* "Add plans" picker modal: tall, its list scrolls, footer stays put. */
 .ts-modal__card.add-plans { max-height: 86vh; display: flex; flex-direction: column; }

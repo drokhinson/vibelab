@@ -346,16 +346,30 @@ async def get_inbox(
     status_code=200,
     summary="Inbox badge count",
 )
-async def get_inbox_count(user: CurrentUser = Depends(get_current_user)) -> InboxCountResponse:
-    """Inbox scraps + processing/failed sources — drives the nav badge."""
+async def get_inbox_count(
+    since: Optional[datetime] = Query(
+        None,
+        description="Only count places imported after this time — the 'new since "
+        "last visit' Wander List badge. Omit for the full pending count.",
+    ),
+    user: CurrentUser = Depends(get_current_user),
+) -> InboxCountResponse:
+    """Drives the nav badge. With `since`, counts only unfiled places imported
+    after that time (new since the user last opened the Wander List) and leaves
+    out in-progress captures. Without it, the full pending count: unvisited
+    scraps + processing/failed sources."""
     sb = get_supabase()
-    scraps = (
+    scraps_q = (
         sb.table("travelscrapbook_scraps")
         .select("id", count="exact")
         .eq("user_id", user.user_id)
         .is_("visited_at", "null")
-        .execute()
     )
+    if since is not None:
+        # "New" badge: freshly imported places only, not in-progress captures.
+        scraps_q = scraps_q.gt("created_at", since.isoformat())
+        return InboxCountResponse(count=(scraps_q.execute().count or 0))
+    scraps = scraps_q.execute()
     sources = (
         sb.table("travelscrapbook_sources")
         .select("id", count="exact")

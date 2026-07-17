@@ -24,6 +24,9 @@ class InboxView extends View {
     this._failed = [];
     this._loaded = false;
     this._seq = 0;
+    // Captured once per visit so the "New" tags stay put across background
+    // revalidates/polls; re-stamped on leave so they clear on the next visit.
+    this._lastVisitAt = null;
   }
 
   renderLoading() {
@@ -36,6 +39,9 @@ class InboxView extends View {
 
   async onMount() {
     this._resetState();
+    // Snapshot the previous visit time BEFORE anything repaints — items imported
+    // after it get the "New" tag for this visit (see onUnmount for the re-stamp).
+    this._lastVisitAt = window.SourceDomain?.getInboxLastVisit() || null;
     // Stale-while-revalidate: paint the cached page instantly on re-entry,
     // refresh in the background. (Suggestion chips ride on the scraps; the
     // trip picker lazy-loads trips when opened — no trips fetch here.)
@@ -51,9 +57,18 @@ class InboxView extends View {
 
   async onUnmount() {
     this._stopPolling();
+    // Leaving the page = these items are no longer "new": stamp now, which also
+    // resets the badge to 0 and clears the tags on the next visit.
+    window.SourceDomain?.markInboxVisited();
   }
 
   _cacheKey() { return JSON.stringify(this._geo); }
+
+  // A place is "new" when it was imported after the visit we snapshotted at mount.
+  _isNew(scrap) {
+    if (!this._lastVisitAt || !scrap.created_at) return false;
+    return new Date(scrap.created_at) > new Date(this._lastVisitAt);
+  }
 
   _applyPage(page) {
     this._processing = page.processing || [];
@@ -139,7 +154,7 @@ class InboxView extends View {
         ${renderFilterBar(this._geo, this._facets)}
         ${this._items.length ? `
           <div class="card-grid card-grid--2col">
-            ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox' })).join('')}
+            ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox', isNew: this._isNew(s) })).join('')}
           </div>` : `
           <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">
             ${filtered ? 'Nothing here matches — clear a filter to widen the view.' : 'Nothing waiting right now.'}</p>`}
