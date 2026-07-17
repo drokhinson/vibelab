@@ -100,14 +100,14 @@ a:hover { color: var(--accent-hover); }
 /* ── Motion ─────────────────────────────────────────────────────────────────── */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.card-list > *, .card-grid > * {
+.card-list > *, .card-grid > *, .plan-zones-grid > * {
   animation: fadeUp 220ms ease both;
   animation-delay: calc(var(--i, 0) * 40ms);
 }
 /* Entrance animation plays on a visit's first paint only — re-renders from
    background revalidates / poll ticks / mutation patches would otherwise
    replay the stagger as a visible blink (View.settleMotion sets the class). */
-.view-settled .card-list > *, .view-settled .card-grid > * { animation: none; }
+.view-settled .card-list > *, .view-settled .card-grid > *, .view-settled .plan-zones-grid > * { animation: none; }
 .card-lift { transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
 .card-lift:hover { transform: translateY(-3px) rotate(0deg) !important; box-shadow: 0 10px 24px rgba(91, 84, 104, 0.16); }
 .card-lift:active { transform: translateY(0); }
@@ -215,31 +215,45 @@ a:hover { color: var(--accent-hover); }
 .scrap-group__grid { margin: 0.7rem 0 0.4rem; }
 
 /* ── Plan zones (trip plans, auto-grouped by geography) ─────────────────────────
-   All plan cards live in one section; consecutive same-region cards sit inside a
-   dotted-outline zone with a per-region colour tint and a title pill on the edge.
-   The dotted dot-pattern echoes the paper background. Colour is hashed from the
-   region label (see plan-zones.js) so a region keeps its tint across re-renders. */
-.plan-zone {
-  border: 2px dotted var(--zone-edge, var(--border));
-  border-radius: 18px;
-  padding: 1.1rem 0.7rem 0.6rem;
-  margin: 1.6rem 0 1.1rem;
+   All plan cards live in ONE gap-less grid, in region order. Each cell is tinted
+   by its region and a dotted outline is traced around exactly the cells a region
+   occupies — so regions interlock like tetris pieces with no wasted half-rows.
+   The dotted dot-pattern echoes the paper background; the outline sides + colour
+   are computed per cell in plan-zones.js. Colour is hashed from the region label
+   so a region keeps its tint across re-renders. */
+.plan-zones-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* fixed 2-up: the outline math assumes it */
+  gap: 0;
+  margin: 1rem 0 1.2rem;
+}
+.zone-cell {
+  position: relative;
+  min-width: 0;
+  padding: 26px 7px 9px; /* uniform top gutter holds the region title on start cells */
+  --zone-line: 2px dotted var(--zone-edge, var(--border));
   background:
     radial-gradient(var(--paper-dot) 1px, transparent 1.5px) 0 0 / 18px 18px,
     var(--zone-tint, transparent);
 }
-.plan-zone .card-grid { margin: 0.3rem 0 0.2rem; }
-.plan-zone__title {
-  display: inline-flex; align-items: center; gap: 0.45rem;
-  font-family: var(--font-display); font-size: 1.35rem; color: var(--ink);
-  background: var(--card); border: 2px solid var(--zone-edge, var(--border));
-  border-radius: 999px; padding: 0.05rem 0.75rem;
-  margin: -1.7rem 0 0.4rem 0.3rem; /* lift the pill so it straddles the top border */
+/* Condensed half-width card, matching .card-grid--2col. */
+.zone-cell > .sticker-card { padding: 0.7rem; }
+.zone-cell .scrap-card__sub {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.plan-zone__count {
-  font-family: var(--font-sans); font-weight: 800; font-size: 0.78rem;
+.zone-cell__label {
+  position: absolute; top: 4px; left: 7px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-family: var(--font-display); font-size: 1.15rem; line-height: 1.4; color: var(--ink);
+  background: var(--card); border: 2px solid var(--zone-edge, var(--border));
+  border-radius: 999px; padding: 0 0.6rem;
+  box-shadow: 0 1px 3px rgba(91, 84, 104, 0.12);
+  max-width: calc(100% - 14px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.zone-cell__count {
+  font-family: var(--font-sans); font-weight: 800; font-size: 0.7rem;
   color: var(--ink-muted); background: var(--paper);
-  border: 1.5px solid var(--border); border-radius: 999px; padding: 0 0.45rem;
+  border: 1.5px solid var(--border); border-radius: 999px; padding: 0 0.4rem; flex-shrink: 0;
 }
 .plan-zone--blush      { --zone-tint: color-mix(in srgb, var(--blush) 26%, var(--paper));      --zone-edge: var(--blush-deep); }
 .plan-zone--mint       { --zone-tint: color-mix(in srgb, var(--mint) 30%, var(--paper));       --zone-edge: #7FCBA4; }
