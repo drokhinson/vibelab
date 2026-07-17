@@ -45,6 +45,9 @@
     // Per-scrap monotonic token so the NEWEST schedule wins: a slow/stale echo
     // (or a rolled-back error) from an older move must not clobber a newer one.
     _scheduleSeq: {},
+    // Same guard for the timeline outcome checkbox — rapid clear→visited→skipped
+    // taps fire overlapping writes; only the latest echo may reconcile.
+    _outcomeSeq: {},
     // Optimistic writes in flight — the capture poll skips its tick while > 0 so
     // a getTrip issued mid-drag can't _applyTrip-stomp the local paint.
     _pendingWrites: 0,
@@ -147,29 +150,42 @@
     // Timeline per-plan outcome: the checkbox cycles clear → visited → skipped.
     // `outcome` is null (clear), 'visited', or 'skipped' — the two are mutually
     // exclusive (the server clears the sibling flag). Optimistic so the tap feels
-    // instant; rolls back the whole bundle on error. visited_at also gates the
-    // Wander List, so lists/inbox refresh; skipped_at is timeline-only.
+    // instant. A per-scrap sequence guard (mirroring schedule) drops stale echoes
+    // from overlapping rapid taps so the checkbox doesn't replay through earlier
+    // states, and rollback is field-level so an error can't erase a concurrent
+    // edit to a different scrap. visited_at also gates the Wander List, so
+    // lists/inbox refresh; skipped_at is timeline-only.
     async setTimelineOutcome(scrapId, tripId, outcome) {
+      const seq = (this._outcomeSeq[scrapId] = (this._outcomeSeq[scrapId] || 0) + 1);
       const stamp = new Date().toISOString();
       const optimistic = {
         visited_at: outcome === 'visited' ? stamp : null,
         skipped_at: outcome === 'skipped' ? stamp : null,
       };
-      const snapshot = tripId ? window.store.get('trip:' + tripId) : null;
-      if (tripId) window.TripDomain.patchScrapFields(tripId, scrapId, optimistic);
+      let prev = null;
+      if (tripId) {
+        const trip = window.store.get('trip:' + tripId);
+        const cur = trip && [...(trip.scraps || []), ...(trip.staged_scraps || []),
+          ...(trip.candidates || [])].find((s) => s.id === scrapId);
+        if (cur) prev = { visited_at: cur.visited_at ?? null, skipped_at: cur.skipped_at ?? null };
+        window.TripDomain.patchScrapFields(tripId, scrapId, optimistic); // instant paint
+      }
       this._pendingWrites++; // pause the capture poll until the echo lands
       try {
         const scrap = await window.api.updateScrap(scrapId, {
           visited: outcome === 'visited',
           skipped: outcome === 'skipped',
         });
+        if (seq !== this._outcomeSeq[scrapId]) return;                 // superseded by a newer tap
         if (tripId) window.TripDomain.patchScrapFields(tripId, scrapId, {
           visited_at: scrap.visited_at, skipped_at: scrap.skipped_at,
         });
         this._invalidateLists();
         window.SourceDomain?.refreshInboxCount();
       } catch (err) {
-        if (snapshot) window.TripDomain._applyTrip(snapshot);
+        if (seq === this._outcomeSeq[scrapId] && tripId && prev) {
+          window.TripDomain.patchScrapFields(tripId, scrapId, prev);   // roll back only our fields
+        }
         throw err;
       } finally {
         this._pendingWrites--;
