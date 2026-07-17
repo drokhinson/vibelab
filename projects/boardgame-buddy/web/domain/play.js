@@ -29,6 +29,13 @@
     static remove(id) {
       return window.api.del(`/plays/${id}`).then((r) => { _invalidatePlayDeps(); return r; });
     }
+    // Self-remove from a play you didn't take part in. The backend turns your
+    // player row into a ghost (keeps the play for its owner) rather than
+    // deleting it. Busts the same caches as any other play mutation so your
+    // history/stats drop it on next read.
+    static leave(id) {
+      return window.api.post(`/plays/${id}/leave`, {}).then((r) => { _invalidatePlayDeps(); return r; });
+    }
   }
 
   function _invalidatePlayDeps() {

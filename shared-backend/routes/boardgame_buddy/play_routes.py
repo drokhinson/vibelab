@@ -21,6 +21,7 @@ from .models import (
     PlayExpansionRef,
     PlayFilterOption,
     PlayFilterOptions,
+    PlayLeaveResponse,
     PlayListResponse,
     PlayPhotoResponse,
     PlayPlayerResponse,
@@ -28,6 +29,7 @@ from .models import (
     PlayUpdate,
 )
 from .dependencies import CurrentUser, get_current_user
+from .services import played_with_service
 
 logger = logging.getLogger(__name__)
 
@@ -545,6 +547,43 @@ async def delete_play(
     ).execute()
 
     return MessageResponse(message="Play deleted")
+
+
+@router.post(
+    "/plays/{play_id}/leave",
+    response_model=PlayLeaveResponse,
+    status_code=200,
+    summary="Remove yourself from a play",
+)
+async def leave_play(
+    play_id: str = Path(..., description="Play UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayLeaveResponse:
+    """Self-remove from a play you didn't take part in: turns your player row
+    into a ghost (nulls player_user_id, keeps the name) instead of deleting the
+    play. The owner keeps the play; you drop out of your own history."""
+    sb = get_supabase()
+
+    existing = (
+        sb.table("boardgamebuddy_plays")
+        .select("id, user_id")
+        .eq("id", play_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Play not found")
+    if existing.data[0]["user_id"] == user.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="You logged this play — edit or delete it instead.",
+        )
+
+    n = played_with_service.ghost_out_of_play(
+        sb, user.user_id, play_id, user.display_name
+    )
+    if n == 0:
+        raise HTTPException(status_code=404, detail="You are not a player in this play")
+    return PlayLeaveResponse(rows_updated=n)
 
 
 @router.get(
