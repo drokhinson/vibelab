@@ -13,6 +13,7 @@ from ..constants import (
     TripScope,
 )
 from .core import ScrapResponse
+from .social import TripMemberResponse
 
 
 # ── Anchors ───────────────────────────────────────────────────────────────────
@@ -137,6 +138,8 @@ class TripResponse(BaseModel):
     anchors: list[AnchorResponse] = []
     scraps: list[ScrapResponse] = []           # approved
     staged_scraps: list[ScrapResponse] = []    # auto-matched, awaiting review
+    members: list[TripMemberResponse] = []     # owner first, pending invites included
+    candidates: list[ScrapResponse] = []       # viewer's scope-matched wishlist adds (write roles)
 
 
 class TripListResponse(BaseModel):

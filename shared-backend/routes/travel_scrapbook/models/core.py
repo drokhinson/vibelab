@@ -245,6 +245,7 @@ class InboxResponse(BaseModel):
     scraps: list[InboxScrapResponse] = []         # one filtered page
     total: int = 0                                # filtered count across pages
     facets: GeoFacets = GeoFacets()
+    inbox_count: int = 0                          # global badge count (unvisited + pending sources)
 
 
 class InboxCountResponse(BaseModel):

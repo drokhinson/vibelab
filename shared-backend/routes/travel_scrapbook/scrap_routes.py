@@ -16,6 +16,7 @@ from .access import get_accessible_membership
 from .constants import GeocodeConfidence
 from .dependencies import CurrentUser, get_current_user
 from .models import (
+    GeoFacets,
     MessageResponse,
     PagedScrapsResponse,
     PlanScheduleRequest,
@@ -26,13 +27,8 @@ from .models import (
 )
 from .services import nominatim
 from .services.enrichment import build_maps_url
-from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
-from .services.places import (
-    geo_facets,
-    geo_match,
-    normalize_place_name,
-    region_for_country_code,
-)
+from .services.hydrate import attach_consensus, hydrate_scraps
+from .services.places import normalize_place_name, region_for_country_code
 
 
 def get_owned_scrap(sb, scrap_id: str, user_id: str) -> dict[str, Any]:
@@ -52,22 +48,20 @@ def _hydrated_scrap(sb, scrap: dict[str, Any], *, with_vibes: bool = False) -> S
     return ScrapResponse(**hydrate_scraps(sb, [scrap], with_vibes=with_vibes)[0])
 
 
-def _hydrated_membership(
-    sb, scrap_id: str, trip_id: str, *, with_vibes: bool = True
-) -> ScrapResponse:
-    """Return a scrap in ONE trip's context (membership fields + per-trip vibes).
-    Used by the membership-scoped endpoints (assign / approve / schedule / vibe)."""
-    rows = (
-        sb.table("travelscrapbook_scrap_trips")
-        .select("*, travelscrapbook_scraps(*)")
-        .eq("scrap_id", scrap_id)
-        .eq("trip_id", trip_id)
-        .execute()
-    ).data or []
-    flat = membership_rows_to_scraps(rows)
-    if not flat:
+def _hydrated_membership(sb, scrap_id: str, trip_id: str) -> ScrapResponse:
+    """Return a scrap in ONE trip's context (membership fields + per-trip vibes)
+    in a single RPC round-trip. Used by the membership-scoped endpoints
+    (assign / approve / schedule / vibe) to echo the updated card."""
+    row = (
+        sb.rpc(
+            "travelscrapbook_scrap_card",
+            {"p_scrap_id": scrap_id, "p_trip_id": trip_id},
+        ).execute()
+    ).data
+    if not row:
         raise HTTPException(status_code=404, detail="This place isn't on that trip")
-    return ScrapResponse(**hydrate_scraps(sb, flat, with_vibes=with_vibes)[0])
+    attach_consensus([row])
+    return ScrapResponse(**row)
 
 
 @router.get(
@@ -101,39 +95,23 @@ async def list_visited(
 ) -> PagedScrapsResponse:
     """One filtered page of the scraps the user marked visited (any trip or
     the wishlist), most-recently-visited first, plus drill-down facets
-    (regions → countries → cities) and the filtered total."""
+    (regions → countries → cities) and the filtered total. Filtering,
+    facets, and pagination all run in SQL (one RPC round-trip)."""
     sb = get_supabase()
-    rows = (
-        sb.table("travelscrapbook_scraps")
-        .select("*, travelscrapbook_places(region, country, city)")
-        .eq("user_id", user.user_id)
-        .not_.is_("visited_at", "null")
-        .order("visited_at", desc=True)
-        .execute()
-    ).data or []
-    geo_rows = []
-    for r in rows:
-        place = r.pop("travelscrapbook_places", None) or {}
-        geo_rows.append({
-            **r,
-            "place_region": place.get("region"),
-            "place_country": place.get("country"),
-            "place_city": place.get("city"),
-        })
-    facets = geo_facets(geo_rows, region=region, country=country)
-    filtered = [
-        r for r in geo_rows
-        if geo_match(r, region=region, country=country, city=city)
-    ]
-    page = hydrate_scraps(sb, [
-        {k: v for k, v in r.items()
-         if k not in ("place_region", "place_country", "place_city")}
-        for r in filtered[offset:offset + limit]
-    ])
+    page = (
+        sb.rpc("travelscrapbook_visited_page", {
+            "p_viewer": user.user_id,
+            "p_region": region,
+            "p_country": country,
+            "p_city": city,
+            "p_limit": limit,
+            "p_offset": offset,
+        }).execute()
+    ).data or {}
     return PagedScrapsResponse(
-        scraps=[ScrapResponse(**s) for s in page],
-        total=len(filtered),
-        facets=facets,
+        scraps=[ScrapResponse(**s) for s in page.get("scraps", [])],
+        total=page.get("total", 0),
+        facets=page.get("facets") or GeoFacets(),
     )
 
 
@@ -326,14 +304,18 @@ async def set_rating(
         .eq("scrap_id", scrap_id)
         .execute()
     ).data or []
-    for m in memberships:
+    if memberships:
+        # One bulk upsert covers every trip the place is in (was one per trip).
         sb.table("travelscrapbook_scrap_vibes").upsert(
-            {
-                "scrap_trip_id": m["id"],
-                "user_id": user.user_id,
-                "level": body.level,
-                "updated_at": "now()",
-            },
+            [
+                {
+                    "scrap_trip_id": m["id"],
+                    "user_id": user.user_id,
+                    "level": body.level,
+                    "updated_at": "now()",
+                }
+                for m in memberships
+            ],
             on_conflict="scrap_trip_id,user_id",
         ).execute()
     return _hydrated_scrap(sb, scrap)

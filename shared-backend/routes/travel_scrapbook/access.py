@@ -65,6 +65,49 @@ def get_accessible_trip(
     return trip, role
 
 
+def assert_writable_trips(sb, trip_ids: set[str] | list[str], user_id: str) -> None:
+    """Batch write-access check over several trips (max two queries, however
+    many trips) — the anti-N+1 form of calling get_accessible_trip in a loop.
+    404 when any trip is missing or invisible to the caller; 403 when the
+    caller is only a viewer on any of them."""
+    ids = list(set(trip_ids))
+    if not ids:
+        return
+    trips = (
+        sb.table("travelscrapbook_trips")
+        .select("id, user_id")
+        .in_("id", ids)
+        .execute()
+    ).data or []
+    found = {t["id"]: t for t in trips}
+    if len(found) < len(ids):
+        raise HTTPException(status_code=404, detail="Trip not found")
+    not_owned = [tid for tid, t in found.items() if t["user_id"] != user_id]
+    if not not_owned:
+        return
+    roles = {
+        m["trip_id"]: TripMemberRole(m["role"])
+        for m in (
+            sb.table("travelscrapbook_trip_members")
+            .select("trip_id, role")
+            .in_("trip_id", not_owned)
+            .eq("user_id", user_id)
+            .eq("status", MemberStatus.ACCEPTED)
+            .execute()
+        ).data or []
+    }
+    for tid in not_owned:
+        role = roles.get(tid)
+        if role is None:
+            # Don't leak the trip's existence to non-members.
+            raise HTTPException(status_code=404, detail="Trip not found")
+        if role == TripMemberRole.VIEWER:
+            raise HTTPException(
+                status_code=403,
+                detail="Viewers can't change this trip — ask for collaborator access",
+            )
+
+
 def get_accessible_membership(
     sb, scrap_id: str, trip_id: str, user_id: str, *, need_write: bool = False
 ) -> tuple[dict[str, Any], TripMemberRole]:

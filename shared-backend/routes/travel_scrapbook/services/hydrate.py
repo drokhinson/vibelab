@@ -39,6 +39,15 @@ def _consensus(levels: list[str]) -> dict[str, Any]:
     return {"counts": dict(counts), "total": total, "headline": headline}
 
 
+def attach_consensus(scraps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Compute the ``consensus`` roll-up from each scrap's raw ``vibes`` rows,
+    in place. Used on scrap JSON coming out of the perf RPCs (migration 015),
+    which return vibes but leave the tie-break logic here."""
+    for s in scraps:
+        s["consensus"] = _consensus([v["level"] for v in s.get("vibes") or []])
+    return scraps
+
+
 def membership_rows_to_scraps(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Flatten travelscrapbook_scrap_trips rows (each embedding its scrap via
     ``travelscrapbook_scraps(*)``) into scrap-shaped dicts carrying the per-trip

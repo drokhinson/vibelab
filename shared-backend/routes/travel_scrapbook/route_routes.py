@@ -79,20 +79,22 @@ async def optimize_route(
     ]
     ordered, leg_km, total_km = optimize(points, start=start, end=end)
 
-    # Persist positions (anchors excluded — position covers scraps only).
+    # Persist positions (anchors excluded — position covers scraps only) in
+    # ONE statement via the bulk RPC instead of an UPDATE per stop.
     anchor_ids = {a["id"] for a in anchors}
     position = 0
     by_id = {s["id"]: s for s in routable}
     ordered_scraps: list[ScrapResponse] = []
+    positions: list[dict] = []
     for p in ordered:
         if p.id in anchor_ids:
             continue
         position += 1
-        sb.table("travelscrapbook_scrap_trips").update(
-            {"route_position": position}
-        ).eq("id", by_id[p.id]["scrap_trip_id"]).execute()
+        positions.append({"id": by_id[p.id]["scrap_trip_id"], "pos": position})
         row = {**by_id[p.id], "route_position": position}
         ordered_scraps.append(ScrapResponse(**row))
+    if positions:
+        sb.rpc("travelscrapbook_set_route_positions", {"p_positions": positions}).execute()
 
     legs = [
         RouteLeg(
