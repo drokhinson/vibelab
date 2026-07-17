@@ -529,11 +529,13 @@ class TripView extends View {
               });
             } else if (action === 'cycle-outcome') {
               // Timeline checkbox: clear → visited → skipped → clear. Optimistic.
+              // Toast fires on the tap (not after the write) and dedupes per-scrap,
+              // so rapid cycling shows one updating bubble, never a delayed burst.
               const cur = scrap.visited_at ? 'visited' : (scrap.skipped_at ? 'skipped' : null);
               const next = cur === null ? 'visited' : (cur === 'visited' ? 'skipped' : null);
-              await window.ScrapDomain.setTimelineOutcome(scrapId, trip.id, next);
               toast(next === 'visited' ? 'Marked visited'
-                : next === 'skipped' ? 'Marked skipped' : 'Cleared');
+                : next === 'skipped' ? 'Marked skipped' : 'Cleared', { key: 'outcome-' + scrapId });
+              await window.ScrapDomain.setTimelineOutcome(scrapId, trip.id, next);
             } else if (action === 'slot') {
               // One-tap "add to Day N" from a timeline suggestion chip. The
               // patched card re-renders the timeline instantly.

@@ -20,14 +20,23 @@ function escapeHtml(str) {
 
 function escapeAttr(str) { return escapeHtml(str); }
 
-function toast(message, { error = false, ms = 2600 } = {}) {
+// `key` dedupes: a repeat toast with the same key updates the existing bubble's
+// text and resets its timer instead of stacking a new one — so rapid-fire
+// mutations (e.g. cycling a timeline checkbox) show one bubble, not a burst.
+function toast(message, { error = false, ms = 2600, key = null } = {}) {
   const root = document.getElementById('toast-root');
   if (!root) return;
-  const el = document.createElement('div');
+  let el = key ? root.querySelector(`.ts-toast[data-toast-key="${key}"]`) : null;
+  if (!el) {
+    el = document.createElement('div');
+    if (key) el.dataset.toastKey = key;
+    root.appendChild(el);
+  } else if (el._toastTimer) {
+    clearTimeout(el._toastTimer);
+  }
   el.className = 'ts-toast' + (error ? ' ts-toast--error' : '');
   el.textContent = message;
-  root.appendChild(el);
-  setTimeout(() => el.remove(), ms);
+  el._toastTimer = setTimeout(() => el.remove(), ms);
 }
 
 function formatDateRange(startDate, endDate) {
