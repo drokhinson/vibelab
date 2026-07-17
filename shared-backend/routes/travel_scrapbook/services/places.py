@@ -11,6 +11,7 @@ as the forward path to global cross-user dedupe.
 import logging
 import re
 import unicodedata
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -29,11 +30,65 @@ from ..constants import (
     TRIP_SUGGEST_RADIUS_KM,
     TripScope,
 )
-from . import nominatim
+from . import gmaps, nominatim
 from .llm import PlaceExtraction
 from .optimizer import haversine_km
 
 logger = logging.getLogger("travel_scrapbook.places")
+
+
+@dataclass
+class ResolvedMapsPlace:
+    """A Google Maps URL resolved to place fields (no LLM). `name` is the URL's
+    place label when present; callers decide whether to use it. `region` is the
+    macro-region derived from the country code, consistent with the rest of the
+    app."""
+    name: Optional[str]
+    lat: Optional[float]
+    lng: Optional[float]
+    city: Optional[str]
+    region: Optional[str]
+    country: Optional[str]
+    country_code: Optional[str]
+    geocode_display_name: Optional[str]
+    geocode_confidence: str
+    maps_url: str
+
+
+async def resolve_maps_place(sb: Client, url: str) -> Optional[ResolvedMapsPlace]:
+    """Parse a Google Maps URL into place fields, deriving city/region/country
+    from the pin (reverse geocode) or, when the URL only names a place, a forward
+    geocode of that name. Returns None for a non-maps or unparseable URL so
+    callers can fall back to their existing text path. Best-effort/null-tolerant."""
+    if not gmaps.is_maps_url(url):
+        return None
+    mp = await gmaps.parse_maps_url(url)
+    if mp is None:
+        return None
+
+    if mp.lat is not None and mp.lng is not None:
+        geo = await nominatim.reverse(mp.lat, mp.lng)
+        lat, lng = mp.lat, mp.lng
+    else:
+        geo = await nominatim.geocode(mp.name) if mp.name else None
+        lat = geo.lat if geo else None
+        lng = geo.lng if geo else None
+
+    country_code = geo.country_code if geo else None
+    return ResolvedMapsPlace(
+        name=mp.name,
+        lat=lat,
+        lng=lng,
+        city=geo.city if geo else None,
+        region=region_for_country_code(sb, country_code),
+        country=geo.country if geo else None,
+        country_code=country_code,
+        geocode_display_name=geo.display_name if geo else None,
+        geocode_confidence=(
+            GeocodeConfidence.HIGH if lat is not None else GeocodeConfidence.NONE
+        ),
+        maps_url=mp.expanded_url,
+    )
 
 
 def region_for_country_code(sb: Client, country_code: Optional[str]) -> Optional[str]:

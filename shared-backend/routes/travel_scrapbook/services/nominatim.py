@@ -19,6 +19,7 @@ from api_logger import log_external_call
 from ..constants import APP_NAME, CACHE_NS_GEOCODE, GEOCODE_TTL_SECONDS
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 HTTP_TIMEOUT = 10.0
 MIN_INTERVAL_SECONDS = 1.1
 
@@ -55,62 +56,11 @@ class GeocodeResult:
     addresstype: Optional[str] = None
 
 
-async def geocode(query: str) -> Optional[GeocodeResult]:
-    """Resolve a freeform place query to coordinates, or None on no match.
-
-    Network/HTTP errors also return None — geocoding is always best-effort.
-    """
-    global _last_call_monotonic
-
-    key = " ".join(query.lower().split())
-    if not key:
-        return None
-    cached = cache.get(CACHE_NS_GEOCODE, key)
-    if cached is not None:
-        return None if cached == _MISS else cached
-
-    async with _throttle_lock:
-        wait = MIN_INTERVAL_SECONDS - (time.monotonic() - _last_call_monotonic)
-        if wait > 0:
-            await asyncio.sleep(wait)
-        _last_call_monotonic = time.monotonic()
-
-        params = {
-            "q": query,
-            "format": "jsonv2",
-            "limit": "1",
-            "addressdetails": "1",
-            # Return names in English where an exonym exists (falls back to the
-            # local name otherwise) so cards/groupings read "Greece" not "Ελλάς".
-            "accept-language": "en",
-        }
-        try:
-            async with log_external_call(
-                app=APP_NAME,
-                api_name="nominatim",
-                method="GET",
-                url=NOMINATIM_URL,
-                params=params,
-            ) as record:
-                async with httpx.AsyncClient(
-                    timeout=HTTP_TIMEOUT,
-                    headers={"User-Agent": _USER_AGENT},
-                ) as client:
-                    resp = await client.get(NOMINATIM_URL, params=params)
-                record.attach_response(resp)
-                resp.raise_for_status()
-                rows = resp.json()
-        except (httpx.HTTPError, ValueError):
-            return None
-
-    if not rows:
-        cache.set(CACHE_NS_GEOCODE, key, _MISS, GEOCODE_TTL_SECONDS)
-        return None
-
-    row = rows[0]
+def _parse_row(row: dict) -> Optional[GeocodeResult]:
+    """Map one Nominatim result row (search or reverse) to a GeocodeResult."""
     address = row.get("address") or {}
     try:
-        result = GeocodeResult(
+        return GeocodeResult(
             lat=float(row["lat"]),
             lng=float(row["lon"]),
             display_name=str(row.get("display_name", "")),
@@ -135,5 +85,97 @@ async def geocode(query: str) -> Optional[GeocodeResult]:
     except (KeyError, TypeError, ValueError):
         return None
 
+
+async def _throttled_get(url: str, params: dict) -> Optional[object]:
+    """One rate-limited Nominatim request. Returns parsed JSON, or None on any
+    network/HTTP error (geocoding is always best-effort)."""
+    global _last_call_monotonic
+    async with _throttle_lock:
+        wait = MIN_INTERVAL_SECONDS - (time.monotonic() - _last_call_monotonic)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _last_call_monotonic = time.monotonic()
+
+        try:
+            async with log_external_call(
+                app=APP_NAME,
+                api_name="nominatim",
+                method="GET",
+                url=url,
+                params=params,
+            ) as record:
+                async with httpx.AsyncClient(
+                    timeout=HTTP_TIMEOUT,
+                    headers={"User-Agent": _USER_AGENT},
+                ) as client:
+                    resp = await client.get(url, params=params)
+                record.attach_response(resp)
+                resp.raise_for_status()
+                return resp.json()
+        except (httpx.HTTPError, ValueError):
+            return None
+
+
+async def geocode(query: str) -> Optional[GeocodeResult]:
+    """Resolve a freeform place query to coordinates, or None on no match.
+
+    Network/HTTP errors also return None — geocoding is always best-effort.
+    """
+    key = " ".join(query.lower().split())
+    if not key:
+        return None
+    cached = cache.get(CACHE_NS_GEOCODE, key)
+    if cached is not None:
+        return None if cached == _MISS else cached
+
+    rows = await _throttled_get(NOMINATIM_URL, {
+        "q": query,
+        "format": "jsonv2",
+        "limit": "1",
+        "addressdetails": "1",
+        # Return names in English where an exonym exists (falls back to the
+        # local name otherwise) so cards/groupings read "Greece" not "Ελλάς".
+        "accept-language": "en",
+    })
+    if rows is None:
+        return None
+    if not rows:
+        cache.set(CACHE_NS_GEOCODE, key, _MISS, GEOCODE_TTL_SECONDS)
+        return None
+
+    result = _parse_row(rows[0])
+    if result is None:
+        return None
+    cache.set(CACHE_NS_GEOCODE, key, result, GEOCODE_TTL_SECONDS)
+    return result
+
+
+async def reverse(lat: float, lng: float) -> Optional[GeocodeResult]:
+    """Resolve coordinates to a place (city/region/country + display name), or
+    None on no match. Used when a Google Maps URL already carries the exact pin —
+    reverse-geocoding that point is more reliable than forward-geocoding a
+    'lat,lng' string. Best-effort: network/HTTP errors return None."""
+    key = f"reverse:{lat:.5f},{lng:.5f}"
+    cached = cache.get(CACHE_NS_GEOCODE, key)
+    if cached is not None:
+        return None if cached == _MISS else cached
+
+    row = await _throttled_get(NOMINATIM_REVERSE_URL, {
+        "lat": f"{lat}",
+        "lon": f"{lng}",
+        "format": "jsonv2",
+        "addressdetails": "1",
+        "accept-language": "en",
+    })
+    if row is None:
+        return None
+    # /reverse returns a single object (or {"error": ...}), not a list.
+    if not isinstance(row, dict) or "lat" not in row:
+        cache.set(CACHE_NS_GEOCODE, key, _MISS, GEOCODE_TTL_SECONDS)
+        return None
+
+    result = _parse_row(row)
+    if result is None:
+        return None
     cache.set(CACHE_NS_GEOCODE, key, result, GEOCODE_TTL_SECONDS)
     return result

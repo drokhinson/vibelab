@@ -31,6 +31,12 @@ function _tlOutcome(scrap) {
   return null;
 }
 
+// "City, Country" for a checkpoint, from its resolved location fields (empty
+// when the anchor has neither).
+function _tlPlace(o) {
+  return [o && o.city, o && o.country].filter(Boolean).join(', ');
+}
+
 const TIMELINE_MARKER_META = {
   arrival: { icon: 'plane-landing', label: 'Arrive' },
   checkin: { icon: 'home', label: 'Check in' },
@@ -68,13 +74,14 @@ function _tlEndpoint(trip, role, { canWrite = true } = {}) {
   }
   const day = anchor.anchor_date ? _tlDay(anchor.anchor_date) : 'no date yet';
   const time = _tlTime(anchor.anchor_time);
+  const place = _tlPlace(anchor);
   return `
     <div class="sticker-card tl-endpoint">
       <span class="tl-endpoint__icon"><i data-lucide="${meta.icon}"></i></span>
       <div class="tl-endpoint__body">
         <span class="tl-endpoint__role">${meta.label}</span>
         <span class="tl-endpoint__name">${escapeHtml(anchor.label)}</span>
-        <span class="scrap-card__sub">${escapeHtml(day)}${time ? ` · ${escapeHtml(time)}` : ''}</span>
+        <span class="scrap-card__sub">${escapeHtml(day)}${time ? ` · ${escapeHtml(time)}` : ''}${place ? ` · ${escapeHtml(place)}` : ''}</span>
       </div>
       ${canWrite ? `
         <button class="tl-row__btn" data-action="edit-anchor" data-anchor-id="${escapeAttr(anchor.id)}"
@@ -87,11 +94,12 @@ function _tlEndpoint(trip, role, { canWrite = true } = {}) {
 function _tlMarkerRow(m, { canWrite = true } = {}) {
   const meta = TIMELINE_MARKER_META[m.kind] || TIMELINE_MARKER_META.checkin;
   const time = _tlTime(m.time);
+  const place = _tlPlace(m);
   return `
     <div class="tl-row tl-row--marker">
       <span class="tl-row__time">${time ? escapeHtml(time) : 'all day'}</span>
       <i data-lucide="${meta.icon}"></i>
-      <span class="tl-row__label"><b>${meta.label}</b> · ${escapeHtml(m.label)}</span>
+      <span class="tl-row__label"><b>${meta.label}</b> · ${escapeHtml(m.label)}${place ? ` · ${escapeHtml(place)}` : ''}</span>
       ${canWrite ? `
         <button class="tl-row__btn" data-action="edit-anchor" data-anchor-id="${escapeAttr(m.anchor_id)}"
                 aria-label="Edit ${escapeAttr(m.label)}" title="Edit checkpoint">

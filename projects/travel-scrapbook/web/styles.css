@@ -357,6 +357,13 @@ a:hover { color: var(--accent-hover); }
 .att-row:hover { border-color: var(--ink-muted); }
 .att-row input { width: 18px; height: 18px; flex-shrink: 0; }
 .att-row .ts-sprite { flex-shrink: 0; }
+/* "Suggested" pill on a trip this place fits — mirrors .tl-suggested-badge's
+   dashed language, tinted mint since it's a positive nudge, pinned to the row end. */
+.att-suggested-badge {
+  margin-left: auto; padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+  border: 1.5px dashed var(--mint, #7fd0a8); font-size: 0.66rem; font-weight: 800;
+  color: var(--ink-muted);
+}
 /* Pencil edit affordance at the whole card's top-right corner. Carries no
    handler — a click bubbles to the card's own click-to-edit listener. */
 .scrap-card__edit {

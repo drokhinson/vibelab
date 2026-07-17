@@ -73,6 +73,8 @@ const AnchorEditor = {
             <input class="ts-input" id="ae-label" required placeholder="e.g. Narita Airport" />
             <label class="ts-label" for="ae-query">Where is it? (searched on the map)</label>
             <input class="ts-input" id="ae-query" required placeholder="e.g. Narita International Airport, Japan" />
+            <label class="ts-label" for="ae-maps-url">Google Maps link (optional)</label>
+            <input class="ts-input" id="ae-maps-url" placeholder="paste a maps link to pin the exact spot" />
           </div>
 
           <div id="ae-type-row">
@@ -166,6 +168,7 @@ const AnchorEditor = {
     if (editing) {
       labelInput.value = anchor.label || '';
       queryInput.value = anchor.query || '';
+      modal.querySelector('#ae-maps-url').value = anchor.maps_url || '';
       queryInput.dataset.touched = '1'; // don't mirror label edits into the query
       if (anchor.type) modal.querySelector('#ae-type').value = anchor.type;
       if (anchor.role === 'stay') {
@@ -195,6 +198,14 @@ const AnchorEditor = {
         } else {
           body.label = labelInput.value.trim();
           body.query = queryInput.value.trim();
+          // A pasted Maps link pins the exact spot (no AI). On edit only send it
+          // when changed, so an unchanged link doesn't re-resolve every save.
+          const mapsUrl = modal.querySelector('#ae-maps-url').value.trim();
+          if (editing) {
+            if (mapsUrl !== (anchor.maps_url || '')) body.maps_url = mapsUrl || null;
+          } else if (mapsUrl) {
+            body.maps_url = mapsUrl;
+          }
           if (TRAVEL_ROLES.includes(role)) body.type = modal.querySelector('#ae-type').value;
           if (role === 'stay') {
             body.stay_date = modal.querySelector('#ae-stay-date').value || null;

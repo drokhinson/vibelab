@@ -1,6 +1,6 @@
 """Trip CRUD and anchor (start/end/stay) management."""
 
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import BackgroundTasks, Depends, HTTPException, Path
 
@@ -30,18 +30,72 @@ from .models import (
 )
 from .services import nominatim
 from .services.hydrate import attach_consensus
-from .services.places import geocode_trip_destination, place_matches_trip_scope
+from .services.places import (
+    geocode_trip_destination,
+    place_matches_trip_scope,
+    region_for_country_code,
+    resolve_maps_place,
+)
+
+# Location columns an anchor carries (mirrors travelscrapbook_places).
+_ANCHOR_LOC_KEYS = (
+    "lat", "lng", "city", "region", "country", "country_code",
+    "geocode_confidence", "maps_url",
+)
 
 
-async def _geocode_anchor(query: str) -> dict[str, Any]:
+def _empty_location() -> dict[str, Any]:
+    return {
+        "lat": None, "lng": None, "city": None, "region": None,
+        "country": None, "country_code": None,
+        "geocode_confidence": GeocodeConfidence.NONE, "maps_url": None,
+    }
+
+
+async def _geocode_anchor(sb, query: str) -> dict[str, Any]:
+    """Forward-geocode a freeform anchor query into its location columns
+    (coords + city/region/country), or nulls on no match."""
+    loc = _empty_location()
     result = await nominatim.geocode(query)
     if result:
-        return {
+        loc.update({
             "lat": result.lat,
             "lng": result.lng,
+            "city": result.city,
+            "region": region_for_country_code(sb, result.country_code),
+            "country": result.country,
+            "country_code": result.country_code,
             "geocode_confidence": GeocodeConfidence.HIGH,
-        }
-    return {"lat": None, "lng": None, "geocode_confidence": GeocodeConfidence.NONE}
+        })
+    return loc
+
+
+async def _resolve_anchor_location(
+    sb, *, maps_url: Optional[str], query: Optional[str]
+) -> dict[str, Any]:
+    """An anchor's location columns from a pasted Google Maps URL (preferred —
+    parsed to itself, no AI) or a freeform text query. Non-Maps / unparseable
+    links are stored verbatim while the text query supplies the pin."""
+    if maps_url:
+        resolved = await resolve_maps_place(sb, maps_url)
+        if resolved is not None:
+            if resolved.lat is not None:
+                return {
+                    "lat": resolved.lat, "lng": resolved.lng,
+                    "city": resolved.city, "region": resolved.region,
+                    "country": resolved.country, "country_code": resolved.country_code,
+                    "geocode_confidence": resolved.geocode_confidence,
+                    "maps_url": resolved.maps_url,
+                }
+            # A Maps link we couldn't geocode — keep it, pin from the text query.
+            loc = await _geocode_anchor(sb, query) if query else _empty_location()
+            loc["maps_url"] = resolved.maps_url
+            return loc
+        # Not a Google Maps URL — store it as-is, geocode the text query.
+        loc = await _geocode_anchor(sb, query) if query else _empty_location()
+        loc["maps_url"] = maps_url
+        return loc
+    return await _geocode_anchor(sb, query) if query else _empty_location()
 
 
 def _get_start_anchor(sb, trip_id: str) -> dict[str, Any] | None:
@@ -308,9 +362,7 @@ async def create_anchor(
             "role": AnchorRole.END,
             "label": start["label"],
             "query": start["query"],
-            "lat": start.get("lat"),
-            "lng": start.get("lng"),
-            "geocode_confidence": start.get("geocode_confidence", GeocodeConfidence.NONE),
+            **{k: start.get(k) for k in _ANCHOR_LOC_KEYS},
             "type": start.get("type"),
             **marker_fields,
         }
@@ -320,7 +372,8 @@ async def create_anchor(
             "role": body.role,
             "label": body.label,
             "query": body.query,
-            **(await _geocode_anchor(body.query)),
+            **(await _resolve_anchor_location(
+                sb, maps_url=body.maps_url, query=body.query)),
             "type": body.type if is_travel else None,
             **marker_fields,
         }
@@ -376,8 +429,17 @@ async def update_anchor(
     }
     if any(k in update for k in ("anchor_date", "stay_date", "stay_end_date")):
         _validate_anchor_dates(trip, {**existing, **update})
-    if "query" in update and update["query"] != existing["query"]:
-        update.update(await _geocode_anchor(update["query"]))
+    query_changed = "query" in update and update["query"] != existing["query"]
+    if "maps_url" in update or query_changed:
+        loc = await _resolve_anchor_location(
+            sb,
+            maps_url=update.get("maps_url"),
+            query=update.get("query", existing.get("query")),
+        )
+        if "maps_url" not in update:
+            # A query-only edit re-pins from text; don't wipe a saved Maps link.
+            loc.pop("maps_url", None)
+        update.update(loc)
     updated = (
         sb.table("travelscrapbook_anchors").update(update).eq("id", anchor_id).execute()
     )

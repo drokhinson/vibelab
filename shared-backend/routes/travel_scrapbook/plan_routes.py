@@ -56,6 +56,32 @@ def _trip_scrap_ids(sb, trip_id: str) -> set[str]:
     }
 
 
+def _dismissed_scrap_ids(sb, trip_id: str) -> set[str]:
+    """Scrap ids the user has already resolved for this trip (kept-then-removed
+    or removed outright) — excluded from re-suggestion. See migration 018."""
+    return {
+        d["scrap_id"]
+        for d in (
+            sb.table("travelscrapbook_scrap_trip_dismissals")
+            .select("scrap_id")
+            .eq("trip_id", trip_id)
+            .execute()
+        ).data or []
+    }
+
+
+def _record_dismissals(sb, trip_id: str, scrap_ids: list[str]) -> None:
+    """Mark (scrap, trip) pairs as resolved so they don't re-appear as
+    suggestions after the place is removed from the trip. Idempotent."""
+    if not scrap_ids:
+        return
+    sb.table("travelscrapbook_scrap_trip_dismissals").upsert(
+        [{"scrap_id": sid, "trip_id": trip_id} for sid in scrap_ids],
+        on_conflict="scrap_id,trip_id",
+        ignore_duplicates=True,
+    ).execute()
+
+
 @router.get(
     "/trips/{trip_id}/scraps",
     response_model=ScrapListResponse,
@@ -91,7 +117,9 @@ async def list_trip_candidates(
     Same match predicate as auto-staging, so suggestions stay consistent."""
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    already = _trip_scrap_ids(sb, trip_id)
+    # Exclude places already in the trip AND ones the user already resolved for
+    # it (migration 018), so a removed suggestion doesn't immediately re-appear.
+    excluded = _trip_scrap_ids(sb, trip_id) | _dismissed_scrap_ids(sb, trip_id)
     rows = [
         r for r in (
             sb.table("travelscrapbook_scraps")
@@ -101,7 +129,7 @@ async def list_trip_candidates(
             .order("created_at", desc=True)
             .execute()
         ).data or []
-        if r["id"] not in already
+        if r["id"] not in excluded
     ]
     hydrated = hydrate_scraps(sb, rows)
     candidates = [
@@ -285,6 +313,10 @@ async def set_scrap_trips(
         sb.table("travelscrapbook_scrap_trips").delete().eq(
             "scrap_id", scrap_id
         ).in_("trip_id", list(to_remove)).execute()
+        # Removing via the multi-select is still resolving the suggestion — mark
+        # each dropped trip so it doesn't re-suggest this place (migration 018).
+        for tid in to_remove:
+            _record_dismissals(sb, tid, [scrap_id])
     # Return the (Wander-List) scrap with its refreshed trip membership set.
     scrap = get_owned_scrap(sb, scrap_id, user.user_id)
     return ScrapResponse(**hydrate_scraps(sb, [scrap], with_trip_ids=True)[0])
@@ -334,6 +366,8 @@ async def unassign_scrap(
     sb.table("travelscrapbook_scrap_trips").delete().eq(
         "scrap_id", scrap_id
     ).eq("trip_id", trip_id).execute()
+    # The user resolved this suggestion — don't re-suggest it for this trip.
+    _record_dismissals(sb, trip_id, [scrap_id])
     return MessageResponse(message="Removed from the trip")
 
 

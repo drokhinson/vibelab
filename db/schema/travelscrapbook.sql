@@ -65,6 +65,11 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_anchors (
   query              TEXT             NOT NULL,
   lat                DOUBLE PRECISION,
   lng                DOUBLE PRECISION,
+  city               TEXT,            -- resolved location (019); from geocode or a pasted Maps URL
+  region             TEXT,            -- macro-region (UN subregion), derived from country_code (019)
+  country            TEXT,            -- (019)
+  country_code       TEXT,            -- (019)
+  maps_url           TEXT,            -- user-pasted Google Maps link, when provided (019)
   geocode_confidence TEXT             NOT NULL DEFAULT 'none'
     CHECK (geocode_confidence IN ('high', 'medium', 'low', 'none')),
   type               TEXT             -- start/end/travel: airport | train_station | car_rental | other
@@ -199,6 +204,21 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trips (
 );
 -- idx_ts_scrap_trips_trip (trip_id, status), idx_ts_scrap_trips_scrap (scrap_id)
 -- idx_ts_scrap_trips_trip_plan_date (trip_id, plan_date)
+
+-- Sticky-resolved suggestions (018): once the user resolves a suggestion (keeps
+-- it then removes it, or removes it outright), this durable marker keeps the
+-- candidates panel from re-suggesting the pair. Survives membership deletion (a
+-- scrap_trips row is hard-deleted on removal). Written on every membership
+-- removal (plan_routes.unassign_scrap / set_scrap_trips); excluded by the
+-- candidates query in travelscrapbook_trip_bundle + list_trip_candidates.
+CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trip_dismissals (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  scrap_id   UUID        NOT NULL REFERENCES public.travelscrapbook_scraps(id) ON DELETE CASCADE,
+  trip_id    UUID        NOT NULL REFERENCES public.travelscrapbook_trips(id)  ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (scrap_id, trip_id)
+);
+-- idx_ts_scrap_trip_dismissals_trip (trip_id)
 
 -- Trip sharing: the owner stays on trips.user_id; everyone else is a row here.
 -- role = viewer (read + vibe) | collaborator (read + vibe + add places).

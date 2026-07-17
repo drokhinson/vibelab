@@ -28,7 +28,11 @@ from .models import (
 from .services import nominatim
 from .services.enrichment import build_maps_url
 from .services.hydrate import attach_consensus, hydrate_scraps
-from .services.places import normalize_place_name, region_for_country_code
+from .services.places import (
+    normalize_place_name,
+    region_for_country_code,
+    resolve_maps_place,
+)
 
 
 def get_owned_scrap(sb, scrap_id: str, user_id: str) -> dict[str, Any]:
@@ -171,7 +175,32 @@ async def update_scrap(
         "country": place_update.get("country", place.get("country")),
     }
 
-    if body.regeocode and merged["name"]:
+    # A pasted Google Maps link parses to itself: pull coords + city/region/
+    # country straight from the URL (no AI) and let them win over typed fields.
+    maps_resolved = False
+    if "maps_url" in update:
+        raw = update["maps_url"]
+        resolved = await resolve_maps_place(sb, raw) if raw else None
+        if resolved:
+            place_update["maps_url"] = resolved.maps_url
+            if resolved.lat is not None:
+                place_update.update({
+                    "lat": resolved.lat,
+                    "lng": resolved.lng,
+                    "city": resolved.city,
+                    "country": resolved.country,
+                    "country_code": resolved.country_code,
+                    "region": resolved.region,
+                    "geocode_confidence": resolved.geocode_confidence,
+                    "geocode_display_name": resolved.geocode_display_name,
+                })
+            maps_resolved = True
+        else:
+            # Empty clears it; a non-Maps / unparseable link is stored verbatim
+            # (the "open in Maps" button still works) without touching location.
+            place_update["maps_url"] = raw or None
+
+    if body.regeocode and merged["name"] and not maps_resolved:
         query = ", ".join(p for p in merged.values() if p)
         result = await nominatim.geocode(query)
         if result:
@@ -198,7 +227,9 @@ async def update_scrap(
                 "osm_id": None,
             })
 
-    if place_update and merged["name"]:
+    # Rebuild the generated search link only when the user didn't supply their
+    # own maps_url this edit (whether it resolved or was stored verbatim).
+    if place_update and merged["name"] and "maps_url" not in place_update:
         place_update["maps_url"] = build_maps_url(
             merged["name"], merged["city"], merged["country"]
         )

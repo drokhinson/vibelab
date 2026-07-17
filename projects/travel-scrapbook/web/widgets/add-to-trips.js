@@ -15,6 +15,10 @@ const AddToTrips = {
       try { trips = await window.TripDomain.loadAll(); } catch (_) { trips = []; }
     }
     const inTrips = new Set(scrap.trip_ids || []);
+    // Trips this place geographically fits — the same scope match that powers
+    // the Wander List suggestions (source_routes.suggest_trips). No-op when the
+    // scrap wasn't hydrated with suggestions.
+    const suggestedIds = new Set((scrap.suggestions || []).map((s) => s.trip_id));
     const modal = document.createElement('div');
     modal.className = 'ts-modal';
     modal.id = 'add-to-trips-modal';
@@ -31,6 +35,7 @@ const AddToTrips = {
                   <input type="checkbox" value="${escapeAttr(t.id)}" ${inTrips.has(t.id) ? 'checked' : ''} />
                   ${renderSprite('cover', t.cover_icon, { size: 'sm', alt: '' })}
                   <span>${escapeHtml(t.name)}</span>
+                  ${suggestedIds.has(t.id) ? '<span class="att-suggested-badge">Suggested</span>' : ''}
                 </label>`).join('')}
             </div>
             <button class="ts-btn ts-btn--mint" type="submit" style="width:100%;margin-top:1rem;">

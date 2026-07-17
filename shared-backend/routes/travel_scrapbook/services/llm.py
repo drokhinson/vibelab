@@ -46,6 +46,12 @@ class PlaceExtraction:
     category: str
     geocode_query: Optional[str]
     confident: bool
+    # Set when the place came straight from a Google Maps URL (services/gmaps):
+    # the exact pin coordinates and the original link, so enrichment can
+    # reverse-geocode the point instead of re-guessing via forward geocode.
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    maps_url: Optional[str] = None
 
 
 @dataclass

@@ -23,7 +23,9 @@
 -- travelscrapbook_trip_bundle(p_trip_id UUID, p_viewer UUID)
 --   → JSONB {trip, role, owner_display_name, anchors[], scraps[], members[],
 --            candidates[]} | NULL when the viewer has no access
---   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql
+--   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
+--               replaced in 018_suggestion_dismissals.sql (candidates now also
+--               exclude the viewer's resolved/dismissed pairs for this trip)
 --   Called by:  shared-backend/routes/travel_scrapbook/trip_routes.py (get_trip)
 --   Purpose:    The whole trip screen in ONE round trip (was 6–9 sequential
 --               queries + 3 extra endpoints). Access (owner or accepted

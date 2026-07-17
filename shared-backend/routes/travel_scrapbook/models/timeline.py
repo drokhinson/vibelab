@@ -16,6 +16,8 @@ class TimelineMarker(BaseModel):
     kind: MarkerKind
     anchor_id: str
     label: str
+    city: Optional[str] = None
+    country: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
     # dt-qualified: the field names shadow the bare date/time type names.

@@ -13,6 +13,7 @@ stay/travel anchor) on that trip instead, with its dates filled in.
 """
 
 import logging
+from dataclasses import replace
 from typing import Any, Optional
 from urllib.parse import quote
 
@@ -27,7 +28,7 @@ from ..constants import (
     MembershipStatus,
     SourceStatus,
 )
-from . import llm, nominatim, places, scraper
+from . import gmaps, llm, nominatim, places, scraper
 
 logger = logging.getLogger("travel_scrapbook.enrichment")
 
@@ -36,6 +37,35 @@ def build_maps_url(place_name: str, city: Optional[str], country: Optional[str])
     """Google Maps search link — a plain URL, no API key involved."""
     parts = [place_name] + [p for p in (city, country) if p]
     return "https://www.google.com/maps/search/?api=1&query=" + quote(", ".join(parts))
+
+
+def _pin_name(geo: Optional[nominatim.GeocodeResult]) -> str:
+    """A display name for a Maps pin that carried coords but no place name."""
+    if geo:
+        if geo.city:
+            return geo.city
+        if geo.display_name:
+            return geo.display_name.split(",")[0].strip() or "Pinned location"
+    return "Pinned location"
+
+
+def _maps_extraction(mp: gmaps.MapsPlace) -> Optional[llm.PlaceExtraction]:
+    """Build a PlaceExtraction straight from a parsed Google Maps URL — no LLM.
+    The coordinates ride along so _materialize_place reverse-geocodes the exact
+    pin rather than forward-geocoding a re-guessed query."""
+    if mp.lat is None and not mp.name:
+        return None
+    return llm.PlaceExtraction(
+        place_name=mp.name,
+        city=None,
+        country=None,
+        category="other",
+        geocode_query=mp.name if mp.lat is None else None,
+        confident=True,
+        lat=mp.lat,
+        lng=mp.lng,
+        maps_url=mp.expanded_url,
+    )
 
 
 async def _geocode_with_fallback(
@@ -94,8 +124,26 @@ async def _materialize_place(
     extraction: llm.PlaceExtraction,
 ) -> None:
     """One extraction → deduped place + source link (+ scrap if new to the user)."""
-    geo, confidence = await _geocode_with_fallback(extraction)
-    maps_url = build_maps_url(extraction.place_name, extraction.city, extraction.country)
+    if extraction.lat is not None and extraction.lng is not None:
+        # A Google Maps pin: reverse-geocode the exact point for city/region/
+        # country, but keep the URL's coordinates as the authoritative pin.
+        geo = await nominatim.reverse(extraction.lat, extraction.lng)
+        geo = (
+            replace(geo, lat=extraction.lat, lng=extraction.lng)
+            if geo
+            else nominatim.GeocodeResult(
+                lat=extraction.lat, lng=extraction.lng, display_name=""
+            )
+        )
+        confidence = GeocodeConfidence.HIGH
+    else:
+        geo, confidence = await _geocode_with_fallback(extraction)
+
+    if not extraction.place_name:
+        extraction = replace(extraction, place_name=_pin_name(geo))
+    maps_url = extraction.maps_url or build_maps_url(
+        extraction.place_name, extraction.city, extraction.country
+    )
 
     place, _created = places.find_or_create_place(
         sb, source["user_id"], extraction, geo, confidence, maps_url
@@ -216,6 +264,25 @@ async def process_source(source_id: str) -> None:
 
     update: dict[str, Any] = {}
     try:
+        # 0. Google Maps links parse to themselves — the URL already names the
+        #    place and encodes its exact pin, so skip the page fetch + LLM
+        #    (which re-guesses from scraped text and can drift to a different
+        #    location). Fall through to the normal path if parsing yields nothing.
+        if gmaps.is_maps_url(url):
+            mp = await gmaps.parse_maps_url(url)
+            extraction = _maps_extraction(mp) if mp else None
+            if extraction is not None:
+                try:
+                    await _materialize_place(sb, source, extraction)
+                    update.update({"status": SourceStatus.READY, "error_kind": None})
+                except Exception:
+                    logger.exception("source %s: failed to materialize maps pin", source_id)
+                    update.update({
+                        "status": SourceStatus.FAILED,
+                        "error_kind": EnrichErrorKind.INTERNAL,
+                    })
+                return
+
         # 1. Fetch the page — degradable. Blocked/unreachable pages still get
         #    a URL-only LLM pass (slugs + share-sheet text often name places).
         page: Optional[scraper.PageContent] = None

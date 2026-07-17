@@ -100,6 +100,11 @@ class ScrapUpdateRequest(BaseModel):
     place_country: Optional[str] = Field(None, max_length=120)
     category: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=2000)
+    maps_url: Optional[str] = Field(
+        None, max_length=2000,
+        description="A Google Maps link. When it's a real Maps place/pin URL, "
+                    "city/region/country + coordinates are extracted from it "
+                    "(no AI) and take precedence over the typed fields.")
     visited: Optional[bool] = Field(
         None, description="Mark visited (been there) or move back to the wishlist")
     skipped: Optional[bool] = Field(
