@@ -111,6 +111,7 @@ class TripView extends View {
         <button class="ts-btn ts-btn--ghost ts-btn--sm" id="trip-back"><i data-lucide="arrow-left"></i>Trips</button>
         <div class="trip-toolbar__actions">
           ${isOwner ? `<button class="ts-btn ts-btn--ghost ts-btn--sm trip-toolbar__btn" id="trip-edit" aria-label="Edit trip"><i data-lucide="pencil"></i></button>` : ''}
+          <button class="ts-btn ts-btn--ghost ts-btn--sm trip-toolbar__btn" id="trip-download" aria-label="Download trip"><i data-lucide="download"></i></button>
           <button class="ts-btn ts-btn--ghost ts-btn--sm trip-toolbar__btn" id="trip-share" aria-label="Collaborators"><i data-lucide="users"></i></button>
           ${isOwner ? `<button class="ts-btn ts-btn--ghost ts-btn--sm trip-toolbar__btn" id="trip-delete" aria-label="Delete trip"><i data-lucide="trash-2"></i></button>` : ''}
         </div>
@@ -328,6 +329,10 @@ class TripView extends View {
         localStorage.setItem('ts.trip.tab', this._tab);
         this.render();
       });
+    });
+    c.querySelector('#trip-download')?.addEventListener('click', () => {
+      const geocodedCount = this._visibleScraps(trip).filter((s) => s.lat != null).length;
+      ExportMenu.open({ tripId: trip.id, tripName: trip.name, geocodedCount });
     });
     c.querySelector('#trip-share')?.addEventListener('click', () => TripShare.open(trip, { isOwner }));
     c.querySelector('#trip-delete')?.addEventListener('click', async () => {

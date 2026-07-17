@@ -1,4 +1,5 @@
-"""Trip exports: Google Maps directions links and My Maps CSV."""
+"""Trip exports: Google Maps directions links, My Maps CSV, a Markdown
+itinerary, and a KML point layer."""
 
 from fastapi import Depends, Path, Query, Response
 
@@ -8,9 +9,40 @@ from . import router
 from .constants import AnchorRole, MembershipStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import MapsLeg, MapsLinksResponse
-from .services.exports import Stop, build_csv, build_dir_links
+from .services.exports import (
+    Stop,
+    build_csv,
+    build_dir_links,
+    build_kml,
+    build_markdown,
+)
 from .access import get_accessible_trip
 from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
+
+
+def _safe_filename(name: str) -> str:
+    """A trip name reduced to a filesystem-safe stem (empty → "trip")."""
+    return "".join(c if c.isalnum() or c in "-_ " else "" for c in name).strip() or "trip"
+
+
+def _trip_anchors(sb, trip_id: str) -> list[dict]:
+    """All anchors for a trip (start/end/stay/travel)."""
+    return (
+        sb.table("travelscrapbook_anchors")
+        .select("*")
+        .eq("trip_id", trip_id)
+        .execute()
+    ).data or []
+
+
+def _ordered_scraps(sb, trip_id: str, *, include_visited: bool = False) -> list[dict]:
+    """Approved scraps sorted the way every file export lays them out:
+    route position first, then creation order."""
+    scraps = _approved_scraps(sb, trip_id, include_visited=include_visited)
+    scraps.sort(
+        key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])
+    )
+    return scraps
 
 
 def _approved_scraps(sb, trip_id: str, *, include_visited: bool = False) -> list[dict]:
@@ -39,12 +71,7 @@ def _ordered_stops(sb, trip_id: str, *, include_visited: bool = False) -> list[S
         key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])
     )
 
-    anchors = (
-        sb.table("travelscrapbook_anchors")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .execute()
-    ).data or []
+    anchors = _trip_anchors(sb, trip_id)
 
     def anchor_stop(role: str) -> Stop | None:
         for a in anchors:
@@ -104,10 +131,7 @@ async def export_csv(
     out unless include_visited is set."""
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    scraps = _approved_scraps(sb, trip_id, include_visited=include_visited)
-    scraps.sort(
-        key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])
-    )
+    scraps = _ordered_scraps(sb, trip_id, include_visited=include_visited)
     rows = [
         {
             "name": s["place_name"] or "Stop",
@@ -121,9 +145,57 @@ async def export_csv(
         }
         for s in scraps
     ]
-    filename = "".join(c if c.isalnum() or c in "-_ " else "" for c in trip["name"]).strip() or "trip"
     return Response(
         content=build_csv(rows),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="{_safe_filename(trip["name"])}.csv"'},
+    )
+
+
+@router.get(
+    "/trips/{trip_id}/export/markdown",
+    status_code=200,
+    summary="Markdown itinerary",
+    response_class=Response,
+)
+async def export_markdown(
+    trip_id: str = Path(..., description="Trip UUID"),
+    include_visited: bool = Query(False, description="Include places already marked visited"),
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    """A readable Markdown itinerary (trip header, start/end anchors, then each
+    place with category, address, notes, and a Google Maps link). Visited
+    places are left out unless include_visited is set."""
+    sb = get_supabase()
+    trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
+    scraps = _ordered_scraps(sb, trip_id, include_visited=include_visited)
+    content = build_markdown(trip, scraps, _trip_anchors(sb, trip_id))
+    return Response(
+        content=content,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{_safe_filename(trip["name"])}.md"'},
+    )
+
+
+@router.get(
+    "/trips/{trip_id}/export/kml",
+    status_code=200,
+    summary="KML point layer for Google My Maps / Earth",
+    response_class=Response,
+)
+async def export_kml(
+    trip_id: str = Path(..., description="Trip UUID"),
+    include_visited: bool = Query(False, description="Include places already marked visited"),
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    """A KML point layer — one named, described pin per geocoded place — that
+    imports into Google My Maps and Google Earth. Visited places are left out
+    unless include_visited is set."""
+    sb = get_supabase()
+    trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
+    scraps = _ordered_scraps(sb, trip_id, include_visited=include_visited)
+    return Response(
+        content=build_kml(trip["name"], scraps),
+        media_type="application/vnd.google-earth.kml+xml",
+        headers={"Content-Disposition": f'attachment; filename="{_safe_filename(trip["name"])}.kml"'},
     )
