@@ -7,8 +7,12 @@
 const TripDomain = {
   async loadAll() {
     const res = await window.api.listTrips();
-    window.store.set('trips', res.trips);
+    // A revalidate that changed nothing shouldn't re-emit (a full re-render
+    // would replay entrance animations — the "blink"); just re-arm the TTL.
     window.tsCache?.set('trips', '', res.trips);
+    if (JSON.stringify(res.trips) !== JSON.stringify(window.store.get('trips'))) {
+      window.store.set('trips', res.trips);
+    }
     return res.trips;
   },
 
@@ -19,10 +23,13 @@ const TripDomain = {
   },
 
   // One write path for a trip bundle: store (re-renders subscribers), cache,
-  // and the members roster that rides on the bundle.
+  // and the members roster that rides on the bundle. Skips the store emission
+  // when the bundle is byte-identical to what's already painted (no-blink
+  // revalidate) — the cache TTL still refreshes.
   _applyTrip(trip) {
-    window.store.set('trip:' + trip.id, trip);
     window.tsCache?.set('trip', trip.id, trip);
+    if (JSON.stringify(trip) === JSON.stringify(window.store.get('trip:' + trip.id))) return;
+    window.store.set('trip:' + trip.id, trip);
     if (trip.members) window.store.set('members:' + trip.id, trip.members);
   },
 

@@ -108,6 +108,7 @@ class TripsView extends View {
       `;
     }
     this.refreshIcons();
+    this.settleMotion();
     this._bindInvitations();
 
     this.container.querySelector('#new-trip-btn')?.addEventListener('click', () => this._openNewTripModal());
