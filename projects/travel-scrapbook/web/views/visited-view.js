@@ -32,8 +32,21 @@ class VisitedView extends View {
 
   async onMount() {
     this._resetState();
+    // Stale-while-revalidate: cached page paints instantly, refresh follows.
+    const cached = window.tsCache?.get('visited', this._cacheKey());
+    if (cached) {
+      this._items = cached.items || [];
+      this._total = cached.total || 0;
+      this._facets = cached.facets || {};
+      this._loaded = true;
+      this.render();
+      this._load().catch(() => {});
+      return;
+    }
     await this._load();
   }
+
+  _cacheKey() { return JSON.stringify(this._geo); }
 
   async _load({ append = false } = {}) {
     const seq = ++this._seq;
@@ -48,9 +61,13 @@ class VisitedView extends View {
       this._total = res.total || 0;
       this._facets = res.facets || {};
       this._loaded = true;
+      if (!append) {
+        window.tsCache?.set('visited', this._cacheKey(),
+          { items: this._items, total: this._total, facets: this._facets });
+      }
       this.render();
     } catch (err) {
-      if (seq !== this._seq) return;
+      if (seq !== this._seq || this._loaded) return; // keep stale content on a failed refresh
       this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load your visited places')}</div>`;
       this.refreshIcons();
     }

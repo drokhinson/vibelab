@@ -34,10 +34,10 @@ const NotePopup = {
 
     const save = async (notes) => {
       try {
-        await window.api.updateScrap(scrap.id, { notes });
+        const updated = await window.api.updateScrap(scrap.id, { notes });
         this.close();
         toast(notes ? 'Note saved' : 'Note removed');
-        onSaved?.();
+        onSaved?.(updated);
       } catch (err) { toast(err.message || 'Could not save the note', { error: true }); }
     };
     modal.querySelector('#note-form').addEventListener('submit', (ev) => {

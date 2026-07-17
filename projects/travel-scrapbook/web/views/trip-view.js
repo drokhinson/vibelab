@@ -14,12 +14,9 @@ class TripView extends View {
     this._priorityOnly = false;
     this._route = null;
     this._routeBusy = false;
-    this._candidates = [];
-    this._candidatesSeq = 0;
-    // Plans (default) or the day-by-day Timeline.
+    // Plans (default) or the day-by-day Timeline (computed locally from the
+    // trip bundle — see domain/timeline.js).
     this._tab = localStorage.getItem('ts.trip.tab') || 'plans';
-    this._timeline = null; // null = not loaded yet
-    this._timelineSeq = 0;
     // Group the trip's scraps by activity type (default) or geography.
     this._groupBy = localStorage.getItem('ts.trip.groupBy') || 'category';
     this._collapsed = new Set();
@@ -38,12 +35,9 @@ class TripView extends View {
   async onMount() {
     this._resetState();
     this._tripId = this.params.tripId;
-    // Anchor/plan changes reload the trip → keep the timeline data in step
-    // (sequence-guarded, so bursts collapse to the latest response).
-    this.listen('trip:' + this._tripId, () => {
-      this.render();
-      if (this._tab === 'timeline') this._loadTimeline();
-    });
+    // Everything renders off the trip bundle in store; the timeline is pure
+    // math over it, so it stays in step with every patch automatically.
+    this.listen('trip:' + this._tripId, () => this.render());
     this.listen('members:' + this._tripId, () => this.render());
     this.listen('pollTimedOut:' + this._tripId, () => this.render());
     await this._load();
@@ -65,51 +59,29 @@ class TripView extends View {
     window.ScrapDomain.stopPolling();
   }
 
+  // One bundle fetch covers the whole screen (trip + scraps + members +
+  // candidates; the timeline is computed locally). Stale-while-revalidate:
+  // a cached bundle paints instantly and the fresh one re-renders on arrival.
   async _load() {
+    const cached = window.store.get('trip:' + this._tripId) ||
+      window.tsCache?.get('trip', this._tripId);
+    if (cached) {
+      window.store.set('trip:' + this._tripId, cached); // paints via listen()
+      window.TripDomain.load(this._tripId).catch(() => {});
+      return;
+    }
     try {
-      const trip = await window.TripDomain.load(this._tripId);
-      // Collaborators can add from their wishlist; viewers can't.
-      if (trip.role !== 'viewer') this._loadCandidates();
-      if (this._tab === 'timeline') this._loadTimeline();
-      window.ShareDomain.loadMembers(this._tripId).catch(() => {});
+      await window.TripDomain.load(this._tripId);
     } catch (err) {
       this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load trip')}</div>`;
       this.refreshIcons();
     }
   }
 
-  // After a schedule change: fresh timeline + fresh trip (plan_date rides on
-  // the scraps the Plans tab shows too).
-  _refreshTimeline(tripId) {
-    this._loadTimeline();
-    window.TripDomain.load(tripId).catch(() => {});
-  }
-
-  // Lazy-load the timeline for the Timeline tab. Sequence-guarded like
-  // _loadCandidates so a stale response never paints another trip's days.
-  async _loadTimeline() {
-    const seq = ++this._timelineSeq;
-    const tripId = this._tripId;
-    try {
-      const data = await window.api.tripTimeline(tripId);
-      if (seq !== this._timelineSeq || this._tripId !== tripId) return;
-      this._timeline = data;
-      this.render();
-    } catch (_) { /* tab keeps its skeleton; a retap retries */ }
-  }
-
-  // Wishlist places that fit this trip's scope. Non-blocking (per the
-  // instantaneous-nav rule); a monotonic guard drops stale results after a
-  // navigation or a newer refresh.
-  async _loadCandidates() {
-    const seq = ++this._candidatesSeq;
-    const tripId = this._tripId;
-    try {
-      const res = await window.api.tripCandidates(tripId);
-      if (seq !== this._candidatesSeq || this._tripId !== tripId) return;
-      this._candidates = res.scraps || [];
-      this.render();
-    } catch (_) { /* panel just stays hidden */ }
+  // The current timeline days (for the scheduler's day picker).
+  _timelineDays(trip) {
+    const data = buildTimeline(trip, trip.anchors || [], trip.scraps || []);
+    return (data.days || []).map((d) => ({ date: d.date, day_number: d.day_number }));
   }
 
   render() {
@@ -158,9 +130,11 @@ class TripView extends View {
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="plans" ${this._tab === 'plans' ? 'checked' : ''} /><span>Plans</span></label>
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="timeline" ${this._tab === 'timeline' ? 'checked' : ''} /><span>Timeline</span></label>
       </div>
-      ${this._tab === 'timeline' ? renderTripTimeline(trip, this._timeline, { canWrite }) : `
+      ${this._tab === 'timeline'
+        ? renderTripTimeline(trip, buildTimeline(trip, trip.anchors || [], allScraps), { canWrite })
+        : `
       ${this._renderStaging(staged, cardOpts)}
-      ${canWrite ? this._renderCandidates(cardOpts) : ''}
+      ${canWrite ? this._renderCandidates(trip, cardOpts) : ''}
       ${renderRoutePanel(trip, { route: this._route, geocodedCount, canWrite, routeBusy: this._routeBusy })}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;margin-top:1.2rem;flex-wrap:wrap;">
         <h2 style="font-size:1.5rem;margin:0;">Plans</h2>
@@ -234,8 +208,8 @@ class TripView extends View {
     `;
   }
 
-  _renderCandidates(cardOpts = {}) {
-    const cands = this._candidates || [];
+  _renderCandidates(trip, cardOpts = {}) {
+    const cands = trip.candidates || [];
     if (!cands.length) return '';
     return `
       <div class="sticker-card washi washi--sky" style="padding-top:1.2rem;margin-top:1.1rem;">
@@ -254,19 +228,20 @@ class TripView extends View {
     const c = this.container;
     c.querySelector('#trip-back')?.addEventListener('click', () => window.router.back('trips'));
 
-    // Plans | Timeline tab. The timeline lazy-loads on first switch.
+    // Plans | Timeline tab — the timeline is computed locally, so switching
+    // (and every schedule change) is instant.
     c.querySelectorAll('input[name=trip-tab]').forEach((r) => {
       r.addEventListener('change', () => {
         if (!r.checked) return;
         this._tab = r.value;
         localStorage.setItem('ts.trip.tab', this._tab);
         this.render();
-        if (this._tab === 'timeline' && !this._timeline) this._loadTimeline();
       });
     });
-    // Timeline empty state → open the trip editor to add dates.
+    // Timeline empty state → open the trip editor to add dates (the saved
+    // trip re-renders via the store, rebuilding the days).
     c.querySelector('#tl-edit-trip')?.addEventListener('click', () => {
-      TripEditor.open(trip, { onSaved: () => { this._timeline = null; this._loadTimeline(); } });
+      TripEditor.open(trip);
     });
     c.querySelector('#trip-share')?.addEventListener('click', () => TripShare.open(trip, { isOwner }));
     c.querySelector('#trip-delete')?.addEventListener('click', async () => {
@@ -282,13 +257,14 @@ class TripView extends View {
       this.render();
     });
     c.querySelector('#trip-edit')?.addEventListener('click', () => {
-      TripEditor.open(trip, { onSaved: () => this._loadCandidates() });
+      TripEditor.open(trip);
     });
     c.querySelector('#add-plans')?.addEventListener('click', () => {
       AddPlans.open(trip, {
         onSaved: async () => {
+          // One bundle refresh covers plans + candidates together.
           await window.TripDomain.load(trip.id);
-          this._loadCandidates();
+          window.tsCache?.invalidate('inbox'); // trip_ids on wishlist cards changed
           window.SourceDomain?.refreshInboxCount();
         },
       });
@@ -357,7 +333,7 @@ class TripView extends View {
     const findScrap = (id) =>
       (trip.scraps || []).find((s) => s.id === id) ||
       (trip.staged_scraps || []).find((s) => s.id === id) ||
-      (this._candidates || []).find((s) => s.id === id);
+      (trip.candidates || []).find((s) => s.id === id);
     c.querySelectorAll('[data-scrap-id]').forEach((el) => {
       const scrapId = el.dataset.scrapId;
       const scrap = findScrap(scrapId);
@@ -384,19 +360,23 @@ class TripView extends View {
                 },
               });
             } else if (action === 'notes') {
-              NotePopup.open(scrap, { onSaved: () => window.TripDomain.load(trip.id) });
+              NotePopup.open(scrap, {
+                onSaved: (updated) => window.TripDomain.patchScrapFields(
+                  trip.id, scrapId, { notes: updated ? updated.notes : null }),
+              });
             } else if (action === 'approve') {
               await window.ScrapDomain.approve(scrapId, trip.id);
               toast('Kept!');
             } else if (action === 'unassign') {
               await window.ScrapDomain.unassign(scrapId, trip.id);
               toast('Moved to your wishlist');
-              this._loadCandidates();
             } else if (action === 'assign') {
-              await window.api.assignScrap(scrapId, el.dataset.tripId || trip.id);
+              // The echo is the hydrated card — patch it straight in (it also
+              // leaves the candidates panel).
+              const added = await window.api.assignScrap(scrapId, el.dataset.tripId || trip.id);
+              window.TripDomain.patchScrap(trip.id, added);
               toast('Added to the trip');
-              await window.TripDomain.load(trip.id);
-              this._loadCandidates();
+              window.tsCache?.invalidate('inbox');
               window.SourceDomain?.refreshInboxCount();
             } else if (action === 'edit') {
               ScrapEditor.open(scrap, trip.id);
@@ -412,16 +392,16 @@ class TripView extends View {
                 },
               });
             } else if (action === 'slot') {
-              // One-tap "add to Day N" from a timeline suggestion chip.
-              await window.api.scheduleScrap(scrapId, trip.id, { plan_date: el.dataset.date });
+              // One-tap "add to Day N" from a timeline suggestion chip. The
+              // patched card re-renders the timeline instantly.
+              await window.ScrapDomain.schedule(scrapId, trip.id, { plan_date: el.dataset.date });
               toast('Slotted in');
-              this._refreshTimeline(trip.id);
             } else if (action === 'schedule') {
               PlanScheduler.open(scrap, {
                 tripId: trip.id,
-                days: (this._timeline?.days || []).map((d) => ({ date: d.date, day_number: d.day_number })),
+                days: this._timelineDays(trip),
                 tripBounds: { start: trip.start_date, end: trip.end_date },
-                onSaved: () => { toast('Scheduled'); this._refreshTimeline(trip.id); },
+                onSaved: () => toast('Scheduled'),
               });
             } else if (action === 'delete') {
               if (!confirmDestructive('Delete this place? This can\'t be undone.')) return;

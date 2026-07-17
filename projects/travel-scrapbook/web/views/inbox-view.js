@@ -36,13 +36,32 @@ class InboxView extends View {
 
   async onMount() {
     this._resetState();
-    // Trips power the suggestion chips + the trip picker; non-blocking.
-    window.TripDomain.loadAll().catch(() => {});
+    // Stale-while-revalidate: paint the cached page instantly on re-entry,
+    // refresh in the background. (Suggestion chips ride on the scraps; the
+    // trip picker lazy-loads trips when opened — no trips fetch here.)
+    const cached = window.tsCache?.get('inbox', this._cacheKey());
+    if (cached) {
+      this._applyPage(cached);
+      this.render();
+      this._load().catch(() => {});
+      return;
+    }
     await this._load();
   }
 
   async onUnmount() {
     this._stopPolling();
+  }
+
+  _cacheKey() { return JSON.stringify(this._geo); }
+
+  _applyPage(page) {
+    this._processing = page.processing || [];
+    this._failed = page.failed || [];
+    this._items = page.items || [];
+    this._total = page.total || 0;
+    this._facets = page.facets || {};
+    this._loaded = true;
   }
 
   // Fetch one page with the current filters. append=true pages forward;
@@ -62,10 +81,18 @@ class InboxView extends View {
       this._total = res.total || 0;
       this._facets = res.facets || {};
       this._loaded = true;
+      if (!append) {
+        window.tsCache?.set('inbox', this._cacheKey(), {
+          processing: this._processing, failed: this._failed,
+          items: this._items, total: this._total, facets: this._facets,
+        });
+      }
       this.render();
-      window.SourceDomain.refreshInboxCount();
+      // The bundle carries the badge count — no extra /inbox/count round trip.
+      if (res.inbox_count != null) window.store.set('inboxCount', res.inbox_count);
+      else window.SourceDomain.refreshInboxCount();
     } catch (err) {
-      if (seq !== this._seq) return;
+      if (seq !== this._seq || this._loaded) return; // keep stale content on a failed refresh
       this.container.innerHTML = `<div class="error-banner"><i data-lucide="cloud-off"></i>${escapeHtml(err.message || 'Could not load inbox')}</div>`;
       this.refreshIcons();
     }
