@@ -80,15 +80,21 @@ def _place_maps_link(place: dict) -> Optional[str]:
     return None
 
 
-def build_markdown(trip: dict, places: list[dict], anchors: list[dict]) -> str:
+def build_markdown(
+    trip: dict, places: list[dict], anchors: list[dict], day_label: str | None = None
+) -> str:
     """A human-readable Markdown itinerary: trip header, start/end anchors,
     then every place in route order with its category, address, notes, and a
-    Google Maps link. `places` are hydrated scrap dicts in display order."""
-    lines: list[str] = [f"# {trip.get('name') or 'Trip'}"]
+    Google Maps link. `places` are hydrated scrap dicts in display order. When
+    `day_label` is set (a single-day export) it's appended to the H1 and the
+    trip's date range is dropped from the subtitle."""
+    title = trip.get("name") or "Trip"
+    if day_label:
+        title += f" — {day_label}"
+    lines: list[str] = [f"# {title}"]
 
-    subtitle = " · ".join(
-        p for p in (trip.get("destination"), _date_range(trip.get("start_date"), trip.get("end_date"))) if p
-    )
+    date_part = None if day_label else _date_range(trip.get("start_date"), trip.get("end_date"))
+    subtitle = " · ".join(p for p in (trip.get("destination"), date_part) if p)
     if subtitle:
         lines.append(f"_{subtitle}_")
     if trip.get("notes"):
