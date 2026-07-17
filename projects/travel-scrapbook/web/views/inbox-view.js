@@ -204,16 +204,13 @@ class InboxView extends View {
       const scrap = this._items.find((s) => s.id === scrapId);
       if (!scrap) return;
       const action = el.dataset.action;
-      if (el.classList.contains('sticker-card') && action === 'edit') {
-        el.addEventListener('click', () => ScrapEditor.open(scrap, null, {
-          onSaved: () => this._load(),
-        }));
-      }
       if (el.tagName !== 'BUTTON') return;
       el.addEventListener('click', async (ev) => {
         ev.stopPropagation();
         try {
-          if (action === 'rate-open') {
+          if (action === 'edit') {
+            ScrapEditor.open(scrap, null, { onSaved: () => this._load() });
+          } else if (action === 'rate-open') {
             PriorityPicker.open({
               activeLevel: scrap.visited_at ? 'visited' : (scrap.rating || null),
               verb: 'priority',
