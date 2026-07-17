@@ -28,7 +28,7 @@
     const keys = ['place_name', 'place_city', 'place_region', 'place_country',
       'category', 'lat', 'lng', 'geocode_confidence', 'geocode_display_name',
       'maps_url', 'og_image_url', 'sources', 'notes', 'rating', 'visited_at',
-      'updated_at'];
+      'skipped_at', 'updated_at'];
     const out = {};
     for (const k of keys) if (k in scrap) out[k] = scrap[k];
     return out;
@@ -110,6 +110,35 @@
     async schedule(scrapId, tripId, fields) {
       const scrap = await window.api.scheduleScrap(scrapId, tripId, fields);
       if (tripId) window.TripDomain.patchScrap(tripId, scrap);
+    },
+
+    // Timeline per-plan outcome: the checkbox cycles clear → visited → skipped.
+    // `outcome` is null (clear), 'visited', or 'skipped' — the two are mutually
+    // exclusive (the server clears the sibling flag). Optimistic so the tap feels
+    // instant; rolls back the whole bundle on error. visited_at also gates the
+    // Wander List, so lists/inbox refresh; skipped_at is timeline-only.
+    async setTimelineOutcome(scrapId, tripId, outcome) {
+      const stamp = new Date().toISOString();
+      const optimistic = {
+        visited_at: outcome === 'visited' ? stamp : null,
+        skipped_at: outcome === 'skipped' ? stamp : null,
+      };
+      const snapshot = tripId ? window.store.get('trip:' + tripId) : null;
+      if (tripId) window.TripDomain.patchScrapFields(tripId, scrapId, optimistic);
+      try {
+        const scrap = await window.api.updateScrap(scrapId, {
+          visited: outcome === 'visited',
+          skipped: outcome === 'skipped',
+        });
+        if (tripId) window.TripDomain.patchScrapFields(tripId, scrapId, {
+          visited_at: scrap.visited_at, skipped_at: scrap.skipped_at,
+        });
+        this._invalidateLists();
+        window.SourceDomain?.refreshInboxCount();
+      } catch (err) {
+        if (snapshot) window.TripDomain._applyTrip(snapshot);
+        throw err;
+      }
     },
 
     // Paint my vibe/rating + recomputed consensus into the trip bundle BEFORE

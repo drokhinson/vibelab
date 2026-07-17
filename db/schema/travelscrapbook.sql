@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Travel Scrapbook — current schema snapshot
--- Last updated: 2026-07-16 (matches db/migrations/travelscrapbook/007_trip_sharing_vibes.sql)
+-- Last updated: 2026-07-17 (through db/migrations/travelscrapbook/016_skipped_outcome.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scraps (
   rating         TEXT                                -- owner's own priority (NULL = unrated)
     CHECK (rating IS NULL OR rating IN ('booked', 'must_do', 'interested', 'could_skip')),
   visited_at     TIMESTAMPTZ,                        -- NULL = on the Wander List; set = visited
+  skipped_at     TIMESTAMPTZ,                        -- 016: timeline-only "Skipped" outcome (does NOT leave Wander List)
   route_position INTEGER,                            -- LEGACY (013→014) → scrap_trips.route_position
   plan_date      DATE,                               -- LEGACY (013→014) → scrap_trips.plan_date
   plan_time      TIME,                               -- LEGACY (013→014) → scrap_trips.plan_time
