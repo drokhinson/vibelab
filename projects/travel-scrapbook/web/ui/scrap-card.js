@@ -219,7 +219,7 @@ function renderScrapCard(scrap, opts = {}) {
   let footer = '';
   if (variant === 'staged') {
     footer = `
-      <div class="scrap-card__row" style="margin-top:0.6rem;">
+      <div class="scrap-card__row">
         <button class="ts-btn ts-btn--sm ts-btn--mint" data-action="approve" data-scrap-id="${escapeAttr(scrap.id)}">
           <i data-lucide="check"></i>Keep it
         </button>
@@ -228,21 +228,20 @@ function renderScrapCard(scrap, opts = {}) {
         </button>
       </div>`;
   } else if (variant === 'inbox') {
-    const chips = (scrap.suggestions || []).map((sug) => `
-      <button class="ts-btn ts-btn--sm ts-btn--sky" data-action="assign"
-              data-scrap-id="${escapeAttr(scrap.id)}" data-trip-id="${escapeAttr(sug.trip_id)}">
-        <i data-lucide="plus"></i>${escapeHtml(sug.name)} · ${formatKm(sug.distance_km)}
-      </button>`).join('');
-    // Delete lives in the editor popup now (pencil → red delete). The
-    // "add to trips" button spans the card width; suggestion chips sit above it.
+    // No separate trip-suggestion bubble — the "add to trips" button itself
+    // reflects whether the place is already on any trip (scrap.trip_ids).
+    // Delete lives in the editor popup now (pencil → red delete).
+    const inAnyTrip = (scrap.trip_ids || []).length > 0;
     footer = `
-      ${chips ? `<div class="scrap-card__row" style="margin-top:0.6rem;">${chips}</div>` : ''}
-      <button class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__addtrip" data-action="pick-trip" data-scrap-id="${escapeAttr(scrap.id)}">
-        <i data-lucide="folder-plus"></i>Add to trips
-      </button>`;
+      <div class="scrap-card__row">
+        <button class="ts-btn ts-btn--sm ${inAnyTrip ? 'ts-btn--sky' : 'ts-btn--ghost'} scrap-card__addtrip"
+                data-action="pick-trip" data-scrap-id="${escapeAttr(scrap.id)}">
+          <i data-lucide="folder-plus"></i>${inAnyTrip ? 'Modify trips' : 'Add to trips'}
+        </button>
+      </div>`;
   } else if (variant === 'candidate') {
     footer = `
-      <div class="scrap-card__row" style="margin-top:0.6rem;">
+      <div class="scrap-card__row">
         <button class="ts-btn ts-btn--sm ts-btn--mint" data-action="assign"
                 data-scrap-id="${escapeAttr(scrap.id)}" data-trip-id="${escapeAttr(tripId)}">
           <i data-lucide="plus"></i>Add to this trip
@@ -251,7 +250,7 @@ function renderScrapCard(scrap, opts = {}) {
   } else if (isCommunity) {
     // Anonymized pool place — a single full-width "Add to my Wander List" action.
     footer = `
-      <div class="scrap-card__row" style="margin-top:0.6rem;">
+      <div class="scrap-card__row">
         ${saved
           ? '<span class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__addtrip" aria-disabled="true" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>'
           : `<button class="ts-btn ts-btn--sm ts-btn--mint scrap-card__addtrip" data-action="save-community" data-place-id="${escapeAttr(placeId)}"><i data-lucide="plus"></i>Add</button>`}
@@ -314,7 +313,7 @@ function renderScrapCard(scrap, opts = {}) {
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
       ${editBtn}
       ${media}
-      <p class="scrap-card__title">${escapeHtml(title)}</p>
+      <p class="scrap-card__title"><span class="scrap-card__title-inner">${escapeHtml(title)}</span></p>
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}
       ${isCommunity ? `<p class="scrap-card__sub scrap-card__saved-by"><i data-lucide="users"></i>Saved by ${savedByCount} traveler${savedByCount === 1 ? '' : 's'}</p>` : ''}
       ${addedBy}
@@ -325,3 +324,35 @@ function renderScrapCard(scrap, opts = {}) {
     </div>
   `;
 }
+
+// Self-wiring, like the source/maps buttons above: watches for scrap-card
+// titles entering the DOM and flags the ones that overflow their card width
+// so CSS can slide them back and forth instead of wrapping (see .is-marquee
+// in styles.css). No view needs to call anything.
+function _checkTitleMarquee(el) {
+  const inner = el.querySelector(':scope > .scrap-card__title-inner');
+  if (!inner) return;
+  const overflow = inner.scrollWidth - el.clientWidth;
+  el.classList.toggle('is-marquee', overflow > 1);
+  el.style.setProperty('--marquee-shift', overflow > 1 ? `-${overflow}px` : '0px');
+}
+function _scanTitleMarquees(root) {
+  (root || document).querySelectorAll('.scrap-card__title').forEach(_checkTitleMarquee);
+}
+function _startTitleMarqueeObserver() {
+  if (!document.body) {
+    document.addEventListener('DOMContentLoaded', _startTitleMarqueeObserver, { once: true });
+    return;
+  }
+  new MutationObserver((muts) => {
+    for (const m of muts) {
+      for (const node of m.addedNodes) {
+        if (!(node instanceof HTMLElement)) continue;
+        if (node.matches?.('.scrap-card__title')) _checkTitleMarquee(node);
+        node.querySelectorAll?.('.scrap-card__title').forEach(_checkTitleMarquee);
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('resize', () => _scanTitleMarquees());
+}
+_startTitleMarqueeObserver();
