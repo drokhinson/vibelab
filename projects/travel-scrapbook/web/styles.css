@@ -1,9 +1,9 @@
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ───────────────────────────────────────────────────────────────────────────────
    Travel Scrapbook — scrapbook theme
    Cream paper background, pastel die-cut sticker cards, washi tape accents,
    handwritten display type. All data-art is custom SVG (assets/sprites/),
    never emoji — see .claude/rules/assets.md.
-   ───────────────────────────────────────────────────────────────────────────── */
+   ─────────────────────────────────────────────────────────────────────────────── */
 
 :root {
   --paper:        #FFF9F2;
@@ -35,7 +35,7 @@
   --font-display: 'Caveat', cursive;
 }
 
-/* ── Layout & paper background ──────────────────────────────────────────────── */
+/* ── Layout & paper background ───────────────────────────────────── */
 html { background: var(--paper); }
 body {
   max-width: var(--app-max-width);
@@ -57,7 +57,7 @@ h1, h2, h3, .ts-display {
 a { color: var(--blush-deep); font-weight: 700; }
 a:hover { color: var(--accent-hover); }
 
-/* ── Header ─────────────────────────────────────────────────────────────────── */
+/* ── Header ──────────────────────────────────────────────────── */
 /* Phones: brand (logo + one-line title) sits on top, nav spreads on its own
    row below. A full-size "Travel Scrapbook" + five 44px nav buttons can't share
    one line on a phone, so stacking keeps the wordmark on a single line. Wide
@@ -88,7 +88,7 @@ a:hover { color: var(--accent-hover); }
 .ts-header__nav button:hover { background: var(--card); border-color: var(--border); }
 .ts-header__nav button.active { background: var(--card); border-color: var(--blush); }
 
-/* ── Splash ─────────────────────────────────────────────────────────────────── */
+/* ── Splash ──────────────────────────────────────────────────── */
 .ts-splash {
   min-height: 70vh; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 1rem;
@@ -97,7 +97,7 @@ a:hover { color: var(--accent-hover); }
 .ts-splash__text { font-family: var(--font-display); font-size: 1.4rem; color: var(--ink-muted); }
 @keyframes bob { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
 
-/* ── Motion ─────────────────────────────────────────────────────────────────── */
+/* ── Motion ──────────────────────────────────────────────────── */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .card-list > *, .card-grid > * {
@@ -112,7 +112,7 @@ a:hover { color: var(--accent-hover); }
 .card-lift:hover { transform: translateY(-3px) rotate(0deg) !important; box-shadow: 0 10px 24px rgba(91, 84, 104, 0.16); }
 .card-lift:active { transform: translateY(0); }
 
-/* ── Sticker cards (the core scrapbook surface) ─────────────────────────────── */
+/* ── Sticker cards (the core scrapbook surface) ──────────────────────── */
 .sticker-card {
   position: relative;
   background: var(--card);
@@ -137,14 +137,14 @@ a:hover { color: var(--accent-hover); }
 .washi--butter::before { background: var(--butter); }
 .washi--blush::before  { background: var(--blush); }
 
-/* ── Sprites ────────────────────────────────────────────────────────────────── */
+/* ── Sprites ─────────────────────────────────────────────────── */
 .ts-sprite { display: inline-block; vertical-align: middle; }
 .ts-sprite--sm { width: 28px; height: 28px; }
 .ts-sprite--md { width: 44px; height: 44px; }
 .ts-sprite--lg { width: 72px; height: 72px; }
 .ts-sprite--xl { width: 110px; height: 110px; }
 
-/* ── Buttons ────────────────────────────────────────────────────────────────── */
+/* ── Buttons ──────────────────────────────────────────────── */
 .ts-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   border-radius: 999px; border: 2px solid var(--ink);
@@ -165,7 +165,7 @@ a:hover { color: var(--accent-hover); }
 .ts-btn--danger { background: #F8B4B4; }
 .ts-btn--sm { padding: 6px 14px; min-height: 36px; font-size: 0.85rem; box-shadow: 2px 2px 0 var(--ink); }
 
-/* ── Inputs ─────────────────────────────────────────────────────────────────── */
+/* ── Inputs ──────────────────────────────────────────────── */
 .ts-input, .ts-select, .ts-textarea {
   width: 100%; background: var(--card); color: var(--ink);
   border: 2px solid var(--border); border-radius: 14px;
@@ -228,7 +228,7 @@ a:hover { color: var(--accent-hover); }
 .trip-toolbar__btn { padding: 0; width: 40px; min-width: 40px; min-height: 40px; }
 .trip-heading { display: flex; align-items: center; gap: 0.8rem; margin-top: 0.9rem; }
 
-/* ── Scrap card specifics ───────────────────────────────────────────────────── */
+/* ── Scrap card specifics ────────────────────────────────────── */
 /* Media wrapper anchors the type bubble (top-left) + pencil (top-right) to the
    photo's corners so they read as a matched, aligned pair. */
 .scrap-card__media { position: relative; }
@@ -342,7 +342,7 @@ a:hover { color: var(--accent-hover); }
 }
 .scrap-card__sub { font-size: 0.82rem; color: var(--ink-muted); overflow-wrap: anywhere; margin: 0.15rem 0 0; }
 .scrap-card__row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; flex-wrap: wrap; }
-/* ── Scrap footer (the always-there capture box) ────────────────────────────── */
+/* ── Scrap footer (the always-there capture box) ──────────────────────── */
 .scrap-footer {
   position: sticky; bottom: 0; z-index: 30;
   display: flex; gap: 0.5rem; align-items: center;
@@ -354,7 +354,7 @@ a:hover { color: var(--accent-hover); }
   box-shadow: 0 -6px 16px rgba(91, 84, 104, 0.10);
 }
 
-/* ── Geo filter bar: Region / Country / City selects (browse views) ─────────── */
+/* ── Geo filter bar: Region / Country / City selects (browse views) ───────── */
 .filter-bar {
   display: flex; align-items: center; gap: 0.5rem;
   overflow-x: auto; -webkit-overflow-scrolling: touch;
@@ -464,7 +464,7 @@ span.note-chip { cursor: default; }
 }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
-/* ── Route panel ────────────────────────────────────────────────────────────── */
+/* ── Route panel ──────────────────────────────────────────────── */
 .route-stop { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.5rem 0; }
 .route-stop__num {
   flex-shrink: 0; width: 34px; height: 34px; border-radius: 999px;
@@ -480,7 +480,7 @@ span.note-chip { cursor: default; }
   font-size: 0.78rem; color: var(--ink-muted);
 }
 
-/* ── Checkpoints (stay/travel cards in the Plans tab) ───────────────────────── */
+/* ── Checkpoints (stay/travel cards in the Plans tab) ─────────────────── */
 .checkpoint-list { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.7rem; }
 .checkpoint-card { display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 0.9rem; }
 .checkpoint-card__icon {
@@ -509,7 +509,7 @@ span.note-chip { cursor: default; }
 .anchor-same__hint { color: var(--ink-muted); font-weight: 700; }
 .anchor-same__note { color: var(--ink-muted); font-size: 0.78rem; margin: 0.35rem 0 0; }
 
-/* ── Toast ──────────────────────────────────────────────────────────────────── */
+/* ── Toast ────────────────────────────────────────────────── */
 #toast-root { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; }
 .ts-toast {
   background: var(--ink); color: var(--paper);
@@ -520,7 +520,7 @@ span.note-chip { cursor: default; }
 }
 .ts-toast--error { background: #B4485E; }
 
-/* ── Empty states ───────────────────────────────────────────────────────────── */
+/* ── Empty states ────────────────────────────────────────────── */
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding: 2.5rem 1rem; gap: 0.6rem;
@@ -530,7 +530,7 @@ span.note-chip { cursor: default; }
 .empty-state .empty-title { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
 .empty-state .empty-desc { font-size: 0.9rem; color: var(--ink-muted); margin: 0; max-width: 280px; }
 
-/* ── Modal (shared confirm/editor surface) ──────────────────────────────────── */
+/* ── Modal (shared confirm/editor surface) ─────────────────────────── */
 .ts-modal { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 1rem; }
 .ts-modal__backdrop { position: absolute; inset: 0; background: rgba(91, 84, 104, 0.45); }
 .ts-modal__card {
@@ -546,7 +546,7 @@ span.note-chip { cursor: default; }
   cursor: pointer; display: grid; place-items: center; color: var(--ink);
 }
 
-/* ── Auth (shared vibelab auth-ui rule) ─────────────────────────────────────── */
+/* ── Auth (shared vibelab auth-ui rule) ────────────────────────────── */
 .auth-card { max-width: 380px; margin: 8vh auto 0; }
 .auth-oauth-btn {
   display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -569,14 +569,14 @@ span.note-chip { cursor: default; }
 .auth-divider span { padding: 0 12px; }
 .auth-error { color: #B4485E; background: #FDECEF; border-radius: 10px; padding: 8px 12px; font-size: 0.85rem; margin: 0.6rem 0 0; }
 
-/* ── Scrap popup (bookmarklet window) ───────────────────────────────────────── */
+/* ── Scrap popup (bookmarklet window) ────────────────────────────── */
 body.popup-mode .ts-header { display: none !important; }
 body.popup-mode { max-width: 420px; }
 .scrap-popup__success { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 2rem 0; }
 .scrap-popup__success img { width: 120px; animation: stamp 400ms cubic-bezier(0.2, 1.6, 0.4, 1) both; }
 @keyframes stamp { from { transform: scale(2.2) rotate(-14deg); opacity: 0; } to { transform: scale(1) rotate(-4deg); opacity: 1; } }
 
-/* ── Bookmarklet chip (settings) ────────────────────────────────────────────── */
+/* ── Bookmarklet chip (settings) ────────────────────────────────── */
 .bookmarklet-chip {
   display: inline-flex; align-items: center; gap: 8px;
   background: var(--blush); border: 2px solid var(--ink); border-radius: 999px;
@@ -584,7 +584,7 @@ body.popup-mode { max-width: 420px; }
   box-shadow: 2.5px 2.5px 0 var(--ink); cursor: grab; text-decoration: none;
 }
 
-/* ── Tutorial carousel (Settings → How it works) ────────────────────────────── */
+/* ── Tutorial carousel (Settings → How it works) ─────────────────────── */
 .tutorial-card { text-align: center; padding-top: 2.2rem; }
 .tutorial-card__art { width: 100%; max-width: 260px; margin: 0 auto 0.6rem; display: block; }
 .tutorial-card__title { font-size: 1.7rem; margin: 0.2rem 0 0.4rem; }
@@ -598,7 +598,7 @@ body.popup-mode { max-width: 420px; }
 .tutorial-card__nav { display: flex; justify-content: space-between; gap: 0.6rem; }
 .tutorial-card__nav .ts-btn { flex: 1; }
 
-/* ── Misc ───────────────────────────────────────────────────────────────────── */
+/* ── Misc ─────────────────────────────────────────────────── */
 .loading-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; }
 .error-banner {
   background: #FDECEF; border: 1px solid #F0B9C4; border-radius: 12px;
@@ -623,7 +623,7 @@ body.popup-mode { max-width: 420px; }
 .icon-md [data-lucide] { width: 20px; height: 20px; }
 .icon-lg [data-lucide] { width: 24px; height: 24px; }
 
-/* ── Source cards (inbox: processing / failed capture events) ───────────────── */
+/* ── Source cards (inbox: processing / failed capture events) ───────────── */
 .source-card--processing { min-height: 64px; }
 .source-card--failed { border-color: #F0B9B9; background: #FFF7F5; }
 
@@ -639,7 +639,7 @@ body.popup-mode { max-width: 420px; }
   text-align: center; pointer-events: none;
 }
 
-/* ── Trip sharing: vibes, consensus, crew ───────────────────────────────────── */
+/* ── Trip sharing: vibes, consensus, crew ──────────────────────────── */
 /* Per-level accents shared by the vibe control segments and consensus chips. */
 :root {
   --vibe-booked:      var(--mint);
@@ -656,7 +656,7 @@ body.popup-mode { max-width: 420px; }
 }
 .added-by i { width: 13px; height: 13px; }
 
-/* ── Trip timeline (endpoint bookends, day cards, suggested rows) ───────────── */
+/* ── Trip timeline (endpoint bookends, day cards, suggested rows) ─────────── */
 .tl-endpoint { display: flex; align-items: center; gap: 0.7rem; }
 .tl-endpoint__icon {
   width: 40px; height: 40px; border-radius: 999px; border: 2px solid var(--border);
@@ -734,7 +734,7 @@ body.popup-mode { max-width: 420px; }
 .tl-outcome-badge--visited { background: #EAF7EF; color: #2F8F5B; border: 1.5px solid #2F8F5B; }
 .tl-outcome-badge--skipped { background: var(--paper); color: var(--ink-muted); border: 1.5px solid var(--border); }
 
-/* ── Swipe scaffold: right = schedule, left = off-timeline ────────────────── */
+/* ── Swipe scaffold: right = schedule, left = off-timeline ──────────────── */
 .tl-swipe { position: relative; overflow: hidden; border-radius: 10px; }
 .tl-swipe__action {
   position: absolute; top: 0; bottom: 0; left: 0; right: 0;
@@ -754,7 +754,7 @@ body.popup-mode { max-width: 420px; }
 .tl-swipe > .tl-row--suggested { background: var(--paper); }
 .tl-swipe > .tl-row--booked { background: color-mix(in srgb, var(--vibe-booked) 18%, var(--card)); }
 
-/* ── Press-and-hold drag: pick a plan up, drop it on any day ──────────────── */
+/* ── Press-and-hold drag: pick a plan up, drop it on any day ───────────── */
 .tl-row--draggable { touch-action: pan-y; -webkit-user-select: none; user-select: none; }
 .tl-row__grip { color: var(--border); display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; cursor: grab; touch-action: none; }
 .tl-row__grip [data-lucide] { width: 16px; height: 16px; }
@@ -812,6 +812,9 @@ body.popup-mode { max-width: 420px; }
 .priority-option__check { margin-left: auto; }
 
 /* Export/download picker (widgets/export-menu.js) */
+.export-scope { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.8rem; }
+.export-scope__label { font-size: 0.78rem; font-weight: 700; color: var(--ink-muted); }
+.export-scope__select { width: 100%; }
 .export-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem; }
 .export-option {
   display: flex; align-items: center; gap: 0.7rem;
