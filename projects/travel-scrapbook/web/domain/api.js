@@ -235,13 +235,14 @@
     tripTimeline: (tripId) => call(`/trips/${tripId}/timeline`),
 
     optimizeRoute: (tripId, body) => call(`/trips/${tripId}/route/optimize`, { method: 'POST', body: body || {} }),
-    exportMapsLinks: (tripId) => call(`/trips/${tripId}/export/maps-links`),
-    /** @returns {Promise<Blob>} */
-    exportCsv: (tripId) => call(`/trips/${tripId}/export/csv`),
-    /** @returns {Promise<Blob>} */
-    exportMarkdown: (tripId) => call(`/trips/${tripId}/export/markdown`),
-    /** @returns {Promise<Blob>} */
-    exportKml: (tripId) => call(`/trips/${tripId}/export/kml`),
+    /** @param {{date?: string}} [params] Optional single-day (YYYY-MM-DD) filter. */
+    exportMapsLinks: (tripId, params = {}) => call(`/trips/${tripId}/export/maps-links${qs(params)}`),
+    /** @param {{date?: string}} [params] @returns {Promise<Blob>} */
+    exportCsv: (tripId, params = {}) => call(`/trips/${tripId}/export/csv${qs(params)}`),
+    /** @param {{date?: string}} [params] @returns {Promise<Blob>} */
+    exportMarkdown: (tripId, params = {}) => call(`/trips/${tripId}/export/markdown${qs(params)}`),
+    /** @param {{date?: string}} [params] @returns {Promise<Blob>} */
+    exportKml: (tripId, params = {}) => call(`/trips/${tripId}/export/kml${qs(params)}`),
 
     // ── Trip sharing ──────────────────────────────────────────────────────
     /** @returns {Promise<{members: TripMember[]}>} */
