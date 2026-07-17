@@ -42,6 +42,13 @@
     POLL_INTERVAL_MS: 2000,
     POLL_TIMEOUT_MS: 45000,
 
+    // Per-scrap monotonic token so the NEWEST schedule wins: a slow/stale echo
+    // (or a rolled-back error) from an older move must not clobber a newer one.
+    _scheduleSeq: {},
+    // Optimistic writes in flight — the capture poll skips its tick while > 0 so
+    // a getTrip issued mid-drag can't _applyTrip-stomp the local paint.
+    _pendingWrites: 0,
+
     // Wander List / Visited pages cache their filtered pages — drop them
     // whenever a mutation changes what those lists would show.
     _invalidateLists() {
@@ -105,11 +112,36 @@
       }
     },
 
-    // Set/clear a plan's per-trip timeline slot (day + optional time). The
-    // echo carries the membership card; the Timeline tab recomputes locally.
+    // Set/clear a plan's per-trip timeline slot (day + optional time). Optimistic:
+    // paint ONLY the fields the caller sent (drag/pin → {plan_date}; scheduler →
+    // {plan_date, plan_time}; unschedule → both null) BEFORE the request so the row
+    // moves instantly — mirroring the server's exclude_unset so a day-only drag
+    // keeps the existing plan_time. Reconcile with the echo, and roll back ONLY our
+    // fields on error (a whole-bundle snapshot would erase a concurrent edit to a
+    // different scrap). A per-scrap sequence guard drops stale overlapping moves.
     async schedule(scrapId, tripId, fields) {
-      const scrap = await window.api.scheduleScrap(scrapId, tripId, fields);
-      if (tripId) window.TripDomain.patchScrap(tripId, scrap);
+      const seq = (this._scheduleSeq[scrapId] = (this._scheduleSeq[scrapId] || 0) + 1);
+      let prev = null;
+      if (tripId) {
+        const trip = window.store.get('trip:' + tripId);
+        const cur = trip && [...(trip.scraps || []), ...(trip.staged_scraps || []),
+          ...(trip.candidates || [])].find((s) => s.id === scrapId);
+        if (cur) { prev = {}; for (const k of Object.keys(fields)) prev[k] = k in cur ? cur[k] : null; }
+        window.TripDomain.patchScrapFields(tripId, scrapId, fields); // instant paint
+      }
+      this._pendingWrites++;
+      try {
+        const scrap = await window.api.scheduleScrap(scrapId, tripId, fields);
+        if (seq !== this._scheduleSeq[scrapId]) return;              // superseded by a newer move
+        if (tripId) window.TripDomain.patchScrap(tripId, scrap);     // reconcile with server echo
+      } catch (err) {
+        if (seq === this._scheduleSeq[scrapId] && tripId && prev) {
+          window.TripDomain.patchScrapFields(tripId, scrapId, prev); // roll back only our fields
+        }
+        throw err;
+      } finally {
+        this._pendingWrites--;
+      }
     },
 
     // Timeline per-plan outcome: the checkbox cycles clear → visited → skipped.
@@ -125,6 +157,7 @@
       };
       const snapshot = tripId ? window.store.get('trip:' + tripId) : null;
       if (tripId) window.TripDomain.patchScrapFields(tripId, scrapId, optimistic);
+      this._pendingWrites++; // pause the capture poll until the echo lands
       try {
         const scrap = await window.api.updateScrap(scrapId, {
           visited: outcome === 'visited',
@@ -138,6 +171,8 @@
       } catch (err) {
         if (snapshot) window.TripDomain._applyTrip(snapshot);
         throw err;
+      } finally {
+        this._pendingWrites--;
       }
     },
 
@@ -254,6 +289,8 @@
 
     async _tick(tripId) {
       if (this._pollTripId !== tripId) return;
+      // Don't clobber an optimistic schedule/outcome that's still reconciling.
+      if (this._pendingWrites > 0) return;
       if (Date.now() - this._pollStartedAt > this.POLL_TIMEOUT_MS) {
         // Timed out — the capture may have failed (it'll show in the inbox) or
         // the page is just slow. Either way, stop hammering.
@@ -265,6 +302,7 @@
       try {
         const trip = await window.api.getTrip(tripId);
         if (this._pollTripId !== tripId) return; // navigated away mid-fetch
+        if (this._pendingWrites > 0) return;     // a write started during the fetch
         window.TripDomain._applyTrip(trip);
         const count = this._tripItemCount(trip);
         if (count > this._pollBaseline) {
