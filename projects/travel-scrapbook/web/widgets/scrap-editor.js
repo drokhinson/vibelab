@@ -21,8 +21,11 @@ const ScrapEditor = {
   },
 
   _render() {
-    this.close();
+    // Drop any stale modal DOM but keep _scrap — close() nulls _scrap, which
+    // would leave `s` null here (the bug this replaced).
+    document.getElementById('scrap-editor-modal')?.remove();
     const s = this._scrap;
+    if (!s) return;
     const categories = window.store.get('categories') || [];
     const modal = document.createElement('div');
     modal.className = 'ts-modal';

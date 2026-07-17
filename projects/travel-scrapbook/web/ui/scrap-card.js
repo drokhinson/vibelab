@@ -259,6 +259,16 @@ function renderScrapCard(scrap, opts = {}) {
           ? '<span class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__addtrip" aria-disabled="true" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>'
           : `<button class="ts-btn ts-btn--sm ts-btn--mint scrap-card__addtrip" data-action="save-community" data-place-id="${escapeAttr(placeId)}"><i data-lucide="plus"></i>Add</button>`}
       </div>`;
+  } else if (variant === 'trip' && canWrite) {
+    // Pull the place out of THIS trip (it stays on the Wander List and in any
+    // other trips). The 'unassign' action is dispatched by the trip view's
+    // button-delegation loop.
+    footer = `
+      <div class="scrap-card__row">
+        <button class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__remove" data-action="unassign" data-scrap-id="${escapeAttr(scrap.id)}">
+          <i data-lucide="folder-minus"></i>Remove from trip
+        </button>
+      </div>`;
   }
 
   // Visited is a priority-picker level, not a separate control — the one chip

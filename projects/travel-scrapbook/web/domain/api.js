@@ -159,7 +159,11 @@
     }
     if (res.status === 204) return null;
     const contentType = res.headers.get('content-type') || '';
-    return contentType.includes('text/csv') ? res.blob() : res.json();
+    // File-download endpoints return a Blob; everything else is JSON.
+    const isDownload = contentType.includes('text/csv') ||
+      contentType.includes('text/markdown') ||
+      contentType.includes('application/vnd.google-earth.kml+xml');
+    return isDownload ? res.blob() : res.json();
   }
 
   window.api = {
@@ -234,6 +238,10 @@
     exportMapsLinks: (tripId) => call(`/trips/${tripId}/export/maps-links`),
     /** @returns {Promise<Blob>} */
     exportCsv: (tripId) => call(`/trips/${tripId}/export/csv`),
+    /** @returns {Promise<Blob>} */
+    exportMarkdown: (tripId) => call(`/trips/${tripId}/export/markdown`),
+    /** @returns {Promise<Blob>} */
+    exportKml: (tripId) => call(`/trips/${tripId}/export/kml`),
 
     // ── Trip sharing ──────────────────────────────────────────────────────
     /** @returns {Promise<{members: TripMember[]}>} */
