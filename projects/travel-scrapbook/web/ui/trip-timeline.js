@@ -2,8 +2,9 @@
 // The timeline is bookended by the trip's endpoints: Arrival on top and
 // Departure at the bottom (ghost "+ Arrival"/"+ Departure" buttons until each
 // is set, then the anchor with an edit affordance). Day cards sit between:
-// stay/travel markers first (chronological), then plans sorted by DESCENDING
-// priority — user-scheduled plans render solid; unscheduled plans auto-place
+// stay/travel markers first (chronological), then plans in ROUTE ORDER (the
+// best point-to-point driving sequence from "Sort my route", not by priority)
+// — user-scheduled plans render solid; unscheduled plans auto-place
 // into their SUGGESTED day as dashed rows until the user pins or moves them.
 // Plans with no suggestion collect in "Anytime".
 //
@@ -17,9 +18,6 @@
 // every checkpoint marker carries an edit pencil.
 // Render-only; trip-view binds the buttons + wires TimelineGestures.
 'use strict';
-
-// Owner priority → sort weight (booked highest). Unrated = 0.
-const TL_PRIORITY_RANK = { booked: 4, must_do: 3, interested: 2, could_skip: 1 };
 
 // The three checkbox states. null = clear (unmarked); the row cycles in order.
 const TL_OUTCOME_META = {
@@ -188,12 +186,15 @@ function _tlAnytime(plans, { canWrite = true } = {}) {
 }
 
 // Per-day plan order: finished (visited/skipped) sink to the bottom, then by
-// DESCENDING priority, then timed-before-untimed, time, and name as tie-breaks.
+// ROUTE ORDER — the best point-to-point driving sequence from "Sort my route"
+// (route_position) — so the day reads as a drivable itinerary, not a priority
+// ranking. Plans not yet routed (no route_position) fall to the end; timed-
+// before-untimed, time, and name break any remaining ties.
 function _tlPlanOrder(a, b) {
   const done = (s) => (s.visited_at || s.skipped_at ? 1 : 0);
-  const rank = (s) => TL_PRIORITY_RANK[s.rating] || 0;
+  const pos = (s) => (s.route_position == null ? Number.MAX_SAFE_INTEGER : s.route_position);
   return (done(a) - done(b)) ||
-    (rank(b) - rank(a)) ||
+    (pos(a) - pos(b)) ||
     ((a.plan_time == null) - (b.plan_time == null)) ||
     String(a.plan_time || '').localeCompare(String(b.plan_time || '')) ||
     String(a.place_name || '').localeCompare(String(b.place_name || ''));
@@ -227,7 +228,7 @@ function renderTripTimeline(trip, data, { canWrite = true } = {}) {
   const dayCards = days.map((d, i) => {
     // Arrival/departure live in the bookends, not the day rows; stays and
     // mid-trip travel legs render inside their day, chronological (structural
-    // anchors of the day). Plans then follow, sorted by descending priority.
+    // anchors of the day). Plans then follow, in driving order (route_position).
     const markerRows = d.markers
       .filter((m) => m.kind !== 'arrival' && m.kind !== 'departure')
       .slice()

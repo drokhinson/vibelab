@@ -264,19 +264,24 @@ class TripView extends View {
     this._bindPlansContent(host, trip);
   }
 
-  // Merge the plan_dates the route sort just filled into the bundle, in one
-  // _applyTrip write. Only fills where the local plan_date is still null — the
-  // sort never moves a hand-scheduled plan (backend + SQL enforce the same), so
-  // this can't clobber a concurrent local edit either.
+  // Merge the route sort's results into the bundle in one _applyTrip write:
+  // route_position for EVERY routed plan (so the timeline re-orders into the
+  // point-to-point driving sequence immediately), and plan_date ONLY where it
+  // was still null (the sort never moves a hand-scheduled plan — backend + SQL
+  // enforce the same, so this can't clobber a concurrent local edit).
   _applyRouteSchedule(tripId, route) {
     const trip = window.store.get('trip:' + tripId);
     if (!trip || !route || !route.ordered_scraps) return;
-    const dateById = {};
-    for (const s of route.ordered_scraps) if (s.plan_date) dateById[s.id] = s.plan_date;
-    if (!Object.keys(dateById).length) return;
-    const merge = (list) => (list || []).map((s) => (
-      dateById[s.id] && !s.plan_date ? { ...s, plan_date: dateById[s.id] } : s
-    ));
+    const byId = {};
+    for (const s of route.ordered_scraps) byId[s.id] = s;
+    if (!Object.keys(byId).length) return;
+    const merge = (list) => (list || []).map((s) => {
+      const r = byId[s.id];
+      if (!r) return s;
+      const next = { ...s, route_position: r.route_position };
+      if (!s.plan_date && r.plan_date) next.plan_date = r.plan_date; // fill-unscheduled only
+      return next;
+    });
     window.TripDomain._applyTrip({
       ...trip,
       scraps: merge(trip.scraps),
