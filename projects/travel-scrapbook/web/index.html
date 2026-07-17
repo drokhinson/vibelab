@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Resolve every relative script/stylesheet against the site root, not the
+       current path. Without this, a hard refresh on a deep link like
+       /trip/:id resolves src="init.js" to /trip/init.js — which the Vercel SPA
+       rewrite serves as index.html, so no JS loads and the splash never clears.
+       Matches the canonical boardgame-buddy pattern. -->
+  <base href="/" />
   <title>Travel Scrapbook</title>
   <link rel="icon" type="image/svg+xml" href="/assets/brand/travel-scrapbook-logo.svg" />
   <link rel="manifest" href="/manifest.json" />
