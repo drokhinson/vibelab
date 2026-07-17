@@ -2883,6 +2883,7 @@ body {
 .profile-panel { display: flex; flex-direction: column; gap: 0.55rem; }
 .profile-panel__controls {
   display: flex; align-items: center; gap: 0.4rem;
+  margin-bottom: 0.5rem;
 }
 .profile-panel__subtitle {
   font-size: 0.72rem; opacity: 0.6;
