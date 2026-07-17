@@ -129,7 +129,9 @@ class TripView extends View {
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="timeline" ${this._tab === 'timeline' ? 'checked' : ''} /><span>Timeline</span></label>
       </div>
       ${this._tab === 'timeline'
-        ? `<div id="tl-content">${renderTripTimeline(trip, buildTimeline(trip, trip.anchors || [], allScraps), { canWrite })}</div>`
+        ? `
+      ${renderRoutePanel(trip, { route: this._route, geocodedCount, canWrite, routeBusy: this._routeBusy })}
+      <div id="tl-content">${renderTripTimeline(trip, buildTimeline(trip, trip.anchors || [], allScraps), { canWrite })}</div>`
         : `
       ${this._renderStaging(staged, cardOpts)}
       ${canWrite ? this._renderCandidates(trip, cardOpts) : ''}
@@ -262,6 +264,32 @@ class TripView extends View {
     this._bindPlansContent(host, trip);
   }
 
+  // Merge the route sort's results into the bundle in one _applyTrip write:
+  // route_position for EVERY routed plan (so the timeline re-orders into the
+  // point-to-point driving sequence immediately), and plan_date ONLY where it
+  // was still null (the sort never moves a hand-scheduled plan — backend + SQL
+  // enforce the same, so this can't clobber a concurrent local edit).
+  _applyRouteSchedule(tripId, route) {
+    const trip = window.store.get('trip:' + tripId);
+    if (!trip || !route || !route.ordered_scraps) return;
+    const byId = {};
+    for (const s of route.ordered_scraps) byId[s.id] = s;
+    if (!Object.keys(byId).length) return;
+    const merge = (list) => (list || []).map((s) => {
+      const r = byId[s.id];
+      if (!r) return s;
+      const next = { ...s, route_position: r.route_position };
+      if (!s.plan_date && r.plan_date) next.plan_date = r.plan_date; // fill-unscheduled only
+      return next;
+    });
+    window.TripDomain._applyTrip({
+      ...trip,
+      scraps: merge(trip.scraps),
+      staged_scraps: merge(trip.staged_scraps),
+      candidates: merge(trip.candidates),
+    });
+  }
+
   // The trip's checkpoints — stays and travel — as simple typed cards under
   // the plans list, chronological, with gap placeholders between dated ones.
   _renderCheckpoints(trip, { canWrite = true } = {}) {
@@ -390,6 +418,11 @@ class TripView extends View {
       this.render();
       try {
         this._route = await window.RouteDomain.optimize(trip.id, { priority_only: this._priorityOnly });
+        // The sort also lays previously-unscheduled plans onto the timeline —
+        // reconcile those plan_dates into the bundle so the Timeline tab reflects
+        // the new itinerary without a refetch. Already-scheduled plans are left
+        // as-is (the backend only fills where plan_date was null).
+        this._applyRouteSchedule(trip.id, this._route);
       } catch (err) {
         toast(err.message || 'Route sorting failed', { error: true });
       } finally {

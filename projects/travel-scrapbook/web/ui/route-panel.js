@@ -10,10 +10,10 @@
  * @param {number} opts.geocodedCount - Trip scraps with map pins.
  * @param {boolean} opts.canWrite - Owner/collaborator (shows the sort button).
  * @param {boolean} opts.routeBusy - Disables the sort button while running.
- * @returns {string} HTML ('' when there is nothing to route yet).
+ * @returns {string} HTML (always renders — shows a hint until 2+ plans are pinned).
  */
 function renderRoutePanel(trip, { route = null, geocodedCount = 0, canWrite = true, routeBusy = false } = {}) {
-  if (geocodedCount < 2 && !route) return '';
+  const enoughToRoute = geocodedCount >= 2;
   let body = '';
   if (route) {
     const r = route;
@@ -50,12 +50,17 @@ function renderRoutePanel(trip, { route = null, geocodedCount = 0, canWrite = tr
           <h2 style="font-size:1.5rem;margin:0;">Route</h2>
           <p class="scrap-card__sub">${geocodedCount} place${geocodedCount === 1 ? '' : 's'} on the map</p>
         </div>
-        ${canWrite ? `<button class="ts-btn ts-btn--mint ts-btn--sm" id="route-optimize" ${routeBusy ? 'disabled' : ''}>
+        ${canWrite ? `<button class="ts-btn ts-btn--mint ts-btn--sm" id="route-optimize" ${routeBusy || !enoughToRoute ? 'disabled' : ''}>
           <i data-lucide="wand-2"></i>${route ? 'Re-sort' : 'Sort my route'}
         </button>` : ''}
       </div>
       ${body}
-      <p class="scrap-card__sub" style="margin-top:0.5rem;">Visited plans are left out of the route and exports.</p>
+      ${enoughToRoute || route
+        ? '<p class="scrap-card__sub" style="margin-top:0.5rem;">Sorting groups plans by checkpoint, drops the days onto your timeline, and leaves visited plans out of the route and exports.</p>'
+        : `<div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;color:var(--ink-soft,#7a6f63);">
+            <i data-lucide="map-pin" style="width:1rem;height:1rem;flex:0 0 auto;"></i>
+            <p class="scrap-card__sub" style="margin:0;">Pin at least 2 plans on the map to sort a route${canWrite ? '' : ' — ask a collaborator to add map pins'}.</p>
+          </div>`}
     </div>
   `;
 }
