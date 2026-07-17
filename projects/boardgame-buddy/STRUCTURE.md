@@ -267,6 +267,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/plays` — paginated plays the target user logged + participated in. Each play includes `is_own`, `logged_by_id`, `logged_by_name`. Supports `page`, `per_page`, `game_id`, `buddy_id` (treated as a player_user_id filter post-migration-009), `search` (free-text match on game name OR any player's display name), and `user_id` (target user; defaults to the viewer — profiles are public).
 - `POST /api/v1/boardgame_buddy/plays`
 - `DELETE /api/v1/boardgame_buddy/plays/{play_id}` — only the original logger can delete
+- `POST /api/v1/boardgame_buddy/plays/{play_id}/leave` — a non-owner participant self-removes from a play they didn't take part in. Turns their `player_user_id` row into a ghost (nulls the id, keeps `player_display_name`) instead of deleting the play — the owner keeps it and sees them as a named ghost; the play drops out of the leaver's history/played-with. 400 if the caller owns the play (use edit/delete), 404 if they aren't a player in it.
 - `GET /api/v1/boardgame_buddy/buddies` — accepted mutual edges only (mutual graph, migration 008). Returns `BuddyEdgeResponse[]`
 - `GET /api/v1/boardgame_buddy/buddies/requests` — pending requests in both directions: `{incoming[], outgoing[]}`
 - `POST /api/v1/boardgame_buddy/buddies/request` — body `{target_user_id}`; auto-accepts if a reverse request exists

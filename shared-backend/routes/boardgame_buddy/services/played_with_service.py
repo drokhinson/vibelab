@@ -209,6 +209,45 @@ def link_ghost(
     return len(res.data or [])
 
 
+def ghost_out_of_play(
+    sb,
+    viewer_id: str,
+    play_id: str,
+    fallback_display_name: str,
+) -> int:
+    """Convert the caller's own player row in `play_id` back into a ghost.
+
+    The inverse of `link_ghost`: instead of stamping a `player_user_id` onto a
+    free-text ghost, it nulls the caller's `player_user_id` while keeping the
+    display name. Used when someone was added to a play they didn't actually
+    take part in — they self-remove from the game log without deleting the play
+    (the owner keeps it, seeing them as a named ghost). Returns the number of
+    rows updated (0 if the caller isn't a player in this play).
+
+    Scoped on `player_user_id = viewer_id`, so a caller can only ever affect
+    their own row — the play owner is never trusted from the client.
+    """
+    # Step 1 — defensive backfill so nulling player_user_id can never trip the
+    # bgb_play_players_identity_chk constraint (a row must keep either a
+    # user_id or a display_name). Rows written by _write_play_players always
+    # carry a display_name, so this normally updates nothing.
+    sb.table("boardgamebuddy_play_players").update(
+        {"player_display_name": fallback_display_name}
+    ).eq("play_id", play_id).eq("player_user_id", viewer_id).is_(
+        "player_display_name", "null"
+    ).execute()
+
+    # Step 2 — drop the account link; the row lives on as a ghost.
+    res = (
+        sb.table("boardgamebuddy_play_players")
+        .update({"player_user_id": None})
+        .eq("play_id", play_id)
+        .eq("player_user_id", viewer_id)
+        .execute()
+    )
+    return len(res.data or [])
+
+
 def merge_ghosts(
     sb,
     viewer_id: str,

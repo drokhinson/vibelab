@@ -557,6 +557,13 @@ class GhostMergeResponse(BaseModel):
     rows_updated: int
 
 
+class PlayLeaveResponse(BaseModel):
+    """Result of a player self-removing from a play (turning their row into a
+    ghost). rows_updated is 1 on success, 0 if the caller wasn't a player."""
+
+    rows_updated: int
+
+
 # ── Public profile view (Strava-style) ────────────────────────────────────────
 
 class PublicProfileResponse(BaseModel):

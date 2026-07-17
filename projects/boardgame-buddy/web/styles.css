@@ -3329,6 +3329,20 @@ body {
   color: oklch(0.78 0.2 27);
 }
 
+/* Non-owner "I didn't play — remove me" self-ghost action. Built on the
+   popup's footer-button base (play-detail-popup__edit--full) with the same
+   rust/red destructive tint as delete, since it removes the user from the
+   log. */
+.play-detail__leave-btn {
+  color: oklch(0.7 0.18 27);
+  border-color: oklch(0.7 0.18 27 / 0.4);
+}
+.play-detail__leave-btn:hover:not(:disabled) {
+  background: oklch(0.55 0.22 27 / 0.12);
+  border-color: oklch(0.7 0.18 27);
+  color: oklch(0.78 0.2 27);
+}
+
 /* ── Search view ──────────────────────────────────────────────────────────── */
 .search-topbar {
   display: flex; align-items: center; gap: 0.6rem;

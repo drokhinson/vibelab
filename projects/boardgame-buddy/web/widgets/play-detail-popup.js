@@ -189,6 +189,24 @@
         </div>
       `;
     }
+    // Non-owner who nonetheless appears as an account player in this play:
+    // offer a self-remove ("I didn't play") that ghosts their row out of the
+    // log. The owner never sees this branch (they get Edit above); uninvolved
+    // viewers appear in no player row so the button stays hidden.
+    const me = window.store && window.store.get && window.store.get("user");
+    const iAmAPlayer = !!(me && (p.players || []).some((pl) => pl.user_id === me.id));
+    if (p && iAmAPlayer) {
+      return `
+        <div class="play-detail-popup__footer">
+          <button class="play-detail-popup__edit play-detail-popup__edit--full play-detail__leave-btn" type="button"
+                  ${state.saving ? "disabled" : ""}
+                  onclick="window.PlayDetailPopup._leavePlay()">
+            <i data-lucide="ghost" class="w-4 h-4"></i>
+            <span>${state.saving ? "Removing…" : "I didn't play — remove me"}</span>
+          </button>
+        </div>
+      `;
+    }
     return "";
   }
 
@@ -701,6 +719,39 @@
     dismiss();
   }
 
+  // Non-owner self-remove. Turns the caller's player row into a ghost so the
+  // play drops out of their history while the owner keeps it. Mirrors
+  // deletePlay's confirm → re-mount → mutate → dismiss shape.
+  async function leavePlay() {
+    if (!state.play || !state.play.id) return;
+    const ok = await window.PolaroidPopup.confirm({
+      title: "Remove yourself from this play?",
+      body: "You won't appear in this game log anymore. The player who logged it will still see the game with your name.",
+      confirmLabel: "Remove me",
+      cancelLabel: "Stay",
+    });
+    if (!ok) return;
+    state.saving = true;
+    state.editError = null;
+    // Re-mount because PolaroidPopup.confirm dismissed our backdrop.
+    if (!document.getElementById(BACKDROP_ID)) mountBackdrop();
+    render();
+    try {
+      await window.Play.leave(state.play.id);
+    } catch (e) {
+      // View-mode footer has no inline error slot (that's edit-only), so
+      // surface the failure through the global toast and re-enable the button.
+      showToast((e && e.message) || "Failed to remove you from this play", "error");
+      state.saving = false;
+      render();
+      return;
+    }
+    if (window.store && window.store.invalidate) window.store.invalidate("feed");
+    document.dispatchEvent(new CustomEvent("play-changed", { detail: { playId: state.play.id, kind: "leave" } }));
+    showToast("Removed you from this play", "info");
+    dismiss();
+  }
+
   async function saveEdit() {
     if (!state.draft) return;
     state.saving = true;
@@ -817,6 +868,7 @@
     _initRounds: initRounds,
     _onPhotoSelect: onPhotoSelect,
     _deletePlay: deletePlay,
+    _leavePlay: leavePlay,
     _saveEdit: saveEdit,
   };
 })();
