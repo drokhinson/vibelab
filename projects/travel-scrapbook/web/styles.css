@@ -811,6 +811,25 @@ body.popup-mode { max-width: 420px; }
 .priority-option--clear { color: var(--ink-muted); border-style: dashed; }
 .priority-option__check { margin-left: auto; }
 
+/* Export/download picker (widgets/export-menu.js) */
+.export-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem; }
+.export-option {
+  display: flex; align-items: center; gap: 0.7rem;
+  min-height: 56px; padding: 0.5rem 0.8rem;
+  border: 1.5px solid var(--border); border-radius: 12px;
+  background: var(--paper); color: var(--ink);
+  cursor: pointer; text-align: left; width: 100%;
+}
+.export-option:hover:not(:disabled) { border-color: var(--ink-muted); }
+.export-option:disabled { opacity: 0.5; cursor: not-allowed; }
+.export-option__icon { width: 22px; height: 22px; flex-shrink: 0; }
+.export-option__text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
+.export-option__label { font-size: 0.95rem; font-weight: 800; }
+.export-option__sub { font-size: 0.78rem; font-weight: 600; color: var(--ink-muted); }
+.export-option__go { width: 16px; height: 16px; flex-shrink: 0; color: var(--ink-muted); margin-left: auto; }
+.export-legs { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.6rem; }
+.export-legs:empty { display: none; }
+
 /* Group consensus: one avatar chip per traveler + a headline. */
 .vibe-consensus {
   display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;

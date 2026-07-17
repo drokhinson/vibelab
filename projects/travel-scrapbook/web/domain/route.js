@@ -12,15 +12,10 @@ const RouteDomain = {
     return window.api.exportMapsLinks(tripId);
   },
 
+  // Kept for the Route panel's CSV button; the download itself lives in
+  // ExportDomain so there's one code path for every file export.
   async downloadCsv(tripId, tripName) {
-    const blob = await window.api.exportCsv(tripId);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${(tripName || 'trip').replace(/[^\w\- ]+/g, '').trim() || 'trip'}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    return window.ExportDomain.downloadCsv(tripId, tripName);
   },
 };
 window.RouteDomain = RouteDomain;
