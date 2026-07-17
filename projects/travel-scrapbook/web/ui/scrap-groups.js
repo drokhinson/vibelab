@@ -169,6 +169,7 @@ function bindScrapGroups(container, { name, collapsed, onChange }) {
   });
 }
 
+window.GROUP_NONE = _GROUP_NONE; // so plan-zones can flag the missing-value bucket
 window.groupScraps = groupScraps;
 window.availableGroupDims = availableGroupDims;
 window.renderGroupByToggle = renderGroupByToggle;

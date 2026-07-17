@@ -214,6 +214,41 @@ a:hover { color: var(--accent-hover); }
 }
 .scrap-group__grid { margin: 0.7rem 0 0.4rem; }
 
+/* ── Plan zones (trip plans, auto-grouped by geography) ─────────────────────────
+   All plan cards live in one section; consecutive same-region cards sit inside a
+   dotted-outline zone with a per-region colour tint and a title pill on the edge.
+   The dotted dot-pattern echoes the paper background. Colour is hashed from the
+   region label (see plan-zones.js) so a region keeps its tint across re-renders. */
+.plan-zone {
+  border: 2px dotted var(--zone-edge, var(--border));
+  border-radius: 18px;
+  padding: 1.1rem 0.7rem 0.6rem;
+  margin: 1.6rem 0 1.1rem;
+  background:
+    radial-gradient(var(--paper-dot) 1px, transparent 1.5px) 0 0 / 18px 18px,
+    var(--zone-tint, transparent);
+}
+.plan-zone .card-grid { margin: 0.3rem 0 0.2rem; }
+.plan-zone__title {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  font-family: var(--font-display); font-size: 1.35rem; color: var(--ink);
+  background: var(--card); border: 2px solid var(--zone-edge, var(--border));
+  border-radius: 999px; padding: 0.05rem 0.75rem;
+  margin: -1.7rem 0 0.4rem 0.3rem; /* lift the pill so it straddles the top border */
+}
+.plan-zone__count {
+  font-family: var(--font-sans); font-weight: 800; font-size: 0.78rem;
+  color: var(--ink-muted); background: var(--paper);
+  border: 1.5px solid var(--border); border-radius: 999px; padding: 0 0.45rem;
+}
+.plan-zone--blush      { --zone-tint: color-mix(in srgb, var(--blush) 26%, var(--paper));      --zone-edge: var(--blush-deep); }
+.plan-zone--mint       { --zone-tint: color-mix(in srgb, var(--mint) 30%, var(--paper));       --zone-edge: #7FCBA4; }
+.plan-zone--sky        { --zone-tint: color-mix(in srgb, var(--sky) 30%, var(--paper));        --zone-edge: #8FC4F5; }
+.plan-zone--butter     { --zone-tint: color-mix(in srgb, var(--butter) 34%, var(--paper));     --zone-edge: #E7C766; }
+.plan-zone--lavender   { --zone-tint: color-mix(in srgb, var(--lavender) 34%, var(--paper));   --zone-edge: #B9A6E0; }
+.plan-zone--terracotta { --zone-tint: color-mix(in srgb, var(--terracotta) 26%, var(--paper)); --zone-edge: #E0906F; }
+.plan-zone--neutral    { --zone-tint: color-mix(in srgb, var(--ink-muted) 12%, var(--paper));  --zone-edge: var(--border); }
+
 /* Trips list: Upcoming / Past section headers. */
 .trips-section { display: flex; align-items: center; gap: 0.5rem; font-size: 1.5rem; margin: 1.4rem 0 0.6rem; }
 .trips-section__count {

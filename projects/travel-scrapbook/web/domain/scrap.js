@@ -24,6 +24,12 @@
   // The scrap-owned fields of an API echo that lack membership context
   // (PATCH /scraps, rating endpoints return the Wander-List shape — merging
   // them whole would wipe the card's status/plan/vibes).
+  // Best-effort display domain for the provisional processing card, before the
+  // server's normalized source_domain comes back. Falls back to 'link'.
+  function domainFromUrl(url) {
+    try { return new URL(url).hostname.replace(/^www\./, ''); } catch (_) { return 'link'; }
+  }
+
   function ownFields(scrap) {
     const keys = ['place_name', 'place_city', 'place_region', 'place_country',
       'category', 'lat', 'lng', 'geocode_confidence', 'geocode_display_name',
@@ -61,15 +67,37 @@
 
     // Capture a URL into a trip (quick-paste). Processing is server-side and
     // async — one URL can fan out into several scraps — so we poll the trip
-    // until new scraps land or the timeout passes.
+    // until new scraps land or the timeout passes. A provisional "processing"
+    // source is pushed into capturePending:<tripId> SYNCHRONOUSLY so a shimmer
+    // card paints at the top of Plans in the same frame as the paste; the trip
+    // poll clears it once the real scraps land (or on timeout / capture error).
     async capture(tripId, url, notes) {
-      const source = await window.api.capture({
-        url, trip_id: tripId, via: 'paste', notes: notes || null,
-      });
-      this.startPolling(tripId);
-      this._invalidateLists();
-      window.SourceDomain?.refreshInboxCount();
-      return source;
+      const key = 'capturePending:' + tripId;
+      const provisional = {
+        id: 'pending-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        url, source_domain: domainFromUrl(url), status: 'processing',
+      };
+      window.store.set(key, [provisional, ...(window.store.get(key) || [])]);
+      try {
+        const source = await window.api.capture({
+          url, trip_id: tripId, via: 'paste', notes: notes || null,
+        });
+        // Reconcile the real id/domain onto the provisional card (still
+        // processing until the scraps land and the poll clears it).
+        const cur = window.store.get(key) || [];
+        window.store.set(key, cur.map((s) => (s.id === provisional.id
+          ? { ...s, id: source.id, source_domain: source.source_domain || s.source_domain }
+          : s)));
+        this.startPolling(tripId);
+        this._invalidateLists();
+        window.SourceDomain?.refreshInboxCount();
+        return source;
+      } catch (err) {
+        // Drop the shimmer — the quick-paste handler surfaces the error toast.
+        const cur = window.store.get(key) || [];
+        window.store.set(key, cur.filter((s) => s.id !== provisional.id));
+        throw err;
+      }
     },
 
     async update(scrapId, tripId, fields) {
@@ -309,7 +337,9 @@
       if (this._pendingWrites > 0) return;
       if (Date.now() - this._pollStartedAt > this.POLL_TIMEOUT_MS) {
         // Timed out — the capture may have failed (it'll show in the inbox) or
-        // the page is just slow. Either way, stop hammering.
+        // the page is just slow. Either way, stop hammering and drop the shimmer
+        // so a stuck processing card doesn't hang forever.
+        window.store.set('capturePending:' + tripId, []);
         window.store.set('pollTimedOut:' + tripId, true);
         this.stopPolling();
         window.SourceDomain?.refreshInboxCount();
@@ -319,9 +349,16 @@
         const trip = await window.api.getTrip(tripId);
         if (this._pollTripId !== tripId) return; // navigated away mid-fetch
         if (this._pendingWrites > 0) return;     // a write started during the fetch
-        window.TripDomain._applyTrip(trip);
+        // Clear the shimmer BEFORE _applyTrip so both store.set()s run back-to-
+        // back with no await between them — the browser paints one final frame
+        // (pending gone + landed scraps in), never a flash of the empty state.
+        // The whole array clears on the first landing (matches the poll stopping
+        // on the first batch); a second in-flight paste's card shows next refresh.
         const count = this._tripItemCount(trip);
-        if (count > this._pollBaseline) {
+        const landed = count > this._pollBaseline;
+        if (landed) window.store.set('capturePending:' + tripId, []);
+        window.TripDomain._applyTrip(trip);
+        if (landed) {
           this.stopPolling();
           this._invalidateLists();
           window.SourceDomain?.refreshInboxCount();
