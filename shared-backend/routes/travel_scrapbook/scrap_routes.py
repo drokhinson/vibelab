@@ -143,9 +143,17 @@ async def update_scrap(
     update = body.model_dump(exclude_unset=True, exclude={"regeocode"})
 
     scrap_update = {k: update[k] for k in ("notes",) if k in update}
-    # visited is a soft timestamp flag, not a 1:1 column — map true→now(), false→NULL.
+    # visited/skipped are soft timestamp flags, not 1:1 columns — map true→now(),
+    # false→NULL. They're mutually exclusive outcomes (the timeline checkbox cycles
+    # clear → visited → skipped → clear), so setting one clears the other.
     if "visited" in update:
         scrap_update["visited_at"] = "now()" if update["visited"] else None
+        if update["visited"]:
+            scrap_update["skipped_at"] = None
+    if "skipped" in update:
+        scrap_update["skipped_at"] = "now()" if update["skipped"] else None
+        if update["skipped"]:
+            scrap_update["visited_at"] = None
     place_update: dict[str, Any] = {}
     if update.get("place_name"):
         place_update["name"] = update["place_name"]

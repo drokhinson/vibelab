@@ -102,6 +102,9 @@ class ScrapUpdateRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=2000)
     visited: Optional[bool] = Field(
         None, description="Mark visited (been there) or move back to the wishlist")
+    skipped: Optional[bool] = Field(
+        None, description="Mark skipped on the timeline (greyed + tagged, but stays "
+                          "on the Wander List) or clear it. Mutually exclusive with visited.")
     # plan_date/plan_time are per-trip now — see PlanScheduleRequest and
     # PATCH /scraps/{id}/trips/{trip_id}/schedule.
     regeocode: bool = Field(False, description="Re-run Nominatim on the edited place fields")
@@ -168,6 +171,7 @@ class ScrapResponse(BaseModel):
     notes: Optional[str] = None
     rating: Optional[TripVibe] = None             # owner's own priority
     visited_at: Optional[datetime] = None
+    skipped_at: Optional[datetime] = None         # timeline-only "Skipped" outcome (016)
     route_position: Optional[int] = None
     plan_date: Optional[date] = None              # timeline slot (trip scraps only)
     plan_time: Optional[time] = None              # optional time within the day

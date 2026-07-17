@@ -685,6 +685,8 @@ body.popup-mode { max-width: 420px; }
 .tl-row--marker { background: var(--paper); font-size: 0.85rem; }
 .tl-row--plan { border: 1.5px dashed var(--border); font-size: 0.85rem; }
 .tl-row--plan.is-visited { opacity: 0.6; }
+.tl-row--plan.is-skipped { opacity: 0.55; }
+.tl-row--plan.is-skipped .tl-row__label { text-decoration: line-through; text-decoration-color: var(--ink-muted); }
 .tl-row--booked { border-style: solid; border-color: var(--vibe-booked); background: color-mix(in srgb, var(--vibe-booked) 18%, transparent); }
 .tl-row__time {
   min-width: 44px; text-align: center; font-weight: 800; font-size: 0.72rem;
@@ -700,6 +702,58 @@ body.popup-mode { max-width: 420px; }
   display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
   background: var(--vibe-booked); font-size: 0.68rem; font-weight: 800;
 }
+
+/* ── Timeline plan checkbox: cycles clear → Visited → Skipped → clear ─────── */
+.tl-check {
+  width: 44px; height: 44px; flex-shrink: 0; padding: 0; border: 0;
+  background: transparent; cursor: pointer; display: grid; place-items: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.tl-check [data-lucide] { width: 26px; height: 26px; }
+.tl-check--clear { color: var(--ink-muted); }
+.tl-check--visited { color: #2F8F5B; }
+.tl-check--skipped { color: var(--ink-muted); }
+.tl-check--ro { opacity: 0.8; cursor: default; }
+.tl-outcome-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+  font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+.tl-outcome-badge--visited { background: #EAF7EF; color: #2F8F5B; border: 1.5px solid #2F8F5B; }
+.tl-outcome-badge--skipped { background: var(--paper); color: var(--ink-muted); border: 1.5px solid var(--border); }
+
+/* ── Swipe scaffold: right = schedule, left = off-timeline ────────────────── */
+.tl-swipe { position: relative; overflow: hidden; border-radius: 10px; }
+.tl-swipe__action {
+  position: absolute; top: 0; bottom: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 0.4rem; padding: 0 0.95rem;
+  font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--ink); opacity: 0; transition: opacity 0.12s;
+}
+.tl-swipe__action [data-lucide] { width: 18px; height: 18px; }
+.tl-swipe__action--schedule { justify-content: flex-start; background: var(--mint); }
+.tl-swipe__action--remove { justify-content: flex-end; background: var(--blush); }
+.tl-swipe.is-swipe-schedule .tl-swipe__action--schedule { opacity: 1; }
+.tl-swipe.is-swipe-remove .tl-swipe__action--remove { opacity: 1; }
+.tl-swipe > .tl-row {
+  position: relative; z-index: 1; background: var(--card);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.tl-swipe > .tl-row--suggested { background: var(--paper); }
+.tl-swipe > .tl-row--booked { background: color-mix(in srgb, var(--vibe-booked) 18%, var(--card)); }
+
+/* ── Press-and-hold drag: pick a plan up, drop it on any day ──────────────── */
+.tl-row--draggable { touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+.tl-row__grip { color: var(--border); display: grid; place-items: center; width: 26px; height: 44px; flex-shrink: 0; cursor: grab; }
+.tl-row__grip [data-lucide] { width: 16px; height: 16px; }
+.tl-swipe.is-dragging > .tl-row { opacity: 0.35; }
+.tl-drag-clone {
+  position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none;
+  border-radius: 10px; background: var(--card); opacity: 0.97; rotate: -1.5deg;
+  box-shadow: 0 14px 30px rgba(60, 40, 20, 0.25);
+}
+.tl-day { transition: outline-color 0.1s, background 0.1s; }
+.tl-day--drop { outline: 2.5px dashed #5FB98A; outline-offset: 3px; background: color-mix(in srgb, var(--mint) 22%, var(--card)); }
 
 /* Priority/vibe chip on scrap cards: one chip showing the current level;
    tapping opens the PriorityPicker popup. */

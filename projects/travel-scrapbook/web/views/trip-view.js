@@ -393,18 +393,18 @@ class TripView extends View {
                   catch (err) { toast(err.message, { error: true }); }
                 },
               });
+            } else if (action === 'cycle-outcome') {
+              // Timeline checkbox: clear → visited → skipped → clear. Optimistic.
+              const cur = scrap.visited_at ? 'visited' : (scrap.skipped_at ? 'skipped' : null);
+              const next = cur === null ? 'visited' : (cur === 'visited' ? 'skipped' : null);
+              await window.ScrapDomain.setTimelineOutcome(scrapId, trip.id, next);
+              toast(next === 'visited' ? 'Marked visited'
+                : next === 'skipped' ? 'Marked skipped' : 'Cleared');
             } else if (action === 'slot') {
               // One-tap "add to Day N" from a timeline suggestion chip. The
               // patched card re-renders the timeline instantly.
               await window.ScrapDomain.schedule(scrapId, trip.id, { plan_date: el.dataset.date });
               toast('Slotted in');
-            } else if (action === 'schedule') {
-              PlanScheduler.open(scrap, {
-                tripId: trip.id,
-                days: this._timelineDays(trip),
-                tripBounds: { start: trip.start_date, end: trip.end_date },
-                onSaved: () => toast('Scheduled'),
-              });
             } else if (action === 'delete') {
               if (!confirmDestructive('Delete this place? This can\'t be undone.')) return;
               await window.ScrapDomain.remove(scrapId, trip.id);
@@ -413,6 +413,38 @@ class TripView extends View {
         });
       }
     });
+
+    // Timeline gestures: swipe-right schedules, swipe-left unschedules, and
+    // press-and-hold drops a plan on any day. Buttons (checkbox/pin) opt out.
+    if (this._tab === 'timeline' && canWrite && window.TimelineGestures) {
+      const openScheduler = (scrap) => PlanScheduler.open(scrap, {
+        tripId: trip.id,
+        days: this._timelineDays(trip),
+        tripBounds: { start: trip.start_date, end: trip.end_date },
+        onSaved: () => toast('Scheduled'),
+      });
+      window.TimelineGestures.bind(c, {
+        canWrite,
+        onSchedule: (scrapId) => {
+          const scrap = findScrap(scrapId);
+          if (scrap) openScheduler(scrap);
+        },
+        onUnschedule: async (scrapId) => {
+          try {
+            await window.ScrapDomain.schedule(scrapId, trip.id, { plan_date: null, plan_time: null });
+            toast('Removed from the timeline');
+          } catch (err) { toast(err.message, { error: true }); }
+        },
+        onMoveToDay: async (scrapId, date) => {
+          const scrap = findScrap(scrapId);
+          if (scrap && scrap.plan_date === date) return; // dropped on its own day
+          try {
+            await window.ScrapDomain.schedule(scrapId, trip.id, { plan_date: date });
+            toast(`Moved to ${_tlDay(date)}`);
+          } catch (err) { toast(err.message, { error: true }); }
+        },
+      });
+    }
 
     c.querySelector('#route-optimize')?.addEventListener('click', async () => {
       this._routeBusy = true;
