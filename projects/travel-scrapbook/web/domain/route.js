@@ -8,8 +8,8 @@ const RouteDomain = {
     return result;
   },
 
-  async mapsLinks(tripId) {
-    return window.api.exportMapsLinks(tripId);
+  async mapsLinks(tripId, date) {
+    return window.api.exportMapsLinks(tripId, date ? { date } : {});
   },
 
   // Kept for the Route panel's CSV button; the download itself lives in
