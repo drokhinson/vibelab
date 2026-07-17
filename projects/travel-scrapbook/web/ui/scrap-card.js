@@ -200,11 +200,14 @@ function renderScrapCard(scrap, opts = {}) {
   // so others' cards on a shared trip aren't tappable-to-edit.
   const editable = mine && (variant === 'trip' || variant === 'inbox' || variant === 'candidate');
   // Pencil (creator only) sits at the whole card's top-right corner. It opens
-  // the full editor (which houses delete) — it carries no handler; a click
-  // bubbles to the card's own click-to-edit listener (wired in every editable
-  // view).
+  // the full editor (which houses delete). It's an explicit action button —
+  // data-action="edit" + data-scrap-id — dispatched by each editable view's
+  // button-delegation loop (see trip/inbox/visited views). The pencil is the
+  // ONLY edit trigger; tapping the card body does nothing.
   const editBtn = editable
-    ? '<button class="scrap-card__edit" type="button" aria-label="Edit place" title="Edit"><i data-lucide="pencil"></i></button>'
+    ? `<button class="scrap-card__edit" type="button" data-action="edit"
+               data-scrap-id="${escapeAttr(scrap.id)}"
+               aria-label="Edit place" title="Edit"><i data-lucide="pencil"></i></button>`
     : '';
   // When there's a real image, the type bubble sits on its top-left corner —
   // icon only until tapped, then it wobbles and unrolls its label. When there's
@@ -309,7 +312,7 @@ function renderScrapCard(scrap, opts = {}) {
 
   return `
     <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isNew ? 'scrap-card--new' : ''} ${isVisited ? 'is-visited' : ''}"
-         style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : isPreview ? 'none' : (editable ? 'edit' : 'none')}">
+         style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : 'none'}">
       ${isNew ? '<span class="scrap-card__new-badge"><i data-lucide="sparkles"></i>New</span>' : ''}
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}

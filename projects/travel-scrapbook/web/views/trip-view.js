@@ -341,9 +341,6 @@ class TripView extends View {
       const scrap = findScrap(scrapId);
       if (!scrap) return;
       const action = el.dataset.action;
-      if (el.classList.contains('sticker-card') && action === 'edit') {
-        el.addEventListener('click', () => ScrapEditor.open(scrap, trip.id));
-      }
       if (el.tagName === 'BUTTON') {
         el.addEventListener('click', async (ev) => {
           ev.stopPropagation();
