@@ -15,6 +15,16 @@ class TripsView extends View {
   async onMount() {
     this.listen('trips', () => this.render());
     this.listen('invitations', () => this.render());
+    // Stale-while-revalidate: paint the cached grid instantly on re-entry,
+    // refresh in the background.
+    const cached = window.store.get('trips') || window.tsCache?.get('trips', '');
+    if (cached) {
+      if (!window.store.get('trips')) window.store.set('trips', cached);
+      this.render();
+      window.TripDomain.loadAll().catch(() => {});
+      window.ShareDomain.loadInvitations().catch(() => {});
+      return;
+    }
     try {
       await window.TripDomain.loadAll();
       window.ShareDomain.loadInvitations().catch(() => {});

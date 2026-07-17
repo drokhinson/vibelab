@@ -172,6 +172,7 @@ const AddPlans = {
         try {
           await window.api.saveCommunityPlace(btn.dataset.placeId, this._trip.id);
           toast('Added to the trip');
+          window.tsCache?.invalidate('community'); // saved_by_count changed
           this._onSaved?.();
           btn.outerHTML = '<span class="ts-btn ts-btn--ghost ts-btn--sm" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>';
           window.lucide?.createIcons({ root: body });

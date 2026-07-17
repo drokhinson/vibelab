@@ -11,24 +11,34 @@ const SourceDomain = {
   },
 
   // The inbox view owns its own (filtered, paginated) data — these mutations
-  // just hit the API and refresh the badge; the caller reloads its list.
+  // hit the API, drop the stale cached pages, and refresh the badge; the
+  // caller reloads its list.
+  _invalidateLists() {
+    window.tsCache?.invalidate('inbox');
+    window.tsCache?.invalidate('visited');
+  },
+
   async retry(sourceId) {
     await window.api.retrySource(sourceId);
+    this._invalidateLists();
     this.refreshInboxCount();
   },
 
   async dismiss(sourceId) {
     await window.api.deleteSource(sourceId);
+    this._invalidateLists();
     this.refreshInboxCount();
   },
 
   async assignScrap(scrapId, tripId) {
     await window.api.assignScrap(scrapId, tripId);
+    this._invalidateLists();
     this.refreshInboxCount();
   },
 
   async removeScrap(scrapId) {
     await window.api.deleteScrap(scrapId);
+    this._invalidateLists();
     this.refreshInboxCount();
   },
 };

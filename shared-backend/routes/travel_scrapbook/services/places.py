@@ -345,8 +345,7 @@ def match_trip(sb: Client, user_id: str, place: dict[str, Any]) -> Optional[dict
 
 
 def suggest_trips(
-    sb: Client,
-    user_id: str,
+    trips: list[dict[str, Any]],
     *,
     lat: Optional[float],
     lng: Optional[float],
@@ -355,9 +354,13 @@ def suggest_trips(
     country: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Trips to suggest for an inbox scrap: country/region trips by tag match,
-    city trips within the (wider) suggestion radius."""
+    city trips within the (wider) suggestion radius.
+
+    Takes the caller's geocoded trips as a preloaded list (see
+    travelscrapbook_inbox_bundle / _geocoded_trips) so a page of scraps
+    shares ONE trips fetch instead of re-querying per scrap."""
     scored: list[tuple[bool, float, dict[str, Any]]] = []
-    for trip in _geocoded_trips(sb, user_id):
+    for trip in trips:
         level = trip.get("scope_level") or TripScope.CITY
         d = (
             haversine_km(lat, lng, trip["lat"], trip["lng"])

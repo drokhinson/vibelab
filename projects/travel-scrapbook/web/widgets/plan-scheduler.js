@@ -49,7 +49,9 @@ const PlanScheduler = {
 
     const save = async (fields) => {
       try {
-        await window.api.scheduleScrap(scrap.id, tripId || scrap.trip_id, fields);
+        // ScrapDomain.schedule patches the returned card into the trip bundle
+        // (the timeline recomputes locally on render — no refetch).
+        await window.ScrapDomain.schedule(scrap.id, tripId || scrap.trip_id, fields);
         this.close();
         onSaved?.();
       } catch (err) { toast(err.message || 'Could not schedule', { error: true }); }

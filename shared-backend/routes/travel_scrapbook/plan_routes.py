@@ -14,7 +14,7 @@ from fastapi import Depends, HTTPException, Path
 from db import get_supabase
 
 from . import router
-from .access import get_accessible_membership, get_accessible_trip
+from .access import assert_writable_trips, get_accessible_membership, get_accessible_trip
 from .constants import MembershipStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import (
@@ -271,8 +271,7 @@ async def set_scrap_trips(
     }
     to_add = requested - current
     to_remove = current - requested
-    for tid in to_add | to_remove:
-        get_accessible_trip(sb, tid, user.user_id, need_write=True)
+    assert_writable_trips(sb, to_add | to_remove, user.user_id)
     if to_add:
         sb.table("travelscrapbook_scrap_trips").upsert(
             [

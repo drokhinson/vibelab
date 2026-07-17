@@ -28,6 +28,7 @@ from .models import (
     CaptureRequest,
     CaptureTokenCreateResponse,
     CaptureTokenStatusResponse,
+    GeoFacets,
     InboxCountResponse,
     InboxResponse,
     InboxScrapResponse,
@@ -252,10 +253,12 @@ async def revoke_capture_token(
 
 # ── Inbox ─────────────────────────────────────────────────────────────────────
 
-def _sweep_stale_processing(sb, user_id: str, sources: list[dict[str, Any]]) -> None:
+def _sweep_stale_processing(sb, sources: list[dict[str, Any]]) -> None:
     """Sources stuck in 'processing' lost their BackgroundTask to a restart —
-    flip them to failed/network so the UI offers a retry."""
+    flip them to failed/network so the UI offers a retry. One batched UPDATE
+    covers every stale row (was one UPDATE per row)."""
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=SOURCE_PROCESSING_TIMEOUT_SECONDS)
+    stale_ids = []
     for source in sources:
         if source["status"] != SourceStatus.PROCESSING:
             continue
@@ -263,11 +266,13 @@ def _sweep_stale_processing(sb, user_id: str, sources: list[dict[str, Any]]) -> 
         if updated_at < cutoff:
             source["status"] = SourceStatus.FAILED
             source["error_kind"] = EnrichErrorKind.NETWORK
-            sb.table("travelscrapbook_sources").update({
-                "status": SourceStatus.FAILED,
-                "error_kind": EnrichErrorKind.NETWORK,
-                "updated_at": "now()",
-            }).eq("id", source["id"]).execute()
+            stale_ids.append(source["id"])
+    if stale_ids:
+        sb.table("travelscrapbook_sources").update({
+            "status": SourceStatus.FAILED,
+            "error_kind": EnrichErrorKind.NETWORK,
+            "updated_at": "now()",
+        }).in_("id", stale_ids).execute()
 
 
 @router.get(
@@ -286,64 +291,40 @@ async def get_inbox(
 ) -> InboxResponse:
     """Everything awaiting the user's attention: sources still processing,
     sources that failed, and one filtered PAGE of unassigned scraps with trip
-    suggestions — plus drill-down facets (regions → countries → cities) and
-    the filtered total. Hydration and suggestions run only for the page."""
+    suggestions — plus drill-down facets (regions → countries → cities), the
+    filtered total, and the global badge count. Fetched in ONE DB round-trip
+    (travelscrapbook_inbox_bundle: page + facets + counts + sources + the
+    geocoded trips that feed suggestions — previously one trips query PER
+    SCRAP on the page)."""
     sb = get_supabase()
-    sources = (
-        sb.table("travelscrapbook_sources")
-        .select("*")
-        .eq("user_id", user.user_id)
-        .in_("status", [SourceStatus.PROCESSING, SourceStatus.FAILED])
-        .order("created_at", desc=True)
-        .execute()
-    ).data or []
-    _sweep_stale_processing(sb, user.user_id, sources)
-
-    # Geo fields ride along on the scrap rows so facets + filtering happen
-    # BEFORE hydration — only the returned page pays for places/sources/
-    # suggestion lookups.
-    # The Wander List is every saved place NOT yet visited — a place stays here
-    # no matter how many trips it's in; it only leaves when marked visited.
-    rows = (
-        sb.table("travelscrapbook_scraps")
-        .select("*, travelscrapbook_places(region, country, city)")
-        .eq("user_id", user.user_id)
-        .is_("visited_at", "null")   # visited places move to the Visited view
-        .order("created_at", desc=True)
-        .execute()
-    ).data or []
-    geo_rows = []
-    for r in rows:
-        place = r.pop("travelscrapbook_places", None) or {}
-        geo_rows.append({
-            **r,
-            "place_region": place.get("region"),
-            "place_country": place.get("country"),
-            "place_city": place.get("city"),
-        })
-    facets = places_svc.geo_facets(geo_rows, region=region, country=country)
-    filtered = [
-        r for r in geo_rows
-        if places_svc.geo_match(r, region=region, country=country, city=city)
+    bundle = (
+        sb.rpc("travelscrapbook_inbox_bundle", {
+            "p_viewer": user.user_id,
+            "p_region": region,
+            "p_country": country,
+            "p_city": city,
+            "p_limit": limit,
+            "p_offset": offset,
+        }).execute()
+    ).data or {}
+    sources = [
+        *bundle.get("processing_sources", []),
+        *bundle.get("failed_sources", []),
     ]
-    page = filtered[offset:offset + limit]
+    _sweep_stale_processing(sb, sources)
 
-    hydrated = hydrate_scraps(sb, [
-        {k: v for k, v in r.items()
-         if k not in ("place_region", "place_country", "place_city")}
-        for r in page
-    ], with_trip_ids=True)
+    trips = bundle.get("geocoded_trips", [])
     inbox_scraps = [
         InboxScrapResponse(
             **s,
             suggestions=places_svc.suggest_trips(
-                sb, user.user_id,
-                lat=s["lat"], lng=s["lng"],
+                trips,
+                lat=s.get("lat"), lng=s.get("lng"),
                 city=s.get("place_city"), region=s.get("place_region"),
                 country=s.get("place_country"),
             ),
         )
-        for s in hydrated
+        for s in bundle.get("scraps", [])
     ]
     return InboxResponse(
         processing_sources=[
@@ -353,8 +334,9 @@ async def get_inbox(
             SourceResponse(**s) for s in sources if s["status"] == SourceStatus.FAILED
         ],
         scraps=inbox_scraps,
-        total=len(filtered),
-        facets=facets,
+        total=bundle.get("total", 0),
+        facets=bundle.get("facets") or GeoFacets(),
+        inbox_count=bundle.get("unvisited_count", 0) + len(sources),
     )
 
 

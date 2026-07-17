@@ -6,9 +6,14 @@
 'use strict';
 
 const AddToTrips = {
-  open(scrap, { onSaved } = {}) {
+  async open(scrap, { onSaved } = {}) {
     this.close();
-    const trips = window.store.get('trips') || [];
+    // Lazy trips load: the Wander List no longer fetches trips on mount, so
+    // pull them from store/cache and only hit the network when both are cold.
+    let trips = window.store.get('trips') || window.tsCache?.get('trips', '');
+    if (!trips) {
+      try { trips = await window.TripDomain.loadAll(); } catch (_) { trips = []; }
+    }
     const inTrips = new Set(scrap.trip_ids || []);
     const modal = document.createElement('div');
     modal.className = 'ts-modal';
@@ -44,6 +49,9 @@ const AddToTrips = {
       try {
         await window.api.setScrapTrips(scrap.id, ids);
         toast(ids.length ? 'Saved to your trips' : 'Removed from every trip');
+        // Memberships changed: cached trip bundles and list pages are stale.
+        window.tsCache?.invalidate('trip');
+        window.tsCache?.invalidate('inbox');
         window.SourceDomain?.refreshInboxCount();
         this.close();
         onSaved?.();

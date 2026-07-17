@@ -12,7 +12,6 @@ from .constants import (
     AnchorRole,
     GeocodeConfidence,
     MembershipStatus,
-    MemberStatus,
     TRAVEL_ROLES,
     TripMemberRole,
 )
@@ -30,19 +29,8 @@ from .models import (
     TripUpdateRequest,
 )
 from .services import nominatim
-from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
-from .services.places import geocode_trip_destination
-
-
-def _owner_display_name(sb, owner_id: str) -> str | None:
-    """Display name of a trip's owner (for members viewing a shared trip)."""
-    rows = (
-        sb.table("travelscrapbook_profiles")
-        .select("display_name")
-        .eq("id", owner_id)
-        .execute()
-    ).data
-    return rows[0]["display_name"] if rows else None
+from .services.hydrate import attach_consensus
+from .services.places import geocode_trip_destination, place_matches_trip_scope
 
 
 async def _geocode_anchor(query: str) -> dict[str, Any]:
@@ -123,77 +111,17 @@ async def list_trips(
     """Trips the current user owns plus trips shared with them (accepted only),
     newest first, with scrap counts and the caller's role on each."""
     sb = get_supabase()
-    _cols = ("id, name, destination, cover_icon, start_date, end_date, created_at, "
-             "user_id, scope_level, dest_city, dest_region, dest_country, "
-             "destination_geocoded_at, travelscrapbook_scrap_trips(count)")
-
-    owned = (
-        sb.table("travelscrapbook_trips")
-        .select(_cols)
-        .eq("user_id", user.user_id)
-        .order("created_at", desc=True)
-        .execute()
+    # One RPC round-trip (owned + shared trips, roles, owner names, counts).
+    rows = (
+        sb.rpc("travelscrapbook_trips_list", {"p_viewer": user.user_id}).execute()
     ).data or []
-
-    # Trips shared with me → {trip_id: role}. Only accepted memberships grant access.
-    shared_roles = {
-        m["trip_id"]: TripMemberRole(m["role"])
-        for m in (
-            sb.table("travelscrapbook_trip_members")
-            .select("trip_id, role")
-            .eq("user_id", user.user_id)
-            .eq("status", MemberStatus.ACCEPTED)
-            .execute()
-        ).data or []
-    }
-    shared = []
-    if shared_roles:
-        shared = (
-            sb.table("travelscrapbook_trips")
-            .select(_cols)
-            .in_("id", list(shared_roles.keys()))
-            .execute()
-        ).data or []
-
-    # One profiles lookup for the owner display names of shared trips.
-    owner_names: dict[str, str] = {}
-    shared_owner_ids = sorted({r["user_id"] for r in shared})
-    if shared_owner_ids:
-        owner_names = {
-            p["id"]: p["display_name"]
-            for p in (
-                sb.table("travelscrapbook_profiles")
-                .select("id, display_name")
-                .in_("id", shared_owner_ids)
-                .execute()
-            ).data or []
-        }
-
-    trips = []
-    pending_geocode = []
-    for r in [*owned, *shared]:
-        counts = r.pop("travelscrapbook_scrap_trips", [])
-        owner_id = r.pop("user_id")
-        role = shared_roles.get(r["id"], TripMemberRole.OWNER)
-        if r.get("destination") and not r.pop("destination_geocoded_at", None):
-            pending_geocode.append(r["id"])
-        else:
-            r.pop("destination_geocoded_at", None)
-        scrap_count = counts[0]["count"] if counts else 0
-        trips.append(TripSummaryResponse(
-            **r,
-            scrap_count=scrap_count,
-            role=role,
-            owner_user_id=owner_id,
-            owner_display_name=(
-                user.display_name if role == TripMemberRole.OWNER
-                else owner_names.get(owner_id)
-            ),
-        ))
-    trips.sort(key=lambda t: t.created_at, reverse=True)
+    pending_geocode = [
+        r["id"] for r in rows
+        if r.get("destination") and not r.get("destination_geocoded_at")
+    ]
     if pending_geocode:
         background_tasks.add_task(_backfill_trip_geocodes, pending_geocode)
-    return TripListResponse(trips=trips)
+    return TripListResponse(trips=[TripSummaryResponse(**r) for r in rows])
 
 
 @router.post(
@@ -240,43 +168,42 @@ async def get_trip(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> TripResponse:
-    """Trip with its anchors and scraps (approved and staged split out) —
-    everything the trip view needs. Readable by the owner and any member;
-    the response carries the caller's role for gating write actions."""
+    """Trip with its anchors, scraps (approved and staged split out), member
+    roster, and the viewer's wishlist candidates — everything the trip view
+    needs, fetched in ONE DB round-trip (travelscrapbook_trip_bundle).
+    Readable by the owner and any member; the response carries the caller's
+    role for gating write actions."""
     sb = get_supabase()
-    trip, role = get_accessible_trip(sb, trip_id, user.user_id)
-    if role == TripMemberRole.OWNER:
-        owner_display_name = user.display_name
-    else:
-        owner_display_name = _owner_display_name(sb, trip["user_id"])
-    anchors = (
-        sb.table("travelscrapbook_anchors")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .order("created_at")
-        .execute()
-    )
-    scraps = hydrate_scraps(
-        sb,
-        membership_rows_to_scraps(
-            (
-                sb.table("travelscrapbook_scrap_trips")
-                .select("*, travelscrapbook_scraps(*)")
-                .eq("trip_id", trip_id)
-                .order("created_at", desc=True)
-                .execute()
-            ).data or []
-        ),
-        with_vibes=True,
-    )
+    bundle = (
+        sb.rpc(
+            "travelscrapbook_trip_bundle",
+            {"p_trip_id": trip_id, "p_viewer": user.user_id},
+        ).execute()
+    ).data
+    if not bundle:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    trip = bundle["trip"]
+    scraps = attach_consensus(bundle["scraps"])
+    # Scope filtering is pure math over fields the bundle already carries.
+    candidates = [
+        s for s in bundle["candidates"]
+        if place_matches_trip_scope(
+            trip,
+            lat=s.get("lat"), lng=s.get("lng"),
+            city=s.get("place_city"), region=s.get("place_region"),
+            country=s.get("place_country"),
+        )
+    ]
     return TripResponse(
         **trip,
-        role=role,
+        role=TripMemberRole(bundle["role"]),
         owner_user_id=trip["user_id"],
-        owner_display_name=owner_display_name,
-        anchors=anchors.data or [],
+        owner_display_name=bundle["owner_display_name"],
+        anchors=bundle["anchors"],
         scraps=[ScrapResponse(**s) for s in scraps if s["status"] == MembershipStatus.APPROVED],
         staged_scraps=[ScrapResponse(**s) for s in scraps if s["status"] == MembershipStatus.STAGED],
+        members=bundle["members"],
+        candidates=[ScrapResponse(**s) for s in candidates],
     )
 
 
@@ -410,9 +337,12 @@ async def create_anchor(
     return AnchorResponse(**created.data[0])
 
 
-def _get_writable_anchor(sb, anchor_id: str, user_id: str) -> dict[str, Any]:
-    """Fetch an anchor the caller may edit — the owner or a collaborator on its
-    trip (anchors are shared route state, so viewers are refused)."""
+def _get_writable_anchor(
+    sb, anchor_id: str, user_id: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Fetch (anchor, trip) the caller may edit — the owner or a collaborator
+    on its trip (anchors are shared route state, so viewers are refused). The
+    trip row rides along so callers don't re-run the access lookup."""
     rows = (
         sb.table("travelscrapbook_anchors")
         .select("*")
@@ -422,8 +352,8 @@ def _get_writable_anchor(sb, anchor_id: str, user_id: str) -> dict[str, Any]:
     if not rows.data:
         raise HTTPException(status_code=404, detail="Anchor not found")
     row = rows.data[0]
-    get_accessible_trip(sb, row["trip_id"], user_id, need_write=True)
-    return row
+    trip, _ = get_accessible_trip(sb, row["trip_id"], user_id, need_write=True)
+    return row, trip
 
 
 @router.patch(
@@ -439,13 +369,12 @@ async def update_anchor(
 ) -> AnchorResponse:
     """Edit label/query/dates; a changed query is re-geocoded synchronously."""
     sb = get_supabase()
-    existing = _get_writable_anchor(sb, anchor_id, user.user_id)
+    existing, trip = _get_writable_anchor(sb, anchor_id, user.user_id)
     update = {
         k: (v.isoformat() if hasattr(v, "isoformat") else v)
         for k, v in body.model_dump(exclude_unset=True).items()
     }
     if any(k in update for k in ("anchor_date", "stay_date", "stay_end_date")):
-        trip, _ = get_accessible_trip(sb, existing["trip_id"], user.user_id)
         _validate_anchor_dates(trip, {**existing, **update})
     if "query" in update and update["query"] != existing["query"]:
         update.update(await _geocode_anchor(update["query"]))
@@ -467,6 +396,6 @@ async def delete_anchor(
 ) -> MessageResponse:
     """Remove an anchor from its trip."""
     sb = get_supabase()
-    _get_writable_anchor(sb, anchor_id, user.user_id)
+    _get_writable_anchor(sb, anchor_id, user.user_id)  # (anchor, trip) unused
     sb.table("travelscrapbook_anchors").delete().eq("id", anchor_id).execute()
     return MessageResponse(message="Anchor deleted")

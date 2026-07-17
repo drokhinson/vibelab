@@ -88,6 +88,7 @@ function initSupabase() {
     }
     if (event === 'SIGNED_OUT') {
       currentUser = null;
+      window.tsCache?.clear(); // never serve one account's data to the next
       window.store.set('authed', false);
       window.store.set('user', null);
       _resolveInitialAuth();
@@ -146,6 +147,7 @@ async function handleLogout() {
   try { await supabaseClient?.auth.signOut(); } catch (_) {}
   currentUser = null;
   session = null;
+  window.tsCache?.clear(); // never serve one account's data to the next
   window.store.set('authed', false);
   window.store.set('user', null);
   window.router.go('login');

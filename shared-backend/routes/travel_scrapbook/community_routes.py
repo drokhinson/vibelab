@@ -11,10 +11,11 @@ from .dependencies import CurrentUser, get_current_user
 from .models import (
     CommunityPlacesResponse,
     CommunitySaveRequest,
+    GeoFacets,
     ScrapResponse,
 )
 from .scrap_routes import _hydrated_membership, _hydrated_scrap
-from .services.community import aggregate_places, copy_place_for_user
+from .services.community import copy_place_for_user
 
 
 @router.get(
@@ -37,13 +38,25 @@ async def list_community_places(
     across users (geocoded only), most-saved first — plus drill-down facets
     (regions → countries with data → cities) and the filtered total. Only
     canonical facts are shared — names, pins, categories, save counts, and
-    public source URLs; never notes, ratings, or who saved what."""
+    public source URLs; never notes, ratings, or who saved what. Grouping,
+    facets, and pagination all run in SQL (one RPC round-trip)."""
     sb = get_supabase()
-    places, total, facets = aggregate_places(
-        sb, q=q, region=region, country=country, city=city,
-        category=category, limit=limit, offset=offset,
+    result = (
+        sb.rpc("travelscrapbook_community_places", {
+            "p_q": q,
+            "p_region": region,
+            "p_country": country,
+            "p_city": city,
+            "p_category": category,
+            "p_limit": limit,
+            "p_offset": offset,
+        }).execute()
+    ).data or {}
+    return CommunityPlacesResponse(
+        places=result.get("places", []),
+        total=result.get("total", 0),
+        facets=result.get("facets") or GeoFacets(),
     )
-    return CommunityPlacesResponse(places=places, total=total, facets=facets)
 
 
 @router.post(

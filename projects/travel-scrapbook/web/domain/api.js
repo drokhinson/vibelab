@@ -170,6 +170,8 @@
 
     listTrips: () => call('/trips'),
     createTrip: (body) => call('/trips', { method: 'POST', body }),
+    /** The whole trip screen in one round trip: trip + anchors + scraps +
+     *  staged_scraps + `members` (TripMember[]) + `candidates` (Scrap[]). */
     getTrip: (tripId) => call(`/trips/${tripId}`),
     updateTrip: (tripId, body) => call(`/trips/${tripId}`, { method: 'PATCH', body }),
     deleteTrip: (tripId) => call(`/trips/${tripId}`, { method: 'DELETE' }),
@@ -180,7 +182,7 @@
 
     /** Silent capture of a shared/pasted URL. @returns {Promise<Source>} */
     capture: (body) => call('/capture', { method: 'POST', body }),
-    /** One filtered page + geo facets. @returns {Promise<{processing_sources: Source[], failed_sources: Source[], scraps: Scrap[], total: number, facets: object}>} */
+    /** One filtered page + geo facets + the global badge count. @returns {Promise<{processing_sources: Source[], failed_sources: Source[], scraps: Scrap[], total: number, facets: object, inbox_count: number}>} */
     getInbox: (params = {}) => call(`/inbox${qs(params)}`),
     /** @returns {Promise<{count: number}>} */
     inboxCount: () => call('/inbox/count'),
