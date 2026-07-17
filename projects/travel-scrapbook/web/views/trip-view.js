@@ -17,9 +17,6 @@ class TripView extends View {
     // Plans (default) or the day-by-day Timeline (computed locally from the
     // trip bundle — see domain/timeline.js).
     this._tab = localStorage.getItem('ts.trip.tab') || 'plans';
-    // Group the trip's scraps by activity type (default) or geography.
-    this._groupBy = localStorage.getItem('ts.trip.groupBy') || 'category';
-    this._collapsed = new Set();
     this._painted = false; // a different trip is a fresh visit → animate once
     // Structural fingerprint of the last full render — the trip-bundle listener
     // diffs against it to decide surgical (field-only) vs full re-render. Null
@@ -47,23 +44,39 @@ class TripView extends View {
     this.listen('trip:' + this._tripId, () => this._onTripUpdate());
     this.listen('members:' + this._tripId, () => this.render());
     this.listen('pollTimedOut:' + this._tripId, () => this.render());
+    this.listen('capturePending:' + this._tripId, () => this._onCapturePending());
     await this._load();
   }
 
   async onParamsChange(params) {
     if (params.tripId !== this._tripId) {
       window.ScrapDomain.stopPolling();
+      // Drop the old trip's shimmer so it can't leak into the new trip's Plans.
+      window.store.set('capturePending:' + this._tripId, []);
       this._resetState();
       this._tripId = params.tripId;
       this.renderLoading();
       this.listen('trip:' + this._tripId, () => this._onTripUpdate());
       this.listen('members:' + this._tripId, () => this.render());
+      this.listen('pollTimedOut:' + this._tripId, () => this.render());
+      this.listen('capturePending:' + this._tripId, () => this._onCapturePending());
       await this._load();
     }
   }
 
   async onUnmount() {
+    window.store.set('capturePending:' + this._tripId, []);
     window.ScrapDomain.stopPolling();
+  }
+
+  // A capture pushed/cleared a processing card. It belongs to the Plans tab, so
+  // surgically re-render just #plans-content (pending state is outside the
+  // structural fingerprint, so this is a field-only patch, not a full render).
+  _onCapturePending() {
+    if (this._tab !== 'plans') return;
+    const trip = window.store.get('trip:' + this._tripId);
+    if (!trip || !this.container.querySelector('#plans-content')) return;
+    this._patchPlans(trip);
   }
 
   // One bundle fetch covers the whole screen (trip + scraps + members +
@@ -189,7 +202,20 @@ class TripView extends View {
     const allScraps = this._visibleScraps(trip);
     const isPriority = (s) => s.rating === 'booked' || s.rating === 'must_do';
     const scraps = this._priorityOnly ? allScraps.filter(isPriority) : allScraps;
+
+    // A just-pasted link shows a shimmer "processing" card at the top of Plans
+    // until its scraps land (see ScrapDomain.capture / the trip poll). Skipped
+    // when the must-dos filter is on — a processing card has no rating yet.
+    const pending = (!this._priorityOnly && window.store.get('capturePending:' + this._tripId)) || [];
+    const processing = pending.length
+      ? `<div class="card-grid card-grid--2col">${
+        pending.map((s, i) => renderSourceCard(s, { index: i, variant: 'processing' })).join('')
+      }</div>`
+      : '';
+
     if (scraps.length === 0) {
+      // Show the shimmer instead of the empty state while a capture is in flight.
+      if (processing) return processing;
       return `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-scraps.svg" alt="" />
@@ -201,9 +227,8 @@ class TripView extends View {
               : 'When the crew adds places, they’ll show up here for you to vibe on.')}</p>
         </div>`;
     }
-    return renderGroupedList(scraps, {
-      dims: ['category', 'region', 'country', 'city'], active: this._groupBy,
-      collapsed: this._collapsed, variant: 'trip', name: 'trip-groupby', ...cardOpts,
+    return processing + renderPlanZones(scraps, {
+      scopeLevel: trip.scope_level, variant: 'trip', tripId: this._tripId, ...cardOpts,
     });
   }
 
@@ -211,8 +236,10 @@ class TripView extends View {
   // (with the fields that drive the day range + suggestions) and the chrome
   // meta the toolbar/heading show. It deliberately OMITS per-scrap fields
   // (plan_date/plan_time/rating/vibes/visited/skipped/notes) so those changes
-  // fall to the surgical path — buildTimeline / _tlPlanOrder / renderGroupedList
+  // fall to the surgical path — buildTimeline / _tlPlanOrder / renderPlanZones
   // all recompute them from local state, so a region re-render is always correct.
+  // It also OMITS capturePending, so a paste's shimmer patches #plans-content
+  // surgically; only the scraps landing (a membership change) forces a full render.
   _structuralSig(trip) {
     const ids = (l) => (l || []).map((s) => s.id).sort().join(',');
     const anchors = (trip.anchors || []).map((a) =>
@@ -630,25 +657,15 @@ class TripView extends View {
     }
   }
 
-  // Plans-tab card region bindings: the group-by toggle + <details> collapse
-  // state, and the scrap-card actions. Scoped to `root` (whole container on a
-  // full render, or #plans-content on a surgical patch).
+  // Plans-tab card region bindings: the scrap-card actions. The plans list is
+  // laid out as geography zones (ui/plan-zones.js) with no toggle or collapse,
+  // so there's no group chrome to wire — just the cards. Scoped to `root` (whole
+  // container on a full render, or #plans-content on a surgical patch).
   _bindPlansContent(root, trip) {
     const findScrap = (id) =>
       (trip.scraps || []).find((s) => s.id === id) ||
       (trip.staged_scraps || []).find((s) => s.id === id) ||
       (trip.candidates || []).find((s) => s.id === id);
-
-    bindScrapGroups(root, {
-      name: 'trip-groupby',
-      collapsed: this._collapsed,
-      onChange: (dim) => {
-        this._groupBy = dim;
-        this._collapsed = new Set();
-        localStorage.setItem('ts.trip.groupBy', dim);
-        this.render();
-      },
-    });
 
     this._bindScrapActions(root, trip, findScrap);
   }
