@@ -437,8 +437,11 @@ async def update_anchor(
         if "anchor_time" in update:
             membership_update["plan_time"] = update["anchor_time"]
 
-    query_changed = "query" in update and update["query"] != synth_query
-    location_changed = "maps_url" in update or query_changed
+    # Location comes only from a Maps link now — a rename (query/label change)
+    # never re-resolves, so an existing pin is never moved or wiped by an edit
+    # to the name. A bare-name checkpoint stays unlocated. (The URL-capture flow
+    # is the only place a text location is geocoded — see resolve_checkpoint_geo.)
+    location_changed = "maps_url" in update
 
     if location_changed:
         geo, confidence, url = await checkpoints.resolve_checkpoint_geo(

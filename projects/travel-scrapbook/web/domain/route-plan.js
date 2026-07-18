@@ -144,8 +144,9 @@
   }
 
   // Undated trip (buildTimeline returns no days): no day scaffold, so every plan
-  // collects in Anytime — routable ones in a single optimized path with legs +
-  // total, unroutable/completed ones appended plainly.
+  // collects into one inline route list (rendered in the middle of the timeline)
+  // — routable ones in a single optimized path with legs + total, unroutable/
+  // completed ones appended plainly.
   function buildUndated(scraps, anchors, reason) {
     const routable = scraps.filter((s) => located(s) && !completed(s)).sort((a, b) => cmpId(a.id, b.id));
     const rest = scraps.filter((s) => !(located(s) && !completed(s)));
@@ -158,21 +159,32 @@
     const { withinKm, transitionKm, stops } = attachLegs(rows, origin);
     for (const s of rest) rows.push({ scrap: s, placement: placementOf(s), leg: null });
 
-    // No closing leg here: the undated "Your route" list renders below the
-    // Departure bookend, so a last-stop→Departure connector has no coherent home.
-    // The optimizer already seeds off the end anchor for ordering.
+    // No closing leg on the undated path: the Departure anchor is rarely located
+    // on a dateless trip, and the optimizer already seeds off the end anchor for
+    // ordering. The route rows render inline in the middle (ui/trip-timeline.js).
     return {
-      days: [], anytime: rows, endLeg: null,
+      days: [], anytime: rows, endLeg: null, uncoveredDays: [],
       totalKm: withinKm + transitionKm, stopCount: stops, reason: reason || 'no_dates',
     };
   }
 
+  // Trip days not covered by any lodging (stay) checkpoint — the only thing the
+  // timeline suggests adding a checkpoint for. A stay covers stay_date..
+  // stay_end_date inclusive (single day when no end). Returns ISO date strings
+  // in trip order.
+  function uncoveredStayDays(tripDays, anchors) {
+    const stays = (anchors || []).filter((a) => a.role === 'stay' && a.stay_date);
+    return tripDays.filter((d) =>
+      !stays.some((s) => s.stay_date <= d && d <= (s.stay_end_date || s.stay_date)));
+  }
+
   /**
    * Build the unified itinerary from a trip bundle.
-   * @returns {{days: Array, anytime: Array, endLeg: object|null, totalKm: number, stopCount: number, reason?: string}}
+   * @returns {{days: Array, anytime: Array, endLeg: object|null, totalKm: number, stopCount: number, reason?: string, uncoveredDays: string[]}}
    *   days[]  = { date, day_number, markers, rows: [{ scrap, placement:'anchored'|'auto', leg|null }] }
    *   anytime = rows for plans with no map pin (or an out-of-range anchored date)
    *   endLeg  = closing hop from the last stop to the Departure anchor (null if either is missing)
+   *   uncoveredDays = trip days no stay checkpoint covers (drives the lodging tip; [] when undated)
    */
   function buildItinerary(trip, anchors, scraps) {
     anchors = anchors || [];
@@ -269,7 +281,10 @@
       totalKm += endLeg.km;
     }
 
-    return { days: outDays, anytime, endLeg, totalKm, stopCount, reason: base.reason };
+    return {
+      days: outDays, anytime, endLeg, totalKm, stopCount, reason: base.reason,
+      uncoveredDays: uncoveredStayDays(tripDays, anchors),
+    };
   }
 
   window.RoutePlan = { buildItinerary };

@@ -428,16 +428,13 @@ class TripView extends View {
   // bookends/markers and the plans-tab Checkpoints list — so it's bound scoped
   // to whichever region is (re)painting.
   _bindAnchorButtons(root, trip) {
-    // Timeline empty state → open the trip editor to add dates (the saved trip
-    // re-renders via the store, rebuilding the days).
-    root.querySelector('#tl-edit-trip')?.addEventListener('click', () => TripEditor.open(trip));
-
-    // "+ Checkpoint" (Plans header + mid-timeline) opens the editor defaulting
+    // "+ Checkpoint" (Plans header + empty-state) opens the editor defaulting
     // to a stay — the role select flips to travel.
     root.querySelectorAll('[data-action=add-checkpoint]').forEach((btn) => {
       btn.addEventListener('click', () => AnchorEditor.open(trip, { role: 'stay' }));
     });
-    // A gap placeholder between two dated checkpoints prefills the empty dates.
+    // A gap placeholder prefills the empty dates: the Plans-tab gap between two
+    // dated checkpoints, or the Timeline's lodging tip (uncovered nights).
     root.querySelectorAll('[data-action=add-checkpoint-gap]').forEach((btn) => {
       btn.addEventListener('click', () => AnchorEditor.open(trip, {
         role: 'stay',

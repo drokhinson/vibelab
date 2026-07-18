@@ -221,6 +221,9 @@ async def _materialize_checkpoint(
         label=booking.label,
         category=category,
         query=booking.location or booking.label,
+        # URL-capture is the AI entry point: geocode the extracted location so
+        # the booking still lands on the map (manual add-by-name does not).
+        geocode_query=True,
     )
     # The booking URL is how the user stumbled on this place — attach it, same
     # as the ordinary place flow does.

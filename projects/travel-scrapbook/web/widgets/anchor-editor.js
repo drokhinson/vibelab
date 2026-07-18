@@ -211,9 +211,13 @@ const AnchorEditor = {
         const saved = editing
           ? await window.TripDomain.updateAnchor(this._tripId, anchor.id, body)
           : await window.TripDomain.addAnchor(this._tripId, body);
-        toast(saved.geocode_confidence === 'none'
-          ? `${editing ? 'Saved' : 'Added'} — but couldn't find it on the map. Try a fuller name.`
-          : (editing ? 'Saved!' : 'Pinned!'));
+        // Location comes only from a Maps link. A name with no link intentionally
+        // has no pin — that's not a failure, so only warn when a link was given
+        // but didn't resolve. Name-only just confirms it was added/saved.
+        const mapsProvided = !!modal.querySelector('#ae-maps-url').value.trim();
+        toast(saved.geocode_confidence === 'none' && mapsProvided
+          ? `${editing ? 'Saved' : 'Added'} — but couldn't pin that map link. Check it and try again.`
+          : (editing ? 'Saved!' : (mapsProvided ? 'Pinned!' : 'Added!')));
         this.close();
       } catch (err) {
         toast(err.message || 'Could not save that', { error: true });
