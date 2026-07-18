@@ -98,6 +98,25 @@
 --               paginate, attach deduped source chips for the page only.
 --               Replaces a 2000-row fetch + Python aggregation.
 
+-- travelscrapbook_trip_suggestions(p_trip_id UUID, p_viewer UUID,
+--                                  p_category TEXT DEFAULT NULL,
+--                                  p_checkpoints BOOLEAN DEFAULT false,
+--                                  p_q TEXT DEFAULT NULL,
+--                                  p_limit INT DEFAULT 6, p_offset INT DEFAULT 0)
+--   → JSONB {items[], total, categories[]}
+--   Defined in: db/migrations/travelscrapbook/024_trip_suggestions.sql
+--   Called by:  shared-backend/routes/travel_scrapbook/plan_routes.py
+--               (list_trip_suggestions)
+--   Purpose:    The unified "add to trip" picker feed in one round trip. Merges
+--               the viewer's wander list (higher priority) with the community
+--               pool, filters to the trip's geo scope, splits by the checkpoint
+--               partition (false = plans, true = stays & transport), ranks
+--               wander-first then nearest to the trip's placed plans (centroid,
+--               falling back to the destination centroid; haversine mirrors
+--               services/optimizer.py). Category is applied post-merge so the
+--               returned `categories` facet always reflects the whole scoped
+--               pool. Supersedes the /wishlist + trip_bundle.candidates pickers.
+
 -- travelscrapbook_set_route_positions / travelscrapbook_set_route_plan
 --   DROPPED in db/migrations/travelscrapbook/022_drop_route_rpcs.sql. Route
 --   ordering is client-side now; the POST /route/optimize endpoint (the only

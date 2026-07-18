@@ -208,6 +208,13 @@
 
     /** All wishlist places + a fits_scope flag, for the trip's add picker. @returns {Promise<{scraps: Array<Scrap & {fits_scope: boolean}>}>} */
     tripWishlist: (tripId) => call(`/trips/${tripId}/wishlist`),
+    /** One proximity-ranked page of the unified add picker: the viewer's Wander
+     *  List (source 'wander', higher priority) merged with the Community pool
+     *  (source 'community'), scoped to the trip and split by `checkpoints`, plus
+     *  the category type-filter facet.
+     *  @param {{category?: string, checkpoints?: boolean, q?: string, limit?: number, offset?: number}} [params]
+     *  @returns {Promise<{items: object[], total: number, categories: Array<{slug:string,label:string,icon:string,count:number}>}>} */
+    tripSuggestions: (tripId, params = {}) => call(`/trips/${tripId}/suggestions${qs(params)}`),
     /** Bulk-add wishlist scraps to a trip. @returns {Promise<{scraps: Scrap[]}>} */
     assignScraps: (tripId, scrapIds) => call(`/trips/${tripId}/assign-scraps`, { method: 'POST', body: { scrap_ids: scrapIds } }),
     /** One filtered page of visited places + geo facets, with visited

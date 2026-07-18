@@ -139,7 +139,7 @@ function _mapsButton(scrap) {
 
 /**
  * @param {Scrap} scrap
- * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select'|'community',
+ * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select'|'community'|'suggestion',
  *          tripId?: string, selected?: boolean, fits?: boolean, saved?: boolean,
  *          isNew?: boolean, shared?: boolean, currentUserId?: (string|null), canWrite?: boolean,
  *          checkpoint?: boolean, showRemove?: boolean, communityWishlist?: boolean}} opts
@@ -154,6 +154,10 @@ function _mapsButton(scrap) {
  *   variant preview   — read-only display (share success screen)
  *   variant select    — read-only + selection checkbox (Wander-List picker)
  *   variant community — anonymized community-pool place (CommunityPlaceResponse) + Add button
+ *   variant suggestion — a unified add-picker item (TripSuggestionItem): basic card
+ *                   only (media + title + location + one-tap Add), with a "Your
+ *                   list" badge when it comes from the viewer's Wander List
+ *                   (source 'wander'). Add dispatches data-action="suggest-add".
  *   saved             — community place already on the viewer's lists (shows a check)
  *   shared        — trip has other members (show consensus + "added by")
  *   currentUserId — the viewer, to derive their own vibe + scrap ownership
@@ -174,12 +178,19 @@ function renderScrapCard(scrap, opts = {}) {
   const isPreview = variant === 'preview';
   const isSelect = variant === 'select';
   const isCommunity = variant === 'community';
+  // A suggestion (TripSuggestionItem) shares the community place-level shape but
+  // stays deliberately basic — no source/maps chips, no save-count line — and
+  // knows which pool it came from so the widget's Add button can branch.
+  const isSuggestion = variant === 'suggestion';
   // A community place (CommunityPlaceResponse) has place-level field names and
   // its own id/save-count. Capture the community-only bits, then map it onto the
   // scrap shape so the one card component renders it identically to a scrap.
   const savedByCount = isCommunity ? (scrap.saved_by_count || 1) : 0;
-  const placeId = isCommunity ? scrap.ref_place_id : null;
-  if (isCommunity) {
+  const placeId = (isCommunity || isSuggestion) ? scrap.ref_place_id : null;
+  const suggestSource = isSuggestion ? scrap.source : null;      // 'wander' | 'community'
+  const suggestScrapId = isSuggestion ? scrap.scrap_id : null;   // wander items only
+  const wanderPriority = isSuggestion && suggestSource === 'wander';
+  if (isCommunity || isSuggestion) {
     scrap = {
       id: scrap.ref_place_id,
       place_name: scrap.name,
@@ -188,11 +199,12 @@ function renderScrapCard(scrap, opts = {}) {
       category: scrap.category,
       og_image_url: scrap.og_image_url,
       lat: scrap.lat, lng: scrap.lng,
-      sources: scrap.sample_sources || [],
-      maps_url: scrap.maps_url,
+      // Suggestions keep it basic: no source chips, no maps button.
+      sources: isCommunity ? (scrap.sample_sources || []) : [],
+      maps_url: isCommunity ? scrap.maps_url : null,
     };
   }
-  const readOnly = isPreview || isSelect || isCommunity;
+  const readOnly = isPreview || isSelect || isCommunity || isSuggestion;
   const catIcon = _scrapCategoryIcon(scrap);
   // "Mine" governs owner-only actions (rating/visited/edit/delete). On solo
   // trips and the inbox added_by is the viewer (or unset), so this stays true.
@@ -275,6 +287,19 @@ function renderScrapCard(scrap, opts = {}) {
           <i data-lucide="plus"></i>Add to this trip
         </button>
       </div>`;
+  } else if (isSuggestion) {
+    // Unified add picker — one full-width Add. The widget binds it and branches
+    // on data-source: 'wander' assigns the viewer's scrap (data-scrap-id),
+    // 'community' saves the pool place (data-place-id).
+    footer = `
+      <div class="scrap-card__row">
+        <button class="ts-btn ts-btn--sm ts-btn--mint scrap-card__addtrip" data-action="suggest-add"
+                data-source="${escapeAttr(suggestSource || '')}"
+                ${suggestScrapId ? `data-scrap-id="${escapeAttr(suggestScrapId)}"` : ''}
+                data-place-id="${escapeAttr(placeId || '')}">
+          <i data-lucide="plus"></i>Add
+        </button>
+      </div>`;
   } else if (isCommunity) {
     // Anonymized pool place — a single full-width save action. On the Community
     // screen it lands on your Wander List ("Want to go"); inside a trip's Add
@@ -347,6 +372,7 @@ function renderScrapCard(scrap, opts = {}) {
       ${isNew ? '<span class="scrap-card__new-badge"><i data-lucide="sparkles"></i>New</span>' : ''}
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
+      ${wanderPriority ? '<span class="scrap-card__fits-badge"><i data-lucide="heart"></i>Your list</span>' : ''}
       ${editBtn}${communityEditBtn}
       ${media}
       <p class="scrap-card__title"><span class="scrap-card__title-inner">${escapeHtml(title)}</span></p>
