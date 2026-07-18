@@ -8,6 +8,15 @@ reverse-geocode the pin for city/region/country (see services/nominatim.reverse)
 
 Handles the common Maps URL shapes plus the `maps.app.goo.gl` / `goo.gl/maps`
 short links (expanded by following the redirect).
+
+Freshly-shared app links are the tricky case: expanded server-side (no browser
+JS) they resolve to the *feature-id* form — `/maps/place/<Name>/data=!1s0x…:0x…`
+— which carries Google's internal place id but NO decimal `!3d…!4d…` pin. With
+no coordinates a caller can only forward-geocode the bare name, which for a
+common/ambiguous name lands on the wrong same-named place anywhere on earth. So
+when the URL itself yields no pin we recover it from the rendered page body (the
+redirect fetch already downloads it), anchored to the feature id so we grab THAT
+place's coordinates rather than a nearby result's.
 """
 
 import re
@@ -40,6 +49,10 @@ _AT_COORDS = re.compile(r"@(-?\d+\.\d+),(-?\d+\.\d+)")
 _LATLNG = re.compile(r"^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$")
 # Place name from the /place/<Name>/ path segment.
 _PLACE_SEG = re.compile(r"/maps/place/([^/@]+)")
+# Feature id in the data blob: !1s0x<hex>:0x<hex>. Present on the app-share URL
+# form even when the decimal pin (!3d!4d) is not — used to anchor the pin we
+# recover from the page body to the right place.
+_FTID = re.compile(r"!1s(0x[0-9a-f]+:0x[0-9a-f]+)", re.IGNORECASE)
 
 
 @dataclass
@@ -48,6 +61,15 @@ class MapsPlace:
     lat: Optional[float]
     lng: Optional[float]
     expanded_url: str
+
+
+@dataclass
+class _Expansion:
+    """A followed short link: the final URL, every URL seen along the redirect
+    chain, and the final page's HTML body (empty string on any fetch failure)."""
+    final_url: str
+    chain_urls: list[str]
+    body: str
 
 
 def is_maps_url(url: str) -> bool:
@@ -72,33 +94,53 @@ def _is_short_link(url: str) -> bool:
     return host in _SHORT_HOSTS
 
 
-async def _expand_short_link(url: str) -> str:
-    """Follow a maps.app.goo.gl / goo.gl redirect to the full maps URL. Returns
-    the original URL unchanged on any failure."""
+async def _fetch(url: str) -> httpx.Response:
+    """One redirect-following GET, logged. Raises httpx.HTTPError on failure."""
+    async with log_external_call(
+        app=APP_NAME,
+        api_name="gmaps-expand",
+        method="GET",
+        url=url,
+    ) as record:
+        async with httpx.AsyncClient(
+            timeout=HTTP_TIMEOUT,
+            follow_redirects=True,
+            headers={"User-Agent": _BROWSER_UA, "Accept-Language": "en"},
+        ) as client:
+            resp = await client.get(url)
+        record.attach_response(resp)
+    return resp
+
+
+async def _expand_short_link(url: str) -> _Expansion:
+    """Follow a maps.app.goo.gl / goo.gl redirect to the full maps place page,
+    keeping every URL seen along the way plus the final page body (the pin often
+    lives only in the body, not the URL). Returns the original URL with an empty
+    body on any failure."""
     try:
-        async with log_external_call(
-            app=APP_NAME,
-            api_name="gmaps-expand",
-            method="GET",
-            url=url,
-        ) as record:
-            async with httpx.AsyncClient(
-                timeout=HTTP_TIMEOUT,
-                follow_redirects=True,
-                headers={"User-Agent": _BROWSER_UA, "Accept-Language": "en"},
-            ) as client:
-                resp = await client.get(url)
-            record.attach_response(resp)
-        final = str(resp.url)
-        # EU consent interstitial hides the real URL in ?continue=<encoded>.
-        parsed = urlparse(final)
-        if (parsed.hostname or "").startswith("consent."):
-            cont = parse_qs(parsed.query).get("continue")
-            if cont:
-                return unquote(cont[0])
-        return final
+        resp = await _fetch(url)
     except httpx.HTTPError:
-        return url
+        return _Expansion(url, [url], "")
+
+    chain = [str(r.url) for r in resp.history] + [str(resp.url)]
+    final = str(resp.url)
+
+    # EU consent interstitial hides the real place URL in ?continue=<encoded> —
+    # and the coordinates live on THAT page, not the consent wall, so follow it.
+    parsed = urlparse(final)
+    if (parsed.hostname or "").startswith("consent."):
+        cont = parse_qs(parsed.query).get("continue")
+        if cont:
+            real = unquote(cont[0])
+            chain.append(real)
+            try:
+                resp = await _fetch(real)
+            except httpx.HTTPError:
+                return _Expansion(real, chain, "")
+            chain += [str(r.url) for r in resp.history] + [str(resp.url)]
+            return _Expansion(str(resp.url), chain, resp.text or "")
+
+    return _Expansion(final, chain, resp.text or "")
 
 
 def _extract_coords(url: str) -> tuple[Optional[float], Optional[float]]:
@@ -118,6 +160,54 @@ def _extract_coords(url: str) -> tuple[Optional[float], Optional[float]]:
                     return float(pair.group(1)), float(pair.group(2))
                 except ValueError:
                     continue
+    return None, None
+
+
+def _best_coords(urls: list[str]) -> tuple[Optional[float], Optional[float]]:
+    """Best coordinates across every URL we saw. An exact pin (!3d!4d) anywhere
+    in the chain beats a coarse viewport (@lat,lng) anywhere, so we sweep for the
+    pin first — a consent/redirect hop can carry the pin while the final URL has
+    only the viewport (or nothing)."""
+    for url in urls:
+        m = _DATA_COORDS.search(url)
+        if m:
+            try:
+                return float(m.group(1)), float(m.group(2))
+            except ValueError:
+                pass
+    for url in urls:
+        lat, lng = _extract_coords(url)
+        if lat is not None:
+            return lat, lng
+    return None, None
+
+
+def _coords_from_body(
+    body: str, ftid: Optional[str]
+) -> tuple[Optional[float], Optional[float]]:
+    """Recover the pin from a rendered Maps place page when the URL didn't carry
+    it. The app-share URL only has the feature id; the decimal pin sits in the
+    page. Anchor to the feature id so we read THAT place's coordinates rather
+    than a nearby result's, then fall back to the first pin/viewport in the page."""
+    if not body:
+        return None, None
+    if ftid:
+        anchored = re.search(
+            re.escape(ftid) + r".{0,6000}?!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)",
+            body,
+            re.DOTALL,
+        )
+        if anchored:
+            try:
+                return float(anchored.group(1)), float(anchored.group(2))
+            except ValueError:
+                pass
+    m = _DATA_COORDS.search(body) or _AT_COORDS.search(body)
+    if m:
+        try:
+            return float(m.group(1)), float(m.group(2))
+        except ValueError:
+            pass
     return None, None
 
 
@@ -144,9 +234,21 @@ async def parse_maps_url(url: str) -> Optional[MapsPlace]:
     (caller then falls back to the normal fetch + LLM path)."""
     if not url:
         return None
-    expanded = await _expand_short_link(url) if _is_short_link(url) else url
-    lat, lng = _extract_coords(expanded)
-    name = _extract_name(expanded)
+    if _is_short_link(url):
+        exp = await _expand_short_link(url)
+    else:
+        exp = _Expansion(url, [url], "")
+
+    # Coordinates from the URL(s) first; when the app-share URL only names the
+    # place (feature-id form, no pin), recover the pin from the page body so we
+    # don't fall back to a name-only forward geocode that lands on the wrong
+    # same-named place.
+    lat, lng = _best_coords(exp.chain_urls)
+    if lat is None:
+        ftid = _FTID.search(exp.final_url)
+        lat, lng = _coords_from_body(exp.body, ftid.group(1) if ftid else None)
+
+    name = _extract_name(exp.final_url)
     if lat is None and not name:
         return None
-    return MapsPlace(name=name, lat=lat, lng=lng, expanded_url=expanded)
+    return MapsPlace(name=name, lat=lat, lng=lng, expanded_url=exp.final_url)
