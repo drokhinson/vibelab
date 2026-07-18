@@ -187,19 +187,31 @@ class ShareView extends View {
     const scraps = this._importScraps || [];
     const stillReading = this._importStatus === 'processing';
     const failed = this._importStatus === 'failed';
+    // While still reading, show the same processing loading card the trip-import
+    // flow uses — a synthetic source standing in for this capture — so the two
+    // flows look identical. As places land they render above it.
+    const processingCard = stillReading
+      ? renderSourceCard(this._syntheticSource(), { index: scraps.length, variant: 'processing' })
+      : '';
     host.innerHTML = `
-      ${scraps.length ? `
+      ${scraps.length || stillReading ? `
         <div class="card-grid card-grid--2col">
           ${scraps.map((s, i) => renderScrapCard(s, { index: i, variant: 'preview' })).join('')}
+          ${processingCard}
         </div>` : ''}
-      ${stillReading ? `
-        <p class="scrap-card__sub" style="text-align:center;margin-top:0.6rem;">
-          <span class="shimmer" style="display:inline-block;width:16px;height:16px;border-radius:50%;vertical-align:-3px;"></span>
-          Finding places…</p>` : ''}
       ${!scraps.length && failed ? `
         <p class="scrap-card__sub" style="text-align:center;">Couldn't read that one — it'll show in your Wander List to retry.</p>` : ''}
     `;
     this.refreshIcons(host);
+  }
+
+  // A stand-in Source for the processing loading card (the real source row is
+  // on the backend; the share screen only knows its id + the shared URL).
+  _syntheticSource() {
+    const url = this._targetUrl() || '';
+    let domain = 'link';
+    try { domain = new URL(url).hostname.replace(/^www\./, ''); } catch (_) {}
+    return { id: this._sourceId || 'pending', url, source_domain: domain, status: 'processing' };
   }
 }
 window.ShareView = ShareView;

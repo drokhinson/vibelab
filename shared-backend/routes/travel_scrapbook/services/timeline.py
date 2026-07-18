@@ -32,6 +32,8 @@ def _markers_from_anchors(anchors: list[dict[str, Any]]) -> list[dict[str, Any]]
             "kind": kind,
             "anchor_id": a["id"],
             "label": a["label"],
+            "city": a.get("city"),
+            "country": a.get("country"),
             "lat": a.get("lat"),
             "lng": a.get("lng"),
             "date": day,

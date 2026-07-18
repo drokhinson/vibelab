@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Car rental: rounded car with a key tag sticker -->
+  <circle cx="32" cy="32" r="30" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="27" fill="#D9EDD6"/>
+  <g stroke="#5B5468" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- cabin + body -->
+    <path d="M18 38 l3 -9 a4 4 0 0 1 4 -3 h14 a4 4 0 0 1 4 3 l3 9 z" fill="#F9C5D1"/>
+    <path d="M15 38 h34 a2 2 0 0 1 2 2 v4 a2 2 0 0 1 -2 2 h-34 a2 2 0 0 1 -2 -2 v-4 a2 2 0 0 1 2 -2 z" fill="#FFF9F2"/>
+    <!-- windows -->
+    <path d="M25 29 h6 v6 h-8 z" fill="#CDE4F5"/>
+    <path d="M34 29 h5 l2 6 h-7 z" fill="#CDE4F5"/>
+    <!-- wheels -->
+    <circle cx="23" cy="47" r="3.4" fill="#5B5468"/>
+    <circle cx="41" cy="47" r="3.4" fill="#5B5468"/>
+    <!-- dangling key -->
+    <circle cx="49" cy="18" r="3.4" fill="#FDE9A9"/>
+    <path d="M49 21 v6 h3 M49 25 h2.4" fill="none" stroke-width="2"/>
+  </g>
+  <ellipse cx="32" cy="53" rx="15" ry="2.2" fill="#5B5468" opacity="0.12"/>
+</svg>

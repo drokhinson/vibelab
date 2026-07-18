@@ -187,7 +187,9 @@
 
     /** Silent capture of a shared/pasted URL. @returns {Promise<Source>} */
     capture: (body) => call('/capture', { method: 'POST', body }),
-    /** One filtered page + geo facets + the global badge count. @returns {Promise<{processing_sources: Source[], failed_sources: Source[], scraps: Scrap[], total: number, facets: object, inbox_count: number}>} */
+    /** One filtered page + geo facets + the global badge count. Checkpoint-
+     *  category places (hotels/transport) arrive split into checkpoint_scraps.
+     *  @returns {Promise<{processing_sources: Source[], failed_sources: Source[], scraps: Scrap[], checkpoint_scraps: Scrap[], total: number, checkpoint_total: number, facets: object, inbox_count: number}>} */
     getInbox: (params = {}) => call(`/inbox${qs(params)}`),
     /** Nav badge count. Pass `{ since }` (ISO) for the "new since last visit"
      *  count; omit for the full pending count. @returns {Promise<{count: number}>} */
@@ -214,7 +216,9 @@
     tripWishlist: (tripId) => call(`/trips/${tripId}/wishlist`),
     /** Bulk-add wishlist scraps to a trip. @returns {Promise<{scraps: Scrap[]}>} */
     assignScraps: (tripId, scrapIds) => call(`/trips/${tripId}/assign-scraps`, { method: 'POST', body: { scrap_ids: scrapIds } }),
-    /** One filtered page of visited places + geo facets. @returns {Promise<{scraps: Scrap[], total: number, facets: object}>} */
+    /** One filtered page of visited places + geo facets, with visited
+     *  checkpoint places (hotels/transport) split into their own section.
+     *  @returns {Promise<{scraps: Scrap[], visited_checkpoints: Scrap[], total: number, checkpoint_total: number, facets: object}>} */
     listVisited: (params = {}) => call(`/visited${qs(params)}`),
     updateScrap: (scrapId, body) => call(`/scraps/${scrapId}`, { method: 'PATCH', body }),
     deleteScrap: (scrapId) => call(`/scraps/${scrapId}`, { method: 'DELETE' }),
@@ -257,7 +261,9 @@
     respondInvitation: (tripId, action) => call(`/trips/${tripId}/invitation/respond`, { method: 'POST', body: { action } }),
 
     // ── Community pool ────────────────────────────────────────────────────
-    /** One filtered page of aggregated places (facts only, no user data). @returns {Promise<{places: object[], total: number, facets: object}>} */
+    /** One filtered page of aggregated places (facts only, no user data).
+     *  Pass `checkpoints: true` for the Stays & transport tab.
+     *  @returns {Promise<{places: object[], total: number, facets: object}>} */
     communityPlaces: (params = {}) => call(`/community/places${qs(params)}`),
     /** Save a community place to a trip (or the Wander List). @returns {Promise<Scrap>} */
     saveCommunityPlace: (placeId, tripId) =>

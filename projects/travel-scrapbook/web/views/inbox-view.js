@@ -18,7 +18,9 @@ class InboxView extends View {
     this._pollStartedAt = 0;
     this._geo = { region: null, country: null, city: null };
     this._items = [];
+    this._checkpoints = [];        // "Stays & transport" section (hotels/airports…)
     this._total = 0;
+    this._checkpointTotal = 0;
     this._facets = {};
     this._processing = [];
     this._failed = [];
@@ -74,7 +76,9 @@ class InboxView extends View {
     this._processing = page.processing || [];
     this._failed = page.failed || [];
     this._items = page.items || [];
+    this._checkpoints = page.checkpoints || [];
     this._total = page.total || 0;
+    this._checkpointTotal = page.checkpointTotal || 0;
     this._facets = page.facets || {};
     this._loaded = true;
   }
@@ -95,12 +99,16 @@ class InboxView extends View {
       // replays entrance animations — the "blink").
       if (!append && this._loaded && JSON.stringify(page) === JSON.stringify({
         processing: this._processing, failed: this._failed,
-        items: this._items, total: this._total, facets: this._facets,
+        items: this._items, checkpoints: this._checkpoints,
+        total: this._total, checkpointTotal: this._checkpointTotal,
+        facets: this._facets,
       })) return;
       this._processing = page.processing;
       this._failed = page.failed;
       this._items = append ? [...this._items, ...page.items] : page.items;
+      this._checkpoints = page.checkpoints;
       this._total = page.total;
+      this._checkpointTotal = page.checkpointTotal;
       this._facets = page.facets;
       this._loaded = true;
       this.render();
@@ -130,7 +138,8 @@ class InboxView extends View {
   render() {
     if (!this._loaded) return;
     const filtered = !!(this._geo.region || this._geo.country || this._geo.city);
-    const empty = !this._processing.length && !this._failed.length && !this._total && !filtered;
+    const empty = !this._processing.length && !this._failed.length && !this._total
+      && !this._checkpointTotal && !filtered;
 
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Wander List</h1>
@@ -162,6 +171,12 @@ class InboxView extends View {
           <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
             <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
           </button>` : ''}
+        ${this._checkpoints.length ? `
+          <h2 style="font-size:1.3rem;margin:1.4rem 0 0.2rem;">Stays &amp; transport</h2>
+          <p class="scrap-card__sub" style="margin:0 0 0.5rem;">Hotels, airports, and stations you've saved — add them to a trip as checkpoints from the trip screen.</p>
+          <div class="card-grid card-grid--2col">
+            ${this._checkpoints.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox', checkpoint: true, isNew: this._isNew(s) })).join('')}
+          </div>` : ''}
       `}
       ${renderQuickPaste()}
     `;
@@ -201,7 +216,8 @@ class InboxView extends View {
 
     c.querySelectorAll('[data-scrap-id]').forEach((el) => {
       const scrapId = el.dataset.scrapId;
-      const scrap = this._items.find((s) => s.id === scrapId);
+      const scrap = this._items.find((s) => s.id === scrapId)
+        || this._checkpoints.find((s) => s.id === scrapId);
       if (!scrap) return;
       const action = el.dataset.action;
       if (el.tagName !== 'BUTTON') return;

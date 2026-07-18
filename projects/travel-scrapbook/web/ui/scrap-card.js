@@ -141,7 +141,8 @@ function _mapsButton(scrap) {
  * @param {Scrap} scrap
  * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select'|'community',
  *          tripId?: string, selected?: boolean, fits?: boolean, saved?: boolean,
- *          isNew?: boolean, shared?: boolean, currentUserId?: (string|null), canWrite?: boolean}} opts
+ *          isNew?: boolean, shared?: boolean, currentUserId?: (string|null), canWrite?: boolean,
+ *          checkpoint?: boolean}} opts
  *   isNew         — Wander List: imported since the last visit (shows a "New" tag)
  *   variant preview   — read-only display (share success screen)
  *   variant select    — read-only + selection checkbox (Wander-List picker)
@@ -150,11 +151,14 @@ function _mapsButton(scrap) {
  *   shared        — trip has other members (show consensus + "added by")
  *   currentUserId — the viewer, to derive their own vibe + scrap ownership
  *   canWrite      — false for viewers (hides add/edit/delete affordances)
+ *   checkpoint    — Stays & transport sections: no trip picker (checkpoints
+ *                   join trips as roles via the trip screen), keeps edit/notes
  */
 function renderScrapCard(scrap, opts = {}) {
   const {
     index = 0, variant = 'trip', tripId = null, selected = false, fits = false,
     isNew = false, shared = false, currentUserId = null, canWrite = true, saved = false,
+    checkpoint = false,
   } = opts;
   // 'preview' = read-only display (share success screen). 'select' = read-only
   // with a selection checkbox (the trip's "add from Wander List" picker).
@@ -231,6 +235,11 @@ function renderScrapCard(scrap, opts = {}) {
           <i data-lucide="heart"></i>To Wander List
         </button>
       </div>`;
+  } else if (variant === 'inbox' && checkpoint) {
+    // Stays & transport: no plan picker — a checkpoint joins a trip with a
+    // role (stay/arrival/…), which flows through the trip screen's
+    // "+ Checkpoint". Notes / priority / edit stay available above.
+    footer = '';
   } else if (variant === 'inbox') {
     // No separate trip-suggestion bubble — the "add to trips" button itself
     // reflects whether the place is already on any trip (scrap.trip_ids).
@@ -259,7 +268,7 @@ function renderScrapCard(scrap, opts = {}) {
           ? '<span class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__addtrip" aria-disabled="true" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>'
           : `<button class="ts-btn ts-btn--sm ts-btn--mint scrap-card__addtrip" data-action="save-community" data-place-id="${escapeAttr(placeId)}"><i data-lucide="plus"></i>Add</button>`}
       </div>`;
-  } else if (variant === 'trip' && canWrite) {
+  } else if (variant === 'trip' && canWrite && !checkpoint) {
     // Pull the place out of THIS trip (it stays on the Wander List and in any
     // other trips). The 'unassign' action is dispatched by the trip view's
     // button-delegation loop.

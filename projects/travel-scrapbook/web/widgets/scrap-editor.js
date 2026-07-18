@@ -62,6 +62,10 @@ const ScrapEditor = {
           </select>
           <label class="ts-label" for="se-notes">Notes</label>
           <textarea class="ts-textarea" id="se-notes" rows="2" placeholder="why you saved it…">${escapeHtml(s.notes || '')}</textarea>
+          <label class="ts-label" for="se-maps-url">Google Maps link</label>
+          <input class="ts-input" id="se-maps-url" value="${escapeAttr(s.maps_url || '')}"
+                 placeholder="paste a maps.app.goo.gl or google.com/maps link" />
+          <p class="confidence-hint" style="margin-top:0.3rem;">Paste a Maps link to pin the exact spot — city &amp; country fill in from it.</p>
           ${s.geocode_display_name ? `
             <p class="confidence-hint" style="margin-top:0.7rem;">
               Pinned as: ${escapeHtml(s.geocode_display_name)}
@@ -96,6 +100,10 @@ const ScrapEditor = {
         visited: modal.querySelector('#se-visited').checked,
         regeocode: modal.querySelector('#se-regeocode').checked,
       };
+      // Only send maps_url when the user actually changed it — an unchanged
+      // (often auto-generated) link shouldn't trigger a re-parse/geocode on save.
+      const mapsUrl = modal.querySelector('#se-maps-url').value.trim();
+      if (mapsUrl !== (s.maps_url || '')) fields.maps_url = mapsUrl || null;
       try {
         await window.ScrapDomain.update(s.id, this._tripId, fields);
         toast('Saved');
@@ -107,7 +115,7 @@ const ScrapEditor = {
     });
 
     modal.querySelector('#se-delete').addEventListener('click', async () => {
-      if (!confirmDestructive('Delete this place? This can\'t be undone.')) return;
+      if (!confirmDestructive('Delete this place? It leaves every trip — including as a checkpoint — and this can\'t be undone.')) return;
       try {
         await window.ScrapDomain.remove(s.id, this._tripId);
         toast('Scrap deleted');

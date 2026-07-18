@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Airport: little plane climbing sticker -->
+  <circle cx="32" cy="32" r="30" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="27" fill="#CDE4F5"/>
+  <g stroke="#5B5468" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- fuselage swept up to the right -->
+    <path d="M15 40 L38 30 a4.5 4.5 0 0 1 6 2 a4.5 4.5 0 0 1 -2 6 L19 46 z" fill="#FFF9F2"/>
+    <!-- wing -->
+    <path d="M30 33 L26 24 h5 l6 7" fill="#F9C5D1"/>
+    <!-- tail fin -->
+    <path d="M18 41 L15 35 h4 l3 4" fill="#F9C5D1"/>
+    <!-- window -->
+    <circle cx="39" cy="35" r="1.6" fill="#CDE4F5"/>
+    <!-- contrail puffs -->
+    <path d="M13 48 h6 M11 52 h10" fill="none" stroke-width="2" opacity="0.6"/>
+    <!-- sun -->
+    <circle cx="47" cy="17" r="4" fill="#FDE9A9"/>
+  </g>
+  <ellipse cx="32" cy="51" rx="14" ry="2.2" fill="#5B5468" opacity="0.12"/>
+</svg>

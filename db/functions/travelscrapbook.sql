@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Travel Scrapbook — RPC function inventory
--- Last updated: 2026-07-17 (017 route_plan RPC: route order + timeline fill)
+-- Last updated: 2026-07-17 (020 checkpoint unification: role-aware RPCs)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -23,11 +23,18 @@
 -- travelscrapbook_trip_bundle(p_trip_id UUID, p_viewer UUID)
 --   → JSONB {trip, role, owner_display_name, anchors[], scraps[], members[],
 --            candidates[]} | NULL when the viewer has no access
---   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql
+--   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
+--               replaced in 018 (candidates exclude dismissed pairs) and again
+--               in 020 (scraps = plan memberships only; anchors[] SYNTHESIZED
+--               from role-bearing memberships in the legacy anchor shape,
+--               ordered by membership created_at; candidates also exclude
+--               checkpoint-category places)
 --   Called by:  shared-backend/routes/travel_scrapbook/trip_routes.py (get_trip)
 --   Purpose:    The whole trip screen in ONE round trip (was 6–9 sequential
 --               queries + 3 extra endpoints). Access (owner or accepted
 --               member) is enforced inside since service role bypasses RLS.
+--               The Python twin of the anchor synthesis lives in
+--               services/checkpoints.synthesize_anchor — keep them in step.
 
 -- travelscrapbook_trips_list(p_viewer UUID)
 --   → JSONB [trip row + owner_user_id, owner_display_name, role, scrap_count]
@@ -38,7 +45,10 @@
 
 -- travelscrapbook_scrap_card(p_scrap_id UUID, p_trip_id UUID)
 --   → JSONB one hydrated membership-scoped scrap | NULL when not on that trip
---   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql
+--   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
+--               replaced in 020 (resolves the PLAN membership only — a scrap
+--               can now also hold checkpoint memberships on the same trip —
+--               and passes role/plan_end_date through)
 --   Called by:  shared-backend/routes/travel_scrapbook/scrap_routes.py
 --               (_hydrated_membership — the echo for assign/approve/schedule/
 --               vibe endpoints)
@@ -48,9 +58,14 @@
 
 -- travelscrapbook_inbox_bundle(p_viewer UUID, p_region TEXT, p_country TEXT,
 --                              p_city TEXT, p_limit INT, p_offset INT)
---   → JSONB {scraps[] (+trip_ids), total, unvisited_count, facets,
+--   → JSONB {scraps[] (+trip_ids), checkpoint_scraps[], total,
+--            checkpoint_total, unvisited_count, facets,
 --            processing_sources[], failed_sources[], geocoded_trips[]}
---   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql
+--   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
+--               replaced in 020 (checkpoint-category scraps split into their
+--               own capped array; the paginated scraps / total / nav badge
+--               count non-checkpoint places; trip_ids counts plan memberships
+--               only; facets stay over the full base)
 --   Called by:  shared-backend/routes/travel_scrapbook/source_routes.py (get_inbox)
 --   Purpose:    The Wander List screen in one round trip: SQL-side filter/
 --               facets/pagination (was fetch-all + Python paging) plus the
@@ -59,17 +74,22 @@
 
 -- travelscrapbook_visited_page(p_viewer UUID, p_region TEXT, p_country TEXT,
 --                              p_city TEXT, p_limit INT, p_offset INT)
---   → JSONB {scraps[], total, facets}
---   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql
+--   → JSONB {scraps[], visited_checkpoints[], total, checkpoint_total, facets}
+--   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
+--               replaced in 020 (same checkpoint split as the inbox bundle)
 --   Called by:  shared-backend/routes/travel_scrapbook/scrap_routes.py (list_visited)
 --   Purpose:    One filtered page of visited places with facets, paginated in
---               SQL.
+--               SQL, plus the visited checkpoint places as their own section.
 
 -- travelscrapbook_community_places(p_q TEXT, p_region TEXT, p_country TEXT,
 --                                  p_city TEXT, p_category TEXT,
---                                  p_limit INT, p_offset INT)
+--                                  p_limit INT, p_offset INT,
+--                                  p_checkpoints BOOLEAN DEFAULT false)
 --   → JSONB {places[], total, facets}
---   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql
+--   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
+--               replaced in 020 (new p_checkpoints flag partitions the pool:
+--               false = ordinary places, true = the Stays & transport tab;
+--               the old 7-arg overload was DROPPED)
 --   Called by:  shared-backend/routes/travel_scrapbook/community_routes.py
 --               (list_community_places)
 --   Purpose:    The community catalog page in one round trip: group by OSM
@@ -97,3 +117,27 @@
 --               incoming value is non-null AND the existing plan_date is NULL,
 --               so hand-scheduled plans never move and re-runs are idempotent.
 --               p_trip_id scopes the UPDATE; the route verifies write access.
+--               Since 020 the UPDATE also requires role IS NULL — a route run
+--               can never move a checkpoint membership.
+
+-- travelscrapbook_add_plan_memberships(p_rows JSONB,
+--                                      p_status TEXT DEFAULT 'approved')
+--   → VOID   (p_rows: [{"scrap_id": "...", "trip_id": "..."}, ...])
+--   Defined in: db/migrations/travelscrapbook/020_unify_checkpoints.sql
+--   Called by:  shared-backend/routes/travel_scrapbook/plan_routes.py
+--               (_add_plan_memberships → assign/assign-many/set_scrap_trips),
+--               source_routes.py (capture trip-hint), community_routes.py
+--               (save_community_place)
+--   Purpose:    Insert PLAN memberships idempotently, one round trip for any
+--               (scrap, trip) fan-out shape. Needed because 020 made the plan
+--               uniqueness a PARTIAL index (scrap_id, trip_id WHERE role IS
+--               NULL), which PostgREST's on_conflict cannot arbitrate — the
+--               RPC emits the index-predicate ON CONFLICT form.
+
+-- travelscrapbook__normalize_name(t TEXT)
+--   → TEXT
+--   Defined in: db/migrations/travelscrapbook/020_unify_checkpoints.sql
+--   Called by:  (migration-internal — the 020 anchor backfill's place dedupe)
+--   Purpose:    Extension-free approximation of Python's normalize_place_name
+--               (accent fold via translate(), lowercase, non-alnum → space,
+--               strip leading "the "). Kept for re-runs of the backfill.

@@ -18,17 +18,21 @@ from .dependencies import CurrentUser, get_current_user
 from .models import (
     GeoFacets,
     MessageResponse,
-    PagedScrapsResponse,
     PlanScheduleRequest,
     RatingRequest,
     ScrapResponse,
     ScrapUpdateRequest,
     VibeRequest,
+    VisitedPageResponse,
 )
 from .services import nominatim
-from .services.enrichment import build_maps_url
+from .services.places import build_maps_url
 from .services.hydrate import attach_consensus, hydrate_scraps
-from .services.places import normalize_place_name, region_for_country_code
+from .services.places import (
+    normalize_place_name,
+    region_for_country_code,
+    resolve_maps_place,
+)
 
 
 def get_owned_scrap(sb, scrap_id: str, user_id: str) -> dict[str, Any]:
@@ -81,7 +85,7 @@ async def get_scrap(
 
 @router.get(
     "/visited",
-    response_model=PagedScrapsResponse,
+    response_model=VisitedPageResponse,
     status_code=200,
     summary="Places you've marked visited",
 )
@@ -92,11 +96,12 @@ async def list_visited(
     limit: int = Query(24, ge=1, le=100, description="Page size"),
     offset: int = Query(0, ge=0, description="Page start"),
     user: CurrentUser = Depends(get_current_user),
-) -> PagedScrapsResponse:
+) -> VisitedPageResponse:
     """One filtered page of the scraps the user marked visited (any trip or
-    the wishlist), most-recently-visited first, plus drill-down facets
-    (regions → countries → cities) and the filtered total. Filtering,
-    facets, and pagination all run in SQL (one RPC round-trip)."""
+    the wishlist), most-recently-visited first — with the visited checkpoint
+    places (hotels/transport, 020) split into their own section — plus
+    drill-down facets (regions → countries → cities) and the filtered totals.
+    Filtering, facets, and pagination all run in SQL (one RPC round-trip)."""
     sb = get_supabase()
     page = (
         sb.rpc("travelscrapbook_visited_page", {
@@ -108,9 +113,13 @@ async def list_visited(
             "p_offset": offset,
         }).execute()
     ).data or {}
-    return PagedScrapsResponse(
+    return VisitedPageResponse(
         scraps=[ScrapResponse(**s) for s in page.get("scraps", [])],
+        visited_checkpoints=[
+            ScrapResponse(**s) for s in page.get("visited_checkpoints", [])
+        ],
         total=page.get("total", 0),
+        checkpoint_total=page.get("checkpoint_total", 0),
         facets=page.get("facets") or GeoFacets(),
     )
 
@@ -171,7 +180,32 @@ async def update_scrap(
         "country": place_update.get("country", place.get("country")),
     }
 
-    if body.regeocode and merged["name"]:
+    # A pasted Google Maps link parses to itself: pull coords + city/region/
+    # country straight from the URL (no AI) and let them win over typed fields.
+    maps_resolved = False
+    if "maps_url" in update:
+        raw = update["maps_url"]
+        resolved = await resolve_maps_place(sb, raw) if raw else None
+        if resolved:
+            place_update["maps_url"] = resolved.maps_url
+            if resolved.lat is not None:
+                place_update.update({
+                    "lat": resolved.lat,
+                    "lng": resolved.lng,
+                    "city": resolved.city,
+                    "country": resolved.country,
+                    "country_code": resolved.country_code,
+                    "region": resolved.region,
+                    "geocode_confidence": resolved.geocode_confidence,
+                    "geocode_display_name": resolved.geocode_display_name,
+                })
+            maps_resolved = True
+        else:
+            # Empty clears it; a non-Maps / unparseable link is stored verbatim
+            # (the "open in Maps" button still works) without touching location.
+            place_update["maps_url"] = raw or None
+
+    if body.regeocode and merged["name"] and not maps_resolved:
         query = ", ".join(p for p in merged.values() if p)
         result = await nominatim.geocode(query)
         if result:
@@ -198,7 +232,9 @@ async def update_scrap(
                 "osm_id": None,
             })
 
-    if place_update and merged["name"]:
+    # Rebuild the generated search link only when the user didn't supply their
+    # own maps_url this edit (whether it resolved or was stored verbatim).
+    if place_update and merged["name"] and "maps_url" not in place_update:
         place_update["maps_url"] = build_maps_url(
             merged["name"], merged["city"], merged["country"]
         )
@@ -306,10 +342,13 @@ async def set_rating(
         {"rating": body.level, "updated_at": "now()"}
     ).eq("id", scrap_id).execute()
     scrap["rating"] = body.level
+    # Plan memberships only (020) — vibes are consensus on PLANS; checkpoint
+    # memberships never carry vibe rows.
     memberships = (
         sb.table("travelscrapbook_scrap_trips")
         .select("id")
         .eq("scrap_id", scrap_id)
+        .is_("role", "null")
         .execute()
     ).data or []
     if memberships:
@@ -353,6 +392,7 @@ async def clear_rating(
             sb.table("travelscrapbook_scrap_trips")
             .select("id")
             .eq("scrap_id", scrap_id)
+            .is_("role", "null")
             .execute()
         ).data or []
     ]

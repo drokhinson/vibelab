@@ -39,6 +39,7 @@ from .core import (  # noqa: F401
     TripSuggestion,
     TripWishlistResponse,
     TripWishlistScrap,
+    VisitedPageResponse,
 )
 from .trip import (  # noqa: F401
     AnchorCreateRequest,

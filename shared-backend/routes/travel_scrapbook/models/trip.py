@@ -23,6 +23,10 @@ class AnchorCreateRequest(BaseModel):
     label: Optional[str] = Field(None, min_length=1, max_length=120)
     query: Optional[str] = Field(None, min_length=2, max_length=300,
                                  description="Freeform place text to geocode, e.g. 'Narita Airport'")
+    maps_url: Optional[str] = Field(
+        None, max_length=2000,
+        description="A Google Maps link. When it's a real Maps place/pin URL, "
+                    "coordinates + city/region/country are extracted from it (no AI).")
     type: Optional[AnchorType] = Field(
         None, description="How you travel (start/end/travel anchors only)")
     anchor_date: Optional[date] = Field(
@@ -49,6 +53,10 @@ class AnchorCreateRequest(BaseModel):
 class AnchorUpdateRequest(BaseModel):
     label: Optional[str] = Field(None, min_length=1, max_length=120)
     query: Optional[str] = Field(None, min_length=2, max_length=300)
+    maps_url: Optional[str] = Field(
+        None, max_length=2000,
+        description="A Google Maps link. When it's a real Maps place/pin URL, "
+                    "coordinates + city/region/country are extracted from it (no AI).")
     type: Optional[AnchorType] = None
     anchor_date: Optional[date] = None
     anchor_time: Optional[time] = None
@@ -64,8 +72,17 @@ class AnchorResponse(BaseModel):
     query: str
     lat: Optional[float] = None
     lng: Optional[float] = None
+    city: Optional[str] = None
+    region: Optional[str] = None                   # macro-region, derived from country_code
+    country: Optional[str] = None
+    country_code: Optional[str] = None
+    maps_url: Optional[str] = None                 # user-pasted Maps link, when provided
     geocode_confidence: GeocodeConfidence = GeocodeConfidence.NONE
     type: Optional[AnchorType] = None
+    # Unified-model links (020): the checkpoint's canonical place + the
+    # creator's scrap. The anchor id itself is the trip-membership id.
+    place_id: Optional[str] = None
+    scrap_id: Optional[str] = None
     anchor_date: Optional[date] = None            # start: arrival; end: departure; travel: leg day
     anchor_time: Optional[time] = None            # NULL = all-day point marker
     stay_date: Optional[date] = None              # stay: check-in

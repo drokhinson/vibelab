@@ -9,6 +9,7 @@ from .access import get_accessible_trip
 from .constants import MembershipStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import TimelineResponse
+from .services.checkpoints import load_trip_anchors
 from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 from .services.timeline import build_timeline
 
@@ -29,12 +30,7 @@ async def get_timeline(
     Empty with reason=no_dates when nothing carries a date yet."""
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    anchors = (
-        sb.table("travelscrapbook_anchors")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .execute()
-    ).data or []
+    anchors = load_trip_anchors(sb, trip_id)
     scraps = hydrate_scraps(
         sb,
         membership_rows_to_scraps(
@@ -43,6 +39,7 @@ async def get_timeline(
                 .select("*, travelscrapbook_scraps(*)")
                 .eq("trip_id", trip_id)
                 .eq("status", MembershipStatus.APPROVED)
+                .is_("role", "null")   # plans only; checkpoints arrive as markers (020)
                 .execute()
             ).data or []
         ),

@@ -14,7 +14,9 @@ class VisitedView extends View {
   _resetState() {
     this._geo = { region: null, country: null, city: null };
     this._items = [];
+    this._checkpoints = [];        // visited "Stays & transport" section
     this._total = 0;
+    this._checkpointTotal = 0;
     this._facets = {};
     this._loaded = false;
     this._seq = 0;
@@ -36,7 +38,9 @@ class VisitedView extends View {
     const cached = window.tsCache?.get('visited', this._cacheKey());
     if (cached) {
       this._items = cached.items || [];
+      this._checkpoints = cached.checkpoints || [];
       this._total = cached.total || 0;
+      this._checkpointTotal = cached.checkpointTotal || 0;
       this._facets = cached.facets || {};
       this._loaded = true;
       this.render();
@@ -58,10 +62,15 @@ class VisitedView extends View {
       });
       if (seq !== this._seq) return;
       // Unchanged revalidate → no repaint (avoids the entrance-anim blink).
-      if (!append && this._loaded && JSON.stringify(page) === JSON.stringify(
-        { items: this._items, total: this._total, facets: this._facets })) return;
+      if (!append && this._loaded && JSON.stringify(page) === JSON.stringify({
+        items: this._items, checkpoints: this._checkpoints,
+        total: this._total, checkpointTotal: this._checkpointTotal,
+        facets: this._facets,
+      })) return;
       this._items = append ? [...this._items, ...page.items] : page.items;
+      this._checkpoints = page.checkpoints;
       this._total = page.total;
+      this._checkpointTotal = page.checkpointTotal;
       this._facets = page.facets;
       this._loaded = true;
       this.render();
@@ -78,7 +87,7 @@ class VisitedView extends View {
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Visited</h1>
       ${renderFilterBar(this._geo, this._facets)}
-      ${this._total === 0 && !filtered ? `
+      ${this._total === 0 && this._checkpointTotal === 0 && !filtered ? `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-inbox.svg" alt="" />
           <p class="empty-title">Nothing visited yet</p>
@@ -92,6 +101,12 @@ class VisitedView extends View {
         <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
           <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
         </button>` : ''}
+      ${this._checkpoints.length ? `
+        <h2 style="font-size:1.3rem;margin:1.4rem 0 0.2rem;">Stays &amp; transport</h2>
+        <p class="scrap-card__sub" style="margin:0 0 0.5rem;">Hotels, airports, and stations from trips you've taken.</p>
+        <div class="card-grid card-grid--2col">
+          ${this._checkpoints.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip', checkpoint: true })).join('')}
+        </div>` : ''}
       ${renderQuickPaste()}
     `;
     this.refreshIcons();
@@ -111,7 +126,8 @@ class VisitedView extends View {
       this._load({ append: true });
     });
     c.querySelectorAll('[data-scrap-id]').forEach((el) => {
-      const scrap = this._items.find((s) => s.id === el.dataset.scrapId);
+      const scrap = this._items.find((s) => s.id === el.dataset.scrapId)
+        || this._checkpoints.find((s) => s.id === el.dataset.scrapId);
       if (!scrap) return;
       const action = el.dataset.action;
       if (el.tagName !== 'BUTTON') return;

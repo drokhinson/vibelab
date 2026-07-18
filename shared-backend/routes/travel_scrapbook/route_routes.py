@@ -9,6 +9,7 @@ from . import router
 from .constants import AnchorRole, MembershipStatus, TripVibe
 from .dependencies import CurrentUser, get_current_user
 from .models import RouteLeg, RouteOptimizeRequest, RouteOptimizeResponse, ScrapResponse
+from .services.checkpoints import load_trip_anchors
 from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 from .access import get_accessible_trip
 from .services.optimizer import Point, haversine_km, optimize
@@ -63,6 +64,7 @@ async def optimize_route(
                 .select("*, travelscrapbook_scraps(*)")
                 .eq("trip_id", trip_id)
                 .eq("status", MembershipStatus.APPROVED)
+                .is_("role", "null")   # plans only — checkpoints are the spine, not stops (020)
                 .execute()
             ).data or []
         ),
@@ -78,16 +80,11 @@ async def optimize_route(
     routable = [s for s in scraps if s["lat"] is not None and s["lng"] is not None]
     skipped = [s["id"] for s in scraps if s["lat"] is None or s["lng"] is None]
 
-    # Ordered by created_at to match the trip bundle (015 RPC) and the frontend
-    # Route panel, so "first stay" resolves to the same anchor on both sides —
-    # keeps the start-or-stay display leg aligned with the panel's stop list.
-    anchors = (
-        sb.table("travelscrapbook_anchors")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .order("created_at")
-        .execute()
-    ).data or []
+    # Synthesized checkpoints in membership-created_at order — matches the trip
+    # bundle RPC and the frontend Route panel, so "first stay" resolves to the
+    # same checkpoint on both sides (keeps the start-or-stay display leg
+    # aligned with the panel's stop list).
+    anchors = load_trip_anchors(sb, trip_id)
 
     # Checkpoint-aware ordering + timeline placement. With located stay/travel
     # checkpoints, cluster around them and spread unscheduled plans over each

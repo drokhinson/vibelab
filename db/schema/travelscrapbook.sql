@@ -15,12 +15,17 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_profiles (
 
 -- icon = custom SVG sprite slug (assets/sprites/categories/travel-scrapbook-cat-<icon>.svg)
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_categories (
-  slug       TEXT    PRIMARY KEY,
-  label      TEXT    NOT NULL,
-  icon       TEXT    NOT NULL,
-  sort_order INTEGER NOT NULL
+  slug          TEXT    PRIMARY KEY,
+  label         TEXT    NOT NULL,
+  icon          TEXT    NOT NULL,
+  sort_order    INTEGER NOT NULL,
+  is_checkpoint BOOLEAN NOT NULL DEFAULT false  -- 020: browse/community "Stays & transport" rule
 );
 -- Seeded (002_seed.sql): restaurant, cafe, bar, sight, activity, shop, lodging, other
+-- Seeded (020): airport, train_station, car_rental, transport — is_checkpoint = true
+--   (along with lodging). is_checkpoint categories are held back from the LLM
+--   (except lodging), excluded from plan candidates/wishlist pickers, and
+--   sectioned separately on the Wander List / Visited / Community surfaces.
 
 -- country_code (ISO-3166 alpha-2) → macro-region (UN M49 subregion). Reference
 -- data seeded in 006; read backend-only to tag places/trips with a region.
@@ -57,23 +62,33 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_trips (
 );
 -- idx_ts_trips_user (user_id)
 
+-- ⚠ FROZEN (020): checkpoints unified into place + scrap + role-bearing
+-- scrap_trips membership. Every row was backfilled by 020 (see
+-- migrated_membership_id); NO code reads or writes this table anymore. Kept as
+-- a rollback backup through the soak; DROPPED by 021 (contract phase).
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_anchors (
-  id                 UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
-  trip_id            UUID             NOT NULL REFERENCES public.travelscrapbook_trips(id) ON DELETE CASCADE,
-  role               TEXT             NOT NULL CHECK (role IN ('start', 'end', 'stay', 'travel')),  -- travel = mid-trip leg (012)
-  label              TEXT             NOT NULL,
-  query              TEXT             NOT NULL,
-  lat                DOUBLE PRECISION,
-  lng                DOUBLE PRECISION,
-  geocode_confidence TEXT             NOT NULL DEFAULT 'none'
+  id                     UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id                UUID             NOT NULL REFERENCES public.travelscrapbook_trips(id) ON DELETE CASCADE,
+  role                   TEXT             NOT NULL CHECK (role IN ('start', 'end', 'stay', 'travel')),
+  label                  TEXT             NOT NULL,
+  query                  TEXT             NOT NULL,
+  lat                    DOUBLE PRECISION,
+  lng                    DOUBLE PRECISION,
+  city                   TEXT,
+  region                 TEXT,
+  country                TEXT,
+  country_code           TEXT,
+  maps_url               TEXT,
+  geocode_confidence     TEXT             NOT NULL DEFAULT 'none'
     CHECK (geocode_confidence IN ('high', 'medium', 'low', 'none')),
-  type               TEXT             -- start/end/travel: airport | train_station | car_rental | other
+  type                   TEXT
     CHECK (type IS NULL OR type IN ('airport', 'train_station', 'car_rental', 'other')),
-  stay_date          DATE,            -- stay only: a check-in day within the trip's date range
-  stay_end_date      DATE,            -- stay only: check-out day (009)
-  anchor_date        DATE,            -- start: arrival; end: departure; travel: leg day (009/012)
-  anchor_time        TIME,            -- optional; NULL = all-day point marker (009)
-  created_at         TIMESTAMPTZ      NOT NULL DEFAULT now()
+  stay_date              DATE,
+  stay_end_date          DATE,
+  anchor_date            DATE,
+  anchor_time            TIME,
+  created_at             TIMESTAMPTZ      NOT NULL DEFAULT now(),
+  migrated_membership_id UUID             -- 020 backfill marker → scrap_trips.id
 );
 -- idx_ts_anchors_trip (trip_id)
 -- idx_ts_anchors_endpoint UNIQUE (trip_id, role) WHERE role IN ('start', 'end')
@@ -185,20 +200,54 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scraps (
 -- Scrap ↔ trip membership (013): a place's presence on one trip, carrying that
 -- trip's status + route position + timeline slot. Absence of a row = not in the
 -- trip. Deleting the scrap OR the trip cascades the membership (and its vibes).
+--
+-- Since 020 a membership is either a PLAN (role NULL — the original meaning)
+-- or a CHECKPOINT (role start|end|stay|travel — what travelscrapbook_anchors
+-- used to be). One trip element model: plan_date/plan_time[/plan_end_date] on
+-- both, with role selecting the timeline/route behavior. The trip bundle
+-- synthesizes the legacy flat "anchors" array from role-bearing rows. Date
+-- mapping for checkpoints: stay → plan_date=check-in, plan_end_date=check-out;
+-- start/end/travel → plan_date(+plan_time)=the marker day/time.
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trips (
   id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   scrap_id       UUID        NOT NULL REFERENCES public.travelscrapbook_scraps(id) ON DELETE CASCADE,
   trip_id        UUID        NOT NULL REFERENCES public.travelscrapbook_trips(id)  ON DELETE CASCADE,
   status         TEXT        NOT NULL DEFAULT 'approved'
     CHECK (status IN ('staged', 'approved')),
-  route_position INTEGER,
+  role           TEXT                              -- 020: NULL = plan; else checkpoint role
+    CHECK (role IS NULL OR role IN ('start', 'end', 'stay', 'travel')),
+  route_position INTEGER,                          -- plans only (route writes filter role IS NULL)
   plan_date      DATE,
   plan_time      TIME,
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (scrap_id, trip_id)
+  plan_end_date  DATE,                             -- 020: stay check-out (>= plan_date)
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- CHECK ts_scrap_trips_end_after_start (plan_end_date >= plan_date when both set)
+-- idx_ts_scrap_trips_plan_unique UNIQUE (scrap_id, trip_id) WHERE role IS NULL
+--   (020: replaces the old UNIQUE(scrap_id, trip_id) — the same airport can be
+--    start AND end, the same hotel two separate stays. Because it's PARTIAL,
+--    PostgREST upserts can't arbitrate on it: plan inserts go through the
+--    travelscrapbook_add_plan_memberships RPC.)
+-- idx_ts_scrap_trips_endpoint UNIQUE (trip_id, role) WHERE role IN ('start','end')
+--   (one start + one end per trip — moved from the anchors table)
+-- idx_ts_scrap_trips_trip_checkpoints (trip_id) WHERE role IS NOT NULL
 -- idx_ts_scrap_trips_trip (trip_id, status), idx_ts_scrap_trips_scrap (scrap_id)
 -- idx_ts_scrap_trips_trip_plan_date (trip_id, plan_date)
+
+-- Sticky-resolved suggestions (018): once the user resolves a suggestion (keeps
+-- it then removes it, or removes it outright), this durable marker keeps the
+-- candidates panel from re-suggesting the pair. Survives membership deletion (a
+-- scrap_trips row is hard-deleted on removal). Written on every membership
+-- removal (plan_routes.unassign_scrap / set_scrap_trips); excluded by the
+-- candidates query in travelscrapbook_trip_bundle + list_trip_candidates.
+CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trip_dismissals (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  scrap_id   UUID        NOT NULL REFERENCES public.travelscrapbook_scraps(id) ON DELETE CASCADE,
+  trip_id    UUID        NOT NULL REFERENCES public.travelscrapbook_trips(id)  ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (scrap_id, trip_id)
+);
+-- idx_ts_scrap_trip_dismissals_trip (trip_id)
 
 -- Trip sharing: the owner stays on trips.user_id; everyone else is a row here.
 -- role = viewer (read + vibe) | collaborator (read + vibe + add places).

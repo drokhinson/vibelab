@@ -13,8 +13,8 @@ stay/travel anchor) on that trip instead, with its dates filled in.
 """
 
 import logging
+from dataclasses import replace
 from typing import Any, Optional
-from urllib.parse import quote
 
 from db import get_supabase
 
@@ -27,15 +27,39 @@ from ..constants import (
     MembershipStatus,
     SourceStatus,
 )
-from . import llm, nominatim, places, scraper
+from . import checkpoints, gmaps, llm, nominatim, places, scraper
+from .places import build_maps_url
 
 logger = logging.getLogger("travel_scrapbook.enrichment")
 
 
-def build_maps_url(place_name: str, city: Optional[str], country: Optional[str]) -> str:
-    """Google Maps search link — a plain URL, no API key involved."""
-    parts = [place_name] + [p for p in (city, country) if p]
-    return "https://www.google.com/maps/search/?api=1&query=" + quote(", ".join(parts))
+def _pin_name(geo: Optional[nominatim.GeocodeResult]) -> str:
+    """A display name for a Maps pin that carried coords but no place name."""
+    if geo:
+        if geo.city:
+            return geo.city
+        if geo.display_name:
+            return geo.display_name.split(",")[0].strip() or "Pinned location"
+    return "Pinned location"
+
+
+def _maps_extraction(mp: gmaps.MapsPlace) -> Optional[llm.PlaceExtraction]:
+    """Build a PlaceExtraction straight from a parsed Google Maps URL — no LLM.
+    The coordinates ride along so _materialize_place reverse-geocodes the exact
+    pin rather than forward-geocoding a re-guessed query."""
+    if mp.lat is None and not mp.name:
+        return None
+    return llm.PlaceExtraction(
+        place_name=mp.name,
+        city=None,
+        country=None,
+        category="other",
+        geocode_query=mp.name if mp.lat is None else None,
+        confident=True,
+        lat=mp.lat,
+        lng=mp.lng,
+        maps_url=mp.expanded_url,
+    )
 
 
 async def _geocode_with_fallback(
@@ -67,13 +91,22 @@ async def _geocode_with_fallback(
 
 
 def _load_category_slugs(sb) -> list[str]:
+    """Category slugs offered to the LLM. Checkpoint-only categories (020,
+    via the cached checkpoints.checkpoint_category_slugs set) are held back so
+    Gemini can't misfile a sight as "transport"; lodging stays in, since hotel
+    listicles legitimately produce lodging scraps."""
     rows = (
         sb.table("travelscrapbook_categories")
         .select("slug")
         .order("sort_order")
         .execute()
     )
-    return [r["slug"] for r in (rows.data or [])] or ["other"]
+    cp_slugs = checkpoints.checkpoint_category_slugs(sb)
+    slugs = [
+        r["slug"] for r in (rows.data or [])
+        if r["slug"] not in cp_slugs or r["slug"] == "lodging"
+    ]
+    return slugs or ["other"]
 
 
 def _user_has_scrap_for_place(sb, user_id: str, place_id: str) -> bool:
@@ -94,8 +127,26 @@ async def _materialize_place(
     extraction: llm.PlaceExtraction,
 ) -> None:
     """One extraction → deduped place + source link (+ scrap if new to the user)."""
-    geo, confidence = await _geocode_with_fallback(extraction)
-    maps_url = build_maps_url(extraction.place_name, extraction.city, extraction.country)
+    if extraction.lat is not None and extraction.lng is not None:
+        # A Google Maps pin: reverse-geocode the exact point for city/region/
+        # country, but keep the URL's coordinates as the authoritative pin.
+        geo = await nominatim.reverse(extraction.lat, extraction.lng)
+        geo = (
+            replace(geo, lat=extraction.lat, lng=extraction.lng)
+            if geo
+            else nominatim.GeocodeResult(
+                lat=extraction.lat, lng=extraction.lng, display_name=""
+            )
+        )
+        confidence = GeocodeConfidence.HIGH
+    else:
+        geo, confidence = await _geocode_with_fallback(extraction)
+
+    if not extraction.place_name:
+        extraction = replace(extraction, place_name=_pin_name(geo))
+    maps_url = extraction.maps_url or build_maps_url(
+        extraction.place_name, extraction.city, extraction.country
+    )
 
     place, _created = places.find_or_create_place(
         sb, source["user_id"], extraction, geo, confidence, maps_url
@@ -149,54 +200,80 @@ async def _materialize_place(
 async def _materialize_checkpoint(
     sb, source: dict[str, Any], booking: llm.BookingExtraction
 ) -> bool:
-    """A booking link captured with a trip context becomes a checkpoint (a
-    stay/travel anchor) on that trip, dates filled in from the page. Without a
-    trip there is nowhere to hang it — the caller falls back to the place flow.
-    Re-capturing the same booking updates the existing checkpoint in place.
-    Returns True when a checkpoint row was written."""
+    """A booking link captured with a trip context becomes a checkpoint on that
+    trip: a place + scrap (deduped like any capture, so it also shows on the
+    Wander List under Stays & transport) + a role-bearing membership with the
+    dates filled in from the page (020). Without a trip there is nowhere to
+    hang the role — the caller falls back to the place flow, which still files
+    the lodging/transport place itself. Re-capturing the same booking updates
+    the existing checkpoint's dates (place dedupe replaces the old label
+    matching). Returns True when a checkpoint membership was written."""
     trip_id = source.get("trip_hint_id")
     if not trip_id:
         return False
 
     role = AnchorRole.STAY if booking.kind == BookingKind.STAY else AnchorRole.TRAVEL
-    query = booking.location or booking.label
-    geo = await nominatim.geocode(query)
-    row: dict[str, Any] = {
-        "trip_id": trip_id,
-        "role": role,
-        "label": booking.label,
-        "query": query,
-        "lat": geo.lat if geo else None,
-        "lng": geo.lng if geo else None,
-        "geocode_confidence": GeocodeConfidence.HIGH if geo else GeocodeConfidence.NONE,
-    }
-    if role == AnchorRole.STAY:
-        row.update({
-            "stay_date": booking.start_date,
-            "stay_end_date": booking.end_date,
-        })
-    else:
-        row.update({
-            "type": booking.transport_type or AnchorType.OTHER,
-            "anchor_date": booking.start_date,
-            "anchor_time": booking.time,
-        })
+    category = checkpoints.category_for(
+        role, booking.transport_type or AnchorType.OTHER
+    )
+    place, scrap = await checkpoints.materialize_checkpoint_scrap(
+        sb, source["user_id"],
+        label=booking.label,
+        category=category,
+        query=booking.location or booking.label,
+    )
+    # The booking URL is how the user stumbled on this place — attach it, same
+    # as the ordinary place flow does.
+    sb.table("travelscrapbook_place_sources").upsert(
+        {"place_id": place["id"], "source_id": source["id"]},
+        on_conflict="place_id,source_id",
+        ignore_duplicates=True,
+    ).execute()
 
+    if role == AnchorRole.STAY:
+        dates: dict[str, Any] = {
+            "plan_date": booking.start_date,
+            "plan_end_date": booking.end_date,
+        }
+    else:
+        dates = {
+            "plan_date": booking.start_date,
+            "plan_time": booking.time,
+        }
+
+    # Re-capture matching, in legacy spirit: the same booking (same label) on
+    # this trip updates its checkpoint in place — including REPOINTING to a new
+    # place when the property moved beyond the dedupe radius — instead of
+    # stacking a second stay. Match by scrap OR by the booking label's
+    # normalized name among this role's checkpoints.
+    label_norm = places.normalize_place_name(booking.label)
     existing = (
-        sb.table("travelscrapbook_anchors")
-        .select("id, label")
+        sb.table("travelscrapbook_scrap_trips")
+        .select("id, scrap_id, travelscrapbook_scraps(place_id, "
+                "travelscrapbook_places(name_normalized))")
         .eq("trip_id", trip_id)
         .eq("role", role)
         .execute()
     ).data or []
     match = next(
-        (a for a in existing if (a.get("label") or "").casefold() == booking.label.casefold()),
+        (m for m in existing if m["scrap_id"] == scrap["id"]
+         or ((m.get("travelscrapbook_scraps") or {}).get("travelscrapbook_places") or {})
+            .get("name_normalized") == label_norm),
         None,
     )
     if match:
-        sb.table("travelscrapbook_anchors").update(row).eq("id", match["id"]).execute()
+        sb.table("travelscrapbook_scrap_trips").update({
+            "scrap_id": scrap["id"],   # repoint if the booking's place changed
+            **dates,
+        }).eq("id", match["id"]).execute()
     else:
-        sb.table("travelscrapbook_anchors").insert(row).execute()
+        sb.table("travelscrapbook_scrap_trips").insert({
+            "scrap_id": scrap["id"],
+            "trip_id": trip_id,
+            "role": role,
+            "status": MembershipStatus.APPROVED,
+            **dates,
+        }).execute()
     return True
 
 
@@ -216,6 +293,25 @@ async def process_source(source_id: str) -> None:
 
     update: dict[str, Any] = {}
     try:
+        # 0. Google Maps links parse to themselves — the URL already names the
+        #    place and encodes its exact pin, so skip the page fetch + LLM
+        #    (which re-guesses from scraped text and can drift to a different
+        #    location). Fall through to the normal path if parsing yields nothing.
+        if gmaps.is_maps_url(url):
+            mp = await gmaps.parse_maps_url(url)
+            extraction = _maps_extraction(mp) if mp else None
+            if extraction is not None:
+                try:
+                    await _materialize_place(sb, source, extraction)
+                    update.update({"status": SourceStatus.READY, "error_kind": None})
+                except Exception:
+                    logger.exception("source %s: failed to materialize maps pin", source_id)
+                    update.update({
+                        "status": SourceStatus.FAILED,
+                        "error_kind": EnrichErrorKind.INTERNAL,
+                    })
+                return
+
         # 1. Fetch the page — degradable. Blocked/unreachable pages still get
         #    a URL-only LLM pass (slugs + share-sheet text often name places).
         page: Optional[scraper.PageContent] = None
