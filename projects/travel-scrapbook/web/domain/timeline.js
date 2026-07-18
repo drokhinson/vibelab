@@ -5,6 +5,11 @@
 // tab and every schedule change instant — zero network. This port is the
 // live implementation for the web app; keep it in step with the Python
 // service (which still backs GET /trips/{id}/timeline for other clients).
+//
+// This produces the day SCAFFOLD only (days + markers + the unscheduled pile).
+// Route ordering, auto-placement, and drive/walk legs layer on top in
+// domain/route-plan.js — a web-only module with no backend twin. Keep THIS port
+// mirroring timeline.py; put any web-only route behaviour in route-plan.js.
 'use strict';
 
 (function () {

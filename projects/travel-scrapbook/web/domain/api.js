@@ -238,15 +238,22 @@
     /** Day-by-day timeline: days with markers + scheduled plans, and unscheduled plans with slot suggestions. */
     tripTimeline: (tripId) => call(`/trips/${tripId}/timeline`),
 
-    optimizeRoute: (tripId, body) => call(`/trips/${tripId}/route/optimize`, { method: 'POST', body: body || {} }),
-    /** @param {{date?: string}} [params] Optional single-day (YYYY-MM-DD) filter. */
-    exportMapsLinks: (tripId, params = {}) => call(`/trips/${tripId}/export/maps-links${qs(params)}`),
-    /** @param {{date?: string}} [params] @returns {Promise<Blob>} */
-    exportCsv: (tripId, params = {}) => call(`/trips/${tripId}/export/csv${qs(params)}`),
-    /** @param {{date?: string}} [params] @returns {Promise<Blob>} */
-    exportMarkdown: (tripId, params = {}) => call(`/trips/${tripId}/export/markdown${qs(params)}`),
-    /** @param {{date?: string}} [params] @returns {Promise<Blob>} */
-    exportKml: (tripId, params = {}) => call(`/trips/${tripId}/export/kml${qs(params)}`),
+    // Exports: `plan` (the client's computed itinerary — [{scrap_id, plan_date}]
+    // in order) is POSTed so auto-placed plans export in the right day/order;
+    // `date` narrows to one day (server filters the plan by it). Without a plan
+    // it's a plain GET on DB order (other clients).
+    /** @param {{date?: string, plan?: Array}} [o] @returns {Promise<{legs: MapsLeg[]}>} */
+    exportMapsLinks: (tripId, { date, plan } = {}) =>
+      call(`/trips/${tripId}/export/maps-links${qs(date ? { date } : {})}`, plan ? { method: 'POST', body: { plan } } : {}),
+    /** @param {{date?: string, plan?: Array}} [o] @returns {Promise<Blob>} */
+    exportCsv: (tripId, { date, plan } = {}) =>
+      call(`/trips/${tripId}/export/csv${qs(date ? { date } : {})}`, plan ? { method: 'POST', body: { plan } } : {}),
+    /** @param {{date?: string, plan?: Array}} [o] @returns {Promise<Blob>} */
+    exportMarkdown: (tripId, { date, plan } = {}) =>
+      call(`/trips/${tripId}/export/markdown${qs(date ? { date } : {})}`, plan ? { method: 'POST', body: { plan } } : {}),
+    /** @param {{date?: string, plan?: Array}} [o] @returns {Promise<Blob>} */
+    exportKml: (tripId, { date, plan } = {}) =>
+      call(`/trips/${tripId}/export/kml${qs(date ? { date } : {})}`, plan ? { method: 'POST', body: { plan } } : {}),
 
     // ── Trip sharing ──────────────────────────────────────────────────────
     /** @returns {Promise<{members: TripMember[]}>} */

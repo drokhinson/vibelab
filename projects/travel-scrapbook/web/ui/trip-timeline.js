@@ -1,35 +1,25 @@
 // ui/trip-timeline.js — render functions for the trip's day-by-day timeline.
+// The timeline IS the route: every geocoded plan appears on the day the route
+// suggestion places it (domain/route-plan.js), with the distance + estimated
+// drive/walk time shown between consecutive stops. Plans the user hand-moves get
+// a saved date and an anchor (pin) marker; the rest float, auto-placed (sparkles)
+// and re-flow whenever the trip changes. A summary line up top gives the whole
+// route's rough distance. Plans with no map pin collect in "Anytime".
+//
 // The timeline is bookended by the trip's endpoints: Arrival on top and
-// Departure at the bottom (ghost "+ Arrival"/"+ Departure" buttons until each
-// is set, then the anchor with an edit affordance). Day cards sit between:
-// stay/travel markers first (chronological), then plans in ROUTE ORDER (the
-// best point-to-point driving sequence from "Sort my route", not by priority)
-// — user-scheduled plans render solid; unscheduled plans auto-place
-// into their SUGGESTED day as dashed rows until the user pins or moves them.
-// Plans with no suggestion collect in "Anytime".
+// Departure at the bottom (ghost "+ Arrival"/"+ Departure" until each is set).
+// Day cards sit between: stay/travel markers first (chronological), then plan
+// rows interleaved with leg connectors. A "+ Checkpoint" affordance sits
+// mid-timeline; each checkpoint marker carries an edit pencil.
 //
 // Every plan row is gesture-driven (see widgets/timeline-gestures.js):
-//   • a leading checkbox cycles the outcome — clear → Visited → Skipped → clear,
-//     greying + tagging the place;
-//   • swipe RIGHT opens the day picker (schedule);
-//   • swipe LEFT unschedules a scheduled plan (removes it from the timeline);
-//   • press-and-hold picks the card up to drop on any day.
-// A "+ Checkpoint" affordance (stay or travel leg) sits mid-timeline, and
-// every checkpoint marker carries an edit pencil.
-// Render-only; trip-view binds the buttons + wires TimelineGestures.
+//   • the leading checkbox cycles the outcome — clear → Visited → Skipped;
+//   • tapping the title opens the plan popup (notes + day/time);
+//   • swipe RIGHT anchors it to a day (day picker), swipe LEFT un-anchors it;
+//   • press-and-hold the right-hand grip picks the card up to drop on any day.
+// Row rendering lives in ui/timeline-row.js. Render-only; trip-view binds the
+// buttons + wires TimelineGestures.
 'use strict';
-
-// The three checkbox states. null = clear (unmarked); the row cycles in order.
-const TL_OUTCOME_META = {
-  visited: { icon: 'square-check', cls: 'is-visited', tag: 'Visited' },
-  skipped: { icon: 'square-x', cls: 'is-skipped', tag: 'Skipped' },
-};
-
-function _tlOutcome(scrap) {
-  if (scrap.visited_at) return 'visited';
-  if (scrap.skipped_at) return 'skipped';
-  return null;
-}
 
 // "City, Country" for a checkpoint, from its resolved location fields (empty
 // when the anchor has neither).
@@ -54,10 +44,6 @@ function _tlDay(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {
     weekday: 'short', month: 'short', day: 'numeric',
   });
-}
-
-function _tlTime(t) {
-  return t ? t.slice(0, 5) : null;
 }
 
 // Arrival / Departure bookend: a ghost add button until the anchor exists,
@@ -108,135 +94,47 @@ function _tlMarkerRow(m, { canWrite = true } = {}) {
     </div>`;
 }
 
-// The leading checkbox. Cycles clear → Visited → Skipped → clear (the actual
-// cycle lives in trip-view; this just paints the current state). Read-only
-// viewers see the state as a static mark, no button.
-function _tlCheckbox(scrap, canWrite) {
-  const outcome = _tlOutcome(scrap);
-  const state = outcome || 'clear';
-  const icon = outcome ? TL_OUTCOME_META[outcome].icon : 'square';
-  const label = outcome === 'visited'
-    ? 'Visited — tap to mark skipped'
-    : outcome === 'skipped'
-      ? 'Skipped — tap to clear'
-      : 'Tap to mark visited';
-  if (!canWrite) {
-    return `<span class="tl-check tl-check--${state} tl-check--ro" aria-hidden="true"><i data-lucide="${icon}"></i></span>`;
-  }
-  return `
-    <button class="tl-check tl-check--${state}" data-action="cycle-outcome"
-            data-scrap-id="${escapeAttr(scrap.id)}" aria-label="${label}" title="${label}">
-      <i data-lucide="${icon}"></i>
-    </button>`;
-}
-
-/**
- * A plan row, wrapped in the swipe/drag scaffold TimelineGestures binds to.
- * @param {object} scrap
- * @param {{canWrite?: boolean, mode?: 'scheduled'|'suggested'|'anytime'}} opts
- *   scheduled — solid, on a day; swipe-left unschedules.
- *   suggested — dashed, auto-placed near a marker; carries a "keep here" pin.
- *   anytime   — dashed, no day suggestion.
- */
-function _tlPlanRow(scrap, { canWrite = true, mode = 'scheduled' } = {}) {
-  const time = _tlTime(scrap.plan_time);
-  const booked = mode === 'scheduled' && scrap.rating === 'booked' && !!time;
-  const outcome = _tlOutcome(scrap);
-  const meta = outcome ? TL_OUTCOME_META[outcome] : null;
-  const sug = scrap.suggestion;
-  const rowCls = [
-    'tl-row', 'tl-row--plan',
-    mode !== 'scheduled' ? 'tl-row--suggested' : '',
-    booked ? 'tl-row--booked' : '',
-    meta ? meta.cls : '',
-    canWrite ? 'tl-row--draggable' : '',
-  ].filter(Boolean).join(' ');
-  return `
-    <div class="tl-swipe" data-scrap-id="${escapeAttr(scrap.id)}" data-plan-date="${escapeAttr(scrap.plan_date || '')}">
-      <div class="tl-swipe__action tl-swipe__action--schedule" aria-hidden="true">
-        <i data-lucide="calendar-clock"></i><span>Schedule</span>
-      </div>
-      ${mode === 'scheduled' ? `
-      <div class="tl-swipe__action tl-swipe__action--remove" aria-hidden="true">
-        <span>Off timeline</span><i data-lucide="calendar-x"></i>
-      </div>` : ''}
-      <div class="${rowCls}">
-        ${_tlCheckbox(scrap, canWrite)}
-        <span class="tl-row__time">${time ? escapeHtml(time) : ''}</span>
-        <span class="tl-row__label">${escapeHtml(scrap.place_name || 'Saved place')}
-          ${booked ? '<span class="tl-booked-badge">Booked</span>' : ''}
-          ${mode === 'suggested' && sug && !outcome ? `
-            <span class="tl-suggested-badge" title="Near ${escapeAttr(sug.marker_label)} (${formatKm(sug.distance_km)})">
-              Suggested · near ${escapeHtml(sug.marker_label)}</span>` : ''}
-          ${meta ? `<span class="tl-outcome-badge tl-outcome-badge--${outcome}">${meta.tag}</span>` : ''}</span>
-        ${mode === 'suggested' && canWrite && sug && !outcome ? `
-          <button class="tl-row__btn tl-row__btn--pin" data-action="slot"
-                  data-scrap-id="${escapeAttr(scrap.id)}" data-date="${escapeAttr(sug.suggested_date)}"
-                  aria-label="Keep ${escapeAttr(scrap.place_name || 'plan')} on Day ${sug.day_number}" title="Keep it here">
-            <i data-lucide="pin"></i>
-          </button>` : ''}
-        ${canWrite ? '<span class="tl-row__grip" aria-hidden="true" title="Hold to move to another day"><i data-lucide="grip-vertical"></i></span>' : ''}
-      </div>
-    </div>`;
-}
-
-function _tlAnytime(plans, { canWrite = true } = {}) {
-  if (!plans.length) return '';
-  const sorted = [...plans].sort(_tlPlanOrder);
+// Plans with no map pin (or an anchored date outside the trip's days) — the
+// route can't place them. On an undated trip, this instead holds the whole route
+// in best order (there are no day cards yet). Each row keeps its leg connector.
+function _tlAnytime(rows, { canWrite = true, noDates = false } = {}) {
+  if (!rows.length) return '';
+  const title = noDates ? 'Your route' : 'Anytime';
+  const sub = noDates
+    ? 'Give the trip dates (or date a checkpoint) and these spread across days — for now, here’s the best order.'
+    : 'No map pin yet, so the route can’t place these. Add a Maps link in the place’s editor to drop a pin.';
   return `
     <div class="sticker-card washi washi--lavender" style="padding-top:1.2rem;margin-top:1.1rem;">
-      <h2 style="font-size:1.4rem;margin:0;">Anytime</h2>
-      <p class="scrap-card__sub">Plans without a day yet — swipe right (or hold to drop on a day) to slot them in.</p>
+      <h2 style="font-size:1.4rem;margin:0;">${title}</h2>
+      <p class="scrap-card__sub">${sub}</p>
       <div class="tl-day__rows" style="margin-top:0.7rem;">
-        ${sorted.map((s) => _tlPlanRow(s, { canWrite, mode: 'anytime' })).join('')}
+        ${rows.map((r) => `${_tlLegRow(r.leg)}${_tlPlanRow(r.scrap, { canWrite, placement: r.placement })}`).join('')}
       </div>
     </div>`;
-}
-
-// Per-day plan order: finished (visited/skipped) sink to the bottom, then by
-// ROUTE ORDER — the best point-to-point driving sequence from "Sort my route"
-// (route_position) — so the day reads as a drivable itinerary, not a priority
-// ranking. Plans not yet routed (no route_position) fall to the end; timed-
-// before-untimed, time, and name break any remaining ties.
-function _tlPlanOrder(a, b) {
-  const done = (s) => (s.visited_at || s.skipped_at ? 1 : 0);
-  const pos = (s) => (s.route_position == null ? Number.MAX_SAFE_INTEGER : s.route_position);
-  return (done(a) - done(b)) ||
-    (pos(a) - pos(b)) ||
-    ((a.plan_time == null) - (b.plan_time == null)) ||
-    String(a.plan_time || '').localeCompare(String(b.plan_time || '')) ||
-    String(a.place_name || '').localeCompare(String(b.place_name || ''));
 }
 
 /**
  * @param {object} trip - Trip bundle (anchors ride on it).
- * @param {object|null} data - TimelineResponse (null = loading).
+ * @param {object|null} itinerary - RoutePlan.buildItinerary output (null = loading).
  * @param {{canWrite?: boolean}} opts
  */
-function renderTripTimeline(trip, data, { canWrite = true } = {}) {
-  if (!data) {
+function renderTripTimeline(trip, itinerary, { canWrite = true } = {}) {
+  if (!itinerary) {
     return `<div class="sticker-card shimmer" style="height:140px;margin-top:1rem;"></div>`;
   }
-  const days = data.days || [];
-  const unscheduled = data.unscheduled || [];
-  const dayDates = new Set(days.map((d) => d.date));
-  // Auto-place suggested plans into their day; the rest go to Anytime.
-  const suggestedByDay = {};
-  const anytime = [];
-  for (const s of unscheduled) {
-    if (s.suggestion && dayDates.has(s.suggestion.suggested_date)) {
-      (suggestedByDay[s.suggestion.suggested_date] ??= []).push(s);
-    } else {
-      anytime.push(s);
-    }
-  }
-  Object.values(suggestedByDay).forEach((list) =>
-    list.sort((a, b) => a.suggestion.distance_km - b.suggestion.distance_km));
+  const days = itinerary.days || [];
+  const anytime = itinerary.anytime || [];
+  const noDates = itinerary.reason === 'no_dates';
+
+  const summary = itinerary.stopCount >= 2 ? `
+    <p class="tl-route-summary"><i data-lucide="route"></i>
+      <span>Route ≈ ${escapeHtml(formatKm(itinerary.totalKm))} · ${itinerary.stopCount} stops · times are estimates</span>
+    </p>` : '';
 
   const dayCards = days.map((d, i) => {
     // Arrival/departure live in the bookends, not the day rows; stays and
-    // mid-trip travel legs render inside their day, chronological (structural
-    // anchors of the day). Plans then follow, in driving order (route_position).
+    // mid-trip travel legs render inside their day, chronological. Plan rows then
+    // follow in route order, each preceded by its leg connector.
     const markerRows = d.markers
       .filter((m) => m.kind !== 'arrival' && m.kind !== 'departure')
       .slice()
@@ -244,11 +142,9 @@ function renderTripTimeline(trip, data, { canWrite = true } = {}) {
         ((a.time == null) - (b.time == null)) ||
         String(a.time || '').localeCompare(String(b.time || '')))
       .map((m) => _tlMarkerRow(m, { canWrite }));
-    const planRows = [...d.plans].sort(_tlPlanOrder)
-      .map((p) => _tlPlanRow(p, { canWrite, mode: 'scheduled' }));
-    const suggested = (suggestedByDay[d.date] || [])
-      .map((s) => _tlPlanRow(s, { canWrite, mode: 'suggested' }));
-    const all = [...markerRows, ...planRows, ...suggested];
+    const planRows = d.rows.map((r) =>
+      `${_tlLegRow(r.leg)}${_tlPlanRow(r.scrap, { canWrite, placement: r.placement })}`);
+    const all = [...markerRows, ...planRows];
     return `
       <div class="sticker-card tl-day" data-day-date="${escapeAttr(d.date)}" data-day-number="${d.day_number}" style="--i:${i};">
         <div class="tl-day__head">
@@ -260,9 +156,9 @@ function renderTripTimeline(trip, data, { canWrite = true } = {}) {
       </div>`;
   }).join('');
 
-  const noDates = data.reason === 'no_dates';
   return `
     <div style="display:flex;flex-direction:column;gap:0.9rem;margin-top:1rem;">
+      ${summary}
       ${_tlEndpoint(trip, 'start', { canWrite })}
       ${dayCards}
       ${noDates ? `
@@ -276,6 +172,6 @@ function renderTripTimeline(trip, data, { canWrite = true } = {}) {
         </button>` : ''}
       ${_tlEndpoint(trip, 'end', { canWrite })}
     </div>
-    ${_tlAnytime(anytime, { canWrite })}
+    ${_tlAnytime(anytime, { canWrite, noDates })}
   `;
 }
