@@ -98,27 +98,11 @@
 --               paginate, attach deduped source chips for the page only.
 --               Replaces a 2000-row fetch + Python aggregation.
 
--- travelscrapbook_set_route_positions(p_positions JSONB)
---   → VOID   (p_positions: [{"id": "<scrap_trip uuid>", "pos": 1}, ...])
---   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql
---   Called by:  (none — SUPERSEDED by travelscrapbook_set_route_plan in 017)
---   Purpose:    Persist an optimized route order in one UPDATE (was one per
---               stop). Left in place (non-destructive) but no longer called.
-
--- travelscrapbook_set_route_plan(p_trip_id UUID, p_rows JSONB)
---   → VOID   (p_rows: [{"id": "<scrap_trip uuid>", "pos": 1,
---                       "plan_date": "2026-04-02" | null}, ...])
---   Defined in: db/migrations/travelscrapbook/017_route_plan_rpc.sql
---   Called by:  shared-backend/routes/travel_scrapbook/route_routes.py
---               (optimize_route)
---   Purpose:    Persist the checkpoint-aware route order (route_position, all
---               rows) AND fill plan_date for unscheduled plans (timeline
---               placement) in one UPDATE. plan_date is written ONLY when the
---               incoming value is non-null AND the existing plan_date is NULL,
---               so hand-scheduled plans never move and re-runs are idempotent.
---               p_trip_id scopes the UPDATE; the route verifies write access.
---               Since 020 the UPDATE also requires role IS NULL — a route run
---               can never move a checkpoint membership.
+-- travelscrapbook_set_route_positions / travelscrapbook_set_route_plan
+--   DROPPED in db/migrations/travelscrapbook/022_drop_route_rpcs.sql. Route
+--   ordering is client-side now; the POST /route/optimize endpoint (the only
+--   caller of set_route_plan) was removed in the code-review cleanup, and
+--   set_route_positions had been dead since 017. No remaining callers.
 
 -- travelscrapbook_add_plan_memberships(p_rows JSONB,
 --                                      p_status TEXT DEFAULT 'approved')
