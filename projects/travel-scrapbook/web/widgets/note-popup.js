@@ -32,13 +32,13 @@ const NotePopup = {
     const textarea = modal.querySelector('#note-text');
     textarea.focus();
 
-    const save = async (notes) => {
-      try {
-        const updated = await window.api.updateScrap(scrap.id, { notes });
-        this.close();
-        toast(notes ? 'Note saved' : 'Note removed');
-        onSaved?.(updated);
-      } catch (err) { toast(err.message || 'Could not save the note', { error: true }); }
+    // Close + toast in the same frame the button is pressed; the caller persists
+    // optimistically (via ScrapDomain.saveNote) and surfaces any write error.
+    // `onSaved` receives the new note value (string, or null when cleared).
+    const save = (notes) => {
+      this.close();
+      toast(notes ? 'Note saved' : 'Note removed');
+      onSaved?.(notes);
     };
     modal.querySelector('#note-form').addEventListener('submit', (ev) => {
       ev.preventDefault();
