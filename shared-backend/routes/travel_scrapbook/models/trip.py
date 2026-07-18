@@ -163,31 +163,6 @@ class TripListResponse(BaseModel):
     trips: list[TripSummaryResponse]
 
 
-# ── Route optimization ────────────────────────────────────────────────────────
-
-class RouteOptimizeRequest(BaseModel):
-    scrap_ids: Optional[list[str]] = Field(
-        None, description="Restrict to these scraps; default = all geocoded scraps in the trip")
-    priority_only: bool = Field(
-        False, description="Route only booked / must-do plans")
-    include_visited: bool = Field(
-        False, description="Include places already marked visited (skipped by default)")
-
-
-class RouteLeg(BaseModel):
-    from_label: str
-    to_label: str
-    distance_km: float
-
-
-class RouteOptimizeResponse(BaseModel):
-    ordered_scraps: list[ScrapResponse]
-    legs: list[RouteLeg]
-    total_km: float
-    skipped_scrap_ids: list[str] = Field(
-        default_factory=list, description="Scraps without coordinates, left out of the route")
-
-
 # ── Exports ───────────────────────────────────────────────────────────────────
 
 class MapsLeg(BaseModel):

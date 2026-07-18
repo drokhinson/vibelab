@@ -5,8 +5,8 @@ place (identity), the user's scrap (their saved, visitable copy), and a
 travelscrapbook_scrap_trips membership whose ``role`` (start|end|stay|travel)
 marks it as a trip checkpoint. This module is the one place that maps between
 that storage and the legacy flat "anchor" shape every timeline/route consumer
-still reads (services/timeline.py, web/domain/timeline.js, route_planner,
-route-panel, trip-timeline, checkpoint-card — none of them changed).
+still reads (web/domain/timeline.js, trip-timeline, checkpoint-card — none of
+them changed).
 
 The category ↔ role/type mapping is the unification's type system: the
 transport mode (old anchor.type) is a property of the PLACE (its category);

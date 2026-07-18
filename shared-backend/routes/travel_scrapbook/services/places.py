@@ -120,59 +120,6 @@ def region_for_country_code(sb: Client, country_code: Optional[str]) -> Optional
         cache.set(CACHE_NS_REGIONS, "map", cached, REGIONS_TTL_SECONDS)
     return cached.get(country_code.lower())
 
-def geo_facets(
-    rows: list[dict[str, Any]],
-    *,
-    region: Optional[str] = None,
-    country: Optional[str] = None,
-) -> dict[str, list[str]]:
-    """Filter options for a set of geo rows (place_region / place_country /
-    place_city fields). All three levels are always populated so the filter
-    bar can show Region, Country, and City dropdowns side by side:
-
-    regions   — distinct regions across the whole set;
-    countries — distinct countries, narrowed to the selected region when one
-                is given, else across the whole set;
-    cities    — distinct cities, narrowed to the selected country (or, absent
-                one, the selected region) when given, else the whole set.
-    """
-    def norm(v: Optional[str]) -> str:
-        return (v or "").strip().lower()
-
-    regions = sorted({r["place_region"] for r in rows if r.get("place_region")})
-    countries = sorted({
-        r["place_country"] for r in rows
-        if r.get("place_country")
-        and (not region or norm(r.get("place_region")) == norm(region))
-    })
-    cities = sorted({
-        r["place_city"] for r in rows
-        if r.get("place_city")
-        and (not region or norm(r.get("place_region")) == norm(region))
-        and (not country or norm(r.get("place_country")) == norm(country))
-    })
-    return {"regions": regions, "countries": countries, "cities": cities}
-
-
-def geo_match(
-    row: dict[str, Any],
-    *,
-    region: Optional[str] = None,
-    country: Optional[str] = None,
-    city: Optional[str] = None,
-) -> bool:
-    """Case-insensitive equality filter on a row's geo fields; unset levels
-    always match."""
-    def eq(value: Optional[str], wanted: Optional[str]) -> bool:
-        return not wanted or (value or "").strip().lower() == wanted.strip().lower()
-
-    return (
-        eq(row.get("place_region"), region)
-        and eq(row.get("place_country"), country)
-        and eq(row.get("place_city"), city)
-    )
-
-
 # Tracking params stripped during URL normalization (never identity-bearing).
 _TRACKING_PARAMS = re.compile(r"^(utm_\w+|fbclid|gclid|igsh|igshid|si|ref|ref_src)$", re.I)
 

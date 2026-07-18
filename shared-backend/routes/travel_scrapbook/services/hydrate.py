@@ -9,7 +9,7 @@ attach each traveler's vibe, the "added by" owner, and the group consensus
 """
 
 from collections import Counter
-from typing import Any, Optional
+from typing import Any
 
 from supabase import Client
 

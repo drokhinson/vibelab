@@ -2,8 +2,7 @@
 
 Split by domain to stay under the ~300-line file budget:
   core.py      — profile, capture/sources, scraps, inbox
-  trip.py      — anchors, trips, route optimization, exports
-  timeline.py  — day-by-day timeline markers/days/suggestions
+  trip.py      — anchors, trips, exports
   community.py — cross-user community place pool
   social.py    — trip members, invitations, vibes
 
@@ -49,9 +48,6 @@ from .trip import (  # noqa: F401
     ExportRequest,
     MapsLeg,
     MapsLinksResponse,
-    RouteLeg,
-    RouteOptimizeRequest,
-    RouteOptimizeResponse,
     TripCreateRequest,
     TripListResponse,
     TripResponse,
@@ -63,13 +59,6 @@ from .community import (  # noqa: F401
     CommunityPlacesResponse,
     CommunitySaveRequest,
     CommunitySourceRef,
-)
-from .timeline import (  # noqa: F401
-    TimelineDay,
-    TimelineMarker,
-    TimelineResponse,
-    TimelineSuggestion,
-    UnscheduledPlan,
 )
 from .social import (  # noqa: F401
     InvitationResponse,

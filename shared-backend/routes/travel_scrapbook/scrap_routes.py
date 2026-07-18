@@ -66,21 +66,6 @@ def _hydrated_membership(sb, scrap_id: str, trip_id: str) -> ScrapResponse:
 
 
 @router.get(
-    "/scraps/{scrap_id}",
-    response_model=ScrapResponse,
-    status_code=200,
-    summary="Get one scrap",
-)
-async def get_scrap(
-    scrap_id: str = Path(..., description="Scrap UUID"),
-    user: CurrentUser = Depends(get_current_user),
-) -> ScrapResponse:
-    """Fetch a single scrap with its place and sources."""
-    sb = get_supabase()
-    return _hydrated_scrap(sb, get_owned_scrap(sb, scrap_id, user.user_id))
-
-
-@router.get(
     "/visited",
     response_model=VisitedPageResponse,
     status_code=200,
