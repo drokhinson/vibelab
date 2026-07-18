@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_categories (
   is_checkpoint BOOLEAN NOT NULL DEFAULT false  -- 020: browse/community "Stays & transport" rule
 );
 -- Seeded (002_seed.sql): restaurant, cafe, bar, sight, activity, shop, lodging, other
+-- Seeded (021): hike — trail imports (Komoot/AllTrails/Strava); non-checkpoint
 -- Seeded (020): airport, train_station, car_rental, transport — is_checkpoint = true
 --   (along with lodging). is_checkpoint categories are held back from the LLM
 --   (except lodging), excluded from plan candidates/wishlist pickers, and

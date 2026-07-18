@@ -3,7 +3,11 @@
 // .claude/rules/assets.md § Custom Images, Not Generic Emojis).
 'use strict';
 
-const KNOWN_CATEGORY_SPRITES = ['restaurant', 'cafe', 'bar', 'sight', 'activity', 'shop', 'lodging', 'other'];
+// Slugs match the category `icon` column (multi-word transport uses hyphens).
+const KNOWN_CATEGORY_SPRITES = [
+  'restaurant', 'cafe', 'bar', 'sight', 'activity', 'shop', 'lodging', 'hike', 'other',
+  'airport', 'train-station', 'car-rental', 'transport',
+];
 const KNOWN_COVER_SPRITES = ['plane', 'beach', 'mountain', 'city', 'food', 'roadtrip'];
 
 function categorySpritePath(iconSlug) {
