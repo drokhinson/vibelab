@@ -5,8 +5,8 @@
 'use strict';
 
 const RouteDomain = {
-  async mapsLinks(tripId, date) {
-    return window.api.exportMapsLinks(tripId, date ? { date } : {});
+  async mapsLinks(tripId, { date, plan } = {}) {
+    return window.api.exportMapsLinks(tripId, { date, plan });
   },
 
   // The download itself lives in ExportDomain so there's one code path for every

@@ -22,21 +22,18 @@ const ExportDomain = {
     return suffix ? `${base} - ${suffix}` : base;
   },
 
-  // A single day sends ?date=YYYY-MM-DD; whole-trip sends nothing.
-  _params(date) {
-    return date ? { date } : {};
+  // A single day passes ?date=YYYY-MM-DD; `plan` (the client's itinerary) is
+  // POSTed so auto-placed plans land in the file in the right day/order.
+  async downloadCsv(tripId, tripName, { date, suffix, plan } = {}) {
+    await this._saveBlob(await window.api.exportCsv(tripId, { date, plan }), `${this._stem(tripName, suffix)}.csv`);
   },
 
-  async downloadCsv(tripId, tripName, { date, suffix } = {}) {
-    await this._saveBlob(await window.api.exportCsv(tripId, this._params(date)), `${this._stem(tripName, suffix)}.csv`);
+  async downloadMarkdown(tripId, tripName, { date, suffix, plan } = {}) {
+    await this._saveBlob(await window.api.exportMarkdown(tripId, { date, plan }), `${this._stem(tripName, suffix)}.md`);
   },
 
-  async downloadMarkdown(tripId, tripName, { date, suffix } = {}) {
-    await this._saveBlob(await window.api.exportMarkdown(tripId, this._params(date)), `${this._stem(tripName, suffix)}.md`);
-  },
-
-  async downloadKml(tripId, tripName, { date, suffix } = {}) {
-    await this._saveBlob(await window.api.exportKml(tripId, this._params(date)), `${this._stem(tripName, suffix)}.kml`);
+  async downloadKml(tripId, tripName, { date, suffix, plan } = {}) {
+    await this._saveBlob(await window.api.exportKml(tripId, { date, plan }), `${this._stem(tripName, suffix)}.kml`);
   },
 };
 window.ExportDomain = ExportDomain;

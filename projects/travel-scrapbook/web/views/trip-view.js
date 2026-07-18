@@ -356,20 +356,21 @@ class TripView extends View {
       });
     });
     c.querySelector('#trip-download')?.addEventListener('click', () => {
-      // Mapped-pin counts per day (and trip-wide) drive the export scope
-      // picker: "points" = geocoded, non-visited plans, matching the exports.
-      // Deliberately over buildTimeline (persisted plan_date only), NOT the
-      // ephemeral route placement — the exports filter by plan_date server-side,
-      // so only hand-anchored plans land in a per-day file. The counts must tell
-      // that truth (an auto-placed plan won't appear in "Day 3.csv").
-      const tl = buildTimeline(trip, trip.anchors || [], trip.scraps || []);
-      const days = (tl.days || []).map((d) => ({
-        date: d.date,
-        day_number: d.day_number,
-        points: d.plans.filter((p) => p.lat != null && !p.visited_at).length,
-      }));
-      const allPoints = (trip.scraps || []).filter((s) => s.lat != null && !s.visited_at).length;
-      ExportMenu.open({ tripId: trip.id, tripName: trip.name, days, allPoints });
+      // Exports now reflect the FULL computed itinerary, not just persisted
+      // dates: we send the server a `plan` (every placed plan in route order,
+      // tagged with its computed day) so auto-placed plans land in the file on
+      // the right day, in the right order. Per-day pin counts come from the same
+      // itinerary so the scope picker matches what each file will contain.
+      const itin = RoutePlan.buildItinerary(trip, trip.anchors || [], trip.scraps || []);
+      const mapped = (rows) => rows.filter((r) => r.scrap.lat != null && !r.scrap.visited_at).length;
+      const plan = [];
+      const days = (itin.days || []).map((d) => {
+        d.rows.forEach((r) => plan.push({ scrap_id: r.scrap.id, plan_date: d.date }));
+        return { date: d.date, day_number: d.day_number, points: mapped(d.rows) };
+      });
+      (itin.anytime || []).forEach((r) => plan.push({ scrap_id: r.scrap.id, plan_date: null }));
+      const allPoints = days.reduce((n, d) => n + d.points, 0) + mapped(itin.anytime || []);
+      ExportMenu.open({ tripId: trip.id, tripName: trip.name, days, allPoints, plan });
     });
     c.querySelector('#trip-share')?.addEventListener('click', () => TripShare.open(trip, { isOwner }));
     c.querySelector('#trip-delete')?.addEventListener('click', async () => {

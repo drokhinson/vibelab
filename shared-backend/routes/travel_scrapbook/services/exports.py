@@ -80,14 +80,43 @@ def _place_maps_link(place: dict) -> Optional[str]:
     return None
 
 
+def _place_lines(p: dict, n: int) -> list[str]:
+    """One numbered place entry: heading + map link, meta, note, source."""
+    name = p.get("place_name") or "Stop"
+    link = _place_maps_link(p)
+    heading = f"{n}. **{name}**"
+    if link:
+        heading += f" — [map]({link})"
+    out = [heading]
+    meta = " · ".join(
+        m for m in (
+            (p.get("category") or "").replace("_", " ").title() or None,
+            p.get("geocode_display_name"),
+        ) if m
+    )
+    if meta:
+        out.append(f"   {meta}")
+    if p.get("notes"):
+        out.append(f"   > {p['notes']}")
+    src = p.get("sources") or []
+    if src:
+        out.append(f"   [{src[0].get('source_domain') or 'link'}]({src[0]['url']})")
+    out.append("")
+    return out
+
+
 def build_markdown(
-    trip: dict, places: list[dict], anchors: list[dict], day_label: str | None = None
+    trip: dict,
+    places: list[dict],
+    anchors: list[dict],
+    day_label: str | None = None,
+    day_groups: list[tuple[str, list[dict]]] | None = None,
 ) -> str:
-    """A human-readable Markdown itinerary: trip header, start/end anchors,
-    then every place in route order with its category, address, notes, and a
-    Google Maps link. `places` are hydrated scrap dicts in display order. When
-    `day_label` is set (a single-day export) it's appended to the H1 and the
-    trip's date range is dropped from the subtitle."""
+    """A human-readable Markdown itinerary: trip header, start/end anchors, then
+    the places. `places` are hydrated scrap dicts in display order. `day_label`
+    (single-day export) is appended to the H1 and drops the date range from the
+    subtitle. `day_groups` (a whole-trip plan export) renders one **## <day>**
+    section per day, numbered within the day, in the client's itinerary order."""
     title = trip.get("name") or "Trip"
     if day_label:
         title += f" — {day_label}"
@@ -108,30 +137,19 @@ def build_markdown(
     if end:
         lines.append(f"**End:** {end['label']}")
 
-    lines += ["", f"## Places ({len(places)})", ""]
-    if not places:
-        lines.append("_No places yet._")
-    for i, p in enumerate(places, 1):
-        name = p.get("place_name") or "Stop"
-        link = _place_maps_link(p)
-        heading = f"{i}. **{name}**"
-        if link:
-            heading += f" — [map]({link})"
-        lines.append(heading)
-        meta = " · ".join(
-            m for m in (
-                (p.get("category") or "").replace("_", " ").title() or None,
-                p.get("geocode_display_name"),
-            ) if m
-        )
-        if meta:
-            lines.append(f"   {meta}")
-        if p.get("notes"):
-            lines.append(f"   > {p['notes']}")
-        src = p.get("sources") or []
-        if src:
-            lines.append(f"   [{src[0].get('source_domain') or 'link'}]({src[0]['url']})")
-        lines.append("")
+    if day_groups is not None:
+        if not places:
+            lines += ["", "_No places yet._"]
+        for heading, group in day_groups:
+            lines += ["", f"## {heading}", ""]
+            for i, p in enumerate(group, 1):
+                lines += _place_lines(p, i)
+    else:
+        lines += ["", f"## Places ({len(places)})", ""]
+        if not places:
+            lines.append("_No places yet._")
+        for i, p in enumerate(places, 1):
+            lines += _place_lines(p, i)
 
     return "\n".join(lines).rstrip() + "\n"
 

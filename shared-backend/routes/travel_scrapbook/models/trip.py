@@ -198,3 +198,18 @@ class MapsLeg(BaseModel):
 
 class MapsLinksResponse(BaseModel):
     legs: list[MapsLeg]
+
+
+class ExportPlanItem(BaseModel):
+    """One placed plan in the client's computed itinerary: which scrap, on which
+    day (null = no day / "Anytime"). Order in the list IS the export order."""
+    scrap_id: str
+    plan_date: Optional[str] = None
+
+
+class ExportRequest(BaseModel):
+    """Optional body for the export endpoints. When present, `plan` is the
+    client's timeline itinerary — the authoritative order + per-plan day,
+    including auto-placed plans the DB has no `plan_date` for. When absent (a
+    plain GET), the server falls back to DB `route_position` / `plan_date`."""
+    plan: Optional[list[ExportPlanItem]] = None

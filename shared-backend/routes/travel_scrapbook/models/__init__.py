@@ -45,6 +45,8 @@ from .trip import (  # noqa: F401
     AnchorCreateRequest,
     AnchorResponse,
     AnchorUpdateRequest,
+    ExportPlanItem,
+    ExportRequest,
     MapsLeg,
     MapsLinksResponse,
     RouteLeg,
