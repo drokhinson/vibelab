@@ -13,7 +13,6 @@ from db import get_supabase
 
 from . import router
 from .access import get_accessible_membership
-from .constants import GeocodeConfidence
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     GeoFacets,
@@ -25,12 +24,10 @@ from .models import (
     VibeRequest,
     VisitedPageResponse,
 )
-from .services import nominatim
 from .services.places import build_maps_url
 from .services.hydrate import attach_consensus, hydrate_scraps
 from .services.places import (
     normalize_place_name,
-    region_for_country_code,
     resolve_maps_place,
 )
 
@@ -135,11 +132,12 @@ async def update_scrap(
     scrap_id: str = Path(..., description="Scrap UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ScrapResponse:
-    """Edit place fields, category, or notes (and the visited flag). Place edits
-    write to the scrap's canonical place row (safe — places are per-user). A
-    plan's per-trip timeline slot is set separately via
-    PATCH /scraps/{id}/trips/{trip_id}/schedule. Pass regeocode=true to re-run
-    Nominatim on the (possibly edited) place."""
+    """Edit the place name, category, or notes (and the visited/skipped flags).
+    Edits write to the scrap's canonical place row (safe — places are per-user).
+    City/country/region are read-only here: they derive from the place's pin, so
+    the only way to move a place is to pass a new maps_url (city/region/country
+    re-derive from it). A plan's per-trip timeline slot is set separately via
+    PATCH /scraps/{id}/trips/{trip_id}/schedule."""
     sb = get_supabase()
     existing = get_owned_scrap(sb, scrap_id, user.user_id)
     place = (
@@ -149,7 +147,7 @@ async def update_scrap(
         .execute()
     ).data[0]
 
-    update = body.model_dump(exclude_unset=True, exclude={"regeocode"})
+    update = body.model_dump(exclude_unset=True)
 
     scrap_update = {k: update[k] for k in ("notes",) if k in update}
     # visited/skipped are soft timestamp flags, not 1:1 columns — map true→now(),
@@ -167,10 +165,6 @@ async def update_scrap(
     if update.get("place_name"):
         place_update["name"] = update["place_name"]
         place_update["name_normalized"] = normalize_place_name(update["place_name"])
-    if "place_city" in update:
-        place_update["city"] = update["place_city"]
-    if "place_country" in update:
-        place_update["country"] = update["place_country"]
     if update.get("category"):
         place_update["category"] = update["category"]
 
@@ -181,8 +175,8 @@ async def update_scrap(
     }
 
     # A pasted Google Maps link parses to itself: pull coords + city/region/
-    # country straight from the URL (no AI) and let them win over typed fields.
-    maps_resolved = False
+    # country straight from the URL (no AI). This is the only path that moves a
+    # place — the location fields re-derive from the pin.
     if "maps_url" in update:
         raw = update["maps_url"]
         resolved = await resolve_maps_place(sb, raw) if raw else None
@@ -199,38 +193,10 @@ async def update_scrap(
                     "geocode_confidence": resolved.geocode_confidence,
                     "geocode_display_name": resolved.geocode_display_name,
                 })
-            maps_resolved = True
         else:
             # Empty clears it; a non-Maps / unparseable link is stored verbatim
             # (the "open in Maps" button still works) without touching location.
             place_update["maps_url"] = raw or None
-
-    if body.regeocode and merged["name"] and not maps_resolved:
-        query = ", ".join(p for p in merged.values() if p)
-        result = await nominatim.geocode(query)
-        if result:
-            place_update.update({
-                "lat": result.lat,
-                "lng": result.lng,
-                "geocode_confidence": GeocodeConfidence.HIGH,
-                "geocode_display_name": result.display_name,
-                "osm_type": result.osm_type,
-                "osm_id": result.osm_id,
-                # Re-pinning refreshes the country_code + derived macro-region
-                # (and, via accept-language=en, English names) — the path that
-                # fixes older local-language places.
-                "country_code": result.country_code,
-                "region": region_for_country_code(sb, result.country_code),
-            })
-        else:
-            place_update.update({
-                "lat": None,
-                "lng": None,
-                "geocode_confidence": GeocodeConfidence.NONE,
-                "geocode_display_name": None,
-                "osm_type": None,
-                "osm_id": None,
-            })
 
     # Rebuild the generated search link only when the user didn't supply their
     # own maps_url this edit (whether it resolved or was stored verbatim).

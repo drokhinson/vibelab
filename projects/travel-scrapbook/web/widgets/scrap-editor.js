@@ -1,6 +1,7 @@
 // widgets/scrap-editor.js — modal for editing a scrap's place fields.
-// Shows Nominatim's resolved address so mis-geocodes are visible, with a
-// "re-pin on map" action that re-runs geocoding on the edited fields.
+// City/country/region are read-only reflections of the place's pin (the
+// Google Maps URL / geocoded point it was captured from), not typed fields —
+// the only way to move a place is to paste a different Maps link.
 'use strict';
 
 const ScrapEditor = {
@@ -46,15 +47,13 @@ const ScrapEditor = {
         <form id="scrap-editor-form">
           <label class="ts-label" for="se-name">Place name</label>
           <input class="ts-input" id="se-name" value="${escapeAttr(s.place_name || '')}" placeholder="e.g. Ichiran Ramen" />
+          <label class="ts-label">Location</label>
           <div style="display:flex;gap:0.6rem;">
-            <div style="flex:1;">
-              <label class="ts-label" for="se-city">City</label>
-              <input class="ts-input" id="se-city" value="${escapeAttr(s.place_city || '')}" />
-            </div>
-            <div style="flex:1;">
-              <label class="ts-label" for="se-country">Country</label>
-              <input class="ts-input" id="se-country" value="${escapeAttr(s.place_country || '')}" />
-            </div>
+            ${[['City', s.place_city], ['Country', s.place_country], ['Region', s.place_region]].map(([lbl, val]) => `
+              <div style="flex:1;">
+                <span style="display:block;font-size:0.7rem;font-weight:600;opacity:0.55;text-transform:uppercase;letter-spacing:0.03em;">${lbl}</span>
+                <span style="display:block;font-size:0.92rem;font-weight:600;">${val ? escapeHtml(val) : '—'}</span>
+              </div>`).join('')}
           </div>
           <label class="ts-label" for="se-category">Category</label>
           <select class="ts-select" id="se-category">
@@ -65,20 +64,12 @@ const ScrapEditor = {
           <label class="ts-label" for="se-maps-url">Google Maps link</label>
           <input class="ts-input" id="se-maps-url" value="${escapeAttr(s.maps_url || '')}"
                  placeholder="paste a maps.app.goo.gl or google.com/maps link" />
-          <p class="confidence-hint" style="margin-top:0.3rem;">Paste a Maps link to pin the exact spot — city &amp; country fill in from it.</p>
+          <p class="confidence-hint" style="margin-top:0.3rem;">Paste a Maps link to pin the exact spot — city, country &amp; region fill in from it.</p>
           ${s.geocode_display_name ? `
             <p class="confidence-hint" style="margin-top:0.7rem;">
               Pinned as: ${escapeHtml(s.geocode_display_name)}
             </p>` : `
             <p class="confidence-hint" style="margin-top:0.7rem;">Not on the map yet.</p>`}
-          <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.7rem;font-size:0.85rem;font-weight:700;">
-            <input type="checkbox" id="se-visited" ${s.visited_at ? 'checked' : ''} style="width:18px;height:18px;" />
-            I've been here (visited)
-          </label>
-          <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem;font-size:0.85rem;font-weight:700;">
-            <input type="checkbox" id="se-regeocode" checked style="width:18px;height:18px;" />
-            Re-pin on the map from these fields
-          </label>
           <div style="display:flex;gap:0.6rem;margin-top:1.1rem;">
             <button class="ts-btn ts-btn--mint" type="submit" style="flex:1;"><i data-lucide="check"></i>Save</button>
             <button class="ts-btn ts-btn--danger" type="button" id="se-delete" aria-label="Delete place"><i data-lucide="trash-2"></i></button>
@@ -93,12 +84,8 @@ const ScrapEditor = {
       ev.preventDefault();
       const fields = {
         place_name: modal.querySelector('#se-name').value.trim() || null,
-        place_city: modal.querySelector('#se-city').value.trim() || null,
-        place_country: modal.querySelector('#se-country').value.trim() || null,
         category: modal.querySelector('#se-category').value,
         notes: modal.querySelector('#se-notes').value.trim() || null,
-        visited: modal.querySelector('#se-visited').checked,
-        regeocode: modal.querySelector('#se-regeocode').checked,
       };
       // Only send maps_url when the user actually changed it — an unchanged
       // (often auto-generated) link shouldn't trigger a re-parse/geocode on save.
