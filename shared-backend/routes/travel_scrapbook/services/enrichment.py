@@ -15,7 +15,6 @@ stay/travel anchor) on that trip instead, with its dates filled in.
 import logging
 from dataclasses import replace
 from typing import Any, Optional
-from urllib.parse import quote
 
 from db import get_supabase
 
@@ -28,15 +27,10 @@ from ..constants import (
     MembershipStatus,
     SourceStatus,
 )
-from . import gmaps, llm, nominatim, places, scraper
+from . import checkpoints, gmaps, llm, nominatim, places, scraper
+from .places import build_maps_url
 
 logger = logging.getLogger("travel_scrapbook.enrichment")
-
-
-def build_maps_url(place_name: str, city: Optional[str], country: Optional[str]) -> str:
-    """Google Maps search link — a plain URL, no API key involved."""
-    parts = [place_name] + [p for p in (city, country) if p]
-    return "https://www.google.com/maps/search/?api=1&query=" + quote(", ".join(parts))
 
 
 def _pin_name(geo: Optional[nominatim.GeocodeResult]) -> str:
@@ -97,13 +91,22 @@ async def _geocode_with_fallback(
 
 
 def _load_category_slugs(sb) -> list[str]:
+    """Category slugs offered to the LLM. Checkpoint-only categories (020,
+    via the cached checkpoints.checkpoint_category_slugs set) are held back so
+    Gemini can't misfile a sight as "transport"; lodging stays in, since hotel
+    listicles legitimately produce lodging scraps."""
     rows = (
         sb.table("travelscrapbook_categories")
         .select("slug")
         .order("sort_order")
         .execute()
     )
-    return [r["slug"] for r in (rows.data or [])] or ["other"]
+    cp_slugs = checkpoints.checkpoint_category_slugs(sb)
+    slugs = [
+        r["slug"] for r in (rows.data or [])
+        if r["slug"] not in cp_slugs or r["slug"] == "lodging"
+    ]
+    return slugs or ["other"]
 
 
 def _user_has_scrap_for_place(sb, user_id: str, place_id: str) -> bool:
@@ -197,54 +200,80 @@ async def _materialize_place(
 async def _materialize_checkpoint(
     sb, source: dict[str, Any], booking: llm.BookingExtraction
 ) -> bool:
-    """A booking link captured with a trip context becomes a checkpoint (a
-    stay/travel anchor) on that trip, dates filled in from the page. Without a
-    trip there is nowhere to hang it — the caller falls back to the place flow.
-    Re-capturing the same booking updates the existing checkpoint in place.
-    Returns True when a checkpoint row was written."""
+    """A booking link captured with a trip context becomes a checkpoint on that
+    trip: a place + scrap (deduped like any capture, so it also shows on the
+    Wander List under Stays & transport) + a role-bearing membership with the
+    dates filled in from the page (020). Without a trip there is nowhere to
+    hang the role — the caller falls back to the place flow, which still files
+    the lodging/transport place itself. Re-capturing the same booking updates
+    the existing checkpoint's dates (place dedupe replaces the old label
+    matching). Returns True when a checkpoint membership was written."""
     trip_id = source.get("trip_hint_id")
     if not trip_id:
         return False
 
     role = AnchorRole.STAY if booking.kind == BookingKind.STAY else AnchorRole.TRAVEL
-    query = booking.location or booking.label
-    geo = await nominatim.geocode(query)
-    row: dict[str, Any] = {
-        "trip_id": trip_id,
-        "role": role,
-        "label": booking.label,
-        "query": query,
-        "lat": geo.lat if geo else None,
-        "lng": geo.lng if geo else None,
-        "geocode_confidence": GeocodeConfidence.HIGH if geo else GeocodeConfidence.NONE,
-    }
-    if role == AnchorRole.STAY:
-        row.update({
-            "stay_date": booking.start_date,
-            "stay_end_date": booking.end_date,
-        })
-    else:
-        row.update({
-            "type": booking.transport_type or AnchorType.OTHER,
-            "anchor_date": booking.start_date,
-            "anchor_time": booking.time,
-        })
+    category = checkpoints.category_for(
+        role, booking.transport_type or AnchorType.OTHER
+    )
+    place, scrap = await checkpoints.materialize_checkpoint_scrap(
+        sb, source["user_id"],
+        label=booking.label,
+        category=category,
+        query=booking.location or booking.label,
+    )
+    # The booking URL is how the user stumbled on this place — attach it, same
+    # as the ordinary place flow does.
+    sb.table("travelscrapbook_place_sources").upsert(
+        {"place_id": place["id"], "source_id": source["id"]},
+        on_conflict="place_id,source_id",
+        ignore_duplicates=True,
+    ).execute()
 
+    if role == AnchorRole.STAY:
+        dates: dict[str, Any] = {
+            "plan_date": booking.start_date,
+            "plan_end_date": booking.end_date,
+        }
+    else:
+        dates = {
+            "plan_date": booking.start_date,
+            "plan_time": booking.time,
+        }
+
+    # Re-capture matching, in legacy spirit: the same booking (same label) on
+    # this trip updates its checkpoint in place — including REPOINTING to a new
+    # place when the property moved beyond the dedupe radius — instead of
+    # stacking a second stay. Match by scrap OR by the booking label's
+    # normalized name among this role's checkpoints.
+    label_norm = places.normalize_place_name(booking.label)
     existing = (
-        sb.table("travelscrapbook_anchors")
-        .select("id, label")
+        sb.table("travelscrapbook_scrap_trips")
+        .select("id, scrap_id, travelscrapbook_scraps(place_id, "
+                "travelscrapbook_places(name_normalized))")
         .eq("trip_id", trip_id)
         .eq("role", role)
         .execute()
     ).data or []
     match = next(
-        (a for a in existing if (a.get("label") or "").casefold() == booking.label.casefold()),
+        (m for m in existing if m["scrap_id"] == scrap["id"]
+         or ((m.get("travelscrapbook_scraps") or {}).get("travelscrapbook_places") or {})
+            .get("name_normalized") == label_norm),
         None,
     )
     if match:
-        sb.table("travelscrapbook_anchors").update(row).eq("id", match["id"]).execute()
+        sb.table("travelscrapbook_scrap_trips").update({
+            "scrap_id": scrap["id"],   # repoint if the booking's place changed
+            **dates,
+        }).eq("id", match["id"]).execute()
     else:
-        sb.table("travelscrapbook_anchors").insert(row).execute()
+        sb.table("travelscrapbook_scrap_trips").insert({
+            "scrap_id": scrap["id"],
+            "trip_id": trip_id,
+            "role": role,
+            "status": MembershipStatus.APPROVED,
+            **dates,
+        }).execute()
     return True
 
 

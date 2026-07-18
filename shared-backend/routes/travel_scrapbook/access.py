@@ -111,15 +111,17 @@ def assert_writable_trips(sb, trip_ids: set[str] | list[str], user_id: str) -> N
 def get_accessible_membership(
     sb, scrap_id: str, trip_id: str, user_id: str, *, need_write: bool = False
 ) -> tuple[dict[str, Any], TripMemberRole]:
-    """Return (membership_row, caller_role) for a place's membership on a trip
-    the caller can access. 404 if the place isn't on that trip or the trip isn't
-    accessible. Used by the per-trip vibe / schedule endpoints so any traveler on
-    a trip can weigh in on any place on it (read access is enough to set a vibe)."""
+    """Return (membership_row, caller_role) for a place's PLAN membership on a
+    trip the caller can access. 404 if the place isn't a plan on that trip or
+    the trip isn't accessible. Used by the per-trip vibe / schedule / approve
+    endpoints — those act on plans only, so checkpoint memberships (role set,
+    020) are invisible here."""
     rows = (
         sb.table("travelscrapbook_scrap_trips")
         .select("*")
         .eq("scrap_id", scrap_id)
         .eq("trip_id", trip_id)
+        .is_("role", "null")
         .execute()
     ).data
     if not rows:

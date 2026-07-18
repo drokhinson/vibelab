@@ -115,7 +115,7 @@ const ScrapEditor = {
     });
 
     modal.querySelector('#se-delete').addEventListener('click', async () => {
-      if (!confirmDestructive('Delete this place? This can\'t be undone.')) return;
+      if (!confirmDestructive('Delete this place? It leaves every trip — including as a checkpoint — and this can\'t be undone.')) return;
       try {
         await window.ScrapDomain.remove(s.id, this._tripId);
         toast('Scrap deleted');

@@ -17,6 +17,7 @@ from .services.exports import (
     build_markdown,
 )
 from .access import get_accessible_trip
+from .services.checkpoints import load_trip_anchors
 from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 
 
@@ -42,13 +43,9 @@ def _pretty_date(date: str) -> str:
 
 
 def _trip_anchors(sb, trip_id: str) -> list[dict]:
-    """All anchors for a trip (start/end/stay/travel)."""
-    return (
-        sb.table("travelscrapbook_anchors")
-        .select("*")
-        .eq("trip_id", trip_id)
-        .execute()
-    ).data or []
+    """All checkpoints for a trip (start/end/stay/travel), synthesized from
+    role-bearing memberships in the legacy anchor shape (020)."""
+    return load_trip_anchors(sb, trip_id)
 
 
 def _anchor_dates(anchor: dict) -> set[str]:
@@ -92,6 +89,7 @@ def _approved_scraps(
             .select("*, travelscrapbook_scraps(*)")
             .eq("trip_id", trip_id)
             .eq("status", MembershipStatus.APPROVED)
+            .is_("role", "null")   # plans only; checkpoints bracket via anchors (020)
             .execute()
         ).data or []
     )

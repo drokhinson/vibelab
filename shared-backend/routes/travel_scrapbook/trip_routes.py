@@ -1,8 +1,16 @@
-"""Trip CRUD and anchor (start/end/stay) management."""
+"""Trip CRUD and checkpoint (start/end/stay/travel) management.
 
-from typing import Any, Optional
+Since migration 020 a checkpoint is a place + scrap + role-bearing
+travelscrapbook_scrap_trips membership (not an anchors-table row). The
+/anchors endpoints keep their paths and AnchorResponse shape — the anchor id
+is now the membership id, and responses are synthesized via
+services/checkpoints.py.
+"""
+
+from typing import Any
 
 from fastapi import BackgroundTasks, Depends, HTTPException, Path
+from supabase import Client
 
 from db import get_supabase
 
@@ -10,7 +18,6 @@ from . import router
 from .access import get_accessible_trip
 from .constants import (
     AnchorRole,
-    GeocodeConfidence,
     MembershipStatus,
     TRAVEL_ROLES,
     TripMemberRole,
@@ -28,83 +35,26 @@ from .models import (
     TripSummaryResponse,
     TripUpdateRequest,
 )
-from .services import nominatim
+from .services import checkpoints
 from .services.hydrate import attach_consensus
 from .services.places import (
+    build_maps_url,
     geocode_trip_destination,
+    normalize_place_name,
     place_matches_trip_scope,
     region_for_country_code,
-    resolve_maps_place,
-)
-
-# Location columns an anchor carries (mirrors travelscrapbook_places).
-_ANCHOR_LOC_KEYS = (
-    "lat", "lng", "city", "region", "country", "country_code",
-    "geocode_confidence", "maps_url",
 )
 
 
-def _empty_location() -> dict[str, Any]:
-    return {
-        "lat": None, "lng": None, "city": None, "region": None,
-        "country": None, "country_code": None,
-        "geocode_confidence": GeocodeConfidence.NONE, "maps_url": None,
-    }
-
-
-async def _geocode_anchor(sb, query: str) -> dict[str, Any]:
-    """Forward-geocode a freeform anchor query into its location columns
-    (coords + city/region/country), or nulls on no match."""
-    loc = _empty_location()
-    result = await nominatim.geocode(query)
-    if result:
-        loc.update({
-            "lat": result.lat,
-            "lng": result.lng,
-            "city": result.city,
-            "region": region_for_country_code(sb, result.country_code),
-            "country": result.country,
-            "country_code": result.country_code,
-            "geocode_confidence": GeocodeConfidence.HIGH,
-        })
-    return loc
-
-
-async def _resolve_anchor_location(
-    sb, *, maps_url: Optional[str], query: Optional[str]
-) -> dict[str, Any]:
-    """An anchor's location columns from a pasted Google Maps URL (preferred —
-    parsed to itself, no AI) or a freeform text query. Non-Maps / unparseable
-    links are stored verbatim while the text query supplies the pin."""
-    if maps_url:
-        resolved = await resolve_maps_place(sb, maps_url)
-        if resolved is not None:
-            if resolved.lat is not None:
-                return {
-                    "lat": resolved.lat, "lng": resolved.lng,
-                    "city": resolved.city, "region": resolved.region,
-                    "country": resolved.country, "country_code": resolved.country_code,
-                    "geocode_confidence": resolved.geocode_confidence,
-                    "maps_url": resolved.maps_url,
-                }
-            # A Maps link we couldn't geocode — keep it, pin from the text query.
-            loc = await _geocode_anchor(sb, query) if query else _empty_location()
-            loc["maps_url"] = resolved.maps_url
-            return loc
-        # Not a Google Maps URL — store it as-is, geocode the text query.
-        loc = await _geocode_anchor(sb, query) if query else _empty_location()
-        loc["maps_url"] = maps_url
-        return loc
-    return await _geocode_anchor(sb, query) if query else _empty_location()
-
-
-def _get_start_anchor(sb, trip_id: str) -> dict[str, Any] | None:
-    """The trip's start anchor, if one exists (used to copy into the end)."""
+def _get_role_membership(sb: Client, trip_id: str, role: str) -> dict[str, Any] | None:
+    """A trip's checkpoint membership for one role, if it exists. Used by
+    same_as_start (reuse the start's scrap) and to pre-check the one-start/
+    one-end slots so a duplicate 409s BEFORE materializing an orphan scrap."""
     rows = (
-        sb.table("travelscrapbook_anchors")
+        sb.table("travelscrapbook_scrap_trips")
         .select("*")
         .eq("trip_id", trip_id)
-        .eq("role", AnchorRole.START)
+        .eq("role", role)
         .execute()
     )
     return rows.data[0] if rows.data else None
@@ -307,104 +257,133 @@ async def delete_trip(
     return MessageResponse(message="Trip deleted")
 
 
-# ── Anchors ───────────────────────────────────────────────────────────────────
+# ── Checkpoints (the /anchors API surface) ────────────────────────────────────
+
+def _marker_dates(body: AnchorCreateRequest | AnchorUpdateRequest, role: str) -> dict[str, Any]:
+    """Role-shaped date fields from a request body, ISO-serialized, in the
+    legacy anchor key names _validate_anchor_dates checks."""
+    is_travel = role in TRAVEL_ROLES
+    return {
+        "anchor_date": body.anchor_date.isoformat() if is_travel and body.anchor_date else None,
+        "anchor_time": body.anchor_time.isoformat() if is_travel and body.anchor_time else None,
+        "stay_date": (
+            body.stay_date.isoformat()
+            if role == AnchorRole.STAY and body.stay_date else None
+        ),
+        "stay_end_date": (
+            body.stay_end_date.isoformat()
+            if role == AnchorRole.STAY and body.stay_end_date else None
+        ),
+    }
+
+
+def _membership_dates(dates: dict[str, Any], role: str) -> dict[str, Any]:
+    """Legacy anchor date keys → unified membership columns: stays put their
+    check-in/out on plan_date/plan_end_date; travel roles use plan_date/time."""
+    if role == AnchorRole.STAY:
+        return {
+            "plan_date": dates.get("stay_date"),
+            "plan_end_date": dates.get("stay_end_date"),
+        }
+    return {
+        "plan_date": dates.get("anchor_date"),
+        "plan_time": dates.get("anchor_time"),
+    }
+
+
+def _anchor_response(sb: Client, membership_id: str) -> AnchorResponse:
+    row = checkpoints.get_checkpoint_membership(sb, membership_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+    scrap = row["travelscrapbook_scraps"]
+    place = scrap["travelscrapbook_places"]
+    return AnchorResponse(**checkpoints.synthesize_anchor(row, scrap, place))
+
 
 @router.post(
     "/trips/{trip_id}/anchors",
     response_model=AnchorResponse,
     status_code=201,
-    summary="Add a route anchor",
+    summary="Add a checkpoint",
 )
 async def create_anchor(
     body: AnchorCreateRequest,
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> AnchorResponse:
-    """Add a checkpoint (start/end/stay/travel anchor). start and end are
-    unique per trip; a trip can hold any number of stay and travel anchors.
+    """Add a checkpoint (start/end/stay/travel). start and end are unique per
+    trip; a trip can hold any number of stays and travel legs.
 
-    Normal anchors geocode their query synchronously. An end anchor with
-    ``same_as_start`` copies the start anchor's place + type instead (arrival and
-    departure are often the same spot), skipping the geocode entirely — but NOT
-    its date: departure day ≠ arrival day, so the request's own
-    anchor_date/anchor_time still apply.
+    The checkpoint's place is materialized into the caller's saved places
+    (deduped like any capture — it also appears on their Wander List / Visited
+    under Stays & transport), and the trip link is a role-bearing membership.
+    An end checkpoint with ``same_as_start`` reuses the start's place/scrap
+    (arrival and departure are often the same spot) — but NOT its date:
+    departure day ≠ arrival day, so the request's own dates still apply.
 
     Collaborators may edit the shared route, so this needs write access.
     """
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
 
-    is_travel = body.role in TRAVEL_ROLES
-    # Timeline marker fields: anchor_date/time + type on the travel roles
-    # (start/end/travel); stay dates only on lodging.
-    marker_fields = {
-        "anchor_date": body.anchor_date.isoformat() if is_travel and body.anchor_date else None,
-        "anchor_time": body.anchor_time.isoformat() if is_travel and body.anchor_time else None,
-        "stay_date": (
-            body.stay_date.isoformat()
-            if body.role == AnchorRole.STAY and body.stay_date else None
-        ),
-        "stay_end_date": (
-            body.stay_end_date.isoformat()
-            if body.role == AnchorRole.STAY and body.stay_end_date else None
-        ),
-    }
+    dates = _marker_dates(body, body.role)
+    _validate_anchor_dates(trip, dates)
+
+    # Pre-check the unique start/end slot so a duplicate 409s BEFORE the place/
+    # scrap materialize below — otherwise the failed request would leave an
+    # orphan card on the Wander List. The partial unique index stays the
+    # authoritative (race-proof) guard.
+    if body.role in (AnchorRole.START, AnchorRole.END) and _get_role_membership(
+        sb, trip_id, body.role
+    ):
+        raise HTTPException(
+            status_code=409, detail=f"Trip already has a '{body.role}' anchor")
 
     if body.same_as_start:
         if body.role != AnchorRole.END:
             raise HTTPException(
                 status_code=400, detail="Only the end anchor can copy the start")
-        start = _get_start_anchor(sb, trip_id)
+        start = _get_role_membership(sb, trip_id, AnchorRole.START)
         if not start:
             raise HTTPException(status_code=400, detail="Add a start anchor first")
-        row = {
-            "trip_id": trip_id,
-            "role": AnchorRole.END,
-            "label": start["label"],
-            "query": start["query"],
-            **{k: start.get(k) for k in _ANCHOR_LOC_KEYS},
-            "type": start.get("type"),
-            **marker_fields,
-        }
+        scrap_id = start["scrap_id"]
     else:
-        row = {
-            "trip_id": trip_id,
-            "role": body.role,
-            "label": body.label,
-            "query": body.query,
-            **(await _resolve_anchor_location(
-                sb, maps_url=body.maps_url, query=body.query)),
-            "type": body.type if is_travel else None,
-            **marker_fields,
-        }
-    _validate_anchor_dates(trip, row)
+        place, scrap = await checkpoints.materialize_checkpoint_scrap(
+            sb, user.user_id,
+            label=body.label,
+            category=checkpoints.category_for(body.role, body.type),
+            query=body.query,
+            maps_url=body.maps_url,
+        )
+        scrap_id = scrap["id"]
 
+    membership = {
+        "scrap_id": scrap_id,
+        "trip_id": trip_id,
+        "role": body.role,
+        "status": MembershipStatus.APPROVED,
+        **_membership_dates(dates, body.role),
+    }
     try:
-        created = sb.table("travelscrapbook_anchors").insert(row).execute()
+        created = sb.table("travelscrapbook_scrap_trips").insert(membership).execute()
     except Exception as exc:
         # Partial unique index: one start + one end per trip.
         raise HTTPException(
             status_code=409,
             detail=f"Trip already has a '{body.role}' anchor",
         ) from exc
-    return AnchorResponse(**created.data[0])
+    return _anchor_response(sb, created.data[0]["id"])
 
 
-def _get_writable_anchor(
-    sb, anchor_id: str, user_id: str
+def _get_writable_checkpoint(
+    sb: Client, membership_id: str, user_id: str
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Fetch (anchor, trip) the caller may edit — the owner or a collaborator
-    on its trip (anchors are shared route state, so viewers are refused). The
-    trip row rides along so callers don't re-run the access lookup."""
-    rows = (
-        sb.table("travelscrapbook_anchors")
-        .select("*")
-        .eq("id", anchor_id)
-        .execute()
-    )
-    if not rows.data:
-        raise HTTPException(status_code=404, detail="Anchor not found")
-    row = rows.data[0]
+    """Fetch (checkpoint membership with scrap+place embedded, trip) the caller
+    may edit — the owner or a collaborator on its trip (checkpoints are shared
+    route state, so viewers are refused)."""
+    row = checkpoints.get_checkpoint_membership(sb, membership_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
     trip, _ = get_accessible_trip(sb, row["trip_id"], user_id, need_write=True)
     return row, trip
 
@@ -413,51 +392,140 @@ def _get_writable_anchor(
     "/anchors/{anchor_id}",
     response_model=AnchorResponse,
     status_code=200,
-    summary="Update an anchor",
+    summary="Update a checkpoint",
 )
 async def update_anchor(
     body: AnchorUpdateRequest,
-    anchor_id: str = Path(..., description="Anchor UUID"),
+    anchor_id: str = Path(..., description="Checkpoint (membership) UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> AnchorResponse:
-    """Edit label/query/dates; a changed query is re-geocoded synchronously."""
+    """Edit a checkpoint. Dates land on the trip membership. A LOCATION change
+    (query or Maps link) re-materializes the place and REPOINTS this membership
+    — the old place may back other checkpoints (same_as_start pairs share one
+    scrap) and the user's Wander List, so it is never mutated to a different
+    location out from under them; if the edit resolves to the SAME canonical
+    place, its pin/link are refreshed in place (never wiping OSM identity).
+    Label/type-only edits write through to the current place (a rename is a
+    correction, not a move). Any trip writer may edit."""
     sb = get_supabase()
-    existing, trip = _get_writable_anchor(sb, anchor_id, user.user_id)
+    existing, trip = _get_writable_checkpoint(sb, anchor_id, user.user_id)
+    scrap = existing["travelscrapbook_scraps"]
+    place = scrap["travelscrapbook_places"]
+    role = existing["role"]
+    synth_query = place.get("geocode_display_name") or place["name"]
+
     update = {
         k: (v.isoformat() if hasattr(v, "isoformat") else v)
         for k, v in body.model_dump(exclude_unset=True).items()
     }
+
     if any(k in update for k in ("anchor_date", "stay_date", "stay_end_date")):
-        _validate_anchor_dates(trip, {**existing, **update})
-    query_changed = "query" in update and update["query"] != existing["query"]
-    if "maps_url" in update or query_changed:
-        loc = await _resolve_anchor_location(
+        current = checkpoints.synthesize_anchor(existing, scrap, place)
+        merged = {**{k: current.get(k) for k in
+                     ("anchor_date", "stay_date", "stay_end_date")}, **update}
+        _validate_anchor_dates(trip, merged)
+
+    membership_update: dict[str, Any] = {}
+    if role == AnchorRole.STAY:
+        if "stay_date" in update:
+            membership_update["plan_date"] = update["stay_date"]
+        if "stay_end_date" in update:
+            membership_update["plan_end_date"] = update["stay_end_date"]
+    else:
+        if "anchor_date" in update:
+            membership_update["plan_date"] = update["anchor_date"]
+        if "anchor_time" in update:
+            membership_update["plan_time"] = update["anchor_time"]
+
+    query_changed = "query" in update and update["query"] != synth_query
+    location_changed = "maps_url" in update or query_changed
+
+    if location_changed:
+        geo, confidence, url = await checkpoints.resolve_checkpoint_geo(
             sb,
             maps_url=update.get("maps_url"),
-            query=update.get("query", existing.get("query")),
+            query=update.get("query", synth_query),
         )
-        if "maps_url" not in update:
-            # A query-only edit re-pins from text; don't wipe a saved Maps link.
-            loc.pop("maps_url", None)
-        update.update(loc)
-    updated = (
-        sb.table("travelscrapbook_anchors").update(update).eq("id", anchor_id).execute()
-    )
-    return AnchorResponse(**updated.data[0])
+        new_label = update.get("label") or place["name"]
+        category = checkpoints.category_for(
+            role,
+            update.get("type") or checkpoints.type_for_category(place.get("category")),
+        )
+        new_place, new_scrap = checkpoints.place_scrap_from_geo(
+            sb, user.user_id, label=new_label, category=category,
+            geo=geo, confidence=confidence, maps_url=url or None,
+        )
+        if new_place["id"] != place["id"]:
+            # A different real-world place: repoint the membership; the old
+            # place/scrap survive untouched (other checkpoints, Wander List).
+            membership_update["scrap_id"] = new_scrap["id"]
+        elif geo is not None:
+            # Same canonical place with a fresh resolution: refresh the pin.
+            # find_or_create only FILLS gaps, so overwrite explicitly — but
+            # never wipe OSM identity with a resolution that lacks it.
+            refresh: dict[str, Any] = {
+                "lat": geo.lat, "lng": geo.lng,
+                "city": geo.city, "country": geo.country,
+                "country_code": geo.country_code,
+                "region": region_for_country_code(sb, geo.country_code),
+                "geocode_confidence": confidence,
+                "geocode_display_name": geo.display_name or None,
+                "updated_at": "now()",
+            }
+            if geo.osm_id is not None:
+                refresh.update({"osm_type": geo.osm_type, "osm_id": geo.osm_id})
+            if "maps_url" in update:
+                refresh["maps_url"] = url
+            if update.get("label"):
+                # A rename riding along with the re-pin (find_or_create only
+                # fills gaps, so apply it explicitly).
+                refresh["name"] = update["label"]
+                refresh["name_normalized"] = normalize_place_name(update["label"])
+            sb.table("travelscrapbook_places").update(refresh).eq(
+                "id", place["id"]
+            ).execute()
+    else:
+        # No location change: label/type write through to the current place.
+        place_update: dict[str, Any] = {}
+        if update.get("label"):
+            place_update["name"] = update["label"]
+            place_update["name_normalized"] = normalize_place_name(update["label"])
+            # Keep a generated search link in step with the rename; a
+            # user-pasted Maps link is never touched.
+            current_maps = place.get("maps_url") or ""
+            if not current_maps or current_maps.startswith(
+                "https://www.google.com/maps/search/"
+            ):
+                place_update["maps_url"] = build_maps_url(
+                    update["label"], place.get("city"), place.get("country"))
+        if update.get("type") and role != AnchorRole.STAY:
+            place_update["category"] = checkpoints.category_for(role, update["type"])
+        if place_update:
+            place_update["updated_at"] = "now()"
+            sb.table("travelscrapbook_places").update(place_update).eq(
+                "id", place["id"]
+            ).execute()
+
+    if membership_update:
+        sb.table("travelscrapbook_scrap_trips").update(membership_update).eq(
+            "id", anchor_id
+        ).execute()
+    return _anchor_response(sb, anchor_id)
 
 
 @router.delete(
     "/anchors/{anchor_id}",
     response_model=MessageResponse,
     status_code=200,
-    summary="Delete an anchor",
+    summary="Delete a checkpoint",
 )
 async def delete_anchor(
-    anchor_id: str = Path(..., description="Anchor UUID"),
+    anchor_id: str = Path(..., description="Checkpoint (membership) UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Remove an anchor from its trip."""
+    """Remove a checkpoint from its trip. Only the trip link is deleted — the
+    place and the creator's scrap survive (on the Wander List / Visited)."""
     sb = get_supabase()
-    _get_writable_anchor(sb, anchor_id, user.user_id)  # (anchor, trip) unused
-    sb.table("travelscrapbook_anchors").delete().eq("id", anchor_id).execute()
-    return MessageResponse(message="Anchor deleted")
+    _get_writable_checkpoint(sb, anchor_id, user.user_id)
+    sb.table("travelscrapbook_scrap_trips").delete().eq("id", anchor_id).execute()
+    return MessageResponse(message="Checkpoint removed from the trip")

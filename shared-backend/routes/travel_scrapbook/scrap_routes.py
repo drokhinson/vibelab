@@ -18,15 +18,15 @@ from .dependencies import CurrentUser, get_current_user
 from .models import (
     GeoFacets,
     MessageResponse,
-    PagedScrapsResponse,
     PlanScheduleRequest,
     RatingRequest,
     ScrapResponse,
     ScrapUpdateRequest,
     VibeRequest,
+    VisitedPageResponse,
 )
 from .services import nominatim
-from .services.enrichment import build_maps_url
+from .services.places import build_maps_url
 from .services.hydrate import attach_consensus, hydrate_scraps
 from .services.places import (
     normalize_place_name,
@@ -85,7 +85,7 @@ async def get_scrap(
 
 @router.get(
     "/visited",
-    response_model=PagedScrapsResponse,
+    response_model=VisitedPageResponse,
     status_code=200,
     summary="Places you've marked visited",
 )
@@ -96,11 +96,12 @@ async def list_visited(
     limit: int = Query(24, ge=1, le=100, description="Page size"),
     offset: int = Query(0, ge=0, description="Page start"),
     user: CurrentUser = Depends(get_current_user),
-) -> PagedScrapsResponse:
+) -> VisitedPageResponse:
     """One filtered page of the scraps the user marked visited (any trip or
-    the wishlist), most-recently-visited first, plus drill-down facets
-    (regions → countries → cities) and the filtered total. Filtering,
-    facets, and pagination all run in SQL (one RPC round-trip)."""
+    the wishlist), most-recently-visited first — with the visited checkpoint
+    places (hotels/transport, 020) split into their own section — plus
+    drill-down facets (regions → countries → cities) and the filtered totals.
+    Filtering, facets, and pagination all run in SQL (one RPC round-trip)."""
     sb = get_supabase()
     page = (
         sb.rpc("travelscrapbook_visited_page", {
@@ -112,9 +113,13 @@ async def list_visited(
             "p_offset": offset,
         }).execute()
     ).data or {}
-    return PagedScrapsResponse(
+    return VisitedPageResponse(
         scraps=[ScrapResponse(**s) for s in page.get("scraps", [])],
+        visited_checkpoints=[
+            ScrapResponse(**s) for s in page.get("visited_checkpoints", [])
+        ],
         total=page.get("total", 0),
+        checkpoint_total=page.get("checkpoint_total", 0),
         facets=page.get("facets") or GeoFacets(),
     )
 
@@ -337,10 +342,13 @@ async def set_rating(
         {"rating": body.level, "updated_at": "now()"}
     ).eq("id", scrap_id).execute()
     scrap["rating"] = body.level
+    # Plan memberships only (020) — vibes are consensus on PLANS; checkpoint
+    # memberships never carry vibe rows.
     memberships = (
         sb.table("travelscrapbook_scrap_trips")
         .select("id")
         .eq("scrap_id", scrap_id)
+        .is_("role", "null")
         .execute()
     ).data or []
     if memberships:
@@ -384,6 +392,7 @@ async def clear_rating(
             sb.table("travelscrapbook_scrap_trips")
             .select("id")
             .eq("scrap_id", scrap_id)
+            .is_("role", "null")
             .execute()
         ).data or []
     ]

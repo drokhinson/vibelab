@@ -38,6 +38,7 @@ from .models import (
     SourceScrapsResponse,
 )
 from .services import places as places_svc
+from .services.checkpoints import checkpoint_category_slugs
 from .services.enrichment import process_source
 from .access import get_accessible_trip
 from .services.hydrate import hydrate_scraps
@@ -136,15 +137,14 @@ async def capture(
                         ).data or []
                     ]
                     if scrap_ids:
-                        sb.table("travelscrapbook_scrap_trips").upsert(
-                            [
-                                {"scrap_id": sid, "trip_id": body.trip_id,
-                                 "status": MembershipStatus.APPROVED}
+                        # RPC: plan uniqueness is a partial index (020) that
+                        # PostgREST's on_conflict can't arbitrate.
+                        sb.rpc("travelscrapbook_add_plan_memberships", {
+                            "p_rows": [
+                                {"scrap_id": sid, "trip_id": body.trip_id}
                                 for sid in scrap_ids
                             ],
-                            on_conflict="scrap_id,trip_id",
-                            ignore_duplicates=True,
-                        ).execute()
+                        }).execute()
             return SourceResponse(**source)
         # failed or stale processing → reset and re-run
         update = {
@@ -326,6 +326,11 @@ async def get_inbox(
         )
         for s in bundle.get("scraps", [])
     ]
+    # Checkpoint places (hotels/transport, 020) get no trip suggestions — they
+    # join trips as checkpoints via the trip screen, not the plan picker.
+    checkpoint_scraps = [
+        InboxScrapResponse(**s) for s in bundle.get("checkpoint_scraps", [])
+    ]
     return InboxResponse(
         processing_sources=[
             SourceResponse(**s) for s in sources if s["status"] == SourceStatus.PROCESSING
@@ -334,7 +339,9 @@ async def get_inbox(
             SourceResponse(**s) for s in sources if s["status"] == SourceStatus.FAILED
         ],
         scraps=inbox_scraps,
+        checkpoint_scraps=checkpoint_scraps,
         total=bundle.get("total", 0),
+        checkpoint_total=bundle.get("checkpoint_total", 0),
         facets=bundle.get("facets") or GeoFacets(),
         inbox_count=bundle.get("unvisited_count", 0) + len(sources),
     )
@@ -357,14 +364,22 @@ async def get_inbox_count(
     """Drives the nav badge. With `since`, counts only unfiled places imported
     after that time (new since the user last opened the Wander List) and leaves
     out in-progress captures. Without it, the full pending count: unvisited
-    scraps + processing/failed sources."""
+    scraps + processing/failed sources. Checkpoint-category places (hotels/
+    transport, 020) don't count — matches the inbox bundle's unvisited_count."""
     sb = get_supabase()
     scraps_q = (
         sb.table("travelscrapbook_scraps")
-        .select("id", count="exact")
+        .select("id, travelscrapbook_places!inner(category)", count="exact")
         .eq("user_id", user.user_id)
         .is_("visited_at", "null")
     )
+    cp_slugs = checkpoint_category_slugs(sb)
+    if cp_slugs:
+        # places.category is NOT NULL-by-construction (DEFAULT 'other'), so the
+        # negative filter never drops rows on a null comparison.
+        scraps_q = scraps_q.not_.in_(
+            "travelscrapbook_places.category", sorted(cp_slugs)
+        )
     if since is not None:
         # "New" badge: freshly imported places only, not in-progress captures.
         scraps_q = scraps_q.gt("created_at", since.isoformat())

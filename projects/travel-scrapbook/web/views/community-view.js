@@ -13,6 +13,7 @@ class CommunityView extends View {
 
   _resetState() {
     this._geo = { region: null, country: null, city: null };
+    this._tab = 'places';          // 'places' | 'checkpoints' (Stays & transport)
     this._items = [];
     this._total = 0;
     this._facets = {};
@@ -46,7 +47,8 @@ class CommunityView extends View {
     await this._load();
   }
 
-  _cacheKey() { return JSON.stringify(this._geo); }
+  // Mirrors BrowsePages.loadCommunity's cache key: the two tabs cache apart.
+  _cacheKey() { return JSON.stringify({ ...this._geo, checkpoints: this._tab === 'checkpoints' }); }
 
   async _load({ append = false } = {}) {
     const seq = ++this._seq;
@@ -55,6 +57,7 @@ class CommunityView extends View {
         geo: this._geo,
         limit: this.PAGE_SIZE,
         offset: append ? this._items.length : 0,
+        checkpoints: this._tab === 'checkpoints',
       });
       if (seq !== this._seq) return;
       // Unchanged revalidate → no repaint (avoids the entrance-anim blink).
@@ -75,14 +78,21 @@ class CommunityView extends View {
   render() {
     if (!this._loaded) return;
     const narrowed = !!(this._geo.region || this._geo.country || this._geo.city);
+    const onCheckpoints = this._tab === 'checkpoints';
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Community</h1>
+      <div class="ts-segmented ts-segmented--sm" style="margin:0.4rem 0 0.6rem;">
+        <label class="ts-segmented__opt"><input type="radio" name="community-tab" value="places" ${onCheckpoints ? '' : 'checked'} /><span>Places</span></label>
+        <label class="ts-segmented__opt"><input type="radio" name="community-tab" value="checkpoints" ${onCheckpoints ? 'checked' : ''} /><span>Stays &amp; transport</span></label>
+      </div>
       ${renderFilterBar(this._geo, this._facets)}
       ${this._total === 0 && !narrowed ? `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-inbox.svg" alt="" />
           <p class="empty-title">Nothing here yet</p>
-          <p class="empty-desc">The pool fills up as travelers scrap places. Yours count too!</p>
+          <p class="empty-desc">${onCheckpoints
+            ? 'Hotels, airports, and stations collect here as travelers pin their trips.'
+            : 'The pool fills up as travelers scrap places. Yours count too!'}</p>
         </div>` : this._items.length ? `
         <div class="card-grid card-grid--2col">
           ${this._items.map((p, i) => renderScrapCard(p, { index: i, variant: 'community' })).join('')}
@@ -102,6 +112,27 @@ class CommunityView extends View {
   _bind() {
     const c = this.container;
     bindQuickPaste(c);
+    c.querySelectorAll('input[name=community-tab]').forEach((input) => {
+      input.addEventListener('change', () => {
+        this._tab = input.value;
+        // Paint the other tab's cached page instantly, then revalidate.
+        const cached = window.tsCache?.get('community', this._cacheKey());
+        if (cached) {
+          this._items = cached.items || [];
+          this._total = cached.total || 0;
+          this._facets = cached.facets || {};
+          this.render();
+          this._load().catch(() => {});
+        } else {
+          // Cold tab: flip the visible state in the tap's frame (skeleton),
+          // then fetch — never leave the other tab's cards on screen.
+          this._items = [];
+          this._loaded = false;
+          this.renderLoading();
+          this._load();
+        }
+      });
+    });
     bindFilterBar(c, {
       geo: this._geo,
       onChange: (geo) => { this._geo = geo; this._load(); },

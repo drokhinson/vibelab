@@ -30,16 +30,20 @@ async def list_community_places(
     country: str | None = Query(None, max_length=120, description="Filter: country (within the region)"),
     city: str | None = Query(None, max_length=120, description="Filter: city (within the country)"),
     category: str | None = Query(None, max_length=40, description="Filter by category slug"),
+    checkpoints: bool = Query(
+        False, description="Browse the Stays & transport pool (checkpoint-category "
+                           "places) instead of ordinary places"),
     limit: int = Query(24, ge=1, le=200, description="Page size"),
     offset: int = Query(0, ge=0, description="Page start"),
     user: CurrentUser = Depends(get_current_user),
 ) -> CommunityPlacesResponse:
     """One filtered page of places any traveler has scrapped, aggregated
     across users (geocoded only), most-saved first — plus drill-down facets
-    (regions → countries with data → cities) and the filtered total. Only
-    canonical facts are shared — names, pins, categories, save counts, and
-    public source URLs; never notes, ratings, or who saved what. Grouping,
-    facets, and pagination all run in SQL (one RPC round-trip)."""
+    (regions → countries with data → cities) and the filtered total. The
+    `checkpoints` flag flips to the Stays & transport tab (hotels, airports…,
+    020). Only canonical facts are shared — names, pins, categories, save
+    counts, and public source URLs; never notes, ratings, or who saved what.
+    Grouping, facets, and pagination all run in SQL (one RPC round-trip)."""
     sb = get_supabase()
     result = (
         sb.rpc("travelscrapbook_community_places", {
@@ -48,6 +52,7 @@ async def list_community_places(
             "p_country": country,
             "p_city": city,
             "p_category": category,
+            "p_checkpoints": checkpoints,
             "p_limit": limit,
             "p_offset": offset,
         }).execute()
@@ -104,13 +109,11 @@ async def save_community_place(
             .insert({"user_id": user.user_id, "place_id": place["id"]})
             .execute()
         ).data[0]
-    # Onto a trip → add a membership (the place also stays on the Wander List).
+    # Onto a trip → add a plan membership (the place also stays on the Wander
+    # List). RPC because the plan uniqueness is a partial index (020).
     if body.trip_id:
-        sb.table("travelscrapbook_scrap_trips").upsert(
-            {"scrap_id": row["id"], "trip_id": body.trip_id,
-             "status": MembershipStatus.APPROVED},
-            on_conflict="scrap_id,trip_id",
-            ignore_duplicates=True,
-        ).execute()
+        sb.rpc("travelscrapbook_add_plan_memberships", {
+            "p_rows": [{"scrap_id": row["id"], "trip_id": body.trip_id}],
+        }).execute()
         return _hydrated_membership(sb, row["id"], body.trip_id)
     return _hydrated_scrap(sb, row)

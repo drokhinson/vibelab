@@ -6,6 +6,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, HttpUrl
 
 from ..constants import (
+    AnchorRole,
     CapturedVia,
     GeocodeConfidence,
     ScrapStatus,
@@ -180,6 +181,8 @@ class ScrapResponse(BaseModel):
     route_position: Optional[int] = None
     plan_date: Optional[date] = None              # timeline slot (trip scraps only)
     plan_time: Optional[time] = None              # optional time within the day
+    plan_end_date: Optional[date] = None          # stay check-out (role memberships, 020)
+    role: Optional[AnchorRole] = None             # set on checkpoint memberships (020)
     added_by_user_id: Optional[str] = None       # scrap owner (who saved it)
     added_by_display_name: Optional[str] = None
     vibes: list[ScrapVibe] = []                   # populated on trip surfaces only
@@ -227,6 +230,13 @@ class PagedScrapsResponse(ScrapListResponse):
     facets: GeoFacets = GeoFacets()
 
 
+class VisitedPageResponse(PagedScrapsResponse):
+    """The Visited view: paginated ordinary places + the visited checkpoint
+    places (hotels/transport, category-flagged — 020) as their own section."""
+    visited_checkpoints: list[ScrapResponse] = []
+    checkpoint_total: int = 0
+
+
 class SourceScrapsResponse(BaseModel):
     """A capture's live progress: its processing status + the scraps it created
     so far — drives the 'watch it import' cards on the share success screen."""
@@ -251,10 +261,12 @@ class InboxScrapResponse(ScrapResponse):
 class InboxResponse(BaseModel):
     processing_sources: list[SourceResponse] = []
     failed_sources: list[SourceResponse] = []
-    scraps: list[InboxScrapResponse] = []         # one filtered page
-    total: int = 0                                # filtered count across pages
+    scraps: list[InboxScrapResponse] = []         # one filtered page (non-checkpoint places)
+    checkpoint_scraps: list[InboxScrapResponse] = []  # "Stays & transport" section (020)
+    total: int = 0                                # filtered count across pages (non-checkpoint)
+    checkpoint_total: int = 0
     facets: GeoFacets = GeoFacets()
-    inbox_count: int = 0                          # global badge count (unvisited + pending sources)
+    inbox_count: int = 0                          # global badge count (non-checkpoint unvisited + pending sources)
 
 
 class InboxCountResponse(BaseModel):

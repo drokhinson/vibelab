@@ -10,6 +10,7 @@ Scrap-level reads/edits/vibes live in scrap_routes.py.
 """
 
 from fastapi import Depends, HTTPException, Path
+from supabase import Client
 
 from db import get_supabase
 
@@ -28,16 +29,20 @@ from .models import (
     TripWishlistScrap,
 )
 from .scrap_routes import _hydrated_membership, get_owned_scrap
+from .services.checkpoints import checkpoint_category_slugs
 from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 from .services.places import place_matches_trip_scope
 
 
 def _trip_memberships(sb, trip_id: str) -> list[dict]:
-    """All memberships of a trip (join rows embedding their scrap), newest first."""
+    """A trip's PLAN memberships (join rows embedding their scrap), newest
+    first. Checkpoint memberships (role set, 020) belong to the anchors
+    surface, never the plans lists."""
     return (
         sb.table("travelscrapbook_scrap_trips")
         .select("*, travelscrapbook_scraps(*)")
         .eq("trip_id", trip_id)
+        .is_("role", "null")
         .order("created_at", desc=True)
         .execute()
     ).data or []
@@ -132,9 +137,13 @@ async def list_trip_candidates(
         if r["id"] not in excluded
     ]
     hydrated = hydrate_scraps(sb, rows)
+    # Checkpoint-category places (hotels, airports…) are never plan suggestions
+    # — they join trips as checkpoints, through the trip screen (020).
+    cp_slugs = checkpoint_category_slugs(sb)
     candidates = [
         s for s in hydrated
-        if place_matches_trip_scope(
+        if s.get("category") not in cp_slugs
+        and place_matches_trip_scope(
             trip,
             lat=s.get("lat"), lng=s.get("lng"),
             city=s.get("place_city"), region=s.get("place_region"),
@@ -173,6 +182,9 @@ async def list_trip_wishlist(
         if r["id"] not in already
     ]
     hydrated = hydrate_scraps(sb, rows)
+    # Same checkpoint exclusion as /candidates: the picker adds PLANS, and a
+    # hotel/airport joins a trip as a checkpoint via the trip screen instead.
+    cp_slugs = checkpoint_category_slugs(sb)
     scored = [
         TripWishlistScrap(
             **s,
@@ -184,25 +196,28 @@ async def list_trip_wishlist(
             ),
         )
         for s in hydrated
+        if s.get("category") not in cp_slugs
     ]
     # Scope-matches first; stable sort preserves newest-first within each group.
     scored.sort(key=lambda w: not w.fits_scope)
     return TripWishlistResponse(scraps=scored)
 
 
-def _upsert_memberships(sb, trip_id: str, scrap_ids: list[str]) -> None:
-    """Add memberships for the given owned scraps to a trip (approved), leaving
-    any that already exist untouched."""
-    if not scrap_ids:
+def _add_plan_memberships(sb: Client, pairs: list[tuple[str, str]]) -> None:
+    """Add PLAN memberships for (scrap_id, trip_id) pairs, leaving any that
+    already exist untouched — one RPC round trip however many pairs. An RPC
+    because the plan uniqueness is a partial index (WHERE role IS NULL, 020)
+    that PostgREST's on_conflict can't arbitrate."""
+    if not pairs:
         return
-    sb.table("travelscrapbook_scrap_trips").upsert(
-        [
-            {"scrap_id": sid, "trip_id": trip_id, "status": MembershipStatus.APPROVED}
-            for sid in scrap_ids
-        ],
-        on_conflict="scrap_id,trip_id",
-        ignore_duplicates=True,
-    ).execute()
+    sb.rpc("travelscrapbook_add_plan_memberships", {
+        "p_rows": [{"scrap_id": sid, "trip_id": tid} for sid, tid in pairs],
+    }).execute()
+
+
+def _upsert_memberships(sb: Client, trip_id: str, scrap_ids: list[str]) -> None:
+    """Add PLAN memberships for the given owned scraps to a trip (approved)."""
+    _add_plan_memberships(sb, [(sid, trip_id) for sid in scrap_ids])
 
 
 @router.post(
@@ -239,6 +254,7 @@ async def assign_scraps(
         .select("*, travelscrapbook_scraps(*)")
         .eq("trip_id", trip_id)
         .in_("scrap_id", ids)
+        .is_("role", "null")
         .execute()
     ).data or []
     flat = membership_rows_to_scraps(rows)
@@ -288,31 +304,26 @@ async def set_scrap_trips(
     sb = get_supabase()
     get_owned_scrap(sb, scrap_id, user.user_id)
     requested = set(body.trip_ids)
+    # PLAN memberships only (role IS NULL, 020): the picker reconciles the
+    # place's plan set — its checkpoint roles on trips are untouchable here.
     current = {
         m["trip_id"]
         for m in (
             sb.table("travelscrapbook_scrap_trips")
             .select("trip_id")
             .eq("scrap_id", scrap_id)
+            .is_("role", "null")
             .execute()
         ).data or []
     }
     to_add = requested - current
     to_remove = current - requested
     assert_writable_trips(sb, to_add | to_remove, user.user_id)
-    if to_add:
-        sb.table("travelscrapbook_scrap_trips").upsert(
-            [
-                {"scrap_id": scrap_id, "trip_id": tid, "status": MembershipStatus.APPROVED}
-                for tid in to_add
-            ],
-            on_conflict="scrap_id,trip_id",
-            ignore_duplicates=True,
-        ).execute()
+    _add_plan_memberships(sb, [(scrap_id, tid) for tid in to_add])
     if to_remove:
         sb.table("travelscrapbook_scrap_trips").delete().eq(
             "scrap_id", scrap_id
-        ).in_("trip_id", list(to_remove)).execute()
+        ).in_("trip_id", list(to_remove)).is_("role", "null").execute()
         # Removing via the multi-select is still resolving the suggestion — mark
         # each dropped trip so it doesn't re-suggest this place (migration 018).
         for tid in to_remove:
@@ -365,7 +376,7 @@ async def unassign_scrap(
     get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
     sb.table("travelscrapbook_scrap_trips").delete().eq(
         "scrap_id", scrap_id
-    ).eq("trip_id", trip_id).execute()
+    ).eq("trip_id", trip_id).is_("role", "null").execute()
     # The user resolved this suggestion — don't re-suggest it for this trip.
     _record_dismissals(sb, trip_id, [scrap_id])
     return MessageResponse(message="Removed from the trip")
@@ -391,6 +402,7 @@ async def approve_all_staged(
         .select("id, travelscrapbook_scraps(user_id)")
         .eq("trip_id", trip_id)
         .eq("status", MembershipStatus.STAGED)
+        .is_("role", "null")
         .execute()
     ).data or []
     mine = [

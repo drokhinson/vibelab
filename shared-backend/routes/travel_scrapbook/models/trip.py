@@ -79,6 +79,10 @@ class AnchorResponse(BaseModel):
     maps_url: Optional[str] = None                 # user-pasted Maps link, when provided
     geocode_confidence: GeocodeConfidence = GeocodeConfidence.NONE
     type: Optional[AnchorType] = None
+    # Unified-model links (020): the checkpoint's canonical place + the
+    # creator's scrap. The anchor id itself is the trip-membership id.
+    place_id: Optional[str] = None
+    scrap_id: Optional[str] = None
     anchor_date: Optional[date] = None            # start: arrival; end: departure; travel: leg day
     anchor_time: Optional[time] = None            # NULL = all-day point marker
     stay_date: Optional[date] = None              # stay: check-in

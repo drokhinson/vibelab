@@ -14,7 +14,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
 from supabase import Client
 
@@ -89,6 +89,12 @@ async def resolve_maps_place(sb: Client, url: str) -> Optional[ResolvedMapsPlace
         ),
         maps_url=mp.expanded_url,
     )
+
+
+def build_maps_url(place_name: str, city: Optional[str], country: Optional[str]) -> str:
+    """Google Maps search link — a plain URL, no API key involved."""
+    parts = [place_name] + [p for p in (city, country) if p]
+    return "https://www.google.com/maps/search/?api=1&query=" + quote(", ".join(parts))
 
 
 def region_for_country_code(sb: Client, country_code: Optional[str]) -> Optional[str]:
