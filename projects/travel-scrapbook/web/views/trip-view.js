@@ -1,6 +1,7 @@
 // views/trip-view.js — trip detail: plans (todos), checkpoints (stays/travel),
-// quick-paste, route panel (rendered by ui/route-panel.js; share modal lives
-// in widgets/trip-share.js).
+// quick-paste, and the unified Timeline (the route lives IN the timeline now —
+// ui/trip-timeline.js over domain/route-plan.js; share modal lives in
+// widgets/trip-share.js).
 'use strict';
 
 class TripView extends View {
@@ -12,10 +13,8 @@ class TripView extends View {
   _resetState() {
     this._tripId = null;
     this._priorityOnly = false;
-    this._route = null;
-    this._routeBusy = false;
     // Plans (default) or the day-by-day Timeline (computed locally from the
-    // trip bundle — see domain/timeline.js).
+    // trip bundle — see domain/timeline.js + domain/route-plan.js).
     this._tab = localStorage.getItem('ts.trip.tab') || 'plans';
     this._painted = false; // a different trip is a fresh visit → animate once
     // Structural fingerprint of the last full render — the trip-bundle listener
@@ -116,7 +115,6 @@ class TripView extends View {
     // (stable sort keeps each half in its original order).
     const allScraps = this._visibleScraps(trip);
     const staged = trip.staged_scraps || [];
-    const geocodedCount = allScraps.filter((s) => s.lat != null).length;
     const dates = formatDateRange(trip.start_date, trip.end_date);
 
     this.container.innerHTML = `
@@ -143,12 +141,10 @@ class TripView extends View {
       </div>
       ${this._tab === 'timeline'
         ? `
-      ${renderRoutePanel(trip, { route: this._route, geocodedCount, canWrite, routeBusy: this._routeBusy })}
-      <div id="tl-content">${renderTripTimeline(trip, buildTimeline(trip, trip.anchors || [], allScraps), { canWrite })}</div>`
+      <div id="tl-content">${renderTripTimeline(trip, RoutePlan.buildItinerary(trip, trip.anchors || [], allScraps), { canWrite })}</div>`
         : `
       ${this._renderStaging(staged, cardOpts)}
       ${canWrite ? this._renderCandidates(trip, cardOpts) : ''}
-      ${renderRoutePanel(trip, { route: this._route, geocodedCount, canWrite, routeBusy: this._routeBusy })}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;margin-top:1.2rem;flex-wrap:wrap;">
         <h2 style="font-size:1.5rem;margin:0;">Plans</h2>
         <div style="display:flex;gap:0.5rem;">
@@ -236,7 +232,7 @@ class TripView extends View {
   // (with the fields that drive the day range + suggestions) and the chrome
   // meta the toolbar/heading show. It deliberately OMITS per-scrap fields
   // (plan_date/plan_time/rating/vibes/visited/skipped/notes) so those changes
-  // fall to the surgical path — buildTimeline / _tlPlanOrder / renderPlanZones
+  // fall to the surgical path — RoutePlan.buildItinerary / renderPlanZones
   // all recompute them from local state, so a region re-render is always correct.
   // It also OMITS capturePending, so a paste's shimmer patches #plans-content
   // surgically; only the scraps landing (a membership change) forces a full render.
@@ -276,7 +272,7 @@ class TripView extends View {
     if (!host) { this.render(); return; }
     const { isOwner, canWrite } = this._deriveCtx(trip);
     host.innerHTML = renderTripTimeline(
-      trip, buildTimeline(trip, trip.anchors || [], this._visibleScraps(trip)), { canWrite });
+      trip, RoutePlan.buildItinerary(trip, trip.anchors || [], this._visibleScraps(trip)), { canWrite });
     this.refreshIcons(host);
     this._bindTimeline(host, trip, { canWrite, isOwner });
   }
@@ -289,32 +285,6 @@ class TripView extends View {
     host.innerHTML = this._renderPlansContent(trip);
     this.refreshIcons(host);
     this._bindPlansContent(host, trip);
-  }
-
-  // Merge the route sort's results into the bundle in one _applyTrip write:
-  // route_position for EVERY routed plan (so the timeline re-orders into the
-  // point-to-point driving sequence immediately), and plan_date ONLY where it
-  // was still null (the sort never moves a hand-scheduled plan — backend + SQL
-  // enforce the same, so this can't clobber a concurrent local edit).
-  _applyRouteSchedule(tripId, route) {
-    const trip = window.store.get('trip:' + tripId);
-    if (!trip || !route || !route.ordered_scraps) return;
-    const byId = {};
-    for (const s of route.ordered_scraps) byId[s.id] = s;
-    if (!Object.keys(byId).length) return;
-    const merge = (list) => (list || []).map((s) => {
-      const r = byId[s.id];
-      if (!r) return s;
-      const next = { ...s, route_position: r.route_position };
-      if (!s.plan_date && r.plan_date) next.plan_date = r.plan_date; // fill-unscheduled only
-      return next;
-    });
-    window.TripDomain._applyTrip({
-      ...trip,
-      scraps: merge(trip.scraps),
-      staged_scraps: merge(trip.staged_scraps),
-      candidates: merge(trip.candidates),
-    });
   }
 
   // The trip's checkpoints — stays and travel — as simple typed cards under
@@ -388,6 +358,10 @@ class TripView extends View {
     c.querySelector('#trip-download')?.addEventListener('click', () => {
       // Mapped-pin counts per day (and trip-wide) drive the export scope
       // picker: "points" = geocoded, non-visited plans, matching the exports.
+      // Deliberately over buildTimeline (persisted plan_date only), NOT the
+      // ephemeral route placement — the exports filter by plan_date server-side,
+      // so only hand-anchored plans land in a per-day file. The counts must tell
+      // that truth (an auto-placed plan won't appear in "Day 3.csv").
       const tl = buildTimeline(trip, trip.anchors || [], trip.scraps || []);
       const days = (tl.days || []).map((d) => ({
         date: d.date,
@@ -447,48 +421,6 @@ class TripView extends View {
       this._bindPlansContent(c, trip);
       this._bindAnchorButtons(c, trip);
     }
-
-    c.querySelector('#route-optimize')?.addEventListener('click', async () => {
-      this._routeBusy = true;
-      this.render();
-      try {
-        this._route = await window.RouteDomain.optimize(trip.id, { priority_only: this._priorityOnly });
-        // The sort also lays previously-unscheduled plans onto the timeline —
-        // reconcile those plan_dates into the bundle so the Timeline tab reflects
-        // the new itinerary without a refetch. Already-scheduled plans are left
-        // as-is (the backend only fills where plan_date was null).
-        this._applyRouteSchedule(trip.id, this._route);
-      } catch (err) {
-        toast(err.message || 'Route sorting failed', { error: true });
-      } finally {
-        this._routeBusy = false;
-        this.render();
-      }
-    });
-
-    c.querySelector('#route-maps')?.addEventListener('click', async () => {
-      try {
-        const res = await window.RouteDomain.mapsLinks(trip.id);
-        if (!res.legs.length) { toast('Pin at least two stops first', { error: true }); return; }
-        if (res.legs.length === 1) {
-          window.open(res.legs[0].url, '_blank', 'noopener');
-          return;
-        }
-        const legsEl = c.querySelector('#route-legs');
-        legsEl.innerHTML = res.legs.map((leg) => `
-          <a class="ts-btn ts-btn--ghost ts-btn--sm" href="${escapeAttr(leg.url)}" target="_blank" rel="noopener" style="justify-content:flex-start;">
-            <i data-lucide="external-link"></i>${escapeHtml(leg.label)} (${leg.stop_count} stops)
-          </a>`).join('');
-        this.refreshIcons(legsEl);
-      } catch (err) { toast(err.message, { error: true }); }
-    });
-
-    c.querySelector('#route-csv')?.addEventListener('click', async () => {
-      try {
-        await window.RouteDomain.downloadCsv(trip.id, trip.name);
-        toast('CSV downloaded — import it in Google My Maps');
-      } catch (err) { toast(err.message, { error: true }); }
-    });
   }
 
   // Anchor/checkpoint buttons within `root`. Present on both tabs — timeline
@@ -604,11 +536,15 @@ class TripView extends View {
               toast(next === 'visited' ? 'Marked visited'
                 : next === 'skipped' ? 'Marked skipped' : 'Cleared', { key: 'outcome-' + scrapId });
               await window.ScrapDomain.setTimelineOutcome(scrapId, trip.id, next);
-            } else if (action === 'slot') {
-              // One-tap "add to Day N" from a timeline suggestion chip. The
-              // patched card re-renders the timeline instantly.
-              await window.ScrapDomain.schedule(scrapId, trip.id, { plan_date: el.dataset.date });
-              toast('Slotted in');
+            } else if (action === 'open-plan') {
+              // Timeline title tap → the plan popup (notes + day/time; setting a
+              // day anchors it). Read-only viewers get the info-only variant.
+              PlanPopup.open(scrap, {
+                tripId: trip.id,
+                days: this._timelineDays(trip),
+                tripBounds: { start: trip.start_date, end: trip.end_date },
+                canWrite: this._deriveCtx(trip).canWrite,
+              });
             } else if (action === 'delete') {
               if (!confirmDestructive('Delete this place? This can\'t be undone.')) return;
               await window.ScrapDomain.remove(scrapId, trip.id);
@@ -631,9 +567,10 @@ class TripView extends View {
     this._bindAnchorButtons(root, trip);
     this._bindScrapActions(root, trip, findScrap);
 
-    // Swipe-right schedules, swipe-left unschedules, press-and-hold drops a plan
-    // on any day. Buttons (checkbox/pin) opt out. Optimistic schedule moves the
-    // row instantly; the store patch re-renders this region surgically.
+    // Swipe-right anchors (day picker), swipe-left un-anchors (back to auto),
+    // holding the grip drops a plan on any day. The checkbox opts out; a tap on
+    // the title opens the plan popup. Optimistic schedule moves the row instantly;
+    // the store patch re-renders this region surgically.
     if (this._tab === 'timeline' && canWrite && window.TimelineGestures) {
       const openScheduler = (scrap) => PlanScheduler.open(scrap, {
         tripId: trip.id,
@@ -650,7 +587,7 @@ class TripView extends View {
         onUnschedule: async (scrapId) => {
           try {
             await window.ScrapDomain.schedule(scrapId, trip.id, { plan_date: null, plan_time: null });
-            toast('Removed from the timeline');
+            toast('Back to auto — the route will place it');
           } catch (err) { toast(err.message, { error: true }); }
         },
         onMoveToDay: async (scrapId, date) => {

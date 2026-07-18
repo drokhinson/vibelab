@@ -238,7 +238,6 @@
     /** Day-by-day timeline: days with markers + scheduled plans, and unscheduled plans with slot suggestions. */
     tripTimeline: (tripId) => call(`/trips/${tripId}/timeline`),
 
-    optimizeRoute: (tripId, body) => call(`/trips/${tripId}/route/optimize`, { method: 'POST', body: body || {} }),
     /** @param {{date?: string}} [params] Optional single-day (YYYY-MM-DD) filter. */
     exportMapsLinks: (tripId, params = {}) => call(`/trips/${tripId}/export/maps-links${qs(params)}`),
     /** @param {{date?: string}} [params] @returns {Promise<Blob>} */

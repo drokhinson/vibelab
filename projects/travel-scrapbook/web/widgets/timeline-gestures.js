@@ -6,18 +6,20 @@
 //     .tl-row.tl-row--draggable               → the sliding foreground
 // Day cards carry .tl-day[data-day-date] and act as drop targets.
 //
-// One pointer state machine per row disambiguates three gestures:
-//   • horizontal drag past a threshold → swipe (schedule / unschedule),
-//   • press-and-hold (stationary) then move → pick the card up and drop on a day,
+// One pointer state machine per row disambiguates the gestures:
+//   • horizontal drag past a threshold → swipe (anchor / un-anchor),
+//   • press-and-hold ON THE GRIP then move → pick the card up and drop on a day,
+//   • a clean tap on the title → its click fires (opens the plan popup),
 //   • everything else → snap back (vertical moves fall through to native scroll).
-// Buttons inside a row (the checkbox, the "keep here" pin) are left alone so
-// their native click still fires. Uses Pointer Events + pointer capture, so no
-// window-level listeners leak across the view's frequent re-renders.
+// Only the checkbox opts out entirely (its own tap); a swipe can start anywhere
+// else on the row, including the title — after a swipe/drag we suppress the
+// title's synthetic click so it doesn't also open the popup. Only the grip
+// starts a pick-up; there is no whole-card long-press. Uses Pointer Events +
+// pointer capture, so no window-level listeners leak across re-renders.
 'use strict';
 
 const TimelineGestures = (function () {
-  const LONGPRESS_MS = 320;   // hold this long (stationary) → pick the card up
-  const MOVE_TOLERANCE = 8;   // px of movement that ends the "is it a hold?" window
+  const MOVE_TOLERANCE = 8;   // px of movement that ends the "is it a tap?" window
   const SWIPE_COMMIT = 72;    // px past which a swipe fires its action
   const SWIPE_MAX = 132;      // px clamp on how far the row slides
   const GRIP_HOLD_MS = 120;   // grip is an explicit handle → pick up fast
@@ -36,6 +38,7 @@ const TimelineGestures = (function () {
     let pointerId = null;
     let pressTimer = null;
     let fromGrip = false;        // did this gesture start on the drag handle?
+    let suppressClick = false;   // a swipe/drag just fired → eat the title's click
     let clone = null, grabX = 0, grabY = 0, dropDayEl = null;
     let rafId = null, lastClientX = 0, lastClientY = 0;
 
@@ -78,6 +81,10 @@ const TimelineGestures = (function () {
 
     const startDrag = (e) => {
       mode = 'drag';
+      // Capture now (not on pointerdown) so a clean TAP never captures — else the
+      // captured pointer retargets the click to the row and the title's own click
+      // (open the popup) never fires.
+      try { fg.setPointerCapture(e.pointerId); } catch { /* older engines */ }
       swipeEl.classList.add('is-dragging');
       fg.style.touchAction = 'none';   // best-effort for the body long-press path
       const r = fg.getBoundingClientRect();
@@ -107,16 +114,21 @@ const TimelineGestures = (function () {
     const onDown = (e) => {
       if (!canWrite || mode !== 'idle') return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
-      if (e.target.closest('button')) return;   // checkbox / pin keep their click
+      // Only the checkbox opts out (its own tap). Everything else on the row —
+      // including the title button — can start a swipe; a clean tap falls through
+      // to the title's click.
+      if (e.target.closest('.tl-check')) return;
       fromGrip = !!e.target.closest('.tl-row__grip');   // the explicit drag handle
       pointerId = e.pointerId;
       startX = e.clientX; startY = e.clientY; dx = 0; dy = 0;
       mode = 'pending';
       fg.style.transition = 'none';
       clearTimer();
-      pressTimer = setTimeout(() => { if (mode === 'pending') startDrag(e); },
-                              fromGrip ? GRIP_HOLD_MS : LONGPRESS_MS);
-      try { fg.setPointerCapture(e.pointerId); } catch { /* older engines */ }
+      // ONLY the grip picks the card up (press-and-hold). A hold anywhere else
+      // does nothing — the title needs no hold, so there's no whole-card longpress.
+      if (fromGrip) pressTimer = setTimeout(() => { if (mode === 'pending') startDrag(e); }, GRIP_HOLD_MS);
+      // NB: pointer capture is deferred to the swipe/drag start (not taken here),
+      // so a clean tap's click still reaches the title button (opens the popup).
     };
 
     const onMove = (e) => {
@@ -137,6 +149,9 @@ const TimelineGestures = (function () {
         clearTimer();
         if (Math.abs(dx) > Math.abs(dy)) {
           mode = 'swipe';
+          // Capture only now that it's a real swipe (see startDrag) so a tap that
+          // never crossed the threshold still delivers its click to the title.
+          try { fg.setPointerCapture(e.pointerId); } catch { /* older engines */ }
           swipeEl.classList.add('is-swiping');
         } else {
           // Vertical intent → let the page scroll; abandon the gesture.
@@ -172,6 +187,9 @@ const TimelineGestures = (function () {
       mode = 'idle';
       pointerId = null;
       fromGrip = false;
+      // A swipe/drag ends with a synthetic click on whatever was under the
+      // finger (often the title button) — eat it so it doesn't open the popup.
+      if (wasMode === 'swipe' || wasMode === 'drag') suppressClick = true;
       if (wasMode === 'swipe') {
         const commit = Math.abs(dx) >= SWIPE_COMMIT;
         snapBack();
@@ -198,6 +216,14 @@ const TimelineGestures = (function () {
     fg.addEventListener('pointermove', onMove);
     fg.addEventListener('pointerup', onUp);
     fg.addEventListener('pointercancel', onCancel);
+    // Capture phase (runs before the title's own bubbling click handler) so a
+    // post-swipe/-drag click is swallowed; a clean tap leaves the flag false.
+    fg.addEventListener('click', (e) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
   }
 
   return {
