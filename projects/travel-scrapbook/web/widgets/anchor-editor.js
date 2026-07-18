@@ -70,9 +70,7 @@ const AnchorEditor = {
 
           <div id="ae-place-fields">
             <label class="ts-label" for="ae-label">Name</label>
-            <input class="ts-input" id="ae-label" required placeholder="e.g. Narita Airport" />
-            <label class="ts-label" for="ae-query">Where is it? (searched on the map)</label>
-            <input class="ts-input" id="ae-query" required placeholder="e.g. Narita International Airport, Japan" />
+            <input class="ts-input" id="ae-label" required placeholder="e.g. Narita International Airport" />
             <label class="ts-label" for="ae-maps-url">Google Maps link (optional)</label>
             <input class="ts-input" id="ae-maps-url" placeholder="paste a maps link to pin the exact spot" />
           </div>
@@ -121,7 +119,6 @@ const AnchorEditor = {
 
     const roleSelect = modal.querySelector('#ae-role');
     const labelInput = modal.querySelector('#ae-label');
-    const queryInput = modal.querySelector('#ae-query');
     const placeFields = modal.querySelector('#ae-place-fields');
     const typeRow = modal.querySelector('#ae-type-row');
     const whenRow = modal.querySelector('#ae-when-row');
@@ -130,18 +127,12 @@ const AnchorEditor = {
     const sameRow = modal.querySelector('#ae-same-row');
     const sameCheckbox = modal.querySelector('#ae-same-as-start');
 
-    labelInput.addEventListener('input', () => {
-      if (!queryInput.dataset.touched) queryInput.value = labelInput.value;
-    });
-    queryInput.addEventListener('input', () => { queryInput.dataset.touched = '1'; });
-
     // Toggle place fields on/off (used by the same-as-arrival checkbox). Hidden
     // required inputs block form submit, so required is dropped while hidden.
     const setPlaceFieldsActive = (active) => {
       placeFields.hidden = !active;
       typeRow.hidden = !active || roleSelect.value === 'stay';
       labelInput.required = active;
-      queryInput.required = active;
     };
 
     // Show only the fields relevant to the selected role. The travel day stays
@@ -167,9 +158,7 @@ const AnchorEditor = {
     // Edit mode: prefill from the existing checkpoint.
     if (editing) {
       labelInput.value = anchor.label || '';
-      queryInput.value = anchor.query || '';
       modal.querySelector('#ae-maps-url').value = anchor.maps_url || '';
-      queryInput.dataset.touched = '1'; // don't mirror label edits into the query
       if (anchor.type) modal.querySelector('#ae-type').value = anchor.type;
       if (anchor.role === 'stay') {
         modal.querySelector('#ae-stay-date').value = anchor.stay_date || '';
@@ -197,7 +186,9 @@ const AnchorEditor = {
           body.same_as_start = true;
         } else {
           body.label = labelInput.value.trim();
-          body.query = queryInput.value.trim();
+          // The name doubles as the map search query (no separate "where is it"
+          // field) — a pasted Maps link still overrides it for the exact pin.
+          body.query = labelInput.value.trim();
           // A pasted Maps link pins the exact spot (no AI). On edit only send it
           // when changed, so an unchanged link doesn't re-resolve every save.
           const mapsUrl = modal.querySelector('#ae-maps-url').value.trim();

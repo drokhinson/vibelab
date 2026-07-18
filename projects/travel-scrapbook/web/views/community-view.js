@@ -95,7 +95,7 @@ class CommunityView extends View {
             : 'The pool fills up as travelers scrap places. Yours count too!'}</p>
         </div>` : this._items.length ? `
         <div class="card-grid card-grid--2col">
-          ${this._items.map((p, i) => renderScrapCard(p, { index: i, variant: 'community' })).join('')}
+          ${this._items.map((p, i) => renderScrapCard(p, { index: i, variant: 'community', communityWishlist: true })).join('')}
         </div>` : `
         <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">No community places match — clear a filter to widen the view.</p>`}
       ${this._items.length < this._total ? `
@@ -147,14 +147,37 @@ class CommunityView extends View {
         try {
           await window.api.saveCommunityPlace(btn.dataset.placeId);
           toast('Saved to your Wander List');
-          window.tsCache?.invalidate('inbox');
-          window.tsCache?.invalidate('community'); // saved_by_count changed
-          window.SourceDomain?.refreshInboxCount();
-          btn.outerHTML = '<span class="ts-btn ts-btn--ghost ts-btn--sm" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>';
-          this.refreshIcons();
+          this._afterCommunitySave(btn);
         } catch (err) { toast(err.message || 'Could not save', { error: true }); btn.disabled = false; }
       });
     });
+    // Fix-location pencil: the aggregated community pin can be wrong. Saving it
+    // makes it your own scrap, so the editor (paste a Maps link → re-geocode)
+    // can correct the location.
+    c.querySelectorAll('[data-action=community-edit]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const scrap = await window.api.saveCommunityPlace(btn.dataset.placeId);
+          this._afterCommunitySave(btn);
+          ScrapEditor.open(scrap, null, { onSaved: () => this._load() });
+        } catch (err) { toast(err.message || 'Could not save', { error: true }); btn.disabled = false; }
+      });
+    });
+  }
+
+  // Invalidate caches + flip the tapped card to its saved state (drop the
+  // pencil, swap the action button for a "Saved" pill). Shared by the plain
+  // "Want to go" save and the fix-location pencil.
+  _afterCommunitySave(btn) {
+    window.tsCache?.invalidate('inbox');
+    window.tsCache?.invalidate('community'); // saved_by_count changed
+    window.SourceDomain?.refreshInboxCount();
+    const card = btn.closest('.sticker-card');
+    card?.querySelector('[data-action=community-edit]')?.remove();
+    const saveBtn = card?.querySelector('[data-action=save-community]');
+    if (saveBtn) saveBtn.outerHTML = '<span class="ts-btn ts-btn--ghost ts-btn--sm" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>';
+    this.refreshIcons();
   }
 }
 window.CommunityView = CommunityView;

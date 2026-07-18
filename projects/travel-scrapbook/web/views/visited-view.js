@@ -110,7 +110,7 @@ class VisitedView extends View {
         ` : `
           ${this._items.length ? `
             <div class="card-grid card-grid--2col">
-              ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip' })).join('')}
+              ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip', showRemove: false })).join('')}
             </div>` : `
             <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">Nothing here matches — clear a filter to widen the view.</p>`}
           ${this._items.length < this._total ? `
