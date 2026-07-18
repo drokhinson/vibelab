@@ -254,21 +254,6 @@ class InboxView extends View {
                 } catch (err) { toast(err.message, { error: true }); }
               },
             });
-          } else if (action === 'notes') {
-            NotePopup.open(scrap, {
-              onSaved: (notes) => {
-                const prev = scrap.notes ?? null;
-                scrap.notes = notes; this.render(); // instant chip flip, no refetch
-                window.ScrapDomain.saveNote(scrap.id, scrap.trip_id || null, notes).catch((err) => {
-                  scrap.notes = prev; this.render();
-                  toast(err.message || 'Could not save the note', { error: true });
-                });
-              },
-            });
-          } else if (action === 'assign') {
-            await window.SourceDomain.assignScrap(scrapId, el.dataset.tripId);
-            toast('Added to the trip');
-            await this._load();
           } else if (action === 'pick-trip') {
             // Multi-select: a place can be in several trips at once, and stays
             // on the Wander List regardless.

@@ -206,12 +206,6 @@
     getCaptureToken: () => call('/capture-token'),
     revokeCaptureToken: () => call('/capture-token', { method: 'DELETE' }),
 
-    /** @returns {Promise<Scrap>} */
-    getScrap: (scrapId) => call(`/scraps/${scrapId}`),
-    /** @returns {Promise<{scraps: Scrap[]}>} */
-    listScraps: (tripId) => call(`/trips/${tripId}/scraps`),
-    /** Wishlist places matching a trip's scope. @returns {Promise<{scraps: Scrap[]}>} */
-    tripCandidates: (tripId) => call(`/trips/${tripId}/candidates`),
     /** All wishlist places + a fits_scope flag, for the trip's add picker. @returns {Promise<{scraps: Array<Scrap & {fits_scope: boolean}>}>} */
     tripWishlist: (tripId) => call(`/trips/${tripId}/wishlist`),
     /** Bulk-add wishlist scraps to a trip. @returns {Promise<{scraps: Scrap[]}>} */
@@ -234,9 +228,6 @@
     scheduleScrap: (scrapId, tripId, body) => call(`/scraps/${scrapId}/trips/${tripId}/schedule`, { method: 'PATCH', body }),
     /** @returns {Promise<{scraps: Scrap[]}>} */
     approveAllStaged: (tripId) => call(`/trips/${tripId}/approve-all`, { method: 'POST' }),
-
-    /** Day-by-day timeline: days with markers + scheduled plans, and unscheduled plans with slot suggestions. */
-    tripTimeline: (tripId) => call(`/trips/${tripId}/timeline`),
 
     // Exports: `plan` (the client's computed itinerary — [{scrap_id, plan_date}]
     // in order) is POSTed so auto-placed plans export in the right day/order;

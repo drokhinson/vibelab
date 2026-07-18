@@ -3,25 +3,13 @@
 
 /**
  * @param {Object} trip — TripSummaryResponse
- * @param {{variant?: 'card'|'row', index?: number}} opts
+ * @param {{variant?: 'card', index?: number}} opts
  */
 function renderTripCard(trip, opts = {}) {
-  const { variant = 'card', index = 0 } = opts;
+  const { index = 0 } = opts;
   const dates = formatDateRange(trip.start_date, trip.end_date);
   const count = trip.scrap_count ?? 0;
   const washi = ['washi', 'washi washi--mint', 'washi washi--butter', 'washi washi--blush'][index % 4];
-
-  if (variant === 'row') {
-    return `
-      <div class="sticker-card card-lift" data-trip-id="${escapeAttr(trip.id)}" style="display:flex;align-items:center;gap:0.7rem;">
-        ${renderSprite('cover', trip.cover_icon, { size: 'md', alt: '' })}
-        <div style="min-width:0;">
-          <div style="font-weight:800;">${escapeHtml(trip.name)}</div>
-          <div class="scrap-card__sub">${escapeHtml(trip.destination || '')}</div>
-        </div>
-      </div>
-    `;
-  }
 
   // Trips shared with the viewer (role != owner) get a "Shared by X" ribbon.
   const sharedChip = (trip.role && trip.role !== 'owner')
