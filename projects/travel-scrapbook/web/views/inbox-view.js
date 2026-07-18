@@ -17,6 +17,7 @@ class InboxView extends View {
     this._pollTimer = null;
     this._pollStartedAt = 0;
     this._geo = { region: null, country: null, city: null };
+    this._tab = 'places';          // 'places' | 'checkpoints' — segmented toggle
     this._items = [];
     this._checkpoints = [];        // "Stays & transport" section (hotels/airports…)
     this._total = 0;
@@ -140,6 +141,7 @@ class InboxView extends View {
     const filtered = !!(this._geo.region || this._geo.country || this._geo.city);
     const empty = !this._processing.length && !this._failed.length && !this._total
       && !this._checkpointTotal && !filtered;
+    const onCheckpoints = this._tab === 'checkpoints';
 
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Wander List</h1>
@@ -150,33 +152,40 @@ class InboxView extends View {
           <p class="empty-desc">Share a link from Instagram, Reddit, or Maps — new finds land here
             (or straight onto a matching trip).</p>
         </div>` : `
-        ${this._processing.length ? `
-          <h2 style="font-size:1.3rem;margin:1.1rem 0 0.5rem;">Reading…</h2>
-          <div class="card-grid">
-            ${this._processing.map((s, i) => renderSourceCard(s, { index: i, variant: 'processing' })).join('')}
-          </div>` : ''}
-        ${this._failed.length ? `
-          <h2 style="font-size:1.3rem;margin:1.1rem 0 0.5rem;">Couldn't read</h2>
-          <div class="card-grid">
-            ${this._failed.map((s, i) => renderSourceCard(s, { index: i, variant: 'failed' })).join('')}
-          </div>` : ''}
+        <div class="ts-segmented ts-segmented--sm" style="margin:0.4rem 0 0.6rem;">
+          <label class="ts-segmented__opt"><input type="radio" name="inbox-tab" value="places" ${onCheckpoints ? '' : 'checked'} /><span>Places</span></label>
+          <label class="ts-segmented__opt"><input type="radio" name="inbox-tab" value="checkpoints" ${onCheckpoints ? 'checked' : ''} /><span>Stays &amp; transport</span></label>
+        </div>
         ${renderFilterBar(this._geo, this._facets)}
-        ${this._items.length ? `
-          <div class="card-grid card-grid--2col">
-            ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox', isNew: this._isNew(s) })).join('')}
-          </div>` : `
-          <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">
-            ${filtered ? 'Nothing here matches — clear a filter to widen the view.' : 'Nothing waiting right now.'}</p>`}
-        ${this._items.length < this._total ? `
-          <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
-            <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
-          </button>` : ''}
-        ${this._checkpoints.length ? `
-          <h2 style="font-size:1.3rem;margin:1.4rem 0 0.2rem;">Stays &amp; transport</h2>
+        ${onCheckpoints ? `
           <p class="scrap-card__sub" style="margin:0 0 0.5rem;">Hotels, airports, and stations you've saved — add them to a trip as checkpoints from the trip screen.</p>
-          <div class="card-grid card-grid--2col">
-            ${this._checkpoints.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox', checkpoint: true, isNew: this._isNew(s) })).join('')}
-          </div>` : ''}
+          ${this._checkpoints.length ? `
+            <div class="card-grid card-grid--2col">
+              ${this._checkpoints.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox', checkpoint: true, isNew: this._isNew(s) })).join('')}
+            </div>` : `
+            <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">No stays or transport saved yet.</p>`}
+        ` : `
+          ${this._processing.length ? `
+            <h2 style="font-size:1.3rem;margin:1.1rem 0 0.5rem;">Reading…</h2>
+            <div class="card-grid">
+              ${this._processing.map((s, i) => renderSourceCard(s, { index: i, variant: 'processing' })).join('')}
+            </div>` : ''}
+          ${this._failed.length ? `
+            <h2 style="font-size:1.3rem;margin:1.1rem 0 0.5rem;">Couldn't read</h2>
+            <div class="card-grid">
+              ${this._failed.map((s, i) => renderSourceCard(s, { index: i, variant: 'failed' })).join('')}
+            </div>` : ''}
+          ${this._items.length ? `
+            <div class="card-grid card-grid--2col">
+              ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'inbox', isNew: this._isNew(s) })).join('')}
+            </div>` : `
+            <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">
+              ${filtered ? 'Nothing here matches — clear a filter to widen the view.' : 'Nothing waiting right now.'}</p>`}
+          ${this._items.length < this._total ? `
+            <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
+              <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
+            </button>` : ''}
+        `}
       `}
       ${renderQuickPaste()}
     `;
@@ -189,6 +198,12 @@ class InboxView extends View {
   _bind() {
     const c = this.container;
     bindQuickPaste(c, { onCreated: () => this._load() });
+
+    // Places / Stays & transport toggle — both sets are already loaded in one
+    // page, so flipping tabs is a pure client-side re-render (no refetch).
+    c.querySelectorAll('input[name=inbox-tab]').forEach((input) => {
+      input.addEventListener('change', () => { this._tab = input.value; this.render(); });
+    });
 
     bindFilterBar(c, {
       geo: this._geo,
