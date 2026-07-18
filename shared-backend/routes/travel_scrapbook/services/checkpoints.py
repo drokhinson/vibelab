@@ -149,11 +149,21 @@ def get_checkpoint_membership(
 
 
 async def resolve_checkpoint_geo(
-    sb: Client, *, maps_url: Optional[str], query: Optional[str]
+    sb: Client,
+    *,
+    maps_url: Optional[str],
+    query: Optional[str],
+    geocode_query: bool = False,
 ) -> tuple[Optional[nominatim.GeocodeResult], GeocodeConfidence, Optional[str]]:
     """(geo, confidence, maps_url_to_store) for a checkpoint's location. A
     pasted Google Maps URL wins (parsed to itself, no AI); a non-Maps or
-    unparseable link is stored verbatim while the text query supplies the pin."""
+    unparseable link is stored verbatim.
+
+    The bare text ``query`` (usually the typed name) is forward-geocoded ONLY
+    when ``geocode_query`` is True — the URL-capture/enrichment path, where the
+    query is an AI-extracted location. On the MANUAL add/edit path it stays
+    False: a name with no Maps link resolves to no location (rather than a
+    best-guess Nominatim pin), so a name-only checkpoint stays a bare name."""
     if maps_url:
         resolved = await resolve_maps_place(sb, maps_url)
         if resolved is not None and resolved.lat is not None:
@@ -167,9 +177,9 @@ async def resolve_checkpoint_geo(
             )
             return geo, GeocodeConfidence.HIGH, resolved.maps_url
         keep_url = resolved.maps_url if resolved is not None else maps_url
-        geo = await nominatim.geocode(query) if query else None
+        geo = await nominatim.geocode(query) if (geocode_query and query) else None
         return geo, (GeocodeConfidence.HIGH if geo else GeocodeConfidence.NONE), keep_url
-    geo = await nominatim.geocode(query) if query else None
+    geo = await nominatim.geocode(query) if (geocode_query and query) else None
     return geo, (GeocodeConfidence.HIGH if geo else GeocodeConfidence.NONE), None
 
 
@@ -227,11 +237,13 @@ async def materialize_checkpoint_scrap(
     category: str,
     query: Optional[str] = None,
     maps_url: Optional[str] = None,
+    geocode_query: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """(place, scrap) for a checkpoint: resolve the location, then dedupe and
-    save via place_scrap_from_geo."""
+    save via place_scrap_from_geo. ``geocode_query`` forwards to
+    resolve_checkpoint_geo — True only on the URL/AI path (see there)."""
     geo, confidence, resolved_url = await resolve_checkpoint_geo(
-        sb, maps_url=maps_url, query=query
+        sb, maps_url=maps_url, query=query, geocode_query=geocode_query
     )
     return place_scrap_from_geo(
         sb, user_id, label=label, category=category,

@@ -1,18 +1,22 @@
-// ui/trip-timeline.js — render functions for the trip's day-by-day timeline.
-// The timeline IS the route: every geocoded plan appears on the day the route
+// ui/trip-timeline.js — render functions for the trip's timeline.
+// The timeline IS the route: every geocoded plan appears where the route
 // suggestion places it (domain/route-plan.js), with the distance + estimated
 // drive/walk time shown between consecutive stops. Plans the user hand-moves get
 // a saved date and an anchor (pin) marker; the rest float, auto-placed (sparkles)
 // and re-flow whenever the trip changes. A summary line up top gives the whole
-// route's rough distance. Plans with no map pin collect in "Anytime".
+// route's rough distance.
 //
 // The timeline is bookended by the trip's endpoints: Arrival on top and
 // Departure at the bottom (ghost "+ Arrival"/"+ Departure" until each is set).
-// Day cards sit between: stay/travel markers first (chronological), then plan
-// rows interleaved with leg connectors — including a leg from the day's start
-// into its first todo. A "+ Checkpoint" affordance sits mid-timeline; each
-// checkpoint marker carries an edit pencil. A closing leg connector (the last
-// stop → Departure) renders just above the Departure bookend.
+// Between them sits the "middle":
+//   • Dated trip → day cards (stay/travel markers first, chronological, then
+//     plan rows interleaved with leg connectors — including a leg from the day's
+//     start into its first todo). Only ONE affordance is ever suggested here: a
+//     lodging tip, and only when a day has no stay covering it.
+//   • Undated trip → the whole route in best order renders inline in the middle
+//     (no day cards, no separate "route" card, no date prompts).
+// Each checkpoint marker carries an edit pencil. A closing leg connector (the
+// last stop → Departure) renders just above the Departure bookend.
 //
 // Every plan row is gesture-driven (see widgets/timeline-gestures.js):
 //   • the leading checkbox cycles the outcome — clear → Visited → Skipped;
@@ -96,23 +100,30 @@ function _tlMarkerRow(m, { canWrite = true } = {}) {
     </div>`;
 }
 
-// Plans with no map pin (or an anchored date outside the trip's days) — the
-// route can't place them. On an undated trip, this instead holds the whole route
-// in best order (there are no day cards yet). Each row keeps its leg connector.
-function _tlAnytime(rows, { canWrite = true, noDates = false } = {}) {
-  if (!rows.length) return '';
-  const title = noDates ? 'Your route' : 'Anytime';
-  const sub = noDates
-    ? 'Give the trip dates (or date a checkpoint) and these spread across days — for now, here’s the best order.'
-    : 'No map pin yet, so the route can’t place these. Add a Maps link in the place’s editor to drop a pin.';
+function _tlNextDay(iso) {
+  return new Date(new Date(iso + 'T00:00:00Z').getTime() + 86400000)
+    .toISOString().slice(0, 10);
+}
+
+// The one thing the timeline ever suggests adding: lodging, and only when the
+// trip has dates AND some day isn't covered by a stay. Prefills the checkpoint
+// editor (stay) with the first uncovered stretch. Renders nothing when every
+// night has a place to stay. `uncoveredDays` come pre-sorted from RoutePlan.
+function _tlLodgingTip(uncoveredDays, { canWrite = true } = {}) {
+  if (!canWrite || !uncoveredDays.length) return '';
+  // Extend the first contiguous run of uncovered days → the stay we prefill.
+  let end = uncoveredDays[0];
+  for (const d of uncoveredDays.slice(1)) {
+    if (d === _tlNextDay(end)) end = d; else break;
+  }
+  const label = uncoveredDays.length === 1
+    ? `${_tlDay(uncoveredDays[0])} has no place to stay yet`
+    : `${uncoveredDays.length} nights have no place to stay yet`;
   return `
-    <div class="sticker-card washi washi--lavender" style="padding-top:1.2rem;margin-top:1.1rem;">
-      <h2 style="font-size:1.4rem;margin:0;">${title}</h2>
-      <p class="scrap-card__sub">${sub}</p>
-      <div class="tl-day__rows" style="margin-top:0.7rem;">
-        ${rows.map((r) => `${_tlLegRow(r.leg)}${_tlPlanRow(r.scrap, { canWrite, placement: r.placement })}`).join('')}
-      </div>
-    </div>`;
+    <button class="tl-add-btn" data-action="add-checkpoint-gap"
+            data-start="${escapeAttr(uncoveredDays[0])}" data-end="${escapeAttr(end)}">
+      <i data-lucide="home"></i>${escapeHtml(label)} — add lodging
+    </button>`;
 }
 
 /**
@@ -135,6 +146,10 @@ function renderTripTimeline(trip, itinerary, { canWrite = true } = {}) {
     <p class="tl-route-summary"><i data-lucide="route"></i>
       <span>${itinerary.stopCount >= 2 ? `Route ≈ ${escapeHtml(formatKm(itinerary.totalKm))} · ` : ''}${itinerary.stopCount} stop${itinerary.stopCount === 1 ? '' : 's'} · times are estimates</span>
     </p>` : '';
+
+  // One row = its leg connector (if any) + the plan row.
+  const rowsHtml = (rows) => rows.map((r) =>
+    `${_tlLegRow(r.leg)}${_tlPlanRow(r.scrap, { canWrite, placement: r.placement })}`).join('');
 
   const dayCards = days.map((d, i) => {
     // Arrival/departure live in the bookends, not the day rows; stays and
@@ -161,23 +176,24 @@ function renderTripTimeline(trip, itinerary, { canWrite = true } = {}) {
       </div>`;
   }).join('');
 
+  // The middle of the timeline. Undated trip → the whole route in best order
+  // renders inline here (no day cards, no separate "route" card). Dated trip →
+  // day cards, followed by any leftover rows the route couldn't place (plans
+  // with neither a date nor a map pin — bare names, no heading).
+  const undatedRows = (noDates && anytime.length)
+    ? `<div class="tl-day__rows">${rowsHtml(anytime)}</div>` : '';
+  const orphanRows = (!noDates && anytime.length)
+    ? `<div class="tl-day__rows">${rowsHtml(anytime)}</div>` : '';
+
   return `
     <div style="display:flex;flex-direction:column;gap:0.9rem;margin-top:1rem;">
       ${summary}
       ${_tlEndpoint(trip, 'start', { canWrite })}
-      ${dayCards}
-      ${noDates ? `
-        <p class="scrap-card__sub" style="text-align:center;">
-          No days yet — give the trip dates (or date an anchor) and they build themselves.
-          ${canWrite ? '<button class="ts-btn ts-btn--ghost ts-btn--sm" id="tl-edit-trip" style="margin-left:0.4rem;"><i data-lucide="pencil"></i>Add trip dates</button>' : ''}
-        </p>` : ''}
-      ${canWrite ? `
-        <button class="tl-add-btn" data-action="add-checkpoint">
-          <i data-lucide="plus"></i>Checkpoint — a stay or travel leg
-        </button>` : ''}
+      ${noDates ? undatedRows : dayCards}
+      ${orphanRows}
+      ${noDates ? '' : _tlLodgingTip(itinerary.uncoveredDays || [], { canWrite })}
       ${itinerary.endLeg ? _tlLegRow(itinerary.endLeg) : ''}
       ${_tlEndpoint(trip, 'end', { canWrite })}
     </div>
-    ${_tlAnytime(anytime, { canWrite, noDates })}
   `;
 }
