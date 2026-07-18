@@ -275,7 +275,7 @@ function renderScrapCard(scrap, opts = {}) {
     footer = `
       <div class="scrap-card__row">
         <button class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__remove" data-action="unassign" data-scrap-id="${escapeAttr(scrap.id)}">
-          <i data-lucide="folder-minus"></i>Remove from trip
+          <i data-lucide="folder-minus"></i>Remove
         </button>
       </div>`;
   }
@@ -284,20 +284,12 @@ function renderScrapCard(scrap, opts = {}) {
   // carries rating OR visited state, keeping the card down to a single element.
   const isVisited = !!scrap.visited_at && !readOnly;
 
-  // Notes live in a popup; the card shows only a chip — filled when a note
-  // exists, ghost otherwise. Interactive on the owner's editable variants;
-  // read-only surfaces show a static filled chip only when there's a note.
-  const noteEditable = !readOnly && mine && (variant === 'trip' || variant === 'inbox');
+  // Notes are edited from the pencil editor (ScrapEditor) only — the card no
+  // longer carries an editable note button (it shared the meta row with the
+  // priority chip and reflowed as the priority label changed). Others' notes on
+  // shared surfaces still surface as a static read-only chip when one exists.
   let noteChip = '';
-  if (noteEditable) {
-    noteChip = `
-      <button class="note-chip ${scrap.notes ? 'is-filled' : ''}" data-action="notes"
-              data-scrap-id="${escapeAttr(scrap.id)}"
-              aria-label="${scrap.notes ? 'View note' : 'Add a note'}"
-              title="${scrap.notes ? escapeAttr(scrap.notes) : 'Add a note'}">
-        <i data-lucide="sticky-note"></i>${scrap.notes ? '' : '<i data-lucide="plus" class="note-chip__plus"></i>'}
-      </button>`;
-  } else if (scrap.notes) {
+  if (!readOnly && !mine && scrap.notes) {
     noteChip = `
       <span class="note-chip is-filled" title="${escapeAttr(scrap.notes)}">
         <i data-lucide="sticky-note"></i>

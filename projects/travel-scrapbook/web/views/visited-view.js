@@ -13,6 +13,7 @@ class VisitedView extends View {
 
   _resetState() {
     this._geo = { region: null, country: null, city: null };
+    this._tab = 'places';          // 'places' | 'checkpoints' — segmented toggle
     this._items = [];
     this._checkpoints = [];        // visited "Stays & transport" section
     this._total = 0;
@@ -84,29 +85,40 @@ class VisitedView extends View {
   render() {
     if (!this._loaded) return;
     const filtered = !!(this._geo.region || this._geo.country || this._geo.city);
+    const emptyAll = this._total === 0 && this._checkpointTotal === 0 && !filtered;
+    const onCheckpoints = this._tab === 'checkpoints';
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Visited</h1>
-      ${renderFilterBar(this._geo, this._facets)}
-      ${this._total === 0 && this._checkpointTotal === 0 && !filtered ? `
+      ${emptyAll ? `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-inbox.svg" alt="" />
           <p class="empty-title">Nothing visited yet</p>
           <p class="empty-desc">Mark a saved place as visited — from your wishlist or a trip — and it collects here.</p>
-        </div>` : this._items.length ? `
-        <div class="card-grid card-grid--2col">
-          ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip' })).join('')}
         </div>` : `
-        <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">Nothing here matches — clear a filter to widen the view.</p>`}
-      ${this._items.length < this._total ? `
-        <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
-          <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
-        </button>` : ''}
-      ${this._checkpoints.length ? `
-        <h2 style="font-size:1.3rem;margin:1.4rem 0 0.2rem;">Stays &amp; transport</h2>
-        <p class="scrap-card__sub" style="margin:0 0 0.5rem;">Hotels, airports, and stations from trips you've taken.</p>
-        <div class="card-grid card-grid--2col">
-          ${this._checkpoints.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip', checkpoint: true })).join('')}
-        </div>` : ''}
+        <div class="ts-segmented ts-segmented--sm" style="margin:0.4rem 0 0.6rem;">
+          <label class="ts-segmented__opt"><input type="radio" name="visited-tab" value="places" ${onCheckpoints ? '' : 'checked'} /><span>Places</span></label>
+          <label class="ts-segmented__opt"><input type="radio" name="visited-tab" value="checkpoints" ${onCheckpoints ? 'checked' : ''} /><span>Stays &amp; transport</span></label>
+        </div>
+        ${renderFilterBar(this._geo, this._facets)}
+        ${onCheckpoints ? `
+          <p class="scrap-card__sub" style="margin:0 0 0.5rem;">Hotels, airports, and stations from trips you've taken.</p>
+          ${this._checkpoints.length ? `
+            <div class="card-grid card-grid--2col">
+              ${this._checkpoints.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip', checkpoint: true })).join('')}
+            </div>` : `
+            <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">No visited stays or transport yet.</p>`}
+        ` : `
+          ${this._items.length ? `
+            <div class="card-grid card-grid--2col">
+              ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip' })).join('')}
+            </div>` : `
+            <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">Nothing here matches — clear a filter to widen the view.</p>`}
+          ${this._items.length < this._total ? `
+            <button class="ts-btn ts-btn--ghost" data-action="load-more" style="width:100%;margin-top:0.8rem;">
+              <i data-lucide="chevrons-down"></i>Load more (showing ${this._items.length} of ${this._total})
+            </button>` : ''}
+        `}
+      `}
       ${renderQuickPaste()}
     `;
     this.refreshIcons();
@@ -117,6 +129,11 @@ class VisitedView extends View {
   _bind() {
     const c = this.container;
     bindQuickPaste(c);
+    // Places / Stays & transport toggle — both sets load in one page, so the
+    // switch is a pure client-side re-render (no refetch).
+    c.querySelectorAll('input[name=visited-tab]').forEach((input) => {
+      input.addEventListener('change', () => { this._tab = input.value; this.render(); });
+    });
     bindFilterBar(c, {
       geo: this._geo,
       onChange: (geo) => { this._geo = geo; this._load(); },
