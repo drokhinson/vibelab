@@ -124,24 +124,24 @@ const PlanPopup = {
     });
   },
 
-  // Persist only what changed: notes via ScrapDomain.update, day/time via
-  // ScrapDomain.schedule (both patch the trip bundle → the timeline re-flows).
-  // `notes === undefined` skips the notes write (used by the un-anchor button).
-  async _save(notes, planDate, planTime, toastMsg) {
+  // Persist only what changed: notes via ScrapDomain.saveNote, day/time via
+  // ScrapDomain.schedule (both paint the trip bundle optimistically → the
+  // timeline re-flows instantly). `notes === undefined` skips the notes write
+  // (used by the un-anchor button). Close in the same frame the button is
+  // pressed; the writes reconcile / roll back in the background.
+  _save(notes, planDate, planTime, toastMsg) {
     const s = this._scrap;
-    try {
-      const notesChanged = notes !== undefined && (notes || null) !== (s.notes || null);
-      const dateChanged = (planDate || null) !== (s.plan_date || null) ||
-        (planTime || null) !== ((s.plan_time || '').slice(0, 5) || null);
-      if (notesChanged) await window.ScrapDomain.update(s.id, this._tripId, { notes });
-      if (dateChanged) await window.ScrapDomain.schedule(s.id, this._tripId, { plan_date: planDate, plan_time: planTime });
-      if (toastMsg) toast(toastMsg);
-      else if (notesChanged || dateChanged) toast('Saved');
-      this._onChanged?.();
-      this.close();
-    } catch (err) {
-      toast(err.message || 'Could not save', { error: true });
-    }
+    const notesChanged = notes !== undefined && (notes || null) !== (s.notes || null);
+    const dateChanged = (planDate || null) !== (s.plan_date || null) ||
+      (planTime || null) !== ((s.plan_time || '').slice(0, 5) || null);
+    this.close();
+    if (toastMsg) toast(toastMsg);
+    else if (notesChanged || dateChanged) toast('Saved');
+    this._onChanged?.();
+    if (notesChanged) window.ScrapDomain.saveNote(s.id, this._tripId, notes)
+      .catch((err) => toast(err.message || 'Could not save', { error: true }));
+    if (dateChanged) window.ScrapDomain.schedule(s.id, this._tripId, { plan_date: planDate, plan_time: planTime })
+      .catch((err) => toast(err.message || 'Could not save', { error: true }));
   },
 
   close() {

@@ -5,8 +5,9 @@
 // set) · tappable title (opens the plan popup) · placement indicator
 // (sparkles = auto-placed by the route, pin = anchored to this day) · drag grip
 // (the ONLY place a press-and-hold pick-up starts — see widgets/timeline-gestures).
-// Between two consecutive located stops sits a leg connector showing the
-// estimated distance + drive/walk time (domain/geo.js).
+// Before each located stop sits a leg connector showing the estimated distance
+// + drive/walk time (domain/geo.js) from the previous stop — or, for a day's
+// first todo, from where the day starts.
 'use strict';
 
 // The two set states of the leading checkbox. null = clear; it cycles
@@ -98,9 +99,10 @@ function _tlPlanRow(scrap, { canWrite = true, placement = 'auto' } = {}) {
     </div>`;
 }
 
-// A non-interactive connector between two consecutive located stops: a small
-// footprints/car glyph + "2.3 km · ~30 min walk". Rendered just before the row
-// it leads into; the first stop of a day gets no leg (leg == null → '').
+// A non-interactive connector between a stop and the one before it (or, for a
+// day's first todo, the point the day starts from; for the Departure bookend,
+// the trip's last stop): a small footprints/car glyph + "2.3 km · ~30 min walk".
+// Rendered just before the row it leads into; a null leg renders nothing.
 function _tlLegRow(leg) {
   if (!leg) return '';
   const icon = leg.mode === 'walk' ? 'footprints' : 'car';

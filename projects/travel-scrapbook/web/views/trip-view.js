@@ -498,8 +498,8 @@ class TripView extends View {
               });
             } else if (action === 'notes') {
               NotePopup.open(scrap, {
-                onSaved: (updated) => window.TripDomain.patchScrapFields(
-                  trip.id, scrapId, { notes: updated ? updated.notes : null }),
+                onSaved: (notes) => window.ScrapDomain.saveNote(scrapId, trip.id, notes)
+                  .catch((err) => toast(err.message || 'Could not save the note', { error: true })),
               });
             } else if (action === 'approve') {
               await window.ScrapDomain.approve(scrapId, trip.id);

@@ -4,8 +4,11 @@
 // scaffold and places every routable plan onto a day using the same
 // nearest-neighbor/2-opt clustering the backend route optimizer uses
 // (services/route_planner.py), then computes the distance + estimated
-// drive/walk time (domain/geo.js) between consecutive stops. The timeline IS
-// the route — there is no separate Route panel any more.
+// drive/walk time (domain/geo.js) between consecutive stops. Each day's first
+// todo also gets a leg from where the day starts (its stay/travel checkpoint, or
+// the Arrival anchor / prior day's last stop), and the trip closes with a leg
+// from the last stop to the Departure anchor (`endLeg`). The timeline IS the
+// route — there is no separate Route panel any more.
 //
 // It deliberately DIVERGES from services/route_planner.py in one way, and this
 // divergence is the whole "anchoring" feature: auto-placement here is EPHEMERAL
@@ -89,8 +92,11 @@
   }
 
   // Walk the day's rows in order and attach each located, unfinished row's leg
-  // (distance/time from the previous located stop). The first located stop gets
-  // no rendered leg; its hop from `originPoint` is counted in transitionKm only.
+  // (distance/time from the previous located stop). The first located stop's leg
+  // is its hop from `originPoint` — the day's stay/travel checkpoint (or, on day
+  // one, the Arrival anchor; else the prior day's last stop) — so the drive from
+  // where the day starts to the first todo shows just like every other leg. That
+  // same hop is the `transitionKm` counted toward the route total.
   function attachLegs(rows, originPoint) {
     let prev = null;
     let withinKm = 0;
@@ -102,8 +108,10 @@
       const pt = pointOf(row.scrap);
       if (prev === null) {
         if (originPoint) {
-          transitionKm += window.Geo.legEstimate(
-            window.Geo.haversineKm(originPoint.lat, originPoint.lng, pt.lat, pt.lng)).km;
+          const leg = window.Geo.legEstimate(
+            window.Geo.haversineKm(originPoint.lat, originPoint.lng, pt.lat, pt.lng));
+          row.leg = leg;
+          transitionKm += leg.km;
         }
       } else {
         const leg = window.Geo.legEstimate(window.Geo.haversineKm(prev.lat, prev.lng, pt.lat, pt.lng));
@@ -150,14 +158,21 @@
     const { withinKm, transitionKm, stops } = attachLegs(rows, origin);
     for (const s of rest) rows.push({ scrap: s, placement: placementOf(s), leg: null });
 
-    return { days: [], anytime: rows, totalKm: withinKm + transitionKm, stopCount: stops, reason: reason || 'no_dates' };
+    // No closing leg here: the undated "Your route" list renders below the
+    // Departure bookend, so a last-stop→Departure connector has no coherent home.
+    // The optimizer already seeds off the end anchor for ordering.
+    return {
+      days: [], anytime: rows, endLeg: null,
+      totalKm: withinKm + transitionKm, stopCount: stops, reason: reason || 'no_dates',
+    };
   }
 
   /**
    * Build the unified itinerary from a trip bundle.
-   * @returns {{days: Array, anytime: Array, totalKm: number, stopCount: number, reason?: string}}
+   * @returns {{days: Array, anytime: Array, endLeg: object|null, totalKm: number, stopCount: number, reason?: string}}
    *   days[]  = { date, day_number, markers, rows: [{ scrap, placement:'anchored'|'auto', leg|null }] }
    *   anytime = rows for plans with no map pin (or an out-of-range anchored date)
+   *   endLeg  = closing hop from the last stop to the Departure anchor (null if either is missing)
    */
   function buildItinerary(trip, anchors, scraps) {
     anchors = anchors || [];
@@ -244,7 +259,17 @@
       return { date: d.date, day_number: d.day_number, markers: d.markers, rows };
     });
 
-    return { days: outDays, anytime, totalKm, stopCount, reason: base.reason };
+    // The trip's closing hop: from the last located stop to the Departure anchor.
+    // Rendered above the Departure bookend (there's no day row to hang it on).
+    const endA = anchors.find((a) => a.role === 'end' && located(a));
+    let endLeg = null;
+    if (endA && lastPoint) {
+      endLeg = window.Geo.legEstimate(
+        window.Geo.haversineKm(lastPoint.lat, lastPoint.lng, endA.lat, endA.lng));
+      totalKm += endLeg.km;
+    }
+
+    return { days: outDays, anytime, endLeg, totalKm, stopCount, reason: base.reason };
   }
 
   window.RoutePlan = { buildItinerary };

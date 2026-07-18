@@ -107,6 +107,42 @@
       return scrap;
     },
 
+    // Save (or clear, with `notes === null`) a place's note. Optimistic so the
+    // note chip flips in the same frame the Save button is pressed — the popup
+    // closes instantly and this reconciles in the background, mirroring
+    // schedule/setTimelineOutcome. A per-scrap sequence guard drops stale echoes
+    // from overlapping saves, and rollback is field-level (just `notes`) so an
+    // error can't erase a concurrent edit to another field. Callers with no trip
+    // bundle in the store (Wander List / Visited) paint their own row and only
+    // lean on the background write + rollback here.
+    _noteSeq: {},
+    async saveNote(scrapId, tripId, notes) {
+      const seq = (this._noteSeq[scrapId] = (this._noteSeq[scrapId] || 0) + 1);
+      let prev = null;
+      if (tripId) {
+        const trip = window.store.get('trip:' + tripId);
+        const cur = trip && [...(trip.scraps || []), ...(trip.staged_scraps || []),
+          ...(trip.candidates || [])].find((s) => s.id === scrapId);
+        if (cur) prev = { notes: cur.notes ?? null };
+        window.TripDomain.patchScrapFields(tripId, scrapId, { notes }); // instant paint
+      }
+      this._pendingWrites++; // pause the capture poll until the echo lands
+      try {
+        const scrap = await window.api.updateScrap(scrapId, { notes });
+        if (seq !== this._noteSeq[scrapId]) return scrap;              // superseded by a newer save
+        if (tripId) window.TripDomain.patchScrapFields(tripId, scrapId, { notes: scrap.notes });
+        this._invalidateLists();
+        return scrap;
+      } catch (err) {
+        if (seq === this._noteSeq[scrapId] && tripId && prev) {
+          window.TripDomain.patchScrapFields(tripId, scrapId, prev);   // roll back only notes
+        }
+        throw err;
+      } finally {
+        this._pendingWrites--;
+      }
+    },
+
     async remove(scrapId, tripId) {
       await window.api.deleteScrap(scrapId);
       if (tripId) window.TripDomain.removeScrap(tripId, scrapId);
