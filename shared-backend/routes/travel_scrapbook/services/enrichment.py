@@ -148,7 +148,7 @@ async def _materialize_place(
         extraction.place_name, extraction.city, extraction.country
     )
 
-    place, _created = places.find_or_create_place(
+    place, created = places.find_or_create_place(
         sb, source["user_id"], extraction, geo, confidence, maps_url
     )
 
@@ -164,19 +164,27 @@ async def _materialize_place(
         return  # already saved — the new source chip is the only change
 
     # The scrap is just the saved place now — its trip links live in
-    # travelscrapbook_scrap_trips.
-    inserted = (
-        sb.table("travelscrapbook_scraps")
-        .insert({
-            "user_id": source["user_id"],
-            "place_id": place["id"],
-            "notes": source.get("capture_notes"),
-        })
-        .execute()
-    ).data
-    scrap_id = inserted[0]["id"] if inserted else None
-    if not scrap_id:
-        return
+    # travelscrapbook_scrap_trips. If this insert fails, a place we created this
+    # call would be left with no scrap (an orphan that ghosts the community
+    # pool), so roll the place back before letting the error propagate — the
+    # per-extraction loop in process_source counts it as a failed extraction.
+    try:
+        inserted = (
+            sb.table("travelscrapbook_scraps")
+            .insert({
+                "user_id": source["user_id"],
+                "place_id": place["id"],
+                "notes": source.get("capture_notes"),
+            })
+            .execute()
+        ).data
+        scrap_id = inserted[0]["id"] if inserted else None
+        if not scrap_id:
+            raise RuntimeError("scrap insert returned no row")
+    except Exception:
+        if created:
+            places.delete_place_if_orphan(sb, place["id"])
+        raise
 
     # Attach a trip membership: the user's explicit pick (approved, no review) or
     # an auto-matched trip by scope (staged, awaiting review).

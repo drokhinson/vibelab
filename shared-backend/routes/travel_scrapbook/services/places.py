@@ -254,6 +254,24 @@ def find_or_create_place(
     return created.data[0], True
 
 
+def delete_place_if_orphan(sb: Client, place_id: str) -> None:
+    """Delete a place iff no scrap references it. Used as a compensating action
+    to roll back a place that was just created when the follow-up scrap insert
+    fails — without it a partial failure leaves an orphan that ghosts the
+    community pool. place_sources cascade with the place; the source rows
+    (capture history) are kept. Safe to call unconditionally: a place that still
+    has a scrap is left untouched."""
+    still = (
+        sb.table("travelscrapbook_scraps")
+        .select("id")
+        .eq("place_id", place_id)
+        .limit(1)
+        .execute()
+    )
+    if not still.data:
+        sb.table("travelscrapbook_places").delete().eq("id", place_id).execute()
+
+
 def _geocoded_trips(sb: Client, user_id: str) -> list[dict[str, Any]]:
     rows = (
         sb.table("travelscrapbook_trips")
