@@ -9,8 +9,10 @@
 // The timeline is bookended by the trip's endpoints: Arrival on top and
 // Departure at the bottom (ghost "+ Arrival"/"+ Departure" until each is set).
 // Day cards sit between: stay/travel markers first (chronological), then plan
-// rows interleaved with leg connectors. A "+ Checkpoint" affordance sits
-// mid-timeline; each checkpoint marker carries an edit pencil.
+// rows interleaved with leg connectors — including a leg from the day's start
+// into its first todo. A "+ Checkpoint" affordance sits mid-timeline; each
+// checkpoint marker carries an edit pencil. A closing leg connector (the last
+// stop → Departure) renders just above the Departure bookend.
 //
 // Every plan row is gesture-driven (see widgets/timeline-gestures.js):
 //   • the leading checkbox cycles the outcome — clear → Visited → Skipped;
@@ -170,6 +172,7 @@ function renderTripTimeline(trip, itinerary, { canWrite = true } = {}) {
         <button class="tl-add-btn" data-action="add-checkpoint">
           <i data-lucide="plus"></i>Checkpoint — a stay or travel leg
         </button>` : ''}
+      ${itinerary.endLeg ? _tlLegRow(itinerary.endLeg) : ''}
       ${_tlEndpoint(trip, 'end', { canWrite })}
     </div>
     ${_tlAnytime(anytime, { canWrite, noDates })}
