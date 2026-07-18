@@ -128,9 +128,12 @@ function renderTripTimeline(trip, itinerary, { canWrite = true } = {}) {
   const anytime = itinerary.anytime || [];
   const noDates = itinerary.reason === 'no_dates';
 
-  const summary = itinerary.stopCount >= 2 ? `
+  // A one-stop trip still gets the banner (just no distance — a single point has
+  // no route); the Route ≈ Xkm span only appears once there are ≥2 located stops
+  // to measure between.
+  const summary = itinerary.stopCount >= 1 ? `
     <p class="tl-route-summary"><i data-lucide="route"></i>
-      <span>Route ≈ ${escapeHtml(formatKm(itinerary.totalKm))} · ${itinerary.stopCount} stops · times are estimates</span>
+      <span>${itinerary.stopCount >= 2 ? `Route ≈ ${escapeHtml(formatKm(itinerary.totalKm))} · ` : ''}${itinerary.stopCount} stop${itinerary.stopCount === 1 ? '' : 's'} · times are estimates</span>
     </p>` : '';
 
   const dayCards = days.map((d, i) => {

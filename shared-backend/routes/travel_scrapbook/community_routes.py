@@ -6,7 +6,6 @@ from db import get_supabase
 
 from . import router
 from .access import get_accessible_trip
-from .constants import MembershipStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     CommunityPlacesResponse,

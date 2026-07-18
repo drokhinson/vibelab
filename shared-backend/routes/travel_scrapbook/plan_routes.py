@@ -61,20 +61,6 @@ def _trip_scrap_ids(sb, trip_id: str) -> set[str]:
     }
 
 
-def _dismissed_scrap_ids(sb, trip_id: str) -> set[str]:
-    """Scrap ids the user has already resolved for this trip (kept-then-removed
-    or removed outright) — excluded from re-suggestion. See migration 018."""
-    return {
-        d["scrap_id"]
-        for d in (
-            sb.table("travelscrapbook_scrap_trip_dismissals")
-            .select("scrap_id")
-            .eq("trip_id", trip_id)
-            .execute()
-        ).data or []
-    }
-
-
 def _record_dismissals(sb, trip_id: str, scrap_ids: list[str]) -> None:
     """Mark (scrap, trip) pairs as resolved so they don't re-appear as
     suggestions after the place is removed from the trip. Idempotent."""
@@ -85,72 +71,6 @@ def _record_dismissals(sb, trip_id: str, scrap_ids: list[str]) -> None:
         on_conflict="scrap_id,trip_id",
         ignore_duplicates=True,
     ).execute()
-
-
-@router.get(
-    "/trips/{trip_id}/scraps",
-    response_model=ScrapListResponse,
-    status_code=200,
-    summary="List a trip's scraps",
-)
-async def list_scraps(
-    trip_id: str = Path(..., description="Trip UUID"),
-    user: CurrentUser = Depends(get_current_user),
-) -> ScrapListResponse:
-    """All places in a trip (approved and staged), newest first. Readable by the
-    owner and any member. Each carries this trip's per-membership context."""
-    sb = get_supabase()
-    get_accessible_trip(sb, trip_id, user.user_id)
-    flat = membership_rows_to_scraps(_trip_memberships(sb, trip_id))
-    return ScrapListResponse(
-        scraps=[ScrapResponse(**s) for s in hydrate_scraps(sb, flat, with_vibes=True)]
-    )
-
-
-@router.get(
-    "/trips/{trip_id}/candidates",
-    response_model=ScrapListResponse,
-    status_code=200,
-    summary="Wishlist places that fit a trip's scope",
-)
-async def list_trip_candidates(
-    trip_id: str = Path(..., description="Trip UUID"),
-    user: CurrentUser = Depends(get_current_user),
-) -> ScrapListResponse:
-    """Unvisited wishlist places NOT already in this trip whose location matches
-    its geographic scope (city/country/region) — the 'from your wishlist' panel.
-    Same match predicate as auto-staging, so suggestions stay consistent."""
-    sb = get_supabase()
-    trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    # Exclude places already in the trip AND ones the user already resolved for
-    # it (migration 018), so a removed suggestion doesn't immediately re-appear.
-    excluded = _trip_scrap_ids(sb, trip_id) | _dismissed_scrap_ids(sb, trip_id)
-    rows = [
-        r for r in (
-            sb.table("travelscrapbook_scraps")
-            .select("*")
-            .eq("user_id", user.user_id)
-            .is_("visited_at", "null")
-            .order("created_at", desc=True)
-            .execute()
-        ).data or []
-        if r["id"] not in excluded
-    ]
-    hydrated = hydrate_scraps(sb, rows)
-    # Checkpoint-category places (hotels, airports…) are never plan suggestions
-    # — they join trips as checkpoints, through the trip screen (020).
-    cp_slugs = checkpoint_category_slugs(sb)
-    candidates = [
-        s for s in hydrated
-        if s.get("category") not in cp_slugs
-        and place_matches_trip_scope(
-            trip,
-            lat=s.get("lat"), lng=s.get("lng"),
-            city=s.get("place_city"), region=s.get("place_region"),
-            country=s.get("place_country"),
-        )
-    ]
-    return ScrapListResponse(scraps=[ScrapResponse(**s) for s in candidates])
 
 
 @router.get(

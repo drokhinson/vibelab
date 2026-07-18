@@ -12,8 +12,6 @@ from db import get_supabase
 from . import router
 from .constants import (
     CAPTURE_TOKEN_PREFIX,
-    CapturedVia,
-    MembershipStatus,
     SOURCE_PROCESSING_TIMEOUT_SECONDS,
     SourceStatus,
     EnrichErrorKind,
