@@ -15,6 +15,7 @@ from .models import (
 )
 from .scrap_routes import _hydrated_membership, _hydrated_scrap
 from .services.community import copy_place_for_user
+from .services.places import delete_place_if_orphan
 
 
 @router.get(
@@ -103,11 +104,21 @@ async def save_community_place(
     if existing:
         row = existing[0]
     else:
-        row = (
-            sb.table("travelscrapbook_scraps")
-            .insert({"user_id": user.user_id, "place_id": place["id"]})
-            .execute()
-        ).data[0]
+        # Roll the freshly-copied place back if the scrap insert fails, so a
+        # partial failure can't orphan it (delete_place_if_orphan no-ops when a
+        # scrap already references the place).
+        try:
+            inserted = (
+                sb.table("travelscrapbook_scraps")
+                .insert({"user_id": user.user_id, "place_id": place["id"]})
+                .execute()
+            ).data
+            if not inserted:
+                raise RuntimeError("scrap insert returned no row")
+            row = inserted[0]
+        except Exception:
+            delete_place_if_orphan(sb, place["id"])
+            raise
     # Onto a trip → add a plan membership (the place also stays on the Wander
     # List). RPC because the plan uniqueness is a partial index (020).
     if body.trip_id:

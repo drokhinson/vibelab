@@ -89,7 +89,9 @@
 --   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
 --               replaced in 020 (new p_checkpoints flag partitions the pool:
 --               false = ordinary places, true = the Stays & transport tab;
---               the old 7-arg overload was DROPPED)
+--               the old 7-arg overload was DROPPED);
+--               replaced in 024 (base CTE now requires EXISTS a scrap, so an
+--               orphaned place row can never surface as a community ghost)
 --   Called by:  shared-backend/routes/travel_scrapbook/community_routes.py
 --               (list_community_places)
 --   Purpose:    The community catalog page in one round trip: group by OSM
