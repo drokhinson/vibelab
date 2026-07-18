@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Hike: mountain trail sticker -->
+  <circle cx="32" cy="32" r="30" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="27" fill="#CDE7B0"/>
+  <circle cx="46" cy="20" r="5" fill="#F4A988" stroke="none"/>
+  <g stroke="#5B5468" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M37 47 L48 29 L59 47 Z" fill="#BEE7D0"/>
+    <path d="M9 47 L26 17 L43 47 Z" fill="#BDE0FE"/>
+    <path d="M21.2 28 L26 17 L30.8 28 Q26 24.5 21.2 28 Z" fill="#FFF9F2" stroke-width="1.6"/>
+    <path d="M23 47 Q31 43 27 37 Q23 32.5 27.5 26" fill="none" stroke-width="2.2" stroke-dasharray="0.1 4.2"/>
+  </g>
+  <ellipse cx="32" cy="52" rx="19" ry="2.3" fill="#5B5468" opacity="0.12"/>
+</svg>

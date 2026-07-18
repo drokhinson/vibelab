@@ -96,16 +96,16 @@ class CaptureTokenStatusResponse(BaseModel):
 
 class ScrapUpdateRequest(BaseModel):
     place_name: Optional[str] = Field(None, max_length=200)
-    place_city: Optional[str] = Field(None, max_length=120)
-    # region is derived from the country (macro-region), never user-set.
-    place_country: Optional[str] = Field(None, max_length=120)
+    # City/country/region are NOT editable here — they are derived from the
+    # place's pin (its Maps URL / geocoded point). Move a place by pasting a
+    # different maps_url; the location fields re-derive from it.
     category: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=2000)
     maps_url: Optional[str] = Field(
         None, max_length=2000,
         description="A Google Maps link. When it's a real Maps place/pin URL, "
                     "city/region/country + coordinates are extracted from it "
-                    "(no AI) and take precedence over the typed fields.")
+                    "(no AI) — this is the only way to change a place's location.")
     visited: Optional[bool] = Field(
         None, description="Mark visited (been there) or move back to the wishlist")
     skipped: Optional[bool] = Field(
@@ -113,7 +113,6 @@ class ScrapUpdateRequest(BaseModel):
                           "on the Wander List) or clear it. Mutually exclusive with visited.")
     # plan_date/plan_time are per-trip now — see PlanScheduleRequest and
     # PATCH /scraps/{id}/trips/{trip_id}/schedule.
-    regeocode: bool = Field(False, description="Re-run Nominatim on the edited place fields")
 
 
 class PlanScheduleRequest(BaseModel):

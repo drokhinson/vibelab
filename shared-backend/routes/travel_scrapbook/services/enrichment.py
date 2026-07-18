@@ -27,7 +27,7 @@ from ..constants import (
     MembershipStatus,
     SourceStatus,
 )
-from . import checkpoints, gmaps, llm, nominatim, places, scraper
+from . import checkpoints, gmaps, llm, nominatim, places, scraper, trails
 from .places import build_maps_url
 
 logger = logging.getLogger("travel_scrapbook.enrichment")
@@ -366,6 +366,12 @@ async def process_source(source_id: str) -> None:
                 "error_kind": EnrichErrorKind.NO_PLACE,
             })
             return
+
+        # 2c. Trail sites (Komoot, AllTrails, Strava…) are hikes — force the
+        #     category regardless of the LLM's guess. The trailhead still
+        #     geocodes normally from the extraction below.
+        if trails.is_trail_url(url):
+            extractions = [replace(e, category="hike") for e in extractions]
 
         # 3. Fan out: place per extraction, serially — the Nominatim throttle
         #    (≥1.1s spacing) makes serial the polite and simple choice.
