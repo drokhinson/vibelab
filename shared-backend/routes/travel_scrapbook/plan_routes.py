@@ -9,7 +9,7 @@ arrives via a URL capture (or the community pool) — there is no manual entry.
 Scrap-level reads/edits/vibes live in scrap_routes.py.
 """
 
-from fastapi import Depends, HTTPException, Path
+from fastapi import Depends, HTTPException, Path, Query
 from supabase import Client
 
 from db import get_supabase
@@ -25,6 +25,7 @@ from .models import (
     ScrapListResponse,
     ScrapResponse,
     SetTripsRequest,
+    TripSuggestionsResponse,
     TripWishlistResponse,
     TripWishlistScrap,
 )
@@ -121,6 +122,49 @@ async def list_trip_wishlist(
     # Scope-matches first; stable sort preserves newest-first within each group.
     scored.sort(key=lambda w: not w.fits_scope)
     return TripWishlistResponse(scraps=scored)
+
+
+@router.get(
+    "/trips/{trip_id}/suggestions",
+    response_model=TripSuggestionsResponse,
+    status_code=200,
+    summary="Ranked wander + community suggestions for a trip's add picker",
+)
+async def list_trip_suggestions(
+    trip_id: str = Path(..., description="Trip UUID"),
+    category: str | None = Query(None, max_length=40, description="Filter by category slug"),
+    checkpoints: bool = Query(
+        False, description="Draw from the Stays & transport pool (checkpoint "
+                           "categories) instead of ordinary plan places"),
+    q: str | None = Query(None, max_length=120, description="Search name or city"),
+    limit: int = Query(6, ge=1, le=24, description="Page size (one carousel page)"),
+    offset: int = Query(0, ge=0, description="Page start"),
+    user: CurrentUser = Depends(get_current_user),
+) -> TripSuggestionsResponse:
+    """The unified 'add to trip' picker feed in one round trip: the viewer's
+    Wander List (higher priority) merged with the community pool, scoped to the
+    trip's region/country/city, split by the checkpoint partition, optionally
+    narrowed to one category, ranked wander-first then nearest to the trip's
+    placed plans. `categories` is the type-filter facet over the whole scoped
+    pool (independent of the current category pick)."""
+    sb = get_supabase()
+    get_accessible_trip(sb, trip_id, user.user_id)  # 404s if not a member
+    result = (
+        sb.rpc("travelscrapbook_trip_suggestions", {
+            "p_trip_id": trip_id,
+            "p_viewer": user.user_id,
+            "p_category": category,
+            "p_checkpoints": checkpoints,
+            "p_q": q,
+            "p_limit": limit,
+            "p_offset": offset,
+        }).execute()
+    ).data or {}
+    return TripSuggestionsResponse(
+        items=result.get("items", []),
+        total=result.get("total", 0),
+        categories=result.get("categories", []),
+    )
 
 
 def _add_plan_memberships(sb: Client, pairs: list[tuple[str, str]]) -> None:

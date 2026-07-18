@@ -472,11 +472,43 @@ span.note-chip { cursor: default; }
 .scrap-card__new-badge [data-lucide] { width: 13px; height: 13px; }
 .scrap-card--new .cat-bubble { left: 58px; }
 
-/* "Add plans" picker modal: tall, its list scrolls, footer stays put. */
-.ts-modal__card.add-plans { max-height: 86vh; display: flex; flex-direction: column; }
-.ts-modal__card.add-plans #add-plans-body { overflow-y: auto; }
-.add-plans__footer { position: sticky; bottom: 0; padding-top: 0.7rem; margin-top: 0.4rem; background: var(--card); }
-.add-plans__footer .ts-btn { width: 100%; }
+/* Unified "add to trip" suggestion picker (TripSuggestions): a type-filter chip
+   row, a paged 2-column grid of basic cards (3×2), ‹ › pager, manual fallback. */
+.ts-modal__card.ts-suggestions { max-height: 86vh; display: flex; flex-direction: column; }
+.ts-suggestions__filter { flex-shrink: 0; }
+.ts-suggestions #ts-grid { overflow-y: auto; flex: 1; min-height: 0; }
+/* Type-filter chip: category sprite + label + count, in the scrollable row. */
+.ts-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem; flex-shrink: 0;
+  min-height: 40px; padding: 0.2rem 0.7rem; border-radius: 999px;
+  border: 1.5px dashed var(--border); background: transparent; color: var(--ink-muted);
+  font-size: 0.78rem; font-weight: 800; cursor: pointer;
+}
+.ts-chip:hover { border-color: var(--ink-muted); color: var(--ink); }
+.ts-chip.is-active {
+  border: 1.5px solid var(--ink); background: var(--card); color: var(--ink);
+  box-shadow: 1.5px 1.5px 0 var(--ink);
+}
+.ts-chip .ts-sprite, .ts-chip svg { width: 16px; height: 16px; }
+.ts-chip__count { opacity: 0.6; font-variant-numeric: tabular-nums; }
+/* ‹ › pager */
+.ts-suggestions__pager {
+  display: flex; align-items: center; justify-content: center; gap: 0.9rem;
+  flex-shrink: 0; padding-top: 0.6rem;
+}
+.ts-suggestions__pager:empty { display: none; }
+.ts-suggestions__arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 999px;
+  border: 1.5px solid var(--border); background: var(--card); color: var(--ink); cursor: pointer;
+}
+.ts-suggestions__arrow:disabled { opacity: 0.35; cursor: default; }
+.ts-suggestions__pageinfo { font-size: 0.82rem; font-weight: 800; color: var(--ink-muted); }
+.ts-suggestions__footer {
+  flex-shrink: 0; position: sticky; bottom: 0; padding-top: 0.7rem; margin-top: 0.2rem;
+  background: var(--card);
+}
+.ts-suggestions__footer .ts-btn { width: 100%; }
 
 .source-badge {
   display: inline-flex; align-items: center; gap: 4px;

@@ -59,6 +59,9 @@ from .community import (  # noqa: F401
     CommunityPlacesResponse,
     CommunitySaveRequest,
     CommunitySourceRef,
+    SuggestionCategoryFacet,
+    TripSuggestionItem,
+    TripSuggestionsResponse,
 )
 from .social import (  # noqa: F401
     InvitationResponse,

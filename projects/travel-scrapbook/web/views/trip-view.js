@@ -144,7 +144,6 @@ class TripView extends View {
       <div id="tl-content">${renderTripTimeline(trip, RoutePlan.buildItinerary(trip, trip.anchors || [], allScraps), { canWrite })}</div>`
         : `
       ${this._renderStaging(staged, cardOpts)}
-      ${canWrite ? this._renderCandidates(trip, cardOpts) : ''}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;margin-top:1.2rem;flex-wrap:wrap;">
         <h2 style="font-size:1.5rem;margin:0;">Plans</h2>
         <div style="display:flex;gap:0.5rem;">
@@ -325,22 +324,6 @@ class TripView extends View {
     `;
   }
 
-  _renderCandidates(trip, cardOpts = {}) {
-    const cands = trip.candidates || [];
-    if (!cands.length) return '';
-    return `
-      <div class="sticker-card washi washi--sky" style="padding-top:1.2rem;margin-top:1.1rem;">
-        <div>
-          <h2 style="font-size:1.5rem;margin:0;">Suggested plans</h2>
-          <p class="scrap-card__sub">From your Wander List, matching this trip — tap to add.</p>
-        </div>
-        <div class="card-grid card-grid--2col" style="margin-top:0.8rem;">
-          ${cands.map((s, i) => renderScrapCard(s, { index: i, variant: 'candidate', tripId: this._tripId, ...cardOpts })).join('')}
-        </div>
-      </div>
-    `;
-  }
-
   _bind(trip, { isOwner = true, canWrite = true } = {}) {
     const c = this.container;
     c.querySelector('#trip-back')?.addEventListener('click', () => window.router.back('trips'));
@@ -389,14 +372,7 @@ class TripView extends View {
       TripEditor.open(trip);
     });
     c.querySelector('#add-plans')?.addEventListener('click', () => {
-      AddPlans.open(trip, {
-        onSaved: async () => {
-          // One bundle refresh covers plans + candidates together.
-          await window.TripDomain.load(trip.id);
-          window.tsCache?.invalidate('inbox'); // trip_ids on wishlist cards changed
-          window.SourceDomain?.refreshInboxCount();
-        },
-      });
+      TripSuggestions.open(trip, { context: 'plan', onSaved: this._onSuggestionSaved(trip) });
     });
 
     bindQuickPaste(c);
@@ -424,14 +400,28 @@ class TripView extends View {
     }
   }
 
+  // Shared onSaved for the suggestion picker (both plan + checkpoint context):
+  // one bundle refresh covers plans, checkpoints and the picker's own exclusions
+  // together, then the inbox count/cache catch up to the changed trip_ids.
+  _onSuggestionSaved(trip) {
+    return async () => {
+      await window.TripDomain.load(trip.id);
+      window.tsCache?.invalidate('inbox'); // trip_ids on wishlist cards changed
+      window.SourceDomain?.refreshInboxCount();
+    };
+  }
+
   // Anchor/checkpoint buttons within `root`. Present on both tabs — timeline
   // bookends/markers and the plans-tab Checkpoints list — so it's bound scoped
   // to whichever region is (re)painting.
   _bindAnchorButtons(root, trip) {
-    // "+ Checkpoint" (Plans header + empty-state) opens the editor defaulting
-    // to a stay — the role select flips to travel.
+    // "+ Checkpoint" (Plans header + empty-state) opens the unified suggestion
+    // picker in checkpoint context (stays & transport pool) — one tap adds an
+    // undated checkpoint; "Enter manually" falls back to the AnchorEditor.
     root.querySelectorAll('[data-action=add-checkpoint]').forEach((btn) => {
-      btn.addEventListener('click', () => AnchorEditor.open(trip, { role: 'stay' }));
+      btn.addEventListener('click', () => TripSuggestions.open(trip, {
+        context: 'checkpoint', onSaved: this._onSuggestionSaved(trip),
+      }));
     });
     // A gap placeholder prefills the empty dates: the Plans-tab gap between two
     // dated checkpoints, or the Timeline's lodging tip (uncovered nights).
