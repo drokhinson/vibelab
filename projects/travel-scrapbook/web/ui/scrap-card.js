@@ -142,7 +142,14 @@ function _mapsButton(scrap) {
  * @param {{index?: number, variant?: 'trip'|'staged'|'inbox'|'candidate'|'preview'|'select'|'community',
  *          tripId?: string, selected?: boolean, fits?: boolean, saved?: boolean,
  *          isNew?: boolean, shared?: boolean, currentUserId?: (string|null), canWrite?: boolean,
- *          checkpoint?: boolean}} opts
+ *          checkpoint?: boolean, showRemove?: boolean, communityWishlist?: boolean}} opts
+ *   showRemove        — variant 'trip': show the "Remove from this trip" footer
+ *                       (default true; false where there's no single-trip
+ *                       context, e.g. the Visited list)
+ *   communityWishlist — variant 'community' shown on the Community screen (saves
+ *                       to the Wander List): relabels the action "Want to go"
+ *                       and adds the fix-location pencil. Off inside a trip's
+ *                       Add picker, where the place saves to the trip.
  *   isNew         — Wander List: imported since the last visit (shows a "New" tag)
  *   variant preview   — read-only display (share success screen)
  *   variant select    — read-only + selection checkbox (Wander-List picker)
@@ -158,7 +165,7 @@ function renderScrapCard(scrap, opts = {}) {
   const {
     index = 0, variant = 'trip', tripId = null, selected = false, fits = false,
     isNew = false, shared = false, currentUserId = null, canWrite = true, saved = false,
-    checkpoint = false,
+    checkpoint = false, showRemove = true, communityWishlist = false,
   } = opts;
   // 'preview' = read-only display (share success screen). 'select' = read-only
   // with a selection checkbox (the trip's "add from Wander List" picker).
@@ -213,6 +220,14 @@ function renderScrapCard(scrap, opts = {}) {
                data-scrap-id="${escapeAttr(scrap.id)}"
                aria-label="Edit place" title="Edit"><i data-lucide="pencil"></i></button>`
     : '';
+  // Community pool places aren't yours to edit yet, but the aggregated pin can
+  // be wrong. The pencil saves the place to your Wander List and opens the
+  // editor so you can fix its location before it settles into your list.
+  const communityEditBtn = (isCommunity && communityWishlist && !saved)
+    ? `<button class="scrap-card__edit" type="button" data-action="community-edit"
+               data-place-id="${escapeAttr(placeId)}"
+               aria-label="Fix this place's location" title="Fix location"><i data-lucide="pencil"></i></button>`
+    : '';
   // When there's a real image, the type bubble sits on its top-left corner —
   // icon only until tapped, then it wobbles and unrolls its label. When there's
   // no image the category sprite IS the image, so no separate bubble is shown.
@@ -261,17 +276,22 @@ function renderScrapCard(scrap, opts = {}) {
         </button>
       </div>`;
   } else if (isCommunity) {
-    // Anonymized pool place — a single full-width "Add to my Wander List" action.
+    // Anonymized pool place — a single full-width save action. On the Community
+    // screen it lands on your Wander List ("Want to go"); inside a trip's Add
+    // picker it lands on the trip ("Add").
+    const addLabel = communityWishlist ? 'Want to go' : 'Add';
+    const addIcon = communityWishlist ? 'heart' : 'plus';
     footer = `
       <div class="scrap-card__row">
         ${saved
           ? '<span class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__addtrip" aria-disabled="true" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>'
-          : `<button class="ts-btn ts-btn--sm ts-btn--mint scrap-card__addtrip" data-action="save-community" data-place-id="${escapeAttr(placeId)}"><i data-lucide="plus"></i>Add</button>`}
+          : `<button class="ts-btn ts-btn--sm ts-btn--mint scrap-card__addtrip" data-action="save-community" data-place-id="${escapeAttr(placeId)}"><i data-lucide="${addIcon}"></i>${addLabel}</button>`}
       </div>`;
-  } else if (variant === 'trip' && canWrite && !checkpoint) {
+  } else if (variant === 'trip' && canWrite && !checkpoint && showRemove) {
     // Pull the place out of THIS trip (it stays on the Wander List and in any
     // other trips). The 'unassign' action is dispatched by the trip view's
-    // button-delegation loop.
+    // button-delegation loop. Suppressed (showRemove:false) where there's no
+    // single "this trip" context — e.g. the Visited list spans every trip.
     footer = `
       <div class="scrap-card__row">
         <button class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__remove" data-action="unassign" data-scrap-id="${escapeAttr(scrap.id)}">
@@ -327,7 +347,7 @@ function renderScrapCard(scrap, opts = {}) {
       ${isNew ? '<span class="scrap-card__new-badge"><i data-lucide="sparkles"></i>New</span>' : ''}
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
       ${isSelect && fits ? '<span class="scrap-card__fits-badge"><i data-lucide="sparkles"></i>Fits</span>' : ''}
-      ${editBtn}
+      ${editBtn}${communityEditBtn}
       ${media}
       <p class="scrap-card__title"><span class="scrap-card__title-inner">${escapeHtml(title)}</span></p>
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}
