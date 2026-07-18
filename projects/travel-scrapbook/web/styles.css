@@ -797,7 +797,8 @@ body.popup-mode { max-width: 420px; }
 
 /* ── Press-and-hold drag: pick a plan up, drop it on any day ───────────── */
 .tl-row--draggable { touch-action: pan-y; -webkit-user-select: none; user-select: none; }
-.tl-row__grip { color: var(--border); display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; cursor: grab; touch-action: none; }
+.tl-row__grip { color: var(--ink-muted); background: none; border: none; padding: 0; display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; cursor: pointer; touch-action: none; }
+.tl-row__grip:active { cursor: grabbing; }
 .tl-row__grip [data-lucide] { width: 16px; height: 16px; }
 .tl-swipe.is-dragging > .tl-row { opacity: 0.35; }
 .tl-drag-clone {

@@ -3,8 +3,10 @@
 //
 // A plan row reads left→right: outcome checkbox · category sprite · time (if
 // set) · tappable title (opens the plan popup) · placement indicator
-// (sparkles = auto-placed by the route, pin = anchored to this day) · drag grip
-// (the ONLY place a press-and-hold pick-up starts — see widgets/timeline-gestures).
+// (sparkles = auto-placed by the route, pin = anchored to this day) · actions
+// button (the ⋮ — a tap opens the plan popup where day/time/notes are edited;
+// it doubles as the ONLY place a press-and-hold drag starts — see
+// widgets/timeline-gestures).
 // Before each located stop sits a leg connector showing the estimated distance
 // + drive/walk time (domain/geo.js) from the previous stop — or, for a day's
 // first todo, from where the day starts.
@@ -94,7 +96,9 @@ function _tlPlanRow(scrap, { canWrite = true, placement = 'auto' } = {}) {
           ${meta ? `<span class="tl-outcome-badge tl-outcome-badge--${outcome}">${meta.tag}</span>` : ''}
         </button>
         <span class="tl-row__place" title="${escapeAttr(pmeta.title)}" aria-label="${escapeAttr(pmeta.title)}"><i data-lucide="${pmeta.icon}"></i></span>
-        ${canWrite ? '<span class="tl-row__grip" aria-hidden="true" title="Hold to drag to another day"><i data-lucide="menu"></i></span>' : ''}
+        ${canWrite ? `<button class="tl-row__grip" data-action="open-plan" data-scrap-id="${escapeAttr(scrap.id)}"
+                aria-label="Plan actions — change day, time or notes; or hold to drag to another day"
+                title="Actions — or hold to drag"><i data-lucide="ellipsis-vertical"></i></button>` : ''}
       </div>
     </div>`;
 }
