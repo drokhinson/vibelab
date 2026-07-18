@@ -6,21 +6,33 @@
 // between. Render-only; trip-view binds the [data-action=...] buttons.
 'use strict';
 
-// role → presentation. start/end are travel checkpoints with a fixed meaning.
+// role → presentation (kind label + arrival/departure note). The icon comes
+// from _checkpointIcon (transport-mode aware), not from here.
 const CHECKPOINT_ROLE_META = {
-  start: { kind: 'Travel', icon: 'plane-landing', note: 'Arrival' },
-  end: { kind: 'Travel', icon: 'plane-takeoff', note: 'Departure' },
-  travel: { kind: 'Travel', icon: 'plane', note: null },
-  stay: { kind: 'Stay', icon: 'home', note: null },
+  start: { kind: 'Travel', note: 'Arrival' },
+  end: { kind: 'Travel', note: 'Departure' },
+  travel: { kind: 'Travel', note: null },
+  stay: { kind: 'Stay', note: null },
 };
 
-// travel `type` refines the icon on non-endpoint legs.
+// transport `type` → Lucide icon, per role. Endpoints (start=arrival,
+// end=departure) get directional variants where the icon family supports it
+// (flights); other modes reuse one mode icon for every role.
 const CHECKPOINT_TYPE_ICONS = {
-  airport: 'plane',
-  train_station: 'train-front',
-  car_rental: 'car',
-  other: 'map-pin',
+  airport: { start: 'plane-landing', end: 'plane-takeoff', default: 'plane' },
+  train_station: { default: 'train-front' },
+  car_rental: { default: 'car' },
+  other: { default: 'map-pin' },
 };
+
+// The icon for a checkpoint: stays are a home; travel checkpoints pick their
+// transport-mode icon (a train arrival shows a train, not a plane), using the
+// directional variant for start/end when the mode has one.
+function _checkpointIcon(anchor) {
+  if (anchor.role === 'stay') return 'home';
+  const set = CHECKPOINT_TYPE_ICONS[anchor.type] || CHECKPOINT_TYPE_ICONS.other;
+  return set[anchor.role] || set.default;
+}
 
 // The date range a checkpoint occupies: stays span check-in → check-out;
 // travel checkpoints sit on their single day. Either end may be null.
@@ -60,9 +72,7 @@ function _checkpointWhen(anchor) {
  */
 function renderCheckpointCard(anchor, { canWrite = true } = {}) {
   const meta = CHECKPOINT_ROLE_META[anchor.role] || CHECKPOINT_ROLE_META.stay;
-  const icon = anchor.role === 'travel'
-    ? (CHECKPOINT_TYPE_ICONS[anchor.type] || CHECKPOINT_TYPE_ICONS.other)
-    : meta.icon;
+  const icon = _checkpointIcon(anchor);
   const unpinned = anchor.geocode_confidence === 'none';
   return `
     <div class="sticker-card checkpoint-card" data-anchor-id="${escapeAttr(anchor.id)}">
