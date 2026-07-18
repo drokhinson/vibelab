@@ -100,6 +100,77 @@
       }
     },
 
+    // Capture from the Visited tab: the place(s) the URL produces should be
+    // born *visited* and land in the Visited list. Capture + enrichment are
+    // async (one URL can fan out into several places), so we paint a processing
+    // card in the Visited list (via capturePending:visited, mirroring the trip
+    // shimmer), poll the source until its scraps materialize, mark each visited,
+    // then clear the card — the Visited view reloads off the store change.
+    VISITED_PENDING_KEY: 'capturePending:visited',
+
+    async captureVisited(url) {
+      const key = this.VISITED_PENDING_KEY;
+      const provisional = {
+        id: 'pending-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+        url, source_domain: domainFromUrl(url), status: 'processing',
+      };
+      window.store.set(key, [provisional, ...(window.store.get(key) || [])]);
+      let source;
+      try {
+        source = await window.api.capture({ url, via: 'paste' });
+      } catch (err) {
+        window.store.set(key, (window.store.get(key) || []).filter((s) => s.id !== provisional.id));
+        throw err;
+      }
+      // Reconcile the real id/domain onto the provisional card (still processing
+      // until the scraps land and the poll clears it).
+      window.store.set(key, (window.store.get(key) || []).map((s) => (s.id === provisional.id
+        ? { ...s, id: source.id, source_domain: source.source_domain || s.source_domain }
+        : s)));
+      this._pollVisitedCapture(source.id, provisional.id);
+      window.SourceDomain?.refreshInboxCount();
+      return source;
+    },
+
+    _pollVisitedCapture(sourceId, provisionalId) {
+      const key = this.VISITED_PENDING_KEY;
+      const started = Date.now();
+      const drop = () => window.store.set(
+        key, (window.store.get(key) || []).filter((s) => s.id !== sourceId && s.id !== provisionalId));
+      const tick = async () => {
+        if (Date.now() - started > this.POLL_TIMEOUT_MS) {
+          drop(); // stuck/slow — stop hammering; it still lands in the inbox
+          window.SourceDomain?.refreshInboxCount();
+          return;
+        }
+        try {
+          const res = await window.api.sourceScraps(sourceId);
+          if (res.status === 'ready') {
+            // Born visited: mark each produced place visited (idempotent — skip
+            // any the user already flipped). Sequential to stay within the
+            // one-at-a-time write assumptions elsewhere; the set is tiny.
+            for (const s of res.scraps || []) {
+              if (!s.visited_at) {
+                try { await window.api.updateScrap(s.id, { visited: true }); } catch (_) {}
+              }
+            }
+            this._invalidateLists();
+            drop(); // clears the shimmer → the Visited view reloads off this
+            window.SourceDomain?.refreshInboxCount();
+            return;
+          }
+          if (res.status === 'failed') {
+            drop();
+            window.SourceDomain?.refreshInboxCount();
+            toast('That link couldn’t be read — check the inbox to retry.', { error: true });
+            return;
+          }
+        } catch (_) { /* transient — keep polling */ }
+        setTimeout(tick, this.POLL_INTERVAL_MS);
+      };
+      setTimeout(tick, this.POLL_INTERVAL_MS);
+    },
+
     async update(scrapId, tripId, fields) {
       const scrap = await window.api.updateScrap(scrapId, fields);
       if (tripId) window.TripDomain.patchScrapFields(tripId, scrapId, ownFields(scrap));

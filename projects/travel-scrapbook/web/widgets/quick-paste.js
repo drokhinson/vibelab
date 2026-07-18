@@ -24,7 +24,11 @@ function renderQuickPaste(tripId = null) {
   `;
 }
 
-function bindQuickPaste(container, { onCreated } = {}) {
+// `onCapture(url)` lets a view own the capture instead of the default paths —
+// e.g. the Visited tab captures the URL as *born visited* (ScrapDomain.
+// captureVisited) and paints its own processing card. When given, the handler
+// owns its own success toast.
+function bindQuickPaste(container, { onCreated, onCapture } = {}) {
   const form = container.querySelector('#quick-paste-form');
   if (!form) return;
   form.addEventListener('submit', async (ev) => {
@@ -36,17 +40,18 @@ function bindQuickPaste(container, { onCreated } = {}) {
     btn.disabled = true;
     try {
       const tripId = form.dataset.tripId;
-      if (tripId) {
+      if (onCapture) {
+        await onCapture(url);
+      } else if (tripId) {
         // Trip capture: the trip polls until the new scraps land.
         await window.ScrapDomain.capture(tripId, url);
+        toast('Scrapped! Reading the link — places land as plans, bookings as checkpoints.');
       } else {
         await window.api.capture({ url, via: 'paste' });
         window.SourceDomain?.refreshInboxCount();
+        toast('Scrapped! Reading the page — it may add more than one place.');
       }
       input.value = '';
-      toast(tripId
-        ? 'Scrapped! Reading the link — places land as plans, bookings as checkpoints.'
-        : 'Scrapped! Reading the page — it may add more than one place.');
       onCreated?.();
     } catch (err) {
       toast(err.message || 'Could not save that link', { error: true });

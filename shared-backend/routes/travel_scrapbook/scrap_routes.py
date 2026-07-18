@@ -217,10 +217,29 @@ async def delete_scrap(
     scrap_id: str = Path(..., description="Scrap UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Remove a saved place (the canonical place row and sources remain)."""
+    """Remove a saved place completely: the scrap, its trip memberships (via
+    cascade), and the now-orphaned canonical place row + its source links. This
+    takes the place out of the Wander List, the Visited list, AND the community
+    pool, and lets a future re-capture re-geocode it fresh instead of deduping
+    onto the old row. Sources (capture history) are left intact."""
     sb = get_supabase()
-    get_owned_scrap(sb, scrap_id, user.user_id)
+    scrap = get_owned_scrap(sb, scrap_id, user.user_id)
+    place_id = scrap["place_id"]
     sb.table("travelscrapbook_scraps").delete().eq("id", scrap_id).execute()
+    # Drop the canonical place once nothing else references it. Per-user places
+    # carry one scrap each, so this is the norm; the guard just keeps a shared
+    # row alive if the invariant ever changes. place_sources cascade with it.
+    remaining = (
+        sb.table("travelscrapbook_scraps")
+        .select("id")
+        .eq("place_id", place_id)
+        .limit(1)
+        .execute()
+    )
+    if not remaining.data:
+        sb.table("travelscrapbook_places").delete().eq("id", place_id).eq(
+            "user_id", user.user_id
+        ).execute()
     return MessageResponse(message="Scrap deleted")
 
 
