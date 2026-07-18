@@ -21,6 +21,10 @@ class VisitedView extends View {
     this._facets = {};
     this._loaded = false;
     this._seq = 0;
+    // Processing cards for in-flight "scrap into Visited" captures (mirrors the
+    // trip's capturePending shimmer). Sourced from the capturePending:visited
+    // store key so a capture survives navigating away and back.
+    this._pending = [];
   }
 
   renderLoading() {
@@ -35,6 +39,10 @@ class VisitedView extends View {
 
   async onMount() {
     this._resetState();
+    // Adopt any capture already in flight (e.g. started, navigated away, came
+    // back) and repaint / reload as its processing card comes and goes.
+    this._pending = window.store.get('capturePending:visited') || [];
+    this.listen('capturePending:visited', () => this._onVisitedPending());
     // Stale-while-revalidate: cached page paints instantly, refresh follows.
     const cached = window.tsCache?.get('visited', this._cacheKey());
     if (cached) {
@@ -85,8 +93,14 @@ class VisitedView extends View {
   render() {
     if (!this._loaded) return;
     const filtered = !!(this._geo.region || this._geo.country || this._geo.city);
-    const emptyAll = this._total === 0 && this._checkpointTotal === 0 && !filtered;
+    // A capture into Visited paints a processing card on the Places tab until the
+    // place lands (born visited) and the list reloads.
+    const hasPending = this._pending.length > 0;
+    const emptyAll = this._total === 0 && this._checkpointTotal === 0 && !filtered && !hasPending;
     const onCheckpoints = this._tab === 'checkpoints';
+    const processingCards = hasPending
+      ? this._pending.map((s, i) => renderSourceCard(s, { index: i, variant: 'processing' })).join('')
+      : '';
     this.container.innerHTML = `
       <h1 style="font-size:2rem;">Visited</h1>
       ${emptyAll ? `
@@ -108,8 +122,9 @@ class VisitedView extends View {
             </div>` : `
             <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">No visited stays or transport yet.</p>`}
         ` : `
-          ${this._items.length ? `
+          ${(this._items.length || hasPending) ? `
             <div class="card-grid card-grid--2col">
+              ${processingCards}
               ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip', showRemove: false })).join('')}
             </div>` : `
             <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">Nothing here matches — clear a filter to widen the view.</p>`}
@@ -126,9 +141,26 @@ class VisitedView extends View {
     this._bind();
   }
 
+  // A capture's processing card was added or cleared. Repaint to show/hide the
+  // shimmer; when it clears (place landed → born visited), reload so the new
+  // visited card appears in place of the shimmer.
+  _onVisitedPending() {
+    const pending = window.store.get('capturePending:visited') || [];
+    const shrank = pending.length < this._pending.length;
+    this._pending = pending;
+    if (shrank) this._load(); else this.render();
+  }
+
   _bind() {
     const c = this.container;
-    bindQuickPaste(c);
+    // Quick-paste here captures the URL as *born visited* (it lands in this
+    // list, not the Wander List) and paints its own processing card.
+    bindQuickPaste(c, {
+      onCapture: async (url) => {
+        await window.ScrapDomain.captureVisited(url);
+        toast('Scrapped! It’ll appear here as visited once the link is read.');
+      },
+    });
     // Places / Stays & transport toggle — both sets load in one page, so the
     // switch is a pure client-side re-render (no refetch).
     c.querySelectorAll('input[name=visited-tab]').forEach((input) => {
