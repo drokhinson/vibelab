@@ -28,7 +28,9 @@
 --               in 020 (scraps = plan memberships only; anchors[] SYNTHESIZED
 --               from role-bearing memberships in the legacy anchor shape,
 --               ordered by membership created_at; candidates also exclude
---               checkpoint-category places)
+--               checkpoint-category places) and 026 (anchors[] = stay/travel
+--               only; arrival/departure are role-NULL plans in scraps[], each
+--               scrap carries is_arrival/is_departure + plan_end_date)
 --   Called by:  shared-backend/routes/travel_scrapbook/trip_routes.py (get_trip)
 --   Purpose:    The whole trip screen in ONE round trip (was 6–9 sequential
 --               queries + 3 extra endpoints). Access (owner or accepted
@@ -48,7 +50,8 @@
 --   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
 --               replaced in 020 (resolves the PLAN membership only — a scrap
 --               can now also hold checkpoint memberships on the same trip —
---               and passes role/plan_end_date through)
+--               and passes role/plan_end_date through) and 026 (echoes
+--               is_arrival/is_departure for the endpoint bookend reconcile)
 --   Called by:  shared-backend/routes/travel_scrapbook/scrap_routes.py
 --               (_hydrated_membership — the echo for assign/approve/schedule/
 --               vibe endpoints)
@@ -65,7 +68,9 @@
 --               replaced in 020 (checkpoint-category scraps split into their
 --               own capped array; the paginated scraps / total / nav badge
 --               count non-checkpoint places; trip_ids counts plan memberships
---               only; facets stay over the full base)
+--               only; facets stay over the full base) and 025 (geocoded_trips
+--               carry member_countries/member_regions for the additive-union
+--               scope in services/places.suggest_trips)
 --   Called by:  shared-backend/routes/travel_scrapbook/source_routes.py (get_inbox)
 --   Purpose:    The Wander List screen in one round trip: SQL-side filter/
 --               facets/pagination (was fetch-all + Python paging) plus the
@@ -104,7 +109,8 @@
 --                                  p_q TEXT DEFAULT NULL,
 --                                  p_limit INT DEFAULT 6, p_offset INT DEFAULT 0)
 --   → JSONB {items[], total, categories[]}
---   Defined in: db/migrations/travelscrapbook/024_trip_suggestions.sql
+--   Defined in: db/migrations/travelscrapbook/024_trip_suggestions.sql;
+--               replaced in 025 (additive-union geo scope; no blanket lat filter)
 --   Called by:  shared-backend/routes/travel_scrapbook/plan_routes.py
 --               (list_trip_suggestions)
 --   Purpose:    The unified "add to trip" picker feed in one round trip. Merges
@@ -116,6 +122,10 @@
 --               services/optimizer.py). Category is applied post-merge so the
 --               returned `categories` facet always reflects the whole scoped
 --               pool. Supersedes the /wishlist + trip_bundle.candidates pickers.
+--               025: geo scope is the UNION of the trip's destination with the
+--               countries/regions of its approved members (mirrors the additive
+--               union in services/places.place_matches_trip_scope); candidates
+--               without a pin are kept (lat only gates the radius sub-branch).
 
 -- travelscrapbook_set_route_positions / travelscrapbook_set_route_plan
 --   DROPPED in db/migrations/travelscrapbook/022_drop_route_rpcs.sql. Route

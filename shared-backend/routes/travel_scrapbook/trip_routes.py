@@ -1,10 +1,12 @@
-"""Trip CRUD and checkpoint (start/end/stay/travel) management.
+"""Trip CRUD, checkpoint (stay/travel) and endpoint (arrival/departure) management.
 
 Since migration 020 a checkpoint is a place + scrap + role-bearing
 travelscrapbook_scrap_trips membership (not an anchors-table row). The
 /anchors endpoints keep their paths and AnchorResponse shape — the anchor id
 is now the membership id, and responses are synthesized via
-services/checkpoints.py.
+services/checkpoints.py. Since 026 arrival/departure are NOT checkpoints: they
+are ordinary role-NULL plans flagged is_arrival/is_departure, managed through
+the /trips/{id}/endpoints routes and returned as ScrapResponse.
 """
 
 from typing import Any
@@ -18,6 +20,7 @@ from . import router
 from .access import get_accessible_trip
 from .constants import (
     AnchorRole,
+    Endpoint,
     MembershipStatus,
     TRAVEL_ROLES,
     TripMemberRole,
@@ -27,6 +30,8 @@ from .models import (
     AnchorCreateRequest,
     AnchorResponse,
     AnchorUpdateRequest,
+    EndpointCreateRequest,
+    EndpointUpdateRequest,
     MessageResponse,
     ScrapResponse,
     TripCreateRequest,
@@ -43,18 +48,39 @@ from .services.places import (
     normalize_place_name,
     place_matches_trip_scope,
     region_for_country_code,
+    trip_scope_sets,
 )
 
 
-def _get_role_membership(sb: Client, trip_id: str, role: str) -> dict[str, Any] | None:
-    """A trip's checkpoint membership for one role, if it exists. Used by
-    same_as_start (reuse the start's scrap) and to pre-check the one-start/
-    one-end slots so a duplicate 409s BEFORE materializing an orphan scrap."""
+def _get_endpoint_membership(
+    sb: Client, trip_id: str, flag: str
+) -> dict[str, Any] | None:
+    """A trip's arrival (flag='is_arrival') or departure (flag='is_departure')
+    bookend plan membership, if set. Pre-checks the one-arrival/one-departure
+    slots so a duplicate 409s BEFORE materializing an orphan scrap; the partial
+    unique indexes stay the authoritative (race-proof) guard."""
     rows = (
         sb.table("travelscrapbook_scrap_trips")
         .select("*")
         .eq("trip_id", trip_id)
-        .eq("role", role)
+        .eq(flag, True)
+        .execute()
+    )
+    return rows.data[0] if rows.data else None
+
+
+def _plan_membership(
+    sb: Client, scrap_id: str, trip_id: str
+) -> dict[str, Any] | None:
+    """The existing role-NULL plan membership for (scrap, trip), if any — so
+    flagging a place that's already a plan reuses that row (respecting the
+    plan-uniqueness index) instead of inserting a duplicate."""
+    rows = (
+        sb.table("travelscrapbook_scrap_trips")
+        .select("*")
+        .eq("scrap_id", scrap_id)
+        .eq("trip_id", trip_id)
+        .is_("role", "null")
         .execute()
     )
     return rows.data[0] if rows.data else None
@@ -188,6 +214,18 @@ async def get_trip(
         raise HTTPException(status_code=404, detail="Trip not found")
     trip = bundle["trip"]
     scraps = attach_consensus(bundle["scraps"])
+    # Additive-union scope: the trip's own destination PLUS the countries/regions
+    # of its approved members (plans + checkpoints/anchors). Built from fields the
+    # bundle already carries — no extra query. Mirrors the SQL union in
+    # travelscrapbook_trip_suggestions (025).
+    member_places = [
+        {"country": s.get("place_country"), "region": s.get("place_region")}
+        for s in bundle["scraps"] if s.get("status") == MembershipStatus.APPROVED
+    ] + [
+        {"country": a.get("country"), "region": a.get("region")}
+        for a in bundle["anchors"]
+    ]
+    union_countries, union_regions = trip_scope_sets(member_places)
     # Scope filtering is pure math over fields the bundle already carries.
     candidates = [
         s for s in bundle["candidates"]
@@ -196,6 +234,7 @@ async def get_trip(
             lat=s.get("lat"), lng=s.get("lng"),
             city=s.get("place_city"), region=s.get("place_region"),
             country=s.get("place_country"),
+            union_countries=union_countries, union_regions=union_regions,
         )
     ]
     return TripResponse(
@@ -311,15 +350,13 @@ async def create_anchor(
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> AnchorResponse:
-    """Add a checkpoint (start/end/stay/travel). start and end are unique per
-    trip; a trip can hold any number of stays and travel legs.
+    """Add a checkpoint (stay or travel). A trip can hold any number of stays and
+    travel legs. (Arrival/departure are no longer checkpoints — set them via
+    POST /trips/{id}/endpoints; they're ordinary bookend plans now.)
 
     The checkpoint's place is materialized into the caller's saved places
     (deduped like any capture — it also appears on their Wander List / Visited
     under Stays & transport), and the trip link is a role-bearing membership.
-    An end checkpoint with ``same_as_start`` reuses the start's place/scrap
-    (arrival and departure are often the same spot) — but NOT its date:
-    departure day ≠ arrival day, so the request's own dates still apply.
 
     Collaborators may edit the shared route, so this needs write access.
     """
@@ -329,49 +366,22 @@ async def create_anchor(
     dates = _marker_dates(body, body.role)
     _validate_anchor_dates(trip, dates)
 
-    # Pre-check the unique start/end slot so a duplicate 409s BEFORE the place/
-    # scrap materialize below — otherwise the failed request would leave an
-    # orphan card on the Wander List. The partial unique index stays the
-    # authoritative (race-proof) guard.
-    if body.role in (AnchorRole.START, AnchorRole.END) and _get_role_membership(
-        sb, trip_id, body.role
-    ):
-        raise HTTPException(
-            status_code=409, detail=f"Trip already has a '{body.role}' anchor")
-
-    if body.same_as_start:
-        if body.role != AnchorRole.END:
-            raise HTTPException(
-                status_code=400, detail="Only the end anchor can copy the start")
-        start = _get_role_membership(sb, trip_id, AnchorRole.START)
-        if not start:
-            raise HTTPException(status_code=400, detail="Add a start anchor first")
-        scrap_id = start["scrap_id"]
-    else:
-        place, scrap = await checkpoints.materialize_checkpoint_scrap(
-            sb, user.user_id,
-            label=body.label,
-            category=checkpoints.category_for(body.role, body.type),
-            query=body.query,
-            maps_url=body.maps_url,
-        )
-        scrap_id = scrap["id"]
+    place, scrap = await checkpoints.materialize_checkpoint_scrap(
+        sb, user.user_id,
+        label=body.label,
+        category=checkpoints.category_for(body.role, body.type),
+        query=body.query,
+        maps_url=body.maps_url,
+    )
 
     membership = {
-        "scrap_id": scrap_id,
+        "scrap_id": scrap["id"],
         "trip_id": trip_id,
         "role": body.role,
         "status": MembershipStatus.APPROVED,
         **_membership_dates(dates, body.role),
     }
-    try:
-        created = sb.table("travelscrapbook_scrap_trips").insert(membership).execute()
-    except Exception as exc:
-        # Partial unique index: one start + one end per trip.
-        raise HTTPException(
-            status_code=409,
-            detail=f"Trip already has a '{body.role}' anchor",
-        ) from exc
+    created = sb.table("travelscrapbook_scrap_trips").insert(membership).execute()
     return _anchor_response(sb, created.data[0]["id"])
 
 
@@ -401,9 +411,8 @@ async def update_anchor(
 ) -> AnchorResponse:
     """Edit a checkpoint. Dates land on the trip membership. A LOCATION change
     (query or Maps link) re-materializes the place and REPOINTS this membership
-    — the old place may back other checkpoints (same_as_start pairs share one
-    scrap) and the user's Wander List, so it is never mutated to a different
-    location out from under them; if the edit resolves to the SAME canonical
+    — the old place may back the user's Wander List, so it is never mutated to a
+    different location out from under them; if the edit resolves to the SAME canonical
     place, its pin/link are refreshed in place (never wiping OSM identity).
     Label/type-only edits write through to the current place (a rename is a
     correction, not a move). Any trip writer may edit."""
@@ -532,3 +541,203 @@ async def delete_anchor(
     _get_writable_checkpoint(sb, anchor_id, user.user_id)
     sb.table("travelscrapbook_scrap_trips").delete().eq("id", anchor_id).execute()
     return MessageResponse(message="Checkpoint removed from the trip")
+
+
+# ── Endpoints (arrival / departure — the trip's bookend plans, 026) ───────────
+
+def _endpoint_scrap(sb: Client, scrap_id: str, trip_id: str) -> ScrapResponse:
+    """The bookend plan hydrated in the trip's context (same echo the plan
+    mutations use), so the client patches it straight into scraps[]."""
+    row = (
+        sb.rpc("travelscrapbook_scrap_card",
+               {"p_scrap_id": scrap_id, "p_trip_id": trip_id}).execute()
+    ).data
+    if not row:
+        raise HTTPException(status_code=404, detail="Endpoint not on that trip")
+    attach_consensus([row])
+    return ScrapResponse(**row)
+
+
+def _validate_endpoint_date(trip: dict[str, Any], date_str: str | None, label: str) -> None:
+    """Reject a bookend date outside the trip's dates (lenient when unset)."""
+    start, end = trip.get("start_date"), trip.get("end_date")
+    if date_str and ((start and date_str < start) or (end and date_str > end)):
+        raise HTTPException(
+            status_code=400, detail=f"{label} must fall within the trip's dates")
+
+
+def _endpoint_cols(which: Endpoint) -> tuple[str, str]:
+    """(flag column, date column) for an endpoint: arrival → is_arrival/plan_date,
+    departure → is_departure/plan_end_date."""
+    if which == Endpoint.ARRIVAL:
+        return "is_arrival", "plan_date"
+    return "is_departure", "plan_end_date"
+
+
+@router.post(
+    "/trips/{trip_id}/endpoints",
+    response_model=ScrapResponse,
+    status_code=201,
+    summary="Set the trip's arrival or departure",
+)
+async def create_endpoint(
+    body: EndpointCreateRequest,
+    trip_id: str = Path(..., description="Trip UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapResponse:
+    """Set the trip's arrival or departure — an ordinary place that bookends the
+    trip (role-NULL plan flagged is_arrival/is_departure). Its place is
+    materialized into the caller's saved places (deduped like any capture). A
+    departure with ``same_as_arrival`` reuses the arrival place (flags its plan
+    as the departure too) — one row, both ends — but keeps its own date.
+
+    Collaborators may edit the shared route, so this needs write access."""
+    sb = get_supabase()
+    trip, _ = get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
+    flag, date_col = _endpoint_cols(body.which)
+    date_str = body.day.isoformat() if body.day else None
+    _validate_endpoint_date(trip, date_str, f"{str(body.which).capitalize()} day")
+
+    # Pre-check the one-arrival/one-departure slot so a duplicate 409s BEFORE the
+    # place/scrap materialize below; the partial unique index is the race guard.
+    if _get_endpoint_membership(sb, trip_id, flag):
+        raise HTTPException(status_code=409, detail=f"Trip already has a {body.which}")
+
+    if body.same_as_arrival:
+        if body.which != Endpoint.DEPARTURE:
+            raise HTTPException(
+                status_code=400, detail="Only the departure can reuse the arrival")
+        arrival = _get_endpoint_membership(sb, trip_id, "is_arrival")
+        if not arrival:
+            raise HTTPException(status_code=400, detail="Set the arrival first")
+        sb.table("travelscrapbook_scrap_trips").update(
+            {"is_departure": True, "plan_end_date": date_str}
+        ).eq("id", arrival["id"]).execute()
+        return _endpoint_scrap(sb, arrival["scrap_id"], trip_id)
+
+    place, scrap = await checkpoints.materialize_checkpoint_scrap(
+        sb, user.user_id,
+        label=body.label,
+        category=checkpoints.category_for(AnchorRole.TRAVEL, body.type),
+        query=body.query,
+        maps_url=body.maps_url,
+    )
+
+    # Flag an existing plan for this place (respecting the plan-uniqueness index),
+    # else insert a fresh bookend plan.
+    existing = _plan_membership(sb, scrap["id"], trip_id)
+    if existing:
+        sb.table("travelscrapbook_scrap_trips").update(
+            {flag: True, date_col: date_str or existing.get(date_col)}
+        ).eq("id", existing["id"]).execute()
+    else:
+        sb.table("travelscrapbook_scrap_trips").insert(
+            {"scrap_id": scrap["id"], "trip_id": trip_id,
+             "status": MembershipStatus.APPROVED, flag: True, date_col: date_str}
+        ).execute()
+    return _endpoint_scrap(sb, scrap["id"], trip_id)
+
+
+@router.patch(
+    "/trips/{trip_id}/endpoints/{which}",
+    response_model=ScrapResponse,
+    status_code=200,
+    summary="Update the trip's arrival or departure",
+)
+async def update_endpoint(
+    body: EndpointUpdateRequest,
+    trip_id: str = Path(..., description="Trip UUID"),
+    which: Endpoint = Path(..., description="arrival or departure"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ScrapResponse:
+    """Edit the trip's arrival/departure: change its date, or its location (which
+    re-materializes the place and repoints this bookend — the old place survives
+    on the Wander List). Editing the location of a place that bookends BOTH ends
+    splits it so only this end moves. Any trip writer may edit."""
+    sb = get_supabase()
+    trip, _ = get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
+    flag, date_col = _endpoint_cols(which)
+    m = _get_endpoint_membership(sb, trip_id, flag)
+    if m is None:
+        raise HTTPException(status_code=404, detail=f"Trip has no {which}")
+
+    fields = body.model_dump(exclude_unset=True)
+    date_str = body.day.isoformat() if body.day else None
+    if "day" in fields:
+        _validate_endpoint_date(trip, date_str, f"{str(which).capitalize()} day")
+    keep_date = date_str if "day" in fields else m.get(date_col)
+
+    location_change = bool(body.label or body.query or body.maps_url)
+    if not location_change:
+        if "day" in fields:
+            sb.table("travelscrapbook_scrap_trips").update(
+                {date_col: date_str}).eq("id", m["id"]).execute()
+        return _endpoint_scrap(sb, m["scrap_id"], trip_id)
+
+    if not body.label or not body.query:
+        raise HTTPException(
+            status_code=400, detail="label and query are required to change the location")
+    place, scrap = await checkpoints.materialize_checkpoint_scrap(
+        sb, user.user_id,
+        label=body.label,
+        category=checkpoints.category_for(AnchorRole.TRAVEL, body.type),
+        query=body.query,
+        maps_url=body.maps_url,
+    )
+
+    shared = m.get("is_arrival") and m.get("is_departure")
+    if shared:
+        # This end moves to the new place; the other end stays on the old row.
+        sb.table("travelscrapbook_scrap_trips").update(
+            {flag: False, date_col: None}).eq("id", m["id"]).execute()
+        target = _plan_membership(sb, scrap["id"], trip_id)
+        if target:
+            sb.table("travelscrapbook_scrap_trips").update(
+                {flag: True, date_col: keep_date}).eq("id", target["id"]).execute()
+        else:
+            sb.table("travelscrapbook_scrap_trips").insert(
+                {"scrap_id": scrap["id"], "trip_id": trip_id,
+                 "status": MembershipStatus.APPROVED, flag: True, date_col: keep_date}
+            ).execute()
+        return _endpoint_scrap(sb, scrap["id"], trip_id)
+
+    target = _plan_membership(sb, scrap["id"], trip_id)
+    if target and target["id"] != m["id"]:
+        # New place already a plan on this trip: fold the flag onto it, drop the old row.
+        sb.table("travelscrapbook_scrap_trips").update(
+            {flag: True, date_col: keep_date}).eq("id", target["id"]).execute()
+        sb.table("travelscrapbook_scrap_trips").delete().eq("id", m["id"]).execute()
+    else:
+        sb.table("travelscrapbook_scrap_trips").update(
+            {"scrap_id": scrap["id"], date_col: keep_date}).eq("id", m["id"]).execute()
+    return _endpoint_scrap(sb, scrap["id"], trip_id)
+
+
+@router.delete(
+    "/trips/{trip_id}/endpoints/{which}",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Clear the trip's arrival or departure",
+)
+async def delete_endpoint(
+    trip_id: str = Path(..., description="Trip UUID"),
+    which: Endpoint = Path(..., description="arrival or departure"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Remove the trip's arrival/departure bookend. When one place is BOTH ends,
+    only this end's flag is cleared (the other stays). Otherwise the bookend plan
+    is removed from the trip; the place and scrap survive on the Wander List."""
+    sb = get_supabase()
+    get_accessible_trip(sb, trip_id, user.user_id, need_write=True)
+    flag, date_col = _endpoint_cols(which)
+    other_flag = "is_departure" if which == Endpoint.ARRIVAL else "is_arrival"
+    m = _get_endpoint_membership(sb, trip_id, flag)
+    if m is None:
+        raise HTTPException(status_code=404, detail=f"Trip has no {which}")
+
+    if m.get(other_flag):
+        sb.table("travelscrapbook_scrap_trips").update(
+            {flag: False, date_col: None}).eq("id", m["id"]).execute()
+    else:
+        sb.table("travelscrapbook_scrap_trips").delete().eq("id", m["id"]).execute()
+    return MessageResponse(message=f"{str(which).capitalize()} cleared")

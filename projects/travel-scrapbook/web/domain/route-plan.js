@@ -147,24 +147,23 @@
   // collects into one inline route list (rendered in the middle of the timeline)
   // — routable ones in a single optimized path with legs + total, unroutable/
   // completed ones appended plainly.
-  function buildUndated(scraps, anchors, reason) {
+  function buildUndated(scraps, arrival, departure, reason) {
     const routable = scraps.filter((s) => located(s) && !completed(s)).sort((a, b) => cmpId(a.id, b.id));
     const rest = scraps.filter((s) => !(located(s) && !completed(s)));
-    const startA = (anchors || []).find((a) => a.role === 'start' && located(a));
-    const endA = (anchors || []).find((a) => a.role === 'end' && located(a));
-    const origin = startA ? pointOf(startA) : null;
+    const origin = arrival && located(arrival) ? pointOf(arrival) : null;
 
-    const rows = orderScraps(routable, origin, endA ? pointOf(endA) : null)
+    const rows = orderScraps(routable, origin, departure && located(departure) ? pointOf(departure) : null)
       .map((s) => ({ scrap: s, placement: placementOf(s), leg: null }));
     const { withinKm, transitionKm, stops } = attachLegs(rows, origin);
     for (const s of rest) rows.push({ scrap: s, placement: placementOf(s), leg: null });
 
-    // No closing leg on the undated path: the Departure anchor is rarely located
-    // on a dateless trip, and the optimizer already seeds off the end anchor for
-    // ordering. The route rows render inline in the middle (ui/trip-timeline.js).
+    // No closing leg on the undated path: the Departure bookend is rarely located
+    // on a dateless trip, and the optimizer already seeds off it for ordering.
+    // The route rows render inline in the middle (ui/trip-timeline.js).
     return {
       days: [], anytime: rows, endLeg: null, uncoveredDays: [],
       totalKm: withinKm + transitionKm, stopCount: stops, reason: reason || 'no_dates',
+      arrival, departure,
     };
   }
 
@@ -189,9 +188,14 @@
   function buildItinerary(trip, anchors, scraps) {
     anchors = anchors || [];
     scraps = scraps || [];
-    const base = window.buildTimeline(trip, anchors, scraps);
+    // Arrival/departure are ordinary bookend plans now (026): pull them out so
+    // they seed the route's endpoints and render as bookends, never as day rows.
+    const arrival = scraps.find((s) => s.is_arrival) || null;
+    const departure = scraps.find((s) => s.is_departure) || null;
+    const planScraps = scraps.filter((s) => !s.is_arrival && !s.is_departure);
+    const base = window.buildTimeline(trip, anchors, planScraps);
     const days = base.days || [];
-    if (!days.length) return buildUndated(scraps, anchors, base.reason);
+    if (!days.length) return buildUndated(planScraps, arrival, departure, base.reason);
 
     const tripDays = days.map((d) => d.date);
     const anchoredCount = {};
@@ -225,9 +229,10 @@
       }
       Object.keys(clusters).forEach((i) => { clusters[i] = orderScraps(clusters[i], spine[i].point, null); });
     } else {
-      const startA = anchors.find((a) => a.role === 'start' && located(a));
-      const endA = anchors.find((a) => a.role === 'end' && located(a));
-      clusters[0] = orderScraps(autoRoutable, startA ? pointOf(startA) : null, endA ? pointOf(endA) : null);
+      clusters[0] = orderScraps(
+        autoRoutable,
+        arrival && located(arrival) ? pointOf(arrival) : null,
+        departure && located(departure) ? pointOf(departure) : null);
     }
 
     // Spread each cluster's autos across the days its checkpoint owns. If no
@@ -257,8 +262,8 @@
     // one day into the next as the origin (so cross-day distance is counted).
     let totalKm = 0;
     let stopCount = 0;
-    const startA = anchors.find((a) => a.role === 'start' && located(a));
-    let lastPoint = startA ? pointOf(startA) : (spine.length ? spine[0].point : null);
+    let lastPoint = (arrival && located(arrival)) ? pointOf(arrival)
+      : (spine.length ? spine[0].point : null);
 
     const outDays = days.map((d) => {
       const stayCp = spine.find((cp) => cp.winStart && cp.winStart <= d.date && (cp.winEnd || cp.winStart) >= d.date);
@@ -271,19 +276,20 @@
       return { date: d.date, day_number: d.day_number, markers: d.markers, rows };
     });
 
-    // The trip's closing hop: from the last located stop to the Departure anchor.
+    // The trip's closing hop: from the last located stop to the Departure plan.
     // Rendered above the Departure bookend (there's no day row to hang it on).
-    const endA = anchors.find((a) => a.role === 'end' && located(a));
+    const endLoc = departure && located(departure) ? departure : null;
     let endLeg = null;
-    if (endA && lastPoint) {
+    if (endLoc && lastPoint) {
       endLeg = window.Geo.legEstimate(
-        window.Geo.haversineKm(lastPoint.lat, lastPoint.lng, endA.lat, endA.lng));
+        window.Geo.haversineKm(lastPoint.lat, lastPoint.lng, endLoc.lat, endLoc.lng));
       totalKm += endLeg.km;
     }
 
     return {
       days: outDays, anytime, endLeg, totalKm, stopCount, reason: base.reason,
       uncoveredDays: uncoveredStayDays(tripDays, anchors),
+      arrival, departure,
     };
   }
 

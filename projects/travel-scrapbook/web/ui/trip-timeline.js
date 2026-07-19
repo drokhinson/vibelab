@@ -42,8 +42,8 @@ const TIMELINE_MARKER_META = {
 };
 
 const TL_ENDPOINT_META = {
-  start: { icon: 'plane-landing', label: 'Arrival' },
-  end: { icon: 'plane-takeoff', label: 'Departure' },
+  arrival: { icon: 'plane-landing', label: 'Arrival' },
+  departure: { icon: 'plane-takeoff', label: 'Departure' },
 };
 
 function _tlDay(dateStr) {
@@ -52,31 +52,34 @@ function _tlDay(dateStr) {
   });
 }
 
-// Arrival / Departure bookend: a ghost add button until the anchor exists,
-// then the anchor card with its date and an edit pencil.
-function _tlEndpoint(trip, role, { canWrite = true } = {}) {
-  const meta = TL_ENDPOINT_META[role];
-  const anchor = (trip.anchors || []).find((a) => a.role === role);
-  if (!anchor) {
+// Arrival / Departure bookend: a ghost add button until the endpoint plan
+// exists (026), then its card with the date and an edit pencil. `which` is
+// 'arrival' | 'departure'; `scrap` is the flagged plan (or null). Arrival reads
+// its day from plan_date, departure from plan_end_date (they may be one scrap
+// when you leave from where you arrived).
+function _tlEndpoint(scrap, which, { canWrite = true } = {}) {
+  const meta = TL_ENDPOINT_META[which];
+  if (!scrap) {
     if (!canWrite) return '';
     return `
-      <button class="tl-add-btn" data-action="add-anchor-role" data-role="${role}">
+      <button class="tl-add-btn" data-action="add-endpoint" data-which="${which}">
         <i data-lucide="plus"></i>${meta.label}
       </button>`;
   }
-  const day = anchor.anchor_date ? _tlDay(anchor.anchor_date) : 'no date yet';
-  const time = _tlTime(anchor.anchor_time);
-  const place = _tlPlace(anchor);
+  const dateVal = which === 'arrival' ? scrap.plan_date : scrap.plan_end_date;
+  const day = dateVal ? _tlDay(dateVal) : 'no date yet';
+  const time = which === 'arrival' ? _tlTime(scrap.plan_time) : '';
+  const place = _tlPlace({ city: scrap.place_city, country: scrap.place_country });
   return `
     <div class="sticker-card tl-endpoint">
       <span class="tl-endpoint__icon"><i data-lucide="${meta.icon}"></i></span>
       <div class="tl-endpoint__body">
         <span class="tl-endpoint__role">${meta.label}</span>
-        <span class="tl-endpoint__name">${escapeHtml(anchor.label)}</span>
+        <span class="tl-endpoint__name">${escapeHtml(scrap.place_name || 'Set a place')}</span>
         <span class="scrap-card__sub">${escapeHtml(day)}${time ? ` · ${escapeHtml(time)}` : ''}${place ? ` · ${escapeHtml(place)}` : ''}</span>
       </div>
       ${canWrite ? `
-        <button class="tl-row__btn" data-action="edit-anchor" data-anchor-id="${escapeAttr(anchor.id)}"
+        <button class="tl-row__btn" data-action="edit-endpoint" data-which="${which}" data-scrap-id="${escapeAttr(scrap.id)}"
                 aria-label="Edit ${meta.label}" title="Edit ${meta.label}">
           <i data-lucide="pencil"></i>
         </button>` : ''}
@@ -188,12 +191,12 @@ function renderTripTimeline(trip, itinerary, { canWrite = true } = {}) {
   return `
     <div style="display:flex;flex-direction:column;gap:0.9rem;margin-top:1rem;">
       ${summary}
-      ${_tlEndpoint(trip, 'start', { canWrite })}
+      ${_tlEndpoint(itinerary.arrival, 'arrival', { canWrite })}
       ${noDates ? undatedRows : dayCards}
       ${orphanRows}
       ${noDates ? '' : _tlLodgingTip(itinerary.uncoveredDays || [], { canWrite })}
       ${itinerary.endLeg ? _tlLegRow(itinerary.endLeg) : ''}
-      ${_tlEndpoint(trip, 'end', { canWrite })}
+      ${_tlEndpoint(itinerary.departure, 'departure', { canWrite })}
     </div>
   `;
 }

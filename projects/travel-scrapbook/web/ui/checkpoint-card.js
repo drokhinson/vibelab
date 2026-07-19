@@ -1,33 +1,29 @@
 // ui/checkpoint-card.js — canonical Checkpoint render functions.
 // A "checkpoint" is an anchor: a STAY (lodging with check-in/out) or TRAVEL
-// (arrival, departure, or a mid-trip leg for multi-city trips). Checkpoints
-// render as simple typed cards in the trip's Plans tab; when two dated
-// checkpoints leave a gap, a dashed placeholder invites filling the nights
-// between. Render-only; trip-view binds the [data-action=...] buttons.
+// (a mid-trip leg for multi-city trips). Checkpoints render as simple typed
+// cards in the trip's Plans tab; when two dated checkpoints leave a gap, a
+// dashed placeholder invites filling the nights between. (026: arrival/
+// departure are no longer checkpoints — they're bookend plans on the timeline.)
+// Render-only; trip-view binds the [data-action=...] buttons.
 'use strict';
 
-// role → presentation (kind label + arrival/departure note). The icon comes
-// from _checkpointIcon (transport-mode aware), not from here.
+// role → presentation. The icon comes from _checkpointIcon (transport-mode
+// aware), not from here.
 const CHECKPOINT_ROLE_META = {
-  start: { kind: 'Travel', note: 'Arrival' },
-  end: { kind: 'Travel', note: 'Departure' },
   travel: { kind: 'Travel', note: null },
   stay: { kind: 'Stay', note: null },
 };
 
-// transport `type` → Lucide icon, per role. Endpoints (start=arrival,
-// end=departure) get directional variants where the icon family supports it
-// (flights); other modes reuse one mode icon for every role.
+// transport `type` → Lucide icon. Travel legs reuse one mode icon.
 const CHECKPOINT_TYPE_ICONS = {
-  airport: { start: 'plane-landing', end: 'plane-takeoff', default: 'plane' },
+  airport: { default: 'plane' },
   train_station: { default: 'train-front' },
   car_rental: { default: 'car' },
   other: { default: 'map-pin' },
 };
 
-// The icon for a checkpoint: stays are a home; travel checkpoints pick their
-// transport-mode icon (a train arrival shows a train, not a plane), using the
-// directional variant for start/end when the mode has one.
+// The icon for a checkpoint: stays are a home; travel legs pick their
+// transport-mode icon (a train leg shows a train, not a plane).
 function _checkpointIcon(anchor) {
   if (anchor.role === 'stay') return 'home';
   const set = CHECKPOINT_TYPE_ICONS[anchor.type] || CHECKPOINT_TYPE_ICONS.other;
@@ -43,10 +39,10 @@ function checkpointSpan(anchor) {
   return { start: anchor.anchor_date || null, end: anchor.anchor_date || null };
 }
 
-// Chronological order: dated checkpoints by their start day (arrival first,
-// departure last on ties), undated ones after in creation order.
+// Chronological order: dated checkpoints by their start day, undated ones
+// after in creation order.
 function sortCheckpoints(anchors) {
-  const weight = { start: 0, stay: 1, travel: 1, end: 2 };
+  const weight = { stay: 1, travel: 1 };
   return [...anchors].sort((a, b) => {
     const sa = checkpointSpan(a).start;
     const sb = checkpointSpan(b).start;

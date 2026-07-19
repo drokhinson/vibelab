@@ -111,5 +111,25 @@ const TripDomain = {
     await window.api.deleteAnchor(anchorId);
     await this.load(tripId);
   },
+
+  // Endpoints (arrival/departure) — bookend plans (026). `which` is
+  // 'arrival'|'departure'. Reload the bundle so the timeline bookends + plans
+  // list reflect the flag/date change (mirrors the anchor ops above).
+  async addEndpoint(tripId, fields) {
+    const scrap = await window.api.createEndpoint(tripId, fields);
+    await this.load(tripId);
+    return scrap;
+  },
+
+  async updateEndpoint(tripId, which, fields) {
+    const scrap = await window.api.updateEndpoint(tripId, which, fields);
+    await this.load(tripId);
+    return scrap;
+  },
+
+  async removeEndpoint(tripId, which) {
+    await window.api.deleteEndpoint(tripId, which);
+    await this.load(tripId);
+  },
 };
 window.TripDomain = TripDomain;

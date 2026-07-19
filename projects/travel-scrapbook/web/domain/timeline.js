@@ -24,8 +24,9 @@
     return 6371 * 2 * Math.asin(Math.sqrt(a));
   }
 
-  // Flatten anchors into dated markers: start/end → arrival/departure,
-  // travel → its leg day, stay → check-in + (when set) check-out.
+  // Flatten anchors into dated markers: travel → its leg day, stay → check-in +
+  // (when set) check-out. (026: arrival/departure are no longer anchors — they
+  // bookend the timeline as plans; see ui/trip-timeline.js.)
   function markersFromAnchors(anchors) {
     const markers = [];
     const add = (kind, a, day, time) => {
@@ -36,9 +37,7 @@
       });
     };
     for (const a of anchors || []) {
-      if (a.role === 'start') add('arrival', a, a.anchor_date, a.anchor_time);
-      else if (a.role === 'end') add('departure', a, a.anchor_date, a.anchor_time);
-      else if (a.role === 'travel') add('travel', a, a.anchor_date, a.anchor_time);
+      if (a.role === 'travel') add('travel', a, a.anchor_date, a.anchor_time);
       else if (a.role === 'stay') {
         add('checkin', a, a.stay_date, null);
         add('checkout', a, a.stay_end_date, null);

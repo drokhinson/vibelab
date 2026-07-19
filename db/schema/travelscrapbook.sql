@@ -216,21 +216,26 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trips (
   status         TEXT        NOT NULL DEFAULT 'approved'
     CHECK (status IN ('staged', 'approved')),
   role           TEXT                              -- 020: NULL = plan; else checkpoint role
-    CHECK (role IS NULL OR role IN ('start', 'end', 'stay', 'travel')),
+                                                   -- 026: start/end dropped (now role-NULL plans)
+    CHECK (role IS NULL OR role IN ('stay', 'travel')),
   route_position INTEGER,                          -- plans only (route writes filter role IS NULL)
-  plan_date      DATE,
+  plan_date      DATE,                             -- 026: arrival day for an is_arrival plan
   plan_time      TIME,
   plan_end_date  DATE,                             -- 020: stay check-out (>= plan_date)
+                                                   -- 026: departure day for an is_departure plan
+  is_arrival     BOOLEAN     NOT NULL DEFAULT false, -- 026: this plan bookends the trip's arrival
+  is_departure   BOOLEAN     NOT NULL DEFAULT false, -- 026: …and/or its departure
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- CHECK ts_scrap_trips_end_after_start (plan_end_date >= plan_date when both set)
 -- idx_ts_scrap_trips_plan_unique UNIQUE (scrap_id, trip_id) WHERE role IS NULL
---   (020: replaces the old UNIQUE(scrap_id, trip_id) — the same airport can be
---    start AND end, the same hotel two separate stays. Because it's PARTIAL,
---    PostgREST upserts can't arbitrate on it: plan inserts go through the
---    travelscrapbook_add_plan_memberships RPC.)
--- idx_ts_scrap_trips_endpoint UNIQUE (trip_id, role) WHERE role IN ('start','end')
---   (one start + one end per trip — moved from the anchors table)
+--   (020: replaces the old UNIQUE(scrap_id, trip_id) — the same hotel can host
+--    two separate stays. Because it's PARTIAL, PostgREST upserts can't arbitrate
+--    on it: plan inserts go through the travelscrapbook_add_plan_memberships RPC.)
+-- idx_ts_scrap_trips_arrival   UNIQUE (trip_id) WHERE is_arrival    (026: one arrival/trip)
+-- idx_ts_scrap_trips_departure UNIQUE (trip_id) WHERE is_departure  (026: one departure/trip)
+--   (026: replace the old idx_ts_scrap_trips_endpoint start/end uniqueness. One
+--    row may be both — you fly out of the airport you flew into.)
 -- idx_ts_scrap_trips_trip_checkpoints (trip_id) WHERE role IS NOT NULL
 -- idx_ts_scrap_trips_trip (trip_id, status), idx_ts_scrap_trips_scrap (scrap_id)
 -- idx_ts_scrap_trips_trip_plan_date (trip_id, plan_date)

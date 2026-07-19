@@ -130,17 +130,32 @@ def build_markdown(
         lines.append("")
         lines.append(trip["notes"])
 
-    start = next((a for a in anchors if a.get("role") == "start" and a.get("label")), None)
-    end = next((a for a in anchors if a.get("role") == "end" and a.get("label")), None)
+    # 026: arrival/departure are ordinary bookend plans (flagged on the scrap),
+    # not anchors. Bracket the itinerary with them and drop them from the numbered
+    # places so an airport isn't both a bookend and a listed stop.
+    def _endpoint_label(flag: str) -> Optional[str]:
+        return next(
+            ((p.get("place_name") or p.get("label")) for p in places if p.get(flag)),
+            None,
+        )
+
+    is_endpoint = lambda p: p.get("is_arrival") or p.get("is_departure")  # noqa: E731
+    start = _endpoint_label("is_arrival")
+    end = _endpoint_label("is_departure")
     if start:
-        lines += ["", f"**Start:** {start['label']}"]
+        lines += ["", f"**Start:** {start}"]
     if end:
-        lines.append(f"**End:** {end['label']}")
+        lines.append(f"**End:** {end}")
+
+    places = [p for p in places if not is_endpoint(p)]
 
     if day_groups is not None:
+        day_groups = [(h, [p for p in g if not is_endpoint(p)]) for h, g in day_groups]
         if not places:
             lines += ["", "_No places yet._"]
         for heading, group in day_groups:
+            if not group:
+                continue
             lines += ["", f"## {heading}", ""]
             for i, p in enumerate(group, 1):
                 lines += _place_lines(p, i)

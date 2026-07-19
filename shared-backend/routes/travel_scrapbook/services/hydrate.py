@@ -52,7 +52,8 @@ def membership_rows_to_scraps(rows: list[dict[str, Any]]) -> list[dict[str, Any]
     """Flatten travelscrapbook_scrap_trips rows (each embedding its scrap via
     ``travelscrapbook_scraps(*)``) into scrap-shaped dicts carrying the per-trip
     membership context (scrap_trip_id / trip_id / status / route_position /
-    plan_date / plan_time). ``id`` stays the scrap id so cards key on it."""
+    plan_date / plan_time / plan_end_date / is_arrival / is_departure). ``id``
+    stays the scrap id so cards key on it."""
     out: list[dict[str, Any]] = []
     for m in rows:
         scrap = m.get("travelscrapbook_scraps") or {}
@@ -66,6 +67,9 @@ def membership_rows_to_scraps(rows: list[dict[str, Any]]) -> list[dict[str, Any]
             "route_position": m.get("route_position"),
             "plan_date": m.get("plan_date"),
             "plan_time": m.get("plan_time"),
+            "plan_end_date": m.get("plan_end_date"),
+            "is_arrival": m.get("is_arrival", False),
+            "is_departure": m.get("is_departure", False),
         })
     return out
 
