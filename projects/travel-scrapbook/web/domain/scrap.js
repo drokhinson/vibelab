@@ -230,9 +230,29 @@
       window.SourceDomain?.refreshInboxCount();
     },
 
+    // Review ✓: rebucket staged→approved INSTANTLY, then reconcile with the
+    // echo (roll back to staged on error). Mirrors the schedule() optimistic
+    // pattern so the card reacts in the same frame as the tap.
     async approve(scrapId, tripId) {
-      const scrap = await window.api.approveScrap(scrapId, tripId);
-      if (tripId) window.TripDomain.patchScrap(tripId, scrap);
+      let prev = null;
+      if (tripId) {
+        const trip = window.store.get('trip:' + tripId);
+        const cur = trip && (trip.staged_scraps || []).find((s) => s.id === scrapId);
+        if (cur) {
+          prev = cur;
+          window.TripDomain.patchScrap(tripId, { ...cur, status: 'approved' });
+        }
+      }
+      this._pendingWrites++; // pause the capture poll until the echo lands
+      try {
+        const scrap = await window.api.approveScrap(scrapId, tripId);
+        if (tripId) window.TripDomain.patchScrap(tripId, scrap);
+      } catch (err) {
+        if (tripId && prev) window.TripDomain.patchScrap(tripId, prev); // back to staged
+        throw err;
+      } finally {
+        this._pendingWrites--;
+      }
     },
 
     async approveAll(tripId) {
@@ -400,18 +420,31 @@
       await this.applyRating(scrapId, tripId, level);
     },
 
-    // Staging "remove" / pulling a place out of ONE trip. The place stays on
-    // the Wander List and in any other trips. The card drops instantly; a
-    // background bundle refresh reconciles the candidates panel (the place
-    // may qualify as a suggestion again).
+    // Staging ✗ / pulling a place out of ONE trip. The place stays on the
+    // Wander List and in any other trips. The card drops INSTANTLY (before the
+    // request); on error it's restored to its bucket. A background bundle
+    // refresh then reconciles the candidates panel (the place may qualify as a
+    // suggestion again).
     async unassign(scrapId, tripId) {
-      await window.api.unassignScrap(scrapId, tripId);
+      let prev = null;
       if (tripId) {
-        window.TripDomain.removeScrap(tripId, scrapId);
-        window.TripDomain.load(tripId).catch(() => {});
+        const trip = window.store.get('trip:' + tripId);
+        prev = trip && [...(trip.scraps || []), ...(trip.staged_scraps || [])]
+          .find((s) => s.id === scrapId);
+        if (prev) window.TripDomain.removeScrap(tripId, scrapId);
       }
-      this._invalidateLists(); // trip_ids on Wander List cards changed
-      window.SourceDomain?.refreshInboxCount();
+      this._pendingWrites++;
+      try {
+        await window.api.unassignScrap(scrapId, tripId);
+        if (tripId) window.TripDomain.load(tripId).catch(() => {});
+        this._invalidateLists(); // trip_ids on Wander List cards changed
+        window.SourceDomain?.refreshInboxCount();
+      } catch (err) {
+        if (tripId && prev) window.TripDomain.patchScrap(tripId, prev); // restore the card
+        throw err;
+      } finally {
+        this._pendingWrites--;
+      }
     },
 
     // Poll the trip while a capture is processing. A monotonic trip guard stops
