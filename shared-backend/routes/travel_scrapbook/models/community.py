@@ -81,3 +81,10 @@ class TripSuggestionsResponse(BaseModel):
     items: list[TripSuggestionItem] = []
     total: int = 0
     categories: list[SuggestionCategoryFacet] = []
+
+
+class SuggestionDismissRequest(BaseModel):
+    """Skip a suggested place for a trip so it stops surfacing in the add picker.
+    Keyed by the item's `ref_place_id`, which every suggestion carries (both
+    Wander and Community), so one call covers either pool."""
+    place_id: str = Field(..., description="The suggestion's ref_place_id to skip")

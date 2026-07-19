@@ -329,8 +329,23 @@ a:hover { color: var(--accent-hover); }
 .scrap-card__meta > .note-chip { flex: 0 0 auto; }
 .scrap-card__meta > .priority-chip,
 .scrap-card__meta > .rating-badge { flex: 1 1 auto; min-width: 0; justify-content: center; }
-/* "Add to trips" / community "Add" spans the card width. */
-.scrap-card__addtrip { width: 100%; }
+/* "Add to trips" / community "Add" / "Remove from trip" each span the card width. */
+.scrap-card__addtrip,
+.scrap-card__remove { width: 100%; }
+/* Suggestion picker footer: the primary Add fills the row, a compact Skip (x)
+   sits beside it to dismiss the suggestion without adding it. */
+.scrap-card__suggest-actions .scrap-card__addtrip { flex: 1 1 auto; width: auto; }
+.scrap-card__suggest-actions .ts-btn { min-height: 44px; }
+.scrap-card__skip {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: var(--paper);
+  color: var(--ink-muted); cursor: pointer;
+}
+.scrap-card__skip:hover { border-color: var(--ink-muted); color: var(--ink); }
+.scrap-card__skip:active { transform: translateY(1px); }
+.scrap-card__skip [data-lucide] { width: 18px; height: 18px; }
 /* Community "Saved by N travelers" line. */
 .scrap-card__saved-by { display: flex; align-items: center; gap: 4px; }
 .scrap-card__saved-by [data-lucide] { width: 13px; height: 13px; }

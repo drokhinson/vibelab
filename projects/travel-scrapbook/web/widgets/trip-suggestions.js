@@ -125,6 +125,8 @@ const TripSuggestions = {
         this._load();
       } else if (action === 'suggest-add') {
         this._add(el);
+      } else if (action === 'suggest-skip') {
+        this._skip(el);
       }
     });
     modal.querySelector('#ts-manual')?.addEventListener('click', () => this._manual());
@@ -214,14 +216,40 @@ const TripSuggestions = {
       }
       toast('Added to the trip');
       this._onSaved?.();
-      // Swap the tapped button for an inline "Added" pill; leave the rest of the
-      // page put (a re-fetch on paging naturally drops what's now on the trip).
+      // Swap the tapped button for an inline "Added" pill and drop the now-moot
+      // Skip beside it; leave the rest of the page put (a re-fetch on paging
+      // naturally drops what's now on the trip).
+      const row = btn.closest('.scrap-card__row');
       btn.outerHTML = '<span class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__addtrip" style="opacity:0.6;"><i data-lucide="check"></i>Added</span>';
+      row?.querySelector('.scrap-card__skip')?.remove();
       const grid = document.getElementById('ts-grid');
       if (grid) window.lucide?.createIcons({ root: grid });
     } catch (err) {
       toast(err.message || 'Could not add', { error: true });
       btn.disabled = false;
+    }
+  },
+
+  // Skip a suggestion: record a per-trip dismissal (keyed on ref_place_id, so it
+  // covers either pool) and drop the card. The place stops surfacing in this
+  // trip's picker. Optimistic — the card leaves immediately; on error it stays.
+  async _skip(btn) {
+    const placeId = btn.dataset.placeId || null;
+    if (!placeId) return;
+    const card = btn.closest('.sticker-card');
+    btn.disabled = true;
+    try {
+      await window.api.dismissSuggestion(this._trip.id, placeId);
+      this._items = (this._items || []).filter((it) => it.ref_place_id !== placeId);
+      this._total = Math.max(0, this._total - 1);
+      card?.remove();
+      // When the page empties out, repaint the grid so the empty state shows.
+      if (!this._items.length) this._renderGrid();
+      this._renderPager();
+      toast('Skipped — we won’t suggest it here again');
+    } catch (err) {
+      btn.disabled = false;
+      toast(err.message || 'Could not skip', { error: true });
     }
   },
 

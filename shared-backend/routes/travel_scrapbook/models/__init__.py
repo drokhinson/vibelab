@@ -60,6 +60,7 @@ from .community import (  # noqa: F401
     CommunitySaveRequest,
     CommunitySourceRef,
     SuggestionCategoryFacet,
+    SuggestionDismissRequest,
     TripSuggestionItem,
     TripSuggestionsResponse,
 )

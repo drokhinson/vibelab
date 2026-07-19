@@ -250,6 +250,20 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_scrap_trip_dismissals (
 );
 -- idx_ts_scrap_trip_dismissals_trip (trip_id)
 
+-- Place-keyed "skip" marker for the trip add picker (025). Distinct from the
+-- scrap-keyed table above: this is written when the viewer explicitly skips a
+-- SUGGESTED place (one they never added), covering both pools (Wander + the
+-- Community aggregate share the place). Excluded by travelscrapbook_trip_suggestions.
+CREATE TABLE IF NOT EXISTS public.travelscrapbook_trip_suggestion_dismissals (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id    UUID        NOT NULL REFERENCES public.travelscrapbook_trips(id)     ON DELETE CASCADE,
+  viewer     UUID        NOT NULL REFERENCES public.travelscrapbook_profiles(id)  ON DELETE CASCADE,
+  place_id   UUID        NOT NULL REFERENCES public.travelscrapbook_places(id)    ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (trip_id, viewer, place_id)
+);
+-- idx_ts_trip_suggestion_dismissals_lookup (trip_id, viewer)
+
 -- Trip sharing: the owner stays on trips.user_id; everyone else is a row here.
 -- role = viewer (read + vibe) | collaborator (read + vibe + add places).
 -- status carries invite → accept: pending | accepted (has access) | declined.

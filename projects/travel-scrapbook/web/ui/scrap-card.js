@@ -288,16 +288,24 @@ function renderScrapCard(scrap, opts = {}) {
         </button>
       </div>`;
   } else if (isSuggestion) {
-    // Unified add picker — one full-width Add. The widget binds it and branches
-    // on data-source: 'wander' assigns the viewer's scrap (data-scrap-id),
-    // 'community' saves the pool place (data-place-id).
+    // Unified add picker — a primary Add plus a compact Skip (x) to dismiss the
+    // suggestion without adding it. The widget binds both: 'suggest-add'
+    // branches on data-source ('wander' assigns the viewer's scrap via
+    // data-scrap-id, 'community' saves the pool place via data-place-id);
+    // 'suggest-skip' records a per-trip dismissal keyed on data-place-id
+    // (ref_place_id) so the place stops surfacing here.
     footer = `
-      <div class="scrap-card__row">
+      <div class="scrap-card__row scrap-card__suggest-actions">
         <button class="ts-btn ts-btn--sm ts-btn--mint scrap-card__addtrip" data-action="suggest-add"
                 data-source="${escapeAttr(suggestSource || '')}"
                 ${suggestScrapId ? `data-scrap-id="${escapeAttr(suggestScrapId)}"` : ''}
                 data-place-id="${escapeAttr(placeId || '')}">
           <i data-lucide="plus"></i>Add
+        </button>
+        <button type="button" class="scrap-card__skip" data-action="suggest-skip"
+                data-place-id="${escapeAttr(placeId || '')}"
+                aria-label="Skip this suggestion" title="Not interested — don't suggest again">
+          <i data-lucide="x"></i>
         </button>
       </div>`;
   } else if (isCommunity) {

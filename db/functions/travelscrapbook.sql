@@ -105,8 +105,9 @@
 --                                  p_limit INT DEFAULT 6, p_offset INT DEFAULT 0)
 --   → JSONB {items[], total, categories[]}
 --   Defined in: db/migrations/travelscrapbook/024_trip_suggestions.sql
+--               (re-declared in 025_suggestion_skip.sql to exclude skipped places)
 --   Called by:  shared-backend/routes/travel_scrapbook/plan_routes.py
---               (list_trip_suggestions)
+--               (list_trip_suggestions; dismiss_trip_suggestion writes the skips)
 --   Purpose:    The unified "add to trip" picker feed in one round trip. Merges
 --               the viewer's wander list (higher priority) with the community
 --               pool, filters to the trip's geo scope, splits by the checkpoint

@@ -215,6 +215,10 @@
      *  @param {{category?: string, checkpoints?: boolean, q?: string, limit?: number, offset?: number}} [params]
      *  @returns {Promise<{items: object[], total: number, categories: Array<{slug:string,label:string,icon:string,count:number}>}>} */
     tripSuggestions: (tripId, params = {}) => call(`/trips/${tripId}/suggestions${qs(params)}`),
+    /** Skip a suggested place so it stops surfacing in this trip's add picker.
+     *  `placeId` is the suggestion's ref_place_id (works for either pool).
+     *  @returns {Promise<{message: string}>} */
+    dismissSuggestion: (tripId, placeId) => call(`/trips/${tripId}/suggestions/dismiss`, { method: 'POST', body: { place_id: placeId } }),
     /** Bulk-add wishlist scraps to a trip. @returns {Promise<{scraps: Scrap[]}>} */
     assignScraps: (tripId, scrapIds) => call(`/trips/${tripId}/assign-scraps`, { method: 'POST', body: { scrap_ids: scrapIds } }),
     /** One filtered page of visited places + geo facets, with visited

@@ -25,6 +25,7 @@ from .models import (
     ScrapListResponse,
     ScrapResponse,
     SetTripsRequest,
+    SuggestionDismissRequest,
     TripSuggestionsResponse,
     TripWishlistResponse,
     TripWishlistScrap,
@@ -165,6 +166,31 @@ async def list_trip_suggestions(
         total=result.get("total", 0),
         categories=result.get("categories", []),
     )
+
+
+@router.post(
+    "/trips/{trip_id}/suggestions/dismiss",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Skip a suggested place for a trip's add picker",
+)
+async def dismiss_trip_suggestion(
+    body: SuggestionDismissRequest,
+    trip_id: str = Path(..., description="Trip UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Hide a suggested place from this trip's add picker without adding it.
+    Keyed on the suggestion's place, so it covers both pools (a Wander item and
+    the equivalent Community aggregate share the place). The suggestions RPC
+    excludes dismissed places for this (trip, viewer). Idempotent."""
+    sb = get_supabase()
+    get_accessible_trip(sb, trip_id, user.user_id, need_write=True)  # 404s if not a member
+    sb.table("travelscrapbook_trip_suggestion_dismissals").upsert(
+        {"trip_id": trip_id, "viewer": user.user_id, "place_id": body.place_id},
+        on_conflict="trip_id,viewer,place_id",
+        ignore_duplicates=True,
+    ).execute()
+    return MessageResponse(message="Suggestion skipped")
 
 
 def _add_plan_memberships(sb: Client, pairs: list[tuple[str, str]]) -> None:
