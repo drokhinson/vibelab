@@ -100,29 +100,34 @@ class GeocodeConfidence(StrEnum):
     NONE = "none"       # not geocoded
 
 
-class AnchorRole(StrEnum):
-    """Anchors are surfaced in the UI as "checkpoints" — the stay/travel combo
-    that frames a trip. travel is a mid-trip leg (multi-city); stay is lodging.
-    (026: arrival/departure are no longer roles — they're ordinary plans flagged
-    is_arrival/is_departure on the membership; see Endpoint.)"""
+class CheckpointRole(StrEnum):
+    """A checkpoint is the stay/travel combo that frames a trip. travel is a
+    mid-trip leg (multi-city); stay is lodging. (026: arrival/departure are no
+    longer roles — they're ordinary stops flagged is_arrival/is_departure on the
+    membership, surfaced to the user as checkpoints too; see Bookend.)
+
+    NB: the underlying scrap_trips.role DB values are unchanged ('stay'/'travel');
+    this enum is the code-side name only."""
     STAY = "stay"
     TRAVEL = "travel"
 
 
-# Roles that use anchor_date/anchor_time + type (everything except lodging).
-TRAVEL_ROLES = (AnchorRole.TRAVEL,)
+# Roles that use checkpoint_date/checkpoint_time + type (everything except lodging).
+TRAVEL_ROLES = (CheckpointRole.TRAVEL,)
 
 
-class Endpoint(StrEnum):
-    """A trip's bookends, now modeled as ordinary plans (026): arrival = the
-    is_arrival plan, departure = the is_departure plan. One plan may be both
-    (you fly out of the airport you flew into)."""
+class Bookend(StrEnum):
+    """A trip's arrival/departure checkpoints, modeled as ordinary stops (026):
+    arrival = the is_arrival stop, departure = the is_departure stop. One stop
+    may be both (you fly out of the airport you flew into). Presented to the user
+    as a kind of checkpoint; kept a distinct code term because the DB mechanism
+    (role-NULL membership flags) differs from stay/travel checkpoints."""
     ARRIVAL = "arrival"
     DEPARTURE = "departure"
 
 
-class AnchorType(StrEnum):
-    """How you travel at a travel checkpoint, or an arrival/departure endpoint."""
+class CheckpointType(StrEnum):
+    """How you travel at a travel checkpoint, or an arrival/departure bookend."""
     AIRPORT = "airport"
     TRAIN_STATION = "train_station"
     CAR_RENTAL = "car_rental"

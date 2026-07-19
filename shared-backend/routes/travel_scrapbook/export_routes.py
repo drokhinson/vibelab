@@ -17,7 +17,7 @@ from .services.exports import (
     build_markdown,
 )
 from .access import get_accessible_trip
-from .services.checkpoints import load_trip_anchors
+from .services.checkpoints import load_trip_checkpoints
 from .services.hydrate import hydrate_scraps, membership_rows_to_scraps
 
 
@@ -42,19 +42,19 @@ def _pretty_date(date: str) -> str:
         return date
 
 
-def _trip_anchors(sb, trip_id: str) -> list[dict]:
-    """All checkpoints for a trip (start/end/stay/travel), synthesized from
-    role-bearing memberships in the legacy anchor shape (020)."""
-    return load_trip_anchors(sb, trip_id)
+def _trip_checkpoints(sb, trip_id: str) -> list[dict]:
+    """All stay/travel checkpoints for a trip, synthesized from role-bearing
+    memberships in the flat checkpoint shape (020)."""
+    return load_trip_checkpoints(sb, trip_id)
 
 
-def _anchor_dates(anchor: dict) -> set[str]:
-    """The ISO dates an anchor touches: start/end/travel → anchor_date; a stay
+def _checkpoint_dates(checkpoint: dict) -> set[str]:
+    """The ISO dates a checkpoint touches: travel → checkpoint_date; a stay
     → its check-in and check-out. Used to keep only a day's checkpoints on a
     single-day markdown sheet."""
     dates = {
-        str(anchor.get(k) or "")[:10]
-        for k in ("anchor_date", "stay_date", "stay_end_date")
+        str(checkpoint.get(k) or "")[:10]
+        for k in ("checkpoint_date", "stay_date", "stay_end_date")
     }
     return {d for d in dates if d}
 
@@ -82,14 +82,14 @@ def _approved_scraps(
 ) -> list[dict]:
     """A trip's approved scraps, hydrated. Visited places sit out of routes
     and exports by default — you've already been there. When `date` is set,
-    only plans scheduled to that day (`plan_date`) are kept."""
+    only stops scheduled to that day (`plan_date`) are kept."""
     flat = membership_rows_to_scraps(
         (
             sb.table("travelscrapbook_scrap_trips")
             .select("*, travelscrapbook_scraps(*)")
             .eq("trip_id", trip_id)
             .eq("status", MembershipStatus.APPROVED)
-            .is_("role", "null")   # plans only; checkpoints bracket via anchors (020)
+            .is_("role", "null")   # stops only; checkpoints bracket separately (020)
             .execute()
         ).data or []
     )
@@ -100,12 +100,12 @@ def _approved_scraps(
     return hydrate_scraps(sb, flat)
 
 
-def _scraps_from_plan(
-    sb, trip_id: str, plan: list, *, include_visited: bool = False, date: str | None = None
+def _scraps_from_itinerary(
+    sb, trip_id: str, itinerary: list, *, include_visited: bool = False, date: str | None = None
 ) -> list[dict]:
-    """Approved scraps ordered by the CLIENT's timeline itinerary. `plan` is an
-    ordered list of ExportPlanItem — the source of truth for order and each
-    plan's day, so auto-placed plans (no DB `plan_date`) export in the right
+    """Approved scraps ordered by the CLIENT's timeline itinerary. `itinerary` is
+    an ordered list of ExportItineraryItem — the source of truth for order and
+    each stop's day, so auto-placed stops (no DB `plan_date`) export in the right
     place. Each scrap's `plan_date` is overridden with the payload's computed
     day; `date` narrows to that day. Only scraps that really belong to the trip
     (and pass the visited filter) survive — the client can't smuggle in others."""
@@ -125,7 +125,7 @@ def _scraps_from_plan(
 
     out: list[dict] = []
     seen: set[str] = set()
-    for item in plan:
+    for item in itinerary:
         s = by_id.get(item.scrap_id)
         if s is None or item.scrap_id in seen:
             continue
@@ -137,9 +137,9 @@ def _scraps_from_plan(
     return out
 
 
-def _endpoint_stop(scraps: list[dict], flag: str) -> Stop | None:
+def _bookend_stop(scraps: list[dict], flag: str) -> Stop | None:
     """The geocoded arrival (flag='is_arrival') / departure (flag='is_departure')
-    plan as a directions Stop, if one is set and located."""
+    bookend as a directions Stop, if one is set and located."""
     for s in scraps:
         if s.get(flag) and s.get("lat") is not None and s.get("lng") is not None:
             return Stop(label=s.get("place_name") or "Stop", lat=s["lat"], lng=s["lng"])
@@ -147,11 +147,11 @@ def _endpoint_stop(scraps: list[dict], flag: str) -> Stop | None:
 
 
 def _bracket_stops(scraps: list[dict]) -> list[Stop]:
-    """Ordered geocoded plan scraps → a Stop list bracketed by the trip's
-    arrival/departure plans (026), which are pulled OUT of the routable middle so
-    an airport isn't both a bracket and a stop."""
-    arrival = _endpoint_stop(scraps, "is_arrival")
-    departure = _endpoint_stop(scraps, "is_departure")
+    """Ordered geocoded stop scraps → a Stop list bracketed by the trip's
+    arrival/departure bookends (026), which are pulled OUT of the routable middle
+    so an airport isn't both a bracket and a stop."""
+    arrival = _bookend_stop(scraps, "is_arrival")
+    departure = _bookend_stop(scraps, "is_departure")
     routable = [
         s for s in scraps
         if s.get("lat") is not None and s.get("lng") is not None
@@ -173,7 +173,7 @@ def _ordered_stops(
     sb, trip_id: str, *, include_visited: bool = False, date: str | None = None
 ) -> list[Stop]:
     """Geocoded scraps in route order (falling back to created order), bracketed
-    by the trip's arrival/departure plans. `date` narrows to one day's plans."""
+    by the trip's arrival/departure bookends. `date` narrows to one day's stops."""
     scraps = _approved_scraps(sb, trip_id, include_visited=include_visited, date=date)
     scraps.sort(
         key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])
@@ -185,17 +185,16 @@ def _export_scraps(
     sb, trip_id: str, body: ExportRequest | None, *, include_visited: bool, date: str | None
 ) -> tuple[list[dict], bool]:
     """The scraps a file export should contain, in order. Returns (scraps,
-    from_plan): with a client `plan`, the itinerary drives order + days;
-    without one, DB `route_position` / `plan_date` do (unchanged for other
-    clients)."""
-    if body is not None and body.plan is not None:
-        return _scraps_from_plan(sb, trip_id, body.plan, include_visited=include_visited, date=date), True
+    from_itinerary): with a client `itinerary`, it drives order + days; without
+    one, DB `route_position` / `plan_date` do (unchanged for other clients)."""
+    if body is not None and body.itinerary is not None:
+        return _scraps_from_itinerary(sb, trip_id, body.itinerary, include_visited=include_visited, date=date), True
     return _ordered_scraps(sb, trip_id, include_visited=include_visited, date=date), False
 
 
 def _day_groups(trip: dict, scraps: list[dict]) -> list[tuple[str, list[dict]]]:
     """Group already-ordered scraps into (heading, places) day sections by their
-    (client-computed) plan_date, first-seen order = chronological. Undated plans
+    (client-computed) plan_date, first-seen order = chronological. Undated stops
     collect under a trailing "Anytime" section."""
     from datetime import date as _date
 
@@ -236,20 +235,20 @@ def _day_groups(trip: dict, scraps: list[dict]) -> list[tuple[str, list[dict]]]:
 async def export_maps_links(
     trip_id: str = Path(..., description="Trip UUID"),
     include_visited: bool = Query(False, description="Include places already marked visited"),
-    date: str | None = Query(None, pattern=DATE_RE, description="Only this day's scheduled plans (YYYY-MM-DD)"),
+    date: str | None = Query(None, pattern=DATE_RE, description="Only this day's scheduled stops (YYYY-MM-DD)"),
     body: ExportRequest | None = Body(None),
     user: CurrentUser = Depends(get_current_user),
 ) -> MapsLinksResponse:
     """Multi-stop google.com/maps/dir/ URLs for the trip route, split into
-    ~10-stop legs that overlap at the seams. POST a `plan` to order the stops by
-    the client's timeline itinerary (incl. auto-placed plans); a plain GET falls
+    ~10-stop legs that overlap at the seams. POST an `itinerary` to order the
+    stops by the client's timeline (incl. auto-placed stops); a plain GET falls
     back to DB route order. Visited places are left out unless include_visited;
     `date` narrows to one day."""
     sb = get_supabase()
     get_accessible_trip(sb, trip_id, user.user_id)
-    if body is not None and body.plan is not None:
+    if body is not None and body.itinerary is not None:
         stops = _bracket_stops(
-            _scraps_from_plan(sb, trip_id, body.plan, include_visited=include_visited, date=date))
+            _scraps_from_itinerary(sb, trip_id, body.itinerary, include_visited=include_visited, date=date))
     else:
         stops = _ordered_stops(sb, trip_id, include_visited=include_visited, date=date)
     legs = build_dir_links(stops)
@@ -268,18 +267,18 @@ async def export_maps_links(
 async def export_csv(
     trip_id: str = Path(..., description="Trip UUID"),
     include_visited: bool = Query(False, description="Include places already marked visited"),
-    date: str | None = Query(None, pattern=DATE_RE, description="Only this day's scheduled plans (YYYY-MM-DD)"),
+    date: str | None = Query(None, pattern=DATE_RE, description="Only this day's scheduled stops (YYYY-MM-DD)"),
     body: ExportRequest | None = Body(None),
     user: CurrentUser = Depends(get_current_user),
 ) -> Response:
     """CSV download (name, category, address, lat, lng, notes, url) that
-    imports directly into a Google My Maps layer. POST a `plan` to order rows by
-    the client's timeline itinerary (incl. auto-placed plans); a plain GET falls
+    imports directly into a Google My Maps layer. POST an `itinerary` to order
+    rows by the client's timeline (incl. auto-placed stops); a plain GET falls
     back to DB order. Visited places are left out unless include_visited;
     `date` narrows to one day."""
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    scraps, _from_plan = _export_scraps(sb, trip_id, body, include_visited=include_visited, date=date)
+    scraps, _from_itinerary = _export_scraps(sb, trip_id, body, include_visited=include_visited, date=date)
     rows = [
         {
             "name": s["place_name"] or "Stop",
@@ -310,27 +309,27 @@ async def export_csv(
 async def export_markdown(
     trip_id: str = Path(..., description="Trip UUID"),
     include_visited: bool = Query(False, description="Include places already marked visited"),
-    date: str | None = Query(None, pattern=DATE_RE, description="Only this day's scheduled plans (YYYY-MM-DD)"),
+    date: str | None = Query(None, pattern=DATE_RE, description="Only this day's scheduled stops (YYYY-MM-DD)"),
     body: ExportRequest | None = Body(None),
     user: CurrentUser = Depends(get_current_user),
 ) -> Response:
-    """A readable Markdown itinerary (trip header, start/end anchors, then each
-    place with category, address, notes, and a Google Maps link). POST a `plan`
-    for a whole-trip export and it's grouped into **Day N** sections in the
-    client's itinerary order (auto-placed plans included); a single day (`date`)
-    reads as one time-ordered sheet. Visited places are left out unless
+    """A readable Markdown itinerary (trip header, arrival/departure bookends,
+    then each place with category, address, notes, and a Google Maps link). POST
+    an `itinerary` for a whole-trip export and it's grouped into **Day N**
+    sections in the client's order (auto-placed stops included); a single day
+    (`date`) reads as one time-ordered sheet. Visited places are left out unless
     include_visited is set."""
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    scraps, from_plan = _export_scraps(sb, trip_id, body, include_visited=include_visited, date=date)
-    anchors = _trip_anchors(sb, trip_id)
+    scraps, from_itinerary = _export_scraps(sb, trip_id, body, include_visited=include_visited, date=date)
+    checkpoints = _trip_checkpoints(sb, trip_id)
     if date:
         # Only that day's checkpoints make sense on a single-day sheet.
-        anchors = [a for a in anchors if date in _anchor_dates(a)]
-    # A whole-trip plan export groups by day; a single day (or a DB fallback) is flat.
-    day_groups = _day_groups(trip, scraps) if (from_plan and not date) else None
+        checkpoints = [c for c in checkpoints if date in _checkpoint_dates(c)]
+    # A whole-trip itinerary export groups by day; a single day (or a DB fallback) is flat.
+    day_groups = _day_groups(trip, scraps) if (from_itinerary and not date) else None
     content = build_markdown(
-        trip, scraps, anchors,
+        trip, scraps, checkpoints,
         day_label=_pretty_date(date) if date else None,
         day_groups=day_groups,
     )
@@ -351,18 +350,18 @@ async def export_markdown(
 async def export_kml(
     trip_id: str = Path(..., description="Trip UUID"),
     include_visited: bool = Query(False, description="Include places already marked visited"),
-    date: str | None = Query(None, pattern=DATE_RE, description="Only this day's scheduled plans (YYYY-MM-DD)"),
+    date: str | None = Query(None, pattern=DATE_RE, description="Only this day's scheduled stops (YYYY-MM-DD)"),
     body: ExportRequest | None = Body(None),
     user: CurrentUser = Depends(get_current_user),
 ) -> Response:
     """A KML point layer — one named, described pin per geocoded place — that
-    imports into Google My Maps and Google Earth. POST a `plan` to include
-    auto-placed plans in the client's itinerary order; a plain GET falls back to
-    DB order. Visited places are left out unless include_visited; `date` narrows
-    to one day."""
+    imports into Google My Maps and Google Earth. POST an `itinerary` to include
+    auto-placed stops in the client's order; a plain GET falls back to DB order.
+    Visited places are left out unless include_visited; `date` narrows to one
+    day."""
     sb = get_supabase()
     trip, _ = get_accessible_trip(sb, trip_id, user.user_id)
-    scraps, _from_plan = _export_scraps(sb, trip_id, body, include_visited=include_visited, date=date)
+    scraps, _from_itinerary = _export_scraps(sb, trip_id, body, include_visited=include_visited, date=date)
     name = f'{trip["name"]} — {_pretty_date(date)}' if date else trip["name"]
     return Response(
         content=build_kml(name, scraps),

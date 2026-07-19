@@ -19,7 +19,7 @@ from api_logger import log_external_call
 
 from ..constants import (
     APP_NAME,
-    AnchorType,
+    CheckpointType,
     BookingKind,
     GEMINI_MODEL,
     LLM_MAX_TOKENS_MULTI,
@@ -64,7 +64,7 @@ class BookingExtraction:
     start_date: Optional[str]        # ISO date — stay: check-in; travel: leg day
     end_date: Optional[str]          # ISO date — stay only: check-out
     time: Optional[str]              # HH:MM — travel only: departure time
-    transport_type: Optional[str]    # AnchorType — travel only
+    transport_type: Optional[str]    # CheckpointType — travel only
 
 
 def _get_api_key() -> str:
@@ -225,7 +225,7 @@ def _coerce_booking(data: dict) -> Optional[BookingExtraction]:
     if not (isinstance(time_, str) and _TIME_RE.match(time_)):
         time_ = None
     transport = raw.get("transport_type")
-    if transport not in tuple(AnchorType):
+    if transport not in tuple(CheckpointType):
         transport = None
     return BookingExtraction(
         kind=kind,

@@ -7,12 +7,12 @@
 
 const ExportMenu = {
   // days: [{ date, day_number, points }] (points = mapped pins that day).
-  // allPoints = mapped pins across the whole trip. plan = the client's computed
-  // itinerary ([{scrap_id, plan_date}] in order) sent to the server so exports
-  // include auto-placed plans in the right day/order.
-  open({ tripId, tripName = 'trip', days = [], allPoints = 0, plan = null } = {}) {
+  // allPoints = mapped pins across the whole trip. itinerary = the client's
+  // computed order ([{scrap_id, plan_date}]) sent to the server so exports
+  // include auto-placed stops in the right day/order.
+  open({ tripId, tripName = 'trip', days = [], allPoints = 0, itinerary = null } = {}) {
     this.close();
-    this._ctx = { tripId, tripName, plan };
+    this._ctx = { tripId, tripName, itinerary };
     // Scope options: "All days" first, then one per dated day. `value` is the
     // ISO date sent as ?date= (empty = whole trip); `suffix` names the file.
     this._scopes = [
@@ -95,9 +95,9 @@ const ExportMenu = {
   },
 
   async _pick(key) {
-    const { tripId, tripName, plan } = this._ctx;
+    const { tripId, tripName, itinerary } = this._ctx;
     const { value: date, suffix } = this._scope;
-    if (key === 'maps') return this._maps(tripId, date, plan);
+    if (key === 'maps') return this._maps(tripId, date, itinerary);
     const jobs = {
       md: ['downloadMarkdown', 'Markdown downloaded'],
       csv: ['downloadCsv', 'CSV downloaded — import it in Google My Maps'],
@@ -106,7 +106,7 @@ const ExportMenu = {
     const [fn, msg] = jobs[key] || [];
     if (!fn) return;
     try {
-      await window.ExportDomain[fn](tripId, tripName, { date: date || undefined, suffix: suffix || undefined, plan });
+      await window.ExportDomain[fn](tripId, tripName, { date: date || undefined, suffix: suffix || undefined, itinerary });
       this.close();
       toast(msg);
     } catch (err) {
@@ -116,9 +116,9 @@ const ExportMenu = {
 
   // Fetch the Google Maps directions legs for the current scope. One leg opens
   // straight away; several render as a link list inside the modal (≤10 stops).
-  async _maps(tripId, date, plan) {
+  async _maps(tripId, date, itinerary) {
     try {
-      const res = await window.RouteDomain.mapsLinks(tripId, { date, plan });
+      const res = await window.RouteDomain.mapsLinks(tripId, { date, itinerary });
       if (!res.legs.length) { toast('Pin at least two places first', { error: true }); return; }
       if (res.legs.length === 1) {
         window.open(res.legs[0].url, '_blank', 'noopener');

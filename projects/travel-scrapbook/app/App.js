@@ -16,7 +16,7 @@ export default function App() {
           contentStyle: { backgroundColor: '#0d0d14' },
         }}
       >
-        <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Travel Scrapbook' }} />
+        <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Travel Trove' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

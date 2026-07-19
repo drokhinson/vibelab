@@ -127,8 +127,8 @@ def hydrate_scraps(
     if with_trip_ids:
         scrap_ids = sorted({s["id"] for s in scraps if s.get("id")})
         if scrap_ids:
-            # Plan memberships only (020): trip_ids feeds the Add-to-Trips
-            # picker, which reconciles plans — checkpoint roles don't count.
+            # Stop memberships only (020): trip_ids feeds the Add-to-Trips
+            # picker, which reconciles stops — checkpoint roles don't count.
             for m in (
                 sb.table("travelscrapbook_scrap_trips")
                 .select("scrap_id, trip_id")

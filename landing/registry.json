@@ -65,8 +65,8 @@
     },
     {
       "id": "travel-scrapbook",
-      "name": "Travel Scrapbook",
-      "description": "Collect travel links, auto-extract places, and plan cute optimized routes",
+      "name": "Travel Trove",
+      "description": "Collect travel links, auto-extract places, and map cute optimized routes",
       "status": "wip",
       "tags": [
         "travel",
@@ -82,7 +82,7 @@
       "iosUrl": null,
       "expoSlug": null,
       "createdAt": "2026-07-15",
-      "icon": "🧳",
+      "icon": "🗺️",
       "featured": true
     },
     {

@@ -2,14 +2,13 @@
 
 Since migration 020 a checkpoint is not its own table row — it is a canonical
 place (identity), the user's scrap (their saved, visitable copy), and a
-travelscrapbook_scrap_trips membership whose ``role`` (start|end|stay|travel)
-marks it as a trip checkpoint. This module is the one place that maps between
-that storage and the legacy flat "anchor" shape every timeline/route consumer
-still reads (web/domain/timeline.js, trip-timeline, checkpoint-card — none of
-them changed).
+travelscrapbook_scrap_trips membership whose ``role`` (stay|travel) marks it as
+a trip checkpoint. This module is the one place that maps between that storage
+and the flat checkpoint shape every timeline/route consumer still reads
+(web/domain/timeline.js, trip-timeline, checkpoint-card).
 
 The category ↔ role/type mapping is the unification's type system: the
-transport mode (old anchor.type) is a property of the PLACE (its category);
+transport mode (checkpoint.type) is a property of the PLACE (its category);
 the role is a property of the MEMBERSHIP.
 """
 
@@ -20,8 +19,8 @@ from supabase import Client
 import cache
 
 from ..constants import (
-    AnchorRole,
-    AnchorType,
+    CheckpointRole,
+    CheckpointType,
     CACHE_NS_CATEGORIES,
     CATEGORIES_TTL_SECONDS,
     GeocodeConfidence,
@@ -30,33 +29,33 @@ from . import nominatim
 from .llm import PlaceExtraction
 from .places import build_maps_url, find_or_create_place, resolve_maps_place
 
-# Transport categories map 1:1 onto the legacy AnchorType vocabulary; lodging
+# Transport categories map 1:1 onto the CheckpointType vocabulary; lodging
 # is the stay category. 'transport' is the generic bucket (type 'other').
 _TYPE_TO_CATEGORY = {
-    AnchorType.AIRPORT: "airport",
-    AnchorType.TRAIN_STATION: "train_station",
-    AnchorType.CAR_RENTAL: "car_rental",
-    AnchorType.OTHER: "transport",
+    CheckpointType.AIRPORT: "airport",
+    CheckpointType.TRAIN_STATION: "train_station",
+    CheckpointType.CAR_RENTAL: "car_rental",
+    CheckpointType.OTHER: "transport",
 }
 _CATEGORY_TO_TYPE = {
-    "airport": AnchorType.AIRPORT,
-    "train_station": AnchorType.TRAIN_STATION,
-    "car_rental": AnchorType.CAR_RENTAL,
+    "airport": CheckpointType.AIRPORT,
+    "train_station": CheckpointType.TRAIN_STATION,
+    "car_rental": CheckpointType.CAR_RENTAL,
 }
 
 
 def category_for(role: str, type_: Optional[str]) -> str:
     """The place category a checkpoint implies: stay → lodging, travel roles →
     their transport-mode category (generic 'transport' when untyped)."""
-    if role == AnchorRole.STAY:
+    if role == CheckpointRole.STAY:
         return "lodging"
     return _TYPE_TO_CATEGORY.get(type_, "transport")
 
 
 def type_for_category(category: Optional[str]) -> str:
-    """The legacy anchor 'type' a travel-role checkpoint reports, from its
-    place's category (anything non-transport degrades to 'other')."""
-    return _CATEGORY_TO_TYPE.get(category or "", AnchorType.OTHER)
+    """The checkpoint 'type' a travel-role checkpoint reports, from its place's
+    category (anything non-transport degrades to 'other')."""
+    return _CATEGORY_TO_TYPE.get(category or "", CheckpointType.OTHER)
 
 
 def checkpoint_category_slugs(sb: Client) -> set[str]:
@@ -80,14 +79,14 @@ def checkpoint_category_slugs(sb: Client) -> set[str]:
     return slugs
 
 
-def synthesize_anchor(
+def synthesize_checkpoint(
     membership: dict[str, Any], scrap: dict[str, Any], place: dict[str, Any]
 ) -> dict[str, Any]:
-    """One role-bearing membership + its scrap + place → the flat legacy anchor
-    dict. Mirrors the SQL synthesis in travelscrapbook_trip_bundle (020) —
-    keep the two in step."""
+    """One role-bearing membership + its scrap + place → the flat checkpoint
+    dict. Mirrors the SQL synthesis in travelscrapbook_trip_bundle (020, whose
+    JSON key stays ``anchors``) — keep the two in step."""
     role = membership["role"]
-    is_stay = role == AnchorRole.STAY
+    is_stay = role == CheckpointRole.STAY
     return {
         "id": membership["id"],
         "trip_id": membership["trip_id"],
@@ -103,8 +102,8 @@ def synthesize_anchor(
         "maps_url": place.get("maps_url"),
         "geocode_confidence": place.get("geocode_confidence") or GeocodeConfidence.NONE,
         "type": None if is_stay else type_for_category(place.get("category")),
-        "anchor_date": None if is_stay else membership.get("plan_date"),
-        "anchor_time": None if is_stay else membership.get("plan_time"),
+        "checkpoint_date": None if is_stay else membership.get("plan_date"),
+        "checkpoint_time": None if is_stay else membership.get("plan_time"),
         "stay_date": membership.get("plan_date") if is_stay else None,
         "stay_end_date": membership.get("plan_end_date") if is_stay else None,
         "created_at": membership["created_at"],
@@ -113,9 +112,9 @@ def synthesize_anchor(
     }
 
 
-def load_trip_anchors(sb: Client, trip_id: str) -> list[dict[str, Any]]:
-    """A trip's checkpoints in the legacy anchor shape, ordered by membership
-    created_at — the same order route-panel.js resolves 'first stay' by."""
+def load_trip_checkpoints(sb: Client, trip_id: str) -> list[dict[str, Any]]:
+    """A trip's checkpoints in the flat checkpoint shape, ordered by membership
+    created_at — the same order route-plan.js resolves 'first stay' by."""
     rows = (
         sb.table("travelscrapbook_scrap_trips")
         .select("*, travelscrapbook_scraps(*, travelscrapbook_places(*))")
@@ -124,13 +123,13 @@ def load_trip_anchors(sb: Client, trip_id: str) -> list[dict[str, Any]]:
         .order("created_at")
         .execute()
     ).data or []
-    anchors: list[dict[str, Any]] = []
+    checkpoints: list[dict[str, Any]] = []
     for m in rows:
         scrap = m.get("travelscrapbook_scraps") or {}
         place = scrap.get("travelscrapbook_places") or {}
         if scrap and place:
-            anchors.append(synthesize_anchor(m, scrap, place))
-    return anchors
+            checkpoints.append(synthesize_checkpoint(m, scrap, place))
+    return checkpoints
 
 
 def get_checkpoint_membership(

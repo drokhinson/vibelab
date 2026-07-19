@@ -55,7 +55,7 @@ class SettingsView extends View {
         <h2 style="font-size:1.5rem;margin:0 0 0.3rem;">Save from your phone</h2>
         <p class="scrap-card__sub">Share from Instagram, Reddit, TripAdvisor, or Maps — the link lands in your scrapbook and we sort it into a trip.</p>
 
-        <h3 style="font-size:1.05rem;margin:0.9rem 0 0.2rem;">iPhone — the "Scrap it" Shortcut</h3>
+        <h3 style="font-size:1.05rem;margin:0.9rem 0 0.2rem;">iPhone — the "Save it" Shortcut</h3>
         ${tokenBlock}
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
           <button class="ts-btn ts-btn--sky ts-btn--sm" id="create-capture-token">
@@ -67,7 +67,7 @@ class SettingsView extends View {
         <details style="margin-top:0.7rem;font-size:0.85rem;">
           <summary style="cursor:pointer;font-weight:800;">Set up the Shortcut (once, ~2 minutes)</summary>
           <ol style="font-size:0.85rem;padding-left:1.2rem;margin:0.6rem 0;line-height:1.7;">
-            <li>Open the <strong>Shortcuts</strong> app → <strong>+</strong> → name it <strong>Scrap it</strong>.</li>
+            <li>Open the <strong>Shortcuts</strong> app → <strong>+</strong> → name it <strong>Save it</strong>.</li>
             <li>Tap the <strong>ⓘ</strong> info panel → turn on <strong>Show in Share Sheet</strong> → set input types to <strong>URLs and Text</strong>.</li>
             <li>Add the action <strong>Get Contents of URL</strong> and set:
               <ul style="padding-left:1rem;margin:0.2rem 0;">
@@ -77,7 +77,7 @@ class SettingsView extends View {
                 <li>Request Body (JSON): field <code style="font-size:0.72rem;">text</code> = <strong>Shortcut Input</strong> (as Text)</li>
               </ul>
             </li>
-            <li>Done — <strong>Scrap it</strong> now appears in the share sheet of every app.</li>
+            <li>Done — <strong>Save it</strong> now appears in the share sheet of every app.</li>
           </ol>
         </details>
 
@@ -85,10 +85,10 @@ class SettingsView extends View {
         ${installed ? `
           <p class="scrap-card__sub" style="margin:0.4rem 0;">
             <i data-lucide="check-circle-2" style="width:14px;height:14px;vertical-align:-2px;"></i>
-            Installed! "Travel Scrapbook" is in your share sheet — share any link to it.
+            Installed! "Travel Trove" is in your share sheet — share any link to it.
           </p>` : `
           <p class="scrap-card__sub" style="margin:0.4rem 0;">In Chrome, open the <strong>⋮ menu → Add to Home screen → Install</strong>.
-          Once installed, "Travel Scrapbook" appears in Android's share sheet.</p>`}
+          Once installed, "Travel Trove" appears in Android's share sheet.</p>`}
       </div>
     `;
   }
@@ -104,7 +104,7 @@ class SettingsView extends View {
       <button class="sticker-card card-lift" id="open-tutorial" style="width:100%;text-align:left;display:flex;align-items:center;gap:0.8rem;cursor:pointer;border:2px solid var(--border);">
         <img src="/assets/illustrations/travel-scrapbook-tutorial-welcome.svg" alt="" style="width:56px;height:56px;flex-shrink:0;" />
         <span style="min-width:0;">
-          <span style="display:block;font-weight:800;font-size:1.05rem;">How Travel Scrapbook works</span>
+          <span style="display:block;font-weight:800;font-size:1.05rem;">How Travel Trove works</span>
           <span class="scrap-card__sub">New here? Take the two-minute tour.</span>
         </span>
         <i data-lucide="chevron-right" style="margin-left:auto;flex-shrink:0;"></i>
@@ -121,11 +121,11 @@ class SettingsView extends View {
           <li>Pick the trip, hit save. Done.</li>
         </ol>
         <a class="bookmarklet-chip" href="${escapeAttr(href)}" onclick="event.preventDefault(); toast('Drag me to your bookmarks bar instead!');">
-          <i data-lucide="scissors"></i>Scrap it
+          <i data-lucide="bookmark-plus"></i>Save it
         </a>
         <details style="margin-top:0.9rem;font-size:0.85rem;">
           <summary style="cursor:pointer;font-weight:800;">Can't drag it? Copy it instead</summary>
-          <p class="scrap-card__sub" style="margin:0.5rem 0;">Make a new bookmark, name it "Scrap it", and paste this as the URL:</p>
+          <p class="scrap-card__sub" style="margin:0.5rem 0;">Make a new bookmark, name it "Save it", and paste this as the URL:</p>
           <div style="display:flex;gap:0.5rem;align-items:flex-start;">
             <code id="bookmarklet-code" style="flex:1;background:var(--paper);border:1.5px solid var(--border);border-radius:10px;padding:0.5rem;font-size:0.7rem;overflow-wrap:anywhere;display:block;">${escapeHtml(href)}</code>
             <button class="ts-btn ts-btn--ghost ts-btn--sm" id="copy-bookmarklet" aria-label="Copy"><i data-lucide="copy"></i></button>

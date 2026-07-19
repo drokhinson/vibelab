@@ -1,15 +1,15 @@
-// widgets/plan-popup.js — the plan card opened by tapping a timeline row's
+// widgets/stop-popup.js — the stop card opened by tapping a timeline row's
 // title. It shows the place read-only (sprite, name, location, photo, source
 // links) and lets the user edit just two things IN THE CONTEXT OF THIS TRIP:
 //   • the note, and
-//   • the day + time — choosing a day ANCHORS the plan there (a saved plan_date);
+//   • the day + time — choosing a day ANCHORS the stop there (a saved plan_date);
 //     choosing "Auto" (or "Let the route decide") un-anchors it so the route
 //     places it again.
 // Place identity (name, category, location) is edited elsewhere — the creator's
 // pencil opens ScrapEditor. Mirrors the ts-modal pattern of scrap-editor.js.
 'use strict';
 
-const PlanPopup = {
+const StopPopup = {
   open(scrap, { tripId = null, days = [], tripBounds = {}, canWrite = true, onChanged } = {}) {
     this.close();
     this._scrap = scrap;
@@ -65,11 +65,11 @@ const PlanPopup = {
 
     const modal = document.createElement('div');
     modal.className = 'ts-modal';
-    modal.id = 'plan-popup-modal';
+    modal.id = 'stop-popup-modal';
     modal.innerHTML = `
-      <div class="ts-modal__backdrop" onclick="PlanPopup.close()"></div>
-      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Plan">
-        <button class="ts-modal__close" onclick="PlanPopup.close()" aria-label="Close"><i data-lucide="x"></i></button>
+      <div class="ts-modal__backdrop" onclick="StopPopup.close()"></div>
+      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Stop">
+        <button class="ts-modal__close" onclick="StopPopup.close()" aria-label="Close"><i data-lucide="x"></i></button>
         <div class="pp-head">
           ${renderSprite('category', s.category, { size: 'md', alt: '' })}
           <div style="min-width:0;flex:1;">
@@ -145,8 +145,8 @@ const PlanPopup = {
   },
 
   close() {
-    document.getElementById('plan-popup-modal')?.remove();
+    document.getElementById('stop-popup-modal')?.remove();
     this._scrap = null;
   },
 };
-window.PlanPopup = PlanPopup;
+window.StopPopup = StopPopup;

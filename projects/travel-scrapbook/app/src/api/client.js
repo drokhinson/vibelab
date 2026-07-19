@@ -1,4 +1,4 @@
-// API client — Travel Scrapbook
+// API client — Travel Trove
 // All fetch calls go through this file. Never call fetch() directly in screens.
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";

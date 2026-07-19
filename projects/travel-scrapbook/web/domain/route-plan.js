@@ -1,20 +1,20 @@
 // domain/route-plan.js — client-side, WEB-ONLY itinerary builder.
 //
 // Layers on top of buildTimeline (domain/timeline.js): it takes that day
-// scaffold and places every routable plan onto a day using the same
+// scaffold and places every routable stop onto a day using the same
 // nearest-neighbor/2-opt clustering the backend route optimizer uses
 // (services/route_planner.py), then computes the distance + estimated
 // drive/walk time (domain/geo.js) between consecutive stops. Each day's first
-// todo also gets a leg from where the day starts (its stay/travel checkpoint, or
-// the Arrival anchor / prior day's last stop), and the trip closes with a leg
-// from the last stop to the Departure anchor (`endLeg`). The timeline IS the
+// stop also gets a leg from where the day starts (its stay/travel checkpoint, or
+// the Arrival bookend / prior day's last stop), and the trip closes with a leg
+// from the last stop to the Departure bookend (`endLeg`). The timeline IS the
 // route — there is no separate Route panel any more.
 //
 // It deliberately DIVERGES from services/route_planner.py in one way, and this
 // divergence is the whole "anchoring" feature: auto-placement here is EPHEMERAL
-// (never persisted to plan_date) and it flows AROUND user-anchored plans,
+// (never persisted to plan_date) and it flows AROUND user-anchored stops,
 // counting them against each day's capacity when spreading. The backend planner
-// ignores anchored plans while spreading and writes plan_date to the DB. This
+// ignores anchored stops while spreading and writes plan_date to the DB. This
 // module has no backend twin — timeline.py stays the canonical timeline math
 // (mirrored in timeline.js); keep the anchoring behaviour HERE, web-side only.
 'use strict';
@@ -29,10 +29,10 @@
   const cmpId = (a, b) => String(a).localeCompare(String(b));
 
   // ---- spine (port of route_planner.build_spine + _clamp_window) ----
-  const effDate = (a) => (a.role === 'stay' ? (a.stay_date || null) : (a.anchor_date || null));
+  const effDate = (a) => (a.role === 'stay' ? (a.stay_date || null) : (a.checkpoint_date || null));
 
-  function buildSpine(anchors) {
-    const cps = (anchors || [])
+  function buildSpine(checkpoints) {
+    const cps = (checkpoints || [])
       .map((a, i) => ({ a, i }))
       .filter(({ a }) => CLUSTER_ROLES.has(a.role) && located(a));
     cps.sort((x, y) => {
@@ -45,7 +45,7 @@
       let winStart;
       let winEnd;
       if (a.role === 'stay') { winStart = a.stay_date || null; winEnd = a.stay_end_date || winStart; }
-      else { winStart = a.anchor_date || null; winEnd = winStart; }
+      else { winStart = a.checkpoint_date || null; winEnd = winStart; }
       return { label: a.label, lat: a.lat, lng: a.lng, point: pointOf(a), winStart, winEnd };
     });
   }
@@ -58,7 +58,7 @@
   };
 
   // Run the optimizer over a list of scraps seeded from `startPoint`, strip the
-  // seed anchor, and return the scraps in route order.
+  // seed point, and return the scraps in route order.
   function orderScraps(list, startPoint, endPoint) {
     if (!list.length) return [];
     const res = window.Geo.optimize(list.map(pointOf), startPoint || null, endPoint || null);
@@ -69,8 +69,8 @@
   // Order one day's rows: unfinished before finished; timed rows chronological;
   // untimed located rows in optimizer order (seeded from the last timed stop, or
   // the day's origin); unlocated rows last. Returns row objects {scrap,placement,leg}.
-  function orderDayRows(anchoredPlans, autos, originPoint) {
-    const all = [...anchoredPlans, ...autos];
+  function orderDayRows(anchoredStops, autos, originPoint) {
+    const all = [...anchoredStops, ...autos];
     const unfinished = all.filter((s) => !completed(s));
     const finished = all.filter(completed).sort((a, b) => cmpId(a.id, b.id));
 
@@ -94,8 +94,8 @@
   // Walk the day's rows in order and attach each located, unfinished row's leg
   // (distance/time from the previous located stop). The first located stop's leg
   // is its hop from `originPoint` — the day's stay/travel checkpoint (or, on day
-  // one, the Arrival anchor; else the prior day's last stop) — so the drive from
-  // where the day starts to the first todo shows just like every other leg. That
+  // one, the Arrival bookend; else the prior day's last stop) — so the drive from
+  // where the day starts to the first stop shows just like every other leg. That
   // same hop is the `transitionKm` counted toward the route total.
   function attachLegs(rows, originPoint) {
     let prev = null;
@@ -124,7 +124,7 @@
   }
 
   // Quota-fill `autos` (already in route order) across `ownedDays`, counting
-  // anchored plans already on each day against its capacity. Anchor-heavy days
+  // anchored stops already on each day against its capacity. Anchor-heavy days
   // fill up and push autos to later days; any leftover lands on the last day.
   function spreadAutos(autos, ownedDays, anchoredCount, autoByDay) {
     const n = ownedDays.length;
@@ -143,7 +143,7 @@
     while (ai < autos.length) autoByDay[lastD].push(autos[ai++]);
   }
 
-  // Undated trip (buildTimeline returns no days): no day scaffold, so every plan
+  // Undated trip (buildTimeline returns no days): no day scaffold, so every stop
   // collects into one inline route list (rendered in the middle of the timeline)
   // — routable ones in a single optimized path with legs + total, unroutable/
   // completed ones appended plainly.
@@ -171,8 +171,8 @@
   // timeline suggests adding a checkpoint for. A stay covers stay_date..
   // stay_end_date inclusive (single day when no end). Returns ISO date strings
   // in trip order.
-  function uncoveredStayDays(tripDays, anchors) {
-    const stays = (anchors || []).filter((a) => a.role === 'stay' && a.stay_date);
+  function uncoveredStayDays(tripDays, checkpoints) {
+    const stays = (checkpoints || []).filter((a) => a.role === 'stay' && a.stay_date);
     return tripDays.filter((d) =>
       !stays.some((s) => s.stay_date <= d && d <= (s.stay_end_date || s.stay_date)));
   }
@@ -181,29 +181,30 @@
    * Build the unified itinerary from a trip bundle.
    * @returns {{days: Array, anytime: Array, endLeg: object|null, totalKm: number, stopCount: number, reason?: string, uncoveredDays: string[]}}
    *   days[]  = { date, day_number, markers, rows: [{ scrap, placement:'anchored'|'auto', leg|null }] }
-   *   anytime = rows for plans with no map pin (or an out-of-range anchored date)
-   *   endLeg  = closing hop from the last stop to the Departure anchor (null if either is missing)
+   *   anytime = rows for stops with no map pin (or an out-of-range anchored date)
+   *   endLeg  = closing hop from the last stop to the Departure bookend (null if either is missing)
    *   uncoveredDays = trip days no stay checkpoint covers (drives the lodging tip; [] when undated)
    */
-  function buildItinerary(trip, anchors, scraps) {
-    anchors = anchors || [];
+  function buildItinerary(trip, checkpoints, scraps) {
+    checkpoints = checkpoints || [];
     scraps = scraps || [];
-    // Arrival/departure are ordinary bookend plans now (026): pull them out so
+    // Arrival/departure are ordinary bookend stops now (026): pull them out so
     // they seed the route's endpoints and render as bookends, never as day rows.
     const arrival = scraps.find((s) => s.is_arrival) || null;
     const departure = scraps.find((s) => s.is_departure) || null;
-    const planScraps = scraps.filter((s) => !s.is_arrival && !s.is_departure);
-    const base = window.buildTimeline(trip, anchors, planScraps);
+    const stopScraps = scraps.filter((s) => !s.is_arrival && !s.is_departure);
+    const base = window.buildTimeline(trip, checkpoints, stopScraps);
     const days = base.days || [];
-    if (!days.length) return buildUndated(planScraps, arrival, departure, base.reason);
+    if (!days.length) return buildUndated(stopScraps, arrival, departure, base.reason);
 
     const tripDays = days.map((d) => d.date);
     const anchoredCount = {};
-    days.forEach((d) => { anchoredCount[d.date] = (d.plans || []).length; });
+    days.forEach((d) => { anchoredCount[d.date] = (d.stops || []).length; });
 
     // Partition buildTimeline's unscheduled list: out-of-range anchored → Anytime
     // (still flagged anchored); geocoded & active → auto-routable; the rest
-    // (no pin, or already visited/skipped) → Anytime.
+    // (no pin, or already visited/skipped) → Anytime. (`anchored` = pinned to a
+    // day by the user; unrelated to checkpoints.)
     const anytime = [];
     const autoRoutable = [];
     for (const s of base.unscheduled) {
@@ -213,9 +214,9 @@
     }
     autoRoutable.sort((a, b) => cmpId(a.id, b.id)); // determinism — stable input to the optimizer
 
-    // Cluster the auto plans around the trip's stay/travel checkpoints (or, with
-    // no checkpoints, one path pinned between the start/end anchors).
-    const spine = buildSpine(anchors);
+    // Cluster the auto stops around the trip's stay/travel checkpoints (or, with
+    // no checkpoints, one path pinned between the arrival/departure bookends).
+    const spine = buildSpine(checkpoints);
     const clusters = {};
     if (spine.length) {
       for (const s of autoRoutable) {
@@ -268,7 +269,7 @@
     const outDays = days.map((d) => {
       const stayCp = spine.find((cp) => cp.winStart && cp.winStart <= d.date && (cp.winEnd || cp.winStart) >= d.date);
       const origin = stayCp ? stayCp.point : lastPoint;
-      const rows = orderDayRows(d.plans || [], autoByDay[d.date] || [], origin);
+      const rows = orderDayRows(d.stops || [], autoByDay[d.date] || [], origin);
       const { withinKm, transitionKm, lastPoint: lp, stops } = attachLegs(rows, origin);
       totalKm += withinKm + transitionKm;
       stopCount += stops;
@@ -276,7 +277,7 @@
       return { date: d.date, day_number: d.day_number, markers: d.markers, rows };
     });
 
-    // The trip's closing hop: from the last located stop to the Departure plan.
+    // The trip's closing hop: from the last located stop to the Departure stop.
     // Rendered above the Departure bookend (there's no day row to hang it on).
     const endLoc = departure && located(departure) ? departure : null;
     let endLeg = null;
@@ -288,7 +289,7 @@
 
     return {
       days: outDays, anytime, endLeg, totalKm, stopCount, reason: base.reason,
-      uncoveredDays: uncoveredStayDays(tripDays, anchors),
+      uncoveredDays: uncoveredStayDays(tripDays, checkpoints),
       arrival, departure,
     };
   }

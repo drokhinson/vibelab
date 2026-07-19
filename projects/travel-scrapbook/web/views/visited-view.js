@@ -158,7 +158,7 @@ class VisitedView extends View {
     bindQuickPaste(c, {
       onCapture: async (url) => {
         await window.ScrapDomain.captureVisited(url);
-        toast('Scrapped! It’ll appear here as visited once the link is read.');
+        toast('Saved! It’ll appear here as visited once the link is read.');
       },
     });
     // Places / Stays & transport toggle — both sets load in one page, so the

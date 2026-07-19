@@ -47,7 +47,7 @@ app = FastAPI(
         {"name": "plant_planner", "description": "Plant Planner — garden layout and companion planting"},
         {"name": "analytics", "description": "Cross-app analytics tracking"},
         {"name": "boardgame_buddy", "description": "BoardgameBuddy — board game collection, play logging, and quick-reference guides"},
-        {"name": "travel_scrapbook", "description": "Travel Scrapbook — save travel links to trips, AI-extract places, and plan optimized routes"},
+        {"name": "travel_scrapbook", "description": "Travel Trove — save travel links to trips, AI-extract places, and plan optimized routes"},
         {"name": "admin", "description": "Admin dashboard and user management"},
     ],
 )

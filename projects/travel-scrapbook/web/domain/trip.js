@@ -95,40 +95,40 @@ const TripDomain = {
     await this.loadAll();
   },
 
-  async addAnchor(tripId, fields) {
-    const anchor = await window.api.createAnchor(tripId, fields);
+  async addCheckpoint(tripId, fields) {
+    const checkpoint = await window.api.createCheckpoint(tripId, fields);
     await this.load(tripId);
-    return anchor;
+    return checkpoint;
   },
 
-  async updateAnchor(tripId, anchorId, fields) {
-    const anchor = await window.api.updateAnchor(anchorId, fields);
+  async updateCheckpoint(tripId, checkpointId, fields) {
+    const checkpoint = await window.api.updateCheckpoint(checkpointId, fields);
     await this.load(tripId);
-    return anchor;
+    return checkpoint;
   },
 
-  async removeAnchor(tripId, anchorId) {
-    await window.api.deleteAnchor(anchorId);
+  async removeCheckpoint(tripId, checkpointId) {
+    await window.api.deleteCheckpoint(checkpointId);
     await this.load(tripId);
   },
 
-  // Endpoints (arrival/departure) — bookend plans (026). `which` is
-  // 'arrival'|'departure'. Reload the bundle so the timeline bookends + plans
-  // list reflect the flag/date change (mirrors the anchor ops above).
-  async addEndpoint(tripId, fields) {
-    const scrap = await window.api.createEndpoint(tripId, fields);
-    await this.load(tripId);
-    return scrap;
-  },
-
-  async updateEndpoint(tripId, which, fields) {
-    const scrap = await window.api.updateEndpoint(tripId, which, fields);
+  // Bookends (arrival/departure) — bookend stops (026), shown as checkpoints.
+  // `which` is 'arrival'|'departure'. Reload the bundle so the timeline bookends
+  // + stops list reflect the flag/date change (mirrors the checkpoint ops above).
+  async addBookend(tripId, fields) {
+    const scrap = await window.api.createBookend(tripId, fields);
     await this.load(tripId);
     return scrap;
   },
 
-  async removeEndpoint(tripId, which) {
-    await window.api.deleteEndpoint(tripId, which);
+  async updateBookend(tripId, which, fields) {
+    const scrap = await window.api.updateBookend(tripId, which, fields);
+    await this.load(tripId);
+    return scrap;
+  },
+
+  async removeBookend(tripId, which) {
+    await window.api.deleteBookend(tripId, which);
     await this.load(tripId);
   },
 };

@@ -1,4 +1,4 @@
-// views/trip-view.js — trip detail: plans (todos), checkpoints (stays/travel),
+// views/trip-view.js — trip detail: stops, checkpoints (stays/travel),
 // quick-paste, and the unified Timeline (the route lives IN the timeline now —
 // ui/trip-timeline.js over domain/route-plan.js; share modal lives in
 // widgets/trip-share.js).
@@ -13,9 +13,9 @@ class TripView extends View {
   _resetState() {
     this._tripId = null;
     this._priorityOnly = false;
-    // Plans (default) or the day-by-day Timeline (computed locally from the
+    // Stops (default) or the day-by-day Timeline (computed locally from the
     // trip bundle — see domain/timeline.js + domain/route-plan.js).
-    this._tab = localStorage.getItem('ts.trip.tab') || 'plans';
+    this._tab = localStorage.getItem('ts.trip.tab') || 'stops';
     this._painted = false; // a different trip is a fresh visit → animate once
     // Structural fingerprint of the last full render — the trip-bundle listener
     // diffs against it to decide surgical (field-only) vs full re-render. Null
@@ -36,10 +36,10 @@ class TripView extends View {
   async onMount() {
     this._resetState();
     this._tripId = this.params.tripId;
-    // Everything renders off the trip bundle in store; the timeline/plans are
+    // Everything renders off the trip bundle in store; the timeline/stops are
     // pure math over it. A scrap-field mutation (priority, schedule, outcome)
     // surgically re-renders just the active tab's content region; a structural
-    // change (membership, anchors, dates) does a full render — see _onTripUpdate.
+    // change (membership, checkpoints, dates) does a full render — see _onTripUpdate.
     this.listen('trip:' + this._tripId, () => this._onTripUpdate());
     this.listen('members:' + this._tripId, () => this.render());
     this.listen('pollTimedOut:' + this._tripId, () => this.render());
@@ -50,7 +50,7 @@ class TripView extends View {
   async onParamsChange(params) {
     if (params.tripId !== this._tripId) {
       window.ScrapDomain.stopPolling();
-      // Drop the old trip's shimmer so it can't leak into the new trip's Plans.
+      // Drop the old trip's shimmer so it can't leak into the new trip's Stops.
       window.store.set('capturePending:' + this._tripId, []);
       this._resetState();
       this._tripId = params.tripId;
@@ -68,14 +68,14 @@ class TripView extends View {
     window.ScrapDomain.stopPolling();
   }
 
-  // A capture pushed/cleared a processing card. It belongs to the Plans tab, so
-  // surgically re-render just #plans-content (pending state is outside the
+  // A capture pushed/cleared a processing card. It belongs to the Stops tab, so
+  // surgically re-render just #stops-content (pending state is outside the
   // structural fingerprint, so this is a field-only patch, not a full render).
   _onCapturePending() {
-    if (this._tab !== 'plans') return;
+    if (this._tab !== 'stops') return;
     const trip = window.store.get('trip:' + this._tripId);
-    if (!trip || !this.container.querySelector('#plans-content')) return;
-    this._patchPlans(trip);
+    if (!trip || !this.container.querySelector('#stops-content')) return;
+    this._patchStops(trip);
   }
 
   // One bundle fetch covers the whole screen (trip + scraps + members +
@@ -99,7 +99,7 @@ class TripView extends View {
 
   // The current timeline days (for the scheduler's day picker).
   _timelineDays(trip) {
-    const data = buildTimeline(trip, trip.anchors || [], trip.scraps || []);
+    const data = buildTimeline(trip, trip.checkpoints || [], trip.scraps || []);
     return (data.days || []).map((d) => ({ date: d.date, day_number: d.day_number }));
   }
 
@@ -111,7 +111,7 @@ class TripView extends View {
     this._lastSig = this._structuralSig(trip);
     const { isOwner, canWrite, cardOpts } = this._deriveCtx(trip);
 
-    // Visited plans stay visible but greyed out and sorted to the bottom
+    // Visited stops stay visible but greyed out and sorted to the bottom
     // (stable sort keeps each half in its original order).
     const allScraps = this._visibleScraps(trip);
     const staged = trip.staged_scraps || [];
@@ -136,19 +136,19 @@ class TripView extends View {
         </div>
       </div>
       <div class="ts-segmented" role="tablist" aria-label="Trip view" style="margin-top:0.9rem;">
-        <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="plans" ${this._tab === 'plans' ? 'checked' : ''} /><span>Plans</span></label>
+        <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="stops" ${this._tab === 'stops' ? 'checked' : ''} /><span>Stops</span></label>
         <label class="ts-segmented__opt"><input type="radio" name="trip-tab" value="timeline" ${this._tab === 'timeline' ? 'checked' : ''} /><span>Timeline</span></label>
       </div>
       ${this._tab === 'timeline'
         ? `
-      <div id="tl-content">${renderTripTimeline(trip, RoutePlan.buildItinerary(trip, trip.anchors || [], allScraps), { canWrite })}</div>`
+      <div id="tl-content">${renderTripTimeline(trip, RoutePlan.buildItinerary(trip, trip.checkpoints || [], allScraps), { canWrite })}</div>`
         : `
       ${this._renderStaging(staged, cardOpts)}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;margin-top:1.2rem;flex-wrap:wrap;">
-        <h2 style="font-size:1.5rem;margin:0;">Plans</h2>
+        <h2 style="font-size:1.5rem;margin:0;">Stops</h2>
         <div style="display:flex;gap:0.5rem;">
           ${canWrite ? `
-            <button class="ts-btn ts-btn--blush ts-btn--sm" id="add-plans"><i data-lucide="plus"></i>Todo</button>
+            <button class="ts-btn ts-btn--blush ts-btn--sm" id="add-stop"><i data-lucide="plus"></i>Stop</button>
             <button class="ts-btn ts-btn--sky ts-btn--sm" data-action="add-checkpoint"><i data-lucide="plus"></i>Checkpoint</button>` : ''}
           <button class="ts-btn ts-btn--ghost ts-btn--sm" id="priority-filter"
                   style="${this._priorityOnly ? 'border-color:var(--butter-deep, #C9A227);color:#8A6D1A;' : ''}">
@@ -156,7 +156,7 @@ class TripView extends View {
           </button>
         </div>
       </div>
-      <div id="plans-content">${this._renderPlansContent(trip)}</div>
+      <div id="stops-content">${this._renderStopsContent(trip)}</div>
       ${this._renderCheckpoints(trip, { canWrite })}
       `}
       ${canWrite ? renderQuickPaste(trip.id) : ''}
@@ -183,24 +183,24 @@ class TripView extends View {
   }
 
   // Trip scraps, visited sorted to the bottom (stable). The one source of truth
-  // for both the timeline math and the plans list, used by render() + patches.
+  // for both the timeline math and the stops list, used by render() + patches.
   _visibleScraps(trip) {
     return [...(trip.scraps || [])].sort(
       (a, b) => (a.visited_at ? 1 : 0) - (b.visited_at ? 1 : 0));
   }
 
-  // The plans-tab card region (grouped list or empty state) — everything that a
-  // priority/vibe/note mutation repaints. Lives in #plans-content so it can be
-  // swapped surgically; the Plans header (add / filter buttons) stays put.
-  _renderPlansContent(trip) {
+  // The stops-tab card region (grouped list or empty state) — everything that a
+  // priority/vibe/note mutation repaints. Lives in #stops-content so it can be
+  // swapped surgically; the Stops header (add / filter buttons) stays put.
+  _renderStopsContent(trip) {
     const { canWrite, cardOpts } = this._deriveCtx(trip);
-    // Arrival/departure are bookend plans (026) — they live on the timeline as
-    // bookends, not in the Plans todo list.
+    // Arrival/departure are bookend stops (026) — they live on the timeline as
+    // bookends, not in the Stops list.
     const allScraps = this._visibleScraps(trip).filter((s) => !s.is_arrival && !s.is_departure);
     const isPriority = (s) => s.rating === 'booked' || s.rating === 'must_do';
     const scraps = this._priorityOnly ? allScraps.filter(isPriority) : allScraps;
 
-    // A just-pasted link shows a shimmer "processing" card at the top of Plans
+    // A just-pasted link shows a shimmer "processing" card at the top of Stops
     // until its scraps land (see ScrapDomain.capture / the trip poll). Skipped
     // when the must-dos filter is on — a processing card has no rating yet.
     const pending = (!this._priorityOnly && window.store.get('capturePending:' + this._tripId)) || [];
@@ -216,38 +216,38 @@ class TripView extends View {
       return `
         <div class="empty-state">
           <img src="/assets/illustrations/travel-scrapbook-empty-scraps.svg" alt="" />
-          <p class="empty-title">${this._priorityOnly ? 'No must-dos yet' : 'No plans yet'}</p>
+          <p class="empty-title">${this._priorityOnly ? 'No must-dos yet' : 'No stops yet'}</p>
           <p class="empty-desc">${this._priorityOnly
-            ? 'Rate plans “Must do” or “Booked” and they collect here.'
+            ? 'Rate stops “Must do” or “Booked” and they collect here.'
             : (canWrite
-              ? 'Tap “+ Todo” to pick from your Wander List — or paste a link below.'
+              ? 'Tap “+ Stop” to pick from your Wander List — or paste a link below.'
               : 'When the crew adds places, they’ll show up here for you to vibe on.')}</p>
         </div>`;
     }
-    return processing + renderPlanZones(scraps, {
+    return processing + renderStopZones(scraps, {
       scopeLevel: trip.scope_level, variant: 'trip', tripId: this._tripId, ...cardOpts,
     });
   }
 
-  // Cheap structural fingerprint. Includes membership ID sets, the anchor set
+  // Cheap structural fingerprint. Includes membership ID sets, the checkpoint set
   // (with the fields that drive the day range + suggestions) and the chrome
   // meta the toolbar/heading show. It deliberately OMITS per-scrap fields
   // (plan_date/plan_time/rating/vibes/visited/skipped/notes) so those changes
-  // fall to the surgical path — RoutePlan.buildItinerary / renderPlanZones
+  // fall to the surgical path — RoutePlan.buildItinerary / renderStopZones
   // all recompute them from local state, so a region re-render is always correct.
-  // It also OMITS capturePending, so a paste's shimmer patches #plans-content
+  // It also OMITS capturePending, so a paste's shimmer patches #stops-content
   // surgically; only the scraps landing (a membership change) forces a full render.
   _structuralSig(trip) {
     const ids = (l) => (l || []).map((s) => s.id).sort().join(',');
-    const anchors = (trip.anchors || []).map((a) =>
-      [a.id, a.role, a.anchor_date || '', a.anchor_time || '',
+    const checkpoints = (trip.checkpoints || []).map((a) =>
+      [a.id, a.role, a.checkpoint_date || '', a.checkpoint_time || '',
         a.stay_date || '', a.stay_end_date || '', a.lat ?? '', a.lng ?? ''].join(':')
     ).sort().join('|');
     return [
       ids(trip.scraps), ids(trip.staged_scraps), ids(trip.candidates),
       trip.start_date || '', trip.end_date || '',
       trip.name || '', trip.destination || '', trip.cover_icon || '', trip.role || '',
-      anchors,
+      checkpoints,
     ].join('#');
   }
 
@@ -260,8 +260,8 @@ class TripView extends View {
     const structural = this._lastSig == null || this._structuralSig(trip) !== this._lastSig;
     if (!structural && this._tab === 'timeline' && this.container.querySelector('#tl-content')) {
       this._patchTimeline(trip);
-    } else if (!structural && this._tab === 'plans' && this.container.querySelector('#plans-content')) {
-      this._patchPlans(trip);
+    } else if (!structural && this._tab === 'stops' && this.container.querySelector('#stops-content')) {
+      this._patchStops(trip);
     } else {
       this.render(); // structural change or tab/host mismatch → full (re-stamps _lastSig)
     }
@@ -273,32 +273,32 @@ class TripView extends View {
     if (!host) { this.render(); return; }
     const { isOwner, canWrite } = this._deriveCtx(trip);
     host.innerHTML = renderTripTimeline(
-      trip, RoutePlan.buildItinerary(trip, trip.anchors || [], this._visibleScraps(trip)), { canWrite });
+      trip, RoutePlan.buildItinerary(trip, trip.checkpoints || [], this._visibleScraps(trip)), { canWrite });
     this.refreshIcons(host);
     this._bindTimeline(host, trip, { canWrite, isOwner });
   }
 
-  // Surgical: re-render only the plans card region + re-bind only its handlers.
-  // The Plans header and checkpoints are outside #plans-content and keep theirs.
-  _patchPlans(trip) {
-    const host = this.container.querySelector('#plans-content');
+  // Surgical: re-render only the stops card region + re-bind only its handlers.
+  // The Stops header and checkpoints are outside #stops-content and keep theirs.
+  _patchStops(trip) {
+    const host = this.container.querySelector('#stops-content');
     if (!host) { this.render(); return; }
-    host.innerHTML = this._renderPlansContent(trip);
+    host.innerHTML = this._renderStopsContent(trip);
     this.refreshIcons(host);
-    this._bindPlansContent(host, trip);
+    this._bindStopsContent(host, trip);
   }
 
   // The trip's checkpoints — stays and travel — as simple typed cards under
-  // the plans list, chronological, with gap placeholders between dated ones.
+  // the stops list, chronological, with gap placeholders between dated ones.
   _renderCheckpoints(trip, { canWrite = true } = {}) {
-    const anchors = trip.anchors || [];
-    if (!anchors.length && !canWrite) return '';
+    const checkpoints = trip.checkpoints || [];
+    if (!checkpoints.length && !canWrite) return '';
     return `
       <div style="margin-top:1.4rem;">
         <h2 style="font-size:1.5rem;margin:0;">Checkpoints</h2>
         <p class="scrap-card__sub">Stays and travel that frame the trip.</p>
-        ${anchors.length
-          ? renderCheckpointList(anchors, { canWrite })
+        ${checkpoints.length
+          ? renderCheckpointList(checkpoints, { canWrite })
           : `<button class="checkpoint-gap" data-action="add-checkpoint" style="margin-top:0.6rem;">
                <i data-lucide="plus"></i>Add your first checkpoint — a stay or travel leg
              </button>`}
@@ -330,7 +330,7 @@ class TripView extends View {
     const c = this.container;
     c.querySelector('#trip-back')?.addEventListener('click', () => window.router.back('trips'));
 
-    // Plans | Timeline tab — the timeline is computed locally, so switching
+    // Stops | Timeline tab — the timeline is computed locally, so switching
     // (and every schedule change) is instant.
     c.querySelectorAll('input[name=trip-tab]').forEach((r) => {
       r.addEventListener('change', () => {
@@ -342,24 +342,24 @@ class TripView extends View {
     });
     c.querySelector('#trip-download')?.addEventListener('click', () => {
       // Exports now reflect the FULL computed itinerary, not just persisted
-      // dates: we send the server a `plan` (every placed plan in route order,
-      // tagged with its computed day) so auto-placed plans land in the file on
-      // the right day, in the right order. Per-day pin counts come from the same
-      // itinerary so the scope picker matches what each file will contain.
-      const itin = RoutePlan.buildItinerary(trip, trip.anchors || [], trip.scraps || []);
+      // dates: we send the server an `itinerary` (every placed stop in route
+      // order, tagged with its computed day) so auto-placed stops land in the
+      // file on the right day, in the right order. Per-day pin counts come from
+      // the same itinerary so the scope picker matches what each file will contain.
+      const itin = RoutePlan.buildItinerary(trip, trip.checkpoints || [], trip.scraps || []);
       const mapped = (rows) => rows.filter((r) => r.scrap.lat != null && !r.scrap.visited_at).length;
-      const plan = [];
+      const itinerary = [];
       const days = (itin.days || []).map((d) => {
-        d.rows.forEach((r) => plan.push({ scrap_id: r.scrap.id, plan_date: d.date }));
+        d.rows.forEach((r) => itinerary.push({ scrap_id: r.scrap.id, plan_date: d.date }));
         return { date: d.date, day_number: d.day_number, points: mapped(d.rows) };
       });
-      (itin.anytime || []).forEach((r) => plan.push({ scrap_id: r.scrap.id, plan_date: null }));
+      (itin.anytime || []).forEach((r) => itinerary.push({ scrap_id: r.scrap.id, plan_date: null }));
       const allPoints = days.reduce((n, d) => n + d.points, 0) + mapped(itin.anytime || []);
-      ExportMenu.open({ tripId: trip.id, tripName: trip.name, days, allPoints, plan });
+      ExportMenu.open({ tripId: trip.id, tripName: trip.name, days, allPoints, itinerary });
     });
     c.querySelector('#trip-share')?.addEventListener('click', () => TripShare.open(trip, { isOwner }));
     c.querySelector('#trip-delete')?.addEventListener('click', async () => {
-      if (!confirmDestructive(`Delete "${trip.name}" and all its plans? This can't be undone.`)) return;
+      if (!confirmDestructive(`Delete "${trip.name}" and all its stops? This can't be undone.`)) return;
       try {
         await window.TripDomain.remove(trip.id);
         toast('Trip deleted');
@@ -373,8 +373,8 @@ class TripView extends View {
     c.querySelector('#trip-edit')?.addEventListener('click', () => {
       TripEditor.open(trip);
     });
-    c.querySelector('#add-plans')?.addEventListener('click', () => {
-      TripSuggestions.open(trip, { context: 'plan', onSaved: this._onSuggestionSaved(trip) });
+    c.querySelector('#add-stop')?.addEventListener('click', () => {
+      TripSuggestions.open(trip, { context: 'stop', onSaved: this._onSuggestionSaved(trip) });
     });
 
     bindQuickPaste(c);
@@ -388,21 +388,21 @@ class TripView extends View {
       } catch (err) { toast(err.message, { error: true }); }
     });
 
-    // The active tab's content region binds its own scrap-card actions, anchor
+    // The active tab's content region binds its own scrap-card actions, checkpoint
     // buttons, group toggles and gestures — the SAME helpers a surgical patch
-    // reuses, scoped there to #tl-content / #plans-content. Binding over the
+    // reuses, scoped there to #tl-content / #stops-content. Binding over the
     // whole container here is safe: innerHTML just discarded the old listeners,
     // and only ONE branch runs per paint (the other tab isn't in the DOM), so
     // nothing double-binds.
     if (this._tab === 'timeline') {
       this._bindTimeline(c, trip, { canWrite, isOwner });
     } else {
-      this._bindPlansContent(c, trip);
-      this._bindAnchorButtons(c, trip);
+      this._bindStopsContent(c, trip);
+      this._bindCheckpointButtons(c, trip);
     }
   }
 
-  // Shared onSaved for the suggestion picker (both plan + checkpoint context):
+  // Shared onSaved for the suggestion picker (both stop + checkpoint context):
   // one bundle refresh covers plans, checkpoints and the picker's own exclusions
   // together, then the inbox count/cache catch up to the changed trip_ids.
   _onSuggestionSaved(trip) {
@@ -413,55 +413,55 @@ class TripView extends View {
     };
   }
 
-  // Anchor/checkpoint buttons within `root`. Present on both tabs — timeline
+  // Checkpoint buttons within `root`. Present on both tabs — timeline
   // bookends/markers and the plans-tab Checkpoints list — so it's bound scoped
   // to whichever region is (re)painting.
-  _bindAnchorButtons(root, trip) {
-    // "+ Checkpoint" (Plans header + empty-state) opens the unified suggestion
+  _bindCheckpointButtons(root, trip) {
+    // "+ Checkpoint" (Stops header + empty-state) opens the unified suggestion
     // picker in checkpoint context (stays & transport pool) — one tap adds an
-    // undated checkpoint; "Enter manually" falls back to the AnchorEditor.
+    // undated checkpoint; "Enter manually" falls back to the CheckpointEditor.
     root.querySelectorAll('[data-action=add-checkpoint]').forEach((btn) => {
       btn.addEventListener('click', () => TripSuggestions.open(trip, {
         context: 'checkpoint', onSaved: this._onSuggestionSaved(trip),
       }));
     });
-    // A gap placeholder prefills the empty dates: the Plans-tab gap between two
+    // A gap placeholder prefills the empty dates: the Stops-tab gap between two
     // dated checkpoints, or the Timeline's lodging tip (uncovered nights).
     root.querySelectorAll('[data-action=add-checkpoint-gap]').forEach((btn) => {
-      btn.addEventListener('click', () => AnchorEditor.open(trip, {
+      btn.addEventListener('click', () => CheckpointEditor.open(trip, {
         role: 'stay',
         prefill: {
           stay_date: btn.dataset.start,
           stay_end_date: btn.dataset.end,
-          anchor_date: btn.dataset.start,
+          checkpoint_date: btn.dataset.start,
         },
       }));
     });
     // Timeline bookends (026): arrival/departure are plans, edited via the
-    // EndpointEditor. `which` = 'arrival' | 'departure'.
-    root.querySelectorAll('[data-action=add-endpoint]').forEach((btn) => {
-      btn.addEventListener('click', () => EndpointEditor.open(trip, { which: btn.dataset.which }));
+    // BookendEditor. `which` = 'arrival' | 'departure'.
+    root.querySelectorAll('[data-action=add-bookend]').forEach((btn) => {
+      btn.addEventListener('click', () => BookendEditor.open(trip, { which: btn.dataset.which }));
     });
-    root.querySelectorAll('[data-action=edit-endpoint]').forEach((btn) => {
+    root.querySelectorAll('[data-action=edit-bookend]').forEach((btn) => {
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
         const scrap = (trip.scraps || []).find((s) => s.id === btn.dataset.scrapId);
-        EndpointEditor.open(trip, { which: btn.dataset.which, scrap: scrap || null });
+        BookendEditor.open(trip, { which: btn.dataset.which, scrap: scrap || null });
       });
     });
-    root.querySelectorAll('[data-action=edit-anchor]').forEach((btn) => {
+    root.querySelectorAll('[data-action=edit-checkpoint]').forEach((btn) => {
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        const anchor = (trip.anchors || []).find((a) => a.id === btn.dataset.anchorId);
-        if (anchor) AnchorEditor.open(trip, { anchor });
+        const checkpoint = (trip.checkpoints || []).find((a) => a.id === btn.dataset.checkpointId);
+        if (checkpoint) CheckpointEditor.open(trip, { checkpoint });
       });
     });
-    root.querySelectorAll('[data-action=remove-anchor]').forEach((btn) => {
+    root.querySelectorAll('[data-action=remove-checkpoint]').forEach((btn) => {
       btn.addEventListener('click', async (ev) => {
         ev.stopPropagation();
-        const anchor = (trip.anchors || []).find((a) => a.id === btn.dataset.anchorId);
-        if (!confirmDestructive(`Remove the "${anchor ? anchor.label : 'this'}" checkpoint? This can't be undone.`)) return;
-        try { await window.TripDomain.removeAnchor(trip.id, btn.dataset.anchorId); }
+        const checkpoint = (trip.checkpoints || []).find((a) => a.id === btn.dataset.checkpointId);
+        if (!confirmDestructive(`Remove the "${checkpoint ? checkpoint.label : 'this'}" checkpoint? This can't be undone.`)) return;
+        try { await window.TripDomain.removeCheckpoint(trip.id, btn.dataset.checkpointId); }
         catch (err) { toast(err.message, { error: true }); }
       });
     });
@@ -529,10 +529,10 @@ class TripView extends View {
               toast(next === 'visited' ? 'Marked visited'
                 : next === 'skipped' ? 'Marked skipped' : 'Cleared', { key: 'outcome-' + scrapId });
               await window.ScrapDomain.setTimelineOutcome(scrapId, trip.id, next);
-            } else if (action === 'open-plan') {
+            } else if (action === 'open-stop') {
               // Timeline title tap → the plan popup (notes + day/time; setting a
               // day anchors it). Read-only viewers get the info-only variant.
-              PlanPopup.open(scrap, {
+              StopPopup.open(scrap, {
                 tripId: trip.id,
                 days: this._timelineDays(trip),
                 tripBounds: { start: trip.start_date, end: trip.end_date },
@@ -548,7 +548,7 @@ class TripView extends View {
     });
   }
 
-  // Timeline region bindings: anchor buttons + scrap actions + swipe/drag
+  // Timeline region bindings: checkpoint buttons + scrap actions + swipe/drag
   // gestures, all scoped to `root` (the whole container on a full render, or
   // #tl-content on a surgical patch). Called from exactly one place per paint.
   _bindTimeline(root, trip, { canWrite = true } = {}) {
@@ -557,7 +557,7 @@ class TripView extends View {
       (trip.staged_scraps || []).find((s) => s.id === id) ||
       (trip.candidates || []).find((s) => s.id === id);
 
-    this._bindAnchorButtons(root, trip);
+    this._bindCheckpointButtons(root, trip);
     this._bindScrapActions(root, trip, findScrap);
 
     // Swipe-right anchors (day picker), swipe-left un-anchors (back to auto),
@@ -565,7 +565,7 @@ class TripView extends View {
     // the title opens the plan popup. Optimistic schedule moves the row instantly;
     // the store patch re-renders this region surgically.
     if (this._tab === 'timeline' && canWrite && window.TimelineGestures) {
-      const openScheduler = (scrap) => PlanScheduler.open(scrap, {
+      const openScheduler = (scrap) => StopScheduler.open(scrap, {
         tripId: trip.id,
         days: this._timelineDays(trip),
         tripBounds: { start: trip.start_date, end: trip.end_date },
@@ -595,11 +595,11 @@ class TripView extends View {
     }
   }
 
-  // Plans-tab card region bindings: the scrap-card actions. The plans list is
-  // laid out as geography zones (ui/plan-zones.js) with no toggle or collapse,
+  // Stops-tab card region bindings: the scrap-card actions. The stops list is
+  // laid out as geography zones (ui/stop-zones.js) with no toggle or collapse,
   // so there's no group chrome to wire — just the cards. Scoped to `root` (whole
-  // container on a full render, or #plans-content on a surgical patch).
-  _bindPlansContent(root, trip) {
+  // container on a full render, or #stops-content on a surgical patch).
+  _bindStopsContent(root, trip) {
     const findScrap = (id) =>
       (trip.scraps || []).find((s) => s.id === id) ||
       (trip.staged_scraps || []).find((s) => s.id === id) ||

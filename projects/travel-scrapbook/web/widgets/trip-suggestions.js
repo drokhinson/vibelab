@@ -1,13 +1,13 @@
 // @ts-check
 // widgets/trip-suggestions.js — the unified "add to trip" picker. Both the
-// "+ Todo" and "+ Checkpoint" buttons open THIS widget (distinguished only by
+// "+ Stop" and "+ Checkpoint" buttons open THIS widget (distinguished only by
 // `context`). It shows one proximity-ranked, paginated list merging the user's
 // Wander List (higher priority, badged "Your list") with the Community pool,
 // scoped to the trip and filterable by type. One tap adds:
-//   • plan context      → the place joins the trip as a plan (todo)
+//   • stop context       → the place joins the trip as a stop
 //   • checkpoint context → the place joins as an (undated) stay/travel checkpoint
 // A "Enter manually" / "Paste a link" fallback covers anything not suggested.
-// Replaces the old two-tab AddPlans modal.
+// Replaces the old two-tab add modal.
 'use strict';
 
 const TripSuggestions = {
@@ -15,7 +15,7 @@ const TripSuggestions = {
 
   _trip: null,
   _onSaved: null,
-  _context: 'plan',   // 'plan' | 'checkpoint'
+  _context: 'stop',   // 'stop' | 'checkpoint'
   _category: null,    // null = All
   _page: 0,
   _items: null,       // null = loading
@@ -23,10 +23,10 @@ const TripSuggestions = {
   _categories: [],    // type-filter facet
   _seq: 0,
 
-  open(trip, { context = 'plan', onSaved } = {}) {
+  open(trip, { context = 'stop', onSaved } = {}) {
     this._trip = trip;
     this._onSaved = onSaved || null;
-    this._context = context === 'checkpoint' ? 'checkpoint' : 'plan';
+    this._context = context === 'checkpoint' ? 'checkpoint' : 'stop';
     this._category = null;
     this._page = 0;
     this._items = null;
@@ -42,12 +42,12 @@ const TripSuggestions = {
   },
 
   // Checkpoint role + travel-type inferred from the place category (mirrors the
-  // AnchorEditor enums: lodging is a stay, everything else in the checkpoint
+  // CheckpointEditor enums: lodging is a stay, everything else in the checkpoint
   // pool is a travel leg).
   _roleForCategory(cat) {
     return cat === 'lodging' ? 'stay' : 'travel';
   },
-  _anchorTypeForCategory(cat) {
+  _checkpointTypeForCategory(cat) {
     if (cat === 'airport') return 'airport';
     if (cat === 'train_station') return 'train_station';
     if (cat === 'car_rental') return 'car_rental';
@@ -89,9 +89,9 @@ const TripSuggestions = {
     modal.id = 'trip-suggestions-modal';
     modal.innerHTML = `
       <div class="ts-modal__backdrop" onclick="TripSuggestions.close()"></div>
-      <div class="ts-modal__card ts-suggestions" role="dialog" aria-modal="true" aria-label="${cp ? 'Add a checkpoint' : 'Add a plan'}">
+      <div class="ts-modal__card ts-suggestions" role="dialog" aria-modal="true" aria-label="${cp ? 'Add a checkpoint' : 'Add a stop'}">
         <button class="ts-modal__close" onclick="TripSuggestions.close()" aria-label="Close"><i data-lucide="x"></i></button>
-        <h2 class="ts-modal__title">${cp ? 'Add a checkpoint' : 'Add a plan'}</h2>
+        <h2 class="ts-modal__title">${cp ? 'Add a checkpoint' : 'Add a stop'}</h2>
         <p class="scrap-card__sub">${cp
           ? 'Nearest stays & transport for this trip — one tap to add.'
           : 'Nearest places for this trip, from your Wander List and the community.'}</p>
@@ -190,7 +190,7 @@ const TripSuggestions = {
   },
 
   // One-tap add. Wander items assign the viewer's own scrap; community items
-  // save the pool place. In checkpoint context both create an (undated) anchor.
+  // save the pool place. In checkpoint context both create an (undated) checkpoint.
   async _add(btn) {
     const source = btn.dataset.source;
     const scrapId = btn.dataset.scrapId || null;
@@ -204,8 +204,8 @@ const TripSuggestions = {
         const role = this._roleForCategory(cat);
         const body = { role, label: item ? item.name : '', query: item ? item.name : '' };
         if (item && item.maps_url) body.maps_url = item.maps_url;
-        if (role !== 'stay') body.type = this._anchorTypeForCategory(cat);
-        await window.api.createAnchor(this._trip.id, body);
+        if (role !== 'stay') body.type = this._checkpointTypeForCategory(cat);
+        await window.api.createCheckpoint(this._trip.id, body);
       } else if (source === 'wander' && scrapId) {
         await window.api.assignScrap(scrapId, this._trip.id);
       } else {
@@ -226,12 +226,12 @@ const TripSuggestions = {
   },
 
   // Fallback for anything not in the list. Checkpoints open the manual editor;
-  // plans drop the user on the trip's paste box (every place enters via a URL).
+  // stops drop the user on the trip's paste box (every place enters via a URL).
   _manual() {
     const trip = this._trip;
     this.close();
     if (this._context === 'checkpoint') {
-      window.AnchorEditor?.open(trip, { role: 'stay' });
+      window.CheckpointEditor?.open(trip, { role: 'stay' });
     } else {
       const input = document.getElementById('quick-paste-input');
       if (input) {

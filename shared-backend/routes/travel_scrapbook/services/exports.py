@@ -108,15 +108,16 @@ def _place_lines(p: dict, n: int) -> list[str]:
 def build_markdown(
     trip: dict,
     places: list[dict],
-    anchors: list[dict],
+    checkpoints: list[dict],
     day_label: str | None = None,
     day_groups: list[tuple[str, list[dict]]] | None = None,
 ) -> str:
-    """A human-readable Markdown itinerary: trip header, start/end anchors, then
-    the places. `places` are hydrated scrap dicts in display order. `day_label`
-    (single-day export) is appended to the H1 and drops the date range from the
-    subtitle. `day_groups` (a whole-trip plan export) renders one **## <day>**
-    section per day, numbered within the day, in the client's itinerary order."""
+    """A human-readable Markdown itinerary: trip header, arrival/departure
+    bookends, then the places. `places` are hydrated scrap dicts in display
+    order. `day_label` (single-day export) is appended to the H1 and drops the
+    date range from the subtitle. `day_groups` (a whole-trip itinerary export)
+    renders one **## <day>** section per day, numbered within the day, in the
+    client's order."""
     title = trip.get("name") or "Trip"
     if day_label:
         title += f" — {day_label}"
@@ -130,27 +131,27 @@ def build_markdown(
         lines.append("")
         lines.append(trip["notes"])
 
-    # 026: arrival/departure are ordinary bookend plans (flagged on the scrap),
-    # not anchors. Bracket the itinerary with them and drop them from the numbered
-    # places so an airport isn't both a bookend and a listed stop.
-    def _endpoint_label(flag: str) -> Optional[str]:
+    # 026: arrival/departure are ordinary bookend stops (flagged on the scrap),
+    # not stay/travel checkpoints. Bracket the itinerary with them and drop them
+    # from the numbered places so an airport isn't both a bookend and a listed stop.
+    def _bookend_label(flag: str) -> Optional[str]:
         return next(
             ((p.get("place_name") or p.get("label")) for p in places if p.get(flag)),
             None,
         )
 
-    is_endpoint = lambda p: p.get("is_arrival") or p.get("is_departure")  # noqa: E731
-    start = _endpoint_label("is_arrival")
-    end = _endpoint_label("is_departure")
+    is_bookend = lambda p: p.get("is_arrival") or p.get("is_departure")  # noqa: E731
+    start = _bookend_label("is_arrival")
+    end = _bookend_label("is_departure")
     if start:
         lines += ["", f"**Start:** {start}"]
     if end:
         lines.append(f"**End:** {end}")
 
-    places = [p for p in places if not is_endpoint(p)]
+    places = [p for p in places if not is_bookend(p)]
 
     if day_groups is not None:
-        day_groups = [(h, [p for p in g if not is_endpoint(p)]) for h, g in day_groups]
+        day_groups = [(h, [p for p in g if not is_bookend(p)]) for h, g in day_groups]
         if not places:
             lines += ["", "_No places yet._"]
         for heading, group in day_groups:

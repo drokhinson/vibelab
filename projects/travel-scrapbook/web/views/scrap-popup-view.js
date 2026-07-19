@@ -44,7 +44,7 @@ class ScrapPopupView extends View {
     if (!url) {
       this.container.innerHTML = `
         <div class="sticker-card" style="margin-top:2rem;text-align:center;">
-          <p class="scrap-card__title">Nothing to scrap</p>
+          <p class="scrap-card__title">Nothing to save</p>
           <p class="scrap-card__sub">Open this from the bookmarklet on a page you want to save.</p>
           <button class="ts-btn ts-btn--ghost ts-btn--sm" onclick="window.router.go('trips')" style="margin-top:0.6rem;">Go to my trips</button>
         </div>`;
@@ -71,7 +71,7 @@ class ScrapPopupView extends View {
 
     this.container.innerHTML = `
       <div class="sticker-card washi washi--mint" style="margin-top:1.2rem;padding-top:1.4rem;">
-        <h2 style="font-size:1.8rem;margin:0 0 0.5rem;">Scrap it</h2>
+        <h2 style="font-size:1.8rem;margin:0 0 0.5rem;">Save it</h2>
         <div class="sticker-card" style="padding:0.7rem;background:var(--paper);">
           <p class="scrap-card__title" style="margin:0;">${escapeHtml(this.params.title || url)}</p>
           <span class="source-badge" style="margin-top:0.3rem;"><i data-lucide="link-2"></i>${escapeHtml(domain)}</span>
@@ -135,7 +135,7 @@ class ScrapPopupView extends View {
     this.container.innerHTML = `
       <div class="scrap-popup__success">
         <img src="/assets/illustrations/travel-scrapbook-success.svg" alt="" />
-        <h2 style="font-size:2rem;margin:0;">Scrapped!</h2>
+        <h2 style="font-size:2rem;margin:0;">Saved!</h2>
         <p class="scrap-card__sub">We're reading the page — if it mentions several places, each one gets its own scrap.</p>
       </div>
     `;

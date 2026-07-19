@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────────────────────
-   Travel Scrapbook — scrapbook theme
+   Travel Trove — scrapbook theme
    Cream paper background, pastel die-cut sticker cards, washi tape accents,
    handwritten display type. All data-art is custom SVG (assets/sprites/),
    never emoji — see .claude/rules/assets.md.
@@ -59,7 +59,7 @@ a:hover { color: var(--accent-hover); }
 
 /* ── Header ──────────────────────────────────────────────────── */
 /* Phones: brand (logo + one-line title) sits on top, nav spreads on its own
-   row below. A full-size "Travel Scrapbook" + five 44px nav buttons can't share
+   row below. A full-size "Travel Trove" + five 44px nav buttons can't share
    one line on a phone, so stacking keeps the wordmark on a single line. Wide
    screens (≥520px) have room to put them side by side. */
 .ts-header {
@@ -100,14 +100,14 @@ a:hover { color: var(--accent-hover); }
 /* ── Motion ──────────────────────────────────────────────────── */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.card-list > *, .card-grid > *, .plan-zones-grid > * {
+.card-list > *, .card-grid > *, .stop-zones-grid > * {
   animation: fadeUp 220ms ease both;
   animation-delay: calc(var(--i, 0) * 40ms);
 }
 /* Entrance animation plays on a visit's first paint only — re-renders from
    background revalidates / poll ticks / mutation patches would otherwise
    replay the stagger as a visible blink (View.settleMotion sets the class). */
-.view-settled .card-list > *, .view-settled .card-grid > *, .view-settled .plan-zones-grid > * { animation: none; }
+.view-settled .card-list > *, .view-settled .card-grid > *, .view-settled .stop-zones-grid > * { animation: none; }
 .card-lift { transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
 .card-lift:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(91, 84, 104, 0.16); }
 .card-lift:active { transform: translateY(0); }
@@ -206,9 +206,9 @@ a:hover { color: var(--accent-hover); }
    by its region and a dotted outline is traced around exactly the cells a region
    occupies — so regions interlock like tetris pieces with no wasted half-rows.
    The dotted dot-pattern echoes the paper background; the outline sides + colour
-   are computed per cell in plan-zones.js. Colour is hashed from the region label
+   are computed per cell in stop-zones.js. Colour is hashed from the region label
    so a region keeps its tint across re-renders. */
-.plan-zones-grid {
+.stop-zones-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr); /* fixed 2-up: the outline math assumes it */
   gap: 0;
@@ -242,13 +242,13 @@ a:hover { color: var(--accent-hover); }
   color: var(--ink-muted); background: var(--paper);
   border: 1.5px solid var(--border); border-radius: 999px; padding: 0 0.4rem; flex-shrink: 0;
 }
-.plan-zone--blush      { --zone-tint: color-mix(in srgb, var(--blush) 26%, var(--paper));      --zone-edge: var(--blush-deep); }
-.plan-zone--mint       { --zone-tint: color-mix(in srgb, var(--mint) 30%, var(--paper));       --zone-edge: #7FCBA4; }
-.plan-zone--sky        { --zone-tint: color-mix(in srgb, var(--sky) 30%, var(--paper));        --zone-edge: #8FC4F5; }
-.plan-zone--butter     { --zone-tint: color-mix(in srgb, var(--butter) 34%, var(--paper));     --zone-edge: #E7C766; }
-.plan-zone--lavender   { --zone-tint: color-mix(in srgb, var(--lavender) 34%, var(--paper));   --zone-edge: #B9A6E0; }
-.plan-zone--terracotta { --zone-tint: color-mix(in srgb, var(--terracotta) 26%, var(--paper)); --zone-edge: #E0906F; }
-.plan-zone--neutral    { --zone-tint: color-mix(in srgb, var(--ink-muted) 12%, var(--paper));  --zone-edge: var(--border); }
+.stop-zone--blush      { --zone-tint: color-mix(in srgb, var(--blush) 26%, var(--paper));      --zone-edge: var(--blush-deep); }
+.stop-zone--mint       { --zone-tint: color-mix(in srgb, var(--mint) 30%, var(--paper));       --zone-edge: #7FCBA4; }
+.stop-zone--sky        { --zone-tint: color-mix(in srgb, var(--sky) 30%, var(--paper));        --zone-edge: #8FC4F5; }
+.stop-zone--butter     { --zone-tint: color-mix(in srgb, var(--butter) 34%, var(--paper));     --zone-edge: #E7C766; }
+.stop-zone--lavender   { --zone-tint: color-mix(in srgb, var(--lavender) 34%, var(--paper));   --zone-edge: #B9A6E0; }
+.stop-zone--terracotta { --zone-tint: color-mix(in srgb, var(--terracotta) 26%, var(--paper)); --zone-edge: #E0906F; }
+.stop-zone--neutral    { --zone-tint: color-mix(in srgb, var(--ink-muted) 12%, var(--paper));  --zone-edge: var(--border); }
 
 /* Trips list: Upcoming / Past section headers. */
 .trips-section { display: flex; align-items: center; gap: 0.5rem; font-size: 1.5rem; margin: 1.4rem 0 0.6rem; }
@@ -426,7 +426,7 @@ a:hover { color: var(--accent-hover); }
 
 /* Note chip — a read-only badge showing another traveler's note on a shared
    card. Only ever rendered as a filled <span>; editing happens in the plan
-   editor / PlanPopup, not here. */
+   editor / StopPopup, not here. */
 .note-chip {
   display: inline-flex; align-items: center; justify-content: center; gap: 1px;
   min-width: 34px; min-height: 26px; padding: 0 8px; border-radius: 999px;
@@ -565,8 +565,8 @@ span.note-chip { cursor: default; }
 .checkpoint-gap:hover { border-color: var(--ink-muted); color: var(--ink); }
 .checkpoint-gap [data-lucide] { width: 16px; height: 16px; }
 
-.anchor-same__hint { color: var(--ink-muted); font-weight: 700; }
-.anchor-same__note { color: var(--ink-muted); font-size: 0.78rem; margin: 0.35rem 0 0; }
+.bookend-same__hint { color: var(--ink-muted); font-weight: 700; }
+.bookend-same__note { color: var(--ink-muted); font-size: 0.78rem; margin: 0.35rem 0 0; }
 
 /* ── Toast ────────────────────────────────────────────────── */
 #toast-root { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; }
@@ -717,18 +717,18 @@ body.popup-mode { max-width: 420px; }
 .added-by i { width: 13px; height: 13px; }
 
 /* ── Trip timeline (endpoint bookends, day cards, suggested rows) ─────────── */
-.tl-endpoint { display: flex; align-items: center; gap: 0.7rem; }
-.tl-endpoint__icon {
+.tl-bookend { display: flex; align-items: center; gap: 0.7rem; }
+.tl-bookend__icon {
   width: 40px; height: 40px; border-radius: 999px; border: 2px solid var(--border);
   background: var(--sky, #BDE0FE); display: grid; place-items: center; flex-shrink: 0;
 }
-.tl-endpoint__icon [data-lucide] { width: 20px; height: 20px; }
-.tl-endpoint__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.tl-endpoint__role {
+.tl-bookend__icon [data-lucide] { width: 20px; height: 20px; }
+.tl-bookend__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tl-bookend__role {
   font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--ink-muted);
 }
-.tl-endpoint__name { font-weight: 800; overflow-wrap: anywhere; }
+.tl-bookend__name { font-weight: 800; overflow-wrap: anywhere; }
 .tl-add-btn {
   display: flex; align-items: center; justify-content: center; gap: 0.4rem;
   min-height: 48px; width: 100%; border-radius: 14px;
@@ -782,10 +782,10 @@ body.popup-mode { max-width: 420px; }
 }
 .tl-row [data-lucide] { width: 16px; height: 16px; flex-shrink: 0; }
 .tl-row--marker { background: var(--paper); font-size: 0.85rem; }
-.tl-row--plan { border: 1.5px dashed var(--border); font-size: 0.85rem; }
-.tl-row--plan.is-visited { opacity: 0.6; }
-.tl-row--plan.is-skipped { opacity: 0.55; }
-.tl-row--plan.is-skipped .tl-row__label { text-decoration: line-through; text-decoration-color: var(--ink-muted); }
+.tl-row--stop { border: 1.5px dashed var(--border); font-size: 0.85rem; }
+.tl-row--stop.is-visited { opacity: 0.6; }
+.tl-row--stop.is-skipped { opacity: 0.55; }
+.tl-row--stop.is-skipped .tl-row__label { text-decoration: line-through; text-decoration-color: var(--ink-muted); }
 .tl-row--booked { border-style: solid; border-color: var(--vibe-booked); background: color-mix(in srgb, var(--vibe-booked) 18%, transparent); }
 .tl-row__time {
   min-width: 44px; text-align: center; font-weight: 800; font-size: 0.72rem;

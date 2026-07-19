@@ -23,6 +23,10 @@
 -- travelscrapbook_trip_bundle(p_trip_id UUID, p_viewer UUID)
 --   → JSONB {trip, role, owner_display_name, anchors[], scraps[], members[],
 --            candidates[]} | NULL when the viewer has no access
+--   NOTE (2026-07-19 rename): the RPC's `anchors[]` JSON key is FROZEN; the
+--   backend (trip_routes.build) surfaces it to API clients as `checkpoints[]`
+--   (TripResponse.checkpoints). Likewise the synthesized rows' `anchor_date`/
+--   `anchor_time` are exposed as `checkpoint_date`/`checkpoint_time`.
 --   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
 --               replaced in 018 (candidates exclude dismissed pairs) and again
 --               in 020 (scraps = plan memberships only; anchors[] SYNTHESIZED

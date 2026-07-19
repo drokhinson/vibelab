@@ -175,21 +175,23 @@
 
     listTrips: () => call('/trips'),
     createTrip: (body) => call('/trips', { method: 'POST', body }),
-    /** The whole trip screen in one round trip: trip + anchors + scraps +
+    /** The whole trip screen in one round trip: trip + checkpoints + scraps +
      *  staged_scraps + `members` (TripMember[]) + `candidates` (Scrap[]). */
     getTrip: (tripId) => call(`/trips/${tripId}`),
     updateTrip: (tripId, body) => call(`/trips/${tripId}`, { method: 'PATCH', body }),
     deleteTrip: (tripId) => call(`/trips/${tripId}`, { method: 'DELETE' }),
 
-    createAnchor: (tripId, body) => call(`/trips/${tripId}/anchors`, { method: 'POST', body }),
-    updateAnchor: (anchorId, body) => call(`/anchors/${anchorId}`, { method: 'PATCH', body }),
-    deleteAnchor: (anchorId) => call(`/anchors/${anchorId}`, { method: 'DELETE' }),
+    // Checkpoints (stay/travel).
+    createCheckpoint: (tripId, body) => call(`/trips/${tripId}/checkpoints`, { method: 'POST', body }),
+    updateCheckpoint: (checkpointId, body) => call(`/checkpoints/${checkpointId}`, { method: 'PATCH', body }),
+    deleteCheckpoint: (checkpointId) => call(`/checkpoints/${checkpointId}`, { method: 'DELETE' }),
 
-    // Endpoints (arrival/departure) are ordinary bookend plans (026); these
-    // return the plan as a ScrapResponse. `which` is 'arrival' | 'departure'.
-    createEndpoint: (tripId, body) => call(`/trips/${tripId}/endpoints`, { method: 'POST', body }),
-    updateEndpoint: (tripId, which, body) => call(`/trips/${tripId}/endpoints/${which}`, { method: 'PATCH', body }),
-    deleteEndpoint: (tripId, which) => call(`/trips/${tripId}/endpoints/${which}`, { method: 'DELETE' }),
+    // Bookends (arrival/departure) are ordinary bookend stops (026), shown as
+    // checkpoints; these return the stop as a ScrapResponse. `which` is
+    // 'arrival' | 'departure'.
+    createBookend: (tripId, body) => call(`/trips/${tripId}/bookends`, { method: 'POST', body }),
+    updateBookend: (tripId, which, body) => call(`/trips/${tripId}/bookends/${which}`, { method: 'PATCH', body }),
+    deleteBookend: (tripId, which) => call(`/trips/${tripId}/bookends/${which}`, { method: 'DELETE' }),
 
     /** Silent capture of a shared/pasted URL. @returns {Promise<Source>} */
     capture: (body) => call('/capture', { method: 'POST', body }),
@@ -237,27 +239,27 @@
     approveScrap: (scrapId, tripId) => call(`/scraps/${scrapId}/trips/${tripId}/approve`, { method: 'POST' }),
     /** Remove a place from one trip. @returns {Promise<{message: string}>} */
     unassignScrap: (scrapId, tripId) => call(`/scraps/${scrapId}/trips/${tripId}`, { method: 'DELETE' }),
-    /** Set/clear a plan's timeline slot on one trip. @returns {Promise<Scrap>} */
+    /** Set/clear a stop's timeline slot on one trip. @returns {Promise<Scrap>} */
     scheduleScrap: (scrapId, tripId, body) => call(`/scraps/${scrapId}/trips/${tripId}/schedule`, { method: 'PATCH', body }),
     /** @returns {Promise<{scraps: Scrap[]}>} */
     approveAllStaged: (tripId) => call(`/trips/${tripId}/approve-all`, { method: 'POST' }),
 
-    // Exports: `plan` (the client's computed itinerary — [{scrap_id, plan_date}]
-    // in order) is POSTed so auto-placed plans export in the right day/order;
-    // `date` narrows to one day (server filters the plan by it). Without a plan
+    // Exports: `itinerary` (the client's computed order — [{scrap_id, plan_date}]
+    // in order) is POSTed so auto-placed stops export in the right day/order;
+    // `date` narrows to one day (server filters by it). Without an itinerary
     // it's a plain GET on DB order (other clients).
-    /** @param {{date?: string, plan?: Array}} [o] @returns {Promise<{legs: MapsLeg[]}>} */
-    exportMapsLinks: (tripId, { date, plan } = {}) =>
-      call(`/trips/${tripId}/export/maps-links${qs(date ? { date } : {})}`, plan ? { method: 'POST', body: { plan } } : {}),
-    /** @param {{date?: string, plan?: Array}} [o] @returns {Promise<Blob>} */
-    exportCsv: (tripId, { date, plan } = {}) =>
-      call(`/trips/${tripId}/export/csv${qs(date ? { date } : {})}`, plan ? { method: 'POST', body: { plan } } : {}),
-    /** @param {{date?: string, plan?: Array}} [o] @returns {Promise<Blob>} */
-    exportMarkdown: (tripId, { date, plan } = {}) =>
-      call(`/trips/${tripId}/export/markdown${qs(date ? { date } : {})}`, plan ? { method: 'POST', body: { plan } } : {}),
-    /** @param {{date?: string, plan?: Array}} [o] @returns {Promise<Blob>} */
-    exportKml: (tripId, { date, plan } = {}) =>
-      call(`/trips/${tripId}/export/kml${qs(date ? { date } : {})}`, plan ? { method: 'POST', body: { plan } } : {}),
+    /** @param {{date?: string, itinerary?: Array}} [o] @returns {Promise<{legs: MapsLeg[]}>} */
+    exportMapsLinks: (tripId, { date, itinerary } = {}) =>
+      call(`/trips/${tripId}/export/maps-links${qs(date ? { date } : {})}`, itinerary ? { method: 'POST', body: { itinerary } } : {}),
+    /** @param {{date?: string, itinerary?: Array}} [o] @returns {Promise<Blob>} */
+    exportCsv: (tripId, { date, itinerary } = {}) =>
+      call(`/trips/${tripId}/export/csv${qs(date ? { date } : {})}`, itinerary ? { method: 'POST', body: { itinerary } } : {}),
+    /** @param {{date?: string, itinerary?: Array}} [o] @returns {Promise<Blob>} */
+    exportMarkdown: (tripId, { date, itinerary } = {}) =>
+      call(`/trips/${tripId}/export/markdown${qs(date ? { date } : {})}`, itinerary ? { method: 'POST', body: { itinerary } } : {}),
+    /** @param {{date?: string, itinerary?: Array}} [o] @returns {Promise<Blob>} */
+    exportKml: (tripId, { date, itinerary } = {}) =>
+      call(`/trips/${tripId}/export/kml${qs(date ? { date } : {})}`, itinerary ? { method: 'POST', body: { itinerary } } : {}),
 
     // ── Trip sharing ──────────────────────────────────────────────────────
     /** @returns {Promise<{members: TripMember[]}>} */

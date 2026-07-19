@@ -9,7 +9,7 @@ explicit trip hint, or dropped into the inbox.
 
 A URL the LLM classifies as a lodging/transport BOOKING (hotel reservation,
 flight itinerary...) captured with a trip context becomes a checkpoint (a
-stay/travel anchor) on that trip instead, with its dates filled in.
+stay/travel checkpoint) on that trip instead, with its dates filled in.
 """
 
 import logging
@@ -19,8 +19,8 @@ from typing import Any, Optional
 from db import get_supabase
 
 from ..constants import (
-    AnchorRole,
-    AnchorType,
+    CheckpointRole,
+    CheckpointType,
     BookingKind,
     EnrichErrorKind,
     GeocodeConfidence,
@@ -212,9 +212,9 @@ async def _materialize_checkpoint(
     if not trip_id:
         return False
 
-    role = AnchorRole.STAY if booking.kind == BookingKind.STAY else AnchorRole.TRAVEL
+    role = CheckpointRole.STAY if booking.kind == BookingKind.STAY else CheckpointRole.TRAVEL
     category = checkpoints.category_for(
-        role, booking.transport_type or AnchorType.OTHER
+        role, booking.transport_type or CheckpointType.OTHER
     )
     place, scrap = await checkpoints.materialize_checkpoint_scrap(
         sb, source["user_id"],
@@ -233,7 +233,7 @@ async def _materialize_checkpoint(
         ignore_duplicates=True,
     ).execute()
 
-    if role == AnchorRole.STAY:
+    if role == CheckpointRole.STAY:
         dates: dict[str, Any] = {
             "plan_date": booking.start_date,
             "plan_end_date": booking.end_date,

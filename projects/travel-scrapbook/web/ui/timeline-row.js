@@ -1,15 +1,15 @@
 // ui/timeline-row.js — row-level renders for the unified trip Timeline. Loaded
 // before ui/trip-timeline.js, which composes these into day cards.
 //
-// A plan row reads left→right: outcome checkbox · category sprite · time (if
-// set) · tappable title (opens the plan popup) · placement indicator
+// A stop row reads left→right: outcome checkbox · category sprite · time (if
+// set) · tappable title (opens the stop popup) · placement indicator
 // (sparkles = auto-placed by the route, pin = anchored to this day) · actions
-// button (the ⋮ — a tap opens the plan popup where day/time/notes are edited;
+// button (the ⋮ — a tap opens the stop popup where day/time/notes are edited;
 // it doubles as the ONLY place a press-and-hold drag starts — see
 // widgets/timeline-gestures).
 // Before each located stop sits a leg connector showing the estimated distance
 // + drive/walk time (domain/geo.js) from the previous stop — or, for a day's
-// first todo, from where the day starts.
+// first stop, from where the day starts.
 'use strict';
 
 // The two set states of the leading checkbox. null = clear; it cycles
@@ -58,20 +58,20 @@ function _tlCheckbox(scrap, canWrite) {
 }
 
 /**
- * A plan row, wrapped in the swipe/drag scaffold TimelineGestures binds to.
+ * A stop row, wrapped in the swipe/drag scaffold TimelineGestures binds to.
  * @param {object} scrap
  * @param {{canWrite?: boolean, placement?: 'auto'|'anchored'}} opts
  *   auto     — dashed; the route placed it (ephemeral, no saved date).
  *   anchored — solid; the user pinned it to this day (plan_date is set).
  */
-function _tlPlanRow(scrap, { canWrite = true, placement = 'auto' } = {}) {
+function _tlStopRow(scrap, { canWrite = true, placement = 'auto' } = {}) {
   const time = _tlTime(scrap.plan_time);
   const booked = placement === 'anchored' && scrap.rating === 'booked' && !!time;
   const outcome = _tlOutcome(scrap);
   const meta = outcome ? TL_OUTCOME_META[outcome] : null;
   const pmeta = TL_PLACEMENT_META[placement] || TL_PLACEMENT_META.auto;
   const rowCls = [
-    'tl-row', 'tl-row--plan',
+    'tl-row', 'tl-row--stop',
     placement === 'auto' ? 'tl-row--auto' : '',
     booked ? 'tl-row--booked' : '',
     meta ? meta.cls : '',
@@ -90,21 +90,21 @@ function _tlPlanRow(scrap, { canWrite = true, placement = 'auto' } = {}) {
         ${_tlCheckbox(scrap, canWrite)}
         ${renderSprite('category', scrap.category, { size: 'sm', alt: '' })}
         ${time ? `<span class="tl-row__time">${escapeHtml(time)}</span>` : ''}
-        <button class="tl-row__title" data-action="open-plan" data-scrap-id="${escapeAttr(scrap.id)}">
+        <button class="tl-row__title" data-action="open-stop" data-scrap-id="${escapeAttr(scrap.id)}">
           <span class="tl-row__name">${escapeHtml(scrap.place_name || 'Saved place')}</span>
           ${booked ? '<span class="tl-booked-badge">Booked</span>' : ''}
           ${meta ? `<span class="tl-outcome-badge tl-outcome-badge--${outcome}">${meta.tag}</span>` : ''}
         </button>
         <span class="tl-row__place" title="${escapeAttr(pmeta.title)}" aria-label="${escapeAttr(pmeta.title)}"><i data-lucide="${pmeta.icon}"></i></span>
-        ${canWrite ? `<button class="tl-row__grip" data-action="open-plan" data-scrap-id="${escapeAttr(scrap.id)}"
-                aria-label="Plan actions — change day, time or notes; or hold to drag to another day"
+        ${canWrite ? `<button class="tl-row__grip" data-action="open-stop" data-scrap-id="${escapeAttr(scrap.id)}"
+                aria-label="Stop actions — change day, time or notes; or hold to drag to another day"
                 title="Actions — or hold to drag"><i data-lucide="ellipsis-vertical"></i></button>` : ''}
       </div>
     </div>`;
 }
 
 // A non-interactive connector between a stop and the one before it (or, for a
-// day's first todo, the point the day starts from; for the Departure bookend,
+// day's first stop, the point the day starts from; for the Departure bookend,
 // the trip's last stop): a small footprints/car glyph + "2.3 km · ~30 min walk".
 // Rendered just before the row it leads into; a null leg renders nothing.
 function _tlLegRow(leg) {

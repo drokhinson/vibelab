@@ -1,14 +1,15 @@
-// widgets/endpoint-editor.js — the arrival/departure editor modal (create + edit).
+// widgets/bookend-editor.js — the arrival/departure editor modal (create + edit).
 // Since 026 a trip's arrival and departure are ordinary places that bookend the
-// trip (role-NULL plans flagged is_arrival/is_departure), not checkpoints. This
+// trip (role-NULL stops flagged is_arrival/is_departure) — shown to the user as
+// checkpoints, but a different mechanism than stay/travel checkpoints. This
 // modal names one, optionally pins it with a Maps link, and dates it. A
 // departure can reuse the arrival place ("Same place as arrival") — you fly out
-// of the airport you flew into. Submit hits the /trips/{id}/endpoints API via
+// of the airport you flew into. Submit hits the /trips/{id}/bookends API via
 // TripDomain; the bookends live in ui/trip-timeline.js.
 'use strict';
 
-// Transport mode → Lucide icon (matches the backend AnchorType enum).
-const ENDPOINT_TYPES = [
+// Transport mode → Lucide icon (matches the backend CheckpointType enum).
+const BOOKEND_TYPES = [
   { type: 'airport', label: 'Airport', lucide: 'plane' },
   { type: 'train_station', label: 'Train station', lucide: 'train-front' },
   { type: 'car_rental', label: 'Car rental', lucide: 'car' },
@@ -20,40 +21,40 @@ const _CATEGORY_TO_TYPE = {
   airport: 'airport', train_station: 'train_station', car_rental: 'car_rental',
 };
 
-const ENDPOINT_META = {
+const BOOKEND_META = {
   arrival: { label: 'Arrival', icon: 'plane-landing', dateLabel: 'Arrival day' },
   departure: { label: 'Departure', icon: 'plane-takeoff', dateLabel: 'Departure day' },
 };
 
-const EndpointEditor = {
+const BookendEditor = {
   _tripId: null,
 
-  // `which` is 'arrival' | 'departure'. `scrap` (the flagged plan) switches to
+  // `which` is 'arrival' | 'departure'. `scrap` (the flagged stop) switches to
   // EDIT mode. In create mode a departure may reuse the arrival place.
   open(trip, { which = 'arrival', scrap = null } = {}) {
     this._tripId = trip.id;
     this.close();
     const editing = !!scrap;
-    const meta = ENDPOINT_META[which] || ENDPOINT_META.arrival;
+    const meta = BOOKEND_META[which] || BOOKEND_META.arrival;
     const arrival = (trip.scraps || []).find((s) => s.is_arrival);
     const canSame = !editing && which === 'departure' && !!arrival;
     const dateBounds = `${trip.start_date ? `min="${escapeAttr(trip.start_date)}"` : ''} ${trip.end_date ? `max="${escapeAttr(trip.end_date)}"` : ''}`;
 
     const modal = document.createElement('div');
     modal.className = 'ts-modal';
-    modal.id = 'endpoint-editor-modal';
+    modal.id = 'bookend-editor-modal';
     modal.innerHTML = `
-      <div class="ts-modal__backdrop" onclick="EndpointEditor.close()"></div>
+      <div class="ts-modal__backdrop" onclick="BookendEditor.close()"></div>
       <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="${editing ? 'Edit' : 'Set'} ${meta.label}">
-        <button class="ts-modal__close" onclick="EndpointEditor.close()" aria-label="Close"><i data-lucide="x"></i></button>
+        <button class="ts-modal__close" onclick="BookendEditor.close()" aria-label="Close"><i data-lucide="x"></i></button>
         <h2 class="ts-modal__title">${editing ? `Edit ${meta.label}` : `Set the ${meta.label.toLowerCase()}`}</h2>
         <p class="scrap-card__sub">Where the trip ${which === 'arrival' ? 'begins' : 'ends'} — it bookends the timeline and the route.</p>
-        <form id="endpoint-editor-form">
+        <form id="bookend-editor-form">
           ${canSame ? `
           <div id="ep-same-row" style="margin-top:0.4rem;">
-            <label class="anchor-same" style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;">
+            <label class="bookend-same" style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;">
               <input type="checkbox" id="ep-same" />
-              <span>Same place as arrival <span class="anchor-same__hint">(${escapeHtml(arrival.place_name || 'arrival')})</span></span>
+              <span>Same place as arrival <span class="bookend-same__hint">(${escapeHtml(arrival.place_name || 'arrival')})</span></span>
             </label>
           </div>` : ''}
 
@@ -67,7 +68,7 @@ const EndpointEditor = {
           <div id="ep-type-row">
             <label class="ts-label" for="ep-type">Travelling by</label>
             <select class="ts-select" id="ep-type">
-              ${ENDPOINT_TYPES.map((t) => `<option value="${t.type}">${t.label}</option>`).join('')}
+              ${BOOKEND_TYPES.map((t) => `<option value="${t.type}">${t.label}</option>`).join('')}
             </select>
           </div>
 
@@ -116,14 +117,14 @@ const EndpointEditor = {
       modal.querySelector('#ep-remove').addEventListener('click', async () => {
         if (!confirmDestructive(`Remove the ${meta.label.toLowerCase()}? This can't be undone.`)) return;
         try {
-          await window.TripDomain.removeEndpoint(this._tripId, which);
+          await window.TripDomain.removeBookend(this._tripId, which);
           toast(`${meta.label} cleared`);
           this.close();
         } catch (err) { toast(err.message || 'Could not remove that', { error: true }); }
       });
     }
 
-    modal.querySelector('#endpoint-editor-form').addEventListener('submit', async (ev) => {
+    modal.querySelector('#bookend-editor-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const btn = modal.querySelector('button[type=submit]');
       btn.disabled = true;
@@ -149,10 +150,10 @@ const EndpointEditor = {
 
         let saved;
         if (editing) {
-          saved = await window.TripDomain.updateEndpoint(this._tripId, which, body);
+          saved = await window.TripDomain.updateBookend(this._tripId, which, body);
         } else {
           body.which = which;
-          saved = await window.TripDomain.addEndpoint(this._tripId, body);
+          saved = await window.TripDomain.addBookend(this._tripId, body);
         }
         const mapsProvided = !same && !!modal.querySelector('#ep-maps-url').value.trim();
         toast(saved && saved.geocode_confidence === 'none' && mapsProvided
@@ -167,7 +168,7 @@ const EndpointEditor = {
   },
 
   close() {
-    document.getElementById('endpoint-editor-modal')?.remove();
+    document.getElementById('bookend-editor-modal')?.remove();
   },
 };
-window.EndpointEditor = EndpointEditor;
+window.BookendEditor = BookendEditor;

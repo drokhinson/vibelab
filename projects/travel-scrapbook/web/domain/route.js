@@ -4,8 +4,8 @@
 'use strict';
 
 const RouteDomain = {
-  async mapsLinks(tripId, { date, plan } = {}) {
-    return window.api.exportMapsLinks(tripId, { date, plan });
+  async mapsLinks(tripId, { date, itinerary } = {}) {
+    return window.api.exportMapsLinks(tripId, { date, itinerary });
   },
 };
 window.RouteDomain = RouteDomain;
