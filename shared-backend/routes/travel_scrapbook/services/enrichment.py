@@ -46,7 +46,13 @@ def _pin_name(geo: Optional[nominatim.GeocodeResult]) -> str:
 def _maps_extraction(mp: gmaps.MapsPlace) -> Optional[llm.PlaceExtraction]:
     """Build a PlaceExtraction straight from a parsed Google Maps URL — no LLM.
     The coordinates ride along so _materialize_place reverse-geocodes the exact
-    pin rather than forward-geocoding a re-guessed query."""
+    pin rather than forward-geocoding a re-guessed query.
+
+    When the URL yields NO pin (mp.lat is None), the place is left ungeocoded
+    on purpose: forward-geocoding the bare, often-ambiguous Maps name lands
+    confidently on the wrong same-named place. geocode_query stays None so
+    _geocode_with_fallback makes zero attempts (→ GeocodeConfidence.NONE), and
+    confident=False keeps a coordinate-less place out of trip auto-staging."""
     if mp.lat is None and not mp.name:
         return None
     return llm.PlaceExtraction(
@@ -54,8 +60,8 @@ def _maps_extraction(mp: gmaps.MapsPlace) -> Optional[llm.PlaceExtraction]:
         city=None,
         country=None,
         category="other",
-        geocode_query=mp.name if mp.lat is None else None,
-        confident=True,
+        geocode_query=None,
+        confident=mp.lat is not None,
         lat=mp.lat,
         lng=mp.lng,
         maps_url=mp.expanded_url,

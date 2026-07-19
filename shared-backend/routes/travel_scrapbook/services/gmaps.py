@@ -37,6 +37,15 @@ _BROWSER_UA = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
+# Google serves datacenter IPs (e.g. Railway) a cookie-consent interstitial
+# instead of the real place page — and that interstitial body carries no
+# !3d<lat>!4d<lng> pin, so a freshly-shared app link (feature-id form, no pin in
+# the URL) then has NO coordinate signal and callers forward-geocode the bare
+# name onto the wrong same-named place. Presenting an accepted-consent cookie
+# makes Google return the real page whose body has the pin. Static, non-PII:
+# CONSENT=YES+ is the documented minimal opt-out; SOCS is the current cookie.
+_CONSENT_COOKIE = "CONSENT=YES+; SOCS=CAI"
+
 # Full-map hosts and short-link hosts.
 _MAPS_HOSTS = ("google.com/maps", "maps.google.")
 _SHORT_HOSTS = ("maps.app.goo.gl", "goo.gl")
@@ -105,7 +114,13 @@ async def _fetch(url: str) -> httpx.Response:
         async with httpx.AsyncClient(
             timeout=HTTP_TIMEOUT,
             follow_redirects=True,
-            headers={"User-Agent": _BROWSER_UA, "Accept-Language": "en"},
+            headers={
+                "User-Agent": _BROWSER_UA,
+                "Accept-Language": "en",
+                # Sent as an explicit header (not the cookie jar) so it rides
+                # every redirect hop, including the ?continue= consent re-fetch.
+                "Cookie": _CONSENT_COOKIE,
+            },
         ) as client:
             resp = await client.get(url)
         record.attach_response(resp)
