@@ -57,9 +57,10 @@ class ResolvedMapsPlace:
 
 async def resolve_maps_place(sb: Client, url: str) -> Optional[ResolvedMapsPlace]:
     """Parse a Google Maps URL into place fields, deriving city/region/country
-    from the pin (reverse geocode) or, when the URL only names a place, a forward
-    geocode of that name. Returns None for a non-maps or unparseable URL so
-    callers can fall back to their existing text path. Best-effort/null-tolerant."""
+    from the pin (reverse geocode). When the URL yields no pin, the place is
+    left ungeocoded (confidence NONE) rather than guessed from its name.
+    Returns None for a non-maps or unparseable URL so callers can fall back to
+    their existing text path. Best-effort/null-tolerant."""
     if not gmaps.is_maps_url(url):
         return None
     mp = await gmaps.parse_maps_url(url)
@@ -70,9 +71,11 @@ async def resolve_maps_place(sb: Client, url: str) -> Optional[ResolvedMapsPlace
         geo = await nominatim.reverse(mp.lat, mp.lng)
         lat, lng = mp.lat, mp.lng
     else:
-        geo = await nominatim.geocode(mp.name) if mp.name else None
-        lat = geo.lat if geo else None
-        lng = geo.lng if geo else None
+        # No pin recovered from the URL/body: do NOT forward-geocode the bare,
+        # often-ambiguous place name — that lands confidently on the wrong
+        # same-named place. Leave it ungeocoded for the user to place manually.
+        geo = None
+        lat = lng = None
 
     country_code = geo.country_code if geo else None
     return ResolvedMapsPlace(
