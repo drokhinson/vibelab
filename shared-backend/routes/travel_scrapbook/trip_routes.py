@@ -43,6 +43,7 @@ from .services.places import (
     normalize_place_name,
     place_matches_trip_scope,
     region_for_country_code,
+    trip_scope_sets,
 )
 
 
@@ -188,6 +189,18 @@ async def get_trip(
         raise HTTPException(status_code=404, detail="Trip not found")
     trip = bundle["trip"]
     scraps = attach_consensus(bundle["scraps"])
+    # Additive-union scope: the trip's own destination PLUS the countries/regions
+    # of its approved members (plans + checkpoints/anchors). Built from fields the
+    # bundle already carries — no extra query. Mirrors the SQL union in
+    # travelscrapbook_trip_suggestions (025).
+    member_places = [
+        {"country": s.get("place_country"), "region": s.get("place_region")}
+        for s in bundle["scraps"] if s.get("status") == MembershipStatus.APPROVED
+    ] + [
+        {"country": a.get("country"), "region": a.get("region")}
+        for a in bundle["anchors"]
+    ]
+    union_countries, union_regions = trip_scope_sets(member_places)
     # Scope filtering is pure math over fields the bundle already carries.
     candidates = [
         s for s in bundle["candidates"]
@@ -196,6 +209,7 @@ async def get_trip(
             lat=s.get("lat"), lng=s.get("lng"),
             city=s.get("place_city"), region=s.get("place_region"),
             country=s.get("place_country"),
+            union_countries=union_countries, union_regions=union_regions,
         )
     ]
     return TripResponse(

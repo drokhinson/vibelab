@@ -254,6 +254,30 @@ def find_or_create_place(
     return created.data[0], True
 
 
+def _trip_member_geo(sb: Client, trip_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """Per-trip list of approved member place geos ({country, region}) — the
+    input to trip_scope_sets for the additive-union scope. One grouped read over
+    all the trips at once (no N+1)."""
+    out: dict[str, list[dict[str, Any]]] = {}
+    if not trip_ids:
+        return out
+    rows = (
+        sb.table("travelscrapbook_scrap_trips")
+        .select("trip_id, travelscrapbook_scraps!inner("
+                "travelscrapbook_places!inner(country, region))")
+        .in_("trip_id", trip_ids)
+        .eq("status", "approved")
+        .execute()
+    ).data or []
+    for r in rows:
+        scrap = r.get("travelscrapbook_scraps") or {}
+        place = scrap.get("travelscrapbook_places") or {}
+        out.setdefault(r["trip_id"], []).append(
+            {"country": place.get("country"), "region": place.get("region")}
+        )
+    return out
+
+
 def _geocoded_trips(sb: Client, user_id: str) -> list[dict[str, Any]]:
     rows = (
         sb.table("travelscrapbook_trips")
@@ -263,7 +287,14 @@ def _geocoded_trips(sb: Client, user_id: str) -> list[dict[str, Any]]:
         .not_.is_("lat", "null")
         .execute()
     )
-    return rows.data or []
+    trips = rows.data or []
+    # Attach each trip's member country/region sets for the additive-union scope.
+    member_geo = _trip_member_geo(sb, [t["id"] for t in trips])
+    for t in trips:
+        countries, regions = trip_scope_sets(member_geo.get(t["id"], []))
+        t["member_countries"] = list(countries)
+        t["member_regions"] = list(regions)
+    return trips
 
 
 def _is_upcoming(trip: dict[str, Any]) -> bool:
@@ -289,6 +320,28 @@ def scope_from_addresstype(addresstype: Optional[str]) -> TripScope:
     return TripScope.CITY
 
 
+def trip_scope_sets(member_places: list[dict[str, Any]]) -> tuple[set[str], set[str]]:
+    """Casefolded country-set / region-set derived from a trip's member places.
+
+    This is the "union of the countries/regions of the todos/checkpoints" half of
+    the additive-union scope: pass the places already on the trip (plans,
+    checkpoints, arrival/departure) and OR the result into place_matches_trip_scope
+    via ``union_countries`` / ``union_regions``. The trip's OWN destination is
+    handled separately by the scope-level branches in the matcher, so this returns
+    member-derived sets only.
+    """
+    countries: set[str] = set()
+    regions: set[str] = set()
+    for p in member_places:
+        c = (p.get("country") or "").strip().casefold()
+        r = (p.get("region") or "").strip().casefold()
+        if c:
+            countries.add(c)
+        if r:
+            regions.add(r)
+    return countries, regions
+
+
 def place_matches_trip_scope(
     trip: dict[str, Any],
     *,
@@ -297,14 +350,29 @@ def place_matches_trip_scope(
     city: Optional[str],
     region: Optional[str],
     country: Optional[str],
+    union_countries: frozenset[str] | set[str] = frozenset(),
+    union_regions: frozenset[str] | set[str] = frozenset(),
 ) -> bool:
     """Does a place belong to a trip, given the trip's geographic scope?
 
     The single source of truth for auto-staging, inbox suggestions, and the
-    trip candidates panel. City scope is distance-based (as before); country and
-    region scope are tag equality (region additionally requires country
-    agreement to keep e.g. Georgia-the-state out of Georgia-the-country).
+    trip candidates panel — kept in lockstep with the SQL predicate in
+    travelscrapbook_trip_suggestions (025).
+
+    Scope is the ADDITIVE UNION of the trip's own destination with the
+    countries/regions of its members (``union_countries`` / ``union_regions``,
+    from trip_scope_sets). A place matches when its country/region is in either
+    union set, OR it matches the trip's own destination at the trip's scope
+    granularity: country/region scope by tag equality, city scope by
+    destination-centroid radius or same city name. Empty union sets ⇒ the
+    pre-union behavior, so callers that don't supply members are unaffected.
     """
+    # Member-union match (always additive, regardless of scope level).
+    if country and country.strip().casefold() in union_countries:
+        return True
+    if region and region.strip().casefold() in union_regions:
+        return True
+
     level = trip.get("scope_level") or TripScope.CITY
     if level == TripScope.COUNTRY:
         return _geo_eq(country, trip.get("dest_country"))
@@ -339,6 +407,8 @@ def match_trip(sb: Client, user_id: str, place: dict[str, Any]) -> Optional[dict
         if not place_matches_trip_scope(
             trip, lat=lat, lng=lng,
             city=place.get("city"), region=place.get("region"), country=place.get("country"),
+            union_countries=set(trip.get("member_countries") or ()),
+            union_regions=set(trip.get("member_regions") or ()),
         ):
             continue
         d = (
@@ -370,6 +440,8 @@ def suggest_trips(
     scored: list[tuple[bool, float, dict[str, Any]]] = []
     for trip in trips:
         level = trip.get("scope_level") or TripScope.CITY
+        ucountries = set(trip.get("member_countries") or ())
+        uregions = set(trip.get("member_regions") or ())
         d = (
             haversine_km(lat, lng, trip["lat"], trip["lng"])
             if lat is not None and lng is not None and trip.get("lat") is not None
@@ -377,9 +449,16 @@ def suggest_trips(
         )
         if level in (TripScope.COUNTRY, TripScope.REGION):
             matched = place_matches_trip_scope(
-                trip, lat=lat, lng=lng, city=city, region=region, country=country)
+                trip, lat=lat, lng=lng, city=city, region=region, country=country,
+                union_countries=ucountries, union_regions=uregions)
         else:
-            matched = d is not None and d <= TRIP_SUGGEST_RADIUS_KM
+            # city: the wider suggestion radius, OR the additive member-union
+            # tag match (a place in a country/region the trip already touches).
+            matched = (d is not None and d <= TRIP_SUGGEST_RADIUS_KM) or (
+                place_matches_trip_scope(
+                    trip, lat=lat, lng=lng, city=city, region=region, country=country,
+                    union_countries=ucountries, union_regions=uregions)
+            )
         if matched:
             scored.append((not _is_upcoming(trip), d if d is not None else float("inf"), trip))
     scored.sort(key=lambda t: (t[0], t[1]))
