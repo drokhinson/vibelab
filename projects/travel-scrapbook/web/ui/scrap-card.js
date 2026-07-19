@@ -1,7 +1,7 @@
 // ui/scrap-card.js — canonical Scrap render function.
 // A scrap is a saved PLACE (the source of truth); the URLs it arrived from
-// render as source chips. Variants: 'trip' (default), 'staged' (approve /
-// move-to-inbox row), 'inbox' (trip-suggestion chips + picker hooks).
+// render as source chips. Variants: 'trip' (default), 'staged' (Needs-review
+// approve / remove-from-trip row), 'inbox' (trip-suggestion chips + picker hooks).
 'use strict';
 
 // One value set for both a scrap's own rating (the owner's priority) and the
@@ -253,13 +253,16 @@ function renderScrapCard(scrap, opts = {}) {
 
   let footer = '';
   if (variant === 'staged') {
+    // Needs-review: green check adds it to this trip, red X removes it from the
+    // trip (the place stays saved on the Wander List). No "Wander List" action —
+    // you're already on the trip page.
     footer = `
-      <div class="scrap-card__row">
-        <button class="ts-btn ts-btn--sm ts-btn--mint" data-action="approve" data-scrap-id="${escapeAttr(scrap.id)}">
-          <i data-lucide="check"></i>Keep it
+      <div class="scrap-card__row scrap-card__row--split">
+        <button class="ts-btn ts-btn--sm ts-btn--mint" data-action="approve" data-scrap-id="${escapeAttr(scrap.id)}" aria-label="Add to this trip" title="Add to this trip">
+          <i data-lucide="check"></i>
         </button>
-        <button class="ts-btn ts-btn--sm ts-btn--ghost" data-action="unassign" data-scrap-id="${escapeAttr(scrap.id)}">
-          <i data-lucide="heart"></i>To Wander List
+        <button class="ts-btn ts-btn--sm ts-btn--danger" data-action="unassign" data-scrap-id="${escapeAttr(scrap.id)}" aria-label="Remove from this trip" title="Remove from this trip">
+          <i data-lucide="x"></i>
         </button>
       </div>`;
   } else if (variant === 'inbox' && checkpoint) {

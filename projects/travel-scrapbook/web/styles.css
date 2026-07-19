@@ -331,6 +331,12 @@ a:hover { color: var(--accent-hover); }
 .scrap-card__meta > .rating-badge { flex: 1 1 auto; min-width: 0; justify-content: center; }
 /* "Add to trips" / community "Add" spans the card width. */
 .scrap-card__addtrip { width: 100%; }
+/* Any action alone in a card row fills the row — a lone button or the disabled
+   "Saved"/"Added" pill alike. */
+.scrap-card__row > .ts-btn:only-child { width: 100%; }
+/* Two side-by-side actions (e.g. Needs-review keep/remove) share the row width;
+   icon-only, so a 44px tap target. */
+.scrap-card__row--split > .ts-btn { flex: 1; min-height: 44px; }
 /* Community "Saved by N travelers" line. */
 .scrap-card__saved-by { display: flex; align-items: center; gap: 4px; }
 .scrap-card__saved-by [data-lucide] { width: 13px; height: 13px; }
@@ -642,6 +648,7 @@ body.popup-mode { max-width: 420px; }
 .tutorial-card__art { width: 100%; max-width: 260px; margin: 0 auto 0.6rem; display: block; }
 .tutorial-card__title { font-size: 1.7rem; margin: 0.2rem 0 0.4rem; }
 .tutorial-card__body { font-size: 0.92rem; color: var(--ink-muted); line-height: 1.5; margin: 0 auto 1rem; max-width: 320px; }
+.tutorial-card__footnote { font-size: 0.78rem; color: var(--ink-muted); opacity: 0.75; line-height: 1.45; margin: -0.5rem auto 1rem; max-width: 320px; }
 .tutorial-card__dots { display: flex; justify-content: center; gap: 7px; margin-bottom: 1.1rem; }
 .tutorial-dot {
   width: 8px; height: 8px; border-radius: 999px; background: var(--border);
