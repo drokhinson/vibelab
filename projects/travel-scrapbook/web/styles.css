@@ -58,35 +58,34 @@ a { color: var(--blush-deep); font-weight: 700; }
 a:hover { color: var(--accent-hover); }
 
 /* ── Header ──────────────────────────────────────────────────── */
-/* Phones: brand (logo + one-line title) sits on top, nav spreads on its own
-   row below. A full-size "Travel Trove" + five 44px nav buttons can't share
-   one line on a phone, so stacking keeps the wordmark on a single line. Wide
-   screens (≥520px) have room to put them side by side. */
+/* Two stacked rows at every width: the title row (wordmark left, Settings gear
+   top-right), then the four content tabs spread evenly on their own row below.
+   Settings lives apart from the browse tabs because it's app config, not a
+   content destination — and pulling it out lets the four tabs breathe. */
 .ts-header {
   display: flex; flex-direction: column; align-items: stretch;
   gap: 0.5rem; padding: 0.25rem 0 1rem;
 }
+.ts-header__top {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+}
 .ts-header__brand {
   display: flex; align-items: center; gap: 0.45rem; text-decoration: none;
-  min-width: 0;
+  flex: 1 1 auto; min-width: 0;
 }
 .ts-header__logo { width: 40px; height: 40px; flex-shrink: 0; }
 .ts-header__title {
   font-family: var(--font-display); font-size: 1.7rem; font-weight: 700;
   color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.ts-header__nav { display: flex; gap: 0.25rem; justify-content: space-between; }
-@media (min-width: 520px) {
-  .ts-header { flex-direction: row; align-items: center; justify-content: space-between; }
-  .ts-header__nav { justify-content: flex-end; }
-}
-.ts-header__nav button {
+.ts-header__nav { display: flex; gap: 0.25rem; justify-content: space-evenly; }
+.ts-header__nav button, .ts-header__settings {
   width: 44px; height: 44px; border-radius: 14px; border: 2px solid transparent;
-  background: transparent; color: var(--ink); cursor: pointer;
+  background: transparent; color: var(--ink); cursor: pointer; flex-shrink: 0;
   display: grid; place-items: center;
 }
-.ts-header__nav button:hover { background: var(--card); border-color: var(--border); }
-.ts-header__nav button.active { background: var(--card); border-color: var(--blush); }
+.ts-header__nav button:hover, .ts-header__settings:hover { background: var(--card); border-color: var(--border); }
+.ts-header__nav button.active, .ts-header__settings.active { background: var(--card); border-color: var(--blush); }
 
 /* ── Splash ──────────────────────────────────────────────────── */
 .ts-splash {

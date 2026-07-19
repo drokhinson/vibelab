@@ -146,6 +146,10 @@ function _mapsButton(scrap) {
  *   showRemove        — variant 'trip': show the "Remove from this trip" footer
  *                       (default true; false where there's no single-trip
  *                       context, e.g. the Visited list)
+ *   showAddTrip       — variant 'trip': show the "Add to trips" / "Modify trips"
+ *                       footer (opens the AddToTrips multi-select). Default false;
+ *                       true on the Visited list so a place you've been to can be
+ *                       added onto a trip. Skipped for checkpoints.
  *   communityWishlist — variant 'community' shown on the Community screen (saves
  *                       to the Wander List): relabels the action "Want to go"
  *                       and adds the fix-location pencil. Off inside a trip's
@@ -169,7 +173,7 @@ function renderScrapCard(scrap, opts = {}) {
   const {
     index = 0, variant = 'trip', tripId = null, selected = false, fits = false,
     isNew = false, shared = false, currentUserId = null, canWrite = true, saved = false,
-    checkpoint = false, showRemove = true, communityWishlist = false,
+    checkpoint = false, showRemove = true, showAddTrip = false, communityWishlist = false,
   } = opts;
   // 'preview' = read-only display (share success screen). 'select' = read-only
   // with a selection checkbox (the trip's "add from Wander List" picker).
@@ -324,6 +328,18 @@ function renderScrapCard(scrap, opts = {}) {
       <div class="scrap-card__row">
         <button class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__remove" data-action="unassign" data-scrap-id="${escapeAttr(scrap.id)}">
           <i data-lucide="folder-minus"></i>Remove
+        </button>
+      </div>`;
+  } else if (variant === 'trip' && canWrite && !checkpoint && showAddTrip) {
+    // Visited list spans every trip (no single "this trip" context), so instead
+    // of Remove it offers the same multi-trip picker as the Wander List — a place
+    // you've been to can still be added onto a trip. Label reflects membership.
+    const inAnyTrip = (scrap.trip_ids || []).length > 0;
+    footer = `
+      <div class="scrap-card__row">
+        <button class="ts-btn ts-btn--sm ${inAnyTrip ? 'ts-btn--sky' : 'ts-btn--ghost'} scrap-card__addtrip"
+                data-action="pick-trip" data-scrap-id="${escapeAttr(scrap.id)}">
+          <i data-lucide="folder-plus"></i>${inAnyTrip ? 'Modify trips' : 'Add to trips'}
         </button>
       </div>`;
   }

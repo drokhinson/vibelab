@@ -125,7 +125,7 @@ class VisitedView extends View {
           ${(this._items.length || hasPending) ? `
             <div class="card-grid card-grid--2col">
               ${processingCards}
-              ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip', showRemove: false })).join('')}
+              ${this._items.map((s, i) => renderScrapCard(s, { index: i, variant: 'trip', showRemove: false, showAddTrip: true })).join('')}
             </div>` : `
             <p class="scrap-card__sub" style="text-align:center;padding:1rem 0;">Nothing here matches — clear a filter to widen the view.</p>`}
           ${this._items.length < this._total ? `
@@ -185,6 +185,8 @@ class VisitedView extends View {
         try {
           if (action === 'edit') {
             ScrapEditor.open(scrap, scrap.trip_id || null, { onSaved: () => this._load() });
+          } else if (action === 'pick-trip') {
+            AddToTrips.open(scrap, { onSaved: () => this._load() });
           } else if (action === 'rate-open') {
             PriorityPicker.open({
               activeLevel: 'visited',

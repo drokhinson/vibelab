@@ -152,7 +152,8 @@
       document.querySelectorAll('[data-auth-only]').forEach((el) => {
         el.classList.toggle('hidden', !authed || document.body.classList.contains('popup-mode'));
       });
-      document.querySelectorAll('.ts-header__nav button').forEach((btn) => {
+      // Includes the Settings gear, which now sits in the title row outside .ts-header__nav.
+      document.querySelectorAll('.ts-header button[data-nav]').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.nav === name);
       });
 
