@@ -366,8 +366,20 @@ function renderScrapCard(scrap, opts = {}) {
   const metaRow = noteChip + chip;
   const consensus = (variant === 'trip' && shared && scrap.trip_id) ? _renderConsensus(scrap) : '';
 
+  // The action cluster — source/maps links, the priority/vibe meta row, the
+  // group consensus roll-up, and the add/remove (or wishlist) footer — is
+  // grouped into one block pinned to the card's bottom edge (margin-top:auto,
+  // see .scrap-card__actions). Cards in a grid row stretch to equal height, so
+  // anchoring this block keeps every card's buttons on the same baseline even
+  // when some cards carry a one-line location and others wrap to two.
+  const actions =
+    (linksRow ? `<div class="scrap-card__row scrap-card__links">${linksRow}</div>` : '') +
+    (metaRow ? `<div class="scrap-card__row scrap-card__meta">${metaRow}</div>` : '') +
+    consensus +
+    footer;
+
   return `
-    <div class="sticker-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isNew ? 'scrap-card--new' : ''} ${isVisited ? 'is-visited' : ''}"
+    <div class="sticker-card scrap-card ${readOnly ? '' : 'card-lift'} ${isSelect ? 'scrap-card--select' : ''} ${isSelect && selected ? 'is-selected' : ''} ${variant === 'staged' ? 'scrap-card--staged' : ''} ${isNew ? 'scrap-card--new' : ''} ${isVisited ? 'is-visited' : ''}"
          style="--i:${index};" data-scrap-id="${escapeAttr(scrap.id)}" data-action="${isSelect ? 'select' : 'none'}">
       ${isNew ? '<span class="scrap-card__new-badge"><i data-lucide="sparkles"></i>New</span>' : ''}
       ${isSelect ? `<span class="scrap-card__check" aria-hidden="true"><i data-lucide="${selected ? 'check-circle-2' : 'circle'}"></i></span>` : ''}
@@ -379,10 +391,7 @@ function renderScrapCard(scrap, opts = {}) {
       ${sub ? `<p class="scrap-card__sub">${escapeHtml(sub)}</p>` : ''}
       ${isCommunity ? `<p class="scrap-card__sub scrap-card__saved-by"><i data-lucide="users"></i>Saved by ${savedByCount} traveler${savedByCount === 1 ? '' : 's'}</p>` : ''}
       ${addedBy}
-      ${linksRow ? `<div class="scrap-card__row scrap-card__links">${linksRow}</div>` : ''}
-      ${metaRow ? `<div class="scrap-card__row scrap-card__meta">${metaRow}</div>` : ''}
-      ${consensus}
-      ${footer}
+      ${actions ? `<div class="scrap-card__actions">${actions}</div>` : ''}
     </div>
   `;
 }
