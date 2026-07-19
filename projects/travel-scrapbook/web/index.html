@@ -32,10 +32,13 @@
 </head>
 <body>
   <header class="ts-header" data-auth-only>
-    <a href="/" class="ts-header__brand" data-route="trips">
-      <img src="/assets/brand/travel-scrapbook-logo.svg" alt="" class="ts-header__logo" />
-      <span class="ts-header__title">Travel Trove</span>
-    </a>
+    <div class="ts-header__top">
+      <a href="/" class="ts-header__brand" data-route="trips">
+        <img src="/assets/brand/travel-scrapbook-logo.svg" alt="" class="ts-header__logo" />
+        <span class="ts-header__title">Travel Trove</span>
+      </a>
+      <button class="ts-header__settings" data-nav="settings" data-route="settings" aria-label="Settings"><i data-lucide="settings-2"></i></button>
+    </div>
     <nav class="ts-header__nav">
       <button data-nav="trips" data-route="trips" aria-label="My trips"><i data-lucide="map"></i></button>
       <button data-nav="inbox" data-route="inbox" aria-label="Wander List" style="position:relative;">
@@ -44,7 +47,6 @@
       </button>
       <button data-nav="visited" data-route="visited" aria-label="Visited"><i data-lucide="circle-check"></i></button>
       <button data-nav="community" data-route="community" aria-label="Community"><i data-lucide="compass"></i></button>
-      <button data-nav="settings" data-route="settings" aria-label="Settings"><i data-lucide="settings-2"></i></button>
     </nav>
   </header>
 
