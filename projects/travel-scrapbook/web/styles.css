@@ -123,6 +123,13 @@ a:hover { color: var(--accent-hover); }
 }
 .card-grid > .sticker-card:nth-child(odd)  { transform: rotate(-0.8deg); }
 .card-grid > .sticker-card:nth-child(even) { transform: rotate(0.7deg); }
+/* Scrap cards lay out as a flex column so their action cluster (source/maps
+   links, priority meta, consensus, add/remove or wishlist footer) can pin to
+   the bottom edge. In a grid row every card stretches to the tallest sibling,
+   so the pinned cluster keeps all cards' buttons aligned even when some carry a
+   one-line location and others wrap to two. */
+.scrap-card { display: flex; flex-direction: column; }
+.scrap-card__actions { margin-top: auto; }
 /* washi tape strip */
 .washi::before {
   content: "";
