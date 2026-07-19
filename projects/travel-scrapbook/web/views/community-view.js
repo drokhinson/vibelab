@@ -176,7 +176,9 @@ class CommunityView extends View {
     const card = btn.closest('.sticker-card');
     card?.querySelector('[data-action=community-edit]')?.remove();
     const saveBtn = card?.querySelector('[data-action=save-community]');
-    if (saveBtn) saveBtn.outerHTML = '<span class="ts-btn ts-btn--ghost ts-btn--sm" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>';
+    // Match the render-time "Saved" pill (scrap-card.js community variant):
+    // full-width via scrap-card__addtrip so a lone pill fills the card row.
+    if (saveBtn) saveBtn.outerHTML = '<span class="ts-btn ts-btn--sm ts-btn--ghost scrap-card__addtrip" aria-disabled="true" style="opacity:0.6;"><i data-lucide="check"></i>Saved</span>';
     this.refreshIcons();
   }
 }

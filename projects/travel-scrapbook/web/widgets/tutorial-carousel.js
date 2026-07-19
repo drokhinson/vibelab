@@ -43,8 +43,29 @@ const TUTORIAL_STEPS = [
   },
 ];
 
+// Shown only on iPhone/iPad (isIOS): an optional nudge to set up the share
+// shortcut. Info-only — the actual setup lives in Settings (see footnote).
+// Inserted right after "Scrap it from anywhere" so it lands in the sharing context.
+const IOS_SHARE_STEP = {
+  illustration: 'travel-scrapbook-tutorial-share-shortcut',
+  title: 'Save straight from your iPhone',
+  body: 'On iPhone you can add a Share Shortcut once: grab your share token and the Share button in Safari, Instagram or Maps sends links straight to your scrapbook — no copy-paste.',
+  footnote: 'Optional — you can always set this up later in Settings → “Save from your phone”.',
+};
+
+// The active step list for this run — the base tour, plus the iPhone card when
+// the viewer is on iOS. Built per-open so a later device change is picked up.
+function buildTutorialSteps() {
+  const steps = TUTORIAL_STEPS.slice();
+  if (typeof isIOS === 'function' && isIOS()) {
+    steps.splice(2, 0, IOS_SHARE_STEP); // after "Scrap it from anywhere"
+  }
+  return steps;
+}
+
 const TutorialCarousel = {
   _step: 0,
+  _steps: TUTORIAL_STEPS,
   _touchStartX: null,
   _onDone: null,
 
@@ -52,6 +73,7 @@ const TutorialCarousel = {
   // fires on Got-it, the X, and the backdrop alike.
   open({ firstRun = false, onDone = null } = {}) {
     this._step = 0;
+    this._steps = buildTutorialSteps();
     this._onDone = onDone;
     this._render();
   },
@@ -66,7 +88,7 @@ const TutorialCarousel = {
 
   _go(delta) {
     const next = this._step + delta;
-    if (next < 0 || next >= TUTORIAL_STEPS.length) return;
+    if (next < 0 || next >= this._steps.length) return;
     this._step = next;
     this._render();
   },
@@ -79,9 +101,9 @@ const TutorialCarousel = {
 
   _render() {
     document.getElementById('tutorial-modal')?.remove();
-    const step = TUTORIAL_STEPS[this._step];
+    const step = this._steps[this._step];
     const isFirst = this._step === 0;
-    const isLast = this._step === TUTORIAL_STEPS.length - 1;
+    const isLast = this._step === this._steps.length - 1;
 
     const modal = document.createElement('div');
     modal.className = 'ts-modal';
@@ -93,8 +115,9 @@ const TutorialCarousel = {
         <img class="tutorial-card__art" src="/assets/illustrations/${step.illustration}.svg" alt="" />
         <h2 class="ts-modal__title tutorial-card__title">${escapeHtml(step.title)}</h2>
         <p class="tutorial-card__body">${escapeHtml(step.body)}</p>
+        ${step.footnote ? `<p class="tutorial-card__footnote">${escapeHtml(step.footnote)}</p>` : ''}
         <div class="tutorial-card__dots">
-          ${TUTORIAL_STEPS.map((_, i) => `<span class="tutorial-dot ${i === this._step ? 'is-active' : ''}" data-dot="${i}"></span>`).join('')}
+          ${this._steps.map((_, i) => `<span class="tutorial-dot ${i === this._step ? 'is-active' : ''}" data-dot="${i}"></span>`).join('')}
         </div>
         <div class="tutorial-card__nav">
           <button class="ts-btn ts-btn--ghost ts-btn--sm" id="tutorial-prev" ${isFirst ? 'disabled' : ''} aria-label="Previous">

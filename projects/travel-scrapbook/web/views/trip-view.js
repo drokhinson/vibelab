@@ -311,7 +311,7 @@ class TripView extends View {
         <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;flex-wrap:wrap;">
           <div>
             <h2 style="font-size:1.5rem;margin:0;">Needs review</h2>
-            <p class="scrap-card__sub">We think these belong in this trip — keep or move them.</p>
+            <p class="scrap-card__sub">We think these belong in this trip — add or remove each.</p>
           </div>
           <button class="ts-btn ts-btn--mint ts-btn--sm" id="approve-all-staged">
             <i data-lucide="check-check"></i>Keep all ${staged.length}
@@ -485,10 +485,10 @@ class TripView extends View {
               });
             } else if (action === 'approve') {
               await window.ScrapDomain.approve(scrapId, trip.id);
-              toast('Kept!');
+              toast('Added to this trip');
             } else if (action === 'unassign') {
               await window.ScrapDomain.unassign(scrapId, trip.id);
-              toast('Moved to your wishlist');
+              toast('Removed from this trip');
             } else if (action === 'assign') {
               // The echo is the hydrated card — patch it straight in (it also
               // leaves the candidates panel).

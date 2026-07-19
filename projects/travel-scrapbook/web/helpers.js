@@ -68,3 +68,14 @@ function staticMapUrl(lat, lng, { w = 400, h = 220, zoom = 15 } = {}) {
 function confirmDestructive(message) {
   return window.confirm(message);
 }
+
+// iPhone / iPad detection, for the platform-specific share-shortcut onboarding
+// nudge. iPadOS 13+ masquerades as a Mac, so also treat a touch-capable
+// "Macintosh" as iOS. UA sniffing is intentionally best-effort here — the
+// tutorial card it gates is optional and purely informational.
+function isIOS() {
+  const ua = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/.test(ua) ||
+    (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+}
+window.isIOS = isIOS;

@@ -137,8 +137,8 @@ class ShareView extends View {
       <div class="scrap-popup__success">
         <img src="/assets/illustrations/travel-scrapbook-success.svg" alt="" />
         <h2 style="font-size:2rem;margin:0;">Saved!</h2>
-        <p class="scrap-card__sub">We're finding the places in it. They'll be sorted into a trip
-          or added to your Wander List — you can switch back to your app.</p>
+        <p class="scrap-card__sub">We're finding the places in it. They'll land on your Wander List —
+          and any that match a trip get flagged there for review. You can switch back to your app.</p>
         <button class="ts-btn ts-btn--blush ts-btn--sm" id="share-open-inbox" style="margin-top:0.8rem;">
           <i data-lucide="heart"></i>View Wander List
         </button>
