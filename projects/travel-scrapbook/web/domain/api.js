@@ -185,6 +185,12 @@
     updateAnchor: (anchorId, body) => call(`/anchors/${anchorId}`, { method: 'PATCH', body }),
     deleteAnchor: (anchorId) => call(`/anchors/${anchorId}`, { method: 'DELETE' }),
 
+    // Endpoints (arrival/departure) are ordinary bookend plans (026); these
+    // return the plan as a ScrapResponse. `which` is 'arrival' | 'departure'.
+    createEndpoint: (tripId, body) => call(`/trips/${tripId}/endpoints`, { method: 'POST', body }),
+    updateEndpoint: (tripId, which, body) => call(`/trips/${tripId}/endpoints/${which}`, { method: 'PATCH', body }),
+    deleteEndpoint: (tripId, which) => call(`/trips/${tripId}/endpoints/${which}`, { method: 'DELETE' }),
+
     /** Silent capture of a shared/pasted URL. @returns {Promise<Source>} */
     capture: (body) => call('/capture', { method: 'POST', body }),
     /** One filtered page + geo facets + the global badge count. Checkpoint-

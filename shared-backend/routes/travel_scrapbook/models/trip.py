@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 from ..constants import (
     AnchorRole,
     AnchorType,
+    Endpoint,
     GeocodeConfidence,
     TripMemberRole,
     TripScope,
@@ -16,38 +17,27 @@ from .core import ScrapResponse
 from .social import TripMemberResponse
 
 
-# ── Anchors ───────────────────────────────────────────────────────────────────
+# ── Anchors (stay/travel checkpoints only; arrival/departure are Endpoints) ────
 
 class AnchorCreateRequest(BaseModel):
     role: AnchorRole
-    label: Optional[str] = Field(None, min_length=1, max_length=120)
-    query: Optional[str] = Field(None, min_length=2, max_length=300,
-                                 description="Freeform place text to geocode, e.g. 'Narita Airport'")
+    label: str = Field(..., min_length=1, max_length=120)
+    query: str = Field(..., min_length=2, max_length=300,
+                       description="Freeform place text to geocode, e.g. 'Narita Airport'")
     maps_url: Optional[str] = Field(
         None, max_length=2000,
         description="A Google Maps link. When it's a real Maps place/pin URL, "
                     "coordinates + city/region/country are extracted from it (no AI).")
     type: Optional[AnchorType] = Field(
-        None, description="How you travel (start/end/travel anchors only)")
+        None, description="How you travel (travel anchors only)")
     anchor_date: Optional[date] = Field(
-        None, description="Start: arrival day; end: departure day; travel: leg day (timeline marker)")
+        None, description="travel: leg day (timeline marker)")
     anchor_time: Optional[time] = Field(
         None, description="Optional time on anchor_date; omit for an all-day point marker")
     stay_date: Optional[date] = Field(
         None, description="Check-in day for a stay anchor; a day within the trip's dates")
     stay_end_date: Optional[date] = Field(
         None, description="Check-out day for a stay anchor (≥ stay_date)")
-    same_as_start: bool = Field(
-        False,
-        description="Copy the trip's start anchor (location + type, not the date) into this end anchor; skips geocoding")
-
-    @model_validator(mode="after")
-    def _require_place(self) -> "AnchorCreateRequest":
-        # label/query are copied from the start anchor when same_as_start is set;
-        # otherwise the user must supply both to geocode a real place.
-        if not self.same_as_start and (not self.label or not self.query):
-            raise ValueError("label and query are required unless same_as_start is set")
-        return self
 
 
 class AnchorUpdateRequest(BaseModel):
@@ -88,6 +78,43 @@ class AnchorResponse(BaseModel):
     stay_date: Optional[date] = None              # stay: check-in
     stay_end_date: Optional[date] = None          # stay: check-out
     created_at: datetime
+
+
+# ── Endpoints (arrival / departure — ordinary bookend plans, 026) ─────────────
+
+class EndpointCreateRequest(BaseModel):
+    which: Endpoint
+    label: Optional[str] = Field(None, min_length=1, max_length=120)
+    query: Optional[str] = Field(None, min_length=2, max_length=300,
+                                 description="Freeform place text to geocode, e.g. 'Narita Airport'")
+    maps_url: Optional[str] = Field(
+        None, max_length=2000,
+        description="A Google Maps link; a real Maps place/pin URL yields "
+                    "coordinates + city/region/country (no AI).")
+    type: Optional[AnchorType] = Field(
+        None, description="How you travel (airport/train_station/car_rental/other)")
+    day: Optional[date] = Field(
+        None, description="Arrival day (arrival) or departure day (departure), within the trip's dates")
+    same_as_arrival: bool = Field(
+        False,
+        description="Departure only: reuse the arrival place (flag its plan as the "
+                    "departure too) instead of geocoding a separate spot — but not its date")
+
+    @model_validator(mode="after")
+    def _require_place(self) -> "EndpointCreateRequest":
+        # label/query are reused from the arrival plan when same_as_arrival is
+        # set; otherwise the user must supply both to geocode a real place.
+        if not self.same_as_arrival and (not self.label or not self.query):
+            raise ValueError("label and query are required unless same_as_arrival is set")
+        return self
+
+
+class EndpointUpdateRequest(BaseModel):
+    label: Optional[str] = Field(None, min_length=1, max_length=120)
+    query: Optional[str] = Field(None, min_length=2, max_length=300)
+    maps_url: Optional[str] = Field(None, max_length=2000)
+    type: Optional[AnchorType] = None
+    day: Optional[date] = None
 
 
 # ── Trips ─────────────────────────────────────────────────────────────────────

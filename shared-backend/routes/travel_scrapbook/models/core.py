@@ -180,7 +180,9 @@ class ScrapResponse(BaseModel):
     route_position: Optional[int] = None
     plan_date: Optional[date] = None              # timeline slot (trip scraps only)
     plan_time: Optional[time] = None              # optional time within the day
-    plan_end_date: Optional[date] = None          # stay check-out (role memberships, 020)
+    plan_end_date: Optional[date] = None          # stay check-out (020); departure day (026)
+    is_arrival: bool = False                       # 026: this plan bookends the trip's arrival
+    is_departure: bool = False                     # 026: …and/or its departure
     role: Optional[AnchorRole] = None             # set on checkpoint memberships (020)
     added_by_user_id: Optional[str] = None       # scrap owner (who saved it)
     added_by_display_name: Optional[str] = None

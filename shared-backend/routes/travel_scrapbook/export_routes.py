@@ -6,7 +6,7 @@ from fastapi import Body, Depends, Path, Query, Response
 from db import get_supabase
 
 from . import router
-from .constants import AnchorRole, MembershipStatus
+from .constants import MembershipStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import ExportRequest, MapsLeg, MapsLinksResponse
 from .services.exports import (
@@ -137,41 +137,48 @@ def _scraps_from_plan(
     return out
 
 
-def _bracket_stops(routable: list[dict], anchors: list[dict]) -> list[Stop]:
-    """Ordered geocoded scraps → a Stop list bracketed by the start/end anchors
-    when they exist (the directions route begins/ends at the trip's endpoints)."""
-    def anchor_stop(role: str) -> Stop | None:
-        for a in anchors:
-            if a["role"] == role and a["lat"] is not None:
-                return Stop(label=a["label"], lat=a["lat"], lng=a["lng"])
-        return None
+def _endpoint_stop(scraps: list[dict], flag: str) -> Stop | None:
+    """The geocoded arrival (flag='is_arrival') / departure (flag='is_departure')
+    plan as a directions Stop, if one is set and located."""
+    for s in scraps:
+        if s.get(flag) and s.get("lat") is not None and s.get("lng") is not None:
+            return Stop(label=s.get("place_name") or "Stop", lat=s["lat"], lng=s["lng"])
+    return None
 
+
+def _bracket_stops(scraps: list[dict]) -> list[Stop]:
+    """Ordered geocoded plan scraps → a Stop list bracketed by the trip's
+    arrival/departure plans (026), which are pulled OUT of the routable middle so
+    an airport isn't both a bracket and a stop."""
+    arrival = _endpoint_stop(scraps, "is_arrival")
+    departure = _endpoint_stop(scraps, "is_departure")
+    routable = [
+        s for s in scraps
+        if s.get("lat") is not None and s.get("lng") is not None
+        and not s.get("is_arrival") and not s.get("is_departure")
+    ]
     stops: list[Stop] = []
-    start = anchor_stop(AnchorRole.START)
-    if start:
-        stops.append(start)
+    if arrival:
+        stops.append(arrival)
     stops.extend(
         Stop(label=s["place_name"] or "Stop", lat=s["lat"], lng=s["lng"])
         for s in routable
     )
-    end = anchor_stop(AnchorRole.END)
-    if end:
-        stops.append(end)
+    if departure:
+        stops.append(departure)
     return stops
 
 
 def _ordered_stops(
     sb, trip_id: str, *, include_visited: bool = False, date: str | None = None
 ) -> list[Stop]:
-    """Geocoded scraps in route order (falling back to created order),
-    bracketed by the start/end anchors when they exist. `date` narrows to one
-    day's scheduled plans."""
+    """Geocoded scraps in route order (falling back to created order), bracketed
+    by the trip's arrival/departure plans. `date` narrows to one day's plans."""
     scraps = _approved_scraps(sb, trip_id, include_visited=include_visited, date=date)
-    routable = [s for s in scraps if s["lat"] is not None and s["lng"] is not None]
-    routable.sort(
+    scraps.sort(
         key=lambda s: (s["route_position"] is None, s["route_position"], s["created_at"])
     )
-    return _bracket_stops(routable, _trip_anchors(sb, trip_id))
+    return _bracket_stops(scraps)
 
 
 def _export_scraps(
@@ -241,9 +248,8 @@ async def export_maps_links(
     sb = get_supabase()
     get_accessible_trip(sb, trip_id, user.user_id)
     if body is not None and body.plan is not None:
-        scraps = _scraps_from_plan(sb, trip_id, body.plan, include_visited=include_visited, date=date)
-        routable = [s for s in scraps if s["lat"] is not None and s["lng"] is not None]
-        stops = _bracket_stops(routable, _trip_anchors(sb, trip_id))
+        stops = _bracket_stops(
+            _scraps_from_plan(sb, trip_id, body.plan, include_visited=include_visited, date=date))
     else:
         stops = _ordered_stops(sb, trip_id, include_visited=include_visited, date=date)
     legs = build_dir_links(stops)

@@ -28,7 +28,9 @@
 --               in 020 (scraps = plan memberships only; anchors[] SYNTHESIZED
 --               from role-bearing memberships in the legacy anchor shape,
 --               ordered by membership created_at; candidates also exclude
---               checkpoint-category places)
+--               checkpoint-category places) and 026 (anchors[] = stay/travel
+--               only; arrival/departure are role-NULL plans in scraps[], each
+--               scrap carries is_arrival/is_departure + plan_end_date)
 --   Called by:  shared-backend/routes/travel_scrapbook/trip_routes.py (get_trip)
 --   Purpose:    The whole trip screen in ONE round trip (was 6–9 sequential
 --               queries + 3 extra endpoints). Access (owner or accepted
@@ -48,7 +50,8 @@
 --   Defined in: db/migrations/travelscrapbook/015_perf_rpcs.sql;
 --               replaced in 020 (resolves the PLAN membership only — a scrap
 --               can now also hold checkpoint memberships on the same trip —
---               and passes role/plan_end_date through)
+--               and passes role/plan_end_date through) and 026 (echoes
+--               is_arrival/is_departure for the endpoint bookend reconcile)
 --   Called by:  shared-backend/routes/travel_scrapbook/scrap_routes.py
 --               (_hydrated_membership — the echo for assign/approve/schedule/
 --               vibe endpoints)

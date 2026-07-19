@@ -194,7 +194,9 @@ class TripView extends View {
   // swapped surgically; the Plans header (add / filter buttons) stays put.
   _renderPlansContent(trip) {
     const { canWrite, cardOpts } = this._deriveCtx(trip);
-    const allScraps = this._visibleScraps(trip);
+    // Arrival/departure are bookend plans (026) — they live on the timeline as
+    // bookends, not in the Plans todo list.
+    const allScraps = this._visibleScraps(trip).filter((s) => !s.is_arrival && !s.is_departure);
     const isPriority = (s) => s.rating === 'booked' || s.rating === 'must_do';
     const scraps = this._priorityOnly ? allScraps.filter(isPriority) : allScraps;
 
@@ -435,9 +437,17 @@ class TripView extends View {
         },
       }));
     });
-    // Timeline bookends: create the arrival/departure with the role preset.
-    root.querySelectorAll('[data-action=add-anchor-role]').forEach((btn) => {
-      btn.addEventListener('click', () => AnchorEditor.open(trip, { role: btn.dataset.role }));
+    // Timeline bookends (026): arrival/departure are plans, edited via the
+    // EndpointEditor. `which` = 'arrival' | 'departure'.
+    root.querySelectorAll('[data-action=add-endpoint]').forEach((btn) => {
+      btn.addEventListener('click', () => EndpointEditor.open(trip, { which: btn.dataset.which }));
+    });
+    root.querySelectorAll('[data-action=edit-endpoint]').forEach((btn) => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const scrap = (trip.scraps || []).find((s) => s.id === btn.dataset.scrapId);
+        EndpointEditor.open(trip, { which: btn.dataset.which, scrap: scrap || null });
+      });
     });
     root.querySelectorAll('[data-action=edit-anchor]').forEach((btn) => {
       btn.addEventListener('click', (ev) => {

@@ -102,20 +102,27 @@ class GeocodeConfidence(StrEnum):
 
 class AnchorRole(StrEnum):
     """Anchors are surfaced in the UI as "checkpoints" — the stay/travel combo
-    that frames a trip. start/end are the trip's arrival/departure travel
-    checkpoints; travel is a mid-trip leg (multi-city); stay is lodging."""
-    START = "start"
-    END = "end"
+    that frames a trip. travel is a mid-trip leg (multi-city); stay is lodging.
+    (026: arrival/departure are no longer roles — they're ordinary plans flagged
+    is_arrival/is_departure on the membership; see Endpoint.)"""
     STAY = "stay"
     TRAVEL = "travel"
 
 
 # Roles that use anchor_date/anchor_time + type (everything except lodging).
-TRAVEL_ROLES = (AnchorRole.START, AnchorRole.END, AnchorRole.TRAVEL)
+TRAVEL_ROLES = (AnchorRole.TRAVEL,)
+
+
+class Endpoint(StrEnum):
+    """A trip's bookends, now modeled as ordinary plans (026): arrival = the
+    is_arrival plan, departure = the is_departure plan. One plan may be both
+    (you fly out of the airport you flew into)."""
+    ARRIVAL = "arrival"
+    DEPARTURE = "departure"
 
 
 class AnchorType(StrEnum):
-    """How you travel at a start/end/travel checkpoint."""
+    """How you travel at a travel checkpoint, or an arrival/departure endpoint."""
     AIRPORT = "airport"
     TRAIN_STATION = "train_station"
     CAR_RENTAL = "car_rental"
