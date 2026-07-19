@@ -109,7 +109,7 @@ a:hover { color: var(--accent-hover); }
    replay the stagger as a visible blink (View.settleMotion sets the class). */
 .view-settled .card-list > *, .view-settled .card-grid > *, .view-settled .plan-zones-grid > * { animation: none; }
 .card-lift { transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
-.card-lift:hover { transform: translateY(-3px) rotate(0deg) !important; box-shadow: 0 10px 24px rgba(91, 84, 104, 0.16); }
+.card-lift:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(91, 84, 104, 0.16); }
 .card-lift:active { transform: translateY(0); }
 
 /* ── Sticker cards (the core scrapbook surface) ──────────────────────── */
@@ -121,8 +121,8 @@ a:hover { color: var(--accent-hover); }
   box-shadow: 0 4px 12px rgba(91, 84, 104, 0.08);
   padding: 0.9rem;
 }
-.card-grid > .sticker-card:nth-child(odd)  { transform: rotate(-0.8deg); }
-.card-grid > .sticker-card:nth-child(even) { transform: rotate(0.7deg); }
+/* Cards stand upright; only the taped section decorations keep a tilt (.washi
+   tape strip below). */
 /* Scrap cards lay out as a flex column so their action cluster (source/maps
    links, priority meta, consensus, add/remove or wishlist footer) can pin to
    the bottom edge. In a grid row every card stretches to the tallest sibling,
