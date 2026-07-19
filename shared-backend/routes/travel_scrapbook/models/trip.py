@@ -1,4 +1,4 @@
-"""Trip models: anchors, trips, route optimization, and exports."""
+"""Trip models: checkpoints, bookends, trips, route optimization, and exports."""
 
 from datetime import date, datetime, time
 from typing import Optional
@@ -6,9 +6,9 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 from ..constants import (
-    AnchorRole,
-    AnchorType,
-    Endpoint,
+    Bookend,
+    CheckpointRole,
+    CheckpointType,
     GeocodeConfidence,
     TripMemberRole,
     TripScope,
@@ -17,10 +17,10 @@ from .core import ScrapResponse
 from .social import TripMemberResponse
 
 
-# ── Anchors (stay/travel checkpoints only; arrival/departure are Endpoints) ────
+# ── Checkpoints (stay/travel only; arrival/departure are Bookends) ────────────
 
-class AnchorCreateRequest(BaseModel):
-    role: AnchorRole
+class CheckpointCreateRequest(BaseModel):
+    role: CheckpointRole
     label: str = Field(..., min_length=1, max_length=120)
     query: str = Field(..., min_length=2, max_length=300,
                        description="Freeform place text to geocode, e.g. 'Narita Airport'")
@@ -28,36 +28,36 @@ class AnchorCreateRequest(BaseModel):
         None, max_length=2000,
         description="A Google Maps link. When it's a real Maps place/pin URL, "
                     "coordinates + city/region/country are extracted from it (no AI).")
-    type: Optional[AnchorType] = Field(
-        None, description="How you travel (travel anchors only)")
-    anchor_date: Optional[date] = Field(
+    type: Optional[CheckpointType] = Field(
+        None, description="How you travel (travel checkpoints only)")
+    checkpoint_date: Optional[date] = Field(
         None, description="travel: leg day (timeline marker)")
-    anchor_time: Optional[time] = Field(
-        None, description="Optional time on anchor_date; omit for an all-day point marker")
+    checkpoint_time: Optional[time] = Field(
+        None, description="Optional time on checkpoint_date; omit for an all-day point marker")
     stay_date: Optional[date] = Field(
-        None, description="Check-in day for a stay anchor; a day within the trip's dates")
+        None, description="Check-in day for a stay checkpoint; a day within the trip's dates")
     stay_end_date: Optional[date] = Field(
-        None, description="Check-out day for a stay anchor (≥ stay_date)")
+        None, description="Check-out day for a stay checkpoint (≥ stay_date)")
 
 
-class AnchorUpdateRequest(BaseModel):
+class CheckpointUpdateRequest(BaseModel):
     label: Optional[str] = Field(None, min_length=1, max_length=120)
     query: Optional[str] = Field(None, min_length=2, max_length=300)
     maps_url: Optional[str] = Field(
         None, max_length=2000,
         description="A Google Maps link. When it's a real Maps place/pin URL, "
                     "coordinates + city/region/country are extracted from it (no AI).")
-    type: Optional[AnchorType] = None
-    anchor_date: Optional[date] = None
-    anchor_time: Optional[time] = None
+    type: Optional[CheckpointType] = None
+    checkpoint_date: Optional[date] = None
+    checkpoint_time: Optional[time] = None
     stay_date: Optional[date] = None
     stay_end_date: Optional[date] = None
 
 
-class AnchorResponse(BaseModel):
+class CheckpointResponse(BaseModel):
     id: str
     trip_id: str
-    role: AnchorRole
+    role: CheckpointRole
     label: str
     query: str
     lat: Optional[float] = None
@@ -68,22 +68,22 @@ class AnchorResponse(BaseModel):
     country_code: Optional[str] = None
     maps_url: Optional[str] = None                 # user-pasted Maps link, when provided
     geocode_confidence: GeocodeConfidence = GeocodeConfidence.NONE
-    type: Optional[AnchorType] = None
+    type: Optional[CheckpointType] = None
     # Unified-model links (020): the checkpoint's canonical place + the
-    # creator's scrap. The anchor id itself is the trip-membership id.
+    # creator's scrap. The checkpoint id itself is the trip-membership id.
     place_id: Optional[str] = None
     scrap_id: Optional[str] = None
-    anchor_date: Optional[date] = None            # start: arrival; end: departure; travel: leg day
-    anchor_time: Optional[time] = None            # NULL = all-day point marker
+    checkpoint_date: Optional[date] = None        # travel: leg day
+    checkpoint_time: Optional[time] = None        # NULL = all-day point marker
     stay_date: Optional[date] = None              # stay: check-in
     stay_end_date: Optional[date] = None          # stay: check-out
     created_at: datetime
 
 
-# ── Endpoints (arrival / departure — ordinary bookend plans, 026) ─────────────
+# ── Bookends (arrival / departure — ordinary bookend stops, 026) ──────────────
 
-class EndpointCreateRequest(BaseModel):
-    which: Endpoint
+class BookendCreateRequest(BaseModel):
+    which: Bookend
     label: Optional[str] = Field(None, min_length=1, max_length=120)
     query: Optional[str] = Field(None, min_length=2, max_length=300,
                                  description="Freeform place text to geocode, e.g. 'Narita Airport'")
@@ -91,29 +91,29 @@ class EndpointCreateRequest(BaseModel):
         None, max_length=2000,
         description="A Google Maps link; a real Maps place/pin URL yields "
                     "coordinates + city/region/country (no AI).")
-    type: Optional[AnchorType] = Field(
+    type: Optional[CheckpointType] = Field(
         None, description="How you travel (airport/train_station/car_rental/other)")
     day: Optional[date] = Field(
         None, description="Arrival day (arrival) or departure day (departure), within the trip's dates")
     same_as_arrival: bool = Field(
         False,
-        description="Departure only: reuse the arrival place (flag its plan as the "
+        description="Departure only: reuse the arrival place (flag its stop as the "
                     "departure too) instead of geocoding a separate spot — but not its date")
 
     @model_validator(mode="after")
-    def _require_place(self) -> "EndpointCreateRequest":
-        # label/query are reused from the arrival plan when same_as_arrival is
+    def _require_place(self) -> "BookendCreateRequest":
+        # label/query are reused from the arrival stop when same_as_arrival is
         # set; otherwise the user must supply both to geocode a real place.
         if not self.same_as_arrival and (not self.label or not self.query):
             raise ValueError("label and query are required unless same_as_arrival is set")
         return self
 
 
-class EndpointUpdateRequest(BaseModel):
+class BookendUpdateRequest(BaseModel):
     label: Optional[str] = Field(None, min_length=1, max_length=120)
     query: Optional[str] = Field(None, min_length=2, max_length=300)
     maps_url: Optional[str] = Field(None, max_length=2000)
-    type: Optional[AnchorType] = None
+    type: Optional[CheckpointType] = None
     day: Optional[date] = None
 
 
@@ -179,7 +179,7 @@ class TripResponse(BaseModel):
     role: TripMemberRole = TripMemberRole.OWNER   # caller's role on this trip
     owner_user_id: Optional[str] = None
     owner_display_name: Optional[str] = None
-    anchors: list[AnchorResponse] = []
+    checkpoints: list[CheckpointResponse] = []  # stay/travel (arrival/departure ride on scraps as flags)
     scraps: list[ScrapResponse] = []           # approved
     staged_scraps: list[ScrapResponse] = []    # auto-matched, awaiting review
     members: list[TripMemberResponse] = []     # owner first, pending invites included
@@ -202,16 +202,17 @@ class MapsLinksResponse(BaseModel):
     legs: list[MapsLeg]
 
 
-class ExportPlanItem(BaseModel):
-    """One placed plan in the client's computed itinerary: which scrap, on which
-    day (null = no day / "Anytime"). Order in the list IS the export order."""
+class ExportItineraryItem(BaseModel):
+    """One placed stop in the client's computed itinerary: which scrap, on which
+    day (null = no day / "Anytime"). Order in the list IS the export order.
+    (`plan_date` mirrors the frozen DB column name.)"""
     scrap_id: str
     plan_date: Optional[str] = None
 
 
 class ExportRequest(BaseModel):
-    """Optional body for the export endpoints. When present, `plan` is the
-    client's timeline itinerary — the authoritative order + per-plan day,
-    including auto-placed plans the DB has no `plan_date` for. When absent (a
-    plain GET), the server falls back to DB `route_position` / `plan_date`."""
-    plan: Optional[list[ExportPlanItem]] = None
+    """Optional body for the export endpoints. When present, `itinerary` is the
+    client's timeline order — the authoritative order + per-stop day, including
+    auto-placed stops the DB has no `plan_date` for. When absent (a plain GET),
+    the server falls back to DB `route_position` / `plan_date`."""
+    itinerary: Optional[list[ExportItineraryItem]] = None

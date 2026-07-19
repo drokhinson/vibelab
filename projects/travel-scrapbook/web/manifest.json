@@ -1,6 +1,6 @@
 {
-  "name": "Travel Scrapbook",
-  "short_name": "Scrapbook",
+  "name": "Travel Trove",
+  "short_name": "Trove",
   "description": "Save travel links from anywhere — we figure out what place they are.",
   "start_url": "/",
   "display": "standalone",

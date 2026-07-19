@@ -69,7 +69,7 @@
     // async — one URL can fan out into several scraps — so we poll the trip
     // until new scraps land or the timeout passes. A provisional "processing"
     // source is pushed into capturePending:<tripId> SYNCHRONOUSLY so a shimmer
-    // card paints at the top of Plans in the same frame as the paste; the trip
+    // card paints at the top of Stops in the same frame as the paste; the trip
     // poll clears it once the real scraps land (or on timeout / capture error).
     async capture(tripId, url, notes) {
       const key = 'capturePending:' + tripId;
@@ -256,7 +256,7 @@
     },
 
     async approveAll(tripId) {
-      // The response is the trip's full plan list — rebucket it locally.
+      // The response is the trip's full stop list — rebucket it locally.
       const res = await window.api.approveAllStaged(tripId);
       const trip = window.store.get('trip:' + tripId);
       if (trip && res.scraps) {
@@ -270,7 +270,7 @@
       }
     },
 
-    // Set/clear a plan's per-trip timeline slot (day + optional time). Optimistic:
+    // Set/clear a stop's per-trip timeline slot (day + optional time). Optimistic:
     // paint ONLY the fields the caller sent (drag/pin → {plan_date}; scheduler →
     // {plan_date, plan_time}; unschedule → both null) BEFORE the request so the row
     // moves instantly — mirroring the server's exclude_unset so a day-only drag
@@ -302,7 +302,7 @@
       }
     },
 
-    // Timeline per-plan outcome: the checkbox cycles clear → visited → skipped.
+    // Timeline per-stop outcome: the checkbox cycles clear → visited → skipped.
     // `outcome` is null (clear), 'visited', or 'skipped' — the two are mutually
     // exclusive (the server clears the sibling flag). Optimistic so the tap feels
     // instant. A per-scrap sequence guard (mirroring schedule) drops stale echoes
@@ -449,11 +449,11 @@
 
     // Poll the trip while a capture is processing. A monotonic trip guard stops
     // a stale loop from clobbering another trip's state after navigation.
-    // Scraps AND anchors count toward the baseline — a booking link lands as a
-    // checkpoint (anchor), not a scrap, and should stop the poll too.
+    // Scraps AND checkpoints count toward the baseline — a booking link lands as
+    // a checkpoint, not a scrap, and should stop the poll too.
     _tripItemCount(trip) {
       return (trip.scraps || []).length + (trip.staged_scraps || []).length +
-        (trip.anchors || []).length;
+        (trip.checkpoints || []).length;
     },
 
     startPolling(tripId) {

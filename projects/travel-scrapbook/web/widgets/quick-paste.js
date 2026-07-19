@@ -17,8 +17,8 @@ function renderQuickPaste(tripId = null) {
       <input class="ts-input" id="quick-paste-input" type="url" required
              placeholder="${tripId ? 'Paste a link — a place, or a hotel/travel booking…' : 'Paste a link — Reddit, Instagram, a blog…'}"
              style="flex:1;margin:0;" inputmode="url" autocomplete="off" />
-      <button class="ts-btn ts-btn--blush" type="submit" aria-label="Scrap it">
-        <i data-lucide="${QUICK_PASTE_ICON}"></i><span class="hidden sm:inline">Scrap it</span>
+      <button class="ts-btn ts-btn--blush" type="submit" aria-label="Save it">
+        <i data-lucide="${QUICK_PASTE_ICON}"></i><span class="hidden sm:inline">Save it</span>
       </button>
     </form>
   `;
@@ -45,11 +45,11 @@ function bindQuickPaste(container, { onCreated, onCapture } = {}) {
       } else if (tripId) {
         // Trip capture: the trip polls until the new scraps land.
         await window.ScrapDomain.capture(tripId, url);
-        toast('Scrapped! Reading the link — places land as plans, bookings as checkpoints.');
+        toast('Saved! Reading the link — places land as stops, bookings as checkpoints.');
       } else {
         await window.api.capture({ url, via: 'paste' });
         window.SourceDomain?.refreshInboxCount();
-        toast('Scrapped! Reading the page — it may add more than one place.');
+        toast('Saved! Reading the page — it may add more than one place.');
       }
       input.value = '';
       onCreated?.();

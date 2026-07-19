@@ -1,16 +1,16 @@
-// widgets/plan-scheduler.js — pick a day (and optional time) for a plan.
+// widgets/stop-scheduler.js — pick a day (and optional time) for a stop.
 // Days come from the trip's timeline; falls back to a raw date input when the
-// trip has no day range yet. Saving PATCHes the plan's per-trip timeline slot
+// trip has no day range yet. Saving PATCHes the stop's per-trip timeline slot
 // (plan_date/plan_time live on the scrap↔trip membership), so a tripId is
 // required.
 'use strict';
 
-const PlanScheduler = {
+const StopScheduler = {
   open(scrap, { tripId = null, days = [], tripBounds = {}, onSaved } = {}) {
     this.close();
     const modal = document.createElement('div');
     modal.className = 'ts-modal';
-    modal.id = 'plan-scheduler-modal';
+    modal.id = 'stop-scheduler-modal';
     const current = scrap.plan_date || '';
     const dayPicker = days.length ? `
       <label class="ts-label" for="ps-day">Day</label>
@@ -25,9 +25,9 @@ const PlanScheduler = {
              ${tripBounds.start ? `min="${escapeAttr(tripBounds.start)}"` : ''}
              ${tripBounds.end ? `max="${escapeAttr(tripBounds.end)}"` : ''} />`;
     modal.innerHTML = `
-      <div class="ts-modal__backdrop" onclick="PlanScheduler.close()"></div>
-      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Schedule plan">
-        <button class="ts-modal__close" onclick="PlanScheduler.close()" aria-label="Close"><i data-lucide="x"></i></button>
+      <div class="ts-modal__backdrop" onclick="StopScheduler.close()"></div>
+      <div class="ts-modal__card" role="dialog" aria-modal="true" aria-label="Schedule stop">
+        <button class="ts-modal__close" onclick="StopScheduler.close()" aria-label="Close"><i data-lucide="x"></i></button>
         <h2 class="ts-modal__title">When?</h2>
         <p class="scrap-card__sub" style="margin-top:-0.4rem;">${escapeHtml(scrap.place_name || 'This place')} — pick its day; time is optional.</p>
         <form id="ps-form">
@@ -69,7 +69,7 @@ const PlanScheduler = {
   },
 
   close() {
-    document.getElementById('plan-scheduler-modal')?.remove();
+    document.getElementById('stop-scheduler-modal')?.remove();
   },
 };
-window.PlanScheduler = PlanScheduler;
+window.StopScheduler = StopScheduler;

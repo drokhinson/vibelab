@@ -27,7 +27,7 @@ class LoginView extends View {
       <div class="auth-card sticker-card washi" style="padding:1.6rem;padding-top:1.9rem;">
         <div style="text-align:center;margin-bottom:1rem;">
           <img src="/assets/brand/travel-scrapbook-logo.svg" alt="" style="width:76px;height:76px;" />
-          <h1 style="font-size:2.1rem;margin:0.3rem 0 0;">Travel Scrapbook</h1>
+          <h1 style="font-size:2.1rem;margin:0.3rem 0 0;">Travel Trove</h1>
           <p class="scrap-card__sub">Save the links. We'll sort the trip.</p>
         </div>
         ${renderOAuthButtons({ busy: this._busy })}

@@ -6,7 +6,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, HttpUrl
 
 from ..constants import (
-    AnchorRole,
+    CheckpointRole,
     CapturedVia,
     GeocodeConfidence,
     ScrapStatus,
@@ -111,14 +111,15 @@ class ScrapUpdateRequest(BaseModel):
     skipped: Optional[bool] = Field(
         None, description="Mark skipped on the timeline (greyed + tagged, but stays "
                           "on the Wander List) or clear it. Mutually exclusive with visited.")
-    # plan_date/plan_time are per-trip now — see PlanScheduleRequest and
+    # plan_date/plan_time are per-trip now — see ScheduleRequest and
     # PATCH /scraps/{id}/trips/{trip_id}/schedule.
 
 
-class PlanScheduleRequest(BaseModel):
-    """A place's timeline slot on ONE trip (per-membership). Null clears."""
+class ScheduleRequest(BaseModel):
+    """A place's timeline slot on ONE trip (per-membership). Null clears.
+    (`plan_date`/`plan_time` mirror the frozen DB column names.)"""
     plan_date: Optional[date] = Field(
-        None, description="Day this plan is slotted on; null clears")
+        None, description="Day this stop is slotted on; null clears")
     plan_time: Optional[time] = Field(
         None, description="Optional time on plan_date; null clears")
 
@@ -181,9 +182,9 @@ class ScrapResponse(BaseModel):
     plan_date: Optional[date] = None              # timeline slot (trip scraps only)
     plan_time: Optional[time] = None              # optional time within the day
     plan_end_date: Optional[date] = None          # stay check-out (020); departure day (026)
-    is_arrival: bool = False                       # 026: this plan bookends the trip's arrival
+    is_arrival: bool = False                       # 026: this stop bookends the trip's arrival
     is_departure: bool = False                     # 026: …and/or its departure
-    role: Optional[AnchorRole] = None             # set on checkpoint memberships (020)
+    role: Optional[CheckpointRole] = None         # set on checkpoint memberships (020)
     added_by_user_id: Optional[str] = None       # scrap owner (who saved it)
     added_by_display_name: Optional[str] = None
     vibes: list[ScrapVibe] = []                   # populated on trip surfaces only

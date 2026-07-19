@@ -1,8 +1,8 @@
 """Scrap-level reads, edits, deletion, the visited list, and vibes.
 
 Creation happens via POST /capture (source_routes) — one URL can fan out into
-several scraps. Trip-plan management (adding scraps to trips, staging review)
-lives in plan_routes.py.
+several scraps. Trip membership management (adding scraps to trips, staging
+review) lives in membership_routes.py.
 """
 
 from typing import Any, Optional
@@ -17,7 +17,7 @@ from .dependencies import CurrentUser, get_current_user
 from .models import (
     GeoFacets,
     MessageResponse,
-    PlanScheduleRequest,
+    ScheduleRequest,
     RatingRequest,
     ScrapResponse,
     ScrapUpdateRequest,
@@ -121,7 +121,7 @@ async def update_scrap(
     Edits write to the scrap's canonical place row (safe — places are per-user).
     City/country/region are read-only here: they derive from the place's pin, so
     the only way to move a place is to pass a new maps_url (city/region/country
-    re-derive from it). A plan's per-trip timeline slot is set separately via
+    re-derive from it). A stop's per-trip timeline slot is set separately via
     PATCH /scraps/{id}/trips/{trip_id}/schedule."""
     sb = get_supabase()
     existing = get_owned_scrap(sb, scrap_id, user.user_id)
@@ -243,16 +243,16 @@ async def delete_scrap(
     return MessageResponse(message="Scrap deleted")
 
 
-# ── Timeline slot (per-trip plan schedule) ──────────────────────────────────
+# ── Timeline slot (per-trip stop schedule) ──────────────────────────────────
 
 @router.patch(
     "/scraps/{scrap_id}/trips/{trip_id}/schedule",
     response_model=ScrapResponse,
     status_code=200,
-    summary="Set a plan's timeline slot on a trip",
+    summary="Set a stop's timeline slot on a trip",
 )
-async def schedule_plan(
-    body: PlanScheduleRequest,
+async def schedule_stop(
+    body: ScheduleRequest,
     scrap_id: str = Path(..., description="Scrap UUID"),
     trip_id: str = Path(..., description="Trip UUID"),
     user: CurrentUser = Depends(get_current_user),
@@ -281,7 +281,7 @@ async def schedule_plan(
         start, end = trip.get("start_date"), trip.get("end_date")
         if (start and plan_date < start) or (end and plan_date > end):
             raise HTTPException(
-                status_code=400, detail="Plan day must fall within the trip's dates")
+                status_code=400, detail="Stop day must fall within the trip's dates")
     if m_update:
         sb.table("travelscrapbook_scrap_trips").update(m_update).eq(
             "id", membership["id"]
@@ -312,7 +312,7 @@ async def set_rating(
         {"rating": body.level, "updated_at": "now()"}
     ).eq("id", scrap_id).execute()
     scrap["rating"] = body.level
-    # Plan memberships only (020) — vibes are consensus on PLANS; checkpoint
+    # Stop memberships only (020) — vibes are consensus on STOPS; checkpoint
     # memberships never carry vibe rows.
     memberships = (
         sb.table("travelscrapbook_scrap_trips")

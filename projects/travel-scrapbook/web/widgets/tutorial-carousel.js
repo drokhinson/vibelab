@@ -13,7 +13,7 @@ const TUTORIAL_STEPS = [
   },
   {
     illustration: 'travel-scrapbook-tutorial-collect',
-    title: 'Scrap it from anywhere',
+    title: 'Save it from anywhere',
     body: 'See somewhere great in a reel, a thread, or an article? Share it straight here from any app. We read the link and pull out every place it mentions — one good listicle can drop five pins at once. Set it up in Settings → “Save from your phone”.',
   },
   {
@@ -24,12 +24,12 @@ const TUTORIAL_STEPS = [
   {
     illustration: 'travel-scrapbook-tutorial-new-trip',
     title: 'Build a trip',
-    body: 'Start a trip with a destination and we’ll do the sorting: finds near it stage themselves under “Needs review”, and your Wander List suggests matching plans. Add the rest with one tap.',
+    body: 'Start a trip with a destination and we’ll do the sorting: finds near it stage themselves under “Needs review”, and your Wander List suggests matching stops. Add the rest with one tap.',
   },
   {
     illustration: 'travel-scrapbook-tutorial-timeline',
     title: 'Checkpoints build the timeline',
-    body: 'Add checkpoints — stays and travel with dates, even paste a booking link — and the trip becomes a day-by-day timeline. Unplanned stops get slotted in — “near your Day 2 hotel” — and booked plans show up right on time.',
+    body: 'Add checkpoints — stays and travel with dates, even paste a booking link — and the trip becomes a day-by-day timeline. Unplanned stops get slotted in — “near your Day 2 hotel” — and booked stops show up right on time.',
   },
   {
     illustration: 'travel-scrapbook-tutorial-community',
@@ -45,7 +45,7 @@ const TUTORIAL_STEPS = [
 
 // Shown only on iPhone/iPad (isIOS): an optional nudge to set up the share
 // shortcut. Info-only — the actual setup lives in Settings (see footnote).
-// Inserted right after "Scrap it from anywhere" so it lands in the sharing context.
+// Inserted right after "Save it from anywhere" so it lands in the sharing context.
 const IOS_SHARE_STEP = {
   illustration: 'travel-scrapbook-tutorial-share-shortcut',
   title: 'Save straight from your iPhone',
@@ -58,7 +58,7 @@ const IOS_SHARE_STEP = {
 function buildTutorialSteps() {
   const steps = TUTORIAL_STEPS.slice();
   if (typeof isIOS === 'function' && isIOS()) {
-    steps.splice(2, 0, IOS_SHARE_STEP); // after "Scrap it from anywhere"
+    steps.splice(2, 0, IOS_SHARE_STEP); // after "Save it from anywhere"
   }
   return steps;
 }
@@ -110,7 +110,7 @@ const TutorialCarousel = {
     modal.id = 'tutorial-modal';
     modal.innerHTML = `
       <div class="ts-modal__backdrop" onclick="TutorialCarousel.close()"></div>
-      <div class="ts-modal__card tutorial-card" role="dialog" aria-modal="true" aria-label="How Travel Scrapbook works">
+      <div class="ts-modal__card tutorial-card" role="dialog" aria-modal="true" aria-label="How Travel Trove works">
         <button class="ts-modal__close" onclick="TutorialCarousel.close()" aria-label="Close"><i data-lucide="x"></i></button>
         <img class="tutorial-card__art" src="/assets/illustrations/${step.illustration}.svg" alt="" />
         <h2 class="ts-modal__title tutorial-card__title">${escapeHtml(step.title)}</h2>

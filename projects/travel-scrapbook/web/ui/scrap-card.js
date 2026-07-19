@@ -266,7 +266,7 @@ function renderScrapCard(scrap, opts = {}) {
         </button>
       </div>`;
   } else if (variant === 'inbox' && checkpoint) {
-    // Stays & transport: no plan picker — a checkpoint joins a trip with a
+    // Stays & transport: no stop picker — a checkpoint joins a trip with a
     // role (stay/arrival/…), which flows through the trip screen's
     // "+ Checkpoint". Notes / priority / edit stay available above.
     footer = '';

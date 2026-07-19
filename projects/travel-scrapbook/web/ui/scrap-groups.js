@@ -1,6 +1,6 @@
 // ui/scrap-groups.js — bucket a list of scraps by a chosen dimension (activity
-// type or geography). The only consumer today is ui/plan-zones.js, which turns
-// the buckets into the trip Plans tab's interlocking geo "zones". Pure helper
+// type or geography). The only consumer today is ui/stop-zones.js, which turns
+// the buckets into the trip Stops tab's interlocking geo "zones". Pure helper
 // over the flat place fields the API already returns (place_city/region/country,
 // category) — no rendering, no DOM.
 'use strict';
@@ -59,5 +59,5 @@ function groupScraps(scraps, dimension) {
   return arr;
 }
 
-window.GROUP_NONE = _GROUP_NONE; // so plan-zones can flag the missing-value bucket
+window.GROUP_NONE = _GROUP_NONE; // so stop-zones can flag the missing-value bucket
 window.groupScraps = groupScraps;

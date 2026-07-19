@@ -1,4 +1,4 @@
-// ui/plan-zones.js — the trip Plans layout: all plan cards in ONE continuous
+// ui/stop-zones.js — the trip Stops layout: all stop cards in ONE continuous
 // grid, auto-grouped by geography. Instead of a rectangular box per region
 // (which wastes a half-row whenever a region has an odd card count), cards pack
 // into a single gap-less grid in region order, and each region is shown by
@@ -20,7 +20,7 @@ const _ZONE_PREF = {
 const _ZONE_PREF_DEFAULT = ['country', 'city', 'region'];
 
 // Fixed column count — the dotted-boundary math below assumes a stable grid
-// width, so the plan grid stays 2-up at every size (see .plan-zones-grid CSS).
+// width, so the stop grid stays 2-up at every size (see .stop-zones-grid CSS).
 const _ZONE_COLS = 2;
 
 // Stable label→colour so a region keeps its tint across re-renders (a fresh
@@ -33,13 +33,13 @@ function _zoneTint(label) {
 }
 
 /**
- * Render trip plans as interlocking geography zones.
+ * Render trip stops as interlocking geography zones.
  * @param {Array} scraps
  * @param {{scopeLevel?:string, variant?:string, tripId?:(string|null),
  *          shared?:boolean, currentUserId?:(string|null), canWrite?:boolean}} opts
  * @returns {string}
  */
-function renderPlanZones(scraps, opts = {}) {
+function renderStopZones(scraps, opts = {}) {
   const {
     scopeLevel, variant = 'trip', tripId = null,
     shared = false, currentUserId = null, canWrite = true,
@@ -88,12 +88,12 @@ function renderPlanZones(scraps, opts = {}) {
       ? `<span class="zone-cell__label">${escapeHtml(cell.label)}<span class="zone-cell__count">${cell.count}</span></span>`
       : '';
     return `
-      <div class="zone-cell plan-zone--${cell.tint}${cell.start ? ' zone-cell--start' : ''}" style="--i:${i};${border}">
+      <div class="zone-cell stop-zone--${cell.tint}${cell.start ? ' zone-cell--start' : ''}" style="--i:${i};${border}">
         ${label}${renderScrapCard(cell.scrap, { index: i, ...card })}
       </div>`;
   }).join('');
 
-  return `<div class="plan-zones-grid">${inner}</div>`;
+  return `<div class="stop-zones-grid">${inner}</div>`;
 }
 
-window.renderPlanZones = renderPlanZones;
+window.renderStopZones = renderStopZones;

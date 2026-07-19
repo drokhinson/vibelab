@@ -1,6 +1,6 @@
 // widgets/timeline-gestures.js — swipe + press-and-hold gestures for the trip
-// Timeline's plan rows. Render (ui/trip-timeline.js) emits the scaffold:
-//   .tl-swipe[data-scrap-id][data-plan-date]  → one plan
+// Timeline's stop rows. Render (ui/trip-timeline.js) emits the scaffold:
+//   .tl-swipe[data-scrap-id][data-plan-date]  → one stop
 //     .tl-swipe__action--schedule             → revealed on swipe RIGHT
 //     .tl-swipe__action--remove               → revealed on swipe LEFT (scheduled only)
 //     .tl-row.tl-row--draggable               → the sliding foreground
@@ -9,7 +9,7 @@
 // One pointer state machine per row disambiguates the gestures:
 //   • horizontal drag past a threshold → swipe (anchor / un-anchor),
 //   • press-and-hold ON THE GRIP then move → pick the card up and drop on a day,
-//   • a clean tap on the title → its click fires (opens the plan popup),
+//   • a clean tap on the title → its click fires (opens the stop popup),
 //   • everything else → snap back (vertical moves fall through to native scroll).
 // Only the checkbox opts out entirely (its own tap); a swipe can start anywhere
 // else on the row, including the title — after a swipe/drag we suppress the
@@ -228,7 +228,7 @@ const TimelineGestures = (function () {
 
   return {
     /**
-     * Wire every plan row in `container`. Safe to call after each render — it
+     * Wire every stop row in `container`. Safe to call after each render — it
      * only touches freshly-rendered nodes, and captured listeners die with them.
      * @param {HTMLElement} container
      * @param {{canWrite?: boolean,

@@ -2,7 +2,7 @@
 
 Split by domain to stay under the ~300-line file budget:
   core.py      — profile, capture/sources, scraps, inbox
-  trip.py      — anchors, trips, exports
+  trip.py      — checkpoints, bookends, trips, exports
   community.py — cross-user community place pool
   social.py    — trip members, invitations, vibes
 
@@ -22,10 +22,10 @@ from .core import (  # noqa: F401
     InboxScrapResponse,
     MessageResponse,
     PagedScrapsResponse,
-    PlanScheduleRequest,
     ProfileResponse,
     ProfileUpdateRequest,
     RatingRequest,
+    ScheduleRequest,
     ScrapConsensus,
     ScrapListResponse,
     ScrapResponse,
@@ -41,12 +41,12 @@ from .core import (  # noqa: F401
     VisitedPageResponse,
 )
 from .trip import (  # noqa: F401
-    AnchorCreateRequest,
-    AnchorResponse,
-    AnchorUpdateRequest,
-    EndpointCreateRequest,
-    EndpointUpdateRequest,
-    ExportPlanItem,
+    BookendCreateRequest,
+    BookendUpdateRequest,
+    CheckpointCreateRequest,
+    CheckpointResponse,
+    CheckpointUpdateRequest,
+    ExportItineraryItem,
     ExportRequest,
     MapsLeg,
     MapsLinksResponse,

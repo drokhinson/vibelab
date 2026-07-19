@@ -1,7 +1,7 @@
 // domain/timeline.js — client-side port of the backend timeline math
 // (shared-backend/routes/travel_scrapbook/services/timeline.py). The trip
-// bundle already carries everything the timeline needs (anchors + each
-// plan's plan_date/plan_time), so building it locally makes the Timeline
+// bundle already carries everything the timeline needs (checkpoints + each
+// stop's plan_date/plan_time), so building it locally makes the Timeline
 // tab and every schedule change instant — zero network. This port is the
 // live implementation for the web app; keep it in step with the Python
 // service (which still backs GET /trips/{id}/timeline for other clients).
@@ -24,20 +24,20 @@
     return 6371 * 2 * Math.asin(Math.sqrt(a));
   }
 
-  // Flatten anchors into dated markers: travel → its leg day, stay → check-in +
-  // (when set) check-out. (026: arrival/departure are no longer anchors — they
-  // bookend the timeline as plans; see ui/trip-timeline.js.)
-  function markersFromAnchors(anchors) {
+  // Flatten checkpoints into dated markers: travel → its leg day, stay →
+  // check-in + (when set) check-out. (026: arrival/departure bookend the
+  // timeline as stops; see ui/trip-timeline.js.)
+  function markersFromCheckpoints(checkpoints) {
     const markers = [];
     const add = (kind, a, day, time) => {
       if (!day) return;
       markers.push({
-        kind, anchor_id: a.id, label: a.label,
+        kind, checkpoint_id: a.id, label: a.label,
         lat: a.lat ?? null, lng: a.lng ?? null, date: day, time: time ?? null,
       });
     };
-    for (const a of anchors || []) {
-      if (a.role === 'travel') add('travel', a, a.anchor_date, a.anchor_time);
+    for (const a of checkpoints || []) {
+      if (a.role === 'travel') add('travel', a, a.checkpoint_date, a.checkpoint_time);
       else if (a.role === 'stay') {
         add('checkin', a, a.stay_date, null);
         add('checkout', a, a.stay_end_date, null);
@@ -47,7 +47,7 @@
   }
 
   // The trip's days as ISO dates. Trip bounds win; otherwise span the
-  // min/max dated marker/plan. Empty when nothing is dated at all.
+  // min/max dated marker/stop. Empty when nothing is dated at all.
   function dayRange(trip, markers, scraps) {
     let start = trip.start_date;
     let end = trip.end_date;
@@ -70,7 +70,7 @@
     return days;
   }
 
-  // Nearest located marker within the radius → "slot this plan near that
+  // Nearest located marker within the radius → "slot this stop near that
   // marker's day". Stays suggest their check-in day.
   function suggest(scrap, markers, dayNumbers) {
     if (scrap.lat == null || scrap.lng == null) return null;
@@ -98,21 +98,21 @@
    * trip's APPROVED plans. Per-day row ordering is left to the renderer
    * (ui/trip-timeline.js sorts rows itself).
    */
-  window.buildTimeline = function buildTimeline(trip, anchors, scraps) {
-    const markers = markersFromAnchors(anchors);
+  window.buildTimeline = function buildTimeline(trip, checkpoints, scraps) {
+    const markers = markersFromCheckpoints(checkpoints);
     const days = dayRange(trip, markers, scraps);
     if (!days.length) return { days: [], unscheduled: [], reason: 'no_dates' };
     const dayNumbers = {};
     days.forEach((d, i) => { dayNumbers[d] = i + 1; });
 
-    const plansByDay = {};
+    const stopsByDay = {};
     const unscheduled = [];
-    // Every approved plan stays in the trip — a scheduled plan sits on its day,
-    // an unscheduled one collects in Anytime. Completed (visited/skipped) plans
+    // Every approved stop stays in the trip — a scheduled stop sits on its day,
+    // an unscheduled one collects in Anytime. Completed (visited/skipped) stops
     // are kept too (greyed + sunk to the bottom by the renderer), never dropped.
     for (const s of scraps) {
       if (s.plan_date && s.plan_date in dayNumbers) {
-        (plansByDay[s.plan_date] ??= []).push(s);
+        (stopsByDay[s.plan_date] ??= []).push(s);
       } else {
         unscheduled.push({ ...s, suggestion: suggest(s, markers, dayNumbers) });
       }
@@ -123,7 +123,7 @@
         date: d,
         day_number: dayNumbers[d],
         markers: markers.filter((m) => m.date === d),
-        plans: plansByDay[d] || [],
+        stops: stopsByDay[d] || [],
       })),
       unscheduled,
     };

@@ -1,9 +1,9 @@
-"""Trip plan management: listing a trip's scraps, wishlist candidates,
+"""Trip membership management: listing a trip's scraps, wishlist candidates,
 adding/removing scraps to/from trips, and staging review.
 
-A "plan" is a place filed into a trip — a row in travelscrapbook_scrap_trips
+A "stop" is a place filed into a trip — a row in travelscrapbook_scrap_trips
 linking the owner's scrap to the trip (with that trip's status / route position
-/ timeline slot). A place can be a plan on several trips at once; it stays on the
+/ timeline slot). A place can be a stop on several trips at once; it stays on the
 owner's Wander List regardless (it only leaves when visited). Every place still
 arrives via a URL capture (or the community pool) — there is no manual entry.
 Scrap-level reads/edits/vibes live in scrap_routes.py.
@@ -36,9 +36,9 @@ from .services.places import place_matches_trip_scope
 
 
 def _trip_memberships(sb, trip_id: str) -> list[dict]:
-    """A trip's PLAN memberships (join rows embedding their scrap), newest
-    first. Checkpoint memberships (role set, 020) belong to the anchors
-    surface, never the plans lists."""
+    """A trip's STOP memberships (join rows embedding their scrap), newest
+    first. Checkpoint memberships (role set, 020) belong to the checkpoints
+    surface, never the stops lists."""
     return (
         sb.table("travelscrapbook_scrap_trips")
         .select("*, travelscrapbook_scraps(*)")
@@ -103,7 +103,7 @@ async def list_trip_wishlist(
         if r["id"] not in already
     ]
     hydrated = hydrate_scraps(sb, rows)
-    # Same checkpoint exclusion as /candidates: the picker adds PLANS, and a
+    # Same checkpoint exclusion as /candidates: the picker adds STOPS, and a
     # hotel/airport joins a trip as a checkpoint via the trip screen instead.
     cp_slugs = checkpoint_category_slugs(sb)
     scored = [
@@ -135,7 +135,7 @@ async def list_trip_suggestions(
     category: str | None = Query(None, max_length=40, description="Filter by category slug"),
     checkpoints: bool = Query(
         False, description="Draw from the Stays & transport pool (checkpoint "
-                           "categories) instead of ordinary plan places"),
+                           "categories) instead of ordinary stop places"),
     q: str | None = Query(None, max_length=120, description="Search name or city"),
     limit: int = Query(6, ge=1, le=24, description="Page size (one carousel page)"),
     offset: int = Query(0, ge=0, description="Page start"),
@@ -145,7 +145,7 @@ async def list_trip_suggestions(
     Wander List (higher priority) merged with the community pool, scoped to the
     trip's region/country/city, split by the checkpoint partition, optionally
     narrowed to one category, ranked wander-first then nearest to the trip's
-    placed plans. `categories` is the type-filter facet over the whole scoped
+    placed stops. `categories` is the type-filter facet over the whole scoped
     pool (independent of the current category pick)."""
     sb = get_supabase()
     get_accessible_trip(sb, trip_id, user.user_id)  # 404s if not a member
@@ -167,11 +167,12 @@ async def list_trip_suggestions(
     )
 
 
-def _add_plan_memberships(sb: Client, pairs: list[tuple[str, str]]) -> None:
-    """Add PLAN memberships for (scrap_id, trip_id) pairs, leaving any that
+def _add_stop_memberships(sb: Client, pairs: list[tuple[str, str]]) -> None:
+    """Add STOP memberships for (scrap_id, trip_id) pairs, leaving any that
     already exist untouched — one RPC round trip however many pairs. An RPC
-    because the plan uniqueness is a partial index (WHERE role IS NULL, 020)
-    that PostgREST's on_conflict can't arbitrate."""
+    because the stop uniqueness is a partial index (WHERE role IS NULL, 020)
+    that PostgREST's on_conflict can't arbitrate. (RPC name stays
+    travelscrapbook_add_plan_memberships — the DB function is frozen.)"""
     if not pairs:
         return
     sb.rpc("travelscrapbook_add_plan_memberships", {
@@ -180,8 +181,8 @@ def _add_plan_memberships(sb: Client, pairs: list[tuple[str, str]]) -> None:
 
 
 def _upsert_memberships(sb: Client, trip_id: str, scrap_ids: list[str]) -> None:
-    """Add PLAN memberships for the given owned scraps to a trip (approved)."""
-    _add_plan_memberships(sb, [(sid, trip_id) for sid in scrap_ids])
+    """Add STOP memberships for the given owned scraps to a trip (approved)."""
+    _add_stop_memberships(sb, [(sid, trip_id) for sid in scrap_ids])
 
 
 @router.post(
@@ -268,8 +269,8 @@ async def set_scrap_trips(
     sb = get_supabase()
     get_owned_scrap(sb, scrap_id, user.user_id)
     requested = set(body.trip_ids)
-    # PLAN memberships only (role IS NULL, 020): the picker reconciles the
-    # place's plan set — its checkpoint roles on trips are untouchable here.
+    # STOP memberships only (role IS NULL, 020): the picker reconciles the
+    # place's stop set — its checkpoint roles on trips are untouchable here.
     current = {
         m["trip_id"]
         for m in (
@@ -283,7 +284,7 @@ async def set_scrap_trips(
     to_add = requested - current
     to_remove = current - requested
     assert_writable_trips(sb, to_add | to_remove, user.user_id)
-    _add_plan_memberships(sb, [(scrap_id, tid) for tid in to_add])
+    _add_stop_memberships(sb, [(scrap_id, tid) for tid in to_add])
     if to_remove:
         sb.table("travelscrapbook_scrap_trips").delete().eq(
             "scrap_id", scrap_id
@@ -333,7 +334,7 @@ async def unassign_scrap(
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
     """Remove a place from ONE trip (staging 'remove', or pulling an approved
-    plan back out). The membership's route position, timeline slot, and vibes
+    stop back out). The membership's route position, timeline slot, and vibes
     cascade away; the place stays on the Wander List and in any other trips."""
     sb = get_supabase()
     get_owned_scrap(sb, scrap_id, user.user_id)
