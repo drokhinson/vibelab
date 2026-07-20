@@ -162,6 +162,7 @@
     // File-download endpoints return a Blob; everything else is JSON.
     const isDownload = contentType.includes('text/csv') ||
       contentType.includes('text/markdown') ||
+      contentType.includes('text/html') ||  // import-audit flowchart download
       contentType.includes('application/vnd.google-earth.kml+xml');
     return isDownload ? res.blob() : res.json();
   }
@@ -207,6 +208,13 @@
     /** @returns {Promise<Source>} */
     retrySource: (sourceId) => call(`/sources/${sourceId}/retry`, { method: 'POST' }),
     deleteSource: (sourceId) => call(`/sources/${sourceId}`, { method: 'DELETE' }),
+
+    /** The user's last 5 imports (parse-trace audit list).
+     *  @returns {Promise<{imports: Array<{source_id: string, url: string, final_status: (string|null), error_kind: (string|null), created_at: string}>}>} */
+    recentImports: () => call('/imports/recent'),
+    /** One import's parse trace rendered as a downloadable HTML flowchart.
+     *  @returns {Promise<Blob>} */
+    importAudit: (sourceId) => call(`/imports/${sourceId}/audit`),
 
     /** @returns {Promise<{token: string, created_at: string}>} */
     createCaptureToken: () => call('/capture-token', { method: 'POST' }),

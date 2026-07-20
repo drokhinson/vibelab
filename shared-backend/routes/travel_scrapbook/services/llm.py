@@ -11,7 +11,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import httpx
 
@@ -26,6 +26,10 @@ from ..constants import (
     MAX_PLACES_PER_SOURCE,
 )
 from .scraper import PageContent
+from .trace import clip
+
+if TYPE_CHECKING:  # annotations only — avoids a runtime import cycle
+    from .trace import ImportTrace
 _ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     f"{GEMINI_MODEL}:generateContent"
@@ -83,7 +87,9 @@ def _get_client() -> httpx.AsyncClient:
 
 _SYSTEM = (
     "You extract travel places from web pages people saved while planning "
-    "trips. Respond with ONLY a JSON object — no prose, no code fences."
+    "trips. Respond with ONLY a JSON object — no prose, no code fences. Extract "
+    "only places that are explicitly named in the provided text; never guess or "
+    "invent places from general knowledge."
 )
 
 
@@ -109,8 +115,11 @@ def _build_prompt(
             lines.append(f"Page text (truncated): {page.text_excerpt}")
     else:
         lines.append(
-            "The page could not be fetched. Infer the place(s) from the URL "
-            "and any share-sheet text (path slugs often contain the place name)."
+            "The page itself could not be fetched. Use ONLY the URL and any "
+            "share-sheet text or recovered caption above. A human-readable URL "
+            "slug may name the place, but an opaque permalink (e.g. "
+            "instagram.com/reel/<id>, tiktok.com/.../video/<id>) names nothing — "
+            "do not guess a place from it."
         )
     lines.append(
         "\nExtract EVERY distinct real-world place a traveler would want to "
@@ -144,8 +153,13 @@ def _build_prompt(
         "  }\n"
         "}\n"
         "For a booking page, still list the lodging or destination as a place "
-        f"entry in \"places\". Order by prominence. Include at most {MAX_PLACES_PER_SOURCE}. "
-        'If no specific place is identifiable, return {"places": [], "booking": null}.'
+        f"entry in \"places\". Order by prominence. Include at most {MAX_PLACES_PER_SOURCE}.\n"
+        "CRITICAL: Extract ONLY places explicitly named in the text, caption, or "
+        "a human-readable URL slug above. NEVER guess, infer from general "
+        "knowledge, or fall back to famous or default places when the input "
+        "names none. If nothing above explicitly names a real place — for "
+        "example an opaque social-media permalink with no caption — you MUST "
+        'return {"places": [], "booking": null}.'
     )
     return "\n".join(lines)
 
@@ -243,13 +257,21 @@ async def extract_places(
     page: Optional[PageContent],
     categories: list[str],
     shared_text: Optional[str] = None,
+    trace: "Optional[ImportTrace]" = None,
 ) -> tuple[list[PlaceExtraction], Optional[BookingExtraction]]:
     """Ask Gemini for every place the page mentions, plus whether the page is
     itself a lodging/transport booking. Raises LLMError on failure; an empty
-    place list means the page has no identifiable places."""
+    place list means the page has no identifiable places. Records the prompt and
+    raw response on the trace when one is supplied."""
     api_key = _get_api_key()
     client = _get_client()
     prompt = _build_prompt(url, page, categories, shared_text)
+    if trace is not None:
+        trace.add(
+            "llm_request",
+            "AI place extraction — prompt sent",
+            {"model": GEMINI_MODEL, "system": _SYSTEM, "prompt": clip(prompt)},
+        )
     body = {
         "system_instruction": {"parts": [{"text": _SYSTEM}]},
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -283,4 +305,31 @@ async def extract_places(
         text = _extract_text(payload)
 
     data = _parse_json(text)
-    return _coerce_places(data, categories), _coerce_booking(data)
+    extractions = _coerce_places(data, categories)
+    booking = _coerce_booking(data)
+    if trace is not None:
+        trace.add(
+            "llm_response",
+            f"AI place extraction — {len(extractions)} place(s) parsed",
+            {
+                "raw": clip(text),
+                "places": [
+                    {
+                        "place_name": e.place_name,
+                        "city": e.city,
+                        "country": e.country,
+                        "category": e.category,
+                        "geocode_query": e.geocode_query,
+                        "confident": e.confident,
+                    }
+                    for e in extractions
+                ],
+                "booking": (
+                    {"kind": booking.kind, "label": booking.label,
+                     "location": booking.location}
+                    if booking
+                    else None
+                ),
+            },
+        )
+    return extractions, booking

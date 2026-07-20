@@ -21,7 +21,7 @@ place's coordinates rather than a nearby result's.
 
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
@@ -29,6 +29,9 @@ import httpx
 from api_logger import log_external_call
 
 from ..constants import APP_NAME
+
+if TYPE_CHECKING:  # annotations only — avoids a runtime import cycle
+    from .trace import ImportTrace
 
 HTTP_TIMEOUT = 10.0
 
@@ -243,13 +246,17 @@ def _extract_name(url: str) -> Optional[str]:
     return None
 
 
-async def parse_maps_url(url: str) -> Optional[MapsPlace]:
+async def parse_maps_url(
+    url: str, trace: "Optional[ImportTrace]" = None
+) -> Optional[MapsPlace]:
     """Extract place name + pin coordinates from a Google Maps URL, expanding a
     short link first if needed. Returns None when nothing usable can be parsed
-    (caller then falls back to the normal fetch + LLM path)."""
+    (caller then falls back to the normal fetch + LLM path). Records the
+    expansion on the trace when one is supplied."""
     if not url:
         return None
-    if _is_short_link(url):
+    short = _is_short_link(url)
+    if short:
         exp = await _expand_short_link(url)
     else:
         exp = _Expansion(url, [url], "")
@@ -264,6 +271,21 @@ async def parse_maps_url(url: str) -> Optional[MapsPlace]:
         lat, lng = _coords_from_body(exp.body, ftid.group(1) if ftid else None)
 
     name = _extract_name(exp.final_url)
-    if lat is None and not name:
-        return None
-    return MapsPlace(name=name, lat=lat, lng=lng, expanded_url=exp.final_url)
+    result = None if (lat is None and not name) else MapsPlace(
+        name=name, lat=lat, lng=lng, expanded_url=exp.final_url
+    )
+    if trace is not None:
+        trace.add(
+            "url_expansion",
+            "Google Maps link parsed" if result else "Google Maps link — nothing parsable",
+            {
+                "original_url": url,
+                "was_short_link": short,
+                "expanded_url": exp.final_url,
+                "redirect_chain": exp.chain_urls,
+                "extracted_name": name,
+                "coords": {"lat": lat, "lng": lng} if lat is not None else None,
+                "parsed": result is not None,
+            },
+        )
+    return result

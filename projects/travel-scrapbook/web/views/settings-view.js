@@ -4,17 +4,80 @@
 class SettingsView extends View {
   constructor() {
     super('settings');
-    this._tokenStatus = null;   // {active, created_at?, last_used_at?}
-    this._freshToken = null;    // plaintext, shown once after creation
+    this._tokenStatus = null;    // {active, created_at?, last_used_at?}
+    this._freshToken = null;     // plaintext, shown once after creation
+    this._recentImports = null;  // {imports: [...]} — null while loading
+    this._importsError = false;  // true if the last fetch failed
   }
 
   async onMount() {
     this._freshToken = null;
+    this._recentImports = null;
+    this._importsError = false;
     this.listen('user', () => this.render());
-    try {
-      this._tokenStatus = await window.api.getCaptureToken();
-      this.render();
-    } catch (_) { /* section renders a retry-free fallback */ }
+    // Load the capture token and the import-audit list together; render once.
+    const [tok, imp] = await Promise.allSettled([
+      window.api.getCaptureToken(),
+      window.api.recentImports(),
+    ]);
+    if (tok.status === 'fulfilled') this._tokenStatus = tok.value;
+    if (imp.status === 'fulfilled') this._recentImports = imp.value;
+    else this._importsError = true;
+    this.render();
+  }
+
+  // Friendly status label + accent for one import-audit row.
+  _auditStatus(im) {
+    if (im.final_status === 'ready') return { label: 'Imported', color: '#2f8f5b' };
+    if (im.final_status === 'failed') {
+      const copy = {
+        network: "Couldn't reach the page",
+        blocked: 'The site blocked us',
+        llm: "Couldn't read the page",
+        no_place: 'No places found',
+        internal: 'Import error',
+      };
+      return { label: copy[im.error_kind] || "Couldn't read", color: '#c2410c' };
+    }
+    return { label: 'Processing…', color: 'var(--ink-muted)' };
+  }
+
+  _renderImportAudit() {
+    const imports = this._recentImports && this._recentImports.imports;
+    let body;
+    if (this._importsError) {
+      body = `<p class="scrap-card__sub" style="margin:0.6rem 0 0;">Couldn't load your recent imports — try reopening Settings.</p>`;
+    } else if (this._recentImports === null) {
+      body = `<p class="scrap-card__sub" style="margin:0.6rem 0 0;">Loading…</p>`;
+    } else if (!imports || imports.length === 0) {
+      body = `<p class="scrap-card__sub" style="margin:0.6rem 0 0;">No imports yet — share a link and it'll show up here.</p>`;
+    } else {
+      body = imports.map((im) => {
+        let host = im.url;
+        try { host = new URL(im.url).hostname.replace(/^www\./, ''); } catch (_) {}
+        const st = this._auditStatus(im);
+        return `
+          <div style="display:flex;align-items:center;gap:0.6rem;padding:0.6rem 0;border-top:1.5px solid var(--border);">
+            <span style="min-width:0;flex:1;">
+              <span style="display:block;font-weight:700;font-size:0.9rem;overflow-wrap:anywhere;">${escapeHtml(host)}</span>
+              <span class="scrap-card__sub" style="font-size:0.78rem;">
+                <span style="color:${st.color};font-weight:700;">${escapeHtml(st.label)}</span>
+                · ${escapeHtml(new Date(im.created_at).toLocaleString())}
+              </span>
+            </span>
+            <button class="ts-btn ts-btn--ghost ts-btn--sm audit-dl" data-audit-id="${escapeAttr(im.source_id)}" data-audit-label="${escapeAttr(host)}" aria-label="Download audit for ${escapeAttr(host)}">
+              <i data-lucide="download"></i>
+            </button>
+          </div>`;
+      }).join('');
+    }
+    return `
+      <div class="sticker-card washi washi--mint" style="padding-top:1.3rem;margin-top:1rem;">
+        <h2 style="font-size:1.5rem;margin:0 0 0.3rem;">Import audit</h2>
+        <p class="scrap-card__sub">Something imported wrong? Download the parse trace for any of your last 5 links — a flowchart of exactly what happened: the link, how it expanded, what the AI was asked and answered, and every place it split into.</p>
+        ${body}
+      </div>
+    `;
   }
 
   _bookmarkletHref() {
@@ -112,6 +175,8 @@ class SettingsView extends View {
 
       ${this._renderPhoneCapture()}
 
+      ${this._renderImportAudit()}
+
       <div class="sticker-card washi" style="padding-top:1.3rem;margin-top:1rem;">
         <h2 style="font-size:1.5rem;margin:0 0 0.3rem;">The Scrap-It button</h2>
         <p class="scrap-card__sub">Save any page to your scrapbook in two taps — no extension needed.</p>
@@ -201,6 +266,19 @@ class SettingsView extends View {
         window.store.set('user', updated);
         toast('Saved');
       } catch (err) { toast(err.message, { error: true }); }
+    });
+
+    this.container.querySelectorAll('.audit-dl').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await ExportDomain.downloadImportAudit(btn.dataset.auditId, btn.dataset.auditLabel);
+        } catch (err) {
+          toast(err.message || 'Download failed', { error: true });
+        } finally {
+          btn.disabled = false;
+        }
+      });
     });
 
     this.container.querySelector('#logout-btn').addEventListener('click', () => handleLogout());

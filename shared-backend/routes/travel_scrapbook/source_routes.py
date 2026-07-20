@@ -4,8 +4,9 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+from urllib.parse import urlparse
 
-from fastapi import BackgroundTasks, Depends, HTTPException, Path, Query
+from fastapi import BackgroundTasks, Depends, HTTPException, Path, Query, Response
 
 from db import get_supabase
 
@@ -27,15 +28,18 @@ from .models import (
     CaptureTokenCreateResponse,
     CaptureTokenStatusResponse,
     GeoFacets,
+    ImportAuditItem,
     InboxCountResponse,
     InboxResponse,
     InboxScrapResponse,
     MessageResponse,
+    RecentImportsResponse,
     ScrapResponse,
     SourceResponse,
     SourceScrapsResponse,
 )
 from .services import places as places_svc
+from .services.audit_report import render_trace_html
 from .services.checkpoints import checkpoint_category_slugs
 from .services.enrichment import process_source
 from .access import get_accessible_trip
@@ -432,6 +436,79 @@ async def get_source_scraps(
         status=source["status"],
         error_kind=source.get("error_kind"),
         scraps=[ScrapResponse(**s) for s in scraps],
+    )
+
+
+# ── Import audit (last 5 parse traces) ────────────────────────────────────────
+
+def _audit_filename(url: str, created_at: object) -> str:
+    """A filesystem-safe stem for the downloaded audit file, from the host + time."""
+    host = (urlparse(url).hostname or "import").removeprefix("www.")
+    stem = "".join(c if c.isalnum() or c in "-_" else "-" for c in host).strip("-") or "import"
+    stamp = str(created_at)[:19].replace(":", "-").replace("T", "_")
+    return f"import-audit-{stem}-{stamp}"
+
+
+@router.get(
+    "/imports/recent",
+    response_model=RecentImportsResponse,
+    status_code=200,
+    summary="The user's last 5 imports (audit list)",
+)
+async def recent_imports(
+    user: CurrentUser = Depends(get_current_user),
+) -> RecentImportsResponse:
+    """The newest 5 import parse traces for the current user — the Settings
+    "Import audit" list; each entry is downloadable as an HTML flowchart."""
+    sb = get_supabase()
+    rows = (
+        sb.table("travelscrapbook_import_traces")
+        .select("source_id, url, final_status, error_kind, created_at")
+        .eq("user_id", user.user_id)
+        .order("created_at", desc=True)
+        .limit(5)
+        .execute()
+    ).data or []
+    return RecentImportsResponse(imports=[ImportAuditItem(**r) for r in rows])
+
+
+@router.get(
+    "/imports/{source_id}/audit",
+    status_code=200,
+    response_class=Response,
+    summary="Download an import's parse trace as an HTML flowchart",
+)
+async def download_import_audit(
+    source_id: str = Path(..., description="Source UUID of the import to audit"),
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    """Render the stored parse trace for one import as a self-contained,
+    downloadable HTML flowchart (link → expansion → fetch → AI → geocode → …)."""
+    sb = get_supabase()
+    rows = (
+        sb.table("travelscrapbook_import_traces")
+        .select("url, final_status, error_kind, created_at, trace")
+        .eq("source_id", source_id)
+        .eq("user_id", user.user_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    ).data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="No audit trace for this import")
+    rec = rows[0]
+    html_doc = render_trace_html(
+        rec["url"],
+        rec.get("final_status"),
+        rec.get("error_kind"),
+        str(rec.get("created_at")) if rec.get("created_at") else None,
+        rec.get("trace") or {},
+    )
+    filename = _audit_filename(rec["url"], rec.get("created_at"))
+    return Response(
+        content=html_doc,
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.html"'},
     )
 
 

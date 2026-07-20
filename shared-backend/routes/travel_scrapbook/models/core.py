@@ -81,6 +81,19 @@ class SourceResponse(BaseModel):
     updated_at: datetime
 
 
+class ImportAuditItem(BaseModel):
+    """One entry in the "last 5 imports" audit list shown in Settings."""
+    source_id: str
+    url: str
+    final_status: Optional[str] = None
+    error_kind: Optional[str] = None
+    created_at: datetime
+
+
+class RecentImportsResponse(BaseModel):
+    imports: list[ImportAuditItem]
+
+
 class CaptureTokenCreateResponse(BaseModel):
     token: str = Field(..., description="Shown once — store it in the iOS Shortcut")
     created_at: datetime

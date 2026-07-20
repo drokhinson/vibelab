@@ -35,5 +35,11 @@ const ExportDomain = {
   async downloadKml(tripId, tripName, { date, suffix, itinerary } = {}) {
     await this._saveBlob(await window.api.exportKml(tripId, { date, itinerary }), `${this._stem(tripName, suffix)}.kml`);
   },
+
+  // Import-audit flowchart: the backend renders the stored parse trace to a
+  // self-contained HTML file (link → expansion → fetch → AI → geocode → …).
+  async downloadImportAudit(sourceId, label) {
+    await this._saveBlob(await window.api.importAudit(sourceId), `${this._stem(label || 'import', 'audit')}.html`);
+  },
 };
 window.ExportDomain = ExportDomain;

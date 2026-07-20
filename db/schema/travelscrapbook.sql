@@ -120,6 +120,20 @@ CREATE TABLE IF NOT EXISTS public.travelscrapbook_sources (
 -- idx_ts_sources_user_url UNIQUE (user_id, url_normalized)
 -- idx_ts_sources_user_status (user_id, status)
 
+-- Per-import parse trace (027): the audit record behind Settings → "Import
+-- audit". One row per import; enrichment keeps only the newest 5 per user.
+CREATE TABLE IF NOT EXISTS public.travelscrapbook_import_traces (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_id    UUID        NOT NULL REFERENCES public.travelscrapbook_sources(id) ON DELETE CASCADE,
+  user_id      UUID        NOT NULL REFERENCES public.travelscrapbook_profiles(id) ON DELETE CASCADE,
+  url          TEXT        NOT NULL,
+  final_status TEXT,                   -- processing | ready | failed (at write time)
+  error_kind   TEXT,                   -- network | blocked | llm | no_place | internal
+  trace        JSONB       NOT NULL,   -- {url, steps: [{kind, title, data}, ...]}
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- idx_ts_import_traces_user_created (user_id, created_at DESC)
+
 -- Canonical place — the source of truth. Per-user for now; osm_type/osm_id
 -- (from Nominatim) are the forward path to global cross-user dedupe.
 CREATE TABLE IF NOT EXISTS public.travelscrapbook_places (
