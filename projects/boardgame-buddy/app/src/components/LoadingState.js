@@ -1,10 +1,11 @@
-// LoadingState — the one branded loader used on every screen while data loads.
+// src/components/LoadingState.js — shared loading placeholder. One surface so
+// every screen's "fetching…" state reads the same.
 
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { COLORS, FONTS, SPACING } from '../theme';
+import { COLORS, FONTS, FONT_SIZES, SPACING } from '../theme';
 
-export default function LoadingState({ label = 'Loading…', style }) {
+export default function LoadingState({ label, style }) {
   return (
     <View style={[styles.wrap, style]}>
       <ActivityIndicator size="large" color={COLORS.accent} />
@@ -14,6 +15,16 @@ export default function LoadingState({ label = 'Loading…', style }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl },
-  label: { fontFamily: FONTS.display, color: COLORS.textSoft, fontSize: 16, marginTop: SPACING.md },
+  wrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.xl,
+  },
+  label: {
+    marginTop: SPACING.md,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.medium,
+    fontSize: FONT_SIZES.sm,
+  },
 });

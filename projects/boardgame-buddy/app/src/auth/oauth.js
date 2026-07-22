@@ -1,27 +1,43 @@
-// Google sign-in via Supabase OAuth + a BoardgameBuddy web bridge.
+// Google sign-in via Supabase OAuth + the BoardgameBuddy web bridge.
 //
 // Why a bridge? The vibelab Supabase project is shared across apps, and
 // Supabase's OAuth callback rejects non-https `redirectTo` values like
-// `exp://...`. Fix: hand Supabase a real https URL on the BGB web app, and
-// have that page forward the auth code to the native runtime via a deep link.
+// `exp://...` / `boardgamebuddy://...`. The fix: hand Supabase a real https
+// URL on the BGB web app (web/auth-callback.html), and have that page forward
+// the auth code to the native runtime via a deep link.
 //
-// The bridge page (web/auth-callback.html) must be deployed on the BGB Vercel
-// host and allowlisted in Supabase → Auth → URL Configuration → Redirect URLs.
+// Flow:
+//   1. App computes its own deep-link target (`exp://.../--/auth-callback`
+//      in Expo Go, `boardgamebuddy://auth-callback` in EAS / production).
+//   2. App asks Supabase for an OAuth URL with redirectTo =
+//      `https://<web>/auth-callback.html?native_url=<encoded native URL>`.
+//   3. After Google auth, Supabase redirects the browser to the bridge with
+//      `?code=...`. The bridge reads `code` + `native_url` and bounces to
+//      `<native_url>?code=<code>` — which opens the app.
+//   4. The app's Linking listener (MainApp.js) catches the deep link, parses
+//      `code`, and calls supabase.auth.exchangeCodeForSession. onAuthStateChange
+//      in AppContext hydrates the user.
 
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { makeRedirectUri } from 'expo-auth-session';
 import { supabase, isAuthConfigured } from './supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Web bridge URL on the BGB Vercel deploy. Override via
+// EXPO_PUBLIC_AUTH_CALLBACK_URL if the web app moves hosts.
 const WEB_BRIDGE_URL = (process.env.EXPO_PUBLIC_AUTH_CALLBACK_URL
   || 'https://vibelab-boardgamebuddy.vercel.app/auth-callback.html').replace(/\/+$/, '');
 
 export function getNativeRedirectUri() {
-  return makeRedirectUri({ scheme: 'boardgamebuddy', path: 'auth-callback' });
+  return makeRedirectUri({
+    scheme: 'boardgamebuddy',
+    path: 'auth-callback',
+  });
 }
 
+// native_url goes in the query string so Supabase's
+// `URL.searchParams.set('code', …)` appends cleanly.
 export function getSupabaseRedirectUri(nativeUri) {
   const encoded = encodeURIComponent(nativeUri);
   return `${WEB_BRIDGE_URL}?native_url=${encoded}`;
@@ -50,6 +66,8 @@ export async function signInWithGoogleOAuth() {
 
   let result;
   try {
+    // Pass nativeUri (not redirectTo) as the return URL so the WebBrowser
+    // closes when the bridge bounces us into the app.
     result = await WebBrowser.openAuthSessionAsync(url, nativeUri);
   } catch (e) {
     return { ok: false, error: e.message || String(e), redirectTo };
@@ -61,7 +79,8 @@ export async function signInWithGoogleOAuth() {
   if (result.type !== 'success' || !result.url) {
     return {
       ok: false,
-      error: `Sign-in flow ended unexpectedly (type=${result?.type}).`,
+      error: `Sign-in flow ended unexpectedly (type=${result?.type}). ` +
+        `If this repeats, open the bridge URL in a browser to confirm it's deployed:\n\n${WEB_BRIDGE_URL}`,
       redirectTo,
     };
   }
@@ -72,14 +91,17 @@ export async function signInWithGoogleOAuth() {
     return {
       ok: false,
       error:
-        `The bridge URL didn't return an auth code. Most common cause: the ` +
-        `auth-callback.html bridge isn't deployed yet on the BGB web host.`,
+        `The bridge URL didn't return an auth code or tokens.\n\n` +
+        `Returned URL:\n  ${result.url}\n\n` +
+        `Most common cause: auth-callback.html isn't deployed yet on Vercel.`,
       redirectTo,
     };
   }
   return { ok: false, error: handled.error || 'Sign-in failed.', redirectTo };
 }
 
+// Parse auth artifacts from a deep-link URL, whether the bridge forwarded a
+// PKCE `code` (query) or implicit-flow tokens (fragment).
 export function parseAuthParamsFromUrl(url) {
   if (!url) return {};
   const out = {};
@@ -99,7 +121,9 @@ export function parseAuthParamsFromUrl(url) {
   if (hashIdx >= 0) {
     const hash = url.slice(hashIdx + 1);
     hash.split('#').forEach((chunk) => {
-      new URLSearchParams(chunk).forEach((v, k) => { if (out[k] == null) out[k] = v; });
+      new URLSearchParams(chunk).forEach((v, k) => {
+        if (out[k] == null) out[k] = v;
+      });
     });
   }
   return out;
@@ -130,8 +154,10 @@ async function setSessionFromTokens(accessToken, refreshToken) {
   }
 }
 
-// Dedup table: WebBrowser result AND the OS deep-link listener can both fire
-// for the same code. PKCE verifier is one-shot, so share the in-flight result.
+// Dedup table: when both WebBrowser.openAuthSessionAsync and the OS-level
+// deep-link listener fire for the same `?code=…` URL, only one can exchange
+// the code — the verifier is one-shot. Track promises by their auth artifact
+// so concurrent callers share the result.
 const inflightExchanges = new Map();
 
 function dedupKey(params) {
@@ -154,9 +180,5 @@ export async function handleAuthDeepLink(url) {
   })();
   inflightExchanges.set(key, promise);
 
-  try {
-    return await promise;
-  } finally {
-    // Keep the entry so a late OS listener fire doesn't re-exchange.
-  }
+  return promise;
 }

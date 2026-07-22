@@ -1,46 +1,52 @@
-// AppHeader — consistent top bar for stack screens: back chevron, title in
-// Crimson, optional right action slot.
+// src/components/AppHeader.js — shared in-screen header: the BoardgameBuddy
+// wordmark (or a screen title) on the left, an optional right slot (e.g. the
+// user badge that opens Settings). Sits under the safe-area inset.
 
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft } from 'lucide-react-native';
-import { COLORS, FONTS, SPACING } from '../theme';
+import { COLORS, FONTS, FONT_SIZES, SPACING } from '../theme';
 
-export default function AppHeader({ title, onBack, right, subtitle }) {
+export default function AppHeader({ title = 'BoardgameBuddy', right, subtitle }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.bar, { paddingTop: insets.top + 6 }]}>
-      <View style={styles.side}>
-        {onBack ? (
-          <Pressable onPress={onBack} hitSlop={10} style={styles.backBtn}>
-            <ChevronLeft size={26} color={COLORS.text} />
-          </Pressable>
-        ) : null}
+    <View style={[styles.wrap, { paddingTop: insets.top + SPACING.sm }]}>
+      <View style={styles.row}>
+        <View style={styles.titleCol}>
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
+          {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
+        </View>
+        {right ? <View style={styles.right}>{right}</View> : null}
       </View>
-      <View style={styles.center}>
-        <Text style={styles.title} numberOfLines={1}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
-      </View>
-      <View style={[styles.side, styles.right]}>{right}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: {
+  wrap: {
+    backgroundColor: COLORS.card,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
+  },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: COLORS.bg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.border,
+    justifyContent: 'space-between',
+    minHeight: 36,
   },
-  side: { width: 64, justifyContent: 'center' },
-  right: { alignItems: 'flex-end' },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  center: { flex: 1, alignItems: 'center' },
-  title: { fontFamily: FONTS.display, color: COLORS.text, fontSize: 20 },
-  subtitle: { fontFamily: FONTS.sans, color: COLORS.textMuted, fontSize: 12 },
+  titleCol: { flex: 1, paddingRight: SPACING.md },
+  title: {
+    fontFamily: FONTS.displayBold,
+    fontSize: FONT_SIZES.xxl,
+    color: COLORS.text,
+  },
+  subtitle: {
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  right: { marginLeft: SPACING.sm },
 });

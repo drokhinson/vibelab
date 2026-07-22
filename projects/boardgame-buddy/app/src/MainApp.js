@@ -1,146 +1,100 @@
-// BoardgameBuddy native root. Kept separate from App.js so a module-load
-// failure here is caught by App.js's diagnostic boundary.
+// src/MainApp.js — navigation, providers, font loading, and the OAuth deep-link
+// listener. Auth-gated: no session → AuthScreen; session → the Feed/Log/Profile
+// bottom tabs (wrapped in a native-stack so later phases push detail screens).
 
 import React, { useEffect } from 'react';
 import { View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import * as Linking from 'expo-linking';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { StatusBar } from 'expo-status-bar';
-import * as Linking from 'expo-linking';
-import { Home, Dices, User, Lock } from 'lucide-react-native';
-import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
-import { CrimsonText_400Regular, CrimsonText_600SemiBold, CrimsonText_700Bold } from '@expo-google-fonts/crimson-text';
-import { Fraunces_400Regular_Italic, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
-import { JetBrainsMono_500Medium, JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Newspaper, Dice5, CircleUser } from 'lucide-react-native';
+import {
+  useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+} from '@expo-google-fonts/poppins';
+import {
+  CrimsonText_600SemiBold,
+  CrimsonText_700Bold,
+} from '@expo-google-fonts/crimson-text';
 
 import { AppProvider, useAppState } from './store/AppContext';
+import { ConfirmProvider } from './components/ConfirmModal';
 import { handleAuthDeepLink } from './auth/oauth';
-import { COLORS, FONTS } from './theme';
-import LoadingState from './components/LoadingState';
-import ConfirmHost from './components/ConfirmModal';
-import { PlayDetailHost } from './widgets/PlayDetailPopup';
-
-import FeedScreen from './screens/FeedScreen';
-import SearchScreen from './screens/SearchScreen';
-import LogPlayScreen from './screens/LogPlayScreen';
-import PlayFlowScreen from './screens/PlayFlowScreen';
-import SessionViewerScreen from './screens/SessionViewerScreen';
-import JoinSessionScreen from './screens/JoinSessionScreen';
-import SessionRouter from './screens/SessionRouter';
-import GameDetailScreen from './screens/GameDetailScreen';
-import ChapterEditorScreen from './screens/ChapterEditorScreen';
-import ProfileSelfScreen from './screens/ProfileSelfScreen';
-import ProfileOtherScreen from './screens/ProfileOtherScreen';
-import CollectionScreen from './screens/CollectionScreen';
-import PlaysScreen from './screens/PlaysScreen';
-import BuddiesScreen from './screens/BuddiesScreen';
-import SettingsScreen from './screens/SettingsScreen';
-import AdminScreen from './screens/AdminScreen';
+import { api } from './api/client';
 import AuthScreen from './screens/AuthScreen';
+import FeedScreen from './screens/FeedScreen';
+import LogPlayScreen from './screens/LogPlayScreen';
+import ProfileSelfScreen from './screens/ProfileSelfScreen';
+import LoadingState from './components/LoadingState';
+import { COLORS, FONTS } from './theme';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function TabIcon({ Icon, color, size, locked }) {
-  return (
-    <View style={{ width: size + 4, height: size + 4, alignItems: 'center', justifyContent: 'center' }}>
-      <Icon size={size} color={color} />
-      {locked ? (
-        <View style={{ position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.card, alignItems: 'center', justifyContent: 'center' }}>
-          <Lock size={9} color={COLORS.textMuted} />
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 function HomeTabs() {
-  const state = useAppState();
-  const isAnon = !state.currentUser;
   return (
     <Tab.Navigator
       initialRouteName="FeedTab"
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.accent,
+        tabBarActiveTintColor: COLORS.accentHover,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarStyle: { backgroundColor: COLORS.card, borderTopColor: COLORS.border },
-        tabBarLabelStyle: { fontSize: 11, fontFamily: FONTS.sansSemibold },
+        tabBarLabelStyle: { fontFamily: FONTS.semibold, fontSize: 11 },
       }}
     >
       <Tab.Screen
         name="FeedTab"
         component={FeedScreen}
-        options={{ title: 'Feed', tabBarIcon: ({ color, size }) => <TabIcon Icon={Home} color={color} size={size} /> }}
+        options={{
+          title: 'Feed',
+          tabBarIcon: ({ color, size }) => <Newspaper size={size} color={color} />,
+        }}
       />
       <Tab.Screen
-        name="PlayTab"
+        name="LogTab"
         component={LogPlayScreen}
-        options={{ title: 'Play', tabBarIcon: ({ color, size }) => <TabIcon Icon={Dices} color={color} size={size} locked={isAnon} /> }}
+        options={{
+          title: 'Log',
+          tabBarIcon: ({ color, size }) => <Dice5 size={size} color={color} />,
+        }}
       />
       <Tab.Screen
         name="ProfileTab"
         component={ProfileSelfScreen}
-        options={{ title: 'Profile', tabBarIcon: ({ color, size }) => <TabIcon Icon={User} color={color} size={size} locked={isAnon} /> }}
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => <CircleUser size={size} color={color} />,
+        }}
       />
     </Tab.Navigator>
   );
 }
 
-function BootGate({ children }) {
-  const { authReady } = useAppState();
+function Root() {
+  const { authReady, session } = useAppState();
+
   if (!authReady) {
     return (
-      <View style={{ flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center' }}>
-        <LoadingState label="Setting the table…" />
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <LoadingState label="Loading…" />
       </View>
     );
   }
-  return children;
-}
 
-const linking = {
-  prefixes: [Linking.createURL('/'), 'boardgamebuddy://', 'https://vibelab-boardgamebuddy.vercel.app'],
-  config: {
-    screens: {
-      Home: { screens: { FeedTab: 'feed', PlayTab: 'play', ProfileTab: 'profile' } },
-      GameDetail: 'game/:gameId',
-      SessionRouter: 'play/:code',
-      JoinSession: 'join',
-      ProfileOther: 'u/:userId',
-      Settings: 'settings',
-      Admin: 'admin',
-    },
-  },
-};
+  if (!session) return <AuthScreen />;
 
-function NavRoot() {
   return (
-    <NavigationContainer linking={linking}>
-      <StatusBar style="light" />
-      <Stack.Navigator
-        initialRouteName="Home"
-        screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: COLORS.bg } }}
-      >
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Home" component={HomeTabs} />
-        <Stack.Screen name="Search" component={SearchScreen} />
-        <Stack.Screen name="GameDetail" component={GameDetailScreen} />
-        <Stack.Screen name="ChapterEditor" component={ChapterEditorScreen} />
-        <Stack.Screen name="PlayFlow" component={PlayFlowScreen} />
-        <Stack.Screen name="SessionViewer" component={SessionViewerScreen} />
-        <Stack.Screen name="SessionRouter" component={SessionRouter} />
-        <Stack.Screen name="JoinSession" component={JoinSessionScreen} />
-        <Stack.Screen name="ProfileOther" component={ProfileOtherScreen} />
-        <Stack.Screen name="Collection" component={CollectionScreen} />
-        <Stack.Screen name="Plays" component={PlaysScreen} />
-        <Stack.Screen name="Buddies" component={BuddiesScreen} />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="Admin" component={AdminScreen} />
-        <Stack.Screen name="Auth" component={AuthScreen} options={{ presentation: 'modal' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -152,16 +106,13 @@ export default function MainApp() {
     Poppins_500Medium,
     Poppins_600SemiBold,
     Poppins_700Bold,
-    CrimsonText_400Regular,
     CrimsonText_600SemiBold,
     CrimsonText_700Bold,
-    Fraunces_400Regular_Italic,
-    Fraunces_600SemiBold,
-    JetBrainsMono_500Medium,
-    JetBrainsMono_700Bold,
   });
 
-  // OAuth deep-link fallback (the Supabase client also listens internally).
+  // OAuth deep-link handshake. The bridge bounces the browser into the app via
+  // `boardgamebuddy://auth-callback?code=…` (cold start → getInitialURL, warm →
+  // the url listener). handleAuthDeepLink dedupes so both firing is safe.
   useEffect(() => {
     let active = true;
     Linking.getInitialURL().then((url) => {
@@ -176,27 +127,27 @@ export default function MainApp() {
     };
   }, []);
 
+  // Fire-and-forget analytics ping per app open (mirrors the web tracking ping).
+  useEffect(() => {
+    api.trackEvent('app_open');
+  }, []);
+
   if (!fontsLoaded) {
     return (
-      <SafeAreaProvider>
-        <View style={{ flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center' }}>
-          <LoadingState label="Setting the table…" />
-        </View>
-      </SafeAreaProvider>
+      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <LoadingState />
+      </View>
     );
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <StatusBar style="dark" />
         <AppProvider>
-          <BottomSheetModalProvider>
-            <BootGate>
-              <NavRoot />
-            </BootGate>
-            <PlayDetailHost />
-            <ConfirmHost />
-          </BottomSheetModalProvider>
+          <ConfirmProvider>
+            <Root />
+          </ConfirmProvider>
         </AppProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

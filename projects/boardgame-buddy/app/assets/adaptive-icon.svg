@@ -1,13 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- Transparent background; the OS composites over android.adaptiveIcon.backgroundColor (#0d0d14). Content stays inside the ~660 safe area. -->
-  <g transform="translate(512,512)">
-    <rect x="-200" y="-200" width="400" height="400" rx="84" fill="#C9922A"/>
-    <g fill="#0d0d14">
-      <circle cx="-96" cy="-96" r="36"/>
-      <circle cx="96" cy="-96" r="36"/>
-      <circle cx="0" cy="0" r="36"/>
-      <circle cx="-96" cy="96" r="36"/>
-      <circle cx="96" cy="96" r="36"/>
-    </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Transparent background — Android composites this foreground over the
+       adaptiveIcon.backgroundColor (#2a1812). Die kept within the safe circle. -->
+  <rect x="287" y="287" width="450" height="450" rx="84" fill="#C9922A"/>
+  <g fill="#2a1812">
+    <circle cx="365" cy="365" r="44"/>
+    <circle cx="659" cy="365" r="44"/>
+    <circle cx="512" cy="512" r="44"/>
+    <circle cx="365" cy="659" r="44"/>
+    <circle cx="659" cy="659" r="44"/>
   </g>
 </svg>

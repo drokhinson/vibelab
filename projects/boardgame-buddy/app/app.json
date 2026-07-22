@@ -4,50 +4,61 @@
     "slug": "boardgame-buddy",
     "version": "1.0.0",
     "orientation": "portrait",
+    "userInterfaceStyle": "light",
     "scheme": "boardgamebuddy",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0d0d14"
+      "backgroundColor": "#2a1812",
+      "resizeMode": "contain"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
       "expo-secure-store",
       "expo-web-browser",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Boardgame Buddy uses your photos to attach a snapshot to a logged play."
-        }
-      ]
+      "expo-image-picker"
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.vibelab.boardgame-buddy",
+      "bundleIdentifier": "com.boardgamebuddy.app",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Boardgame Buddy uses your photos to attach a snapshot to a logged play.",
         "CFBundleURLTypes": [
-          { "CFBundleURLSchemes": ["boardgamebuddy"] }
+          {
+            "CFBundleURLSchemes": [
+              "boardgamebuddy"
+            ]
+          }
         ]
       }
     },
     "android": {
+      "package": "com.boardgamebuddy.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0d0d14"
+        "backgroundColor": "#2a1812"
       },
-      "package": "com.vibelab.boardgame-buddy",
       "intentFilters": [
         {
           "action": "VIEW",
-          "category": ["DEFAULT", "BROWSABLE"],
-          "data": [{ "scheme": "boardgamebuddy" }]
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ],
+          "data": [
+            {
+              "scheme": "boardgamebuddy"
+            }
+          ]
         }
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "owner": "drokhinson"
   }
 }

@@ -1,14 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1284" height="2778" viewBox="0 0 1284 2778">
-  <rect width="1284" height="2778" fill="#0d0d14"/>
-  <g transform="translate(642,1320)">
-    <rect x="-180" y="-180" width="360" height="360" rx="76" fill="#C9922A"/>
-    <g fill="#0d0d14">
-      <circle cx="-86" cy="-86" r="32"/>
-      <circle cx="86" cy="-86" r="32"/>
-      <circle cx="0" cy="0" r="32"/>
-      <circle cx="-86" cy="86" r="32"/>
-      <circle cx="86" cy="86" r="32"/>
-    </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1242 1242" width="1242" height="1242">
+  <rect width="1242" height="1242" fill="#2a1812"/>
+  <rect x="410" y="410" width="422" height="422" rx="78" fill="#C9922A"/>
+  <g fill="#2a1812">
+    <circle cx="513" cy="513" r="42"/>
+    <circle cx="729" cy="513" r="42"/>
+    <circle cx="621" cy="621" r="42"/>
+    <circle cx="513" cy="729" r="42"/>
+    <circle cx="729" cy="729" r="42"/>
   </g>
-  <text x="642" y="1640" text-anchor="middle" font-family="Georgia, serif" font-size="78" fill="#C9922A">Boardgame Buddy</text>
 </svg>

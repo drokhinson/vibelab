@@ -1,408 +1,228 @@
-// Central app state — mirrors web/domain/store.js shape. Reducer + provider.
-// Read state, dispatch, and actions are split into three contexts so screens
-// that only dispatch/act don't re-render on read changes.
+// src/store/AppContext.js — global app state via Context + useReducer.
+//
+// Split read/write contexts: components read state from useAppState() and call
+// actions from useAppActions(). Mirrors the web store.js keys (session, user,
+// feed, activePlay, search) that later phases will populate.
+//
+// Auth lifecycle (ported from web init.js):
+//   - Subscribe to supabase.auth.onAuthStateChange.
+//   - On a real session, load GET /profile (resiliently — a transient network
+//     hiccup keeps the session and retries rather than forcing a sign-out).
+//   - Only an explicit SIGNED_OUT (or AUTH_FAILED on profile load) clears state.
 
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import { api, setAuthTokenGetter } from '../api/client';
+import React, {
+  createContext, useContext, useEffect, useMemo, useReducer, useRef,
+} from 'react';
 import { supabase, isAuthConfigured } from '../auth/supabase';
 import { signInWithGoogleOAuth } from '../auth/oauth';
+import { api } from '../api/client';
 
-// ── Initial state ───────────────────────────────────────────────────────────
 export const initialState = {
-  // Auth / boot
-  authReady: false, // false until Supabase getSession() resolves
-  authBusy: false,
+  // Auth
+  authReady: false, // true once the initial session check has resolved
+  authBusy: false, // an email/oauth action is in flight
   authError: null,
   session: null,
-  currentUser: null, // { id, display_name, username, avatar, is_admin }
-  becomeAdminBusy: false,
-  becomeAdminError: null,
+  currentUser: null, // BGB profile row (null = signed out OR onboarding)
+  needsOnboarding: false, // signed in but no profile display_name yet
 
-  // Bootstrap-seeded first paint
-  bootstrapped: false,
-  feed: null, // FeedPageResponse
+  // Populated by later phases
+  feed: null,
   feedCursor: null,
-  feedLoading: false,
-  myCollectionMap: {}, // gameId -> 'owned' | 'wishlist' | 'played'
-  expansionCounts: {}, // base_game_bgg_id -> owned expansion count
-  stats: null,
-  profileBundle: null,
-  gameBundles: {}, // gameId -> detail bundle (cache)
-  recentlyPlayedGames: [], // host game-picker seed
-  playPartners: { accounts: [], ghosts: [], recent: [] }, // host player-picker seed
-
-  // Lookups
-  chapterTypes: [],
-
-  // Live session draft (host flow). Persisted to AsyncStorage by playSession model.
-  activeSession: null,
-};
-
-// ── Action types ──────────────────────────────────────────────────────────
-const A = {
-  SET_AUTH_READY: 'SET_AUTH_READY',
-  SET_SESSION: 'SET_SESSION',
-  SET_CURRENT_USER: 'SET_CURRENT_USER',
-  SET_AUTH_BUSY: 'SET_AUTH_BUSY',
-  SET_AUTH_ERROR: 'SET_AUTH_ERROR',
-  CLEAR_AUTH: 'CLEAR_AUTH',
-  SET_BECOME_ADMIN: 'SET_BECOME_ADMIN',
-
-  BOOTSTRAP_LOADED: 'BOOTSTRAP_LOADED',
-  SET_FEED: 'SET_FEED',
-  APPEND_FEED: 'APPEND_FEED',
-  SET_FEED_LOADING: 'SET_FEED_LOADING',
-  SET_COLLECTION_STATUS: 'SET_COLLECTION_STATUS',
-  SET_COLLECTION_MAP: 'SET_COLLECTION_MAP',
-  SET_STATS: 'SET_STATS',
-  CACHE_GAME_BUNDLE: 'CACHE_GAME_BUNDLE',
-  SET_CHAPTER_TYPES: 'SET_CHAPTER_TYPES',
-  SET_HOST_SEEDS: 'SET_HOST_SEEDS',
-  SET_ACTIVE_SESSION: 'SET_ACTIVE_SESSION',
+  activePlay: null,
+  search: null,
 };
 
 function reducer(state, action) {
   switch (action.type) {
-    case A.SET_AUTH_READY:
-      return { ...state, authReady: action.value };
-    case A.SET_SESSION:
-      return { ...state, session: action.session };
-    case A.SET_CURRENT_USER:
-      return { ...state, currentUser: action.user, authError: null };
-    case A.SET_AUTH_BUSY:
-      return { ...state, authBusy: action.value };
-    case A.SET_AUTH_ERROR:
+    case 'SET_AUTH_READY':
+      return { ...state, authReady: true };
+    case 'SET_AUTH_BUSY':
+      return { ...state, authBusy: action.value, authError: action.value ? null : state.authError };
+    case 'SET_AUTH_ERROR':
       return { ...state, authError: action.error, authBusy: false };
-    case A.CLEAR_AUTH:
+    case 'SET_SESSION':
+      return { ...state, session: action.session };
+    case 'SET_USER':
       return {
         ...state,
-        session: null,
-        currentUser: null,
-        feed: null,
-        feedCursor: null,
-        myCollectionMap: {},
-        expansionCounts: {},
-        stats: null,
-        profileBundle: null,
-        gameBundles: {},
-        recentlyPlayedGames: [],
-        playPartners: { accounts: [], ghosts: [], recent: [] },
-        bootstrapped: false,
-        activeSession: null,
+        currentUser: action.user,
+        needsOnboarding: action.needsOnboarding ?? false,
       };
-    case A.SET_BECOME_ADMIN:
-      return { ...state, becomeAdminBusy: !!action.busy, becomeAdminError: action.error || null };
-
-    case A.BOOTSTRAP_LOADED: {
-      const p = action.payload || {};
-      const pb = p.profile_bundle || {};
+    case 'SIGN_OUT':
       return {
-        ...state,
-        bootstrapped: true,
-        feed: p.feed_first_page || state.feed,
-        feedCursor: p.feed_cursor || null,
-        myCollectionMap: pb.status_map || state.myCollectionMap,
-        expansionCounts: pb.expansion_counts || state.expansionCounts,
-        stats: pb.stats || state.stats,
-        profileBundle: p.profile_bundle || state.profileBundle,
-        gameBundles: { ...state.gameBundles, ...(p.game_detail_bundles || {}) },
-        recentlyPlayedGames: p.recently_played_games || [],
-        playPartners: p.play_partners || state.playPartners,
-        currentUser: p.current_user
-          ? {
-              id: p.current_user.id,
-              display_name: p.current_user.display_name,
-              username: p.current_user.username,
-              avatar: p.current_user.avatar || null,
-              is_admin: !!p.current_user.is_admin,
-            }
-          : state.currentUser,
+        ...initialState,
+        authReady: true,
       };
-    }
-    case A.SET_FEED:
-      return { ...state, feed: action.feed, feedCursor: action.cursor ?? null, feedLoading: false };
-    case A.APPEND_FEED: {
-      const prev = state.feed && Array.isArray(state.feed.cards) ? state.feed.cards : [];
-      const next = action.feed && Array.isArray(action.feed.cards) ? action.feed.cards : [];
-      return {
-        ...state,
-        feed: { ...(state.feed || {}), cards: [...prev, ...next] },
-        feedCursor: action.cursor ?? null,
-        feedLoading: false,
-      };
-    }
-    case A.SET_FEED_LOADING:
-      return { ...state, feedLoading: action.value };
-    case A.SET_COLLECTION_STATUS: {
-      const next = { ...state.myCollectionMap };
-      if (action.status) next[action.gameId] = action.status;
-      else delete next[action.gameId];
-      return { ...state, myCollectionMap: next };
-    }
-    case A.SET_COLLECTION_MAP:
-      return { ...state, myCollectionMap: action.map || {} };
-    case A.SET_STATS:
-      return { ...state, stats: action.stats };
-    case A.CACHE_GAME_BUNDLE:
-      return { ...state, gameBundles: { ...state.gameBundles, [action.gameId]: action.bundle } };
-    case A.SET_CHAPTER_TYPES:
-      return { ...state, chapterTypes: action.types || [] };
-    case A.SET_HOST_SEEDS:
-      return {
-        ...state,
-        recentlyPlayedGames: action.games ?? state.recentlyPlayedGames,
-        playPartners: action.partners ?? state.playPartners,
-      };
-    case A.SET_ACTIVE_SESSION:
-      return { ...state, activeSession: action.session };
+    case 'SET':
+      return { ...state, [action.key]: action.value };
     default:
       return state;
   }
 }
 
 const StateContext = createContext(initialState);
-const DispatchContext = createContext(null);
-const ActionsContext = createContext(null);
-
-export function useAppState() {
-  return useContext(StateContext);
-}
-export function useAppDispatch() {
-  return useContext(DispatchContext);
-}
-export function useAppActions() {
-  return useContext(ActionsContext);
-}
+const ActionsContext = createContext({});
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  // Keep a ref so async callbacks read fresh session without re-subscribing.
+  const sessionRef = useRef(null);
 
-  // Wire the API client to read the token directly from Supabase (not React
-  // state) — going through state races the SET_SESSION dispatch.
-  useEffect(() => {
-    setAuthTokenGetter(async () => {
-      if (!supabase) return null;
-      try {
-        const { data } = await supabase.auth.getSession();
-        return data?.session?.access_token || null;
-      } catch {
-        return null;
+  // Load the BGB profile for the signed-in user. Resilient: a network blip
+  // returns 'deferred' (keep session, retry) while a 401/403 returns 'failed'
+  // (the token is genuinely bad → sign out).
+  async function loadProfile() {
+    try {
+      const profile = await api.get('/profile');
+      const hasName = !!(profile && profile.display_name);
+      dispatch({ type: 'SET_USER', user: profile || null, needsOnboarding: !hasName });
+      return 'ok';
+    } catch (e) {
+      if (e && (e.status === 401 || e.status === 403)) return 'failed';
+      if (e && e.status === 404) {
+        // No profile row yet → onboarding.
+        dispatch({ type: 'SET_USER', user: null, needsOnboarding: true });
+        return 'ok';
       }
-    });
-  }, []);
+      return 'deferred';
+    }
+  }
 
-  // Auth bootstrap: subscribe to Supabase session changes. On sign-in fetch
-  // profile (auto-create on 404). On sign-out clear everything.
+  async function applySession(session) {
+    sessionRef.current = session;
+    dispatch({ type: 'SET_SESSION', session });
+    if (!session) {
+      dispatch({ type: 'SET_USER', user: null, needsOnboarding: false });
+      return;
+    }
+    let outcome = await loadProfile();
+    // One short backoff retry on a deferred (transient) failure before giving up.
+    if (outcome === 'deferred') {
+      await new Promise((r) => setTimeout(r, 800));
+      outcome = await loadProfile();
+    }
+    if (outcome === 'failed') {
+      try { await supabase.auth.signOut(); } catch {}
+      dispatch({ type: 'SIGN_OUT' });
+    }
+  }
+
   useEffect(() => {
     if (!isAuthConfigured || !supabase) {
-      dispatch({ type: A.SET_AUTH_READY, value: true });
+      dispatch({ type: 'SET_AUTH_READY' });
       return undefined;
     }
-    let cancelled = false;
+    let active = true;
 
-    async function hydrate(session) {
-      if (!session) {
-        dispatch({ type: A.CLEAR_AUTH });
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!active) return;
+        await applySession(data ? data.session : null);
+      } catch {
+        // ignore — listener below will catch subsequent changes
+      } finally {
+        if (active) dispatch({ type: 'SET_AUTH_READY' });
+      }
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (event === 'SIGNED_OUT') {
+        sessionRef.current = null;
+        dispatch({ type: 'SIGN_OUT' });
         return;
       }
-      try {
-        const profile = await api.getProfile();
-        if (cancelled) return;
-        dispatch({ type: A.SET_CURRENT_USER, user: normUser(profile) });
-      } catch (e) {
-        if (e.status === 404) {
-          try {
-            const created = await api.upsertProfile(
-              session.user?.email?.split('@')[0] || 'Player',
-            );
-            if (!cancelled) dispatch({ type: A.SET_CURRENT_USER, user: normUser(created) });
-          } catch (e2) {
-            if (!cancelled) {
-              dispatch({ type: A.SET_AUTH_ERROR, error: `Profile creation failed: ${e2.message}` });
-            }
-          }
-        } else if (!cancelled) {
-          dispatch({ type: A.SET_AUTH_ERROR, error: `Couldn't load your profile: ${e.message}` });
-        }
+      // A wake-up TOKEN_REFRESHED while already signed in shouldn't re-run the
+      // whole profile load — only (re)apply when the user identity changes.
+      const prevUser = sessionRef.current && sessionRef.current.user && sessionRef.current.user.id;
+      const nextUser = session && session.user && session.user.id;
+      if (event === 'TOKEN_REFRESHED' && prevUser && prevUser === nextUser) {
+        sessionRef.current = session;
+        dispatch({ type: 'SET_SESSION', session });
+        return;
       }
-    }
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
-      const session = data?.session || null;
-      dispatch({ type: A.SET_SESSION, session });
-      hydrate(session).finally(() => {
-        if (!cancelled) dispatch({ type: A.SET_AUTH_READY, value: true });
-      });
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      dispatch({ type: A.SET_SESSION, session });
-      hydrate(session);
+      applySession(session || null);
     });
 
     return () => {
-      cancelled = true;
-      sub?.subscription?.unsubscribe();
+      active = false;
+      try { sub.subscription.unsubscribe(); } catch {}
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Bootstrap seed: once currentUser lands, one GET /bootstrap warms first
-  // paint. Falls back to lazy per-screen fetches if it fails.
-  const currentUserId = state.currentUser?.id;
-  useEffect(() => {
-    if (!currentUserId || state.bootstrapped) return undefined;
-    let cancelled = false;
-    api.bootstrap().then(
-      (payload) => !cancelled && dispatch({ type: A.BOOTSTRAP_LOADED, payload }),
-      () => {
-        // Fallback: pull the essentials individually.
-        api.feed().then((f) => !cancelled && dispatch({ type: A.SET_FEED, feed: f, cursor: f?.next_cursor }), () => {});
-        api.myStats().then((s) => !cancelled && dispatch({ type: A.SET_STATS, stats: s }), () => {});
-        api.collection().then((items) => {
-          if (cancelled) return;
-          const map = {};
-          (Array.isArray(items) ? items : items?.items || []).forEach((it) => {
-            if (it.status) map[it.game_id] = it.status;
-          });
-          dispatch({ type: A.SET_COLLECTION_MAP, map });
-        }, () => {});
-      },
-    );
-    // Chapter types (lookup) — cheap, load once.
-    api.chapterTypes().then((t) => !cancelled && dispatch({ type: A.SET_CHAPTER_TYPES, types: t }), () => {});
-    return () => { cancelled = true; };
-  }, [currentUserId, state.bootstrapped]);
+  const actions = useMemo(() => ({
+    async signInEmail(email, password) {
+      if (!supabase) return { ok: false, error: 'Sign-in is not configured.' };
+      dispatch({ type: 'SET_AUTH_BUSY', value: true });
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) {
+        dispatch({ type: 'SET_AUTH_ERROR', error: error.message });
+        return { ok: false, error: error.message };
+      }
+      dispatch({ type: 'SET_AUTH_BUSY', value: false });
+      return { ok: true };
+    },
 
-  // Actions — screens never call fetch directly for auth/feed/collection.
-  const actions = useMemo(
-    () => ({
-      async signInEmail(email, password) {
-        if (!supabase) return { ok: false, error: 'Sign-in is not configured.' };
-        dispatch({ type: A.SET_AUTH_BUSY, value: true });
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        dispatch({ type: A.SET_AUTH_BUSY, value: false });
-        if (error) {
-          dispatch({ type: A.SET_AUTH_ERROR, error: error.message });
-          return { ok: false, error: error.message };
-        }
-        return { ok: true };
-      },
-      async signUpEmail(email, password) {
-        if (!supabase) return { ok: false, error: 'Sign-in is not configured.' };
-        dispatch({ type: A.SET_AUTH_BUSY, value: true });
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        dispatch({ type: A.SET_AUTH_BUSY, value: false });
-        if (error) {
-          dispatch({ type: A.SET_AUTH_ERROR, error: error.message });
-          return { ok: false, error: error.message };
-        }
-        // If email confirmation is OFF, signUp returns a session → auto signed in.
-        return { ok: true, needsConfirm: !data?.session };
-      },
-      async signInGoogle() {
-        dispatch({ type: A.SET_AUTH_BUSY, value: true });
-        const r = await signInWithGoogleOAuth();
-        dispatch({ type: A.SET_AUTH_BUSY, value: false });
-        if (!r.ok && !r.cancelled) dispatch({ type: A.SET_AUTH_ERROR, error: r.error });
-        return r;
-      },
-      async signOut() {
-        if (supabase) await supabase.auth.signOut();
-        dispatch({ type: A.CLEAR_AUTH });
-      },
-      async becomeAdmin(key) {
-        dispatch({ type: A.SET_BECOME_ADMIN, busy: true });
-        try {
-          const u = await api.becomeAdmin(key);
-          dispatch({ type: A.SET_CURRENT_USER, user: normUser(u) });
-          dispatch({ type: A.SET_BECOME_ADMIN, busy: false });
-          return { ok: true };
-        } catch (e) {
-          dispatch({ type: A.SET_BECOME_ADMIN, busy: false, error: e.message });
-          return { ok: false, error: e.message };
-        }
-      },
-      async refreshFeed() {
-        dispatch({ type: A.SET_FEED_LOADING, value: true });
-        try {
-          const f = await api.feed();
-          dispatch({ type: A.SET_FEED, feed: f, cursor: f?.next_cursor });
-        } catch {
-          dispatch({ type: A.SET_FEED_LOADING, value: false });
-        }
-      },
-      async loadMoreFeed(cursor) {
-        if (!cursor) return;
-        dispatch({ type: A.SET_FEED_LOADING, value: true });
-        try {
-          const f = await api.feed({ cursor });
-          dispatch({ type: A.APPEND_FEED, feed: f, cursor: f?.next_cursor });
-        } catch {
-          dispatch({ type: A.SET_FEED_LOADING, value: false });
-        }
-      },
-      // Collection status — the one place tiles flip shelf state, app-wide.
-      async setCollectionStatus(gameId, status) {
-        const prev = state.myCollectionMap[gameId] || null;
-        dispatch({ type: A.SET_COLLECTION_STATUS, gameId, status });
-        try {
-          if (!status) await api.removeFromCollection(gameId);
-          else if (prev) await api.updateCollection(gameId, status);
-          else await api.addToCollection(gameId, status);
-        } catch (e) {
-          // Roll back on failure.
-          dispatch({ type: A.SET_COLLECTION_STATUS, gameId, status: prev });
-          throw e;
-        }
-      },
-      async loadGameBundle(gameId, { force = false } = {}) {
-        if (!force && state.gameBundles[gameId]) return state.gameBundles[gameId];
-        const bundle = await api.gameBundle(gameId);
-        dispatch({ type: A.CACHE_GAME_BUNDLE, gameId, bundle });
-        return bundle;
-      },
-      async refreshHostSeeds() {
-        try {
-          const [games, accounts, ghosts, recent] = await Promise.all([
-            api.recentlyPlayedGames().catch(() => []),
-            api.buddies().catch(() => []),
-            api.ghostPlayers().catch(() => []),
-            api.playedWith().catch(() => []),
-          ]);
-          dispatch({
-            type: A.SET_HOST_SEEDS,
-            games,
-            partners: { accounts: accounts || [], ghosts: ghosts || [], recent: recent || [] },
-          });
-        } catch {}
-      },
-      setActiveSession(session) {
-        dispatch({ type: A.SET_ACTIVE_SESSION, session });
-      },
-      dispatch,
-    }),
-    [state.myCollectionMap, state.gameBundles],
-  );
+    async signUpEmail(email, password) {
+      if (!supabase) return { ok: false, error: 'Sign-up is not configured.' };
+      dispatch({ type: 'SET_AUTH_BUSY', value: true });
+      const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+      if (error) {
+        dispatch({ type: 'SET_AUTH_ERROR', error: error.message });
+        return { ok: false, error: error.message };
+      }
+      dispatch({ type: 'SET_AUTH_BUSY', value: false });
+      // When email confirmation is on, there's no session yet.
+      const needsConfirm = !(data && data.session);
+      return { ok: true, needsConfirm };
+    },
+
+    async signInGoogle() {
+      dispatch({ type: 'SET_AUTH_BUSY', value: true });
+      const res = await signInWithGoogleOAuth();
+      if (!res.ok && !res.cancelled) {
+        dispatch({ type: 'SET_AUTH_ERROR', error: res.error || 'Google sign-in failed.' });
+      } else {
+        dispatch({ type: 'SET_AUTH_BUSY', value: false });
+      }
+      return res;
+    },
+
+    async signOut() {
+      try { await supabase?.auth.signOut(); } catch {}
+      dispatch({ type: 'SIGN_OUT' });
+    },
+
+    async refreshProfile() {
+      return loadProfile();
+    },
+
+    clearAuthError() {
+      dispatch({ type: 'SET_AUTH_ERROR', error: null });
+    },
+
+    set(key, value) {
+      dispatch({ type: 'SET', key, value });
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
 
   return (
     <StateContext.Provider value={state}>
-      <DispatchContext.Provider value={dispatch}>
-        <ActionsContext.Provider value={actions}>{children}</ActionsContext.Provider>
-      </DispatchContext.Provider>
+      <ActionsContext.Provider value={actions}>
+        {children}
+      </ActionsContext.Provider>
     </StateContext.Provider>
   );
 }
 
-function normUser(raw) {
-  if (!raw) return null;
-  return {
-    id: raw.id,
-    display_name: raw.display_name,
-    username: raw.username,
-    avatar: raw.avatar || null,
-    is_admin: !!raw.is_admin,
-  };
+export function useAppState() {
+  return useContext(StateContext);
 }
 
-export { A as ACTIONS };
+export function useAppActions() {
+  return useContext(ActionsContext);
+}
