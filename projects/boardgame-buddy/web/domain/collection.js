@@ -95,6 +95,9 @@
       // mutation a router-back lands on.
       if (window.Profile && window.Profile.invalidate) window.Profile.invalidate();
       if (window.Game && window.Game.invalidateBundle) window.Game.invalidateBundle();
+      // Cached game searches embed each hit's collection_status — a mutation
+      // changes which shelf a game sits on, so drop them too.
+      if (window.Game && window.Game.invalidateSearch) window.Game.invalidateSearch();
     }
 
     /**

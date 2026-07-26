@@ -38,14 +38,47 @@
       else window.bgbCache.delete("game.bundle", id);
     }
 
+    // Cache key for a library search — normalized query + limit.
+    static _searchKey(q, limit) {
+      return `${(q || "").trim().toLowerCase()}|${limit}`;
+    }
+
+    // Synchronous peek at the cached library-search result (or null). The
+    // GameFinder uses this to render instantly on backspace/re-type and to
+    // decide whether it needs to show a loading state at all.
+    static cachedSearch(q, { limit = 20 } = {}) {
+      if (!window.bgbCache) return null;
+      return window.bgbCache.get("game.search", Game._searchKey(q, limit));
+    }
+
     // Single ranked search. include_bgg=true appends BGG hits.
+    //
+    // Library searches (include_bgg=false) are memoized in bgbCache under
+    // "game.search" so re-typing a query the user already searched is instant
+    // and doesn't re-hit the DB. Invalidated by Game.invalidateSearch() after
+    // any collection mutation so a freshly-added game's status stays correct.
+    // BGG searches bypass the cache — they hit the external BGG API (already
+    // cached server-side) and are far less frequent.
     static async search(q, { includeBgg = false, limit = 20 } = {}) {
-      const data = await window.api.get("/search", {
-        q,
-        limit,
-        include_bgg: includeBgg ? "true" : "false",
-      });
+      const query = (q || "").trim();
+      const params = { q: query, limit, include_bgg: includeBgg ? "true" : "false" };
+      if (includeBgg || !window.bgbCache) {
+        return window.api.get("/search", params);
+      }
+      const key = Game._searchKey(query, limit);
+      const hit = window.bgbCache.get("game.search", key);
+      if (hit) return hit;
+      const data = await window.api.get("/search", params);
+      // 3-minute TTL: long enough that a burst of typing/backspacing is
+      // instant, short enough that the catalog stays reasonably fresh.
+      window.bgbCache.set("game.search", key, data, 3 * 60 * 1000);
       return data;
+    }
+
+    /** Drop every cached library search. Call after a collection mutation so
+     *  cached results reflect the new owned/wishlist status. */
+    static invalidateSearch() {
+      if (window.bgbCache) window.bgbCache.clear("game.search");
     }
 
     // Caller's most-recently-played distinct games (seed for the inline

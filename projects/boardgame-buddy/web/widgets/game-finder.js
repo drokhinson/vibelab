@@ -151,6 +151,13 @@
         this._renderDropdown("");
         return;
       }
+      // Instant path: a query the user already searched is served from cache
+      // with no debounce and no loading flash (backspace / re-type feel live).
+      if (window.Game && window.Game.cachedSearch && window.Game.cachedSearch(q)) {
+        this._bggMode = false;
+        this._renderDropdown(q);
+        return;
+      }
       // 180ms debounce so a fast typer doesn't fire one query per keystroke.
       this._searchTimer = setTimeout(() => {
         this._bggMode = false;
@@ -203,6 +210,7 @@
       const dd = document.getElementById(this.dropdownId);
       if (dd) {
         dd.classList.add("hidden");
+        dd.classList.remove("game-finder-dropdown--loading");
         dd.innerHTML = "";
       }
     }
@@ -219,8 +227,10 @@
       const q = (query || "").trim();
       const token = ++this._queryToken;
 
-      // Empty query → recently-played seed (or hint).
+      // Empty query → recently-played seed (or hint). No BGG footer (nothing
+      // to search for yet).
       if (!q) {
+        dd.classList.remove("game-finder-dropdown--loading");
         const list = (this._opts.includeRecentlyPlayed !== false && this._recentGames) || [];
         this._gameById.clear();
         list.forEach((g) => this._gameById.set(g.id, g));
@@ -237,39 +247,79 @@
         return;
       }
 
-      dd.innerHTML = `<li class="game-finder-dropdown__hint">Searching…</li>`;
+      // Cache hit → render instantly, no loading state, no network wait.
+      const cached = (window.Game && window.Game.cachedSearch)
+        ? window.Game.cachedSearch(q) : null;
+      if (cached) {
+        dd.classList.remove("game-finder-dropdown--loading");
+        this._renderResults(dd, cached, q);
+        return;
+      }
+
+      // Cache miss → REFRESH IN PLACE. Keep whatever results are already
+      // showing and flag the dropdown as loading (top bar + dimmed rows) so
+      // the list visibly refreshes instead of blanking. Only when the
+      // dropdown is cold (no rows) do we show a spinner row.
       dd.classList.remove("hidden");
+      if (dd.querySelector(".game-finder-dropdown-item")) {
+        dd.classList.add("game-finder-dropdown--loading");
+      } else {
+        dd.classList.remove("game-finder-dropdown--loading");
+        dd.innerHTML =
+          `<li class="game-finder-dropdown__loading-row">
+             <span class="game-finder-spinner" aria-hidden="true"></span>
+             <span>Searching…</span>
+           </li>`;
+      }
 
       let data;
       try {
         data = await window.Game.search(q);
       } catch (e) {
         if (token !== this._queryToken) return;
-        dd.innerHTML = `<li class="game-finder-dropdown__hint">Search failed. Try again.</li>`;
+        dd.classList.remove("game-finder-dropdown--loading");
+        dd.innerHTML =
+          `<li class="game-finder-dropdown__hint">Search failed. Try again.</li>` +
+          this._bggFooter(q);
+        this._wireRowClicks(dd);
+        if (window.lucide) window.lucide.createIcons({ root: dd });
         if (this._opts.onError) this._opts.onError(e);
         return;
       }
       if (token !== this._queryToken) return;
+      dd.classList.remove("game-finder-dropdown--loading");
+      this._renderResults(dd, data, q);
+    }
 
+    // Render library results + the always-visible sticky BGG footer. Shared
+    // by the cache-hit and network-response paths.
+    _renderResults(dd, data, q) {
       const hits = (data && data.results) || [];
-      const bggRow = `
-        <li class="game-finder-dropdown-item game-finder-dropdown-item--bgg"
-            data-finder-action="run-bgg" data-finder-query="${escapeAttr(q)}">
-          <i data-lucide="search" class="w-4 h-4"></i>
-          <span>Search BoardGameGeek for "${escape(q)}"</span>
-        </li>`;
-      if (hits.length === 0) {
-        dd.innerHTML = `<li class="game-finder-dropdown__hint">No matches in your library.</li>${bggRow}`;
-        this._wireRowClicks(dd);
-        if (window.lucide) window.lucide.createIcons({ root: dd });
-        return;
-      }
-
       this._gameById.clear();
       hits.forEach((h) => { if (h && h.game) this._gameById.set(h.game.id, h.game); });
-      dd.innerHTML = hits.map((h) => this._renderRow(h.game, "library")).join("") + bggRow;
+
+      const rows = hits.length
+        ? hits.map((h) => this._renderRow(h.game, "library")).join("")
+        : `<li class="game-finder-dropdown__hint">No matches in your library.</li>`;
+
+      dd.innerHTML = rows + this._bggFooter(q);
+      dd.classList.remove("hidden");
       this._wireRowClicks(dd);
       if (window.lucide) window.lucide.createIcons({ root: dd });
+    }
+
+    // Short, sticky "Search BoardGameGeek" action pinned to the bottom of the
+    // dropdown — always offered whenever there's a query, even when the
+    // library already has matches, so BGG is one tap away and never buried.
+    _bggFooter(q) {
+      return `
+        <li class="game-finder-dropdown__bgg-footer">
+          <button type="button" class="game-finder-bgg-btn"
+                  data-finder-action="run-bgg" data-finder-query="${escapeAttr(q)}">
+            <i data-lucide="search" class="w-4 h-4"></i>
+            <span>Search BoardGameGeek</span>
+          </button>
+        </li>`;
     }
 
     _renderRow(game, source) {
@@ -324,7 +374,12 @@
       if (!dd) return;
       this._bggMode = true;
       const token = ++this._queryToken;
-      dd.innerHTML = `<li class="game-finder-dropdown__hint">Searching BoardGameGeek…</li>`;
+      dd.classList.remove("game-finder-dropdown--loading");
+      dd.innerHTML =
+        `<li class="game-finder-dropdown__loading-row">
+           <span class="game-finder-spinner" aria-hidden="true"></span>
+           <span>Searching BoardGameGeek…</span>
+         </li>`;
       dd.classList.remove("hidden");
 
       let data;

@@ -79,6 +79,34 @@ def _db_hits(
     return hits
 
 
+def _rpc_hits(sb, viewer_id: str, query: str, limit: int) -> list[UnifiedSearchHit]:
+    """Single index-backed query via the boardgamebuddy_search_games RPC.
+
+    The RPC does the trigram-indexed catalog ILIKE, LEFT JOINs the viewer's
+    collection, and returns rows collection-first. Each row carries the
+    GameSummary columns plus `in_collection` / `collection_status`. Raises if
+    the RPC is missing (not yet migrated) so unified_search can fall back.
+    """
+    res = sb.rpc(
+        "boardgamebuddy_search_games",
+        {"p_viewer": viewer_id, "p_query": query, "p_limit": limit},
+    ).execute()
+    rows = res.data or []
+    hits: list[UnifiedSearchHit] = []
+    for r in rows:
+        if not r or not r.get("name"):
+            continue
+        if r.get("in_collection"):
+            hits.append(UnifiedSearchHit(
+                source="collection",
+                game=game_summary_from_row(r),
+                collection_status=r.get("collection_status"),
+            ))
+        else:
+            hits.append(UnifiedSearchHit(source="db", game=game_summary_from_row(r)))
+    return hits
+
+
 async def _bgg_hits(sb, query: str, limit: int) -> list[BggSearchResult]:
     """Proxy the existing /games/search-bgg behavior. Swallows network errors
     so a flaky BGG never breaks the main search."""
@@ -160,11 +188,18 @@ async def unified_search(
     if not q:
         return UnifiedSearchResponse(results=[], bgg_results=[], bgg_searched=include_bgg)
 
-    collection_hits = _collection_hits(sb, viewer_id, q, limit)
-    exclude = {h.game.id for h in collection_hits}
-    remaining = max(0, limit - len(collection_hits))
-    db_hits = _db_hits(sb, q, remaining, exclude_game_ids=exclude) if remaining else []
-    all_hits = collection_hits + db_hits
+    # Fast path: one index-backed RPC. Fall back to the two-query PostgREST
+    # path if the RPC isn't present yet (migration 040 not applied) or errors,
+    # so an auto-deploy ahead of the migration never breaks search.
+    try:
+        all_hits = _rpc_hits(sb, viewer_id, q, limit)
+    except Exception as exc:
+        logger.warning("search RPC unavailable, using two-query fallback: %s", exc)
+        collection_hits = _collection_hits(sb, viewer_id, q, limit)
+        exclude = {h.game.id for h in collection_hits}
+        remaining = max(0, limit - len(collection_hits))
+        db_hits = _db_hits(sb, q, remaining, exclude_game_ids=exclude) if remaining else []
+        all_hits = collection_hits + db_hits
 
     bgg_results: list[BggSearchResult] = []
     if include_bgg:

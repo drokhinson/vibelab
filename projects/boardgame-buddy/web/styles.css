@@ -5724,6 +5724,86 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-accent);
 }
 
+/* ── Refresh-in-place loading ─────────────────────────────────────────────
+   On a cache miss the previous results stay visible (dimmed) while a thin
+   accent bar sweeps across the top — the list "refreshes" instead of
+   blanking to a "Searching…" line. */
+.game-finder-dropdown--loading::before {
+  content: "";
+  position: sticky;
+  top: -6px;                 /* cancel the ul's 6px top padding */
+  display: block;
+  height: 3px;
+  margin: -6px -6px 4px;     /* span the full width over the padding */
+  border-radius: 3px 3px 0 0;
+  background:
+    linear-gradient(90deg, transparent, var(--polaroid-accent), transparent)
+    no-repeat;
+  background-size: 40% 100%;
+  animation: gameFinderBar 0.9s ease-in-out infinite;
+  z-index: 2;
+}
+.game-finder-dropdown--loading .game-finder-dropdown-item { opacity: 0.5; }
+@keyframes gameFinderBar {
+  0%   { background-position: -40% 0; }
+  100% { background-position: 140% 0; }
+}
+
+/* Cold-start spinner row (no prior results to keep visible). */
+.game-finder-dropdown__loading-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--polaroid-muted);
+  font-style: italic;
+}
+.game-finder-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--polaroid-line);
+  border-top-color: var(--polaroid-accent);
+  border-radius: 50%;
+  animation: gameFinderSpin 0.7s linear infinite;
+}
+@keyframes gameFinderSpin { to { transform: rotate(360deg); } }
+
+/* ── Sticky BoardGameGeek action ──────────────────────────────────────────
+   Always offered whenever there's a query, pinned to the bottom of the
+   dropdown so it stays visible while scrolling library results. */
+.game-finder-dropdown__bgg-footer {
+  position: sticky;
+  bottom: -6px;                 /* cancel the ul's 6px bottom padding */
+  margin: 4px -6px -6px;        /* span the full width, hug the edge */
+  padding: 6px;
+  background: var(--polaroid-bg);
+  border-top: 1px solid var(--polaroid-line);
+  z-index: 1;
+}
+.game-finder-bgg-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--polaroid-accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--polaroid-accent);
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.game-finder-bgg-btn:hover { background: var(--polaroid-bg-soft); }
+.game-finder-bgg-btn:active { transform: translateY(1px); }
+
 /* ── Add-game modal (collection/wishlist header CTA) ────────────────────── */
 .add-game-modal {
   width: min(92vw, 420px);
