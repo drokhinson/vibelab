@@ -37,7 +37,8 @@ logger = logging.getLogger(__name__)
 # two relationships between plays and games (direct game_id FK + via the
 # junction) and refuses to auto-pick — so we name the FK explicitly.
 _SELECT_PLAY = (
-    "id, user_id, game_id, played_at, notes, photo_url, play_mode, created_at, "
+    "id, user_id, game_id, played_at, notes, photo_url, play_mode, "
+    "scoring_template_id, round_labels, created_at, "
     "boardgamebuddy_games!boardgamebuddy_plays_game_id_fkey(name, thumbnail_url), "
     "boardgamebuddy_profiles!user_id(display_name)"
 )
@@ -68,6 +69,8 @@ def _build_play_response(
         expansions=(expansions_by_play or {}).get(play["id"], []),
         created_at=play["created_at"],
         play_mode=play.get("play_mode") or "competitive",
+        scoring_template_id=play.get("scoring_template_id"),
+        round_labels=play.get("round_labels"),
         logged_by_id=play["user_id"],
         logged_by_name=logger_profile.get("display_name", "Unknown"),
         is_own=is_own,
@@ -366,6 +369,8 @@ async def log_play(
             "notes": body.notes,
             "photo_url": body.photo_url,
             "play_mode": effective_mode,
+            "scoring_template_id": body.scoring_template_id,
+            "round_labels": body.round_labels,
             **play_denormalized_from_game(game_row),
         })
         .execute()
@@ -389,6 +394,8 @@ async def log_play(
         expansions=expansions,
         created_at=play["created_at"],
         play_mode=play.get("play_mode") or effective_mode,
+        scoring_template_id=play.get("scoring_template_id"),
+        round_labels=play.get("round_labels"),
         logged_by_id=user.user_id,
         logged_by_name=user.display_name,
         is_own=True,
@@ -460,6 +467,11 @@ async def update_play(
         "played_at": body.played_at.isoformat(),
         "notes": body.notes,
         "photo_url": body.photo_url,
+        # Full-replace semantics (like players/expansions below): the FE always
+        # sends the current template + label snapshot, so a play that dropped
+        # its template correctly clears these.
+        "scoring_template_id": body.scoring_template_id,
+        "round_labels": body.round_labels,
     }
     if body.play_mode is not None:
         update_payload["play_mode"] = body.play_mode.value

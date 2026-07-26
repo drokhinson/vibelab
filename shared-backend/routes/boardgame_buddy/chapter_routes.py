@@ -7,9 +7,11 @@ game and add the ones they want. No curated defaults, no review queue
 — moderation is reactive via per-chapter reports.
 """
 
+import json
 from typing import Any, Optional
 
 from fastapi import Depends, Header, HTTPException, Path, Query, Response
+from pydantic import ValidationError
 
 from db import get_supabase
 
@@ -31,6 +33,7 @@ from .models import (
     ChapterUpdate,
     MessageResponse,
     MyGuideChapterResponse,
+    ScoringTemplateRows,
 )
 
 
@@ -138,6 +141,27 @@ def _validate_chapter_type(sb, chapter_type: str) -> None:
     )
     if not row.data:
         raise HTTPException(status_code=400, detail="Unknown chapter type")
+
+
+def _validate_scoring_template_content(layout: Optional[str], content: str) -> None:
+    """When a chapter uses the structured scoring-template layout, its content
+    must be a `{"rows": [...]}` JSON blob with at least one named row (the FE
+    rows editor serializes it that way). Text chapters are unaffected."""
+    if layout != "scoring_template":
+        return
+    try:
+        parsed = json.loads(content)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Scoring template content must be JSON")
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=400, detail="Scoring template content must be a JSON object")
+    try:
+        ScoringTemplateRows(rows=parsed.get("rows", []))
+    except ValidationError:
+        raise HTTPException(
+            status_code=400,
+            detail="A scoring template needs at least one named row",
+        )
 
 
 @router.get(
@@ -268,6 +292,7 @@ async def create_chapter(
         raise HTTPException(status_code=404, detail="Game not found")
 
     _validate_chapter_type(sb, body.chapter_type)
+    _validate_scoring_template_content(body.layout, body.content)
 
     insert = (
         sb.table("boardgamebuddy_guide_chapters")
@@ -343,6 +368,11 @@ async def update_chapter(
         updates["content"] = body.content
     if body.layout is not None:
         updates["layout"] = body.layout
+
+    # The FE always resends layout + content together when editing a scoring
+    # template (full replace), so validating the pair here covers the real path.
+    if updates.get("layout") == "scoring_template" and "content" in updates:
+        _validate_scoring_template_content("scoring_template", updates["content"])
 
     sb.table("boardgamebuddy_guide_chapters").update(updates).eq("id", chapter_id).execute()
 

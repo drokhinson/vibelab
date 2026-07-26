@@ -703,6 +703,9 @@
       if (ps.players.length === 0) {
         return `<section class="cascade-card"><p class="text-sm opacity-70">Add players on the Gather step.</p></section>`;
       }
+      // Lazily discover scoring templates for this game (guarded so it runs
+      // once per game pick, off the render path).
+      this._maybeLoadScoringTemplate();
       const mode = this._resolvePlayMode();
       // Table markup is delegated to the shared round-grid widget so the
       // play-detail popup paints the same scoreboard. We still own the
@@ -713,6 +716,7 @@
         editable: true,
         playMode: mode,
         showSign: window.RoundGridSign.enabled(),
+        rowLabels: ps.rowLabels,
         getCellValue: (p, r) => this._cellValue(p, r),
         getPlayerTotal: (p) => this._playerTotal(p),
       });
@@ -722,10 +726,203 @@
             <label class="cascade-card__label">Scoring</label>
             ${window.RoundGridSign.renderToggle("playFlowView")}
           </div>
+          ${this._renderTemplateBar()}
           ${mode === "coop" ? this._renderCoopOutcome() : ""}
           ${grid}
         </section>
       `;
+    }
+
+    // The template affordance above the grid: an active-template chip (with a
+    // Change action) when one is applied, or a "templates available" banner
+    // when the game has scoring templates the host hasn't applied yet.
+    _renderTemplateBar() {
+      const ps = this._ps;
+      const active = ps.scoringTemplateId
+        ? (this._availableTemplates || []).find((t) => t.id === ps.scoringTemplateId)
+        : null;
+      if (ps.scoringTemplateId) {
+        const name = (active && active.title) || this._activeTemplateName || "Scoring template";
+        return `
+          <div class="scoring-tmpl-chip">
+            <i data-lucide="table" class="w-4 h-4"></i>
+            <span class="scoring-tmpl-chip__name" title="${escapeAttr(name)}">${escape(name)}</span>
+            <button type="button" class="scoring-tmpl-chip__change"
+                    onclick="window.playFlowView._openTemplatePicker()">Change</button>
+          </div>
+        `;
+      }
+      const avail = this._availableTemplates || [];
+      if (!avail.length) return "";
+      return `
+        <div class="scoring-tmpl-banner">
+          <i data-lucide="sparkles" class="w-4 h-4"></i>
+          <span class="scoring-tmpl-banner__text">
+            ${avail.length} scoring ${avail.length === 1 ? "template" : "templates"} available for this game.
+          </span>
+          <button type="button" class="scoring-tmpl-banner__btn"
+                  onclick="window.playFlowView._openTemplatePicker()">Choose</button>
+        </div>
+      `;
+    }
+
+    // Discover scoring templates for the current game. Runs once per game pick
+    // (guarded by _tmplCheckedForGame), off the render path. Auto-applies when
+    // the host has exactly one adopted template; otherwise stashes the
+    // candidates (adopted, else the community pool) so the banner/picker can
+    // offer them. A template already chosen for this draft short-circuits.
+    async _maybeLoadScoringTemplate() {
+      const ps = this._ps;
+      const gid = ps && ps.gameId;
+      if (!gid || !window.ScoringTemplate) return;
+      if (this._tmplCheckedForGame === gid) return;
+      this._tmplCheckedForGame = gid;
+      try {
+        const adopted = await window.ScoringTemplate.adoptedTemplates(gid);
+        if (ps.gameId !== gid) return; // game changed mid-flight
+        if (ps.scoringTemplateId) {
+          // Keep the list around so the chip can resolve the active name.
+          this._availableTemplates = adopted;
+          this._refreshScoringSection();
+          return;
+        }
+        if (adopted.length === 1) {
+          this._availableTemplates = adopted;
+          this._applyScoringTemplate(adopted[0]);
+          return;
+        }
+        if (adopted.length > 1) {
+          this._availableTemplates = adopted;
+          this._refreshScoringSection();
+          return;
+        }
+        // None adopted — surface the community pool if any exist.
+        const pool = await window.ScoringTemplate.templatesForGame(gid);
+        if (ps.gameId !== gid) return;
+        this._availableTemplates = pool || [];
+        this._refreshScoringSection();
+      } catch (_) {
+        // Non-fatal: scoring still works with generic rounds.
+      }
+    }
+
+    // Apply a template chapter: seed the row names, remember the id (so it
+    // rides onto the play + live session), and pad every player's round array
+    // so all named rows are visible immediately.
+    _applyScoringTemplate(chapter) {
+      const ps = this._ps;
+      if (!chapter || !ps) return;
+      const rows = window.ScoringTemplate.parseRows(chapter);
+      ps.rowLabels = rows.slice();
+      ps.scoringTemplateId = chapter.id;
+      this._activeTemplateName = chapter.title || "Scoring template";
+      // Make sure this template is resolvable by the chip.
+      const list = this._availableTemplates || [];
+      if (!list.some((t) => t.id === chapter.id)) list.push(chapter);
+      this._availableTemplates = list;
+      // Grow (never shrink) each player's round array to the template length.
+      const n = rows.length;
+      for (const p of ps.players) {
+        if (!Array.isArray(p.roundScores)) p.roundScores = [];
+        while (p.roundScores.length < n) p.roundScores.push(null);
+      }
+      ps.persist();
+      this._autoSelectWinners();
+      // Share the template with joiners so their read-only mirror shows the
+      // same named rows (they resolve the names from this id).
+      if (ps.code) {
+        window.PlaySession.updateLobby(ps.code, { scoringTemplateId: chapter.id }).catch(() => {});
+      }
+      this.render();
+    }
+
+    _clearScoringTemplate() {
+      const ps = this._ps;
+      if (!ps) return;
+      ps.scoringTemplateId = null;
+      ps.rowLabels = [];
+      this._activeTemplateName = null;
+      ps.persist();
+      if (ps.code) {
+        window.PlaySession.updateLobby(ps.code, { scoringTemplateId: null }).catch(() => {});
+      }
+      this.render();
+    }
+
+    // Lightweight non-destructive picker (bespoke selection UI is fine — the
+    // one-surface rule governs destructive confirmations). Lists the game's
+    // scoring templates + a "generic rounds" option + a create shortcut.
+    _openTemplatePicker() {
+      const avail = this._availableTemplates || [];
+      const activeId = this._ps.scoringTemplateId || null;
+      const rowFor = (t) => {
+        const rows = window.ScoringTemplate.parseRows(t);
+        const preview = rows.slice(0, 4).join(" · ") + (rows.length > 4 ? "…" : "");
+        return `
+          <button type="button" class="tmpl-pick__row ${t.id === activeId ? "is-active" : ""}"
+                  data-tmpl-id="${escapeAttr(t.id)}">
+            <span class="tmpl-pick__row-main">
+              <span class="tmpl-pick__row-title">${escape(t.title || "Untitled")}</span>
+              <span class="tmpl-pick__row-sub">${escape(preview || `${rows.length} rows`)}</span>
+            </span>
+            ${t.id === activeId ? `<i data-lucide="check" class="w-4 h-4"></i>` : ""}
+          </button>
+        `;
+      };
+      const root = document.createElement("div");
+      root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--confirm tmpl-pick__backdrop";
+      root.innerHTML = `
+        <div class="polaroid-popup__card polaroid-popup__card--confirm tmpl-pick" role="dialog" aria-modal="true"
+             aria-label="Choose a scoring template">
+          <button class="polaroid-popup__close" aria-label="Close"><i data-lucide="x" class="w-4 h-4"></i></button>
+          <div class="polaroid-popup__title">Scoring template</div>
+          <div class="tmpl-pick__list">
+            ${avail.map(rowFor).join("")}
+            <button type="button" class="tmpl-pick__row ${!activeId ? "is-active" : ""}" data-tmpl-id="">
+              <span class="tmpl-pick__row-main">
+                <span class="tmpl-pick__row-title">Generic rounds</span>
+                <span class="tmpl-pick__row-sub">R1, R2, R3…</span>
+              </span>
+              ${!activeId ? `<i data-lucide="check" class="w-4 h-4"></i>` : ""}
+            </button>
+          </div>
+          <button type="button" class="tmpl-pick__create">
+            <i data-lucide="plus" class="w-4 h-4"></i> Create a template
+          </button>
+        </div>
+      `;
+      const close = () => { if (root.parentNode) root.parentNode.removeChild(root); };
+      root.addEventListener("click", (ev) => {
+        if (ev.target === root) return close();
+        const rowBtn = ev.target.closest("[data-tmpl-id]");
+        if (rowBtn) {
+          const id = rowBtn.getAttribute("data-tmpl-id");
+          close();
+          if (!id) { this._clearScoringTemplate(); return; }
+          const chapter = (this._availableTemplates || []).find((t) => t.id === id);
+          if (chapter) this._applyScoringTemplate(chapter);
+          return;
+        }
+        if (ev.target.closest(".polaroid-popup__close")) return close();
+        if (ev.target.closest(".tmpl-pick__create")) {
+          close();
+          this._createScoringTemplate();
+        }
+      });
+      document.body.appendChild(root);
+      if (window.lucide) window.lucide.createIcons({ root });
+    }
+
+    // Jump to the reference-guide builder to author a template for this game.
+    _createScoringTemplate() {
+      const ps = this._ps;
+      if (!ps || !ps.gameId) return;
+      // Re-check templates when the user returns.
+      this._tmplCheckedForGame = null;
+      window.router.go("reference-guide-add", {
+        gameId: ps.gameId,
+        gameName: (ps.gameSnapshot || {}).name || "",
+      });
     }
 
     // Re-render just the scoring section in place (cheaper than a full view
@@ -1019,6 +1216,11 @@
       if (!ps) return;
       ps.gameId = null;
       ps.gameSnapshot = null;
+      ps.scoringTemplateId = null;
+      ps.rowLabels = [];
+      this._activeTemplateName = null;
+      this._availableTemplates = [];
+      this._tmplCheckedForGame = null;
       ps.persist();
       // Push the clear to the lobby so joiners' read-only mirrors drop the
       // game pick alongside the host.
@@ -1045,6 +1247,13 @@
         is_expansion: !!game.is_expansion,
       };
       ps.playMode = game.play_mode || ps.playMode || null;
+      // A scoring template is game-specific — drop any carried over from a
+      // previous pick and let _maybeLoadScoringTemplate re-resolve.
+      ps.scoringTemplateId = null;
+      ps.rowLabels = [];
+      this._activeTemplateName = null;
+      this._availableTemplates = [];
+      this._tmplCheckedForGame = null;
       ps.persist();
       window.store.set("activePlay", ps);
       // Warm the reference-guide cache for the new pick (base game only).
@@ -1248,6 +1457,17 @@
 
     // ── Scoring rounds ──────────────────────────────────────────────────────
 
+    // Store a per-row name. Intentionally does NOT re-render the section — the
+    // input already holds the typed text, and a re-render mid-keystroke would
+    // drop focus. Live sessions share the template via its id (see
+    // _applyScoringTemplate); ad-hoc per-row renames stay local and land in the
+    // play's round_labels snapshot on save.
+    _setRowLabel(roundIndex, value) {
+      if (!Array.isArray(this._ps.rowLabels)) this._ps.rowLabels = [];
+      this._ps.rowLabels[roundIndex] = String(value == null ? "" : value);
+      this._ps.persist();
+    }
+
     _addRound() {
       for (const p of this._ps.players) {
         if (!Array.isArray(p.roundScores)) p.roundScores = [];
@@ -1284,6 +1504,10 @@
         }
       }
       if (removed) {
+        // Keep the row-name overlay aligned with the (now-shorter) round axis.
+        if (Array.isArray(this._ps.rowLabels) && r < this._ps.rowLabels.length) {
+          this._ps.rowLabels.splice(r, 1);
+        }
         this._ps.persist();
         this._autoSelectWinners();
         // Drop the round's live rows too so it disappears from joiners'

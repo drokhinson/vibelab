@@ -14,13 +14,22 @@
 //   window[host]._addRound()
 //   window[host]._removeRoundAt(roundIdx)
 //   window[host]._toggleWinner(playerIdx)
+//   window[host]._setRowLabel(roundIdx, value)   — only when rows are editable
 //
-// Each consumer implements these with identical signatures.
+// Each consumer implements these with identical signatures. Hosts that never
+// expose editable row names (e.g. the read-only joiner mirror) can omit
+// _setRowLabel — it's only wired when the row header renders as an input.
 //
 // Opts:
 //   editable        — when false, cells render as static spans, "Add round"
 //                     and remove buttons are hidden. Used by the popup's
 //                     read-only view mode.
+//   rowLabels       — optional array of per-row names (positional, parallel to
+//                     rounds). When a slot is set, the left header cell shows
+//                     that name instead of the generic "R{n}"; unset slots fall
+//                     back to "R{n}". Labels are a display overlay only — they
+//                     never drive the row count (roundScores / roundCount do),
+//                     so legacy plays with no labels render exactly as before.
 //   playMode        — "competitive" | "team" | "coop". Co-op hides the
 //                     per-player trophy button (the whole table wins or
 //                     loses together).
@@ -39,6 +48,7 @@
     const showSign = !!o.showSign;
     const getCell = o.getCellValue || defaultCellValue;
     const getTotal = o.getPlayerTotal || defaultPlayerTotal;
+    const rowLabels = Array.isArray(o.rowLabels) ? o.rowLabels : [];
     const safePlayers = Array.isArray(players) ? players : [];
     // Viewer mode (joiner's read-only mirror): exactly one column — the
     // current user's — stays editable, every other column renders greyed-out
@@ -64,7 +74,7 @@
             <tr>
               <th></th>
               ${safePlayers.map((p) => `
-                <th class="scoring-head${colRead(p) ? " scoring-col--read" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
+                <th class="scoring-head is-named${colRead(p) ? " scoring-col--read" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
               `).join("")}
             </tr>
           </thead>
@@ -79,7 +89,7 @@
                         <i data-lucide="x" class="w-3 h-3"></i>
                       </button>
                     ` : ""}
-                    R${r + 1}
+                    ${renderRoundLabel(r, host, showControls, rowLabels[r])}
                   </span>
                 </th>
                 ${safePlayers.map((p, i) => `
@@ -127,6 +137,25 @@
              value="${escapeAttr(val)}"
              oninput="window.${host}._setRoundScore(${i}, ${r}, this.value)" />
     </div>`;
+  }
+
+  // Left-column row header. When the grid is editable (host grid / popup edit)
+  // the row name is an inline text input so the user can name a row instead of
+  // the generic "R{n}"; the generic label rides along as the placeholder so an
+  // unnamed row still reads "R1", "R2"… When read-only (view mode, joiner
+  // mirror), it renders the resolved name as a static span. `label` is the
+  // per-row name (may be undefined/"" → falls back to R{n}).
+  function renderRoundLabel(r, host, editable, label) {
+    const val = label == null ? "" : String(label);
+    const fallback = "R" + (r + 1);
+    if (!editable) {
+      return `<span class="scoring-round-name">${escape(val || fallback)}</span>`;
+    }
+    return `<input type="text" class="scoring-round-name-input"
+              id="rg-label-${host}-${r}"
+              value="${escapeAttr(val)}" placeholder="${escapeAttr(fallback)}"
+              aria-label="Name row ${r + 1}"
+              oninput="window.${host}._setRowLabel(${r}, this.value)" />`;
   }
 
   function renderTotalsCell(p, i, mode, total, host, showWinner, readClass) {

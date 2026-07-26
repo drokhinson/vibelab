@@ -311,7 +311,11 @@
                 roundScores: Array.isArray(pl.round_scores) ? pl.round_scores : [],
               })),
               "PlayDetailPopup",
-              { editable: false, playMode: p.play_mode || "competitive" }
+              {
+                editable: false,
+                playMode: p.play_mode || "competitive",
+                rowLabels: Array.isArray(p.round_labels) ? p.round_labels : [],
+              }
             )}
           </section>` : ""}
       </article>
@@ -351,6 +355,10 @@
     return {
       played_at: p.played_at,
       notes: p.notes || "",
+      // Scoring-template link + row-name snapshot carried through an edit so a
+      // re-save preserves the named rows.
+      scoringTemplateId: p.scoring_template_id || null,
+      rowLabels: Array.isArray(p.round_labels) ? p.round_labels.slice() : [],
       players: (p.players || []).map((pl) => ({
         name: pl.name,
         is_winner: !!pl.is_winner,
@@ -419,6 +427,7 @@
               editable: true,
               playMode: p.play_mode || "competitive",
               showSign: window.RoundGridSign.enabled(),
+              rowLabels: d.rowLabels || [],
             })}
           </section>
         ` : ""}
@@ -549,6 +558,13 @@
     autoSelectWinners();
     render();
   }
+  // Row name. No render() — the input already holds the typed text, and a
+  // re-render mid-keystroke would drop focus (mirrors play-flow-view).
+  function setRowLabel(r, value) {
+    if (!state.draft) return;
+    if (!Array.isArray(state.draft.rowLabels)) state.draft.rowLabels = [];
+    state.draft.rowLabels[r] = String(value == null ? "" : value);
+  }
   // Per-cell +/− button: cycle "" → "-" → cleared, or flip the sign.
   function toggleRoundSign(i, r) {
     if (!state.draft) return;
@@ -584,6 +600,10 @@
         p.roundScores.splice(r, 1);
       }
       p.score = String(sumRounds(p.roundScores));
+    }
+    // Keep the row-name overlay aligned with the now-shorter round axis.
+    if (Array.isArray(state.draft.rowLabels) && r < state.draft.rowLabels.length) {
+      state.draft.rowLabels.splice(r, 1);
     }
     // When the grid empties out (or drops to a single round), clear the
     // arrays entirely so the save path lands round_scores=NULL again and
@@ -789,6 +809,8 @@
       photo_url: photoUrl,
       expansion_ids: state.draft.expansion_ids,
       play_mode: state.draft.play_mode || null,
+      scoring_template_id: state.draft.scoringTemplateId || null,
+      round_labels: gridActive ? persistLabels(state.draft.rowLabels, state.draft.players) : null,
       players: state.draft.players.map((p) => {
         const rs = Array.isArray(p.roundScores) ? p.roundScores : [];
         const round_scores = gridActive && rs.length > 1
@@ -830,6 +852,28 @@
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  // Snapshot row names sized to the widest per-player round count, so they line
+  // up with round_scores by index. Returns null when nothing was named (leaves
+  // the backend column NULL → generic "R{n}"). Mirrors PlaySession's helper.
+  function persistLabels(labels, players) {
+    if (!Array.isArray(labels)) return null;
+    const rounds = Math.max(
+      0,
+      ...(players || []).map((p) => (Array.isArray(p.roundScores) ? p.roundScores.length : 0)),
+    );
+    if (rounds === 0) return null;
+    const sized = [];
+    let anyNamed = false;
+    for (let i = 0; i < rounds; i++) {
+      const v = labels[i];
+      const name = v == null ? null : String(v).trim() || null;
+      if (name) anyNamed = true;
+      sized.push(name);
+    }
+    return anyNamed ? sized : null;
+  }
+
   function escape(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -860,6 +904,7 @@
     // Round-grid handlers (signatures match play-flow-view so the
     // shared round-score-grid widget can target either host).
     _setRoundScore: setRoundScore,
+    _setRowLabel: setRowLabel,
     _toggleRoundSign: toggleRoundSign,
     _toggleSignButtons: toggleSignButtons,
     _addRound: addRound,

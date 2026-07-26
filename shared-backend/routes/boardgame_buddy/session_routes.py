@@ -155,20 +155,27 @@ async def remove_session_participant(
     "/sessions/{code}",
     response_model=SessionResponse,
     status_code=200,
-    summary="Update an open play session (host-only, game pick)",
+    summary="Update an open play session (host-only: game pick, scoring template)",
 )
 async def update_session(
     body: SessionUpdateBody,
     code: str = Path(..., description="Session code"),
     user: CurrentUser = Depends(get_current_user),
 ) -> SessionResponse:
-    """Host edits the lobby — currently only the game pick. Pass game_id=null
-    to clear. Joiners pick this up on their next poll."""
-    return session_service.update_session_game(
+    """Host edits the lobby — the game pick and/or the scoring template. Only
+    the fields present in the request are applied (an omitted field is left
+    as-is; an explicit null clears it). Joiners pick this up on their next
+    poll — the shared scoring_template_id is how they render the same row
+    names."""
+    fields = body.model_fields_set
+    return session_service.update_session(
         get_supabase(),
         viewer_id=user.user_id,
         code=code,
         game_id=body.game_id,
+        set_game="game_id" in fields,
+        scoring_template_id=body.scoring_template_id,
+        set_template="scoring_template_id" in fields,
     )
 
 

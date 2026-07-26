@@ -86,8 +86,8 @@ def create_session(
 
 
 _SESSION_SELECT = (
-    "id, code, host_user_id, game_id, status, phase, created_at, expires_at, "
-    "finalized_play_id, finalized_at"
+    "id, code, host_user_id, game_id, scoring_template_id, status, phase, "
+    "created_at, expires_at, finalized_play_id, finalized_at"
 )
 
 
@@ -242,27 +242,38 @@ def remove_participant(
     return _build_response(sb, session)
 
 
-def update_session_game(
+def update_session(
     sb,
     *,
     viewer_id: str,
     code: str,
-    game_id: Optional[str],
+    game_id: Optional[str] = None,
+    set_game: bool = False,
+    scoring_template_id: Optional[str] = None,
+    set_template: bool = False,
 ) -> SessionResponse:
-    """Host-only: change the game on an open lobby (or clear it).
+    """Host-only: change the game and/or scoring template on an open lobby.
 
-    Lets joiners see the pick live via their poll loop — without this the
-    game_id on the row was frozen at create time. Idempotent: skip the write
-    when the value is unchanged.
+    Each field is applied only when its set_* flag is true, so a PATCH that
+    carries just game_id doesn't clobber the template (and vice-versa) — the
+    route derives the flags from the request's model_fields_set. Passing a
+    field explicitly as null clears it. Lets joiners see the pick + the shared
+    scoring template live via their poll loop. Idempotent: skips the write when
+    nothing changed.
     """
     session = _fetch_open_session(sb, code)
     if session["host_user_id"] != viewer_id:
         raise HTTPException(status_code=403, detail="Only the host can update the session")
-    if session.get("game_id") != game_id:
-        sb.table("boardgamebuddy_play_sessions").update(
-            {"game_id": game_id}
-        ).eq("id", session["id"]).execute()
-        session["game_id"] = game_id
+    updates: dict[str, Any] = {}
+    if set_game and session.get("game_id") != game_id:
+        updates["game_id"] = game_id
+    if set_template and session.get("scoring_template_id") != scoring_template_id:
+        updates["scoring_template_id"] = scoring_template_id
+    if updates:
+        sb.table("boardgamebuddy_play_sessions").update(updates).eq(
+            "id", session["id"]
+        ).execute()
+        session.update(updates)
     return _build_response(sb, session)
 
 

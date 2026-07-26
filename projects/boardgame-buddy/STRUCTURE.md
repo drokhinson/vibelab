@@ -111,6 +111,8 @@ a second buddy of yours to the same account merges into the first.
 | played_at | DATE | |
 | notes | TEXT | nullable |
 | bgg_play_id | BIGINT | nullable; set when the row was imported from BGG (migration 062). Unique per (user_id, bgg_play_id) — re-running BGG sync is idempotent. |
+| scoring_template_id | UUID FK | nullable → guide_chapters, ON DELETE SET NULL (migration 041). The scoring template applied to this play (provenance / re-adopt). |
+| round_labels | JSONB | nullable (migration 041). Positional snapshot of the scoring-row names used, parallel to play_players.round_scores. NULL for generic-round plays → grid shows `R{n}`. |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_play_players
@@ -133,6 +135,7 @@ walks the row through phase=gather → play → settle → finalized.
 | game_id | UUID FK | nullable → games |
 | status | TEXT | open / finalized / abandoned (gates expiry + finalize path) |
 | phase | TEXT | gather / play / settle / finalized / abandoned (drives cascading screen state; migration 026). Watched by joiners via Supabase Realtime. |
+| scoring_template_id | UUID FK | nullable → guide_chapters, ON DELETE SET NULL (migration 041). The template the host applied; joiners resolve the shared row names from it. |
 | finalized_play_id | UUID FK | nullable → plays |
 | created_at | TIMESTAMPTZ | |
 | expires_at | TIMESTAMPTZ | default now + 2h |
@@ -165,10 +168,17 @@ Merged into the canonical play on finalize.
 ### boardgamebuddy_chapter_types (lookup)
 | Column | Type | Notes |
 |--------|------|-------|
-| id | TEXT PK | `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant` |
+| id | TEXT PK | `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant`, `scoring_template` |
 | label | TEXT | human label |
 | icon | TEXT | lucide icon name |
 | display_order | INT | sort in UI |
+
+The `scoring_template` type (migration 041) is authored through the same guide
+builder but uses a structured rows editor (with a live grid preview) instead of
+markdown. Its `content` is JSON — `{"rows":["Cats","Baskets", …]}` — and its
+`layout` is `scoring_template`. Adopting one (via `user_chapters`) makes it
+selectable on the scoring screen; the chosen rows replace the grid's generic
+`R1, R2…` labels.
 
 ### boardgamebuddy_guide_chapters
 Reference-guide chapters contributed by users. Each chapter belongs to one
@@ -181,8 +191,8 @@ browse pool sorted by popularity.
 | chapter_type | TEXT FK | → chapter_types |
 | title | TEXT | short label |
 | created_by | UUID FK | nullable → profiles (creator can edit; creator or admin can delete) |
-| layout | TEXT | `text` for now; future `table`, `grid` |
-| content | TEXT | markdown |
+| layout | TEXT | `text` (markdown) or `scoring_template` (JSON rows, migration 041) |
+| content | TEXT | markdown, or `{"rows":[…]}` JSON when layout=`scoring_template` |
 | created_at / updated_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_user_chapters
@@ -289,7 +299,7 @@ each missing game from the BGG XML API.
 - `POST /api/v1/boardgame_buddy/sessions` — open a short-code play session (body `{game_id?}`). Closes any prior open session for the same host first.
 - `GET /api/v1/boardgame_buddy/sessions/joinable` — list active sessions the caller can join (phase=gather where caller is participant/host/host-buddy). Drives the Join chooser screen.
 - `GET /api/v1/boardgame_buddy/sessions/{code}` — poll target for the lobby
-- `PATCH /api/v1/boardgame_buddy/sessions/{code}` — host updates the lobby (body `{game_id?}`)
+- `PATCH /api/v1/boardgame_buddy/sessions/{code}` — host updates the lobby (body `{game_id?, scoring_template_id?}`; only fields present are applied, so a game-only update doesn't clear the template and vice-versa; explicit null clears)
 - `PATCH /api/v1/boardgame_buddy/sessions/{code}/phase` — host advances the cascading flow (body `{phase: 'gather'|'play'|'settle'|'finalized'|'abandoned'}`). Transitions enforced: gather→play→settle→finalized, plus any→abandoned. Joiners watch this column via Realtime.
 - `POST /api/v1/boardgame_buddy/sessions/{code}/join` — join a session by code. Returns 409 once the session has moved past phase=gather.
 - `POST /api/v1/boardgame_buddy/sessions/{code}/participants` — host-only. Adds a buddy (with `user_id`) or a ghost (name-only, `user_id=null`) to the lobby roster so joiners see the player. Gather-only.
@@ -357,7 +367,7 @@ Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
 3. **Log a play**: the Log tab opens a Host-or-Join chooser. Picking **Host a game** drops the user into the cascading three-screen flow (`play-flow` view); picking **Join a game** routes to a session-select screen that combines a 5-char code input with a list of active sessions where the user is a participant or the host is a buddy.
    The Log a play cascade has three snap-scroll screens:
    - **Gather** — pick a game, set game type (competitive/team/co-op), manage the player list. A session code opens on entry and is shown at the top of the screen; other phones can join via code while the host is on Gather. Joiners stream into the player list via polling.
-   - **Play** — full-width reference guide on top, scoring grid below. Host has full grid access (add rounds, override winners). Authenticated joiners see the same grid in read-only mode except for their own column, which they can edit live. Per-cell edits stream both ways via Supabase Realtime against `boardgamebuddy_play_session_scores`. Scores may be negative; a "± Negative" header toggle (default off, remembered) reveals per-cell +/− sign buttons for keyboards that lack a minus key.
+   - **Play** — full-width reference guide on top, scoring grid below. Host has full grid access (add rounds, override winners). Authenticated joiners see the same grid in read-only mode except for their own column, which they can edit live. Per-cell edits stream both ways via Supabase Realtime against `boardgamebuddy_play_session_scores`. Scores may be negative; a "± Negative" header toggle (default off, remembered) reveals per-cell +/− sign buttons for keyboards that lack a minus key. The grid's column header shows each player's **name by default** (tap a header to flip it to the colored initials bubble) and stays **frozen at the top** while the body scrolls. Each row can be **named** instead of the generic `R1, R2…` — either inline, or by applying a **scoring template**: if the game has scoring templates (authored as `scoring_template` guide chapters), a banner offers to pick one (a single adopted template auto-applies), and the chosen template's `id` is shared to the session so joiners render the same named rows. On finalize the row names snapshot into `plays.round_labels`.
    - **Settle Up** — host only. Optional photo upload + "Key moments" notes textarea (reuses the play's `notes` column), then Save. Save calls `/sessions/{code}/finalize` which merges live scores into the canonical play and marks the session finalized.
    When the host advances Gather→Play, the lobby closes (`POST /sessions/{code}/join` returns 409 thereafter). When the host enters Settle Up, every non-host joiner sees a polaroid splash popup centered on the screen with the game thumbnail and current winner; tapping the X dismisses to a refreshed feed.
    The draft auto-persists to localStorage (metadata only, plus current phase); the photo blob stays in memory. The chooser surfaces a "Resume hosting?" banner when a non-terminal draft exists.

@@ -177,6 +177,14 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   game_thumbnail_url TEXT,
   game_image_url TEXT,
   game_play_mode TEXT,
+  -- Scoring template applied to this play (migration 041). Provenance /
+  -- re-adopt link; NULL for generic-round plays. ON DELETE SET NULL so
+  -- deleting the template never orphans history.
+  scoring_template_id UUID REFERENCES public.boardgamebuddy_guide_chapters(id) ON DELETE SET NULL,
+  -- Per-play snapshot of the scoring-row names actually used (migration 041),
+  -- positional and parallel to play_players.round_scores. NULL for
+  -- generic-round / legacy plays (renders "R{n}"). Authoritative for display.
+  round_labels JSONB,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
@@ -242,7 +250,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
   chapter_type TEXT NOT NULL REFERENCES public.boardgamebuddy_chapter_types(id),
   title TEXT NOT NULL,
   created_by UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE SET NULL,
-  layout TEXT NOT NULL DEFAULT 'text' CHECK (layout IN ('text')),
+  -- 'scoring_template' (migration 041) stores an ordered named-row set as JSON
+  -- in `content` ({"rows":[…]}); 'text' stores markdown. Renderers branch on it.
+  layout TEXT NOT NULL DEFAULT 'text' CHECK (layout IN ('text', 'scoring_template')),
   content TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
@@ -293,6 +303,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_sessions (
   phase TEXT NOT NULL DEFAULT 'gather'
     CHECK (phase IN ('gather', 'play', 'settle', 'finalized', 'abandoned')),
   finalized_play_id UUID REFERENCES public.boardgamebuddy_plays(id) ON DELETE SET NULL,
+  -- Scoring template the host applied (migration 041). Joiners resolve the
+  -- shared row names from it. ON DELETE SET NULL → falls back to "R{n}".
+  scoring_template_id UUID REFERENCES public.boardgamebuddy_guide_chapters(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '2 hours'),
   finalized_at TIMESTAMPTZ

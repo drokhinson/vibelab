@@ -117,6 +117,9 @@ components above.
       this._editingChapterId = null; // set when _tab === "edit"
       this._formTitle = "";
       this._formContent = "";
+      // Structured rows for the scoring_template chapter type (parallel to
+      // _formContent, which stays the markdown buffer for text chapters).
+      this._formRows = [];
       this._formType = "";
       this._editorView = "write";    // "write" | "preview"
       this._error = null;
@@ -238,6 +241,9 @@ components above.
         this._editingChapterId = c.id;
         this._formTitle = c.title || "";
         this._formContent = c.content || "";
+        this._formRows = window.ScoringTemplate.isTemplate(c)
+          ? window.ScoringTemplate.parseRows(c)
+          : [];
         this._formType = c.chapter_type || "";
         this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
         this._tab = "edit";
@@ -594,7 +600,11 @@ components above.
               </div>
               ${toggleBtn}
             </summary>
-            <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
+            <div class="scroll-chapter__content">${
+              window.ScoringTemplate.isTemplate(c)
+                ? window.ScoringTemplate.renderRowsList(c)
+                : window.renderMarkdown(c.content || "")
+            }</div>
             <div class="scroll-chapter__actions">
               ${isOwner ? `
                 <button class="btn btn-ghost btn-xs"
@@ -622,6 +632,9 @@ components above.
       this._editingChapterId = c.id;
       this._formTitle = c.title || "";
       this._formContent = c.content || "";
+      this._formRows = window.ScoringTemplate.isTemplate(c)
+        ? window.ScoringTemplate.parseRows(c)
+        : [];
       this._formType = c.chapter_type || "";
       this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
       this._editorView = "write";
@@ -701,8 +714,11 @@ components above.
         : "";
 
       const isPreview = this._editorView === "preview";
+      const isTemplate = this._formType === window.ScoringTemplate.TYPE;
 
-      const editorPanel = isPreview
+      const editorPanel = isTemplate
+        ? (isPreview ? this._renderTemplatePreview() : this._renderRowsEditor())
+        : isPreview
         ? `<div class="chapter-edit__preview">
              ${this._formContent.trim()
                ? window.renderMarkdown(this._formContent)
@@ -749,7 +765,8 @@ components above.
              ${this._renderPopovers()}
            </div>`;
 
-      const importBtn = isEditing ? "" : `
+      // .md import is meaningless for the structured scoring-template editor.
+      const importBtn = (isEditing || isTemplate) ? "" : `
         <label class="chapter-edit__import" title="Import a .md file as this chapter">
           <input type="file" accept=".md,text/markdown,text/plain"
                  onchange="window.referenceGuideAddView._onImportMd(event)" />
@@ -892,7 +909,109 @@ components above.
 
     _pickType(id) {
       this._formType = id;
+      // Seed a couple of blank rows the first time the structured
+      // scoring-template editor is opened so there's something to type into.
+      if (id === window.ScoringTemplate.TYPE && (!this._formRows || !this._formRows.length)) {
+        this._formRows = ["", ""];
+      }
       this.render();
+    }
+
+    // ── Scoring-template rows editor ──────────────────────────────────────────
+    _setRow(i, value) {
+      if (!Array.isArray(this._formRows)) this._formRows = [];
+      this._formRows[i] = String(value == null ? "" : value);
+      // No re-render — the input holds the typed text; a re-render would drop
+      // focus mid-keystroke. Preview reads _formRows fresh when toggled.
+    }
+
+    _addRow() {
+      if (!Array.isArray(this._formRows)) this._formRows = [];
+      this._formRows.push("");
+      this.render();
+    }
+
+    _removeRow(i) {
+      if (!Array.isArray(this._formRows)) return;
+      this._formRows.splice(i, 1);
+      if (!this._formRows.length) this._formRows = [""];
+      this.render();
+    }
+
+    _moveRow(i, dir) {
+      const j = i + dir;
+      if (!Array.isArray(this._formRows) || j < 0 || j >= this._formRows.length) return;
+      const tmp = this._formRows[i];
+      this._formRows[i] = this._formRows[j];
+      this._formRows[j] = tmp;
+      this.render();
+    }
+
+    // Write mode for a scoring template: an ordered list of named-row inputs
+    // with reorder + remove, plus an Add row button. Mirrors the grid's row
+    // axis (top row = first scoring row).
+    _renderRowsEditor() {
+      const rows = Array.isArray(this._formRows) && this._formRows.length
+        ? this._formRows
+        : [""];
+      const items = rows.map((val, i) => `
+        <li class="tmpl-rows__item">
+          <span class="tmpl-rows__num">${i + 1}</span>
+          <input type="text" class="tmpl-rows__input" maxlength="60"
+                 value="${escapeAttr(val || "")}"
+                 placeholder="Score row name (e.g. Rare Treasures)"
+                 aria-label="Scoring row ${i + 1}"
+                 oninput="window.referenceGuideAddView._setRow(${i}, this.value)" />
+          <div class="tmpl-rows__ctrls">
+            <button type="button" class="tmpl-rows__btn" title="Move up" ${i === 0 ? "disabled" : ""}
+                    onclick="window.referenceGuideAddView._moveRow(${i}, -1)">
+              <i data-lucide="chevron-up" class="w-4 h-4"></i>
+            </button>
+            <button type="button" class="tmpl-rows__btn" title="Move down" ${i === rows.length - 1 ? "disabled" : ""}
+                    onclick="window.referenceGuideAddView._moveRow(${i}, 1)">
+              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </button>
+            <button type="button" class="tmpl-rows__btn tmpl-rows__btn--del" title="Remove row"
+                    onclick="window.referenceGuideAddView._removeRow(${i})">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </li>
+      `).join("");
+      return `
+        <div class="chapter-edit__write tmpl-rows">
+          <p class="tmpl-rows__hint">Name each scoring row. When someone scores this
+             game with your template, these become the grid's rows instead of R1, R2…</p>
+          <ol class="tmpl-rows__list">${items}</ol>
+          <button type="button" class="btn btn-ghost btn-sm tmpl-rows__add"
+                  onclick="window.referenceGuideAddView._addRow()">
+            <i data-lucide="plus" class="w-4 h-4"></i> Add row
+          </button>
+        </div>
+      `;
+    }
+
+    // Preview mode for a scoring template: the real scoring grid, populated
+    // with two placeholder players so the author sees exactly how their named
+    // rows read in play.
+    _renderTemplatePreview() {
+      const rows = (this._formRows || []).map((r) => String(r || "").trim());
+      if (!rows.some(Boolean)) {
+        return `<div class="chapter-edit__preview">
+          <p class="chapter-edit__preview-empty">Add a named row to preview the scoresheet.</p>
+        </div>`;
+      }
+      const players = [
+        { name: "Player 1", roundScores: [] },
+        { name: "Player 2", roundScores: [] },
+      ];
+      const grid = window.renderRoundGrid(players, "referenceGuideAddView", {
+        editable: false,
+        playMode: "competitive",
+        rowLabels: rows,
+        roundCount: rows.length,
+      });
+      return `<div class="chapter-edit__preview tmpl-preview">${grid}</div>`;
     }
 
     _setEditorView(v) {
@@ -1128,11 +1247,31 @@ components above.
         return;
       }
       const title = (this._formTitle || "").trim();
-      const content = (this._formContent || "").trim();
-      if (!title || !content) {
-        this._error = "Title and content are required.";
-        this.render();
-        return;
+      const isTemplate = this._formType === window.ScoringTemplate.TYPE;
+      let content;
+      let layout;
+      if (isTemplate) {
+        const rows = (this._formRows || []).map((r) => String(r || "").trim()).filter(Boolean);
+        if (!title) {
+          this._error = "A title is required.";
+          this.render();
+          return;
+        }
+        if (!rows.length) {
+          this._error = "Add at least one named scoring row.";
+          this.render();
+          return;
+        }
+        content = window.ScoringTemplate.serializeRows(rows);
+        layout = window.ScoringTemplate.LAYOUT;
+      } else {
+        content = (this._formContent || "").trim();
+        if (!title || !content) {
+          this._error = "Title and content are required.";
+          this.render();
+          return;
+        }
+        layout = "text";
       }
       this._saving = true;
       this.render();
@@ -1145,16 +1284,17 @@ components above.
             chapter_type: this._formType,
             title,
             content,
+            layout,
           });
-          showToast("Chapter updated", "success");
+          showToast(isTemplate ? "Scoring template updated" : "Chapter updated", "success");
         } else {
           await window.Chapter.create(targetGameId, {
             chapter_type: this._formType,
             title,
             content,
-            layout: "text",
+            layout,
           });
-          showToast("Chapter added to your guide", "success");
+          showToast(isTemplate ? "Scoring template added to your guide" : "Chapter added to your guide", "success");
         }
         window.Chapter.invalidateChaptersCache();
         document.dispatchEvent(new CustomEvent("chapters-changed", {

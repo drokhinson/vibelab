@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from typing import Any, Literal, Optional, Union
-from pydantic import BaseModel, Field, SecretStr, computed_field
+from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator
 
 from .constants import (
     BggAuthState,
@@ -262,6 +262,13 @@ class PlayCreate(BaseModel):
     # Optional per-play scoring style override (migration 007). When None,
     # the play inherits the game's stored play_mode at insert time.
     play_mode: Optional[PlayMode] = None
+    # Scoring template applied to this play (migration 041) — the
+    # scoring_template chapter id. Provenance/re-adopt only; row names for
+    # display come from round_labels below.
+    scoring_template_id: Optional[str] = None
+    # Per-play snapshot of the scoring-row names used, positional and parallel
+    # to each player's round_scores. None for generic-round plays.
+    round_labels: Optional[list[Optional[str]]] = None
 
 
 class PlayUpdate(BaseModel):
@@ -273,6 +280,8 @@ class PlayUpdate(BaseModel):
     photo_url: Optional[str] = None
     expansion_ids: list[str] = []
     play_mode: Optional[PlayMode] = None
+    scoring_template_id: Optional[str] = None
+    round_labels: Optional[list[Optional[str]]] = None
 
 
 class PlayPhotoResponse(BaseModel):
@@ -312,6 +321,10 @@ class PlayResponse(BaseModel):
     # Resolved scoring style for this play. Set from PlayCreate.play_mode if
     # provided, else inherited from the game at insert time. Always populated.
     play_mode: PlayMode = PlayMode.COMPETITIVE
+    # Scoring template link + per-play row-name snapshot (migration 041). NULL
+    # for generic-round / legacy plays — the FE renders "R{n}" in that case.
+    scoring_template_id: Optional[str] = None
+    round_labels: Optional[list[Optional[str]]] = None
     # Logger metadata — lets the FE distinguish own logs from shared plays
     # (where the current user appears via a linked buddy).
     logged_by_id: str
@@ -384,6 +397,22 @@ class ChapterUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     layout: Optional[str] = None
+
+
+class ScoringTemplateRows(BaseModel):
+    """Structured payload stored (as JSON text) in guide_chapters.content when
+    layout='scoring_template'. Validates a chapter authored via the reference-
+    guide builder's rows editor: at least one non-empty, trimmed row name."""
+
+    rows: list[str] = Field(default_factory=list)
+
+    @field_validator("rows")
+    @classmethod
+    def _clean_rows(cls, v: list[str]) -> list[str]:
+        cleaned = [str(r).strip() for r in v if str(r).strip()]
+        if not cleaned:
+            raise ValueError("A scoring template needs at least one named row")
+        return cleaned
 
 
 class ChapterResponse(BaseModel):
@@ -629,6 +658,9 @@ class SessionResponse(BaseModel):
     created_at: datetime
     expires_at: datetime
     finalized_play_id: Optional[str] = None
+    # Scoring template the host applied (migration 041). Joiners fetch this
+    # chapter and render the same named scoring rows. None → generic "R{n}".
+    scoring_template_id: Optional[str] = None
 
 
 class SessionCreate(BaseModel):
@@ -636,9 +668,12 @@ class SessionCreate(BaseModel):
 
 
 class SessionUpdateBody(BaseModel):
-    # Currently the only field a host may change on an open lobby. Sent as
-    # null when clearing the pick, set to a game UUID when (re)selecting one.
+    # Host-editable fields on an open lobby. Each is optional AND distinguishes
+    # "omitted" (leave as-is) from an explicit null (clear) via *_set flags on
+    # the parsed payload — see session_service.update_session. game_id: null
+    # clears the pick; scoring_template_id: null clears the template.
     game_id: Optional[str] = None
+    scoring_template_id: Optional[str] = None
 
 
 class SessionPhaseUpdate(BaseModel):

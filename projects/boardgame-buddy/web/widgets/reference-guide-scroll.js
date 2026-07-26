@@ -281,7 +281,11 @@
               <span class="scroll-chapter__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
               <span class="scroll-chapter__title">${escape(c.title)}</span>
             </summary>
-            <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
+            <div class="scroll-chapter__content">${
+              window.ScoringTemplate && window.ScoringTemplate.isTemplate(c)
+                ? window.ScoringTemplate.renderRowsList(c)
+                : window.renderMarkdown(c.content || "")
+            }</div>
             <div class="scroll-chapter__actions">
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._removeChapter('${c.id}', '${c.source_game_id || c.game_id}', event)">

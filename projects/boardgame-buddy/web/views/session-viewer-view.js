@@ -634,12 +634,17 @@
       }
       const me = window.store.get("user");
       const myId = me && me.id;
+      // Resolve the host's shared scoring template (if any) so the joiner's
+      // rows read with the same names.
+      this._ensureTemplateRows(s);
+      const rowLabels = this._templateRows || [];
       // Round count is unknown to the joiner — fall back to the maximum
       // round_index we've seen in live scores so far, defaulting to 1. The
       // host writes a null placeholder row on _addRound (play-flow-view.js)
-      // so an empty new round still grows maxRound() here.
+      // so an empty new round still grows maxRound() here. A shared template
+      // also floors the count so every named row shows before any score lands.
       const maxRound = this._liveScores ? this._liveScores.maxRound() : -1;
-      const rounds = Math.max(1, maxRound + 1);
+      const rounds = Math.max(1, maxRound + 1, rowLabels.length);
       // Remember what we just sized the grid to, so the live-scores callback
       // can tell when the host added/removed a round and re-render the rows.
       this._renderedRounds = rounds;
@@ -654,6 +659,7 @@
       const grid = window.renderRoundGrid(players, "sessionViewerView", {
         editableColumnId: myId,
         roundCount: rounds,
+        rowLabels,
         showSign: false,
         getCellValue: (p, r) => {
           const v = this._liveScores ? this._liveScores.getScore(p.user_id, r) : null;
@@ -667,6 +673,34 @@
           ${grid}
         </section>
       `;
+    }
+
+    // Fetch + cache the host's scoring-template row names when the session's
+    // scoring_template_id changes. Re-renders the scoring section once resolved
+    // so the labels swap in. Guarded by _templateRowsFor so the poll doesn't
+    // refetch every 2s.
+    _ensureTemplateRows(s) {
+      const tid = s && s.scoring_template_id;
+      if (!tid) {
+        this._templateRows = [];
+        this._templateRowsFor = null;
+        return;
+      }
+      if (this._templateRowsFor === tid) return;
+      this._templateRowsFor = tid;
+      this._templateRows = [];
+      const gid = (s && s.game_id) || (s && s.game && s.game.id);
+      if (!gid || !window.ScoringTemplate) return;
+      window.ScoringTemplate.templatesForGame(gid).then((list) => {
+        if (!this._session || this._session.scoring_template_id !== tid) return;
+        const t = (list || []).find((c) => c.id === tid);
+        this._templateRows = t ? window.ScoringTemplate.parseRows(t) : [];
+        const sec = this.container && this.container.querySelector(".cascade-card--scoring");
+        if (sec) {
+          sec.outerHTML = this._renderViewerScoring(this._session);
+          if (this.refreshIcons) this.refreshIcons();
+        }
+      }).catch(() => {});
     }
 
     // Patch the per-player totals in place by column index. The totals row is

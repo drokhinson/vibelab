@@ -20,6 +20,14 @@
       this.notes        = initial.notes || "";
       this.expansionIds = initial.expansionIds || [];
       this.playMode     = initial.playMode || null;
+      // Per-row scoring names (positional, parallel to each player's
+      // roundScores). Empty/unset slots fall back to "R{n}" in the grid.
+      this.rowLabels    = initial.rowLabels || [];
+      // The scoring-template chapter the host applied, if any. Carried onto
+      // the session (so joiners render the same row names) and onto the saved
+      // play (provenance + re-adopt); the row names themselves are snapshotted
+      // into round_labels on save.
+      this.scoringTemplateId = initial.scoringTemplateId || null;
       this.code         = initial.code || null;
       this.sessionId    = initial.sessionId || null;
       this.hostUserId   = initial.hostUserId || null;
@@ -50,6 +58,8 @@
         notes: this.notes,
         expansionIds: this.expansionIds,
         playMode: this.playMode,
+        rowLabels: this.rowLabels,
+        scoringTemplateId: this.scoringTemplateId,
         code: this.code,
         sessionId: this.sessionId,
         hostUserId: this.hostUserId,
@@ -66,6 +76,8 @@
       this.notes = "";
       this.expansionIds = [];
       this.playMode = null;
+      this.rowLabels = [];
+      this.scoringTemplateId = null;
       this.code = null;
       this.sessionId = null;
       this.hostUserId = null;
@@ -101,9 +113,15 @@
       return window.api.get(`/sessions/${code}`);
     }
 
-    // Host-only. Pass `gameId: null` to clear the pick.
-    static updateLobby(code, { gameId } = {}) {
-      return window.api.patch(`/sessions/${code}`, { game_id: gameId || null });
+    // Host-only. Pass `gameId: null` to clear the pick, or `scoringTemplateId`
+    // to set/clear the shared scoring template. Only the keys actually passed
+    // are sent, so a game-only update doesn't clobber the template (and vice
+    // versa) — the backend applies just the fields present in the body.
+    static updateLobby(code, opts = {}) {
+      const body = {};
+      if ("gameId" in opts) body.game_id = opts.gameId || null;
+      if ("scoringTemplateId" in opts) body.scoring_template_id = opts.scoringTemplateId || null;
+      return window.api.patch(`/sessions/${code}`, body);
     }
 
     // Host-only. Adds a buddy (with userId) or a ghost (userId=null) to the
@@ -160,6 +178,8 @@
         photo_url: this.photoUrl || null,
         expansion_ids: this.expansionIds,
         play_mode: this.playMode || null,
+        scoring_template_id: this.scoringTemplateId || null,
+        round_labels: persistableRowLabels(this.rowLabels, this.players),
       };
     }
   }
@@ -185,6 +205,28 @@
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     });
+  }
+
+  // Play-level snapshot of the row names actually used. Sized to the widest
+  // per-player round count so it lines up with round_scores by index. Returns
+  // null when no row was named (the common generic-rounds case) so legacy /
+  // unnamed plays leave the backend column NULL and render "R{n}".
+  function persistableRowLabels(labels, players) {
+    if (!Array.isArray(labels)) return null;
+    const rounds = Math.max(
+      0,
+      ...(players || []).map((p) => (Array.isArray(p.roundScores) ? p.roundScores.length : 0)),
+    );
+    if (rounds === 0) return null;
+    const sized = [];
+    let anyNamed = false;
+    for (let i = 0; i < rounds; i++) {
+      const v = labels[i];
+      const name = v == null ? null : String(v).trim() || null;
+      if (name) anyNamed = true;
+      sized.push(name);
+    }
+    return anyNamed ? sized : null;
   }
 
   window.PlaySession = PlaySession;

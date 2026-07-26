@@ -895,6 +895,56 @@ body {
   list-style: disc outside;
 }
 .chapter-edit__preview li { margin: 0.2rem 0; color: #4a3c28; }
+
+/* ── Scoring-template rows editor (chapter_type=scoring_template) ──────────────
+   Structured alternative to the markdown editor: an ordered list of named-row
+   inputs on the cream polaroid surface. */
+.tmpl-rows { padding: 4px 2px; }
+.tmpl-rows__hint {
+  font-size: 0.8rem; color: var(--polaroid-muted, #8B7E68);
+  margin: 0 0 0.6rem; line-height: 1.4;
+}
+.tmpl-rows__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.tmpl-rows__item { display: flex; align-items: center; gap: 0.4rem; }
+.tmpl-rows__num {
+  flex: 0 0 auto; width: 1.4rem; text-align: right;
+  font-size: 0.78rem; font-weight: 700; color: var(--polaroid-muted, #8B7E68);
+  font-variant-numeric: tabular-nums;
+}
+.tmpl-rows__input {
+  flex: 1 1 auto; min-width: 0;
+  padding: 0.45rem 0.6rem;
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+  border-radius: 0.5rem;
+  color: var(--polaroid-ink, #1D1812);
+  font-size: 0.9rem;
+}
+.tmpl-rows__input:focus { outline: none; border-color: var(--accent); }
+.tmpl-rows__input::placeholder { color: var(--polaroid-muted, #8B7E68); }
+.tmpl-rows__ctrls { flex: 0 0 auto; display: inline-flex; gap: 0.15rem; }
+.tmpl-rows__btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem; padding: 0;
+  background: transparent; border: 1px solid transparent; border-radius: 0.4rem;
+  color: var(--polaroid-ink-soft, #4A3F2F); cursor: pointer;
+}
+.tmpl-rows__btn:hover:not(:disabled) { background: rgba(0, 0, 0, 0.06); }
+.tmpl-rows__btn:disabled { opacity: 0.3; cursor: default; }
+.tmpl-rows__btn--del:hover:not(:disabled) { color: #b4472b; }
+.tmpl-rows__add { margin-top: 0.6rem; }
+
+/* Grid preview inside the polaroid preview surface. */
+.tmpl-preview { padding: 12px 12px; }
+
+/* Read-only rows list shown when a scoring_template chapter is displayed in
+   the guide scroll / browse pool. */
+.tmpl-list {
+  margin: 0; padding-left: 1.2rem; list-style: decimal outside;
+  color: var(--polaroid-ink, #1D1812);
+}
+.tmpl-list__row { margin: 0.15rem 0; }
+.tmpl-list__empty { color: var(--polaroid-muted, #8B7E68); font-size: 0.85rem; margin: 0; }
 .chapter-edit__preview a {
   color: var(--accent-hover, #B8820E);
   text-decoration: underline;
@@ -3947,6 +3997,11 @@ body {
 /* ── Scoring rounds table ─────────────────────────────────────────────────── */
 .scoring-table-wrap {
   overflow-x: auto;
+  /* Cap the height so a game with many named rows scrolls its body while the
+     player-name header row stays pinned (position: sticky on thead th below).
+     Horizontal scroll for wide 5–6-player tables is preserved. */
+  max-height: 60vh;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 .scoring-table {
@@ -3964,6 +4019,13 @@ body {
   font-weight: 600;
   opacity: 0.75;
   white-space: nowrap;
+  /* Freeze the header row (player names) at the top of the scroll region. The
+     grid only ever renders on the cream polaroid surface, so an opaque
+     polaroid-bg keeps scrolled score rows from bleeding through. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--polaroid-bg, #FFFBF1);
 }
 /* Column-header bubble. Sized between user-badge `sm` (28/12) and `md`
    (40/16) so the player's initials are easily legible in a dense scoring
@@ -4050,6 +4112,63 @@ body {
   background: #b4472b; border-color: #b4472b; color: #fff;
 }
 .scoring-sign-toggle__glyph { font-size: 0.95rem; line-height: 1; }
+
+/* ── Scoring-template affordances (play-flow scoring section) ─────────────────
+   Sit above the grid on the cream polaroid surface. */
+.scoring-tmpl-chip {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.3rem 0.6rem; margin-bottom: 0.5rem;
+  background: rgba(255, 251, 241, 0.7);
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+  border-radius: 999px;
+  color: var(--polaroid-ink, #1D1812); font-size: 0.78rem; font-weight: 700;
+  max-width: 100%;
+}
+.scoring-tmpl-chip__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scoring-tmpl-chip__change {
+  background: none; border: none; padding: 0 0 0 0.2rem;
+  color: var(--accent); font-weight: 700; font-size: 0.74rem; cursor: pointer;
+}
+.scoring-tmpl-banner {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0.7rem; margin-bottom: 0.6rem;
+  background: rgba(200, 146, 42, 0.12);
+  border: 1px solid rgba(200, 146, 42, 0.35);
+  border-radius: 0.6rem;
+  color: var(--polaroid-ink, #1D1812); font-size: 0.8rem;
+}
+.scoring-tmpl-banner__text { flex: 1 1 auto; line-height: 1.35; }
+.scoring-tmpl-banner__btn {
+  flex: 0 0 auto;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: 999px; padding: 0.3rem 0.8rem;
+  font-size: 0.76rem; font-weight: 700; cursor: pointer;
+}
+
+/* Template picker overlay (reuses the polaroid card chrome). */
+.tmpl-pick { text-align: left; }
+.tmpl-pick__list { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.6rem 0; }
+.tmpl-pick__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  width: 100%; text-align: left;
+  padding: 0.55rem 0.7rem;
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+  border-radius: 0.6rem; cursor: pointer;
+  color: var(--polaroid-ink, #1D1812);
+}
+.tmpl-pick__row.is-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.tmpl-pick__row-main { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.tmpl-pick__row-title { font-weight: 700; font-size: 0.88rem; }
+.tmpl-pick__row-sub {
+  font-size: 0.74rem; color: var(--polaroid-muted, #8B7E68);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 15rem;
+}
+.tmpl-pick__create {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  background: none; border: none; cursor: pointer;
+  color: var(--accent); font-weight: 700; font-size: 0.82rem; padding: 0.3rem 0;
+}
 .scoring-total.is-neg { color: #b4472b; }
 
 .scoring-total-row { background: oklch(var(--b2) / 0.5); }
@@ -4062,6 +4181,35 @@ body {
 .scoring-round-th { white-space: nowrap; }
 .scoring-round-label {
   display: inline-flex; align-items: center; gap: 0.3rem;
+}
+/* Editable row-name input (host grid / popup edit) — names a scoring row in
+   place of the generic "R{n}" (which rides along as the placeholder). Sits on
+   the cream polaroid surface, left-aligned to read like a label not a field. */
+.scoring-round-name-input {
+  width: 7rem;
+  max-width: 42vw;
+  padding: 0.15rem 0.3rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--polaroid-ink, #1D1812);
+  text-align: left;
+}
+.scoring-round-name-input::placeholder { color: var(--polaroid-muted, #8B7E68); font-weight: 600; }
+.scoring-round-name-input:hover { border-color: var(--polaroid-line, #DAC9A4); }
+.scoring-round-name-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.5);
+}
+/* Read-only row name (view mode / joiner mirror). */
+.scoring-round-name {
+  display: inline-block;
+  max-width: 9rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  vertical-align: middle;
 }
 .scoring-round-remove {
   display: inline-flex; align-items: center; justify-content: center;

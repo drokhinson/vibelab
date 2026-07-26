@@ -119,11 +119,11 @@
 
 -- bgb_session_bundle(p_session_id UUID)
 --   → JSONB shaped like models.SessionResponse { id, code, status, phase,
---     host_user_id, game_id, game, participants[], created_at, expires_at,
---     finalized_play_id } or {"error": "not_found"}
+--     host_user_id, game_id, scoring_template_id, game, participants[],
+--     created_at, expires_at, finalized_play_id } or {"error": "not_found"}
 --   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
---   Last updated in: db/migrations/boardgamebuddy/037_joinable_sessions_rpc.sql
---               (game block delegated to bgb_game_summary; output unchanged)
+--   Last updated in: db/migrations/boardgamebuddy/041_scoring_templates.sql
+--               (added scoring_template_id so joiners resolve shared row names)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (_build_response — the response builder for every session
 --               endpoint; also invoked internally by the three RPCs below)
@@ -196,7 +196,10 @@
 --                p_game UUID DEFAULT NULL, p_buddy UUID DEFAULT NULL,
 --                p_search TEXT DEFAULT NULL, p_own_only BOOLEAN DEFAULT false)
 --   → JSONB { plays: [models.PlayResponse-shaped...], total }
+--     (each play includes scoring_template_id + round_labels since 041)
 --   Defined in: db/migrations/boardgamebuddy/039_perf_rpcs_and_indexes.sql
+--   Last updated in: db/migrations/boardgamebuddy/041_scoring_templates.sql
+--               (added scoring_template_id + round_labels to each play object)
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
 --               (list_plays — GET /plays; get_game_plays — GET /games/{id}/plays
 --               with p_own_only=true)
