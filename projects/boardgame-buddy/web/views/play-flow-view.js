@@ -201,6 +201,7 @@
             this._ps.phase = s.phase;
             this._ps.persist();
             this._syncUrlToCode();
+            this._reconcileGameToLobby();
             return;
           }
           // Reached the server and it says the lobby is gone/closed — fall
@@ -237,9 +238,27 @@
         this._ps.phase = session.phase || "gather";
         this._ps.persist();
         this._syncUrlToCode();
+        this._reconcileGameToLobby();
       } catch (e) {
         this._error = e.message || "Could not start a session";
       }
+    }
+
+    // A game can be picked before the lobby exists: onMount mounts the finder
+    // (live and pickable) before _ensureLobbyOpen() resolves. That first pick
+    // sets _ps.gameId, but _applyGamePick's push was skipped because _ps.code
+    // was still null — so the game never reached the server and only the
+    // SECOND pick "stuck". Once the lobby is open, push the pending pick so
+    // the session row + joiners' mirrors catch up. No-op in the common case
+    // where the lobby already carries the picked game (opened WITH a gameId,
+    // or nothing picked yet).
+    _reconcileGameToLobby() {
+      const ps = this._ps;
+      if (!ps || !ps.code || !ps.gameId) return;
+      if (this._lobby && this._lobby.game_id === ps.gameId) return;
+      window.PlaySession.updateLobby(ps.code, { gameId: ps.gameId })
+        .then(() => { if (this._lobby) this._lobby.game_id = ps.gameId; })
+        .catch(() => {});
     }
 
     // Once we know the lobby code, rewrite the address bar from /play to

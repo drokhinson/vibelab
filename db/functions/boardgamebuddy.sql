@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 2026-05-24 (033 bootstrap bundle for first-paint cache)
+-- Last updated: 2026-07-26 (040 unified game search RPC)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -231,3 +231,22 @@
 --               20 most recently completed. has_credentials mirrors
 --               bgg_client.has_stored_credentials so auth_state derives
 --               without shipping the encrypted secret.
+
+-- boardgamebuddy_search_games(p_viewer UUID, p_query TEXT, p_limit INT DEFAULT 20)
+--   → TABLE (id UUID, bgg_id INT, name TEXT, year_published INT, min_players INT,
+--            max_players INT, playing_time INT, thumbnail_url TEXT, image_url TEXT,
+--            theme_color TEXT, is_expansion BOOLEAN, base_game_bgg_id INT,
+--            expansion_color TEXT, rulebook_url TEXT, play_mode TEXT,
+--            collection_status TEXT, in_collection BOOLEAN)
+--   Defined in: db/migrations/boardgamebuddy/040_search_rpc.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/search_service.py
+--               (_rpc_hits — GET /search, the per-keystroke GameFinder)
+--   Purpose:    One index-backed query for the unified game picker. Catalog
+--               ILIKE '%q%' served by the pg_trgm GIN index (idx_bgb_games_name_trgm,
+--               migration 039); LEFT JOIN onto the viewer's collection marks
+--               in_collection + collection_status; collection-first ordering
+--               (in_collection DESC, name) in SQL. Columns mirror _helpers._GAME_SELECT
+--               plus the two collection extras. Replaced the two-query PostgREST
+--               path whose collection match filtered an embedded !inner-joined
+--               games.name column that the trigram index couldn't reliably serve.
+--               search_service falls back to that path if this RPC is absent.
