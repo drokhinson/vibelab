@@ -26,17 +26,38 @@
 .pa-admin-login svg { display: block; }
 .pa-admin-login--active { border-color: rgba(242, 212, 107, 0.5); color: #f2d46b; background: rgba(242, 212, 107, 0.12); }
 
-/* About page: pin the icon to the top-right of the centered header. */
-.header-inner .pa-admin-login {
+/* Pencil + status chip sit together as a unit on the right of the header. */
+.header-actions { display: inline-flex; align-items: center; gap: 0.6rem; }
+
+/* "Logged in" / "Editing" status chip, inserted by admin.js next to the pencil. */
+.pa-admin-status {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: rgba(214, 223, 231, 0.85);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.pa-admin-status--editing {
+  color: #f2d46b;
+  background: rgba(242, 212, 107, 0.12);
+  border-color: rgba(242, 212, 107, 0.5);
+}
+.pa-admin-status[hidden] { display: none; }
+
+/* About page: pin the actions to the top-right of the centered header. */
+.header-inner .header-actions {
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
 }
-.header-inner .pa-admin-login:active { transform: translateY(-50%) scale(0.96); }
 @media (max-width: 520px) {
-  .header-inner .pa-admin-login { position: static; transform: none; margin: 0.75rem auto 0; }
-  .header-inner .pa-admin-login:active { transform: translateY(1px); }
+  .header-inner .header-actions { position: static; transform: none; margin: 0.75rem auto 0; }
 }
 
 /* ── Admin bar ─────────────────────────────────────────────────────────── */
@@ -51,6 +72,9 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
+/* `display:flex` above would otherwise defeat the [hidden] attribute's
+   display:none, leaking an empty bar into the public (non-admin) view. */
+.travel-admin-bar[hidden] { display: none; }
 .pa-tag {
   font-size: 0.68rem;
   letter-spacing: 0.22em;

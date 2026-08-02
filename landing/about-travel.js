@@ -29,7 +29,7 @@
     { name: "is_published", label: "Published", type: "checkbox" },
   ];
 
-  function isAdmin() { return PA.hasKey(); }
+  function isAdmin() { return PA.isAdmin(); }
 
   // ── Rendering ───────────────────────────────────────────────────────────
   function tripCard(t) {
@@ -145,29 +145,13 @@
     renderAdminBar();
   }
 
-  // ── Header admin login/logout button ──────────────────────────────────────
-  function renderLoginBtn() {
-    if (!loginBtn) return;
-    // Keep the pencil icon; only flip the tooltip/label + active state so we
-    // never wipe the inline SVG.
-    var label = PA.hasKey() ? "Editing — sign out" : "Edit — admin login";
-    loginBtn.title = label;
-    loginBtn.setAttribute("aria-label", label);
-    loginBtn.classList.toggle("pa-admin-login--active", PA.hasKey());
-  }
-  if (loginBtn) {
-    loginBtn.addEventListener("click", function () {
-      if (PA.hasKey()) PA.signOut();
-      else PA.promptForKey();
-    });
-    renderLoginBtn();
-  }
+  // Header pencil → edit-mode toggle + "Logged in / Editing" chip (shared).
+  PA.wireLoginButton(loginBtn);
 
-  // Re-render when admin state flips. The header button + admin bar always
-  // update; the grid only re-renders once dynamic mode is active, so we don't
+  // Re-render when admin state flips. wireLoginButton keeps the pencil + chip
+  // in sync; the grid only re-renders once dynamic mode is active, so we don't
   // paint an empty grid before the backend has responded.
   PA.onChange(function () {
-    renderLoginBtn();
     if (!dynamicActive) return;
     renderAdminBar();
     renderGrid();

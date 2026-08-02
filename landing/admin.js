@@ -11,6 +11,7 @@
   var API = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || "http://localhost:8000";
   var BASE = "/api/v1/person";
   var STORAGE_KEY = "person_admin_key";
+  var EDIT_KEY = "person_edit_mode";
   var changeListeners = [];
 
   // ── Key storage ─────────────────────────────────────────────────────────
@@ -18,6 +19,26 @@
   function setKey(k) { sessionStorage.setItem(STORAGE_KEY, k); }
   function clearKey() { sessionStorage.removeItem(STORAGE_KEY); }
   function hasKey() { return !!getKey(); }
+
+  // ── Edit mode ─────────────────────────────────────────────────────────────
+  // "Logged in" (a valid key is held) is separate from "edit mode" (admin
+  // controls are visible). Once logged in, the pencil flips edit mode on/off
+  // without a re-prompt; only Sign out (or closing the tab) drops the key.
+  function editMode() { return hasKey() && sessionStorage.getItem(EDIT_KEY) === "1"; }
+  function setEditMode(on) {
+    if (on) sessionStorage.setItem(EDIT_KEY, "1");
+    else sessionStorage.removeItem(EDIT_KEY);
+    notifyChange();
+  }
+  // Admin controls show only when logged in AND edit mode is on.
+  function isAdmin() { return hasKey() && editMode(); }
+
+  // Pencil handler: prompt for the key the first time, then toggle edit mode.
+  async function toggleEdit() {
+    if (hasKey()) { setEditMode(!editMode()); return; }
+    var ok = await promptForKey();
+    if (ok) setEditMode(true);
+  }
 
   function notifyChange() {
     changeListeners.forEach(function (cb) {
@@ -82,10 +103,42 @@
 
   function signOut() {
     clearKey();
+    sessionStorage.removeItem(EDIT_KEY);
     notifyChange();
   }
 
   function onChange(cb) { if (typeof cb === "function") changeListeners.push(cb); }
+
+  // ── Header pencil button + "Logged in / Editing" status chip ───────────────
+  // Shared across about.html and trip.html. Wires the pencil to toggleEdit and
+  // keeps a small status chip (inserted before the button) in sync with state.
+  function wireLoginButton(btn) {
+    if (!btn) return;
+    var status = document.createElement("span");
+    status.className = "pa-admin-status";
+    status.hidden = true;
+    btn.parentNode.insertBefore(status, btn);
+
+    function render() {
+      var editing = isAdmin();
+      var loggedIn = hasKey();
+      var label = !loggedIn
+        ? "Edit — admin login"
+        : editing
+          ? "Editing — click to stop editing"
+          : "Logged in — click to edit";
+      btn.title = label;
+      btn.setAttribute("aria-label", label);
+      btn.classList.toggle("pa-admin-login--active", editing);
+      status.hidden = !loggedIn;
+      status.textContent = editing ? "Editing" : "Logged in";
+      status.classList.toggle("pa-admin-status--editing", editing);
+    }
+
+    btn.addEventListener("click", function () { toggleEdit(); });
+    onChange(render);
+    render();
+  }
 
   // ── Generic admin form modal ──────────────────────────────────────────────
   // opts: { title, submitLabel, fields: [{name,label,type,required,rows,placeholder}], values }
@@ -228,7 +281,7 @@
   async function init() {
     var params = new URLSearchParams(window.location.search);
     if (params.has("admin") && !hasKey()) {
-      await promptForKey();
+      if (await promptForKey()) setEditMode(true);
     } else if (hasKey()) {
       // Re-validate a carried-over key silently; drop it if stale.
       try { await adminFetch("/admin/verify"); } catch (_) {}
@@ -239,6 +292,10 @@
   window.PersonAdmin = {
     apiBase: API,
     hasKey: hasKey,
+    editMode: editMode,
+    isAdmin: isAdmin,
+    toggleEdit: toggleEdit,
+    wireLoginButton: wireLoginButton,
     publicFetch: publicFetch,
     adminFetch: adminFetch,
     promptForKey: promptForKey,

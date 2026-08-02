@@ -25,7 +25,7 @@
     { name: "html_content", label: "Content", type: "htmleditor", required: true },
   ];
 
-  function isAdmin() { return PA.hasKey(); }
+  function isAdmin() { return PA.isAdmin(); }
 
   function slugFromPath() {
     var parts = window.location.pathname.split("/").filter(Boolean);
@@ -234,27 +234,12 @@
     renderAdminBar();
   }
 
-  // ── Header edit-icon login/logout button ──────────────────────────────────
-  function renderLoginBtn() {
-    if (!loginBtn) return;
-    // Keep the pencil icon; only flip the tooltip/label + active state.
-    var label = PA.hasKey() ? "Editing — sign out" : "Edit — admin login";
-    loginBtn.title = label;
-    loginBtn.setAttribute("aria-label", label);
-    loginBtn.classList.toggle("pa-admin-login--active", PA.hasKey());
-  }
-  if (loginBtn) {
-    loginBtn.addEventListener("click", function () {
-      if (PA.hasKey()) PA.signOut();
-      else PA.promptForKey();
-    });
-    renderLoginBtn();
-  }
+  // Header pencil → edit-mode toggle + "Logged in / Editing" chip (shared).
+  PA.wireLoginButton(loginBtn);
 
-  // Re-render when admin state flips. The edit icon always updates; the admin
-  // bar + stops only re-render once the trip has loaded.
+  // Re-render when admin state flips. wireLoginButton keeps the pencil + chip
+  // in sync; the admin bar + stops only re-render once the trip has loaded.
   PA.onChange(function () {
-    renderLoginBtn();
     if (!trip) return;
     renderAdminBar();
     renderStops();
