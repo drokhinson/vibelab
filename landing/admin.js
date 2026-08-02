@@ -1,0 +1,200 @@
+// admin.js — shared API client + admin-key handling for the person travel
+// section. Loaded on both about.html and trip.html, before the page module.
+//
+// Admin access uses the shared ADMIN_API_KEY (backend auth.py require_admin).
+// The key is held in sessionStorage (clears on tab close) and sent as a Bearer
+// header on write requests. Enter admin mode by visiting the page with ?admin
+// in the query string — that prompts for the key and validates it.
+(function () {
+  "use strict";
+
+  var API = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || "http://localhost:8000";
+  var BASE = "/api/v1/person";
+  var STORAGE_KEY = "person_admin_key";
+  var changeListeners = [];
+
+  // ── Key storage ─────────────────────────────────────────────────────────
+  function getKey() { return sessionStorage.getItem(STORAGE_KEY); }
+  function setKey(k) { sessionStorage.setItem(STORAGE_KEY, k); }
+  function clearKey() { sessionStorage.removeItem(STORAGE_KEY); }
+  function hasKey() { return !!getKey(); }
+
+  function notifyChange() {
+    changeListeners.forEach(function (cb) {
+      try { cb(hasKey()); } catch (_) {}
+    });
+  }
+
+  // ── Escaping (text + attribute contexts) ─────────────────────────────────
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function escAttr(s) { return esc(s); }
+
+  // ── Fetch helpers ─────────────────────────────────────────────────────────
+  async function publicFetch(path, opts) {
+    opts = opts || {};
+    var headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+    var res = await fetch(API + BASE + path, Object.assign({}, opts, { headers: headers }));
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+    return data;
+  }
+
+  async function adminFetch(path, opts) {
+    opts = opts || {};
+    var key = getKey();
+    var headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+    if (key) headers["Authorization"] = "Bearer " + key;
+    var res = await fetch(API + BASE + path, Object.assign({}, opts, { headers: headers }));
+    if (res.status === 401 || res.status === 403) {
+      clearKey();
+      notifyChange();
+      throw new Error("Admin key rejected — please sign in again.");
+    }
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+    return data;
+  }
+
+  // ── Admin session ─────────────────────────────────────────────────────────
+  // Prompt for the key, validate it against /admin/verify, store on success.
+  async function promptForKey() {
+    var key = window.prompt("Enter admin key:");
+    if (!key) return false;
+    setKey(key.trim());
+    try {
+      await adminFetch("/admin/verify");
+      notifyChange();
+      return true;
+    } catch (err) {
+      // adminFetch already cleared the key + notified on 401/403.
+      window.alert("Invalid admin key.");
+      return false;
+    }
+  }
+
+  function signOut() {
+    clearKey();
+    notifyChange();
+  }
+
+  function onChange(cb) { if (typeof cb === "function") changeListeners.push(cb); }
+
+  // ── Generic admin form modal ──────────────────────────────────────────────
+  // opts: { title, submitLabel, fields: [{name,label,type,required,rows,placeholder}], values }
+  // type ∈ text | url | number | textarea | checkbox. Resolves collected values
+  // (numbers/checkboxes coerced) on submit, or null on cancel/backdrop/Escape.
+  function formModal(opts) {
+    opts = opts || {};
+    var fields = opts.fields || [];
+    var values = opts.values || {};
+    return new Promise(function (resolve) {
+      var root = document.createElement("div");
+      root.className = "pa-modal__backdrop";
+
+      var fieldsHtml = fields.map(function (f) {
+        var v = values[f.name];
+        var id = "pa-f-" + f.name;
+        var labelHtml = '<label class="pa-field__label" for="' + id + '">' +
+          esc(f.label) + (f.required ? ' <span class="pa-req">*</span>' : "") + "</label>";
+        if (f.type === "checkbox") {
+          return '<div class="pa-field pa-field--check">' +
+            '<label class="pa-field__label" for="' + id + '">' +
+            '<input id="' + id + '" data-name="' + escAttr(f.name) + '" type="checkbox" ' +
+            (v ? "checked" : "") + " /> " + esc(f.label) + "</label></div>";
+        }
+        if (f.type === "textarea") {
+          return '<div class="pa-field">' + labelHtml +
+            '<textarea id="' + id + '" data-name="' + escAttr(f.name) + '" rows="' +
+            (f.rows || 4) + '" placeholder="' + escAttr(f.placeholder || "") + '">' +
+            esc(v == null ? "" : v) + "</textarea></div>";
+        }
+        var inputType = f.type === "number" ? "number" : (f.type === "url" ? "url" : "text");
+        return '<div class="pa-field">' + labelHtml +
+          '<input id="' + id + '" data-name="' + escAttr(f.name) + '" type="' + inputType +
+          '" placeholder="' + escAttr(f.placeholder || "") + '" value="' +
+          escAttr(v == null ? "" : v) + '" /></div>';
+      }).join("");
+
+      root.innerHTML =
+        '<div class="pa-modal" role="dialog" aria-modal="true">' +
+        '<div class="pa-modal__head"><span class="pa-modal__title">' + esc(opts.title || "Edit") +
+        '</span><button class="pa-modal__x" aria-label="Close">&times;</button></div>' +
+        '<form class="pa-modal__body">' + fieldsHtml +
+        '<div class="pa-modal__err" hidden></div>' +
+        '<div class="pa-modal__actions">' +
+        '<button type="button" class="pa-btn pa-btn--ghost pa-cancel">Cancel</button>' +
+        '<button type="submit" class="pa-btn pa-btn--primary pa-submit">' +
+        esc(opts.submitLabel || "Save") + "</button></div></form></div>";
+
+      function close(result) {
+        document.removeEventListener("keydown", onKey);
+        if (root.parentNode) root.parentNode.removeChild(root);
+        resolve(result);
+      }
+      function onKey(ev) { if (ev.key === "Escape") close(null); }
+
+      root.addEventListener("click", function (ev) { if (ev.target === root) close(null); });
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(root);
+      root.querySelector(".pa-modal__x").addEventListener("click", function () { close(null); });
+      root.querySelector(".pa-cancel").addEventListener("click", function () { close(null); });
+
+      var form = root.querySelector("form");
+      var errEl = root.querySelector(".pa-modal__err");
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var out = {};
+        for (var i = 0; i < fields.length; i++) {
+          var f = fields[i];
+          var el = form.querySelector('[data-name="' + f.name + '"]');
+          if (!el) continue;
+          if (f.type === "checkbox") { out[f.name] = el.checked; continue; }
+          var val = el.value.trim();
+          if (f.required && !val) {
+            errEl.textContent = f.label + " is required.";
+            errEl.hidden = false;
+            el.focus();
+            return;
+          }
+          if (f.type === "number") { out[f.name] = val === "" ? null : Number(val); }
+          else { out[f.name] = val === "" ? null : val; }
+        }
+        close(out);
+      });
+      var first = root.querySelector("input, textarea");
+      if (first) first.focus();
+    });
+  }
+
+  // On load: if the URL asks for admin and we don't yet have a key, prompt.
+  async function init() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.has("admin") && !hasKey()) {
+      await promptForKey();
+    } else if (hasKey()) {
+      // Re-validate a carried-over key silently; drop it if stale.
+      try { await adminFetch("/admin/verify"); } catch (_) {}
+      notifyChange();
+    }
+  }
+
+  window.PersonAdmin = {
+    apiBase: API,
+    hasKey: hasKey,
+    publicFetch: publicFetch,
+    adminFetch: adminFetch,
+    promptForKey: promptForKey,
+    signOut: signOut,
+    onChange: onChange,
+    init: init,
+    esc: esc,
+    escAttr: escAttr,
+    formModal: formModal,
+  };
+
+  document.addEventListener("DOMContentLoaded", init);
+})();
