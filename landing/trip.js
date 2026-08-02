@@ -9,7 +9,6 @@
   var eyebrowEl = document.getElementById("trip-eyebrow");
   var headlineEl = document.getElementById("trip-headline");
   var albumEl = document.getElementById("trip-album");
-  var ledeEl = document.getElementById("trip-lede");
   var adminBar = document.getElementById("travel-admin-bar");
   var stopsHeading = document.getElementById("stops-heading");
   var stopsEl = document.getElementById("stops");
@@ -26,7 +25,7 @@
     { name: "html_content", label: "Content", type: "htmleditor", required: true },
   ];
 
-  function isAdmin() { return PA.hasKey(); }
+  function isAdmin() { return PA.isAdmin(); }
 
   function slugFromPath() {
     var parts = window.location.pathname.split("/").filter(Boolean);
@@ -40,14 +39,20 @@
     eyebrowEl.textContent = trip.eyebrow || "";
     eyebrowEl.style.display = trip.eyebrow ? "" : "none";
     headlineEl.textContent = heading;
-    ledeEl.textContent = trip.lede || "";
-    ledeEl.style.display = trip.lede ? "" : "none";
+    var albumLabel = albumEl.querySelector("span");
     if (trip.photo_album_url) {
       albumEl.href = trip.photo_album_url;
-      albumEl.hidden = false;
+      albumEl.setAttribute("target", "_blank");
+      albumEl.classList.remove("album-link--empty");
+      if (albumLabel) albumLabel.textContent = "Photo album ↗";
     } else {
-      albumEl.hidden = true;
+      // No album set — show a muted, non-clickable "No album" pill.
+      albumEl.removeAttribute("href");
+      albumEl.removeAttribute("target");
+      albumEl.classList.add("album-link--empty");
+      if (albumLabel) albumLabel.textContent = "No album";
     }
+    albumEl.hidden = false;
   }
 
   // ── Stop cards ──────────────────────────────────────────────────────────
@@ -99,10 +104,11 @@
     stopsEl.querySelectorAll(".stop").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var id = btn.getAttribute("data-id");
-        var stop = stops.find(function (s) { return s.id === id; });
+        var idx = stops.findIndex(function (s) { return s.id === id; });
         // Opens from memory — the whole trip (incl. every stop's HTML) is loaded
-        // in one pass, so there's no per-stop fetch here.
-        if (stop) window.StopPopup.show(stop.title, stop.html_content);
+        // in one pass, so there's no per-stop fetch here. Pass the full list so
+        // the popup can page Prev/Next through the stops in place.
+        if (idx >= 0) window.StopPopup.show(stops, idx);
       });
     });
     if (!isAdmin()) return;
@@ -230,7 +236,6 @@
       trip = null;
       headlineEl.textContent = "Trip not found";
       eyebrowEl.style.display = "none";
-      ledeEl.style.display = "none";
       albumEl.hidden = true;
       stopsHeading.hidden = true;
       stopsEl.innerHTML = '<li class="empty empty--error">' + PA.esc(err.message) + "</li>";
@@ -238,27 +243,12 @@
     renderAdminBar();
   }
 
-  // ── Header edit-icon login/logout button ──────────────────────────────────
-  function renderLoginBtn() {
-    if (!loginBtn) return;
-    // Keep the pencil icon; only flip the tooltip/label + active state.
-    var label = PA.hasKey() ? "Editing — sign out" : "Edit — admin login";
-    loginBtn.title = label;
-    loginBtn.setAttribute("aria-label", label);
-    loginBtn.classList.toggle("pa-admin-login--active", PA.hasKey());
-  }
-  if (loginBtn) {
-    loginBtn.addEventListener("click", function () {
-      if (PA.hasKey()) PA.signOut();
-      else PA.promptForKey();
-    });
-    renderLoginBtn();
-  }
+  // Header pencil → edit-mode toggle + "Logged in / Editing" chip (shared).
+  PA.wireLoginButton(loginBtn);
 
-  // Re-render when admin state flips. The edit icon always updates; the admin
-  // bar + stops only re-render once the trip has loaded.
+  // Re-render when admin state flips. wireLoginButton keeps the pencil + chip
+  // in sync; the admin bar + stops only re-render once the trip has loaded.
   PA.onChange(function () {
-    renderLoginBtn();
     if (!trip) return;
     renderAdminBar();
     renderStops();
