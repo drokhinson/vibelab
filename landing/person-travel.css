@@ -1,0 +1,351 @@
+/* person-travel.css — admin controls, form modal, and stop popup for the
+   person page travel section. Loaded by about.html and trip.html. Self-contained
+   dark styling so it reads consistently on the Pico about page and the
+   enamel-themed trip page. */
+
+/* ── Admin bar ─────────────────────────────────────────────────────────── */
+.travel-admin-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.pa-tag {
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #f2d46b;
+  margin-right: auto;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+.pa-btn {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1;
+  min-height: 40px;
+  padding: 0.5rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #eaf1f7;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.pa-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.4); }
+.pa-btn:active { transform: translateY(1px); }
+.pa-btn:disabled { opacity: 0.5; cursor: default; }
+.pa-btn--primary { background: #2b6cb0; border-color: #3f86d1; color: #fff; }
+.pa-btn--primary:hover { background: #3f86d1; }
+.pa-btn--danger { background: rgba(176, 85, 46, 0.22); border-color: rgba(176, 85, 46, 0.6); color: #f3c9b6; }
+.pa-btn--danger:hover { background: rgba(176, 85, 46, 0.4); }
+.pa-btn--ghost { background: transparent; }
+.pa-btn--sm { min-height: 34px; padding: 0.35rem 0.6rem; font-size: 0.76rem; }
+
+/* ── Trip card admin controls (about page) ─────────────────────────────── */
+.travel-card-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+.pa-card-controls { display: flex; gap: 0.5rem; }
+.pa-card-controls .pa-btn { flex: 1; }
+.pa-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  vertical-align: middle;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  background: rgba(242, 212, 107, 0.18);
+  color: #f2d46b;
+}
+.travel-empty {
+  color: rgba(214, 223, 231, 0.7);
+  font-size: 0.95rem;
+  padding: 1rem 0;
+}
+.travel-empty--error { color: #f3c9b6; }
+
+/* ── Form modal ────────────────────────────────────────────────────────── */
+.pa-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(8, 16, 26, 0.72);
+  backdrop-filter: blur(3px);
+}
+.pa-modal {
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: 16px;
+  background: #16232f;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.85);
+  color: #eaf1f7;
+}
+.pa-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.pa-modal__title { font-size: 1.1rem; font-weight: 700; }
+.pa-modal__x {
+  font-size: 1.6rem;
+  line-height: 1;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: none;
+  color: rgba(234, 241, 247, 0.7);
+  cursor: pointer;
+  border-radius: 8px;
+}
+.pa-modal__x:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.pa-modal__body { padding: 1.25rem; display: flex; flex-direction: column; gap: 0.9rem; }
+.pa-field { display: flex; flex-direction: column; gap: 0.35rem; }
+.pa-field__label { font-size: 0.8rem; font-weight: 600; color: rgba(234, 241, 247, 0.85); }
+.pa-req { color: #f2d46b; }
+.pa-field input[type="text"],
+.pa-field input[type="url"],
+.pa-field input[type="number"],
+.pa-field textarea {
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.pa-field textarea { resize: vertical; min-height: 3rem; }
+.pa-field input:focus, .pa-field textarea:focus {
+  outline: none;
+  border-color: #3f86d1;
+  background: rgba(255, 255, 255, 0.09);
+}
+.pa-field--check .pa-field__label {
+  flex-direction: row;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.pa-modal__err {
+  color: #f3b0b0;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(176, 46, 46, 0.15);
+}
+.pa-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+/* ── HTML editor textarea (stop content) gets a monospace, taller box ───── */
+.pa-field textarea[data-name="html_content"] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  min-height: 14rem;
+  line-height: 1.45;
+  tab-size: 2;
+}
+
+/* ── File import control (load an .html file into the editor) ───────────── */
+.pa-import {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.pa-import__btn { display: inline-flex; align-items: center; cursor: pointer; }
+.pa-import__name {
+  font-size: 0.78rem;
+  color: rgba(234, 241, 247, 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── HTML span editor (per-paragraph inline WYSIWYG) ────────────────────── */
+.hse { display: flex; flex-direction: column; gap: 0.6rem; }
+.hse-tabs { display: flex; gap: 0.4rem; }
+.hse-tab {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: none;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(234, 241, 247, 0.7);
+  cursor: pointer;
+}
+.hse-tab--on { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+.hse-toolbar { display: flex; gap: 0.35rem; margin-bottom: 0.5rem; }
+.hse-tb {
+  font: inherit;
+  font-size: 0.85rem;
+  min-width: 34px;
+  min-height: 32px;
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #eaf1f7;
+  cursor: pointer;
+}
+.hse-tb:hover { background: rgba(255, 255, 255, 0.16); }
+
+.hse-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-height: 46vh;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+.hse-block {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+.hse-block__tag {
+  flex: none;
+  margin-top: 0.5rem;
+  width: 2.6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(234, 241, 247, 0.45);
+  text-align: right;
+}
+.hse-block__field {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  line-height: 1.5;
+}
+.hse-block__field:focus { outline: none; border-color: #3f86d1; background: rgba(255, 255, 255, 0.09); }
+.hse-empty { color: rgba(234, 241, 247, 0.6); font-size: 0.9rem; margin: 0.5rem 0; }
+
+.hse-source {
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  tab-size: 2;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 14rem;
+  resize: vertical;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.hse-source:focus { outline: none; border-color: #3f86d1; }
+
+/* ── Stop popup (sandboxed iframe) ─────────────────────────────────────── */
+.stop-popup__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(8, 16, 26, 0.8);
+  backdrop-filter: blur(4px);
+}
+.stop-popup__shell {
+  width: 100%;
+  max-width: 960px;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #0e2032;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9);
+}
+.stop-popup__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem 0.7rem 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #eaf1f7;
+}
+.stop-popup__title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stop-popup__close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #eaf1f7;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.stop-popup__close:hover { background: rgba(255, 255, 255, 0.16); }
+.stop-popup__frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
+.stop-popup__state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  color: rgba(234, 241, 247, 0.75);
+}
+.stop-popup__state--error { color: #f3c9b6; }
+
+@media (max-width: 620px) {
+  .stop-popup__backdrop { padding: 0.5rem; }
+  .stop-popup__shell { height: 94vh; }
+  .pa-card-controls { flex-wrap: wrap; }
+}

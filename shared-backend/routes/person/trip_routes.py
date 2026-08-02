@@ -1,0 +1,208 @@
+"""Trip routes for the personal page: public reads + admin-gated CRUD."""
+
+import re
+from datetime import datetime, timezone
+from typing import List, Optional
+
+from fastapi import Header, HTTPException, Path
+
+from auth import require_admin
+from db import get_supabase
+from shared_models import HealthResponse
+
+from . import router
+from .models import (
+    CreateTripBody,
+    MessageResponse,
+    TripDetailResponse,
+    TripSummaryResponse,
+    UpdateTripBody,
+)
+
+# Columns for the card/summary shape — never selects html_content (not on trips).
+_TRIP_COLS = (
+    "id, slug, title, eyebrow, headline, lede, photo_album_url, "
+    "card_cta, sort_order, is_published"
+)
+# Full stop rows for the trip-detail endpoint: html_content is included so the
+# trip page loads all stops in one pass (the trip UI opens popups from memory).
+_STOP_COLS = "id, trip_id, title, meta, note, sort_order, html_content"
+
+
+def _slugify(text: str) -> str:
+    """Lowercase, non-alnum → hyphen, collapse repeats, strip ends."""
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return slug or "trip"
+
+
+def _unique_slug(base: str) -> str:
+    """Return `base`, or base-2, base-3… so the slug is unique in person_trips."""
+    sb = get_supabase()
+    existing = sb.table("person_trips").select("slug").execute()
+    taken = {row["slug"] for row in (existing.data or [])}
+    if base not in taken:
+        return base
+    n = 2
+    while f"{base}-{n}" in taken:
+        n += 1
+    return f"{base}-{n}"
+
+
+@router.get("/health", response_model=HealthResponse, status_code=200, summary="Health check")
+async def health() -> HealthResponse:
+    """Return service status for the person API."""
+    return HealthResponse(project="person", status="ok")
+
+
+@router.get(
+    "/admin/verify",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Validate an admin key",
+)
+async def admin_verify(authorization: Optional[str] = Header(None)) -> MessageResponse:
+    """Admin: cheap endpoint the frontend probes to confirm the admin key is valid."""
+    require_admin(authorization)
+    return MessageResponse(status="ok")
+
+
+@router.get(
+    "/trips",
+    response_model=List[TripSummaryResponse],
+    status_code=200,
+    summary="List published trips (card grid)",
+)
+async def list_trips() -> List[dict]:
+    """Public: all published trips ordered for the about-page card grid."""
+    sb = get_supabase()
+    result = (
+        sb.table("person_trips")
+        .select(_TRIP_COLS)
+        .eq("is_published", True)
+        .order("sort_order")
+        .execute()
+    )
+    return result.data or []
+
+
+@router.get(
+    "/trips/{slug}",
+    response_model=TripDetailResponse,
+    status_code=200,
+    summary="Get one trip by slug with its stops",
+)
+async def get_trip(
+    slug: str = Path(..., description="Trip URL slug"),
+) -> dict:
+    """Public: a trip plus its ordered stop metadata (no html_content)."""
+    sb = get_supabase()
+    trip_res = sb.table("person_trips").select(_TRIP_COLS).eq("slug", slug).execute()
+    if not trip_res.data:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    trip = trip_res.data[0]
+
+    stops_res = (
+        sb.table("person_trip_stops")
+        .select(_STOP_COLS)
+        .eq("trip_id", trip["id"])
+        .order("sort_order")
+        .execute()
+    )
+    trip["stops"] = stops_res.data or []
+    return trip
+
+
+@router.post(
+    "/admin/trips",
+    response_model=TripSummaryResponse,
+    status_code=201,
+    summary="Create a trip",
+)
+async def create_trip(
+    body: CreateTripBody,
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """Admin: create a trip. Slug is derived from the title unless provided."""
+    require_admin(authorization)
+    sb = get_supabase()
+
+    slug_base = _slugify(body.slug or body.title)
+    slug = _unique_slug(slug_base)
+
+    trip_data = {
+        "slug": slug,
+        "title": body.title,
+        "eyebrow": body.eyebrow,
+        "headline": body.headline,
+        "lede": body.lede,
+        "photo_album_url": body.photo_album_url,
+        "card_cta": body.card_cta,
+        "sort_order": body.sort_order if body.sort_order is not None else 0,
+        "is_published": body.is_published if body.is_published is not None else True,
+    }
+    result = sb.table("person_trips").insert(trip_data).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create trip")
+    return result.data[0]
+
+
+@router.put(
+    "/admin/trips/{trip_id}",
+    response_model=TripSummaryResponse,
+    status_code=200,
+    summary="Update a trip",
+)
+async def update_trip(
+    body: UpdateTripBody,
+    trip_id: str = Path(..., description="Trip ID"),
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """Admin: update a trip's fields. Only non-null fields are changed."""
+    require_admin(authorization)
+    sb = get_supabase()
+
+    existing = sb.table("person_trips").select("id").eq("id", trip_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    update_data: dict = {}
+    for field in [
+        "title", "eyebrow", "headline", "lede",
+        "photo_album_url", "card_cta", "sort_order", "is_published",
+    ]:
+        val = getattr(body, field)
+        if val is not None:
+            update_data[field] = val
+    if body.slug is not None:
+        update_data["slug"] = _unique_slug(_slugify(body.slug))
+
+    if update_data:
+        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        result = sb.table("person_trips").update(update_data).eq("id", trip_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update trip")
+
+    updated = sb.table("person_trips").select(_TRIP_COLS).eq("id", trip_id).execute()
+    return updated.data[0]
+
+
+@router.delete(
+    "/admin/trips/{trip_id}",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Delete a trip",
+)
+async def delete_trip(
+    trip_id: str = Path(..., description="Trip ID"),
+    authorization: Optional[str] = Header(None),
+) -> MessageResponse:
+    """Admin: delete a trip; its stops are removed via ON DELETE CASCADE."""
+    require_admin(authorization)
+    sb = get_supabase()
+
+    existing = sb.table("person_trips").select("id").eq("id", trip_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    sb.table("person_trips").delete().eq("id", trip_id).execute()
+    return MessageResponse(status="deleted", id=trip_id)

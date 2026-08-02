@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="about.css" />
+  <link rel="stylesheet" href="person-travel.css" />
 </head>
 <body>
   <header class="site-header">
@@ -70,29 +71,17 @@
         Trips, races and the occasional postcard from the road.
       </p>
 
-      <div class="travel-grid">
-        <a class="travel-card" href="/travel/slovenian-arrow">
-          <div class="travel-card__art" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="52" height="52" fill="none"
-                 stroke="currentColor" stroke-width="3"
-                 stroke-linecap="round" stroke-linejoin="round">
-              <path d="M8 52 L40 20" />
-              <path d="M28 16 L44 16 L44 32" />
-              <circle cx="12" cy="48" r="6" />
-              <circle cx="52" cy="24" r="6" />
-            </svg>
-          </div>
-          <div class="travel-card__body">
-            <h3 class="travel-card__title">Slovenian Arrow 2026</h3>
-            <span class="travel-card__cta">Follow the route ↗</span>
-          </div>
-        </a>
-      </div>
+      <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>
+      <div class="travel-grid" id="travel-grid"></div>
     </section>
   </main>
 
   <footer>
     <small>Built in vibelab. Powered by Supabase, Railway &amp; Vercel.</small>
   </footer>
+
+  <script src="config.js"></script>
+  <script src="admin.js"></script>
+  <script src="about-travel.js"></script>
 </body>
 </html>
