@@ -67,7 +67,9 @@
     setKey(key.trim());
     try {
       await adminFetch("/admin/verify");
-      notifyChange();
+      // Refresh so the page re-renders with admin tools from a clean state.
+      // On reload, init() sees the stored key and re-validates it silently.
+      window.location.reload();
       return true;
     } catch (err) {
       // Clear the key so a wrong key OR an unreachable backend doesn't leave a
