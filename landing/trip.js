@@ -22,8 +22,7 @@
     { name: "title", label: "Name", type: "text", required: true },
     { name: "meta", label: "Subtitle", type: "text" },
     { name: "note", label: "Note (one-line teaser)", type: "text" },
-    { name: "html_content", label: "HTML page", type: "textarea", rows: 18, required: true,
-      importFile: true, placeholder: "Paste HTML, or use “Load file” to import an .html file…" },
+    { name: "html_content", label: "Content", type: "htmleditor", required: true },
   ];
 
   function isAdmin() { return PA.hasKey(); }

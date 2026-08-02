@@ -106,6 +106,10 @@
             '<input id="' + id + '" data-name="' + escAttr(f.name) + '" type="checkbox" ' +
             (v ? "checked" : "") + " /> " + esc(f.label) + "</label></div>";
         }
+        if (f.type === "htmleditor") {
+          return '<div class="pa-field">' + labelHtml +
+            '<div class="hse-mount" data-name="' + escAttr(f.name) + '"></div></div>';
+        }
         if (f.type === "textarea") {
           var importHtml = f.importFile
             ? '<div class="pa-import">' +
@@ -171,11 +175,31 @@
           reader.readAsText(file);
         });
       });
+
+      // Instantiate rich HTML editors for any htmleditor fields.
+      var editors = {};
+      fields.forEach(function (f) {
+        if (f.type === "htmleditor" && window.HtmlSpanEditor) {
+          var mountEl = form.querySelector('.hse-mount[data-name="' + f.name + '"]');
+          if (mountEl) editors[f.name] = window.HtmlSpanEditor.create(mountEl, values[f.name] || "");
+        }
+      });
+
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
         var out = {};
         for (var i = 0; i < fields.length; i++) {
           var f = fields[i];
+          if (f.type === "htmleditor") {
+            var ed = editors[f.name];
+            if (f.required && ed && !ed.hasContent()) {
+              errEl.textContent = f.label + " is required.";
+              errEl.hidden = false;
+              return;
+            }
+            out[f.name] = ed ? ed.getHTML() : "";
+            continue;
+          }
           var el = form.querySelector('[data-name="' + f.name + '"]');
           if (!el) continue;
           if (f.type === "checkbox") { out[f.name] = el.checked; continue; }
