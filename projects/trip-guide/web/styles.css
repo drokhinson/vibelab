@@ -1,0 +1,180 @@
+/* TripGuide — visual system.
+   Trip pages set --tg-* CSS vars (from the trip's color scheme) on the view
+   container; the page + every stop card read those vars. Defaults below keep
+   un-themed surfaces (home, modals, preview) coherent. */
+
+:root {
+  --tg-primary: #3f3f46;
+  --tg-bg:      #f4f5f7;
+  --tg-surface: #ffffff;
+  --tg-text:    #1f2024;
+  --tg-accent:  #a1a1aa;
+  --tg-muted:   #71717a;
+  --tg-radius: 16px;
+  --tg-shadow: 0 1px 2px rgba(16,24,40,.06), 0 4px 16px rgba(16,24,40,.06);
+  --tg-shadow-lift: 0 6px 24px rgba(16,24,40,.12);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  background: #eef0f3;
+  color: #1f2024;
+  -webkit-font-smoothing: antialiased;
+}
+.hidden { display: none !important; }
+
+/* ── Header ─────────────────────────────────────────────────────────────────*/
+.tg-header {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 20px;
+  background: rgba(255,255,255,.85); backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(16,24,40,.08);
+}
+.tg-brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+.tg-brand__logo { width: 28px; height: 28px; }
+.tg-brand__name { font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; }
+.tg-admin-btn { gap: 6px; }
+.tg-admin-btn i { width: 16px; height: 16px; }
+.tg-admin-btn--on { color: #16a34a; }
+
+/* ── Layout ─────────────────────────────────────────────────────────────────*/
+.tg-view { min-height: calc(100vh - 53px); }
+.tg-page { max-width: 820px; margin: 0 auto; padding: 24px 20px 64px; }
+.tg-page__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.tg-page__title { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+.tg-page__subtitle { margin: 4px 0 0; color: var(--tg-muted); }
+.tg-loading { display: grid; place-items: center; min-height: 60vh; }
+.tg-back { gap: 6px; margin-bottom: 12px; padding-left: 6px; }
+.tg-back i { width: 18px; height: 18px; }
+
+/* ── Trip grid + trip card ──────────────────────────────────────────────────*/
+.tg-trip-grid { display: grid; gap: 14px; }
+.tg-trip-card {
+  position: relative; display: flex; align-items: stretch; gap: 0;
+  background: var(--tg-surface); border-radius: var(--tg-radius);
+  box-shadow: var(--tg-shadow); overflow: hidden; cursor: pointer;
+  border: 1px solid rgba(16,24,40,.06);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.tg-trip-card:hover { transform: translateY(-2px); box-shadow: var(--tg-shadow-lift); }
+.tg-trip-card__swatch { width: 8px; flex: none;
+  background: linear-gradient(160deg, var(--card-primary), var(--card-accent)); }
+.tg-trip-card__body { flex: 1; padding: 16px 18px; min-width: 0; }
+.tg-trip-card__name { margin: 0; font-size: 1.15rem; font-weight: 650; }
+.tg-trip-card__desc { margin: 4px 0 0; color: #52525b; font-size: .92rem;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tg-trip-card__meta { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px;
+  color: var(--card-primary); font-weight: 600; font-size: .82rem; }
+.tg-trip-card__meta i { width: 15px; height: 15px; }
+.tg-trip-card__actions { display: flex; align-items: center; gap: 2px; padding-right: 6px; }
+.tg-trip-card__chev { align-self: center; margin-right: 12px; color: #a1a1aa; width: 20px; height: 20px; }
+.tg-danger { color: #dc2626; }
+
+/* ── Trip page (themed) ─────────────────────────────────────────────────────*/
+.tg-themed { background: var(--tg-bg); color: var(--tg-text); }
+.tg-trip__hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.tg-trip__title { margin: 0; font-size: 2.1rem; font-weight: 750; letter-spacing: -0.02em; color: var(--tg-primary); }
+.tg-trip__desc { margin: 8px 0 0; color: var(--tg-text); opacity: .85; max-width: 60ch; }
+.tg-trip__adminbar { display: flex; align-items: center; gap: 14px; margin: 18px 0 4px; }
+.tg-trip__hint { color: var(--tg-muted); font-size: .82rem; }
+
+/* ── Stop list + stop card ──────────────────────────────────────────────────*/
+.tg-stop-list { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; }
+.tg-stop-card {
+  display: flex; gap: 0; background: var(--tg-surface); border-radius: var(--tg-radius);
+  box-shadow: var(--tg-shadow); overflow: hidden; border: 1px solid rgba(16,24,40,.05);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.tg-stop-card__rail { flex: none; width: 54px; background: color-mix(in srgb, var(--tg-primary) 12%, var(--tg-surface));
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 18px; }
+.tg-stop-card__num { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--tg-primary); color: #fff; font-weight: 700; font-size: .95rem; }
+.tg-stop-card__main { flex: 1; padding: 16px 18px; min-width: 0; }
+.tg-stop-card__head { display: flex; align-items: flex-start; gap: 8px; }
+.tg-stop-card__titles { flex: 1; min-width: 0; }
+.tg-stop-card__name { margin: 0; font-size: 1.2rem; font-weight: 650; color: var(--tg-primary); }
+.tg-stop-card__desc { margin: 3px 0 0; color: var(--tg-muted); font-size: .9rem; }
+.tg-stop-card__actions { display: flex; gap: 2px; flex: none; }
+.tg-stop-card__grip { flex: none; display: grid; place-items: center; width: 32px; height: 32px;
+  margin: -4px 0 0 -6px; border: 0; background: transparent; color: var(--tg-muted); cursor: grab; border-radius: 8px; }
+.tg-stop-card__grip:active { cursor: grabbing; }
+.tg-stop-card__grip i { width: 18px; height: 18px; }
+.tg-stop-card__content { margin-top: 12px; }
+.tg-stop-card.tg-dragging { opacity: .5; box-shadow: var(--tg-shadow-lift); }
+
+/* Admin-authored HTML content */
+.tg-html { line-height: 1.6; word-wrap: break-word; }
+.tg-html p { margin: 0 0 .7em; }
+.tg-html ul, .tg-html ol { margin: 0 0 .7em; padding-left: 1.3em; }
+.tg-html li { margin: .2em 0; }
+.tg-html a { color: var(--tg-primary); text-decoration: underline; }
+.tg-html h1, .tg-html h2, .tg-html h3, .tg-html h4 { margin: .6em 0 .3em; line-height: 1.25; }
+.tg-html img { max-width: 100%; height: auto; border-radius: 10px; }
+.tg-html blockquote { margin: 0 0 .7em; padding-left: 1em; border-left: 3px solid var(--tg-accent); color: var(--tg-muted); }
+.tg-html code { background: rgba(16,24,40,.06); padding: .1em .35em; border-radius: 5px; font-size: .9em; }
+
+/* ── Empty / error states ───────────────────────────────────────────────────*/
+.tg-empty { text-align: center; padding: 48px 20px; }
+.tg-empty--inline { padding: 32px 20px; }
+.tg-empty__art { width: 160px; max-width: 60%; margin: 0 auto 18px; opacity: .95; }
+.tg-empty__title { margin: 0 0 6px; font-size: 1.3rem; font-weight: 650; }
+.tg-empty__text { margin: 0 0 16px; color: var(--tg-muted); }
+.tg-error { text-align: center; padding: 40px 20px; color: #b91c1c; display: grid; gap: 14px; place-items: center; }
+
+/* ── Modal ──────────────────────────────────────────────────────────────────*/
+.tg-modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(16,24,40,.5);
+  display: grid; place-items: center; padding: 20px; }
+.tg-modal { width: 100%; max-width: 480px; max-height: 90vh; overflow: auto;
+  background: #fff; color: #1f2024; border-radius: 18px; box-shadow: 0 20px 60px rgba(16,24,40,.3);
+  animation: tgPop .16s ease; }
+.tg-modal--wide { max-width: 860px; }
+.tg-modal__head { display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid rgba(16,24,40,.08); }
+.tg-modal__title { margin: 0; font-size: 1.15rem; font-weight: 650; }
+.tg-modal__body { padding: 18px; }
+.tg-modal__foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px;
+  border-top: 1px solid rgba(16,24,40,.08); }
+.tg-modal__hint { margin: 0 0 12px; color: #52525b; font-size: .92rem; }
+
+/* ── Forms ──────────────────────────────────────────────────────────────────*/
+.tg-form { display: flex; flex-direction: column; gap: 14px; }
+.tg-form__row { display: flex; gap: 12px; }
+.tg-field { display: flex; flex-direction: column; gap: 6px; }
+.tg-field--grow { flex: 1; }
+.tg-field__label { font-weight: 600; font-size: .85rem; color: #3f3f46; }
+.tg-form-err { margin: 0; color: #dc2626; font-size: .85rem; }
+.tg-swatch-row { display: flex; gap: 6px; margin-top: 4px; }
+.tg-swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(16,24,40,.12); }
+.tg-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.tg-editor__pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tg-editor__code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .85rem; }
+.tg-editor__preview { border: 1px dashed rgba(16,24,40,.2); border-radius: 12px; padding: 14px;
+  min-height: 220px; overflow: auto; background: #fafafa; }
+.tg-editor__empty { color: #a1a1aa; font-style: italic; }
+
+/* ── Toasts ─────────────────────────────────────────────────────────────────*/
+.tg-toast-host { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 60; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.tg-toast { padding: 10px 18px; border-radius: 999px; color: #fff; font-size: .9rem; font-weight: 500;
+  background: #27272a; box-shadow: var(--tg-shadow-lift); animation: tgToastIn .2s ease; }
+.tg-toast--success { background: #16a34a; }
+.tg-toast--error { background: #dc2626; }
+.tg-toast--out { opacity: 0; transform: translateY(6px); transition: .4s ease; }
+
+/* ── Motion ─────────────────────────────────────────────────────────────────*/
+.tg-fade { animation: tgFadeUp .4s ease both; animation-delay: calc(var(--i, 0) * 40ms); }
+@keyframes tgFadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes tgPop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes tgToastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tg-fade, .tg-modal, .tg-toast { animation: none; } }
+
+/* ── Responsive ─────────────────────────────────────────────────────────────*/
+@media (max-width: 640px) {
+  .tg-editor { grid-template-columns: 1fr; }
+  .tg-page { padding: 18px 14px 56px; }
+  .tg-trip__title { font-size: 1.7rem; }
+  .tg-stop-card__rail { width: 44px; }
+}

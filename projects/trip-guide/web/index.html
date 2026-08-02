@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Resolve all relative URLs against the root so deep links (/trip/:id) load
+       scripts and assets correctly under the SPA rewrite. -->
+  <base href="/" />
+  <title>TripGuide</title>
+  <link rel="icon" type="image/svg+xml" href="assets/brand/trip-guide-logo.svg" />
+
+  <!-- DaisyUI v4 + Tailwind CSS (no build step) -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons (SVG icon set) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ── App header ─────────────────────────────────────────────────────── -->
+  <header class="tg-header">
+    <a class="tg-brand" href="/" data-nav-home aria-label="TripGuide home">
+      <img src="assets/brand/trip-guide-logo.svg" alt="" class="tg-brand__logo" />
+      <span class="tg-brand__name">TripGuide</span>
+    </a>
+    <button id="admin-btn" class="btn btn-sm btn-ghost tg-admin-btn" aria-label="Admin">
+      <i data-lucide="lock"></i>
+      <span class="tg-admin-btn__label">Admin</span>
+    </button>
+  </header>
+
+  <!-- ── Views ──────────────────────────────────────────────────────────── -->
+  <main id="app-main">
+    <section data-view="home" class="tg-view">
+      <div class="tg-loading"><span class="loading loading-spinner loading-lg"></span></div>
+    </section>
+    <section data-view="trip" class="tg-view hidden">
+      <div class="tg-loading"><span class="loading loading-spinner loading-lg"></span></div>
+    </section>
+  </main>
+
+  <!-- Modal + toast hosts (populated at runtime) -->
+  <div id="modal-host"></div>
+  <div id="toast-host" class="tg-toast-host"></div>
+
+  <!-- Config → router/view base → api → admin → ui components → views → init -->
+  <script src="config.js"></script>
+  <script src="domain/view.js"></script>
+  <script src="api.js"></script>
+  <script src="admin.js"></script>
+  <script src="ui/modal.js"></script>
+  <script src="ui/forms.js"></script>
+  <script src="ui/trip-card.js"></script>
+  <script src="ui/stop-card.js"></script>
+  <script src="views/trips-view.js"></script>
+  <script src="views/trip-view.js"></script>
+  <script src="init.js"></script>
+</body>
+</html>

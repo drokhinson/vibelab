@@ -155,6 +155,27 @@
       "createdAt": "2026-03-15",
       "icon": "🛠️",
       "isAdminTool": true
+    },
+    {
+      "id": "trip-guide",
+      "name": "TripGuide",
+      "description": "Build and share visual trip guides — themed, HTML-rich stops you can add and reorder.",
+      "status": "wip",
+      "tags": [
+        "travel",
+        "guide",
+        "admin"
+      ],
+      "webUrl": null,
+      "backendUrl": "https://vibelab-production-2119.up.railway.app",
+      "hasNativeApp": false,
+      "androidStatus": "not-started",
+      "androidUrl": null,
+      "iosStatus": "not-started",
+      "iosUrl": null,
+      "expoSlug": null,
+      "createdAt": "2026-08-02",
+      "icon": "🧭"
     }
   ]
 }
