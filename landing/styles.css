@@ -64,12 +64,74 @@ body {
   right: 0;
 }
 
-.about-slot {
-  position: absolute;
-  top: 0;
-  left: 0;
+/* ── About the Author card (below the title) ────────────────────────────── */
+.author-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 1.4rem auto 0;
+  padding: 0.7rem 1.1rem 0.7rem 0.8rem;
+  border-radius: 16px;
+  text-decoration: none;
+  color: #eaeaf0;
+  background:
+    linear-gradient(135deg, rgba(108,99,255,0.14), rgba(45,212,191,0.10) 55%, rgba(251,113,133,0.12));
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 10px 30px -18px rgba(0,0,0,0.7);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
-.about-slot .admin-btn-icon { display: inline-flex; align-items: center; }
+.author-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(167,139,250,0.6);
+  box-shadow: 0 18px 40px -20px rgba(0,0,0,0.75);
+}
+
+.author-card__icons { display: inline-flex; align-items: center; gap: 0.4rem; }
+.author-ico {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #10151c;                 /* dark glyph on the bright badge */
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+  transition: transform 0.18s ease;
+}
+.author-ico--mtn    { background: #38bdf8; }  /* mountains — sky */
+.author-ico--soccer { background: #22c55e; }  /* soccer — grass */
+.author-ico--chess  { background: #f59e0b; }  /* chess — amber */
+.author-ico--tri    { background: #fb7185; }  /* triathlon — coral */
+
+/* Playful stagger: badges lift in sequence on hover. */
+.author-card:hover .author-ico { transform: translateY(-3px); }
+.author-card:hover .author-ico--soccer { transition-delay: 0.04s; }
+.author-card:hover .author-ico--chess  { transition-delay: 0.08s; }
+.author-card:hover .author-ico--tri    { transition-delay: 0.12s; }
+
+.author-card__text { display: flex; flex-direction: column; gap: 0.1rem; text-align: left; }
+.author-card__eyebrow {
+  font-family: "Poppins", "Inter", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #a78bfa;
+}
+.author-card__meta { font-size: 0.86rem; color: #cfd0d6; }
+.author-card__cta {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #a78bfa;
+  transition: transform 0.15s ease;
+}
+.author-card:hover .author-card__cta { transform: translateX(3px); }
+
+@media (max-width: 520px) {
+  .author-card { flex-wrap: wrap; justify-content: center; text-align: center; }
+  .author-card__text { text-align: center; align-items: center; }
+  .author-card__cta { display: none; }
+}
 
 .admin-btn {
   display: inline-flex;
