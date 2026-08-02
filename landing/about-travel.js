@@ -167,13 +167,12 @@
   // ── Header admin login/logout button ──────────────────────────────────────
   function renderLoginBtn() {
     if (!loginBtn) return;
-    if (PA.hasKey()) {
-      loginBtn.textContent = "Admin · Sign out";
-      loginBtn.classList.add("pa-admin-login--active");
-    } else {
-      loginBtn.textContent = "Admin login";
-      loginBtn.classList.remove("pa-admin-login--active");
-    }
+    // Keep the pencil icon; only flip the tooltip/label + active state so we
+    // never wipe the inline SVG.
+    var label = PA.hasKey() ? "Editing — sign out" : "Edit — admin login";
+    loginBtn.title = label;
+    loginBtn.setAttribute("aria-label", label);
+    loginBtn.classList.toggle("pa-admin-login--active", PA.hasKey());
   }
   if (loginBtn) {
     loginBtn.addEventListener("click", function () {

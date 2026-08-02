@@ -42,7 +42,6 @@
       transition:border-color .15s, background .15s, color .15s;
     }
     .back:hover{ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
-    .brandtag{ font-size:.72rem; letter-spacing:.28em; text-transform:uppercase; color:rgba(214,223,231,.55); font-weight:700; }
 
     /* ── Hero ────────────────────────────────────────────────── */
     .hero{ text-align:center; padding:1rem 0 2.5rem; }
@@ -129,7 +128,14 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
         Back
       </a>
-      <span class="brandtag">A David Rokhinson trip</span>
+      <button id="admin-login-btn" class="pa-admin-login" type="button"
+              title="Edit — admin login" aria-label="Edit — admin login">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9"/>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+        </svg>
+      </button>
     </div>
 
     <section class="hero">

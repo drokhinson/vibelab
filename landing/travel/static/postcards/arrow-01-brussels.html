@@ -78,7 +78,6 @@
 
   .message{ font-family:Georgia,"Iowan Old Style",serif; font-size:clamp(9.5px,2.72vw,11.6px);
     line-height:1.62; color:var(--ink); outline:none; margin:0; }
-  .message:focus{ background:rgba(255,255,255,.5); }
 
   /* race explainer */
   .race{ border:1px solid rgba(18,60,107,.3); padding:9px 10px 8px; background:rgba(255,255,255,.32); }
@@ -176,7 +175,7 @@
         </div>
       </div>
 
-      <p class="message" id="msg" contenteditable="true" spellcheck="false">Pippen casually popped over to Brussels just to send us off, which is a very Pippen thing to do. Then the race pack opened and so did the argument: north through Germany, south through France, or a straight shot at Italy by way of Luxembourg and Switzerland. Three directions, one clock, no idea. We picked the train to Luxembourg — and bought ourselves a few hours of quiet carriage to work out what on earth happens next.</p>
+      <p class="message" id="msg">Pippen casually popped over to Brussels just to send us off, which is a very Pippen thing to do. Then the race pack opened and so did the argument: north through Germany, south through France, or a straight shot at Italy by way of Luxembourg and Switzerland. Three directions, one clock, no idea. We picked the train to Luxembourg — and bought ourselves a few hours of quiet carriage to work out what on earth happens next.</p>
 
       <div class="race">
         <h3>Three ways out of Brussels</h3>
@@ -203,7 +202,7 @@
   </div>
 </div>
 
-<p class="hint">Tap the card to <b>turn it over</b> · the message is yours to rewrite</p>
+<p class="hint">Tap the card to <b>turn it over</b></p>
 
 <script>
 const STOPS = [
@@ -321,14 +320,12 @@ document.getElementById("map").innerHTML =
      <g>${land}</g>${forks}${plan}${leg}${head}${labels}${marks}
    </svg>`;
 
-const card = document.getElementById("card"), msg = document.getElementById("msg");
+const card = document.getElementById("card");
 function flip(){ card.classList.toggle("flipped"); if (card.classList.contains("flipped")) card.classList.add("drawn"); }
-card.addEventListener("click", e => { if (e.target !== msg) flip(); });
+card.addEventListener("click", flip);
 card.addEventListener("keydown", e => {
-  if (e.target === msg) return;
   if (e.key === "Enter" || e.key === " "){ e.preventDefault(); flip(); }
 });
-msg.addEventListener("click", e => e.stopPropagation());
 </script>
 </body>
 </html>

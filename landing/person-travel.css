@@ -3,17 +3,17 @@
    dark styling so it reads consistently on the Pico about page and the
    enamel-themed trip page. */
 
-/* ── Header admin login button (top-right of the about page) ────────────── */
+/* ── Edit-icon admin login button ──────────────────────────────────────────
+   The pencil icon is the entry point for admin editing. It sits inline as a
+   flex item in the trip page topbar; on the about page header it's pinned
+   top-right (see the .header-inner override below). */
 .pa-admin-login {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 600;
-  min-height: 40px;
-  padding: 0.45rem 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.05);
@@ -22,9 +22,21 @@
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .pa-admin-login:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.4); }
-.pa-admin-login--active { border-color: rgba(242, 212, 107, 0.5); color: #f2d46b; }
+.pa-admin-login:active { transform: translateY(1px); }
+.pa-admin-login svg { display: block; }
+.pa-admin-login--active { border-color: rgba(242, 212, 107, 0.5); color: #f2d46b; background: rgba(242, 212, 107, 0.12); }
+
+/* About page: pin the icon to the top-right of the centered header. */
+.header-inner .pa-admin-login {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.header-inner .pa-admin-login:active { transform: translateY(-50%) scale(0.96); }
 @media (max-width: 520px) {
-  .pa-admin-login { position: static; transform: none; display: block; margin: 0.75rem auto 0; }
+  .header-inner .pa-admin-login { position: static; transform: none; margin: 0.75rem auto 0; }
+  .header-inner .pa-admin-login:active { transform: translateY(1px); }
 }
 
 /* ── Admin bar ─────────────────────────────────────────────────────────── */

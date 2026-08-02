@@ -13,7 +13,7 @@ Run once, after 001_baseline.sql and 002_seed.sql have been applied:
         python db/migrations/person/seed_postcards.py
 
 Idempotent: re-running simply re-writes the same html_content. Once the DB copy
-is verified, the source files under landing/travel/postcards/ can be removed.
+is verified, the source files under landing/travel/static/postcards/ can be removed.
 """
 import os
 import sys
@@ -23,7 +23,7 @@ from supabase import create_client
 
 # Repo root = this file's dir / ../../..  (db/migrations/person/ -> repo root)
 REPO_ROOT = Path(__file__).resolve().parents[3]
-POSTCARDS_DIR = REPO_ROOT / "landing" / "travel" / "postcards"
+POSTCARDS_DIR = REPO_ROOT / "landing" / "travel" / "static" / "postcards"
 
 TRIP_SLUG = "slovenian-arrow"
 

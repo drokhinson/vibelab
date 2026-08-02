@@ -78,7 +78,6 @@
 
   .message{ font-family:Georgia,"Iowan Old Style",serif; font-size:clamp(9.5px,2.72vw,11.6px);
     line-height:1.62; color:var(--ink); outline:none; margin:0; }
-  .message:focus{ background:rgba(255,255,255,.5); }
 
   /* race explainer */
   .race{ border:1px solid rgba(18,60,107,.3); padding:9px 10px 8px; background:rgba(255,255,255,.32); }
@@ -169,7 +168,7 @@
         </div>
       </div>
 
-      <p class="message" id="msg" contenteditable="true" spellcheck="false">We found this race last October, three days into our rotation in Munich, and booked our tickets before we had even worked out where the good bakery was. It was the first plan we made for our time abroad, and it is still the one we have been most excited about. Now we've flown to Brussels, the board is up, the shirt is loud, and we are about to start our first Lupine race.</p>
+      <p class="message" id="msg">We found this race last October, three days into our rotation in Munich, and booked our tickets before we had even worked out where the good bakery was. It was the first plan we made for our time abroad, and it is still the one we have been most excited about. Now we've flown to Brussels, the board is up, the shirt is loud, and we are about to start our first Lupine race.</p>
 
       <div class="race">
         <h3>What we've signed up for</h3>
@@ -197,7 +196,7 @@
   </div>
 </div>
 
-<p class="hint">Tap the card to <b>turn it over</b> · the message is yours to rewrite</p>
+<p class="hint">Tap the card to <b>turn it over</b></p>
 
 <script>
 const STOPS = [
@@ -293,14 +292,12 @@ document.getElementById("map").innerHTML =
      <g>${land}</g>${flew}${ghost}${head}${marks}
    </svg>`;
 
-const card = document.getElementById("card"), msg = document.getElementById("msg");
+const card = document.getElementById("card");
 function flip(){ card.classList.toggle("flipped"); if (card.classList.contains("flipped")) card.classList.add("drawn"); }
-card.addEventListener("click", e => { if (e.target !== msg) flip(); });
+card.addEventListener("click", flip);
 card.addEventListener("keydown", e => {
-  if (e.target === msg) return;
   if (e.key === "Enter" || e.key === " "){ e.preventDefault(); flip(); }
 });
-msg.addEventListener("click", e => e.stopPropagation());
 </script>
 </body>
 </html>
