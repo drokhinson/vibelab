@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="about.css" />
+  <link rel="stylesheet" href="person-travel.css" />
 </head>
 <body>
   <header class="site-header">
@@ -70,7 +71,11 @@
         Trips, races and the occasional postcard from the road.
       </p>
 
-      <div class="travel-grid">
+      <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>
+      <!-- Static fallback card: shown when the backend is unreachable. When the
+           person API responds, about-travel.js replaces this grid with the
+           dynamic trips (see about-travel.js). -->
+      <div class="travel-grid" id="travel-grid">
         <a class="travel-card" href="/travel/slovenian-arrow">
           <div class="travel-card__art" aria-hidden="true">
             <svg viewBox="0 0 64 64" width="52" height="52" fill="none"
@@ -97,5 +102,9 @@
   <footer>
     <small>Built in vibelab. Powered by Supabase, Railway &amp; Vercel.</small>
   </footer>
+
+  <script src="config.js"></script>
+  <script src="admin.js"></script>
+  <script src="about-travel.js"></script>
 </body>
 </html>
