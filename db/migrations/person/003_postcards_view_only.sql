@@ -2,7 +2,7 @@
 -- person — make the Slovenian Arrow postcards view-only
 --
 -- The seeded stop postcards (person_trip_stops.html_content, loaded from
--- landing/travel/postcards/*.html via seed_postcards.py) shipped with an
+-- landing/travel/static/postcards/*.html via seed_postcards.py) shipped with an
 -- editable message: the <p class="message"> was contenteditable, the flip
 -- handler deliberately ignored taps on it, and a hint invited visitors to
 -- rewrite it. Non-admins should only VIEW postcards — admins edit them through
@@ -15,7 +15,7 @@
 -- Idempotent: each REPLACE targets the exact original substring, so re-running
 -- (or running after a fresh seed from the fixed files) is a no-op. Scoped to the
 -- slovenian-arrow trip's stops. Mirrors the edits made to the source files under
--- landing/travel/postcards/.
+-- landing/travel/static/postcards/.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 UPDATE public.person_trip_stops AS s
