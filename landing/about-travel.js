@@ -10,10 +10,6 @@
   var loginBtn = document.getElementById("admin-login-btn");
   var trips = [];
   var dynamicActive = false;
-  // Static fallback card(s) that ship in about.html. They stay in the grid
-  // permanently (below the dynamic trips) until the user removes them by hand
-  // once the dynamic ones are working. Dynamic cards are inserted ABOVE them.
-  var staticFallback = grid ? Array.prototype.slice.call(grid.children) : [];
 
   // Default card art — the same arrow mark the section shipped with.
   var ARROW_SVG =
@@ -62,22 +58,8 @@
       "</div>";
   }
 
-  // Remove previously-inserted dynamic cards, leaving the static fallback intact.
-  function clearDynamic() {
-    Array.prototype.slice.call(grid.children).forEach(function (node) {
-      if (staticFallback.indexOf(node) === -1) grid.removeChild(node);
-    });
-  }
-
   function renderGrid() {
-    clearDynamic();
-    if (!trips.length) return; // nothing dynamic yet — static fallback remains
-    var tmp = document.createElement("div");
-    tmp.innerHTML = trips.map(tripCard).join("");
-    var anchor = staticFallback.length ? staticFallback[0] : null;
-    Array.prototype.slice.call(tmp.children).forEach(function (node) {
-      grid.insertBefore(node, anchor); // insert dynamic cards above the static one
-    });
+    grid.innerHTML = trips.map(tripCard).join("");
     if (isAdmin()) wireCardControls();
   }
 
@@ -152,12 +134,11 @@
     try {
       fetched = await PA.publicFetch("/trips");
     } catch (err) {
-      // Backend unreachable — leave the static fallback card in place, no error
-      // banner. The dynamic section stays dormant until the backend is wired up.
-      console.warn("Travel: dynamic trips unavailable; keeping static fallback.", err);
+      // Backend unreachable — leave the grid empty, no error banner. The
+      // section stays dormant until the backend is reachable again.
+      console.warn("Travel: trips unavailable.", err);
       return;
     }
-    // Backend responded → dynamic mode owns the grid from here on.
     dynamicActive = true;
     trips = fetched || [];
     renderGrid();
@@ -183,8 +164,8 @@
   }
 
   // Re-render when admin state flips. The header button + admin bar always
-  // update; the grid only re-renders once dynamic mode is active, so we never
-  // wipe the static fallback while the backend is unreachable.
+  // update; the grid only re-renders once dynamic mode is active, so we don't
+  // paint an empty grid before the backend has responded.
   PA.onChange(function () {
     renderLoginBtn();
     if (!dynamicActive) return;
