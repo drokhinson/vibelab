@@ -49,15 +49,13 @@
 }
 .pa-admin-status[hidden] { display: none; }
 
-/* About page: pin the actions to the top-right of the centered header. */
+/* About page: pin the actions to the top-right of the centered header,
+   at every width (including mobile). */
 .header-inner .header-actions {
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-}
-@media (max-width: 520px) {
-  .header-inner .header-actions { position: static; transform: none; margin: 0.75rem auto 0; }
 }
 
 /* ── Admin bar ─────────────────────────────────────────────────────────── */
