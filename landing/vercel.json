@@ -2,7 +2,7 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/travel/:slug", "destination": "/trip.html" }
+    { "source": "/travel/:slug", "destination": "/trip" }
   ],
   "headers": [
     {
