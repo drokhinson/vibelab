@@ -99,7 +99,7 @@ body {
   transition: transform 0.18s ease;
 }
 .author-ico--mtn    { background: #38bdf8; }  /* mountains — sky */
-.author-ico--soccer { background: #22c55e; }  /* soccer — grass */
+.author-ico--soccer { background: #fff; }  /* soccer — white ball, black seams */
 .author-ico--chess  { background: #f59e0b; }  /* chess — amber */
 .author-ico--tri    { background: #fb7185; }  /* triathlon — coral */
 
@@ -118,7 +118,6 @@ body {
   text-transform: uppercase;
   color: #a78bfa;
 }
-.author-card__meta { font-size: 0.86rem; color: #cfd0d6; }
 .author-card__cta {
   font-size: 1.2rem;
   font-weight: 700;
