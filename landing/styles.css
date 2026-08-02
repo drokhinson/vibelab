@@ -64,6 +64,13 @@ body {
   right: 0;
 }
 
+.about-slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.about-slot .admin-btn-icon { display: inline-flex; align-items: center; }
+
 .admin-btn {
   display: inline-flex;
   align-items: center;

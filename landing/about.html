@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>David Rokhinson</title>
+  <link rel="icon" type="image/svg+xml" href="assets/brand/vibelab-logo.svg" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="about.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="home-link" href="/" title="Back to vibelab">
+        <svg class="logo-mark" width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+          <rect class="bar" x="4"  y="7"  width="24" height="5" rx="2.5" fill="#a78bfa"/>
+          <rect class="bar" x="8"  y="14" width="20" height="5" rx="2.5" fill="#8c83ff"/>
+          <rect class="bar" x="12" y="21" width="16" height="5" rx="2.5" fill="#6c63ff"/>
+        </svg>
+        <span>vibelab</span>
+        <span class="home-link__sep">/</span>
+        <span class="home-link__here">about</span>
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── Profile ─────────────────────────────────────────────────────── -->
+    <section class="profile">
+      <div class="profile-photo">
+        <img src="assets/photos/david-summit.jpg"
+             alt="David Rokhinson standing on a rocky summit with a black-and-white dog" />
+      </div>
+      <div class="profile-body">
+        <h1 class="profile-name">David Rokhinson</h1>
+        <p class="profile-role">Software Engineer</p>
+        <p class="profile-bio">
+          Software engineer with a passion for biking, soccer, travel and everything
+          in between. This is my corner of vibelab — a place to collect the projects,
+          trips and stories worth keeping.
+        </p>
+        <ul class="profile-tags">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 100-2 1 1 0 000 2zm-3 11.5V14l-3-3 4-3 2 3h2"/></svg>
+            Biking
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 7l4.7 3.4-1.8 5.5H9.1l-1.8-5.5L12 7zM12 2v5M4.9 8.6l4.2 1.8M19.1 8.6l-4.2 1.8M7.3 16.4L4 20M16.7 16.4L20 20"/></svg>
+            Soccer
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5a2.12 2.12 0 0 0-3-3L13 8 4.8 6.2a.5.5 0 0 0-.5.8l3.9 4.5-2.5 2.5-1.6-.4a.5.5 0 0 0-.5.8l2.1 2.1 2.1 2.1a.5.5 0 0 0 .8-.5l-.4-1.6 2.5-2.5 4.5 3.9a.5.5 0 0 0 .8-.5z"/></svg>
+            Travel
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 4l-4 16"/></svg>
+            Building things
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ── Travel ──────────────────────────────────────────────────────── -->
+    <section class="about-section">
+      <h2 class="section-heading">Travel</h2>
+      <p class="section-lede">
+        Trips, races and the occasional postcard from the road.
+      </p>
+
+      <div class="travel-grid">
+        <a class="travel-card" href="/travel/slovenian-arrow">
+          <div class="travel-card__art" aria-hidden="true">
+            <svg viewBox="0 0 64 64" width="52" height="52" fill="none"
+                 stroke="currentColor" stroke-width="3"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 52 L40 20" />
+              <path d="M28 16 L44 16 L44 32" />
+              <circle cx="12" cy="48" r="6" />
+              <circle cx="52" cy="24" r="6" />
+            </svg>
+          </div>
+          <div class="travel-card__body">
+            <h3 class="travel-card__title">The Slovenian Arrow</h3>
+            <p class="travel-card__desc">
+              A race from Brussels to Slovenia, told one postcard at a time.
+            </p>
+            <span class="travel-card__cta">Follow the route ↗</span>
+          </div>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <small>Built in vibelab. Powered by Supabase, Railway &amp; Vercel.</small>
+  </footer>
+</body>
+</html>
