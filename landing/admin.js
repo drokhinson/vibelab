@@ -107,7 +107,15 @@
             (v ? "checked" : "") + " /> " + esc(f.label) + "</label></div>";
         }
         if (f.type === "textarea") {
-          return '<div class="pa-field">' + labelHtml +
+          var importHtml = f.importFile
+            ? '<div class="pa-import">' +
+                '<label class="pa-btn pa-btn--ghost pa-btn--sm pa-import__btn">Load file' +
+                  '<input type="file" accept="' + escAttr(f.importAccept || ".html,text/html,.htm") +
+                  '" data-import-for="' + escAttr(f.name) + '" hidden /></label>' +
+                '<span class="pa-import__name"></span>' +
+              "</div>"
+            : "";
+          return '<div class="pa-field">' + labelHtml + importHtml +
             '<textarea id="' + id + '" data-name="' + escAttr(f.name) + '" rows="' +
             (f.rows || 4) + '" placeholder="' + escAttr(f.placeholder || "") + '">' +
             esc(v == null ? "" : v) + "</textarea></div>";
@@ -145,6 +153,24 @@
 
       var form = root.querySelector("form");
       var errEl = root.querySelector(".pa-modal__err");
+
+      // Wire "Load file" inputs: read the picked file's text into its textarea.
+      form.querySelectorAll("input[type=file][data-import-for]").forEach(function (inp) {
+        inp.addEventListener("change", function () {
+          var file = inp.files && inp.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function () {
+            var ta = form.querySelector('[data-name="' + inp.getAttribute("data-import-for") + '"]');
+            if (ta) ta.value = String(reader.result || "");
+            var wrap = inp.closest(".pa-import");
+            var nameEl = wrap && wrap.querySelector(".pa-import__name");
+            if (nameEl) nameEl.textContent = file.name;
+          };
+          reader.onerror = function () { window.alert("Could not read that file."); };
+          reader.readAsText(file);
+        });
+      });
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
         var out = {};

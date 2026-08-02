@@ -19,10 +19,11 @@
   var reorderSeq = 0;
 
   var STOP_FIELDS = [
-    { name: "title", label: "Title (city)", type: "text", required: true },
-    { name: "meta", label: "Meta (e.g. “Belgium · Day 0”)", type: "text" },
+    { name: "title", label: "Name", type: "text", required: true },
+    { name: "meta", label: "Subtitle", type: "text" },
     { name: "note", label: "Note (one-line teaser)", type: "text" },
-    { name: "html_content", label: "HTML page", type: "textarea", rows: 16, required: true },
+    { name: "html_content", label: "HTML page", type: "textarea", rows: 18, required: true,
+      importFile: true, placeholder: "Paste HTML, or use “Load file” to import an .html file…" },
   ];
 
   function isAdmin() { return PA.hasKey(); }
@@ -97,7 +98,11 @@
   function wireStops() {
     stopsEl.querySelectorAll(".stop").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        window.StopPopup.show(btn.getAttribute("data-id"), btn.getAttribute("data-title"));
+        var id = btn.getAttribute("data-id");
+        var stop = stops.find(function (s) { return s.id === id; });
+        // Opens from memory — the whole trip (incl. every stop's HTML) is loaded
+        // in one pass, so there's no per-stop fetch here.
+        if (stop) window.StopPopup.show(stop.title, stop.html_content);
       });
     });
     if (!isAdmin()) return;
@@ -138,35 +143,39 @@
     });
     if (!vals) return;
     try {
-      await PA.adminFetch("/admin/trips/" + trip.id + "/stops", {
+      // The API returns the full stop (incl. html_content); splice it into local
+      // state and re-render — no refetch (fully reactive).
+      var created = await PA.adminFetch("/admin/trips/" + trip.id + "/stops", {
         method: "POST", body: JSON.stringify(vals),
       });
-      await loadTrip();
+      stops.push(created);
+      renderStops();
     } catch (err) { window.alert("Could not add stop: " + err.message); }
   }
 
   async function onEditStop(id) {
-    // Fetch full content (list view omits html_content).
-    var current;
-    try {
-      current = await PA.publicFetch("/stops/" + encodeURIComponent(id));
-    } catch (err) { window.alert("Could not load stop: " + err.message); return; }
-    var meta = stops.find(function (s) { return s.id === id; }) || {};
+    // html_content is already in memory (loaded in one pass) — no fetch needed.
+    var stop = stops.find(function (s) { return s.id === id; });
+    if (!stop) return;
     var vals = await PA.formModal({
       title: "Edit stop",
       submitLabel: "Save",
       fields: STOP_FIELDS,
       values: {
-        title: current.title,
-        meta: meta.meta,
-        note: meta.note,
-        html_content: current.html_content,
+        title: stop.title,
+        meta: stop.meta,
+        note: stop.note,
+        html_content: stop.html_content,
       },
     });
     if (!vals) return;
     try {
-      await PA.adminFetch("/admin/stops/" + id, { method: "PUT", body: JSON.stringify(vals) });
-      await loadTrip();
+      var updated = await PA.adminFetch("/admin/stops/" + id, {
+        method: "PUT", body: JSON.stringify(vals),
+      });
+      var idx = stops.findIndex(function (s) { return s.id === id; });
+      if (idx >= 0) stops[idx] = updated;
+      renderStops();
     } catch (err) { window.alert("Could not save stop: " + err.message); }
   }
 
@@ -174,7 +183,8 @@
     if (!window.confirm('Delete stop "' + title + '"? This cannot be undone.')) return;
     try {
       await PA.adminFetch("/admin/stops/" + id, { method: "DELETE" });
-      await loadTrip();
+      stops = stops.filter(function (s) { return s.id !== id; });
+      renderStops();
     } catch (err) { window.alert("Could not delete stop: " + err.message); }
   }
 

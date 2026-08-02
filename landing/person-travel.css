@@ -165,6 +165,24 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;
   min-height: 14rem;
+  line-height: 1.45;
+  tab-size: 2;
+}
+
+/* ── File import control (load an .html file into the editor) ───────────── */
+.pa-import {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.pa-import__btn { display: inline-flex; align-items: center; cursor: pointer; }
+.pa-import__name {
+  font-size: 0.78rem;
+  color: rgba(234, 241, 247, 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Stop popup (sandboxed iframe) ─────────────────────────────────────── */
