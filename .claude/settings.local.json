@@ -8,7 +8,9 @@
       "Bash(git commit:*)",
       "mcp__Claude_Preview__preview_start",
       "Bash(git -C /c/CodeProjects/vibelab add CLAUDE.md)",
-      "Bash(git -C:*)"
+      "Bash(git -C:*)",
+      "Bash(cp \"/root/.claude/uploads/b8708d80-f658-59d2-a2e1-68cb8242d530/cc44c75f-arrow01brussels.html\" landing/travel/postcards/arrow-01-brussels.html)",
+      "Bash(git -C /home/user/vibelab diff --stat)"
     ]
   }
 }
