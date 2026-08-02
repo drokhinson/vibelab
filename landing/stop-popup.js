@@ -2,7 +2,9 @@
 // sandboxed iframe. Used on the trip page: tapping a stop card opens it here.
 //
 // The trip page loads every stop's html_content in one pass, so the popup renders
-// straight from memory — no per-stop fetch. Call StopPopup.show(title, html).
+// straight from memory — no per-stop fetch. Call StopPopup.show(stops, index) with
+// the trip's whole stop list; a bottom nav bar pages Previous/Next in place so you
+// can read through the route without closing the popup between stops.
 //
 // The HTML is admin-authored and runs inside a `sandbox="allow-scripts"` iframe
 // with NO `allow-same-origin`, so its scripts/styles are isolated in an opaque
@@ -20,19 +22,28 @@
 
   var PA = window.PersonAdmin;
   var BACKDROP_ID = "person-stop-popup";
+  var activeKeyHandler = null;
 
   function dismiss() {
     var existing = document.getElementById(BACKDROP_ID);
     if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
-    document.removeEventListener("keydown", onKey);
+    if (activeKeyHandler) {
+      document.removeEventListener("keydown", activeKeyHandler);
+      activeKeyHandler = null;
+    }
   }
-
-  function onKey(ev) { if (ev.key === "Escape") dismiss(); }
 
   function esc(s) { return PA ? PA.esc(s) : String(s == null ? "" : s); }
 
-  function show(title, html) {
+  // show(stops, index): stops is the trip's stop array (each with title +
+  // html_content); index is the one to open. Prev/Next page through in place.
+  function show(stops, index) {
     dismiss(); // singleton — never stack two
+
+    var list = Array.isArray(stops) ? stops : [];
+    if (!list.length) return;
+    var current = Math.min(Math.max(index | 0, 0), list.length - 1);
+    var multi = list.length > 1;
 
     var root = document.createElement("div");
     root.id = BACKDROP_ID;
@@ -40,24 +51,69 @@
     root.innerHTML =
       '<div class="stop-popup__shell" role="dialog" aria-modal="true">' +
         '<div class="stop-popup__bar">' +
-          '<span class="stop-popup__title">' + esc(title || "Postcard") + "</span>" +
+          '<span class="stop-popup__title"></span>' +
           '<button class="stop-popup__close" aria-label="Close">&times;</button>' +
         "</div>" +
+        (multi
+          ? '<div class="stop-popup__nav">' +
+              '<button class="stop-popup__nav-btn" data-dir="-1">&larr; Previous</button>' +
+              '<span class="stop-popup__counter"></span>' +
+              '<button class="stop-popup__nav-btn" data-dir="1">Next &rarr;</button>' +
+            "</div>"
+          : "") +
       "</div>";
 
     root.addEventListener("click", function (ev) { if (ev.target === root) dismiss(); });
-    document.addEventListener("keydown", onKey);
     document.body.appendChild(root);
     root.querySelector(".stop-popup__close").addEventListener("click", dismiss);
+
+    var shell = root.querySelector(".stop-popup__shell");
+    var titleEl = root.querySelector(".stop-popup__title");
+    var counterEl = root.querySelector(".stop-popup__counter");
+    var prevBtn = root.querySelector('.stop-popup__nav-btn[data-dir="-1"]');
+    var nextBtn = root.querySelector('.stop-popup__nav-btn[data-dir="1"]');
 
     var frame = document.createElement("iframe");
     frame.className = "stop-popup__frame";
     frame.setAttribute("sandbox", "allow-scripts"); // NO allow-same-origin
-    frame.setAttribute("title", title || "Postcard");
-    // Set via the DOM property (not an attribute string) so we don't have to
-    // attribute-escape a ~400 KB document.
-    frame.srcdoc = html || "";
-    root.querySelector(".stop-popup__shell").appendChild(frame);
+    // Insert the frame between the bar and the (optional) nav footer.
+    shell.insertBefore(frame, root.querySelector(".stop-popup__nav"));
+
+    function renderAt(i) {
+      current = i;
+      var stop = list[current];
+      var title = (stop && stop.title) || "Postcard";
+      titleEl.textContent = title;
+      frame.setAttribute("title", title);
+      // Reassigning srcdoc reloads the isolated frame in place. Set via the DOM
+      // property (not an attribute) so we don't attribute-escape a large document.
+      frame.srcdoc = (stop && stop.html_content) || "";
+      if (multi) {
+        counterEl.textContent = (current + 1) + " / " + list.length;
+        prevBtn.disabled = current === 0;
+        nextBtn.disabled = current === list.length - 1;
+      }
+    }
+
+    function go(delta) {
+      var next = current + delta;
+      if (next >= 0 && next < list.length) renderAt(next);
+    }
+
+    if (multi) {
+      prevBtn.addEventListener("click", function () { go(-1); });
+      nextBtn.addEventListener("click", function () { go(1); });
+    }
+
+    activeKeyHandler = function (ev) {
+      if (ev.key === "Escape") { dismiss(); return; }
+      if (!multi) return;
+      if (ev.key === "ArrowLeft") go(-1);
+      else if (ev.key === "ArrowRight") go(1);
+    };
+    document.addEventListener("keydown", activeKeyHandler);
+
+    renderAt(current);
   }
 
   window.StopPopup = { show: show, dismiss: dismiss };

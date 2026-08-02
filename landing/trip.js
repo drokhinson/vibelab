@@ -104,10 +104,11 @@
     stopsEl.querySelectorAll(".stop").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var id = btn.getAttribute("data-id");
-        var stop = stops.find(function (s) { return s.id === id; });
+        var idx = stops.findIndex(function (s) { return s.id === id; });
         // Opens from memory — the whole trip (incl. every stop's HTML) is loaded
-        // in one pass, so there's no per-stop fetch here.
-        if (stop) window.StopPopup.show(stop.title, stop.html_content);
+        // in one pass, so there's no per-stop fetch here. Pass the full list so
+        // the popup can page Prev/Next through the stops in place.
+        if (idx >= 0) window.StopPopup.show(stops, idx);
       });
     });
     if (!isAdmin()) return;
