@@ -27,6 +27,7 @@ from routes import daywordplay
 from routes import plant_planner
 from routes import boardgame_buddy
 from routes import travel_scrapbook
+from routes import person
 
 # Infrastructure routers
 from routes import analytics
@@ -48,6 +49,7 @@ app = FastAPI(
         {"name": "analytics", "description": "Cross-app analytics tracking"},
         {"name": "boardgame_buddy", "description": "BoardgameBuddy — board game collection, play logging, and quick-reference guides"},
         {"name": "travel_scrapbook", "description": "Travel Trove — save travel links to trips, AI-extract places, and plan optimized routes"},
+        {"name": "person", "description": "David Rokhinson personal page — admin-editable travel trips and stops"},
         {"name": "admin", "description": "Admin dashboard and user management"},
     ],
 )
@@ -151,6 +153,7 @@ app.include_router(daywordplay.router)
 app.include_router(plant_planner.router)
 app.include_router(boardgame_buddy.router)
 app.include_router(travel_scrapbook.router)
+app.include_router(person.router)
 
 # ── Infrastructure routers ────────────────────────────────────────────────
 app.include_router(analytics.router)
