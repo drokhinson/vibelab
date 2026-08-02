@@ -39,12 +39,20 @@
     eyebrowEl.textContent = trip.eyebrow || "";
     eyebrowEl.style.display = trip.eyebrow ? "" : "none";
     headlineEl.textContent = heading;
+    var albumLabel = albumEl.querySelector("span");
     if (trip.photo_album_url) {
       albumEl.href = trip.photo_album_url;
-      albumEl.hidden = false;
+      albumEl.setAttribute("target", "_blank");
+      albumEl.classList.remove("album-link--empty");
+      if (albumLabel) albumLabel.textContent = "Photo album ↗";
     } else {
-      albumEl.hidden = true;
+      // No album set — show a muted, non-clickable "No album" pill.
+      albumEl.removeAttribute("href");
+      albumEl.removeAttribute("target");
+      albumEl.classList.add("album-link--empty");
+      if (albumLabel) albumLabel.textContent = "No album";
     }
+    albumEl.hidden = false;
   }
 
   // ── Stop cards ──────────────────────────────────────────────────────────

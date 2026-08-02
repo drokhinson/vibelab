@@ -63,6 +63,10 @@
     }
     .album-link:hover{ border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.12); }
     .album-link svg{ width:18px; height:18px; color:var(--gold); flex:none; }
+    /* No album set: same pill, muted and non-interactive. */
+    .album-link--empty{ opacity:.55; cursor:default; }
+    .album-link--empty:hover{ border-color:rgba(255,255,255,.14); background:rgba(255,255,255,.06); }
+    .album-link--empty svg{ color:rgba(214,223,231,.7); }
 
     /* ── Stops list ──────────────────────────────────────────── */
     .stops-heading{
@@ -141,13 +145,13 @@
       <h1 id="trip-headline">Loading…</h1>
       <a class="album-link" id="trip-album" href="#" target="_blank" rel="noopener" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        <span>Photo album ↗</span>
+        <span id="trip-album-label">Photo album ↗</span>
       </a>
     </section>
 
     <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>
 
-    <h2 class="stops-heading" id="stops-heading" hidden>Postcards from the route</h2>
+    <h2 class="stops-heading" id="stops-heading" hidden>Stops along the way</h2>
     <ul class="stops" id="stops"></ul>
 
     <footer>Part of David Rokhinson&rsquo;s corner of vibelab.</footer>
