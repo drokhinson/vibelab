@@ -7,6 +7,7 @@
   var PA = window.PersonAdmin;
   var grid = document.getElementById("travel-grid");
   var adminBar = document.getElementById("travel-admin-bar");
+  var loginBtn = document.getElementById("admin-login-btn");
   var trips = [];
   var dynamicActive = false;
   // Static fallback card(s) that ship in about.html. They stay in the grid
@@ -163,9 +164,30 @@
     renderAdminBar();
   }
 
-  // Re-render when admin state flips — but only once dynamic mode is active, so
-  // we never wipe the static fallback while the backend is unreachable.
+  // ── Header admin login/logout button ──────────────────────────────────────
+  function renderLoginBtn() {
+    if (!loginBtn) return;
+    if (PA.hasKey()) {
+      loginBtn.textContent = "Admin · Sign out";
+      loginBtn.classList.add("pa-admin-login--active");
+    } else {
+      loginBtn.textContent = "Admin login";
+      loginBtn.classList.remove("pa-admin-login--active");
+    }
+  }
+  if (loginBtn) {
+    loginBtn.addEventListener("click", function () {
+      if (PA.hasKey()) PA.signOut();
+      else PA.promptForKey();
+    });
+    renderLoginBtn();
+  }
+
+  // Re-render when admin state flips. The header button + admin bar always
+  // update; the grid only re-renders once dynamic mode is active, so we never
+  // wipe the static fallback while the backend is unreachable.
   PA.onChange(function () {
+    renderLoginBtn();
     if (!dynamicActive) return;
     renderAdminBar();
     renderGrid();
