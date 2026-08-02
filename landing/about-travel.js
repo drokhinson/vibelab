@@ -7,7 +7,13 @@
   var PA = window.PersonAdmin;
   var grid = document.getElementById("travel-grid");
   var adminBar = document.getElementById("travel-admin-bar");
+  var loginBtn = document.getElementById("admin-login-btn");
   var trips = [];
+  var dynamicActive = false;
+  // Static fallback card(s) that ship in about.html. They stay in the grid
+  // permanently (below the dynamic trips) until the user removes them by hand
+  // once the dynamic ones are working. Dynamic cards are inserted ABOVE them.
+  var staticFallback = grid ? Array.prototype.slice.call(grid.children) : [];
 
   // Default card art — the same arrow mark the section shipped with.
   var ARROW_SVG =
@@ -56,14 +62,22 @@
       "</div>";
   }
 
+  // Remove previously-inserted dynamic cards, leaving the static fallback intact.
+  function clearDynamic() {
+    Array.prototype.slice.call(grid.children).forEach(function (node) {
+      if (staticFallback.indexOf(node) === -1) grid.removeChild(node);
+    });
+  }
+
   function renderGrid() {
-    if (!trips.length) {
-      grid.innerHTML = isAdmin()
-        ? '<p class="travel-empty">No trips yet. Use “Add trip” above.</p>'
-        : '<p class="travel-empty">No trips to show yet.</p>';
-      return;
-    }
-    grid.innerHTML = trips.map(tripCard).join("");
+    clearDynamic();
+    if (!trips.length) return; // nothing dynamic yet — static fallback remains
+    var tmp = document.createElement("div");
+    tmp.innerHTML = trips.map(tripCard).join("");
+    var anchor = staticFallback.length ? staticFallback[0] : null;
+    Array.prototype.slice.call(tmp.children).forEach(function (node) {
+      grid.insertBefore(node, anchor); // insert dynamic cards above the static one
+    });
     if (isAdmin()) wireCardControls();
   }
 
@@ -134,19 +148,50 @@
 
   // ── Load ────────────────────────────────────────────────────────────────
   async function loadTrips() {
-    grid.innerHTML = '<p class="travel-empty">Loading trips…</p>';
+    var fetched;
     try {
-      trips = await PA.publicFetch("/trips");
-      renderGrid();
+      fetched = await PA.publicFetch("/trips");
     } catch (err) {
-      grid.innerHTML = '<p class="travel-empty travel-empty--error">Couldn’t load trips: ' +
-        PA.esc(err.message) + "</p>";
+      // Backend unreachable — leave the static fallback card in place, no error
+      // banner. The dynamic section stays dormant until the backend is wired up.
+      console.warn("Travel: dynamic trips unavailable; keeping static fallback.", err);
+      return;
     }
+    // Backend responded → dynamic mode owns the grid from here on.
+    dynamicActive = true;
+    trips = fetched || [];
+    renderGrid();
     renderAdminBar();
   }
 
-  // Re-render when admin state flips (key entered / signed out / rejected).
-  PA.onChange(function () { renderAdminBar(); renderGrid(); });
+  // ── Header admin login/logout button ──────────────────────────────────────
+  function renderLoginBtn() {
+    if (!loginBtn) return;
+    if (PA.hasKey()) {
+      loginBtn.textContent = "Admin · Sign out";
+      loginBtn.classList.add("pa-admin-login--active");
+    } else {
+      loginBtn.textContent = "Admin login";
+      loginBtn.classList.remove("pa-admin-login--active");
+    }
+  }
+  if (loginBtn) {
+    loginBtn.addEventListener("click", function () {
+      if (PA.hasKey()) PA.signOut();
+      else PA.promptForKey();
+    });
+    renderLoginBtn();
+  }
+
+  // Re-render when admin state flips. The header button + admin bar always
+  // update; the grid only re-renders once dynamic mode is active, so we never
+  // wipe the static fallback while the backend is unreachable.
+  PA.onChange(function () {
+    renderLoginBtn();
+    if (!dynamicActive) return;
+    renderAdminBar();
+    renderGrid();
+  });
 
   document.addEventListener("DOMContentLoaded", loadTrips);
 })();

@@ -25,6 +25,7 @@
         <span class="home-link__sep">/</span>
         <span class="home-link__here">about</span>
       </a>
+      <button id="admin-login-btn" class="pa-admin-login" type="button">Admin login</button>
     </div>
   </header>
 
@@ -72,7 +73,30 @@
       </p>
 
       <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>
-      <div class="travel-grid" id="travel-grid"></div>
+      <!-- Static fallback card: shown when the backend is unreachable. When the
+           person API responds, about-travel.js replaces this grid with the
+           dynamic trips (see about-travel.js). -->
+      <div class="travel-grid" id="travel-grid">
+        <a class="travel-card" href="/travel/slovenian-arrow">
+          <div class="travel-card__art" aria-hidden="true">
+            <svg viewBox="0 0 64 64" width="52" height="52" fill="none"
+                 stroke="currentColor" stroke-width="3"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 52 L40 20" />
+              <path d="M28 16 L44 16 L44 32" />
+              <circle cx="12" cy="48" r="6" />
+              <circle cx="52" cy="24" r="6" />
+            </svg>
+          </div>
+          <div class="travel-card__body">
+            <h3 class="travel-card__title">The Slovenian Arrow</h3>
+            <p class="travel-card__desc">
+              A race from Brussels to Slovenia, told one postcard at a time.
+            </p>
+            <span class="travel-card__cta">Follow the route ↗</span>
+          </div>
+        </a>
+      </div>
     </section>
   </main>
 

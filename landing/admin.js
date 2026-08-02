@@ -70,8 +70,12 @@
       notifyChange();
       return true;
     } catch (err) {
-      // adminFetch already cleared the key + notified on 401/403.
-      window.alert("Invalid admin key.");
+      // Clear the key so a wrong key OR an unreachable backend doesn't leave a
+      // stale login state (adminFetch already clears on 401/403; this also
+      // covers network/CORS failures).
+      clearKey();
+      notifyChange();
+      window.alert("Couldn't verify admin key — wrong key or the backend isn't reachable.");
       return false;
     }
   }
