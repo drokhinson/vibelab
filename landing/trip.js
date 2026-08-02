@@ -9,7 +9,6 @@
   var eyebrowEl = document.getElementById("trip-eyebrow");
   var headlineEl = document.getElementById("trip-headline");
   var albumEl = document.getElementById("trip-album");
-  var ledeEl = document.getElementById("trip-lede");
   var adminBar = document.getElementById("travel-admin-bar");
   var stopsHeading = document.getElementById("stops-heading");
   var stopsEl = document.getElementById("stops");
@@ -40,8 +39,6 @@
     eyebrowEl.textContent = trip.eyebrow || "";
     eyebrowEl.style.display = trip.eyebrow ? "" : "none";
     headlineEl.textContent = heading;
-    ledeEl.textContent = trip.lede || "";
-    ledeEl.style.display = trip.lede ? "" : "none";
     if (trip.photo_album_url) {
       albumEl.href = trip.photo_album_url;
       albumEl.hidden = false;
@@ -230,7 +227,6 @@
       trip = null;
       headlineEl.textContent = "Trip not found";
       eyebrowEl.style.display = "none";
-      ledeEl.style.display = "none";
       albumEl.hidden = true;
       stopsHeading.hidden = true;
       stopsEl.innerHTML = '<li class="empty empty--error">' + PA.esc(err.message) + "</li>";
