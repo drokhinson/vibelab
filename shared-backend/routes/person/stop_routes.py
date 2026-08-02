@@ -14,11 +14,11 @@ from .models import (
     MessageResponse,
     ReorderStopsBody,
     StopContentResponse,
-    StopSummaryResponse,
+    StopResponse,
     UpdateStopBody,
 )
 
-_STOP_COLS = "id, trip_id, title, meta, note, sort_order"
+_STOP_COLS = "id, trip_id, title, meta, note, sort_order, html_content"
 
 
 def _now() -> str:
@@ -49,7 +49,7 @@ async def get_stop(
 
 @router.post(
     "/admin/trips/{trip_id}/stops",
-    response_model=StopSummaryResponse,
+    response_model=StopResponse,
     status_code=201,
     summary="Add a stop to a trip",
 )
@@ -90,14 +90,14 @@ async def create_stop(
     result = sb.table("person_trip_stops").insert(stop_data).execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create stop")
-    row = result.data[0]
-    # Return the summary shape (drop html_content from the echo).
-    return {k: row[k] for k in ("id", "trip_id", "title", "meta", "note", "sort_order")}
+    # Return the full stop (incl. html_content) so the client can splice it into
+    # local state without a refetch.
+    return result.data[0]
 
 
 @router.put(
     "/admin/stops/{stop_id}",
-    response_model=StopSummaryResponse,
+    response_model=StopResponse,
     status_code=200,
     summary="Update a stop",
 )

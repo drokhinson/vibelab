@@ -24,8 +24,9 @@ _TRIP_COLS = (
     "id, slug, title, eyebrow, headline, lede, photo_album_url, "
     "card_cta, sort_order, is_published"
 )
-# Stop card metadata only — deliberately excludes the ~400 KB html_content.
-_STOP_COLS = "id, trip_id, title, meta, note, sort_order"
+# Full stop rows for the trip-detail endpoint: html_content is included so the
+# trip page loads all stops in one pass (the trip UI opens popups from memory).
+_STOP_COLS = "id, trip_id, title, meta, note, sort_order, html_content"
 
 
 def _slugify(text: str) -> str:

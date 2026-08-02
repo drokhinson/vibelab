@@ -20,23 +20,28 @@ class TripSummaryResponse(BaseModel):
     is_published: bool
 
 
-class StopSummaryResponse(BaseModel):
-    """A stop's card metadata — never includes the heavy html_content."""
+class StopResponse(BaseModel):
+    """A stop, including its full html_content.
+
+    The trip-detail endpoint returns every stop in this shape so the trip page
+    loads all stop HTML in a single pass and can open popups from memory.
+    """
     id: str
     trip_id: str
     title: str
     meta: Optional[str] = None
     note: Optional[str] = None
     sort_order: int
+    html_content: str
 
 
 class TripDetailResponse(TripSummaryResponse):
-    """A trip plus its ordered stops (metadata only)."""
-    stops: List[StopSummaryResponse] = []
+    """A trip plus its ordered stops (each with full html_content)."""
+    stops: List[StopResponse] = []
 
 
 class StopContentResponse(BaseModel):
-    """A single stop's full HTML page — fetched once per popup open."""
+    """A single stop's full HTML page (direct fetch by id)."""
     id: str
     title: str
     html_content: str
