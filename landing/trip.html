@@ -69,10 +69,19 @@
     .album-link--empty svg{ color:rgba(214,223,231,.7); }
 
     /* ── Stops list ──────────────────────────────────────────── */
+    .stops-header{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin:0 0 1rem; }
     .stops-heading{
       font-size:.75rem; letter-spacing:.18em; text-transform:uppercase;
-      color:rgba(214,223,231,.6); font-weight:700; margin:0 0 1rem;
+      color:rgba(214,223,231,.6); font-weight:700; margin:0;
     }
+    .stops-order-toggle{
+      flex:none; display:inline-flex; align-items:center; justify-content:center;
+      padding:.3rem; border:0; border-radius:8px; background:transparent; cursor:pointer;
+      color:rgba(214,223,231,.6); transition:color .15s, background .15s;
+    }
+    .stops-order-toggle:hover{ color:var(--gold); background:rgba(255,255,255,.08); }
+    .stops-order-toggle svg{ display:block; transition:transform .2s; }
+    .stops-order-toggle.is-reversed svg{ transform:rotate(180deg); }
     .stops{ display:flex; flex-direction:column; gap:.9rem; list-style:none; margin:0; padding:0; }
     .stop-row{ display:flex; flex-direction:column; gap:.5rem; }
 
@@ -151,7 +160,13 @@
 
     <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>
 
-    <h2 class="stops-heading" id="stops-heading" hidden>Stops along the way</h2>
+    <div class="stops-header" id="stops-header" hidden>
+      <h2 class="stops-heading" id="stops-heading">Stops along the way</h2>
+      <button class="stops-order-toggle" id="stops-order-toggle" type="button"
+              aria-pressed="false" title="Reverse order" aria-label="Reverse stop order" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>
+      </button>
+    </div>
     <ul class="stops" id="stops"></ul>
 
     <footer>Part of David Rokhinson&rsquo;s corner of vibelab.</footer>
