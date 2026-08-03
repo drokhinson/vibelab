@@ -25,30 +25,29 @@
         <span class="home-link__sep">/</span>
         <span class="home-link__here">about</span>
       </a>
-      <div class="header-actions">
-        <button id="admin-login-btn" class="pa-admin-login" type="button"
-                title="Edit — admin login" aria-label="Edit — admin login">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 20h9"/>
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-          </svg>
-        </button>
-      </div>
     </div>
   </header>
 
   <main>
     <!-- ── Profile ─────────────────────────────────────────────────────── -->
     <section class="profile">
+      <!-- Profile edit pencil — shown only in admin edit mode (about-profile.js). -->
+      <button id="profile-edit-btn" class="pa-edit-pencil profile-edit-btn" type="button"
+              title="Edit profile" aria-label="Edit profile" hidden>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9"/>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+        </svg>
+      </button>
       <div class="profile-photo">
         <img src="assets/photos/david-summit.jpg"
              alt="David Rokhinson standing on a rocky summit with a black-and-white dog" />
       </div>
       <div class="profile-body">
-        <h1 class="profile-name">David Rokhinson</h1>
-        <p class="profile-role">Software Engineer</p>
-        <p class="profile-bio">
+        <h1 class="profile-name" id="profile-name">David Rokhinson</h1>
+        <p class="profile-role" id="profile-role">Software Engineer</p>
+        <p class="profile-bio" id="profile-bio">
           Software engineer with a passion for biking, soccer, travel and everything
           in between. This is my corner of vibelab — a place to collect the projects,
           trips and stories worth keeping.
@@ -76,10 +75,18 @@
 
     <!-- ── Travel ──────────────────────────────────────────────────────── -->
     <section class="about-section">
-      <h2 class="section-heading">Travel</h2>
-      <p class="section-lede">
-        Trips, races and the occasional postcard from the road.
-      </p>
+      <div class="section-head-row">
+        <h2 class="section-heading">Travel</h2>
+        <!-- Travel edit pencil — shown only in admin edit mode; opens Add trip. -->
+        <button id="travel-edit-btn" class="pa-edit-pencil" type="button"
+                title="Add trip" aria-label="Add trip" hidden>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+          </svg>
+        </button>
+      </div>
 
       <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>
       <!-- Trip cards are rendered from the person API by about-travel.js. -->
@@ -88,11 +95,17 @@
   </main>
 
   <footer>
+    <!-- Admin login/edit control — the pill IS the login toggle (about-travel.js). -->
+    <div class="admin-dock">
+      <button id="admin-login-btn" class="admin-pill" type="button"
+              title="Admin login" aria-label="Admin login">Admin</button>
+    </div>
     <small>Built in vibelab. Powered by Supabase, Railway &amp; Vercel.</small>
   </footer>
 
   <script src="config.js"></script>
   <script src="admin.js"></script>
   <script src="about-travel.js"></script>
+  <script src="about-profile.js"></script>
 </body>
 </html>

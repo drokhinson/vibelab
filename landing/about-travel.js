@@ -8,6 +8,7 @@
   var grid = document.getElementById("travel-grid");
   var adminBar = document.getElementById("travel-admin-bar");
   var loginBtn = document.getElementById("admin-login-btn");
+  var travelEditBtn = document.getElementById("travel-edit-btn");
   var trips = [];
   var dynamicActive = false;
 
@@ -66,11 +67,11 @@
   function renderAdminBar() {
     if (!isAdmin()) { adminBar.hidden = true; adminBar.innerHTML = ""; return; }
     adminBar.hidden = false;
+    // Add trip now lives on the inline header pencil; the bar keeps Sign out so
+    // it stays reachable once login moved to the footer pill.
     adminBar.innerHTML =
       '<span class="pa-tag">Admin</span>' +
-      '<button class="pa-btn pa-btn--primary" id="pa-add-trip">+ Add trip</button>' +
       '<button class="pa-btn pa-btn--ghost" id="pa-signout">Sign out</button>';
-    document.getElementById("pa-add-trip").addEventListener("click", onAddTrip);
     document.getElementById("pa-signout").addEventListener("click", function () { PA.signOut(); });
   }
 
@@ -145,17 +146,46 @@
     renderAdminBar();
   }
 
-  // Header pencil → edit-mode toggle + "Logged in / Editing" chip (shared).
-  PA.wireLoginButton(loginBtn);
+  // ── About-page admin controls ─────────────────────────────────────────────
+  // The shared PA.wireLoginButton (header pencil + chip) is left for trip.html.
+  // Here the footer pill is the login/edit toggle and an inline pencil beside
+  // the Travel heading opens Add-trip — both driven directly off PA state.
 
-  // Re-render when admin state flips. wireLoginButton keeps the pencil + chip
-  // in sync; the grid only re-renders once dynamic mode is active, so we don't
-  // paint an empty grid before the backend has responded.
+  // Footer pill: click toggles edit mode; label + accent reflect the state.
+  function renderLoginPill() {
+    if (!loginBtn) return;
+    var editing = PA.isAdmin();
+    var loggedIn = PA.hasKey();
+    loginBtn.textContent = !loggedIn ? "Admin" : (editing ? "Editing" : "Logged in");
+    var label = !loggedIn ? "Admin login"
+      : editing ? "Editing — click to stop editing"
+      : "Logged in — click to edit";
+    loginBtn.title = label;
+    loginBtn.setAttribute("aria-label", label);
+    loginBtn.classList.toggle("admin-pill--editing", editing);
+  }
+  if (loginBtn) loginBtn.addEventListener("click", function () { PA.toggleEdit(); });
+
+  // Inline Travel pencil: visible only in edit mode; opens the Add-trip modal.
+  function renderTravelEditBtn() {
+    if (travelEditBtn) travelEditBtn.hidden = !isAdmin();
+  }
+  if (travelEditBtn) travelEditBtn.addEventListener("click", onAddTrip);
+
+  // Re-render when admin state flips. The pill + pencil update on every change;
+  // the grid/bar only re-render once dynamic mode is active, so we don't paint
+  // an empty grid before the backend has responded.
   PA.onChange(function () {
+    renderLoginPill();
+    renderTravelEditBtn();
     if (!dynamicActive) return;
     renderAdminBar();
     renderGrid();
   });
+
+  // Initial paint (before any state change / backend response).
+  renderLoginPill();
+  renderTravelEditBtn();
 
   document.addEventListener("DOMContentLoaded", loadTrips);
 })();

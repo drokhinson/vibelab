@@ -11,6 +11,7 @@ Supabase tables (prefixed person_):
                        card_cta, sort_order, is_published, created_at, updated_at
   person_trip_stops  — id, trip_id, title, meta, note, html_content, sort_order,
                        created_at, updated_at
+  person_profile     — id (singleton=1), name, role, bio, photo_path, updated_at
 """
 
 from fastapi import APIRouter
@@ -18,5 +19,6 @@ from fastapi import APIRouter
 router = APIRouter(prefix="/api/v1/person", tags=["person"])
 
 # Import sub-modules to register their routes on this router
-from . import trip_routes   # noqa: F401, E402
-from . import stop_routes   # noqa: F401, E402
+from . import trip_routes      # noqa: F401, E402
+from . import stop_routes      # noqa: F401, E402
+from . import profile_routes   # noqa: F401, E402

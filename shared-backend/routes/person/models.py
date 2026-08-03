@@ -47,6 +47,14 @@ class StopContentResponse(BaseModel):
     html_content: str
 
 
+class ProfileResponse(BaseModel):
+    """The single profile block shown at the top of the about page."""
+    name: str
+    role: Optional[str] = None
+    bio: Optional[str] = None
+    photo_path: Optional[str] = None
+
+
 class MessageResponse(BaseModel):
     """Generic confirmation for delete/reorder operations."""
     status: str
@@ -96,3 +104,13 @@ class UpdateStopBody(BaseModel):
 
 class ReorderStopsBody(BaseModel):
     stop_ids: List[str]
+
+
+class UpdateProfileBody(BaseModel):
+    """Partial update of the profile block — only non-null fields are changed.
+
+    Photo editing is deliberately omitted for now (see person_profile.photo_path).
+    """
+    name: Optional[str] = None
+    role: Optional[str] = None
+    bio: Optional[str] = None

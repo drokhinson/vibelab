@@ -19,6 +19,7 @@
 
 /* ── Profile ────────────────────────────────────────────────────────────── */
 .profile {
+  position: relative; /* anchors the profile edit pencil (top-right) */
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: 2rem;
@@ -28,6 +29,12 @@
   background: var(--pico-card-background-color);
   border: 1px solid var(--pico-card-border-color);
   border-radius: 20px;
+}
+.profile-edit-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1;
 }
 
 .profile-photo {
@@ -100,11 +107,24 @@
 
 /* ── Section ────────────────────────────────────────────────────────────── */
 .about-section { margin-top: 2.5rem; }
-.about-section .section-heading { margin-bottom: 0.35rem; }
-.section-lede {
-  color: var(--pico-muted-color);
-  font-size: 0.95rem;
-  margin: 0 0 1.25rem;
+
+/* Heading + inline edit pencil sit on one row. The row owns the vertical
+   rhythm the bare .section-heading used to carry. */
+.section-head-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 2.25rem 0 1.1rem;
+}
+/* Bigger, real heading — override the shared eyebrow-style .section-heading
+   (small/uppercase/muted) into a proper section title. */
+.about-section .section-heading {
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  color: #fff;
+  margin: 0;
 }
 
 /* ── Travel grid + cards ────────────────────────────────────────────────── */
@@ -170,6 +190,58 @@
   color: #f2d46b;
 }
 
+/* ── Edit pencils (profile + travel) ────────────────────────────────────── */
+/* Small round pencil, styled to match the dark app controls. Shown only in
+   admin edit mode — about-travel.js / about-profile.js toggle the [hidden] attr. */
+.pa-edit-pencil {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: #eaf1f7;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.pa-edit-pencil:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.4); }
+.pa-edit-pencil:active { transform: translateY(1px); }
+.pa-edit-pencil svg { display: block; }
+.pa-edit-pencil[hidden] { display: none; }
+
+/* ── Bottom-center admin login dock ─────────────────────────────────────── */
+.admin-dock {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 1.25rem;
+}
+/* The pill itself is the login/edit toggle. Label + accent reflect state:
+   "Admin" (logged out) → "Logged in" → gold "Editing" (edit mode on). */
+.admin-pill {
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: rgba(214, 223, 231, 0.85);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.admin-pill:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.4); }
+.admin-pill--editing {
+  color: #f2d46b;
+  background: rgba(242, 212, 107, 0.12);
+  border-color: rgba(242, 212, 107, 0.5);
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 620px) {
   .profile {
@@ -183,4 +255,6 @@
   .profile-name { font-size: 1.7rem; }
   .profile-bio { margin-left: auto; margin-right: auto; }
   .profile-tags { justify-content: center; }
+  /* Keep the pencil clear of the centered photo/name. */
+  .profile-edit-btn { top: 0.75rem; right: 0.75rem; }
 }
