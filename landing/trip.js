@@ -68,7 +68,9 @@
 
   // ── Stop cards ──────────────────────────────────────────────────────────
   function stopRow(stop, index) {
-    var no = String(index).padStart(2, "0");
+    // Number belongs to the stop (its rank in the canonical sort_order), not the
+    // display slot — so it travels with the card when the view order is flipped.
+    var no = String(stops.indexOf(stop)).padStart(2, "0");
     var noteHtml = stop.note ? '<p class="stop__note">' + PA.esc(stop.note) + "</p>" : "";
     var admin = isAdmin();
     var controls = admin
