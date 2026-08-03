@@ -77,15 +77,9 @@
     <section class="about-section">
       <div class="section-head-row">
         <h2 class="section-heading">Travel</h2>
-        <!-- Travel edit pencil — shown only in admin edit mode; opens Add trip. -->
-        <button id="travel-edit-btn" class="pa-edit-pencil" type="button"
-                title="Add trip" aria-label="Add trip" hidden>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 20h9"/>
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-          </svg>
-        </button>
+        <!-- Add-trip button — shown to any logged-in admin (even outside edit mode). -->
+        <button id="travel-add-btn" class="pa-btn pa-btn--primary pa-btn--sm travel-add-btn"
+                type="button" hidden>+ Add trip</button>
       </div>
 
       <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>

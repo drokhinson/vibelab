@@ -8,7 +8,7 @@
   var grid = document.getElementById("travel-grid");
   var adminBar = document.getElementById("travel-admin-bar");
   var loginBtn = document.getElementById("admin-login-btn");
-  var travelEditBtn = document.getElementById("travel-edit-btn");
+  var addTripBtn = document.getElementById("travel-add-btn");
   var trips = [];
   var dynamicActive = false;
 
@@ -148,8 +148,8 @@
 
   // ── About-page admin controls ─────────────────────────────────────────────
   // The shared PA.wireLoginButton (header pencil + chip) is left for trip.html.
-  // Here the footer pill is the login/edit toggle and an inline pencil beside
-  // the Travel heading opens Add-trip — both driven directly off PA state.
+  // Here the footer pill is the login/edit toggle and an "+ Add trip" button
+  // beside the Travel heading opens Add-trip — both driven directly off PA state.
 
   // Footer pill: click toggles edit mode; label + accent reflect the state.
   function renderLoginPill() {
@@ -166,18 +166,20 @@
   }
   if (loginBtn) loginBtn.addEventListener("click", function () { PA.toggleEdit(); });
 
-  // Inline Travel pencil: visible only in edit mode; opens the Add-trip modal.
-  function renderTravelEditBtn() {
-    if (travelEditBtn) travelEditBtn.hidden = !isAdmin();
+  // "+ Add trip" button: shown to any logged-in admin (hasKey), independent of
+  // edit mode; opens the existing Add-trip modal. Creating works without edit
+  // mode because the POST carries the stored admin key via PA.adminFetch.
+  function renderAddTripBtn() {
+    if (addTripBtn) addTripBtn.hidden = !PA.hasKey();
   }
-  if (travelEditBtn) travelEditBtn.addEventListener("click", onAddTrip);
+  if (addTripBtn) addTripBtn.addEventListener("click", onAddTrip);
 
-  // Re-render when admin state flips. The pill + pencil update on every change;
-  // the grid/bar only re-render once dynamic mode is active, so we don't paint
-  // an empty grid before the backend has responded.
+  // Re-render when admin state flips. The pill + add button update on every
+  // change; the grid/bar only re-render once dynamic mode is active, so we don't
+  // paint an empty grid before the backend has responded.
   PA.onChange(function () {
     renderLoginPill();
-    renderTravelEditBtn();
+    renderAddTripBtn();
     if (!dynamicActive) return;
     renderAdminBar();
     renderGrid();
@@ -185,7 +187,7 @@
 
   // Initial paint (before any state change / backend response).
   renderLoginPill();
-  renderTravelEditBtn();
+  renderAddTripBtn();
 
   document.addEventListener("DOMContentLoaded", loadTrips);
 })();
