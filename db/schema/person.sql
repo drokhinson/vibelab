@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- person — current schema snapshot
--- Last updated: 2026-08-02 (through db/migrations/person/002_seed.sql)
+-- Last updated: 2026-08-03 (through db/migrations/person/004_profile.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- David Rokhinson's personal page: admin-editable travel trips + stops.
 -- Backend-only access via service role; writes gated by ADMIN_API_KEY.
@@ -35,3 +35,14 @@ CREATE TABLE IF NOT EXISTS public.person_trip_stops (
 );
 -- idx_person_stops_trip (trip_id)
 -- idx_person_stops_order (trip_id, sort_order)
+
+-- Single-row profile block for the about page (id is pinned to 1).
+-- photo_path reserved for future bucket storage; editor is text-only today.
+CREATE TABLE IF NOT EXISTS public.person_profile (
+  id         SMALLINT    PRIMARY KEY DEFAULT 1 CHECK (id = 1),  -- singleton row
+  name       TEXT        NOT NULL,                              -- display name (H1)
+  role       TEXT,                                              -- role/title line
+  bio        TEXT,                                              -- bio paragraph
+  photo_path TEXT,                                              -- reserved for future bucket storage
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
