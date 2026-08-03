@@ -10,13 +10,24 @@
   var headlineEl = document.getElementById("trip-headline");
   var albumEl = document.getElementById("trip-album");
   var adminBar = document.getElementById("travel-admin-bar");
-  var stopsHeading = document.getElementById("stops-heading");
+  var stopsHeaderEl = document.getElementById("stops-header");
+  var orderToggleBtn = document.getElementById("stops-order-toggle");
   var stopsEl = document.getElementById("stops");
   var loginBtn = document.getElementById("admin-login-btn");
 
   var trip = null;
   var stops = [];
   var reorderSeq = 0;
+  // Public display order. Default shows the newest (last-added) stop first — a
+  // non-persisted, view-only flip of the canonical `stops` array. Admins always
+  // see the curated sort_order (ascending) so the per-row reorder stays intact,
+  // so this only affects non-admin viewers.
+  var oldestFirst = false;
+
+  function orderedStops() {
+    if (isAdmin()) return stops;                       // curated order for editing
+    return oldestFirst ? stops : stops.slice().reverse();
+  }
 
   var STOP_FIELDS = [
     { name: "title", label: "Name", type: "text", required: true },
@@ -87,16 +98,31 @@
       "</li>";
   }
 
+  // Public order toggle: visible only to non-admin viewers with 2+ stops (one
+  // stop can't reorder; admin has its own per-row reorder controls).
+  function syncOrderToggle() {
+    var show = !isAdmin() && stops.length >= 2;
+    orderToggleBtn.hidden = !show;
+    if (!show) return;
+    orderToggleBtn.setAttribute("aria-pressed", oldestFirst ? "true" : "false");
+    orderToggleBtn.classList.toggle("is-reversed", oldestFirst);
+    var label = oldestFirst ? "Show newest first" : "Show oldest first";
+    orderToggleBtn.title = label;
+    orderToggleBtn.setAttribute("aria-label", label);
+  }
+
   function renderStops() {
     if (!stops.length) {
-      stopsHeading.hidden = !isAdmin();
+      stopsHeaderEl.hidden = !isAdmin();
+      syncOrderToggle();
       stopsEl.innerHTML = isAdmin()
         ? '<li class="empty">No stops yet. Use “Add stop” above.</li>'
         : '<li class="empty">First postcard coming soon.</li>';
       return;
     }
-    stopsHeading.hidden = false;
-    stopsEl.innerHTML = stops.map(stopRow).join("");
+    stopsHeaderEl.hidden = false;
+    syncOrderToggle();
+    stopsEl.innerHTML = orderedStops().map(stopRow).join("");
     wireStops();
   }
 
@@ -104,11 +130,12 @@
     stopsEl.querySelectorAll(".stop").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var id = btn.getAttribute("data-id");
-        var idx = stops.findIndex(function (s) { return s.id === id; });
         // Opens from memory — the whole trip (incl. every stop's HTML) is loaded
-        // in one pass, so there's no per-stop fetch here. Pass the full list so
-        // the popup can page Prev/Next through the stops in place.
-        if (idx >= 0) window.StopPopup.show(stops, idx);
+        // in one pass, so there's no per-stop fetch here. Pass the displayed
+        // order so the popup pages Prev/Next in the order the viewer sees.
+        var view = orderedStops();
+        var idx = view.findIndex(function (s) { return s.id === id; });
+        if (idx >= 0) window.StopPopup.show(view, idx);
       });
     });
     if (!isAdmin()) return;
@@ -237,7 +264,7 @@
       headlineEl.textContent = "Trip not found";
       eyebrowEl.style.display = "none";
       albumEl.hidden = true;
-      stopsHeading.hidden = true;
+      stopsHeaderEl.hidden = true;
       stopsEl.innerHTML = '<li class="empty empty--error">' + PA.esc(err.message) + "</li>";
     }
     renderAdminBar();
@@ -246,10 +273,20 @@
   // Header pencil → edit-mode toggle + "Logged in / Editing" chip (shared).
   PA.wireLoginButton(loginBtn);
 
+  // Public reverse-order toggle. Lives outside #stops so it survives re-renders
+  // and only needs wiring once.
+  orderToggleBtn.addEventListener("click", function () {
+    oldestFirst = !oldestFirst;
+    renderStops();
+  });
+
   // Re-render when admin state flips. wireLoginButton keeps the pencil + chip
   // in sync; the admin bar + stops only re-render once the trip has loaded.
+  // Reset to the default (newest-first) view when admin state flips, so leaving
+  // admin returns the public viewer to the default order.
   PA.onChange(function () {
     if (!trip) return;
+    oldestFirst = false;
     renderAdminBar();
     renderStops();
   });
