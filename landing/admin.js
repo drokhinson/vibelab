@@ -2,9 +2,9 @@
 // section. Loaded on both about.html and trip.html, before the page module.
 //
 // Admin access uses the shared ADMIN_API_KEY (backend auth.py require_admin).
-// The key is held in sessionStorage (clears on tab close) and sent as a Bearer
-// header on write requests. Enter admin mode by visiting the page with ?admin
-// in the query string — that prompts for the key and validates it.
+// The key is held in localStorage (persists across browser sessions) and sent
+// as a Bearer header on write requests. Enter admin mode by visiting the page
+// with ?admin in the query string — that prompts for the key and validates it.
 (function () {
   "use strict";
 
@@ -14,20 +14,36 @@
   var EDIT_KEY = "person_edit_mode";
   var changeListeners = [];
 
+  // Admin login persists across browser sessions: the key + edit-mode flag live
+  // in localStorage (not sessionStorage), so closing the tab or browser no
+  // longer logs you out. The backend key never expires, so a stored key keeps
+  // working until Sign out or a rejected key (401/403). Migrate any key left in
+  // sessionStorage by an older build so existing logins carry over seamlessly.
+  var store = window.localStorage;
+  try {
+    var legacy = window.sessionStorage.getItem(STORAGE_KEY);
+    if (legacy && !store.getItem(STORAGE_KEY)) {
+      store.setItem(STORAGE_KEY, legacy);
+      if (window.sessionStorage.getItem(EDIT_KEY) === "1") store.setItem(EDIT_KEY, "1");
+    }
+    window.sessionStorage.removeItem(STORAGE_KEY);
+    window.sessionStorage.removeItem(EDIT_KEY);
+  } catch (_) {}
+
   // ── Key storage ─────────────────────────────────────────────────────────
-  function getKey() { return sessionStorage.getItem(STORAGE_KEY); }
-  function setKey(k) { sessionStorage.setItem(STORAGE_KEY, k); }
-  function clearKey() { sessionStorage.removeItem(STORAGE_KEY); }
+  function getKey() { return store.getItem(STORAGE_KEY); }
+  function setKey(k) { store.setItem(STORAGE_KEY, k); }
+  function clearKey() { store.removeItem(STORAGE_KEY); }
   function hasKey() { return !!getKey(); }
 
   // ── Edit mode ─────────────────────────────────────────────────────────────
   // "Logged in" (a valid key is held) is separate from "edit mode" (admin
   // controls are visible). Once logged in, the pencil flips edit mode on/off
   // without a re-prompt; only Sign out (or closing the tab) drops the key.
-  function editMode() { return hasKey() && sessionStorage.getItem(EDIT_KEY) === "1"; }
+  function editMode() { return hasKey() && store.getItem(EDIT_KEY) === "1"; }
   function setEditMode(on) {
-    if (on) sessionStorage.setItem(EDIT_KEY, "1");
-    else sessionStorage.removeItem(EDIT_KEY);
+    if (on) store.setItem(EDIT_KEY, "1");
+    else store.removeItem(EDIT_KEY);
     notifyChange();
   }
   // Admin controls show only when logged in AND edit mode is on.
@@ -103,7 +119,7 @@
 
   function signOut() {
     clearKey();
-    sessionStorage.removeItem(EDIT_KEY);
+    store.removeItem(EDIT_KEY);
     notifyChange();
   }
 
