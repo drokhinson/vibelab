@@ -18,11 +18,16 @@
   var trip = null;
   var stops = [];
   var reorderSeq = 0;
-  // Public, non-persisted display-order flip. Reverses only the view, never the
-  // canonical `stops` array (so admin's persisted per-row reorder stays intact).
-  var reversed = false;
+  // Public display order. Default shows the newest (last-added) stop first — a
+  // non-persisted, view-only flip of the canonical `stops` array. Admins always
+  // see the curated sort_order (ascending) so the per-row reorder stays intact,
+  // so this only affects non-admin viewers.
+  var oldestFirst = false;
 
-  function orderedStops() { return reversed ? stops.slice().reverse() : stops; }
+  function orderedStops() {
+    if (isAdmin()) return stops;                       // curated order for editing
+    return oldestFirst ? stops : stops.slice().reverse();
+  }
 
   var STOP_FIELDS = [
     { name: "title", label: "Name", type: "text", required: true },
@@ -99,9 +104,9 @@
     var show = !isAdmin() && stops.length >= 2;
     orderToggleBtn.hidden = !show;
     if (!show) return;
-    orderToggleBtn.setAttribute("aria-pressed", reversed ? "true" : "false");
-    orderToggleBtn.classList.toggle("is-reversed", reversed);
-    var label = reversed ? "Restore original order" : "Reverse order";
+    orderToggleBtn.setAttribute("aria-pressed", oldestFirst ? "true" : "false");
+    orderToggleBtn.classList.toggle("is-reversed", oldestFirst);
+    var label = oldestFirst ? "Show newest first" : "Show oldest first";
     orderToggleBtn.title = label;
     orderToggleBtn.setAttribute("aria-label", label);
   }
@@ -271,17 +276,17 @@
   // Public reverse-order toggle. Lives outside #stops so it survives re-renders
   // and only needs wiring once.
   orderToggleBtn.addEventListener("click", function () {
-    reversed = !reversed;
+    oldestFirst = !oldestFirst;
     renderStops();
   });
 
   // Re-render when admin state flips. wireLoginButton keeps the pencil + chip
   // in sync; the admin bar + stops only re-render once the trip has loaded.
-  // Reset the view order so entering/leaving admin starts from canonical order
-  // (keeps the admin per-row reorder unambiguous).
+  // Reset to the default (newest-first) view when admin state flips, so leaving
+  // admin returns the public viewer to the default order.
   PA.onChange(function () {
     if (!trip) return;
-    reversed = false;
+    oldestFirst = false;
     renderAdminBar();
     renderStops();
   });
