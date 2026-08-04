@@ -21,15 +21,39 @@
       --gold:#F2D46B;
     }
     *{ box-sizing:border-box; }
+    /* The page is exactly one viewport and never scrolls — only .stops-scroll
+       does. html carries the gradient's end colour so nothing (rubber-band
+       overscroll, an iOS repaint hiccup) can ever expose the white canvas;
+       that white band under the cards is what this fixes. Because body no
+       longer scrolls, the gradient needs no background-attachment:fixed —
+       and dropping it is what keeps the iOS bug from coming back. */
+    html{ background:#0E2032; }
+    html, body{ height:100%; overscroll-behavior:none; }
     body{
       margin:0;
-      min-height:100vh;
+      height:100vh;
+      height:100dvh;
+      overflow:hidden;
       font-family:'Inter',-apple-system,sans-serif;
       color:#D6DFE7;
       background:radial-gradient(120% 90% at 50% 0%, #2E5C86 0%, #16324B 55%, #0E2032 100%);
-      background-attachment:fixed;
     }
-    .wrap{ max-width:860px; margin:0 auto; padding:1.5rem 1.25rem 4rem; }
+    .wrap{
+      max-width:860px; margin:0 auto; height:100%;
+      display:flex; flex-direction:column;
+      padding:1.5rem 1.25rem 0;
+    }
+    .trip-top{ flex:none; }
+    /* The only scroller on the page. min-height:0 is what lets a flex child
+       actually shrink below its content; the padding / negative-margin pair
+       gives .stop's drop shadow room to render without narrowing the cards. */
+    .stops-scroll{
+      flex:1 1 auto; min-height:0;
+      overflow-y:auto; -webkit-overflow-scrolling:touch;
+      overscroll-behavior:contain;
+      padding:2px 14px calc(1.25rem + env(safe-area-inset-bottom));
+      margin:0 -14px;
+    }
 
     /* ── Top bar ─────────────────────────────────────────────── */
     .topbar{ display:flex; align-items:center; justify-content:space-between; padding:0.5rem 0 1.5rem; }
@@ -59,33 +83,45 @@
     .trip-export[hidden]{ display:none; }
     @media (max-width:480px){ .trip-export span{ display:none; } .trip-export{ padding:0.45rem 0.7rem; } }
 
+    /* Photo album pill — lives in the topbar alongside .back / .trip-export,
+       so it matches their shape and size rather than the old hero pill's. */
+    .album-link{
+      display:inline-flex; align-items:center; gap:.45rem;
+      font-size:.85rem; font-weight:600; letter-spacing:.02em;
+      color:rgba(214,223,231,.85); text-decoration:none; white-space:nowrap;
+      min-height:40px; padding:.45rem .85rem; border-radius:999px;
+      background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.16);
+      transition:border-color .15s, background .15s, color .15s;
+    }
+    .album-link:hover{ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
+    .album-link svg{ width:17px; height:17px; color:var(--gold); flex:none; }
+    /* No album set: same pill, muted and non-interactive. */
+    .album-link--empty{ opacity:.55; cursor:default; }
+    .album-link--empty:hover{ color:rgba(214,223,231,.85); border-color:rgba(255,255,255,.16); background:rgba(255,255,255,.05); }
+    .album-link--empty svg{ color:rgba(214,223,231,.7); }
+
     /* ── Hero ────────────────────────────────────────────────── */
-    .hero{ text-align:center; padding:1rem 0 2.5rem; }
+    .hero{ text-align:center; padding:1rem 0 1.75rem; }
     .hero .eyebrow{
       font-size:.72rem; letter-spacing:.32em; text-transform:uppercase;
       color:var(--gold); font-weight:700; margin-bottom:.9rem;
     }
+    /* Last child of the hero now that the album pill moved up — the hero's own
+       bottom padding does the spacing. */
     .hero h1{
-      font-size:clamp(2.2rem,8vw,3.6rem); line-height:.95; margin:0 0 1rem;
+      font-size:clamp(2.2rem,8vw,3.6rem); line-height:.95; margin:0;
       font-weight:800; letter-spacing:-0.03em; color:#fff;
     }
-    .album-link{
-      display:inline-flex; align-items:center; gap:.5rem;
-      font-size:.9rem; font-weight:600; letter-spacing:.02em;
-      color:#EAF1F7; text-decoration:none;
-      background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14);
-      padding:.5rem 1rem; border-radius:999px;
-      transition:border-color .15s, background .15s;
-    }
-    .album-link:hover{ border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.12); }
-    .album-link svg{ width:18px; height:18px; color:var(--gold); flex:none; }
-    /* No album set: same pill, muted and non-interactive. */
-    .album-link--empty{ opacity:.55; cursor:default; }
-    .album-link--empty:hover{ border-color:rgba(255,255,255,.14); background:rgba(255,255,255,.06); }
-    .album-link--empty svg{ color:rgba(214,223,231,.7); }
 
     /* ── Stops list ──────────────────────────────────────────── */
-    .stops-header{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin:0 0 1rem; }
+    /* margin-left:auto on the actions rather than space-between: the heading is
+       hidden on an empty / not-found trip, and the buttons must stay right. */
+    .stops-header{ display:flex; align-items:center; gap:.75rem; margin:0 0 1rem; min-height:32px; }
+    .stops-header__actions{ margin-left:auto; display:inline-flex; align-items:center; gap:.4rem; }
+    /* The pencil is 40px in the topbar; scaled down here to sit level with the
+       order toggle instead of towering over the heading. */
+    .stops-header .pa-admin-login{ width:32px; height:32px; }
+    .stops-header .pa-admin-login svg{ width:16px; height:16px; }
     .stops-heading{
       font-size:.75rem; letter-spacing:.18em; text-transform:uppercase;
       color:rgba(214,223,231,.6); font-weight:700; margin:0;
@@ -136,30 +172,81 @@
     .empty{ text-align:center; padding:3rem 1rem; color:rgba(214,223,231,.6); }
     .empty--error{ color:#f3c9b6; }
 
-    footer{ text-align:center; margin-top:3rem; font-size:.8rem; color:rgba(214,223,231,.5); }
-
     @media (max-width:560px){
       .stop__no{ width:58px; }
       .stop__city{ font-size:1.25rem; }
       .stop__note{ display:none; }
+      /* Pinned chrome costs screen height permanently, so buy some back for
+         the stop list on a phone. */
+      .topbar{ padding-bottom:1rem; }
+      .hero{ padding:.25rem 0 1.25rem; }
+    }
+
+    /* Measured: Back + "Photo album ↗" + the icon-only Download need 287px and
+       fit every phone down to 360px. Only below that does the row overflow, so
+       the album pill drops to its icon there — same move .trip-export makes. */
+    @media (max-width:350px){
+      .album-link span{ display:none; }
+      .album-link{ padding:.45rem .7rem; }
+    }
+
+    /* Short viewport (landscape phone, split view). The hero is pinned now, so
+       at this height it would leave the list a ~50px slot. Condense the whole
+       header block instead. */
+    @media (max-height:620px){
+      .wrap{ padding-top:.75rem; }
+      .topbar{ padding:0 0 .6rem; }
+      .hero{ padding:0 0 .9rem; }
+      .hero .eyebrow{ font-size:.65rem; margin-bottom:.35rem; }
+      .hero h1{ font-size:clamp(1.5rem,5vw,2rem); }
+      .back, .trip-export, .album-link{ min-height:34px; padding:.3rem .7rem; }
+      .stops-header{ margin-bottom:.6rem; }
     }
   </style>
   <link rel="stylesheet" href="person-travel.css" />
 </head>
 <body>
   <div class="wrap">
+   <!-- Pinned: everything above the list stays put while the stops scroll. -->
+   <div class="trip-top">
     <div class="topbar">
       <a class="back" href="/about">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
         Back
       </a>
       <div class="header-actions">
+        <!-- Unhidden by trip.js once the trip loads; shows a muted "No album"
+             pill when the trip has none. -->
+        <a class="album-link" id="trip-album" href="#" target="_blank" rel="noopener" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          <span id="trip-album-label">Photo album ↗</span>
+        </a>
         <!-- Public — everyone can take the trip away as a file. Unhidden by
              trip.js once the trip has stops. -->
         <button id="trip-export-btn" class="trip-export" type="button" hidden
                 title="Download this trip as an HTML file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
           <span id="trip-export-label">Download</span>
+        </button>
+      </div>
+    </div>
+
+    <section class="hero">
+      <p class="eyebrow" id="trip-eyebrow"></p>
+      <h1 id="trip-headline">Loading…</h1>
+    </section>
+
+    <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>
+
+    <!-- The row itself is always present — the admin pencil lives here now, and
+         it has to stay reachable on an empty or not-found trip. Only the
+         heading and the order toggle come and go. -->
+    <div class="stops-header" id="stops-header">
+      <h2 class="stops-heading" id="stops-heading" hidden>Stops along the way</h2>
+      <div class="stops-header__actions">
+        <button class="stops-order-toggle" id="stops-order-toggle" type="button"
+                aria-pressed="false" title="Reverse order" aria-label="Reverse stop order" hidden>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>
         </button>
         <button id="admin-login-btn" class="pa-admin-login" type="button"
                 title="Edit — admin login" aria-label="Edit — admin login">
@@ -171,28 +258,12 @@
         </button>
       </div>
     </div>
+   </div>
 
-    <section class="hero">
-      <p class="eyebrow" id="trip-eyebrow"></p>
-      <h1 id="trip-headline">Loading…</h1>
-      <a class="album-link" id="trip-album" href="#" target="_blank" rel="noopener" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        <span id="trip-album-label">Photo album ↗</span>
-      </a>
-    </section>
-
-    <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>
-
-    <div class="stops-header" id="stops-header" hidden>
-      <h2 class="stops-heading" id="stops-heading">Stops along the way</h2>
-      <button class="stops-order-toggle" id="stops-order-toggle" type="button"
-              aria-pressed="false" title="Reverse order" aria-label="Reverse stop order" hidden>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>
-      </button>
-    </div>
+   <!-- The scrolling half. -->
+   <div class="stops-scroll">
     <ul class="stops" id="stops"></ul>
-
-    <footer>Part of David Rokhinson&rsquo;s corner of vibelab.</footer>
+   </div>
   </div>
 
   <script src="config.js"></script>

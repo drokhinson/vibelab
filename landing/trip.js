@@ -10,7 +10,9 @@
   var headlineEl = document.getElementById("trip-headline");
   var albumEl = document.getElementById("trip-album");
   var adminBar = document.getElementById("travel-admin-bar");
-  var stopsHeaderEl = document.getElementById("stops-header");
+  // Only the heading itself comes and goes — its row is permanent, because the
+  // admin pencil and the order toggle live in it.
+  var stopsHeadingEl = document.getElementById("stops-heading");
   var orderToggleBtn = document.getElementById("stops-order-toggle");
   var stopsEl = document.getElementById("stops");
   var loginBtn = document.getElementById("admin-login-btn");
@@ -120,14 +122,14 @@
     // Nothing to take away until there's at least one postcard.
     exportBtn.hidden = !stops.length;
     if (!stops.length) {
-      stopsHeaderEl.hidden = !isAdmin();
+      stopsHeadingEl.hidden = !isAdmin();
       syncOrderToggle();
       stopsEl.innerHTML = isAdmin()
         ? '<li class="empty">No stops yet. Use “Add stop” above.</li>'
         : '<li class="empty">First postcard coming soon.</li>';
       return;
     }
-    stopsHeaderEl.hidden = false;
+    stopsHeadingEl.hidden = false;
     syncOrderToggle();
     stopsEl.innerHTML = orderedStops().map(stopRow).join("");
     wireStops();
@@ -279,14 +281,15 @@
       headlineEl.textContent = "Trip not found";
       eyebrowEl.style.display = "none";
       albumEl.hidden = true;
-      stopsHeaderEl.hidden = true;
+      stopsHeadingEl.hidden = true;
+      orderToggleBtn.hidden = true;
       exportBtn.hidden = true;
       stopsEl.innerHTML = '<li class="empty empty--error">' + PA.esc(err.message) + "</li>";
     }
     renderAdminBar();
   }
 
-  // Header pencil → edit-mode toggle + "Logged in / Editing" chip (shared).
+  // Pencil (in the stops header) → edit-mode toggle.
   PA.wireLoginButton(loginBtn);
 
   // Public reverse-order toggle. Lives outside #stops so it survives re-renders
@@ -318,8 +321,8 @@
     }
   });
 
-  // Re-render when admin state flips. wireLoginButton keeps the pencil + chip
-  // in sync; the admin bar + stops only re-render once the trip has loaded.
+  // Re-render when admin state flips. wireLoginButton keeps the pencil in
+  // sync; the admin bar + stops only re-render once the trip has loaded.
   // The display order (`oldestFirst`) is deliberately NOT reset here, so entering
   // or leaving edit mode preserves the order the stops were just shown in.
   PA.onChange(function () {

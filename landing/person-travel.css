@@ -4,9 +4,9 @@
    enamel-themed trip page. */
 
 /* ── Edit-icon admin login button ──────────────────────────────────────────
-   The pencil icon is the entry point for admin editing. It sits inline as a
-   flex item in the trip page topbar; on the about page header it's pinned
-   top-right (see the .header-inner override below). */
+   The pencil icon is the entry point for admin editing — it prompts for the
+   key when there isn't one, and turns gold (--active) while editing. On the
+   trip page it sits inline in the "Stops along the way" row. */
 .pa-admin-login {
   display: inline-flex;
   align-items: center;
@@ -26,28 +26,8 @@
 .pa-admin-login svg { display: block; }
 .pa-admin-login--active { border-color: rgba(242, 212, 107, 0.5); color: #f2d46b; background: rgba(242, 212, 107, 0.12); }
 
-/* Pencil + status chip sit together as a unit on the right of the header. */
+/* The header's right-hand action group (trip page: album + download pills). */
 .header-actions { display: inline-flex; align-items: center; gap: 0.6rem; }
-
-/* "Logged in" / "Editing" status chip, inserted by admin.js next to the pencil. */
-.pa-admin-status {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  padding: 0.3rem 0.6rem;
-  border-radius: 999px;
-  white-space: nowrap;
-  color: rgba(214, 223, 231, 0.85);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-}
-.pa-admin-status--editing {
-  color: #f2d46b;
-  background: rgba(242, 212, 107, 0.12);
-  border-color: rgba(242, 212, 107, 0.5);
-}
-.pa-admin-status[hidden] { display: none; }
 
 /* About page: pin the actions to the top-right of the centered header,
    at every width (including mobile). */

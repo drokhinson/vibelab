@@ -16,6 +16,11 @@
   var base = [
     ":root{ --enamel:#123C6B; --door:#4E7FA6; --terracotta:#B0552E; --gold:#F2D46B; }",
     "*{ box-sizing:border-box; }",
+    // This file DOES scroll (it's the whole trip on one page), so body keeps
+    // its fixed gradient. html carries the gradient's end colour so the iOS
+    // repaint bug in background-attachment:fixed falls back to dark instead of
+    // flashing the white canvas.
+    "html{ background:#0E2032; }",
     "body{ margin:0; padding:36px 20px 64px; color:#D6DFE7;",
     "  font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;",
     "  background:radial-gradient(120% 90% at 50% 0%, #2E5C86 0%, #16324B 55%, #0E2032 100%);",
@@ -62,7 +67,8 @@
 
     "@media print{",
     "  @page{ size:A4 landscape; margin:12mm; }",
-    "  body{ background:#fff !important; color:#111; padding:0; }",
+    "  html, body{ background:#fff !important; }",
+    "  body{ color:#111; padding:0; }",
     "  .tx-hero{ border-bottom-color:#bbb; }",
     "  .tx-hero h1, .tx-stop__title{ color:#111; }",
     "  .tx-hero__lede, .tx-stop__note{ color:#333; }",
