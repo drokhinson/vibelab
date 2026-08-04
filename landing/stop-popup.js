@@ -35,13 +35,17 @@
 
   function esc(s) { return PA ? PA.esc(s) : String(s == null ? "" : s); }
 
-  // show(stops, index): stops is the trip's stop array (each with title +
+  // show(stops, index, opts): stops is the trip's stop array (each with title +
   // html_content); index is the one to open. Prev/Next page through in place.
-  function show(stops, index) {
+  // opts.numbers (optional) is an array parallel to `stops` giving each stop's
+  // display number for the counter — so it reads as the card's badge (e.g.
+  // "7 / 9") rather than the stop's slot in the current display order.
+  function show(stops, index, opts) {
     dismiss(); // singleton — never stack two
 
     var list = Array.isArray(stops) ? stops : [];
     if (!list.length) return;
+    var numbers = (opts && Array.isArray(opts.numbers)) ? opts.numbers : null;
     var current = Math.min(Math.max(index | 0, 0), list.length - 1);
     var multi = list.length > 1;
 
@@ -89,7 +93,8 @@
       // property (not an attribute) so we don't attribute-escape a large document.
       frame.srcdoc = (stop && stop.html_content) || "";
       if (multi) {
-        counterEl.textContent = (current + 1) + " / " + list.length;
+        var no = numbers ? numbers[current] : current + 1;
+        counterEl.textContent = no + " / " + list.length;
         prevBtn.disabled = current === 0;
         nextBtn.disabled = current === list.length - 1;
       }
