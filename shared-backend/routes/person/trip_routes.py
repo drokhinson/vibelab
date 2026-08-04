@@ -21,7 +21,7 @@ from .models import (
 
 # Columns for the card/summary shape — never selects html_content (not on trips).
 _TRIP_COLS = (
-    "id, slug, title, eyebrow, headline, lede, photo_album_url, "
+    "id, slug, title, eyebrow, headline, lede, photo_album_url, icon_url, "
     "card_cta, sort_order, is_published"
 )
 # Full stop rows for the trip-detail endpoint: html_content is included so the
@@ -136,6 +136,7 @@ async def create_trip(
         "headline": body.headline,
         "lede": body.lede,
         "photo_album_url": body.photo_album_url,
+        "icon_url": body.icon_url,
         "card_cta": body.card_cta,
         "sort_order": body.sort_order if body.sort_order is not None else 0,
         "is_published": body.is_published if body.is_published is not None else True,
@@ -165,10 +166,13 @@ async def update_trip(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Trip not found")
 
+    # Note: only non-None fields are written, so a field can't be cleared by
+    # sending null. `icon_url` is clearable because the frontend sends "" for a
+    # blanked input rather than null (see landing/about-travel.js).
     update_data: dict = {}
     for field in [
         "title", "eyebrow", "headline", "lede",
-        "photo_album_url", "card_cta", "sort_order", "is_published",
+        "photo_album_url", "icon_url", "card_cta", "sort_order", "is_published",
     ]:
         val = getattr(body, field)
         if val is not None:

@@ -12,7 +12,8 @@
   var trips = [];
   var dynamicActive = false;
 
-  // Default card art — the same arrow mark the section shipped with.
+  // Fallback card art — the arrow mark the section shipped with. Used whenever a
+  // trip has no icon_url set.
   var ARROW_SVG =
     '<svg viewBox="0 0 64 64" width="52" height="52" fill="none" stroke="currentColor" ' +
     'stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
@@ -25,6 +26,8 @@
     { name: "headline", label: "Headline (hero H1)", type: "text" },
     { name: "lede", label: "Lede (hero paragraph)", type: "textarea", rows: 3 },
     { name: "photo_album_url", label: "Photo album URL", type: "url" },
+    { name: "icon_url", label: "Card icon URL (image)", type: "url",
+      placeholder: "https://…/poster.jpg — blank for the default arrow" },
     { name: "card_cta", label: "Card CTA text", type: "text", placeholder: "Follow the route ↗" },
     { name: "sort_order", label: "Sort order", type: "number" },
     { name: "is_published", label: "Published", type: "checkbox" },
@@ -46,10 +49,17 @@
       : "";
     var draftBadge = (admin && !t.is_published)
       ? '<span class="pa-badge">Draft</span>' : "";
+    // A dead or hotlink-blocked icon removes itself, leaving the plain art panel
+    // rather than a broken-image glyph; no-referrer dodges referer hotlink checks.
+    var art = t.icon_url
+      ? '<img class="travel-card__art-img" src="' + PA.escAttr(t.icon_url) + '" alt="" ' +
+        'loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />'
+      : ARROW_SVG;
     return '' +
       '<div class="travel-card-wrap">' +
         '<a class="travel-card" href="/travel/' + PA.escAttr(t.slug) + '">' +
-          '<div class="travel-card__art" aria-hidden="true">' + ARROW_SVG + "</div>" +
+          '<div class="travel-card__art' + (t.icon_url ? " travel-card__art--img" : "") +
+            '" aria-hidden="true">' + art + "</div>" +
           '<div class="travel-card__body">' +
             '<h3 class="travel-card__title">' + PA.esc(t.title) + draftBadge + "</h3>" +
             '<span class="travel-card__cta">' + PA.esc(cta) + "</span>" +
@@ -91,6 +101,15 @@
   }
 
   // ── Admin actions ─────────────────────────────────────────────────────────
+  // formModal sends null for a blanked input and the API skips null fields, so a
+  // field normally can't be unset once written. Send "" for icon_url instead —
+  // it's not null, so the API writes it, and "" is falsy on render (back to the
+  // arrow). Scoped to this field on purpose; the general behaviour is unchanged.
+  function clearableIcon(vals) {
+    if (vals.icon_url == null) vals.icon_url = "";
+    return vals;
+  }
+
   async function onAddTrip() {
     var vals = await PA.formModal({
       title: "Add trip",
@@ -100,7 +119,9 @@
     });
     if (!vals) return;
     try {
-      await PA.adminFetch("/admin/trips", { method: "POST", body: JSON.stringify(vals) });
+      await PA.adminFetch("/admin/trips", {
+        method: "POST", body: JSON.stringify(clearableIcon(vals)),
+      });
       await loadTrips();
     } catch (err) { window.alert("Could not create trip: " + err.message); }
   }
@@ -116,7 +137,9 @@
     });
     if (!vals) return;
     try {
-      await PA.adminFetch("/admin/trips/" + id, { method: "PUT", body: JSON.stringify(vals) });
+      await PA.adminFetch("/admin/trips/" + id, {
+        method: "PUT", body: JSON.stringify(clearableIcon(vals)),
+      });
       await loadTrips();
     } catch (err) { window.alert("Could not save trip: " + err.message); }
   }
