@@ -3,8 +3,9 @@
 //
 // The trip page loads every stop's html_content in one pass, so the popup renders
 // straight from memory — no per-stop fetch. Call StopPopup.show(stops, index) with
-// the trip's whole stop list; a bottom nav bar pages Previous/Next in place so you
-// can read through the route without closing the popup between stops.
+// the trip's whole stop list in canonical order; a bottom nav bar pages
+// Previous/Next in place so you can read through the route without closing the
+// popup between stops.
 //
 // The HTML is admin-authored and runs inside a `sandbox="allow-scripts"` iframe
 // with NO `allow-same-origin`, so its scripts/styles are isolated in an opaque
@@ -35,17 +36,17 @@
 
   function esc(s) { return PA ? PA.esc(s) : String(s == null ? "" : s); }
 
-  // show(stops, index, opts): stops is the trip's stop array (each with title +
-  // html_content); index is the one to open. Prev/Next page through in place.
-  // opts.numbers (optional) is an array parallel to `stops` giving each stop's
-  // display number for the counter — so it reads as the card's badge (e.g.
-  // "7 / 9") rather than the stop's slot in the current display order.
-  function show(stops, index, opts) {
+  // show(stops, index): stops is the trip's stop array (each with title +
+  // html_content) in canonical order; index is the one to open. Prev/Next page
+  // through in place. Because the list is canonical, Next always moves to the
+  // next-higher stop number and Previous to the next-lower — the caller's
+  // display order (which can be reversed on the trip page) does not affect it.
+  // The counter is 1-based, so it reads as the card's badge (e.g. "7 / 9").
+  function show(stops, index) {
     dismiss(); // singleton — never stack two
 
     var list = Array.isArray(stops) ? stops : [];
     if (!list.length) return;
-    var numbers = (opts && Array.isArray(opts.numbers)) ? opts.numbers : null;
     var current = Math.min(Math.max(index | 0, 0), list.length - 1);
     var multi = list.length > 1;
 
@@ -93,8 +94,7 @@
       // property (not an attribute) so we don't attribute-escape a large document.
       frame.srcdoc = (stop && stop.html_content) || "";
       if (multi) {
-        var no = numbers ? numbers[current] : current + 1;
-        counterEl.textContent = no + " / " + list.length;
+        counterEl.textContent = (current + 1) + " / " + list.length;
         prevBtn.disabled = current === 0;
         nextBtn.disabled = current === list.length - 1;
       }
