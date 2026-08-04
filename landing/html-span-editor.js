@@ -33,6 +33,9 @@
   // strip the media out of it.
   var OPAQUE_SEL = "img,svg,canvas,video,iframe,script,style,object,embed";
   var ALLOWED = { B: 1, STRONG: 1, I: 1, EM: 1, U: 1, A: 1, BR: 1, SPAN: 1 };
+  var VOID = { AREA: 1, BASE: 1, BR: 1, COL: 1, EMBED: 1, HR: 1, IMG: 1, INPUT: 1,
+               LINK: 1, META: 1, PARAM: 1, SOURCE: 1, TRACK: 1, WBR: 1 };
+  var URL_ATTR = { href: 1, src: 1, "xlink:href": 1 };
   var EMPTY_DOC = "<!DOCTYPE html><html><head></head><body></body></html>";
 
   function escText(s) { return PA ? PA.esc(s) : String(s == null ? "" : s); }
@@ -71,7 +74,27 @@
     return name;
   }
 
-  // Keep only inline formatting tags; unwrap everything else (keep its text).
+  // Attributes are carried across, minus anything executable. Dropping them is
+  // not a safe default: a stored page's own script keys on them, so a field that
+  // came back as a bare <span> would unhook document.getElementById() and take
+  // the page's behaviour down with it — the script throws on the first null and
+  // never reaches whatever it wires up last.
+  function safeAttrs(el) {
+    var out = "";
+    Array.prototype.forEach.call(el.attributes, function (at) {
+      var name = at.name.toLowerCase();
+      if (name.indexOf("on") === 0) return;
+      if (URL_ATTR[name] && /^\s*javascript:/i.test(at.value)) return;
+      out += " " + at.name + '="' + escText(at.value) + '"';
+    });
+    return out;
+  }
+
+  // Keep inline formatting tags, plus any other tag holding no prose of its own
+  // — those are the empty hooks (<span id="ccCount">, <b id="doneKm">, a
+  // spacer <div>) a stored page fills in at runtime, and they carry nothing an
+  // edit could have been meant to change. Only a foreign tag actually wrapping
+  // text is unwrapped, which is the pasted-markup case this exists for.
   function sanitizeInline(html) {
     var body = new DOMParser().parseFromString("<body>" + html + "</body>", "text/html").body;
     function ser(node) {
@@ -80,18 +103,13 @@
         if (c.nodeType === 3) {
           out += escText(c.nodeValue);
         } else if (c.nodeType === 1) {
-          var tag = c.tagName;
-          if (tag === "BR") { out += "<br>"; return; }
-          if (ALLOWED[tag]) {
-            var name = tag.toLowerCase();
-            var open = "<" + name;
-            if (tag === "A" && c.getAttribute("href")) {
-              open += ' href="' + escText(c.getAttribute("href")) + '"';
-            }
-            out += open + ">" + ser(c) + "</" + name + ">";
-          } else {
+          if (!ALLOWED[c.tagName] && c.textContent.trim()) {
             out += ser(c); // unwrap disallowed tag, keep its contents
+            return;
           }
+          var name = c.tagName.toLowerCase();
+          out += "<" + name + safeAttrs(c) + ">";
+          if (!VOID[c.tagName]) out += ser(c) + "</" + name + ">";
         }
       });
       return out;
