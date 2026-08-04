@@ -21,15 +21,39 @@
       --gold:#F2D46B;
     }
     *{ box-sizing:border-box; }
+    /* The page is exactly one viewport and never scrolls — only .stops-scroll
+       does. html carries the gradient's end colour so nothing (rubber-band
+       overscroll, an iOS repaint hiccup) can ever expose the white canvas;
+       that white band under the cards is what this fixes. Because body no
+       longer scrolls, the gradient needs no background-attachment:fixed —
+       and dropping it is what keeps the iOS bug from coming back. */
+    html{ background:#0E2032; }
+    html, body{ height:100%; overscroll-behavior:none; }
     body{
       margin:0;
-      min-height:100vh;
+      height:100vh;
+      height:100dvh;
+      overflow:hidden;
       font-family:'Inter',-apple-system,sans-serif;
       color:#D6DFE7;
       background:radial-gradient(120% 90% at 50% 0%, #2E5C86 0%, #16324B 55%, #0E2032 100%);
-      background-attachment:fixed;
     }
-    .wrap{ max-width:860px; margin:0 auto; padding:1.5rem 1.25rem 4rem; }
+    .wrap{
+      max-width:860px; margin:0 auto; height:100%;
+      display:flex; flex-direction:column;
+      padding:1.5rem 1.25rem 0;
+    }
+    .trip-top{ flex:none; }
+    /* The only scroller on the page. min-height:0 is what lets a flex child
+       actually shrink below its content; the padding / negative-margin pair
+       gives .stop's drop shadow room to render without narrowing the cards. */
+    .stops-scroll{
+      flex:1 1 auto; min-height:0;
+      overflow-y:auto; -webkit-overflow-scrolling:touch;
+      overscroll-behavior:contain;
+      padding:2px 14px calc(1.25rem + env(safe-area-inset-bottom));
+      margin:0 -14px;
+    }
 
     /* ── Top bar ─────────────────────────────────────────────── */
     .topbar{ display:flex; align-items:center; justify-content:space-between; padding:0.5rem 0 1.5rem; }
@@ -136,18 +160,39 @@
     .empty{ text-align:center; padding:3rem 1rem; color:rgba(214,223,231,.6); }
     .empty--error{ color:#f3c9b6; }
 
-    footer{ text-align:center; margin-top:3rem; font-size:.8rem; color:rgba(214,223,231,.5); }
+    footer{ text-align:center; margin-top:2rem; font-size:.8rem; color:rgba(214,223,231,.5); }
 
     @media (max-width:560px){
       .stop__no{ width:58px; }
       .stop__city{ font-size:1.25rem; }
       .stop__note{ display:none; }
+      /* Pinned chrome costs screen height permanently, so buy some back for
+         the stop list on a phone. */
+      .topbar{ padding-bottom:1rem; }
+      .hero{ padding:.25rem 0 1.5rem; }
+      .hero h1{ margin-bottom:.75rem; }
+    }
+
+    /* Short viewport (landscape phone, split view). The hero is pinned now, so
+       at this height it would leave the list a ~50px slot. Condense the whole
+       header block instead. */
+    @media (max-height:620px){
+      .wrap{ padding-top:.75rem; }
+      .topbar{ padding:0 0 .6rem; }
+      .hero{ padding:0 0 .9rem; }
+      .hero .eyebrow{ font-size:.65rem; margin-bottom:.35rem; }
+      .hero h1{ font-size:clamp(1.5rem,5vw,2rem); margin-bottom:.6rem; }
+      .album-link{ padding:.35rem .8rem; font-size:.82rem; }
+      .album-link svg{ width:16px; height:16px; }
+      .stops-header{ margin-bottom:.6rem; }
     }
   </style>
   <link rel="stylesheet" href="person-travel.css" />
 </head>
 <body>
   <div class="wrap">
+   <!-- Pinned: everything above the list stays put while the stops scroll. -->
+   <div class="trip-top">
     <div class="topbar">
       <a class="back" href="/about">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
@@ -190,9 +235,14 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>
       </button>
     </div>
-    <ul class="stops" id="stops"></ul>
+   </div>
 
+   <!-- The scrolling half. The footer rides along inside it rather than
+        eating pinned height on a phone. -->
+   <div class="stops-scroll">
+    <ul class="stops" id="stops"></ul>
     <footer>Part of David Rokhinson&rsquo;s corner of vibelab.</footer>
+   </div>
   </div>
 
   <script src="config.js"></script>
