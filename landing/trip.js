@@ -70,7 +70,8 @@
   function stopRow(stop, index) {
     // Number belongs to the stop (its rank in the canonical sort_order), not the
     // display slot — so it travels with the card when the view order is flipped.
-    var no = String(stops.indexOf(stop)).padStart(2, "0");
+    // Shown 1-based even though sort_order is 0-based.
+    var no = String(stops.indexOf(stop) + 1).padStart(2, "0");
     var noteHtml = stop.note ? '<p class="stop__note">' + PA.esc(stop.note) + "</p>" : "";
     var admin = isAdmin();
     var controls = admin
@@ -133,15 +134,12 @@
       btn.addEventListener("click", function () {
         var id = btn.getAttribute("data-id");
         // Opens from memory — the whole trip (incl. every stop's HTML) is loaded
-        // in one pass, so there's no per-stop fetch here. Pass the displayed
-        // order so the popup pages Prev/Next in the order the viewer sees, plus
-        // each stop's canonical badge number so the popup counter matches the
-        // number on the card (not the display-slot position).
-        var view = orderedStops();
-        var idx = view.findIndex(function (s) { return s.id === id; });
-        if (idx >= 0) window.StopPopup.show(view, idx, {
-          numbers: view.map(function (s) { return stops.indexOf(s); }),
-        });
+        // in one pass, so there's no per-stop fetch here. Pass the canonical
+        // order, NOT the displayed order: the popup's Next always advances to
+        // the next-higher stop number and Previous to the next-lower, so its
+        // paging direction is independent of this page's order toggle.
+        var idx = stops.findIndex(function (s) { return s.id === id; });
+        if (idx >= 0) window.StopPopup.show(stops, idx);
       });
     });
     if (!isAdmin()) return;
