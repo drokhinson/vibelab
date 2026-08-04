@@ -26,8 +26,11 @@
     { name: "headline", label: "Headline (hero H1)", type: "text" },
     { name: "lede", label: "Lede (hero paragraph)", type: "textarea", rows: 3 },
     { name: "photo_album_url", label: "Photo album URL", type: "url" },
-    { name: "icon_url", label: "Card icon URL (image)", type: "url",
-      placeholder: "https://…/poster.jpg — blank for the default arrow" },
+    // Deliberately "text", not "url": formModal's <form> has no novalidate, so a
+    // url input's native validation would silently refuse to submit a repo-relative
+    // path like assets/sprites/trips/… — which is how committed card art is set.
+    { name: "icon_url", label: "Card icon (image URL or assets path)", type: "text",
+      placeholder: "assets/sprites/trips/… or https://… — blank for the arrow" },
     { name: "card_cta", label: "Card CTA text", type: "text", placeholder: "Follow the route ↗" },
     { name: "sort_order", label: "Sort order", type: "number" },
     { name: "is_published", label: "Published", type: "checkbox" },

@@ -165,19 +165,28 @@
   background: rgba(255, 255, 255, 0.05);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
-/* Trip with an icon_url: the image fills the art column edge-to-edge. The card's
-   own overflow:hidden + border-radius clip it. Block rather than the flex
-   centering above — the image sizes itself, so there is nothing to centre. The
-   panel background stays: it sits behind the image, and shows through if the
-   image fails to load and removes itself. */
+/* Trip with an icon_url. `contain`, not `cover`: these are logos and marks, and
+   cropping one to fill the column cuts its wordmark off. The panel background
+   stays: it's the dark surface a transparent logo is drawn against, and the
+   fallback surface if the image fails to load and removes itself.
+
+   The image is taken out of flow on purpose. In flow, a portrait icon's own
+   height drives the art column and the card grows taller than its icon-less
+   neighbours, leaving the grid ragged. Absolute inset:0 means the panel is
+   sized only by the card body, and the icon fits whatever height that is
+   (padding is on the image, which is border-box via styles.css). */
 .travel-card__art--img {
   display: block;
   padding: 0;
+  position: relative;
 }
 .travel-card__art-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  padding: 0.45rem;
+  object-fit: contain;
   display: block;
 }
 
