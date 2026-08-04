@@ -15,6 +15,7 @@ class TripSummaryResponse(BaseModel):
     headline: Optional[str] = None
     lede: Optional[str] = None
     photo_album_url: Optional[str] = None
+    icon_url: Optional[str] = None
     card_cta: Optional[str] = None
     sort_order: int
     is_published: bool
@@ -69,6 +70,7 @@ class CreateTripBody(BaseModel):
     headline: Optional[str] = None
     lede: Optional[str] = None
     photo_album_url: Optional[str] = None
+    icon_url: Optional[str] = None  # card art image; empty string clears it
     card_cta: Optional[str] = None
     sort_order: Optional[int] = None
     is_published: Optional[bool] = None
@@ -81,6 +83,7 @@ class UpdateTripBody(BaseModel):
     headline: Optional[str] = None
     lede: Optional[str] = None
     photo_album_url: Optional[str] = None
+    icon_url: Optional[str] = None  # card art image; empty string clears it
     card_cta: Optional[str] = None
     sort_order: Optional[int] = None
     is_published: Optional[bool] = None

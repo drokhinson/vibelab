@@ -14,6 +14,8 @@
   var orderToggleBtn = document.getElementById("stops-order-toggle");
   var stopsEl = document.getElementById("stops");
   var loginBtn = document.getElementById("admin-login-btn");
+  var exportBtn = document.getElementById("trip-export-btn");
+  var exportLabel = document.getElementById("trip-export-label");
 
   var trip = null;
   var stops = [];
@@ -115,6 +117,8 @@
   }
 
   function renderStops() {
+    // Nothing to take away until there's at least one postcard.
+    exportBtn.hidden = !stops.length;
     if (!stops.length) {
       stopsHeaderEl.hidden = !isAdmin();
       syncOrderToggle();
@@ -276,6 +280,7 @@
       eyebrowEl.style.display = "none";
       albumEl.hidden = true;
       stopsHeaderEl.hidden = true;
+      exportBtn.hidden = true;
       stopsEl.innerHTML = '<li class="empty empty--error">' + PA.esc(err.message) + "</li>";
     }
     renderAdminBar();
@@ -289,6 +294,28 @@
   orderToggleBtn.addEventListener("click", function () {
     oldestFirst = !oldestFirst;
     renderStops();
+  });
+
+  // Download the whole trip as one static HTML file. Public — no admin gate.
+  // Each stop is rendered in a hidden sandboxed frame and snapshotted, so this
+  // takes a moment per postcard; the button reports progress meanwhile. `stops`
+  // is passed canonical (00 → N) so the file reads chronologically regardless of
+  // the on-screen order toggle.
+  exportBtn.addEventListener("click", async function () {
+    if (!trip || !stops.length) return;
+    exportBtn.disabled = true;
+    try {
+      await window.TripExport.download(trip, stops, {
+        onProgress: function (done, total) {
+          exportLabel.textContent = "Preparing… " + done + "/" + total;
+        },
+      });
+    } catch (err) {
+      window.alert("Could not build the download: " + err.message);
+    } finally {
+      exportBtn.disabled = false;
+      exportLabel.textContent = "Download";
+    }
   });
 
   // Re-render when admin state flips. wireLoginButton keeps the pencil + chip

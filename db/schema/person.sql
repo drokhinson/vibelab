@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- person — current schema snapshot
--- Last updated: 2026-08-03 (through db/migrations/person/004_profile.sql)
+-- Last updated: 2026-08-04 (through db/migrations/person/005_trip_icon.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- David Rokhinson's personal page: admin-editable travel trips + stops.
 -- Backend-only access via service role; writes gated by ADMIN_API_KEY.
@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.person_trips (
   headline        TEXT,                                 -- hero H1
   lede            TEXT,                                 -- hero paragraph
   photo_album_url TEXT,                                 -- external photo album link
+  icon_url        TEXT,                                 -- card art image URL; empty/NULL = default arrow SVG
   card_cta        TEXT,                                 -- card CTA text (default "Follow the route ↗")
   sort_order      INT         NOT NULL DEFAULT 0,       -- order of cards on the about page
   is_published    BOOLEAN     NOT NULL DEFAULT true,    -- false = draft, hidden from public list

@@ -43,6 +43,22 @@
     }
     .back:hover{ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
 
+    /* Download pill — same shape language as .back / .album-link. */
+    .trip-export{
+      display:inline-flex; align-items:center; gap:0.45rem;
+      font:inherit; font-size:0.85rem; font-weight:600; letter-spacing:0.02em;
+      color:rgba(214,223,231,.85); cursor:pointer;
+      min-height:40px; padding:0.45rem 0.9rem; border-radius:999px;
+      border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05);
+      transition:border-color .15s, background .15s, color .15s;
+    }
+    .trip-export:hover:not(:disabled){ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
+    .trip-export:active:not(:disabled){ transform:translateY(1px); }
+    .trip-export:disabled{ opacity:.6; cursor:default; }
+    .trip-export svg{ width:17px; height:17px; color:var(--gold); flex:none; }
+    .trip-export[hidden]{ display:none; }
+    @media (max-width:480px){ .trip-export span{ display:none; } .trip-export{ padding:0.45rem 0.7rem; } }
+
     /* ── Hero ────────────────────────────────────────────────── */
     .hero{ text-align:center; padding:1rem 0 2.5rem; }
     .hero .eyebrow{
@@ -138,6 +154,13 @@
         Back
       </a>
       <div class="header-actions">
+        <!-- Public — everyone can take the trip away as a file. Unhidden by
+             trip.js once the trip has stops. -->
+        <button id="trip-export-btn" class="trip-export" type="button" hidden
+                title="Download this trip as an HTML file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          <span id="trip-export-label">Download</span>
+        </button>
         <button id="admin-login-btn" class="pa-admin-login" type="button"
                 title="Edit — admin login" aria-label="Edit — admin login">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
@@ -176,6 +199,9 @@
   <script src="admin.js"></script>
   <script src="html-span-editor.js"></script>
   <script src="stop-popup.js"></script>
+  <script src="trip-export-style.js"></script>
+  <script src="trip-export-css.js"></script>
+  <script src="trip-export.js"></script>
   <script src="trip.js"></script>
 </body>
 </html>
