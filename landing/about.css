@@ -116,6 +116,9 @@
   gap: 0.6rem;
   margin: 2.25rem 0 1.1rem;
 }
+/* Add-trip button sits on the right edge of the Travel header, centered with
+   the heading text (the row's align-items: center handles the vertical). */
+.travel-add-btn { margin-left: auto; }
 /* Bigger, real heading — override the shared eyebrow-style .section-heading
    (small/uppercase/muted) into a proper section title. */
 .about-section .section-heading {

@@ -18,14 +18,14 @@
   var trip = null;
   var stops = [];
   var reorderSeq = 0;
-  // Public display order. Default shows the newest (last-added) stop first — a
-  // non-persisted, view-only flip of the canonical `stops` array. Admins always
-  // see the curated sort_order (ascending) so the per-row reorder stays intact,
-  // so this only affects non-admin viewers.
+  // Display order. Default shows the newest (last-added) stop first — a
+  // non-persisted, view-only flip of the canonical `stops` array. Entering edit
+  // mode keeps whatever order was on screen (it does NOT snap back to canonical),
+  // so the admin edits the stops in the order they were just looking at. The
+  // per-row reorder maps back to canonical, so it stays correct in either order.
   var oldestFirst = false;
 
   function orderedStops() {
-    if (isAdmin()) return stops;                       // curated order for editing
     return oldestFirst ? stops : stops.slice().reverse();
   }
 
@@ -134,10 +134,14 @@
         var id = btn.getAttribute("data-id");
         // Opens from memory — the whole trip (incl. every stop's HTML) is loaded
         // in one pass, so there's no per-stop fetch here. Pass the displayed
-        // order so the popup pages Prev/Next in the order the viewer sees.
+        // order so the popup pages Prev/Next in the order the viewer sees, plus
+        // each stop's canonical badge number so the popup counter matches the
+        // number on the card (not the display-slot position).
         var view = orderedStops();
         var idx = view.findIndex(function (s) { return s.id === id; });
-        if (idx >= 0) window.StopPopup.show(view, idx);
+        if (idx >= 0) window.StopPopup.show(view, idx, {
+          numbers: view.map(function (s) { return stops.indexOf(s); }),
+        });
       });
     });
     if (!isAdmin()) return;
@@ -227,11 +231,18 @@
   // echo; roll back by reloading on error. Guarded by a monotonic token so an
   // older reorder resolving late can't clobber a newer one.
   async function onMove(id, dir) {
-    var i = stops.findIndex(function (s) { return s.id === id; });
-    var j = i + dir;
-    if (i < 0 || j < 0 || j >= stops.length) return;
+    // The ↑/↓ arrows live on the displayed rows, so `dir` is a move within the
+    // displayed order. Swap there, then map back to the canonical `stops` array
+    // (reverse when the view is newest-first) before persisting — this keeps the
+    // arrows pointing the way the viewer sees regardless of the display order.
+    var view = orderedStops();
+    var vi = view.findIndex(function (s) { return s.id === id; });
+    var vj = vi + dir;
+    if (vi < 0 || vj < 0 || vj >= view.length) return;
     var snapshot = stops.slice();
-    var tmp = stops[i]; stops[i] = stops[j]; stops[j] = tmp;
+    var newView = view.slice();
+    var tmp = newView[vi]; newView[vi] = newView[vj]; newView[vj] = tmp;
+    stops = oldestFirst ? newView : newView.slice().reverse();
     renderStops();
 
     var seq = ++reorderSeq;
@@ -284,11 +295,10 @@
 
   // Re-render when admin state flips. wireLoginButton keeps the pencil + chip
   // in sync; the admin bar + stops only re-render once the trip has loaded.
-  // Reset to the default (newest-first) view when admin state flips, so leaving
-  // admin returns the public viewer to the default order.
+  // The display order (`oldestFirst`) is deliberately NOT reset here, so entering
+  // or leaving edit mode preserves the order the stops were just shown in.
   PA.onChange(function () {
     if (!trip) return;
-    oldestFirst = false;
     renderAdminBar();
     renderStops();
   });
