@@ -315,21 +315,41 @@
 .hse-source:focus { outline: none; border-color: #3f86d1; }
 
 /* ── Stop popup (sandboxed iframe) ─────────────────────────────────────── */
+/* The backdrop must size to the *visible* viewport, not the large one. On
+   mobile `vh` (and the fixed-position containing block) resolve against the
+   viewport with the browser's URL bar retracted, so a `vh`-sized shell centred
+   in here spills off both edges while the URL bar is showing — that's what was
+   clipping the ✕ and the Previous/Next row. `dvh` tracks the height actually on
+   screen; the `vh` line above stays as the fallback. Same pattern as body in
+   trip.html. */
 .stop-popup__backdrop {
   position: fixed;
   inset: 0;
+  box-sizing: border-box;
+  height: 100vh;
+  height: 100dvh;
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
+  padding-top: calc(1.5rem + env(safe-area-inset-top));
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
   background: rgba(8, 16, 26, 0.8);
   backdrop-filter: blur(4px);
 }
+/* max-height:100% resolves against the backdrop's (now definite) content box,
+   so the shell can never grow past viewport-minus-padding — the padding is the
+   only inset, which is what keeps the gap above the bar equal to the gap below
+   the nav. */
 .stop-popup__shell {
+  box-sizing: border-box;
   width: 100%;
   max-width: 960px;
   height: 88vh;
+  height: 88dvh;
+  max-height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-radius: 16px;
@@ -369,8 +389,12 @@
   cursor: pointer;
 }
 .stop-popup__close:hover { background: rgba(255, 255, 255, 0.16); }
+/* min-height:0 — an iframe is a replaced element, so its automatic minimum size
+   would otherwise pin it at its intrinsic 150px and push the nav row out of the
+   shell on short viewports. */
 .stop-popup__frame {
   flex: 1;
+  min-height: 0;
   width: 100%;
   border: 0;
   background: #fff;
@@ -424,7 +448,17 @@
 .stop-popup__state--error { color: #f3c9b6; }
 
 @media (max-width: 620px) {
-  .stop-popup__backdrop { padding: 0.5rem; }
-  .stop-popup__shell { height: 94vh; }
+  .stop-popup__backdrop {
+    padding: 0.5rem;
+    padding-top: calc(0.5rem + env(safe-area-inset-top));
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+  /* No fixed height on phones — fill the padded backdrop so the inset above the
+     bar always matches the inset below the nav. */
+  .stop-popup__shell { height: 100%; }
+  /* Tighter chrome so the postcard gets the room back. The 44px touch targets
+     are untouched — only the padding around them shrinks. */
+  .stop-popup__bar { padding: 0.45rem 0.5rem 0.45rem 0.75rem; }
+  .stop-popup__nav { padding: 0.45rem 0.5rem; }
   .pa-card-controls { flex-wrap: wrap; }
 }
