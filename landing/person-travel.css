@@ -245,7 +245,9 @@
 
 /* ── HTML span editor (per-paragraph inline WYSIWYG) ────────────────────── */
 .hse { display: flex; flex-direction: column; gap: 0.6rem; }
-.hse-tabs { display: flex; gap: 0.4rem; }
+/* .hse already gaps its children — drop .pa-import's own trailing margin. */
+.hse > .pa-import { margin-bottom: 0; }
+.hse-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .hse-tab {
   font: inherit;
   font-size: 0.78rem;
@@ -299,6 +301,8 @@
   color: rgba(234, 241, 247, 0.45);
   text-align: right;
 }
+/* Sections labels carry a class/id hint ("span.cityname"), so they need room. */
+.hse-blocks--sections .hse-block__tag { width: 7rem; }
 .hse-block__field {
   flex: 1;
   min-width: 0;
