@@ -19,6 +19,17 @@ Each project lives in `projects/[name]/` and has three tiers:
 
 ---
 
+## Naming Disambiguation — Do Not Confuse These
+
+Two distinct things get mixed up across sessions. Check which one a request actually means before touching code:
+
+- **AboutMe** (`aboutme`, `aboutmetrips`, `aboutmetravel`) — work in the **personal section**. Anything about trips under this umbrella belongs to the **aboutmetravel** section specifically.
+- **travelscrapbook** — this repo's `projects/travel-scrapbook/` app, display-named **Travel Trove**. See `projects/travel-scrapbook/STRUCTURE.md`.
+
+If a request mentions trips/travel, confirm which of the two it's about — do not default to `travel-scrapbook`/Trove just because it's the trip-related project in this repo.
+
+---
+
 ## Pipeline Stages
 
 ### Stage 1 — Ideation
