@@ -125,20 +125,16 @@
 
   function onChange(cb) { if (typeof cb === "function") changeListeners.push(cb); }
 
-  // ── Header pencil button + "Logged in / Editing" status chip ───────────────
-  // Shared across about.html and trip.html. Wires the pencil to toggleEdit and
-  // keeps a small status chip (inserted before the button) in sync with state.
+  // ── Header pencil button ───────────────────────────────────────────────────
+  // Wires the pencil to toggleEdit. The pencil is the whole affordance: it
+  // prompts for the key when there isn't one, and goes gold while editing —
+  // no standing "Logged in" chip, the button's own state says it.
   function wireLoginButton(btn) {
     if (!btn) return;
-    var status = document.createElement("span");
-    status.className = "pa-admin-status";
-    status.hidden = true;
-    btn.parentNode.insertBefore(status, btn);
 
     function render() {
       var editing = isAdmin();
-      var loggedIn = hasKey();
-      var label = !loggedIn
+      var label = !hasKey()
         ? "Edit — admin login"
         : editing
           ? "Editing — click to stop editing"
@@ -146,9 +142,6 @@
       btn.title = label;
       btn.setAttribute("aria-label", label);
       btn.classList.toggle("pa-admin-login--active", editing);
-      status.hidden = !loggedIn;
-      status.textContent = editing ? "Editing" : "Logged in";
-      status.classList.toggle("pa-admin-status--editing", editing);
     }
 
     btn.addEventListener("click", function () { toggleEdit(); });
