@@ -1,15 +1,22 @@
 // html-span-editor.js — edit the prose inside a stored HTML page without
 // touching its layout, CSS, or scripts.
 //
-// It parses the stored HTML with DOMParser (which does NOT execute scripts),
-// pulls out the block-level text elements (h1–h6, p, li, blockquote,
-// figcaption), and opens each as its own small inline WYSIWYG field
+// It parses the stored HTML with DOMParser (which does NOT execute scripts) and
+// opens each text-bearing element as its own small inline WYSIWYG field
 // (bold / italic / link). On getHTML() the edited inline content is written
 // back into the exact original nodes and the whole document is re-serialized —
-// so everything outside the edited spans is preserved.
+// so everything outside the edited fields is preserved.
 //
-// An "Advanced (HTML)" tab exposes the raw source + a "Load file" import for
-// full control / pasting a brand-new page.
+// Three tabs, narrow to wide:
+//   Text      — block-level prose only (h1–h6, p, li, blockquote, figcaption).
+//   Sections  — the above plus text-bearing containers (span, div, dt/dd, td…).
+//               Deliberately hides <style>, <head>/meta, <script>, and anything
+//               holding an <img class="photo"> so a photo can never be
+//               clobbered by an edit.
+//   Full HTML — the raw document source, no guard rails.
+//
+// "Load file" sits above the tabs and imports into all three at once, so you
+// can load a page and go straight to editing.
 //
 //   const ed = HtmlSpanEditor.create(mountEl, initialHtml);
 //   ed.getHTML();  // reconciled full-document HTML string
@@ -18,6 +25,13 @@
 
   var PA = window.PersonAdmin;
   var BLOCK_SEL = "p,h1,h2,h3,h4,h5,h6,li,blockquote,figcaption";
+  // Sections adds text-bearing containers. Inline formatting tags (b/i/em/a/…)
+  // are deliberately absent: as candidates they'd steal "<p>Hi <b>you</b></p>"
+  // down to just "you". They stay inside the field, handled by sanitizeInline.
+  var SECTION_SEL = BLOCK_SEL + ",span,div,dt,dd,td,th,caption,summary,label,address";
+  // An element owning one of these is never editable — sanitizeInline would
+  // strip the media out of it.
+  var OPAQUE_SEL = "img,svg,canvas,video,iframe,script,style,object,embed";
   var ALLOWED = { B: 1, STRONG: 1, I: 1, EM: 1, U: 1, A: 1, BR: 1, SPAN: 1 };
   var EMPTY_DOC = "<!DOCTYPE html><html><head></head><body></body></html>";
 
@@ -32,12 +46,29 @@
     return dt + doc.documentElement.outerHTML;
   }
 
-  // Innermost block-level text elements that actually contain text.
-  function editableNodes(doc) {
-    return Array.prototype.slice.call(doc.body.querySelectorAll(BLOCK_SEL))
-      .filter(function (el) {
-        return el.textContent.trim() && !el.querySelector(BLOCK_SEL);
+  // Innermost elements matching `sel` that actually hold text. Rooted at
+  // <body>, so <head>, <title> and <meta> are never reachable.
+  // Note: a container mixing loose text with a candidate child — e.g.
+  // "<div>Total <span>5</span></div>" — yields only the <span>; the loose
+  // "Total" stays editable in the Full HTML tab.
+  function collectNodes(doc, sel) {
+    return Array.prototype.slice.call(doc.body.querySelectorAll(sel)).filter(function (el) {
+      if (!el.textContent.trim()) return false;
+      if (el.closest("style,script,template,noscript")) return false;
+      if (el.querySelector(OPAQUE_SEL)) return false;
+      return !Array.prototype.some.call(el.querySelectorAll(sel), function (d) {
+        return d.textContent.trim();
       });
+    });
+  }
+
+  // "span.cityname", "dd", "h3" — enough to tell the fields apart.
+  function nodeLabel(el) {
+    var name = el.tagName.toLowerCase();
+    var cls = (el.getAttribute("class") || "").trim().split(/\s+/)[0];
+    if (cls) return name + "." + cls;
+    if (el.id) return name + "#" + el.id;
+    return name;
   }
 
   // Keep only inline formatting tags; unwrap everything else (keep its text).
@@ -70,83 +101,104 @@
 
   function create(mount, initialHtml) {
     var doc = parseDoc(initialHtml);
-    var editables = editableNodes(doc);
     var mode = "text";
     var lastField = null;
 
     mount.innerHTML =
       '<div class="hse">' +
+        '<div class="pa-import">' +
+          '<label class="pa-btn pa-btn--ghost pa-btn--sm pa-import__btn">Load file' +
+            '<input type="file" accept=".html,text/html,.htm" hidden /></label>' +
+          '<span class="pa-import__name"></span>' +
+        "</div>" +
         '<div class="hse-tabs">' +
           '<button type="button" class="hse-tab hse-tab--on" data-mode="text">Text</button>' +
-          '<button type="button" class="hse-tab" data-mode="html">Advanced (HTML)</button>' +
+          '<button type="button" class="hse-tab" data-mode="sections">Sections</button>' +
+          '<button type="button" class="hse-tab" data-mode="html">Full HTML</button>' +
+        "</div>" +
+        '<div class="hse-toolbar">' +
+          '<button type="button" class="hse-tb" data-cmd="bold" title="Bold"><b>B</b></button>' +
+          '<button type="button" class="hse-tb" data-cmd="italic" title="Italic"><i>I</i></button>' +
+          '<button type="button" class="hse-tb" data-cmd="link" title="Add link">Link</button>' +
         "</div>" +
         '<div class="hse-pane hse-pane--text">' +
-          '<div class="hse-toolbar">' +
-            '<button type="button" class="hse-tb" data-cmd="bold" title="Bold"><b>B</b></button>' +
-            '<button type="button" class="hse-tb" data-cmd="italic" title="Italic"><i>I</i></button>' +
-            '<button type="button" class="hse-tb" data-cmd="link" title="Add link">Link</button>' +
-          "</div>" +
           '<div class="hse-blocks"></div>' +
         "</div>" +
+        '<div class="hse-pane hse-pane--sections" hidden>' +
+          '<div class="hse-blocks hse-blocks--sections"></div>' +
+        "</div>" +
         '<div class="hse-pane hse-pane--html" hidden>' +
-          '<div class="pa-import">' +
-            '<label class="pa-btn pa-btn--ghost pa-btn--sm pa-import__btn">Load file' +
-              '<input type="file" accept=".html,text/html,.htm" hidden /></label>' +
-            '<span class="pa-import__name"></span>' +
-          "</div>" +
           '<textarea class="hse-source" rows="16" spellcheck="false"></textarea>' +
         "</div>" +
       "</div>";
 
-    var blocksEl = mount.querySelector(".hse-blocks");
     var sourceEl = mount.querySelector(".hse-source");
     var toolbar = mount.querySelector(".hse-toolbar");
     var textPane = mount.querySelector(".hse-pane--text");
+    var sectionsPane = mount.querySelector(".hse-pane--sections");
     var htmlPane = mount.querySelector(".hse-pane--html");
 
-    function renderBlocks() {
-      if (!editables.length) {
-        blocksEl.innerHTML =
-          '<p class="hse-empty">No text blocks detected. Paste HTML or use “Load file” ' +
-          'in the Advanced tab, then switch back here to edit the text.</p>';
-        return;
+    // One block pane: renders a contenteditable field per collected node and
+    // writes the edits back into those same live nodes.
+    function makeBlockView(container, sel, emptyHint) {
+      var nodes = [];
+
+      function render() {
+        if (!nodes.length) {
+          container.innerHTML = '<p class="hse-empty">' + escText(emptyHint) + "</p>";
+          return;
+        }
+        container.innerHTML = nodes.map(function (el, i) {
+          return '<div class="hse-block">' +
+            '<span class="hse-block__tag">' + escText(nodeLabel(el)) + "</span>" +
+            '<div class="hse-block__field" contenteditable="true" data-idx="' + i + '">' +
+              el.innerHTML +
+            "</div></div>";
+        }).join("");
+        container.querySelectorAll(".hse-block__field").forEach(function (f) {
+          f.addEventListener("focus", function () { lastField = f; });
+        });
       }
-      blocksEl.innerHTML = editables.map(function (el, i) {
-        return '<div class="hse-block">' +
-          '<span class="hse-block__tag">' + escText(el.tagName.toLowerCase()) + "</span>" +
-          '<div class="hse-block__field" contenteditable="true" data-idx="' + i + '">' +
-            el.innerHTML +
-          "</div></div>";
-      }).join("");
-      blocksEl.querySelectorAll(".hse-block__field").forEach(function (f) {
-        f.addEventListener("focus", function () { lastField = f; });
-      });
+
+      return {
+        rebuild: function (d) { nodes = collectNodes(d, sel); render(); },
+        reconcile: function () {
+          container.querySelectorAll(".hse-block__field").forEach(function (f) {
+            var idx = Number(f.getAttribute("data-idx"));
+            if (nodes[idx]) nodes[idx].innerHTML = sanitizeInline(f.innerHTML);
+          });
+        },
+      };
     }
 
-    // Write each field's (sanitized) inline HTML back into its source node.
-    function reconcileToDoc() {
-      blocksEl.querySelectorAll(".hse-block__field").forEach(function (f) {
-        var idx = Number(f.getAttribute("data-idx"));
-        if (editables[idx]) editables[idx].innerHTML = sanitizeInline(f.innerHTML);
-      });
-    }
+    var textView = makeBlockView(
+      mount.querySelector(".hse-pane--text .hse-blocks"),
+      BLOCK_SEL,
+      "No text blocks detected. Use “Load file” above, or paste a page into the Full HTML tab."
+    );
+    var sectionView = makeBlockView(
+      mount.querySelector(".hse-blocks--sections"),
+      SECTION_SEL,
+      "No editable sections detected. Use “Load file” above, or paste a page into the Full HTML tab."
+    );
 
-    function syncFromSource() {
-      doc = parseDoc(sourceEl.value);
-      editables = editableNodes(doc);
-      renderBlocks();
-    }
+    function activeView() { return mode === "sections" ? sectionView : textView; }
 
     function switchMode(m, tab) {
       if (m === mode) return;
-      if (m === "html") { reconcileToDoc(); sourceEl.value = serialize(doc); }
-      else { syncFromSource(); }
+      // Flush the pane we're leaving into `doc` before rebuilding the next one.
+      if (mode === "html") doc = parseDoc(sourceEl.value);
+      else activeView().reconcile();
       mode = m;
+      if (m === "html") sourceEl.value = serialize(doc);
+      else activeView().rebuild(doc);
       mount.querySelectorAll(".hse-tab").forEach(function (t) {
         t.classList.toggle("hse-tab--on", t === tab);
       });
       textPane.hidden = m !== "text";
+      sectionsPane.hidden = m !== "sections";
       htmlPane.hidden = m !== "html";
+      toolbar.hidden = m === "html";
     }
 
     mount.querySelectorAll(".hse-tab").forEach(function (tab) {
@@ -169,27 +221,33 @@
       });
     });
 
-    // Advanced-tab file import → raw source.
-    var fileInp = htmlPane.querySelector("input[type=file]");
+    // File import → every pane at once, so you can load and edit without a
+    // round-trip through the Full HTML tab.
+    var fileInp = mount.querySelector(".pa-import input[type=file]");
+    var nameEl = mount.querySelector(".pa-import__name");
     fileInp.addEventListener("change", function () {
       var file = fileInp.files && fileInp.files[0];
       if (!file) return;
       var reader = new FileReader();
       reader.onload = function () {
-        sourceEl.value = String(reader.result || "");
-        var nm = htmlPane.querySelector(".pa-import__name");
-        if (nm) nm.textContent = file.name;
+        var txt = String(reader.result || "");
+        sourceEl.value = txt;
+        doc = parseDoc(txt);
+        textView.rebuild(doc);
+        sectionView.rebuild(doc);
+        if (nameEl) nameEl.textContent = file.name;
       };
       reader.onerror = function () { window.alert("Could not read that file."); };
       reader.readAsText(file);
     });
 
     sourceEl.value = initialHtml || "";
-    renderBlocks();
+    textView.rebuild(doc);
+    sectionView.rebuild(doc);
 
     function getHTML() {
       if (mode === "html") return sourceEl.value;
-      reconcileToDoc();
+      activeView().reconcile();
       return serialize(doc);
     }
 
