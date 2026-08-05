@@ -150,9 +150,17 @@
   }
 
   // ── Generic admin form modal ──────────────────────────────────────────────
-  // opts: { title, submitLabel, fields: [{name,label,type,required,rows,placeholder}], values }
+  // opts: { title, submitLabel, savingLabel, onSubmit, fields: [{name,label,type,required,rows,placeholder}], values }
   // type ∈ text | url | number | textarea | checkbox. Resolves collected values
   // (numbers/checkboxes coerced) on submit, or null on cancel/backdrop/Escape.
+  //
+  // onSubmit(values) → Promise: opt-in "save before you close" mode. The modal
+  // stays mounted while the promise is pending, shows a spinner on the submit
+  // button, and freezes every dismissal path — so the caller can finish its
+  // request (and update its own state) before the user is handed back to the
+  // page. A rejection keeps the modal open with the input intact and the reason
+  // in the error strip, so a failed save is retryable instead of retyped.
+  // Without onSubmit the modal closes the instant it validates, as it always has.
   function formModal(opts) {
     opts = opts || {};
     var fields = opts.fields || [];
@@ -220,7 +228,13 @@
         root.style.transform = "translateY(" + (vv.offsetTop || 0) + "px)";
       }
 
+      // True while an onSubmit promise is in flight. Every dismissal path checks
+      // it: walking away mid-save would leave the request racing a page the user
+      // has already moved on from.
+      var saving = false;
+
       function close(result) {
+        if (saving) return;
         document.removeEventListener("keydown", onKey);
         if (vv) {
           vv.removeEventListener("resize", syncViewport);
@@ -239,11 +253,31 @@
         vv.addEventListener("scroll", syncViewport);
         syncViewport();
       }
-      root.querySelector(".pa-modal__x").addEventListener("click", function () { close(null); });
-      root.querySelector(".pa-cancel").addEventListener("click", function () { close(null); });
+      var dialog = root.querySelector(".pa-modal");
+      var closeBtn = root.querySelector(".pa-modal__x");
+      var cancelBtn = root.querySelector(".pa-cancel");
+      var submitBtn = root.querySelector(".pa-submit");
+      var submitHtml = submitBtn.innerHTML;
+      closeBtn.addEventListener("click", function () { close(null); });
+      cancelBtn.addEventListener("click", function () { close(null); });
 
       var form = root.querySelector("form");
       var errEl = root.querySelector(".pa-modal__err");
+
+      function setBusy(on) {
+        saving = on;
+        // Drops the software keyboard on mobile, so the saving state is what's
+        // on screen rather than a keyboard over a frozen form.
+        if (on && document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        root.classList.toggle("pa-modal--busy", on);
+        dialog.setAttribute("aria-busy", on ? "true" : "false");
+        submitBtn.disabled = on;
+        cancelBtn.disabled = on;
+        closeBtn.disabled = on;
+        submitBtn.innerHTML = on
+          ? '<span class="pa-spin" aria-hidden="true"></span>' + esc(opts.savingLabel || "Saving…")
+          : submitHtml;
+      }
 
       // The shell shrinks when the keyboard opens; pull whatever just took focus
       // back into the scroller. Covers the contenteditable block fields too.
@@ -280,8 +314,9 @@
         }
       });
 
-      form.addEventListener("submit", function (ev) {
+      form.addEventListener("submit", async function (ev) {
         ev.preventDefault();
+        if (saving) return;
         var out = {};
         for (var i = 0; i < fields.length; i++) {
           var f = fields[i];
@@ -308,6 +343,19 @@
           if (f.type === "number") { out[f.name] = val === "" ? null : Number(val); }
           else { out[f.name] = val === "" ? null : val; }
         }
+        if (!opts.onSubmit) { close(out); return; }
+        errEl.hidden = true;
+        setBusy(true);
+        try {
+          await opts.onSubmit(out);
+        } catch (err) {
+          // Stay open with everything the user typed still in the fields.
+          setBusy(false);
+          errEl.textContent = (err && err.message) || "Something went wrong. Try again.";
+          errEl.hidden = false;
+          return;
+        }
+        setBusy(false);
         close(out);
       });
       var first = root.querySelector("input, textarea");
