@@ -201,15 +201,31 @@
         '<div class="pa-modal" role="dialog" aria-modal="true">' +
         '<div class="pa-modal__head"><span class="pa-modal__title">' + esc(opts.title || "Edit") +
         '</span><button class="pa-modal__x" aria-label="Close">&times;</button></div>' +
-        '<form class="pa-modal__body">' + fieldsHtml +
+        '<form class="pa-modal__form">' +
+        '<div class="pa-modal__body">' + fieldsHtml + "</div>" +
         '<div class="pa-modal__err" hidden></div>' +
         '<div class="pa-modal__actions">' +
         '<button type="button" class="pa-btn pa-btn--ghost pa-cancel">Cancel</button>' +
         '<button type="submit" class="pa-btn pa-btn--primary pa-submit">' +
         esc(opts.submitLabel || "Save") + "</button></div></form></div>";
 
+      // Keep the backdrop matched to the viewport actually on screen. iOS Safari
+      // overlays the software keyboard without shrinking the layout viewport, so
+      // even a 100dvh fixed backdrop extends behind it and takes the pinned
+      // actions row with it. visualViewport is the only thing that reports the
+      // visible box; offsetTop covers the page being scrolled within it.
+      var vv = window.visualViewport;
+      function syncViewport() {
+        root.style.setProperty("--pa-vv-h", vv.height + "px");
+        root.style.transform = "translateY(" + (vv.offsetTop || 0) + "px)";
+      }
+
       function close(result) {
         document.removeEventListener("keydown", onKey);
+        if (vv) {
+          vv.removeEventListener("resize", syncViewport);
+          vv.removeEventListener("scroll", syncViewport);
+        }
         if (root.parentNode) root.parentNode.removeChild(root);
         resolve(result);
       }
@@ -218,11 +234,24 @@
       root.addEventListener("click", function (ev) { if (ev.target === root) close(null); });
       document.addEventListener("keydown", onKey);
       document.body.appendChild(root);
+      if (vv) {
+        vv.addEventListener("resize", syncViewport);
+        vv.addEventListener("scroll", syncViewport);
+        syncViewport();
+      }
       root.querySelector(".pa-modal__x").addEventListener("click", function () { close(null); });
       root.querySelector(".pa-cancel").addEventListener("click", function () { close(null); });
 
       var form = root.querySelector("form");
       var errEl = root.querySelector(".pa-modal__err");
+
+      // The shell shrinks when the keyboard opens; pull whatever just took focus
+      // back into the scroller. Covers the contenteditable block fields too.
+      form.addEventListener("focusin", function (ev) {
+        if (ev.target && ev.target.scrollIntoView) {
+          ev.target.scrollIntoView({ block: "nearest" });
+        }
+      });
 
       // Wire "Load file" inputs: read the picked file's text into its textarea.
       form.querySelectorAll("input[type=file][data-import-for]").forEach(function (inp) {
