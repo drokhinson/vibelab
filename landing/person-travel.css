@@ -376,6 +376,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Downloads the stop's stored HTML. Sits left of the close button and mirrors
+   its box so the pair reads as one control group. */
+.stop-popup__dl {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #eaf1f7;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.stop-popup__dl svg { display: block; }
+.stop-popup__dl:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #f2d46b;
+}
+.stop-popup__dl:disabled { opacity: 0.4; cursor: default; }
 .stop-popup__close {
   flex: none;
   width: 44px;

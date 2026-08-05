@@ -7,6 +7,12 @@
 // Previous/Next in place so you can read through the route without closing the
 // popup between stops.
 //
+// The bar's download button saves the current stop's stored html_content
+// verbatim — source, not a rendered snapshot — so the saved file keeps the
+// postcard's own script and draws its map and flags when opened from disk.
+// (trip-export.js does the opposite for the whole-trip export, where the
+// stops have to be flattened into one inert document.)
+//
 // The HTML is admin-authored and runs inside a `sandbox="allow-scripts"` iframe
 // with NO `allow-same-origin`, so its scripts/styles are isolated in an opaque
 // origin and cannot touch this page's DOM, cookies, or storage. NEVER add
@@ -36,6 +42,30 @@
 
   function esc(s) { return PA ? PA.esc(s) : String(s == null ? "" : s); }
 
+  // Same recipe as trip-export.js's filename stem, plus whitespace collapsing.
+  function fileNameFor(title) {
+    var stem = String(title == null ? "" : title)
+      .replace(/[^\w\- ]+/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/-{2,}/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    return (stem || "postcard") + ".html";
+  }
+
+  // Kept local rather than reaching into TripExport: stop-popup.js loads before
+  // the export modules, and TripExport only exposes its whole-trip download.
+  function saveBlob(blob, filename) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+  }
+
   // show(stops, index): stops is the trip's stop array (each with title +
   // html_content) in canonical order; index is the one to open. Prev/Next page
   // through in place. Because the list is canonical, Next always moves to the
@@ -57,6 +87,13 @@
       '<div class="stop-popup__shell" role="dialog" aria-modal="true">' +
         '<div class="stop-popup__bar">' +
           '<span class="stop-popup__title"></span>' +
+          '<button class="stop-popup__dl" type="button" aria-label="Download this postcard" ' +
+            'title="Download this postcard">' +
+            '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" ' +
+              'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M12 3v12M7 12l5 5 5-5M4 20h16"/>' +
+            "</svg>" +
+          "</button>" +
           '<button class="stop-popup__close" aria-label="Close">&times;</button>' +
         "</div>" +
         (multi
@@ -74,6 +111,7 @@
 
     var shell = root.querySelector(".stop-popup__shell");
     var titleEl = root.querySelector(".stop-popup__title");
+    var dlBtn = root.querySelector(".stop-popup__dl");
     var counterEl = root.querySelector(".stop-popup__counter");
     var prevBtn = root.querySelector('.stop-popup__nav-btn[data-dir="-1"]');
     var nextBtn = root.querySelector('.stop-popup__nav-btn[data-dir="1"]');
@@ -93,6 +131,7 @@
       // Reassigning srcdoc reloads the isolated frame in place. Set via the DOM
       // property (not an attribute) so we don't attribute-escape a large document.
       frame.srcdoc = (stop && stop.html_content) || "";
+      dlBtn.disabled = !(stop && stop.html_content);
       if (multi) {
         counterEl.textContent = (current + 1) + " / " + list.length;
         prevBtn.disabled = current === 0;
@@ -109,6 +148,16 @@
       prevBtn.addEventListener("click", function () { go(-1); });
       nextBtn.addEventListener("click", function () { go(1); });
     }
+
+    // Saves the stop's stored HTML verbatim, so the downloaded file keeps the
+    // postcard's own script and renders its map/flags exactly like the popup.
+    // Reads `current` at click time, so paging Prev/Next downloads what's shown.
+    dlBtn.addEventListener("click", function () {
+      var stop = list[current];
+      if (!stop || !stop.html_content) return;
+      saveBlob(new Blob([stop.html_content], { type: "text/html;charset=utf-8" }),
+        fileNameFor(stop.title));
+    });
 
     activeKeyHandler = function (ev) {
       if (ev.key === "Escape") { dismiss(); return; }
