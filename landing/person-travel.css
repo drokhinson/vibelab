@@ -112,22 +112,39 @@
 .travel-empty--error { color: #f3c9b6; }
 
 /* ── Form modal ────────────────────────────────────────────────────────── */
+/* Sized to the *visible* viewport, like .stop-popup__backdrop below. `dvh` drops
+   the retracted-URL-bar strip; `--pa-vv-h` (set by formModal from
+   window.visualViewport) goes further and drops the software keyboard too —
+   iOS overlays the keyboard without shrinking the layout viewport, so `dvh`
+   alone still leaves the pinned actions row underneath it. The `vh` line is the
+   no-dvh fallback. */
 .pa-modal__backdrop {
   position: fixed;
   inset: 0;
+  box-sizing: border-box;
+  height: 100vh;
+  height: 100dvh;
+  height: var(--pa-vv-h, 100dvh);
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: 1.5rem;
+  padding-top: calc(1.5rem + env(safe-area-inset-top));
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
   background: rgba(8, 16, 26, 0.72);
   backdrop-filter: blur(3px);
 }
+/* Flex column: head and actions are flex:none, only the fields scroll — so the
+   Save/Cancel row can never scroll (or be typed) off the bottom. */
 .pa-modal {
   width: 100%;
   max-width: 640px;
-  max-height: 90vh;
-  overflow: auto;
+  max-height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 16px;
   background: #16232f;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -135,6 +152,7 @@
   color: #eaf1f7;
 }
 .pa-modal__head {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -154,7 +172,20 @@
   border-radius: 8px;
 }
 .pa-modal__x:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
-.pa-modal__body { padding: 1.25rem; display: flex; flex-direction: column; gap: 0.9rem; }
+.pa-modal__form { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* The one scroller in the modal — min-height:0 so it actually shrinks instead of
+   pushing the actions row out of the shell. */
+.pa-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
 .pa-field { display: flex; flex-direction: column; gap: 0.35rem; }
 .pa-field__label { font-size: 0.8rem; font-weight: 600; color: rgba(234, 241, 247, 0.85); }
 .pa-req { color: #f2d46b; }
@@ -185,17 +216,25 @@
   cursor: pointer;
 }
 .pa-modal__err {
+  flex: none;
+  margin: 0 1.25rem;
   color: #f3b0b0;
   font-size: 0.85rem;
   padding: 0.4rem 0.6rem;
   border-radius: 8px;
   background: rgba(176, 46, 46, 0.15);
 }
+/* Opaque + bordered: the fields scroll underneath this row, so it can't be
+   translucent. */
 .pa-modal__actions {
+  flex: none;
   display: flex;
   justify-content: flex-end;
   gap: 0.6rem;
-  margin-top: 0.25rem;
+  padding: 0.75rem 1.25rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: #16232f;
 }
 
 /* ── HTML editor textarea (stop content) gets a monospace, taller box ───── */
@@ -257,34 +296,35 @@
 }
 .hse-tb:hover { background: rgba(255, 255, 255, 0.16); }
 
+/* No max-height/overflow here: .pa-modal__body is the modal's one scroller, and
+   a nested `vh`-capped scroller would fight it once the keyboard shrinks the
+   shell. The cap only existed to keep Save reachable past a long block list,
+   which the pinned actions row now handles. */
 .hse-blocks {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  max-height: 46vh;
-  overflow: auto;
+  gap: 0.75rem;
   padding-right: 0.25rem;
 }
+/* Tag above the box, not beside it, so the box gets the full modal width — the
+   old 2.6rem/7rem gutter ate a third of a phone-width row. */
 .hse-block {
   display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 .hse-block__tag {
-  flex: none;
-  margin-top: 0.5rem;
-  width: 2.6rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: rgba(234, 241, 247, 0.45);
-  text-align: right;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
-/* Sections labels carry a class/id hint ("span.cityname"), so they need room. */
-.hse-blocks--sections .hse-block__tag { width: 7rem; }
 .hse-block__field {
-  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
   padding: 0.5rem 0.7rem;
   border-radius: 8px;
@@ -483,4 +523,15 @@
   .stop-popup__bar { padding: 0.45rem 0.5rem 0.45rem 0.75rem; }
   .stop-popup__nav { padding: 0.45rem 0.5rem; }
   .pa-card-controls { flex-wrap: wrap; }
+  .pa-modal__backdrop {
+    padding: 0.5rem;
+    padding-top: calc(0.5rem + env(safe-area-inset-top));
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+  /* No forced height — max-height:100% already lets a long form (the stop
+     editor) fill the padded backdrop, while a two-field form still shrink-wraps
+     instead of stranding its actions row at the bottom of the screen. */
+  .pa-modal__body { padding: 0.9rem; }
+  .pa-modal__err { margin: 0 0.9rem; }
+  .pa-modal__actions { padding-left: 0.9rem; padding-right: 0.9rem; }
 }
