@@ -43,6 +43,10 @@
       display:flex; flex-direction:column;
       padding:1.5rem 1.25rem 0;
     }
+    /* `display:flex` above would otherwise defeat the [hidden] attribute's
+       display:none, leaving the stop list live (tabbable, and read out by
+       screen readers) behind the opaque stop screen. */
+    .wrap[hidden]{ display:none; }
     .trip-top{ flex:none; }
     /* The only scroller on the page. min-height:0 is what lets a flex child
        actually shrink below its content; the padding / negative-margin pair
@@ -206,7 +210,7 @@
   <link rel="stylesheet" href="person-travel.css" />
 </head>
 <body>
-  <div class="wrap">
+  <div class="wrap" id="trip-screen">
    <!-- Pinned: everything above the list stays put while the stops scroll. -->
    <div class="trip-top">
     <div class="topbar">
@@ -266,10 +270,39 @@
    </div>
   </div>
 
+  <!-- The stop reader at /travel/:slug/:stop — a screen, not an overlay. The bar
+       and the nav are flex:none, the frame is the only flexible row, and the page
+       itself never scrolls (body{overflow:hidden} above), so the postcard's own
+       document is the single scroller. Populated by stop-view.js.
+
+       The iframe is sandboxed with allow-scripts and deliberately WITHOUT
+       allow-same-origin: the postcard HTML is admin-authored and runs in an
+       opaque origin where it cannot reach this page's DOM, cookies, or storage.
+       Never add allow-same-origin here — together with allow-scripts it re-grants
+       same-origin access and defeats the sandbox entirely. -->
+  <section class="stop-screen" id="stop-screen" aria-label="Postcard" hidden>
+    <div class="stop-screen__bar">
+      <span class="stop-screen__title"></span>
+      <button class="stop-screen__dl" type="button" aria-label="Download this postcard"
+              title="Download this postcard">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 12l5 5 5-5M4 20h16"/></svg>
+      </button>
+      <button class="stop-screen__close" type="button" aria-label="Close postcard" title="Close postcard">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <iframe class="stop-screen__frame" sandbox="allow-scripts" title="Postcard"></iframe>
+    <div class="stop-screen__nav" hidden>
+      <button class="stop-screen__nav-btn" type="button" data-dir="-1">&larr; Previous</button>
+      <span class="stop-screen__counter"></span>
+      <button class="stop-screen__nav-btn" type="button" data-dir="1">Next &rarr;</button>
+    </div>
+  </section>
+
   <script src="config.js"></script>
   <script src="admin.js"></script>
   <script src="html-span-editor.js"></script>
-  <script src="stop-popup.js"></script>
+  <script src="stop-view.js"></script>
   <script src="trip-export-style.js"></script>
   <script src="trip-export-css.js"></script>
   <script src="trip-export.js"></script>

@@ -8,7 +8,7 @@
 // export with no map and no flags — so each stop is rendered and snapshotted
 // instead.
 //
-// The frame that renders it stays sandboxed exactly as stop-popup.js requires
+// The frame that renders it stays sandboxed exactly as stop-view.js requires
 // (allow-scripts, never allow-same-origin), which means we cannot read its DOM.
 // So we splice our own harvester into the srcdoc and let the frame post its
 // outerHTML up to us as a plain string; we only ever touch the string.

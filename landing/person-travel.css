@@ -1,4 +1,4 @@
-/* person-travel.css — admin controls, form modal, and stop popup for the
+/* person-travel.css — admin controls, form modal, and stop screen for the
    person page travel section. Loaded by about.html and trip.html. Self-contained
    dark styling so it reads consistently on the Pico about page and the
    enamel-themed trip page. */
@@ -112,7 +112,7 @@
 .travel-empty--error { color: #f3c9b6; }
 
 /* ── Form modal ────────────────────────────────────────────────────────── */
-/* Sized to the *visible* viewport, like .stop-popup__backdrop below. `dvh` drops
+/* Sized to the *visible* viewport, like .stop-screen below. `dvh` drops
    the retracted-URL-bar strip; `--pa-vv-h` (set by formModal from
    window.visualViewport) goes further and drops the software keyboard too —
    iOS overlays the keyboard without shrinking the layout viewport, so `dvh`
@@ -380,15 +380,21 @@
 }
 .hse-source:focus { outline: none; border-color: #3f86d1; }
 
-/* ── Stop popup (sandboxed iframe) ─────────────────────────────────────── */
-/* The backdrop must size to the *visible* viewport, not the large one. On
-   mobile `vh` (and the fixed-position containing block) resolve against the
-   viewport with the browser's URL bar retracted, so a `vh`-sized shell centred
-   in here spills off both edges while the URL bar is showing — that's what was
-   clipping the ✕ and the Previous/Next row. `dvh` tracks the height actually on
-   screen; the `vh` line above stays as the fallback. Same pattern as body in
-   trip.html. */
-.stop-popup__backdrop {
+/* ── Stop screen (sandboxed iframe) ────────────────────────────────────── */
+/* The postcard reader at /travel/:slug/:stop. Deliberately a screen and not an
+   overlay: it was a centred, bordered, rounded shell floating on a blurred
+   backdrop, which framed every postcard in a box it wasn't designed for and
+   nested three scrollable layers (page → shell → the postcard's own document)
+   so touch scrolling fought itself at the edges. Now there is no backdrop, no
+   inset, no border and no radius — just pinned chrome with the postcard filling
+   everything between, and its own document as the only scroller on screen.
+
+   Sized to the *visible* viewport: on mobile `vh` (and the fixed-position
+   containing block) resolve against the viewport with the URL bar retracted, so
+   a `vh`-sized screen pushes its nav row off the bottom while the URL bar is
+   showing. `dvh` tracks the height actually on screen; the `vh` line above stays
+   as the fallback. Same pattern as body in trip.html. */
+.stop-screen {
   position: fixed;
   inset: 0;
   box-sizing: border-box;
@@ -396,44 +402,27 @@
   height: 100dvh;
   z-index: 1000;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  padding-top: calc(1.5rem + env(safe-area-inset-top));
-  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
-  background: rgba(8, 16, 26, 0.8);
-  backdrop-filter: blur(4px);
-}
-/* max-height:100% resolves against the backdrop's (now definite) content box,
-   so the shell can never grow past viewport-minus-padding — the padding is the
-   only inset, which is what keeps the gap above the bar equal to the gap below
-   the nav. */
-.stop-popup__shell {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 960px;
-  height: 88vh;
-  height: 88dvh;
-  max-height: 100%;
-  min-height: 0;
-  display: flex;
   flex-direction: column;
-  border-radius: 16px;
-  overflow: hidden;
   background: #0e2032;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9);
 }
-.stop-popup__bar {
+/* display:flex outranks the [hidden] UA rule, so it has to be restated. */
+.stop-screen[hidden] { display: none; }
+
+/* Chrome reads as chrome through a lifted background rather than a hairline
+   rule — one less line drawn across the postcard. The safe-area padding lives
+   here, not on a wrapper, so the bars clear the notch and the home indicator
+   while the postcard keeps every pixel in between. */
+.stop-screen__bar {
   flex: none;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.7rem 0.85rem 0.7rem 1.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: calc(0.7rem + env(safe-area-inset-top));
+  background: rgba(255, 255, 255, 0.05);
   color: #eaf1f7;
 }
-.stop-popup__title {
+.stop-screen__title {
   font-size: 0.95rem;
   font-weight: 700;
   flex: 1;
@@ -444,7 +433,8 @@
 }
 /* Downloads the stop's stored HTML. Sits left of the close button and mirrors
    its box so the pair reads as one control group. */
-.stop-popup__dl {
+.stop-screen__dl,
+.stop-screen__close {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -458,46 +448,48 @@
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.stop-popup__dl svg { display: block; }
-.stop-popup__dl:hover:not(:disabled) {
+.stop-screen__dl svg,
+.stop-screen__close svg { display: block; }
+.stop-screen__dl:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.16);
   color: #f2d46b;
 }
-.stop-popup__dl:disabled { opacity: 0.4; cursor: default; }
-.stop-popup__close {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #eaf1f7;
-  font-size: 1.4rem;
-  line-height: 1;
-  cursor: pointer;
-}
-.stop-popup__close:hover { background: rgba(255, 255, 255, 0.16); }
-/* min-height:0 — an iframe is a replaced element, so its automatic minimum size
-   would otherwise pin it at its intrinsic 150px and push the nav row out of the
-   shell on short viewports. */
-.stop-popup__frame {
-  flex: 1;
+.stop-screen__dl:disabled { opacity: 0.4; cursor: default; }
+.stop-screen__close:hover { background: rgba(255, 255, 255, 0.16); }
+
+/* The only flexible row. min-height:0 — an iframe is a replaced element, so its
+   automatic minimum size would otherwise pin it at its intrinsic 150px and push
+   the nav row off a short viewport. display:block kills the inline baseline gap
+   that otherwise shows as a seam under the frame. The background matches the
+   page (it used to be #fff, which flashed as a white band while a postcard
+   loaded and edged the card wherever its own body didn't reach). Capped and
+   centred so a postcard laid out for a phone isn't stretched across a desktop;
+   phones fall under the cap and go edge to edge. */
+.stop-screen__frame {
+  flex: 1 1 auto;
   min-height: 0;
+  display: block;
   width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
   border: 0;
-  background: #fff;
+  background: #0e2032;
 }
-/* Bottom nav: page Previous/Next through the trip's stops in place. */
-.stop-popup__nav {
+
+/* Bottom nav: page Previous/Next through the trip's stops in place. Hidden by
+   stop-view.js on a one-stop trip. */
+.stop-screen__nav {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.6rem 0.85rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.05);
 }
-.stop-popup__nav-btn {
+.stop-screen__nav[hidden] { display: none; }
+.stop-screen__nav-btn {
   flex: none;
   min-height: 44px;
   padding: 0.5rem 0.9rem;
@@ -511,12 +503,12 @@
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.stop-popup__nav-btn:hover:not(:disabled) {
+.stop-screen__nav-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.16);
   border-color: rgba(255, 255, 255, 0.4);
 }
-.stop-popup__nav-btn:disabled { opacity: 0.4; cursor: default; }
-.stop-popup__counter {
+.stop-screen__nav-btn:disabled { opacity: 0.4; cursor: default; }
+.stop-screen__counter {
   flex: 1;
   text-align: center;
   font-size: 0.72rem;
@@ -524,30 +516,20 @@
   letter-spacing: 0.14em;
   color: rgba(214, 223, 231, 0.7);
 }
-.stop-popup__state {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  text-align: center;
-  color: rgba(234, 241, 247, 0.75);
-}
-.stop-popup__state--error { color: #f3c9b6; }
 
 @media (max-width: 620px) {
-  .stop-popup__backdrop {
-    padding: 0.5rem;
-    padding-top: calc(0.5rem + env(safe-area-inset-top));
-    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
-  }
-  /* No fixed height on phones — fill the padded backdrop so the inset above the
-     bar always matches the inset below the nav. */
-  .stop-popup__shell { height: 100%; }
   /* Tighter chrome so the postcard gets the room back. The 44px touch targets
-     are untouched — only the padding around them shrinks. */
-  .stop-popup__bar { padding: 0.45rem 0.5rem 0.45rem 0.75rem; }
-  .stop-popup__nav { padding: 0.45rem 0.5rem; }
+     are untouched — only the padding around them shrinks, and the safe-area
+     insets are re-added on top so the bars still clear the notch and the home
+     indicator. */
+  .stop-screen__bar {
+    padding: 0.45rem 0.5rem 0.45rem 0.75rem;
+    padding-top: calc(0.45rem + env(safe-area-inset-top));
+  }
+  .stop-screen__nav {
+    padding: 0.45rem 0.5rem;
+    padding-bottom: calc(0.45rem + env(safe-area-inset-bottom));
+  }
   .pa-card-controls { flex-wrap: wrap; }
   .pa-modal__backdrop {
     padding: 0.5rem;

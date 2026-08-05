@@ -2,7 +2,8 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/travel/:slug", "destination": "/trip" }
+    { "source": "/travel/:slug", "destination": "/trip" },
+    { "source": "/travel/:slug/:stop", "destination": "/trip" }
   ],
   "headers": [
     {

@@ -1,11 +1,19 @@
 // trip.js — renders a single trip page at /travel/:slug. Reads the slug from the
 // path, fetches the trip + its stops, paints the hero + stop cards. Tapping a
-// stop opens its stored HTML in the sandboxed StopPopup. In admin mode (?admin),
-// adds create / edit / delete / reorder controls for stops.
+// stop navigates to /travel/:slug/:stop, where StopView renders its stored HTML
+// full-screen. In admin mode (?admin), adds create / edit / delete / reorder
+// controls for stops.
+//
+// Both screens live on this one page: the trip loads with every stop's
+// html_content in a single request, so opening a stop is a pushState and a
+// frame swap — no reload, no second fetch — and Back returns to the list with
+// its scroll position and order toggle intact. This module is the only place
+// that writes history; StopView asks it to move and never touches the URL.
 (function () {
   "use strict";
 
   var PA = window.PersonAdmin;
+  var tripScreen = document.getElementById("trip-screen");
   var eyebrowEl = document.getElementById("trip-eyebrow");
   var headlineEl = document.getElementById("trip-headline");
   var albumEl = document.getElementById("trip-album");
@@ -42,10 +50,94 @@
 
   function isAdmin() { return PA.isAdmin(); }
 
-  function slugFromPath() {
-    var parts = window.location.pathname.split("/").filter(Boolean);
-    return parts.length ? decodeURIComponent(parts[parts.length - 1]) : "";
+  // ── Routing ───────────────────────────────────────────────────────────────
+  // /travel/<trip-slug>            → the stop list
+  // /travel/<trip-slug>/<stop-no>  → that stop's postcard, full screen
+  //
+  // The stop number is 1-based over the *canonical* stops array — the same
+  // number stopRow() stamps on the card badge and StopView shows in its counter.
+  // Canonical, not displayed, so the URL doesn't change meaning when the viewer
+  // flips the list to oldest-first.
+  var TRAVEL_PATH = /^\/travel\/([^/]+)(?:\/([^/]+))?\/?$/;
+
+  function parseRoute() {
+    var m = TRAVEL_PATH.exec(window.location.pathname);
+    if (!m) {
+      // Not the deployed path shape (a local static server, a preview host that
+      // serves trip.html directly). Fall back to the last segment as the slug.
+      var parts = window.location.pathname.split("/").filter(Boolean);
+      return { slug: parts.length ? decodeURIComponent(parts[parts.length - 1]) : "", stopNo: null, hasStop: false };
+    }
+    // parseInt so a zero-padded segment ("/05", matching the card badge) resolves;
+    // loadTrip rewrites it to the canonical unpadded form. `hasStop` is tracked
+    // separately from `stopNo` so a segment that's present but unusable ("/0",
+    // "/abc") is still recognised as a stale URL worth rewriting.
+    var n = m[2] == null ? NaN : parseInt(decodeURIComponent(m[2]), 10);
+    return {
+      slug: decodeURIComponent(m[1]),
+      stopNo: isFinite(n) && n > 0 ? n : null,
+      hasStop: m[2] != null,
+    };
   }
+
+  function pathFor(stopNo) {
+    var base = "/travel/" + encodeURIComponent(trip && trip.slug ? trip.slug : parseRoute().slug);
+    return stopNo ? base + "/" + stopNo : base;
+  }
+
+  // True once a card tap has pushed a stop entry, so ✕ / Escape can unwind it
+  // with history.back() — that returns to the list at its previous scroll
+  // position instead of stacking another entry. A deep link starts false.
+  var pushedFromList = false;
+
+  function showList() {
+    window.StopView.close();
+    tripScreen.hidden = false;
+    pushedFromList = false;
+    document.title = (trip ? (trip.title || trip.headline || "Trip") : "Trip") + " — David Rokhinson";
+  }
+
+  // Renders the stop screen for a canonical index. Does not touch history — the
+  // callers below own that.
+  function showStop(index) {
+    var stop = stops[index];
+    if (!stop) return;
+    tripScreen.hidden = true;
+    document.title = (stop.title || "Postcard") + " — " + (trip ? (trip.title || "Trip") : "Trip");
+    window.StopView.show(stops, index, { onNavigate: goToStop, onExit: exitStop });
+  }
+
+  // A card tap: push, so Back closes the postcard.
+  function openStop(index) {
+    if (!stops[index]) return;
+    history.pushState({ stopNo: index + 1 }, "", pathFor(index + 1));
+    pushedFromList = true;
+    showStop(index);
+  }
+
+  // Previous / Next: replace, not push. The URL keeps tracking the stop on
+  // screen, but paging through eighteen postcards doesn't bury the trip list
+  // eighteen entries deep in the back stack.
+  function goToStop(index) {
+    if (!stops[index]) return;
+    history.replaceState({ stopNo: index + 1 }, "", pathFor(index + 1));
+    showStop(index);
+  }
+
+  function exitStop() {
+    if (pushedFromList) { history.back(); return; } // popstate paints the list
+    history.pushState({ stopNo: null }, "", pathFor(null));
+    showList();
+  }
+
+  // Back/forward: replay whatever the URL now says, without writing history.
+  window.addEventListener("popstate", function () {
+    if (!trip) return;
+    var route = parseRoute();
+    var index = route.stopNo ? route.stopNo - 1 : -1;
+    if (index >= 0 && stops[index]) showStop(index);
+    else showList();
+  });
 
   // ── Hero ──────────────────────────────────────────────────────────────────
   function renderHero() {
@@ -140,12 +232,12 @@
       btn.addEventListener("click", function () {
         var id = btn.getAttribute("data-id");
         // Opens from memory — the whole trip (incl. every stop's HTML) is loaded
-        // in one pass, so there's no per-stop fetch here. Pass the canonical
-        // order, NOT the displayed order: the popup's Next always advances to
-        // the next-higher stop number and Previous to the next-lower, so its
-        // paging direction is independent of this page's order toggle.
+        // in one pass, so there's no per-stop fetch here. The index is into the
+        // canonical order, NOT the displayed order: it becomes the URL's stop
+        // number and drives Previous/Next, so both stay independent of this
+        // page's order toggle.
         var idx = stops.findIndex(function (s) { return s.id === id; });
-        if (idx >= 0) window.StopPopup.show(stops, idx);
+        if (idx >= 0) openStop(idx);
       });
     });
     if (!isAdmin()) return;
@@ -271,16 +363,28 @@
 
   // ── Load ────────────────────────────────────────────────────────────────
   async function loadTrip() {
-    var slug = slugFromPath();
-    if (!slug) {
+    var route = parseRoute();
+    if (!route.slug) {
       headlineEl.textContent = "Trip not found";
       return;
     }
     try {
-      trip = await PA.publicFetch("/trips/" + encodeURIComponent(slug));
+      trip = await PA.publicFetch("/trips/" + encodeURIComponent(route.slug));
       stops = trip.stops || [];
       renderHero();
       renderStops();
+      // Deep link to a stop. The list is already painted underneath, so ✕ has
+      // somewhere to land. A number that no longer exists (a deleted or
+      // reordered stop, a hand-typed URL) quietly falls back to the trip rather
+      // than showing an error; a valid but non-canonical one ("/05") is
+      // normalised. Either way replaceState, so Back still leaves the site.
+      var index = route.stopNo ? route.stopNo - 1 : -1;
+      if (index >= 0 && stops[index]) {
+        history.replaceState({ stopNo: index + 1 }, "", pathFor(index + 1));
+        showStop(index);
+      } else if (route.hasStop) {
+        history.replaceState({ stopNo: null }, "", pathFor(null));
+      }
     } catch (err) {
       trip = null;
       headlineEl.textContent = "Trip not found";
