@@ -358,8 +358,9 @@
         setBusy(false);
         close(out);
       });
-      var first = root.querySelector("input, textarea");
-      if (first) first.focus();
+      // Deliberately no autofocus: focusing the first field opens the software
+      // keyboard the instant the modal appears, which covers most of the form
+      // before you've even seen it. Tap the field you actually want.
     });
   }
 

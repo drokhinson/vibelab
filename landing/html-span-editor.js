@@ -7,7 +7,9 @@
 // back into the exact original nodes and the whole document is re-serialized —
 // so everything outside the edited fields is preserved.
 //
-// Three tabs, narrow to wide:
+// Three tabs, narrow to wide. Sections is the one that opens, because it's the
+// widest view that still has guard rails — the narrower Text view hides fields
+// you usually want, and Full HTML has no protection at all:
 //   Text      — block-level prose only (h1–h6, p, li, blockquote, figcaption).
 //   Sections  — the above plus text-bearing containers (span, div, dt/dd, td…).
 //               Deliberately hides <style>, <head>/meta, <script>, and anything
@@ -119,7 +121,7 @@
 
   function create(mount, initialHtml) {
     var doc = parseDoc(initialHtml);
-    var mode = "text";
+    var mode = "sections";
     var lastField = null;
 
     mount.innerHTML =
@@ -130,8 +132,8 @@
           '<span class="pa-import__name"></span>' +
         "</div>" +
         '<div class="hse-tabs">' +
-          '<button type="button" class="hse-tab hse-tab--on" data-mode="text">Text</button>' +
-          '<button type="button" class="hse-tab" data-mode="sections">Sections</button>' +
+          '<button type="button" class="hse-tab" data-mode="text">Text</button>' +
+          '<button type="button" class="hse-tab hse-tab--on" data-mode="sections">Sections</button>' +
           '<button type="button" class="hse-tab" data-mode="html">Full HTML</button>' +
         "</div>" +
         '<div class="hse-toolbar">' +
@@ -139,10 +141,10 @@
           '<button type="button" class="hse-tb" data-cmd="italic" title="Italic"><i>I</i></button>' +
           '<button type="button" class="hse-tb" data-cmd="link" title="Add link">Link</button>' +
         "</div>" +
-        '<div class="hse-pane hse-pane--text">' +
+        '<div class="hse-pane hse-pane--text" hidden>' +
           '<div class="hse-blocks"></div>' +
         "</div>" +
-        '<div class="hse-pane hse-pane--sections" hidden>' +
+        '<div class="hse-pane hse-pane--sections">' +
           '<div class="hse-blocks hse-blocks--sections"></div>' +
         "</div>" +
         '<div class="hse-pane hse-pane--html" hidden>' +
