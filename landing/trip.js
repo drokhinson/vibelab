@@ -177,32 +177,38 @@
   }
 
   // ── Admin actions ─────────────────────────────────────────────────────────
+  // Both writes below run inside formModal's onSubmit, so the modal holds a
+  // spinner until the request lands AND the list has been re-rendered from the
+  // response — by the time it closes, the cards (and the `stops` array the popup
+  // reads from) are already the saved data. A failure leaves the form open with
+  // its input intact and the reason in the modal's error strip.
   async function onAddStop() {
-    var vals = await PA.formModal({
+    await PA.formModal({
       title: "Add stop",
       submitLabel: "Create",
+      savingLabel: "Creating…",
       fields: STOP_FIELDS,
       values: {},
+      onSubmit: async function (vals) {
+        // The API returns the full stop (incl. html_content); splice it into
+        // local state and re-render — no refetch (fully reactive).
+        var created = await PA.adminFetch("/admin/trips/" + trip.id + "/stops", {
+          method: "POST", body: JSON.stringify(vals),
+        });
+        stops.push(created);
+        renderStops();
+      },
     });
-    if (!vals) return;
-    try {
-      // The API returns the full stop (incl. html_content); splice it into local
-      // state and re-render — no refetch (fully reactive).
-      var created = await PA.adminFetch("/admin/trips/" + trip.id + "/stops", {
-        method: "POST", body: JSON.stringify(vals),
-      });
-      stops.push(created);
-      renderStops();
-    } catch (err) { window.alert("Could not add stop: " + err.message); }
   }
 
   async function onEditStop(id) {
     // html_content is already in memory (loaded in one pass) — no fetch needed.
     var stop = stops.find(function (s) { return s.id === id; });
     if (!stop) return;
-    var vals = await PA.formModal({
+    await PA.formModal({
       title: "Edit stop",
       submitLabel: "Save",
+      savingLabel: "Saving…",
       fields: STOP_FIELDS,
       values: {
         title: stop.title,
@@ -210,16 +216,15 @@
         note: stop.note,
         html_content: stop.html_content,
       },
+      onSubmit: async function (vals) {
+        var updated = await PA.adminFetch("/admin/stops/" + id, {
+          method: "PUT", body: JSON.stringify(vals),
+        });
+        var idx = stops.findIndex(function (s) { return s.id === id; });
+        if (idx >= 0) stops[idx] = updated;
+        renderStops();
+      },
     });
-    if (!vals) return;
-    try {
-      var updated = await PA.adminFetch("/admin/stops/" + id, {
-        method: "PUT", body: JSON.stringify(vals),
-      });
-      var idx = stops.findIndex(function (s) { return s.id === id; });
-      if (idx >= 0) stops[idx] = updated;
-      renderStops();
-    } catch (err) { window.alert("Could not save stop: " + err.message); }
   }
 
   async function onDeleteStop(id, title) {
