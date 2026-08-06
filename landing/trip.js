@@ -1,14 +1,17 @@
-// trip.js — renders a single trip page at /travel/:slug. Reads the slug from the
-// path, fetches the trip + its stops, paints the hero + stop cards. Tapping a
-// stop navigates to /travel/:slug/:stop, where StopView renders its stored HTML
-// full-screen. In admin mode (?admin), adds create / edit / delete / reorder
-// controls for stops.
+// trip.js — the trip page at /travel/:slug. Reads the slug from the path, paints
+// the hero, and owns the routing between the two screens that live on this one
+// page: the stop list (TripStops) and the full-screen postcard (StopView).
 //
-// Both screens live on this one page: the trip loads with every stop's
-// html_content in a single request, so opening a stop is a pushState and a
-// frame swap — no reload, no second fetch — and Back returns to the list with
-// its scroll position and order toggle intact. This module is the only place
-// that writes history; StopView asks it to move and never touches the URL.
+// The trip loads with every stop's html_content in a single request, so opening
+// a stop is a pushState and a frame swap — no reload, no second fetch — and Back
+// returns to the list with its scroll position and order toggle intact. This
+// module is the only place that writes history; StopView asks it to move and
+// never touches the URL.
+//
+// It is also the only place that assigns `trip` / `stops`. TripData fetches the
+// payload (from the network, or from the offline cache when this trip is saved)
+// and hands it here; TripStops and TripAdmin read it back through the accessors
+// passed to their init().
 (function () {
   "use strict";
 
@@ -18,46 +21,21 @@
   var headlineEl = document.getElementById("trip-headline");
   var albumEl = document.getElementById("trip-album");
   var adminBar = document.getElementById("travel-admin-bar");
-  // Only the heading itself comes and goes — its row is permanent, because the
-  // admin pencil and the order toggle live in it.
-  var stopsHeadingEl = document.getElementById("stops-heading");
-  var orderToggleBtn = document.getElementById("stops-order-toggle");
-  var stopsEl = document.getElementById("stops");
   var loginBtn = document.getElementById("admin-login-btn");
   var exportBtn = document.getElementById("trip-export-btn");
   var exportLabel = document.getElementById("trip-export-label");
 
   var trip = null;
   var stops = [];
-  // Display order. Default shows the newest (last-added) stop first — a
-  // non-persisted, view-only flip of the canonical `stops` array. Entering edit
-  // mode keeps whatever order was on screen (it does NOT snap back to canonical),
-  // so the admin edits the stops in the order they were just looking at. The
-  // per-row reorder maps back to canonical, so it stays correct in either order.
-  var oldestFirst = false;
-
-  function orderedStops() {
-    return oldestFirst ? stops : stops.slice().reverse();
-  }
-
-  // The inverse of orderedStops(): takes an array in displayed order and returns
-  // it in canonical order. TripAdmin's ↑/↓ arrows move a stop within what the
-  // admin is looking at, and this is what turns that back into sort_order —
-  // which keeps `oldestFirst` a private detail of this file.
-  function canonicalFrom(view) {
-    return oldestFirst ? view : view.slice().reverse();
-  }
-
-  function isAdmin() { return PA.isAdmin(); }
 
   // ── Routing ───────────────────────────────────────────────────────────────
   // /travel/<trip-slug>            → the stop list
   // /travel/<trip-slug>/<stop-no>  → that stop's postcard, full screen
   //
   // The stop number is 1-based over the *canonical* stops array — the same
-  // number stopRow() stamps on the card badge and StopView shows in its counter.
-  // Canonical, not displayed, so the URL doesn't change meaning when the viewer
-  // flips the list to oldest-first.
+  // number the card badge carries and StopView shows in its counter. Canonical,
+  // not displayed, so the URL doesn't change meaning when the viewer flips the
+  // list to oldest-first.
   var TRAVEL_PATH = /^\/travel\/([^/]+)(?:\/([^/]+))?\/?$/;
 
   function parseRoute() {
@@ -69,9 +47,9 @@
       return { slug: parts.length ? decodeURIComponent(parts[parts.length - 1]) : "", stopNo: null, hasStop: false };
     }
     // parseInt so a zero-padded segment ("/05", matching the card badge) resolves;
-    // loadTrip rewrites it to the canonical unpadded form. `hasStop` is tracked
-    // separately from `stopNo` so a segment that's present but unusable ("/0",
-    // "/abc") is still recognised as a stale URL worth rewriting.
+    // resolveRoute rewrites it to the canonical unpadded form. `hasStop` is
+    // tracked separately from `stopNo` so a segment that's present but unusable
+    // ("/0", "/abc") is still recognised as a stale URL worth rewriting.
     var n = m[2] == null ? NaN : parseInt(decodeURIComponent(m[2]), 10);
     return {
       slug: decodeURIComponent(m[1]),
@@ -139,6 +117,29 @@
     else showList();
   });
 
+  // The deep-link resolution, run once for the life of the page. A background
+  // refresh must not re-run it — that would yank the reader back into a stop
+  // they had already closed, or rewrite the URL under them.
+  var routeResolved = false;
+
+  function resolveRoute() {
+    if (routeResolved) return;
+    routeResolved = true;
+    // The list is already painted underneath, so ✕ has somewhere to land. A stop
+    // number that no longer exists (a deleted or reordered stop, a hand-typed
+    // URL) quietly falls back to the trip rather than showing an error; a valid
+    // but non-canonical one ("/05") is normalised. Either way replaceState, so
+    // Back still leaves the site.
+    var route = parseRoute();
+    var index = route.stopNo ? route.stopNo - 1 : -1;
+    if (index >= 0 && stops[index]) {
+      history.replaceState({ stopNo: index + 1 }, "", pathFor(index + 1));
+      showStop(index);
+    } else if (route.hasStop) {
+      history.replaceState({ stopNo: null }, "", pathFor(null));
+    }
+  }
+
   // ── Hero ──────────────────────────────────────────────────────────────────
   function renderHero() {
     var heading = trip.headline || trip.title || "Trip";
@@ -162,136 +163,72 @@
     albumEl.hidden = false;
   }
 
-  // ── Stop cards ──────────────────────────────────────────────────────────
-  function stopRow(stop, index) {
-    // Number belongs to the stop (its rank in the canonical sort_order), not the
-    // display slot — so it travels with the card when the view order is flipped.
-    // Shown 1-based even though sort_order is 0-based.
-    var no = String(stops.indexOf(stop) + 1).padStart(2, "0");
-    var noteHtml = stop.note ? '<p class="stop__note">' + PA.esc(stop.note) + "</p>" : "";
-    // Empty string outside admin mode — the ↑ ↓ Edit Delete row lives in
-    // trip-admin.js so this file stays about the public card.
-    var controls = window.TripAdmin.controls(stop, index);
-    return '' +
-      '<li class="stop-row">' +
-        '<button class="stop" data-id="' + PA.escAttr(stop.id) + '" data-title="' + PA.escAttr(stop.title) + '">' +
-          '<span class="stop__no"><span class="n">' + PA.esc(no) + '</span><span class="lbl">Stop</span></span>' +
-          '<span class="stop__body">' +
-            '<span class="stop__city">' + PA.esc(stop.title) + "</span>" +
-            (stop.meta ? '<span class="stop__meta">' + PA.esc(stop.meta) + "</span>" : "") +
-            noteHtml +
-          "</span>" +
-          '<span class="stop__go" aria-hidden="true">↗</span>' +
-        "</button>" +
-        controls +
-      "</li>";
-  }
-
-  // Public order toggle: visible only to non-admin viewers with 2+ stops (one
-  // stop can't reorder; admin has its own per-row reorder controls).
-  function syncOrderToggle() {
-    var show = !isAdmin() && stops.length >= 2;
-    orderToggleBtn.hidden = !show;
-    if (!show) return;
-    orderToggleBtn.setAttribute("aria-pressed", oldestFirst ? "true" : "false");
-    orderToggleBtn.classList.toggle("is-reversed", oldestFirst);
-    var label = oldestFirst ? "Show newest first" : "Show oldest first";
-    orderToggleBtn.title = label;
-    orderToggleBtn.setAttribute("aria-label", label);
-  }
-
+  // ── Painting a payload ────────────────────────────────────────────────────
   function renderStops() {
-    // Nothing to take away until there's at least one postcard.
-    exportBtn.hidden = !stops.length;
-    if (!stops.length) {
-      stopsHeadingEl.hidden = !isAdmin();
-      syncOrderToggle();
-      stopsEl.innerHTML = isAdmin()
-        ? '<li class="empty">No stops yet. Use “Add stop” above.</li>'
-        : '<li class="empty">First postcard coming soon.</li>';
-      return;
-    }
-    stopsHeadingEl.hidden = false;
-    syncOrderToggle();
-    stopsEl.innerHTML = orderedStops().map(stopRow).join("");
-    wireStops();
+    exportBtn.hidden = !stops.length; // nothing to take away until there's a postcard
+    window.TripStops.render();
   }
 
-  function wireStops() {
-    stopsEl.querySelectorAll(".stop").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var id = btn.getAttribute("data-id");
-        // Opens from memory — the whole trip (incl. every stop's HTML) is loaded
-        // in one pass, so there's no per-stop fetch here. The index is into the
-        // canonical order, NOT the displayed order: it becomes the URL's stop
-        // number and drives Previous/Next, so both stay independent of this
-        // page's order toggle.
-        var idx = stops.findIndex(function (s) { return s.id === id; });
-        if (idx >= 0) openStop(idx);
-      });
-    });
-    window.TripAdmin.wireRows(stopsEl);
+  function applyTrip(data) {
+    var openIndex = window.StopView.isOpen() ? window.StopView.currentIndex() : -1;
+    var openStop = openIndex >= 0 ? stops[openIndex] : null;
+
+    trip = data;
+    stops = data.stops || [];
+    renderHero();
+    renderStops();
+
+    // A refresh that lands while a postcard is open repaints the list behind it,
+    // which is invisible. Re-rendering the postcard itself is not: it would
+    // reload the card and throw away the reader's scroll position and whichever
+    // side of the flip they were on. So only do that if the stop's HTML actually
+    // changed underneath them.
+    if (openStop) {
+      var still = stops[openIndex];
+      if (!still) exitStop();
+      else if (still.html_content !== openStop.html_content) showStop(openIndex);
+    }
   }
 
-  // ── Load ────────────────────────────────────────────────────────────────
-  async function loadTrip() {
-    var route = parseRoute();
-    if (!route.slug) {
-      headlineEl.textContent = "Trip not found";
-      return;
-    }
-    try {
-      trip = await PA.publicFetch("/trips/" + encodeURIComponent(route.slug));
-      stops = trip.stops || [];
-      renderHero();
-      renderStops();
-      // Deep link to a stop. The list is already painted underneath, so ✕ has
-      // somewhere to land. A number that no longer exists (a deleted or
-      // reordered stop, a hand-typed URL) quietly falls back to the trip rather
-      // than showing an error; a valid but non-canonical one ("/05") is
-      // normalised. Either way replaceState, so Back still leaves the site.
-      var index = route.stopNo ? route.stopNo - 1 : -1;
-      if (index >= 0 && stops[index]) {
-        history.replaceState({ stopNo: index + 1 }, "", pathFor(index + 1));
-        showStop(index);
-      } else if (route.hasStop) {
-        history.replaceState({ stopNo: null }, "", pathFor(null));
-      }
-    } catch (err) {
-      trip = null;
-      headlineEl.textContent = "Trip not found";
-      eyebrowEl.style.display = "none";
-      albumEl.hidden = true;
-      stopsHeadingEl.hidden = true;
-      orderToggleBtn.hidden = true;
-      exportBtn.hidden = true;
-      stopsEl.innerHTML = '<li class="empty empty--error">' + PA.esc(err.message) + "</li>";
-    }
-    // The bar keeps itself in sync with admin state; this is the one transition
-    // PA.onChange can't see — the trip only just stopped being null.
-    window.TripAdmin.renderBar();
+  function renderNotFound(message) {
+    trip = null;
+    headlineEl.textContent = "Trip not found";
+    eyebrowEl.style.display = "none";
+    albumEl.hidden = true;
+    exportBtn.hidden = true;
+    window.TripStops.renderError(message);
   }
 
+  // ── Wiring ────────────────────────────────────────────────────────────────
   // Pencil (in the stops header) → edit-mode toggle.
   PA.wireLoginButton(loginBtn);
 
-  // Hand TripAdmin the keys to the state it edits. This file stays the only
-  // thing that assigns `trip` / `stops`; setStops is assign-and-repaint, so the
-  // admin module never calls a renderer of ours directly.
+  window.TripStops.init({
+    stops: function () { return stops; },
+    onOpen: openStop,
+  });
+
+  window.TripData.init({
+    slug: function () { return parseRoute().slug; },
+    trip: function () { return trip; },
+    onData: function (data) { applyTrip(data); resolveRoute(); },
+    onError: renderNotFound,
+    // The admin bar keeps itself in sync with admin state; this is the one
+    // transition PA.onChange can't see — the trip only just stopped (or started)
+    // being null.
+    onSettled: function () { window.TripAdmin.renderBar(); },
+  });
+
+  // Hand TripAdmin the keys to the state it edits. setStops is
+  // assign-and-repaint, so the admin module never calls a renderer of ours
+  // directly.
   window.TripAdmin.init({
     bar: adminBar,
     trip: function () { return trip; },
     stops: function () { return stops; },
     setStops: function (next) { stops = next; renderStops(); },
-    orderedStops: orderedStops,
-    canonicalFrom: canonicalFrom,
-  });
-
-  // Public reverse-order toggle. Lives outside #stops so it survives re-renders
-  // and only needs wiring once.
-  orderToggleBtn.addEventListener("click", function () {
-    oldestFirst = !oldestFirst;
-    renderStops();
+    orderedStops: window.TripStops.orderedStops,
+    canonicalFrom: window.TripStops.canonicalFrom,
   });
 
   // Download the whole trip as one static HTML file. Public — no admin gate.
@@ -318,13 +255,16 @@
 
   // Re-render when admin state flips. wireLoginButton keeps the pencil in sync
   // and TripAdmin keeps its own bar in sync; the stops only re-render once the
-  // trip has loaded. The display order (`oldestFirst`) is deliberately NOT reset
-  // here, so entering or leaving edit mode preserves the order the stops were
-  // just shown in.
+  // trip has loaded. The display order is deliberately NOT reset here, so
+  // entering or leaving edit mode preserves the order the stops were just shown
+  // in — that state lives in TripStops and nothing here touches it.
   PA.onChange(function () {
     if (!trip) return;
     renderStops();
   });
 
-  document.addEventListener("DOMContentLoaded", loadTrip);
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!parseRoute().slug) { headlineEl.textContent = "Trip not found"; return; }
+    window.TripData.load();
+  });
 })();
