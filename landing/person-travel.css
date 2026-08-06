@@ -553,14 +553,23 @@
    steady state is exactly what it was before the animation existed.
 
    left:0;right:0 rather than width:100% so `margin:0 auto` still centres the
-   capped frame inside the stage on a wide screen. */
+   capped frame inside the stage on a wide screen.
+
+   height MUST stay explicit. An iframe is a *replaced* element, and an
+   absolutely positioned replaced element with `height:auto` takes its intrinsic
+   height — 150px — and drops `bottom` as over-constrained. It does not stretch
+   between top and bottom the way a normal box does. `height:auto` here collapsed
+   the outgoing postcard to a 150px strip the moment this class landed, leaving
+   the stage's own navy filling the rest of the screen until the slide settled
+   and the class came off again. 100% resolves against the stage, so the frame's
+   box is identical sliding and settled. */
 .stop-screen__frame--sliding {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
   right: 0;
-  height: auto;
+  height: 100%;
   transition: transform 0.28s ease, opacity 0.28s ease;
 }
 .stop-screen__frame--from-right { transform: translateX(100%); opacity: 0.4; }
