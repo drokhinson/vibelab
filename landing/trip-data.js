@@ -75,15 +75,38 @@
   });
 
   // Compressing the payload buys a trip roughly six times the room, but the
-  // ~5MB localStorage ceiling is still a ceiling. When a trip is past it, say by
-  // how much and point at the thing that does work — the Download button is
-  // right there in the same row, and it has no size limit at all.
+  // ~5MB localStorage ceiling is still a ceiling, and a long trip full of rich
+  // postcards can be far enough past it that no amount of squeezing helps.
+  //
+  // So the message shows the whole arithmetic: what the trip costs raw, what
+  // compression got it down to, and what the browser will actually allow. Seeing
+  // all three is what makes it clear the gap is structural rather than something
+  // a retry or a bit of tidying would fix — and it points at Download, which is
+  // in the same row and has no size limit at all.
   function tooBigMessage(res) {
     var fmt = window.TripCache.formatChars;
-    if (!res.needChars) return "Couldn't save this trip offline — this browser's storage isn't available.";
-    return "Couldn't save this trip offline — it needs about " + fmt(res.needChars) +
-      " and only " + fmt(res.freeChars) + " is free in this browser's storage.\n\n" +
-      "Use Download instead to keep a copy of the whole trip as a file.";
+    if (!res.needChars) {
+      return "Couldn't save this trip offline — this browser's storage isn't available.";
+    }
+    // Only tell the two-number story when compression actually moved the
+    // needle. A postcard full of already-compressed art (base64 JPEGs, say)
+    // barely shrinks, and "needs 9.4 MB — compressed, 9.4 MB" reads as a bug
+    // rather than as an explanation.
+    var helped = res.compressed && res.storedChars < res.rawChars * 0.9;
+    var sizes;
+    if (helped) {
+      sizes = "Uncompressed the trip needs about " + fmt(res.rawChars) + " of storage. " +
+        "Compressed it still needs " + fmt(res.storedChars) + ", and this browser allows about " +
+        fmt(res.freeChars) + ".";
+    } else if (res.compressed) {
+      sizes = "The trip needs about " + fmt(res.storedChars) + " of storage even compressed, " +
+        "and this browser allows about " + fmt(res.freeChars) + ".";
+    } else {
+      sizes = "The trip needs about " + fmt(res.needChars) + " of storage and this browser allows about " +
+        fmt(res.freeChars) + ". (This browser can't compress saved data.)";
+    }
+    return "Couldn't save this trip offline.\n\n" + sizes + "\n\n" +
+      "Use Download to keep the whole trip as a file instead — it has no size limit.";
   }
 
   // ── Refresh ──────────────────────────────────────────────────────────────
