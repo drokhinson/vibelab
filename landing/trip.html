@@ -366,10 +366,13 @@
     <div class="stop-screen__stage">
       <iframe class="stop-screen__frame" sandbox="allow-scripts" title="Postcard"></iframe>
     </div>
+    <!-- The word lives in its own span so the landscape rails can drop it and
+         keep the arrow; aria-label carries the name either way (and contains the
+         visible word, so it still satisfies Label in Name). -->
     <div class="stop-screen__nav" hidden>
-      <button class="stop-screen__nav-btn" type="button" data-dir="-1">&larr; Previous</button>
+      <button class="stop-screen__nav-btn" type="button" data-dir="-1" aria-label="Previous stop"><span aria-hidden="true">&larr;</span><span class="stop-screen__nav-label">Previous</span></button>
       <span class="stop-screen__counter"></span>
-      <button class="stop-screen__nav-btn" type="button" data-dir="1">Next &rarr;</button>
+      <button class="stop-screen__nav-btn" type="button" data-dir="1" aria-label="Next stop"><span class="stop-screen__nav-label">Next</span><span aria-hidden="true">&rarr;</span></button>
     </div>
   </section>
 
@@ -377,6 +380,7 @@
   <script src="admin.js"></script>
   <script src="html-span-editor.js"></script>
   <script src="stop-readonly.js"></script>
+  <script src="stop-pair.js"></script>
   <script src="stop-view.js"></script>
   <script src="trip-export-style.js"></script>
   <script src="trip-export-css.js"></script>

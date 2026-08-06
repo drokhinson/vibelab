@@ -139,9 +139,13 @@
   function buildFrame(html, title) {
     var next = proto.cloneNode(false);
     next.setAttribute("title", title);
-    // Every postcard goes in read-only — see stop-readonly.js for why that has
-    // to happen inside the document rather than out here.
-    next.srcdoc = window.StopReadonly.harden(html);
+    // Every postcard goes in read-only, and carries the rig that lays its two
+    // faces side by side on a sideways phone — see stop-readonly.js and
+    // stop-pair.js for why both have to happen inside the document rather than
+    // out here. attach() then keeps that frame told which way the phone is
+    // held, so rotating re-lays-out the card without rebuilding the frame.
+    next.srcdoc = window.StopReadonly.harden(window.StopPair.pair(html));
+    window.StopPair.attach(next);
     return next;
   }
 

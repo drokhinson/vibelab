@@ -588,8 +588,14 @@
   background: rgba(255, 255, 255, 0.05);
 }
 .stop-screen__nav[hidden] { display: none; }
+/* inline-flex, not a plain text button: the arrow and the word are separate
+   spans so the landscape rails can drop the word (see trip.html). */
 .stop-screen__nav-btn {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   min-height: 44px;
   padding: 0.5rem 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -641,4 +647,63 @@
   .pa-modal__body { padding: 0.9rem; }
   .pa-modal__err { margin: 0 0.9rem; }
   .pa-modal__actions { padding-left: 0.9rem; padding-right: 0.9rem; }
+}
+
+/* ── Landscape phone: rails instead of bars ───────────────────────────────
+   Held sideways, height is the scarce dimension and width is the plentiful one,
+   which makes the two chrome bars exactly the wrong shape — they eat the
+   postcard's height while the gutters either side of it sit empty. So the whole
+   screen becomes a grid, and the bar and the nav become `display:contents` so
+   their buttons promote to grid items and land in rails left and right of the
+   card: close over Previous, download over Next. The markup's nesting doesn't
+   change at all.
+
+   Neither [hidden] rule needs restating here. `.stop-screen[hidden]` and
+   `.stop-screen__nav[hidden]` are class + attribute, so they outrank the plain
+   class selectors below whatever the source order — the opposite of the
+   display:flex case above, which had to be restated because it came from an
+   equally specific rule.
+
+   The breakpoint is shared: stop-pair.js reads this same query to decide when
+   to lay a postcard's two faces side by side, and the rails and the pairing
+   only make sense together. Keep the two in step. */
+@media (orientation: landscape) and (max-height: 620px) {
+  .stop-screen {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      "close stage   dl"
+      "prev  stage   next"
+      "prev  counter next";
+    align-items: center;
+    gap: 0.35rem;
+    /* The bars carried the safe-area insets; with them gone the screen does.
+       Landscape also puts the notch on the left or the right, which portrait
+       never had to think about. */
+    padding: calc(0.35rem + env(safe-area-inset-top))
+             calc(0.35rem + env(safe-area-inset-right))
+             calc(0.35rem + env(safe-area-inset-bottom))
+             calc(0.35rem + env(safe-area-inset-left));
+  }
+  .stop-screen__bar,
+  .stop-screen__nav { display: contents; }
+  /* No room for it, and the stop's name is one tap away on the list. */
+  .stop-screen__title { display: none; }
+  .stop-screen__close { grid-area: close; }
+  .stop-screen__dl { grid-area: dl; }
+  /* Spans the two upper rows, so the card gets everything above the counter. */
+  .stop-screen__stage { grid-area: stage; align-self: stretch; }
+  .stop-screen__nav-btn[data-dir="-1"] { grid-area: prev; }
+  .stop-screen__nav-btn[data-dir="1"] { grid-area: next; }
+  .stop-screen__counter { grid-area: counter; }
+  /* Arrow only, still a 44px target. The word would double each rail's width,
+     and the width is the whole point of turning the phone. */
+  .stop-screen__nav-btn {
+    width: 44px;
+    padding: 0;
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+  .stop-screen__nav-label { display: none; }
 }
