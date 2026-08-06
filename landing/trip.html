@@ -98,6 +98,9 @@
       transition:border-color .15s, background .15s, color .15s;
     }
     .album-link:hover{ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
+    /* display:inline-flex above outranks the [hidden] attribute's display:none,
+       so hiding the pill needs this — same reason .trip-export has it. */
+    .album-link[hidden]{ display:none; }
     .album-link svg{ width:17px; height:17px; color:var(--gold); flex:none; }
     /* No album set: same pill, muted and non-interactive. */
     .album-link--empty{ opacity:.55; cursor:default; }
@@ -136,6 +139,9 @@
       color:rgba(214,223,231,.6); transition:color .15s, background .15s;
     }
     .stops-order-toggle:hover{ color:var(--gold); background:rgba(255,255,255,.08); }
+    /* Same [hidden]-vs-display trap as .album-link / .trip-export — without this
+       the toggle stays on screen in admin mode, where it has no business being. */
+    .stops-order-toggle[hidden]{ display:none; }
     .stops-order-toggle svg{ display:block; transition:transform .2s; }
     .stops-order-toggle.is-reversed svg{ transform:rotate(180deg); }
     .stops{ display:flex; flex-direction:column; gap:.9rem; list-style:none; margin:0; padding:0; }
