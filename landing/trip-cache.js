@@ -201,19 +201,31 @@
   }
 
   // ── Write ────────────────────────────────────────────────────────────────
-  // Resolves to { ok, needChars, freeChars }. ok:false means the trip is not
-  // saved — too big, no room, or storage unavailable — and needChars/freeChars
-  // are what the caller needs to say why. The background write after a refresh
-  // ignores the result; the switch, where the viewer explicitly asked to save,
-  // reports it and flips itself back.
-  function fail(need, free) { return { ok: false, needChars: need || 0, freeChars: free || 0 }; }
+  // Resolves to a result object:
+  //
+  //   { ok, rawChars, storedChars, needChars, freeChars, compressed }
+  //
+  // ok:false means the trip is not saved — too big, no room, or storage
+  // unavailable. The rest is everything the caller needs to explain why without
+  // guessing: what the trip costs uncompressed, what compression got it down to,
+  // what the entry actually needs, and what was available. All of it in stored
+  // characters, so the figures are directly comparable.
+  //
+  // The background write after a refresh ignores the result; the switch, where
+  // the viewer explicitly asked to save, reports it and flips itself back.
+  function result(ok, fields) {
+    var out = { ok: ok, rawChars: 0, storedChars: 0, needChars: 0, freeChars: 0, compressed: false };
+    for (var k in fields) if (Object.prototype.hasOwnProperty.call(fields, k)) out[k] = fields[k];
+    return out;
+  }
 
   async function write(slug, trip) {
     var s = store();
-    if (!s || !slug || !trip || !isEnabled(slug)) return fail(0, 0);
+    if (!s || !slug || !trip || !isEnabled(slug)) return result(false, {});
 
     var json;
-    try { json = JSON.stringify({ savedAt: Date.now(), trip: trip }); } catch (_) { return fail(0, 0); }
+    try { json = JSON.stringify({ savedAt: Date.now(), trip: trip }); }
+    catch (_) { return result(false, {}); }
 
     var value;
     if (canCompress()) {
@@ -225,13 +237,18 @@
 
     // Everything below is measured in stored characters, the unit the browser
     // charges — see the header.
-    var need = dataKey(slug).length + value.length;
-    var free = freeChars(slug);
-    if (value.length > MAX_CHARS) { clear(slug); return fail(need, free); }
+    var facts = {
+      rawChars: json.length,
+      storedChars: value.length,
+      needChars: dataKey(slug).length + value.length,
+      freeChars: freeChars(slug),
+      compressed: value.indexOf(GZIP_TAG) === 0,
+    };
+    if (value.length > MAX_CHARS) { clear(slug); return result(false, facts); }
 
     try {
       s.setItem(dataKey(slug), value);
-      return { ok: true, needChars: need, freeChars: free };
+      return result(true, facts);
     } catch (_) {
       // Out of room. Evict the other saved trips and try once more; if it still
       // won't fit, leave no half-written entry behind.
@@ -240,10 +257,11 @@
       });
       try {
         s.setItem(dataKey(slug), value);
-        return { ok: true, needChars: need, freeChars: free };
+        return result(true, facts);
       } catch (_) {
         clear(slug);
-        return fail(need, freeChars(slug));
+        facts.freeChars = freeChars(slug);
+        return result(false, facts);
       }
     }
   }
