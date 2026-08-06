@@ -85,6 +85,17 @@
   // ── 2. Sanitize ─────────────────────────────────────────────────────────
   function sanitize(doc) {
     doc.querySelectorAll("script,link[rel~=stylesheet]").forEach(function (n) { n.remove(); });
+    // Editing affordances baked into a postcard go the same way the scripts do,
+    // so the keepsake reads the way the on-screen postcard does (stop-view.js
+    // does the equivalent at render time). Scripts are already gone here, so a
+    // static attribute pass is enough — no observer needed.
+    doc.querySelectorAll("[contenteditable]").forEach(function (el) {
+      el.setAttribute("contenteditable", "false");
+    });
+    doc.querySelectorAll("input,textarea,select").forEach(function (el) {
+      el.setAttribute("readonly", "");
+      el.setAttribute("tabindex", "-1");
+    });
     doc.querySelectorAll("*").forEach(function (el) {
       for (var i = el.attributes.length - 1; i >= 0; i--) {
         var name = el.attributes[i].name;
