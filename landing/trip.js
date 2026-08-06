@@ -265,6 +265,8 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     if (!parseRoute().slug) { headlineEl.textContent = "Trip not found"; return; }
-    window.TripData.load();
+    // Fire and forget: load() reports every failure through onError/the refresh
+    // button itself, so there is nothing here to await or handle.
+    window.TripData.load().catch(function () {});
   });
 })();
