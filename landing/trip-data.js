@@ -27,6 +27,9 @@
   var host = null;
   var refreshing = false;
   var errorTimer = null;
+  // Set once a network payload has been applied, so a slower cache read can't
+  // paint stale content over it. See load().
+  var networkLanded = false;
 
   function trip() { return host && host.trip(); }
   function slug() { return (host && host.slug()) || ""; }
@@ -52,7 +55,7 @@
   // This is the write the viewer explicitly asked for, so — unlike the
   // background one in refresh() — a failure has to be reported: silently leaving
   // the switch on would promise an offline copy that isn't there.
-  offlineInput.addEventListener("change", function () {
+  offlineInput.addEventListener("change", async function () {
     var t = trip();
     if (!t) return;
     if (!offlineInput.checked) {
@@ -61,14 +64,27 @@
       return;
     }
     window.TripCache.setEnabled(t.slug, true);
-    if (!window.TripCache.write(t.slug, t)) {
+    var res = await window.TripCache.write(t.slug, t);
+    if (!res.ok) {
       window.TripCache.setEnabled(t.slug, false);
       syncSwitch();
-      window.alert("Couldn't save this trip offline — there isn't enough room in this browser's storage.");
+      window.alert(tooBigMessage(res));
       return;
     }
     syncSwitch();
   });
+
+  // Compressing the payload buys a trip roughly six times the room, but the
+  // ~5MB localStorage ceiling is still a ceiling. When a trip is past it, say by
+  // how much and point at the thing that does work — the Download button is
+  // right there in the same row, and it has no size limit at all.
+  function tooBigMessage(res) {
+    var fmt = window.TripCache.formatChars;
+    if (!res.needChars) return "Couldn't save this trip offline — this browser's storage isn't available.";
+    return "Couldn't save this trip offline — it needs about " + fmt(res.needChars) +
+      " and only " + fmt(res.freeChars) + " is free in this browser's storage.\n\n" +
+      "Use Download instead to keep a copy of the whole trip as a file.";
+  }
 
   // ── Refresh ──────────────────────────────────────────────────────────────
   function spinning(on) {
@@ -88,8 +104,11 @@
     spinning(true);
     try {
       var data = await PA.publicFetch("/trips/" + encodeURIComponent(s));
+      networkLanded = true;
       host.onData(data);
-      window.TripCache.write(s, data); // a no-op unless this trip is saved
+      // Fire and forget, and a no-op unless this trip is saved. A background
+      // write that fails stays silent — only the switch reports.
+      window.TripCache.write(s, data).catch(function () {});
       syncSwitch();
     } catch (err) {
       if (!trip()) {
@@ -116,12 +135,29 @@
   // postcard's HTML — before anything touches the network, so it works with no
   // connection at all. The network pass then runs behind it and quietly replaces
   // it if the trip has moved on.
-  function load() {
+  //
+  // Reading the cache now means decompressing it, so it is asynchronous — but it
+  // is still awaited BEFORE the network pass starts rather than raced against
+  // it. Starting both together would, on a failed fetch, paint "Trip not found"
+  // and then replace it with the cached trip a moment later — a flash of the
+  // error in precisely the case this feature exists for. Decompressing costs a
+  // few milliseconds; a wrong first paint costs more.
+  //
+  // `networkLanded` still guards the paint, because refresh() can also be fired
+  // by the button while this is in flight.
+  async function load() {
     if (!slug()) return false;
-    var cached = window.TripCache.read(slug());
-    if (cached) host.onData(cached.trip);
-    syncSwitch();
-    refresh();
+    var cached = null;
+    try { cached = await window.TripCache.read(slug()); } catch (_) {}
+    if (cached && !networkLanded) {
+      host.onData(cached.trip);
+      // Sync the switch here, not only in refresh(): loading offline from cache
+      // means refresh() takes its failure path, which deliberately leaves the
+      // painted page alone — so this is the only chance the switch gets to show
+      // that this trip is saved.
+      syncSwitch();
+    }
+    await refresh();
     return !!cached;
   }
 
