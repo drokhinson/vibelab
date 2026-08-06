@@ -87,6 +87,19 @@
     .trip-export[hidden]{ display:none; }
     @media (max-width:480px){ .trip-export span{ display:none; } .trip-export{ padding:0.45rem 0.7rem; } }
 
+    /* "Save offline" switch — sits with .trip-export because it's the same kind
+       of control: take this trip with you. Off by default; nothing is stored
+       until it's on. Shape matches the pills either side of it; the slider
+       itself is styled by .pa-switch in person-travel.css. */
+    .trip-offline{
+      min-height:40px; padding:.35rem .8rem; border-radius:999px;
+      background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.16);
+      transition:border-color .15s, background .15s;
+    }
+    .trip-offline:hover{ border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
+    /* Same [hidden]-vs-display trap as .album-link / .trip-export below. */
+    .trip-offline[hidden]{ display:none; }
+
     /* Photo album pill — lives in the topbar alongside .back / .trip-export,
        so it matches their shape and size rather than the old hero pill's. */
     .album-link{
@@ -144,6 +157,27 @@
     .stops-order-toggle[hidden]{ display:none; }
     .stops-order-toggle svg{ display:block; transition:transform .2s; }
     .stops-order-toggle.is-reversed svg{ transform:rotate(180deg); }
+
+    /* Refresh — same box as the order toggle, to the right of the pencil. It
+       re-fetches WITHOUT clearing the list: whatever is on screen stays put for
+       the whole request, and a failed refresh leaves it alone entirely. The
+       spin is the only signal that anything is happening. */
+    .stops-refresh{
+      flex:none; display:inline-flex; align-items:center; justify-content:center;
+      padding:.3rem; border:0; border-radius:8px; background:transparent; cursor:pointer;
+      color:rgba(214,223,231,.6); transition:color .15s, background .15s;
+    }
+    .stops-refresh:hover:not(:disabled){ color:var(--gold); background:rgba(255,255,255,.08); }
+    .stops-refresh svg{ display:block; }
+    /* pa-spin is declared in person-travel.css, already loaded on this page. */
+    .stops-refresh.is-spinning svg{ animation:pa-spin .8s linear infinite; }
+    .stops-refresh.is-spinning{ color:var(--gold); }
+    /* Refresh failed (usually offline). The list it was refreshing is untouched
+       — this tint is the whole error report. */
+    .stops-refresh.is-error{ color:#f3c9b6; }
+    @media (prefers-reduced-motion:reduce){
+      .stops-refresh.is-spinning svg{ animation:none; opacity:.55; }
+    }
     .stops{ display:flex; flex-direction:column; gap:.9rem; list-style:none; margin:0; padding:0; }
     .stop-row{ display:flex; flex-direction:column; gap:.5rem; }
 
@@ -192,10 +226,20 @@
       .hero{ padding:.25rem 0 1.25rem; }
     }
 
-    /* Measured: Back + "Photo album ↗" + the icon-only Download need 287px and
-       fit every phone down to 360px. Only below that does the row overflow, so
-       the album pill drops to its icon there — same move .trip-export makes. */
-    @media (max-width:350px){
+    /* The topbar row is Back + album + Download + the offline switch, and it has
+       to survive a 360px phone. Two stages, each dropping a label once its pill
+       stops fitting — the icon (or the slider) still carries the state, and the
+       title/aria-label carry the words for anyone who needs them.
+
+       First the switch's label, which is the widest of the three. */
+    @media (max-width:560px){
+      .pa-switch__label{ display:none; }
+      .trip-offline{ padding:.35rem .55rem; }
+    }
+    /* Then the album's. Measured: Back + "Photo album ↗" + icon-only Download +
+       the icon-only switch need ~390px, so the album pill drops to its icon just
+       above that — same move .trip-export makes at 480px. */
+    @media (max-width:430px){
       .album-link span{ display:none; }
       .album-link{ padding:.45rem .7rem; }
     }
@@ -209,7 +253,7 @@
       .hero{ padding:0 0 .9rem; }
       .hero .eyebrow{ font-size:.65rem; margin-bottom:.35rem; }
       .hero h1{ font-size:clamp(1.5rem,5vw,2rem); }
-      .back, .trip-export, .album-link{ min-height:34px; padding:.3rem .7rem; }
+      .back, .trip-export, .album-link, .trip-offline{ min-height:34px; padding:.3rem .7rem; }
       .stops-header{ margin-bottom:.6rem; }
     }
   </style>
@@ -238,6 +282,16 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
           <span id="trip-export-label">Download</span>
         </button>
+        <!-- Keep this trip readable with no connection. Public, per trip, and
+             OFF by default — nothing is written to the device until it's on.
+             Unhidden by trip.js once the trip loads. A real checkbox does the
+             work so it is keyboard- and screen-reader-native; .pa-switch draws
+             the slider (person-travel.css). -->
+        <label class="pa-switch trip-offline" id="trip-offline" hidden>
+          <input type="checkbox" id="trip-offline-input" />
+          <span class="pa-switch__track" aria-hidden="true"></span>
+          <span class="pa-switch__label">Save offline</span>
+        </label>
       </div>
     </div>
 
@@ -264,6 +318,14 @@
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 20h9"/>
             <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+          </svg>
+        </button>
+        <button id="trip-refresh-btn" class="stops-refresh" type="button"
+                title="Refresh" aria-label="Refresh this trip">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+            <path d="M21 3v6h-6"/>
           </svg>
         </button>
       </div>
@@ -297,7 +359,13 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
-    <iframe class="stop-screen__frame" sandbox="allow-scripts" title="Postcard"></iframe>
+    <!-- The stage is the flexible row and clips the slide; the frame inside is
+         what stop-view.js swaps. Previous/Next animates by putting the incoming
+         frame in here alongside the outgoing one — it is still always a brand
+         new iframe, which is what keeps paging out of the session history. -->
+    <div class="stop-screen__stage">
+      <iframe class="stop-screen__frame" sandbox="allow-scripts" title="Postcard"></iframe>
+    </div>
     <div class="stop-screen__nav" hidden>
       <button class="stop-screen__nav-btn" type="button" data-dir="-1">&larr; Previous</button>
       <span class="stop-screen__counter"></span>
@@ -308,11 +376,15 @@
   <script src="config.js"></script>
   <script src="admin.js"></script>
   <script src="html-span-editor.js"></script>
+  <script src="stop-readonly.js"></script>
   <script src="stop-view.js"></script>
   <script src="trip-export-style.js"></script>
   <script src="trip-export-css.js"></script>
   <script src="trip-export.js"></script>
   <script src="trip-admin.js"></script>
+  <script src="trip-cache.js"></script>
+  <script src="trip-stops.js"></script>
+  <script src="trip-data.js"></script>
   <script src="trip.js"></script>
 </body>
 </html>

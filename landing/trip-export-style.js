@@ -59,6 +59,14 @@
   ].join("\n");
 
   var late = [
+    // A postcard that shipped an editable box is inert here — trip-export.js's
+    // sanitize() already dropped its scripts and marked the fields readonly, and
+    // this stops a stray one from still catching taps in the exported file.
+    ".tx-card input, .tx-card textarea, .tx-card select{",
+    "  pointer-events:none !important; caret-color:transparent !important; }",
+    ".tx-card [contenteditable]{ -webkit-user-modify:read-only !important;",
+    "  user-modify:read-only !important; }",
+
     // Narrow screens can't hold two faces abreast; stack them.
     "@media (max-width:760px){",
     "  .tx-card [data-tx-card]{ grid-template-columns:1fr; }",

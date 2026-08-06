@@ -31,6 +31,10 @@
 // storage. NEVER add allow-same-origin alongside allow-scripts — that
 // combination re-grants same-origin access and defeats the sandbox.
 //
+// That isolation cuts both ways: this page cannot reach into the frame either.
+// So the read-only pass cannot be done from out here — StopReadonly.harden()
+// splices it into the srcdoc string to run inside the postcard instead.
+//
 // Note on headers: `X-Frame-Options: DENY` governs framing of HTTP responses; a
 // `srcdoc` iframe has no HTTP response, so it is not affected. If a
 // Content-Security-Policy is ever added to the landing site, it must not block
@@ -39,7 +43,8 @@
 (function () {
   "use strict";
 
-  var root = null, titleEl = null, frame = null, proto = null, dlBtn = null, closeBtn = null;
+  var root = null, titleEl = null, stage = null, frame = null, proto = null;
+  var dlBtn = null, closeBtn = null;
   var nav = null, counterEl = null, prevBtn = null, nextBtn = null;
 
   var list = [];
@@ -47,6 +52,13 @@
   var handlers = {};
   var open = false;
   var keyHandler = null;
+
+  // Keep in step with the transition on .stop-screen__frame--sliding.
+  var SLIDE_MS = 280;
+  // How long to let an incoming postcard load before sliding it in anyway. Long
+  // enough that a normal card arrives painted, short enough that a slow one
+  // doesn't make Next feel stuck.
+  var LOAD_WAIT_MS = 350;
 
   // The markup is static in trip.html, so the iframe (and its sandbox attribute)
   // lives where a reader can see it, and paging Previous/Next swaps only the
@@ -56,6 +68,7 @@
     root = document.getElementById("stop-screen");
     if (!root) return false;
     titleEl = root.querySelector(".stop-screen__title");
+    stage = root.querySelector(".stop-screen__stage");
     frame = root.querySelector(".stop-screen__frame");
     // A pristine copy of the markup's iframe, taken before anything is ever
     // loaded into it — every stop gets a fresh clone of this. See renderFrame().
@@ -106,25 +119,104 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
   }
 
-  // Swaps in a brand-new iframe rather than reassigning srcdoc on the one that's
-  // already there. Not a style choice: navigating a *loaded* child frame pushes
-  // an entry onto the joint session history, so paging Previous/Next would bury
-  // the trip list one bogus entry deeper per postcard and the browser Back
-  // button would step through stale iframe documents instead of closing the
-  // stop. A newly created frame's first load replaces its own initial entry, so
-  // this leaves the history exactly as trip.js wrote it.
+  // ── Frame swapping ────────────────────────────────────────────────────────
+  // Every render builds a brand-new iframe rather than reassigning srcdoc on the
+  // one that's already there. Not a style choice: navigating a *loaded* child
+  // frame pushes an entry onto the joint session history, so paging
+  // Previous/Next would bury the trip list one bogus entry deeper per postcard
+  // and the browser Back button would step through stale iframe documents
+  // instead of closing the stop. A newly created frame's first load replaces its
+  // own initial entry, so this leaves the history exactly as trip.js wrote it.
+  //
+  // The slide below only changes *where* the new frame is inserted. It must
+  // never reuse a frame — that is the whole reason this function exists.
   //
   // srcdoc is set on the DOM property before insertion — as a property so we
   // don't attribute-escape a large document, and before insertion so the load is
   // that initial (replacing) navigation. The clone carries the markup's
   // sandbox="allow-scripts" with it; see the header note on why
   // allow-same-origin must never join it.
-  function renderFrame(html, title) {
+  function buildFrame(html, title) {
     var next = proto.cloneNode(false);
     next.setAttribute("title", title);
-    next.srcdoc = html || "";
-    frame.replaceWith(next);
+    // Every postcard goes in read-only — see stop-readonly.js for why that has
+    // to happen inside the document rather than out here.
+    next.srcdoc = window.StopReadonly.harden(html);
+    return next;
+  }
+
+  function reducedMotion() {
+    try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+    catch (_) { return false; }
+  }
+
+  // The slide in flight, if any: { incoming, outgoing, ... }. At most one — a
+  // nav arriving mid-slide settles the previous one instantly.
+  var pending = null;
+
+  function settleSlide() {
+    var p = pending;
+    if (!p) return;
+    pending = null;
+    clearTimeout(p.loadTimer);
+    clearTimeout(p.doneTimer);
+    if (p.onLoad) p.incoming.removeEventListener("load", p.onLoad);
+    if (p.onEnd) p.incoming.removeEventListener("transitionend", p.onEnd);
+    if (p.outgoing && p.outgoing.parentNode) p.outgoing.remove();
+    // Back to a plain static child — the steady state is exactly what it was
+    // before any of this ran.
+    p.incoming.className = "stop-screen__frame";
+  }
+
+  // dir: +1 for Next (the new card comes in from the right), -1 for Previous.
+  function slide(next, dir) {
+    var outgoing = frame;
+    var fromCls = dir > 0 ? "stop-screen__frame--from-right" : "stop-screen__frame--from-left";
+    var outCls = dir > 0 ? "stop-screen__frame--out-left" : "stop-screen__frame--out-right";
+
+    next.classList.add("stop-screen__frame--sliding", fromCls);
+    // Lift the outgoing card into the same absolute layer now, well before it
+    // moves: a transition only runs if the element already had the transition
+    // property in its previous computed style.
+    outgoing.classList.add("stop-screen__frame--sliding");
+    stage.appendChild(next);
     frame = next;
+
+    var p = { incoming: next, outgoing: outgoing, loadTimer: 0, doneTimer: 0, onLoad: null, onEnd: null };
+    pending = p;
+
+    function begin() {
+      if (pending !== p) return;
+      clearTimeout(p.loadTimer);
+      if (p.onLoad) { next.removeEventListener("load", p.onLoad); p.onLoad = null; }
+      void next.offsetWidth; // settle the start position before transitioning off it
+      next.classList.add("stop-screen__frame--in");
+      outgoing.classList.add(outCls);
+      p.onEnd = function (ev) { if (ev.target === next) settleSlide(); };
+      next.addEventListener("transitionend", p.onEnd);
+      // transitionend doesn't fire if the transition is interrupted or never
+      // starts (a backgrounded tab), so never rely on it alone.
+      p.doneTimer = setTimeout(settleSlide, SLIDE_MS + 120);
+    }
+
+    // Wait for the postcard to paint so it doesn't slide in as a blank rectangle
+    // — but only briefly, so a slow card doesn't stall the nav.
+    p.onLoad = begin;
+    next.addEventListener("load", p.onLoad);
+    p.loadTimer = setTimeout(begin, LOAD_WAIT_MS);
+  }
+
+  // dir 0 (or absent) is a hard swap: opening from the list, and close()'s
+  // teardown. Only Previous/Next animates.
+  function renderFrame(html, title, dir) {
+    settleSlide();
+    var next = buildFrame(html, title);
+    if (!dir || reducedMotion()) {
+      frame.replaceWith(next);
+      frame = next;
+      return;
+    }
+    slide(next, dir);
   }
 
   // Asks trip.js to move — it rewrites the URL and calls back into show(), so
@@ -150,12 +242,18 @@
     list = Array.isArray(stops) ? stops : [];
     if (!list.length) return;
     handlers = opts || {};
+    var previous = current;
     current = Math.min(Math.max(index | 0, 0), list.length - 1);
+
+    // Direction of travel, for the slide. Zero unless the screen is already up
+    // and we're actually moving — opening from the list, and re-rendering the
+    // stop already on screen, both stay hard swaps.
+    var dir = open && current !== previous ? (current > previous ? 1 : -1) : 0;
 
     var stop = list[current];
     var title = (stop && stop.title) || "Postcard";
     titleEl.textContent = title;
-    renderFrame(stop && stop.html_content, title);
+    renderFrame(stop && stop.html_content, title, dir);
     dlBtn.disabled = !(stop && stop.html_content);
 
     var multi = list.length > 1;
@@ -192,5 +290,12 @@
     }
   }
 
-  window.StopView = { show: show, close: close, isOpen: function () { return open; } };
+  // currentIndex is how trip.js decides whether a background refresh has any
+  // business touching the postcard on screen.
+  window.StopView = {
+    show: show,
+    close: close,
+    isOpen: function () { return open; },
+    currentIndex: function () { return open ? current : -1; },
+  };
 })();
