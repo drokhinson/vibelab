@@ -187,6 +187,27 @@
         // A fixed option set: f.options is [{ value, label }]. A select always
         // has a value, so it never takes the "blank input → null" path in the
         // submit collector below.
+        // A colour preset. A named dropdown would leave you guessing at the
+        // colours, so this is a real radio group — keyboard- and
+        // screen-reader-native — with each chip painted by the same
+        // [data-trip-theme] tokens the card and the trip page use, so a chip
+        // cannot promise a colour the trip won't wear.
+        if (f.type === "swatch") {
+          var checked = v == null ? (f.options[0] && f.options[0].value) : v;
+          var chips = (f.options || []).map(function (o) {
+            var oid = id + "-" + o.value;
+            return '<label class="pa-swatch" for="' + oid + '" data-trip-theme="' +
+              escAttr(o.value) + '">' +
+              '<input id="' + oid + '" type="radio" data-name="' + escAttr(f.name) +
+              '" name="' + escAttr(f.name) + '" value="' + escAttr(o.value) + '"' +
+              (String(checked) === String(o.value) ? " checked" : "") + " />" +
+              '<span class="pa-swatch__chip" aria-hidden="true"></span>' +
+              '<span class="pa-swatch__name">' + esc(o.label) + "</span></label>";
+          }).join("");
+          return '<div class="pa-field">' + labelHtml +
+            '<div class="pa-swatches" role="radiogroup" aria-label="' + escAttr(f.label) +
+            '">' + chips + "</div></div>";
+        }
         if (f.type === "select") {
           var opts = (f.options || []).map(function (o) {
             return '<option value="' + escAttr(o.value) + '"' +
@@ -341,6 +362,14 @@
               return;
             }
             out[f.name] = ed ? ed.getHTML() : "";
+            continue;
+          }
+          // A radio group has one element per option, so the plain
+          // querySelector below would always read the FIRST chip rather than
+          // the chosen one.
+          if (f.type === "swatch") {
+            var picked = form.querySelector('[data-name="' + f.name + '"]:checked');
+            out[f.name] = picked ? picked.value : null;
             continue;
           }
           var el = form.querySelector('[data-name="' + f.name + '"]');

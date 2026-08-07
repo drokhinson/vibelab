@@ -147,6 +147,19 @@
   // is what tells them whether the trip is still being added to.
   var STATUS_LABELS = { upcoming: "Upcoming", live: "Live", complete: "Complete" };
 
+  // The trip's colour preset, stamped on <html> so every --trip-* token on the
+  // page (and in person-travel.css, which styles the postcard reader) resolves
+  // to that palette. The list is a whitelist, not a passthrough: an unknown or
+  // absent theme — an offline copy cached before the column existed — falls
+  // back to enamel rather than writing an attribute nothing has styles for.
+  var THEMES = ["enamel", "terracotta", "pine", "plum"];
+
+  function applyTheme() {
+    var theme = trip && trip.theme;
+    if (THEMES.indexOf(theme) < 0) theme = "enamel";
+    document.documentElement.setAttribute("data-trip-theme", theme);
+  }
+
   function renderStatus() {
     // The lookup is also the validation: an unrecognised (or absent) status —
     // an offline copy cached before the field existed, say — shows nothing
@@ -165,6 +178,7 @@
   }
 
   function renderHero() {
+    applyTheme();
     var heading = trip.headline || trip.title || "Trip";
     document.title = (trip.title || heading) + " — David Rokhinson";
     eyebrowEl.textContent = trip.eyebrow || "";

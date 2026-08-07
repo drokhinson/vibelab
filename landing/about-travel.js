@@ -31,6 +31,26 @@
   ];
   var DEFAULT_STATUS = "upcoming";
 
+  // The colour presets. These are slugs — the actual palettes live in
+  // person-travel.css as [data-trip-theme="…"] token blocks, which is also what
+  // draws the swatches in the picker, so a chip can't disagree with the card it
+  // is promising. `swatch` names the three tokens each chip shows.
+  var THEMES = [
+    { value: "enamel", label: "Enamel" },
+    { value: "terracotta", label: "Terracotta" },
+    { value: "pine", label: "Pine" },
+    { value: "plum", label: "Plum" },
+  ];
+  var DEFAULT_THEME = "enamel";
+
+  function themeOf(t) {
+    for (var i = 0; i < THEMES.length; i++) {
+      if (THEMES[i].value === t.theme) return t.theme;
+    }
+    // A trip from a backend that predates the column keeps the original look.
+    return DEFAULT_THEME;
+  }
+
   function statusOf(t) {
     // A trip served by a backend that predates the column has no status; treat
     // it as the plain card rather than greying it out.
@@ -68,6 +88,7 @@
     { name: "card_cta", label: "Card CTA text", type: "text", placeholder: "Follow the route ↗" },
     { name: "sort_order", label: "Sort order", type: "number" },
     { name: "status", label: "Status", type: "select", options: STATUSES },
+    { name: "theme", label: "Colour", type: "swatch", options: THEMES },
     { name: "is_published", label: "Published", type: "checkbox" },
   ];
 
@@ -125,10 +146,13 @@
     // dropping the element rather than suppressing its clicks is what actually
     // takes it out of the tab order and off the screen reader's link list. The
     // admin controls sit outside the card, so it stays fully editable.
+    // The card wears the trip's colour preset — person-travel.css turns the
+    // attribute into the --trip-* tokens about.css reads.
+    var themeAttr = ' data-trip-theme="' + PA.escAttr(themeOf(t)) + '"';
     var card = upcoming
-      ? '<div class="travel-card travel-card--upcoming">' + inner + "</div>"
+      ? '<div class="travel-card travel-card--upcoming"' + themeAttr + ">" + inner + "</div>"
       : '<a class="travel-card' + (status === "live" ? " travel-card--live" : "") +
-        '" href="/travel/' + PA.escAttr(t.slug) + '">' + inner + "</a>";
+        '"' + themeAttr + ' href="/travel/' + PA.escAttr(t.slug) + '">' + inner + "</a>";
     return '<div class="travel-card-wrap">' + card + adminControls + "</div>";
   }
 
@@ -184,7 +208,7 @@
       title: "Add trip",
       submitLabel: "Create",
       fields: TRIP_FIELDS,
-      values: { is_published: true, status: DEFAULT_STATUS },
+      values: { is_published: true, status: DEFAULT_STATUS, theme: DEFAULT_THEME },
     });
     if (!vals) return;
     try {

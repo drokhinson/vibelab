@@ -364,6 +364,59 @@
   border-color: #3f86d1;
   background: rgba(255, 255, 255, 0.09);
 }
+/* ── Colour preset picker ──────────────────────────────────────────────────
+   One chip per preset. Each label carries its own data-trip-theme, so the chip
+   is painted by the very tokens the card and the trip page will use — there is
+   no second copy of the palette here to drift out of step.
+
+   The radios stay real radios (clipped, not display:none, which would make them
+   unfocusable), so arrow keys move between presets and the group is announced
+   correctly. The visible selected state is on the label. */
+.pa-swatches { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pa-swatch {
+  flex: 1 1 6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.4rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pa-swatch:hover { border-color: rgba(255, 255, 255, 0.32); }
+.pa-swatch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+/* The chip is the preset in miniature: the page ground, the numbered plate, and
+   the accent — the three things that actually change between presets. */
+.pa-swatch__chip {
+  width: 100%;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid var(--trip-card-border);
+  background: linear-gradient(135deg,
+    var(--trip-ground-top) 0%, var(--trip-ground-mid) 45%, var(--trip-ground-deep) 100%);
+  box-shadow: inset 0 -7px 0 -3px var(--trip-accent);
+}
+.pa-swatch__name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(234, 241, 247, 0.75);
+}
+.pa-swatch:has(input:checked) {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.1);
+}
+.pa-swatch:has(input:checked) .pa-swatch__name { color: #fff; }
+.pa-swatch:has(input:focus-visible) { outline: 2px solid #f2d46b; outline-offset: 2px; }
+
 .pa-field--check .pa-field__label {
   flex-direction: row;
   display: inline-flex;
