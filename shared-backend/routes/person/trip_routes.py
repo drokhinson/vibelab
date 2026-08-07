@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime, timezone
+from enum import StrEnum
 from typing import List, Optional
 
 from fastapi import Header, HTTPException, Path
@@ -11,7 +12,7 @@ from db import get_supabase
 from shared_models import HealthResponse
 
 from . import router
-from .constants import TripStatus
+from .constants import TripStatus, TripTheme
 from .models import (
     CreateTripBody,
     MessageResponse,
@@ -23,7 +24,7 @@ from .models import (
 # Columns for the card/summary shape — never selects html_content (not on trips).
 _TRIP_COLS = (
     "id, slug, title, eyebrow, headline, lede, photo_album_url, icon_url, "
-    "card_cta, sort_order, is_published, status"
+    "card_cta, sort_order, is_published, status, theme"
 )
 # Full stop rows for the trip-detail endpoint: html_content is included so the
 # trip page loads all stops in one pass (the trip UI opens popups from memory).
@@ -144,6 +145,9 @@ async def create_trip(
         # A trip is announced before it is lived, so an unstated status is
         # 'upcoming' — the admin flips it to 'live' when the trip starts.
         "status": str(body.status if body.status is not None else TripStatus.UPCOMING),
+        # The palette the section already had, so an unstated theme leaves the
+        # trip looking exactly like every trip before it.
+        "theme": str(body.theme if body.theme is not None else TripTheme.ENAMEL),
     }
     result = sb.table("person_trips").insert(trip_data).execute()
     if not result.data:
@@ -177,13 +181,14 @@ async def update_trip(
     for field in [
         "title", "eyebrow", "headline", "lede",
         "photo_album_url", "icon_url", "card_cta", "sort_order", "is_published",
-        "status",
+        "status", "theme",
     ]:
         val = getattr(body, field)
         if val is not None:
             # StrEnum members serialise as their value, but str() keeps the
-            # payload plain for the Supabase client.
-            update_data[field] = str(val) if isinstance(val, TripStatus) else val
+            # payload plain for the Supabase client. Checked against StrEnum
+            # rather than each enum in turn, so a new one needs no branch here.
+            update_data[field] = str(val) if isinstance(val, StrEnum) else val
     if body.slug is not None:
         update_data["slug"] = _unique_slug(_slugify(body.slug))
 

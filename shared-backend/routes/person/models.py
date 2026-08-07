@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from .constants import TripStatus
+from .constants import TripStatus, TripTheme
 
 
 # ── Responses ────────────────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ class TripSummaryResponse(BaseModel):
     sort_order: int
     is_published: bool
     status: TripStatus
+    theme: TripTheme
 
 
 class StopResponse(BaseModel):
@@ -78,6 +79,7 @@ class CreateTripBody(BaseModel):
     sort_order: Optional[int] = None
     is_published: Optional[bool] = None
     status: Optional[TripStatus] = None  # defaults to 'upcoming' when omitted
+    theme: Optional[TripTheme] = None  # defaults to 'enamel' when omitted
 
 
 class UpdateTripBody(BaseModel):
@@ -92,6 +94,7 @@ class UpdateTripBody(BaseModel):
     sort_order: Optional[int] = None
     is_published: Optional[bool] = None
     status: Optional[TripStatus] = None
+    theme: Optional[TripTheme] = None
 
 
 class CreateStopBody(BaseModel):

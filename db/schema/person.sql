@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- person — current schema snapshot
--- Last updated: 2026-08-07 (through db/migrations/person/006_trip_status.sql)
+-- Last updated: 2026-08-07 (through db/migrations/person/007_trip_theme.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- David Rokhinson's personal page: admin-editable travel trips + stops.
 -- Backend-only access via service role; writes gated by ADMIN_API_KEY.
@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS public.person_trips (
   is_published    BOOLEAN     NOT NULL DEFAULT true,    -- false = draft, hidden from public list
   status          TEXT        NOT NULL DEFAULT 'upcoming'  -- 'upcoming' | 'live' | 'complete'
                     CHECK (status IN ('upcoming', 'live', 'complete')),
+  -- Colour preset SLUG, never a colour. Palettes live in
+  -- landing/person-travel.css as [data-trip-theme="…"] token blocks.
+  theme           TEXT        NOT NULL DEFAULT 'enamel'
+                    CHECK (theme IN ('enamel', 'terracotta', 'pine', 'plum')),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
