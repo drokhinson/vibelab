@@ -122,10 +122,46 @@
 
     /* ── Hero ────────────────────────────────────────────────── */
     .hero{ text-align:center; padding:1rem 0 1.75rem; }
+    /* The kicker row owns the gap down to the H1 now, because either of the two
+       things in it can be missing — a trip with no eyebrow still needs the
+       status pill spaced off the headline, and vice versa. */
+    .hero__kicker{
+      display:flex; align-items:center; justify-content:center;
+      gap:.7rem; flex-wrap:wrap; margin-bottom:.9rem;
+    }
     .hero .eyebrow{
       font-size:.72rem; letter-spacing:.32em; text-transform:uppercase;
-      color:var(--gold); font-weight:700; margin-bottom:.9rem;
+      color:var(--gold); font-weight:700; margin-bottom:0;
     }
+    /* Where the trip is in its life — the same three states as the cards on the
+       about page. Unlike the cards, a finished trip says so here: arriving on
+       the page cold (a deep link, a bookmark) there is nothing else to tell you
+       whether the trip is still being added to. */
+    .trip-status{
+      display:inline-flex; align-items:center; gap:.4rem;
+      padding:.22rem .6rem; border-radius:999px;
+      font-size:.62rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+      border:1px solid transparent;
+    }
+    .trip-status--live{
+      color:#ffe9e0; background:rgba(196,74,46,.85); border-color:rgba(255,160,130,.6);
+    }
+    .trip-status--upcoming{
+      color:var(--gold); background:rgba(242,212,107,.14); border-color:rgba(242,212,107,.34);
+    }
+    .trip-status--complete{
+      color:rgba(214,223,231,.85); background:rgba(255,255,255,.06);
+      border-color:rgba(255,255,255,.16);
+    }
+    .trip-status__dot{
+      width:6px; height:6px; border-radius:50%; background:#ffd9cc;
+      animation:trip-live-pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes trip-live-pulse{
+      0%,100%{ opacity:1; transform:scale(1); }
+      50%{ opacity:.35; transform:scale(.7); }
+    }
+    @media (prefers-reduced-motion: reduce){ .trip-status__dot{ animation:none; } }
     /* Last child of the hero now that the album pill moved up — the hero's own
        bottom padding does the spacing. */
     .hero h1{
@@ -251,7 +287,8 @@
       .wrap{ padding-top:.75rem; }
       .topbar{ padding:0 0 .6rem; }
       .hero{ padding:0 0 .9rem; }
-      .hero .eyebrow{ font-size:.65rem; margin-bottom:.35rem; }
+      .hero .eyebrow{ font-size:.65rem; }
+      .hero__kicker{ margin-bottom:.35rem; gap:.5rem; }
       .hero h1{ font-size:clamp(1.5rem,5vw,2rem); }
       .back, .trip-export, .album-link, .trip-offline{ min-height:34px; padding:.3rem .7rem; }
       .stops-header{ margin-bottom:.6rem; }
@@ -296,7 +333,13 @@
     </div>
 
     <section class="hero">
-      <p class="eyebrow" id="trip-eyebrow"></p>
+      <!-- Kicker row: the trip's own eyebrow, and the status pill trip.js fills
+           in. Either can be absent, so they share a centred row rather than
+           stacking. -->
+      <div class="hero__kicker">
+        <p class="eyebrow" id="trip-eyebrow"></p>
+        <span class="trip-status" id="trip-status" hidden></span>
+      </div>
       <h1 id="trip-headline">Loading…</h1>
     </section>
 

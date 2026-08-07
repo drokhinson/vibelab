@@ -18,6 +18,7 @@
   var PA = window.PersonAdmin;
   var tripScreen = document.getElementById("trip-screen");
   var eyebrowEl = document.getElementById("trip-eyebrow");
+  var statusEl = document.getElementById("trip-status");
   var headlineEl = document.getElementById("trip-headline");
   var albumEl = document.getElementById("trip-album");
   var adminBar = document.getElementById("travel-admin-bar");
@@ -141,11 +142,34 @@
   }
 
   // ── Hero ──────────────────────────────────────────────────────────────────
+  // Where the trip is in its life. The about page shows this on the cards, but
+  // a reader who arrived by deep link or bookmark never saw those — so the pill
+  // is what tells them whether the trip is still being added to.
+  var STATUS_LABELS = { upcoming: "Upcoming", live: "Live", complete: "Complete" };
+
+  function renderStatus() {
+    // The lookup is also the validation: an unrecognised (or absent) status —
+    // an offline copy cached before the field existed, say — shows nothing
+    // rather than an empty pill, and never reaches the class name.
+    var label = trip && STATUS_LABELS[trip.status];
+    if (!label) {
+      statusEl.hidden = true;
+      statusEl.textContent = "";
+      return;
+    }
+    statusEl.hidden = false;
+    statusEl.className = "trip-status trip-status--" + trip.status;
+    statusEl.innerHTML = trip.status === "live"
+      ? '<span class="trip-status__dot" aria-hidden="true"></span>' + label
+      : label;
+  }
+
   function renderHero() {
     var heading = trip.headline || trip.title || "Trip";
     document.title = (trip.title || heading) + " — David Rokhinson";
     eyebrowEl.textContent = trip.eyebrow || "";
     eyebrowEl.style.display = trip.eyebrow ? "" : "none";
+    renderStatus();
     headlineEl.textContent = heading;
     var albumLabel = albumEl.querySelector("span");
     if (trip.photo_album_url) {
@@ -194,6 +218,7 @@
     trip = null;
     headlineEl.textContent = "Trip not found";
     eyebrowEl.style.display = "none";
+    renderStatus();
     albumEl.hidden = true;
     exportBtn.hidden = true;
     window.TripStops.renderError(message);
