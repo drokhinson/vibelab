@@ -205,6 +205,8 @@
 
   window.TripStops.init({
     stops: function () { return stops; },
+    // Read for `status`, which picks which end of the trip the list opens on.
+    trip: function () { return trip; },
     onOpen: openStop,
   });
 

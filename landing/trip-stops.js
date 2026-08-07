@@ -8,7 +8,7 @@
 // are the two directions of that mapping; TripAdmin uses the pair to move a row
 // within what the admin is looking at and store the result back as sort_order.
 //
-//   TripStops.init({ stops: fn, onOpen: fn(canonicalIndex) })
+//   TripStops.init({ stops: fn, trip: fn, onOpen: fn(canonicalIndex) })
 (function () {
   "use strict";
 
@@ -22,13 +22,36 @@
   var host = null;
 
   function stops() { return (host && host.stops()) || []; }
+  function trip() { return (host && host.trip && host.trip()) || null; }
   function isAdmin() { return PA.isAdmin(); }
 
-  // Default shows the newest (last-added) stop first — a non-persisted,
-  // view-only flip of the canonical array. Entering edit mode keeps whatever
-  // order was on screen (it does NOT snap back to canonical), so the admin edits
-  // the stops in the order they were just looking at.
+  // Which end of the trip the list opens on — a non-persisted, view-only flip of
+  // the canonical array. Entering edit mode keeps whatever order was on screen
+  // (it does NOT snap back to canonical), so the admin edits the stops in the
+  // order they were just looking at.
+  //
+  // The starting value comes from the trip's status, because a trip that is
+  // still happening and one that is over want opposite ends: a live trip is
+  // being followed, so the newest postcard belongs at the top, while a finished
+  // trip is read as a story and starts at stop 01. An upcoming trip is an
+  // itinerary, so it reads forwards too.
   var oldestFirst = false;
+
+  // The status default is a starting point, not a rule — applied once, the first
+  // time a trip lands, and never again. TripData repaints on every background
+  // refresh and after every admin edit, and re-deriving here would yank the list
+  // back out of whatever order the reader had chosen.
+  var statusDefaultApplied = false;
+
+  function applyStatusDefault() {
+    if (statusDefaultApplied) return;
+    var t = trip();
+    if (!t) return;
+    statusDefaultApplied = true;
+    // Anything that isn't 'live' reads forwards, which also covers a payload
+    // with no status at all (an offline copy cached before the column existed).
+    oldestFirst = t.status !== "live";
+  }
 
   function orderedStops() {
     var all = stops();
@@ -97,6 +120,7 @@
   }
 
   function render() {
+    applyStatusDefault();
     if (!stops().length) {
       headingEl.hidden = !isAdmin();
       syncOrderToggle();

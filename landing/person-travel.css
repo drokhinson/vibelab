@@ -252,6 +252,7 @@
 .pa-field input[type="text"],
 .pa-field input[type="url"],
 .pa-field input[type="number"],
+.pa-field select,
 .pa-field textarea {
   font: inherit;
   width: 100%;
@@ -263,7 +264,10 @@
   color: #fff;
 }
 .pa-field textarea { resize: vertical; min-height: 3rem; }
-.pa-field input:focus, .pa-field textarea:focus {
+/* The dropdown list itself is drawn by the OS and won't inherit the dark shell,
+   so the options are given their own colours or they render white-on-white. */
+.pa-field select option { background: #16324b; color: #fff; }
+.pa-field input:focus, .pa-field select:focus, .pa-field textarea:focus {
   outline: none;
   border-color: #3f86d1;
   background: rgba(255, 255, 255, 0.09);

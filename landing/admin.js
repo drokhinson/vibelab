@@ -184,6 +184,19 @@
           return '<div class="pa-field">' + labelHtml +
             '<div class="hse-mount" data-name="' + escAttr(f.name) + '"></div></div>';
         }
+        // A fixed option set: f.options is [{ value, label }]. A select always
+        // has a value, so it never takes the "blank input → null" path in the
+        // submit collector below.
+        if (f.type === "select") {
+          var opts = (f.options || []).map(function (o) {
+            return '<option value="' + escAttr(o.value) + '"' +
+              (String(v) === String(o.value) ? " selected" : "") + ">" +
+              esc(o.label) + "</option>";
+          }).join("");
+          return '<div class="pa-field">' + labelHtml +
+            '<select id="' + id + '" data-name="' + escAttr(f.name) + '">' +
+            opts + "</select></div>";
+        }
         if (f.type === "textarea") {
           var importHtml = f.importFile
             ? '<div class="pa-import">' +
