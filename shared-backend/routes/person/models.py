@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
+from .constants import TripStatus
+
 
 # ── Responses ────────────────────────────────────────────────────────────────
 class TripSummaryResponse(BaseModel):
@@ -19,6 +21,7 @@ class TripSummaryResponse(BaseModel):
     card_cta: Optional[str] = None
     sort_order: int
     is_published: bool
+    status: TripStatus
 
 
 class StopResponse(BaseModel):
@@ -74,6 +77,7 @@ class CreateTripBody(BaseModel):
     card_cta: Optional[str] = None
     sort_order: Optional[int] = None
     is_published: Optional[bool] = None
+    status: Optional[TripStatus] = None  # defaults to 'upcoming' when omitted
 
 
 class UpdateTripBody(BaseModel):
@@ -87,6 +91,7 @@ class UpdateTripBody(BaseModel):
     card_cta: Optional[str] = None
     sort_order: Optional[int] = None
     is_published: Optional[bool] = None
+    status: Optional[TripStatus] = None
 
 
 class CreateStopBody(BaseModel):
