@@ -148,14 +148,19 @@
   overflow: hidden;
   text-decoration: none;
   color: #fff;
-  background: linear-gradient(135deg, #16324b 0%, #123c6b 55%, #0e2032 100%);
-  border: 1px solid rgba(120, 160, 200, 0.28);
+  /* Wears the trip's colour preset — about-travel.js puts data-trip-theme on
+     each card, and the token blocks live in person-travel.css (loaded here too).
+     The three gradient stops ARE the trip page's ground mid / plate / deep, so
+     a card and the page it opens read as the same object. */
+  background: linear-gradient(135deg,
+    var(--trip-ground-mid) 0%, var(--trip-plate) 55%, var(--trip-ground-deep) 100%);
+  border: 1px solid var(--trip-card-border);
   transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
 }
 .travel-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-  border-color: rgba(160, 195, 230, 0.55);
+  border-color: var(--trip-card-border-hover);
 }
 
 /* ── Status: live ───────────────────────────────────────────────────────── */
@@ -211,13 +216,15 @@
    the word across the card. */
 .travel-card--upcoming {
   cursor: default;
-  border-color: rgba(120, 160, 200, 0.16);
-  background: linear-gradient(135deg, #16324b 0%, #123c6b 55%, #0e2032 100%);
+  border-color: var(--trip-card-border-muted);
+  /* No background here: .travel-card's themed gradient already applies, and
+     restating it (as this rule used to) would pin every upcoming card to
+     enamel regardless of its preset. */
 }
 .travel-card--upcoming:hover {
   transform: none;
   box-shadow: none;
-  border-color: rgba(120, 160, 200, 0.16);
+  border-color: var(--trip-card-border-muted);
 }
 /* Dim the card's own content, not the band on top of it. */
 .travel-card--upcoming .travel-card__art,
@@ -253,7 +260,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #f2d46b;
+  color: var(--trip-accent);
   background: rgba(255, 255, 255, 0.05);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -306,7 +313,7 @@
   margin-top: 0.35rem;
   font-size: 0.82rem;
   font-weight: 600;
-  color: #f2d46b;
+  color: var(--trip-accent);
 }
 
 /* ── Edit pencils (profile + travel) ────────────────────────────────────── */
