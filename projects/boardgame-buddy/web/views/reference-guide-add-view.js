@@ -98,6 +98,11 @@ components above.
       // in onMount when mode === "edit", cleared in onUnmount otherwise.
       this._prefillChapter = null;
 
+      // Delegated focusin handler for the editor shell. A live listener
+      // reference, not form state — so it lives here rather than in
+      // _resetFormState(), which runs on paths that must not drop it.
+      this._onEditorFocusIn = null;
+
       // Form / tab / popover state — all owned by _resetFormState() so a
       // single source of truth governs what "clean" looks like. Initialize
       // here so render() never sees `undefined` on first paint.
@@ -143,6 +148,9 @@ components above.
     // which is exactly the "Add a chapter opened the previously-edited
     // chapter" bug the user hit on re-auth.
     renderLoading() {
+      // Runs before onMount, so a re-entry could otherwise paint this loading
+      // chip inside a shell still locked by the previous edit session.
+      this._teardownEditorChrome();
       const p = this.params || {};
       const name = p.gameName || "Reference guide";
       const loader = (window.buddyLoader && window.buddyLoader({ size: 64 })) || "";
@@ -190,6 +198,35 @@ components above.
         this._activePop = null;
         this.render();
       });
+
+      // The shell shrinks when the keyboard opens; pull whatever just took
+      // focus back into the scroller. focusin (unlike focus) bubbles, so one
+      // container-level listener covers the title field and the textarea
+      // across every innerHTML replace — the container itself is stable, only
+      // its contents are swapped. Bound on the container rather than via
+      // listenDom() because every view stays in the DOM permanently (the
+      // router only toggles .hidden), so a document-level handler would fire
+      // for other views' inputs too.
+      if (!this._onEditorFocusIn) {
+        this._onEditorFocusIn = (ev) => {
+          if (this._tab === "browse") return;
+          const t = ev.target;
+          if (!t || typeof t.scrollIntoView !== "function") return;
+          // Deferred a turn: on iOS the visualViewport resize lands after
+          // focusin, so scrolling immediately targets the pre-keyboard box.
+          setTimeout(() => t.scrollIntoView({ block: "nearest" }), 0);
+        };
+        this.container.addEventListener("focusin", this._onEditorFocusIn);
+      }
+      this._unsubs.push(() => {
+        if (this.container && this._onEditorFocusIn) {
+          this.container.removeEventListener("focusin", this._onEditorFocusIn);
+          this._onEditorFocusIn = null;
+        }
+      });
+      // Safety net: drop the fixed shell whenever the view unmounts, however
+      // it got there. Pushed once per mount, alongside the listeners above.
+      this._unsubs.push(() => this._teardownEditorChrome());
 
       if (!this._gameId) {
         this.render();
@@ -259,6 +296,7 @@ components above.
       // mount. Also drop any open toolbar popover.
       this._prefillChapter = null;
       this._activePop = null;
+      this._teardownEditorChrome();
     }
 
     async _loadPool() {
@@ -331,6 +369,9 @@ components above.
 
     render() {
       if (!this._gameId) {
+        // Early return, so it never reaches the _syncEditorChrome() at the end
+        // — unlock explicitly or this error state paints inside a locked shell.
+        this._teardownEditorChrome();
         this.container.innerHTML = `
           <div class="p-6 text-center">
             <p class="opacity-60 mb-3">No game specified.</p>
@@ -346,25 +387,36 @@ components above.
 
       // Preserve horizontal/vertical scroll positions across re-renders so
       // toggling a filter chip doesn't reset the chip row to the start, and
-      // the chapter list doesn't jump to the top either.
+      // the chapter list doesn't jump to the top either. The editor needs the
+      // same treatment now that it scrolls inside .chapter-edit__scroll rather
+      // than scrolling the document — document scroll survived an innerHTML
+      // replace, an inner scroller's does not.
       const prevChipScroll = this.container.querySelector(".chapter-add__filter-chips")?.scrollLeft || 0;
       const prevPoolScroll = this.container.querySelector(".chapter-add__pool-scroll .scroll-panel__body")?.scrollTop || 0;
+      const prevEditScroll = this.container.querySelector(".chapter-edit__scroll")?.scrollTop || 0;
+      const prevTypeScroll = this.container.querySelector(".chapter-edit__typescroll")?.scrollLeft || 0;
 
       // No topbar — the centred game chip is the top element across every
       // mode. Browse's back affordance is the left-side floating FAB;
       // create / edit rely on the inline Cancel / Save footer for exit.
-      this.container.innerHTML = `
-        ${this._renderGameChip()}
-        ${isBrowsing
-            ? this._renderBrowse()
-            : this._renderEditor(isEditing)}
-      `;
+      // The editor renders its own chip (as a flex:none child of the shell, so
+      // it stays pinned above the scroller); browse keeps it in normal flow.
+      this.container.innerHTML = isBrowsing
+        ? `${this._renderGameChip()}${this._renderBrowse()}`
+        : this._renderEditor(isEditing);
 
       // Restore scroll positions captured before the innerHTML replace.
       const nextChips = this.container.querySelector(".chapter-add__filter-chips");
       if (nextChips) nextChips.scrollLeft = prevChipScroll;
       const nextPool = this.container.querySelector(".chapter-add__pool-scroll .scroll-panel__body");
       if (nextPool) nextPool.scrollTop = prevPoolScroll;
+      const nextEdit = this.container.querySelector(".chapter-edit__scroll");
+      if (nextEdit) nextEdit.scrollTop = prevEditScroll;
+      // Without this, tapping a type pill near the end of the row snaps the row
+      // back to the left (_pickType re-renders). The one-shot centring below
+      // runs after and stays authoritative on arrival.
+      const nextTypes = this.container.querySelector(".chapter-edit__typescroll");
+      if (nextTypes && !this._centerTypeScrollOnNext) nextTypes.scrollLeft = prevTypeScroll;
 
       // One-shot centring of the active chapter-type pill when arriving
       // in edit mode. Without this, a pill toward the end of the row
@@ -393,6 +445,39 @@ components above.
       // Build the table dimension picker grid (lazy — only when popover is
       // open, to keep the DOM cheap on first paint).
       if (this._activePop === "table") this._buildTableGrid();
+
+      // Popovers are position:absolute inside .chapter-edit__write, which now
+      // sits in a scroller — so one opened with the toolbar near the bottom of
+      // the viewport would render below the fold. Pull it in.
+      if (this._activePop) {
+        this.container.querySelector(".chapter-edit__pop")?.scrollIntoView({ block: "nearest" });
+      }
+
+      this._syncEditorChrome();
+    }
+
+    // Create/edit turn the view container into a fixed shell sized to the
+    // visible viewport (see .chapter-edit-locked in styles.css) so the
+    // Save/Cancel row can't be covered by the software keyboard; the global
+    // header and bottom nav step aside for it. Reconciled from _tab at the end
+    // of every render() so every in-view transition — cancel, save,
+    // back-to-browse — unwinds it without a bespoke call site.
+    _syncEditorChrome() {
+      const editing = this._tab === "create" || this._tab === "edit";
+      if (this.container) this.container.classList.toggle("chapter-edit-locked", editing);
+      // On <html>, not <body>: the page-scroll lock rides on this class, and
+      // `html, body { overflow-x: hidden }` stops body's overflow propagating
+      // to the viewport.
+      document.documentElement.classList.toggle("bgb-chapter-editing", editing);
+    }
+
+    // Unconditional teardown, for the paths that leave the view without a
+    // final render() — the external-edit Cancel / Save pop the router, and
+    // router.go fires the old view's unmount() fire-and-forget, so without
+    // this a z-index:45 fixed shell sits over the destination for a frame.
+    _teardownEditorChrome() {
+      if (this.container) this.container.classList.remove("chapter-edit-locked");
+      document.documentElement.classList.remove("bgb-chapter-editing");
     }
 
     // Game chip — cream pill with cover + name. Especially important in
@@ -769,35 +854,43 @@ components above.
           : (isEditing ? "Save changes" : "Save chapter");
       const submitDisabled = this._saving || noType;
 
+      // Shell layout (see .chapter-edit-locked in styles.css): the game chip
+      // and the footer are flex:none siblings of one scroller, so the
+      // Save/Cancel row can never be scrolled — or typed — off the bottom.
+      // The guide modal stays OUTSIDE the form (and is position:fixed), so it
+      // escapes the scroller and paints over the whole shell.
       return `
+        ${this._renderGameChip()}
         <form class="chapter-edit__form" onsubmit="window.referenceGuideAddView._submitForm(event)">
-          ${targetSelector}
+          <div class="chapter-edit__scroll">
+            ${targetSelector}
 
-          <div class="chapter-edit__titlerow">
-            <input id="chapter-form-title" class="chapter-edit__titlefield"
-                   maxlength="200" required
-                   value="${escapeAttr(this._formTitle)}"
-                   oninput="window.referenceGuideAddView._formTitle = this.value"
-                   placeholder="Chapter title…" />
-            ${importBtn}
+            <div class="chapter-edit__titlerow">
+              <input id="chapter-form-title" class="chapter-edit__titlefield"
+                     maxlength="200" required
+                     value="${escapeAttr(this._formTitle)}"
+                     oninput="window.referenceGuideAddView._formTitle = this.value"
+                     placeholder="Chapter title…" />
+              ${importBtn}
+            </div>
+
+            <div class="chapter-edit__typescroll">${typeBtns}</div>
+
+            <div class="chapter-edit__seg">
+              <button type="button" class="${!isPreview ? "on" : ""}"
+                      onclick="window.referenceGuideAddView._setEditorView('write')">
+                <i data-lucide="pencil" class="w-4 h-4"></i> Write
+              </button>
+              <button type="button" class="${isPreview ? "on" : ""}"
+                      onclick="window.referenceGuideAddView._setEditorView('preview')">
+                <i data-lucide="eye" class="w-4 h-4"></i> Preview
+              </button>
+            </div>
+
+            ${editorPanel}
+
+            ${this._error ? `<div class="text-error text-sm chapter-edit__error">${escape(this._error)}</div>` : ""}
           </div>
-
-          <div class="chapter-edit__typescroll">${typeBtns}</div>
-
-          <div class="chapter-edit__seg">
-            <button type="button" class="${!isPreview ? "on" : ""}"
-                    onclick="window.referenceGuideAddView._setEditorView('write')">
-              <i data-lucide="pencil" class="w-4 h-4"></i> Write
-            </button>
-            <button type="button" class="${isPreview ? "on" : ""}"
-                    onclick="window.referenceGuideAddView._setEditorView('preview')">
-              <i data-lucide="eye" class="w-4 h-4"></i> Preview
-            </button>
-          </div>
-
-          ${editorPanel}
-
-          ${this._error ? `<div class="text-error text-sm chapter-edit__error">${escape(this._error)}</div>` : ""}
 
           <div class="chapter-edit__footer">
             <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
@@ -1112,6 +1205,7 @@ components above.
       // prior view. In-view create / in-view edit return to browse.
       if (this._externalEdit) {
         this._resetFormState();
+        this._teardownEditorChrome();
         window.router.back("game-detail");
         return;
       }
@@ -1121,6 +1215,10 @@ components above.
 
     async _submitForm(event) {
       event.preventDefault();
+      // Drop the software keyboard, so the saving state is what's on screen
+      // rather than a keyboard over a frozen form. render() destroys the
+      // textarea anyway, but on iOS the keyboard can linger through that.
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       this._error = null;
       if (!this._formType) {
         this._error = "Pick a chapter type.";
@@ -1167,6 +1265,7 @@ components above.
           // before popping so a later re-entry can't show stale form fields
           // during the brief window before the next mount's render().
           this._resetFormState();
+          this._teardownEditorChrome();
           window.router.back("game-detail");
         } else {
           await this._backToBrowse();

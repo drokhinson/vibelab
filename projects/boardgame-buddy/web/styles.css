@@ -630,6 +630,104 @@ body {
   flex-direction: column;
   gap: 0.7rem;
 }
+
+/* ── Editor viewport lock (create / edit only) ────────────────────────────
+   The software keyboard used to cover Save/Cancel: the footer was the last
+   child of a document-flow form, and on iOS the keyboard is an *overlay* —
+   the layout viewport, 100vh, 100dvh, position:fixed and position:sticky all
+   still describe the full screen, so anything pinned by them lands behind the
+   keyboard. So in create/edit the view container becomes a flex-column shell
+   sized to the *visible* viewport (--bgb-vv-h, published by
+   ui/viewport-lock.js from window.visualViewport), with exactly ONE scroller
+   in the middle and a flex:none footer that can never be pushed off.
+
+   Positioned with top/height rather than transform on purpose: a transform
+   would create a containing block for position:fixed descendants, which would
+   recapture the authoring-guide modal and clip it against overflow:hidden.
+
+   Browse is untouched — every rule here is gated on .chapter-edit-locked,
+   which reference-guide-add-view.js#_syncEditorChrome puts on the container
+   only while _tab is "create" or "edit".
+
+   :not(.hidden) is load-bearing: the router hides views with Tailwind's
+   .hidden (display:none, specificity 0,1,0). Without the guard this rule's
+   display:flex outranks it and the editor reappears over the next view during
+   the fire-and-forget unmount. */
+main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
+  position: fixed;
+  top: var(--bgb-vv-top, 0px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;          /* keeps the column centred on desktop */
+  width: 100%;
+  max-width: 480px;             /* matches #app's max-w-[480px] */
+  height: 100vh;                /* no-dvh fallback */
+  height: 100dvh;               /* drops the retracted URL-bar strip */
+  height: var(--bgb-vv-h, 100dvh);  /* drops the keyboard too */
+  z-index: 45;                  /* above .bgb-nav (40) and .bgb-global-header (30) */
+  box-sizing: border-box;
+  padding: 0;                   /* Tailwind px-4/py-4 off — the scroller carries the gutter */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: oklch(var(--b1));
+}
+.chapter-edit-locked .chapter-edit__gamechip { flex: none; }
+/* The form owns the rest of the shell so the footer lands on its bottom edge
+   rather than floating right after short content. */
+.chapter-edit-locked .chapter-edit__form {
+  flex: 1;
+  min-height: 0;
+  gap: 0;                       /* the scroller reinstates the 0.7rem rhythm */
+}
+
+/* THE one scroller. min-height:0 so it actually shrinks under flex instead of
+   pushing the footer out of the shell. */
+.chapter-edit__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain; /* stop an iOS rubber-band dragging the page behind */
+  -webkit-overflow-scrolling: touch;
+  /* Replaces main's Tailwind px-4 py-4. The 1rem side padding is load-bearing:
+     .chapter-edit__typescroll bleeds out of it with margin: 0 -0.5rem. */
+  padding: 1rem 1rem 0.8rem;
+}
+
+/* Opaque + bordered: the fields scroll underneath this row, so it can't be
+   translucent. */
+.chapter-edit-locked .chapter-edit__footer {
+  flex: none;
+  margin-top: 0;
+  padding: 0.7rem 1rem;
+  padding-bottom: calc(0.7rem + env(safe-area-inset-bottom));
+  border-top: 1px solid oklch(var(--b3));
+  background: oklch(var(--b1));
+}
+/* Keyboard up → the home indicator is behind it, so the safe-area inset would
+   just be a dead gap between the buttons and the keyboard. */
+:root.bgb-kb-open .chapter-edit-locked .chapter-edit__footer {
+  padding-bottom: 0.7rem;
+}
+
+/* 220px of textarea swallows a keyboard-shrunk shell whole. */
+.chapter-edit-locked .chapter-edit__mdarea { min-height: 140px; }
+
+/* The shell covers the screen; the app's persistent chrome would otherwise sit
+   on top of it or peek out around it on wider screens. */
+:root.bgb-chapter-editing .bgb-nav,
+:root.bgb-chapter-editing .bgb-global-header { display: none; }
+/* #app is taller than the viewport (min-height:100dvh plus the nav clearance),
+   so without this the page keeps scrolling *behind* the fixed shell — a drag
+   on the chip or the footer moves the wrong thing. The lock has to sit on the
+   root element, not body: `html, body { overflow-x: hidden }` at the top of
+   this file means body's overflow no longer propagates to the viewport. */
+:root.bgb-chapter-editing { overflow: hidden; }
+
 .chapter-edit__field {
   display: flex;
   flex-direction: column;
@@ -854,8 +952,12 @@ body {
   background: oklch(var(--b1) / 0.6);
   color: oklch(var(--bc));
   font-family: var(--font-score, ui-monospace, monospace);
-  font-size: 0.85rem;
-  line-height: 1.55;
+  /* 1rem, not the 0.85rem the rest of the editor uses: iOS Safari auto-zooms
+     the page whenever a focused control computes under 16px, which shifts the
+     whole layout and throws off the visualViewport measurements the editor
+     shell is sized from. Costs ~8 characters per line — worth it. */
+  font-size: 1rem;
+  line-height: 1.5;
   padding: 14px;
 }
 .chapter-edit__mdarea:focus {
@@ -938,20 +1040,28 @@ body {
 .polaroid-popup__card.chapter-guide__card {
   width: calc(100vw - 32px);
   max-width: 460px;
+  /* Bounded by the backdrop (which is sized to the visible viewport) rather
+     than by a vh unit that ignores the keyboard, so the Close / Download row
+     stays reachable. */
+  max-height: 100%;
   padding: 20px 18px 16px;
   text-align: left;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+/* The card's one scroller — flexes instead of capping at 60vh so the actions
+   row below it is never pushed out. */
 .chapter-guide__body {
+  flex: 1;
   min-height: 0;
-  max-height: 60vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   box-shadow: none;
   margin: 0;
 }
 .chapter-guide__actions {
+  flex: none;
   margin-top: 2px;
 }
 .chapter-guide__actions .btn-primary {
@@ -1491,6 +1601,13 @@ body {
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
   z-index: 41; padding: 14px;
   animation: fadeUp 180ms ease both;
+}
+/* Keyboard up: the nav + FAB clearance is behind the keyboard, so re-anchor to
+   the keyboard's top edge and cap against the visible viewport instead of 72vh
+   (which measures the full screen). See ui/viewport-lock.js. */
+:root.bgb-kb-open .session-panel {
+  bottom: calc(var(--bgb-kb-inset, 0px) + 12px);
+  max-height: calc(var(--bgb-vv-h, 100dvh) - 24px);
 }
 
 .session-grid {
@@ -4903,6 +5020,18 @@ main[data-view="session-viewer"].hidden {
   z-index: 36;
 }
 
+/* Keyboard up (score entry, player names): the bottom nav and the home
+   indicator are both behind it, so their clearances become dead space — and
+   sticky resolves against the layout viewport, which iOS does NOT shrink for
+   the keyboard. Re-anchor both sticky rows to the top of the keyboard instead.
+   --bgb-kb-inset comes from ui/viewport-lock.js. */
+:root.bgb-kb-open .cascade-cta-wrap {
+  bottom: calc(var(--bgb-kb-inset, 0px) + 12px);
+}
+:root.bgb-kb-open .cascade-error {
+  bottom: calc(var(--bgb-kb-inset, 0px) + 76px);
+}
+
 /* Invite-code card. Cream polaroid with the brass-orange code centered.
    Trailing slot is the "Join someone else's session instead" pill. */
 .cascade-card--invite {
@@ -5393,9 +5522,21 @@ main[data-view="session-viewer"].hidden {
 .cascade-join__loading { text-align: center; padding: 20px 0; }
 
 /* ── Polaroid popup ──────────────────────────────────────────────────────── */
+/* Sized to the *visible* viewport rather than `inset: 0`, so a card centred in
+   here lands above the software keyboard instead of behind it. --bgb-vv-h /
+   --bgb-vv-top come from ui/viewport-lock.js; the dvh and vh lines are the
+   fallbacks for browsers without visualViewport. This one rule covers every
+   modal built on the polaroid chrome — confirms, the avatar customizer, the
+   add-game modal and the chapter authoring guide. */
 .polaroid-popup__backdrop {
   position: fixed;
-  inset: 0;
+  top: var(--bgb-vv-top, 0px);
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100dvh;
+  height: var(--bgb-vv-h, 100dvh);
+  box-sizing: border-box;
   background: rgba(15, 12, 10, 0.55);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -6103,7 +6244,11 @@ main[data-view="session-viewer"].hidden {
 .play-detail-popup__card {
   position: relative;
   width: min(96vw, 460px);
+  /* Visible viewport, not the layout one — the card already pins its footer
+     with flex, but a dvh-tall card puts that footer behind the keyboard while
+     the notes field or a score input has focus. */
   max-height: calc(100dvh - 36px);
+  max-height: calc(var(--bgb-vv-h, 100dvh) - 36px);
   background: var(--polaroid-bg);
   color: var(--polaroid-ink);
   border-radius: 12px;
@@ -6376,10 +6521,13 @@ main[data-view="session-viewer"].hidden {
   justify-content: flex-end;
   flex-wrap: wrap;
   padding: 10px 14px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   background: var(--polaroid-bg-soft, #F5EEDC);
   flex-shrink: 0;
 }
+/* Keyboard up → the home indicator is behind it and the inset is dead space. */
+:root.bgb-kb-open .play-detail-popup__footer { padding-bottom: 10px; }
 
 /* View-mode Edit pill stretches full-width inside the footer so it
    reads as the sole call-to-action of the popup. */
