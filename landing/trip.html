@@ -11,15 +11,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
   <style>
-    :root{
-      --enamel:#123C6B;
-      --door:#4E7FA6;
-      --terracotta:#B0552E;
-      --paper:#E7E3D6;
-      --plaque:#FBFAF6;
-      --ink:#1E2A33;
-      --gold:#F2D46B;
-    }
+    /* The palette lives in person-travel.css as [data-trip-theme="…"] token
+       blocks — one place, shared with the about page's cards. trip.js stamps
+       the trip's preset onto <html>, so everything below reads --trip-* and
+       nothing here restates a hex.
+
+       person-travel.css is <link>ed AFTER this block, which is fine: custom
+       properties resolve at use time, not at parse time, and the two sets of
+       declarations don't collide (this file declares none). */
     *{ box-sizing:border-box; }
     /* The page is exactly one viewport and never scrolls — only .stops-scroll
        does. html carries the gradient's end colour so nothing (rubber-band
@@ -27,7 +26,7 @@
        that white band under the cards is what this fixes. Because body no
        longer scrolls, the gradient needs no background-attachment:fixed —
        and dropping it is what keeps the iOS bug from coming back. */
-    html{ background:#0E2032; }
+    html{ background:var(--trip-ground-deep); }
     html, body{ height:100%; overscroll-behavior:none; }
     body{
       margin:0;
@@ -36,7 +35,8 @@
       overflow:hidden;
       font-family:'Inter',-apple-system,sans-serif;
       color:#D6DFE7;
-      background:radial-gradient(120% 90% at 50% 0%, #2E5C86 0%, #16324B 55%, #0E2032 100%);
+      background:radial-gradient(120% 90% at 50% 0%,
+        var(--trip-ground-top) 0%, var(--trip-ground-mid) 55%, var(--trip-ground-deep) 100%);
     }
     .wrap{
       max-width:860px; margin:0 auto; height:100%;
@@ -83,7 +83,7 @@
     .trip-export:hover:not(:disabled){ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
     .trip-export:active:not(:disabled){ transform:translateY(1px); }
     .trip-export:disabled{ opacity:.6; cursor:default; }
-    .trip-export svg{ width:17px; height:17px; color:var(--gold); flex:none; }
+    .trip-export svg{ width:17px; height:17px; color:var(--trip-accent); flex:none; }
     .trip-export[hidden]{ display:none; }
     @media (max-width:480px){ .trip-export span{ display:none; } .trip-export{ padding:0.45rem 0.7rem; } }
 
@@ -114,7 +114,7 @@
     /* display:inline-flex above outranks the [hidden] attribute's display:none,
        so hiding the pill needs this — same reason .trip-export has it. */
     .album-link[hidden]{ display:none; }
-    .album-link svg{ width:17px; height:17px; color:var(--gold); flex:none; }
+    .album-link svg{ width:17px; height:17px; color:var(--trip-accent); flex:none; }
     /* No album set: same pill, muted and non-interactive. */
     .album-link--empty{ opacity:.55; cursor:default; }
     .album-link--empty:hover{ color:rgba(214,223,231,.85); border-color:rgba(255,255,255,.16); background:rgba(255,255,255,.05); }
@@ -122,10 +122,48 @@
 
     /* ── Hero ────────────────────────────────────────────────── */
     .hero{ text-align:center; padding:1rem 0 1.75rem; }
+    /* The kicker row owns the gap down to the H1 now, because either of the two
+       things in it can be missing — a trip with no eyebrow still needs the
+       status pill spaced off the headline, and vice versa. */
+    .hero__kicker{
+      display:flex; align-items:center; justify-content:center;
+      gap:.7rem; flex-wrap:wrap; margin-bottom:.9rem;
+    }
     .hero .eyebrow{
       font-size:.72rem; letter-spacing:.32em; text-transform:uppercase;
-      color:var(--gold); font-weight:700; margin-bottom:.9rem;
+      color:var(--trip-accent); font-weight:700; margin-bottom:0;
     }
+    /* Where the trip is in its life — the same three states as the cards on the
+       about page. Unlike the cards, a finished trip says so here: arriving on
+       the page cold (a deep link, a bookmark) there is nothing else to tell you
+       whether the trip is still being added to. */
+    .trip-status{
+      display:inline-flex; align-items:center; gap:.4rem;
+      padding:.22rem .6rem; border-radius:999px;
+      font-size:.62rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+      border:1px solid transparent;
+    }
+    .trip-status--live{
+      color:#ffe9e0; background:rgba(196,74,46,.85); border-color:rgba(255,160,130,.6);
+    }
+    .trip-status--upcoming{
+      color:var(--trip-accent);
+      background:rgb(var(--trip-accent-rgb) / .14);
+      border-color:rgb(var(--trip-accent-rgb) / .34);
+    }
+    .trip-status--complete{
+      color:rgba(214,223,231,.85); background:rgba(255,255,255,.06);
+      border-color:rgba(255,255,255,.16);
+    }
+    .trip-status__dot{
+      width:6px; height:6px; border-radius:50%; background:#ffd9cc;
+      animation:trip-live-pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes trip-live-pulse{
+      0%,100%{ opacity:1; transform:scale(1); }
+      50%{ opacity:.35; transform:scale(.7); }
+    }
+    @media (prefers-reduced-motion: reduce){ .trip-status__dot{ animation:none; } }
     /* Last child of the hero now that the album pill moved up — the hero's own
        bottom padding does the spacing. */
     .hero h1{
@@ -151,7 +189,7 @@
       padding:.3rem; border:0; border-radius:8px; background:transparent; cursor:pointer;
       color:rgba(214,223,231,.6); transition:color .15s, background .15s;
     }
-    .stops-order-toggle:hover{ color:var(--gold); background:rgba(255,255,255,.08); }
+    .stops-order-toggle:hover{ color:var(--trip-accent); background:rgba(255,255,255,.08); }
     /* Same [hidden]-vs-display trap as .album-link / .trip-export — without this
        the toggle stays on screen in admin mode, where it has no business being. */
     .stops-order-toggle[hidden]{ display:none; }
@@ -167,11 +205,11 @@
       padding:.3rem; border:0; border-radius:8px; background:transparent; cursor:pointer;
       color:rgba(214,223,231,.6); transition:color .15s, background .15s;
     }
-    .stops-refresh:hover:not(:disabled){ color:var(--gold); background:rgba(255,255,255,.08); }
+    .stops-refresh:hover:not(:disabled){ color:var(--trip-accent); background:rgba(255,255,255,.08); }
     .stops-refresh svg{ display:block; }
     /* pa-spin is declared in person-travel.css, already loaded on this page. */
     .stops-refresh.is-spinning svg{ animation:pa-spin .8s linear infinite; }
-    .stops-refresh.is-spinning{ color:var(--gold); }
+    .stops-refresh.is-spinning{ color:var(--trip-accent); }
     /* Refresh failed (usually offline). The list it was refreshing is untouched
        — this tint is the whole error report. */
     .stops-refresh.is-error{ color:#f3c9b6; }
@@ -186,7 +224,7 @@
       text-align:left; font-family:inherit; cursor:pointer; width:100%;
       background:var(--paper); color:var(--ink);
       box-shadow:0 18px 40px -22px rgba(0,0,0,.8);
-      border:1px solid var(--border, #B9B2A0);
+      border:1px solid var(--stop-border);
       transition:transform .15s, box-shadow .2s;
     }
     .stop:hover{ transform:translateY(-3px); box-shadow:0 26px 50px -22px rgba(0,0,0,.85); }
@@ -194,7 +232,7 @@
     .stop__no{
       flex:none; width:74px; display:flex; flex-direction:column;
       align-items:center; justify-content:center; gap:2px;
-      background:var(--enamel); color:var(--plaque);
+      background:var(--trip-plate); color:var(--plaque);
     }
     .stop__no .n{ font-size:1.7rem; font-weight:800; line-height:1; font-family:'Arial Narrow',Impact,sans-serif; }
     .stop__no .lbl{ font-size:.55rem; letter-spacing:.22em; text-transform:uppercase; opacity:.8; }
@@ -203,14 +241,14 @@
     .stop__city{
       font-family:'Arial Narrow',Impact,sans-serif;
       font-weight:700; text-transform:uppercase; letter-spacing:.01em;
-      font-size:1.5rem; line-height:1; color:var(--enamel);
+      font-size:1.5rem; line-height:1; color:var(--trip-plate);
     }
-    .stop__meta{ font-size:.78rem; letter-spacing:.14em; text-transform:uppercase; color:var(--door); font-weight:600; }
+    .stop__meta{ font-size:.78rem; letter-spacing:.14em; text-transform:uppercase; color:var(--trip-meta); font-weight:600; }
     .stop__note{ font-size:.9rem; line-height:1.5; color:#4a4a44; margin:0; }
 
     .stop__go{
       flex:none; align-self:center; margin:0 1.1rem 0 .5rem;
-      font-size:1.3rem; color:var(--terracotta); font-weight:700;
+      font-size:1.3rem; color:var(--trip-go); font-weight:700;
     }
 
     .empty{ text-align:center; padding:3rem 1rem; color:rgba(214,223,231,.6); }
@@ -251,7 +289,8 @@
       .wrap{ padding-top:.75rem; }
       .topbar{ padding:0 0 .6rem; }
       .hero{ padding:0 0 .9rem; }
-      .hero .eyebrow{ font-size:.65rem; margin-bottom:.35rem; }
+      .hero .eyebrow{ font-size:.65rem; }
+      .hero__kicker{ margin-bottom:.35rem; gap:.5rem; }
       .hero h1{ font-size:clamp(1.5rem,5vw,2rem); }
       .back, .trip-export, .album-link, .trip-offline{ min-height:34px; padding:.3rem .7rem; }
       .stops-header{ margin-bottom:.6rem; }
@@ -296,7 +335,13 @@
     </div>
 
     <section class="hero">
-      <p class="eyebrow" id="trip-eyebrow"></p>
+      <!-- Kicker row: the trip's own eyebrow, and the status pill trip.js fills
+           in. Either can be absent, so they share a centred row rather than
+           stacking. -->
+      <div class="hero__kicker">
+        <p class="eyebrow" id="trip-eyebrow"></p>
+        <span class="trip-status" id="trip-status" hidden></span>
+      </div>
       <h1 id="trip-headline">Loading…</h1>
     </section>
 

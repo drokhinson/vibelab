@@ -1,7 +1,99 @@
-/* person-travel.css — admin controls, form modal, and stop screen for the
-   person page travel section. Loaded by about.html and trip.html. Self-contained
-   dark styling so it reads consistently on the Pico about page and the
-   enamel-themed trip page. */
+/* person-travel.css — the trip colour presets, plus admin controls, the form
+   modal, and the stop screen for the person page travel section. Loaded by
+   about.html and trip.html. Self-contained dark styling so it reads consistently
+   on the Pico about page and on the trip page. */
+
+/* ── Trip colour presets ───────────────────────────────────────────────────
+   A trip picks one of four palettes (person_trips.theme; the slugs are pinned
+   by a CHECK constraint and by TripTheme in the backend's constants.py). This
+   file is the ONE place the colours are written down, because it is the only
+   stylesheet both about.html and trip.html load — trip.html's inline block and
+   about.css both read these tokens rather than restating hex.
+
+   Deliberately attribute selectors and not :root rules. The trip page puts the
+   attribute on <html> (one theme per document); the about page puts it on each
+   individual .travel-card (four themes in one document). Same block, both jobs.
+
+   Only hue-bearing values are tokens. The white-alpha chrome elsewhere in this
+   file (rgba(255,255,255,.05) and friends) is theme-neutral by construction —
+   it reads correctly on any dark ground — and is left alone on purpose.
+
+   --trip-accent-rgb is the accent again as a bare "r g b" triple, for the
+   handful of places that need it at alpha: rgb(var(--trip-accent-rgb) / .14).
+   var() can't be interpolated into a legacy rgba(…) call, hence the pair. */
+:root {
+  /* Constant across every preset. The cream postcard-on-paper stop card is the
+     section's identity — only the ground, the accents and the numbered plate
+     re-colour. */
+  --paper: #E7E3D6;
+  --ink: #1E2A33;
+  --plaque: #FBFAF6;
+  --stop-border: #B9B2A0;
+}
+
+/* Enamel is also the bare :root fallback, so an element with no
+   data-trip-theme (or an unrecognised one) still paints the original look. */
+:root,
+[data-trip-theme="enamel"] {
+  --trip-ground-top: #2E5C86;
+  --trip-ground-mid: #16324B;
+  --trip-ground-deep: #0E2032;
+  --trip-accent: #F2D46B;
+  --trip-accent-rgb: 242 212 107;
+  --trip-plate: #123C6B;
+  --trip-meta: #4E7FA6;
+  --trip-go: #B0552E;
+  --trip-card-border: rgba(120, 160, 200, 0.28);
+  --trip-card-border-hover: rgba(160, 195, 230, 0.55);
+  --trip-card-border-muted: rgba(120, 160, 200, 0.16);
+}
+
+[data-trip-theme="terracotta"] {
+  --trip-ground-top: #8A4A2E;
+  --trip-ground-mid: #4A2318;
+  --trip-ground-deep: #241009;
+  --trip-accent: #E8B77A;
+  --trip-accent-rgb: 232 183 122;
+  --trip-plate: #6B2E1E;
+  --trip-meta: #B07A5C;
+  /* Teal, not the usual terracotta: the ↗ is the one warm pop on the cream
+     card, and a clay arrow on a clay theme stops being a pop. */
+  --trip-go: #2E6B5A;
+  --trip-card-border: rgba(200, 150, 120, 0.28);
+  --trip-card-border-hover: rgba(230, 180, 145, 0.55);
+  --trip-card-border-muted: rgba(200, 150, 120, 0.16);
+}
+
+[data-trip-theme="pine"] {
+  --trip-ground-top: #2D6A4F;
+  --trip-ground-mid: #1B4332;
+  --trip-ground-deep: #0B1F16;
+  --trip-accent: #D9C089;
+  --trip-accent-rgb: 217 192 137;
+  /* Lighter and more saturated than --trip-ground-mid, as in every preset:
+     the plate is the card gradient's mid-tone as well as the stop number's
+     block, and matching the two flattens the card. */
+  --trip-plate: #22614A;
+  --trip-meta: #6B9080;
+  --trip-go: #B0552E;
+  --trip-card-border: rgba(130, 190, 160, 0.26);
+  --trip-card-border-hover: rgba(165, 220, 190, 0.5);
+  --trip-card-border-muted: rgba(130, 190, 160, 0.15);
+}
+
+[data-trip-theme="plum"] {
+  --trip-ground-top: #6A3D74;
+  --trip-ground-mid: #3E2148;
+  --trip-ground-deep: #1B0F21;
+  --trip-accent: #E0A9C4;
+  --trip-accent-rgb: 224 169 196;
+  --trip-plate: #562E64;
+  --trip-meta: #9B7BA6;
+  --trip-go: #C9A227;
+  --trip-card-border: rgba(180, 140, 200, 0.28);
+  --trip-card-border-hover: rgba(210, 175, 230, 0.55);
+  --trip-card-border-muted: rgba(180, 140, 200, 0.16);
+}
 
 /* ── Edit-icon admin login button ──────────────────────────────────────────
    The pencil icon is the entry point for admin editing — it prompts for the
@@ -252,6 +344,7 @@
 .pa-field input[type="text"],
 .pa-field input[type="url"],
 .pa-field input[type="number"],
+.pa-field select,
 .pa-field textarea {
   font: inherit;
   width: 100%;
@@ -263,11 +356,67 @@
   color: #fff;
 }
 .pa-field textarea { resize: vertical; min-height: 3rem; }
-.pa-field input:focus, .pa-field textarea:focus {
+/* The dropdown list itself is drawn by the OS and won't inherit the dark shell,
+   so the options are given their own colours or they render white-on-white. */
+.pa-field select option { background: #16324b; color: #fff; }
+.pa-field input:focus, .pa-field select:focus, .pa-field textarea:focus {
   outline: none;
   border-color: #3f86d1;
   background: rgba(255, 255, 255, 0.09);
 }
+/* ── Colour preset picker ──────────────────────────────────────────────────
+   One chip per preset. Each label carries its own data-trip-theme, so the chip
+   is painted by the very tokens the card and the trip page will use — there is
+   no second copy of the palette here to drift out of step.
+
+   The radios stay real radios (clipped, not display:none, which would make them
+   unfocusable), so arrow keys move between presets and the group is announced
+   correctly. The visible selected state is on the label. */
+.pa-swatches { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pa-swatch {
+  flex: 1 1 6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.4rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pa-swatch:hover { border-color: rgba(255, 255, 255, 0.32); }
+.pa-swatch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+/* The chip is the preset in miniature: the page ground, the numbered plate, and
+   the accent — the three things that actually change between presets. */
+.pa-swatch__chip {
+  width: 100%;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid var(--trip-card-border);
+  background: linear-gradient(135deg,
+    var(--trip-ground-top) 0%, var(--trip-ground-mid) 45%, var(--trip-ground-deep) 100%);
+  box-shadow: inset 0 -7px 0 -3px var(--trip-accent);
+}
+.pa-swatch__name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(234, 241, 247, 0.75);
+}
+.pa-swatch:has(input:checked) {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.1);
+}
+.pa-swatch:has(input:checked) .pa-swatch__name { color: #fff; }
+.pa-swatch:has(input:focus-visible) { outline: 2px solid #f2d46b; outline-offset: 2px; }
+
 .pa-field--check .pa-field__label {
   flex-direction: row;
   display: inline-flex;
@@ -462,7 +611,10 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  background: #0e2032;
+  /* Follows the trip's preset — the reader is the trip's reading surface, and
+     a blue shell around a plum trip would read as a different site. The token
+     resolves off <html>, which trip.js stamps with the theme. */
+  background: var(--trip-ground-deep);
 }
 /* display:flex outranks the [hidden] UA rule, so it has to be restated. */
 .stop-screen[hidden] { display: none; }
@@ -511,7 +663,7 @@
 .stop-screen__close svg { display: block; }
 .stop-screen__dl:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.16);
-  color: #f2d46b;
+  color: var(--trip-accent);
 }
 .stop-screen__dl:disabled { opacity: 0.4; cursor: default; }
 .stop-screen__close:hover { background: rgba(255, 255, 255, 0.16); }
@@ -542,7 +694,7 @@
   max-width: 960px;
   margin: 0 auto;
   border: 0;
-  background: #0e2032;
+  background: var(--trip-ground-deep);
 }
 
 /* ── Previous / Next slide ────────────────────────────────────────────────

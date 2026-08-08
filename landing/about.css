@@ -142,17 +142,116 @@
   align-items: stretch;
   gap: 0;
   border-radius: 16px;
+  /* `relative` anchors the live bubble and the upcoming band; `overflow: hidden`
+     already clips both to the rounded corners. */
+  position: relative;
   overflow: hidden;
   text-decoration: none;
   color: #fff;
-  background: linear-gradient(135deg, #16324b 0%, #123c6b 55%, #0e2032 100%);
-  border: 1px solid rgba(120, 160, 200, 0.28);
+  /* Wears the trip's colour preset — about-travel.js puts data-trip-theme on
+     each card, and the token blocks live in person-travel.css (loaded here too).
+     The three gradient stops ARE the trip page's ground mid / plate / deep, so
+     a card and the page it opens read as the same object. */
+  background: linear-gradient(135deg,
+    var(--trip-ground-mid) 0%, var(--trip-plate) 55%, var(--trip-ground-deep) 100%);
+  border: 1px solid var(--trip-card-border);
   transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
 }
 .travel-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-  border-color: rgba(160, 195, 230, 0.55);
+  border-color: var(--trip-card-border-hover);
+}
+
+/* ── Status: live ───────────────────────────────────────────────────────── */
+/* A trip that's happening right now. Top-right corner of the card, over the
+   body rather than the art column, so it never sits on top of a trip logo. */
+.travel-card__live {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.18rem 0.45rem 0.18rem 0.38rem;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffe9e0;
+  background: rgba(196, 74, 46, 0.85);
+  border: 1px solid rgba(255, 160, 130, 0.6);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+/* The bubble is absolutely positioned, so the title has to be told to get out of
+   its way — without this a title long enough to reach the corner runs straight
+   underneath it. A floated spacer rather than padding-right, because the bubble
+   only occupies the FIRST line: padding would indent every line and push a
+   two-word title onto three of them. `height` is what keeps the float to that
+   one line. */
+.travel-card--live .travel-card__title::before {
+  content: "";
+  float: right;
+  width: 3.1rem;
+  height: 1.1em;
+}
+.travel-card__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffd9cc;
+  animation: travel-live-pulse 1.8s ease-in-out infinite;
+}
+@keyframes travel-live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .travel-card__live-dot { animation: none; }
+}
+
+/* ── Status: upcoming ───────────────────────────────────────────────────── */
+/* Rendered as a <div>, not an <a> — there is nothing to open yet. Muted, with
+   the word across the card. */
+.travel-card--upcoming {
+  cursor: default;
+  border-color: var(--trip-card-border-muted);
+  /* No background here: .travel-card's themed gradient already applies, and
+     restating it (as this rule used to) would pin every upcoming card to
+     enamel regardless of its preset. */
+}
+.travel-card--upcoming:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--trip-card-border-muted);
+}
+/* Dim the card's own content, not the band on top of it. */
+.travel-card--upcoming .travel-card__art,
+.travel-card--upcoming .travel-card__body {
+  opacity: 0.3;
+  filter: grayscale(0.7);
+}
+.travel-card__upcoming {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The scrim is what makes it read as "not yet" rather than "broken", and what
+     keeps the word legible over whatever title is dimmed behind it. */
+  background: rgba(10, 20, 32, 0.55);
+  font-size: 0.82rem;
+  font-weight: 700;
+  /* Trimmed at the narrow end of the grid (280px) so the tracking can't push
+     the word past the card's edge. The matching padding-left re-centres it:
+     letter-spacing leaves a gap after the last letter that would otherwise sit
+     the word slightly left of centre. */
+  letter-spacing: clamp(0.1em, 0.05em + 1.2vw, 0.34em);
+  padding-left: clamp(0.1em, 0.05em + 1.2vw, 0.34em);
+  text-transform: uppercase;
+  color: rgba(234, 241, 247, 0.92);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 
 .travel-card__art {
@@ -161,7 +260,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #f2d46b;
+  color: var(--trip-accent);
   background: rgba(255, 255, 255, 0.05);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -214,7 +313,7 @@
   margin-top: 0.35rem;
   font-size: 0.82rem;
   font-weight: 600;
-  color: #f2d46b;
+  color: var(--trip-accent);
 }
 
 /* ── Edit pencils (profile + travel) ────────────────────────────────────── */

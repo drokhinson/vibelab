@@ -20,6 +20,60 @@
     '<path d="M8 52 L40 20" /><path d="M28 16 L44 16 L44 32" />' +
     '<circle cx="12" cy="48" r="6" /><circle cx="52" cy="24" r="6" /></svg>';
 
+  // Where a trip is in its life. Mirrors the CHECK constraint on
+  // person_trips.status and TripStatus in the backend's constants.py. The order
+  // here is the order the card's cycle button walks: a trip is announced, then
+  // lived, then over.
+  var STATUSES = [
+    { value: "upcoming", label: "Upcoming" },
+    { value: "live", label: "Live" },
+    { value: "complete", label: "Complete" },
+  ];
+  var DEFAULT_STATUS = "upcoming";
+
+  // The colour presets. These are slugs — the actual palettes live in
+  // person-travel.css as [data-trip-theme="…"] token blocks, which is also what
+  // draws the swatches in the picker, so a chip can't disagree with the card it
+  // is promising. `swatch` names the three tokens each chip shows.
+  var THEMES = [
+    { value: "enamel", label: "Enamel" },
+    { value: "terracotta", label: "Terracotta" },
+    { value: "pine", label: "Pine" },
+    { value: "plum", label: "Plum" },
+  ];
+  var DEFAULT_THEME = "enamel";
+
+  function themeOf(t) {
+    for (var i = 0; i < THEMES.length; i++) {
+      if (THEMES[i].value === t.theme) return t.theme;
+    }
+    // A trip from a backend that predates the column keeps the original look.
+    return DEFAULT_THEME;
+  }
+
+  function statusOf(t) {
+    // A trip served by a backend that predates the column has no status; treat
+    // it as the plain card rather than greying it out.
+    for (var i = 0; i < STATUSES.length; i++) {
+      if (STATUSES[i].value === t.status) return t.status;
+    }
+    return "complete";
+  }
+
+  function statusLabel(value) {
+    for (var i = 0; i < STATUSES.length; i++) {
+      if (STATUSES[i].value === value) return STATUSES[i].label;
+    }
+    return value;
+  }
+
+  function nextStatus(value) {
+    for (var i = 0; i < STATUSES.length; i++) {
+      if (STATUSES[i].value === value) return STATUSES[(i + 1) % STATUSES.length].value;
+    }
+    return DEFAULT_STATUS;
+  }
+
   var TRIP_FIELDS = [
     { name: "title", label: "Title", type: "text", required: true },
     { name: "eyebrow", label: "Eyebrow (hero kicker)", type: "text" },
@@ -33,6 +87,8 @@
       placeholder: "assets/sprites/trips/… or https://… — blank for the arrow" },
     { name: "card_cta", label: "Card CTA text", type: "text", placeholder: "Follow the route ↗" },
     { name: "sort_order", label: "Sort order", type: "number" },
+    { name: "status", label: "Status", type: "select", options: STATUSES },
+    { name: "theme", label: "Colour", type: "swatch", options: THEMES },
     { name: "is_published", label: "Published", type: "checkbox" },
   ];
 
@@ -41,9 +97,18 @@
   // ── Rendering ───────────────────────────────────────────────────────────
   function tripCard(t) {
     var admin = isAdmin();
+    var status = statusOf(t);
+    var upcoming = status === "upcoming";
     var cta = t.card_cta || "Follow the route ↗";
     var adminControls = admin
       ? '<div class="pa-card-controls">' +
+          // Cycles upcoming → live → complete and saves immediately, so the
+          // common edit (a trip just started, a trip just ended) is one click
+          // rather than a trip through the modal.
+          '<button class="pa-btn pa-btn--ghost pa-status-trip" data-id="' + PA.escAttr(t.id) +
+          '" title="Status: ' + PA.escAttr(statusLabel(status)) + ' — click for ' +
+          PA.escAttr(statusLabel(nextStatus(status))) + '">' + PA.esc(statusLabel(status)) +
+          "</button>" +
           '<button class="pa-btn pa-btn--ghost pa-edit-trip" data-id="' + PA.escAttr(t.id) +
           '" title="Edit trip">Edit</button>' +
           '<button class="pa-btn pa-btn--danger pa-del-trip" data-id="' + PA.escAttr(t.id) +
@@ -52,24 +117,43 @@
       : "";
     var draftBadge = (admin && !t.is_published)
       ? '<span class="pa-badge">Draft</span>' : "";
+    // A trip that is happening right now says so, in the corner of its card.
+    var liveBubble = status === "live"
+      ? '<span class="travel-card__live"><span class="travel-card__live-dot" aria-hidden="true">' +
+        "</span>Live</span>"
+      : "";
+    // An upcoming trip has nothing to read yet, so the card is a teaser: greyed
+    // out, with the word across it. `aria-hidden` on the band because the same
+    // word is already in the card's own label below.
+    var upcomingBand = upcoming
+      ? '<span class="travel-card__upcoming" aria-hidden="true">Upcoming</span>' : "";
     // A dead or hotlink-blocked icon removes itself, leaving the plain art panel
     // rather than a broken-image glyph; no-referrer dodges referer hotlink checks.
     var art = t.icon_url
       ? '<img class="travel-card__art-img" src="' + PA.escAttr(t.icon_url) + '" alt="" ' +
         'loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />'
       : ARROW_SVG;
-    return '' +
-      '<div class="travel-card-wrap">' +
-        '<a class="travel-card" href="/travel/' + PA.escAttr(t.slug) + '">' +
-          '<div class="travel-card__art' + (t.icon_url ? " travel-card__art--img" : "") +
-            '" aria-hidden="true">' + art + "</div>" +
-          '<div class="travel-card__body">' +
-            '<h3 class="travel-card__title">' + PA.esc(t.title) + draftBadge + "</h3>" +
-            '<span class="travel-card__cta">' + PA.esc(cta) + "</span>" +
-          "</div>" +
-        "</a>" +
-        adminControls +
-      "</div>";
+    var inner =
+      '<div class="travel-card__art' + (t.icon_url ? " travel-card__art--img" : "") +
+        '" aria-hidden="true">' + art + "</div>" +
+      '<div class="travel-card__body">' +
+        '<h3 class="travel-card__title">' + PA.esc(t.title) + draftBadge + "</h3>" +
+        '<span class="travel-card__cta">' +
+          PA.esc(upcoming ? "Upcoming — not yet underway" : cta) + "</span>" +
+      "</div>" +
+      liveBubble + upcomingBand;
+    // An upcoming trip is a <div>, not an <a>: there is nothing to open yet, and
+    // dropping the element rather than suppressing its clicks is what actually
+    // takes it out of the tab order and off the screen reader's link list. The
+    // admin controls sit outside the card, so it stays fully editable.
+    // The card wears the trip's colour preset — person-travel.css turns the
+    // attribute into the --trip-* tokens about.css reads.
+    var themeAttr = ' data-trip-theme="' + PA.escAttr(themeOf(t)) + '"';
+    var card = upcoming
+      ? '<div class="travel-card travel-card--upcoming"' + themeAttr + ">" + inner + "</div>"
+      : '<a class="travel-card' + (status === "live" ? " travel-card--live" : "") +
+        '"' + themeAttr + ' href="/travel/' + PA.escAttr(t.slug) + '">' + inner + "</a>";
+    return '<div class="travel-card-wrap">' + card + adminControls + "</div>";
   }
 
   function renderGrid() {
@@ -101,6 +185,12 @@
         onDeleteTrip(btn.getAttribute("data-id"), btn.getAttribute("data-title"));
       });
     });
+    grid.querySelectorAll(".pa-status-trip").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        onCycleStatus(btn.getAttribute("data-id"));
+      });
+    });
   }
 
   // ── Admin actions ─────────────────────────────────────────────────────────
@@ -118,7 +208,7 @@
       title: "Add trip",
       submitLabel: "Create",
       fields: TRIP_FIELDS,
-      values: { is_published: true },
+      values: { is_published: true, status: DEFAULT_STATUS, theme: DEFAULT_THEME },
     });
     if (!vals) return;
     try {
@@ -145,6 +235,28 @@
       });
       await loadTrips();
     } catch (err) { window.alert("Could not save trip: " + err.message); }
+  }
+
+  // Repaints first and persists after — the whole point of the cycle button is
+  // that a status change is instant, and waiting on the round-trip would make
+  // three clicks through the cycle feel like three page loads. A failed save
+  // puts the old status back and says why, the same shape as the stop reorder
+  // in trip-admin.js.
+  async function onCycleStatus(id) {
+    var trip = trips.find(function (t) { return t.id === id; });
+    if (!trip) return;
+    var previous = trip.status;
+    trip.status = nextStatus(statusOf(trip));
+    renderGrid();
+    try {
+      await PA.adminFetch("/admin/trips/" + id, {
+        method: "PUT", body: JSON.stringify({ status: trip.status }),
+      });
+    } catch (err) {
+      trip.status = previous;
+      renderGrid();
+      window.alert("Could not change the status: " + err.message);
+    }
   }
 
   async function onDeleteTrip(id, title) {

@@ -167,7 +167,9 @@
       '<meta charset="utf-8">\n' +
       '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
       "<title>" + esc(trip.title || "Trip") + "</title>\n" +
-      "<style>\n" + window.TripExportStyle.base + "\n</style>\n" +
+      // A call, not a constant: it reads the trip's colour tokens off this page
+      // so the downloaded file wears the same preset.
+      "<style>\n" + window.TripExportStyle.base() + "\n</style>\n" +
       "<style>\n" + css.join("\n\n") + "\n</style>\n" +
       // Late: the responsive + print chrome shares its specificity with the
       // scoped stop rules, so it has to come after them to win.
