@@ -282,6 +282,11 @@
   });
 
   document.addEventListener("DOMContentLoaded", () => {
+    // Start publishing the visible-viewport box as CSS custom properties. Every
+    // surface that pins an action row above the software keyboard reads these
+    // (see ui/viewport-lock.js for why dvh alone isn't enough).
+    window.BgbViewport.start();
+
     // Restore a previously-active play session, if any.
     const ps = window.PlaySession.load();
     if (ps && ps.isActive()) {
