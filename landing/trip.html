@@ -71,8 +71,9 @@
     }
     .back:hover{ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
 
-    /* Download pill — same shape language as .back / .album-link. */
-    .trip-export{
+    /* Share + Download pills — same shape language as .back / .album-link, and
+       the same as each other: they're the two ways to take the trip with you. */
+    .trip-export, .trip-share{
       display:inline-flex; align-items:center; gap:0.45rem;
       font:inherit; font-size:0.85rem; font-weight:600; letter-spacing:0.02em;
       color:rgba(214,223,231,.85); cursor:pointer;
@@ -80,12 +81,21 @@
       border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05);
       transition:border-color .15s, background .15s, color .15s;
     }
-    .trip-export:hover:not(:disabled){ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
-    .trip-export:active:not(:disabled){ transform:translateY(1px); }
-    .trip-export:disabled{ opacity:.6; cursor:default; }
-    .trip-export svg{ width:17px; height:17px; color:var(--trip-accent); flex:none; }
-    .trip-export[hidden]{ display:none; }
+    .trip-export:hover:not(:disabled), .trip-share:hover:not(:disabled){ color:#fff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
+    .trip-export:active:not(:disabled), .trip-share:active:not(:disabled){ transform:translateY(1px); }
+    .trip-export:disabled, .trip-share:disabled{ opacity:.6; cursor:default; }
+    .trip-export svg, .trip-share svg{ width:17px; height:17px; color:var(--trip-accent); flex:none; }
+    .trip-export[hidden], .trip-share[hidden]{ display:none; }
     @media (max-width:480px){ .trip-export span{ display:none; } .trip-export{ padding:0.45rem 0.7rem; } }
+
+    /* Copied! state — the check replaces the share mark for a beat. Both icons
+       ship in the markup so the swap costs no layout and no re-parse, and the
+       label reserves the width of the longer of its two words so the pills
+       either side of it don't slide about while it's showing. */
+    .trip-share span{ min-width:4.4em; text-align:center; }
+    .trip-share__check{ display:none; }
+    .trip-share.is-copied .trip-share__icon{ display:none; }
+    .trip-share.is-copied .trip-share__check{ display:block; }
 
     /* "Save offline" switch — sits with .trip-export because it's the same kind
        of control: take this trip with you. Off by default; nothing is stored
@@ -264,22 +274,41 @@
       .hero{ padding:.25rem 0 1.25rem; }
     }
 
-    /* The topbar row is Back + album + Download + the offline switch, and it has
-       to survive a 360px phone. Two stages, each dropping a label once its pill
-       stops fitting — the icon (or the slider) still carries the state, and the
-       title/aria-label carry the words for anyone who needs them.
+    /* The topbar row is Back + album + Share + Download + the offline switch, and
+       it has to survive a 360px phone. Four stages, each dropping a label once
+       its pill stops fitting — the icon (or the slider) still carries the state,
+       and the title/aria-label carry the words for anyone who needs them.
+       Widths below are the row's measured content width, against a viewport
+       40px wider (the page's own padding).
 
-       First the switch's label, which is the widest of the three. */
-    @media (max-width:560px){
+       First Share's, which is the most redundant: the share mark says it on its
+       own, and this is the pill that arrived last into an already-full row.
+       Fully labelled the row wants ~663px. */
+    @media (max-width:740px){
+      .trip-share span{ display:none; }
+      .trip-share{ padding:.45rem .7rem; }
+    }
+    /* Then the switch's, which is the widest of the rest — ~590px with Share
+       already down to its icon. This used to drop at 560px; Share's pill costs
+       ~50px at every width, so every stage below moved up to match. */
+    @media (max-width:660px){
       .pa-switch__label{ display:none; }
       .trip-offline{ padding:.35rem .55rem; }
     }
-    /* Then the album's. Measured: Back + "Photo album ↗" + icon-only Download +
-       the icon-only switch need ~390px, so the album pill drops to its icon just
-       above that — same move .trip-export makes at 480px. */
-    @media (max-width:430px){
+    /* Then the album's: Back + "Photo album ↗" + labelled Download + the
+       icon-only Share and switch want ~493px, so they stop fitting at a 533px
+       viewport. */
+    @media (max-width:560px){
       .album-link span{ display:none; }
       .album-link{ padding:.45rem .7rem; }
+    }
+    /* Last stage, for the 320px holdouts below the 360px floor the rest of this
+       cascade is measured against: Back gives up its word too. Four icon-only
+       pills plus a labelled Back want ~298px against the 280px such a screen
+       leaves; the arrow alone brings it to ~253px. */
+    @media (max-width:359px){
+      .back span{ display:none; }
+      .back{ padding:.45rem .7rem; gap:0; }
     }
 
     /* Short viewport (landscape phone, split view). The hero is pinned now, so
@@ -292,7 +321,7 @@
       .hero .eyebrow{ font-size:.65rem; }
       .hero__kicker{ margin-bottom:.35rem; gap:.5rem; }
       .hero h1{ font-size:clamp(1.5rem,5vw,2rem); }
-      .back, .trip-export, .album-link, .trip-offline{ min-height:34px; padding:.3rem .7rem; }
+      .back, .trip-export, .trip-share, .album-link, .trip-offline{ min-height:34px; padding:.3rem .7rem; }
       .stops-header{ margin-bottom:.6rem; }
     }
   </style>
@@ -303,9 +332,11 @@
    <!-- Pinned: everything above the list stays put while the stops scroll. -->
    <div class="trip-top">
     <div class="topbar">
-      <a class="back" href="/about">
+      <!-- The label is a span so it can drop like every other pill's does; the
+           title carries the word once it has. -->
+      <a class="back" href="/about" title="Back to travel">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-        Back
+        <span>Back</span>
       </a>
       <div class="header-actions">
         <!-- Unhidden by trip.js once the trip loads; shows a muted "No album"
@@ -314,6 +345,15 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
           <span id="trip-album-label">Photo album ↗</span>
         </a>
+        <!-- Public — hand the trip on with one tap. Unhidden by trip.js as soon
+             as the trip loads: a link is worth sharing even before there's a
+             single postcard, unlike the download beside it. -->
+        <button id="trip-share-btn" class="trip-share" type="button" hidden
+                title="Copy this trip's link">
+          <svg class="trip-share__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
+          <svg class="trip-share__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+          <span id="trip-share-label">Share</span>
+        </button>
         <!-- Public — everyone can take the trip away as a file. Unhidden by
              trip.js once the trip has stops. -->
         <button id="trip-export-btn" class="trip-export" type="button" hidden
