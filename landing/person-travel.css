@@ -642,8 +642,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Downloads the stop's stored HTML. Sits left of the close button and mirrors
-   its box so the pair reads as one control group. */
+/* Share hands out this postcard's link; Download saves the stop's stored HTML.
+   Both sit left of the close button and share its box, so the three read as one
+   control group. */
+.stop-screen__share,
 .stop-screen__dl,
 .stop-screen__close {
   flex: none;
@@ -659,14 +661,29 @@
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
+.stop-screen__share svg,
 .stop-screen__dl svg,
 .stop-screen__close svg { display: block; }
+.stop-screen__share:hover:not(:disabled),
 .stop-screen__dl:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.16);
   color: var(--trip-accent);
 }
 .stop-screen__dl:disabled { opacity: 0.4; cursor: default; }
 .stop-screen__close:hover { background: rgba(255, 255, 255, 0.16); }
+/* Copied — the check stands in for the share mark for a beat. Both icons ship in
+   the markup, as they do on the topbar's Share pill, so the swap is a class flip
+   rather than a re-parse. The button carries no label to change here, so the
+   accent colour does the talking (the title/aria-label change too).
+
+   Every selector below is scoped to the button on purpose: the
+   `… svg { display: block }` rule above is class-plus-type, so a bare
+   `.stop-screen__share-check` loses to it on specificity and the two icons
+   stack on top of each other. */
+.stop-screen__share .stop-screen__share-check { display: none; }
+.stop-screen__share.is-copied { color: var(--trip-accent); }
+.stop-screen__share.is-copied .stop-screen__share-icon { display: none; }
+.stop-screen__share.is-copied .stop-screen__share-check { display: block; }
 
 /* The only flexible row, and the slide's viewport. min-height:0 — an iframe is a
    replaced element, so its automatic minimum size would otherwise pin the row at
@@ -816,8 +833,12 @@
    postcard's height while the gutters either side of it sit empty. So the whole
    screen becomes a grid, and the bar and the nav become `display:contents` so
    their buttons promote to grid items and land in rails left and right of the
-   card: close over Previous, download over Next. The markup's nesting doesn't
-   change at all.
+   card: close over Previous on one side, download over share over Next on the
+   other. The markup's nesting doesn't change at all.
+
+   Every promoted button needs a grid-area here. One without becomes an unplaced
+   item, gets auto-placed into an implicit track, and quietly wrecks the rails —
+   so a new control in the bar means a new area in the template below.
 
    Neither [hidden] rule needs restating here. `.stop-screen[hidden]` and
    `.stop-screen__nav[hidden]` are class + attribute, so they outrank the plain
@@ -832,9 +853,10 @@
   .stop-screen {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     grid-template-areas:
       "close stage   dl"
+      "close stage   share"
       "prev  stage   next"
       "prev  counter next";
     align-items: center;
@@ -853,7 +875,8 @@
   .stop-screen__title { display: none; }
   .stop-screen__close { grid-area: close; }
   .stop-screen__dl { grid-area: dl; }
-  /* Spans the two upper rows, so the card gets everything above the counter. */
+  .stop-screen__share { grid-area: share; }
+  /* Spans every row above the counter, so the card gets all of it. */
   .stop-screen__stage { grid-area: stage; align-self: stretch; }
   .stop-screen__nav-btn[data-dir="-1"] { grid-area: prev; }
   .stop-screen__nav-btn[data-dir="1"] { grid-area: next; }

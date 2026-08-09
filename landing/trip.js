@@ -25,9 +25,16 @@
   var loginBtn = document.getElementById("admin-login-btn");
   var exportBtn = document.getElementById("trip-export-btn");
   var exportLabel = document.getElementById("trip-export-label");
+  var shareBtn = document.getElementById("trip-share-btn");
+  var shareLabel = document.getElementById("trip-share-label");
 
   var trip = null;
   var stops = [];
+
+  // The share button's resting tooltip, which depends on the loaded trip (a
+  // draft says so), and the timer that restores the button after "Copied!".
+  var shareTitle = "Copy this trip's link";
+  var shareResetTimer = null;
 
   // ── Routing ───────────────────────────────────────────────────────────────
   // /travel/<trip-slug>            → the stop list
@@ -83,7 +90,22 @@
     if (!stop) return;
     tripScreen.hidden = true;
     document.title = (stop.title || "Postcard") + " — " + (trip ? (trip.title || "Trip") : "Trip");
-    window.StopView.show(stops, index, { onNavigate: goToStop, onExit: exitStop });
+    window.StopView.show(stops, index, {
+      onNavigate: goToStop,
+      onExit: exitStop,
+      // The reader's Share button. It hands out the postcard's own URL, which is
+      // the same one openStop/goToStop put in the address bar — composed here
+      // rather than read back off location, so it can't inherit a stale one
+      // mid-navigation. Resolves true when StopView owes the reader a "copied"
+      // flash; see shareLink.
+      onShare: function (i) {
+        var s = stops[i];
+        var name = (s && s.title) || "Postcard";
+        var tripName = trip && (trip.title || trip.headline);
+        return shareLink(window.location.origin + pathFor(i + 1),
+          tripName ? name + " — " + tripName : name);
+      },
+    });
   }
 
   // A card tap: push, so Back closes the postcard.
@@ -199,6 +221,16 @@
       if (albumLabel) albumLabel.textContent = "No album";
     }
     albumEl.hidden = false;
+    // A draft trip is still reachable by anyone holding its URL — the detail
+    // endpoint doesn't gate on is_published — so the button works, but says so
+    // before you paste the link somewhere public. Strict === false: an offline
+    // copy cached before the column existed has no flag and gets the plain
+    // wording rather than a warning about a trip that may well be live.
+    shareTitle = trip.is_published === false
+      ? "Share this trip's link — heads up, it's still a draft"
+      : "Copy this trip's link";
+    shareBtn.title = shareTitle;
+    shareBtn.hidden = false;
   }
 
   // ── Painting a payload ────────────────────────────────────────────────────
@@ -235,6 +267,7 @@
     renderStatus();
     albumEl.hidden = true;
     exportBtn.hidden = true;
+    shareBtn.hidden = true;
     window.TripStops.renderError(message);
   }
 
@@ -292,6 +325,66 @@
       exportBtn.disabled = false;
       exportLabel.textContent = "Download";
     }
+  });
+
+  // The confirmation the export button's progress label established: the
+  // control that did the thing reports it, rather than a toast this page has
+  // no other use for. Re-entrant — a second click restarts the beat instead of
+  // letting the first one's timer strand the button on "Copied!".
+  function flashCopied() {
+    if (shareResetTimer) clearTimeout(shareResetTimer);
+    shareBtn.classList.add("is-copied");
+    shareLabel.textContent = "Copied!";
+    shareBtn.title = "Link copied";
+    shareResetTimer = setTimeout(function () {
+      shareResetTimer = null;
+      shareBtn.classList.remove("is-copied");
+      shareLabel.textContent = "Share";
+      shareBtn.title = shareTitle;
+    }, 1800);
+  }
+
+  // Hand a link on. Shared by the topbar (the whole trip) and the postcard
+  // reader's bar (one stop), which is why it lives here: this module is the only
+  // one that knows the slug and composes URLs.
+  //
+  // navigator.share first, so a phone gets its native sheet (Messages, AirDrop,
+  // whatever) instead of a clipboard the reader then has to paste by hand. A
+  // cancelled sheet is a decision, not a failure — it must NOT fall through to
+  // the clipboard, hence the AbortError guard. Desktop browsers without Web
+  // Share copy instead; with no clipboard either (an insecure context), the
+  // prompt at least puts the URL somewhere selectable.
+  //
+  // Returns true only when the link went to the clipboard silently and the
+  // caller still owes the reader a "Copied!" — the sheet and the prompt are
+  // their own confirmation.
+  async function shareLink(url, title) {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: title, url: url });
+        return false;
+      } catch (err) {
+        if (err && err.name === "AbortError") return false;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      return true;
+    } catch (_) {
+      window.prompt("Copy this link:", url);
+      return false;
+    }
+  }
+
+  // The topbar's button: the trip itself. Public — no admin gate, and no stops
+  // required, since the link is worth sharing from the moment the trip exists.
+  // Always the trip's own URL, never the current one — the topbar is off screen
+  // while a postcard is open, so there is no reading of "the link" this could be
+  // mistaken for. The stop-level link is the reader's own button; see showStop.
+  shareBtn.addEventListener("click", async function () {
+    if (!trip) return;
+    var title = trip.title || trip.headline || "Trip";
+    if (await shareLink(window.location.origin + pathFor(null), title)) flashCopied();
   });
 
   // Re-render when admin state flips. wireLoginButton keeps the pencil in sync
