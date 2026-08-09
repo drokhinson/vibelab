@@ -44,7 +44,7 @@
   "use strict";
 
   var root = null, titleEl = null, stage = null, frame = null, proto = null;
-  var dlBtn = null, closeBtn = null;
+  var dlBtn = null, closeBtn = null, shareBtn = null;
   var nav = null, counterEl = null, prevBtn = null, nextBtn = null;
 
   var list = [];
@@ -52,6 +52,8 @@
   var handlers = {};
   var open = false;
   var keyHandler = null;
+  // Restores the share button after its "copied" beat; see flashShared/resetShare.
+  var shareResetTimer = null;
 
   // Keep in step with the transition on .stop-screen__frame--sliding.
   var SLIDE_MS = 280;
@@ -74,6 +76,7 @@
     // loaded into it — every stop gets a fresh clone of this. See renderFrame().
     proto = frame.cloneNode(false);
     dlBtn = root.querySelector(".stop-screen__dl");
+    shareBtn = root.querySelector(".stop-screen__share");
     closeBtn = root.querySelector(".stop-screen__close");
     nav = root.querySelector(".stop-screen__nav");
     counterEl = root.querySelector(".stop-screen__counter");
@@ -92,7 +95,37 @@
       saveBlob(new Blob([stop.html_content], { type: "text/html;charset=utf-8" }),
         fileNameFor(stop.title));
     });
+    // Hands out this postcard's link. trip.js owns the URL — this module knows
+    // nothing about slugs or history — so all that happens here is asking for
+    // the stop on screen (read at click time, like the download above) to be
+    // shared, and reporting back if it landed on the clipboard silently.
+    shareBtn.addEventListener("click", async function () {
+      if (!handlers.onShare) return;
+      if (await handlers.onShare(current)) flashShared();
+    });
     return true;
+  }
+
+  // The button carries no label, so the confirmation is the icon and the colour.
+  // Re-entrant: a second click restarts the beat rather than letting the first
+  // one's timer clear a check that is still earning its keep.
+  function flashShared() {
+    resetShare();
+    shareBtn.classList.add("is-copied");
+    shareBtn.title = "Link copied";
+    shareBtn.setAttribute("aria-label", "Link copied");
+    shareResetTimer = setTimeout(resetShare, 1800);
+  }
+
+  // Called on every show() and on close() as well as by the timer: paging to the
+  // next postcard, or coming back to this screen later, must never land on a
+  // check still confirming someone else's link.
+  function resetShare() {
+    if (shareResetTimer) { clearTimeout(shareResetTimer); shareResetTimer = null; }
+    if (!shareBtn) return;
+    shareBtn.classList.remove("is-copied");
+    shareBtn.title = "Share this postcard";
+    shareBtn.setAttribute("aria-label", "Share this postcard");
   }
 
   // Same recipe as trip-export.js's filename stem, plus whitespace collapsing.
@@ -258,7 +291,10 @@
     var title = (stop && stop.title) || "Postcard";
     titleEl.textContent = title;
     renderFrame(stop && stop.html_content, title, dir);
+    // A stop with no stored HTML has nothing to save; its link still works, so
+    // only the download goes dark.
     dlBtn.disabled = !(stop && stop.html_content);
+    resetShare();
 
     var multi = list.length > 1;
     nav.hidden = !multi;
@@ -284,6 +320,7 @@
     if (!root || !open) return;
     open = false;
     root.hidden = true;
+    resetShare();
     // Drop the document so the postcard's scripts, timers and map tiles stop
     // when the reader is back on the trip list — again by swapping the frame,
     // for the history reason in renderFrame().

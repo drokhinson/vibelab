@@ -90,7 +90,22 @@
     if (!stop) return;
     tripScreen.hidden = true;
     document.title = (stop.title || "Postcard") + " — " + (trip ? (trip.title || "Trip") : "Trip");
-    window.StopView.show(stops, index, { onNavigate: goToStop, onExit: exitStop });
+    window.StopView.show(stops, index, {
+      onNavigate: goToStop,
+      onExit: exitStop,
+      // The reader's Share button. It hands out the postcard's own URL, which is
+      // the same one openStop/goToStop put in the address bar — composed here
+      // rather than read back off location, so it can't inherit a stale one
+      // mid-navigation. Resolves true when StopView owes the reader a "copied"
+      // flash; see shareLink.
+      onShare: function (i) {
+        var s = stops[i];
+        var name = (s && s.title) || "Postcard";
+        var tripName = trip && (trip.title || trip.headline);
+        return shareLink(window.location.origin + pathFor(i + 1),
+          tripName ? name + " — " + tripName : name);
+      },
+    });
   }
 
   // A card tap: push, so Back closes the postcard.
@@ -329,35 +344,47 @@
     }, 1800);
   }
 
-  // Hand the trip on. Public — no admin gate, and no stops required: the link
-  // is worth sharing from the moment the trip exists. Always the trip's own
-  // URL, never the current one — the topbar is off screen while a postcard is
-  // open, so there is no reading of "the link" this could be mistaken for.
+  // Hand a link on. Shared by the topbar (the whole trip) and the postcard
+  // reader's bar (one stop), which is why it lives here: this module is the only
+  // one that knows the slug and composes URLs.
   //
   // navigator.share first, so a phone gets its native sheet (Messages, AirDrop,
   // whatever) instead of a clipboard the reader then has to paste by hand. A
   // cancelled sheet is a decision, not a failure — it must NOT fall through to
   // the clipboard, hence the AbortError guard. Desktop browsers without Web
-  // Share copy instead and the button says so; with no clipboard either (an
-  // insecure context), the prompt at least puts the URL somewhere selectable.
-  shareBtn.addEventListener("click", async function () {
-    if (!trip) return;
-    var url = window.location.origin + pathFor(null);
-    var title = trip.title || trip.headline || "Trip";
+  // Share copy instead; with no clipboard either (an insecure context), the
+  // prompt at least puts the URL somewhere selectable.
+  //
+  // Returns true only when the link went to the clipboard silently and the
+  // caller still owes the reader a "Copied!" — the sheet and the prompt are
+  // their own confirmation.
+  async function shareLink(url, title) {
     if (navigator.share) {
       try {
         await navigator.share({ title: title, url: url });
-        return;
+        return false;
       } catch (err) {
-        if (err && err.name === "AbortError") return;
+        if (err && err.name === "AbortError") return false;
       }
     }
     try {
       await navigator.clipboard.writeText(url);
-      flashCopied();
+      return true;
     } catch (_) {
-      window.prompt("Copy this trip's link:", url);
+      window.prompt("Copy this link:", url);
+      return false;
     }
+  }
+
+  // The topbar's button: the trip itself. Public — no admin gate, and no stops
+  // required, since the link is worth sharing from the moment the trip exists.
+  // Always the trip's own URL, never the current one — the topbar is off screen
+  // while a postcard is open, so there is no reading of "the link" this could be
+  // mistaken for. The stop-level link is the reader's own button; see showStop.
+  shareBtn.addEventListener("click", async function () {
+    if (!trip) return;
+    var title = trip.title || trip.headline || "Trip";
+    if (await shareLink(window.location.origin + pathFor(null), title)) flashCopied();
   });
 
   // Re-render when admin state flips. wireLoginButton keeps the pencil in sync
