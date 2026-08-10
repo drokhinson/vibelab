@@ -8,8 +8,11 @@ the shared ADMIN_API_KEY via require_admin() from auth.py.
 
 Supabase tables (prefixed person_):
   person_trips       — id, slug, title, eyebrow, headline, lede, photo_album_url,
-                       icon_url, card_cta, sort_order, is_published, created_at,
-                       updated_at
+                       icon_url, card_cta, sort_order, is_published, status,
+                       theme, summary_html, summary_title, summary_caption,
+                       has_summary (generated), created_at, updated_at
+                       summary_html is the trip's whole-trip recap page — large,
+                       and served only by GET /trips/{slug}/summary
   person_trip_stops  — id, trip_id, title, meta, note, html_content, sort_order,
                        created_at, updated_at
   person_profile     — id (singleton=1), name, role, bio, photo_path, updated_at

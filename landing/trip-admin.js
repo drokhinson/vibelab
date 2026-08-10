@@ -13,6 +13,7 @@
 //     trip:  fn () -> trip,   // for trip.id on the write paths
 //     stops: fn () -> stops,  // the canonical (sort_order) array
 //     setStops: fn (next),    // replace the array AND repaint the list
+//     setSummary: fn (patch), // same, for the trip's recap fields
 //     orderedStops: fn () -> stops in *display* order,
 //     canonicalFrom: fn (view) -> that display order mapped back to canonical,
 //   })
@@ -41,6 +42,26 @@
     { name: "meta", label: "Subtitle", type: "text" },
     { name: "note", label: "Note (one-line teaser)", type: "text" },
     { name: "html_content", label: "Content", type: "htmleditor", required: true },
+  ];
+
+  // The trip's recap: one standalone HTML page about the whole journey.
+  //
+  // A plain textarea, not the `htmleditor` a stop gets. Two reasons. These
+  // documents are generated rather than written — an animated route replay with
+  // base64 photos runs to hundreds of KB — so opening every text node as its own
+  // WYSIWYG field is slow and buys nothing. And HtmlSpanEditor never returns ""
+  // for an empty editor; it returns a skeleton document, which is truthy, so a
+  // stray Save would store a blank page and the banner would appear with nothing
+  // behind it. A textarea reports blank as null, which clearableSummary turns
+  // into the "" that actually clears the column.
+  //
+  // `importFile` is the Load-file button — that is how a 600KB artifact gets in.
+  var SUMMARY_FIELDS = [
+    { name: "summary_title", label: "Recap name", type: "text", placeholder: "Trip recap" },
+    { name: "summary_caption", label: "Banner subline", type: "text",
+      placeholder: "e.g. 2,021 km in six days" },
+    { name: "summary_html", label: "Recap page (full HTML document)", type: "textarea",
+      rows: 6, importFile: true, placeholder: "<!DOCTYPE html>…  — or use Load file" },
   ];
 
   function isAdmin() { return PA.isAdmin(); }
@@ -89,8 +110,11 @@
     bar.innerHTML =
       '<span class="pa-tag">Admin</span>' +
       '<button class="pa-btn pa-btn--primary" id="pa-add-stop">+ Add stop</button>' +
+      '<button class="pa-btn pa-btn--ghost" id="pa-edit-summary">' +
+        (window.TripSummary.has() ? "Edit recap" : "+ Add recap") + "</button>" +
       '<button class="pa-btn pa-btn--ghost" id="pa-signout">Sign out</button>';
     document.getElementById("pa-add-stop").addEventListener("click", onAddStop);
+    document.getElementById("pa-edit-summary").addEventListener("click", onEditSummary);
     document.getElementById("pa-signout").addEventListener("click", function () { PA.signOut(); });
   }
 
@@ -138,6 +162,57 @@
           method: "PUT", body: JSON.stringify(vals),
         });
         host.setStops(host.stops().map(function (s) { return s.id === id ? updated : s; }));
+      },
+    });
+  }
+
+  // ── The recap ─────────────────────────────────────────────────────────────
+  // formModal sends null for a blanked input and the API skips null fields, so a
+  // field normally can't be unset once written. Send "" instead — it isn't null,
+  // so the API writes it, and the API stores a blank as NULL, which drops
+  // has_summary back to false. Same trick as clearableIcon in about-travel.js.
+  function clearableSummary(vals) {
+    ["summary_html", "summary_title", "summary_caption"].forEach(function (k) {
+      if (vals[k] == null) vals[k] = "";
+    });
+    return vals;
+  }
+
+  // Unlike a stop, the recap document is NOT in the trip payload — it is fetched
+  // on demand — so the form has to go and get it before it can show it.
+  async function onEditSummary() {
+    var trip = host.trip();
+    if (!trip) return;
+    var current = "";
+    if (window.TripSummary.has()) {
+      try {
+        current = (await window.TripSummary.load()) || "";
+      } catch (err) {
+        // Opening the form on a recap we couldn't read would offer an empty box
+        // over a document that still exists — and Save would destroy it.
+        window.alert("Could not load the current recap: " + err.message);
+        return;
+      }
+    }
+    await PA.formModal({
+      title: window.TripSummary.has() ? "Edit recap" : "Add recap",
+      submitLabel: "Save",
+      savingLabel: "Saving…",
+      fields: SUMMARY_FIELDS,
+      values: {
+        summary_title: trip.summary_title,
+        summary_caption: trip.summary_caption,
+        summary_html: current,
+      },
+      onSubmit: async function (vals) {
+        var body = clearableSummary(vals);
+        await PA.adminFetch("/admin/trips/" + trip.id, {
+          method: "PUT", body: JSON.stringify(body),
+        });
+        // Patch from what was submitted, not from the echo: the trip-update
+        // response is deliberately the small card shape and carries none of
+        // these fields (see _TRIP_COLS in trip_routes.py).
+        host.setSummary(body);
       },
     });
   }

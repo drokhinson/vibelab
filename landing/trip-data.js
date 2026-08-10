@@ -64,6 +64,13 @@
       return;
     }
     window.TripCache.setEnabled(t.slug, true);
+    // The recap is fetched on demand, so a trip saved before anyone opened it
+    // would go offline without it. Pull it in first — saving "the trip" has to
+    // mean all of it. A failure here is not fatal: the rest still saves, and the
+    // banner will simply need a connection.
+    if (t.has_summary && !t.summary_html) {
+      try { await window.TripSummary.load(); } catch (_) {}
+    }
     var res = await window.TripCache.write(t.slug, t);
     if (!res.ok) {
       window.TripCache.setEnabled(t.slug, false);

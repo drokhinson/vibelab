@@ -17,7 +17,10 @@
 //
 // ── On size ───────────────────────────────────────────────────────────────
 // Postcards carry inline scripts, inline CSS and base64 art, so a trip is
-// routinely megabytes, and localStorage has a hard ~5MB per-origin ceiling. The
+// routinely megabytes, and localStorage has a hard ~5MB per-origin ceiling. A
+// trip with a recap carries that document too — it is fetched separately but
+// stamped onto the payload precisely so it is saved with everything else, and it
+// is the same shape of thing, so it lands on the same side of the budget. The
 // payload is therefore gzipped before it is stored. That buys roughly 6× (gzip
 // manages ~8× on this kind of HTML; base64-ing the bytes back into a string
 // gives about a third of it away), which is the difference between a real trip

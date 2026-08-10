@@ -251,6 +251,45 @@
       font-size:1.3rem; color:var(--trip-go); font-weight:700;
     }
 
+    /* ── Trip recap banner ───────────────────────────────────── */
+    /* Deliberately not a .stop: a recap is about the whole trip, so it reads as
+       a banner in the page's own dark palette rather than as another numbered
+       paper plaque. Every colour is a --trip-* token, so it follows the trip's
+       preset with no per-palette rules. */
+    .trip-summary{
+      display:flex; align-items:center; gap:.85rem; width:100%;
+      margin:0 0 1.1rem; /* clears the stops heading below it */
+      padding:.8rem 1rem; border-radius:16px;
+      font:inherit; text-align:left; cursor:pointer; color:#D6DFE7;
+      background:rgb(var(--trip-accent-rgb) / .10);
+      border:1px solid var(--trip-card-border);
+      transition:transform .15s, border-color .15s, background .15s, opacity .15s;
+    }
+    .trip-summary:hover{
+      transform:translateY(-2px);
+      border-color:var(--trip-card-border-hover);
+      background:rgb(var(--trip-accent-rgb) / .16);
+    }
+    /* Same [hidden]-vs-display trap as .album-link / .trip-export / the order
+       toggle — display:flex above outranks the attribute's display:none. */
+    .trip-summary[hidden]{ display:none; }
+    /* Fetching the document. It is the one thing on this page that isn't already
+       in memory, so the banner has to say something while it lands. */
+    .trip-summary.is-loading{ opacity:.6; cursor:progress; }
+    .trip-summary.is-loading .trip-summary__go{ animation:pa-spin .8s linear infinite; }
+    @media (prefers-reduced-motion:reduce){
+      .trip-summary.is-loading .trip-summary__go{ animation:none; }
+    }
+    .trip-summary__mark{ flex:none; display:flex; color:var(--trip-accent); }
+    .trip-summary__body{ flex:1; min-width:0; display:flex; flex-direction:column; gap:.15rem; }
+    .trip-summary__title{ font-size:.98rem; font-weight:700; letter-spacing:.01em; color:#fff; }
+    .trip-summary__meta{
+      font-size:.72rem; letter-spacing:.14em; text-transform:uppercase;
+      color:rgba(214,223,231,.6); font-weight:600;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .trip-summary__go{ flex:none; font-size:1.2rem; font-weight:700; color:var(--trip-accent); }
+
     .empty{ text-align:center; padding:3rem 1rem; color:rgba(214,223,231,.6); }
     .empty--error{ color:#f3c9b6; }
 
@@ -258,6 +297,7 @@
       .stop__no{ width:58px; }
       .stop__city{ font-size:1.25rem; }
       .stop__note{ display:none; }
+      .trip-summary__meta{ display:none; }
       /* Pinned chrome costs screen height permanently, so buy some back for
          the stop list on a phone. */
       .topbar{ padding-bottom:1rem; }
@@ -294,6 +334,10 @@
       .hero h1{ font-size:clamp(1.5rem,5vw,2rem); }
       .back, .trip-export, .album-link, .trip-offline{ min-height:34px; padding:.3rem .7rem; }
       .stops-header{ margin-bottom:.6rem; }
+      /* The recap banner is pinned too, so it condenses with the rest rather
+         than costing the list a row of its own. */
+      .trip-summary{ margin-bottom:.6rem; padding:.5rem .8rem; }
+      .trip-summary__meta{ display:none; }
     }
   </style>
   <link rel="stylesheet" href="person-travel.css" />
@@ -346,6 +390,22 @@
     </section>
 
     <div id="travel-admin-bar" class="travel-admin-bar" hidden></div>
+
+    <!-- The whole-trip recap at /travel/:slug/summary. Pinned, ABOVE the stops
+         heading: it is not a stop, so it must not sit under a heading that says
+         "stops along the way". Costs a little list height, which the short-
+         viewport block at the end of this stylesheet buys back. Painted by
+         trip-summary.js and hidden on a trip with no recap. -->
+    <button class="trip-summary" id="trip-summary" type="button" hidden>
+      <span class="trip-summary__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 L10 9 L14 14 L20 6"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="6" r="2"/></svg>
+      </span>
+      <span class="trip-summary__body">
+        <span class="trip-summary__title" id="trip-summary-title">Trip recap</span>
+        <span class="trip-summary__meta" id="trip-summary-meta"></span>
+      </span>
+      <span class="trip-summary__go" aria-hidden="true">↗</span>
+    </button>
 
     <!-- The row itself is always present — the admin pencil lives here now, and
          it has to stay reachable on an empty or not-found trip. Only the
@@ -433,6 +493,7 @@
   <script src="trip-admin.js"></script>
   <script src="trip-cache.js"></script>
   <script src="trip-stops.js"></script>
+  <script src="trip-summary.js"></script>
   <script src="trip-data.js"></script>
   <script src="trip.js"></script>
 </body>

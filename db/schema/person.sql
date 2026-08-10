@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- person — current schema snapshot
--- Last updated: 2026-08-07 (through db/migrations/person/007_trip_theme.sql)
+-- Last updated: 2026-08-10 (through db/migrations/person/008_trip_summary.sql)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- David Rokhinson's personal page: admin-editable travel trips + stops.
 -- Backend-only access via service role; writes gated by ADMIN_API_KEY.
@@ -24,6 +24,15 @@ CREATE TABLE IF NOT EXISTS public.person_trips (
   -- landing/person-travel.css as [data-trip-theme="…"] token blocks.
   theme           TEXT        NOT NULL DEFAULT 'enamel'
                     CHECK (theme IN ('enamel', 'terracotta', 'pine', 'plum')),
+  -- Optional whole-trip recap: one hand-authored standalone HTML page about the
+  -- journey, same storage shape as person_trip_stops.html_content. Hundreds of
+  -- KB, so it is TOASTed out of line and NEVER selected by the card-grid query.
+  summary_html    TEXT,                                 -- the document itself
+  summary_title   TEXT,                                 -- banner + reader title; UI default "Trip recap"
+  summary_caption TEXT,                                 -- banner subline
+  -- Lets the trip-detail endpoint advertise a recap without transferring it.
+  has_summary     BOOLEAN     GENERATED ALWAYS AS
+                    (summary_html IS NOT NULL AND summary_html <> '') STORED,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
