@@ -115,13 +115,16 @@
 
 /**
  * @typedef {Object} BggSyncStatus
- * @property {boolean} linked
  * @property {string|null} bgg_username
- * @property {string} [status]        // idle | pending | running | done | error
- * @property {number} [pending_count]
- * @property {number} [processed]
- * @property {number} [total]
- * @property {string|null} [last_sync_at]
+ * @property {'unlinked'|'linked'|'relink_required'} auth_state
+ * @property {number} pending_count      lifetime pending-import rows
+ * @property {number} errored_count
+ * @property {string|null} last_completed_at
+ * @property {string|null} session_started_at
+ * @property {number} session_total      distinct BGG ids this sync session
+ * @property {number} session_done
+ * @property {number} session_errored
+ * @property {string[]} session_game_names
  */
 
 export {};
