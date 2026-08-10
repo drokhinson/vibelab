@@ -9,7 +9,13 @@ from .constants import TripStatus, TripTheme
 
 # ── Responses ────────────────────────────────────────────────────────────────
 class TripSummaryResponse(BaseModel):
-    """A trip as shown on the about-page card grid (no stops)."""
+    """A trip as shown on the about-page card grid (no stops).
+
+    "Summary" here means the summarised *card* shape, and has nothing to do with
+    a trip's recap document (`summary_html`) — that lives on TripDetailResponse
+    and TripSummaryDocResponse below. This model must stay small: it is what
+    GET /trips returns for every trip on every about-page load.
+    """
     id: str
     slug: str
     title: str
@@ -41,8 +47,29 @@ class StopResponse(BaseModel):
 
 
 class TripDetailResponse(TripSummaryResponse):
-    """A trip plus its ordered stops (each with full html_content)."""
+    """A trip plus its ordered stops (each with full html_content).
+
+    Carries the recap's *labels* and a flag, never the recap document: the
+    document runs to hundreds of KB and is fetched on demand by
+    GET /trips/{slug}/summary only when a reader opens it.
+    """
+    summary_title: Optional[str] = None
+    summary_caption: Optional[str] = None
+    has_summary: bool = False
     stops: List[StopResponse] = []
+
+
+class TripSummaryDocResponse(BaseModel):
+    """A trip's whole-trip recap: one standalone HTML page about the journey.
+
+    Fetched on its own so the trip page stays light for the readers who never
+    open it. Named "Doc" to keep it apart from TripSummaryResponse, which is the
+    about-page card shape.
+    """
+    slug: str
+    title: Optional[str] = None
+    caption: Optional[str] = None
+    html: str
 
 
 class StopContentResponse(BaseModel):
@@ -80,6 +107,10 @@ class CreateTripBody(BaseModel):
     is_published: Optional[bool] = None
     status: Optional[TripStatus] = None  # defaults to 'upcoming' when omitted
     theme: Optional[TripTheme] = None  # defaults to 'enamel' when omitted
+    # Recap labels only. The document itself is attached from the trip page once
+    # the trip exists (PUT /admin/trips/{id}), never at creation.
+    summary_title: Optional[str] = None  # blank stores NULL
+    summary_caption: Optional[str] = None  # blank stores NULL
 
 
 class UpdateTripBody(BaseModel):
@@ -95,6 +126,12 @@ class UpdateTripBody(BaseModel):
     is_published: Optional[bool] = None
     status: Optional[TripStatus] = None
     theme: Optional[TripTheme] = None
+    # The whole-trip recap. All three are clearable: a blank string is written
+    # (unlike null, which is skipped) and normalised to NULL, which drops
+    # has_summary back to false. See update_trip in trip_routes.py.
+    summary_html: Optional[str] = None  # empty string clears it
+    summary_title: Optional[str] = None  # empty string clears it
+    summary_caption: Optional[str] = None  # empty string clears it
 
 
 class CreateStopBody(BaseModel):

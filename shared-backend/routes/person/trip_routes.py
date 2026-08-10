@@ -17,6 +17,7 @@ from .models import (
     CreateTripBody,
     MessageResponse,
     TripDetailResponse,
+    TripSummaryDocResponse,
     TripSummaryResponse,
     UpdateTripBody,
 )
@@ -26,6 +27,15 @@ _TRIP_COLS = (
     "id, slug, title, eyebrow, headline, lede, photo_album_url, icon_url, "
     "card_cta, sort_order, is_published, status, theme"
 )
+# The trip page needs to know a recap EXISTS (to paint its banner) without
+# paying for it. has_summary is a generated column, so this stays cheap;
+# summary_html is deliberately absent and is served by get_trip_summary below.
+# Never fold these into _TRIP_COLS — that is what /trips selects for every trip
+# on every about-page load.
+_TRIP_DETAIL_COLS = _TRIP_COLS + ", summary_title, summary_caption, has_summary"
+# Blank means "cleared" for these: the update loop skips None, so the frontend
+# sends "" to unset a field, and it is stored as NULL so has_summary recomputes.
+_SUMMARY_FIELDS = ("summary_html", "summary_title", "summary_caption")
 # Full stop rows for the trip-detail endpoint: html_content is included so the
 # trip page loads all stops in one pass (the trip UI opens popups from memory).
 _STOP_COLS = "id, trip_id, title, meta, note, sort_order, html_content"
@@ -35,6 +45,14 @@ def _slugify(text: str) -> str:
     """Lowercase, non-alnum → hyphen, collapse repeats, strip ends."""
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug or "trip"
+
+
+def _blank_to_none(data: dict) -> None:
+    """Rewrite blank recap strings to NULL in place, so has_summary recomputes."""
+    for field in _SUMMARY_FIELDS:
+        value = data.get(field)
+        if isinstance(value, str) and not value.strip():
+            data[field] = None
 
 
 def _unique_slug(base: str) -> str:
@@ -96,9 +114,9 @@ async def list_trips() -> List[dict]:
 async def get_trip(
     slug: str = Path(..., description="Trip URL slug"),
 ) -> dict:
-    """Public: a trip plus its ordered stop metadata (no html_content)."""
+    """Public: a trip plus its ordered stops, and whether it has a recap."""
     sb = get_supabase()
-    trip_res = sb.table("person_trips").select(_TRIP_COLS).eq("slug", slug).execute()
+    trip_res = sb.table("person_trips").select(_TRIP_DETAIL_COLS).eq("slug", slug).execute()
     if not trip_res.data:
         raise HTTPException(status_code=404, detail="Trip not found")
     trip = trip_res.data[0]
@@ -112,6 +130,36 @@ async def get_trip(
     )
     trip["stops"] = stops_res.data or []
     return trip
+
+
+@router.get(
+    "/trips/{slug}/summary",
+    response_model=TripSummaryDocResponse,
+    status_code=200,
+    summary="Get one trip's whole-trip recap document",
+)
+async def get_trip_summary(
+    slug: str = Path(..., description="Trip URL slug"),
+) -> dict:
+    """Public: the trip's recap HTML page, fetched only when a reader opens it."""
+    sb = get_supabase()
+    res = (
+        sb.table("person_trips")
+        .select("slug, summary_title, summary_caption, summary_html")
+        .eq("slug", slug)
+        .execute()
+    )
+    # A trip with no recap is a 404 rather than an empty 200: the frontend treats
+    # this the same as a stale stop number and falls back to the trip page.
+    if not res.data or not (res.data[0].get("summary_html") or "").strip():
+        raise HTTPException(status_code=404, detail="Trip summary not found")
+    row = res.data[0]
+    return {
+        "slug": row["slug"],
+        "title": row.get("summary_title"),
+        "caption": row.get("summary_caption"),
+        "html": row["summary_html"],
+    }
 
 
 @router.post(
@@ -140,6 +188,9 @@ async def create_trip(
         "photo_album_url": body.photo_album_url,
         "icon_url": body.icon_url,
         "card_cta": body.card_cta,
+        # Recap labels only — the document is attached later from the trip page.
+        "summary_title": body.summary_title,
+        "summary_caption": body.summary_caption,
         "sort_order": body.sort_order if body.sort_order is not None else 0,
         "is_published": body.is_published if body.is_published is not None else True,
         # A trip is announced before it is lived, so an unstated status is
@@ -149,6 +200,7 @@ async def create_trip(
         # trip looking exactly like every trip before it.
         "theme": str(body.theme if body.theme is not None else TripTheme.ENAMEL),
     }
+    _blank_to_none(trip_data)
     result = sb.table("person_trips").insert(trip_data).execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create trip")
@@ -176,12 +228,13 @@ async def update_trip(
 
     # Note: only non-None fields are written, so a field can't be cleared by
     # sending null. `icon_url` is clearable because the frontend sends "" for a
-    # blanked input rather than null (see landing/about-travel.js).
+    # blanked input rather than null (see landing/about-travel.js); the three
+    # summary_* fields work the same way (see landing/trip-admin.js).
     update_data: dict = {}
     for field in [
         "title", "eyebrow", "headline", "lede",
         "photo_album_url", "icon_url", "card_cta", "sort_order", "is_published",
-        "status", "theme",
+        "status", "theme", *_SUMMARY_FIELDS,
     ]:
         val = getattr(body, field)
         if val is not None:
@@ -191,6 +244,9 @@ async def update_trip(
             update_data[field] = str(val) if isinstance(val, StrEnum) else val
     if body.slug is not None:
         update_data["slug"] = _unique_slug(_slugify(body.slug))
+    # "" arrived above as a real write; store it as NULL so the generated
+    # has_summary column drops back to false rather than seeing an empty string.
+    _blank_to_none(update_data)
 
     if update_data:
         update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
