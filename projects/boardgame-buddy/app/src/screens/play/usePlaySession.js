@@ -15,6 +15,7 @@ import api from '../../api/client';
 import LiveScores from '../../realtime/liveScores';
 import { emptyDraft, loadDraft, saveDraft, clearDraft } from '../../models/playSession';
 import { sanitizeRoundScore, parseRoundScore, autoSelectWinners } from '../../domain/scoring';
+import { savePlay } from './playSave';
 
 export default function usePlaySession({ me, initialCode, initialGame }) {
   const draftRef = useRef(null);
@@ -402,7 +403,7 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     if (code) api.updateSessionPhase(code, 'abandoned').catch(() => {});
   }, []);
 
-  // ── Save (save-then-photo, mirroring web _save) ─────────────────────────
+  // ── Save (save-then-photo; see playSave.js) ─────────────────────────────
   const save = useCallback(async () => {
     const d = draftRef.current;
     if (!d.game?.id) {
@@ -411,60 +412,17 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     }
     setSaving(true);
     setError(null);
-    const rounds = maxRoundCount();
-    const players = d.players.map((p) => {
-      const rs = rounds > 0 ? Array.from({ length: rounds }, (_, r) => resolvedScore(p, r)) : null;
-      const total = rs ? rs.reduce((s, v) => s + (Number(v) || 0), 0) : parseRoundScore(p.score);
-      return {
-        name: p.name,
-        user_id: p.user_id || null,
-        is_winner: !!p.is_winner,
-        score: total != null ? Number(total) : null,
-        round_scores: rounds > 1 ? rs : null,
-      };
+    const result = await savePlay(d, lobbyRef.current?.code || null, {
+      rounds: maxRoundCount(),
+      resolvedScore,
     });
-    const payload = {
-      game_id: d.game.id,
-      played_at: d.playedAt || new Date().toISOString().slice(0, 10),
-      players,
-      notes: d.notes || null,
-      photo_url: null,
-      expansion_ids: d.expansionIds || [],
-      play_mode: d.playMode || null,
-    };
-
-    let saved;
-    try {
-      saved = lobbyRef.current?.code
-        ? await api.finalizeSession(lobbyRef.current.code, payload)
-        : await api.createPlay(payload);
-    } catch (e) {
-      setError(e.message || 'Failed to save');
+    if (!result.ok) {
+      setError(result.error);
       setSaving(false);
       return { ok: false };
     }
-    const savedId = saved?.id || saved?.play_id || saved?.play?.id || null;
-
-    // Photo is best-effort AFTER the play is safely persisted.
-    let photoFailed = false;
-    if (d.photo) {
-      try {
-        const resp = await api.uploadPlayPhoto(d.photo);
-        if (resp?.photo_url && savedId) {
-          const { game_id, ...rest } = payload;
-          await api.updatePlay(savedId, { ...rest, photo_url: resp.photo_url });
-        } else {
-          photoFailed = true;
-        }
-      } catch {
-        photoFailed = true;
-      }
-    }
-
     const summary = {
-      ok: true,
-      playId: savedId,
-      photoFailed,
+      ...result,
       game: d.game,
       winner: d.players.find((p) => p.is_winner) || null,
       photoUrl: d.photo?.uri || null,

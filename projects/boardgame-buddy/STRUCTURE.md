@@ -31,19 +31,37 @@ Game night under a warm lamp: espresso ground, amber glow, terracotta wins. Full
 - **Choice lists are bottom sheets**, on the shared `ui/bottom-sheet.js` shell, never `position: absolute` dropdowns. Four today: the app-wide status sheet, the Stats by-game picker, and both Gather pickers. A new sheet must be added *by name* to the theme re-point list in `styles.css`, because a body-level sheet lands outside the screen that opened it.
 
 ### Native app (`app/`)
-Full feature-parity React Native build. Organized around the repo's one-canonical-component-per-
-core-object rule (`.claude/rules/ui-object-design.md`):
-- **Core-object components** (`app/src/components/`): `GameTile` (variants tile/preview/hero/thumb),
-  `PlayCard` (flip card), `UserBadge` (avatars + 11 icon glyphs), `BuddyRow`, `StatusTag`/
-  `ExpansionBadge`. Shared chrome: `AppHeader`, `LoadingState`, `EmptyState`, `ConfirmModal`
-  (the single app-wide destructive-confirm surface), `OAuthButtons`, `Markdown`, `AvatarCustomizer`,
-  `StatsStrip`.
-- **Widgets** (`app/src/widgets/`): `ReferenceGuideScroll`, `RoundScoreGrid`, `GameFinder`,
-  `PlayDetailPopup` (the single "open a play" destination).
-- **Realtime** (`app/src/realtime/`): `liveScores`, `sessionPhase` (Supabase channels for the live
-  host/join cascade); draft model in `app/src/models/playSession.js` (AsyncStorage-persisted).
-- **API client** (`app/src/api/client.js`): all ~80 endpoints, 401 refresh-retry, multipart photo
-  upload. Boot seeds first paint via `GET /bootstrap`.
+Rebuilt from scratch (2026-08) as one coherent design system — full feature parity with the web
+app except chapter *authoring* (reference guides are read-only on native: view + add/remove
+community pool chapters; writing chapters stays on web). Organized around the repo's
+one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md`):
+- **Design system** (`app/src/ui/` + `app/src/theme.js`): primitive kit — `Screen` (safe-area +
+  keyboard handling + a `FooterBar` slot that always stays above the keyboard), `Text` (semantic
+  variants over the 4-family type system), `Button`, `Card`, `Input`, `Sheet`, `Skeleton`,
+  `RefreshHint`, `Row`/`Stack`. Screens compose primitives; no color/font literals in screens.
+- **Core-object components** (`app/src/components/`): `GameTile` (variants
+  tile/preview/hero/thumb/polaroid), `PlayCard` (flip card), `UserBadge` (avatars + 11 icon
+  glyphs), `BuddyRow`, `StatusTag`/`ExpansionBadge`, `SessionCard`, `StatsStrip`. Shared chrome:
+  `AppHeader`, `LoadingState`, `EmptyState`, `ConfirmModal` (the single app-wide
+  destructive-confirm surface), `PolaroidPopup` (winner-splash surface), `OAuthButtons`,
+  `Markdown`, `AvatarCustomizer`.
+- **Widgets** (`app/src/widgets/`): `ReferenceGuideScroll` (read-only + community pool),
+  `RoundScoreGrid`, `GameFinder`, `PlayDetailPopup` (the single "open a play" destination;
+  view/edit/delete own plays, leave tagged plays).
+- **Offline + speed** (`app/src/offline/collectionStore.js`, `app/src/domain/gameSearch.js`):
+  the owned/wishlist collection persists to AsyncStorage and hydrates before any network call;
+  game search falls through **owned (instant, offline) → BGB `/search` → BGG import**. Screen
+  data uses a 10-min-TTL serve-then-refresh cache (`app/src/store/cache.js`) with a visible
+  RefreshHint while revalidating; `GET /bootstrap` seeds first paint.
+- **Play cascade** (`app/src/screens/play/`): `PlayFlowScreen` hosts a non-swipeable pager over
+  Gather → Play → Settle; `usePlaySession` owns the draft, 2s lobby poll, LiveScores channel and
+  the `_phaseSeq`-guarded optimistic phase machine (ported from `web/views/play-flow-view.js`).
+  Joiners: `SessionRouter` (host/joiner hop on `/play/:code`), `SessionViewerScreen` +
+  `useSessionWatch` (Realtime phase + poll safety net, own-column score editing, winner splash).
+- **Realtime** (`app/src/realtime/`): `liveScores`, `sessionPhase` (Supabase channels);
+  draft model in `app/src/models/playSession.js` (AsyncStorage-persisted).
+- **API client** (`app/src/api/client.js`): all ~80 endpoints incl. admin, 401 refresh-retry,
+  multipart photo upload; JSDoc response typedefs in `app/src/api/types.js`.
 - **Auth/OAuth prerequisites (web-side, not in `app/`):** Google sign-in routes through a hosted
   `web/auth-callback.html` bridge page on the BGB Vercel deploy, allowlisted in Supabase → Auth →
   URL Configuration. Store submission also needs `web/privacy.html` + `web/delete-account.html`.
