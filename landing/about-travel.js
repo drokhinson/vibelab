@@ -74,6 +74,11 @@
     return DEFAULT_STATUS;
   }
 
+  // Deliberately no summary_* fields here. This form is seeded from `trips`,
+  // i.e. GET /trips, which does not carry the recap — so the box would open
+  // empty and Save would clear a recap that was perfectly fine. The recap is
+  // edited on the trip page, where the document can actually be fetched: see
+  // SUMMARY_FIELDS in trip-admin.js.
   var TRIP_FIELDS = [
     { name: "title", label: "Title", type: "text", required: true },
     { name: "eyebrow", label: "Eyebrow (hero kicker)", type: "text" },

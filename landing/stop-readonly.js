@@ -22,9 +22,19 @@
   // Nothing here is given `disabled` — that would grey the control out and
   // restyle the card. pointer-events plus tabindex=-1 already make it
   // unreachable, and readOnly covers a field that somehow gets focus anyway.
+  //
+  // Only TEXT-ENTRY controls, hence the :not() list. The problem this solves is
+  // that tapping a text field raises the phone keyboard and steals the flip tap
+  // — a range, checkbox, radio or button does none of that, and neutering them
+  // would silently break a document's own controls (a trip recap's scrub bar is
+  // exactly the shape that would hit this). Keep the two selectors in step.
+  var FIELD_SEL = "input:not([type=range]):not([type=checkbox]):not([type=radio])" +
+    ":not([type=button]):not([type=submit]):not([type=reset]):not([type=image])" +
+    ",textarea,select";
+
   var STYLE = "<style>" +
     "[contenteditable]{-webkit-user-modify:read-only!important;user-modify:read-only!important;}" +
-    "input,textarea,select{pointer-events:none!important;caret-color:transparent!important;}" +
+    FIELD_SEL + "{pointer-events:none!important;caret-color:transparent!important;}" +
     "</style>";
 
   // Runs inside the postcard. The MutationObserver is what covers cards that
@@ -39,7 +49,7 @@
         "for(i=0;i<l.length;i++){n=l[i];" +
           'if(String(n.getAttribute("contenteditable")).toLowerCase()!=="false")' +
             'n.setAttribute("contenteditable","false");}' +
-        'l=document.querySelectorAll("input,textarea,select");' +
+        "l=document.querySelectorAll(" + JSON.stringify(FIELD_SEL) + ");" +
         "for(i=0;i<l.length;i++){n=l[i];" +
           'try{if("readOnly" in n&&!n.readOnly)n.readOnly=true;}catch(e){}' +
           "if(n.tabIndex!==-1)n.tabIndex=-1;}" +

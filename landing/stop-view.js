@@ -23,7 +23,13 @@
 // verbatim — source, not a rendered snapshot — so the saved file keeps the
 // postcard's own script and draws its map and flags when opened from disk.
 // (trip-export.js does the opposite for the whole-trip export, where the
-// stops have to be flattened into one inert document.)
+// stops have to be flattened into one inert document. That split is why a
+// trip's recap — an animated route replay, which a stripped snapshot would
+// freeze at frame zero — is offered here and NOT in the whole-trip export.)
+//
+// Not only postcards: trip-summary.js reuses this screen for a trip's recap,
+// passing a one-element list (so the nav row hides itself) and opts.label to
+// keep the chrome's wording and aria-labels honest.
 //
 // The HTML is admin-authored and runs inside a `sandbox="allow-scripts"` iframe
 // with NO `allow-same-origin` (declared in trip.html), so its scripts/styles are
@@ -235,17 +241,37 @@
     if (open && handlers.onExit) handlers.onExit();
   }
 
+  // What this screen is showing, for the chrome's wording and its aria-labels.
+  // "Postcard" unless a caller says otherwise (trip-summary.js passes "Recap").
+  // The markup carries the postcard wording, so this only ever has to overwrite.
+  function applyLabel(label) {
+    var name = label || "Postcard";
+    root.setAttribute("aria-label", name);
+    setLabel(dlBtn, "Download this " + name.toLowerCase());
+    setLabel(closeBtn, "Close " + name.toLowerCase());
+  }
+
+  function setLabel(el, text) {
+    el.title = text;
+    el.setAttribute("aria-label", text);
+  }
+
   // show(stops, index, opts): stops is the trip's stop array (each with title +
   // html_content) in canonical order; index is the one to render. Because the
   // list is canonical, Next always moves to the next-higher stop number and
   // Previous to the next-lower — the trip page's display order (which can be
   // reversed) does not affect it. The counter is 1-based, so it reads as the
   // card's badge and as the URL's stop number (e.g. "7 / 9").
+  //
+  // opts.label renames what the chrome calls the thing on screen; a one-element
+  // list hides the nav row entirely, which together is what lets the trip recap
+  // reuse this screen unchanged.
   function show(stops, index, opts) {
     if (!cache()) return;
     list = Array.isArray(stops) ? stops : [];
     if (!list.length) return;
     handlers = opts || {};
+    applyLabel(handlers.label);
     var previous = current;
     current = Math.min(Math.max(index | 0, 0), list.length - 1);
 
