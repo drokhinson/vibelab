@@ -62,11 +62,7 @@ export default function GameDetailScreen({ navigation, route }) {
 
           <Row gap="sm" justify="center" style={{ marginTop: SPACING.md }}>
             {me ? (
-              <LinkChip
-                Icon={Dices}
-                label="Log a play"
-                onPress={() => navigation.navigate('Home', { screen: 'PlayTab', params: { gameId: game.id } })}
-              />
+              <LinkChip Icon={Dices} label="Log a play" onPress={() => navigation.navigate('PlayFlow', { game })} />
             ) : null}
             {game.bgg_id ? (
               <LinkChip
