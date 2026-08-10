@@ -21,6 +21,8 @@ import { AppProvider, useAppState } from './store/AppContext';
 import { handleAuthDeepLink } from './auth/oauth';
 import { COLORS, FONTS } from './theme';
 import LoadingState from './components/LoadingState';
+import ConfirmHost from './components/ConfirmModal';
+import PolaroidHost from './components/PolaroidPopup';
 
 import FeedScreen from './screens/FeedScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -193,8 +195,10 @@ export default function MainApp() {
             <BootGate>
               <NavRoot />
             </BootGate>
-            {/* PlayDetailHost + ConfirmHost mount here (M2/M3) — siblings of
-                BootGate so popups outlive navigation. */}
+            {/* Imperative hosts — siblings of BootGate so popups outlive
+                navigation. PlayDetailHost joins them in M3. */}
+            <ConfirmHost />
+            <PolaroidHost />
           </BottomSheetModalProvider>
         </AppProvider>
       </SafeAreaProvider>
