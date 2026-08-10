@@ -17,12 +17,13 @@ import { CrimsonText_400Regular, CrimsonText_600SemiBold, CrimsonText_700Bold } 
 import { Fraunces_400Regular_Italic, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
 import { JetBrainsMono_500Medium, JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono';
 
-import { AppProvider, useAppState } from './store/AppContext';
+import { AppProvider, useAppActions, useAppState } from './store/AppContext';
 import { handleAuthDeepLink } from './auth/oauth';
 import { COLORS, FONTS } from './theme';
 import LoadingState from './components/LoadingState';
 import ConfirmHost from './components/ConfirmModal';
 import PolaroidHost from './components/PolaroidPopup';
+import PlayDetailPopup, { PlayDetailHost } from './widgets/PlayDetailPopup';
 
 import FeedScreen from './screens/FeedScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -88,6 +89,18 @@ function HomeTabs() {
       />
     </Tab.Navigator>
   );
+}
+
+// When a play is edited/deleted/left inside PlayDetailPopup, run the same
+// cache invalidation as saving a play — feed, stats, and the game's bundle
+// must not go stale.
+function PlayMutationBridge() {
+  const actions = useAppActions();
+  useEffect(() => {
+    PlayDetailPopup.setMutationListener((gameId) => actions.afterPlaySaved(gameId));
+    return () => PlayDetailPopup.setMutationListener(null);
+  }, [actions]);
+  return null;
 }
 
 function BootGate({ children }) {
@@ -196,7 +209,9 @@ export default function MainApp() {
               <NavRoot />
             </BootGate>
             {/* Imperative hosts — siblings of BootGate so popups outlive
-                navigation. PlayDetailHost joins them in M3. */}
+                navigation. */}
+            <PlayDetailHost />
+            <PlayMutationBridge />
             <ConfirmHost />
             <PolaroidHost />
           </BottomSheetModalProvider>
