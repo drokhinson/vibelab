@@ -2,12 +2,20 @@
 // Built once per provider mount against a stateRef so callbacks always read
 // live state without re-memoizing on every dispatch.
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api/client';
 import { supabase } from '../auth/supabase';
 import { signInWithGoogleOAuth } from '../auth/oauth';
 import { ACTIONS as A } from './initialState';
 import cache from './cache';
 import { applyLocalStatus, refreshCollection } from '../offline/collectionStore';
+import { clearOutbox } from '../offline/playOutbox';
+
+// Offline cold-start keys: the cached profile unlocks the Play/Profile tabs
+// when the profile fetch can't reach the server; the host seeds keep Gather's
+// player/recents suggestions working with zero network.
+export const PROFILE_CACHE_KEY = 'bgb:profile:v1';
+export const HOST_SEEDS_KEY = 'bgb:hostSeeds:v1';
 
 const BUNDLE_TTL_MS = 10 * 60 * 1000;
 
@@ -47,6 +55,8 @@ export function buildActions(dispatch, stateRef) {
     async signOut() {
       if (supabase) await supabase.auth.signOut();
       cache.invalidate('');
+      clearOutbox();
+      AsyncStorage.multiRemove([PROFILE_CACHE_KEY, HOST_SEEDS_KEY]).catch(() => {});
       dispatch({ type: A.CLEAR_AUTH });
     },
     async becomeAdmin(key) {
@@ -134,11 +144,9 @@ export function buildActions(dispatch, stateRef) {
           api.ghostPlayers().catch(() => []),
           api.playedWith().catch(() => []),
         ]);
-        dispatch({
-          type: A.SET_HOST_SEEDS,
-          games,
-          partners: { accounts: accounts || [], ghosts: ghosts || [], recent: recent || [] },
-        });
+        const partners = { accounts: accounts || [], ghosts: ghosts || [], recent: recent || [] };
+        dispatch({ type: A.SET_HOST_SEEDS, games, partners });
+        AsyncStorage.setItem(HOST_SEEDS_KEY, JSON.stringify({ games, partners })).catch(() => {});
       } catch {}
     },
 

@@ -77,9 +77,19 @@ export default function PlayFlowScreen({ navigation, route }) {
     } else {
       const result = await session.save();
       if (!result.ok) return;
+      actions.setActiveSession(null);
+      if (result.queued) {
+        // Offline: the play sits in the outbox — nothing changed server-side.
+        navigation.navigate('Home', { screen: 'FeedTab' });
+        showPolaroid({
+          title: 'Well played!',
+          caption: 'Saved on this phone — uploads when you’re back online.',
+          photoUrl: result.photoUrl || result.game?.thumbnail_url || null,
+        });
+        return;
+      }
       actions.afterPlaySaved(result.game?.id);
       actions.refreshHostSeeds();
-      actions.setActiveSession(null);
       if (result.photoFailed) {
         await alert({
           title: "Photo couldn't be uploaded",
@@ -104,7 +114,8 @@ export default function PlayFlowScreen({ navigation, route }) {
   }
 
   const ctaLabel = phase === 'gather' ? 'Continue to Play' : phase === 'play' ? 'Wrap up' : saving ? 'Saving…' : 'Save play';
-  const ctaDisabled = phase === 'gather' ? !draft.game?.id || !session.lobby?.code : false;
+  const ctaDisabled =
+    phase === 'gather' ? !draft.game?.id || (!session.lobby?.code && !draft.offlineTable) : false;
 
   return (
     <View style={[styles.safe, { paddingTop: insets.top }]}>

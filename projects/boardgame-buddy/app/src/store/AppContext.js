@@ -10,12 +10,14 @@
 //   4. background: refresh the offline collection from the network
 
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setAuthTokenGetter } from '../api/client';
 import { supabase, isAuthConfigured } from '../auth/supabase';
 import { initialState, ACTIONS as A } from './initialState';
 import { reducer } from './reducer';
-import { buildActions, normUser } from './actions';
+import { buildActions, normUser, PROFILE_CACHE_KEY, HOST_SEEDS_KEY } from './actions';
 import { hydrateCollection, refreshCollection, clearCollection } from '../offline/collectionStore';
+import { clearOutbox, hydrateOutbox } from '../offline/playOutbox';
 
 const StateContext = createContext(initialState);
 const DispatchContext = createContext(null);
@@ -38,10 +40,29 @@ export function AppProvider({ children }) {
 
   const actions = useMemo(() => buildActions(dispatch, stateRef), []);
 
-  // Offline collection hydrates before anything network-bound.
+  // Offline stores hydrate before anything network-bound: the collection
+  // (search), the play outbox (pending uploads), and the host seeds
+  // (Gather's player/recents suggestions).
   useEffect(() => {
     hydrateCollection();
+    hydrateOutbox();
+    AsyncStorage.getItem(HOST_SEEDS_KEY)
+      .then((raw) => {
+        if (!raw) return;
+        const { games, partners } = JSON.parse(raw);
+        dispatch({ type: A.SET_HOST_SEEDS, games: games || [], partners: partners || undefined });
+      })
+      .catch(() => {});
   }, []);
+
+  // Keep the profile cache fresh so an offline cold start can still unlock
+  // the Play/Profile tabs (cleared on sign-out in actions.signOut).
+  const currentUser = state.currentUser;
+  useEffect(() => {
+    if (currentUser) {
+      AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(currentUser)).catch(() => {});
+    }
+  }, [currentUser]);
 
   // Wire the API client to read the token directly from Supabase (not React
   // state) — going through state races the SET_SESSION dispatch.
@@ -81,6 +102,18 @@ export function AppProvider({ children }) {
           } catch (e2) {
             if (!cancelled) dispatch({ type: A.SET_AUTH_ERROR, error: `Profile creation failed: ${e2.message}` });
           }
+        } else if (e.status == null) {
+          // Network failure with a live Supabase session — fall back to the
+          // cached profile so an offline cold start can still record plays.
+          try {
+            const raw = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+            const cached = raw ? JSON.parse(raw) : null;
+            if (!cancelled && cached?.id === session.user?.id) {
+              dispatch({ type: A.SET_CURRENT_USER, user: cached });
+              return;
+            }
+          } catch {}
+          if (!cancelled) dispatch({ type: A.SET_AUTH_ERROR, error: `Couldn't load your profile: ${e.message}` });
         } else if (!cancelled) {
           dispatch({ type: A.SET_AUTH_ERROR, error: `Couldn't load your profile: ${e.message}` });
         }
@@ -100,6 +133,8 @@ export function AppProvider({ children }) {
       dispatch({ type: A.SET_SESSION, session });
       if (event === 'SIGNED_OUT') {
         clearCollection();
+        clearOutbox();
+        AsyncStorage.multiRemove([PROFILE_CACHE_KEY, HOST_SEEDS_KEY]).catch(() => {});
         dispatch({ type: A.CLEAR_AUTH });
       } else {
         hydrate(session);

@@ -124,10 +124,18 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
       d.sessionId = session.id;
       d.hostUserId = session.host_user_id;
       d.phase = session.phase || 'gather';
+      d.offlineTable = false;
       persist();
       reconcileGameToLobby();
     } catch (e) {
-      setError(e.message || 'Could not start a session');
+      if (e && e.status != null) {
+        setError(e.message || 'Could not start a session');
+        return;
+      }
+      // Network failure — run as an OFFLINE TABLE: no code, no live scores,
+      // phases flip locally, and the finished play queues in the outbox.
+      d.offlineTable = true;
+      persist();
     }
   }, [persist, reconcileGameToLobby]);
 
@@ -358,9 +366,18 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
   const advancePhase = useCallback(
     async (next) => {
       const d = draftRef.current;
-      if (!lobbyRef.current?.code) {
-        setError('Session not ready yet.');
-        return false;
+      // Offline table (or no lobby yet): the phase is local-only. Nobody is
+      // following it server-side, so just flip and go.
+      if (d.offlineTable || !lobbyRef.current?.code) {
+        if (!d.offlineTable && !lobbyRef.current?.code) {
+          setError('Session not ready yet.');
+          return false;
+        }
+        setError(null);
+        d.phase = next;
+        persist();
+        repaint();
+        return true;
       }
       setError(null);
       const prevPhase = d.phase;
@@ -382,6 +399,11 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
         return true;
       } catch (e) {
         if (seq !== phaseSeqRef.current) return true;
+        if (e && e.status == null) {
+          // Dead link mid-game must not trap the host on a screen: keep the
+          // optimistic flip. The save path falls back to the outbox anyway.
+          return true;
+        }
         d.phase = prevPhase;
         persist();
         setError(e.message || 'Could not advance to the next screen');

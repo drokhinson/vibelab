@@ -24,6 +24,9 @@ export function emptyDraft() {
     playMode: 'competitive',
     notes: '',
     photo: null, // { uri, name, type } — in-memory only
+    // True when the lobby couldn't be opened (offline): phases flip locally
+    // and the finished play queues in the outbox.
+    offlineTable: false,
   };
 }
 

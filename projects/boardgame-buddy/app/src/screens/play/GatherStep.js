@@ -4,7 +4,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, View } from 'react-native';
-import { ArrowUpRight, Dice6, Share2, UserPlus, X } from 'lucide-react-native';
+import { ArrowUpRight, Dice6, Share2, UserPlus, WifiOff, X } from 'lucide-react-native';
 import { COLORS, RADII, SPACING, gameAccent } from '../../theme';
 import { Card, Input, Row, Text } from '../../ui';
 import UserBadge from '../../components/UserBadge';
@@ -77,29 +77,44 @@ export default function GatherStep({ session, navigation }) {
 
   return (
     <View style={styles.wrap}>
-      {/* Invite */}
-      <Card pad="md">
-        <Row justify="space-between">
-          <View>
-            <Text variant="caption">INVITE CODE</Text>
-            <Text variant="scoreBig" color={COLORS.accent} style={{ letterSpacing: 4, fontSize: 26 }}>
-              {lobby?.code || draft.code || '·····'}
-            </Text>
-          </View>
-          <Pressable
-            style={styles.shareBtn}
-            onPress={() =>
-              Share.share({ message: `Join my game on Boardgame Buddy — code ${lobby?.code || draft.code}` }).catch(() => {})
-            }
-            hitSlop={6}
-          >
-            <Share2 size={18} color={COLORS.accent} />
-          </Pressable>
-        </Row>
-        <Text variant="caption" style={{ marginTop: 4 }}>
-          Buddies can join from the Play tab and type their own scores.
-        </Text>
-      </Card>
+      {/* Invite — or the offline-table notice when no lobby could be opened */}
+      {draft.offlineTable ? (
+        <Card pad="md">
+          <Row gap="md">
+            <WifiOff size={20} color={COLORS.textSoft} />
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium">Offline table</Text>
+              <Text variant="caption">
+                No connection — scores stay on this phone and the play uploads when you're back online. Add
+                everyone as players below.
+              </Text>
+            </View>
+          </Row>
+        </Card>
+      ) : (
+        <Card pad="md">
+          <Row justify="space-between">
+            <View>
+              <Text variant="caption">INVITE CODE</Text>
+              <Text variant="scoreBig" color={COLORS.accent} style={{ letterSpacing: 4, fontSize: 26 }}>
+                {lobby?.code || draft.code || '·····'}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.shareBtn}
+              onPress={() =>
+                Share.share({ message: `Join my game on Boardgame Buddy — code ${lobby?.code || draft.code}` }).catch(() => {})
+              }
+              hitSlop={6}
+            >
+              <Share2 size={18} color={COLORS.accent} />
+            </Pressable>
+          </Row>
+          <Text variant="caption" style={{ marginTop: 4 }}>
+            Buddies can join from the Play tab and type their own scores.
+          </Text>
+        </Card>
+      )}
 
       {/* Game */}
       <Text variant="label" style={styles.sectionLabel}>
