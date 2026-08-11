@@ -1,10 +1,13 @@
 // playSave — builds the PlayCreate payload from a finished draft and runs the
 // save-then-photo sequence (mirrors web play-flow-view._save): persist the
 // play first so a flaky upload can never lose the record, then attach the
-// photo best-effort via upload + PUT.
+// photo best-effort via upload + PUT. A NETWORK failure (error without
+// .status) never loses the play — it lands in the offline outbox and uploads
+// on the next flush; only server rejections surface as errors.
 
 import api from '../../api/client';
 import { parseRoundScore } from '../../domain/scoring';
+import { enqueuePlay, persistOutboxPhoto } from '../../offline/playOutbox';
 
 export function buildPlayPayload(draft, { rounds, resolvedScore }) {
   const players = draft.players.map((p) => {
@@ -30,7 +33,7 @@ export function buildPlayPayload(draft, { rounds, resolvedScore }) {
 }
 
 /**
- * @returns {Promise<{ok: boolean, error?: string, playId?: string|null, photoFailed?: boolean}>}
+ * @returns {Promise<{ok: boolean, error?: string, playId?: string|null, photoFailed?: boolean, queued?: boolean}>}
  */
 export async function savePlay(draft, lobbyCode, { rounds, resolvedScore }) {
   const payload = buildPlayPayload(draft, { rounds, resolvedScore });
@@ -38,7 +41,29 @@ export async function savePlay(draft, lobbyCode, { rounds, resolvedScore }) {
   try {
     saved = lobbyCode ? await api.finalizeSession(lobbyCode, payload) : await api.createPlay(payload);
   } catch (e) {
-    return { ok: false, error: e.message || 'Failed to save' };
+    if (e && e.status != null) {
+      return { ok: false, error: e.message || 'Failed to save' };
+    }
+    // Network failure — queue for the next online flush instead of losing
+    // the record. The photo temp file is copied to a stable dir first.
+    const localId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const photoUri = draft.photo ? await persistOutboxPhoto(draft.photo, localId) : null;
+    const winner = draft.players.find((p) => p.is_winner) || null;
+    await enqueuePlay({
+      payload,
+      code: lobbyCode || null,
+      photoUri,
+      gameSnapshot: draft.game
+        ? {
+            id: draft.game.id,
+            name: draft.game.name,
+            thumbnail_url: draft.game.thumbnail_url || null,
+            theme_color: draft.game.theme_color || null,
+          }
+        : null,
+      winnerName: winner ? winner.name : null,
+    });
+    return { ok: true, queued: true, playId: null, photoFailed: false };
   }
   const playId = saved?.id || saved?.play_id || saved?.play?.id || null;
 
