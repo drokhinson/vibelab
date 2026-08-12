@@ -53,6 +53,14 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
   game search falls through **owned (instant, offline) → BGB `/search` → BGG import**. Screen
   data uses a 10-min-TTL serve-then-refresh cache (`app/src/store/cache.js`) with a visible
   RefreshHint while revalidating; `GET /bootstrap` seeds first paint.
+- **Offline play recording** (`app/src/offline/playOutbox.js`): when the lobby can't be opened
+  (network failure), the cascade runs as an **offline table** — phases flip locally, ghost
+  players + persisted host seeds, no invite code — and Save queues the play (photo copied to
+  a stable file via `expo-file-system`) in an AsyncStorage outbox. The outbox auto-flushes on
+  sign-in and app foreground (finalize the original lobby when it still exists, else plain
+  `POST /plays`, then photo attach); `PendingUploadsBar` on Feed + Play shows the queue with
+  retry/discard. Network failures retry silently; server rejections surface per-play. A cached
+  profile + host seeds make this work from an offline cold start.
 - **Play cascade** (`app/src/screens/play/`): `PlayFlowScreen` hosts a non-swipeable pager over
   Gather → Play → Settle; `usePlaySession` owns the draft, 2s lobby poll, LiveScores channel and
   the `_phaseSeq`-guarded optimistic phase machine (ported from `web/views/play-flow-view.js`).

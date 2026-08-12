@@ -10,6 +10,7 @@
 //   4. background: refresh the offline collection from the network
 
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setAuthTokenGetter } from '../api/client';
 import { supabase, isAuthConfigured } from '../auth/supabase';
@@ -17,7 +18,7 @@ import { initialState, ACTIONS as A } from './initialState';
 import { reducer } from './reducer';
 import { buildActions, normUser, PROFILE_CACHE_KEY, HOST_SEEDS_KEY } from './actions';
 import { hydrateCollection, refreshCollection, clearCollection } from '../offline/collectionStore';
-import { clearOutbox, hydrateOutbox } from '../offline/playOutbox';
+import { clearOutbox, flushOutbox, hydrateOutbox } from '../offline/playOutbox';
 
 const StateContext = createContext(initialState);
 const DispatchContext = createContext(null);
@@ -146,6 +147,26 @@ export function AppProvider({ children }) {
       sub?.subscription?.unsubscribe();
     };
   }, []);
+
+  // Outbox flush: whenever we're plausibly back online — sign-in resolved,
+  // or the app returns to the foreground — drain any plays recorded offline
+  // (sauceboss attachAppStateListener pattern). Flushed plays run the same
+  // invalidation as a live save so feed/plays/stats catch up.
+  const flushUserId = state.currentUser?.id;
+  useEffect(() => {
+    if (!flushUserId) return undefined;
+    const runFlush = async () => {
+      try {
+        const { flushed } = await flushOutbox();
+        for (const f of flushed) actions.afterPlaySaved(f.gameId);
+      } catch {}
+    };
+    runFlush();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') runFlush();
+    });
+    return () => sub?.remove?.();
+  }, [flushUserId, actions]);
 
   // Bootstrap seed: once currentUser lands, one GET /bootstrap warms first
   // paint, and the offline collection refreshes in the background.

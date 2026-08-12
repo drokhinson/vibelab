@@ -14,6 +14,7 @@ import PlayCard from '../components/PlayCard';
 import GameTile from '../components/GameTile';
 import BuddyRow from '../components/BuddyRow';
 import EmptyState from '../components/EmptyState';
+import PendingUploadsBar from '../components/PendingUploadsBar';
 import PlayDetailPopup from '../widgets/PlayDetailPopup';
 
 export default function FeedScreen({ navigation }) {
@@ -50,6 +51,7 @@ export default function FeedScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Header navigation={navigation} />
+      <PendingUploadsBar style={styles.pendingBar} />
       <FlatList
         data={cards}
         keyExtractor={(c, i) => `${c.kind}-${c.play_id || c.session_id || i}`}
@@ -196,6 +198,7 @@ function Header({ navigation }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   header: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm },
+  pendingBar: { marginHorizontal: SPACING.lg, marginBottom: SPACING.xs },
   searchBtn: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
   list: { padding: SPACING.lg, paddingBottom: 40 },
   cardWrap: { marginBottom: SPACING.lg },
