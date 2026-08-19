@@ -232,13 +232,16 @@
 --               bgg_client.has_stored_credentials so auth_state derives
 --               without shipping the encrypted secret.
 
--- boardgamebuddy_search_games(p_viewer UUID, p_query TEXT, p_limit INT DEFAULT 20)
+-- boardgamebuddy_search_games(p_viewer UUID, p_query TEXT, p_limit INT DEFAULT 20,
+--                             p_include_expansions BOOLEAN DEFAULT false)
 --   → TABLE (id UUID, bgg_id INT, name TEXT, year_published INT, min_players INT,
 --            max_players INT, playing_time INT, thumbnail_url TEXT, image_url TEXT,
 --            theme_color TEXT, is_expansion BOOLEAN, base_game_bgg_id INT,
 --            expansion_color TEXT, rulebook_url TEXT, play_mode TEXT,
 --            collection_status TEXT, in_collection BOOLEAN)
 --   Defined in: db/migrations/boardgamebuddy/040_search_rpc.sql
+--               db/migrations/boardgamebuddy/041_search_exclude_expansions.sql
+--                 (adds p_include_expansions; drops + recreates the 3-arg form)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/search_service.py
 --               (_rpc_hits — GET /search, the per-keystroke GameFinder)
 --   Purpose:    One index-backed query for the unified game picker. Catalog
@@ -250,3 +253,6 @@
 --               path whose collection match filtered an embedded !inner-joined
 --               games.name column that the trigram index couldn't reliably serve.
 --               search_service falls back to that path if this RPC is absent.
+--               p_include_expansions defaults to false: expansions aren't
+--               pickable as a session's main game and live in the base game's
+--               expansion section instead.

@@ -29,6 +29,13 @@ async def unified_search(
         False,
         description="If true, additionally search BoardGameGeek (slower).",
     ),
+    include_expansions: bool = Query(
+        False,
+        description=(
+            "If true, expansion rows are listed alongside base games. Off by "
+            "default — expansions belong to a base game's expansion section."
+        ),
+    ),
     user: CurrentUser = Depends(get_current_user),
 ) -> UnifiedSearchResponse:
     """Single ranked search list. Pass include_bgg=true to fetch BGG too."""
@@ -38,4 +45,5 @@ async def unified_search(
         q,
         limit=limit,
         include_bgg=include_bgg,
+        include_expansions=include_expansions,
     )
