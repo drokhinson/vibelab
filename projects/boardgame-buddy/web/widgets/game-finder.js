@@ -4,6 +4,10 @@
 // fallback when no library hits, and imports a BGG result on tap via
 // Game.importBgg(). Picking a result fires the caller-supplied onPick
 // callback — the widget itself never mutates collection/session state.
+//
+// Expansions never appear here: /search excludes them from every source
+// (library, DB, BGG). They're added through a base game's expansion
+// section — see widgets/import-expansions-modal.js.
 // Used by:
 //   - play-flow-view.js (Gather screen: pick game for an active session)
 //   - widgets/add-game-modal.js (Add to collection / wishlist from spokes)
@@ -412,8 +416,7 @@
             <div class="game-finder-dropdown-item__body">
               <div class="game-finder-dropdown-item__name">${escape(hit.name)}</div>
               <div class="game-finder-dropdown-item__meta">
-                ${[hit.year_published, hit.is_expansion ? "Expansion" : null].filter(Boolean).join(" · ")}
-                ${hit.already_in_db ? " · In library" : ""}
+                ${hit.year_published || ""}${hit.already_in_db ? `${hit.year_published ? " · " : ""}In library` : ""}
               </div>
             </div>
             <button class="btn btn-ghost btn-xs game-finder-dropdown-item__action">

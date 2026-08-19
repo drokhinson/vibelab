@@ -478,11 +478,13 @@
     }
 
     _onFinderPick(game, ctx) {
-      // Mid-session host can only pick base games. Expansions need a base
-      // attached on the Gather screen's expansion picker — the refusal
-      // returns control to the dropdown with an inline explanation.
-      if (ctx && ctx.source === "bgg" && game && game.is_expansion) {
-        return { refuse: true, reason: "Pick a base game; expansions attach later." };
+      // A session's main game is always a base game. /search excludes
+      // expansions from every source, but the recently-played seed isn't
+      // filtered — a host who once logged an expansion as the main game can
+      // still surface one — so the guard covers every source, not just BGG.
+      // The refusal returns control to the dropdown with an inline reason.
+      if (game && game.is_expansion) {
+        return { refuse: true, reason: "Pick a base game; expansions attach in the Expansions card." };
       }
       this._applyGamePick(game);
     }
@@ -1427,20 +1429,17 @@
     }
 
     _renderExpansionsPicker() {
-      // Always render the card so hosts know the section exists. When
-      // there's nothing to pick (no game yet, the game is itself an
-      // expansion, or the game has no expansions), show a greyed-out
-      // placeholder with explanatory copy. Once a base game with
-      // expansions is selected the card becomes interactive and starts
-      // collapsed; the user taps the header to expand the list.
+      // Always render the card so hosts know the section exists. It stays
+      // greyed out only while importing genuinely can't work — no game
+      // picked yet, or the picked game is itself an expansion. A base game
+      // with zero imported expansions is still interactive: expansions are
+      // hidden from search, so this card is the only place to pull one in.
       const snap = this._ps.gameSnapshot;
       let disabledHint = null;
       if (!this._ps.gameId) {
         disabledHint = "Pick a game first to choose expansions.";
       } else if (snap && snap.is_expansion) {
         disabledHint = "This game is itself an expansion.";
-      } else if (!this._expansions || this._expansions.length === 0) {
-        disabledHint = "No expansions for this game.";
       }
       if (disabledHint) {
         return `
@@ -1456,9 +1455,17 @@
           </section>
         `;
       }
+      const list = this._expansions || [];
       const open = !!this._expansionsOpen;
       const chevron = open ? "chevron-down" : "chevron-right";
       const selected = (this._ps.expansionIds || []).length;
+      const importRow = `
+        <li class="cascade-exp-import">
+          <button type="button" class="btn btn-sm expansion-import-btn"
+                  onclick="window.playFlowView._openImportExpansions()">
+            <i data-lucide="plus" class="w-4 h-4"></i> Import expansions
+          </button>
+        </li>`;
       return `
         <section class="cascade-card cascade-card--expansions">
           <button class="collapsible-header" aria-expanded="${open}"
@@ -1471,11 +1478,33 @@
           </button>
           ${open ? `
             <ul class="expansion-list cascade-exp-list">
-              ${this._expansions.map((e) => this._renderExpansionPickerRow(e)).join("")}
+              ${list.length
+                ? list.map((e) => this._renderExpansionPickerRow(e)).join("")
+                : `<li class="cascade-card__hint">No expansions in BoardgameBuddy yet.</li>`}
+              ${importRow}
             </ul>
           ` : ""}
         </section>
       `;
+    }
+
+    _openImportExpansions() {
+      const gameId = this._ps && this._ps.gameId;
+      if (!gameId) return;
+      const snap = this._ps.gameSnapshot || {};
+      window.ImportExpansionsModal.open({
+        gameId,
+        gameName: snap.name || "",
+        // Mirrors _applyGamePick's refresh tail: re-pull the linked list so
+        // the new expansion is immediately togglable, and let the in-play
+        // guide widget pick up its chapter pool.
+        onImported: async () => {
+          this._expansionsLoadedFor = null;
+          await this._loadExpansionsIfNeeded();
+          this.render();
+          if (this._guideWidget) this._guideWidget.refresh();
+        },
+      });
     }
 
     _renderExpansionPickerRow(e) {

@@ -5970,6 +5970,135 @@ main[data-view="session-viewer"].hidden {
   color: #b3492f;
 }
 
+/* ── Import-expansions modal ────────────────────────────────────────────────
+   Opened from the expansion section on the game-detail page and the host's
+   Gather card. Lists the base game's not-yet-imported BGG expansions; one +
+   per row pulls it into the catalog. Shares the polaroid card chrome with
+   .add-game-modal and the spinner with .game-finder-spinner. */
+.import-exp-modal {
+  width: min(92vw, 420px);
+  text-align: left;
+  padding-bottom: 18px;
+}
+.import-exp-modal .polaroid-popup__title { text-align: left; }
+.import-exp-modal__hint {
+  margin: 4px 0 12px;
+  text-align: left;
+}
+.import-exp-modal__body {
+  max-height: min(52vh, 380px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.import-exp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.import-exp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 8px;
+  background: var(--polaroid-bg-soft);
+}
+.import-exp-row--error { border-color: #b3492f; }
+.import-exp-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.import-exp-row__name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.import-exp-row__error {
+  font-size: 11px;
+  color: #b3492f;
+}
+.import-exp-row__add {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--polaroid-accent);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.import-exp-row__add:hover:not(:disabled) { background: var(--polaroid-bg); }
+.import-exp-row__add:active:not(:disabled) { transform: translateY(1px); }
+.import-exp-row__add:disabled { cursor: default; opacity: 0.7; }
+/* Skeleton rows while /expansions/available is in flight. */
+.import-exp-row--skeleton { pointer-events: none; }
+.import-exp-row--skeleton .import-exp-row__name {
+  display: block;
+  width: 60%;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--polaroid-line);
+  animation: importExpPulse 1.2s ease-in-out infinite;
+}
+.import-exp-row--skeleton:nth-child(2) .import-exp-row__name { width: 75%; animation-delay: 120ms; }
+.import-exp-row--skeleton:nth-child(3) .import-exp-row__name { width: 45%; animation-delay: 240ms; }
+@keyframes importExpPulse { 50% { opacity: 0.45; } }
+.import-exp-modal__state {
+  padding: 12px 2px 4px;
+  text-align: left;
+}
+.import-exp-modal__state-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--polaroid-muted);
+}
+.import-exp-modal__retry { margin-top: 10px; }
+.import-exp-modal__note {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: var(--polaroid-muted);
+}
+
+/* Shared "Import expansions" affordance — game-detail section header and the
+   bottom of the host's expansion list. */
+.expansion-import-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  /* DaisyUI's btn-xs/btn-sm are shorter than the 44px tap-target floor. */
+  min-height: 44px;
+  padding-inline: 0.7rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+.game-detail__section--expansions .game-detail__section-title {
+  display: flex;
+  width: 100%;
+}
+.game-detail__section--expansions .expansion-import-btn { margin-left: auto; }
+.game-detail__section-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+.cascade-exp-import {
+  list-style: none;
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
 /* Picked-game chip (above the input) */
 .cascade-game-chip {
   display: grid;

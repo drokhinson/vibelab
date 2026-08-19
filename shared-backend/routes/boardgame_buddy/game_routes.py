@@ -368,55 +368,6 @@ async def search_bgg(
 
 
 @router.get(
-    "/games/bgg/{bgg_id}/expansions",
-    response_model=list[BggSearchResult],
-    status_code=200,
-    summary="List a BGG game's expansions",
-)
-async def list_bgg_expansions(
-    bgg_id: int = Path(..., description="BoardGameGeek game ID"),
-) -> list[BggSearchResult]:
-    """Fetch the BGG /thing record for a base game and return every expansion
-    it links to. Each entry is shaped like a search result so the FE can reuse
-    its add/import button (no year — BGG's /thing only includes year on the
-    item itself, not on outbound links)."""
-    body = await fetch_bgg(
-        "/thing",
-        {"id": bgg_id, "stats": 0},
-        timeout=15.0,
-    )
-    root = parse_bgg_xml(body, context=f"thing id={bgg_id}")
-    item = root.find("item")
-    if item is None:
-        raise HTTPException(status_code=404, detail="Game not found on BGG")
-
-    results: list[BggSearchResult] = []
-    seen: set[int] = set()
-    for link in item.findall("link[@type='boardgameexpansion']"):
-        # Outbound links from a base game point at its expansions. Inbound
-        # links (set on an expansion's own /thing) point back at the base —
-        # skip those when this endpoint is called on an expansion by accident.
-        if link.get("inbound") == "true":
-            continue
-        try:
-            exp_id = int(link.get("id", "0"))
-        except (TypeError, ValueError):
-            continue
-        if not exp_id or exp_id in seen:
-            continue
-        seen.add(exp_id)
-        results.append(BggSearchResult(
-            bgg_id=exp_id,
-            name=link.get("value", "") or "",
-            year_published=None,
-            is_expansion=True,
-        ))
-
-    _annotate_already_in_db(get_supabase(), results)
-    return results
-
-
-@router.get(
     "/games/recently-played",
     response_model=list[GameSummary],
     status_code=200,

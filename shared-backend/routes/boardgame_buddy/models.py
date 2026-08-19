@@ -193,6 +193,25 @@ class BggSearchResult(BaseModel):
         return f"https://boardgamegeek.com/boardgame/{self.bgg_id}"
 
 
+class BggExpansionCandidate(BaseModel):
+    """One expansion BGG links to a base game that BgB hasn't imported yet.
+
+    `name` has the base game's name stripped off the front ("Catan: Cities &
+    Knights" → "Cities & Knights") so the import popup reads as a list of
+    expansions rather than a column of repeated base-game names. `full_name`
+    keeps BGG's original string for the row's title attribute.
+    """
+
+    bgg_id: int
+    name: str
+    full_name: str
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def bgg_url(self) -> str:
+        return f"https://boardgamegeek.com/boardgame/{self.bgg_id}"
+
+
 # ── Collection ────────────────────────────────────────────────────────────────
 
 class CollectionAdd(BaseModel):

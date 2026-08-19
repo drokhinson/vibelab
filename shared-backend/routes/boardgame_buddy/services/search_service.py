@@ -15,7 +15,14 @@ from ._helpers import fetch_games_by_ids, game_summary_from_row, game_select_cla
 logger = logging.getLogger(__name__)
 
 
-def _collection_hits(sb, viewer_id: str, query: str, limit: int) -> list[UnifiedSearchHit]:
+def _collection_hits(
+    sb,
+    viewer_id: str,
+    query: str,
+    limit: int,
+    *,
+    include_expansions: bool,
+) -> list[UnifiedSearchHit]:
     """Name-match the viewer's collection, filtered in SQL.
 
     This runs per keystroke; the old version fetched the viewer's ENTIRE
@@ -25,7 +32,7 @@ def _collection_hits(sb, viewer_id: str, query: str, limit: int) -> list[Unified
     """
     if limit <= 0:
         return []
-    rows = (
+    q = (
         sb.table("boardgamebuddy_collections")
         .select(
             "status, game_id, "
@@ -33,11 +40,10 @@ def _collection_hits(sb, viewer_id: str, query: str, limit: int) -> list[Unified
         )
         .eq("user_id", viewer_id)
         .ilike("boardgamebuddy_games.name", f"%{query}%")
-        .limit(limit)
-        .execute()
-        .data
-        or []
     )
+    if not include_expansions:
+        q = q.eq("boardgamebuddy_games.is_expansion", False)
+    rows = q.limit(limit).execute().data or []
     hits: list[UnifiedSearchHit] = []
     for r in rows:
         g = r.get("boardgamebuddy_games") or {}
@@ -58,12 +64,17 @@ def _db_hits(
     limit: int,
     *,
     exclude_game_ids: set[str],
+    include_expansions: bool,
 ) -> list[UnifiedSearchHit]:
-    rows = (
+    q = (
         sb.table("boardgamebuddy_games")
         .select(game_select_clause())
         .ilike("name", f"%{query}%")
-        .order("name")
+    )
+    if not include_expansions:
+        q = q.eq("is_expansion", False)
+    rows = (
+        q.order("name")
         .limit(limit + len(exclude_game_ids))
         .execute()
         .data
@@ -79,17 +90,30 @@ def _db_hits(
     return hits
 
 
-def _rpc_hits(sb, viewer_id: str, query: str, limit: int) -> list[UnifiedSearchHit]:
+def _rpc_hits(
+    sb,
+    viewer_id: str,
+    query: str,
+    limit: int,
+    *,
+    include_expansions: bool,
+) -> list[UnifiedSearchHit]:
     """Single index-backed query via the boardgamebuddy_search_games RPC.
 
     The RPC does the trigram-indexed catalog ILIKE, LEFT JOINs the viewer's
     collection, and returns rows collection-first. Each row carries the
     GameSummary columns plus `in_collection` / `collection_status`. Raises if
-    the RPC is missing (not yet migrated) so unified_search can fall back.
+    the RPC is missing or predates migration 041's `p_include_expansions`
+    parameter, so unified_search can fall back.
     """
     res = sb.rpc(
         "boardgamebuddy_search_games",
-        {"p_viewer": viewer_id, "p_query": query, "p_limit": limit},
+        {
+            "p_viewer": viewer_id,
+            "p_query": query,
+            "p_limit": limit,
+            "p_include_expansions": include_expansions,
+        },
     ).execute()
     rows = res.data or []
     hits: list[UnifiedSearchHit] = []
@@ -107,13 +131,20 @@ def _rpc_hits(sb, viewer_id: str, query: str, limit: int) -> list[UnifiedSearchH
     return hits
 
 
-async def _bgg_hits(sb, query: str, limit: int) -> list[BggSearchResult]:
+async def _bgg_hits(
+    sb,
+    query: str,
+    limit: int,
+    *,
+    include_expansions: bool,
+) -> list[BggSearchResult]:
     """Proxy the existing /games/search-bgg behavior. Swallows network errors
     so a flaky BGG never breaks the main search."""
+    type_param = "boardgame,boardgameexpansion" if include_expansions else "boardgame"
     try:
         body = await fetch_bgg(
             "/search",
-            {"query": query, "type": "boardgame,boardgameexpansion"},
+            {"query": query, "type": type_param},
             timeout=10.0,
         )
     except Exception as exc:
@@ -128,6 +159,11 @@ async def _bgg_hits(sb, query: str, limit: int) -> list[BggSearchResult]:
 
     raw: list[dict[str, Any]] = []
     for item in root.findall("item")[:limit]:
+        is_expansion = item.get("type") == "boardgameexpansion"
+        # BGG's type= filter isn't reliably exclusive, so drop expansion rows
+        # here too rather than trusting the query string alone.
+        if is_expansion and not include_expansions:
+            continue
         try:
             bgg_id = int(item.get("id", "0"))
         except (TypeError, ValueError):
@@ -147,7 +183,7 @@ async def _bgg_hits(sb, query: str, limit: int) -> list[BggSearchResult]:
             "bgg_id": bgg_id,
             "name": name,
             "year_published": year,
-            "is_expansion": item.get("type") == "boardgameexpansion",
+            "is_expansion": is_expansion,
         })
 
     if not raw:
@@ -182,28 +218,43 @@ async def unified_search(
     *,
     limit: int = 20,
     include_bgg: bool = False,
+    include_expansions: bool = False,
 ) -> UnifiedSearchResponse:
-    """Collection hits first, then DB hits, then (optionally) BGG."""
+    """Collection hits first, then DB hits, then (optionally) BGG.
+
+    Expansions are excluded by default: they aren't pickable as a session's
+    main game and are added through the base game's expansion section instead.
+    """
     q = (query or "").strip()
     if not q:
         return UnifiedSearchResponse(results=[], bgg_results=[], bgg_searched=include_bgg)
 
     # Fast path: one index-backed RPC. Fall back to the two-query PostgREST
-    # path if the RPC isn't present yet (migration 040 not applied) or errors,
+    # path if the RPC isn't present yet (migration 041 not applied) or errors,
     # so an auto-deploy ahead of the migration never breaks search.
     try:
-        all_hits = _rpc_hits(sb, viewer_id, q, limit)
+        all_hits = _rpc_hits(sb, viewer_id, q, limit, include_expansions=include_expansions)
     except Exception as exc:
         logger.warning("search RPC unavailable, using two-query fallback: %s", exc)
-        collection_hits = _collection_hits(sb, viewer_id, q, limit)
+        collection_hits = _collection_hits(
+            sb, viewer_id, q, limit, include_expansions=include_expansions,
+        )
         exclude = {h.game.id for h in collection_hits}
         remaining = max(0, limit - len(collection_hits))
-        db_hits = _db_hits(sb, q, remaining, exclude_game_ids=exclude) if remaining else []
+        db_hits = (
+            _db_hits(
+                sb, q, remaining,
+                exclude_game_ids=exclude,
+                include_expansions=include_expansions,
+            )
+            if remaining
+            else []
+        )
         all_hits = collection_hits + db_hits
 
     bgg_results: list[BggSearchResult] = []
     if include_bgg:
-        bgg_results = await _bgg_hits(sb, q, limit)
+        bgg_results = await _bgg_hits(sb, q, limit, include_expansions=include_expansions)
 
     return UnifiedSearchResponse(
         results=all_hits,
