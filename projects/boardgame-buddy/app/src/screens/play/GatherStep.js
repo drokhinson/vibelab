@@ -2,13 +2,14 @@
 // expansions, player list. No dense data display here (D6); Continue lives in
 // the cascade FooterBar.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, Share, StyleSheet, View } from 'react-native';
-import { ArrowUpRight, Dice6, Share2, UserPlus, WifiOff, X } from 'lucide-react-native';
+import { ArrowUpRight, Dice6, Plus, Share2, UserPlus, WifiOff, X } from 'lucide-react-native';
 import { COLORS, RADII, SPACING, gameAccent } from '../../theme';
-import { Card, Input, Row, Text } from '../../ui';
+import { Button, Card, Input, Row, Text } from '../../ui';
 import UserBadge from '../../components/UserBadge';
 import GameFinder from '../../widgets/GameFinder';
+import ImportExpansionsSheet from '../../widgets/ImportExpansionsSheet';
 import api from '../../api/client';
 import { useAppState } from '../../store/AppContext';
 
@@ -23,23 +24,42 @@ export default function GatherStep({ session, navigation }) {
   const { draft, lobby, mutate, pickGame, addPlayer, removePlayer } = session;
   const [playerInput, setPlayerInput] = useState('');
   const [expansions, setExpansions] = useState([]);
+  const [pickError, setPickError] = useState('');
+  const importRef = useRef(null);
 
   const game = draft?.game;
 
-  useEffect(() => {
-    let alive = true;
-    if (game?.id && !game.is_expansion) {
-      api.expansions(game.id).then(
-        (rows) => alive && setExpansions((rows || []).filter((e) => e.is_enabled)),
-        () => alive && setExpansions([]),
-      );
-    } else {
+  // Every expansion linked to this base game — not just the enabled ones.
+  // The host picks which were in THIS play; a freshly imported one has to
+  // show up here immediately.
+  const loadExpansions = useCallback(async () => {
+    if (!game?.id || game.is_expansion) {
+      setExpansions([]);
+      return;
+    }
+    try {
+      const rows = await api.expansions(game.id);
+      setExpansions(Array.isArray(rows) ? rows : []);
+    } catch {
       setExpansions([]);
     }
-    return () => {
-      alive = false;
-    };
   }, [game?.id, game?.is_expansion]);
+
+  useEffect(() => {
+    loadExpansions();
+  }, [loadExpansions]);
+
+  // A session's main game is always a base game. /search excludes expansions
+  // from every source, but the recently-played seed isn't filtered — a host
+  // who once logged an expansion as the main game can still surface one.
+  function handlePick(picked, ctx) {
+    if (picked?.is_expansion) {
+      setPickError('Pick a base game — expansions attach in the Expansions card.');
+      return;
+    }
+    setPickError('');
+    pickGame(picked, ctx);
+  }
 
   const suggestions = useMemo(() => {
     const q = playerInput.trim().toLowerCase();
@@ -142,7 +162,14 @@ export default function GatherStep({ session, navigation }) {
           </Row>
         </Card>
       ) : (
-        <GameFinder onPick={pickGame} includeRecentlyPlayed placeholder="Search your shelf, BGB, or BGG…" />
+        <>
+          <GameFinder onPick={handlePick} includeRecentlyPlayed placeholder="Search your shelf, BGB, or BGG…" />
+          {pickError ? (
+            <Text variant="small" color={COLORS.rustText}>
+              {pickError}
+            </Text>
+          ) : null}
+        </>
       )}
 
       {/* Mode */}
@@ -163,12 +190,18 @@ export default function GatherStep({ session, navigation }) {
         ))}
       </Row>
 
-      {/* Expansions */}
-      {expansions.length > 0 ? (
+      {/* Expansions — shown for any base game, even with none imported yet:
+          expansions are hidden from search, so importing here is the only
+          way to attach one mid-setup. */}
+      {game && !game.is_expansion ? (
         <>
-          <Text variant="label" style={styles.sectionLabel}>
-            Expansions in this play
-          </Text>
+          <Row justify="space-between" style={styles.sectionLabel}>
+            <Text variant="label">Expansions in this play</Text>
+            <Button label="Import" icon={Plus} variant="outline" size="sm" onPress={() => importRef.current?.present()} />
+          </Row>
+          {expansions.length === 0 ? (
+            <Text variant="caption">No expansions in BoardgameBuddy yet.</Text>
+          ) : null}
           <Row gap="xs" wrap>
             {expansions.map((exp) => {
               const on = (draft.expansionIds || []).includes(exp.expansion_game_id);
@@ -192,6 +225,12 @@ export default function GatherStep({ session, navigation }) {
               );
             })}
           </Row>
+          <ImportExpansionsSheet
+            ref={importRef}
+            gameId={game.id}
+            gameName={game.name}
+            onImported={loadExpansions}
+          />
         </>
       ) : null}
 

@@ -1,32 +1,59 @@
 // ExpansionsSection — collapsible list of a base game's expansions with
 // per-expansion enable toggles (drives which expansion chapters show in the
-// reference guide and which expansions Gather offers).
+// reference guide and which expansions Gather offers), plus the Import
+// expansions entry point.
+//
+// The section renders for every base game, including ones with nothing
+// imported: expansions are hidden from game search, so this is the only
+// place one can be pulled into the catalog. It renders nothing on an
+// expansion's own page.
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { ChevronDown, ChevronRight } from 'lucide-react-native';
+import { ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
 import { COLORS, SPACING } from '../../theme';
-import { Text } from '../../ui';
+import { Button, Row, Text } from '../../ui';
+import ImportExpansionsSheet from '../../widgets/ImportExpansionsSheet';
 import api from '../../api/client';
 
-export default function ExpansionsSection({ expansions, baseId, onChanged }) {
+export default function ExpansionsSection({ game, expansions, onChanged }) {
   const [open, setOpen] = useState(false);
-  if (!expansions.length) return null;
+  const importRef = useRef(null);
+
+  if (!game || game.is_expansion) return null;
+  const list = expansions || [];
+
   return (
     <View style={styles.section}>
-      <Pressable style={styles.header} onPress={() => setOpen((v) => !v)}>
-        <Text variant="heading" style={{ fontSize: 18 }}>
-          Expansions ({expansions.length})
+      <Row justify="space-between">
+        <Pressable style={styles.header} onPress={() => setOpen((v) => !v)} disabled={list.length === 0}>
+          <Text variant="heading" style={{ fontSize: 18 }}>
+            Expansions{list.length ? ` (${list.length})` : ''}
+          </Text>
+          {list.length ? (
+            open ? (
+              <ChevronDown size={18} color={COLORS.textMuted} />
+            ) : (
+              <ChevronRight size={18} color={COLORS.textMuted} />
+            )
+          ) : null}
+        </Pressable>
+        <Button label="Import" icon={Plus} variant="outline" size="sm" onPress={() => importRef.current?.present()} />
+      </Row>
+
+      {list.length === 0 ? (
+        <Text variant="small" style={{ marginTop: SPACING.xs }}>
+          No expansions in BoardgameBuddy yet.
         </Text>
-        {open ? <ChevronDown size={18} color={COLORS.textMuted} /> : <ChevronRight size={18} color={COLORS.textMuted} />}
-      </Pressable>
-      {open ? (
+      ) : open ? (
         <View style={{ marginTop: SPACING.sm, gap: 2 }}>
-          {expansions.map((exp) => (
-            <ExpansionRow key={exp.expansion_game_id} exp={exp} baseId={baseId} onChanged={onChanged} />
+          {list.map((exp) => (
+            <ExpansionRow key={exp.expansion_game_id} exp={exp} baseId={game.id} onChanged={onChanged} />
           ))}
         </View>
       ) : null}
+
+      <ImportExpansionsSheet ref={importRef} gameId={game.id} gameName={game.name} onImported={onChanged} />
     </View>
   );
 }
@@ -61,7 +88,7 @@ function ExpansionRow({ exp, baseId, onChanged }) {
 
 const styles = StyleSheet.create({
   section: { marginTop: SPACING.xl },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, minHeight: 44, flex: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 10, minHeight: 44 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   toggle: { width: 42, height: 24, borderRadius: 12, backgroundColor: COLORS.border, padding: 3, justifyContent: 'center' },

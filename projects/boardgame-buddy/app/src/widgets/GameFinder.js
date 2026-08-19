@@ -37,7 +37,7 @@ export default function GameFinder({ onPick, includeRecentlyPlayed = false, incl
       const seq = ++seqRef.current;
       if (includeBgg) setBggLoading(true);
       else setLoading(true);
-      searchRemote(term, { includeBgg, limit: 20, localIds }).then(
+      searchRemote(term, { includeBgg, includeExpansions, limit: 20, localIds }).then(
         (data) => {
           if (seq !== seqRef.current) return; // stale
           setRemote(data);
@@ -71,7 +71,7 @@ export default function GameFinder({ onPick, includeRecentlyPlayed = false, incl
     timer.current = setTimeout(() => runRemote(term, false), 280);
     return () => timer.current && clearTimeout(timer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, includeExpansions]);
 
   async function importAndPick(bggHit) {
     setImporting(bggHit.bgg_id);
@@ -154,7 +154,7 @@ export default function GameFinder({ onPick, includeRecentlyPlayed = false, incl
                   {h.name}
                 </Text>
                 <Text variant="caption">
-                  {[h.year_published, h.is_expansion ? 'expansion' : null].filter(Boolean).join(' · ')}
+                  {[h.year_published, h.already_in_db ? 'in library' : null].filter(Boolean).join(' · ')}
                 </Text>
               </View>
               {importing === h.bgg_id ? <ActivityIndicator color={COLORS.accent} /> : <Download size={18} color={COLORS.accent} />}

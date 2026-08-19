@@ -56,14 +56,16 @@ export function searchLocal(query, { limit = 8, includeExpansions = false } = {}
 /**
  * Tiers 2+3 — backend /search (which itself ranks collection-first) and
  * optionally BGG. Results already shown by the local tier are dropped.
+ * Expansions are excluded server-side unless includeExpansions is set, so
+ * both tiers agree on what a "game" is in the picker.
  * @param {string} query
- * @param {{ includeBgg?: boolean, limit?: number, localIds?: Set<string> }} [opts]
+ * @param {{ includeBgg?: boolean, includeExpansions?: boolean, limit?: number, localIds?: Set<string> }} [opts]
  * @returns {Promise<{ results: any[], bggResults: any[], bggSearched: boolean }>}
  */
-export async function searchRemote(query, { includeBgg = false, limit = 20, localIds } = {}) {
+export async function searchRemote(query, { includeBgg = false, includeExpansions = false, limit = 20, localIds } = {}) {
   const q = query.trim();
   if (!q) return { results: [], bggResults: [], bggSearched: false };
-  const resp = await api.search(q, { includeBgg, limit });
+  const resp = await api.search(q, { includeBgg, includeExpansions, limit });
   const seen = localIds || new Set();
   const seenBgg = new Set();
   const results = [];

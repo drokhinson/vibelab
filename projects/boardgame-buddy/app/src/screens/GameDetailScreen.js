@@ -76,7 +76,7 @@ export default function GameDetailScreen({ navigation, route }) {
             ) : null}
           </Row>
 
-          <ExpansionsSection expansions={bundle?.expansions || []} baseId={game.id} onChanged={load} />
+          <ExpansionsSection game={game} expansions={bundle?.expansions || []} onChanged={load} />
 
           <View style={styles.section}>
             <ReferenceGuideScroll

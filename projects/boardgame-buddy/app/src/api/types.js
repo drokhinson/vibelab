@@ -103,6 +103,26 @@
  */
 
 /**
+ * @typedef {Object} ExpansionListItem
+ * @property {string} expansion_game_id
+ * @property {number|null} bgg_id
+ * @property {string} name
+ * @property {string|null} thumbnail_url
+ * @property {string|null} color
+ * @property {boolean} is_enabled
+ * @property {string|null} rulebook_url
+ */
+
+/**
+ * @typedef {Object} BggExpansionCandidate
+ *   An expansion BGG links to a base game that isn't in the catalog yet.
+ * @property {number} bgg_id
+ * @property {string} name       base game's name stripped off the front
+ * @property {string} full_name  BGG's original string
+ * @property {string} [bgg_url]
+ */
+
+/**
  * @typedef {Object} Chapter
  * @property {string} id
  * @property {string} game_id

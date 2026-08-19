@@ -161,8 +161,15 @@ export const api = {
     get('/suggestions/featured-from-collection', { days_since: daysSince, limit }),
 
   // ── Search ─────────────────────────────────────────────────────────────
-  search: (q, { includeBgg = false, limit = 20 } = {}) =>
-    get('/search', { q, limit, include_bgg: includeBgg ? 'true' : 'false' }),
+  // Expansions are excluded from every source by default (migration 041) —
+  // they belong to a base game's expansion section, not the game picker.
+  search: (q, { includeBgg = false, includeExpansions = false, limit = 20 } = {}) =>
+    get('/search', {
+      q,
+      limit,
+      include_bgg: includeBgg ? 'true' : 'false',
+      include_expansions: includeExpansions ? 'true' : 'false',
+    }),
   searchBgg: (query, { includeExpansions = true } = {}) =>
     get('/games/search-bgg', { query, include_expansions: includeExpansions ? 'true' : 'false' }),
 
@@ -181,6 +188,11 @@ export const api = {
   expansions: (baseId) => get(`/games/${baseId}/expansions`),
   toggleExpansion: (baseId, expansionId, isEnabled) =>
     post(`/games/${baseId}/expansions/${expansionId}/toggle`, { is_enabled: isEnabled }),
+  // BGG-linked expansions this base game doesn't have in the catalog yet.
+  // Since expansions are hidden from search, importing from here is the only
+  // way one enters the catalog.
+  availableExpansions: (baseId) => get(`/games/${baseId}/expansions/available`),
+  importExpansion: (baseId, bggId) => post(`/games/${baseId}/expansions/import/${bggId}`),
 
   // ── Collection ─────────────────────────────────────────────────────────
   collection: (status) => get('/collection', { status }),

@@ -4,14 +4,18 @@
 
 import React, { forwardRef } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
+import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { COLORS, FONTS, RADII, SPACING } from '../theme';
 import Text from './Text';
 
 const Input = forwardRef(function Input(
-  { label, hint, error, kind = 'text', style, inputStyle, ...rest },
+  { label, hint, error, kind = 'text', bottomSheet = false, style, inputStyle, ...rest },
   ref,
 ) {
   const isScore = kind === 'score';
+  // Inside a @gorhom bottom sheet the input must be the sheet's own so the
+  // sheet resizes with the keyboard instead of covering the field.
+  const Field = bottomSheet ? BottomSheetTextInput : TextInput;
   return (
     <View style={style}>
       {label ? (
@@ -19,7 +23,7 @@ const Input = forwardRef(function Input(
           {label}
         </Text>
       ) : null}
-      <TextInput
+      <Field
         ref={ref}
         placeholderTextColor={COLORS.textMuted}
         keyboardType={isScore ? 'number-pad' : rest.keyboardType}
