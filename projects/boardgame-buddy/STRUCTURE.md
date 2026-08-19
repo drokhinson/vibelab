@@ -250,6 +250,8 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/games/lookup-by-bgg/{bgg_id}` — null-or-`GameSummary`; the import preview uses this to label a bundle as "new game" vs "existing game"
 - `GET /api/v1/boardgame_buddy/games/{game_id}/chapter-pool` — browse the pool of existing chapters for a game. Each row carries `popularity` (count of users who have it) and `in_my_guide` (whether the caller has it). Sorted by `popularity DESC, created_at DESC`. Supports `?q=` (title+content ILIKE), `?chapter_type=`, and `?expansion_ids=a,b,c` (comma-separated game UUIDs to merge into the pool — each merged row carries `source_game_id` / `source_game_name` / `source_color` so the FE can render colored dots tying chapters to their expansion). Auth optional — anon callers always see `in_my_guide=false`.
 - `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise. Each item includes the expansion's `rulebook_url`.
+- `GET /api/v1/boardgame_buddy/games/{base_id}/expansions/available` — expansions BGG links to this base game that BgB hasn't imported yet. Backs the "Import expansions" popup: already-imported bgg_ids are filtered out and each `name` has the base game's name stripped off the front ("Catan: Cities & Knights" → "Cities & Knights"), with BGG's original string kept in `full_name`. 400 when the target is itself an expansion.
+- `POST /api/v1/boardgame_buddy/games/{base_id}/expansions/import/{bgg_id}` — import one expansion into the catalog and pin `base_game_bgg_id` to this base game (BGG keeps only the first inbound link, which can point at a different base). Idempotent; returns the `ExpansionListItem`. Catalog-only — does not touch the caller's collection.
 - `GET /api/v1/boardgame_buddy/chapter-types` — chapter type lookup
 
 ### Auth Required
@@ -285,7 +287,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/users/me/stats` — Strava-style aggregate stats for the current user
 - `GET /api/v1/boardgame_buddy/users/{user_id}/stats` — same shape for any user (profiles are public)
 - `GET /api/v1/boardgame_buddy/users/{user_id}/profile` — public profile + buddy-relation flags
-- `GET /api/v1/boardgame_buddy/search?q=&include_bgg=false` — unified game search (collection → DB; BGG only when `include_bgg=true`)
+- `GET /api/v1/boardgame_buddy/search?q=&include_bgg=false` — unified game search (collection → DB; BGG only when `include_bgg=true`). Expansions are excluded from every source unless `include_expansions=true` — they aren't pickable as a session's main game and are added through the base game's expansion section instead.
 - `POST /api/v1/boardgame_buddy/sessions` — open a short-code play session (body `{game_id?}`). Closes any prior open session for the same host first.
 - `GET /api/v1/boardgame_buddy/sessions/joinable` — list active sessions the caller can join (phase=gather where caller is participant/host/host-buddy). Drives the Join chooser screen.
 - `GET /api/v1/boardgame_buddy/sessions/{code}` — poll target for the lobby
