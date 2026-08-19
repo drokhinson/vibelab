@@ -5985,10 +5985,46 @@ main[data-view="session-viewer"].hidden {
   margin: 4px 0 12px;
   text-align: left;
 }
+/* Client-side filter over the loaded list. Sits above the scroll container so
+   it stays put while the rows move; borrows the .game-finder field chrome so
+   both search inputs in the app read as the same control. */
+.import-exp-search {
+  margin-bottom: 10px;
+}
+.import-exp-search[hidden] { display: none; }
+.import-exp-search__input {
+  /* Explicit floor so the field clears the 44px tap target even if DaisyUI's
+     .input sizing isn't in play. */
+  min-height: 44px;
+  padding-right: 44px;
+  font-size: 13px;
+}
+.import-exp-search__clear {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--polaroid-muted);
+  cursor: pointer;
+}
+.import-exp-search__clear[hidden] { display: none; }
+.import-exp-search__clear:hover { color: var(--polaroid-ink); }
 .import-exp-modal__body {
   max-height: min(52vh, 380px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+.import-exp-row__hl {
+  background: color-mix(in oklab, var(--polaroid-accent) 22%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
 }
 .import-exp-list {
   list-style: none;

@@ -6,6 +6,10 @@
 // off the front). A + per row imports it into the catalog and links it to
 // this base game; the row then leaves the list.
 //
+// The whole list arrives in one response, so the filter field is purely
+// client-side — no debounce, no second request. It matches the displayed
+// name and BGG's full name (so typing the base game's name still hits).
+//
 // Opened from the expansion section on both surfaces that own expansions:
 //   - views/game-detail-view.js (boardgame page)
 //   - views/play-flow-view.js   (host Gather screen)
@@ -48,6 +52,9 @@
   let _previousFocus = null;
   let _escHandler = null;
   let _opts = null;
+  /** @type {ExpansionCandidate[]} Everything loaded, minus what's been imported. */
+  let _candidates = [];
+  let _query = "";
 
   function _root() {
     return document.getElementById(BACKDROP_ID);
@@ -56,6 +63,13 @@
   function _body() {
     const root = _root();
     return root ? root.querySelector(".import-exp-modal__body") : null;
+  }
+
+  function _searchInput() {
+    const root = _root();
+    return /** @type {HTMLInputElement|null} */ (
+      root ? root.querySelector(".import-exp-search__input") : null
+    );
   }
 
   /** Paint into the card body and re-run Lucide over just that subtree. */
@@ -89,6 +103,30 @@
     };
   }
 
+  /**
+   * Substring match against the displayed name AND BGG's full name — the
+   * base game's name is stripped from what's shown, so a user who types it
+   * would otherwise get nothing.
+   * @param {ExpansionCandidate} e
+   */
+  function _matches(e, q) {
+    if (!q) return true;
+    const needle = q.toLowerCase();
+    return String(e.name || "").toLowerCase().includes(needle)
+      || String(e.full_name || "").toLowerCase().includes(needle);
+  }
+
+  /** Escape `text`, wrapping the first case-insensitive hit on `q` in a <mark>. */
+  function _highlight(text, q) {
+    const raw = String(text ?? "");
+    if (!q) return escape(raw);
+    const i = raw.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return escape(raw);
+    return escape(raw.slice(0, i))
+      + `<mark class="import-exp-row__hl">${escape(raw.slice(i, i + q.length))}</mark>`
+      + escape(raw.slice(i + q.length));
+  }
+
   /** @param {ExpansionCandidate[]} list */
   function _renderList(list) {
     return `
@@ -96,7 +134,7 @@
         ${list.map((e) => `
           <li class="import-exp-row" data-exp-row="${e.bgg_id}">
             <span class="import-exp-row__body">
-              <span class="import-exp-row__name" title="${escape(e.full_name || e.name)}">${escape(e.name)}</span>
+              <span class="import-exp-row__name" title="${escape(e.full_name || e.name)}">${_highlight(e.name, _query)}</span>
               <span class="import-exp-row__error" hidden></span>
             </span>
             <button type="button" class="import-exp-row__add"
@@ -112,9 +150,49 @@
       </p>`;
   }
 
+  /** Show/hide the filter field and keep its clear button in sync. */
+  function _syncSearchChrome() {
+    const root = _root();
+    if (!root) return;
+    const host = root.querySelector(".import-exp-search");
+    if (host) host.hidden = _candidates.length === 0;
+    const clear = root.querySelector(".import-exp-search__clear");
+    if (clear) clear.hidden = !_query;
+  }
+
+  /**
+   * Paint the row list for the current query. Two different empties:
+   * nothing left to import at all, vs nothing matching the filter — the
+   * filter field stays up for the second so the user can back out of it.
+   */
+  function _renderRows() {
+    _syncSearchChrome();
+    if (_candidates.length === 0) {
+      _setBody(_renderStates().empty("All caught up — every expansion is imported."));
+      return;
+    }
+    const q = _query.trim();
+    const visible = _candidates.filter((e) => _matches(e, q));
+    if (visible.length === 0) {
+      _setBody(_renderStates().empty(`No expansion matches “${q}”.`));
+      return;
+    }
+    _setBody(_renderList(visible));
+  }
+
+  function _setQuery(value) {
+    _query = value || "";
+    _renderRows();
+  }
+
   async function _load() {
     if (!_opts) return;
     const states = _renderStates();
+    _candidates = [];
+    _query = "";
+    const input = _searchInput();
+    if (input) input.value = "";
+    _syncSearchChrome();
     _setBody(states.loading);
     let list;
     try {
@@ -134,7 +212,8 @@
       ));
       return;
     }
-    _setBody(_renderList(list));
+    _candidates = list;
+    _renderRows();
   }
 
   async function _import(bggId, btnEl) {
@@ -174,13 +253,15 @@
     }
 
     if (!_root()) return;
-    if (row && row.parentNode) {
-      row.parentNode.removeChild(row);
-      const list = _body() && _body().querySelector(".import-exp-list");
-      if (list && !list.querySelector("[data-exp-row]")) {
-        _setBody(_renderStates().empty("All caught up — every expansion is imported."));
-      }
-    }
+    _candidates = _candidates.filter((c) => c.bgg_id !== bggId);
+    // Drop just this row rather than re-rendering, so a sibling row that
+    // failed keeps its inline error. Fall back to a full repaint once the
+    // visible list empties out — _renderRows picks the right empty state
+    // (nothing left at all vs nothing matching the filter).
+    if (row && row.parentNode) row.parentNode.removeChild(row);
+    const listEl = _body() && _body().querySelector(".import-exp-list");
+    if (!listEl || !listEl.querySelector("[data-exp-row]")) _renderRows();
+    else _syncSearchChrome();
   }
 
   /** @param {ImportExpansionsModalOpts} opts */
@@ -208,6 +289,16 @@
             ? `Expansions BoardGameGeek lists for <strong>${escape(opts.gameName)}</strong>.`
             : "Expansions BoardGameGeek lists for this game."}
         </p>
+        <div class="game-finder import-exp-search" hidden>
+          <i data-lucide="search" class="w-4 h-4 game-finder__icon"></i>
+          <input type="text" class="input input-bordered game-finder__input import-exp-search__input"
+                 placeholder="Filter expansions…" aria-label="Filter expansions by name"
+                 autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <button type="button" class="import-exp-search__clear"
+                  data-exp-action="clear-filter" aria-label="Clear filter" hidden>
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
         <div class="import-exp-modal__body"></div>
       </div>
     `;
@@ -234,11 +325,37 @@
           _load();
         } else if (action === "import") {
           _import(Number(hit.getAttribute("data-exp-bgg-id")), hit);
+        } else if (action === "clear-filter") {
+          const input = _searchInput();
+          if (input) { input.value = ""; input.focus(); }
+          _setQuery("");
         }
       });
     }
 
-    _escHandler = (e) => { if (e.key === "Escape") dismiss(); };
+    // Filtering is local to the loaded list, so this runs straight off the
+    // keystroke — no debounce, no request.
+    const input = _searchInput();
+    if (input) {
+      input.addEventListener("input", (ev) => {
+        _setQuery(/** @type {HTMLInputElement} */ (ev.target).value);
+      });
+    }
+
+    _escHandler = (e) => {
+      if (e.key !== "Escape") return;
+      // Layered, mirroring the GameFinder/add-game-modal pairing: the first
+      // Escape backs out of the filter, the next closes the popup.
+      const el = _searchInput();
+      if (el && el.value) {
+        e.preventDefault();
+        e.stopPropagation();
+        el.value = "";
+        _setQuery("");
+        return;
+      }
+      dismiss();
+    };
     document.addEventListener("keydown", _escHandler, true);
 
     _load();
@@ -252,6 +369,8 @@
     const existing = _root();
     if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
     _opts = null;
+    _candidates = [];
+    _query = "";
     if (_previousFocus && typeof _previousFocus.focus === "function") {
       try { _previousFocus.focus(); } catch (_) {}
     }
