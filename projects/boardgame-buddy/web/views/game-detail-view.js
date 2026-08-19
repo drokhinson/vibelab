@@ -234,15 +234,38 @@
     }
 
     _renderExpansions() {
-      if (!this._expansions || this._expansions.length === 0) return "";
+      // An expansion has no expansions of its own — it keeps the base-game
+      // back-link banner instead. Base games always get the section, even
+      // with nothing imported, so Import expansions is always reachable.
+      const g = this._game;
+      if (!g || g.is_expansion) return "";
+      const list = this._expansions || [];
+      const importBtn = `
+        <button class="btn btn-xs expansion-import-btn"
+                onclick="window.gameDetailView._openImportExpansions()">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i> Import expansions
+        </button>`;
+      if (list.length === 0) {
+        return `
+          <section class="game-detail__section game-detail__section--expansions">
+            <h3 class="game-detail__section-title">
+              <i data-lucide="puzzle" class="w-4 h-4"></i>
+              Expansions
+              ${importBtn}
+            </h3>
+            <p class="game-detail__section-hint">No expansions in BoardgameBuddy yet.</p>
+          </section>
+        `;
+      }
       return `
         <section class="game-detail__section game-detail__section--expansions">
           <h3 class="game-detail__section-title">
             <i data-lucide="puzzle" class="w-4 h-4"></i>
-            Expansions (${this._expansions.length})
+            Expansions (${list.length})
+            ${importBtn}
           </h3>
           <div class="expansion-reel">
-            ${this._expansions.map((e) => {
+            ${list.map((e) => {
               const status = (this._statusMap || {})[e.expansion_game_id] || null;
               const owned = status === "owned" || status === "played" || status === "wishlist";
               return `
@@ -261,6 +284,17 @@
           </div>
         </section>
       `;
+    }
+
+    _openImportExpansions() {
+      if (!this._game) return;
+      window.ImportExpansionsModal.open({
+        gameId: this._game.id,
+        gameName: this._game.name,
+        // Each import lands one expansion; reload so the reel picks it up
+        // (and its owned check, which comes from the bundle's status map).
+        onImported: () => { this._reload(); },
+      });
     }
 
     // ── Reference guide scroll ────────────────────────────────────────────────
