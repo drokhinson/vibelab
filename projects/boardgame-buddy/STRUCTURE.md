@@ -47,7 +47,11 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
   `Markdown`, `AvatarCustomizer`.
 - **Widgets** (`app/src/widgets/`): `ReferenceGuideScroll` (read-only + community pool),
   `RoundScoreGrid`, `GameFinder`, `PlayDetailPopup` (the single "open a play" destination;
-  view/edit/delete own plays, leave tagged plays).
+  view/edit/delete own plays, leave tagged plays), `ImportExpansionsSheet` (the native
+  counterpart of `web/widgets/import-expansions-modal.js` — same client-side filter over
+  name + BGG `full_name`, per-row import that fails only its own row; opened from the
+  expansions card on both Game Detail and Gather, which render for every base game since
+  expansions are hidden from search).
 - **Offline + speed** (`app/src/offline/collectionStore.js`, `app/src/domain/gameSearch.js`):
   the owned/wishlist collection persists to AsyncStorage and hydrates before any network call;
   game search falls through **owned (instant, offline) → BGB `/search` → BGG import**. Screen
