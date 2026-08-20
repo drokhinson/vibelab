@@ -2,8 +2,37 @@
 
 from typing import Any, Optional
 
+from fastapi import HTTPException
+
 from ..models import GameSummary
 from ..constants import PlayMode
+
+
+# The JSONB-returning RPCs (migrations 036/037/042) signal gate failures with
+# {"error": "<code>"} instead of raising, so a caller gets one round trip
+# either way. This maps those codes onto the HTTP statuses the routes have
+# always returned.
+RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
+    "not_found": (404, "Session not found"),
+    "expired": (410, "Session expired"),
+    "guest_name_required": (400, "display_name is required for guests"),
+    "code_allocation_failed": (503, "Could not allocate session code"),
+    "forbidden": (403, "Only the host can finalize"),
+    "game_not_found": (404, "Game not found"),
+}
+
+
+def raise_for_rpc_error(data: Any, what: str) -> None:
+    """Raise the mapped HTTPException when an RPC returned an error envelope.
+
+    `what` labels the RPC in the fallback message for an unmapped code.
+    """
+    if not isinstance(data, dict) or not data:
+        raise HTTPException(status_code=502, detail=f"Empty {what} RPC response")
+    error = data.get("error")
+    if error:
+        status, detail = RPC_ERROR_STATUS.get(error, (500, f"{what} RPC error: {error}"))
+        raise HTTPException(status_code=status, detail=detail)
 
 
 _GAME_SELECT = (

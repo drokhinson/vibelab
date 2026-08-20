@@ -3,14 +3,15 @@
 Owns boardgamebuddy_play_sessions + participants. The host's phone calls
 create_session(); other phones call join_session(code, ...). When the host
 hits Save, finalize_session() writes the canonical boardgamebuddy_plays row
-(via play_routes' existing logic) and marks the session 'finalized'.
+and marks the session 'finalized'.
 
-The hot paths (create / join / the 2s GET poll) are single Postgres RPCs
-(migration 036) — each previously fanned out 4-6 sequential PostgREST
-round trips, which made host/join taps crawl at cross-region RTTs. The
-RPCs return SessionResponse-shaped JSONB, or {"error": "<code>"} for gate
-failures, which _bundle_to_response maps to the same HTTPExceptions the
-routes have always raised.
+Every hot path — create / join / the 2s GET poll (migration 036) and now
+the Save (migration 042) — is a single Postgres RPC. Each previously
+fanned out 4-10 sequential PostgREST round trips, which made host/join
+taps and the wrap-up crawl at cross-region RTTs. The RPCs return
+SessionResponse- or PlayResponse-shaped JSONB, or {"error": "<code>"} for
+gate failures, which raise_for_rpc_error maps to the same HTTPExceptions
+the routes have always raised.
 """
 
 from datetime import datetime, timezone
@@ -25,29 +26,15 @@ from ..constants import (
 )
 from ..models import (
     JoinableSession,
-    PlayerEntry,
+    PlayResponse,
     SessionResponse,
 )
-
-
-_BUNDLE_ERROR_STATUS: dict[str, tuple[int, str]] = {
-    "not_found": (404, "Session not found"),
-    "expired": (410, "Session expired"),
-    "guest_name_required": (400, "display_name is required for guests"),
-    "code_allocation_failed": (503, "Could not allocate session code"),
-}
+from ._helpers import raise_for_rpc_error
 
 
 def _bundle_to_response(data: Any) -> SessionResponse:
     """Parse a session-RPC JSONB payload, mapping error codes to HTTP."""
-    if not isinstance(data, dict) or not data:
-        raise HTTPException(status_code=502, detail="Empty session RPC response")
-    error = data.get("error")
-    if error:
-        status, detail = _BUNDLE_ERROR_STATUS.get(
-            error, (500, f"Session RPC error: {error}")
-        )
-        raise HTTPException(status_code=status, detail=detail)
+    raise_for_rpc_error(data, "Session")
     return SessionResponse.model_validate(data)
 
 
@@ -276,14 +263,28 @@ def abandon_session(sb, viewer_id: str, code: str) -> None:
     }).eq("id", session["id"]).execute()
 
 
-def mark_finalized(sb, session_id: str, play_id: str) -> None:
-    """Called from play_routes after a session-backed play is saved."""
-    sb.table("boardgamebuddy_play_sessions").update({
-        "status": PlaySessionStatus.FINALIZED.value,
-        "phase": SessionPhase.FINALIZED.value,
-        "finalized_play_id": play_id,
-        "finalized_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("id", session_id).execute()
+def finalize_session(sb, *, host_user_id: str, code: str, payload: dict[str, Any]) -> PlayResponse:
+    """Turn an open lobby into a play row in ONE round trip.
+
+    bgb_finalize_session (migration 042) does the open/expiry/host gating,
+    overlays the joiners' live-scoring totals onto the host's player list,
+    writes the play (via bgb_log_play) and marks the session finalized — the
+    work that used to be four service calls and ten sequential PostgREST
+    round trips.
+
+    `payload` is a PlayCreate dumped in JSON mode (dates as ISO strings).
+    """
+    data = (
+        sb.rpc("bgb_finalize_session", {
+            "p_host": host_user_id,
+            "p_code": code,
+            "p_payload": payload,
+        })
+        .execute()
+        .data
+    )
+    raise_for_rpc_error(data, "Finalize")
+    return PlayResponse.model_validate(data)
 
 
 def update_phase(
@@ -342,45 +343,3 @@ def list_joinable(sb, viewer_id: str) -> list[JoinableSession]:
     """
     data = sb.rpc("bgb_joinable_sessions", {"p_viewer": viewer_id}).execute().data
     return [JoinableSession.model_validate(item) for item in (data or [])]
-
-
-def merge_live_scores_into_players(
-    sb,
-    *,
-    session_id: str,
-    players: list[PlayerEntry],
-) -> list[PlayerEntry]:
-    """Overlay live-scoring writes onto the host's PlayCreate payload.
-
-    Authenticated joiners stream cell updates into
-    boardgamebuddy_play_session_scores during phase='play'. At finalize
-    time we sum each player's rows and overwrite the matching
-    PlayerEntry.score (matched by user_id). Guest players (user_id is
-    None) are never in the scores table; their host-typed scores ride
-    through unchanged.
-    """
-    rows = (
-        sb.table("boardgamebuddy_play_session_scores")
-        .select("player_user_id, score")
-        .eq("session_id", session_id)
-        .execute()
-        .data
-        or []
-    )
-    if not rows:
-        return players
-    totals: dict[str, int] = {}
-    for r in rows:
-        uid = r.get("player_user_id")
-        if not uid:
-            continue
-        totals[uid] = totals.get(uid, 0) + int(r.get("score") or 0)
-    if not totals:
-        return players
-    merged: list[PlayerEntry] = []
-    for p in players:
-        if p.user_id and p.user_id in totals:
-            merged.append(p.model_copy(update={"score": totals[p.user_id]}))
-        else:
-            merged.append(p)
-    return merged

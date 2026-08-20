@@ -26,6 +26,14 @@
     static update(id, payload) {
       return window.api.put(`/plays/${id}`, payload).then((r) => { _invalidatePlayDeps(); return r; });
     }
+    // Write just the photo column. PUT /plays/{id} is a FULL replacement —
+    // it deletes and re-inserts every player and expansion row — so routing
+    // a photo attach through it cost twelve round trips and churned rows
+    // that hadn't changed. This is one.
+    static attachPhoto(id, photoUrl) {
+      return window.api.patch(`/plays/${id}/photo`, { photo_url: photoUrl })
+        .then((r) => { _invalidatePlayDeps(); return r; });
+    }
     static remove(id) {
       return window.api.del(`/plays/${id}`).then((r) => { _invalidatePlayDeps(); return r; });
     }

@@ -42,11 +42,21 @@
    *           primary CTA whenever `error` is set.
    */
 
-  /** @param {PolaroidPopupOptions} opts */
+  // Monotonic id stamped on each splash card. Background work that finishes
+  // late (the host's photo attach) passes the id it started with to update()
+  // so it can only ever repaint its own card — never a confirm dialog or a
+  // later splash that took the singleton slot in the meantime.
+  let _cardSeq = 0;
+
+  /**
+   * @param {PolaroidPopupOptions} opts
+   * @returns {number} the card's id, for guarded update() calls.
+   */
   function show(opts) {
     dismiss(); // singleton — never stack two
     const root = document.createElement("div");
     root.id = BACKDROP_ID;
+    root.__cardId = ++_cardSeq;
     root.className = "polaroid-popup__backdrop"
       + (opts && opts.headline ? " polaroid-popup__backdrop--with-headline" : "");
     root.innerHTML = renderInner(opts);
@@ -63,6 +73,7 @@
     });
     document.body.appendChild(root);
     wire(root, opts);
+    return root.__cardId;
   }
 
   /**
@@ -70,10 +81,21 @@
    * arrives after settle, or when the host's background save lands). Merges
    * `partial` over the opts stashed on the backdrop so game/winner survive.
    * Safe to call when no popup is open — silently no-ops.
+   *
+   * @param {Object} partial
+   * @param {number=} cardId — when given, the update applies only if this is
+   *   still the card that show() returned that id for. Late background work
+   *   must pass it; without the guard a slow photo attach could repaint a
+   *   confirm dialog that has since claimed the singleton slot.
    */
-  function update(partial) {
+  function update(partial, cardId) {
     const root = document.getElementById(BACKDROP_ID);
     if (!root) return;
+    // confirm()/alert() build their own markup and never stash __opts —
+    // re-rendering them through renderInner would replace the dialog and
+    // strand its promise.
+    if (!root.__opts) return;
+    if (cardId != null && root.__cardId !== cardId) return;
     const merged = { ...(root.__opts || {}), ...partial };
     root.innerHTML = renderInner(merged);
     wire(root, merged);
