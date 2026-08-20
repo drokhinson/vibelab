@@ -96,15 +96,16 @@ async def _handle_supabase_api_error(request: Request, exc: APIError) -> JSONRes
 # this, anonymous-friendly routes (plant-planner catalog/cache-fill, BGG public
 # catalog) emit api_logs rows with NULL user_id even when the caller's JWT
 # identifies a real user.
+# Each prefix must match the router's real APIRouter prefix exactly — this is a
+# startswith() match, so a hyphen here against an underscore prefix silently
+# matches nothing and every request for that app logs an anonymous api_logs row.
 _APP_PREFIX_MAP = [
-    ("/api/v1/plant-planner/",   "plant-planner"),
-    ("/api/v1/boardgame-buddy/", "boardgame-buddy"),
-    ("/api/v1/sauceboss/",       "sauceboss"),
-    ("/api/v1/wealthmate/",      "wealthmate"),
-    ("/api/v1/daywordplay/",     "daywordplay"),
-    ("/api/v1/spotme/",          "spotme"),
-    # NOTE: matches the router's real underscore prefix (unlike some legacy
-    # hyphenated entries above, which predate this observation).
+    ("/api/v1/plant_planner/",    "plant-planner"),
+    ("/api/v1/boardgame_buddy/",  "boardgame-buddy"),
+    ("/api/v1/sauceboss/",        "sauceboss"),
+    ("/api/v1/wealthmate/",       "wealthmate"),
+    ("/api/v1/daywordplay/",      "daywordplay"),
+    ("/api/v1/spotme/",           "spotme"),
     ("/api/v1/travel_scrapbook/", "travel-scrapbook"),
 ]
 
