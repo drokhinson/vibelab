@@ -255,6 +255,8 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/chapter-types` — chapter type lookup
 
 ### Auth Required
+- `GET /api/v1/boardgame_buddy/bootstrap` — first-paint cache warm-up: `current_user`, `profile_bundle`, `feed_first_page` + `feed_cursor`, `recently_played_games`, `play_partners`, and a `bootstrap_version` the FE compares against its own constant (mismatch → wipe and rehydrate). The six blocks are fetched concurrently (`asyncio.to_thread` + `gather`) since the Supabase client is synchronous. Deliberately excludes the per-game detail bundles — see below.
+- `GET /api/v1/boardgame_buddy/bootstrap/game-bundles` — deferred second stage: one `bgb_game_detail_bundle` per owned base game, keyed by `game_id`, plus `owned_count` / `truncated`. Split out of `/bootstrap` because it's an N+1 in SQL (up to 250 invocations) and nothing on the first screen reads it; the FE pulls it from an idle callback after the user has landed, and Game Detail falls back to its own fetch on a miss.
 - `GET /api/v1/boardgame_buddy/profile`
 - `POST /api/v1/boardgame_buddy/profile`
 - `POST /api/v1/boardgame_buddy/profile/become-admin` — body `{admin_key}`; sets `is_admin=true` if the key matches `ADMIN_API_KEY`

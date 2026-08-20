@@ -833,3 +833,20 @@ class SuggestedBuddiesResponse(BaseModel):
 
 class FeaturedFromCollectionResponse(BaseModel):
     games: list[FeedFeaturedFromCollectionEntry] = []
+
+
+class GameBundlesResponse(BaseModel):
+    """Deferred second stage of the boot warm-up.
+
+    Split out of /bootstrap because building these is an N+1 in SQL (one
+    bgb_game_detail_bundle per owned game) and nothing on the first screen
+    reads them — only Game Detail does, and it falls back to its own fetch.
+    """
+
+    # game_id -> bgb_game_detail_bundle output. Free-form because the bundle is
+    # composed in SQL and every consumer is the FE cache, which stores it whole.
+    game_detail_bundles: dict[str, Any] = {}
+    owned_count: int = 0
+    # True when the viewer owns more base games than max_bundles; the overflow
+    # falls back to Game Detail's own fetch.
+    truncated: bool = False
