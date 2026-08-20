@@ -126,8 +126,13 @@
       return window.api.del(`/sessions/${code}`);
     }
 
+    // Writes the play the lobby was building. Same cache blast radius as
+    // Play.create — profile, stats, game bundle, buddies, feed first page —
+    // so it routes through the same invalidation instead of leaving every one
+    // of them holding a pre-play view.
     static finalizeLobby(code, payload) {
-      return window.api.post(`/sessions/${code}/finalize`, payload);
+      return window.api.post(`/sessions/${code}/finalize`, payload)
+        .then((r) => { if (window.Play) window.Play.invalidateDeps(); return r; });
     }
 
     // Host-only. Move the lobby through gather → play → settle, or abandon.

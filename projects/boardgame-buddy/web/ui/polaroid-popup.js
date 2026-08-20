@@ -1,7 +1,8 @@
 // ui/polaroid-popup.js — Wrap-up splash polaroid. A medium cream card lands
 // in the middle of the screen showing the game thumbnail + winner with a
-// close (X) in the top-right. Dismiss invalidates the feed cache so the
-// just-saved play card appears when the user lands back on the feed.
+// close (X) in the top-right. Dismiss routes to the feed; getting the
+// just-saved play into that feed is the save path's job — play-flow's
+// _runSave() re-pulls the first page the moment the write lands.
 //
 // Two callers, one card:
 //   • Non-host joiners (session-viewer) get the plain X-only splash.

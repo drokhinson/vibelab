@@ -26,6 +26,7 @@
         else this._statusMap[gameId] = status;
         this.render();
       });
+      this.listenDom("play-changed", (e) => this._onPlayChanged(e.detail || {}));
       this._statusMap = {};
       this._expansionCounts = {};
       this._refreshCollectionData();
@@ -43,6 +44,36 @@
         this._expansionCounts = exp || {};
       } catch (_) {}
       this.render();
+    }
+
+    /**
+     * PlayDetailPopup is a modal, not a route — deleting a play from it leaves
+     * the feed mounted underneath with the deleted card still painted, and the
+     * cache bust inside Play.remove() only takes effect on the next mount. So
+     * drop the card from the page we're holding right now, then reconcile with
+     * the server in the background.
+     *
+     * @param {{playId?: string, kind?: string}} detail
+     */
+    _onPlayChanged({ playId, kind }) {
+      // "update" is left alone: the edit popup owns its own repaint and
+      // Play.update() already busted the cache for the next mount.
+      if (!playId || (kind !== "delete" && kind !== "leave")) return;
+      if (!this._page || !Array.isArray(this._page.cards)) return;
+      const cards = this._page.cards.filter(
+        (c) => !(c.kind === "play" && c.play_id === playId),
+      );
+      if (cards.length === this._page.cards.length) return; // not on this page
+      this._page = { ...this._page, cards };
+      // This is the repaint: the new object identity makes store.set fire this
+      // view's own listen("feed") subscriber (onMount, above) exactly once. No
+      // explicit render() call — that would paint the whole feed twice. The
+      // store also has to stay in sync for play-card.js's findCardById
+      // fallback. render() re-runs groupCards(), so a session that lost its
+      // last play disappears and a two-play session collapses to the single
+      // variant on its own — no session-level bookkeeping needed here.
+      window.store.set("feed", this._page);
+      window.Feed.refreshFirstPage().catch(() => {});
     }
 
     async onUnmount() {

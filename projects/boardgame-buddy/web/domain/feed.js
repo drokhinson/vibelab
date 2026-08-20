@@ -26,29 +26,15 @@
       );
     }
 
-    // Force the cached first page to refresh on the next read. Used by the
-    // tab-focus warm refresh path and by Play.log() (which also patches the
-    // cached page optimistically via prependPlay below).
+    // Drop the cached first page and re-fetch it. Two callers, both wanting
+    // the new page warm before the user looks at it: the tab-focus warm
+    // refresh, and any play mutation (save, delete) that just changed what
+    // the first page should contain. Safe to fire-and-forget — a read that
+    // arrives mid-flight joins the same request through bgbCache's
+    // single-flight map rather than opening a second one.
     static async refreshFirstPage() {
       window.bgbCache.delete(NS, FIRST_KEY);
       return Feed.fetchPage({});
-    }
-
-    // Optimistically prepend a freshly-logged play to the cached first page
-    // so the Feed view paints it instantly when the user returns from the
-    // Log Play flow. The background refresh will replace this with the
-    // server-composed page (including any new Hot Games / Suggested
-    // Buddies cards that may have shifted).
-    static prependPlay(playCard) {
-      if (!playCard) return;
-      const cached = window.bgbCache.get(NS, FIRST_KEY);
-      if (!cached || !Array.isArray(cached.cards)) return;
-      const next = { ...cached, cards: [playCard, ...cached.cards] };
-      // Re-store with the same TTLs so the next read still treats it as fresh.
-      window.bgbCache.setWithTtls(NS, FIRST_KEY, next, {
-        freshTtl: FRESH_TTL_MS,
-        staleTtl: STALE_TTL_MS,
-      });
     }
   }
 
