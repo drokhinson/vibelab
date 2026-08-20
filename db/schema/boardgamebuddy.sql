@@ -1,7 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: post-008..012 (OOP/Strava redesign). 013 cleanup applied
--- after the new frontend cuts over.
+-- Last updated: migration 044 (dead-object cleanup).
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: the legacy boardgamebuddy_buddies table is now strictly for free-text
@@ -24,14 +23,14 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   categories TEXT[] DEFAULT '{}',
   mechanics TEXT[] DEFAULT '{}',
   theme_color TEXT,
-  -- Expansion linkage (migration 046). is_expansion flags the row; when true,
+  -- Expansion linkage (folded into 001_baseline). is_expansion flags the row; when true,
   -- base_game_bgg_id stores the parent's BGG id (kept as a soft reference, not
   -- a FK, so expansions can be imported before their base game). expansion_color
   -- is auto-assigned at import time and used for the toggle/dot UI.
   is_expansion BOOLEAN NOT NULL DEFAULT false,
   base_game_bgg_id INTEGER,
   expansion_color TEXT,
-  -- Official rulebook URL (migration 048). Promoted from a `chunk_type='rulebook'`
+  -- Official rulebook URL (folded into 001_baseline). Promoted from a `chunk_type='rulebook'`
   -- row to a per-game column so it can be fetched alongside the game and isn't
   -- subject to the chunk system's hide/reorder/customize flow.
   rulebook_url TEXT,
@@ -63,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- accounts; cleared on the first successful POST /profile so the
   -- "Create your profile" modal only fires until they save.
   needs_setup BOOLEAN NOT NULL DEFAULT true,
-  -- Linked BoardGameGeek username for collection/plays sync (migration 062).
+  -- Linked BoardGameGeek username for collection/plays sync (folded into 001_baseline).
   -- Unique only when non-null so multiple unlinked profiles can coexist.
   bgg_username TEXT,
   -- Per-user BGG authentication (migration 003). The user logs in with their
@@ -125,14 +124,13 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
 );
 ALTER TABLE public.boardgamebuddy_collections ENABLE ROW LEVEL SECURITY;
 
--- Free-text ghost players only. Mutual friendship now lives in
--- boardgamebuddy_buddy_edges. linked_user_id is retained during the
--- redesign rollout and dropped in migration 013.
+-- Free-text ghost players only. Mutual friendship lives in
+-- boardgamebuddy_buddy_edges; migration 013 dropped this table's
+-- linked_user_id, so nothing here participates in the friend graph.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  linked_user_id UUID REFERENCES public.boardgamebuddy_profiles(id),
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(owner_id, name)
 );
@@ -159,7 +157,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
   played_at DATE NOT NULL DEFAULT CURRENT_DATE,
   notes TEXT,
-  -- BGG play_id when this row was imported from BoardGameGeek (migration 062).
+  -- BGG play_id when this row was imported from BoardGameGeek (folded into 001_baseline).
   -- Unique per (user_id, bgg_play_id) so resync is idempotent.
   bgg_play_id BIGINT,
   -- Optional photo URL into the boardgamebuddy-plays storage bucket (005).
@@ -170,24 +168,20 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   play_mode TEXT NOT NULL DEFAULT 'competitive'
     CHECK (play_mode IN ('competitive', 'coop', 'team')),
   -- Denormalized game fields (migration 020). Games are immutable after BGG
-  -- import; caching name/image/play_mode here turns every play list into a
-  -- single-table read. game_play_mode is the game's intrinsic mode, distinct
-  -- from play_mode above (which is what the user actually played).
+  -- import; caching name/thumbnail here turns every play list into a
+  -- single-table read. migration 044 dropped game_image_url and
+  -- game_play_mode from this table — nothing ever read them off a play row.
   game_name TEXT NOT NULL,
   game_thumbnail_url TEXT,
-  game_image_url TEXT,
-  game_play_mode TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
 
 -- Players in a logged play. After migration 009, plays reference real
 -- profiles directly (player_user_id) or a free-text name (player_display_name).
--- buddy_id is retained during the redesign rollout and dropped in migration 013.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   play_id UUID NOT NULL REFERENCES public.boardgamebuddy_plays(id) ON DELETE CASCADE,
-  buddy_id UUID REFERENCES public.boardgamebuddy_buddies(id),
   player_user_id UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE SET NULL,
   player_display_name TEXT,
   is_winner BOOLEAN DEFAULT false,
@@ -209,21 +203,6 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_expansions (
   PRIMARY KEY (play_id, expansion_game_id)
 );
 ALTER TABLE public.boardgamebuddy_play_expansions ENABLE ROW LEVEL SECURITY;
-
--- Legacy single-row guide table. Retained during rollout of the chunk system
--- (migration 034); will be dropped in a follow-up migration.
-CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guides (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
-  quick_setup TEXT,
-  player_guide TEXT,
-  rulebook_url TEXT,
-  contributed_by UUID REFERENCES public.boardgamebuddy_profiles(id),
-  is_official BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.boardgamebuddy_guides ENABLE ROW LEVEL SECURITY;
 
 -- Chapter system (migration 018 renamed from chunks). Each user builds
 -- their own reference guide for each game by picking chapters from the
@@ -249,18 +228,17 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
 );
 ALTER TABLE public.boardgamebuddy_guide_chapters ENABLE ROW LEVEL SECURITY;
 
--- Per-user expansion toggle (migration 046). Retained for now; the new
--- chapter system no longer consumes it (each game has its own guide).
--- Drop in a follow-up once confirmed unused.
+-- Per-user expansion toggle. LIVE: written and deleted by the toggle endpoint
+-- in expansion_routes, read there and joined inside bgb_game_detail_bundle.
+-- (An earlier note here called it unused — it is not.)
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_expansions (
   user_id            UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   expansion_game_id  UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
-  enabled_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, expansion_game_id)
 );
 ALTER TABLE public.boardgamebuddy_user_expansions ENABLE ROW LEVEL SECURITY;
 
--- BGG-import staging (migration 062). When a user runs "Sync from BGG" and we
+-- BGG-import staging (folded into 001_baseline). When a user runs "Sync from BGG" and we
 -- encounter a bgg_id we don't yet have in boardgamebuddy_games, we drop the
 -- intended collection-status / play-record here and a background worker drains
 -- the queue after fetching each missing game from the BGG XML API.
@@ -318,21 +296,18 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_scores (
   player_user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   round_index    SMALLINT NOT NULL CHECK (round_index >= 0 AND round_index < 64),
   score          INTEGER,
-  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (session_id, player_user_id, round_index)
 );
 ALTER TABLE public.boardgamebuddy_play_session_scores ENABLE ROW LEVEL SECURITY;
 
 -- Per-user "this chapter is in my guide" rows (migration 018, renamed
 -- from boardgamebuddy_guide_selections). Presence = in guide, absence =
--- not. display_order is kept for a future reorder UI; V1 sorts by
--- created_at.
+-- not. Ordering is by created_at.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_chapters (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
   chapter_id UUID NOT NULL REFERENCES public.boardgamebuddy_guide_chapters(id) ON DELETE CASCADE,
-  display_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE (user_id, chapter_id)
 );
@@ -356,8 +331,6 @@ ALTER TABLE public.boardgamebuddy_chapter_reports ENABLE ROW LEVEL SECURITY;
 
 -- Indexes
 CREATE UNIQUE INDEX IF NOT EXISTS bgb_profiles_username_uk ON public.boardgamebuddy_profiles(username);
-CREATE INDEX IF NOT EXISTS idx_bgb_games_bgg_id ON public.boardgamebuddy_games(bgg_id);
-CREATE INDEX IF NOT EXISTS idx_bgb_games_name ON public.boardgamebuddy_games USING gin(to_tsvector('english', name));
 -- Composite indexes (migration 019) — supersede the single-column variants.
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_user_status
   ON public.boardgamebuddy_collections (user_id, status, added_at DESC);
@@ -374,10 +347,6 @@ CREATE INDEX IF NOT EXISTS idx_bgb_plays_played_at
 -- Phase 2 (migration 020): alphabetical shelf sort.
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_user_status_name
   ON public.boardgamebuddy_collections (user_id, status, game_name);
-CREATE INDEX IF NOT EXISTS idx_bgb_play_expansions_play
-  ON public.boardgamebuddy_play_expansions(play_id);
-CREATE INDEX IF NOT EXISTS idx_bgb_guides_game ON public.boardgamebuddy_guides(game_id);
-CREATE INDEX IF NOT EXISTS idx_bgb_chapters_game ON public.boardgamebuddy_guide_chapters(game_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_chapters_game_type
   ON public.boardgamebuddy_guide_chapters(game_id, chapter_type);
 CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_user_game
@@ -386,21 +355,13 @@ CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_chapter
   ON public.boardgamebuddy_user_chapters(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_chapter_reports_status
   ON public.boardgamebuddy_chapter_reports(status, created_at);
--- Expansions (migration 046): fast lookup of a base game's expansions by bgg_id.
+-- Expansions (folded into 001_baseline): fast lookup of a base game's expansions by bgg_id.
 CREATE INDEX IF NOT EXISTS idx_bgb_games_base_bgg
   ON public.boardgamebuddy_games(base_game_bgg_id)
   WHERE is_expansion = true;
-CREATE INDEX IF NOT EXISTS idx_bgb_user_expansions_user
-  ON public.boardgamebuddy_user_expansions(user_id);
 -- Buddies linking (migration 043): one linked-row per (owner, target) and a
 -- fast lookup for "plays where I'm a linked buddy".
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_buddies_owner_linked
-  ON public.boardgamebuddy_buddies (owner_id, linked_user_id)
-  WHERE linked_user_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_bgb_buddies_linked_user
-  ON public.boardgamebuddy_buddies (linked_user_id)
-  WHERE linked_user_id IS NOT NULL;
--- BGG link (migration 062): unique linked username + dedup on imported plays
+-- BGG link (folded into 001_baseline): unique linked username + dedup on imported plays
 -- + queue indices on the pending-imports table.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_profiles_bgg_username
   ON public.boardgamebuddy_profiles (bgg_username)
@@ -434,8 +395,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_sessions_open_code
   WHERE status = 'open';
 CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_host
   ON public.boardgamebuddy_play_sessions (host_user_id, status);
-CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_code_phase
-  ON public.boardgamebuddy_play_sessions (code, phase);
 -- Migration 043: bgb_joinable_sessions filters expires_at > now() over the
 -- open sessions; partial because that's the only status it looks at.
 CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_expires
@@ -464,3 +423,37 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_players_display_name_trgm
 -- Sync-status session roll-up predicate (migration 039).
 CREATE INDEX IF NOT EXISTS idx_bgb_pending_imports_user_created
   ON public.boardgamebuddy_bgg_pending_imports (user_id, created_at);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Objects the migrations create that this snapshot used to omit
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Extensions. Both live in the `extensions` schema on Supabase, which is why
+-- the trigram opclasses above are schema-qualified.
+--   pg_trgm   (migration 039) — backs the substring-search indexes.
+--   pgcrypto  (migration 036) — created for gen_random_bytes, then abandoned by
+--             038 in favour of uuid_send(gen_random_uuid()). Retained because
+--             the extension is shared across every app in this database.
+
+-- Row-level security policies (migration 026). Only these three exist; every
+-- other table has RLS enabled with no policy, because the backend uses the
+-- service-role key and bypasses RLS entirely. These three are what let the
+-- browser's anon key drive the live-scoring / phase Realtime path directly.
+--   bgb_play_sessions_select   ON boardgamebuddy_play_sessions
+--   bgb_session_scores_select  ON boardgamebuddy_play_session_scores
+--   bgb_session_scores_write   ON boardgamebuddy_play_session_scores
+
+-- Data API grants (migration 034). Required for the two tables the frontend
+-- reaches directly through supabase-js; RLS authorises the rows, but the
+-- table-level grant is what makes them visible to PostgREST at all.
+--   GRANT SELECT               ON boardgamebuddy_play_sessions       TO authenticated;
+--   GRANT SELECT, INSERT, UPDATE, DELETE
+--                              ON boardgamebuddy_play_session_scores TO authenticated;
+
+-- Project role grants. Every migration issues
+--   GRANT SELECT ON public.boardgamebuddy_<table> TO boardgamebuddy_role;
+-- for the tables it creates (see db/migrations/README.md). The role itself is
+-- created in db/migrations/_shared/003_project_roles.sql.
+
+-- Named constraint declared inline above as an anonymous CHECK:
+--   bgb_profiles_username_format  CHECK (username ~ '^[a-z0-9_]{3,30}$')  (migration 017)
