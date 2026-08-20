@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field, SecretStr, computed_field
 
 from .constants import (
     BggAuthState,
-    BuddyEdgeStatus,
     CollectionStatus,
     FeedCardKind,
     PlayMode,
@@ -349,8 +348,6 @@ class PlayResponse(BaseModel):
     is_own: bool = True
 
 
-class PlayCountResponse(BaseModel):
-    count: int
 
 
 class PlayListResponse(BaseModel):
@@ -360,30 +357,11 @@ class PlayListResponse(BaseModel):
     per_page: int
 
 
-class PlayFilterOption(BaseModel):
-    id: str
-    name: str
 
 
-class PlayFilterOptions(BaseModel):
-    games: list[PlayFilterOption]
-    buddies: list[PlayFilterOption]
 
 
 # ── Buddies ───────────────────────────────────────────────────────────────────
-
-class BuddyResponse(BaseModel):
-    id: str
-    name: str  # original free-text name (preserved even after linking)
-    linked_user_id: Optional[str] = None
-    linked_display_name: Optional[str] = None  # joined from boardgamebuddy_profiles
-    play_count: int = 0
-    created_at: datetime
-
-
-class BuddyLinkBody(BaseModel):
-    user_id: str
-
 
 class ProfileSearchResult(BaseModel):
     id: str
@@ -494,8 +472,6 @@ class ExpansionToggleRequest(BaseModel):
     is_enabled: bool
 
 
-class ExpansionColorUpdate(BaseModel):
-    color: str
 
 
 class RulebookUrlUpdate(BaseModel):

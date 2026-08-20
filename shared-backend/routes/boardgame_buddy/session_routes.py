@@ -13,9 +13,8 @@ Route order note: /sessions/joinable is declared before /sessions/{code} so
 the literal path wins over the slug.
 """
 
-import uuid
 
-from fastapi import Body, Depends, Path
+from fastapi import Depends, Path
 
 from db import get_supabase
 

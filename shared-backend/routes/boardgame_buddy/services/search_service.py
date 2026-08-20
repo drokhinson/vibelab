@@ -5,12 +5,11 @@ from typing import Any
 
 from ..models import (
     BggSearchResult,
-    GameSummary,
     UnifiedSearchHit,
     UnifiedSearchResponse,
 )
 from ..bgg_client import fetch_bgg, parse_bgg_xml
-from ._helpers import fetch_games_by_ids, game_summary_from_row, game_select_clause
+from ._helpers import game_summary_from_row, game_select_clause
 
 logger = logging.getLogger(__name__)
 

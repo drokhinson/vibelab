@@ -221,19 +221,6 @@ def unfriend(sb, viewer_id: str, edge_id: str) -> None:
     sb.table("boardgamebuddy_buddy_edges").delete().eq("id", edge_id).execute()
 
 
-def visible_user_ids(sb, viewer_id: str) -> list[str]:
-    """User IDs whose plays should appear in viewer's feed (self + accepted)."""
-    rows = (
-        sb.table("boardgamebuddy_buddy_edges")
-        .select("user_a, user_b")
-        .eq("status", BuddyEdgeStatus.ACCEPTED.value)
-        .or_(f"user_a.eq.{viewer_id},user_b.eq.{viewer_id}")
-        .execute()
-    )
-    ids = {viewer_id}
-    for r in rows.data or []:
-        ids.add(r["user_b"] if r["user_a"] == viewer_id else r["user_a"])
-    return list(ids)
 
 
 def relation_to(sb, viewer_id: str, other_id: str) -> dict[str, Optional[str]]:

@@ -29,16 +29,13 @@ from .game_routes import (
 )
 from .dependencies import (
     CurrentUser,
-    get_current_admin,
     get_current_user,
     maybe_supabase_user,
 )
 from .models import (
     BggExpansionCandidate,
-    ExpansionColorUpdate,
     ExpansionListItem,
     ExpansionToggleRequest,
-    GameSummary,
     MessageResponse,
 )
 
@@ -342,40 +339,3 @@ async def toggle_expansion(
     return MessageResponse(message="Expansion disabled")
 
 
-@router.patch(
-    "/games/admin/{game_id}/expansion-color",
-    response_model=GameSummary,
-    status_code=200,
-    summary="Override an expansion's dot color (admin)",
-)
-async def update_expansion_color(
-    body: ExpansionColorUpdate,
-    game_id: str = Path(..., description="Expansion game UUID"),
-    _admin: CurrentUser = Depends(get_current_admin),
-) -> GameSummary:
-    """Admin-only: replace the auto-assigned `expansion_color` for a game."""
-    sb = get_supabase()
-    existing = (
-        sb.table("boardgamebuddy_games")
-        .select("id, is_expansion")
-        .eq("id", game_id)
-        .execute()
-    )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Game not found")
-    if not existing.data[0].get("is_expansion"):
-        raise HTTPException(status_code=400, detail="Game is not an expansion")
-
-    updated = (
-        sb.table("boardgamebuddy_games")
-        .update({"expansion_color": body.color})
-        .eq("id", game_id)
-        .execute()
-    )
-    if not updated.data:
-        raise HTTPException(status_code=500, detail="Failed to update color")
-    # Fan the new color out to any collection rows that cache it, and bust
-    # the in-process game / mechanics caches so the next read sees the change.
-    _sync_denormalized_game_fields(sb, game_id)
-    _invalidate_game_caches()
-    return GameSummary(**updated.data[0])

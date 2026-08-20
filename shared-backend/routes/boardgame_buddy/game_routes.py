@@ -6,7 +6,6 @@ from typing import Optional
 
 import httpx
 from fastapi import Depends, Header, Query, Path, HTTPException
-from fastapi.responses import Response
 from supabase import Client
 
 import cache
@@ -56,7 +55,7 @@ def _invalidate_game_caches(bgg_id: Optional[int] = None) -> None:
     invalidate_bgg_thing_cache()
 from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
 from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
-from .models import GameDetail, GameListResponse, GameSummary, BggSearchResult, RefreshImagesResponse, RulebookUrlUpdate
+from .models import GameDetail, GameListResponse, GameSummary, RefreshImagesResponse, RulebookUrlUpdate
 from .services import game_service
 
 logger = logging.getLogger(__name__)
@@ -298,73 +297,6 @@ def _attach_expansion_counts(sb: Client, games: list[GameSummary]) -> None:
             g.expansion_count = counts.get(g.bgg_id, 0)
 
 
-def _annotate_already_in_db(sb: Client, results: list[BggSearchResult]) -> None:
-    """Set already_in_db on each result by checking the catalog in one query."""
-    bgg_ids = [r.bgg_id for r in results]
-    if not bgg_ids:
-        return
-    existing = (
-        sb.table("boardgamebuddy_games")
-        .select("bgg_id")
-        .in_("bgg_id", bgg_ids)
-        .execute()
-    )
-    existing_set = {r["bgg_id"] for r in (existing.data or [])}
-    for r in results:
-        r.already_in_db = r.bgg_id in existing_set
-
-
-@router.get(
-    "/games/search-bgg",
-    response_model=list[BggSearchResult],
-    status_code=200,
-    summary="Search BoardGameGeek",
-)
-async def search_bgg(
-    query: str = Query(..., min_length=2, description="Search query"),
-    include_expansions: bool = Query(
-        True,
-        description="Include boardgame expansions in the search results",
-    ),
-) -> list[BggSearchResult]:
-    """Proxy search to BGG XML API. Includes expansions by default so a name
-    search returns the base game *and* any matching expansions; the FE flags
-    expansion rows with a puzzle icon and sorts base games first."""
-    type_param = "boardgame,boardgameexpansion" if include_expansions else "boardgame"
-    body = await fetch_bgg(
-        "/search",
-        {"query": query, "type": type_param},
-        timeout=10.0,
-    )
-    root = parse_bgg_xml(body, context=f"search query={query!r}")
-
-    results: list[BggSearchResult] = []
-    for item in root.findall("item")[:40]:
-        try:
-            bgg_id = int(item.get("id", "0"))
-        except (TypeError, ValueError):
-            continue
-        if not bgg_id:
-            continue
-        name_el = item.find("name")
-        year_el = item.find("yearpublished")
-        name = name_el.get("value", "") if name_el is not None else ""
-        year = None
-        if year_el is not None:
-            try:
-                year = int(year_el.get("value", "0")) or None
-            except (TypeError, ValueError):
-                year = None
-
-        results.append(BggSearchResult(
-            bgg_id=bgg_id,
-            name=name,
-            year_published=year,
-            is_expansion=item.get("type") == "boardgameexpansion",
-        ))
-
-    _annotate_already_in_db(get_supabase(), results)
-    return results
 
 
 @router.get(
@@ -381,26 +313,6 @@ async def recently_played_games(
     return game_service.recently_played(get_supabase(), user.user_id, limit)
 
 
-@router.get(
-    "/games/mechanics",
-    response_model=list[str],
-    status_code=200,
-    summary="Distinct mechanics",
-)
-async def list_mechanics() -> list[str]:
-    """Return a sorted list of all distinct mechanic strings across all games.
-
-    Cached in-process for 1h. The mechanics catalog only grows on a BGG
-    import; invalidated by `_invalidate_game_caches`.
-    """
-    hit = cache.get(_CACHE_MECHANICS, _MECHANICS_KEY)
-    if hit is not None:
-        return hit
-    sb = get_supabase()
-    result = sb.rpc("bgb_distinct_mechanics", {}).execute()
-    out = [row["mechanic"] for row in (result.data or []) if row.get("mechanic")]
-    cache.set(_CACHE_MECHANICS, _MECHANICS_KEY, out, ttl_seconds=_CACHE_MECHANICS_TTL_S)
-    return out
 
 
 @router.get(
@@ -685,26 +597,8 @@ def collection_denormalized_from_game(game: dict) -> dict:
     }
 
 
-def fetch_play_denorm_for_game(sb: Client, game_id: str) -> Optional[dict]:
-    """Look up a game and return the play-denorm payload, or None if missing."""
-    res = (
-        sb.table("boardgamebuddy_games")
-        .select(PLAY_DENORM_GAME_FIELDS)
-        .eq("id", game_id)
-        .execute()
-    )
-    return play_denormalized_from_game(res.data[0]) if res.data else None
 
 
-def fetch_collection_denorm_for_game(sb: Client, game_id: str) -> Optional[dict]:
-    """Look up a game and return the collection-denorm payload, or None if missing."""
-    res = (
-        sb.table("boardgamebuddy_games")
-        .select(COLLECTION_DENORM_GAME_FIELDS)
-        .eq("id", game_id)
-        .execute()
-    )
-    return collection_denormalized_from_game(res.data[0]) if res.data else None
 
 
 def _sync_denormalized_game_fields(sb: Client, game_id: str) -> None:
@@ -733,8 +627,6 @@ _GAME_SUMMARY_FIELDS = (
     "playing_time, thumbnail_url, image_url, theme_color, "
     "is_expansion, base_game_bgg_id, expansion_color, rulebook_url"
 )
-# Legacy alias kept so existing call sites read identically.
-_MISSING_IMAGES_FIELDS = _GAME_SUMMARY_FIELDS
 
 
 async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> None:
@@ -763,26 +655,6 @@ async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Non
     _invalidate_game_caches(bgg_id=bgg_id)
 
 
-@router.get(
-    "/games/lookup-by-bgg/{bgg_id}",
-    response_model=Optional[GameSummary],
-    status_code=200,
-    summary="Look up an existing catalog game by BGG id",
-)
-async def lookup_game_by_bgg(
-    bgg_id: int = Path(..., description="BoardGameGeek game id"),
-) -> Optional[GameSummary]:
-    """Return the catalog row for this BGG id if it's already imported, else null."""
-    sb = get_supabase()
-    result = (
-        sb.table("boardgamebuddy_games")
-        .select(_GAME_SUMMARY_FIELDS)
-        .eq("bgg_id", bgg_id)
-        .execute()
-    )
-    if not result.data:
-        return None
-    return GameSummary(**result.data[0])
 
 
 @router.get(
@@ -798,7 +670,7 @@ async def list_games_missing_images(
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_games")
-        .select(_MISSING_IMAGES_FIELDS)
+        .select(_GAME_SUMMARY_FIELDS)
         .or_("image_url.is.null,thumbnail_url.is.null")
         .order("name")
         .execute()
@@ -884,32 +756,3 @@ async def update_game_rulebook_url(
     return GameSummary(**updated.data[0])
 
 
-@router.get(
-    "/games/image-proxy",
-    status_code=200,
-    summary="Proxy a BGG CDN image to avoid hotlink blocking",
-)
-async def proxy_bgg_image(
-    url: str = Query(..., description="BGG CDN image URL to proxy"),
-) -> Response:
-    """Fetch a BGG image server-side and stream it back to the browser."""
-    if url.startswith("//"):
-        url = "https:" + url
-    if not url.startswith("https://cf.geekdo-images.com/"):
-        raise HTTPException(status_code=400, detail="Only BGG CDN images are supported")
-    try:
-        async with httpx.AsyncClient(
-            timeout=10.0,
-            headers={"User-Agent": BGG_USER_AGENT},
-            follow_redirects=True,
-        ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch image: {exc}")
-    content_type = resp.headers.get("content-type", "image/jpeg")
-    return Response(
-        content=resp.content,
-        media_type=content_type,
-        headers={"Cache-Control": "public, max-age=86400"},
-    )

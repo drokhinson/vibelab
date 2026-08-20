@@ -1,6 +1,6 @@
 """Shared helpers used across BoardgameBuddy services."""
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -101,7 +101,3 @@ def canonical_edge_pair(a: str, b: str) -> tuple[str, str]:
     return (a, b) if a < b else (b, a)
 
 
-def rpc(sb, name: str, params: Optional[dict[str, Any]] = None) -> list[dict[str, Any]]:
-    """Execute a Supabase RPC and return rows (or empty list on null)."""
-    res = sb.rpc(name, params or {}).execute()
-    return res.data or []

@@ -15,11 +15,8 @@ from db import get_supabase
 from . import router
 from .models import (
     MessageResponse,
-    PlayCountResponse,
     PlayCreate,
     PlayExpansionRef,
-    PlayFilterOption,
-    PlayFilterOptions,
     PlayLeaveResponse,
     PlayListResponse,
     PlayPhotoAttach,
@@ -156,33 +153,17 @@ def _fetch_play_expansions(
     return out
 
 
-def _write_play_players(sb, play_id: str, user_id: str, players: list) -> list[PlayPlayerResponse]:
-    """Insert the play_players rows for a play in TWO bulk statements.
+def _write_play_players(sb, play_id: str, players: list) -> list[PlayPlayerResponse]:
+    """Insert the play_players rows for a play in ONE bulk statement.
 
     Writes go through the new (post-migration-009) columns directly:
     player_user_id for real-account players, player_display_name as the
-    free-text label. The legacy boardgamebuddy_buddies upsert is kept so the
-    Plays-by-buddy filter in the legacy admin tools still has a roster to
-    pick from, but the play_players row no longer references it. Both writes
-    were previously one round trip PER PLAYER (a 5-player log = 10 round
-    trips, paid again by every session finalize).
+    free-text label. This was previously one round trip PER PLAYER (a
+    5-player log = 10 round trips, paid again by every session finalize).
     """
     out: list[PlayPlayerResponse] = []
     if not players:
         return out
-
-    # Legacy buddies roster in one bulk upsert. Dedup names first — the same
-    # (owner_id, name) twice in one statement would trip Postgres's
-    # "ON CONFLICT cannot affect row a second time" error.
-    seen_names: set[str] = set()
-    buddy_rows: list[dict] = []
-    for p in players:
-        if p.name not in seen_names:
-            seen_names.add(p.name)
-            buddy_rows.append({"owner_id": user_id, "name": p.name})
-    sb.table("boardgamebuddy_buddies").upsert(
-        buddy_rows, on_conflict="owner_id,name"
-    ).execute()
 
     rows: list[dict] = []
     for p in players:
@@ -219,15 +200,6 @@ def _write_play_expansions(sb, play_id: str, expansion_ids: list[str]) -> None:
     ]
     if rows:
         sb.table("boardgamebuddy_play_expansions").insert(rows).execute()
-
-
-async def _user_can_view_play(sb, user, play_row: dict) -> bool:
-    """Any authenticated user can read a play — feed surfaces a friend's play
-    even when the viewer wasn't a participant, and tapping through should
-    succeed. Writes/deletes stay owner-only (gated inline in update_play /
-    delete_play). The `is_own` flag on the response distinguishes the owner
-    so the frontend can hide edit affordances for non-owners."""
-    return True
 
 
 @router.get(
@@ -280,51 +252,6 @@ async def list_plays(
     )
 
 
-@router.get(
-    "/plays/filter-options",
-    response_model=PlayFilterOptions,
-    status_code=200,
-    summary="Filter options for play log",
-)
-async def get_play_filter_options(
-    user: CurrentUser = Depends(get_current_user),
-) -> PlayFilterOptions:
-    """Return distinct games and buddies for the play log filter dropdowns."""
-    sb = get_supabase()
-
-    games_q = (
-        sb.table("boardgamebuddy_plays")
-        .select(
-            "game_id, "
-            "boardgamebuddy_games!boardgamebuddy_plays_game_id_fkey(name)"
-        )
-        .eq("user_id", user.user_id)
-        .execute()
-    )
-    games_seen: dict[str, str] = {}
-    for r in games_q.data or []:
-        gid = r["game_id"]
-        if gid not in games_seen:
-            games_seen[gid] = (r.get("boardgamebuddy_games") or {}).get("name", "Unknown")
-    games = sorted(
-        [PlayFilterOption(id=gid, name=name) for gid, name in games_seen.items()],
-        key=lambda g: g.name.lower(),
-    )
-
-    buddies_q = (
-        sb.table("boardgamebuddy_buddies")
-        .select("id, name")
-        .eq("owner_id", user.user_id)
-        .execute()
-    )
-    buddies = sorted(
-        [PlayFilterOption(id=r["id"], name=r["name"]) for r in buddies_q.data or []],
-        key=lambda b: b.name.lower(),
-    )
-
-    return PlayFilterOptions(games=games, buddies=buddies)
-
-
 @router.post(
     "/plays",
     response_model=PlayResponse,
@@ -375,9 +302,11 @@ async def get_play(
     )
     if not res.data:
         raise HTTPException(status_code=404, detail="Play not found")
+    # Any authenticated user can read a play — the feed surfaces a buddy's
+    # play even when the viewer wasn't a participant, and tapping through
+    # should succeed. Writes/deletes stay owner-only (gated inline in
+    # update_play / delete_play); `is_own` tells the frontend which is which.
     row = res.data[0]
-    if not await _user_can_view_play(sb, user, row):
-        raise HTTPException(status_code=403, detail="Not allowed")
 
     players_by_play = _fetch_players(sb, [play_id])
     expansions_by_play = _fetch_play_expansions(sb, [play_id])
@@ -428,7 +357,7 @@ async def update_play(
     # Full-replace the nested lists.
     sb.table("boardgamebuddy_play_players").delete().eq("play_id", play_id).execute()
     sb.table("boardgamebuddy_play_expansions").delete().eq("play_id", play_id).execute()
-    _write_play_players(sb, play_id, user.user_id, body.players)
+    _write_play_players(sb, play_id, body.players)
     _write_play_expansions(sb, play_id, body.expansion_ids)
 
     res = (
@@ -580,59 +509,6 @@ async def leave_play(
     if n == 0:
         raise HTTPException(status_code=404, detail="You are not a player in this play")
     return PlayLeaveResponse(rows_updated=n)
-
-
-@router.get(
-    "/games/{game_id}/play-count",
-    response_model=PlayCountResponse,
-    status_code=200,
-    summary="Count plays for a game",
-)
-async def get_play_count(
-    game_id: str = Path(..., description="Game UUID"),
-    user: CurrentUser = Depends(get_current_user),
-) -> PlayCountResponse:
-    """Return the number of plays the current user has logged for this game."""
-    sb = get_supabase()
-    result = (
-        sb.table("boardgamebuddy_plays")
-        .select("id", count="exact")
-        .eq("user_id", user.user_id)
-        .eq("game_id", game_id)
-        .execute()
-    )
-    return PlayCountResponse(count=result.count or 0)
-
-
-@router.get(
-    "/games/{game_id}/plays",
-    response_model=list[PlayResponse],
-    status_code=200,
-    summary="Play history for a game",
-)
-async def get_game_plays(
-    game_id: str = Path(..., description="Game UUID"),
-    user: CurrentUser = Depends(get_current_user),
-) -> list[PlayResponse]:
-    """Return plays the current user logged for a specific game, newest first."""
-    sb = get_supabase()
-
-    # Same RPC as list_plays with p_own_only (this endpoint has never
-    # included shared plays). per_page bounds what was previously an
-    # unbounded fetch; 500 plays of one game is far past any real history.
-    data = (
-        sb.rpc("bgb_plays_page", {
-            "p_target": user.user_id,
-            "p_page": 1,
-            "p_per_page": 500,
-            "p_game": game_id,
-            "p_own_only": True,
-        })
-        .execute()
-        .data
-        or {}
-    )
-    return [PlayResponse.model_validate(p) for p in data.get("plays") or []]
 
 
 # Legacy buddy endpoints (GET/POST /buddies, POST /buddies/{id}/link) have
