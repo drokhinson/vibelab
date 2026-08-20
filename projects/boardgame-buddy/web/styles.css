@@ -5634,6 +5634,47 @@ main[data-view="session-viewer"].hidden {
 }
 .polaroid-popup__view { margin-top: 10px; color: var(--polaroid-ink); }
 
+/* Host wrap-up card only: the save runs behind the card, so the primary CTA
+   spins as "Saving…" and settles into "Go to feed" (or "Retry" on failure).
+   The joiner splash renders none of this. */
+.polaroid-popup__error {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--polaroid-accent);
+}
+.polaroid-popup__warning {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--polaroid-muted);
+}
+.polaroid-popup__actions--wrap {
+  margin-top: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+/* ≥44px hit area on both actions (WCAG 2.5.5) — DaisyUI's btn-sm is 32px. */
+.polaroid-popup__actions--wrap .btn {
+  min-height: 44px;
+  height: auto;
+  gap: 6px;
+}
+/* Scoped through .polaroid-popup__actions so these win over the shared
+   `.polaroid-popup__actions .btn-primary` / `.btn-ghost` rules further down
+   the file (same specificity, later in source order). */
+.polaroid-popup__actions .polaroid-popup__another:disabled,
+.polaroid-popup__actions .polaroid-popup__feed:disabled {
+  color: var(--polaroid-muted);
+  opacity: 0.65;
+  cursor: default;
+}
+.polaroid-popup__actions .polaroid-popup__feed:disabled {
+  background: var(--polaroid-line);
+  border-color: var(--polaroid-line);
+}
+
 /* Read-only scoring cell on the joiner's grid. Shares the .scoring-cell box
    (min-width, padding, border, radius) so a read-only column lines up exactly
    with the editable input column beside it. min-height keeps an empty cell

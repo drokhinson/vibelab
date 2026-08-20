@@ -1,8 +1,14 @@
-// ui/polaroid-popup.js — Splash polaroid for non-host joiners when the
-// host wraps up. A medium cream card lands in the middle of the screen
-// showing the game thumbnail + winner with a close (X) in the top-right.
-// Dismiss invalidates the feed cache so the just-saved play card appears
-// when the user lands back on the feed.
+// ui/polaroid-popup.js — Wrap-up splash polaroid. A medium cream card lands
+// in the middle of the screen showing the game thumbnail + winner with a
+// close (X) in the top-right. Dismiss invalidates the feed cache so the
+// just-saved play card appears when the user lands back on the feed.
+//
+// Two callers, one card:
+//   • Non-host joiners (session-viewer) get the plain X-only splash.
+//   • The host (play-flow) shows it the instant they hit Save, while the
+//     write runs behind it — so the card also carries the save state
+//     (`saving` / `error` / `warning`) on its primary CTA and the host-only
+//     "Another round?" action.
 
 // @ts-check
 
@@ -20,7 +26,20 @@
    * @property {string=} playId — when present, the splash adds a "View play"
    *           CTA that opens the in-place play-detail popup. Set by the
    *           phase=finalized handler.
+   * @property {boolean=} saving — the play is still being written. The
+   *           primary CTA shows a spinner + "Saving…", "Another round?" is
+   *           disabled, and the card can't be dismissed (no X, inert
+   *           backdrop) so nobody walks away mid-write.
+   * @property {string=} error — the background save failed. Renders under
+   *           the winner pill and swaps the primary CTA to "Retry".
+   * @property {string=} warning — muted advisory line (e.g. the photo
+   *           upload failed but the play itself saved).
    * @property {() => void=} onDismiss — override default feed redirect.
+   * @property {(() => void)=} onAnotherRound — host-only. When set the card
+   *           renders an "Another round?" button that re-seeds a fresh
+   *           session with the same game / expansions / players.
+   * @property {(() => void)=} onRetry — re-fire a failed save. Wired to the
+   *           primary CTA whenever `error` is set.
    */
 
   /** @param {PolaroidPopupOptions} opts */
@@ -33,12 +52,41 @@
     root.innerHTML = renderInner(opts);
     root.__opts = opts;
     root.addEventListener("click", (ev) => {
-      // Click on the backdrop (but not on the card) dismisses.
-      if (ev.target === root) handleDismiss(opts);
+      // Click on the backdrop (but not on the card) dismisses — unless a
+      // save is still in flight, in which case the card is modal. Read the
+      // live opts off the element so an update() that clears `saving`
+      // re-enables backdrop dismissal without re-binding this listener.
+      if (ev.target !== root) return;
+      const live = root.__opts || opts;
+      if (live && live.saving) return;
+      handleDismiss(live);
     });
     document.body.appendChild(root);
+    wire(root, opts);
+  }
+
+  /**
+   * Refresh the popup contents in place (e.g. when phase=finalized
+   * arrives after settle, or when the host's background save lands). Merges
+   * `partial` over the opts stashed on the backdrop so game/winner survive.
+   * Safe to call when no popup is open — silently no-ops.
+   */
+  function update(partial) {
+    const root = document.getElementById(BACKDROP_ID);
+    if (!root) return;
+    const merged = { ...(root.__opts || {}), ...partial };
+    root.innerHTML = renderInner(merged);
+    wire(root, merged);
+  }
+
+  /**
+   * Bind every button inside the card. The single binding path for both
+   * show() and update() — each paint re-creates the markup, so exactly one
+   * pass wires it.
+   */
+  function wire(root, opts) {
+    root.__opts = opts;
     if (window.lucide) window.lucide.createIcons({ root });
-    // Wire the close button + (optional) View play link.
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => handleDismiss(opts));
     const viewBtn = root.querySelector(".polaroid-popup__view");
@@ -51,32 +99,22 @@
         if (pid && window.PlayDetailPopup) window.PlayDetailPopup.show(pid);
       });
     }
-  }
-
-  /**
-   * Refresh the popup contents in place (e.g. when phase=finalized
-   * arrives after settle). Adds a "View play" CTA pointing at the saved
-   * play. Safe to call when no popup is open — silently no-ops.
-   */
-  function update(partial) {
-    const root = document.getElementById(BACKDROP_ID);
-    if (!root) return;
-    // Re-render the card with merged opts. Stash original opts on the
-    // backdrop element so we don't lose game/winner on the update.
-    const merged = { ...(root.__opts || {}), ...partial };
-    root.innerHTML = renderInner(merged);
-    root.__opts = merged;
-    if (window.lucide) window.lucide.createIcons({ root });
-    const closeBtn = root.querySelector(".polaroid-popup__close");
-    if (closeBtn) closeBtn.addEventListener("click", () => handleDismiss(merged));
-    const viewBtn = root.querySelector(".polaroid-popup__view");
-    if (viewBtn) {
-      viewBtn.addEventListener("click", () => {
-        const pid = viewBtn.getAttribute("data-play-id");
-        dismiss();
-        // Open the in-place play-detail popup so the user stays on
-        // whichever surface they wrapped up from.
-        if (pid && window.PlayDetailPopup) window.PlayDetailPopup.show(pid);
+    const againBtn = root.querySelector(".polaroid-popup__another");
+    if (againBtn) {
+      againBtn.addEventListener("click", () => {
+        if (againBtn.disabled) return;
+        if (typeof opts.onAnotherRound === "function") opts.onAnotherRound();
+      });
+    }
+    const feedBtn = root.querySelector(".polaroid-popup__feed");
+    if (feedBtn) {
+      feedBtn.addEventListener("click", () => {
+        if (feedBtn.disabled) return;
+        if (opts.error && typeof opts.onRetry === "function") {
+          opts.onRetry();
+          return;
+        }
+        handleDismiss(opts);
       });
     }
   }
@@ -120,16 +158,52 @@
            <span>View play</span>
          </button>`
       : "";
+    const error = opts.error
+      ? `<div class="polaroid-popup__error">${escape(opts.error)}</div>`
+      : "";
+    const warning = opts.warning
+      ? `<div class="polaroid-popup__warning">${escape(opts.warning)}</div>`
+      : "";
+    // The host's wrap-up card carries the save state; the joiner's splash
+    // (session-viewer) passes none of these and keeps its X-only chrome.
+    const hasActions = !!(opts.onAnotherRound || opts.saving || opts.error);
+    const actions = hasActions ? `
+      <div class="polaroid-popup__actions polaroid-popup__actions--wrap">
+        ${opts.onAnotherRound ? `
+          <button class="polaroid-popup__another btn btn-ghost btn-sm"
+                  ${opts.saving || opts.error ? "disabled" : ""}>
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            <span>Another round?</span>
+          </button>
+        ` : ""}
+        <button class="polaroid-popup__feed btn btn-primary btn-sm"
+                ${opts.saving ? "disabled" : ""}>
+          ${opts.saving
+            ? `<span class="loading loading-spinner loading-xs"></span><span>Saving…</span>`
+            : opts.error
+              ? `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Retry</span>`
+              : `<span>Go to feed</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`}
+        </button>
+      </div>
+    ` : "";
+    // No escape hatch while a write is in flight — the primary CTA is the
+    // only affordance until the save resolves one way or the other.
+    const closeBtn = opts.saving ? "" : `
+      <button class="polaroid-popup__close" aria-label="Close">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    `;
     return `
       ${headline}
       <div class="polaroid-popup__card" role="dialog" aria-modal="true" aria-label="Game wrapped up">
-        <button class="polaroid-popup__close" aria-label="Close">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
+        ${closeBtn}
         ${photo}
         <div class="polaroid-popup__title">${gameName}</div>
         ${winner}
+        ${error}
+        ${warning}
         ${viewBtn}
+        ${actions}
       </div>
     `;
   }
