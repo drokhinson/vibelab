@@ -1831,8 +1831,8 @@
         return;
       }
       // Same wrap-up splash non-host joiners get, plus the host-only save
-      // state + "Another round?" CTA. Default dismiss handler invalidates
-      // the feed cache and routes to /feed.
+      // state + "Another round?" CTA. Default dismiss handler routes to /feed
+      // (which _runSave has already re-pulled by then).
       this._cardId = window.PolaroidPopup.show({
         headline: "Well played!",
         gameName: game.name || "Game over",
@@ -1919,7 +1919,13 @@
       // from it (Go to feed, X, Another round?) paints on its own.
       this._ps.clear();
       window.store.set("activePlay", null);
-      window.store.invalidate("feed");
+      // Re-pull the feed's first page NOW, behind the still-up wrap-up card,
+      // so "Go to feed" lands on a feed that already contains this play.
+      // store.invalidate("feed") used to sit here and did nothing for this —
+      // it only re-fires subscribers with the unchanged value. Fire-and-forget:
+      // if the host taps through before it settles, Feed.fetchPage() joins the
+      // same in-flight request via bgbCache's single-flight map.
+      if (window.Feed) window.Feed.refreshFirstPage().catch(() => {});
       // Drop the host-flow caches so the next gather screen sees the new
       // ghost names + updated played-with counts + the just-played game at
       // the top of the recents dropdown. Re-warm in the background so the
@@ -1933,6 +1939,12 @@
       // Unblock the card here, on the play landing — not on the photo. The
       // photo has always been best-effort, so making Go to feed / Another
       // round? wait on it only ever cost the host time.
+      //
+      // Deliberately no `playId` — the saved card is two CTAs, "Another round?"
+      // and "Go to feed", and nothing else. The play is one tap away on the
+      // feed the host is already being sent to, so a third "View play" button
+      // only crowded the wrap-up. (The joiner splash in session-viewer still
+      // sets playId; that card has no other affordance.)
       if (popup) {
         popup.update({
           saving: false,
@@ -1940,7 +1952,6 @@
           // Clears any onDismiss a prior failed attempt installed, so X /
           // backdrop go back to the default feed redirect.
           onDismiss: null,
-          playId: savedId,
         }, cardId);
       }
 

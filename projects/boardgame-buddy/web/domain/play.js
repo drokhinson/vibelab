@@ -44,19 +44,24 @@
     static leave(id) {
       return window.api.post(`/plays/${id}/leave`, {}).then((r) => { _invalidatePlayDeps(); return r; });
     }
+
+    // Public handle on the same invalidation the mutations above run. Exists
+    // for writes that create a play without going through this class —
+    // PlaySession.finalizeLobby() posts to /sessions/{code}/finalize, which is
+    // a play create in everything but the URL and left every one of these
+    // caches stale.
+    static invalidateDeps() { _invalidatePlayDeps(); }
   }
 
   function _invalidatePlayDeps() {
     if (window.Profile && window.Profile.invalidate) window.Profile.invalidate();
     if (window.Game && window.Game.invalidateBundle) window.Game.invalidateBundle();
     // Stats live in their own cache namespace now — clear so the next
-    // Profile mount re-pulls accurate plays/wins counts. Feed first page
-    // gets invalidated too so the new play surfaces on next open; the
-    // optimistic Feed.prependPlay() path patches it in-place when the
-    // log-play flow returns the freshly-created play card.
+    // Profile mount re-pulls accurate plays/wins counts.
     if (window.Stats && window.Stats.invalidate) window.Stats.invalidate();
     // Drop the cached feed first page; the next Feed mount triggers a fresh
-    // fetch. Fire-and-forget.
+    // fetch. Callers that want the new page warm before the user gets there
+    // (the host save flow) follow up with Feed.refreshFirstPage().
     if (window.bgbCache) window.bgbCache.delete("feed", "first");
     if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
     window.store.invalidate("feed");
