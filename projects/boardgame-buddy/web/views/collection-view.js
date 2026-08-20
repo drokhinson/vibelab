@@ -42,7 +42,6 @@
       // while the other tab was active — _setMode refetches lazily.
       this._staleModes = { owned: false, played: false };
       this._statusMap = {};
-      this._expansionCounts = {};
       this._targetUserId = null;
       this._targetProfile = null;
     }
@@ -99,7 +98,6 @@
         this._items.played = seed.played_page || [];
         this._total.played = seed.played_total || 0;
         this._statusMap = seed.status_map || {};
-        this._expansionCounts = seed.expansion_counts || {};
       } else {
         this._loading.owned = true;
         this._loading.played = true;
@@ -325,7 +323,11 @@
     _renderTile(item) {
       const g = item.game || {};
       const status = this._statusMap[g.id] || item.status || null;
-      const expCount = g.bgg_id ? (this._expansionCounts[g.bgg_id] || 0) : 0;
+      // Catalog-wide count, straight off the grid row — the same number the
+      // game page's "Expansions (N)" heading shows. Absent on the
+      // profile-bundle seed (that RPC doesn't compute it), so the badge
+      // appears when the grid fetch lands rather than on first paint.
+      const expCount = g.expansion_count || 0;
       return `
         <div class="collection-tile" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})">
           ${window.renderStatusTag(g.id, status, { size: "xs" })}
@@ -333,7 +335,7 @@
             ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="" loading="lazy" />`
             : `<div class="collection-tile__placeholder"><i data-lucide="dice-6"></i></div>`}
           <div class="collection-tile__name">${escape(g.name || "Unknown")}</div>
-          ${window.renderExpansionBadge(expCount)}
+          ${window.renderExpansionBadge(expCount, { context: "total" })}
         </div>
       `;
     }
@@ -399,12 +401,7 @@
 
     async _refreshMaps() {
       try {
-        const [status, exp] = await Promise.all([
-          window.Collection.myStatusMap(),
-          window.Collection.myExpansionCountByBaseBggId(),
-        ]);
-        this._statusMap = status || {};
-        this._expansionCounts = exp || {};
+        this._statusMap = (await window.Collection.myStatusMap()) || {};
       } catch (_) {}
       this.render();
     }

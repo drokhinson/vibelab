@@ -31,7 +31,6 @@
       this._filtersOpen = false;
       this._searchTimer = null;
       this._statusMap = {};
-      this._expansionCounts = {};
     }
 
     async onMount() {
@@ -49,7 +48,6 @@
         this._items = seed.wishlist_page || [];
         this._total = seed.wishlist_total || 0;
         this._statusMap = seed.status_map || {};
-        this._expansionCounts = seed.expansion_counts || {};
       } else {
         this._loading = true;
       }
@@ -206,7 +204,8 @@
     _renderTile(item) {
       const g = item.game || {};
       const status = this._statusMap[g.id] || item.status || null;
-      const expCount = g.bgg_id ? (this._expansionCounts[g.bgg_id] || 0) : 0;
+      // Catalog-wide count off the grid row — see collection-view._renderTile.
+      const expCount = g.expansion_count || 0;
       return `
         <div class="collection-tile" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})">
           ${window.renderStatusTag(g.id, status, { size: "xs" })}
@@ -214,7 +213,7 @@
             ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="" loading="lazy" />`
             : `<div class="collection-tile__placeholder"><i data-lucide="dice-6"></i></div>`}
           <div class="collection-tile__name">${escape(g.name || "Unknown")}</div>
-          ${window.renderExpansionBadge(expCount)}
+          ${window.renderExpansionBadge(expCount, { context: "total" })}
         </div>
       `;
     }
@@ -275,12 +274,7 @@
 
     async _refreshMaps() {
       try {
-        const [status, exp] = await Promise.all([
-          window.Collection.myStatusMap(),
-          window.Collection.myExpansionCountByBaseBggId(),
-        ]);
-        this._statusMap = status || {};
-        this._expansionCounts = exp || {};
+        this._statusMap = (await window.Collection.myStatusMap()) || {};
       } catch (_) {}
       this.render();
     }

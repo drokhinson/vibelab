@@ -6040,7 +6040,9 @@ main[data-view="session-viewer"].hidden {
   padding-right: 44px;
   font-size: 13px;
 }
-.import-exp-search__clear {
+/* Shared clear (×) affordance for any .game-finder-chrome field that can hold
+   a query — the import popup's filter and the Gather picker's filter. */
+.field-clear-btn {
   position: absolute;
   right: 0;
   top: 50%;
@@ -6054,8 +6056,8 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-muted);
   cursor: pointer;
 }
-.import-exp-search__clear[hidden] { display: none; }
-.import-exp-search__clear:hover { color: var(--polaroid-ink); }
+.field-clear-btn[hidden] { display: none; }
+.field-clear-btn:hover { color: var(--polaroid-ink); }
 .import-exp-modal__body {
   max-height: min(52vh, 380px);
   overflow-y: auto;
@@ -6169,11 +6171,46 @@ main[data-view="session-viewer"].hidden {
   font-size: 0.8rem;
   opacity: 0.65;
 }
-.cascade-exp-import {
-  list-style: none;
+/* Gather expansion picker — filter, capped scroll box, then Import.
+   The row cap keeps a game with dozens of expansions from pushing the rest
+   of the Gather cascade off screen; --cascade-exp-rows sets how many are
+   visible before it scrolls. Import lives outside the scroll box so it stays
+   reachable no matter how far down the list you are. */
+.cascade-exp-filter {
+  margin: 0 0 8px;
+}
+.cascade-exp-filter__input {
+  min-height: 44px;
+  padding-right: 44px;
+  font-size: 13px;
+}
+.cascade-exp-scroll {
+  --cascade-exp-rows: 5;
+  /* Row height is fixed by .expansion-list__row: 36px thumb + 2 * 0.45rem
+     padding + 2 * 1px border ≈ 52.4px, rounded up so the cap never clips the
+     fifth row. Gap is .cascade-exp-list's flex gap. */
+  --cascade-exp-row-h: 53px;
+  --cascade-exp-row-gap: 0.4rem;
+  /* Sliver of row six left showing, so the list reads as scrollable instead
+     of as if it simply ends at five. */
+  --cascade-exp-peek: 14px;
+  margin-top: 8px;
+  max-height: calc(
+    var(--cascade-exp-rows) * var(--cascade-exp-row-h)
+    + (var(--cascade-exp-rows) - 1) * var(--cascade-exp-row-gap)
+    + var(--cascade-exp-peek)
+  );
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+/* The scroll box owns the spacing above the list now — the list's own top
+   margin would otherwise eat into the row cap and push row five out. */
+.cascade-exp-scroll > .cascade-exp-list { margin-top: 0; }
+.cascade-exp-actions {
   display: flex;
   justify-content: center;
-  padding-top: 4px;
+  padding-top: 10px;
 }
 
 /* Picked-game chip (above the input) */

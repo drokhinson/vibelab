@@ -20,6 +20,29 @@ function playerRange(min, max) {
   return `${min || "?"}–${max || "?"}P`;
 }
 
+// Drop a leading base-game name from an expansion's name, for surfaces where
+// the base game is already the surrounding context — a game page's expansion
+// reel, the host's Gather picker, the guide's expansion chips, a play's
+// expansion list. "Carcassonne: Abbey & Mayor" reads as "Abbey & Mayor" there.
+//
+// Display only: the stored name is untouched, so the expansion's own detail
+// page, the collection grid, search and the feed still show it in full.
+//
+// Mirrors the backend's _strip_base_prefix at
+// shared-backend/routes/boardgame_buddy/expansion_routes.py — keep in sync.
+// Falls back to the original when the base name isn't a prefix, or when
+// stripping it would leave nothing behind.
+function stripBaseGameName(name, baseName) {
+  const raw = String(name ?? "").trim();
+  const base = String(baseName ?? "").trim();
+  if (!raw || !base) return raw;
+  // Escape the base name — real titles carry regex metacharacters
+  // ("7 Wonders (Duel)", "Brass: Birmingham").
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stripped = raw.replace(new RegExp(`^${escaped}\\s*[:\\-–—,]\\s*`, "i"), "").trim();
+  return stripped || raw;
+}
+
 function formatTime(minutes) {
   if (!minutes) return "";
   if (minutes < 60) return `${minutes}m`;

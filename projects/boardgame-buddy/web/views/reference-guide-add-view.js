@@ -252,10 +252,14 @@ components above.
         };
         if (!this._gameName) this._gameName = game.name || "";
       }
+      // Chips and colored-dot labels sit next to the base game's own chip, so
+      // they drop its name and show only what the expansion is called. The
+      // base game's own entry above keeps its full name.
+      const baseName = (game && game.name) || this._gameName || "";
       for (const e of (exps || [])) {
         if (this._expansionIds.includes(e.expansion_game_id)) {
           this._expansionMeta[e.expansion_game_id] = {
-            name: e.name,
+            name: stripBaseGameName(e.name, baseName),
             color: e.color || null,
             thumb: e.thumbnail_url || null,
           };
