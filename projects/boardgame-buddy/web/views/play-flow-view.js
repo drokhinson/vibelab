@@ -1483,7 +1483,7 @@
           ${open ? `
             <ul class="expansion-list cascade-exp-list">
               ${list.length
-                ? list.map((e) => this._renderExpansionPickerRow(e)).join("")
+                ? list.map((e) => this._renderExpansionPickerRow(e, (snap && snap.name) || "")).join("")
                 : `<li class="cascade-card__hint">No expansions in BoardgameBuddy yet.</li>`}
               ${importRow}
             </ul>
@@ -1511,18 +1511,22 @@
       });
     }
 
-    _renderExpansionPickerRow(e) {
+    _renderExpansionPickerRow(e, baseName) {
       const active = (this._ps.expansionIds || []).includes(e.expansion_game_id);
+      // The picked game's chip sits right above this list, so the rows drop
+      // the base game's name and show only what each expansion adds.
+      const label = stripBaseGameName(e.name, baseName);
       return `
         <li class="expansion-list__row cascade-exp-row ${active ? "is-active" : ""}"
             onclick="window.playFlowView._toggleExpansion('${e.expansion_game_id}')"
+            title="${escapeAttr(e.name || "")}"
             style="--exp-color:${e.color || "#C9922A"}">
           <span class="expansion-list__dot"></span>
           ${e.thumbnail_url
             ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" class="expansion-list__thumb" loading="lazy" />`
             : `<div class="expansion-list__thumb expansion-list__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
           <div class="expansion-list__body">
-            <div class="expansion-list__name">${escape(e.name)}</div>
+            <div class="expansion-list__name">${escape(label)}</div>
           </div>
           <span class="cascade-exp-toggle ${active ? "cascade-exp-toggle--on" : ""}">
             <i data-lucide="${active ? "check" : "plus"}" class="w-4 h-4"></i>

@@ -252,9 +252,10 @@
             <ul class="play-detail__expansions">
               ${(p.expansions || []).map((e) => `
                 <li onclick="window.PlayDetailPopup.dismiss();window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || "")}'})"
+                    title="${escapeAttr(e.name || "")}"
                     style="--exp-color:${e.color || "#C9922A"}">
                   <span class="play-detail__expansion-dot"></span>
-                  ${escape(e.name)}
+                  ${escape(stripBaseGameName(e.name, p.game_name))}
                 </li>
               `).join("")}
             </ul>

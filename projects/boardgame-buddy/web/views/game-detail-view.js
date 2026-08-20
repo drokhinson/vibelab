@@ -268,8 +268,13 @@
             ${list.map((e) => {
               const status = (this._statusMap || {})[e.expansion_game_id] || null;
               const owned = status === "owned" || status === "played" || status === "wishlist";
+              // The page title already says the base game, so the caption drops
+              // it — the cap is 2-line clamped and the prefix ate one of them.
+              // Navigation still carries the full name: it seeds the
+              // destination page's header, which is a standalone title there.
+              const label = stripBaseGameName(e.name, g.name);
               return `
-                <article class="expansion-polaroid"
+                <article class="expansion-polaroid" title="${escapeAttr(e.name || '')}"
                          onclick="window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || '')}'})">
                   <div class="expansion-polaroid__photo">
                     ${e.thumbnail_url
@@ -277,7 +282,7 @@
                       : `<div class="expansion-polaroid__placeholder"><i data-lucide="dice-6"></i></div>`}
                     ${owned ? `<span class="expansion-polaroid__check"><i data-lucide="check" class="w-3.5 h-3.5"></i></span>` : ""}
                   </div>
-                  <div class="expansion-polaroid__cap">${escape(e.name)}</div>
+                  <div class="expansion-polaroid__cap">${escape(label)}</div>
                 </article>
               `;
             }).join("")}
