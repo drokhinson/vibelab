@@ -309,10 +309,6 @@ class PlayPhotoAttach(BaseModel):
 
 
 class PlayPlayerResponse(BaseModel):
-    # buddy_id is the legacy per-owner buddy row. Optional now: after
-    # migration 013 the column is gone and writes through the new path
-    # populate player_user_id/player_display_name directly.
-    buddy_id: Optional[str] = None
     user_id: Optional[str] = None
     name: str
     # Linked-account avatar config (migration 029). NULL for ghost players

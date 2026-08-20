@@ -31,7 +31,7 @@ async def get_my_stats(
 )
 async def get_user_stats(
     user_id: str = Path(..., description="Target user UUID"),
-    viewer: CurrentUser = Depends(get_current_user),
+    _viewer: CurrentUser = Depends(get_current_user),
 ) -> StatsResponse:
     """Profiles are fully public so this is unguarded beyond auth."""
     return stats_service.fetch_stats(get_supabase(), user_id)

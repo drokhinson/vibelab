@@ -8,8 +8,8 @@ catalog. It exposes:
 - listing the expansions linked to a base game (with the caller's enable state),
 - listing the base game's not-yet-imported expansions straight from BGG,
 - importing one of those under this base game,
-- toggling one on/off per-user (legacy — the chapter system no longer reads it),
-- an admin override for the auto-assigned dot color.
+- toggling one on/off per-user (read by the game-detail bundle RPC and the
+  native GameDetailScreen; the chapter system does not consume it).
 """
 
 import re

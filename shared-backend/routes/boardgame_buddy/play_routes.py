@@ -113,7 +113,6 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
         )
         players_by_play.setdefault(row["play_id"], []).append(
             PlayPlayerResponse(
-                buddy_id=None,
                 user_id=uid,
                 name=name,
                 avatar=(prof_row or {}).get("avatar"),
@@ -180,7 +179,6 @@ def _write_play_players(sb, play_id: str, players: list) -> list[PlayPlayerRespo
             row["player_user_id"] = player_uid
         rows.append(row)
         out.append(PlayPlayerResponse(
-            buddy_id=None,
             user_id=player_uid,
             name=p.name,
             is_winner=p.is_winner,
@@ -511,6 +509,3 @@ async def leave_play(
     return PlayLeaveResponse(rows_updated=n)
 
 
-# Legacy buddy endpoints (GET/POST /buddies, POST /buddies/{id}/link) have
-# moved to buddy_routes.py under the mutual-edge model. The legacy
-# boardgamebuddy_buddies table is now strictly for free-text ghost players.
