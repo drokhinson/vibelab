@@ -26,19 +26,8 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Plus, RotateCcw, Search } from 'lucide-react-native';
 import { COLORS, RADII, SPACING } from '../theme';
 import { Button, Input, Row, Sheet, Skeleton, Text } from '../ui';
+import { matchesExpansionQuery } from '../domain/expansionName';
 import api from '../api/client';
-
-/** Substring match against the displayed name AND BGG's full name — the base
- *  game's name is stripped from what's shown, so a user who types it would
- *  otherwise get nothing. */
-function matches(candidate, q) {
-  if (!q) return true;
-  const needle = q.toLowerCase();
-  return (
-    String(candidate.name || '').toLowerCase().includes(needle) ||
-    String(candidate.full_name || '').toLowerCase().includes(needle)
-  );
-}
 
 /** Render `text` with the first case-insensitive hit on `q` emphasized. */
 function Highlighted({ text, query }) {
@@ -119,7 +108,7 @@ const ImportExpansionsSheet = forwardRef(function ImportExpansionsSheet({ gameId
   }
 
   const q = query.trim();
-  const visible = (candidates || []).filter((c) => matches(c, q));
+  const visible = (candidates || []).filter((c) => matchesExpansionQuery(q, c.name, c.full_name));
   const loaded = candidates !== null;
   const hasCandidates = loaded && candidates.length > 0;
 

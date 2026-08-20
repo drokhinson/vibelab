@@ -164,6 +164,9 @@ export default function CollectionScreen({ navigation, route }) {
               game={item.game}
               variant="tile"
               showStatus={!userId}
+              // Catalog-wide count, only computed by /collection/grid — the
+              // offline tier leaves it undefined and the badge hides itself.
+              expansionCount={item.game.expansion_count}
               onPress={() => navigation.navigate('GameDetail', { gameId: item.game.id, gameName: item.game.name })}
             />
           </View>

@@ -14,6 +14,7 @@ import { ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
 import { COLORS, SPACING } from '../../theme';
 import { Button, Row, Text } from '../../ui';
 import ImportExpansionsSheet from '../../widgets/ImportExpansionsSheet';
+import { stripBaseGameName } from '../../domain/expansionName';
 import api from '../../api/client';
 
 export default function ExpansionsSection({ game, expansions, onChanged }) {
@@ -48,7 +49,13 @@ export default function ExpansionsSection({ game, expansions, onChanged }) {
       ) : open ? (
         <View style={{ marginTop: SPACING.sm, gap: 2 }}>
           {list.map((exp) => (
-            <ExpansionRow key={exp.expansion_game_id} exp={exp} baseId={game.id} onChanged={onChanged} />
+            <ExpansionRow
+              key={exp.expansion_game_id}
+              exp={exp}
+              baseId={game.id}
+              baseName={game.name}
+              onChanged={onChanged}
+            />
           ))}
         </View>
       ) : null}
@@ -58,7 +65,7 @@ export default function ExpansionsSection({ game, expansions, onChanged }) {
   );
 }
 
-function ExpansionRow({ exp, baseId, onChanged }) {
+function ExpansionRow({ exp, baseId, baseName, onChanged }) {
   const [enabled, setEnabled] = useState(exp.is_enabled);
   const [busy, setBusy] = useState(false);
   async function toggle() {
@@ -77,7 +84,7 @@ function ExpansionRow({ exp, baseId, onChanged }) {
     <Pressable style={styles.row} onPress={toggle} disabled={busy}>
       {exp.color ? <View style={[styles.dot, { backgroundColor: exp.color }]} /> : null}
       <Text variant="bodyMedium" numberOfLines={1} style={{ flex: 1 }}>
-        {exp.name}
+        {stripBaseGameName(exp.name, baseName)}
       </Text>
       <View style={[styles.toggle, enabled && styles.toggleOn]}>
         <View style={[styles.knob, enabled && styles.knobOn]} />

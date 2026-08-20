@@ -10,6 +10,7 @@ import { Button, Card, Input, Row, Text } from '../../ui';
 import UserBadge from '../../components/UserBadge';
 import GameFinder from '../../widgets/GameFinder';
 import ImportExpansionsSheet from '../../widgets/ImportExpansionsSheet';
+import { stripBaseGameName } from '../../domain/expansionName';
 import api from '../../api/client';
 import { useAppState } from '../../store/AppContext';
 
@@ -219,7 +220,7 @@ export default function GatherStep({ session, navigation }) {
                 >
                   {exp.color ? <View style={[styles.expDot, { backgroundColor: exp.color }]} /> : null}
                   <Text variant="small" color={on ? COLORS.text : COLORS.textMuted}>
-                    {exp.name}
+                    {stripBaseGameName(exp.name, game.name)}
                   </Text>
                 </Pressable>
               );

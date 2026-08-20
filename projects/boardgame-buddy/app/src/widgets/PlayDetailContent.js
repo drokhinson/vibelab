@@ -9,6 +9,7 @@ import { Star, Pencil, Trash2, LogOut } from 'lucide-react-native';
 import { COLORS, RADII, SPACING } from '../theme';
 import { Button, Input, Row, Text } from '../ui';
 import UserBadge from '../components/UserBadge';
+import { stripBaseGameName } from '../domain/expansionName';
 import { useAppState } from '../store/AppContext';
 
 export default function PlayDetailContent({ play, editing, onStartEdit, onCancelEdit, onSave, onDelete, onLeave }) {
@@ -76,7 +77,7 @@ export default function PlayDetailContent({ play, editing, onStartEdit, onCancel
             <View key={ex.expansion_game_id || ex.id} style={styles.expChip}>
               {ex.color ? <View style={[styles.expDot, { backgroundColor: ex.color }]} /> : null}
               <Text variant="caption" color={COLORS.polaroidInkSoft}>
-                {ex.name}
+                {stripBaseGameName(ex.name, play.game_name)}
               </Text>
             </View>
           ))}
