@@ -11,8 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SPACING } from '../theme';
 import { Button, FooterBar, Row, Text } from '../ui';
 import LoadingState from '../components/LoadingState';
-import { alert, confirm } from '../components/ConfirmModal';
-import { showPolaroid } from '../components/PolaroidPopup';
+import { confirm } from '../components/ConfirmModal';
+import { showPolaroid, updatePolaroid } from '../components/PolaroidPopup';
+import { attachPhoto } from './play/playSave';
 import { useAppActions, useAppState } from '../store/AppContext';
 import usePlaySession from './play/usePlaySession';
 import GatherStep from './play/GatherStep';
@@ -67,6 +68,63 @@ export default function PlayFlowScreen({ navigation, route }) {
     navigation.goBack();
   }
 
+  // Persist the play behind the wrap-up card. Never awaited by the tap
+  // handler — the card is already up, and it carries the save's state.
+  async function runSaveBehindCard(snap, cardId) {
+    updatePolaroid({ saving: true, error: null }, cardId);
+    const result = await session.runSave(snap);
+
+    if (!result.ok) {
+      // Server rejection: offer Retry and leave the draft untouched, so
+      // closing the card lands back on an intact Settle Up.
+      updatePolaroid(
+        {
+          saving: false,
+          error: result.error || 'Failed to save',
+          onRetry: () => runSaveBehindCard(snap, cardId),
+          onDismiss: () => session.setError(result.error || 'Failed to save'),
+        },
+        cardId,
+      );
+      return;
+    }
+
+    actions.setActiveSession(null);
+
+    if (result.queued) {
+      // Offline: the outbox owns it from here, so this is a success, not a
+      // Retry — the play uploads on the next flush.
+      updatePolaroid(
+        {
+          saving: false,
+          error: null,
+          onDismiss: null,
+          caption: 'Saved on this phone — uploads when you’re back online.',
+        },
+        cardId,
+      );
+      return;
+    }
+
+    // Refresh behind the still-up card so "Go to feed" lands on a feed that
+    // already contains this play.
+    actions.afterPlaySaved(result.game?.id);
+    actions.refreshHostSeeds();
+    updatePolaroid({ saving: false, error: null, onDismiss: null }, cardId);
+
+    // Unblocked on the play landing, not on the photo — the photo has always
+    // been best-effort, and it only ever cost the host time to wait on it.
+    if (result.uploadPromise) {
+      const ok = await attachPhoto(result.uploadPromise, result.playId);
+      if (!ok) {
+        updatePolaroid(
+          { warning: 'Saved without the photo — you can add it later from the play card.' },
+          cardId,
+        );
+      }
+    }
+  }
+
   async function advance() {
     if (phase === 'gather') {
       if (!draft.game?.id) return session.setError('Pick a game first.');
@@ -75,33 +133,21 @@ export default function PlayFlowScreen({ navigation, route }) {
     } else if (phase === 'play') {
       session.advancePhase('settle');
     } else {
-      const result = await session.save();
-      if (!result.ok) return;
-      actions.setActiveSession(null);
-      if (result.queued) {
-        // Offline: the play sits in the outbox — nothing changed server-side.
-        navigation.navigate('Home', { screen: 'FeedTab' });
-        showPolaroid({
-          title: 'Well played!',
-          caption: 'Saved on this phone — uploads when you’re back online.',
-          photoUrl: result.photoUrl || result.game?.thumbnail_url || null,
-        });
-        return;
-      }
-      actions.afterPlaySaved(result.game?.id);
-      actions.refreshHostSeeds();
-      if (result.photoFailed) {
-        await alert({
-          title: "Photo couldn't be uploaded",
-          body: 'Your play was saved without the photo. You can add it later from the play card.',
-        });
-      }
-      navigation.navigate('Home', { screen: 'FeedTab' });
-      showPolaroid({
+      // Snapshot before anything clears or recycles the draft.
+      const snap = session.snapshotForSave();
+      if (!snap) return;
+      const seed = session.nextRoundSeed();
+
+      // Card up in the same frame as the tap; the write runs behind it.
+      const cardId = showPolaroid({
         title: 'Well played!',
-        caption: result.winner ? `${result.winner.name} takes ${result.game?.name || 'the game'}` : result.game?.name || '',
-        photoUrl: result.photoUrl || result.game?.image_url || result.game?.thumbnail_url || null,
+        caption: snap.winner ? `${snap.winner.name} takes ${snap.game?.name || 'the game'}` : snap.game?.name || '',
+        photoUrl: snap.photoUrl || snap.game?.image_url || snap.game?.thumbnail_url || null,
+        saving: true,
+        onAnotherRound: () => session.startAnotherRound(seed),
+        onDismiss: () => navigation.navigate('Home', { screen: 'FeedTab' }),
       });
+      runSaveBehindCard(snap, cardId);
     }
   }
 

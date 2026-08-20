@@ -3,65 +3,110 @@
 // drops in with a slight rotation, like web/ui/polaroid-popup.js. Imperative:
 // mounted once at root, any screen calls showPolaroid().
 //
+// The host's wrap-up card also carries the save's state, so the card is
+// updatable after it goes up: showPolaroid() returns a card id and
+// updatePolaroid(patch, cardId) no-ops once a newer card has replaced it —
+// without that guard a slow save could repaint the card belonging to the
+// NEXT round.
+//
+// While `saving` the card is modal: no close affordance, inert backdrop, and
+// the primary CTA spins. A failed photo becomes a `warning` line ON the card
+// rather than a second modal — this popup is a singleton, so an alert() would
+// dismiss the very card it was warning about.
+//
 // Not for confirmations — destructive gates go through ConfirmModal (§3c).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
-import { PartyPopper } from 'lucide-react-native';
+import { ArrowRight, PartyPopper, RotateCcw } from 'lucide-react-native';
 import { COLORS, MOTION, RADII, SHADOWS, SPACING } from '../theme';
-import { Button, Text } from '../ui';
+import { Button, Row, Text } from '../ui';
 
 let _show = null;
+let _update = null;
 
 /**
- * @param {{ title?: string, caption?: string, photoUrl?: string|null,
- *           buttonLabel?: string }} opts
- * @returns {Promise<void>} resolves on dismiss
+ * @typedef {Object} PolaroidOpts
+ * @property {string} [title]
+ * @property {string} [caption]
+ * @property {string|null} [photoUrl]
+ * @property {string} [buttonLabel]   primary CTA when settled
+ * @property {boolean} [saving]       spinner CTA, no dismiss
+ * @property {string|null} [error]    swaps the CTA to Retry
+ * @property {string|null} [warning]  advisory line (e.g. photo didn't land)
+ * @property {() => void} [onAnotherRound]
+ * @property {() => void} [onRetry]
+ * @property {() => void} [onDismiss] overrides the default dismiss behavior
+ */
+
+/**
+ * @param {PolaroidOpts} opts
+ * @returns {number} card id for updatePolaroid()
  */
 export function showPolaroid(opts = {}) {
-  if (!_show) return Promise.resolve();
-  return _show(opts);
+  return _show ? _show(opts) : 0;
+}
+
+/** Patch the live card. No-ops if `cardId` isn't the card currently up. */
+export function updatePolaroid(patch, cardId) {
+  if (_update) _update(patch, cardId);
 }
 
 export default function PolaroidHost() {
   const [cfg, setCfg] = useState(null);
-  const resolverRef = useRef(null);
+  const cardIdRef = useRef(0);
   const drop = useSharedValue(0);
 
-  const show = useCallback(
-    (opts) =>
-      new Promise((resolve) => {
-        resolverRef.current = resolve;
-        setCfg(opts);
-      }),
-    [],
-  );
+  const show = useCallback((opts) => {
+    const id = ++cardIdRef.current;
+    setCfg({ ...opts, _id: id });
+    return id;
+  }, []);
   if (_show !== show) _show = show;
+
+  const update = useCallback((patch, cardId) => {
+    setCfg((prev) => {
+      if (!prev) return prev;
+      if (cardId != null && cardId !== prev._id) return prev; // stale writer
+      return { ...prev, ...patch };
+    });
+  }, []);
+  if (_update !== update) _update = update;
 
   useEffect(() => {
     if (cfg) {
       drop.value = 0;
       drop.value = withSpring(1, { damping: 14, stiffness: 120 });
     }
-  }, [cfg, drop]);
+  }, [cfg?._id, drop]);
 
   const cardStyle = useAnimatedStyle(() => ({
     opacity: withTiming(drop.value ? 1 : 0, { duration: MOTION.fast }),
-    transform: [
-      { translateY: (1 - drop.value) * -80 },
-      { rotate: `${(1 - drop.value) * 6 - 2}deg` },
-    ],
+    transform: [{ translateY: (1 - drop.value) * -80 }, { rotate: `${(1 - drop.value) * 6 - 2}deg` }],
   }));
 
+  if (!cfg) return null;
+
+  const saving = !!cfg.saving;
   const close = () => {
-    const r = resolverRef.current;
-    resolverRef.current = null;
+    if (saving) return; // modal until the write resolves
+    const onDismiss = cfg.onDismiss;
     setCfg(null);
-    if (r) r();
+    if (onDismiss) onDismiss();
   };
 
-  if (!cfg) return null;
+  const primaryLabel = saving ? 'Saving…' : cfg.error ? 'Retry' : cfg.buttonLabel || 'Go to feed';
+  const primaryIcon = saving ? undefined : cfg.error ? RotateCcw : ArrowRight;
+  const onPrimary = () => {
+    if (saving) return;
+    if (cfg.error && cfg.onRetry) {
+      cfg.onRetry();
+      return;
+    }
+    close();
+  };
+
   return (
     <Modal visible transparent animationType="fade" onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close}>
@@ -76,6 +121,7 @@ export default function PolaroidHost() {
                 </View>
               )}
             </View>
+
             {cfg.title ? (
               <Text variant="polaroid" center style={{ fontSize: 20, marginTop: SPACING.md }}>
                 {cfg.title}
@@ -86,12 +132,44 @@ export default function PolaroidHost() {
                 {cfg.caption}
               </Text>
             ) : null}
-            <Button
-              label={cfg.buttonLabel || 'Nice!'}
-              onPress={close}
-              full
-              style={{ marginTop: SPACING.lg }}
-            />
+
+            {cfg.error ? (
+              <Text variant="small" center color={COLORS.rust} style={{ marginTop: SPACING.sm }}>
+                {cfg.error}
+              </Text>
+            ) : null}
+            {cfg.warning && !cfg.error ? (
+              <Text variant="caption" center color={COLORS.polaroidMuted} style={{ marginTop: SPACING.sm }}>
+                {cfg.warning}
+              </Text>
+            ) : null}
+
+            <Row gap="sm" style={{ marginTop: SPACING.lg }}>
+              {cfg.onAnotherRound ? (
+                <Button
+                  label="Another round?"
+                  variant="outline"
+                  icon={RotateCcw}
+                  size="sm"
+                  // Only once the play is safely saved — a new session must
+                  // not start on top of an unresolved write.
+                  disabled={saving || !!cfg.error}
+                  onPress={() => {
+                    const fn = cfg.onAnotherRound;
+                    setCfg(null);
+                    if (fn) fn();
+                  }}
+                  style={{ flex: 1 }}
+                />
+              ) : null}
+              <Button
+                label={primaryLabel}
+                icon={primaryIcon}
+                onPress={onPrimary}
+                busy={saving}
+                style={{ flex: 1 }}
+              />
+            </Row>
           </Pressable>
         </Animated.View>
       </Pressable>

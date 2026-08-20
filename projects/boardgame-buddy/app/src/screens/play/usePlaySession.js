@@ -15,7 +15,7 @@ import api from '../../api/client';
 import LiveScores from '../../realtime/liveScores';
 import { emptyDraft, loadDraft, saveDraft, clearDraft } from '../../models/playSession';
 import { sanitizeRoundScore, parseRoundScore, autoSelectWinners } from '../../domain/scoring';
-import { attachPhoto, savePlay } from './playSave';
+import { savePlay } from './playSave';
 
 export default function usePlaySession({ me, initialCode, initialGame }) {
   const draftRef = useRef(null);
@@ -425,41 +425,146 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     if (code) api.updateSessionPhase(code, 'abandoned').catch(() => {});
   }, []);
 
-  // ── Save (photo uploads in parallel, attaches after; see playSave.js) ───
-  const save = useCallback(async () => {
+  // ── Save ────────────────────────────────────────────────────────────────
+  //
+  // Split in two so the wrap-up card can go up in the same frame as the tap
+  // and the write can run behind it. Everything the write (and a follow-up
+  // round) needs is captured up front, because the draft is cleared on
+  // success and recycled by startAnotherRound.
+
+  /** Snapshot for a save that will run behind the card. `null` if not ready. */
+  const snapshotForSave = useCallback(() => {
     const d = draftRef.current;
-    if (!d.game?.id) {
+    if (!d?.game?.id) {
       setError('Pick a game first.');
-      return { ok: false };
+      return null;
     }
-    setSaving(true);
-    setError(null);
-    const snap = {};
-    const result = await savePlay(d, lobbyRef.current?.code || null, {
+    return {
+      draft: d,
+      lobbyCode: lobbyRef.current?.code || null,
       rounds: maxRoundCount(),
-      resolvedScore,
-      snap,
-    });
-    if (!result.ok) {
-      setError(result.error);
-      setSaving(false);
-      return { ok: false };
-    }
-    const summary = {
-      ...result,
       game: d.game,
       winner: d.players.find((p) => p.is_winner) || null,
       photoUrl: d.photo?.uri || null,
+      // Memoized upload promise lives here so a Retry doesn't re-push bytes.
+      uploadPromise: null,
     };
-    await clearDraft();
-    draftRef.current = null;
-    // The play is safe; the photo is best-effort from here.
-    summary.photoFailed = result.uploadPromise
-      ? !(await attachPhoto(result.uploadPromise, result.playId))
-      : false;
-    setSaving(false);
-    return summary;
-  }, [maxRoundCount, resolvedScore]);
+  }, [maxRoundCount]);
+
+  /**
+   * Persist the play. On failure the draft is left completely intact, so a
+   * Retry can re-fire the same snapshot and dismissing the card lands back
+   * on an untouched Settle Up.
+   */
+  const runSave = useCallback(
+    async (snap) => {
+      setSaving(true);
+      setError(null);
+      const result = await savePlay(snap.draft, snap.lobbyCode, {
+        rounds: snap.rounds,
+        resolvedScore,
+        snap,
+      });
+      if (!result.ok) {
+        setSaving(false);
+        return { ok: false, error: result.error };
+      }
+      // The play is on the server (or safely queued) — drop the persisted
+      // copy so the Play tab stops offering to resume it. The in-memory
+      // draft stays put on purpose: the wrap-up card is covering Settle Up,
+      // and tearing it down now would flash a loading screen behind the
+      // card. It goes with the screen on dismiss, or is replaced wholesale
+      // by startAnotherRound.
+      await clearDraft();
+      setSaving(false);
+      return { ...result, game: snap.game, winner: snap.winner, photoUrl: snap.photoUrl };
+    },
+    [resolvedScore],
+  );
+
+  /**
+   * Everything that carries into a follow-up game with the same group.
+   * Deliberately drops per-play results and `participant_id` — the latter
+   * belongs to the finished session's lobby rows, and reusing it would make
+   * removePlayer issue a DELETE against the wrong session.
+   */
+  const nextRoundSeed = useCallback(() => {
+    const d = draftRef.current;
+    if (!d) return null;
+    return {
+      game: d.game,
+      expansionIds: [...(d.expansionIds || [])],
+      playMode: d.playMode,
+      players: (d.players || []).map((p) => ({
+        name: p.name,
+        user_id: p.user_id || null,
+        avatar: p.avatar || null,
+        team: p.team || '',
+        is_winner: false,
+        score: null,
+        round_scores: [],
+      })),
+    };
+  }, []);
+
+  /**
+   * Start a fresh session pre-seeded with the same game, expansions, play
+   * mode and roster, landing on Gather so the host can still tweak the
+   * line-up (and joiners get a window to re-join under the new code).
+   */
+  const startAnotherRound = useCallback(
+    async (seed) => {
+      if (!seed) return;
+      // Tear down the finished session's live wiring — mirrors unmount.
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+      const live = liveRef.current;
+      liveRef.current = null;
+      if (live) Promise.resolve().then(() => live.stop()).catch(() => {});
+      lobbyRef.current = null;
+
+      // Reset the async guards so an in-flight call from the finished
+      // session can't reconcile into the new one.
+      phaseSeqRef.current++;
+      pendingPhaseRef.current = 0;
+      pendingDeletesRef.current = 0;
+      setError(null);
+      setSaving(false);
+
+      const d = emptyDraft();
+      d.game = seed.game;
+      d.expansionIds = seed.expansionIds;
+      d.playMode = seed.playMode;
+      d.players = seed.players.map((p) => ({ ...p }));
+      if (!d.players.length && me) {
+        d.players.push({ name: me.display_name, is_winner: false, score: null, round_scores: [], user_id: me.id, avatar: me.avatar || null });
+      }
+      draftRef.current = d;
+      saveDraft(d);
+      // Paint the prefilled Gather screen before any network work.
+      repaint();
+
+      await ensureLobbyOpen();
+      // POST /sessions seats only the host, so the carried roster needs
+      // explicit participant rows before joiners can see the group.
+      const code = lobbyRef.current?.code;
+      if (code) {
+        await Promise.all(
+          d.players
+            .filter((p) => !p.participant_id && !(me && p.user_id === me.id))
+            .map((p) =>
+              api
+                .addParticipant(code, { userId: p.user_id || null, displayName: p.name })
+                .catch(() => {}),
+            ),
+        );
+      }
+      repaint();
+      pollRef.current = setInterval(lobbyPollTick, 2000);
+      await startLiveScores();
+    },
+    [me, repaint, ensureLobbyOpen, lobbyPollTick, startLiveScores],
+  );
 
   return {
     ready,
@@ -482,6 +587,9 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     maxRoundCount,
     advancePhase,
     abandon,
-    save,
+    snapshotForSave,
+    runSave,
+    nextRoundSeed,
+    startAnotherRound,
   };
 }

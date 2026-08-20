@@ -46,7 +46,8 @@ export default function SessionViewerScreen({ navigation, route }) {
       }
       actions.afterPlaySaved(null);
       navigation.navigate('Home', { screen: 'FeedTab' });
-      showPolaroid({ title, caption, photoUrl });
+      // The joiner is already on the feed by now — this card just celebrates.
+      showPolaroid({ title, caption, photoUrl, buttonLabel: 'Nice!' });
     },
     [actions, navigation],
   );
