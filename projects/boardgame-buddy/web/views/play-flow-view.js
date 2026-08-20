@@ -52,6 +52,10 @@
       // check. _ensureLobbyOpen consumes (and clears) it so the same code
       // isn't fetched twice back-to-back on a deep-link entry.
       this._prefetchedLobby = null;
+      // Id of the wrap-up splash this view put up, from PolaroidPopup.show().
+      // The background save passes it back to update() so a late response
+      // can only repaint its own card.
+      this._cardId = null;
     }
 
     async onMount() {
@@ -1829,7 +1833,7 @@
       // Same wrap-up splash non-host joiners get, plus the host-only save
       // state + "Another round?" CTA. Default dismiss handler invalidates
       // the feed cache and routes to /feed.
-      window.PolaroidPopup.show({
+      this._cardId = window.PolaroidPopup.show({
         headline: "Well played!",
         gameName: game.name || "Game over",
         gameThumbnail: game.thumbnail_url || game.image_url || null,
@@ -1853,12 +1857,35 @@
      * re-fire with the same snapshot and closing the card drops the host
      * back onto an intact Settle Up screen.
      *
-     * @param {{payload: Object, lobbyCode: string|null, photoFile: File|null}} snap
+     * @param {{payload: Object, lobbyCode: string|null, photoFile: File|null,
+     *          uploadPromise?: Promise<any>|null}} snap
+     *   The same object across a Retry — `uploadPromise` is memoized onto it
+     *   so a retry doesn't re-push photo bytes that already landed.
      */
     async _runSave(snap) {
       this._saving = true;
       const popup = window.PolaroidPopup;
-      if (popup) popup.update({ saving: true, error: null });
+      // Every update below is scoped to the card this run started on, so a
+      // slow request can never repaint a card (or dialog) that replaced it.
+      const cardId = this._cardId;
+      if (popup) popup.update({ saving: true, error: null }, cardId);
+
+      // Start the upload alongside the save rather than after it. On mobile
+      // upstream the photo bytes are the largest single chunk of wall clock,
+      // and nothing about them has to wait on the play row — only the
+      // attach does. If the save then fails we simply never attach it; the
+      // orphan blob in the bucket is cheap.
+      //
+      // Cached on the snapshot so a Retry re-uses bytes already uploaded
+      // rather than pushing the whole photo a second time. Cleared on
+      // failure, so a Retry does get a fresh attempt at a failed upload.
+      if (snap.photoFile && !snap.uploadPromise) {
+        const fd = new FormData();
+        fd.append("file", snap.photoFile);
+        snap.uploadPromise = window.api.upload("/plays/photo", fd)
+          .catch(() => { snap.uploadPromise = null; return null; });
+      }
+      const uploadPromise = snap.uploadPromise || null;
 
       let saved;
       try {
@@ -1876,7 +1903,7 @@
             saving: false,
             error: msg,
             onDismiss: () => { this._error = msg; this.render(); },
-          });
+          }, cardId);
         } else {
           this._error = msg;
           this.render();
@@ -1885,31 +1912,6 @@
       }
 
       const savedId = (saved && (saved.id || saved.play_id || (saved.play && saved.play.id))) || null;
-
-      // PUT /plays/{id} requires owner. Both solo and lobby-host paths
-      // are owned by the current user, so the attach call succeeds.
-      // Revisit if joiners ever finalize.
-      let photoUploadFailed = false;
-      if (snap.photoFile) {
-        if (!savedId) {
-          photoUploadFailed = true;
-        } else {
-          try {
-            const fd = new FormData();
-            fd.append("file", snap.photoFile);
-            const resp = await window.api.upload("/plays/photo", fd);
-            const uploadedUrl = resp && resp.photo_url;
-            if (uploadedUrl) {
-              const { game_id, ...rest } = snap.payload;
-              await window.Play.update(savedId, { ...rest, photo_url: uploadedUrl });
-            } else {
-              photoUploadFailed = true;
-            }
-          } catch (_) {
-            photoUploadFailed = true;
-          }
-        }
-      }
 
       this._saving = false;
       // The play is on the server — the draft has done its job. Note we do
@@ -1928,9 +1930,9 @@
       if (window.Buddy && window.Buddy.allBuddies) window.Buddy.allBuddies().catch(() => {});
       if (window.Game && window.Game.recentlyPlayed) window.Game.recentlyPlayed(6).catch(() => {});
 
-      // The photo warning rides on the card rather than in a PolaroidPopup
-      // .alert() — the popup is a singleton, so an alert would dismiss the
-      // very card it is warning about.
+      // Unblock the card here, on the play landing — not on the photo. The
+      // photo has always been best-effort, so making Go to feed / Another
+      // round? wait on it only ever cost the host time.
       if (popup) {
         popup.update({
           saving: false,
@@ -1939,10 +1941,39 @@
           // backdrop go back to the default feed redirect.
           onDismiss: null,
           playId: savedId,
-          warning: photoUploadFailed
-            ? "Saved without the photo — you can add it later from the play card."
-            : null,
-        });
+        }, cardId);
+      }
+
+      if (uploadPromise) await this._attachPhoto(uploadPromise, savedId, cardId);
+    }
+
+    /**
+     * Land the already-in-flight photo upload on the saved play. Runs after
+     * the card has unblocked, so it only ever touches the card again to warn
+     * that the photo didn't make it — and only while the card is still up
+     * (PolaroidPopup.update no-ops once it's dismissed).
+     *
+     * PATCH /plays/{id}/photo writes the one column. The old path re-sent the
+     * whole play through PUT /plays/{id}, which full-replaces the nested
+     * lists — twelve round trips, and every player row destroyed and
+     * recreated, to set a URL.
+     */
+    async _attachPhoto(uploadPromise, savedId, cardId) {
+      let ok = false;
+      try {
+        const resp = await uploadPromise;
+        const uploadedUrl = resp && resp.photo_url;
+        if (uploadedUrl && savedId) {
+          await window.Play.attachPhoto(savedId, uploadedUrl);
+          ok = true;
+        }
+      } catch (_) {
+        ok = false;
+      }
+      if (!ok && window.PolaroidPopup) {
+        window.PolaroidPopup.update({
+          warning: "Saved without the photo — you can add it later from the play card.",
+        }, cardId);
       }
     }
 
@@ -1997,6 +2028,7 @@
       this._liveScores = null;
       this._lobby = null;
       this._prefetchedLobby = null;
+      this._cardId = null;
 
       // Reset the async guards so an in-flight call from the finished
       // session can't reconcile into the new one.

@@ -298,6 +298,17 @@ class PlayPhotoResponse(BaseModel):
     photo_url: str
 
 
+class PlayPhotoAttach(BaseModel):
+    """Body for PATCH /plays/{id}/photo — the one field, on its own.
+
+    Attaching a photo used to go through PlayUpdate, which is a *full
+    replacement*: it deletes and re-inserts every player and expansion row
+    to write one column. PlayUpdate can't express a partial edit (played_at
+    is required and players defaults to []), hence this dedicated model.
+    """
+    photo_url: str = Field(..., min_length=1)
+
+
 class PlayPlayerResponse(BaseModel):
     # buddy_id is the legacy per-owner buddy row. Optional now: after
     # migration 013 the column is gone and writes through the new path

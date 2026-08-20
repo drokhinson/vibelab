@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 2026-07-26 (040 unified game search RPC)
+-- Last updated: 2026-08-20 (042 play-write RPCs)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -191,6 +191,37 @@
 --               phase gather/play/settle visible to the viewer (own hosted,
 --               already-joined, or hosted by an accepted buddy). Replaced
 --               the 5 sequential PostgREST selects list_joinable fanned out.
+
+-- bgb_log_play(p_user UUID, p_payload JSONB)
+--   → JSONB shaped like models.PlayResponse { id, game_id, game_name,
+--     game_thumbnail, played_at, notes, players[], photo_url, expansions[],
+--     created_at, play_mode, logged_by_id, logged_by_name, is_own }
+--     or {"error": "game_not_found"}
+--   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
+--   Defined in: db/migrations/boardgamebuddy/042_write_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
+--               (log_play — POST /plays) and SQL-internally by
+--               bgb_finalize_session
+--   Purpose:    One-call play write: resolves the game, inserts the play with
+--               its denormalized game_* columns (migration 020), bulk-writes
+--               play_players + play_expansions + the legacy buddies roster,
+--               and returns the hydrated response. Replaced the 6 sequential
+--               PostgREST calls log_play fanned out — including a read-back
+--               of the expansion rows it had just inserted.
+
+-- bgb_finalize_session(p_host UUID, p_code TEXT, p_payload JSONB)
+--   → JSONB (PlayResponse, via bgb_log_play) or {"error": "not_found" |
+--     "expired" | "forbidden" | "game_not_found"}
+--   Defined in: db/migrations/boardgamebuddy/042_write_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (finalize_session — POST /sessions/{code}/finalize)
+--   Purpose:    One-call wrap-up: open/expiry/host gates, overlays joiners'
+--               live per-round totals onto the host's player list (matched by
+--               user_id; guests keep their host-typed scores), calls
+--               bgb_log_play, marks the session finalized. Replaced a 10
+--               round-trip Python chain — the host's Save used to block on
+--               all of it. A failed write (game_not_found) leaves the session
+--               open so the host can retry.
 
 -- bgb_plays_page(p_target UUID, p_page INT DEFAULT 1, p_per_page INT DEFAULT 20,
 --                p_game UUID DEFAULT NULL, p_buddy UUID DEFAULT NULL,

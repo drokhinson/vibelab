@@ -13,7 +13,6 @@ from fastapi import Depends, Path, Query, HTTPException, UploadFile, File
 from db import get_supabase
 
 from . import router
-from .game_routes import play_denormalized_from_game
 from .models import (
     MessageResponse,
     PlayCountResponse,
@@ -23,6 +22,7 @@ from .models import (
     PlayFilterOptions,
     PlayLeaveResponse,
     PlayListResponse,
+    PlayPhotoAttach,
     PlayPhotoResponse,
     PlayPlayerResponse,
     PlayResponse,
@@ -30,6 +30,7 @@ from .models import (
 )
 from .dependencies import CurrentUser, get_current_user
 from .services import played_with_service
+from .services._helpers import raise_for_rpc_error
 
 logger = logging.getLogger(__name__)
 
@@ -334,65 +335,24 @@ async def log_play(
     body: PlayCreate,
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayResponse:
-    """Record a game play with players and winner."""
-    sb = get_supabase()
+    """Record a game play with players and winner.
 
-    # Verify game exists; also fetch its play_mode so we can inherit it
-    # when the request didn't override + image_url for the new play row's
-    # denormalized cache (migration 020).
-    game = (
-        sb.table("boardgamebuddy_games")
-        .select("id, name, thumbnail_url, image_url, play_mode")
-        .eq("id", body.game_id)
-        .execute()
-    )
-    if not game.data:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    game_row = game.data[0]
-    effective_mode = (
-        body.play_mode.value
-        if body.play_mode is not None
-        else (game_row.get("play_mode") or "competitive")
-    )
-
-    # Create play
-    play_result = (
-        sb.table("boardgamebuddy_plays")
-        .insert({
-            "user_id": user.user_id,
-            "game_id": body.game_id,
-            "played_at": body.played_at.isoformat(),
-            "notes": body.notes,
-            "photo_url": body.photo_url,
-            "play_mode": effective_mode,
-            **play_denormalized_from_game(game_row),
+    One round trip: bgb_log_play (migration 042) resolves the game, inserts
+    the play with its denormalized game columns, bulk-writes the player and
+    expansion rows plus the legacy buddies roster, and returns the
+    PlayResponse-shaped payload — replacing six sequential PostgREST calls.
+    """
+    data = (
+        get_supabase()
+        .rpc("bgb_log_play", {
+            "p_user": user.user_id,
+            "p_payload": body.model_dump(mode="json"),
         })
         .execute()
+        .data
     )
-    play = play_result.data[0]
-
-    players = _write_play_players(sb, play["id"], user.user_id, body.players)
-    _write_play_expansions(sb, play["id"], body.expansion_ids)
-
-    expansions = _fetch_play_expansions(sb, [play["id"]]).get(play["id"], [])
-
-    return PlayResponse(
-        id=play["id"],
-        game_id=play["game_id"],
-        game_name=game_row["name"],
-        game_thumbnail=game_row.get("thumbnail_url"),
-        played_at=play["played_at"],
-        notes=play.get("notes"),
-        players=players,
-        photo_url=play.get("photo_url"),
-        expansions=expansions,
-        created_at=play["created_at"],
-        play_mode=play.get("play_mode") or effective_mode,
-        logged_by_id=user.user_id,
-        logged_by_name=user.display_name,
-        is_own=True,
-    )
+    raise_for_rpc_error(data, "Log play")
+    return PlayResponse.model_validate(data)
 
 
 @router.get(
@@ -525,6 +485,42 @@ async def upload_play_photo(
         logger.warning("Play photo upload failed %s: %s", path, exc)
         raise HTTPException(status_code=502, detail="Upload failed")
     return PlayPhotoResponse(photo_url=sb.storage.from_(PLAYS_BUCKET).get_public_url(path))
+
+
+@router.patch(
+    "/plays/{play_id}/photo",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Attach a photo URL to a play (owner only)",
+)
+async def attach_play_photo(
+    body: PlayPhotoAttach,
+    play_id: str = Path(..., description="Play UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Set a play's photo_url without touching its players or expansions.
+
+    The log-play flow saves the play first and uploads the photo alongside
+    it, so all that's left is writing one column. Routing that through
+    PUT /plays/{id} cost twelve round trips and tore down and re-inserted
+    every player and expansion row; this is one.
+
+    Ownership is enforced by the WHERE clause rather than a prior SELECT —
+    PostgREST returns the updated rows, so an empty result means the play is
+    missing or belongs to someone else. Both are reported as 404 so the
+    endpoint doesn't confirm the existence of other users' plays.
+    """
+    res = (
+        get_supabase()
+        .table("boardgamebuddy_plays")
+        .update({"photo_url": body.photo_url})
+        .eq("id", play_id)
+        .eq("user_id", user.user_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Play not found")
+    return MessageResponse(message="Photo attached")
 
 
 @router.delete(

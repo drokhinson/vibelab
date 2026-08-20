@@ -15,12 +15,11 @@ the literal path wins over the slug.
 
 import uuid
 
-from fastapi import Body, Depends, HTTPException, Path
+from fastapi import Body, Depends, Path
 
 from db import get_supabase
 
 from . import router
-from .constants import PlaySessionStatus
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     JoinableSessionsResponse,
@@ -228,21 +227,15 @@ async def finalize_session(
     here: each authenticated player's `score` is overwritten by the sum of
     their live rounds. Guest players (no user_id) keep the host's locally-
     typed scores.
+
+    All of that — the open/expiry/host gates, the live-score overlay, the
+    play write and the finalized stamp — happens inside bgb_finalize_session
+    (migration 042), so this is one round trip rather than the ten it used
+    to take.
     """
-    sb = get_supabase()
-    session = session_service.get_session(sb, code)
-    if session.host_user_id != user.user_id:
-        raise HTTPException(status_code=403, detail="Only the host can finalize")
-
-    merged_players = session_service.merge_live_scores_into_players(
-        sb, session_id=session.id, players=body.players
+    return session_service.finalize_session(
+        get_supabase(),
+        host_user_id=user.user_id,
+        code=code,
+        payload=body.model_dump(mode="json"),
     )
-    merged_body = body.model_copy(update={"players": merged_players})
-
-    # Defer to play_routes.log_play for the write — keeps the player /
-    # expansion bookkeeping in one place. Local import dodges the circular
-    # import at module load.
-    from .play_routes import log_play  # noqa: WPS433
-    play = await log_play(merged_body, user)
-    session_service.mark_finalized(sb, session.id, play.id)
-    return play
