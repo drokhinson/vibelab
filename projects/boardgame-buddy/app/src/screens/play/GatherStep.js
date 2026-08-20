@@ -3,16 +3,19 @@
 // the cascade FooterBar.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, Share, StyleSheet, View } from 'react-native';
-import { ArrowUpRight, Dice6, Plus, Share2, UserPlus, WifiOff, X } from 'lucide-react-native';
+import { Image, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { ArrowUpRight, Dice6, Plus, Search, Share2, UserPlus, WifiOff, X } from 'lucide-react-native';
 import { COLORS, RADII, SPACING, gameAccent } from '../../theme';
 import { Button, Card, Input, Row, Text } from '../../ui';
 import UserBadge from '../../components/UserBadge';
 import GameFinder from '../../widgets/GameFinder';
 import ImportExpansionsSheet from '../../widgets/ImportExpansionsSheet';
-import { stripBaseGameName } from '../../domain/expansionName';
+import { matchesExpansionQuery, stripBaseGameName } from '../../domain/expansionName';
 import api from '../../api/client';
 import { useAppState } from '../../store/AppContext';
+
+// Past this many expansions the list gets a filter field above it.
+const EXPANSION_FILTER_THRESHOLD = 5;
 
 const MODES = [
   { key: 'competitive', label: 'Competitive' },
@@ -25,15 +28,24 @@ export default function GatherStep({ session, navigation }) {
   const { draft, lobby, mutate, pickGame, addPlayer, removePlayer } = session;
   const [playerInput, setPlayerInput] = useState('');
   const [expansions, setExpansions] = useState([]);
+  const [expansionQuery, setExpansionQuery] = useState('');
   const [pickError, setPickError] = useState('');
   const importRef = useRef(null);
 
   const game = draft?.game;
 
+  const visibleExpansions = useMemo(
+    () =>
+      expansions.filter((e) => matchesExpansionQuery(expansionQuery, stripBaseGameName(e.name, game?.name), e.name)),
+    [expansions, expansionQuery, game?.name],
+  );
+
   // Every expansion linked to this base game — not just the enabled ones.
   // The host picks which were in THIS play; a freshly imported one has to
   // show up here immediately.
   const loadExpansions = useCallback(async () => {
+    // A filter typed for the previous pick would silently hide everything.
+    setExpansionQuery('');
     if (!game?.id || game.is_expansion) {
       setExpansions([]);
       return;
@@ -196,36 +208,86 @@ export default function GatherStep({ session, navigation }) {
           way to attach one mid-setup. */}
       {game && !game.is_expansion ? (
         <>
-          <Row justify="space-between" style={styles.sectionLabel}>
-            <Text variant="label">Expansions in this play</Text>
-            <Button label="Import" icon={Plus} variant="outline" size="sm" onPress={() => importRef.current?.present()} />
-          </Row>
+          <Text variant="label" style={styles.sectionLabel}>
+            Expansions in this play
+          </Text>
+
           {expansions.length === 0 ? (
             <Text variant="caption">No expansions in BoardgameBuddy yet.</Text>
-          ) : null}
-          <Row gap="xs" wrap>
-            {expansions.map((exp) => {
-              const on = (draft.expansionIds || []).includes(exp.expansion_game_id);
-              return (
-                <Pressable
-                  key={exp.expansion_game_id}
-                  onPress={() =>
-                    mutate((d) => {
-                      d.expansionIds = on
-                        ? d.expansionIds.filter((id) => id !== exp.expansion_game_id)
-                        : [...(d.expansionIds || []), exp.expansion_game_id];
-                    })
-                  }
-                  style={[styles.expChip, on && { borderColor: exp.color || COLORS.accent, backgroundColor: (exp.color || COLORS.accent) + '22' }]}
+          ) : (
+            <>
+              {/* Past a handful, a filter beats scrolling — matched against
+                  both the shortened label and the stored name, so typing the
+                  base game's name still hits. */}
+              {expansions.length > EXPANSION_FILTER_THRESHOLD ? (
+                <Row gap="sm" style={styles.expFilterRow}>
+                  <Search size={15} color={COLORS.textMuted} />
+                  <Input
+                    placeholder="Filter expansions…"
+                    value={expansionQuery}
+                    onChangeText={setExpansionQuery}
+                    autoCorrect={false}
+                    style={{ flex: 1 }}
+                    inputStyle={styles.bareFilterInput}
+                  />
+                  {expansionQuery ? (
+                    <Pressable onPress={() => setExpansionQuery('')} hitSlop={8} style={styles.filterClear}>
+                      <X size={14} color={COLORS.textMuted} />
+                    </Pressable>
+                  ) : null}
+                </Row>
+              ) : null}
+
+              {visibleExpansions.length === 0 ? (
+                <Text variant="caption">No expansion matches “{expansionQuery.trim()}”.</Text>
+              ) : (
+                // Capped so a big expansion list can't push the rest of the
+                // cascade off screen; the cap leaves a sliver of the next row
+                // showing so it reads as scrollable.
+                <ScrollView
+                  style={styles.expScroll}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                 >
-                  {exp.color ? <View style={[styles.expDot, { backgroundColor: exp.color }]} /> : null}
-                  <Text variant="small" color={on ? COLORS.text : COLORS.textMuted}>
-                    {stripBaseGameName(exp.name, game.name)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </Row>
+                  <Row gap="xs" wrap>
+                    {visibleExpansions.map((exp) => {
+                      const on = (draft.expansionIds || []).includes(exp.expansion_game_id);
+                      return (
+                        <Pressable
+                          key={exp.expansion_game_id}
+                          onPress={() =>
+                            mutate((d) => {
+                              d.expansionIds = on
+                                ? d.expansionIds.filter((id) => id !== exp.expansion_game_id)
+                                : [...(d.expansionIds || []), exp.expansion_game_id];
+                            })
+                          }
+                          style={[styles.expChip, on && { borderColor: exp.color || COLORS.accent, backgroundColor: (exp.color || COLORS.accent) + '22' }]}
+                        >
+                          {exp.color ? <View style={[styles.expDot, { backgroundColor: exp.color }]} /> : null}
+                          <Text variant="small" color={on ? COLORS.text : COLORS.textMuted}>
+                            {stripBaseGameName(exp.name, game.name)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </Row>
+                </ScrollView>
+              )}
+            </>
+          )}
+
+          {/* Below the scroll box, so it stays reachable however far down
+              the list you are. */}
+          <Button
+            label="Import expansions"
+            icon={Plus}
+            variant="outline"
+            size="sm"
+            onPress={() => importRef.current?.present()}
+            style={{ alignSelf: 'flex-start', marginTop: SPACING.xs }}
+          />
           <ImportExpansionsSheet
             ref={importRef}
             gameId={game.id}
@@ -317,6 +379,18 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   modePillOn: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  expFilterRow: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADII.md,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: SPACING.xs,
+  },
+  bareFilterInput: { backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 0, minHeight: 38 },
+  filterClear: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  // ~4 chip rows plus a sliver of the next, so the box reads as scrollable.
+  expScroll: { maxHeight: 168 },
   expChip: {
     flexDirection: 'row',
     alignItems: 'center',
