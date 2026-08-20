@@ -2,6 +2,6 @@
 -- gear (reads as app-settings) onto a box, which evokes setting the game up
 -- from the box. Idempotent: re-running just re-sets the same value.
 
-UPDATE public.boardgamebuddy_chunk_types
+UPDATE public.boardgamebuddy_chapter_types
 SET icon = 'box'
 WHERE id = 'setup';
