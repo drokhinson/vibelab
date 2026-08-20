@@ -20,6 +20,11 @@ from .bgg_client import (
     normalize_image_url,
     parse_bgg_xml,
 )
+from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
+from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
+from .models import GameDetail, GameListResponse, GameSummary, RefreshImagesResponse, RulebookUrlUpdate
+from .services import game_service
+from .services._helpers import game_select_clause
 
 
 # Cache namespaces for game-side reads. Both invalidate on admin writes
@@ -53,11 +58,6 @@ def _invalidate_game_caches(bgg_id: Optional[int] = None) -> None:
     cache.clear(_CACHE_GAME)
     cache.clear(_CACHE_MECHANICS)
     invalidate_bgg_thing_cache()
-from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
-from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
-from .models import GameDetail, GameListResponse, GameSummary, RefreshImagesResponse, RulebookUrlUpdate
-from .services import game_service
-from .services._helpers import game_select_clause
 
 logger = logging.getLogger(__name__)
 
@@ -289,8 +289,6 @@ def _attach_expansion_counts(sb: Client, games: list[GameSummary]) -> None:
             g.expansion_count = counts.get(g.bgg_id, 0)
 
 
-
-
 @router.get(
     "/games/recently-played",
     response_model=list[GameSummary],
@@ -303,8 +301,6 @@ async def recently_played_games(
 ) -> list[GameSummary]:
     """Distinct games the caller has plays for, sorted by latest played_at DESC."""
     return game_service.recently_played(get_supabase(), user.user_id, limit)
-
-
 
 
 @router.get(
@@ -589,10 +585,6 @@ def collection_denormalized_from_game(game: dict) -> dict:
     }
 
 
-
-
-
-
 def _sync_denormalized_game_fields(sb: Client, game_id: str) -> None:
     """Propagate a games-row mutation to every plays / collections row that
     caches its fields. Called from the admin paths that mutate games
@@ -612,8 +604,6 @@ def _sync_denormalized_game_fields(sb: Client, game_id: str) -> None:
     collection_payload = collection_denormalized_from_game(game)
     sb.table("boardgamebuddy_plays").update(play_payload).eq("game_id", game_id).execute()
     sb.table("boardgamebuddy_collections").update(collection_payload).eq("game_id", game_id).execute()
-
-
 
 
 async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> None:
@@ -640,8 +630,6 @@ async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Non
     }).eq("id", game_id).execute()
     _sync_denormalized_game_fields(sb, game_id)
     _invalidate_game_caches(bgg_id=bgg_id)
-
-
 
 
 @router.get(
