@@ -67,7 +67,15 @@
     </header>
 
     <!-- ── Views ────────────────────────────────────────────────────────────── -->
-    <main data-view="splash" class="flex-1 px-4 py-4 flex flex-col items-center justify-center min-h-[60vh]"></main>
+    <!-- The loader mark is inlined rather than left to SplashView.render() so
+         the browser paints it as soon as CSS is ready. Every script below is
+         parser-blocking, so a render() that only runs on DOMContentLoaded
+         leaves the user on a blank page until ~24k lines of JS have downloaded
+         and executed. Keep this markup in sync with views/splash-view.js. -->
+    <main data-view="splash" class="flex-1 px-4 py-4 flex flex-col items-center justify-center min-h-[60vh]">
+      <img src="assets/illustrations/bgb-loading.svg" alt="Loading"
+           style="width:176px;height:176px;" class="rounded-2xl" />
+    </main>
     <main data-view="auth" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="feed" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="log-play" class="hidden flex-1 px-4 py-4"></main>

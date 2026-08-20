@@ -9,7 +9,13 @@
   const NS = "feed";
   const FIRST_KEY = "first";
   const FRESH_TTL_MS = 60 * 1000;        // tight: feed should feel live
-  const STALE_TTL_MS = 10 * 60 * 1000;   // serve while we refresh
+  // Long stale window on purpose: this is what lets a refresh paint the
+  // last-seen feed immediately rather than sitting on a skeleton while the
+  // network answers. Every read past the fresh window still fires a background
+  // refresh, and any play write deletes the entry outright (_invalidatePlayDeps
+  // in domain/play.js), so the only thing this buys is a stale-but-instant
+  // first frame. Keep in sync with TTLS.feedFirst in domain/bootstrap.js.
+  const STALE_TTL_MS = 24 * 60 * 60 * 1000;
 
   class Feed {
     static async fetchPage({ cursor } = {}) {

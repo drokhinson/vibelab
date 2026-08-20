@@ -2,6 +2,26 @@
 // The legacy apiFetch / showView / trackEvent / state-coupled helpers have
 // moved to the domain layer (api.js, view.js) and to the individual views.
 
+// Warm the TLS connections to the two origins every boot hits: the API
+// (Railway) and Supabase auth. This file is the second script in the document,
+// so the handshakes overlap with the ~50 script fetches still to come instead
+// of starting cold when the first request finally fires. Lives here rather
+// than as static <link>s in index.html because both origins come from
+// APP_CONFIG, which build.sh generates per environment.
+(function preconnectApiOrigins() {
+  const cfg = window.APP_CONFIG || {};
+  for (const url of [cfg.apiBase, cfg.supabaseUrl]) {
+    if (!url) continue;
+    let origin;
+    try { origin = new URL(url).origin; } catch (_) { continue; }
+    const link = document.createElement("link");
+    link.rel = "preconnect";
+    link.href = origin;
+    link.crossOrigin = "anonymous";
+    document.head.appendChild(link);
+  }
+})();
+
 function bggImg(url) {
   if (!url) return null;
   if (url.startsWith("//")) return "https:" + url;
