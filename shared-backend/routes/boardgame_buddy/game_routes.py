@@ -57,6 +57,7 @@ from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
 from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
 from .models import GameDetail, GameListResponse, GameSummary, RefreshImagesResponse, RulebookUrlUpdate
 from .services import game_service
+from .services._helpers import game_select_clause
 
 logger = logging.getLogger(__name__)
 
@@ -190,12 +191,7 @@ async def list_games(
             return GameListResponse(games=[], total=0, page=page, per_page=per_page)
         rows = (
             sb.table("boardgamebuddy_games")
-            .select(
-                "id, bgg_id, name, year_published, min_players, max_players, "
-                "playing_time, thumbnail_url, image_url, theme_color, "
-                "is_expansion, base_game_bgg_id, expansion_color, rulebook_url, "
-                "play_mode"
-            )
+            .select(game_select_clause())
             .in_("bgg_id", ids)
             .execute()
             .data
@@ -222,11 +218,7 @@ async def list_games(
             return GameListResponse(games=[], total=0, page=page, per_page=per_page)
 
     query = sb.table("boardgamebuddy_games").select(
-        "id, bgg_id, name, year_published, min_players, max_players, "
-        "playing_time, thumbnail_url, image_url, theme_color, "
-        "is_expansion, base_game_bgg_id, expansion_color, rulebook_url, "
-        "play_mode",
-        count="exact",
+        game_select_clause(), count="exact"
     )
 
     if owned_ids is not None:
@@ -622,11 +614,6 @@ def _sync_denormalized_game_fields(sb: Client, game_id: str) -> None:
     sb.table("boardgamebuddy_collections").update(collection_payload).eq("game_id", game_id).execute()
 
 
-_GAME_SUMMARY_FIELDS = (
-    "id, bgg_id, name, year_published, min_players, max_players, "
-    "playing_time, thumbnail_url, image_url, theme_color, "
-    "is_expansion, base_game_bgg_id, expansion_color, rulebook_url"
-)
 
 
 async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> None:
@@ -670,7 +657,7 @@ async def list_games_missing_images(
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_games")
-        .select(_GAME_SUMMARY_FIELDS)
+        .select(game_select_clause())
         .or_("image_url.is.null,thumbnail_url.is.null")
         .order("name")
         .execute()
@@ -707,7 +694,7 @@ async def refresh_single_game_images(
 
     refreshed = (
         sb.table("boardgamebuddy_games")
-        .select(_GAME_SUMMARY_FIELDS)
+        .select(game_select_clause())
         .eq("id", game_id)
         .execute()
     )
