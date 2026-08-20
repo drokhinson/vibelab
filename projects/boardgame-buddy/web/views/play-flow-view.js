@@ -1793,30 +1793,94 @@
 
     // ── Save ───────────────────────────────────────────────────────────────
 
-    async _save() {
+    // Card first, write behind it. The wrap-up splash goes up in the same
+    // frame as the tap and carries the save state on its primary CTA
+    // (spinner → "Go to feed", or "Retry" if the write failed), so the host
+    // never watches a disabled button wait on a round-trip.
+    _save() {
       if (!this._ps.gameId) {
         this._error = "Pick a game first.";
         this.render();
         return;
       }
+      if (this._saving) return;
+
+      // Snapshot everything the write and the next round need BEFORE the
+      // draft is cleared (on success) or recycled (Another round?), and
+      // before _startAnotherRound nulls out _ps.code / this._lobby.
+      const snap = {
+        payload: this._ps.toPlayCreate(),
+        lobbyCode: (this._lobby && this._lobby.code) || null,
+        photoFile: this._ps.photoFile || null,
+      };
+      const game = this._ps.gameSnapshot || {};
+      const winner = this._ps.players.find((p) => p.is_winner);
+      const seed = this._nextRoundSeed();
+
       this._saving = true;
+      this._error = null;
       this.render();
-      // Save-then-photo. Persist the play first so a flaky upload can't
-      // strand the user with no record of the game. Photo upload + the
-      // follow-up PUT to attach it are best-effort; if either fails the
-      // play stays saved and we warn before the wrap-up splash.
+
+      if (!window.PolaroidPopup) {
+        // No splash available — fall back to the old blocking shape.
+        this._runSave(snap).then(() => window.router.go("feed"));
+        return;
+      }
+      // Same wrap-up splash non-host joiners get, plus the host-only save
+      // state + "Another round?" CTA. Default dismiss handler invalidates
+      // the feed cache and routes to /feed.
+      window.PolaroidPopup.show({
+        headline: "Well played!",
+        gameName: game.name || "Game over",
+        gameThumbnail: game.thumbnail_url || game.image_url || null,
+        winnerName: winner ? winner.name : null,
+        saving: true,
+        onAnotherRound: () => this._startAnotherRound(seed),
+        onRetry: () => this._runSave(snap),
+      });
+      // Deliberately not awaited — the card is already up.
+      this._runSave(snap);
+    }
+
+    /**
+     * Persist the play behind the wrap-up card. Save-then-photo: the play
+     * lands first so a flaky upload can't strand the user with no record of
+     * the game. Photo upload + the follow-up PUT to attach it are
+     * best-effort; if either fails the play stays saved and the card carries
+     * a warning line.
+     *
+     * On failure the draft is left completely untouched, so "Retry" can
+     * re-fire with the same snapshot and closing the card drops the host
+     * back onto an intact Settle Up screen.
+     *
+     * @param {{payload: Object, lobbyCode: string|null, photoFile: File|null}} snap
+     */
+    async _runSave(snap) {
+      this._saving = true;
+      const popup = window.PolaroidPopup;
+      if (popup) popup.update({ saving: true, error: null });
+
       let saved;
       try {
-        const payload = this._ps.toPlayCreate();
-        if (this._lobby && this._lobby.code) {
-          saved = await window.PlaySession.finalizeLobby(this._lobby.code, payload);
-        } else {
-          saved = await window.Play.create(payload);
-        }
+        saved = snap.lobbyCode
+          ? await window.PlaySession.finalizeLobby(snap.lobbyCode, snap.payload)
+          : await window.Play.create(snap.payload);
       } catch (e) {
-        this._error = e.message || "Failed to save";
         this._saving = false;
-        this.render();
+        const msg = e.message || "Failed to save";
+        if (popup) {
+          // Closing a failed card must NOT take the default feed redirect —
+          // the draft is still intact behind it, so drop the host back onto
+          // Settle Up with the error surfaced there instead.
+          popup.update({
+            saving: false,
+            error: msg,
+            onDismiss: () => { this._error = msg; this.render(); },
+          });
+        } else {
+          this._error = msg;
+          this.render();
+        }
         return;
       }
 
@@ -1826,18 +1890,17 @@
       // are owned by the current user, so the attach call succeeds.
       // Revisit if joiners ever finalize.
       let photoUploadFailed = false;
-      if (this._ps.photoFile) {
+      if (snap.photoFile) {
         if (!savedId) {
           photoUploadFailed = true;
         } else {
           try {
             const fd = new FormData();
-            fd.append("file", this._ps.photoFile);
+            fd.append("file", snap.photoFile);
             const resp = await window.api.upload("/plays/photo", fd);
             const uploadedUrl = resp && resp.photo_url;
             if (uploadedUrl) {
-              const createPayload = this._ps.toPlayCreate();
-              const { game_id, ...rest } = createPayload;
+              const { game_id, ...rest } = snap.payload;
               await window.Play.update(savedId, { ...rest, photo_url: uploadedUrl });
             } else {
               photoUploadFailed = true;
@@ -1848,46 +1911,149 @@
         }
       }
 
-      try {
-        const game = this._ps.gameSnapshot || {};
-        const winner = this._ps.players.find((p) => p.is_winner);
-        const popupOpts = {
-          headline: "Well played!",
-          gameName: game.name || "Game over",
-          gameThumbnail: game.thumbnail_url || game.image_url || null,
-          winnerName: winner ? winner.name : null,
+      this._saving = false;
+      // The play is on the server — the draft has done its job. Note we do
+      // NOT render() after this: the card covers the view, and every exit
+      // from it (Go to feed, X, Another round?) paints on its own.
+      this._ps.clear();
+      window.store.set("activePlay", null);
+      window.store.invalidate("feed");
+      // Drop the host-flow caches so the next gather screen sees the new
+      // ghost names + updated played-with counts + the just-played game at
+      // the top of the recents dropdown. Re-warm in the background so the
+      // user returns to instant data without paying for a round-trip on
+      // the next host tap.
+      if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
+      if (window.Game && window.Game.invalidateRecent) window.Game.invalidateRecent();
+      if (window.Buddy && window.Buddy.allBuddies) window.Buddy.allBuddies().catch(() => {});
+      if (window.Game && window.Game.recentlyPlayed) window.Game.recentlyPlayed(6).catch(() => {});
+
+      // The photo warning rides on the card rather than in a PolaroidPopup
+      // .alert() — the popup is a singleton, so an alert would dismiss the
+      // very card it is warning about.
+      if (popup) {
+        popup.update({
+          saving: false,
+          error: null,
+          // Clears any onDismiss a prior failed attempt installed, so X /
+          // backdrop go back to the default feed redirect.
+          onDismiss: null,
           playId: savedId,
-        };
-        this._ps.clear();
-        window.store.set("activePlay", null);
-        window.store.invalidate("feed");
-        // Drop the host-flow caches so the next gather screen sees the new
-        // ghost names + updated played-with counts + the just-played game at
-        // the top of the recents dropdown. Re-warm in the background so the
-        // user returns to instant data without paying for a round-trip on
-        // the next host tap.
-        if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
-        if (window.Game && window.Game.invalidateRecent) window.Game.invalidateRecent();
-        if (window.Buddy && window.Buddy.allBuddies) window.Buddy.allBuddies().catch(() => {});
-        if (window.Game && window.Game.recentlyPlayed) window.Game.recentlyPlayed(6).catch(() => {});
-        // Surface the warning before the wrap-up popup so the user can't miss it.
-        if (photoUploadFailed && window.PolaroidPopup && window.PolaroidPopup.alert) {
-          await window.PolaroidPopup.alert({
-            title: "Photo couldn't be uploaded",
-            body: "Your play was saved without the photo. You can add it later from the play card.",
-          });
-        }
-        // Same wrap-up splash non-host joiners get. Default dismiss handler
-        // invalidates the feed cache and routes to /feed.
-        if (window.PolaroidPopup) {
-          window.PolaroidPopup.show(popupOpts);
-        } else {
-          window.router.go("feed");
-        }
-      } finally {
-        this._saving = false;
-        this.render();
+          warning: photoUploadFailed
+            ? "Saved without the photo — you can add it later from the play card."
+            : null,
+        });
       }
+    }
+
+    // ── Another round ──────────────────────────────────────────────────────
+
+    /**
+     * Plain snapshot of everything that carries into a follow-up game with
+     * the same group. Deliberately drops per-play results (`is_winner`,
+     * `score`, `roundScores`) and `participant_id` — the latter belongs to
+     * the finished session's lobby rows, and reusing it would make
+     * _removePlayer issue a DELETE against the wrong session.
+     */
+    _nextRoundSeed() {
+      const ps = this._ps;
+      return {
+        gameId: ps.gameId,
+        gameSnapshot: ps.gameSnapshot,
+        expansionIds: [...(ps.expansionIds || [])],
+        playMode: ps.playMode,
+        players: (ps.players || []).map((p) => ({
+          name: p.name,
+          is_winner: false,
+          score: null,
+          user_id: p.user_id || null,
+          avatar: p.avatar || null,
+          team: p.team || "",
+          initials: p.initials || null,
+        })),
+      };
+    }
+
+    /**
+     * Start a fresh session pre-seeded with the same game, expansions, play
+     * mode and roster, landing on Gather so the host can still tweak the
+     * line-up (and joiners get a window to re-join under the new code).
+     *
+     * Restarts in place rather than via router.go("play-flow"): the host is
+     * already mounted on this view, and View.mount() short-circuits on
+     * _mounted, so onMount would never re-run.
+     */
+    async _startAnotherRound(seed) {
+      if (window.PolaroidPopup) window.PolaroidPopup.dismiss();
+
+      // Tear down the finished session's live wiring — mirrors onUnmount.
+      this._stopLobbyPoll();
+      if (this._liveOff) { try { this._liveOff(); } catch (_) {} }
+      this._liveOff = null;
+      if (this._liveScores) {
+        const live = this._liveScores;
+        Promise.resolve().then(() => live.stop()).catch(() => {});
+      }
+      this._liveScores = null;
+      this._lobby = null;
+      this._prefetchedLobby = null;
+
+      // Reset the async guards so an in-flight call from the finished
+      // session can't reconcile into the new one.
+      this._phaseSeq++;
+      this._pendingPhase = 0;
+      this._pendingDeletes = 0;
+      this._saving = false;
+      this._error = null;
+      this._expansionsOpen = false;
+
+      const ps = new window.PlaySession({
+        gameId: seed.gameId,
+        gameSnapshot: seed.gameSnapshot,
+        expansionIds: seed.expansionIds,
+        playMode: seed.playMode,
+        players: seed.players.map((p) => ({ ...p })),
+        phase: "gather",
+      });
+      this._ps = ps;
+      // Safety net for a roster the host had emptied down to nothing.
+      this._ensureSelfIncluded();
+      ps.persist();
+      window.store.set("activePlay", ps);
+
+      // Paint the prefilled Gather screen before any network work.
+      this.render();
+      this._scrollToCurrentPhase();
+
+      // _ps.code is null, so this takes the create branch: POST /sessions
+      // with the game already attached, then replaces the URL with the new
+      // /play/{code}.
+      await this._ensureLobbyOpen();
+      await this._syncRosterToLobby();
+      this.render();
+      this._startLobbyPoll();
+      await this._startLiveScores();
+      if (this._guideWidget) this._guideWidget.refresh();
+    }
+
+    /**
+     * Push the carried-over roster into a freshly opened lobby. POST
+     * /sessions seats only the host, so everyone else needs an explicit
+     * participant row before joiners can see them. Parallel — rosters are a
+     * handful of rows — and each push already toasts + rolls the local row
+     * back on failure.
+     */
+    async _syncRosterToLobby() {
+      if (!this._lobby || !this._lobby.code) return;
+      const me = window.store.get("user");
+      const meId = me ? me.id : null;
+      const pending = (this._ps.players || []).filter(
+        (p) => !p.participant_id && !(meId && p.user_id === meId)
+      );
+      if (pending.length === 0) return;
+      await Promise.all(
+        pending.map((p) => this._pushParticipantToBackend(p.name, p.user_id))
+      );
     }
   }
 
