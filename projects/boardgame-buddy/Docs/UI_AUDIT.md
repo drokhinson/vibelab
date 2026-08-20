@@ -2,7 +2,14 @@
 
 A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code as `path:line` so each finding can be jumped to and verified. The scope is the web frontend only; the React Native app under `app/` is out of scope.
 
-> **Status:** Original audit produced 2026-05-23. **Cleanup pass applied 2026-05-23**: all confirmed-dead JS and CSS deleted; global header avatar migrated to `BgbBadge.render`. See "Cleanup log" at the bottom for the exact set of changes.
+> **Status:** Original audit produced 2026-05-23. **First cleanup pass applied
+> 2026-05-23**: all confirmed-dead JS and CSS deleted; global header avatar
+> migrated to `BgbBadge.render`. **Second cleanup pass applied 2026-08-20** —
+> see §9 at the bottom.
+>
+> ⚠️ Every `file:line` citation in §§2-8 dates from 2026-05-23 and has drifted.
+> Treat the *claims* as current only where §9 confirms them; re-grep before
+> acting on any line number.
 
 ---
 
@@ -442,3 +449,67 @@ wc -l projects/boardgame-buddy/web/styles.css   # → 7145
 - `renderStatusTag` option-shape inconsistency (`compact: true` vs `size: "xs"`). Trivial refactor; out of scope here.
 - `.plays-list__row` typography mismatch with the polaroid family. Design decision required.
 - `PlayDetailPopup` is its own modal rather than a `PolaroidPopup`. Larger refactor.
+
+
+---
+
+## 9. Second cleanup pass — 2026-08-20
+
+A repo-wide dead-code sweep across all three tiers. Frontend portion:
+
+**Deleted modules** (globals with zero readers): `domain/status.js`
+(`window.Status` — its ICON/LABEL/CYCLE maps are independently re-declared in
+`ui/status-tag.js`, which is what actually renders status pills) and
+`domain/search.js` (`window.Search` — views call `window.api.get("/search")`
+directly). Both `<script>` tags removed from `index.html`.
+
+**Deleted globals**: `bggImg`, `playerRange`, `formatTime`, the `window.showView`
+legacy shim, and the `window.Router` / `window.StatusPicker` /
+`window.renderScoringHead` exports (each class or function is used only via its
+singleton or internally in the same file). `MAX_PHOTO_BYTES` was flagged by the
+audit tooling but is live at `helpers.js:200` and was kept.
+
+**Deleted statics**: `Bgg.processPending`, `Collection.updateStatus`,
+`Collection.statusFor`, `Game.fromRaw`, `Game.fetch`, `PlaySession.abandonLobby`,
+`Stats.format`.
+
+**Dead CSS**: `styles.css` went 7988 → 6554 lines (~18%). Removal was done per
+*selector*, not per rule, so shared rules kept their live selectors. Dynamically
+built class names were held back explicitly: `.status-tag--{status}`,
+`.user-badge--{size}`, `.bgg-log__step--{state}`, `.play-card--strip is-{orient}`.
+Also removed a duplicate `@keyframes fadeIn` and six unread custom properties.
+
+**Helper consolidation**: `helpers.js` had no HTML escaper, so 26 modules each
+carried their own copy plus 18 `escapeAttr` aliases — 49 definitions, now one.
+This also fixed a latent bug: five local `jsStr` shadows had drifted from the
+canonical version, three of them omitting the `\n` escape, so a newline in a
+value interpolated into an inline `onclick` broke the handler in those modules.
+
+**A real bug, fixed**: `Collection.removeByGame` called
+`DELETE /collection/by-game/{id}`, a route that does not exist. Clearing a game's
+status from the tile picker always 404'd. It now calls `DELETE /collection/{id}`,
+which already keys on `(user_id, game_id)`.
+
+### Still open after this pass
+
+The consolidation work in §6 was deliberately left alone — it carries
+visual-regression risk across many screens and deserves its own change:
+
+- **Six bespoke game tiles** (unchanged from §6 — all six were re-verified as
+  live in this pass): `.collection-tile`, `.hot-game-tile`, `.preview-card__cover`,
+  `.game-detail__polaroid`, `.plays-list__thumb`, `.game-polaroid`.
+  `renderGamePolaroid` (`ui/game-card.js`) is used exactly once, by the Gather
+  grid. Two of the six are outright copy-paste: `.collection-tile` is duplicated
+  between `views/collection-view.js` and `views/wishlist-view.js`, and
+  `.hot-game-tile` is duplicated *within* `views/feed-view.js` at two call sites.
+  The native tier is the healthier model — `components/GameTile.js` is one
+  component used everywhere. Fold the web side onto a single
+  `renderGameTile(game, { variant })`.
+- **`renderStatusTag` still takes three option shapes** (`{size:"xs"}`,
+  `{size:"lg", addLabel}`, `{compact:true}`), two of which produce the same
+  visual outcome. Collapse to a single `size` scale.
+- **`.plays-list__row` still sidesteps the polaroid family** — same record as the
+  feed's play cards, different idiom and different font. Decide whether the
+  chronological log should render through `renderPlayCard`.
+- **Two affordances for one destination**: `PlayDetailPopup` opens from a
+  maximize button on a play card, but from a full-row tap in the plays list.
