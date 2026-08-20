@@ -12,6 +12,12 @@
 // — the backend merges live scoring rows into the play's PlayerEntry list.
 
 (function () {
+  // Above this many expansions the Gather picker grows a filter field. Its
+  // list is capped at the same number of visible rows (see
+  // .cascade-exp-scroll) so a game with dozens of expansions can't push the
+  // rest of the Gather cascade off screen.
+  const EXPANSION_FILTER_THRESHOLD = 5;
+
   class PlayFlowView extends window.View {
     constructor() {
       super("play-flow");
@@ -23,6 +29,7 @@
       this._expansions = [];
       this._expansionsLoadedFor = null;
       this._expansionsOpen = false;
+      this._expansionQuery = "";
       this._guideWidget = null;
       this._liveScores = null;
       this._liveOff = null;
@@ -1413,6 +1420,9 @@
         return;
       }
       if (this._expansionsLoadedFor === gameId) return;
+      // A different game means a different list — a filter typed for the
+      // previous pick would silently hide everything.
+      this._expansionQuery = "";
       const snap = this._ps.gameSnapshot;
       if (snap && snap.is_expansion) {
         this._expansions = [];
@@ -1463,13 +1473,11 @@
       const open = !!this._expansionsOpen;
       const chevron = open ? "chevron-down" : "chevron-right";
       const selected = (this._ps.expansionIds || []).length;
-      const importRow = `
-        <li class="cascade-exp-import">
-          <button type="button" class="btn btn-sm expansion-import-btn"
-                  onclick="window.playFlowView._openImportExpansions()">
-            <i data-lucide="plus" class="w-4 h-4"></i> Import expansions
-          </button>
-        </li>`;
+      const baseName = (snap && snap.name) || "";
+      // Carcassonne alone has dozens. Past the threshold the list caps at
+      // five visible rows and scrolls, with a filter above it; Import sits
+      // below the scroll box so it never drifts out of reach mid-list.
+      const showFilter = list.length > EXPANSION_FILTER_THRESHOLD;
       return `
         <section class="cascade-card cascade-card--expansions">
           <button class="collapsible-header" aria-expanded="${open}"
@@ -1481,15 +1489,90 @@
             <i data-lucide="${chevron}" class="w-4 h-4 collapsible-header__chev"></i>
           </button>
           ${open ? `
-            <ul class="expansion-list cascade-exp-list">
-              ${list.length
-                ? list.map((e) => this._renderExpansionPickerRow(e, (snap && snap.name) || "")).join("")
-                : `<li class="cascade-card__hint">No expansions in BoardgameBuddy yet.</li>`}
-              ${importRow}
-            </ul>
+            ${showFilter ? this._renderExpansionFilter() : ""}
+            <div class="cascade-exp-scroll">
+              <ul class="expansion-list cascade-exp-list" id="cascade-exp-list">
+                ${this._renderExpansionRows(list, baseName)}
+              </ul>
+            </div>
+            <div class="cascade-exp-actions">
+              <button type="button" class="btn btn-sm expansion-import-btn"
+                      onclick="window.playFlowView._openImportExpansions()">
+                <i data-lucide="plus" class="w-4 h-4"></i> Import expansions
+              </button>
+            </div>
           ` : ""}
         </section>
       `;
+    }
+
+    _renderExpansionFilter() {
+      const q = this._expansionQuery || "";
+      return `
+        <div class="game-finder cascade-exp-filter">
+          <i data-lucide="search" class="w-4 h-4 game-finder__icon"></i>
+          <input type="text" id="cascade-exp-filter-input"
+                 class="input input-bordered game-finder__input cascade-exp-filter__input"
+                 placeholder="Filter expansions…" aria-label="Filter expansions by name"
+                 value="${escapeAttr(q)}"
+                 autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+                 oninput="window.playFlowView._onExpansionFilterInput(this.value)" />
+          <button type="button" class="field-clear-btn" aria-label="Clear filter" ${q ? "" : "hidden"}
+                  onclick="window.playFlowView._clearExpansionFilter()">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `;
+    }
+
+    /** Rows for the current filter, or the right hint when there are none. */
+    _renderExpansionRows(list, baseName) {
+      if (!list.length) {
+        return `<li class="cascade-card__hint">No expansions in BoardgameBuddy yet.</li>`;
+      }
+      const q = (this._expansionQuery || "").trim();
+      const visible = q
+        ? list.filter((e) => this._expansionMatches(e, q, baseName))
+        : list;
+      if (!visible.length) {
+        return `<li class="cascade-card__hint">No expansion matches “${escape(q)}”.</li>`;
+      }
+      return visible.map((e) => this._renderExpansionPickerRow(e, baseName)).join("");
+    }
+
+    /** Match the displayed (base-name-stripped) label or the stored full name,
+     *  so typing the base game's name still hits — same rule the import popup
+     *  uses for its own filter. */
+    _expansionMatches(e, q, baseName) {
+      const needle = q.toLowerCase();
+      const full = String(e.name || "");
+      return stripBaseGameName(full, baseName).toLowerCase().includes(needle)
+        || full.toLowerCase().includes(needle);
+    }
+
+    // Filtering is local to the already-loaded list, so this patches just the
+    // row host — a full render() would rebuild the input and drop focus and
+    // the caret mid-keystroke.
+    _onExpansionFilterInput(value) {
+      this._expansionQuery = value || "";
+      const host = document.getElementById("cascade-exp-list");
+      if (host) {
+        const snap = this._ps.gameSnapshot;
+        host.innerHTML = this._renderExpansionRows(
+          this._expansions || [], (snap && snap.name) || "",
+        );
+        this.refreshIcons(host);
+      }
+      const clear = document.querySelector(".cascade-exp-filter .field-clear-btn");
+      if (clear) clear.hidden = !this._expansionQuery;
+    }
+
+    _clearExpansionFilter() {
+      const input = /** @type {HTMLInputElement|null} */ (
+        document.getElementById("cascade-exp-filter-input")
+      );
+      if (input) { input.value = ""; input.focus(); }
+      this._onExpansionFilterInput("");
     }
 
     _openImportExpansions() {

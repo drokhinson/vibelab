@@ -156,7 +156,7 @@
     if (!root) return;
     const host = root.querySelector(".import-exp-search");
     if (host) host.hidden = _candidates.length === 0;
-    const clear = root.querySelector(".import-exp-search__clear");
+    const clear = root.querySelector(".import-exp-search .field-clear-btn");
     if (clear) clear.hidden = !_query;
   }
 
@@ -294,7 +294,7 @@
           <input type="text" class="input input-bordered game-finder__input import-exp-search__input"
                  placeholder="Filter expansions…" aria-label="Filter expansions by name"
                  autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
-          <button type="button" class="import-exp-search__clear"
+          <button type="button" class="field-clear-btn"
                   data-exp-action="clear-filter" aria-label="Clear filter" hidden>
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
