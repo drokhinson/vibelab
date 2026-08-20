@@ -124,7 +124,7 @@
       let titleHtml;
       if (other && p && p.display_name) {
         const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm" });
-        titleHtml = `${badge}<span class="spoke-head__title-text">${escape(p.display_name)}'s plays</span>`;
+        titleHtml = `${badge}<span class="spoke-head__title-text">${escapeHtml(p.display_name)}'s plays</span>`;
       } else {
         titleHtml = `<span class="spoke-head__title-text">Recent plays</span>`;
       }
@@ -159,7 +159,7 @@
 
     _renderBody() {
       if (this._error) {
-        return `<div class="text-error text-sm">${escape(this._error)}</div>`;
+        return `<div class="text-error text-sm">${escapeHtml(this._error)}</div>`;
       }
       if (!this._loaded) {
         return window.buddyLoader({ size: 88 });
@@ -169,7 +169,7 @@
       }
       const groups = groupPlays(this._plays);
       return groups.map((grp) => `
-        <h3 class="plays-day-divider font-display">${escape(grp.label)}</h3>
+        <h3 class="plays-day-divider font-display">${escapeHtml(grp.label)}</h3>
         <ul class="plays-list">
           ${grp.items.map((p) => this._renderRow(p)).join("")}
         </ul>
@@ -179,7 +179,7 @@
     _renderRow(p) {
       const me = window.store.get("user");
       const winners = (p.players || []).filter((pl) => pl.is_winner);
-      const winnerLabel = winners.map((w) => escape(w.name)).join(", ");
+      const winnerLabel = winners.map((w) => escapeHtml(w.name)).join(", ");
       const playerCount = (p.players || []).length;
       const youWon = !this._isOther() && winners.some((w) =>
         (w.user_id && me && w.user_id === me.id) ||
@@ -204,7 +204,7 @@
           <div class="plays-list__body">
             <div class="plays-list__top">
               <div class="plays-list__game">
-                ${escape(p.game_name)}
+                ${escapeHtml(p.game_name)}
                 ${youWon ? `<span class="plays-list__won-tag"><i data-lucide="trophy" class="w-3 h-3"></i> Won</span>` : ""}
               </div>
               <div class="plays-list__date">${formatDate(p.played_at)}</div>
@@ -289,13 +289,6 @@
     x.setDate(x.getDate() - offset);
     return x;
   }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
 
   window.PlaysView = PlaysView;
 })();

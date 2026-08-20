@@ -134,7 +134,7 @@
           <button class="play-detail-popup__close" aria-label="Close">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
-          <div class="play-detail-popup__error">${escape(state.error)}</div>
+          <div class="play-detail-popup__error">${escapeHtml(state.error)}</div>
         </div>
       `;
     }
@@ -255,7 +255,7 @@
                     title="${escapeAttr(e.name || "")}"
                     style="--exp-color:${e.color || "#C9922A"}">
                   <span class="play-detail__expansion-dot"></span>
-                  ${escape(stripBaseGameName(e.name, p.game_name))}
+                  ${escapeHtml(stripBaseGameName(e.name, p.game_name))}
                 </li>
               `).join("")}
             </ul>
@@ -268,7 +268,7 @@
             <h3 class="play-detail__section-title">
               <i data-lucide="sticky-note" class="w-4 h-4"></i> Notes
             </h3>
-            <p class="play-detail__notes">${escape(p.notes)}</p>
+            <p class="play-detail__notes">${escapeHtml(p.notes)}</p>
           </section>` : ""}
 
         <section class="play-detail__section">
@@ -289,7 +289,7 @@
                         isMe: !!(me && pl.user_id === me.id),
                         extraClass: "play-detail__player-badge",
                       }) : ""}
-                      <span class="play-detail__player-text">${escape(pl.name)}</span>
+                      <span class="play-detail__player-text">${escapeHtml(pl.name)}</span>
                       ${pl.is_winner ? `<i data-lucide="crown" class="w-3.5 h-3.5 play-detail__player-crown"></i>` : ""}
                     </span>
                     <span class="play-detail__player-score">${pl.score != null ? pl.score : ""}</span>
@@ -431,9 +431,9 @@
           <ul class="play-detail__edit-players">
             ${d.players.map((pl, i) => `
               <li class="play-detail__edit-player">
-                <span class="play-detail__edit-player-name">${escape(pl.name)}</span>
+                <span class="play-detail__edit-player-name">${escapeHtml(pl.name)}</span>
                 ${hasRoundGrid(d.players, "roundScores")
-                  ? `<span class="play-detail__edit-score-readout">${escape(sumRounds(pl.roundScores))}</span>`
+                  ? `<span class="play-detail__edit-score-readout">${escapeHtml(sumRounds(pl.roundScores))}</span>`
                   : `<input type="number" class="input input-bordered input-sm play-detail__edit-score"
                             placeholder="Score"
                             value="${escapeAttr(pl.score)}"
@@ -474,10 +474,10 @@
             <i data-lucide="sticky-note" class="w-4 h-4"></i> Notes
           </h3>
           <textarea class="textarea textarea-bordered w-full" rows="2"
-                    oninput="window.PlayDetailPopup._setDraft('notes', this.value)">${escape(d.notes)}</textarea>
+                    oninput="window.PlayDetailPopup._setDraft('notes', this.value)">${escapeHtml(d.notes)}</textarea>
         </section>
 
-        ${state.editError ? `<div class="alert alert-error m-3">${escape(state.editError)}</div>` : ""}
+        ${state.editError ? `<div class="alert alert-error m-3">${escapeHtml(state.editError)}</div>` : ""}
       </article>
     `;
   }
@@ -503,7 +503,7 @@
             : ""}
           <div class="play-detail__game-info">
             <div class="play-detail__game-title">
-              A game of <span class="play-detail__game-name">${escape(p.game_name)}</span>
+              A game of <span class="play-detail__game-name">${escapeHtml(p.game_name)}</span>
             </div>
             ${subline}
           </div>
@@ -830,17 +830,6 @@
     }
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
-  function jsStr(s) {
-    // For values interpolated into single-quoted JS strings inside onclick="".
-    return String(s ?? "").replace(/['\\]/g, "\\$&").replace(/\n/g, "\\n");
-  }
   function formatDate(iso) {
     if (!iso) return "";
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

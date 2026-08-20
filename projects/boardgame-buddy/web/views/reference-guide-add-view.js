@@ -158,7 +158,7 @@ components above.
         <div class="chapter-edit__gamechip">
           <div class="chapter-edit__gamechip-cv chapter-edit__gamechip-cv--blank"></div>
           <div class="chapter-edit__gamechip-text">
-            <div class="chapter-edit__gamechip-name">${escape(name)}</div>
+            <div class="chapter-edit__gamechip-name">${escapeHtml(name)}</div>
             <div class="chapter-edit__gamechip-sub">Loading…</div>
           </div>
         </div>
@@ -501,8 +501,8 @@ components above.
         <div class="chapter-edit__gamechip">
           ${cover}
           <div class="chapter-edit__gamechip-text">
-            <div class="chapter-edit__gamechip-name">${escape(name)}</div>
-            <div class="chapter-edit__gamechip-sub">${escape(sub)}</div>
+            <div class="chapter-edit__gamechip-name">${escapeHtml(name)}</div>
+            <div class="chapter-edit__gamechip-sub">${escapeHtml(sub)}</div>
           </div>
         </div>
       `;
@@ -572,7 +572,7 @@ components above.
         <button class="chapter-add__chip ${t.id === this._typeFilter ? "chapter-add__chip--active" : ""}"
                 onclick="window.referenceGuideAddView._onTypeFilter('${t.id}')">
           <i data-lucide="${t.icon}" class="w-3.5 h-3.5"></i>
-          ${escape(t.label)}
+          ${escapeHtml(t.label)}
         </button>
       `)].join("");
 
@@ -617,7 +617,7 @@ components above.
                 title="${escapeAttr(backLabel)}"
                 onclick="${backOnClick}">
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
-          <span>${escape(backLabel)}</span>
+          <span>${escapeHtml(backLabel)}</span>
         </button>
         <button class="chapter-add__fab"
                 title="Create a new chapter"
@@ -633,7 +633,7 @@ components above.
         <section class="scroll-section" data-type="${escapeAttr(group.type)}">
           <h4 class="scroll-section__header">
             <i data-lucide="${group.icon}" class="w-4 h-4"></i>
-            ${escape(group.label)}
+            ${escapeHtml(group.label)}
           </h4>
           <ul class="scroll-chapter-list">
             ${group.chapters.map((c) => this._renderPoolRow(c)).join("")}
@@ -644,7 +644,7 @@ components above.
 
     _renderPoolRow(c) {
       const icon = c.chapter_type_icon || "book";
-      const author = c.created_by_name ? `by ${escape(c.created_by_name)}` : "";
+      const author = c.created_by_name ? `by ${escapeHtml(c.created_by_name)}` : "";
       const inGuide = !!c.in_my_guide;
       const me = window.store && window.store.get("user");
       const isAuthed = !!me;
@@ -673,7 +673,7 @@ components above.
               ${dot}
               <span class="scroll-chapter__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
               <div class="scroll-chapter__summary-text">
-                <div class="scroll-chapter__title">${escape(c.title)}</div>
+                <div class="scroll-chapter__title">${escapeHtml(c.title)}</div>
                 <div class="scroll-chapter__submeta">
                   <span class="scroll-chapter__pop" title="${c.popularity} ${c.popularity === 1 ? "person has" : "people have"} this in their guide">
                     <i data-lucide="users" class="w-3 h-3"></i> ${c.popularity}
@@ -778,7 +778,7 @@ components above.
                 class="chapter-edit__tpill ${t.id === this._formType ? "chapter-edit__tpill--on" : ""}"
                 onclick="window.referenceGuideAddView._pickType('${t.id}')">
           <i data-lucide="${t.icon || "book"}" class="w-4 h-4"></i>
-          <span>${escape(t.label)}</span>
+          <span>${escapeHtml(t.label)}</span>
         </button>
       `).join("");
 
@@ -834,7 +834,7 @@ components above.
                        rows="14" required
                        spellcheck="false"
                        oninput="window.referenceGuideAddView._formContent = this.value"
-                       placeholder="## What you can do on your turn…">${escape(this._formContent)}</textarea>
+                       placeholder="## What you can do on your turn…">${escapeHtml(this._formContent)}</textarea>
              ${this._renderPopovers()}
            </div>`;
 
@@ -893,7 +893,7 @@ components above.
 
             ${editorPanel}
 
-            ${this._error ? `<div class="text-error text-sm chapter-edit__error">${escape(this._error)}</div>` : ""}
+            ${this._error ? `<div class="text-error text-sm chapter-edit__error">${escapeHtml(this._error)}</div>` : ""}
           </div>
 
           <div class="chapter-edit__footer">
@@ -901,7 +901,7 @@ components above.
                     onclick="window.referenceGuideAddView._cancelForm()">Cancel</button>
             <button type="submit" class="chapter-edit__fbtn chapter-edit__fbtn--save"
                     ${submitDisabled ? "disabled" : ""}>
-              ${escape(submitLabel)}
+              ${escapeHtml(submitLabel)}
             </button>
           </div>
         </form>
@@ -970,7 +970,7 @@ components above.
                   style="--exp-color:${color}"
                   onclick="window.referenceGuideAddView._pickCreateTarget('${id}')">
             ${meta.color ? `<span class="chapter-add__target-dot"></span>` : ""}
-            <span>${escape(meta.name || "Game")}</span>
+            <span>${escapeHtml(meta.name || "Game")}</span>
           </button>
         `;
       }).join("");
@@ -1095,7 +1095,7 @@ components above.
       if (this._activePop === "table") {
         return `
           <div class="chapter-edit__pop chapter-edit__pop--table">
-            <div class="chapter-edit__pop-head">Insert table · <span class="chapter-edit__pop-dim" id="table-pick-label">${escape(this._tablePickLabel)}</span></div>
+            <div class="chapter-edit__pop-head">Insert table · <span class="chapter-edit__pop-dim" id="table-pick-label">${escapeHtml(this._tablePickLabel)}</span></div>
             <div class="chapter-edit__tgrid" id="table-pick-grid"></div>
           </div>
         `;
@@ -1282,13 +1282,6 @@ components above.
       }
     }
   }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
 
   window.ReferenceGuideAddView = ReferenceGuideAddView;
 })();

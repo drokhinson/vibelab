@@ -21,13 +21,6 @@
     played: "Played",
   };
 
-  // The escaping helpers live local to this file. The gameId is a UUID we put
-  // into an inline onclick, so just JS-escape it; jsStr handles both that and
-  // the rare apostrophe-in-name case for any future label.
-  function jsStr(s) {
-    return String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-  }
-
   /**
    * Build the HTML for a tile's status tag.
    * @param {string} gameId

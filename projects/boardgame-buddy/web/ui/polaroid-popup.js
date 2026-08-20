@@ -160,14 +160,14 @@
   }
 
   function renderInner(opts) {
-    const gameName = escape(opts.gameName || "Game over");
+    const gameName = escapeHtml(opts.gameName || "Game over");
     const headline = opts.headline
-      ? `<div class="polaroid-popup__headline">${escape(opts.headline)}</div>`
+      ? `<div class="polaroid-popup__headline">${escapeHtml(opts.headline)}</div>`
       : "";
     const winner = opts.winnerName
       ? `<div class="polaroid-popup__winner">
            <i data-lucide="trophy" class="w-4 h-4"></i>
-           <span>${escape(opts.winnerName)}</span>
+           <span>${escapeHtml(opts.winnerName)}</span>
          </div>`
       : `<div class="polaroid-popup__winner polaroid-popup__winner--muted">No winner recorded</div>`;
     const photo = opts.gameThumbnail
@@ -182,10 +182,10 @@
          </button>`
       : "";
     const error = opts.error
-      ? `<div class="polaroid-popup__error">${escape(opts.error)}</div>`
+      ? `<div class="polaroid-popup__error">${escapeHtml(opts.error)}</div>`
       : "";
     const warning = opts.warning
-      ? `<div class="polaroid-popup__warning">${escape(opts.warning)}</div>`
+      ? `<div class="polaroid-popup__warning">${escapeHtml(opts.warning)}</div>`
       : "";
     // The host's wrap-up card carries the save state; the joiner's splash
     // (session-viewer) passes none of these and keeps its X-only chrome.
@@ -246,11 +246,11 @@
       root.innerHTML = `
         <div class="polaroid-popup__card polaroid-popup__card--confirm"
              role="alertdialog" aria-modal="true">
-          <div class="polaroid-popup__title">${escape(title)}</div>
-          ${body ? `<p class="polaroid-popup__body">${escape(body)}</p>` : ""}
+          <div class="polaroid-popup__title">${escapeHtml(title)}</div>
+          ${body ? `<p class="polaroid-popup__body">${escapeHtml(body)}</p>` : ""}
           <div class="polaroid-popup__actions">
-            <button class="btn btn-ghost btn-sm polaroid-popup__cancel">${escape(cancelLabel)}</button>
-            <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escape(confirmLabel)}</button>
+            <button class="btn btn-ghost btn-sm polaroid-popup__cancel">${escapeHtml(cancelLabel)}</button>
+            <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escapeHtml(confirmLabel)}</button>
           </div>
         </div>
       `;
@@ -283,10 +283,10 @@
       root.innerHTML = `
         <div class="polaroid-popup__card polaroid-popup__card--confirm"
              role="alertdialog" aria-modal="true">
-          <div class="polaroid-popup__title">${escape(title)}</div>
-          ${body ? `<p class="polaroid-popup__body">${escape(body)}</p>` : ""}
+          <div class="polaroid-popup__title">${escapeHtml(title)}</div>
+          ${body ? `<p class="polaroid-popup__body">${escapeHtml(body)}</p>` : ""}
           <div class="polaroid-popup__actions">
-            <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escape(label)}</button>
+            <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escapeHtml(label)}</button>
           </div>
         </div>
       `;
@@ -301,13 +301,6 @@
       if (okBtn) okBtn.addEventListener("click", () => { dismiss(); resolve(); });
     });
   }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
 
   /**
    * Avatar customizer modal. Reuses the polaroid card chrome (cream bg,
@@ -374,7 +367,7 @@
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
           <div class="avatar-cust__body">
-            <div class="polaroid-popup__title">${escape(headerTitle)}</div>
+            <div class="polaroid-popup__title">${escapeHtml(headerTitle)}</div>
 
             ${nameFieldHtml}
 
@@ -406,7 +399,7 @@
 
             <div class="polaroid-popup__actions">
               <button class="btn btn-ghost btn-sm polaroid-popup__cancel">Cancel</button>
-              <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escape(saveLabel)}</button>
+              <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escapeHtml(saveLabel)}</button>
             </div>
           </div>
         </div>
@@ -443,7 +436,7 @@
         slot.className = "avatar-cust__slot";
         slot.dataset.i = String(i);
         slot.innerHTML = it.key === "initials"
-          ? `<span class="avatar-cust__ini">${escape(initialsForCustomizer(state.displayName))}</span>`
+          ? `<span class="avatar-cust__ini">${escapeHtml(initialsForCustomizer(state.displayName))}</span>`
           : `<svg viewBox="0 0 24 24">${window.BgbBadge.ICONS[it.key]}</svg>`;
         slot.addEventListener("click", () => { state.index = i; rerender(); });
         track.appendChild(slot);

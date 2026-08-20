@@ -183,7 +183,7 @@
 
     _renderBody(hasPager = false) {
       if (this._error) {
-        return `<div class="alert alert-error text-sm">${escape(this._error)}</div>`;
+        return `<div class="alert alert-error text-sm">${escapeHtml(this._error)}</div>`;
       }
       if (this._loading && this._items.length === 0) {
         return window.buddyLoader({ size: 88 });
@@ -212,7 +212,7 @@
           ${g.thumbnail_url
             ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="" loading="lazy" />`
             : `<div class="collection-tile__placeholder"><i data-lucide="dice-6"></i></div>`}
-          <div class="collection-tile__name">${escape(g.name || "Unknown")}</div>
+          <div class="collection-tile__name">${escapeHtml(g.name || "Unknown")}</div>
           ${window.renderExpansionBadge(expCount, { context: "total" })}
         </div>
       `;
@@ -314,13 +314,6 @@
     }
     _goPage(n) { this._page = n; this._load(); }
   }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
 
   window.WishlistView = WishlistView;
 })();

@@ -66,7 +66,7 @@
       if (this._error) {
         this.container.innerHTML = `
           ${this._renderBack()}
-          <div class="alert alert-error text-sm mt-3">${escape(this._error)}</div>
+          <div class="alert alert-error text-sm mt-3">${escapeHtml(this._error)}</div>
         `;
         this.refreshIcons();
         return;
@@ -113,8 +113,8 @@
         <header class="profile-hub__id">
           ${badge}
           <div class="profile-hub__who">
-            <div class="profile-hub__name font-display">${escape(p.display_name || "")}</div>
-            ${p.username ? `<div class="profile-hub__handle">@${escape(p.username)}</div>` : ""}
+            <div class="profile-hub__name font-display">${escapeHtml(p.display_name || "")}</div>
+            ${p.username ? `<div class="profile-hub__handle">@${escapeHtml(p.username)}</div>` : ""}
           </div>
           ${this._renderRelationButton(p)}
         </header>
@@ -174,7 +174,7 @@
             <div class="profile-stat-card__k">Wins</div>
           </div>
           <button class="profile-stat-card profile-stat-card--fav" ${favClick}>
-            <div class="profile-stat-card__v profile-stat-card__v--text" title="${escapeAttr(favName)}">${escape(favName)}</div>
+            <div class="profile-stat-card__v profile-stat-card__v--text" title="${escapeAttr(favName)}">${escapeHtml(favName)}</div>
             <div class="profile-stat-card__k">Top game</div>
           </button>
         </section>
@@ -196,7 +196,7 @@
         seeAllJs: "window.profileOtherView._goCollection()",
         body: items.length
           ? `<div class="preview-card__covers">${items.slice(0, PREVIEW_COVERS).map((it) => this._cover(it)).join("")}</div>`
-          : `<div class="preview-card__empty">${escape(this._profile.display_name || "They")} doesn't own any games yet.</div>`,
+          : `<div class="preview-card__empty">${escapeHtml(this._profile.display_name || "They")} doesn't own any games yet.</div>`,
       });
     }
 
@@ -205,7 +205,7 @@
       const total = (b && b.recent_plays_total) || 0;
       const body = plays.length
         ? `<ul class="preview-card__plays">${plays.slice(0, PREVIEW_PLAYS).map((p) => this._playRow(p)).join("")}</ul>`
-        : `<div class="preview-card__empty">${escape(this._profile.display_name || "They")} hasn't logged any plays yet.</div>`;
+        : `<div class="preview-card__empty">${escapeHtml(this._profile.display_name || "They")} hasn't logged any plays yet.</div>`;
       return this._previewCard({
         icon: "dices",
         title: "Recent plays",
@@ -223,8 +223,8 @@
         <section class="preview-card">
           <header class="preview-card__head">
             <span class="preview-card__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
-            <h3 class="preview-card__title font-display">${escape(title)}</h3>
-            <span class="preview-card__sub">${escape(sub)}</span>
+            <h3 class="preview-card__title font-display">${escapeHtml(title)}</h3>
+            <span class="preview-card__sub">${escapeHtml(sub)}</span>
             <button class="preview-card__seeall" onclick="${seeAllJs}">
               See all <i data-lucide="chevron-right" class="w-3 h-3"></i>
             </button>
@@ -241,7 +241,7 @@
         <div class="preview-card__cover" ${click} title="${escapeAttr(g.name || "")}">
           ${g.thumbnail_url
             ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />`
-            : `<div class="preview-card__cover-fallback">${escape((g.name || "?").slice(0, 14))}</div>`}
+            : `<div class="preview-card__cover-fallback">${escapeHtml((g.name || "?").slice(0, 14))}</div>`}
         </div>
       `;
     }
@@ -255,7 +255,7 @@
             ? `<img class="preview-card__play-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
             : `<div class="preview-card__play-thumb preview-card__play-thumb--placeholder"><i data-lucide="dice-6" class="w-4 h-4"></i></div>`}
           <div class="preview-card__play-info">
-            <div class="preview-card__play-name">${escape(p.game_name || "")}</div>
+            <div class="preview-card__play-name">${escapeHtml(p.game_name || "")}</div>
             ${playerCount > 0 ? `<div class="preview-card__play-meta">${playerCount} ${playerCount === 1 ? "player" : "players"}</div>` : ""}
           </div>
           <div class="preview-card__play-date">${formatDateShort(p.played_at)}</div>
@@ -264,12 +264,6 @@
     }
   }
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
   function formatDateShort(iso) {
     if (!iso) return "";
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });

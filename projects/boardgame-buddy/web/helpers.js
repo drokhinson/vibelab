@@ -58,6 +58,22 @@ function formatDate(dateStr) {
   });
 }
 
+// HTML-escape for any untrusted text interpolated into a template literal.
+// Every module used to carry its own copy of this; they all delegate here now
+// so the escaping rules live in exactly one place.
+const ESCAPE_MAP = {
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+};
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ESCAPE_MAP[c]);
+}
+
+// Same escaping, named for the attribute-value case so call sites read as
+// intended. Quotes are already covered, so one implementation serves both.
+function escapeAttr(s) {
+  return escapeHtml(s);
+}
+
 // JS-string escape for safely embedding text inside inline onclicks
 // (e.g. `onclick="...router.go('game-detail',{gameName:'${jsStr(name)}'})"`).
 // Handles backslashes, single quotes, and newlines — that's enough for

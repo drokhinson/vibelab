@@ -147,17 +147,10 @@
     const styleColor = `color:${escapeAttr(av.iconColor)}`;
     const showInitials = !!opts.forceInitials || av.icon === "initials" || !ICONS[av.icon];
     const inner = showInitials
-      ? `<span class="user-badge__initials">${escape(initials)}</span>`
+      ? `<span class="user-badge__initials">${escapeHtml(initials)}</span>`
       : `<svg class="user-badge__icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[av.icon]}</svg>`;
     return `<span class="${classes}" style="${styleBg};${styleColor}" aria-label="${escapeAttr(opts.displayName || "")}">${inner}</span>`;
   }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
 
   window.BgbBadge = {
     render,

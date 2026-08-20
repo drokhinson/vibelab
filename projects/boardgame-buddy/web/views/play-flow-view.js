@@ -458,7 +458,7 @@
           ${this._renderSettle()}
           ${this._renderSaveCta()}
         </section>
-        ${this._error ? `<div class="alert alert-error cascade-error">${escape(this._error)}</div>` : ""}
+        ${this._error ? `<div class="alert alert-error cascade-error">${escapeHtml(this._error)}</div>` : ""}
       `;
       this.refreshIcons();
       this._mountReferenceGuide();
@@ -510,7 +510,7 @@
             </button>
           ` : `<span class="cascade-back-spacer"></span>`}
           <div class="cascade-screen__header-body">
-            <h1 class="cascade-screen__title">${escape(title)}</h1>
+            <h1 class="cascade-screen__title">${escapeHtml(title)}</h1>
             <span class="cascade-screen__step">Step ${step} of 3</span>
           </div>
           <button class="cascade-screen__close" title="End session"
@@ -528,7 +528,7 @@
           <button class="btn btn-primary cascade-cta"
                   ${disabled ? "disabled" : ""}
                   onclick="window.playFlowView.${handler}">
-            ${escape(label)}
+            ${escapeHtml(label)}
             <i data-lucide="arrow-down" class="w-4 h-4"></i>
           </button>
         </div>
@@ -579,7 +579,7 @@
           </span>
           <div class="cascade-invite__body">
             <span class="cascade-invite__title">Session code</span>
-            <span class="cascade-invite__code">${escape(code || "— — — — —")}</span>
+            <span class="cascade-invite__code">${escapeHtml(code || "— — — — —")}</span>
           </div>
         </section>
       `;
@@ -659,7 +659,7 @@
       return `
         <li class="cascade-player">
           ${badge}
-          <span class="cascade-player__name">${escape(p.name)}</span>
+          <span class="cascade-player__name">${escapeHtml(p.name)}</span>
           <input class="cascade-player__init" type="text" maxlength="3"
                  aria-label="Initials"
                  placeholder="${escapeAttr(computeInitials(p.name))}"
@@ -889,7 +889,7 @@
           <textarea class="textarea textarea-bordered w-full cascade-notes"
                     rows="4"
                     placeholder="A clutch play, a surprise comeback, anything worth remembering."
-                    onchange="window.playFlowView._setNotes(this.value)">${escape(this._ps.notes || "")}</textarea>
+                    onchange="window.playFlowView._setNotes(this.value)">${escapeHtml(this._ps.notes || "")}</textarea>
         </section>
       `;
     }
@@ -1003,7 +1003,7 @@
           ${game.thumbnail_url
             ? `<img class="cascade-game-chip__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />`
             : `<div class="cascade-game-chip__thumb cascade-game-chip__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
-          <div class="cascade-game-chip__name">${escape(game.name)}</div>
+          <div class="cascade-game-chip__name">${escapeHtml(game.name)}</div>
           <button class="cascade-game-chip__details" type="button"
                   title="View game details" aria-label="View game details"
                   onclick="window.playFlowView._openGameDetails()">
@@ -1465,7 +1465,7 @@
               </span>
               <i data-lucide="chevron-right" class="w-4 h-4 collapsible-header__chev"></i>
             </div>
-            <p class="cascade-card__hint">${escape(disabledHint)}</p>
+            <p class="cascade-card__hint">${escapeHtml(disabledHint)}</p>
           </section>
         `;
       }
@@ -1534,7 +1534,7 @@
         ? list.filter((e) => this._expansionMatches(e, q, baseName))
         : list;
       if (!visible.length) {
-        return `<li class="cascade-card__hint">No expansion matches “${escape(q)}”.</li>`;
+        return `<li class="cascade-card__hint">No expansion matches “${escapeHtml(q)}”.</li>`;
       }
       return visible.map((e) => this._renderExpansionPickerRow(e, baseName)).join("");
     }
@@ -1609,7 +1609,7 @@
             ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" class="expansion-list__thumb" loading="lazy" />`
             : `<div class="expansion-list__thumb expansion-list__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
           <div class="expansion-list__body">
-            <div class="expansion-list__name">${escape(label)}</div>
+            <div class="expansion-list__name">${escapeHtml(label)}</div>
           </div>
           <span class="cascade-exp-toggle ${active ? "cascade-exp-toggle--on" : ""}">
             <i data-lucide="${active ? "check" : "plus"}" class="w-4 h-4"></i>
@@ -1889,7 +1889,7 @@
         return;
       }
       const headerHtml = header
-        ? `<li class="cascade-buddy-dropdown-header">${escape(header)}</li>`
+        ? `<li class="cascade-buddy-dropdown-header">${escapeHtml(header)}</li>`
         : "";
       dd.innerHTML = headerHtml + rows.map((c) => {
         const handler = c.user_id
@@ -1899,7 +1899,7 @@
           ? `<span class="cascade-buddy-dropdown-pill">ghost</span>`
           : "";
         const subtitle = c.username
-          ? `<span class="cascade-buddy-dropdown-sub">@${escape(c.username)}</span>`
+          ? `<span class="cascade-buddy-dropdown-sub">@${escapeHtml(c.username)}</span>`
           : "";
         const badge = window.BgbBadge.render({
           avatar: c.avatar,
@@ -1910,7 +1910,7 @@
         return `
           <li class="cascade-buddy-dropdown-item" onclick="${handler}">
             ${badge}
-            <span class="cascade-buddy-dropdown-name">${escape(c.name)}</span>
+            <span class="cascade-buddy-dropdown-name">${escapeHtml(c.name)}</span>
             ${subtitle}
             ${ghostPill}
           </li>
@@ -2225,12 +2225,6 @@
     }
   }
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
   function initialsOf(name) {
     const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();

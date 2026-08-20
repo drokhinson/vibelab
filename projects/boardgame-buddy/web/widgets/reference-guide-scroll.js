@@ -7,13 +7,6 @@
 // expansion.
 
 (function () {
-  const ESCAPE_MAP = {
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  };
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ESCAPE_MAP[c]);
-  }
-  function escapeAttr(s) { return escape(s); }
 
   class ReferenceGuideScroll {
     constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = true, gameImage = null } = {}) {
@@ -176,7 +169,7 @@
         : (filtered.length > 0
             ? this._groupChaptersByType(filtered)
                 .map((g) => this._renderChapterSection(g)).join("")
-            : `<div class="scroll-panel__empty">No chapters match "${escape(this._search)}".</div>`);
+            : `<div class="scroll-panel__empty">No chapters match "${escapeHtml(this._search)}".</div>`);
 
       const rollupHint = open && hasChapters ? `
         <button class="scroll-panel__rollup-hint" type="button"
@@ -245,7 +238,7 @@
         <section class="scroll-section" data-type="${escapeAttr(group.type)}">
           <h4 class="scroll-section__header">
             <i data-lucide="${group.icon}" class="w-4 h-4"></i>
-            ${escape(group.label)}
+            ${escapeHtml(group.label)}
           </h4>
           <ul class="scroll-chapter-list">
             ${group.chapters.map((c) => this._renderChapter(c)).join("")}
@@ -279,7 +272,7 @@
             <summary class="scroll-chapter__summary">
               ${dot}
               <span class="scroll-chapter__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
-              <span class="scroll-chapter__title">${escape(c.title)}</span>
+              <span class="scroll-chapter__title">${escapeHtml(c.title)}</span>
             </summary>
             <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
             <div class="scroll-chapter__actions">

@@ -3,11 +3,6 @@
 // caller today; other game surfaces use bespoke tiles (see UI_AUDIT.md §5c).
 
 (function () {
-  function escapeHtml(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
 
   // Polaroid-style game tile for the "Find a Game that fits" grid on the
   // host/join landing. Cream surface + Fraunces caption matching the play

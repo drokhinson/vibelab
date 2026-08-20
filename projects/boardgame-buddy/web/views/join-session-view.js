@@ -116,7 +116,7 @@
               ${this._joining ? "Joining…" : "Join"}
             </button>
           </div>
-          ${this._error ? `<div class="cascade-card__error">${escape(this._error)}</div>` : ""}
+          ${this._error ? `<div class="cascade-card__error">${escapeHtml(this._error)}</div>` : ""}
         </section>
 
         <section class="cascade-join__list-wrap">
@@ -170,11 +170,11 @@
           ${thumb}
           <div class="cascade-join__row-body">
             <div class="cascade-join__row-top">
-              <span class="cascade-join__row-host">${escape(s.host_display_name)}</span>
-              <span class="cascade-join__row-code">${escape(s.code)}</span>
+              <span class="cascade-join__row-host">${escapeHtml(s.host_display_name)}</span>
+              <span class="cascade-join__row-code">${escapeHtml(s.code)}</span>
             </div>
             <div class="cascade-join__row-bottom">
-              <span class="cascade-join__row-game">${escape(gameName)}</span>
+              <span class="cascade-join__row-game">${escapeHtml(gameName)}</span>
               <span class="cascade-join__row-count">
                 <i data-lucide="users" class="w-3 h-3"></i>
                 ${s.participant_count}
@@ -234,13 +234,6 @@
       }
     }
   }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
 
   window.JoinSessionView = JoinSessionView;
 })();

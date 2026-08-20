@@ -12,22 +12,17 @@
 // reintroduced into the live attribute — the inner text stays escaped.
 
 (function () {
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
 
   function splitRow(s) {
     return s.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
   }
 
   function renderInline(s) {
-    return escape(s)
+    return escapeHtml(s)
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/(?<![*])\*([^*\n]+)\*(?![*])/g, "<em>$1</em>")
-      // [text](url) links. escape() only encodes & < > " ' so the bracket /
+      // [text](url) links. escapeHtml() only encodes & < > " ' so the bracket /
       // paren syntax survives intact. Only http(s), mailto, and root-relative
       // URLs are allowed through — anything else (e.g. javascript:) is left as
       // literal text so the markdown can't smuggle an unsafe href.

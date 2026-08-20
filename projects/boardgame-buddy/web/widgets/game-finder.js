@@ -34,13 +34,6 @@
   /** @typedef {{ source: "library"|"bgg"|"recent", isExpansion: boolean, dropdownItemEl: Element|null }} PickCtx */
   /** @typedef {{ refuse?: boolean, reason?: string }} RefusalResult */
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
-
   class GameFinder {
     /** @param {GameFinderOpts} opts */
     constructor(opts) {
@@ -342,8 +335,8 @@
             ? `<img class="game-finder-dropdown-item__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" loading="lazy" />`
             : `<div class="game-finder-dropdown-item__thumb game-finder-dropdown-item__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
           <div class="game-finder-dropdown-item__body">
-            <div class="game-finder-dropdown-item__name">${escape(game.name)}</div>
-            ${meta ? `<div class="game-finder-dropdown-item__meta">${escape(meta)}</div>` : ""}
+            <div class="game-finder-dropdown-item__name">${escapeHtml(game.name)}</div>
+            ${meta ? `<div class="game-finder-dropdown-item__meta">${escapeHtml(meta)}</div>` : ""}
           </div>
         </li>
       `;
@@ -414,7 +407,7 @@
               <i data-lucide="dice-6"></i>
             </div>
             <div class="game-finder-dropdown-item__body">
-              <div class="game-finder-dropdown-item__name">${escape(hit.name)}</div>
+              <div class="game-finder-dropdown-item__name">${escapeHtml(hit.name)}</div>
               <div class="game-finder-dropdown-item__meta">
                 ${hit.year_published || ""}${hit.already_in_db ? `${hit.year_published ? " · " : ""}In library` : ""}
               </div>
@@ -435,8 +428,8 @@
         const body = rowEl.querySelector(".game-finder-dropdown-item__body");
         if (!body) return;
         body.innerHTML = `
-          <div class="game-finder-dropdown-item__name">${escape(name)}</div>
-          <div class="game-finder-dropdown-item__meta">${escape(text)}</div>
+          <div class="game-finder-dropdown-item__name">${escapeHtml(name)}</div>
+          <div class="game-finder-dropdown-item__meta">${escapeHtml(text)}</div>
         `;
       };
       setMeta("Importing from BoardGameGeek…");
@@ -490,8 +483,8 @@
           const body = row.querySelector(".game-finder-dropdown-item__body");
           if (body) {
             body.innerHTML = `
-              <div class="game-finder-dropdown-item__name">${escape(game.name)}</div>
-              <div class="game-finder-dropdown-item__meta">${escape(result.reason || "Can't pick this game.")}</div>
+              <div class="game-finder-dropdown-item__name">${escapeHtml(game.name)}</div>
+              <div class="game-finder-dropdown-item__meta">${escapeHtml(result.reason || "Can't pick this game.")}</div>
             `;
           }
           const action = row.querySelector(".game-finder-dropdown-item__action");

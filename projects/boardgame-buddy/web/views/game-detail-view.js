@@ -100,7 +100,7 @@
           <header class="search-topbar">
             <button class="btn btn-ghost btn-sm" onclick="window.router.back('feed')"><i data-lucide="arrow-left" class="w-4 h-4"></i></button>
           </header>
-          <div class="p-6 alert alert-error">${escape(this._error)}</div>
+          <div class="p-6 alert alert-error">${escapeHtml(this._error)}</div>
         `;
         this.refreshIcons();
         return;
@@ -133,7 +133,7 @@
             </div>
           </header>
           <div class="game-detail__body">
-            <h1 class="game-detail__name font-display">${escape(g.name)}</h1>
+            <h1 class="game-detail__name font-display">${escapeHtml(g.name)}</h1>
             ${this._renderBaseGameLink(g)}
             <div class="game-detail__meta">
               ${g.is_expansion ? `<span class="game-detail__meta-pill"><i data-lucide="puzzle" class="w-3.5 h-3.5"></i> Expansion</span>` : ""}
@@ -228,7 +228,7 @@
       return `
         <a class="game-detail__base-link" onclick="window.router.go('game-detail',{gameId:'${g.base_game_id}',gameName:'${jsStr(g.base_game_name || '')}'})">
           <i data-lucide="corner-up-left" class="w-3.5 h-3.5"></i>
-          <span>Expansion of <strong>${escape(g.base_game_name || "base game")}</strong></span>
+          <span>Expansion of <strong>${escapeHtml(g.base_game_name || "base game")}</strong></span>
         </a>
       `;
     }
@@ -282,7 +282,7 @@
                       : `<div class="expansion-polaroid__placeholder"><i data-lucide="dice-6"></i></div>`}
                     ${owned ? `<span class="expansion-polaroid__check"><i data-lucide="check" class="w-3.5 h-3.5"></i></span>` : ""}
                   </div>
-                  <div class="expansion-polaroid__cap">${escape(label)}</div>
+                  <div class="expansion-polaroid__cap">${escapeHtml(label)}</div>
                 </article>
               `;
             }).join("")}
@@ -484,12 +484,6 @@
     }
   }
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
   function formatDate(iso) {
     if (!iso) return "";
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

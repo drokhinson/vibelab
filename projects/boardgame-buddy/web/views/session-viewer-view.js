@@ -447,7 +447,7 @@
       if (this._error && !s) {
         this.container.innerHTML = `
           ${this._renderTopbar(null)}
-          <div class="p-6 alert alert-error">${escape(this._error)}</div>
+          <div class="p-6 alert alert-error">${escapeHtml(this._error)}</div>
         `;
         this.refreshIcons();
         return;
@@ -509,7 +509,7 @@
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="font-display font-semibold text-base play-detail__crumb">
-            Session ${escape(codeLabel)}
+            Session ${escapeHtml(codeLabel)}
           </h2>
           <span></span>
         </header>
@@ -521,8 +521,8 @@
         <header class="cascade-screen__header cascade-screen__header--read">
           <span class="cascade-back-spacer"></span>
           <div class="cascade-screen__header-body">
-            <h1 class="cascade-screen__title">${escape(title)}</h1>
-            <span class="cascade-screen__step">Step ${step} of 3 · ${escape(hint)}</span>
+            <h1 class="cascade-screen__title">${escapeHtml(title)}</h1>
+            <span class="cascade-screen__step">Step ${step} of 3 · ${escapeHtml(hint)}</span>
           </div>
           <span class="cascade-back-spacer"></span>
         </header>
@@ -554,8 +554,8 @@
                 ? `<img class="cascade-game__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />`
                 : `<div class="cascade-game__thumb cascade-game__thumb--placeholder"><i data-lucide="dice-6" class="w-5 h-5"></i></div>`}
               <div>
-                <div class="cascade-game__name">${escape(game.name)}</div>
-                <div class="cascade-game__sub">${host ? "Hosted by " + escape(host.display_name) : ""}</div>
+                <div class="cascade-game__name">${escapeHtml(game.name)}</div>
+                <div class="cascade-game__sub">${host ? "Hosted by " + escapeHtml(host.display_name) : ""}</div>
               </div>
             </div>
           ` : `
@@ -563,7 +563,7 @@
               <div class="cascade-game__thumb cascade-game__thumb--placeholder"><i data-lucide="dice-6" class="w-5 h-5"></i></div>
               <div>
                 <div class="cascade-game__name">Waiting on host to pick a game</div>
-                <div class="cascade-game__sub">${host ? "Hosted by " + escape(host.display_name) : ""}</div>
+                <div class="cascade-game__sub">${host ? "Hosted by " + escapeHtml(host.display_name) : ""}</div>
               </div>
             </div>
           `}
@@ -598,7 +598,7 @@
       return `
         <li class="cascade-player cascade-player--read">
           ${badge}
-          <span class="cascade-player__name">${escape(p.display_name)}</span>
+          <span class="cascade-player__name">${escapeHtml(p.display_name)}</span>
           ${isHost
             ? `<span class="session-viewer__host-tag"><i data-lucide="crown" class="w-3 h-3"></i> Host</span>`
             : ""}
@@ -772,12 +772,6 @@
     }
   }
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
   function initialsOf(name) {
     const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
