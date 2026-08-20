@@ -20,6 +20,7 @@ from .constants import CollectionSort, CollectionStatus, PlayMode
 from .dependencies import CurrentUser, get_current_user
 from .game_routes import (
     COLLECTION_DENORM_GAME_FIELDS,
+    _attach_expansion_counts,
     collection_denormalized_from_game,
 )
 
@@ -410,6 +411,22 @@ _GRID_GAME_FIELDS = (
 )
 
 
+def _attach_page_expansion_counts(sb: Client, items: list[CollectionItem]) -> None:
+    """Fill `game.expansion_count` on one page of grid items.
+
+    The tile badge counts every expansion the *catalog* holds for that base
+    game — the same number the game page's "Expansions (N)" heading shows —
+    not just the ones the viewer owns. Expansions arrive via the import popup
+    without touching anyone's collection, so an owned-only count reads as
+    zero for a game that plainly has eleven of them.
+
+    Reuses game_routes._attach_expansion_counts, which tallies the whole page
+    in one round-trip and leaves expansion rows at 0.
+    """
+    if items:
+        _attach_expansion_counts(sb, [it.game for it in items])
+
+
 def _passes_grid_filters(
     game: dict,
     *,
@@ -572,6 +589,7 @@ async def collection_grid(
             )
             for g in page_games
         ]
+        _attach_page_expansion_counts(sb, items)
         return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
 
     # Round-trip 1: every shelf row, with the joined game payload embedded.
@@ -676,4 +694,5 @@ async def collection_grid(
         )
         for r in page_rows
     ]
+    _attach_page_expansion_counts(sb, items)
     return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
