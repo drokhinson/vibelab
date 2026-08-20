@@ -270,7 +270,6 @@
   };
 
   window.renderRoundGrid = renderRoundGrid;
-  window.renderScoringHead = renderScoringHead;
   window.sanitizeRoundScore = sanitizeRoundScore;
   window.parseRoundScore = parseRoundScore;
   window.nextSignToggle = nextSignToggle;

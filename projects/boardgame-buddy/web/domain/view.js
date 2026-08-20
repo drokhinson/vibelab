@@ -321,13 +321,6 @@
   }
 
   window.View = View;
-  window.Router = Router;
   window.router = new Router();
 
-  // Convenience: keep showView() working so legacy code paths that haven't
-  // been migrated yet keep navigating correctly. Routes through the new
-  // router so subscriptions still fire.
-  window.showView = function (name, params) {
-    window.router.go(name, params);
-  };
 })();

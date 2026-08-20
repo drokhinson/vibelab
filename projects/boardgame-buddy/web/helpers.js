@@ -22,22 +22,10 @@
   }
 })();
 
-function bggImg(url) {
-  if (!url) return null;
-  if (url.startsWith("//")) return "https:" + url;
-  return url;
-}
-
 function computeInitials(name) {
   const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   return (parts[0] || "?").slice(0, 2).toUpperCase();
-}
-
-function playerRange(min, max) {
-  if (!min && !max) return "";
-  if (min === max) return `${min}P`;
-  return `${min || "?"}–${max || "?"}P`;
 }
 
 // Drop a leading base-game name from an expansion's name, for surfaces where
@@ -61,14 +49,6 @@ function stripBaseGameName(name, baseName) {
   const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const stripped = raw.replace(new RegExp(`^${escaped}\\s*[:\\-–—,]\\s*`, "i"), "").trim();
   return stripped || raw;
-}
-
-function formatTime(minutes) {
-  if (!minutes) return "";
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h}h${m}m` : `${h}h`;
 }
 
 function formatDate(dateStr) {

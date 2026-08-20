@@ -8,7 +8,6 @@
     }
     static unlink()           { return window.api.del("/bgg/link"); }
     static sync()             { return window.api.post("/bgg/sync", {}); }
-    static processPending()   { return window.api.post("/bgg/sync/process-pending", {}); }
   }
 
   window.Bgg = Bgg;

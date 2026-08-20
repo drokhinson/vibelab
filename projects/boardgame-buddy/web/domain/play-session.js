@@ -122,10 +122,6 @@
       return window.api.del(`/sessions/${code}/participants/${participantId}`);
     }
 
-    static abandonLobby(code) {
-      return window.api.del(`/sessions/${code}`);
-    }
-
     // Writes the play the lobby was building. Same cache blast radius as
     // Play.create — profile, stats, game bundle, buddies, feed first page —
     // so it routes through the same invalidation instead of leaving every one

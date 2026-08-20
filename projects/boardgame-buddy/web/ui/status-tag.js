@@ -220,6 +220,5 @@
 
   window.renderStatusTag = renderStatusTag;
   window.renderExpansionBadge = renderExpansionBadge;
-  window.StatusPicker = StatusPicker;
   window.statusPicker = new StatusPicker();
 })();
