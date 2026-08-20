@@ -17,7 +17,6 @@ export const initialState = {
   feedCursor: null,
   feedLoading: false,
   myCollectionMap: {}, // gameId -> 'owned' | 'wishlist' | 'played'
-  expansionCounts: {}, // base_game_bgg_id -> owned expansion count
   stats: null,
   profileBundle: null,
   gameBundles: {}, // gameId -> { bundle, at } (TTL-stamped)
@@ -41,6 +40,7 @@ export const ACTIONS = {
   SET_BECOME_ADMIN: 'SET_BECOME_ADMIN',
 
   BOOTSTRAP_LOADED: 'BOOTSTRAP_LOADED',
+  SEED_GAME_BUNDLES: 'SEED_GAME_BUNDLES',
   SET_FEED: 'SET_FEED',
   APPEND_FEED: 'APPEND_FEED',
   SET_FEED_LOADING: 'SET_FEED_LOADING',

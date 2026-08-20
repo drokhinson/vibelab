@@ -10,12 +10,13 @@
 //   4. background: refresh the offline collection from the network
 
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import { AppState } from 'react-native';
+import { AppState, InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setAuthTokenGetter } from '../api/client';
 import { supabase, isAuthConfigured } from '../auth/supabase';
 import { initialState, ACTIONS as A } from './initialState';
-import { reducer } from './reducer';
+import { reducer, EXPECTED_BOOTSTRAP_VERSION } from './reducer';
+import cache from './cache';
 import { buildActions, normUser, PROFILE_CACHE_KEY, HOST_SEEDS_KEY } from './actions';
 import { hydrateCollection, refreshCollection, clearCollection } from '../offline/collectionStore';
 import { clearOutbox, flushOutbox, hydrateOutbox } from '../offline/playOutbox';
@@ -177,8 +178,21 @@ export function AppProvider({ children }) {
     api.bootstrap().then(
       (payload) => {
         if (cancelled) return;
+        if (payload?.bootstrap_version != null && payload.bootstrap_version !== EXPECTED_BOOTSTRAP_VERSION) {
+          cache.invalidate(''); // server shape changed — don't mix two shapes
+        }
         dispatch({ type: A.BOOTSTRAP_LOADED, payload });
         refreshCollection();
+        // Second stage: the per-owned-game detail bundles. Deferred until
+        // after the first screen has settled — nothing on it reads them, and
+        // Game Detail force-fetches its own bundle on a miss anyway.
+        InteractionManager.runAfterInteractions(() => {
+          if (cancelled) return;
+          api.bootstrapGameBundles().then(
+            (r) => !cancelled && dispatch({ type: A.SEED_GAME_BUNDLES, bundles: r?.game_detail_bundles }),
+            () => {},
+          );
+        });
       },
       () => {
         if (cancelled) return;

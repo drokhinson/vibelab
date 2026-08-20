@@ -19,6 +19,10 @@
  * @property {number|null} base_game_bgg_id
  * @property {string|null} expansion_color
  * @property {string|null} play_mode  // 'competitive' | 'cooperative' | 'team'
+ * @property {number} expansion_count
+ *   Expansions the CATALOG holds for this base game (not the viewer's owned
+ *   ones). Populated only by GET /collection/grid — treat 0 as "not computed
+ *   yet" rather than "none", since the bootstrap seed doesn't carry it.
  */
 
 /**
@@ -131,6 +135,25 @@
  * @property {string} content
  * @property {string} created_by
  * @property {number} [popularity]
+ */
+
+/**
+ * @typedef {Object} BootstrapPayload  GET /bootstrap
+ * @property {number} bootstrap_version  mismatch with EXPECTED → wipe caches
+ * @property {Object|null} current_user
+ * @property {Object|null} profile_bundle
+ * @property {FeedPage|null} feed_first_page
+ * @property {string|null} feed_cursor
+ * @property {GameSummary[]} recently_played_games
+ * @property {{accounts: any[], ghosts: any[], recent: any[]}} play_partners
+ * @property {Object} game_detail_bundles  always {} since v2 — see below
+ */
+
+/**
+ * @typedef {Object} GameBundlesResponse  GET /bootstrap/game-bundles
+ * @property {Object<string, any>} game_detail_bundles  gameId -> bundle
+ * @property {number} owned_count
+ * @property {boolean} truncated  viewer owns more base games than the cap
  */
 
 /**

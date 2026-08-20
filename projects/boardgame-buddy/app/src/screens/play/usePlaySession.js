@@ -15,7 +15,7 @@ import api from '../../api/client';
 import LiveScores from '../../realtime/liveScores';
 import { emptyDraft, loadDraft, saveDraft, clearDraft } from '../../models/playSession';
 import { sanitizeRoundScore, parseRoundScore, autoSelectWinners } from '../../domain/scoring';
-import { savePlay } from './playSave';
+import { attachPhoto, savePlay } from './playSave';
 
 export default function usePlaySession({ me, initialCode, initialGame }) {
   const draftRef = useRef(null);
@@ -425,7 +425,7 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     if (code) api.updateSessionPhase(code, 'abandoned').catch(() => {});
   }, []);
 
-  // ── Save (save-then-photo; see playSave.js) ─────────────────────────────
+  // ── Save (photo uploads in parallel, attaches after; see playSave.js) ───
   const save = useCallback(async () => {
     const d = draftRef.current;
     if (!d.game?.id) {
@@ -434,9 +434,11 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     }
     setSaving(true);
     setError(null);
+    const snap = {};
     const result = await savePlay(d, lobbyRef.current?.code || null, {
       rounds: maxRoundCount(),
       resolvedScore,
+      snap,
     });
     if (!result.ok) {
       setError(result.error);
@@ -451,6 +453,10 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     };
     await clearDraft();
     draftRef.current = null;
+    // The play is safe; the photo is best-effort from here.
+    summary.photoFailed = result.uploadPromise
+      ? !(await attachPhoto(result.uploadPromise, result.playId))
+      : false;
     setSaving(false);
     return summary;
   }, [maxRoundCount, resolvedScore]);

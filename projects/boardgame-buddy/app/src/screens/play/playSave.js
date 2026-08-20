@@ -1,9 +1,19 @@
 // playSave — builds the PlayCreate payload from a finished draft and runs the
-// save-then-photo sequence (mirrors web play-flow-view._save): persist the
-// play first so a flaky upload can never lose the record, then attach the
-// photo best-effort via upload + PUT. A NETWORK failure (error without
-// .status) never loses the play — it lands in the offline outbox and uploads
-// on the next flush; only server rejections surface as errors.
+// save (mirrors web play-flow-view._runSave).
+//
+// Two round trips on the blocking path:
+//   1. the photo upload starts FIRST and is not awaited — on mobile upstream
+//      the bytes are the largest chunk of wall clock and nothing about them
+//      has to wait on the play row, only the attach does;
+//   2. the create/finalize is awaited, and the caller unblocks the moment it
+//      lands — not when the photo does.
+// The attach (`PATCH /plays/{id}/photo`, one column) then runs in the
+// background. Attaching through `PUT /plays/{id}` instead would full-replace
+// every player and expansion row to write one string.
+//
+// A NETWORK failure (error without .status) never loses the play — it lands
+// in the offline outbox and uploads on the next flush; only server rejections
+// surface as errors.
 
 import api from '../../api/client';
 import { parseRoundScore } from '../../domain/scoring';
@@ -33,10 +43,46 @@ export function buildPlayPayload(draft, { rounds, resolvedScore }) {
 }
 
 /**
- * @returns {Promise<{ok: boolean, error?: string, playId?: string|null, photoFailed?: boolean, queued?: boolean}>}
+ * Land an already-in-flight photo upload on the saved play. Best-effort: the
+ * play is already safe, so a failure here is a warning, never an error.
+ * @returns {Promise<boolean>} true when the photo made it
  */
-export async function savePlay(draft, lobbyCode, { rounds, resolvedScore }) {
+export async function attachPhoto(uploadPromise, playId) {
+  if (!uploadPromise || !playId) return false;
+  try {
+    const resp = await uploadPromise;
+    if (!resp?.photo_url) return false;
+    await api.attachPlayPhoto(playId, resp.photo_url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param {Object} draft
+ * @param {string|null} lobbyCode
+ * @param {{rounds: number, resolvedScore: Function, snap?: Object}} opts
+ *   `snap` carries the memoized upload promise across a Retry so the photo
+ *   bytes aren't pushed twice.
+ * @returns {Promise<{ok: boolean, error?: string, playId?: string|null,
+ *                    uploadPromise?: Promise<any>|null, queued?: boolean}>}
+ */
+export async function savePlay(draft, lobbyCode, { rounds, resolvedScore, snap }) {
   const payload = buildPlayPayload(draft, { rounds, resolvedScore });
+
+  // Start the upload alongside the save rather than after it. Cached on the
+  // snapshot so a Retry re-uses bytes already uploaded; cleared on failure so
+  // a Retry does get a fresh attempt.
+  const carrier = snap || {};
+  if (draft.photo && !carrier.uploadPromise) {
+    carrier.uploadPromise = api.uploadPlayPhoto(draft.photo).catch(() => {
+      carrier.uploadPromise = null;
+      return null;
+    });
+  }
+  const uploadPromise = carrier.uploadPromise || null;
+
   let saved;
   try {
     saved = lobbyCode ? await api.finalizeSession(lobbyCode, payload) : await api.createPlay(payload);
@@ -63,23 +109,11 @@ export async function savePlay(draft, lobbyCode, { rounds, resolvedScore }) {
         : null,
       winnerName: winner ? winner.name : null,
     });
-    return { ok: true, queued: true, playId: null, photoFailed: false };
+    return { ok: true, queued: true, playId: null, uploadPromise: null };
   }
   const playId = saved?.id || saved?.play_id || saved?.play?.id || null;
-
-  let photoFailed = false;
-  if (draft.photo) {
-    try {
-      const resp = await api.uploadPlayPhoto(draft.photo);
-      if (resp?.photo_url && playId) {
-        const { game_id, ...rest } = payload;
-        await api.updatePlay(playId, { ...rest, photo_url: resp.photo_url });
-      } else {
-        photoFailed = true;
-      }
-    } catch {
-      photoFailed = true;
-    }
-  }
-  return { ok: true, playId, photoFailed };
+  // Unblock here, on the play landing — the photo attaches in the background
+  // via attachPhoto(). Returning the promise lets the caller warn on the
+  // still-up wrap-up card if it never makes it.
+  return { ok: true, playId, uploadPromise };
 }

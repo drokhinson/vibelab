@@ -1,5 +1,9 @@
 import { initialState, ACTIONS as A } from './initialState';
 
+// Bumped by the server when /bootstrap's shape changes. v2 moved the
+// per-game detail bundles out to /bootstrap/game-bundles.
+export const EXPECTED_BOOTSTRAP_VERSION = 2;
+
 export function reducer(state, action) {
   switch (action.type) {
     case A.SET_AUTH_READY:
@@ -25,6 +29,11 @@ export function reducer(state, action) {
       const p = action.payload || {};
       const pb = p.profile_bundle || {};
       const now = Date.now();
+      // The server bumps bootstrap_version when the payload's shape changes;
+      // on a mismatch drop what we cached rather than mixing two shapes.
+      const stale = p.bootstrap_version != null && p.bootstrap_version !== EXPECTED_BOOTSTRAP_VERSION;
+      // /bootstrap stopped carrying these (they're an N+1 in SQL); they now
+      // arrive from the deferred SEED_GAME_BUNDLES. Kept for older servers.
       const bundles = {};
       for (const [id, bundle] of Object.entries(p.game_detail_bundles || {})) {
         bundles[id] = { bundle, at: now };
@@ -35,11 +44,12 @@ export function reducer(state, action) {
         feed: p.feed_first_page || state.feed,
         feedCursor: p.feed_cursor || null,
         myCollectionMap: pb.status_map || state.myCollectionMap,
-        expansionCounts: pb.expansion_counts || state.expansionCounts,
         stats: pb.stats || state.stats,
         profileBundle: p.profile_bundle || state.profileBundle,
-        gameBundles: { ...state.gameBundles, ...bundles },
-        recentlyPlayedGames: p.recently_played_games || [],
+        gameBundles: stale ? bundles : { ...state.gameBundles, ...bundles },
+        // `?? state` not `|| []` — an absent key must not wipe the seeds the
+        // offline path restored from AsyncStorage.
+        recentlyPlayedGames: p.recently_played_games ?? state.recentlyPlayedGames,
         playPartners: p.play_partners || state.playPartners,
         currentUser: p.current_user
           ? {
@@ -51,6 +61,15 @@ export function reducer(state, action) {
             }
           : state.currentUser,
       };
+    }
+    case A.SEED_GAME_BUNDLES: {
+      const now = Date.now();
+      const seeded = {};
+      for (const [id, bundle] of Object.entries(action.bundles || {})) {
+        seeded[id] = { bundle, at: now };
+      }
+      // Anything already cached is fresher than the warm-up — don't clobber.
+      return { ...state, gameBundles: { ...seeded, ...state.gameBundles } };
     }
     case A.SET_FEED:
       return { ...state, feed: action.feed, feedCursor: action.cursor ?? null, feedLoading: false };

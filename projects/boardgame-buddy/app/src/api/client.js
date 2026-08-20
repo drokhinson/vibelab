@@ -133,6 +133,10 @@ export const api = {
 
   // ── Bootstrap ──────────────────────────────────────────────────────────
   bootstrap: () => get('/bootstrap'),
+  // Deferred second stage. Building these is an N+1 in SQL and nothing on
+  // the first screen reads them, so the server split them out — we pull them
+  // after the user has landed. Game Detail falls back to its own fetch.
+  bootstrapGameBundles: () => get('/bootstrap/game-bundles'),
 
   // ── Profile / user ─────────────────────────────────────────────────────
   getProfile: () => get('/profile'),
@@ -208,6 +212,10 @@ export const api = {
   playFilterOptions: () => get('/plays/filter-options'),
   createPlay: (payload) => post('/plays', payload),
   updatePlay: (id, payload) => put(`/plays/${id}`, payload),
+  // Writes just the one column. Attaching through updatePlay instead is a
+  // FULL replacement — it deletes and re-inserts every player and expansion
+  // row to set a string.
+  attachPlayPhoto: (id, photoUrl) => patch(`/plays/${id}/photo`, { photo_url: photoUrl }),
   deletePlay: (id) => del(`/plays/${id}`),
   leavePlay: (id) => post(`/plays/${id}/leave`, {}),
   uploadPlayPhoto: (photo) => {

@@ -151,15 +151,12 @@ async function _uploadItem(item) {
   const playId = saved?.id || saved?.play_id || saved?.play?.id || null;
 
   if (item.photoUri && playId) {
-    // Photo attach mirrors playSave.js: upload, then PUT the same payload
-    // with the hosted url. Best-effort — a failure here never blocks the
-    // queue (the play itself is already saved).
+    // Photo attach mirrors playSave.js: upload, then PATCH the one column.
+    // Best-effort — a failure here never blocks the queue (the play itself
+    // is already saved).
     try {
       const resp = await api.uploadPlayPhoto({ uri: item.photoUri, name: 'play.jpg', type: 'image/jpeg' });
-      if (resp?.photo_url) {
-        const { game_id, ...rest } = item.payload;
-        await api.updatePlay(playId, { ...rest, photo_url: resp.photo_url });
-      }
+      if (resp?.photo_url) await api.attachPlayPhoto(playId, resp.photo_url);
     } catch {}
   }
   return playId;
