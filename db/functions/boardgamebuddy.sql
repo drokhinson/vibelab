@@ -34,7 +34,20 @@
 --            participant_count INT, participants JSONB)
 --   Defined in: db/migrations/boardgamebuddy/014_feed_order_by_played_at.sql
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/032_feed_plays_buddy_participation.sql
+--   Last updated in: db/migrations/boardgamebuddy/043_feed_perf_and_bootstrap_split.sql
+--               (perf only, no behavior change — verified identical rows and
+--               row order across 390 viewer x limit x cursor cases. A `page`
+--               CTE now applies the cursor and LIMIT first and a LATERAL
+--               resolves each page row's roster; previously the winners/
+--               participants CTEs group-aggregated the entire play_players
+--               table on every call — Postgres can't push the join qual
+--               through a GROUP BY subquery — so feed latency grew with total
+--               plays across all users, not the viewer's. 105 ms -> 5 ms on a
+--               30k-play fixture. Language changed sql -> plpgsql so `lim` can
+--               be interpolated as a literal via RETURN QUERY EXECUTE: as a
+--               bind parameter it destroyed the planner's row estimate for
+--               `page` and made the rewrite 8x slower than the original.)
+--               Behavior last changed in 032_feed_plays_buddy_participation.sql
 --               (visibility predicate widened from "logger ∈ visible OR
 --               viewer ∈ participants" to "any participant ∈ visible",
 --               so plays where a buddy was tagged but the logger is not
@@ -107,13 +120,32 @@
 --             game_detail_bundles (object keyed by game_id), owned_count,
 --             truncated }
 --   Defined in: db/migrations/boardgamebuddy/033_bootstrap_bundle.sql
+--   Last updated in: db/migrations/boardgamebuddy/043_feed_perf_and_bootstrap_split.sql
+--               (bootstrap_version → 2; the game-bundle block is now skipped
+--               when max_game_bundles <= 0, which is how the backend calls it)
 --   Called by:  shared-backend/routes/boardgame_buddy/bootstrap_routes.py
---               (GET /bootstrap)
+--               (GET /bootstrap, with max_game_bundles = 0)
 --   Purpose:    First-paint client cache warm-up. Composes bgb_profile_bundle
---               for the viewer and bgb_game_detail_bundle for every owned
---               game into one JSONB. The FE writes everything into its
---               localStorage-backed cache so the entire app navigates
+--               for the viewer into one JSONB. The FE writes everything into
+--               its localStorage-backed cache so the entire app navigates
 --               without further round trips until cached entries go stale.
+--               game_detail_bundles is left empty on the live call path —
+--               see bgb_game_bundles.
+
+-- bgb_game_bundles(viewer UUID, owned_plays_limit INT DEFAULT 5,
+--                  max_bundles INT DEFAULT 250)
+--   → JSONB { game_detail_bundles (object keyed by game_id), owned_count,
+--             truncated }
+--   Defined in: db/migrations/boardgamebuddy/043_feed_perf_and_bootstrap_split.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/bootstrap_routes.py
+--               (GET /bootstrap/game-bundles)
+--   Purpose:    Deferred second stage of the boot warm-up — one
+--               bgb_game_detail_bundle per owned base game so opening Game
+--               Detail is instant. Split out of bgb_bootstrap because it is
+--               an N+1 in SQL (up to max_bundles invocations, ~5 statements
+--               each) and nothing on the first screen reads it; the FE pulls
+--               it from an idle callback after the user has landed, and Game
+--               Detail falls back to its own fetch on a miss.
 --               bootstrap_version is bumped any time this payload's shape
 --               changes — the FE wipes its cache on mismatch.
 

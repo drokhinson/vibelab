@@ -65,6 +65,8 @@
       // hiccup while the phone wakes — as a logout, or a mid-session host gets
       // bounced out.
       if (event === "SIGNED_OUT" || !sess) {
+        _bootRouted = false;
+        _profileLoaded = false;
         window.store.set("user", null);
         window.router.go("auth");
         return;
@@ -72,15 +74,27 @@
 
       const supaUid = sess.user && sess.user.id;
       if (window.bgbCache && supaUid) {
+        // Synchronously rehydrates this user's persisted cache into memory.
         window.bgbCache.bindUser(supaUid);
       }
 
-      const currentView = window.store.get("currentView");
-      const onBoot = currentView === "splash" || currentView === "auth";
-      // A plain background token refresh while already signed in and past the
-      // boot splash needs nothing beyond the updated token above — don't
+      // Optimistic boot. The cache we just rehydrated already holds the last
+      // known profile, feed page, collection map and host-flow seeds — enough
+      // to put the user on their screen with zero network wait. /bootstrap
+      // still runs below and reconciles everything in the background.
+      const cachedMe = (supaUid && window.bgbCache) ? window.bgbCache.get("me", supaUid) : null;
+      if (!_bootRouted && cachedMe && window.User) {
+        window.store.set("user", new window.User(cachedMe));
+        routeAfterBoot();
+      }
+
+      // A plain background token refresh, once we've already landed AND have a
+      // live profile, needs nothing beyond the updated token above — don't
       // re-bootstrap (a failed refetch here used to bounce an active session).
-      if (event === "TOKEN_REFRESHED" && window.store.get("user") && !onBoot) {
+      // Gated on _profileLoaded rather than store.get('user'), which is now
+      // set optimistically from cache and no longer proves we reached the
+      // server this session.
+      if (event === "TOKEN_REFRESHED" && _profileLoaded && _bootRouted) {
         return;
       }
 
@@ -88,44 +102,90 @@
       // resume this is the first authed call after a reload; if it fails we
       // distinguish "auth is bad" from "network is flaky" so we never show a
       // login screen for a session that is actually valid.
-      const me = await loadProfileResilient();
-      if (me === AUTH_FAILED) {
-        window.store.set("user", null);
-        window.router.go("auth");
+      const profileLoad = loadProfileResilient();
+      if (_bootRouted) {
+        // Already painted from cache — reconcile without blocking anything.
+        profileLoad
+          .then(handleProfileOutcome)
+          .catch((e) => console.warn("Background profile load failed:", e));
         return;
       }
-      // Valid session but the profile couldn't load yet (flaky network on
-      // wake). Recover it in the background so the header/profile fill in once
-      // connectivity returns — without blocking the resume below.
-      if (me === LOAD_DEFERRED) {
-        retryProfileInBackground();
-      }
-
-      // Land where the user requested (deep link) or feed by default.
-      // pendingRoute is stashed on boot from window.location.pathname so a
-      // hard refresh on /play/{code}, /game/{id}, etc. resumes there instead of
-      // dropping back to the feed. We route on boot regardless of the profile
-      // outcome — a valid session must never be stranded on the splash; the
-      // resumed view's own (token-valid) calls work even while the profile
-      // catches up.
-      if (onBoot) {
-        const pending = window.store.get("pendingRoute");
-        window.store.set("pendingRoute", null);
-        if (pending && pending.name && pending.name !== "auth" && pending.name !== "splash") {
-          window.router.go(pending.name, pending.params || {});
-        } else {
-          window.router.go("feed");
-        }
-      }
-      // First-time onboarding: a brand-new profile carries needs_setup=true
-      // (migration 030, set by the dependency-side auto-create). Prompt the
-      // user to pick their display name + badge before they start using the
-      // app. Dismissing without saving leaves the flag set so the modal
-      // returns on next load.
-      if (me && me !== LOAD_DEFERRED && me.needs_setup) {
-        maybePromptFirstTimeSetup(me);
-      }
+      const me = await profileLoad;
+      handleProfileOutcome(me);
+      // A valid session must never be stranded on the splash, so we route
+      // regardless of the profile outcome — the resumed view's own
+      // (token-valid) calls work even while the profile catches up. The one
+      // exception is a genuinely bad token, which handleProfileOutcome has
+      // already redirected to /auth.
+      if (me !== AUTH_FAILED) routeAfterBoot();
     });
+  }
+
+  // Boot navigation happens exactly once per signed-in session. Supabase fires
+  // onAuthStateChange more than once at boot (INITIAL_SESSION, then often
+  // TOKEN_REFRESHED) and each invocation is an un-serialized async function, so
+  // without this latch a second invocation resolves seconds later — after the
+  // user has already tapped into the host flow — and yanks them back to the
+  // feed mid-typing. Cleared on sign-out so the next login routes again.
+  let _bootRouted = false;
+  // Whether a /bootstrap has actually reached the server this session. Distinct
+  // from _bootRouted, which can be true off nothing but the persisted cache.
+  let _profileLoaded = false;
+
+  // Land where the user requested (deep link) or the feed by default.
+  // pendingRoute is stashed on boot from window.location.pathname so a hard
+  // refresh on /play/{code}, /game/{id}, etc. resumes there instead of dropping
+  // back to the feed.
+  function routeAfterBoot() {
+    if (_bootRouted) return;
+    _bootRouted = true;
+    const pending = window.store.get("pendingRoute");
+    window.store.set("pendingRoute", null);
+    if (pending && pending.name && pending.name !== "auth" && pending.name !== "splash") {
+      window.router.go(pending.name, pending.params || {});
+    } else {
+      window.router.go("feed");
+    }
+    warmGameBundlesWhenIdle();
+  }
+
+  // The per-owned-game detail bundles are no longer part of /bootstrap (they're
+  // an N+1 in SQL and nothing on the first screen reads them). Pull them once
+  // the user is looking at something, so opening a game is still instant.
+  function warmGameBundlesWhenIdle() {
+    if (!window.Bootstrap || !window.Bootstrap.warmGameBundles) return;
+    const kick = () => window.Bootstrap.warmGameBundles().catch(() => {});
+    if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 3000 });
+    else setTimeout(kick, 0);
+  }
+
+  // Apply a loadProfileResilient() result. Runs either awaited (cold boot) or
+  // off a .then() (optimistic boot), so it must not assume it's on the boot
+  // path — routing is routeAfterBoot's job, not this function's.
+  function handleProfileOutcome(me) {
+    if (me === AUTH_FAILED) {
+      _bootRouted = false;
+      _profileLoaded = false;
+      window.store.set("user", null);
+      window.router.go("auth");
+      return;
+    }
+    // Valid session but the profile couldn't load yet (flaky network on wake).
+    // Recover it in the background so the header/profile fill in once
+    // connectivity returns.
+    if (me === LOAD_DEFERRED) {
+      retryProfileInBackground();
+      return;
+    }
+    _profileLoaded = true;
+    // First-time onboarding: a brand-new profile carries needs_setup=true
+    // (migration 030, set by the dependency-side auto-create). Prompt the user
+    // to pick their display name + badge before they start using the app.
+    // Dismissing without saving leaves the flag set so the modal returns on
+    // next load.
+    if (me && me.needs_setup) {
+      maybePromptFirstTimeSetup(me);
+    }
   }
 
   // Sentinels distinguishing the loadProfileResilient outcomes from a real User.
@@ -148,7 +208,7 @@
             me = new window.User(payload.current_user);
             window.store.set("user", me);
           }
-          return me || (window.store.get("user") || LOAD_DEFERRED);
+          return me || LOAD_DEFERRED;
         }
         const me = await window.User.current();
         window.store.set("user", me);
@@ -157,8 +217,11 @@
         if (e && (e.status === 401 || e.status === 403)) return AUTH_FAILED;
         if (attempt >= delays.length) {
           console.warn("Profile load failed (transient); keeping session:", e);
-          // Keep an already-known user if we have one; otherwise defer.
-          return window.store.get("user") || LOAD_DEFERRED;
+          // A cached user may already be in the store from the optimistic
+          // boot — leave it there. We still report DEFERRED, because what the
+          // caller needs to know is that this attempt never reached the
+          // server, so a background retry gets scheduled.
+          return LOAD_DEFERRED;
         }
         await new Promise((r) => setTimeout(r, delays[attempt]));
       }
@@ -166,8 +229,11 @@
   }
 
   // Background profile recovery after a deferred load (valid session, server
-  // unreachable on wake). Spaced retries that stop as soon as the user lands in
-  // the store — store.subscribe('user') then refreshes the header avatar.
+  // unreachable on wake). Spaced retries that stop as soon as a live profile
+  // lands — store.subscribe('user') then refreshes the header avatar. The exit
+  // condition is _profileLoaded, not store.get('user'): the optimistic boot
+  // fills the store from cache, so a user being present proves nothing about
+  // whether we've reached the server.
   let _profileRecovering = false;
   async function retryProfileInBackground() {
     if (_profileRecovering) return;
@@ -175,9 +241,15 @@
     try {
       for (let i = 0; i < 5; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        if (window.store.get("user")) return;
+        if (_profileLoaded) return;
         const me = await loadProfileResilient();
-        if (me === AUTH_FAILED || (me && me !== LOAD_DEFERRED)) return;
+        // LOAD_DEFERRED means "still unreachable" — keep looping. Anything
+        // else is terminal, and handleProfileOutcome applies it. (It can't
+        // recurse back into here: _profileRecovering is still true.)
+        if (me !== LOAD_DEFERRED) {
+          handleProfileOutcome(me);
+          return;
+        }
       }
     } finally {
       _profileRecovering = false;
@@ -251,6 +323,8 @@
       try { await window.supabaseClient.auth.signOut(); } catch (_) {}
     }
     window.session = null;
+    _bootRouted = false;
+    _profileLoaded = false;
     // Wipe persisted cache for this user BEFORE store.reset() so the unbind
     // sees the still-bound uid.
     if (window.bgbCache) window.bgbCache.unbindUser();

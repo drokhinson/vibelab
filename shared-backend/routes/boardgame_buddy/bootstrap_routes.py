@@ -1,9 +1,11 @@
 """First-paint bootstrap bundle.
 
-One round trip after auth that returns everything the FE caches:
+Two calls, split by what the first screen actually needs.
+
+GET /bootstrap is the blocking one — the FE waits on it only when it has no
+cached identity to boot from. It returns:
   - current_user (raw profile row)
   - profile_bundle (stats, shelves, recent plays, status_map, buddies, requests)
-  - game_detail_bundles (object keyed by game_id — one bundle per owned game)
   - feed_first_page + feed_cursor (composed in Python; reuses feed_service so
     Hot Games / Suggested Buddies / Featured-From-Collection interspersing is
     not duplicated)
@@ -11,10 +13,17 @@ One round trip after auth that returns everything the FE caches:
   - play_partners (host flow player-picker seed: accounts + ghosts + recent)
   - bootstrap_version (int; FE wipes cache when this changes)
 
-The FE writes each block straight into the appropriate cache namespace and
-runs the entire app off that cache until SWR background-refresh kicks in.
+GET /bootstrap/game-bundles is the deferred one — one bgb_game_detail_bundle
+per owned game. That's an N+1 in SQL (up to 250 invocations, ~5 statements
+each) and nothing on the first screen reads it, so the FE pulls it from an idle
+callback after the user has already landed. Game Detail falls back to its own
+fetch on a miss, so a slow or failed warm-up degrades to the old behavior.
+
+The FE writes each block straight into the appropriate cache namespace and runs
+the entire app off that cache until SWR background-refresh kicks in.
 """
 
+import asyncio
 from typing import Any
 
 from fastapi import Depends
@@ -23,7 +32,12 @@ from db import get_supabase
 
 from . import router
 from .dependencies import CurrentUser, get_current_user
+from .models import GameBundlesResponse
 from .services import buddy_service, feed_service, game_service, played_with_service
+
+# Cap on how many owned games get a prebuilt detail bundle. Mirrors the RPC's
+# own default; the overflow is marked `truncated` and lazily fetched instead.
+_MAX_GAME_BUNDLES = 250
 
 
 @router.get(
@@ -35,27 +49,69 @@ from .services import buddy_service, feed_service, game_service, played_with_ser
 async def get_bootstrap(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Return everything the FE caches on initial load in one round trip."""
+    """Return everything the FE caches on initial load, minus the game bundles."""
     sb = get_supabase()
-    rpc_result = sb.rpc("bgb_bootstrap", {"viewer": user.user_id}).execute()
-    payload: dict[str, Any] = dict(rpc_result.data or {})
+    viewer = user.user_id
 
-    # Compose the feed first page in Python so the Hot Games / Suggested
-    # Buddies / Featured-From-Collection rules stay in one place.
-    feed_page = feed_service.build_feed_page(sb, user.user_id, cursor=None, limit=20)
+    # Every block below is independent, but the Supabase client is synchronous,
+    # so calling them inline would serialize ~17 round trips *and* block the
+    # event loop for every other in-flight request. to_thread + gather makes
+    # the wall time the slowest single block instead of the sum.
+    #
+    # max_game_bundles=0 tells bgb_bootstrap to skip the per-owned-game N+1;
+    # /bootstrap/game-bundles below serves that separately.
+    (
+        rpc_result,
+        feed_page,
+        recent_games,
+        buddies,
+        ghosts,
+        partners,
+    ) = await asyncio.gather(
+        asyncio.to_thread(
+            lambda: sb.rpc(
+                "bgb_bootstrap", {"viewer": viewer, "max_game_bundles": 0}
+            ).execute()
+        ),
+        asyncio.to_thread(feed_service.build_feed_page, sb, viewer, cursor=None, limit=20),
+        asyncio.to_thread(game_service.recently_played, sb, viewer, limit=6),
+        asyncio.to_thread(buddy_service.list_accepted_buddies, sb, viewer),
+        asyncio.to_thread(played_with_service.fetch_ghost_players, sb, viewer),
+        asyncio.to_thread(played_with_service.fetch_played_with, sb, viewer),
+    )
+
+    payload: dict[str, Any] = dict(rpc_result.data or {})
     payload["feed_first_page"] = feed_page.model_dump(mode="json")
     payload["feed_cursor"] = feed_page.next_cursor
-
-    # Host-flow seeds: recently-played games + the player-picker's combined
-    # buddies/ghosts/recent bundle. Both lists only mutate when the user
-    # finalizes a play; the FE re-warms after save.
-    payload["recently_played_games"] = [
-        g.model_dump(mode="json") for g in game_service.recently_played(sb, user.user_id, limit=6)
-    ]
+    payload["recently_played_games"] = [g.model_dump(mode="json") for g in recent_games]
     payload["play_partners"] = {
-        "accounts": [b.model_dump(mode="json") for b in buddy_service.list_accepted_buddies(sb, user.user_id)],
-        "ghosts": [g.model_dump(mode="json") for g in played_with_service.fetch_ghost_players(sb, user.user_id)],
-        "recent": [p.model_dump(mode="json") for p in played_with_service.fetch_played_with(sb, user.user_id)],
+        "accounts": [b.model_dump(mode="json") for b in buddies],
+        "ghosts": [g.model_dump(mode="json") for g in ghosts],
+        "recent": [p.model_dump(mode="json") for p in partners],
     }
-
     return payload
+
+
+@router.get(
+    "/bootstrap/game-bundles",
+    response_model=GameBundlesResponse,
+    status_code=200,
+    summary="Deferred warm-up: detail bundles for every owned game",
+)
+async def get_bootstrap_game_bundles(
+    user: CurrentUser = Depends(get_current_user),
+) -> GameBundlesResponse:
+    """Return one prebuilt game-detail bundle per owned game, keyed by game_id."""
+    sb = get_supabase()
+    result = await asyncio.to_thread(
+        lambda: sb.rpc(
+            "bgb_game_bundles",
+            {"viewer": user.user_id, "max_bundles": _MAX_GAME_BUNDLES},
+        ).execute()
+    )
+    data = dict(result.data or {})
+    return GameBundlesResponse(
+        game_detail_bundles=data.get("game_detail_bundles") or {},
+        owned_count=data.get("owned_count") or 0,
+        truncated=bool(data.get("truncated")),
+    )

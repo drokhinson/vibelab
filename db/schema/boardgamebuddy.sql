@@ -367,6 +367,10 @@ CREATE INDEX IF NOT EXISTS idx_bgb_plays_user_played
   ON public.boardgamebuddy_plays (user_id, played_at DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_game_played
   ON public.boardgamebuddy_plays (game_id, played_at DESC);
+-- Migration 043: bgb_hot_games ranges on played_at alone; neither composite
+-- above leads with it, so it was seq-scanning the plays table per /feed.
+CREATE INDEX IF NOT EXISTS idx_bgb_plays_played_at
+  ON public.boardgamebuddy_plays (played_at DESC);
 -- Phase 2 (migration 020): alphabetical shelf sort.
 CREATE INDEX IF NOT EXISTS idx_bgb_collections_user_status_name
   ON public.boardgamebuddy_collections (user_id, status, game_name);
@@ -432,6 +436,11 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_host
   ON public.boardgamebuddy_play_sessions (host_user_id, status);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_code_phase
   ON public.boardgamebuddy_play_sessions (code, phase);
+-- Migration 043: bgb_joinable_sessions filters expires_at > now() over the
+-- open sessions; partial because that's the only status it looks at.
+CREATE INDEX IF NOT EXISTS idx_bgb_play_sessions_expires
+  ON public.boardgamebuddy_play_sessions (expires_at)
+  WHERE status = 'open';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_session_user_unique
   ON public.boardgamebuddy_play_session_participants (session_id, user_id)
   WHERE user_id IS NOT NULL;

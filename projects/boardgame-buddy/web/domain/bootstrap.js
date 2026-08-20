@@ -11,31 +11,47 @@
 //     generated_at:         timestamp,
 //     current_user:         profile row,
 //     profile_bundle:       bgb_profile_bundle output for self,
-//     game_detail_bundles:  { gameId: bgb_game_detail_bundle output },
-//     owned_count:          int,
-//     truncated:            bool,      // true if >max_game_bundles owned
 //     feed_first_page:      FeedPageResponse,
 //     feed_cursor:          string|null,
 //     recently_played_games: GameSummary[],  // host flow game-picker seed
 //     play_partners:        { accounts, ghosts, recent },  // host player-picker seed
 //   }
+//
+// The heavy per-owned-game detail bundles are NOT in here — building them is
+// an N+1 in SQL and nothing on the first screen reads them, so they come from
+// a second, deferred call (warmGameBundles → GET /bootstrap/game-bundles):
+//   { game_detail_bundles: { gameId: bgb_game_detail_bundle output },
+//     owned_count: int, truncated: bool }  // truncated = >max_bundles owned
 
 (function () {
   // Bumped when the bootstrap RPC's shape changes. Mismatch with the server's
   // bootstrap_version forces a full cache wipe before rehydrating.
-  const EXPECTED_BOOTSTRAP_VERSION = 1;
+  // v2: game_detail_bundles moved out to /bootstrap/game-bundles.
+  const EXPECTED_BOOTSTRAP_VERSION = 2;
 
   // TTL pairs (freshTtl, staleTtl) per namespace. Fresh = get() returns it,
   // no refresh. Stale = swr() returns it AND fires a background refresh.
   // hostSeed = 24h fresh / 7d stale — these lists only mutate on play
   // finalize or buddy graph edits, both of which invalidate explicitly.
+  // feedFirst carries a long stale window on purpose: it's what lets a refresh
+  // paint the last-seen feed immediately instead of sitting on a skeleton
+  // while /bootstrap flies. Staleness after a write isn't governed by this —
+  // Play's _invalidatePlayDeps() deletes the entry outright.
+  // identity is the boot seed init.js reads before any await; it's rewritten on
+  // every successful bootstrap, so a long TTL can't let it drift.
   const TTLS = {
     profile:     { fresh: 60 * 1000,        stale: 5 * 60 * 1000 },
     gameBundle:  { fresh: 30 * 60 * 1000,   stale: 60 * 60 * 1000 },
-    feedFirst:   { fresh: 60 * 1000,        stale: 10 * 60 * 1000 },
+    feedFirst:   { fresh: 60 * 1000,        stale: 24 * 60 * 60 * 1000 },
     stats:       { fresh: 60 * 1000,        stale: 10 * 60 * 1000 },
     hostSeed:    { fresh: 24 * 60 * 60 * 1000, stale: 7 * 24 * 60 * 60 * 1000 },
+    identity:    { fresh: 30 * 24 * 60 * 60 * 1000, stale: 30 * 24 * 60 * 60 * 1000 },
   };
+
+  // Single-flight guards. Supabase can fire two auth callbacks at boot and both
+  // reach for the profile; without these they'd each issue their own request.
+  let _loadInflight = null;
+  let _bundlesInflight = null;
 
   class Bootstrap {
     /**
@@ -43,24 +59,48 @@
      * caller (init.js) can react to it (e.g. set the user store slot).
      * On any error, rejects — init.js falls back to per-domain lazy fetches.
      */
-    static async load() {
+    static load() {
+      if (_loadInflight) return _loadInflight;
+      _loadInflight = Bootstrap._load().finally(() => { _loadInflight = null; });
+      return _loadInflight;
+    }
+
+    static async _load() {
       const payload = await window.api.get("/bootstrap");
       if (!payload || typeof payload !== "object") {
         throw new Error("bootstrap: empty payload");
       }
 
       // Server schema bump → wipe cache before seeding the new shape so we
-      // don't mix old + new entries.
-      if (payload.bootstrap_version !== EXPECTED_BOOTSTRAP_VERSION) {
-        const me = payload.current_user;
-        if (window.bgbCache && me && me.id) {
-          window.bgbCache.unbindUser();
-          window.bgbCache.bindUser(me.id);
-        }
+      // don't mix old + new entries. clear() with no namespace drops both the
+      // in-memory maps and this user's localStorage keys.
+      if (payload.bootstrap_version !== EXPECTED_BOOTSTRAP_VERSION && window.bgbCache) {
+        window.bgbCache.clear();
       }
 
       Bootstrap._seedCaches(payload);
       Bootstrap._seedStore(payload);
+      return payload;
+    }
+
+    /**
+     * Second-stage warm-up: the per-owned-game detail bundles. Split out of
+     * /bootstrap because building them is an N+1 in SQL (one
+     * bgb_game_detail_bundle per owned game, up to 250) and nothing on the
+     * first screen reads them — Game Detail is the only consumer and it falls
+     * back to its own fetch on a miss. init.js kicks this from an idle
+     * callback once the user has landed.
+     */
+    static warmGameBundles() {
+      if (_bundlesInflight) return _bundlesInflight;
+      _bundlesInflight = Bootstrap._warmGameBundles()
+        .finally(() => { _bundlesInflight = null; });
+      return _bundlesInflight;
+    }
+
+    static async _warmGameBundles() {
+      const payload = await window.api.get("/bootstrap/game-bundles");
+      Bootstrap._seedGameBundles(payload && payload.game_detail_bundles);
       return payload;
     }
 
@@ -99,19 +139,22 @@
         );
       }
 
-      // Every owned game's full detail bundle. Opening any of these in
-      // Game Detail is now instant.
-      const bundles = payload.game_detail_bundles || {};
-      for (const gameId of Object.keys(bundles)) {
-        const b = bundles[gameId];
-        if (!b) continue;
+      // Identity seed. This is the one entry init.js reads synchronously right
+      // after bindUser(), before any await — it's what lets the next boot paint
+      // the user's screen without waiting on the network.
+      if (viewerId && me) {
         cache.setWithTtls(
-          "game.bundle",
-          gameId,
-          b,
-          { freshTtl: TTLS.gameBundle.fresh, staleTtl: TTLS.gameBundle.stale },
+          "me",
+          viewerId,
+          me,
+          { freshTtl: TTLS.identity.fresh, staleTtl: TTLS.identity.stale },
         );
       }
+
+      // Normally empty now — the bundles arrive via warmGameBundles(). Still
+      // honored here so a /bootstrap that does carry them (or a rollback to
+      // the v1 payload) seeds correctly.
+      Bootstrap._seedGameBundles(payload.game_detail_bundles);
 
       // Stats — pulled from profile_bundle.stats so we don't pay a separate
       // /users/me/stats round trip on Profile mount.
@@ -163,6 +206,25 @@
       if (pb && pb.status_map && pb.expansion_counts &&
           window.Collection && window.Collection.seedFromBundle) {
         window.Collection.seedFromBundle(pb.status_map, pb.expansion_counts);
+      }
+    }
+
+    /**
+     * Seed the game.bundle namespace from a {gameId: bundle} map. Shared by
+     * the bootstrap payload and the deferred /bootstrap/game-bundles warm-up
+     * so both write the same TTLs.
+     */
+    static _seedGameBundles(bundles) {
+      if (!window.bgbCache || !bundles) return;
+      for (const gameId of Object.keys(bundles)) {
+        const b = bundles[gameId];
+        if (!b) continue;
+        window.bgbCache.setWithTtls(
+          "game.bundle",
+          gameId,
+          b,
+          { freshTtl: TTLS.gameBundle.fresh, staleTtl: TTLS.gameBundle.stale },
+        );
       }
     }
 
