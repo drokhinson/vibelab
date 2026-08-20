@@ -55,15 +55,11 @@
         .then((r) => { Collection.invalidateMyStatusMap(); return r; });
     }
 
-    static remove(itemId) {
-      return window.api.del(`/collection/${itemId}`)
-        .then((r) => { Collection.invalidateMyStatusMap(); return r; });
-    }
-
     // Remove by game UUID — the path the status-tag picker uses to clear
-    // a tile's status without needing the underlying collection row id.
+    // a tile's status. DELETE /collection/{game_id} already keys on
+    // (user_id, game_id), so the game UUID is all the backend needs.
     static removeByGame(gameId) {
-      return window.api.del(`/collection/by-game/${gameId}`)
+      return window.api.del(`/collection/${gameId}`)
         .then((r) => { Collection.invalidateMyStatusMap(); return r; });
     }
 
