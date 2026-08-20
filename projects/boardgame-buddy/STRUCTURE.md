@@ -56,7 +56,18 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
   the owned/wishlist collection persists to AsyncStorage and hydrates before any network call;
   game search falls through **owned (instant, offline) → BGB `/search` → BGG import**. Screen
   data uses a 10-min-TTL serve-then-refresh cache (`app/src/store/cache.js`) with a visible
-  RefreshHint while revalidating; `GET /bootstrap` seeds first paint.
+  RefreshHint while revalidating; `GET /bootstrap` seeds first paint and its `bootstrap_version`
+  wipes the cache on a mismatch. The per-game detail bundles come from the deferred
+  `GET /bootstrap/game-bundles`, fired from `InteractionManager.runAfterInteractions` once the
+  first screen has settled — Game Detail force-fetches its own bundle, so a miss is harmless.
+- **Wrap-up card** (`app/src/components/PolaroidPopup.js`): Save puts the "Well played!" polaroid
+  up in the same frame and runs the write behind it. `showPolaroid()` returns a card id and
+  `updatePolaroid(patch, id)` no-ops once a newer card replaced it. Modal while saving (no close,
+  inert backdrop, spinning CTA), then **Go to feed** + host-only **Another round?**; a server
+  rejection swaps in **Retry** with the draft left intact, a failed photo becomes a warning line
+  on the card, and a network failure settles to "Saved on this phone" because the outbox owns it.
+  **Another round?** reseeds a new session with the same game/expansions/mode/roster (teams kept,
+  scores reset) under a new code and pushes the roster as participants.
 - **Offline play recording** (`app/src/offline/playOutbox.js`): when the lobby can't be opened
   (network failure), the cascade runs as an **offline table** — phases flip locally, ghost
   players + persisted host seeds, no invite code — and Save queues the play (photo copied to
@@ -73,7 +84,15 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
 - **Realtime** (`app/src/realtime/`): `liveScores`, `sessionPhase` (Supabase channels);
   draft model in `app/src/models/playSession.js` (AsyncStorage-persisted).
 - **API client** (`app/src/api/client.js`): all ~80 endpoints incl. admin, 401 refresh-retry,
-  multipart photo upload; JSDoc response typedefs in `app/src/api/types.js`.
+  multipart photo upload; JSDoc response typedefs in `app/src/api/types.js`. The photo attaches
+  via `PATCH /plays/{id}/photo` and its upload runs *alongside* the create/finalize, so the
+  blocking save path is two round trips.
+- **Expansion labels** (`app/src/domain/expansionName.js`): `stripBaseGameName()` is the native
+  twin of `web/helpers.js` and the backend's `_strip_base_prefix` — keep the three in sync. Applied
+  where the base game is already the context (game page list, Gather chips, a play's chips); every
+  other surface keeps the full stored name. The Gather picker gains a filter past five expansions
+  and caps its height; collection tiles show `game.expansion_count` (catalog-wide) as a
+  `git-fork N` badge.
 - **Auth/OAuth prerequisites (web-side, not in `app/`):** Google sign-in routes through a hosted
   `web/auth-callback.html` bridge page on the BGB Vercel deploy, allowlisted in Supabase → Auth →
   URL Configuration. Store submission also needs `web/privacy.html` + `web/delete-account.html`.
