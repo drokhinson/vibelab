@@ -1472,7 +1472,6 @@
       const list = this._expansions || [];
       const open = !!this._expansionsOpen;
       const chevron = open ? "chevron-down" : "chevron-right";
-      const selected = (this._ps.expansionIds || []).length;
       const baseName = (snap && snap.name) || "";
       // Carcassonne alone has dozens. Past the threshold the list caps at
       // five visible rows and scrolls, with a filter above it; Import sits
@@ -1484,7 +1483,7 @@
                   onclick="window.playFlowView._toggleExpansionsPicker()">
             <span class="collapsible-header__title">
               <i data-lucide="puzzle" class="w-4 h-4"></i>
-              Expansions${selected ? ` (${selected} selected)` : ""}
+              <span class="cascade-exp-title">${this._expansionsHeaderLabel()}</span>
             </span>
             <i data-lucide="${chevron}" class="w-4 h-4 collapsible-header__chev"></i>
           </button>
@@ -1601,6 +1600,7 @@
       const label = stripBaseGameName(e.name, baseName);
       return `
         <li class="expansion-list__row cascade-exp-row ${active ? "is-active" : ""}"
+            data-exp-id="${escapeAttr(e.expansion_game_id)}"
             onclick="window.playFlowView._toggleExpansion('${e.expansion_game_id}')"
             title="${escapeAttr(e.name || "")}"
             style="--exp-color:${e.color || "#C9922A"}">
@@ -1630,7 +1630,45 @@
       else ids.push(expansionGameId);
       this._ps.expansionIds = ids;
       this._ps.persist();
-      this.render();
+      // A full render() would rebuild .cascade-exp-scroll and reset its
+      // scrollTop, bouncing the user back to the top of a long expansion list
+      // after every tap. Same reasoning as _onExpansionFilterInput above:
+      // patch only what a toggle actually changes.
+      this._refreshExpansionRow(expansionGameId);
+      this._refreshExpansionCount();
+      // The guide lives in the (locked) Play screen but reads expansionIds,
+      // so keep it in sync — render() used to do this for us.
+      this._mountReferenceGuide();
+    }
+
+    /** Swap one row in place. Row height is fixed, so the scroll box can't move. */
+    _refreshExpansionRow(expansionGameId) {
+      const host = document.getElementById("cascade-exp-list");
+      if (!host) return;
+      const sel = `[data-exp-id="${CSS.escape(expansionGameId)}"]`;
+      const row = host.querySelector(sel);
+      const e = (this._expansions || []).find(
+        (x) => x.expansion_game_id === expansionGameId,
+      );
+      if (!row || !e) return;
+      const snap = this._ps.gameSnapshot;
+      row.outerHTML = this._renderExpansionPickerRow(e, (snap && snap.name) || "");
+      const next = host.querySelector(sel);
+      if (next) this.refreshIcons(next);
+    }
+
+    // The whole label lives in one span (not just the count) because
+    // .collapsible-header__title is an inline-flex with a gap — splitting the
+    // text in two would make the count its own flex item and widen the space
+    // before it.
+    _expansionsHeaderLabel() {
+      const n = (this._ps.expansionIds || []).length;
+      return `Expansions${n ? ` (${n} selected)` : ""}`;
+    }
+
+    _refreshExpansionCount() {
+      const el = this.container.querySelector(".cascade-exp-title");
+      if (el) el.textContent = this._expansionsHeaderLabel();
     }
 
     // ── Reference guide ─────────────────────────────────────────────────────
