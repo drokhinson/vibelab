@@ -537,8 +537,11 @@
       ps.playMode = this._game.play_mode || null;
       ps.persist();
       window.store.set("activePlay", ps);
-      // play-flow-view.onMount calls _ensureLobbyOpen() which creates the
-      // server-side lobby on first paint, so we don't need to do it here.
+      // _ensureLobbyOpen() in play-flow-view still owns creating the lobby;
+      // starting the request here just lets it overlap the navigation and
+      // first paint, so the invite card lands with a code instead of dashes.
+      // Safe at this point: any in-progress lobby was abandoned above.
+      window.PlaySession.prefetchLobby({ gameId: ps.gameId });
       window.router.go("play-flow");
     }
   }

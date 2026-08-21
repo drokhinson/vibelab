@@ -37,7 +37,7 @@
   const _flightGen = new Map();
   let _boundUid = null;
   let _persist = true; // flips false after a QuotaExceeded fallback
-  const _counters = { freshHit: 0, staleHit: 0, miss: 0, set: 0, evict: 0 };
+  const _counters = { freshHit: 0, staleHit: 0, peekHit: 0, miss: 0, set: 0, evict: 0 };
 
   function _flightKey(ns, key) {
     return ns + "\x00" + key;
@@ -248,6 +248,33 @@
         if (_persist && _boundUid) {
           try { localStorage.removeItem(_storageKey(ns, key)); } catch (_) {}
         }
+      }
+      _counters.miss++;
+      return null;
+    },
+
+    /**
+     * Synchronous stale-tolerant read — the primitive behind every "paint from
+     * what bootstrap warmed" peek in the views. Where get() serves only the
+     * fresh window, this serves anything swr() would still hand back, i.e. out
+     * to staleTtl. It does NOT kick a refresh: the caller paints from it and
+     * then fires its own SWR read, which is what repaints with fresher data.
+     *
+     * Views that peeked through get() were silently blank past freshTtl (60s
+     * for the profile bundle) — the Play tab's "Another Round" card being the
+     * one that showed.
+     */
+    peek(ns, key) {
+      const b = _store.get(ns);
+      if (!b) { _counters.miss++; return null; }
+      const entry = b.get(key);
+      if (!entry) { _counters.miss++; return null; }
+      const age = Date.now() - entry.storedAt;
+      if (age < entry.staleTtl) { _counters.peekHit++; return entry.value; }
+      // Past stale — same eviction get() does, so a dead entry doesn't linger.
+      b.delete(key);
+      if (_persist && _boundUid) {
+        try { localStorage.removeItem(_storageKey(ns, key)); } catch (_) {}
       }
       _counters.miss++;
       return null;

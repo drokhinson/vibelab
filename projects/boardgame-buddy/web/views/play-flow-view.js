@@ -83,6 +83,9 @@
           const s = await window.PlaySession.fetchLobby(urlCode);
           const me = window.store.get("user");
           if (s && me && s.host_user_id && s.host_user_id !== me.id) {
+            // Bails before _ensureLobbyOpen, so anything a chooser tap minted
+            // would never be consumed — close it rather than leak it.
+            window.PlaySession.discardPrefetchedLobby();
             window.router.go("session-viewer", { code: urlCode });
             return;
           }
@@ -241,7 +244,20 @@
         }
       }
       try {
-        const session = await window.PlaySession.openLobby({ gameId: this._ps.gameId });
+        // The tap handler that sent us here (Host / Another Round / a game
+        // tile) already fired POST /sessions, so this usually resolves on the
+        // spot. Falls through to a normal mint when there was no prefetch, it
+        // aged out, or it failed.
+        //
+        // No game-id match check on purpose: a lobby minted before the user
+        // picked a game is still a good lobby — _reconcileGameToLobby() below
+        // exists precisely to push a late pick to the server.
+        const pre = window.PlaySession.takePrefetchedLobby();
+        let session = null;
+        if (pre) { try { session = await pre; } catch (_) { session = null; } }
+        if (!session) {
+          session = await window.PlaySession.openLobby({ gameId: this._ps.gameId });
+        }
         this._lobby = session;
         this._ps.code = session.code;
         this._ps.sessionId = session.id;
@@ -2039,6 +2055,16 @@
 
       const savedId = (saved && (saved.id || saved.play_id || (saved.play && saved.play.id))) || null;
 
+      // Seed the Play tab's "Another Round" card from the row we just saved,
+      // so it's correct the instant the host lands back there — no refetch.
+      // Order matters: both Play.create and PlaySession.finalizeLobby chain
+      // their cache invalidation BEFORE resolving, so this write lands after
+      // it. If that invalidation ever moves to a .finally() or fires in
+      // parallel, it will race this write and blank the card.
+      if (saved && window.Play && window.Play.rememberLastPlay) {
+        window.Play.rememberLastPlay(saved.play || saved);
+      }
+
       this._saving = false;
       // The play is on the server — the draft has done its job. Note we do
       // NOT render() after this: the card covers the view, and every exit
@@ -2153,6 +2179,13 @@
      */
     async _startAnotherRound(seed) {
       if (window.PolaroidPopup) window.PolaroidPopup.dismiss();
+
+      // Start the new lobby's POST /sessions before the teardown + repaint
+      // below, so it overlaps them instead of following them. Safe here: the
+      // session this restarts from has just been finalized, so there is no
+      // open lobby for bgb_create_session's stale-abandon sweep to close.
+      // _ensureLobbyOpen() picks it up on the create branch further down.
+      window.PlaySession.prefetchLobby({ gameId: seed.gameId });
 
       // Tear down the finished session's live wiring — mirrors onUnmount.
       this._stopLobbyPoll();

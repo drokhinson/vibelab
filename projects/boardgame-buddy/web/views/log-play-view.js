@@ -61,6 +61,29 @@
       };
     }
 
+    // Everything the first paint needs, read synchronously from cache. Called
+    // by renderLoading() (before onMount runs at all) and again by onMount so
+    // a re-entry after a cache warm-up picks up the newer values.
+    _hydrateFromCache() {
+      this._lastPlay = this._cachedLastPlay();
+      this._collectionMap =
+        window.store.get("myCollectionMap")
+        || (window.Collection.cachedStatusMap && window.Collection.cachedStatusMap())
+        || {};
+    }
+
+    // View.mount() calls this synchronously before onMount(), so the chooser —
+    // Host / Another Round / Join, the resume banner, the filters — is on
+    // screen in the tap frame. The grid below renders its loader; nothing here
+    // waits on the network. Deliberately does NOT reset _filters / _page /
+    // _games: a return visit repaints the user's last filter state instantly.
+    renderLoading() {
+      this._hydrateFromCache();
+      this._loading = true;
+      this._error = null;
+      this.render();
+    }
+
     async onMount() {
       // Keep the polaroid status badges in sync with any other view that
       // mutates the user's collection (game-detail status picker, profile
@@ -77,21 +100,28 @@
         else this._collectionMap[gameId] = status;
         this.render();
       });
-      // Sync peek first so the "Another Round" card is in the very first
-      // paint rather than popping in and shoving the grid down. Bootstrap
-      // warms this bundle at login, so it's normally a hit.
-      this._lastPlay = this._recentPlayFrom(window.Profile.cachedBundle());
-      try {
-        this._collectionMap = (await window.Collection.myStatusMap()) || {};
-      } catch (_) {
-        this._collectionMap = {};
-      }
-      this.render();
+      // renderLoading() already painted the chooser from cache one frame ago
+      // (it runs synchronously just before this). Re-hydrating is idempotent
+      // and covers the case where that call threw; _loadGames() below paints
+      // synchronously either way, so there's no second full render here.
+      this._hydrateFromCache();
+
+      // Everything below is unawaited and independent. The status map only
+      // feeds badges on the grid far below the fold, so blocking the chooser's
+      // paint on it (as this used to) traded the whole screen for a detail.
+      window.Collection.myStatusMap()
+        .then((m) => {
+          if (!this._mounted || !m) return;
+          this._collectionMap = m;
+          this.render();
+        })
+        .catch(() => {});
       this._refreshLastPlay();
-      await this._loadGames();
+      const gamesLoaded = this._loadGames();
       // Honor `focus=find` query param from the Profile FAB → scroll the
       // section into view after the first render completes.
       if (this.params && this.params.focus === "find") {
+        await gamesLoaded;
         requestAnimationFrame(() => {
           const el = this.container.querySelector(".lp-find-section");
           if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -199,27 +229,7 @@
           </section>
         ` : ""}
 
-        <div class="cascade-chooser__cards">
-          <button class="cascade-chooser__card cascade-chooser__card--host"
-                  onclick="window.router.go('play-flow')">
-            <span class="cascade-chooser__card-icon">
-              <i data-lucide="dice-6" class="w-7 h-7"></i>
-            </span>
-            <span class="cascade-chooser__card-title">Host a game</span>
-            <span class="cascade-chooser__card-body">Open a session, log a play.</span>
-          </button>
-
-          ${this._renderAnotherRoundCard()}
-
-          <button class="cascade-chooser__card cascade-chooser__card--join"
-                  onclick="window.router.go('join-session')">
-            <span class="cascade-chooser__card-icon">
-              <i data-lucide="qr-code" class="w-7 h-7"></i>
-            </span>
-            <span class="cascade-chooser__card-title">Join a game</span>
-            <span class="cascade-chooser__card-body">Enter a code or join a buddy.</span>
-          </button>
-        </div>
+        <div class="cascade-chooser__cards">${this._renderChooserCards()}</div>
 
         <hr class="lp-divider" />
 
@@ -231,6 +241,30 @@
         </section>
       `;
       this.refreshIcons();
+    }
+
+    _renderChooserCards() {
+      return `
+        <button class="cascade-chooser__card cascade-chooser__card--host"
+                onclick="window.logPlayView._host()">
+          <span class="cascade-chooser__card-icon">
+            <i data-lucide="dice-6" class="w-7 h-7"></i>
+          </span>
+          <span class="cascade-chooser__card-title">Host a game</span>
+          <span class="cascade-chooser__card-body">Open a session, log a play.</span>
+        </button>
+
+        ${this._renderAnotherRoundCard()}
+
+        <button class="cascade-chooser__card cascade-chooser__card--join"
+                onclick="window.router.go('join-session')">
+          <span class="cascade-chooser__card-icon">
+            <i data-lucide="qr-code" class="w-7 h-7"></i>
+          </span>
+          <span class="cascade-chooser__card-title">Join a game</span>
+          <span class="cascade-chooser__card-body">Enter a code or join a buddy.</span>
+        </button>
+      `;
     }
 
     _renderFilters() {
@@ -396,8 +430,31 @@
       window.Chapter.prefetchMyChapters(g.id);
       // If a lobby is already open (e.g. user came back after starting a
       // host session), push the swap to the server so joiners see it.
+      // Otherwise start minting one now — see _host() for why the two cases
+      // must stay exclusive.
       if (ps.code) {
         window.PlaySession.updateLobby(ps.code, { gameId: g.id }).catch(() => {});
+      } else {
+        window.PlaySession.prefetchLobby({ gameId: g.id });
+      }
+      window.router.go("play-flow");
+    }
+
+    // ── Host ───────────────────────────────────────────────────────────────
+
+    // Kick POST /sessions here rather than letting PlayFlowView.onMount do it,
+    // so the round trip overlaps the navigation and first paint instead of
+    // following them. By the time Gather renders, the code is usually already
+    // in hand.
+    //
+    // The resumable-session guard is load-bearing, not defensive:
+    // bgb_create_session abandons every other open session this host owns, so
+    // minting speculatively here would close the lobby the resume banner is
+    // offering — before _ensureLobbyOpen ever got to revalidate it.
+    _host() {
+      if (!this._resumableSession()) {
+        const ps = window.store.get("activePlay");
+        window.PlaySession.prefetchLobby({ gameId: (ps && ps.gameId) || null });
       }
       window.router.go("play-flow");
     }
@@ -407,6 +464,19 @@
     _recentPlayFrom(bundle) {
       const plays = bundle && bundle.recent_plays;
       return (Array.isArray(plays) && plays[0]) || null;
+    }
+
+    // Sync source of truth for the Another Round card. The `play.last` seed is
+    // written by bootstrap, by every profile-bundle fetch, and by the host
+    // flow the instant a play saves — so it survives the profile bundle being
+    // invalidated after a save and being expired after 60s, which is what used
+    // to make the card arrive late. The bundle peek is the bridge for a
+    // session that started before the seed existed.
+    _cachedLastPlay() {
+      const seed = (window.Play && window.Play.cachedLastPlay)
+        ? window.Play.cachedLastPlay()
+        : null;
+      return seed || this._recentPlayFrom(window.Profile.cachedBundle());
     }
 
     // SWR refresh behind the sync peek in onMount. Only re-renders when the
@@ -425,7 +495,19 @@
       // don't paint into a container this view no longer owns. onMount's
       // sync peek picks the refreshed value up on the next visit.
       if (!this._mounted) return;
-      this.render();
+      this._patchChooserCards();
+    }
+
+    // Repaint just the three chooser cards. render() rebuilds the entire
+    // container via innerHTML, so using it here yanked the grid down (and
+    // reflashed every polaroid) the moment a late last-play landed. With the
+    // seed in place this path is rare; when it does run, nothing outside the
+    // chooser row moves.
+    _patchChooserCards() {
+      const el = this.container.querySelector(".cascade-chooser__cards");
+      if (!el) { this.render(); return; }
+      el.innerHTML = this._renderChooserCards();
+      this.refreshIcons(el);
     }
 
     // Middle chooser card: replay the last game with the same table. Sits
@@ -497,6 +579,10 @@
       window.store.set("activePlay", ps);
       // Same reference-guide warm-up the grid picker does.
       window.Chapter.prefetchMyChapters(ps.gameId);
+      // Mint the lobby now, overlapping it with the navigation. Deliberately
+      // below the confirm + abandon above: a user who chose "Keep playing"
+      // must never have a session minted behind their back.
+      window.PlaySession.prefetchLobby({ gameId: ps.gameId });
       window.router.go("play-flow");
     }
 

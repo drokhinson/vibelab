@@ -1,6 +1,20 @@
 // domain/play.js — Logged play.
+//
+// Also owns the "last play" seed (cache ns `play.last`, key `self`): the most
+// recent play row the viewer took part in, kept on a host-seed TTL so the Play
+// tab's "Another Round" card can render synchronously on first paint. It lives
+// here rather than in the profile bundle because _invalidatePlayDeps() DELETES
+// that bundle after every save — precisely the moment the card matters most.
 
 (function () {
+  const LAST_NS = "play.last";
+  const LAST_KEY = "self";
+  // Mirrors bootstrap's hostSeed pair: 24h fresh / 7d stale. The seed is
+  // rewritten on every save and on every profile-bundle fetch, so a long
+  // window can't let it drift — it only has to outlive the app being closed.
+  const LAST_FRESH_TTL_MS = 24 * 60 * 60 * 1000;
+  const LAST_STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
   class Play {
     constructor(raw) { Object.assign(this, raw || {}); }
 
@@ -24,7 +38,11 @@
       return window.api.post("/plays", payload).then((r) => { _invalidatePlayDeps(); return r; });
     }
     static update(id, payload) {
-      return window.api.put(`/plays/${id}`, payload).then((r) => { _invalidatePlayDeps(); return r; });
+      return window.api.put(`/plays/${id}`, payload).then((r) => {
+        _invalidatePlayDeps();
+        Play.rememberLastPlay(null);
+        return r;
+      });
     }
     // Write just the photo column. PUT /plays/{id} is a FULL replacement —
     // it deletes and re-inserts every player and expansion row — so routing
@@ -35,14 +53,46 @@
         .then((r) => { _invalidatePlayDeps(); return r; });
     }
     static remove(id) {
-      return window.api.del(`/plays/${id}`).then((r) => { _invalidatePlayDeps(); return r; });
+      return window.api.del(`/plays/${id}`).then((r) => {
+        _invalidatePlayDeps();
+        Play.rememberLastPlay(null);
+        return r;
+      });
     }
     // Self-remove from a play you didn't take part in. The backend turns your
     // player row into a ghost (keeps the play for its owner) rather than
     // deleting it. Busts the same caches as any other play mutation so your
     // history/stats drop it on next read.
     static leave(id) {
-      return window.api.post(`/plays/${id}/leave`, {}).then((r) => { _invalidatePlayDeps(); return r; });
+      return window.api.post(`/plays/${id}/leave`, {}).then((r) => {
+        _invalidatePlayDeps();
+        Play.rememberLastPlay(null);
+        return r;
+      });
+    }
+
+    /**
+     * Remember the viewer's most recent play. `row` is a PlayResponse (or a
+     * profile bundle `recent_plays[0]`) — the two shapes agree on everything
+     * the Another Round card and PlaySession.seedFromPlayRow() read. Passing
+     * null clears the seed (the viewer has no plays left).
+     */
+    static rememberLastPlay(row) {
+      if (!window.bgbCache) return;
+      if (!row || !row.game_id) {
+        window.bgbCache.delete(LAST_NS, LAST_KEY);
+        return;
+      }
+      window.bgbCache.setWithTtls(LAST_NS, LAST_KEY, row, {
+        freshTtl: LAST_FRESH_TTL_MS,
+        staleTtl: LAST_STALE_TTL_MS,
+      });
+    }
+
+    /** Synchronous read of the seed above, or null. Never hits the network. */
+    static cachedLastPlay() {
+      if (!window.bgbCache) return null;
+      return window.bgbCache.peek(LAST_NS, LAST_KEY);
     }
 
     // Public handle on the same invalidation the mutations above run. Exists
@@ -53,6 +103,12 @@
     static invalidateDeps() { _invalidatePlayDeps(); }
   }
 
+  // Note: the `play.last` seed is deliberately NOT cleared here. This also runs
+  // for create / finalize / attachPhoto, which are exactly the moments the
+  // Another Round card should be showing the play that just landed — the
+  // caller (play-flow's _runSave) writes the fresh row into the seed. The
+  // mutations that can genuinely destroy or reshape the top play (update,
+  // remove, leave) clear it themselves.
   function _invalidatePlayDeps() {
     if (window.Profile && window.Profile.invalidate) window.Profile.invalidate();
     if (window.Game && window.Game.invalidateBundle) window.Game.invalidateBundle();
