@@ -23,10 +23,19 @@
       this._bggSyncResult = null;
       this._bggSummary = null;
       this._bggPollHandle = null;
+
+      // True while a manual outbox flush is in flight — drives the Upload now
+      // button's disabled/"Uploading…" state.
+      this._uploadingOutbox = false;
     }
 
     async onMount() {
       this.listen("user", () => this.render());
+      // A background flush (boot, `online`, tab focus) can drain the queue
+      // while this screen is open; connectivity returning also swaps the
+      // section's copy and reveals the Upload now button.
+      this.listen("outboxCount", () => this.render());
+      this.listen("offline", () => this.render());
       // The BGG import poll skips its ticks while the tab is hidden — fire
       // one immediate catch-up tick when it becomes visible again (only
       // while a poll is actually armed). Auto-removed on unmount via
@@ -91,6 +100,7 @@
         ` : ""}
         <div class="set-card-label">Connections</div>
         ${this._renderBggCard()}
+        ${this._renderPendingUploadsSection()}
         <div class="set-card-label">Local cache</div>
         ${this._renderCacheCard()}
         ${this._renderLogout()}
@@ -335,6 +345,102 @@
       "feed":       "plays",
       "buddy":      "buddies",
     };
+
+    /**
+     * Plays recorded offline that haven't reached the server yet.
+     *
+     * The whole section is absent when the queue is empty — an always-present
+     * "0 pending uploads" row would train people to ignore the one place that
+     * tells them a play is still only on this phone.
+     *
+     * Entries marked `failed` are ones the server rejected outright (the game
+     * was deleted, the payload is invalid). They will never succeed on retry,
+     * so the flush skips them rather than wedging the queue behind them, and
+     * they need a manual delete — hence the per-row action.
+     */
+    _renderPendingUploadsSection() {
+      const entries = window.Outbox ? window.Outbox.list() : [];
+      if (!entries.length) return "";
+      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
+      const busy = !!this._uploadingOutbox;
+
+      const rows = entries.map((e) => {
+        const name = (e.gameSnapshot && e.gameSnapshot.name) || "Unknown game";
+        const when = (e.payload && e.payload.played_at) || "";
+        const failed = e.state === "failed";
+        return `
+          <div class="set-card__cache-row">
+            <span class="set-card__cache-row-label">${escapeHtml(name)}</span>
+            <span class="set-card__cache-row-meta">
+              ${escapeHtml(when)}${failed ? ` · ${escapeHtml(e.lastError || "rejected")}` : ""}
+            </span>
+            ${failed ? `
+              <button class="btn btn-ghost btn-xs set-card__cache-row-action"
+                      onclick="window.settingsView._discardQueuedPlay('${escapeAttr(e.clientKey)}')">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Discard
+              </button>
+            ` : ""}
+          </div>
+        `;
+      }).join("");
+
+      return `
+        <div class="set-card-label">Pending uploads</div>
+        <div class="set-card">
+          <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
+            <p class="text-sm opacity-80">
+              ${entries.length} ${entries.length === 1 ? "play is" : "plays are"}
+              saved on this device and not on the server yet.
+              ${offline ? "They'll upload as soon as you're back online." : ""}
+            </p>
+            <div class="set-card__cache-breakdown">${rows}</div>
+            ${offline ? "" : `
+              <button class="btn btn-primary btn-sm" ${busy ? "disabled" : ""}
+                      onclick="window.settingsView._uploadPending()">
+                ${busy ? "Uploading…" : "Upload now"}
+              </button>
+            `}
+          </div>
+        </div>
+      `;
+    }
+
+    async _uploadPending() {
+      this._uploadingOutbox = true;
+      this.render();
+      let res;
+      try {
+        res = await window.Outbox.flush();
+      } finally {
+        this._uploadingOutbox = false;
+        this.render();
+      }
+      if (window.showToast) {
+        if (res.sent > 0) {
+          window.showToast(`Uploaded ${res.sent} ${res.sent === 1 ? "play" : "plays"}.`, "success");
+        } else {
+          window.showToast("Couldn't upload — they're still safe on this device.", "error");
+        }
+      }
+    }
+
+    async _discardQueuedPlay(clientKey) {
+      const entry = window.Outbox.list().find((e) => e.clientKey === clientKey);
+      if (!entry) return;
+      const name = (entry.gameSnapshot && entry.gameSnapshot.name) || "this play";
+      // Destructive and unrecoverable — the queue is the only copy. Routed
+      // through the project's single confirm surface per
+      // .claude/rules/web-frontend.md.
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Discard this play?",
+        body: `${name} was never uploaded, and this device holds the only copy. This can't be undone.`,
+        confirmLabel: "Discard",
+        cancelLabel: "Keep it",
+      });
+      if (!ok) return;
+      window.Outbox.remove(clientKey);
+      this.render();
+    }
 
     _renderCacheCard() {
       const stats = (window.bgbCache && window.bgbCache.stats) ? window.bgbCache.stats() : null;

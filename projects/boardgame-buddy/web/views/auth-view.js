@@ -11,6 +11,11 @@
 
     onMount() {
       // Bound once. The form is re-rendered on tab switches but mount is single-shot.
+      // Connectivity is the exception: sign-in is the one flow with no offline
+      // path at all (Supabase Auth is a network call by definition), so the
+      // screen has to say so rather than let the user type a password into a
+      // form that can only fail.
+      this.listen("offline", () => this.render());
     }
 
     setError(msg) {
@@ -34,6 +39,14 @@
       });
       const errLine = this._error
         ? `<div class="text-error text-sm mb-3">${this._error}</div>` : "";
+      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
+      const offlineBanner = offline
+        ? `<div class="alert alert-warning mb-4 text-sm">
+             <i data-lucide="cloud-off" class="w-4 h-4"></i>
+             <span>You're offline. Signing in needs a connection — plays you
+             already recorded are safe on this device.</span>
+           </div>`
+        : "";
 
       this.container.innerHTML = `
         <div class="flex flex-col items-center justify-center min-h-[60vh] px-4">
@@ -45,6 +58,7 @@
           <div class="card bg-base-200 w-full max-w-sm">
             <div class="card-body">
               ${configBanner}
+              ${offlineBanner}
               ${oauth}
               <div class="tabs tabs-boxed mb-4">
                 <button class="tab ${this._mode === "login" ? "tab-active" : ""}" onclick="window.authView.switchMode('login')">Log In</button>

@@ -1,0 +1,55 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fullbleed" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a0f0b"/>
+      <stop offset="100%" stop-color="#2a1812"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#fullbleed)"/>
+  <g transform="translate(256,256) scale(0.66) translate(-278,-252)"><defs>
+    <linearGradient id="mbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a0f0b"/>
+      <stop offset="100%" stop-color="#2a1812"/>
+    </linearGradient>
+
+    <linearGradient id="maccent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  
+
+  
+
+  <!-- Buddy head -->
+  <rect x="176" y="120" width="160" height="160" rx="32" fill="url(#maccent)" />
+
+  <!-- Face -->
+  <circle cx="220" cy="190" r="10" fill="#1a0f0b"/>
+  <circle cx="292" cy="190" r="10" fill="#1a0f0b"/>
+  <path d="M220 230 Q256 260 292 230" stroke="#1a0f0b" stroke-width="6" fill="none" stroke-linecap="round"/>
+
+  <!-- Body (now same gradient) -->
+  <g fill="url(#maccent)">
+    <circle cx="256" cy="310" r="26"/>
+    <rect x="226" y="330" width="60" height="40" rx="16"/>
+    <rect x="206" y="360" width="100" height="24" rx="12"/>
+  </g>
+
+  <!-- Speech bubble (square — matches die-face proportions) -->
+  <g transform="translate(300, 260)">
+    <rect x="0" y="0" width="80" height="80" rx="18" fill="#ffffff" opacity="0.95"/>
+    <polygon points="16,80 36,80 22,100" fill="#ffffff" opacity="0.95"/>
+
+    <!-- Die face: 5 -->
+    <g fill="#2a1812">
+      <circle cx="20" cy="20" r="5"/>
+      <circle cx="60" cy="20" r="5"/>
+      <circle cx="40" cy="40" r="5"/>
+      <circle cx="20" cy="60" r="5"/>
+      <circle cx="60" cy="60" r="5"/>
+    </g>
+  </g></g>
+</svg>

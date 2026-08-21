@@ -281,6 +281,33 @@
     },
 
     /**
+     * Keys currently readable via peek() in a namespace, i.e. still inside
+     * their stale window. Purely synchronous; never touches the network.
+     *
+     * Exists for the offline game picker: `game.bundle` is warmed for every
+     * owned game by Bootstrap.warmGameBundles(), which makes enumerating it
+     * the only way to see the user's whole library with no server to search.
+     * Nothing else should reach for this — a view that knows which key it
+     * wants should peek() that key directly.
+     *
+     * Reads the in-memory map alone, which is complete: bindUser() rehydrates
+     * every persisted entry for the bound user into it at boot.
+     *
+     * @param {string} ns
+     * @returns {string[]}
+     */
+    keys(ns) {
+      const b = _store.get(ns);
+      if (!b) return [];
+      const now = Date.now();
+      const out = [];
+      for (const [key, entry] of b) {
+        if (now - entry.storedAt < entry.staleTtl) out.push(key);
+      }
+      return out;
+    },
+
+    /**
      * Back-compat single-TTL setter. Stores with freshTtl == staleTtl so
      * old callers see the same expiry behavior they always did.
      */

@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from typing import Any, Literal, Optional, Union
-from pydantic import BaseModel, Field, SecretStr, computed_field
+from pydantic import UUID4, BaseModel, Field, SecretStr, computed_field
 
 from .constants import (
     BggAuthState,
@@ -280,6 +280,12 @@ class PlayCreate(BaseModel):
     # Optional per-play scoring style override (migration 007). When None,
     # the play inherits the game's stored play_mode at insert time.
     play_mode: Optional[PlayMode] = None
+    # Idempotency key for offline-queued plays (migration 048). The web app's
+    # outbox stamps one UUID per queued play and re-sends it on every flush
+    # attempt, so a retry after a lost response returns the original play
+    # instead of writing a duplicate. Omitted by live writes, where two
+    # identical POSTs legitimately mean two plays.
+    client_key: Optional[UUID4] = None
 
 
 class PlayUpdate(BaseModel):

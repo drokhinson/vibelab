@@ -174,6 +174,12 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   -- game_play_mode from this table — nothing ever read them off a play row.
   game_name TEXT NOT NULL,
   game_thumbnail_url TEXT,
+  -- Client-generated idempotency key for offline-queued plays (migration 048).
+  -- The web app's outbox (web/domain/outbox.js) stamps one UUID per queued
+  -- play and re-sends it on every flush attempt, so a retry after a lost
+  -- response returns the original play instead of writing a duplicate. NULL
+  -- for every live write — two identical online POSTs really are two plays.
+  client_key UUID,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
@@ -370,6 +376,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_profiles_bgg_username
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bgg_play
   ON public.boardgamebuddy_plays (user_id, bgg_play_id)
   WHERE bgg_play_id IS NOT NULL;
+-- Offline outbox idempotency (migration 048). Partial so the unlimited NULLs
+-- from live writes don't collide; bgb_log_play returns the existing play
+-- instead of inserting when the key is already stored.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_client_key
+  ON public.boardgamebuddy_plays (user_id, client_key)
+  WHERE client_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_bgb_bgg_pending_user_status
   ON public.boardgamebuddy_bgg_pending_imports (user_id, status)
   WHERE status = 'pending';

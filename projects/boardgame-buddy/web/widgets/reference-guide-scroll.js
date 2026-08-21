@@ -84,6 +84,15 @@
         this._loading = true;
       }
       this._render();
+      // Offline there is nothing to revalidate against. The seed above already
+      // read through the stale window, so skipping the request keeps the guide
+      // exactly as it is instead of flashing the loader and landing back on
+      // the same list one failed round trip later.
+      if (window.BgbNet && window.BgbNet.isOffline()) {
+        this._loading = false;
+        this._render();
+        return;
+      }
       try {
         const fresh = await window.Chapter.myChapters(this._baseGameId, { expansionIds }) || [];
         this._chapters = fresh;

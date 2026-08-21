@@ -10,6 +10,15 @@
 // Live scoring during Play streams in via LiveScores (Realtime). Save on
 // Settle Up uploads the optional photo and calls /sessions/{code}/finalize
 // — the backend merges live scoring rows into the play's PlayerEntry list.
+//
+// OFFLINE (see domain/net.js) this is the same three screens with the whole
+// lobby subtracted: no POST /sessions, no code, no 2s poll, no Realtime, no
+// phase PATCH, no photo. All of that exists to serve joiners, and there can't
+// be any without a server. What's left runs off the localStorage draft and the
+// bgbCache seeds bootstrap warmed, and Save hands the play to the outbox
+// instead of the API. `_offline` is latched once at mount so the guards can't
+// disagree mid-cascade; Save is the one place that re-checks, because a host
+// who walked back into signal should get a live write.
 
 (function () {
   // Above this many expansions the Gather picker grows a filter field. Its
@@ -59,6 +68,9 @@
       // check. _ensureLobbyOpen consumes (and clears) it so the same code
       // isn't fetched twice back-to-back on a deep-link entry.
       this._prefetchedLobby = null;
+      // Latched by _ensureLobbyOpen: this cascade is running with no lobby,
+      // no poll and no live scores. See _isOffline().
+      this._offline = false;
       // Id of the wrap-up splash this view put up, from PolaroidPopup.show().
       // The background save passes it back to update() so a late response
       // can only repaint its own card.
@@ -77,8 +89,13 @@
       // for a different code (or empty), adopt the URL's code so
       // _ensureLobbyOpen fetches the right lobby. If the current user turns
       // out not to be the host of that lobby, hop to session-viewer.
+      // Offline is decided before anything can reach for the network, so the
+      // deep-link host-vs-joiner probe below doesn't fire a doomed request and
+      // the first render already knows which Gather header to paint.
+      this._offline = !!(window.BgbNet && window.BgbNet.isOffline());
+
       const urlCode = this.params && this.params.code;
-      if (urlCode && this._ps.code !== urlCode) {
+      if (urlCode && !this._offline && this._ps.code !== urlCode) {
         try {
           const s = await window.PlaySession.fetchLobby(urlCode);
           const me = window.store.get("user");
@@ -144,7 +161,16 @@
         try {
           combined = await window.Buddy.allBuddies();
         } catch (_) {
-          combined = { accounts: [], ghosts: [], recent: [] };
+          // Keep whatever the synchronous cache seed above already produced
+          // rather than replacing it with empties. Offline (or on any blip
+          // past the 7d stale window) this is the difference between a player
+          // picker that still knows the host's regular group and one that
+          // forgets everyone the moment the network does.
+          combined = {
+            accounts: this._buddies,
+            ghosts: this._ghosts,
+            recent: this._recent,
+          };
         }
         this._buddies = combined.accounts || [];
         this._ghosts = combined.ghosts || [];
@@ -194,7 +220,48 @@
 
     // ── Lobby + phase ────────────────────────────────────────────────────────
 
+    /**
+     * Whether this run of the cascade is lobby-less.
+     *
+     * Latched at mount rather than read live, because every guard downstream
+     * has to agree with itself for the whole session: a host who starts
+     * offline must not have a poll spring to life the moment a bar of signal
+     * appears, half-adopting a lobby that was never minted. Connectivity
+     * returning matters at exactly one point — Save — where _runSave asks
+     * BgbNet again and posts live if it can.
+     */
+    _isOffline() {
+      return !!this._offline;
+    }
+
+    /**
+     * The code of a lobby this run actually opened, or null.
+     *
+     * Deliberately not `_ps.code`: the persisted draft outlives the lobby it
+     * was minted against, so offline (or after a lobby was found gone) the
+     * draft can still carry a code that no longer addresses anything. Every
+     * write to /sessions/{code} keys off this.
+     */
+    _liveLobbyCode() {
+      return (this._lobby && this._lobby.code) || null;
+    }
+
     async _ensureLobbyOpen() {
+      // Offline: no lobby, no code, no network. The cascade runs entirely off
+      // the localStorage draft and the bgbCache seeds bootstrap warmed, and
+      // Save queues to the outbox. Nothing here is a degraded lobby — there
+      // are no joiners to serve without a server, so the whole concept is
+      // simply absent for this run.
+      //
+      // Leaves a persisted `code` from an earlier online session untouched:
+      // it can't be revalidated offline, and clearing it would lose the host's
+      // ability to resume that lobby once they reconnect.
+      if (window.BgbNet && window.BgbNet.isOffline()) {
+        this._offline = true;
+        this._lobby = null;
+        return;
+      }
+      this._offline = false;
       // Already have a valid lobby in the persisted draft? Re-validate via
       // a fetch — if the server abandoned it we open a fresh one.
       if (this._ps.code) {
@@ -300,6 +367,11 @@
     }
 
     _startLobbyPoll() {
+      // The poll exists solely to auto-promote joiners into the player list.
+      // Offline there is no lobby to read and no joiner to promote, so the
+      // interval is never armed — not armed-and-skipping, which would still
+      // wake the tab every 2s for nothing.
+      if (this._isOffline()) return;
       if (this._lobbyPoll || !this._lobby) return;
       this._lobbyPoll = setInterval(() => this._lobbyPollTick(), 2000);
     }
@@ -388,6 +460,12 @@
     }
 
     async _startLiveScores() {
+      // Realtime goes browser → Postgres directly (anon key + RLS), so it has
+      // its own connection to fail at. Guarded explicitly rather than relying
+      // on sessionId being null: a draft resumed from an earlier online
+      // session still carries one, and opening a channel for a lobby nobody
+      // is in would retry forever in the background.
+      if (this._isOffline()) return;
       if (this._liveScores || !this._ps.sessionId) return;
       const me = window.store.get("user");
       this._liveScores = new window.LiveScores({
@@ -460,7 +538,13 @@
         <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
           ${this._renderScreenHeader("Gather", 1, false)}
           ${this._renderGather()}
-          ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", { disabled: !this._ps.gameId || !(this._lobby && this._lobby.code) })}
+          ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", {
+            // Online, Continue waits on the lobby: advancing the phase is a
+            // PATCH against a code we may not hold yet. Offline the phase is
+            // local, so a game pick is the only prerequisite — gating on a
+            // lobby that will never exist would wedge the cascade on Gather.
+            disabled: !this._ps.gameId || (!this._isOffline() && !this._liveLobbyCode()),
+          })}
         </section>
 
         <section class="cascade-screen ${lockPlay ? "is-locked" : ""}" id="screen-play">
@@ -579,6 +663,24 @@
     // ── Gather screen ───────────────────────────────────────────────────────
 
     _renderInviteCard() {
+      // Offline the same slot carries the reason there's no code, rather than
+      // a placeholder the host would keep waiting on. Nothing to share: no
+      // lobby was minted, so there is nothing for another phone to join.
+      if (this._isOffline()) {
+        return `
+          <section class="cascade-card cascade-card--invite cascade-card--offline">
+            <span class="cascade-invite__icon">
+              <i data-lucide="cloud-off" class="w-4 h-4"></i>
+            </span>
+            <div class="cascade-invite__body">
+              <span class="cascade-invite__title">Offline</span>
+              <span class="cascade-invite__hint">
+                Saves to this device and uploads next time you're online. No code to share.
+              </span>
+            </div>
+          </section>
+        `;
+      }
       // Session code surface. Rendered on Gather AND Play so the host can
       // always read the code aloud / share it (PR #274 allows late joiners
       // as spectators, so the lobby is effectively always "open"). Settle
@@ -881,6 +983,43 @@
                  onchange="window.playFlowView._setDate(this.value)" />
         </section>
 
+        ${this._renderPhotoCard(url)}
+
+        <section class="cascade-card">
+          <label class="cascade-card__label">Key moments</label>
+          <textarea class="textarea textarea-bordered w-full cascade-notes"
+                    rows="4"
+                    placeholder="A clutch play, a surprise comeback, anything worth remembering."
+                    onchange="window.playFlowView._setNotes(this.value)">${escapeHtml(this._ps.notes || "")}</textarea>
+        </section>
+      `;
+    }
+
+    /**
+     * The Settle Up photo slot.
+     *
+     * Offline it becomes an explanation instead of a picker. The photo blob is
+     * the one part of a play that is deliberately never persisted (see
+     * domain/play-session.js) — it lives in memory only, so a queued play
+     * can't carry one, and an OS reload of a backgrounded tab would drop it.
+     * Offering the picker anyway would let a host attach a photo that quietly
+     * never reaches the play they attached it to.
+     *
+     * @param {string|null} url  existing preview / stored photo URL
+     */
+    _renderPhotoCard(url) {
+      if (this._isOffline()) {
+        return `
+          <section class="cascade-card cascade-card--offline">
+            <label class="cascade-card__label">Photo</label>
+            <p class="cascade-card__hint">
+              <i data-lucide="cloud-off" class="w-4 h-4"></i>
+              Photos need a connection. Add one from the play card once this uploads.
+            </p>
+          </section>
+        `;
+      }
+      return `
         <section class="cascade-card">
           <label class="cascade-card__label">Photo</label>
           ${url ? `
@@ -899,14 +1038,6 @@
               <span>Tap to add photo (optional)</span>
             </label>
           `}
-        </section>
-
-        <section class="cascade-card">
-          <label class="cascade-card__label">Key moments</label>
-          <textarea class="textarea textarea-bordered w-full cascade-notes"
-                    rows="4"
-                    placeholder="A clutch play, a surprise comeback, anything worth remembering."
-                    onchange="window.playFlowView._setNotes(this.value)">${escapeHtml(this._ps.notes || "")}</textarea>
         </section>
       `;
     }
@@ -947,6 +1078,18 @@
     }
 
     async _advancePhase(next) {
+      // Offline the phase is a purely local idea: it decides which screen the
+      // cascade shows and where a resume lands, and there are no joiners'
+      // mirrors to advance. Still bumps _phaseSeq so a rapid tap sequence
+      // resolves the same way it does online.
+      if (this._isOffline()) {
+        ++this._phaseSeq;
+        this._ps.phase = next;
+        this._ps.persist();
+        this.render();
+        this._scrollToCurrentPhase();
+        return;
+      }
       if (!this._lobby || !this._lobby.code) {
         this._error = "Session not ready yet.";
         this.render();
@@ -993,7 +1136,11 @@
     async _abandon() {
       const ok = await window.PolaroidPopup.confirm({
         title: "Discard this play?",
-        body: "Players in the lobby will be kicked and any scores so far will be lost. This can't be undone.",
+        // Offline there is no lobby and nobody to kick — promising otherwise
+        // would describe a consequence that can't happen.
+        body: this._isOffline()
+          ? "Any scores so far will be lost. This can't be undone."
+          : "Players in the lobby will be kicked and any scores so far will be lost. This can't be undone.",
         confirmLabel: "Discard",
         cancelLabel: "Keep playing",
       });
@@ -1001,7 +1148,7 @@
       // Tear down locally and navigate FIRST so the UI always responds.
       // The server-side abandon is fire-and-forget — a slow or hung PATCH
       // shouldn't strand the user on the gather screen.
-      const code = this._lobby && this._lobby.code;
+      const code = this._liveLobbyCode();
       this._ps.clear();
       window.store.set("activePlay", null);
       window.router.go("log-play");
@@ -1051,9 +1198,13 @@
       ps.gameSnapshot = null;
       ps.persist();
       // Push the clear to the lobby so joiners' read-only mirrors drop the
-      // game pick alongside the host.
-      if (ps.code) {
-        window.PlaySession.updateLobby(ps.code, { gameId: null }).catch(() => {});
+      // game pick alongside the host. Keyed off the live lobby rather than
+      // ps.code: a draft resumed offline still carries the code of a lobby
+      // this run never opened, and pushing to it would be a doomed request
+      // against a session with nobody in it.
+      const code = this._liveLobbyCode();
+      if (code) {
+        window.PlaySession.updateLobby(code, { gameId: null }).catch(() => {});
       }
       this.render();
       // Focus the freshly-mounted finder input so the user lands ready to
@@ -1080,8 +1231,10 @@
       // Warm the reference-guide cache for the new pick (base game only).
       window.Chapter.prefetchMyChapters(game.id);
       // Push the pick to the lobby so joiners' read-only mirrors swap too.
-      if (ps.code) {
-        window.PlaySession.updateLobby(ps.code, { gameId: game.id }).catch(() => {});
+      // Live lobby only — see _clearGamePick for why not ps.code.
+      const code = this._liveLobbyCode();
+      if (code) {
+        window.PlaySession.updateLobby(code, { gameId: game.id }).catch(() => {});
       }
       // The finder + dropdown unmount once a game is picked — the user
       // changes the pick by tapping the chip's × (which clears state and
@@ -1446,13 +1599,33 @@
         this._expansionsLoadedFor = gameId;
         return;
       }
-      try {
-        const list = await window.api.get(`/games/${gameId}/expansions`);
-        this._expansions = Array.isArray(list) ? list : [];
-      } catch (_) {
-        this._expansions = [];
+      // `authoritative` gates the prune below. The list is only trustworthy
+      // enough to delete the host's picks against when it came from the
+      // server — bootstrap warms game.bundle for owned games only, so a cache
+      // read that finds nothing means "not warmed", not "no expansions".
+      let authoritative = false;
+      if (this._isOffline()) {
+        // bgb_game_detail_bundle carries the same ExpansionListItem[] the
+        // endpoint returns, and Bootstrap.warmGameBundles() has it for every
+        // owned game — enough to run the picker with no server.
+        const bundle = window.bgbCache && window.bgbCache.peek("game.bundle", gameId);
+        this._expansions = (bundle && Array.isArray(bundle.expansions)) ? bundle.expansions : [];
+      } else {
+        try {
+          const list = await window.api.get(`/games/${gameId}/expansions`);
+          this._expansions = Array.isArray(list) ? list : [];
+          authoritative = true;
+        } catch (_) {
+          this._expansions = [];
+        }
       }
       this._expansionsLoadedFor = gameId;
+      // Drop picks the game no longer offers — but ONLY against a list we
+      // actually fetched. This used to run unconditionally, so any blip on
+      // the expansions request silently wiped every expansion the host had
+      // ticked: the catch set the list to [], and the filter then removed
+      // everything for not being in it.
+      if (!authoritative) return;
       const valid = new Set(this._expansions.map((e) => e.expansion_game_id));
       const before = (this._ps.expansionIds || []).length;
       this._ps.expansionIds = (this._ps.expansionIds || []).filter((id) => valid.has(id));
@@ -1956,8 +2129,12 @@
       // before _startAnotherRound nulls out _ps.code / this._lobby.
       const snap = {
         payload: this._ps.toPlayCreate(),
-        lobbyCode: (this._lobby && this._lobby.code) || null,
+        lobbyCode: this._liveLobbyCode(),
         photoFile: this._ps.photoFile || null,
+        // Carried on the snapshot, not re-read from _ps at write time: a
+        // Retry can fire after the draft has been recycled, and the outbox
+        // entry's card would then be labelled with the wrong game.
+        gameSnapshot: this._ps.gameSnapshot || null,
       };
       const game = this._ps.gameSnapshot || {};
       const winner = this._ps.players.find((p) => p.is_winner);
@@ -2030,25 +2207,75 @@
       const uploadPromise = snap.uploadPromise || null;
 
       let saved;
+      let queued = false;
+      // Asked fresh rather than read off the latched `_offline`: a host who
+      // ran the whole cascade offline may have walked back into signal by the
+      // time they tap Save, and a live write is strictly better than a queued
+      // one. This is the single point in the flow where reconnecting matters.
+      const offlineNow = !!(window.BgbNet && window.BgbNet.isOffline());
       try {
-        saved = snap.lobbyCode
-          ? await window.PlaySession.finalizeLobby(snap.lobbyCode, snap.payload)
-          : await window.Play.create(snap.payload);
+        if (offlineNow) {
+          this._queuePlay(snap);
+          queued = true;
+        } else {
+          saved = snap.lobbyCode
+            ? await window.PlaySession.finalizeLobby(snap.lobbyCode, snap.payload)
+            : await window.Play.create(snap.payload);
+        }
       } catch (e) {
+        // The link died between the tap and the request. Queueing beats
+        // stranding the host on a Retry button they can't satisfy — the play
+        // is recorded either way, and the outbox pushes it when signal
+        // returns. Only for a network failure: a 4xx is a real rejection and
+        // queueing it would just defer the same error.
+        if (e && e.offline && !queued) {
+          try {
+            this._queuePlay(snap);
+            queued = true;
+          } catch (_) {
+            // Fall through to the error card below — see _queuePlay.
+          }
+        }
+        if (!queued) {
+          this._saving = false;
+          const msg = (e && e.message) || "Failed to save";
+          if (popup) {
+            // Closing a failed card must NOT take the default feed redirect —
+            // the draft is still intact behind it, so drop the host back onto
+            // Settle Up with the error surfaced there instead.
+            popup.update({
+              saving: false,
+              error: msg,
+              onDismiss: () => { this._error = msg; this.render(); },
+            }, cardId);
+          } else {
+            this._error = msg;
+            this.render();
+          }
+          return;
+        }
+      }
+
+      // Queued, not saved: there is no server row, so nothing downstream that
+      // reads one applies. The draft is still cleared — the play is safely on
+      // disk in the outbox and leaving the draft behind would offer the host a
+      // "Resume hosting?" banner for a game they already finished.
+      if (queued) {
         this._saving = false;
-        const msg = e.message || "Failed to save";
+        this._ps.clear();
+        window.store.set("activePlay", null);
         if (popup) {
-          // Closing a failed card must NOT take the default feed redirect —
-          // the draft is still intact behind it, so drop the host back onto
-          // Settle Up with the error surfaced there instead.
+          // A photo picked while still online can't ride along: the blob is
+          // never persisted, so the queue has no way to hold it. Say so rather
+          // than letting it disappear between the tap and the upload.
           popup.update({
             saving: false,
-            error: msg,
-            onDismiss: () => { this._error = msg; this.render(); },
+            error: null,
+            warning: snap.photoFile
+              ? "Saved on this device — it uploads next time you're online. The photo wasn't kept; add one from the play card afterwards."
+              : "Saved on this device — it uploads next time you're online.",
+            onDismiss: null,
           }, cardId);
-        } else {
-          this._error = msg;
-          this.render();
         }
         return;
       }
@@ -2108,6 +2335,38 @@
       }
 
       if (uploadPromise) await this._attachPhoto(uploadPromise, savedId, cardId);
+    }
+
+    /**
+     * Hand a finished play to the outbox instead of the server.
+     *
+     * Throws when the queue write fails (localStorage full or unavailable) —
+     * the caller MUST let that surface. A silent failure here is the one
+     * genuinely unrecoverable outcome in this flow: the host is told their
+     * game is saved, the draft is cleared, and the record exists nowhere.
+     *
+     * @param {{payload: Object}} snap
+     */
+    _queuePlay(snap) {
+      window.Outbox.enqueue(snap.payload, snap.gameSnapshot || null);
+      // Seed the Play tab's "Another Round" card the same way a live save
+      // does. Built from the payload rather than a server row — there isn't
+      // one yet — and shaped to match `recent_plays[]`, which is what
+      // seedFromPlayRow() and the card both read. The next successful
+      // bootstrap overwrites it with the real row.
+      const game = snap.gameSnapshot || {};
+      if (window.Play && window.Play.rememberLastPlay && snap.payload.game_id) {
+        window.Play.rememberLastPlay({
+          game_id: snap.payload.game_id,
+          game_name: game.name || "",
+          game_thumbnail: game.thumbnail_url || null,
+          play_mode: snap.payload.play_mode || null,
+          players: snap.payload.players || [],
+          expansions: (snap.payload.expansion_ids || []).map((id) => ({
+            expansion_game_id: id,
+          })),
+        });
+      }
     }
 
     /**
@@ -2185,7 +2444,13 @@
       // session this restarts from has just been finalized, so there is no
       // open lobby for bgb_create_session's stale-abandon sweep to close.
       // _ensureLobbyOpen() picks it up on the create branch further down.
-      window.PlaySession.prefetchLobby({ gameId: seed.gameId });
+      //
+      // Skipped offline: the request can only fail, and _ensureLobbyOpen will
+      // discard the record rather than consume it — leaving prefetchLobby's
+      // single slot holding a rejected promise for the next real host tap.
+      if (!(window.BgbNet && window.BgbNet.isOffline())) {
+        window.PlaySession.prefetchLobby({ gameId: seed.gameId });
+      }
 
       // Tear down the finished session's live wiring — mirrors onUnmount.
       this._stopLobbyPoll();

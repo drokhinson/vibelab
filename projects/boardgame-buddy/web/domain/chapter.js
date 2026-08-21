@@ -34,9 +34,19 @@
     },
 
     // Synchronous read of a cached my-chapters list (or null when absent/stale).
+    //
+    // Offline it reads through peek() instead of get(). get() only serves the
+    // fresh window, so a guide cached an hour ago would read as absent — and
+    // with no server to re-fetch from, the reference scroll on the Play screen
+    // would simply be empty at exactly the table where nobody can look the
+    // rules up any other way. A stale chapter list is the right answer there:
+    // chapters change rarely, and the alternative is nothing.
     cachedMyChapters(baseGameId, expansionIds) {
       if (!window.bgbCache || !baseGameId) return null;
-      return window.bgbCache.get(CHAPTERS_NS, chaptersKey(baseGameId, expansionIds));
+      const key = chaptersKey(baseGameId, expansionIds);
+      return (window.BgbNet && window.BgbNet.isOffline())
+        ? window.bgbCache.peek(CHAPTERS_NS, key)
+        : window.bgbCache.get(CHAPTERS_NS, key);
     },
     // Write-through a freshly-fetched list.
     cacheMyChapters(baseGameId, expansionIds, rows) {
@@ -49,6 +59,9 @@
     // Fire-and-forget warm-up: skip when already fresh, otherwise fetch + cache.
     prefetchMyChapters(baseGameId, expansionIds = []) {
       if (!baseGameId || !window.session || !window.bgbCache) return;
+      // Nothing to warm from offline — the request can only fail, and
+      // cachedMyChapters already falls back to the stale window there.
+      if (window.BgbNet && window.BgbNet.isOffline()) return;
       if (this.cachedMyChapters(baseGameId, expansionIds)) return;
       this.myChapters(baseGameId, { expansionIds })
         .then((rows) => this.cacheMyChapters(baseGameId, expansionIds, rows || []))

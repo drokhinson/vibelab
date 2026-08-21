@@ -43,6 +43,43 @@
       return false;
     }
 
+    /**
+     * fetch() + connectivity bookkeeping.
+     *
+     * A dead network makes fetch REJECT with a bare `TypeError: Failed to
+     * fetch` — it never reaches the `!res.ok` branch below, so it used to
+     * arrive at callers with no `.status` and no way to tell it apart from
+     * anything else that threw. Offline mode needs that distinction on every
+     * call site, so it's normalized here: `err.offline = true`, `err.status = 0`.
+     *
+     * Caveat: "Failed to fetch" is overloaded in this codebase. An unhandled
+     * Supabase APIError used to produce a 500 that bypassed CORSMiddleware,
+     * which the browser also reports this way — see the long comment on
+     * @app.exception_handler(APIError) in shared-backend/main.py. That handler
+     * now returns a CORS-bearing 500, so the overlap is rare, but `err.offline`
+     * is a heuristic and BgbNet treats it as one (two strikes, not one).
+     *
+     * @param {string} url
+     * @param {RequestInit} init
+     * @returns {Promise<Response>}
+     */
+    async _fetch(url, init) {
+      let res;
+      try {
+        res = await fetch(url, init);
+      } catch (e) {
+        if (window.BgbNet) window.BgbNet.noteFailure();
+        const err = new Error("You appear to be offline.");
+        err.offline = true;
+        err.status = 0;
+        err.cause = e;
+        throw err;
+      }
+      // The link demonstrably works — a 4xx/5xx still proves reachability.
+      if (window.BgbNet) window.BgbNet.noteSuccess();
+      return res;
+    }
+
     async _request(method, path, { body, query, headers, raw, _retried } = {}) {
       const url = new URL(this.base + this.prefix + path);
       if (query) {
@@ -61,7 +98,7 @@
       } else if (raw) {
         init.body = body;
       }
-      const res = await fetch(url.toString(), init);
+      const res = await this._fetch(url.toString(), init);
       if (!res.ok) {
         // A 401 usually means the access token expired (commonly after the
         // device slept). Refresh once and retry before surfacing the error so
@@ -92,7 +129,7 @@
     // For multipart bodies (play photo upload). Caller passes a FormData.
     async upload(path, formData, _retried) {
       const url = this.base + this.prefix + path;
-      const res = await fetch(url, {
+      const res = await this._fetch(url, {
         method: "POST",
         headers: this._authHeader(),
         body: formData,

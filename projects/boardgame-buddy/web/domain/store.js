@@ -15,6 +15,8 @@
         search: null,         // last UnifiedSearchResponse
         currentView: "splash",
         currentRoute: { name: "splash", params: {} },
+        offline: false,       // BgbNet.isOffline() — see domain/net.js
+        outboxCount: 0,       // plays queued for upload — see domain/outbox.js
       };
       this._subs = new Map(); // key → Set<fn>
     }
@@ -62,6 +64,13 @@
         search: null,
         currentView: "splash",
         currentRoute: { name: "splash", params: {} },
+        // Re-seeded from their owners rather than zeroed: reset() runs on
+        // logout, and neither the device's connectivity nor the plays already
+        // queued on disk stop being true because someone signed out. Zeroing
+        // them here would also desync BgbNet's edge-tracking, which suppresses
+        // a publish when the value it last published is unchanged.
+        offline: !!(window.BgbNet && window.BgbNet.isOffline()),
+        outboxCount: window.Outbox ? window.Outbox.count() : 0,
       };
       for (const subs of this._subs.values()) {
         for (const fn of subs) {
