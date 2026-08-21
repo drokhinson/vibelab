@@ -2,10 +2,10 @@
 //
 // Two halves on a single screen, split by a divider:
 //   • Top (Host): "Let's play" heading, an optional "Resume hosting?" banner,
-//     an optional "N plays waiting to upload" banner, then the host cards —
-//     Host a game / Play offline / Another Round / Game Explorer. "Play
-//     offline" is hidden once the app has already detected no connectivity,
-//     where it would only be offering what's already happening.
+//     an optional "N plays waiting to upload" banner, then three host cards —
+//     Host a game / Another Round / Game Explorer. With no connection the
+//     cards stay exactly where they are and only their copy changes: offline
+//     is detected, never chosen, so there is nothing here to opt into.
 //   • Bottom (Join): the JoinPanel widget — a 5-char code input and the list
 //     of active sessions the user can join or spectate.
 //
@@ -208,17 +208,6 @@
             : "Open a session, log a play."}</span>
         </button>
 
-        ${offline ? "" : `
-        <button class="cascade-chooser__card cascade-chooser__card--offline"
-                onclick="window.logPlayView._hostOffline()">
-          <span class="cascade-chooser__card-icon">
-            <i data-lucide="cloud-off" class="w-7 h-7"></i>
-          </span>
-          <span class="cascade-chooser__card-title">Play offline</span>
-          <span class="cascade-chooser__card-body">No code, no upload until later.</span>
-        </button>
-        `}
-
         ${this._renderAnotherRoundCard()}
 
         <button class="cascade-chooser__card cascade-chooser__card--explore"
@@ -261,30 +250,6 @@
           window.PlaySession.prefetchLobby({ gameId: null });
         }
       }
-      window.router.go("play-flow");
-    }
-
-    /**
-     * Deliberate offline hosting — the card the user taps when they know the
-     * venue has no signal, or has the kind that resolves DNS and then times
-     * out. navigator.onLine reports true for that second case, so auto-detect
-     * alone would let the host sit through a 30s POST /sessions before the
-     * cascade would even paint a code placeholder.
-     *
-     * Sets manual mode BEFORE navigating so PlayFlowView.onMount latches
-     * offline on its first line rather than after a failed round trip.
-     */
-    _hostOffline() {
-      window.BgbNet.manual(true);
-      if (!this._resumableSession()) {
-        const stale = window.PlaySession.load();
-        if (stale) stale.clear();
-        window.store.set("activePlay", null);
-      }
-      // A lobby minted moments ago by a Host/Explorer tap is now unreachable
-      // for the rest of this play — close it rather than leave it open for a
-      // buddy to find in their Join list.
-      window.PlaySession.discardPrefetchedLobby();
       window.router.go("play-flow");
     }
 

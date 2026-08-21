@@ -59,6 +59,30 @@ body {
   background: oklch(var(--b1));
 }
 
+/* ── The hiding contract ──────────────────────────────────────────────────────
+   Tailwind's `.hidden` is specificity 0,1,0, and this file is the LAST
+   stylesheet in the document (index.html:44, after the DaisyUI/Tailwind pair at
+   :30 — which the deploy workflow swaps for assets/bgb-tw.css, same slot). So
+   any component rule below that sets `display` WINS the tie and the element
+   stays visible with .hidden on it. Silently, and usually as a bare strip of
+   its own padding.
+
+   That is not hypothetical — it shipped. #bgb-offline-banner rendered as a 17px
+   empty brown bar under the header on every screen, because syncOfflineBanner
+   adds .hidden and clears innerHTML while `.bgb-offline-banner { display:flex }`
+   below kept it laid out. The same defect was already live on .bgb-global-header
+   and .bgb-nav, which leaked onto splash/auth.
+
+   The project had patched this three times, three different ways (the
+   :not(.hidden) guard on the chapter editor, .status-picker.hidden, and the
+   play-flow/session-viewer containers). This rule ends it for every present and
+   future component. `!important` is deliberate and safe: nothing in this app
+   ever wants to override .hidden, and no JS sets an inline display on an
+   element that carries it — the router, the data-auth-only toggle and
+   syncOfflineBanner all depend on it actually hiding.
+   ─────────────────────────────────────────────────────────────────────────── */
+.hidden { display: none !important; }
+
 .font-display {
   font-family: var(--font-display);
 }
@@ -6768,7 +6792,11 @@ main[data-view="session-viewer"].hidden {
   font-size: 12.5px;
   cursor: pointer;
 }
-.bgb-offline-banner__action:hover { text-decoration: underline; }
+.bgb-offline-banner__action:hover:not(:disabled) { text-decoration: underline; }
+.bgb-offline-banner__action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 
 /* Cascade cards that replace a connected affordance (the invite code on
    Gather, the photo picker on Settle Up). Dashed edge so they read as an
@@ -6795,12 +6823,6 @@ main[data-view="session-viewer"].hidden {
   line-height: 1.35;
 }
 .cascade-card__hint [data-lucide] { flex: none; margin-top: 1px; color: var(--rust); }
-
-/* "Play offline" chooser card. Same geometry as its siblings — only the icon
-   chip changes, so the row still reads as one set of equivalent choices. */
-.cascade-chooser__card--offline .cascade-chooser__card-icon {
-  background: var(--rust);
-}
 
 /* "N plays waiting to upload", above the host cards on the Play tab. */
 .lp-pending {

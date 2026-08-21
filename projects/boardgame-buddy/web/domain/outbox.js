@@ -227,11 +227,6 @@
       if (sent > 0 && window.Feed && window.Feed.refreshFirstPage) {
         window.Feed.refreshFirstPage().catch(() => {});
       }
-      // A clean drain means the reason for manual offline mode is gone. Leaving
-      // it latched would silently keep the next session lobby-less.
-      if (sent > 0 && Outbox.pendingCount() === 0 && window.BgbNet && window.BgbNet.isManual()) {
-        window.BgbNet.manual(false);
-      }
       _publish();
       return { sent, failed, remaining: Outbox.count() };
     }
