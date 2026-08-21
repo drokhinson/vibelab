@@ -110,6 +110,11 @@ components above.
       // _resetFormState(), which runs on paths that must not drop it.
       this._onEditorFocusIn = null;
 
+      // Pending visual-viewport settle pass (see _syncEditorChrome). A live
+      // timer handle, not form state, so it lives here rather than in
+      // _resetFormState() — losing the handle would leak the timer.
+      this._vvSettle = null;
+
       // Monotonic token for in-flight AI drafts (see _onGenerateAi). It must
       // NEVER be reset by _resetFormState(): a draft still in flight when the
       // user cancels out and re-enters would then be handed the same token as
@@ -490,6 +495,27 @@ components above.
       // `html, body { overflow-x: hidden }` stops body's overflow propagating
       // to the viewport.
       document.documentElement.classList.toggle("bgb-chapter-editing", editing);
+      // Re-read the visible viewport whenever the shell's lock state or its
+      // contents change. --bgb-vv-h/-top size and place this shell, but they
+      // only refresh on a visualViewport resize/scroll event — and mobile
+      // Chrome on iOS skips those across toolbar and keyboard transitions
+      // (dismissing the keyboard, which _onGenerateAi and _submitForm both do
+      // explicitly, is the usual culprit). A stale box leaves the footer
+      // mis-placed with no event coming to correct it, so every render pulls
+      // the real numbers. Cheap: four style writes, no layout read beyond
+      // what visualViewport already exposes.
+      if (editing && window.BgbViewport) {
+        window.BgbViewport.sync();
+        // The immediate sync reads the box as it is *now*, which during a
+        // keyboard dismissal is still the pre-animation one. Re-read once the
+        // animation has settled so the final resting box wins even if the
+        // browser never fires its own resize. Debounced, so a burst of renders
+        // schedules one settle pass, not one per render.
+        clearTimeout(this._vvSettle);
+        this._vvSettle = setTimeout(() => {
+          if (window.BgbViewport) window.BgbViewport.sync();
+        }, 350);
+      }
     }
 
     // Unconditional teardown, for the paths that leave the view without a
@@ -499,6 +525,11 @@ components above.
     _teardownEditorChrome() {
       if (this.container) this.container.classList.remove("chapter-edit-locked");
       document.documentElement.classList.remove("bgb-chapter-editing");
+      // Drop any pending settle pass — the shell is gone, and a sync firing
+      // after the user has left would republish the box for a view that no
+      // longer reads it.
+      clearTimeout(this._vvSettle);
+      this._vvSettle = null;
     }
 
     // Game chip — cream pill with cover + name. Especially important in
