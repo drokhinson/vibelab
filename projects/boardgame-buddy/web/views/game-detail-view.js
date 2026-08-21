@@ -157,7 +157,7 @@
               ${this._renderRulebookButton(g)}
             </div>
             ${g.description ? `<div class="game-detail__desc">${stripHtml(g.description)}</div>` : ""}
-            ${this._renderExpansions()}
+            <div id="game-detail-expansions">${this._renderExpansions()}</div>
             ${this._renderReferenceGuide()}
             ${this._renderRecentPlays()}
           </div>
@@ -293,13 +293,72 @@
 
     _openImportExpansions() {
       if (!this._game) return;
+      const gameId = this._game.id;
       window.ImportExpansionsModal.open({
-        gameId: this._game.id,
+        gameId,
         gameName: this._game.name,
-        // Each import lands one expansion; reload so the reel picks it up
-        // (and its owned check, which comes from the bundle's status map).
-        onImported: () => { this._reload(); },
+        // The import POST answers with the finished ExpansionListItem, so the
+        // reel takes the new expansion straight from it — the popup is still
+        // open over this page, and a _reload() here would blank the view
+        // behind it while the bundle refetches. The background reconcile
+        // below catches anything the optimistic row doesn't carry.
+        onImported: (expansion) => {
+          this._addExpansion(gameId, expansion);
+          this._refreshExpansions(gameId);
+        },
       });
+    }
+
+    /**
+     * Drop one freshly-imported ExpansionListItem into the reel and repaint.
+     * Ordered by name to match the bundle RPC, so the row doesn't jump once
+     * the background refresh lands.
+     * @param {string} gameId  Base game the import was started from.
+     * @param {any} expansion  ExpansionListItem from the import endpoint.
+     */
+    _addExpansion(gameId, expansion) {
+      if (!expansion || !expansion.expansion_game_id) return;
+      // The user can navigate off the page while the import is in flight.
+      if (!this._game || this._game.id !== gameId) return;
+      const list = this._expansions || [];
+      if (list.some((e) => e.expansion_game_id === expansion.expansion_game_id)) return;
+      this._expansions = list
+        .concat([expansion])
+        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      this._patchExpansions();
+    }
+
+    /**
+     * Repaint the expansions reel on its own. A full render() would rebuild
+     * the whole page — remounting the reference-guide widget and resetting
+     * every flipped play card — for a change confined to one section.
+     */
+    _patchExpansions() {
+      const host = this.container && this.container.querySelector("#game-detail-expansions");
+      if (!host) { this.render(); return; }
+      host.innerHTML = this._renderExpansions();
+      this.refreshIcons(host);
+    }
+
+    /**
+     * Re-pull the detail bundle after an import and repaint the reel from it.
+     * Unlike _reload() this never clears _game, so the page keeps its content
+     * (and its scroll position) instead of flashing the loader under the
+     * still-open popup.
+     * @param {string} gameId
+     */
+    async _refreshExpansions(gameId) {
+      try {
+        const bundle = await window.Game.detailBundle(gameId, { playsLimit: 5, force: true });
+        if (!this._game || this._game.id !== gameId) return;
+        if (!bundle || !Array.isArray(bundle.expansions)) return;
+        this._expansions = bundle.expansions;
+        this._patchExpansions();
+      } catch (e) {
+        // The optimistic row is already on screen — a failed reconcile just
+        // means the rest of the bundle catches up on the next open.
+        console.warn("Expansion refresh failed", e);
+      }
     }
 
     // ── Reference guide scroll ────────────────────────────────────────────────

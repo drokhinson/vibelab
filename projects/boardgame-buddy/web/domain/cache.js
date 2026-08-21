@@ -29,9 +29,66 @@
   const _store = new Map();
   // (ns,key) → Promise — single-flight guard inside swr().
   const _inflight = new Map();
+  // (ns,key) → int, bumped whenever an entry is dropped while a fetch for it
+  // is in flight. A fetch carries the generation it started under and only
+  // writes its result back if that's still current — otherwise the request
+  // predates the mutation that invalidated the entry and writing it would
+  // resurrect stale data.
+  const _flightGen = new Map();
   let _boundUid = null;
   let _persist = true; // flips false after a QuotaExceeded fallback
   const _counters = { freshHit: 0, staleHit: 0, miss: 0, set: 0, evict: 0 };
+
+  function _flightKey(ns, key) {
+    return ns + "\x00" + key;
+  }
+
+  /** Detach any in-flight fetch for this key: the next reader starts a fresh
+   *  request, and the outstanding one is write-blocked when it lands. */
+  function _cancelFlight(fk) {
+    if (!_inflight.has(fk)) return;
+    _inflight.delete(fk);
+    _flightGen.set(fk, (_flightGen.get(fk) || 0) + 1);
+  }
+
+  /** Cancel every in-flight fetch — used when the bound user changes, where a
+   *  request issued for the previous account must never write into the next
+   *  one's cache. */
+  function _cancelAllFlights() {
+    for (const fk of Array.from(_inflight.keys())) _cancelFlight(fk);
+  }
+
+  /** Cancel the in-flight fetches for one namespace. Keyed off the flight map
+   *  rather than the stored entries: a namespace whose only activity is a
+   *  first fetch has flights but nothing stored yet. */
+  function _cancelFlightsIn(ns) {
+    const prefix = ns + "\x00";
+    for (const fk of Array.from(_inflight.keys())) {
+      if (fk.startsWith(prefix)) _cancelFlight(fk);
+    }
+  }
+
+  /**
+   * Start (and register) the single-flight fetch for one key. The result is
+   * written back only if the entry wasn't invalidated while the request was
+   * in the air. Rejects on fetch failure — callers decide whether that
+   * surfaces or is swallowed.
+   */
+  function _startFetch(ns, key, fetcher, freshTtl, staleTtl) {
+    const fk = _flightKey(ns, key);
+    const gen = _flightGen.get(fk) || 0;
+    const p = Promise.resolve()
+      .then(() => fetcher())
+      .then((fresh) => {
+        if ((_flightGen.get(fk) || 0) === gen) {
+          bgbCache.setWithTtls(ns, key, fresh, { freshTtl, staleTtl });
+        }
+        return fresh;
+      })
+      .finally(() => { if (_inflight.get(fk) === p) _inflight.delete(fk); });
+    _inflight.set(fk, p);
+    return p;
+  }
 
   function _bucket(ns) {
     let b = _store.get(ns);
@@ -239,7 +296,7 @@
       const b = _bucket(ns);
       const entry = b.get(key);
       const now = Date.now();
-      const inflightKey = ns + "\x00" + key;
+      const inflightKey = _flightKey(ns, key);
 
       if (entry) {
         const age = now - entry.storedAt;
@@ -249,14 +306,12 @@
         }
         if (age < entry.staleTtl) {
           _counters.staleHit++;
-          // Background refresh, single-flight per (ns,key).
+          // Background refresh, single-flight per (ns,key). The caller gets
+          // the stale value, so swallow the rejection here rather than
+          // leaving it unhandled.
           if (!_inflight.has(inflightKey)) {
-            const p = Promise.resolve()
-              .then(() => fetcher())
-              .then((fresh) => { this.setWithTtls(ns, key, fresh, { freshTtl, staleTtl }); return fresh; })
-              .catch((e) => { console.warn("bgbCache swr refresh failed", ns, key, e); })
-              .finally(() => { _inflight.delete(inflightKey); });
-            _inflight.set(inflightKey, p);
+            _startFetch(ns, key, fetcher, freshTtl, staleTtl)
+              .catch((e) => { console.warn("bgbCache swr refresh failed", ns, key, e); });
           }
           return entry.value;
         }
@@ -268,18 +323,17 @@
       }
       _counters.miss++;
       if (_inflight.has(inflightKey)) return _inflight.get(inflightKey);
-      const p = Promise.resolve()
-        .then(() => fetcher())
-        .then((fresh) => { this.setWithTtls(ns, key, fresh, { freshTtl, staleTtl }); return fresh; })
-        .finally(() => { _inflight.delete(inflightKey); });
-      _inflight.set(inflightKey, p);
-      return p;
+      return _startFetch(ns, key, fetcher, freshTtl, staleTtl);
     },
 
     /** Drop a single key. Silent no-op when missing. */
     delete(ns, key) {
       const b = _store.get(ns);
       if (b) b.delete(key);
+      // A fetch already in flight was issued before whatever invalidated this
+      // entry (usually a mutation), so its answer is stale on arrival — cut
+      // it loose instead of letting it write itself back in.
+      _cancelFlight(_flightKey(ns, key));
       if (_persist && _boundUid) {
         try { localStorage.removeItem(_storageKey(ns, key)); } catch (_) {}
       }
@@ -297,8 +351,10 @@
           }
         }
         _store.clear();
+        _cancelAllFlights();
         return;
       }
+      _cancelFlightsIn(ns);
       const b = _store.get(ns);
       if (!b) return;
       if (_persist && _boundUid) {
@@ -319,7 +375,7 @@
       if (_boundUid === userId) return;
       // Clean slate before hydrating so a logout-without-unbind can't leak.
       _store.clear();
-      _inflight.clear();
+      _cancelAllFlights();
       _boundUid = userId;
       _persist = true;
       _purgeStrangers(userId);
@@ -339,9 +395,17 @@
     unbindUser() {
       const uid = _boundUid;
       _store.clear();
-      _inflight.clear();
+      _cancelAllFlights();
       if (uid) _purgeStorageFor(uid);
       _boundUid = null;
+    },
+
+    /** When this key was last written (epoch ms), or 0 when absent. Lets a
+     *  slow bulk warm-up skip keys a newer write already claimed. */
+    storedAt(ns, key) {
+      const b = _store.get(ns);
+      const entry = b && b.get(key);
+      return (entry && entry.storedAt) || 0;
     },
 
     /** Snapshot of per-namespace sizes + counters — debug aid only. */
