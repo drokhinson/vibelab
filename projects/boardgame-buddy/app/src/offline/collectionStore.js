@@ -9,7 +9,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api/client';
 
-const KEY = 'bgb:collection:v1';
+// v2 = rows keep GET /collection's nested `game` object. A v1 payload (flat
+// `game_*` columns) is simply not read; the first refresh rewrites it.
+const KEY = 'bgb:collection:v2';
 
 /** @type {{ items: import('../api/types').CollectionItem[], syncedAt: number|null }} */
 let _state = { items: [], syncedAt: null };
@@ -76,18 +78,12 @@ export function applyLocalStatus(gameId, status, gameSummary) {
         id: `local-${gameId}`,
         game_id: gameId,
         added_at: new Date().toISOString(),
-        game_name: gameSummary?.name || null,
-        game_thumbnail_url: gameSummary?.thumbnail_url || null,
-        game_year_published: gameSummary?.year_published ?? null,
-        game_min_players: gameSummary?.min_players ?? null,
-        game_max_players: gameSummary?.max_players ?? null,
-        game_playing_time: gameSummary?.playing_time ?? null,
-        game_is_expansion: gameSummary?.is_expansion ?? null,
-        game_base_game_bgg_id: gameSummary?.base_game_bgg_id ?? null,
-        game_expansion_color: gameSummary?.expansion_color ?? null,
-        game_play_mode: gameSummary?.play_mode ?? null,
-        game_bgg_id: gameSummary?.bgg_id ?? null,
-        game_theme_color: gameSummary?.theme_color ?? null,
+        last_played_at: null,
+        play_count: 0,
+        // Same nested shape GET /collection returns, so the next background
+        // refresh replaces this row rather than changing the shape under
+        // collectionGames().
+        game: { ...(gameSummary || {}), id: gameId },
       }),
       status,
     });
@@ -106,23 +102,21 @@ export async function clearCollection() {
   } catch {}
 }
 
-/** Owned+wishlist items as GameSummary-ish objects for search/display. */
+/**
+ * Shelf rows flattened to GameSummary-shaped objects for search/display, with
+ * the row's `status` and play stats carried along. `it.game` is the nested
+ * GameSummary GET /collection returns — do NOT reintroduce flat `game_*`
+ * field reads here; that shape belongs to /collection/grid, not this endpoint.
+ */
 export function collectionGames() {
-  return _state.items.map((it) => ({
-    id: it.game_id,
-    bgg_id: it.game_bgg_id ?? null,
-    name: it.game_name || '',
-    year_published: it.game_year_published ?? null,
-    min_players: it.game_min_players ?? null,
-    max_players: it.game_max_players ?? null,
-    playing_time: it.game_playing_time ?? null,
-    thumbnail_url: it.game_thumbnail_url ?? null,
-    image_url: null,
-    theme_color: it.game_theme_color ?? null,
-    is_expansion: !!it.game_is_expansion,
-    base_game_bgg_id: it.game_base_game_bgg_id ?? null,
-    expansion_color: it.game_expansion_color ?? null,
-    play_mode: it.game_play_mode ?? null,
-    status: it.status,
-  }));
+  return _state.items
+    .filter((it) => it && it.game)
+    .map((it) => ({
+      ...it.game,
+      id: it.game.id || it.game_id,
+      name: it.game.name || '',
+      status: it.status,
+      last_played_at: it.last_played_at ?? null,
+      play_count: it.play_count ?? 0,
+    }));
 }
