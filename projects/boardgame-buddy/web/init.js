@@ -495,7 +495,60 @@
     // origins all throw or reject here, and none of them should stop the app
     // from booting — losing the offline shell is a degradation, not a failure.
     try { navigator.serviceWorker?.register("/sw.js").catch(() => {}); } catch (_) {}
+    watchForNewBuild();
 
     if (window.api) window.api.trackEvent("page_view");
   });
+
+  // Pick up a new deploy without waiting for a navigation.
+  //
+  // sw.js already does its half correctly: the cache name carries the build id,
+  // install() skipWaiting()s and activate() clients.claim()s, so a new worker
+  // takes over the moment the browser notices it. The gap is that the browser
+  // only goes looking on a NAVIGATION. An installed PWA is resumed from the app
+  // switcher, which is not a navigation — so it can keep running a build from
+  // weeks ago, with every fix shipped since invisible to the person who cared
+  // enough to install it. That is not hypothetical: it is how a fixed
+  // feed-scroll bug went on being reported as broken.
+  //
+  // So: ask on every visibility flip, and reload once the new worker has
+  // claimed the page — because a claimed page is still executing the OLD
+  // scripts, which is the stale build the user is looking at.
+  //
+  // The reload is deliberately deferred until the app is in the BACKGROUND.
+  // Reloading under the user's thumb would be its own bug, and the play draft's
+  // photo blob lives in memory only (see domain/play-session.js) — a reload at
+  // the wrong moment costs them the photo. Backgrounded, the swap is invisible:
+  // they come back to the new build already running.
+  function watchForNewBuild() {
+    const sw = navigator.serviceWorker;
+    if (!sw) return;
+    // A controllerchange with no prior controller is just this page being
+    // adopted by its first worker — that is a fresh install, not a new build.
+    const hadController = !!sw.controller;
+    let newBuildWaiting = false;
+    let reloading = false;
+
+    const swapIfHidden = () => {
+      if (!newBuildWaiting || reloading) return;
+      if (document.visibilityState === "visible") return;
+      reloading = true;
+      window.location.reload();
+    };
+
+    try {
+      sw.addEventListener("controllerchange", () => {
+        if (!hadController) return;
+        newBuildWaiting = true;
+        swapIfHidden();
+      });
+    } catch (_) {}
+
+    document.addEventListener("visibilitychange", () => {
+      // Both directions: going hidden is what lets an already-claimed page
+      // swap, and either transition is a good moment to re-check for a deploy.
+      sw.getRegistration?.().then((reg) => reg && reg.update()).catch(() => {});
+      swapIfHidden();
+    });
+  }
 })();
