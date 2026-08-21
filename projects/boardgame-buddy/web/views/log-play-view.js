@@ -1,7 +1,7 @@
 // views/log-play-view.js — The Play tab: Host on top, Join on the bottom.
 //
 // Two halves on a single screen, split by a divider:
-//   • Top (Host): "Let's play" heading, an optional "Resume hosting?" banner,
+//   • Top (Host): "Host a game" heading, an optional "Resume hosting?" banner,
 //     then three cards — Host a game / Another Round / Game Explorer.
 //   • Bottom (Join): the JoinPanel widget — a 5-char code input and the list
 //     of active sessions the user can join or spectate.
@@ -71,7 +71,7 @@
 
       this.container.innerHTML = `
         <header class="cascade-chooser__header">
-          <h1 class="font-display">Let's play</h1>
+          <h1 class="font-display">Host a game</h1>
         </header>
 
         ${resumable ? `
