@@ -117,9 +117,9 @@
     const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${escapeAttr(jsStr(g.name || ""))}'})`;
 
     // Caption "winner" block. Three modes:
-    //   - cooperative + any winners → "We beat the game" (brass win style)
-    //   - cooperative + no winners  → "The game won" (muted, no star)
-    //   - competitive               → winner name(s) · score (or just name)
+    //   - coop + any winners → "We beat the game" (brass win style)
+    //   - coop + no winners  → "The game won" (muted, no star)
+    //   - competitive        → winner name(s) · score (or just name)
     // Coop renderings don't list players because everyone won/lost together
     // and the joined name list overruns the caption on big tables.
     const winnerBlock = buildWinnerBlock(card, me);
@@ -210,7 +210,7 @@
     const participantTotal = card.participant_count || 0;
     const everyoneWon = participantTotal > 0 && winnerCount > 0 && winnerCount >= participantTotal;
     const nobodyWon = winnerCount === 0;
-    const teamBucket = (playMode === "cooperative") || everyoneWon || nobodyWon;
+    const teamBucket = (playMode === "coop") || everyoneWon || nobodyWon;
     const we = viewerInPlay(card, me) ? "We" : "They";
 
     if (teamBucket) {
