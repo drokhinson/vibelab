@@ -78,17 +78,6 @@ export default function BggSyncCard() {
     setBusy(false);
   }
 
-  async function processPending() {
-    setBusy(true);
-    try {
-      await api.bggProcessPending();
-      startPoll();
-    } catch (e) {
-      await alertModal({ title: 'Import failed', body: e.message });
-    }
-    setBusy(false);
-  }
-
   async function unlink() {
     const ok = await confirm({
       title: 'Unlink BoardGameGeek?',
@@ -138,11 +127,17 @@ export default function BggSyncCard() {
               ) : null}
             </View>
           ) : null}
+          {/* No manual drain button: POST /bgg/sync schedules the pending-import
+              worker as a background task, so the count clears on its own and
+              the poll above tracks it. */}
+          {!importing && status.pending_count > 0 ? (
+            <Text variant="caption">
+              {status.pending_count} game{status.pending_count === 1 ? '' : 's'} still importing in the
+              background — sync again if the count stalls.
+            </Text>
+          ) : null}
           <Row gap="sm">
             <Button label="Sync now" icon={RefreshCw} variant="secondary" size="sm" onPress={sync} busy={busy} disabled={!!importing} />
-            {!importing && status.pending_count > 0 ? (
-              <Button label={`Import ${status.pending_count} pending`} variant="outline" size="sm" onPress={processPending} disabled={busy} />
-            ) : null}
             <Button label="Unlink" variant="outline" size="sm" onPress={unlink} />
           </Row>
         </View>

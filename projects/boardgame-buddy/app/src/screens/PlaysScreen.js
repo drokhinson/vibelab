@@ -12,10 +12,12 @@ import AppHeader from '../components/AppHeader';
 import EmptyState from '../components/EmptyState';
 import PlayDetailPopup from '../widgets/PlayDetailPopup';
 import api from '../api/client';
+import { useAppState } from '../store/AppContext';
 import { useCachedResource } from '../store/cache';
 
 export default function PlaysScreen({ navigation, route }) {
   const userId = route.params?.userId || undefined;
+  const { playPartners } = useAppState();
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [gameFilter, setGameFilter] = useState(null); // {value,label}
@@ -45,7 +47,25 @@ export default function PlaysScreen({ navigation, route }) {
       user_id: userId,
     }),
   );
-  const { data: filterOptions } = useCachedResource(userId ? null : 'plays:filter-options', () => api.playFilterOptions());
+  // Filter options, assembled client-side. The backend's /plays/filter-options
+  // is gone, but /plays still takes game_id + buddy_id, and both option sets
+  // are already available: recently-played is the games you've actually
+  // logged or been in, and playPartners.recent (GET /played-with) is exactly
+  // "accounts who appear in plays you're part of".
+  const { data: recentGames } = useCachedResource(
+    userId ? null : 'plays:filter-games',
+    () => api.recentlyPlayedGames({ limit: 30 }),
+  );
+  const filterOptions = useMemo(
+    () => ({
+      games: (recentGames || []).map((g) => ({ value: g.id, label: g.name })),
+      buddies: (playPartners.recent || []).map((u) => ({
+        value: u.user_id || u.id,
+        label: u.display_name,
+      })),
+    }),
+    [recentGames, playPartners.recent],
+  );
 
   const plays = useMemo(() => [...(firstPage?.plays || []), ...extra], [firstPage, extra]);
   const total = firstPage?.total || 0;

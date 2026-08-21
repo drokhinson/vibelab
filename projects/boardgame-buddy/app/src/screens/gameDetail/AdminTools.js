@@ -5,13 +5,11 @@
 import React, { useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { BottomSheetModal, BottomSheetView, BottomSheetBackdrop, BottomSheetTextInput } from '@gorhom/bottom-sheet';
-import { Wrench, BookOpen, RefreshCw, Palette } from 'lucide-react-native';
+import { Wrench, BookOpen, RefreshCw } from 'lucide-react-native';
 import { COLORS, FONTS, RADII, SPACING } from '../../theme';
 import { Button, Row, Text } from '../../ui';
 import api from '../../api/client';
 import { alert } from '../../components/ConfirmModal';
-
-const EXP_COLORS = ['#C9922A', '#7a5293', '#2f6a93', '#3f7d4a', '#b23b34', '#d2691e', '#2a8a7a', '#39424f'];
 
 export default function AdminTools({ game, onChanged }) {
   const sheetRef = useRef(null);
@@ -84,23 +82,9 @@ export default function AdminTools({ game, onChanged }) {
             style={{ alignSelf: 'flex-start' }}
           />
 
-          {game.is_expansion ? (
-            <>
-              <Row gap="xs" style={{ marginTop: SPACING.lg, marginBottom: SPACING.xs }}>
-                <Palette size={14} color={COLORS.textSoft} />
-                <Text variant="caption">EXPANSION DOT COLOR</Text>
-              </Row>
-              <Row gap="sm" wrap>
-                {EXP_COLORS.map((hex) => (
-                  <Pressable
-                    key={hex}
-                    onPress={() => run('color', () => api.adminSetExpansionColor(game.id, hex))}
-                    style={[styles.swatch, { backgroundColor: hex }, game.expansion_color === hex && styles.swatchOn]}
-                  />
-                ))}
-              </Row>
-            </>
-          ) : null}
+          {/* The expansion dot-colour override is gone: the backend dropped
+              PATCH /games/admin/{id}/expansion-color. Colours are auto-assigned
+              at import. */}
         </BottomSheetView>
       </BottomSheetModal>
     </View>
@@ -129,6 +113,4 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.sans,
     fontSize: 14,
   },
-  swatch: { width: 34, height: 34, borderRadius: 17 },
-  swatchOn: { borderWidth: 3, borderColor: COLORS.text },
 });

@@ -80,12 +80,13 @@ export async function searchRemote(query, { includeBgg = false, includeExpansion
 }
 
 /**
- * Resolve a BGG pick to a catalog game: reuse if already imported, else
- * import. Returns a GameSummary.
+ * Resolve a BGG pick to a catalog game. `import_game_from_bgg` is idempotent —
+ * it returns the pre-existing row when the bgg_id is already in the catalog —
+ * so this is one call, not a lookup-then-import. Don't reintroduce a
+ * `/games/lookup-by-bgg` pre-check; that endpoint is gone.
  * @param {number} bggId
+ * @returns {Promise<Object>} GameSummary
  */
-export async function resolveBggGame(bggId) {
-  const existing = await api.lookupByBgg(bggId).catch(() => null);
-  if (existing?.id) return existing;
+export function resolveBggGame(bggId) {
   return api.importBgg(bggId);
 }
