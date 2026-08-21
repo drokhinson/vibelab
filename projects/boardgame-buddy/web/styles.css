@@ -2274,6 +2274,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .feed-rail__header h3 i { color: var(--polaroid-accent); }
 .feed-rail__scroll {
   display: flex; gap: 0.6rem; overflow-x: auto;
+  /* An absent overflow-y computes to `auto` beside a scrollable overflow-x,
+     not to `visible` (CSS Overflow 3 §3) — so leaving it off silently made
+     this rail a VERTICAL scroll container too, sitting over the Hot this
+     week / Buddies you may know / Time to revisit tiles. It swallows nothing
+     today only because the tiles fit inside the padding, leaving
+     scrollHeight == clientHeight; a taller tile would have put a gesture trap
+     across those rails. .play-session__scroll and .expansion-reel were given
+     the honest value already; this rail was missed. */
+  overflow-y: hidden;
   scrollbar-width: none; padding: 2px 2px 6px;
   -webkit-overflow-scrolling: touch;
 }
