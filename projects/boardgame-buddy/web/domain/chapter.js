@@ -71,6 +71,16 @@
     create(gameId, payload) {
       return window.api.post(`/games/${gameId}/chapters`, payload);
     },
+    // AI-draft a chapter of `chapterType` for this game. Returns
+    // { chapter_type, title, content } — a draft for the editor to load into
+    // its form. Saves nothing; the user reviews and hits Save themselves.
+    // Slower than every other call here (a live LLM round-trip), so callers
+    // must show a pending state.
+    generate(gameId, chapterType) {
+      return window.api.post(`/games/${gameId}/chapters/generate`, {
+        chapter_type: chapterType,
+      });
+    },
     add(gameId, chapterId) {
       return window.api.post(`/games/${gameId}/my-chapters`, { chapter_id: chapterId });
     },

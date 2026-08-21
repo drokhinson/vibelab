@@ -19,7 +19,14 @@
   ];
 
   // Authoring guide shown by the toolbar info button and offered as a .md
-  // download. Written for an AI (or person) drafting a chapter. Keep this in
+  // download. Written for an AI (or person) drafting a chapter.
+  //
+  // KEEP IN SYNC with _AUTHORING_GUIDE in
+  // shared-backend/routes/boardgame_buddy/services/chapter_ai.py — the same
+  // text is what "Generate with AI" hands the model, so a change here that
+  // isn't mirrored there means the AI drafts against stale rules.
+  //
+  // Keep this in
   // sync with what ui/markdown.js actually renders — every component named
   // under "Supported formatting" is handled by renderMarkdown/renderInline;
   // anything not listed shows up as literal text.
@@ -103,6 +110,13 @@ components above.
       // _resetFormState(), which runs on paths that must not drop it.
       this._onEditorFocusIn = null;
 
+      // Monotonic token for in-flight AI drafts (see _onGenerateAi). It must
+      // NEVER be reset by _resetFormState(): a draft still in flight when the
+      // user cancels out and re-enters would then be handed the same token as
+      // the next request, and its late reply would overwrite the new draft.
+      // Only the instance lifetime bounds it.
+      this._genSeq = 0;
+
       // Form / tab / popover state — all owned by _resetFormState() so a
       // single source of truth governs what "clean" looks like. Initialize
       // here so render() never sees `undefined` on first paint.
@@ -126,6 +140,9 @@ components above.
       this._editorView = "write";    // "write" | "preview"
       this._error = null;
       this._saving = false;
+      // AI draft in flight? The matching `_genSeq` guard deliberately lives on
+      // the constructor, not here — see the note there.
+      this._generating = false;
       // Toolbar popover + one-shots
       this._activePop = null;        // null | "table" | "color"
       this._tablePickLabel = "1 × 1";
@@ -838,13 +855,36 @@ components above.
              ${this._renderPopovers()}
            </div>`;
 
-      const importBtn = isEditing ? "" : `
-        <label class="chapter-edit__import" title="Import a .md file as this chapter">
-          <input type="file" accept=".md,text/markdown,text/plain"
-                 onchange="window.referenceGuideAddView._onImportMd(event)" />
-          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
-          <span>Import .md</span>
-        </label>
+      // Draft-source row: import a file, or have the AI write a first draft.
+      // Create-only — an existing chapter already has a body, and replacing it
+      // wholesale isn't what the Edit screen is for.
+      // Generate needs a chapter type to know what to write, so it stays
+      // disabled until a type pill is tapped (which is why the type scroller
+      // sits above this row). A disabled button gives no other feedback, so
+      // the tooltip carries the reason.
+      const genDisabled = !this._formType || this._generating || this._saving;
+      const genTitle = this._generating
+        ? "Drafting a chapter…"
+        : this._formType
+          ? "Draft this chapter with AI — you review and edit before saving"
+          : "Pick a chapter type first";
+      const draftRow = isEditing ? "" : `
+        <div class="chapter-edit__genrow">
+          <label class="chapter-edit__import" title="Import a .md file as this chapter">
+            <input type="file" accept=".md,text/markdown,text/plain"
+                   onchange="window.referenceGuideAddView._onImportMd(event)" />
+            <i data-lucide="upload" class="w-4 h-4"></i>
+            <span>Import .md</span>
+          </label>
+          <button type="button"
+                  class="chapter-edit__genbtn ${this._generating ? "chapter-edit__genbtn--busy" : ""}"
+                  title="${escapeAttr(genTitle)}"
+                  ${genDisabled ? "disabled" : ""}
+                  onclick="window.referenceGuideAddView._onGenerateAi()">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span>${this._generating ? "Generating…" : "Generate with AI"}</span>
+          </button>
+        </div>
       `;
 
       // No chapter type picked yet → Save reads "Select chapter type" and
@@ -869,16 +909,17 @@ components above.
           <div class="chapter-edit__scroll">
             ${targetSelector}
 
+            <div class="chapter-edit__typescroll">${typeBtns}</div>
+
+            ${draftRow}
+
             <div class="chapter-edit__titlerow">
               <input id="chapter-form-title" class="chapter-edit__titlefield"
                      maxlength="200" required
                      value="${escapeAttr(this._formTitle)}"
                      oninput="window.referenceGuideAddView._formTitle = this.value"
                      placeholder="Chapter title…" />
-              ${importBtn}
             </div>
-
-            <div class="chapter-edit__typescroll">${typeBtns}</div>
 
             <div class="chapter-edit__seg">
               <button type="button" class="${!isPreview ? "on" : ""}"
@@ -1202,6 +1243,58 @@ components above.
       reader.readAsText(file);
       // Reset the input so the same file can be re-imported next time.
       event.target.value = "";
+    }
+
+    // AI-draft the chapter for the picked type, then load it into the form for
+    // the user to review. Deliberately NOT a save — the draft is a starting
+    // point, and the user still has to hit Save chapter.
+    async _onGenerateAi() {
+      if (!this._formType || this._generating || this._saving) return;
+
+      // Generating replaces whatever is in the form, so anything already typed
+      // would be lost — that needs a secondary confirm through the project's
+      // one confirm surface. An untouched form has nothing to lose, so it goes
+      // straight through.
+      const hasDraft = !!(this._formTitle.trim() || this._formContent.trim());
+      if (hasDraft) {
+        const ok = await window.PolaroidPopup.confirm({
+          title: "Replace what you've written?",
+          body: "Generating a chapter overwrites the title and body currently in the form. This can't be undone.",
+          confirmLabel: "Replace",
+          cancelLabel: "Keep mine",
+        });
+        if (!ok) return;
+        // The confirm dialog stole focus and the user may have re-typed while
+        // it was open — re-check before committing to the overwrite.
+        if (!this._formType || this._generating) return;
+      }
+
+      // Drop the software keyboard so the pending state is what's on screen
+      // rather than a keyboard over a frozen form (same reason as _submitForm).
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+
+      // Stamped before the await: switching type and re-generating mid-flight
+      // must land the LATEST draft, not whichever request finishes last.
+      const seq = ++this._genSeq;
+      const targetGameId = this._createTargetGameId || this._gameId;
+      const chapterType = this._formType;
+      this._error = null;
+      this._generating = true;
+      this.render();
+      try {
+        const draft = await window.Chapter.generate(targetGameId, chapterType);
+        if (seq !== this._genSeq) return;
+        this._formTitle = (draft.title || "").slice(0, 200);
+        this._formContent = draft.content || "";
+        this._generating = false;
+        this.render();
+        showToast("Draft ready — review and edit before saving", "success");
+      } catch (e) {
+        if (seq !== this._genSeq) return;
+        this._error = e.message || "Couldn't draft a chapter";
+        this._generating = false;
+        this.render();
+      }
     }
 
     async _cancelForm() {
