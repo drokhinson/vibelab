@@ -1,8 +1,9 @@
 // ui/polaroid-popup.js — Wrap-up splash polaroid. A medium cream card lands
 // in the middle of the screen showing the game thumbnail + winner with a
-// close (X) in the top-right. Dismiss routes to the feed; getting the
-// just-saved play into that feed is the save path's job — play-flow's
-// _runSave() re-pulls the first page the moment the write lands.
+// close (X) in the top-right. The X backs out to the Play tab; the primary
+// CTA and a backdrop tap route to the feed. Getting the just-saved play into
+// that feed is the save path's job — play-flow's _runSave() re-pulls the
+// first page the moment the write lands.
 //
 // Two callers, one card:
 //   • Non-host joiners (session-viewer) get the plain X-only splash.
@@ -35,7 +36,12 @@
    *           the winner pill and swaps the primary CTA to "Retry".
    * @property {string=} warning — muted advisory line (e.g. the photo
    *           upload failed but the play itself saved).
-   * @property {() => void=} onDismiss — override default feed redirect.
+   * @property {() => void=} onDismiss — override the default feed redirect
+   *           used by the backdrop tap and the primary CTA.
+   * @property {() => void=} onClose — override what the corner X does. By
+   *           default the X routes to the Play tab (`log-play`) instead of
+   *           the feed; when unset but `onDismiss` is, the X follows
+   *           `onDismiss`.
    * @property {(() => void)=} onAnotherRound — host-only. When set the card
    *           renders an "Another round?" button that re-seeds a fresh
    *           session with the same game / expansions / players.
@@ -111,7 +117,7 @@
     root.__opts = opts;
     if (window.lucide) window.lucide.createIcons({ root });
     const closeBtn = root.querySelector(".polaroid-popup__close");
-    if (closeBtn) closeBtn.addEventListener("click", () => handleDismiss(opts));
+    if (closeBtn) closeBtn.addEventListener("click", () => handleClose(opts));
     const viewBtn = root.querySelector(".polaroid-popup__view");
     if (viewBtn) {
       viewBtn.addEventListener("click", () => {
@@ -147,6 +153,28 @@
     if (existing && existing.parentNode) {
       existing.parentNode.removeChild(existing);
     }
+  }
+
+  /**
+   * The X in the card's corner. Distinct from the rest of the dismiss paths:
+   * closing the wrap-up card means "I'm done with this game", so it drops the
+   * user back on the Play tab rather than the feed. `onClose` overrides it;
+   * absent that it falls back to `onDismiss` so a caller that only overrides
+   * dismissal keeps one consistent destination for every exit.
+   */
+  function handleClose(opts) {
+    if (opts && typeof opts.onClose === "function") {
+      dismiss();
+      try { opts.onClose(); } catch (_) {}
+      return;
+    }
+    if (opts && typeof opts.onDismiss === "function") {
+      handleDismiss(opts);
+      return;
+    }
+    dismiss();
+    try { window.store.invalidate("feed"); } catch (_) {}
+    window.router.go("log-play");
   }
 
   function handleDismiss(opts) {
