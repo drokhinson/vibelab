@@ -11,17 +11,14 @@ import UserBadge from '../../components/UserBadge';
 import GameFinder from '../../widgets/GameFinder';
 import ImportExpansionsSheet from '../../widgets/ImportExpansionsSheet';
 import { matchesExpansionQuery, stripBaseGameName } from '../../domain/expansionName';
+import { PLAY_MODES, PLAY_MODE_LABELS } from '../../domain/playMode';
 import api from '../../api/client';
 import { useAppState } from '../../store/AppContext';
 
 // Past this many expansions the list gets a filter field above it.
 const EXPANSION_FILTER_THRESHOLD = 5;
 
-const MODES = [
-  { key: 'competitive', label: 'Competitive' },
-  { key: 'cooperative', label: 'Co-op' },
-  { key: 'team', label: 'Teams' },
-];
+const MODES = PLAY_MODES.map((key) => ({ key, label: PLAY_MODE_LABELS[key] }));
 
 export default function GatherStep({ session, navigation }) {
   const { playPartners } = useAppState();

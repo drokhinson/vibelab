@@ -15,6 +15,7 @@ import api from '../../api/client';
 import LiveScores from '../../realtime/liveScores';
 import { emptyDraft, loadDraft, saveDraft, clearDraft } from '../../models/playSession';
 import { sanitizeRoundScore, parseRoundScore, autoSelectWinners } from '../../domain/scoring';
+import { isCoop, normalizePlayMode } from '../../domain/playMode';
 import { savePlay } from './playSave';
 
 export default function usePlaySession({ me, initialCode, initialGame }) {
@@ -242,7 +243,7 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     (game) => {
       mutate((d) => {
         d.game = game;
-        d.playMode = game.play_mode || d.playMode || 'competitive';
+        d.playMode = normalizePlayMode(game.play_mode || d.playMode);
         d.expansionIds = [];
       });
       reconcileGameToLobby();
@@ -352,7 +353,7 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
         const p = d.players[i];
         if (!p) return;
         const next = !p.is_winner;
-        if (d.playMode === 'cooperative') {
+        if (isCoop(d.playMode)) {
           for (const other of d.players) other.is_winner = next;
         } else {
           p.is_winner = next;

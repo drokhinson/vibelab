@@ -11,6 +11,7 @@ import { Maximize2, Star } from 'lucide-react-native';
 import { COLORS, FONTS, RADII, SPACING, SHADOWS, gameAccent } from '../theme';
 import UserBadge from './UserBadge';
 import api from '../api/client';
+import { isCoop } from '../domain/playMode';
 
 function countWinners(raw) {
   if (!raw) return 0;
@@ -28,7 +29,7 @@ function WinnerBlock({ card, meId, meName }) {
   const total = card.participant_count || 0;
   const everyoneWon = total > 0 && winnerCount >= total;
   const nobodyWon = winnerCount === 0;
-  const teamBucket = playMode === 'cooperative' || everyoneWon || nobodyWon;
+  const teamBucket = isCoop(playMode) || everyoneWon || nobodyWon;
   const we = viewerInPlay(card, meId) ? 'We' : 'They';
 
   if (teamBucket) {

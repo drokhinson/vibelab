@@ -9,6 +9,7 @@ import { COLORS, RADII, SPACING } from '../../theme';
 import { Button, Row, Text } from '../../ui';
 import RoundScoreGrid from '../../widgets/RoundScoreGrid';
 import ReferenceGuideScroll from '../../widgets/ReferenceGuideScroll';
+import { isCoop } from '../../domain/playMode';
 
 export default function PlayStep({ session }) {
   const { draft, setRoundScore, addRound, removeRound, toggleWinner, resolvedScore, playerTotal, maxRoundCount } = session;
@@ -20,13 +21,13 @@ export default function PlayStep({ session }) {
   }, [draft, rounds, addRound]);
 
   if (!draft) return null;
-  const isCoop = draft.playMode === 'cooperative';
+  const coop = isCoop(draft.playMode);
   const won = draft.players.length > 0 && draft.players.every((p) => p.is_winner);
 
   return (
     <View style={styles.wrap}>
       <Text variant="label">Scores</Text>
-      {isCoop ? (
+      {coop ? (
         <Row gap="sm">
           <Button
             label="We won!"
@@ -59,10 +60,10 @@ export default function PlayStep({ session }) {
         onSetCell={setRoundScore}
         onAddRound={addRound}
         onRemoveRound={removeRound}
-        onToggleWinner={isCoop ? undefined : toggleWinner}
+        onToggleWinner={coop ? undefined : toggleWinner}
         editable
       />
-      {!isCoop ? (
+      {!coop ? (
         <Text variant="caption" center>
           Tap a player's name to crown the winner — highest total is picked automatically.
         </Text>

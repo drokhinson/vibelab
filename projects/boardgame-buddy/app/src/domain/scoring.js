@@ -5,6 +5,8 @@
 // Ported from web helpers (sanitizeRoundScore / parseRoundScore /
 // nextSignToggle) + play-flow-view._autoSelectWinners.
 
+import { isCoop } from './playMode';
+
 /** Keep digits and a single leading minus. "" and "-" are legal mid-typing. */
 export function sanitizeRoundScore(value) {
   const s = String(value ?? '');
@@ -35,11 +37,11 @@ export function nextSignToggle(v) {
  * or when every total is 0. Team mode groups by the free-text team tag.
  * @param {Array<Object>} players
  * @param {(playerIdx: number) => number} totalOf
- * @param {'competitive'|'cooperative'|'team'|string} mode
+ * @param {import('./playMode').PlayModeValue|string} mode
  * @returns {boolean} whether anything changed
  */
 export function autoSelectWinners(players, totalOf, mode) {
-  if (!players.length || mode === 'cooperative' || mode === 'coop') return false;
+  if (!players.length || isCoop(mode)) return false;
   const totals = players.map((_, i) => totalOf(i));
   if (totals.every((t) => t === 0)) return false;
   let changed = false;

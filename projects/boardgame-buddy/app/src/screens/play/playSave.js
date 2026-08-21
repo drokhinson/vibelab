@@ -17,6 +17,7 @@
 
 import api from '../../api/client';
 import { parseRoundScore } from '../../domain/scoring';
+import { normalizePlayMode } from '../../domain/playMode';
 import { enqueuePlay, persistOutboxPhoto } from '../../offline/playOutbox';
 
 export function buildPlayPayload(draft, { rounds, resolvedScore }) {
@@ -38,7 +39,10 @@ export function buildPlayPayload(draft, { rounds, resolvedScore }) {
     notes: draft.notes || null,
     photo_url: null,
     expansion_ids: draft.expansionIds || [],
-    play_mode: draft.playMode || null,
+    // Normalized, not passed through: PlayCreate validates against the
+    // PlayMode enum, so an off-vocabulary string is a 422 on an otherwise
+    // finished play.
+    play_mode: normalizePlayMode(draft.playMode),
   };
 }
 
