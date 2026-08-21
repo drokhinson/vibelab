@@ -598,7 +598,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   max-width: 480px;             /* matches #app's max-w-[480px] */
   height: 100vh;                /* no-dvh fallback */
   height: 100dvh;               /* drops the retracted URL-bar strip */
-  height: var(--bgb-vv-h, 100dvh);  /* drops the keyboard too */
+  /* --bgb-vv-h drops the keyboard too, but it is only as fresh as the last
+     visualViewport resize event — and mobile Chrome on iOS drops those during
+     toolbar and keyboard transitions. A stale-LARGE value would size the shell
+     past the bottom of the screen and take the footer (its last flex:none
+     child) with it: Save/Cancel end up below the fold, their labels clipped and
+     their hit areas unreachable. min() clamps that to the real dynamic
+     viewport, so a missed event can degrade the fit but never strand the
+     footer. When the value is accurate — including with the keyboard up, where
+     it is *smaller* than 100dvh — min() is a no-op. Subtracting --bgb-vv-top
+     keeps the invariant exact: top + height never exceeds the viewport. */
+  height: min(var(--bgb-vv-h, 100dvh), calc(100dvh - var(--bgb-vv-top, 0px)));
   z-index: 45;                  /* above .bgb-nav (40) and .bgb-global-header (30) */
   box-sizing: border-box;
   padding: 0;                   /* Tailwind px-4/py-4 off — the scroller carries the gutter */
@@ -642,6 +652,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   padding-bottom: calc(0.7rem + env(safe-area-inset-bottom));
   border-top: 1px solid oklch(var(--b3));
   background: oklch(var(--b1));
+  /* The shell clips to its box, so the footer must be the thing that wins any
+     overlap: raised above the scroller's content, and never shrunk below the
+     height its labels need (flex:none already refuses to shrink — this is the
+     belt to that braces, since a clipped footer reads as "blank dead buttons"
+     rather than as a layout bug). */
+  position: relative;
+  z-index: 1;
+  min-height: calc(48px + 1.4rem);
 }
 /* Keyboard up → the home indicator is behind it, so the safe-area inset would
    just be a dead gap between the buttons and the keyboard. */
@@ -816,6 +834,22 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 @keyframes chapterGenPulse {
   0%, 100% { opacity: 0.5; }
   50%      { opacity: 0.85; }
+}
+
+/* The scroller's fixed-height rows must hold their natural height and let the
+   scroller scroll — otherwise flexbox shrinks them to fit and their contents
+   spill out under the next row.
+   .chapter-edit__typescroll is the trap: overflow-x:auto makes it a scroll
+   container, and a scroll container's automatic minimum size is 0 rather than
+   min-content. Every other row refuses to shrink past its text, so the pill row
+   is the one child flexbox *can* shrink — it absorbed the entire overflow
+   (30px of pills squeezed into 10px) and the Import/Generate row painted over
+   the remains. */
+.chapter-edit__typescroll,
+.chapter-edit__genrow,
+.chapter-edit__titlerow,
+.chapter-edit__seg {
+  flex-shrink: 0;
 }
 
 /* Horizontal type-pill scroller (replaces the cramped 6-up grid). */
@@ -1139,6 +1173,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 800;
   font-size: 0.95rem;
   padding: 13px 16px;
+  /* Floor the box at its natural height so the label can never be squeezed out
+     of a compressed row — an empty-looking pill gives the user nothing to act
+     on and no hint that anything is wrong. */
+  min-height: 48px;
   cursor: pointer;
   transition: transform 100ms ease, filter 140ms ease;
   display: inline-flex;
@@ -1149,8 +1187,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .chapter-edit__fbtn:active { transform: scale(0.97); }
 .chapter-edit__fbtn--cancel {
   background: transparent;
-  color: oklch(var(--bc));
-  border: 1.5px solid oklch(var(--b3));
+  /* Fallback inside the var(): --bc comes from the DaisyUI theme layer, not
+     from this file. If that layer ever fails to load, oklch(var(--bc)) is an
+     invalid colour, the declaration drops, and the label inherits black onto a
+     near-black shell — invisible. The literal keeps it readable regardless. */
+  color: oklch(var(--bc, 87.6229% 0.021 340));
+  border: 1.5px solid oklch(var(--b3, 19% 0.020 52));
 }
 .chapter-edit__fbtn--cancel:hover { background: oklch(var(--b2)); }
 .chapter-edit__fbtn--save {
