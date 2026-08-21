@@ -1814,10 +1814,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* ── Caption row ──────────────────────────────────────────────────────────
-   Default: game name left, winner right on a single row. When the winner
-   text is long (set by JS via .has-long-meta on the caption), the meta
-   drops to its own row below the title and scrolls horizontally inside
-   the polaroid frame instead of clipping. */
+   Default: game name left, winner right on a single row. The winner never
+   shrinks — the game name takes the ellipsis — so short names like "You"
+   always read in full. When the row genuinely can't fit both (.has-long-meta,
+   set by play-card.js from a post-paint measurement), the meta drops to its
+   own row below the title and scrolls horizontally inside the polaroid frame
+   instead of clipping. */
 .play-card__caption {
   width: 100%;
   padding: 14px 4px 4px;
@@ -1841,17 +1843,24 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-ink);
   cursor: pointer;
   flex: 0 1 auto;
-  min-width: 0;
+  /* The title is the only shrinkable half of the row, so it takes the
+     ellipsis when space runs out. It never collapses past this floor —
+     once the title would go narrower than ~5 characters the caption
+     overflows and the fit pass drops the winner onto its own row. */
+  min-width: 5ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .play-card__caption.has-long-meta .play-card__caption-name {
   flex: 0 0 100%;            /* claim the first row entirely */
+  min-width: 0;
 }
 .play-card__caption-name:hover { text-decoration: underline; }
 .play-card__caption-meta {
-  flex: 0 1 auto;
+  /* Never shrink: the winner name is short and must read in full. Squeezing
+     it clipped names like "You" / "Julia" mid-glyph at the polaroid edge. */
+  flex: 0 0 auto;
   min-width: 0;
   max-width: 100%;
   text-align: right;
@@ -1866,6 +1875,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .play-card__caption.has-long-meta .play-card__caption-meta {
   flex: 0 0 100%;            /* full-width scroll lane on row 2 */
+  max-width: 100%;
   text-align: left;
 }
 .play-card__caption-meta::-webkit-scrollbar { display: none; }
