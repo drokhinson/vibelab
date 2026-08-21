@@ -10,7 +10,7 @@ import { Button, Card, Input, Row, Text } from '../../ui';
 import UserBadge from '../../components/UserBadge';
 import GameFinder from '../../widgets/GameFinder';
 import ImportExpansionsSheet from '../../widgets/ImportExpansionsSheet';
-import { matchesExpansionQuery, stripBaseGameName } from '../../domain/expansionName';
+import { insertExpansion, matchesExpansionQuery, stripBaseGameName } from '../../domain/expansionName';
 import { PLAY_MODES, PLAY_MODE_LABELS } from '../../domain/playMode';
 import api from '../../api/client';
 import { useAppState } from '../../store/AppContext';
@@ -41,8 +41,6 @@ export default function GatherStep({ session, navigation }) {
   // The host picks which were in THIS play; a freshly imported one has to
   // show up here immediately.
   const loadExpansions = useCallback(async () => {
-    // A filter typed for the previous pick would silently hide everything.
-    setExpansionQuery('');
     if (!game?.id || game.is_expansion) {
       setExpansions([]);
       return;
@@ -56,6 +54,9 @@ export default function GatherStep({ session, navigation }) {
   }, [game?.id, game?.is_expansion]);
 
   useEffect(() => {
+    // A filter typed for the previous pick would silently hide everything.
+    // Reset it on a game change only — an import must leave it alone.
+    setExpansionQuery('');
     loadExpansions();
   }, [loadExpansions]);
 
@@ -289,7 +290,12 @@ export default function GatherStep({ session, navigation }) {
             ref={importRef}
             gameId={game.id}
             gameName={game.name}
-            onImported={loadExpansions}
+            onImported={(expansion) => {
+              // The import response is the finished row — show it now rather
+              // than after a refetch, so the host can tick it straight away.
+              setExpansions((prev) => insertExpansion(prev, expansion));
+              loadExpansions();
+            }}
           />
         </>
       ) : null}

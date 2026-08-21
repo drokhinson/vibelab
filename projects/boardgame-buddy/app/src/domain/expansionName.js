@@ -50,3 +50,18 @@ export function matchesExpansionQuery(q, ...candidates) {
   if (!needle) return true;
   return candidates.some((c) => String(c ?? '').toLowerCase().includes(needle));
 }
+
+/**
+ * Insert a freshly imported expansion into a rendered list, keeping the
+ * name order the bundle RPC and GET /games/{id}/expansions both use. The
+ * import endpoint answers with the finished ExpansionListItem, so the row
+ * can go up immediately instead of waiting on a refetch.
+ * @param {Array<Object>} list
+ * @param {Object} expansion
+ */
+export function insertExpansion(list, expansion) {
+  const rows = Array.isArray(list) ? list : [];
+  if (!expansion || !expansion.expansion_game_id) return rows;
+  if (rows.some((e) => e.expansion_game_id === expansion.expansion_game_id)) return rows;
+  return [...rows, expansion].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+}

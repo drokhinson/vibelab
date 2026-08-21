@@ -17,7 +17,7 @@ import ImportExpansionsSheet from '../../widgets/ImportExpansionsSheet';
 import { stripBaseGameName } from '../../domain/expansionName';
 import api from '../../api/client';
 
-export default function ExpansionsSection({ game, expansions, onChanged }) {
+export default function ExpansionsSection({ game, expansions, onChanged, onImported }) {
   const [open, setOpen] = useState(false);
   const importRef = useRef(null);
 
@@ -60,7 +60,7 @@ export default function ExpansionsSection({ game, expansions, onChanged }) {
         </View>
       ) : null}
 
-      <ImportExpansionsSheet ref={importRef} gameId={game.id} gameName={game.name} onImported={onChanged} />
+      <ImportExpansionsSheet ref={importRef} gameId={game.id} gameName={game.name} onImported={onImported || onChanged} />
     </View>
   );
 }

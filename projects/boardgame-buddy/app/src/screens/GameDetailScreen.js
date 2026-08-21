@@ -3,7 +3,7 @@
 // previous visit), then refreshes in the background with a visible hint —
 // never a blank screen for a game we've seen before, never silently stale.
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ExternalLink, BookOpen, Dices } from 'lucide-react-native';
 import { COLORS, RADII, SPACING } from '../theme';
@@ -16,6 +16,7 @@ import PlayCard from '../components/PlayCard';
 import ReferenceGuideScroll from '../widgets/ReferenceGuideScroll';
 import PlayDetailPopup from '../widgets/PlayDetailPopup';
 import ExpansionsSection from './gameDetail/ExpansionsSection';
+import { insertExpansion } from '../domain/expansionName';
 import AdminTools from './gameDetail/AdminTools';
 
 export default function GameDetailScreen({ navigation, route }) {
@@ -26,14 +27,30 @@ export default function GameDetailScreen({ navigation, route }) {
   const [bundle, setBundle] = useState(cached);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Monotonic token: two overlapping loads (mount + an onChanged refresh)
+  // can land out of order, and the earlier one would paint the pre-mutation
+  // bundle over the newer one.
+  const seqRef = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++seqRef.current;
     setRefreshing(true);
     try {
       const b = await actions.loadGameBundle(gameId, { force: true });
+      if (seq !== seqRef.current) return;
       setBundle(b);
     } catch {}
-    setRefreshing(false);
+    if (seq === seqRef.current) setRefreshing(false);
   }, [gameId, actions]);
+
+  // An import returns the finished row, so the expansions section can show it
+  // in the same frame; the forced bundle refetch reconciles behind it.
+  const addExpansion = useCallback(
+    (expansion) => {
+      setBundle((b) => (b ? { ...b, expansions: insertExpansion(b.expansions, expansion) } : b));
+      load();
+    },
+    [load],
+  );
 
   useEffect(() => {
     load();
@@ -76,7 +93,7 @@ export default function GameDetailScreen({ navigation, route }) {
             ) : null}
           </Row>
 
-          <ExpansionsSection game={game} expansions={bundle?.expansions || []} onChanged={load} />
+          <ExpansionsSection game={game} expansions={bundle?.expansions || []} onChanged={load} onImported={addExpansion} />
 
           <View style={styles.section}>
             <ReferenceGuideScroll
