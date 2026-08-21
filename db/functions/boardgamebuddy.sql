@@ -243,6 +243,8 @@
 --     game_thumbnail, played_at, notes, players[], photo_url, expansions[],
 --     created_at, play_mode, logged_by_id, logged_by_name, is_own }
 --     or {"error": "game_not_found"}
+--     or {"duplicate": true, "id": <uuid>} when p_payload.client_key is one
+--     this user already has a play for (048) — the caller re-reads that row.
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
 --   Defined in: db/migrations/boardgamebuddy/042_write_rpcs.sql
 --               db/migrations/boardgamebuddy/044_cleanup.sql
@@ -250,6 +252,10 @@
 --                  044 drops; stops writing the boardgamebuddy_buddies roster,
 --                  whose only reader — GET /plays/filter-options — was removed;
 --                  stops emitting the always-null buddy_id key on each player)
+--               db/migrations/boardgamebuddy/048_play_client_key.sql
+--                 (honours p_payload.client_key: pre-checks for a stored key,
+--                  writes the column, and catches unique_violation for the
+--                  concurrent case — both return the duplicate envelope)
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
 --               bgb_finalize_session
@@ -258,7 +264,9 @@
 --               bulk-writes play_players + play_expansions, and returns the
 --               hydrated response. Replaced the 6 sequential PostgREST calls
 --               log_play fanned out — including a read-back of the expansion
---               rows it had just inserted.
+--               rows it had just inserted. Idempotent when the payload
+--               carries a client_key, which is what makes the web app's
+--               offline outbox safe to retry after a lost response.
 
 -- bgb_finalize_session(p_host UUID, p_code TEXT, p_payload JSONB)
 --   → JSONB (PlayResponse, via bgb_log_play) or {"error": "not_found" |

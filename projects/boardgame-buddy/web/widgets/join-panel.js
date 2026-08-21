@@ -56,6 +56,22 @@
       this._startPolling();
     }
 
+    /**
+     * Connectivity changed under us. Called by LogPlayView's `offline`
+     * subscriber, because a widget has no View.listen of its own.
+     *
+     * render() preserves the typed code and caret, so this is safe to fire on
+     * every flap. Coming back online also re-loads: the poll skipped every
+     * tick while offline, so the session list is however stale it was when
+     * signal died.
+     */
+    syncOffline() {
+      if (!this._host) return;
+      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
+      if (offline) { this.render(); return; }
+      this._load();
+    }
+
     unmount() {
       this._stopPolling();
       document.removeEventListener("visibilitychange", this._onVisibility);
@@ -63,6 +79,16 @@
     }
 
     async _load() {
+      // Joining is inherently a networked act — the lobby lives on the server
+      // and the code is its address. Offline, say so once instead of showing a
+      // failed fetch's error text, which reads like something broke.
+      if (window.BgbNet && window.BgbNet.isOffline()) {
+        this._loading = false;
+        this._error = null;
+        this._sessions = [];
+        this.render();
+        return;
+      }
       this._loading = true;
       this._error = null;
       this.render();
@@ -87,6 +113,10 @@
       // Not on screen, or hidden tab: skip the fetch — the visibilitychange
       // listener fires one catch-up tick the moment the tab is visible again.
       if (!this._host || document.hidden) return;
+      // Offline the poll can only fail. Skipping the tick (rather than letting
+      // it throw six times a minute) also keeps BgbNet's failure counter
+      // measuring real user-driven requests instead of its own background noise.
+      if (window.BgbNet && window.BgbNet.isOffline()) return;
       try {
         const resp = await window.PlaySession.listJoinable();
         const next = (resp && resp.sessions) || [];
@@ -127,8 +157,10 @@
       const hadFocus = !!(active && active.id === "join-code-input");
       const caret = hadFocus ? active.selectionStart : null;
 
+      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
+
       el.innerHTML = `
-        <section class="cascade-card">
+        <section class="cascade-card${offline ? " cascade-card--offline" : ""}">
           <label class="cascade-card__label">Enter a host's code</label>
           <div class="cascade-join__code-row">
             <input id="join-code-input"
@@ -136,17 +168,26 @@
                    placeholder="5-character code"
                    maxlength="5"
                    autocapitalize="characters"
+                   ${offline ? "disabled" : ""}
                    value="${escapeAttr(this._joinCode)}"
                    oninput="window.joinPanel._joinCode = this.value.toUpperCase();" />
             <button class="btn btn-primary"
-                    ${this._joining ? "disabled" : ""}
+                    ${this._joining || offline ? "disabled" : ""}
                     onclick="window.joinPanel._joinByCode()">
               ${this._joining ? "Joining…" : "Join"}
             </button>
           </div>
-          ${this._error ? `<div class="cascade-card__error">${escapeHtml(this._error)}</div>` : ""}
+          ${offline ? `
+            <p class="cascade-card__hint">
+              <i data-lucide="cloud-off" class="w-4 h-4"></i>
+              Joining needs a connection — the lobby lives on the server. You
+              can still host your own game offline.
+            </p>
+          ` : ""}
+          ${this._error && !offline ? `<div class="cascade-card__error">${escapeHtml(this._error)}</div>` : ""}
         </section>
 
+        ${offline ? "" : `
         <section class="cascade-join__list-wrap">
           <div class="cascade-join__list-head">
             <h3 class="cascade-join__list-title">Active sessions</h3>
@@ -166,6 +207,7 @@
                    ${sessions.map((s) => this._renderSessionRow(s)).join("")}
                  </ul>`}
         </section>
+        `}
       `;
       if (window.lucide) window.lucide.createIcons({ root: el });
 

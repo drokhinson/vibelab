@@ -13,6 +13,14 @@
   <base href="/" />
   <title>Boardgame Buddy</title>
   <link rel="icon" type="image/svg+xml" href="assets/brand/bgb-logo.svg" />
+  <!-- Installable PWA. The point isn't the home-screen icon, it's that sw.js
+       precaches the shell so the app opens with no signal — which is what
+       makes offline hosting work for someone who closed the tab. -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#1a0f0b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="assets/brand/bgb-icon-192.png" />
 
   <!-- DaisyUI v4 + Tailwind CSS (no build step). Local dev only: the deploy
        workflow (.github/workflows/deploy-frontend*.yml) swaps this CDN pair
@@ -57,6 +65,12 @@
               style="background:#2a1812;color:#C9922A">?</span>
       </button>
     </header>
+
+    <!-- Offline banner. Sits between the header and the views so it reads as
+         app state rather than screen content, and so no individual view has to
+         remember to render it. init.js#syncOfflineBanner drives it from the
+         store's `offline` slot; hidden whenever the app is connected. -->
+    <div id="bgb-offline-banner" class="bgb-offline-banner hidden" role="status"></div>
 
     <!-- ── Views ────────────────────────────────────────────────────────────── -->
     <!-- The loader mark is inlined rather than left to SplashView.render() so
@@ -126,6 +140,8 @@
   <!-- Domain -->
   <script src="domain/api.js"></script>
   <script src="domain/store.js"></script>
+  <script src="domain/net.js"></script>
+  <script src="domain/outbox.js"></script>
   <script src="domain/cache.js"></script>
   <script src="domain/view.js"></script>
   <script src="domain/user.js"></script>

@@ -110,6 +110,19 @@ jobs:
           console.log("index.html now uses precompiled assets/bgb-tw.css");
           SWAP
 
+      # Stamp the service worker's cache version. sw.js keys its cache on this,
+      # so a fresh SHA per deploy means the new build lands in a new cache and
+      # activate() deletes the old one — the answer to the stale-bundle risk
+      # that made travel-scrapbook's sw.js refuse to cache at all. Left literal
+      # in the repo, which sw.js reads as "local dev" and disables itself.
+      - name: Stamp service-worker build id (boardgame-buddy only)
+        if: matrix.project == 'boardgame-buddy'
+        working-directory: ./projects/${{ matrix.project }}/web
+        run: |
+          grep -q "__BGB_BUILD_ID__" sw.js || { echo "sw.js build-id placeholder missing"; exit 1; }
+          sed -i "s/__BGB_BUILD_ID__/${GITHUB_SHA}/" sw.js
+          echo "sw.js cache stamped with ${GITHUB_SHA}"
+
       - name: Deploy ${{ matrix.project }} web frontend
         working-directory: ./projects/${{ matrix.project }}/web
         env:

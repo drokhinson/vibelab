@@ -2,7 +2,10 @@
 //
 // Two halves on a single screen, split by a divider:
 //   • Top (Host): "Let's play" heading, an optional "Resume hosting?" banner,
-//     then three cards — Host a game / Another Round / Game Explorer.
+//     an optional "N plays waiting to upload" banner, then the host cards —
+//     Host a game / Play offline / Another Round / Game Explorer. "Play
+//     offline" is hidden once the app has already detected no connectivity,
+//     where it would only be offering what's already happening.
 //   • Bottom (Join): the JoinPanel widget — a 5-char code input and the list
 //     of active sessions the user can join or spectate.
 //
@@ -40,6 +43,16 @@
       // synchronously just before this). Re-hydrating is idempotent and covers
       // the case where that call threw.
       this._hydrateFromCache();
+      // Signal dropping (or returning) changes which host cards make sense and
+      // whether the pending banner offers an Upload button; a background flush
+      // draining the queue removes the banner entirely. View.listen
+      // auto-unsubscribes on unmount.
+      this.listen("offline", () => {
+        this._patchOfflineRegions();
+        // The Join half is a widget, so it can't subscribe for itself.
+        window.joinPanel.syncOffline();
+      });
+      this.listen("outboxCount", () => this._patchOfflineRegions());
       this._refreshLastPlay();
     }
 
@@ -96,6 +109,8 @@
           </section>
         ` : ""}
 
+        <div id="lp-pending-host">${this._renderPendingUploads()}</div>
+
         <div class="cascade-chooser__cards">${this._renderChooserCards()}</div>
 
         <hr class="lp-divider" />
@@ -112,16 +127,97 @@
       window.joinPanel.mount(this.container.querySelector("#lp-join-mount"));
     }
 
+    /**
+     * "N plays waiting to upload", above the host cards.
+     *
+     * Sits here rather than only in Settings because this is the screen the
+     * host lands on straight after an offline save, and a queue nobody can see
+     * is a queue nobody trusts. Auto-flushing already happens on boot, on
+     * `online` and on tab focus — the button is for the case where the user
+     * can see they have signal and the app hasn't noticed yet.
+     */
+    _renderPendingUploads() {
+      const n = window.Outbox ? window.Outbox.count() : 0;
+      if (!n) return "";
+      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
+      return `
+        <section class="lp-pending">
+          <span class="lp-pending__icon">
+            <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+          </span>
+          <div class="lp-pending__body">
+            <span class="lp-pending__title">
+              ${n} ${n === 1 ? "play" : "plays"} waiting to upload
+            </span>
+            <span class="lp-pending__meta">
+              ${offline ? "They'll go up when you're back online." : "Uploading…"}
+            </span>
+          </div>
+          ${offline ? "" : `
+            <button class="btn btn-primary btn-sm"
+                    onclick="window.logPlayView._flushOutbox()">
+              Upload now
+            </button>
+          `}
+        </section>
+      `;
+    }
+
+    async _flushOutbox() {
+      const res = await window.Outbox.flush();
+      if (res.sent > 0 && window.showToast) {
+        window.showToast(`Uploaded ${res.sent} ${res.sent === 1 ? "play" : "plays"}.`, "success");
+      } else if (res.remaining > 0 && window.showToast) {
+        window.showToast("Still can't reach the server — they're safe on this device.", "error");
+      }
+      // Outbox.flush() publishes outboxCount, which patches the banner. The
+      // explicit call covers the no-op case (nothing sent, count unchanged),
+      // where the store never fires.
+      this._patchOfflineRegions();
+    }
+
+    /**
+     * Repaint just the two regions connectivity touches.
+     *
+     * Not render(): that rebuilds the whole container via innerHTML, which
+     * replaces the JoinPanel's host element and would wipe a half-typed
+     * session code every time the network flapped or a background flush
+     * landed. Same reasoning as _patchChooserCards below.
+     */
+    _patchOfflineRegions() {
+      if (!this._mounted) return;
+      const pending = this.container.querySelector("#lp-pending-host");
+      if (pending) {
+        pending.innerHTML = this._renderPendingUploads();
+        this.refreshIcons(pending);
+      }
+      this._patchChooserCards();
+    }
+
     _renderChooserCards() {
+      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
       return `
         <button class="cascade-chooser__card cascade-chooser__card--host"
                 onclick="window.logPlayView._host()">
           <span class="cascade-chooser__card-icon">
-            <i data-lucide="dice-6" class="w-7 h-7"></i>
+            <i data-lucide="${offline ? "cloud-off" : "dice-6"}" class="w-7 h-7"></i>
           </span>
           <span class="cascade-chooser__card-title">Host a game</span>
-          <span class="cascade-chooser__card-body">Open a session, log a play.</span>
+          <span class="cascade-chooser__card-body">${offline
+            ? "Offline — saves to this device."
+            : "Open a session, log a play."}</span>
         </button>
+
+        ${offline ? "" : `
+        <button class="cascade-chooser__card cascade-chooser__card--offline"
+                onclick="window.logPlayView._hostOffline()">
+          <span class="cascade-chooser__card-icon">
+            <i data-lucide="cloud-off" class="w-7 h-7"></i>
+          </span>
+          <span class="cascade-chooser__card-title">Play offline</span>
+          <span class="cascade-chooser__card-body">No code, no upload until later.</span>
+        </button>
+        `}
 
         ${this._renderAnotherRoundCard()}
 
@@ -157,8 +253,38 @@
         const stale = window.PlaySession.load();
         if (stale) stale.clear();
         window.store.set("activePlay", null);
-        window.PlaySession.prefetchLobby({ gameId: null });
+        // Offline the mint can only fail, and failing isn't the worst of it:
+        // prefetchLobby parks its promise in a single module-level slot that
+        // PlayFlowView never consumes offline, so the rejected record would
+        // still be sitting there for the next real host tap to adopt.
+        if (!(window.BgbNet && window.BgbNet.isOffline())) {
+          window.PlaySession.prefetchLobby({ gameId: null });
+        }
       }
+      window.router.go("play-flow");
+    }
+
+    /**
+     * Deliberate offline hosting — the card the user taps when they know the
+     * venue has no signal, or has the kind that resolves DNS and then times
+     * out. navigator.onLine reports true for that second case, so auto-detect
+     * alone would let the host sit through a 30s POST /sessions before the
+     * cascade would even paint a code placeholder.
+     *
+     * Sets manual mode BEFORE navigating so PlayFlowView.onMount latches
+     * offline on its first line rather than after a failed round trip.
+     */
+    _hostOffline() {
+      window.BgbNet.manual(true);
+      if (!this._resumableSession()) {
+        const stale = window.PlaySession.load();
+        if (stale) stale.clear();
+        window.store.set("activePlay", null);
+      }
+      // A lobby minted moments ago by a Host/Explorer tap is now unreachable
+      // for the rest of this play — close it rather than leave it open for a
+      // buddy to find in their Join list.
+      window.PlaySession.discardPrefetchedLobby();
       window.router.go("play-flow");
     }
 
@@ -284,8 +410,11 @@
       window.Chapter.prefetchMyChapters(ps.gameId);
       // Mint the lobby now, overlapping it with the navigation. Deliberately
       // below the confirm + abandon above: a user who chose "Keep playing"
-      // must never have a session minted behind their back.
-      window.PlaySession.prefetchLobby({ gameId: ps.gameId });
+      // must never have a session minted behind their back. Skipped offline
+      // for the same reason as _host().
+      if (!(window.BgbNet && window.BgbNet.isOffline())) {
+        window.PlaySession.prefetchLobby({ gameId: ps.gameId });
+      }
       window.router.go("play-flow");
     }
 

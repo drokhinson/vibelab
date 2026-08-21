@@ -102,7 +102,14 @@
       // below covers the cold-cache case (no bootstrap seed) and refreshes
       // when the entry has fallen into the SWR stale window.
       if (this._opts.includeRecentlyPlayed !== false && window.bgbCache) {
-        const seeded = window.bgbCache.get("game.recent", "self");
+        // peek() rather than get() when offline: get() only serves the 24h
+        // fresh window, and a host in a cabin for a weekend would find their
+        // own recents gone. peek() serves the full 7d stale window, which is
+        // exactly what bootstrap's hostSeed TTL pair was sized for.
+        const offline = window.BgbNet && window.BgbNet.isOffline();
+        const seeded = offline
+          ? window.bgbCache.peek("game.recent", "self")
+          : window.bgbCache.get("game.recent", "self");
         if (Array.isArray(seeded)) this._recentGames = seeded;
       }
       // Eagerly start loading recently-played so the dropdown is ready
@@ -244,6 +251,14 @@
         return;
       }
 
+      // Offline: /search is server-side, so filter what's already on the
+      // device instead. See _offlineMatches for what that pool is.
+      if (window.BgbNet && window.BgbNet.isOffline()) {
+        dd.classList.remove("game-finder-dropdown--loading");
+        this._renderOfflineResults(dd, this._offlineMatches(q));
+        return;
+      }
+
       // Cache hit → render instantly, no loading state, no network wait.
       const cached = (window.Game && window.Game.cachedSearch)
         ? window.Game.cachedSearch(q) : null;
@@ -300,6 +315,73 @@
         : `<li class="game-finder-dropdown__hint">No matches in your library.</li>`;
 
       dd.innerHTML = rows + this._bggFooter(q);
+      dd.classList.remove("hidden");
+      this._wireRowClicks(dd);
+      if (window.lucide) window.lucide.createIcons({ root: dd });
+    }
+
+    /**
+     * Every game the device can offer with no server, filtered by `q`.
+     *
+     * Two sources, both already on disk:
+     *   • `game.recent:self` — the host-flow seed bootstrap warms (24h/7d).
+     *   • `game.bundle:*`    — one entry per OWNED game, warmed by
+     *     Bootstrap.warmGameBundles() from an idle callback after login.
+     *
+     * That second one is the real library: it's the user's whole collection,
+     * which is overwhelmingly what a group is playing when they're somewhere
+     * with no signal. Read through peek() so entries past their fresh window
+     * still count — a stale name and thumbnail are fine, and the game row
+     * itself is immutable after BGG import anyway.
+     *
+     * @param {string} q
+     * @returns {Array<Object>} GameSummary-ish rows, name-ordered
+     */
+    _offlineMatches(q) {
+      const cache = window.bgbCache;
+      if (!cache) return [];
+      const needle = q.toLowerCase();
+      const byId = new Map();
+
+      const consider = (g) => {
+        if (!g || !g.id || byId.has(g.id)) return;
+        // Expansions are excluded from /search on every source; the offline
+        // pool has to agree or the picker would start offering them here and
+        // nowhere else. They attach via the Expansions card instead.
+        if (g.is_expansion) return;
+        if (!(g.name || "").toLowerCase().includes(needle)) return;
+        byId.set(g.id, g);
+      };
+
+      const recent = cache.peek("game.recent", "self");
+      if (Array.isArray(recent)) recent.forEach(consider);
+      for (const gameId of cache.keys("game.bundle")) {
+        const bundle = cache.peek("game.bundle", gameId);
+        if (bundle && bundle.game) consider(bundle.game);
+      }
+
+      return Array.from(byId.values())
+        .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+
+    /**
+     * Offline dropdown: matches only, no BGG footer.
+     *
+     * The empty state names the constraint rather than saying "no matches" —
+     * POST /plays requires a real game_id, so a game that was never cached
+     * genuinely cannot be logged until the app is back online, and a host
+     * staring at an empty list deserves to know that's why.
+     */
+    _renderOfflineResults(dd, games) {
+      this._gameById.clear();
+      games.forEach((g) => this._gameById.set(g.id, g));
+      dd.innerHTML = games.length
+        ? `<li class="game-finder-dropdown__header">On this device</li>` +
+          games.map((g) => this._renderRow(g, "library")).join("")
+        : `<li class="game-finder-dropdown__hint">
+             No match on this device. Offline you can only pick games already
+             saved here — your collection and recent plays.
+           </li>`;
       dd.classList.remove("hidden");
       this._wireRowClicks(dd);
       if (window.lucide) window.lucide.createIcons({ root: dd });

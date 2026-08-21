@@ -70,6 +70,16 @@
       // hiccup while the phone wakes — as a logout, or a mid-session host gets
       // bounced out.
       if (event === "SIGNED_OUT" || !sess) {
+        // Offline, supabase-js can reach the same conclusion for the wrong
+        // reason: it tries to refresh an expired access token, cannot reach
+        // the auth server, and gives up. Bouncing to /auth there strands a
+        // host mid-game on a screen they physically cannot complete, and
+        // takes their draft's view with it. Hold the last known session
+        // instead and let the offline banner explain the state; connectivity
+        // returning re-runs this callback with a real answer either way.
+        // Same rule as the 401 self-heal in domain/api.js — a blip is not a
+        // state change (.claude/rules/web-frontend.md).
+        if (_offlineWithKnownUser()) return;
         _bootRouted = false;
         _profileLoaded = false;
         window.store.set("user", null);
@@ -124,6 +134,21 @@
       // already redirected to /auth.
       if (me !== AUTH_FAILED) routeAfterBoot();
     });
+  }
+
+  // Whether a sign-out signal should be disbelieved: we're offline AND we have
+  // a cached identity to keep painting from. Requires _bootRouted so this only
+  // ever protects a session that already got somewhere — a cold boot with no
+  // connectivity and no landed session still belongs on /auth, which at least
+  // says why nothing works.
+  //
+  // Deliberately NOT applied to an explicit handleLogout(): that path clears
+  // the cache and calls router.go("auth") itself rather than relying on the
+  // SIGNED_OUT event, so a user tapping Log out offline still logs out.
+  function _offlineWithKnownUser() {
+    if (!_bootRouted) return false;
+    if (!window.BgbNet || !window.BgbNet.isOffline()) return false;
+    return !!window.store.get("user");
   }
 
   // Boot navigation happens exactly once per signed-in session. Supabase fires
@@ -183,6 +208,10 @@
       return;
     }
     _profileLoaded = true;
+    // We have a live server AND a valid token — the only moment where a queued
+    // offline play is certain to be pushable. Fire-and-forget: the user is
+    // already on their screen and a drain must never gate it.
+    if (window.Outbox) window.Outbox.flush();
     // First-time onboarding: a brand-new profile carries needs_setup=true
     // (migration 030, set by the dependency-side auto-create). Prompt the user
     // to pick their display name + badge before they start using the app.
@@ -322,6 +351,38 @@
   }
   window.store.subscribe("user", syncGlobalAvatar);
 
+  // Persistent offline banner under the global header. Lives at this level
+  // rather than in a View because connectivity is app state, not screen state:
+  // every view would otherwise have to remember to render it, and the one that
+  // forgot would be the one the user was on when their signal died.
+  function syncOfflineBanner(offline) {
+    const el = document.getElementById("bgb-offline-banner");
+    if (!el) return;
+    if (!offline) {
+      el.classList.add("hidden");
+      el.innerHTML = "";
+      return;
+    }
+    const manual = !!(window.BgbNet && window.BgbNet.isManual());
+    el.innerHTML = `
+      <i data-lucide="cloud-off" class="w-4 h-4 bgb-offline-banner__icon"></i>
+      <span class="bgb-offline-banner__text">
+        ${manual
+          ? "Offline mode — plays save to this device."
+          : "No connection — plays save to this device."}
+      </span>
+      ${manual ? `
+        <button class="bgb-offline-banner__action"
+                onclick="window.BgbNet.manual(false)">
+          Go online
+        </button>
+      ` : ""}
+    `;
+    el.classList.remove("hidden");
+    if (window.lucide) window.lucide.createIcons({ root: el });
+  }
+  window.store.subscribe("offline", syncOfflineBanner);
+
   // Logout helper — referenced by ProfileSelfView.
   window.handleLogout = async function () {
     if (window.supabaseClient) {
@@ -358,6 +419,10 @@
     if (window.Bootstrap && window.Bootstrap.warmRefresh) {
       window.Bootstrap.warmRefresh().catch(() => {});
     }
+    // Coming back to the tab is the most common moment for connectivity to
+    // have returned without an `online` event firing (the OS suspended the
+    // page across the transition). Cheap: flush() no-ops when offline or empty.
+    if (window.Outbox) window.Outbox.flush();
   });
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -365,6 +430,14 @@
     // surface that pins an action row above the software keyboard reads these
     // (see ui/viewport-lock.js for why dvh alone isn't enough).
     window.BgbViewport.start();
+
+    // Start watching connectivity before anything else can issue a request, so
+    // the very first failure already counts toward offline detection.
+    window.BgbNet.start();
+    window.store.set("outboxCount", window.Outbox.count());
+    // start() only publishes on an edge, so a page that loads already offline
+    // would never fire the subscriber. Paint the banner from the current state.
+    syncOfflineBanner(window.BgbNet.isOffline());
 
     // Restore a previously-active play session, if any.
     const ps = window.PlaySession.load();
@@ -396,6 +469,12 @@
     // Views refresh their own subtree via View.refreshIcons() from here on.
     if (window.lucide) window.lucide.createIcons();
     initSupabase();
+
+    // Register the app-shell worker. Wrapped defensively (same idiom as
+    // travel-scrapbook): unsupported browsers, private modes and insecure
+    // origins all throw or reject here, and none of them should stop the app
+    // from booting — losing the offline shell is a degradation, not a failure.
+    try { navigator.serviceWorker?.register("/sw.js").catch(() => {}); } catch (_) {}
 
     if (window.api) window.api.trackEvent("page_view");
   });

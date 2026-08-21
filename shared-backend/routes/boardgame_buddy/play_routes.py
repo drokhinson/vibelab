@@ -152,6 +152,31 @@ def _fetch_play_expansions(
     return out
 
 
+def _load_play_response(sb, play_id: str, viewer_id: str) -> PlayResponse:
+    """Read one stored play back and shape it as a PlayResponse.
+
+    Shared by GET /plays/{id} and by log_play's duplicate branch, where the
+    client re-sent a client_key we already have a row for: what it MEANT to
+    write can differ from what actually landed, so the answer has to come from
+    the stored row rather than from the payload in hand.
+    """
+    res = (
+        sb.table("boardgamebuddy_plays")
+        .select(_SELECT_PLAY)
+        .eq("id", play_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Play not found")
+    row = res.data[0]
+    return _build_play_response(
+        row,
+        is_own=row["user_id"] == viewer_id,
+        players_by_play=_fetch_players(sb, [play_id]),
+        expansions_by_play=_fetch_play_expansions(sb, [play_id]),
+    )
+
+
 def _write_play_players(sb, play_id: str, players: list) -> list[PlayPlayerResponse]:
     """Insert the play_players rows for a play in ONE bulk statement.
 
@@ -260,16 +285,20 @@ async def log_play(
     body: PlayCreate,
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayResponse:
-    """Record a game play with players and winner.
+    """Record a game play with players and winner (idempotent when client_key is set).
 
     One round trip: bgb_log_play (migration 042) resolves the game, inserts
-    the play with its denormalized game columns, bulk-writes the player and
-    expansion rows plus the legacy buddies roster, and returns the
-    PlayResponse-shaped payload — replacing six sequential PostgREST calls.
+    the play with its denormalized game columns and bulk-writes the player and
+    expansion rows, returning the PlayResponse-shaped payload — replacing six
+    sequential PostgREST calls.
+
+    When the body carries a client_key (migration 048), a repeat of a key
+    already stored returns the original play instead of writing a second one.
+    That is what makes the offline outbox safe to retry after a lost response.
     """
+    sb = get_supabase()
     data = (
-        get_supabase()
-        .rpc("bgb_log_play", {
+        sb.rpc("bgb_log_play", {
             "p_user": user.user_id,
             "p_payload": body.model_dump(mode="json"),
         })
@@ -277,6 +306,13 @@ async def log_play(
         .data
     )
     raise_for_rpc_error(data, "Log play")
+    # A client_key we already hold a play for (migration 048) — an offline
+    # outbox retry after a lost response. The RPC wrote nothing and handed
+    # back the original row's id; answer with the play that actually exists
+    # rather than the payload this attempt carried. Still 201: from the
+    # client's side the play is recorded either way.
+    if isinstance(data, dict) and data.get("duplicate"):
+        return _load_play_response(sb, data["id"], user.user_id)
     return PlayResponse.model_validate(data)
 
 
@@ -291,29 +327,11 @@ async def get_play(
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayResponse:
     """Return a single play with players, scores, expansions, and photo."""
-    sb = get_supabase()
-    res = (
-        sb.table("boardgamebuddy_plays")
-        .select(_SELECT_PLAY)
-        .eq("id", play_id)
-        .execute()
-    )
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Play not found")
     # Any authenticated user can read a play — the feed surfaces a buddy's
     # play even when the viewer wasn't a participant, and tapping through
     # should succeed. Writes/deletes stay owner-only (gated inline in
     # update_play / delete_play); `is_own` tells the frontend which is which.
-    row = res.data[0]
-
-    players_by_play = _fetch_players(sb, [play_id])
-    expansions_by_play = _fetch_play_expansions(sb, [play_id])
-    return _build_play_response(
-        row,
-        is_own=row["user_id"] == user.user_id,
-        players_by_play=players_by_play,
-        expansions_by_play=expansions_by_play,
-    )
+    return _load_play_response(get_supabase(), play_id, user.user_id)
 
 
 @router.put(
