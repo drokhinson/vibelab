@@ -1,0 +1,361 @@
+// views/game-explorer-view.js — "Find a game that fits" browser.
+//
+// A simplified game explorer: My Collection ↔ All BgB Games toggle plus
+// players / play time / game-type filters, rendering a paginated 3×3 grid of
+// Polaroid-style cards. Tapping a card stages the pick in the active
+// PlaySession and jumps straight into the Gather screen of the host flow —
+// the game arrives prefilled.
+//
+// Reached from the Play tab's "Game Explorer" host card. Lived as the bottom
+// half of the Play tab until Join moved down there; the markup and the filter
+// semantics are unchanged by that move.
+
+(function () {
+  const PER_PAGE = 9;
+
+  // Playtime preset bubbles. Inclusive min/max — matches the backend filter
+  // (`gte(min) / lte(max)`), so a 60-min game shows up in both the "30–60"
+  // and "60–90" buckets. Acceptable for a filter UI.
+  const PLAYTIME_BUCKETS = [
+    { id: "u30",    label: "< 30m",     min: null, max: 29 },
+    { id: "30-60",  label: "30–60m",    min: 30,   max: 60 },
+    { id: "60-90",  label: "60–90m",    min: 60,   max: 90 },
+    { id: "90-120", label: "90–120m",   min: 90,   max: 120 },
+    { id: "o120",   label: "2+ hours",  min: 120,  max: null },
+  ];
+
+  function isActiveBucket(b, f) {
+    return f.playtimeMin === b.min && f.playtimeMax === b.max;
+  }
+
+  class GameExplorerView extends window.View {
+    constructor() {
+      super("game-explorer");
+      this._filters = this._emptyFilters();
+      this._page = 1;
+      this._games = [];
+      this._total = 0;
+      this._loading = false;
+      this._error = null;
+      this._scopeAutoSwitched = false;
+      // Per-game owned/wishlist/played status map. Populated from
+      // Collection.myStatusMap() on mount; patched live by status-changed
+      // CustomEvents fired from the status-picker.
+      this._collectionMap = {};
+    }
+
+    _emptyFilters() {
+      return {
+        scope: "mine",        // 'mine' | 'all'
+        players: null,
+        playtimeMin: null,
+        playtimeMax: null,
+        playMode: null,        // null | 'competitive' | 'coop' | 'team'
+      };
+    }
+
+    _hydrateFromCache() {
+      this._collectionMap =
+        window.store.get("myCollectionMap")
+        || (window.Collection.cachedStatusMap && window.Collection.cachedStatusMap())
+        || {};
+    }
+
+    // View.mount() calls this synchronously before onMount(), so the header and
+    // the filter chips are on screen in the tap frame; only the grid below
+    // waits on the network. Deliberately does NOT reset _filters / _page /
+    // _games: a return visit repaints the user's last filter state instantly.
+    renderLoading() {
+      this._hydrateFromCache();
+      this._loading = true;
+      this._error = null;
+      this.render();
+    }
+
+    async onMount() {
+      // Keep the polaroid status badges in sync with any other view that
+      // mutates the user's collection (game-detail status picker, profile
+      // grid, etc.). The status-tag picker dispatches `status-changed` on
+      // document; the shared collection cache also pushes into the store.
+      this.listen("myCollectionMap", (m) => {
+        this._collectionMap = m || {};
+        this.render();
+      });
+      this.listenDom("status-changed", (e) => {
+        const { gameId, status } = (e && e.detail) || {};
+        if (!gameId) return;
+        if (status == null) delete this._collectionMap[gameId];
+        else this._collectionMap[gameId] = status;
+        this.render();
+      });
+      // renderLoading() already painted from cache one frame ago (it runs
+      // synchronously just before this). Re-hydrating is idempotent and covers
+      // the case where that call threw.
+      this._hydrateFromCache();
+
+      // Unawaited and independent: the status map only feeds badges on the
+      // grid, so the filters must not wait on it.
+      window.Collection.myStatusMap()
+        .then((m) => {
+          if (!this._mounted || !m) return;
+          this._collectionMap = m;
+          this.render();
+        })
+        .catch(() => {});
+      this._loadGames();
+    }
+
+    async _loadGames() {
+      this._loading = true;
+      this._error = null;
+      this.render();
+      try {
+        const qs = new URLSearchParams();
+        qs.set("page", String(this._page));
+        qs.set("per_page", String(PER_PAGE));
+        qs.set("exclude_expansions", "true");
+        if (this._filters.players) qs.set("players", String(this._filters.players));
+        if (this._filters.playtimeMin != null) qs.set("playtime_min", String(this._filters.playtimeMin));
+        if (this._filters.playtimeMax != null) qs.set("playtime_max", String(this._filters.playtimeMax));
+        if (this._filters.playMode) qs.set("play_mode", this._filters.playMode);
+
+        if (this._filters.scope === "mine") {
+          qs.set("status", "owned");
+          qs.set("sort", "added_at");
+          const data = await window.api.get("/collection/grid?" + qs.toString());
+          this._games = (data && data.items ? data.items.map((it) => it.game) : []);
+          this._total = (data && data.total) || 0;
+          // Auto-switch to "All BgB Games" when the user has nothing owned
+          // matching their filters — only on first load (avoid an infinite
+          // toggle loop if the catalog scope also returns nothing).
+          if (this._total === 0 && !this._scopeAutoSwitched && this._activeFilterCount() === 0) {
+            this._scopeAutoSwitched = true;
+            this._filters.scope = "all";
+            await this._loadGames();
+            return;
+          }
+        } else {
+          const data = await window.api.get("/games?" + qs.toString());
+          this._games = (data && data.games) || [];
+          this._total = (data && data.total) || 0;
+        }
+      } catch (e) {
+        this._error = e.message || "Failed to load games";
+        this._games = [];
+        this._total = 0;
+      } finally {
+        this._loading = false;
+        this.render();
+      }
+    }
+
+    _activeFilterCount() {
+      const f = this._filters;
+      let n = 0;
+      if (f.players) n++;
+      if (f.playtimeMin != null || f.playtimeMax != null) n++;
+      if (f.playMode) n++;
+      return n;
+    }
+
+    render() {
+      this.container.innerHTML = `
+        <header class="cascade-back-row">
+          <button class="btn btn-ghost btn-sm" onclick="window.router.back('log-play')">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          </button>
+          <h1 class="font-display cascade-back-row__title">Game Explorer</h1>
+          <span></span>
+        </header>
+
+        <section class="lp-find-section">
+          ${this._renderFilters()}
+          ${this._renderGrid()}
+          ${this._renderPager()}
+        </section>
+      `;
+      this.refreshIcons();
+    }
+
+    _renderFilters() {
+      const f = this._filters;
+      const playerChip = (n) => `
+        <button class="lp-chip ${f.players === n ? "is-active" : ""}"
+                onclick="window.gameExplorerView._setFilter('players', ${f.players === n ? "null" : n})">
+          ${n === 7 ? "7+" : n}
+        </button>`;
+      const modeChip = (mode, label) => `
+        <button class="lp-chip ${f.playMode === mode ? "is-active" : ""}"
+                onclick="window.gameExplorerView._setFilter('playMode', ${f.playMode === mode ? "null" : "'" + mode + "'"})">
+          ${label}
+        </button>`;
+      return `
+        <div class="lp-filters">
+          <div class="lp-scope-toggle" role="tablist" aria-label="Game source">
+            <button class="lp-scope-toggle__opt ${f.scope === "mine" ? "is-active" : ""}"
+                    role="tab" aria-selected="${f.scope === "mine"}"
+                    onclick="window.gameExplorerView._setScope('mine')">
+              My Collection
+            </button>
+            <button class="lp-scope-toggle__opt ${f.scope === "all" ? "is-active" : ""}"
+                    role="tab" aria-selected="${f.scope === "all"}"
+                    onclick="window.gameExplorerView._setScope('all')">
+              All BgB Games
+            </button>
+          </div>
+          <div class="lp-filter-row">
+            <span class="lp-filter-label">Players</span>
+            <div class="lp-chip-row">
+              ${[1, 2, 3, 4, 5, 6, 7].map(playerChip).join("")}
+            </div>
+          </div>
+          <div class="lp-filter-row">
+            <span class="lp-filter-label">Play time</span>
+            <div class="lp-chip-row">
+              ${PLAYTIME_BUCKETS.map((b) => `
+                <button class="lp-chip ${isActiveBucket(b, f) ? "is-active" : ""}"
+                        onclick="window.gameExplorerView._setPlaytimeBucket('${b.id}')">
+                  ${b.label}
+                </button>`).join("")}
+            </div>
+          </div>
+          <div class="lp-filter-row">
+            <span class="lp-filter-label">Type</span>
+            <div class="lp-chip-row">
+              ${modeChip("competitive", "Competitive")}
+              ${modeChip("coop", "Co-op")}
+              ${modeChip("team", "Team")}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    _renderGrid() {
+      if (this._error) {
+        return `<div class="alert alert-error">${escapeHtml(this._error)}</div>`;
+      }
+      if (this._loading && this._games.length === 0) {
+        return `<div class="lp-find-loading">${window.buddyLoader({ size: 72 })}</div>`;
+      }
+      if (this._games.length === 0) {
+        const inCollection = this._filters.scope === "mine";
+        return `
+          <div class="lp-find-empty">
+            <p>${inCollection
+              ? "No games in your collection match these filters."
+              : "No games match these filters."}</p>
+            ${this._activeFilterCount() > 0
+              ? `<button class="btn btn-ghost btn-sm" onclick="window.gameExplorerView._clearFilters()">
+                   Clear filters
+                 </button>`
+              : ""}
+          </div>
+        `;
+      }
+      const cards = this._games.map((g) => window.renderGamePolaroid(g, {
+        clickHandler: `window.gameExplorerView._pickFromGrid('${jsStr(g.id)}')`,
+        collectionStatus: this._collectionMap[g.id] || null,
+      })).join("");
+      return `<div class="lp-find-grid ${this._loading ? "is-reloading" : ""}">${cards}</div>`;
+    }
+
+    _renderPager() {
+      const totalPages = Math.max(1, Math.ceil(this._total / PER_PAGE));
+      if (totalPages <= 1) return "";
+      return `
+        <nav class="lp-find-pager">
+          <button class="btn btn-ghost btn-sm" ${this._page <= 1 ? "disabled" : ""}
+                  onclick="window.gameExplorerView._goPage(${this._page - 1})">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
+          </button>
+          <span class="text-xs opacity-60">Page ${this._page} of ${totalPages}</span>
+          <button class="btn btn-ghost btn-sm" ${this._page >= totalPages ? "disabled" : ""}
+                  onclick="window.gameExplorerView._goPage(${this._page + 1})">
+            Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </nav>
+      `;
+    }
+
+    // ── Filter actions ───────────────────────────────────────────────────────
+
+    _setScope(scope) {
+      if (this._filters.scope === scope) return;
+      this._filters.scope = scope;
+      this._page = 1;
+      // Manual scope switch overrides the empty-collection auto-fallback.
+      this._scopeAutoSwitched = true;
+      this._loadGames();
+    }
+
+    _setFilter(key, value) {
+      this._filters[key] = value;
+      this._page = 1;
+      this._loadGames();
+    }
+
+    _setPlaytimeBucket(id) {
+      const f = this._filters;
+      const cur = PLAYTIME_BUCKETS.find((b) => isActiveBucket(b, f));
+      const next = cur && cur.id === id ? null : PLAYTIME_BUCKETS.find((b) => b.id === id);
+      f.playtimeMin = next ? next.min : null;
+      f.playtimeMax = next ? next.max : null;
+      this._page = 1;
+      this._loadGames();
+    }
+
+    _clearFilters() {
+      const scope = this._filters.scope;
+      this._filters = this._emptyFilters();
+      this._filters.scope = scope;
+      this._page = 1;
+      this._loadGames();
+    }
+
+    _goPage(n) {
+      this._page = n;
+      this._loadGames();
+      const el = this.container.querySelector(".lp-find-section");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // ── Pick ─────────────────────────────────────────────────────────────────
+
+    // Stages the game into the active draft and drops the user on Gather with
+    // it prefilled. Same staging contract as the Play tab's Another Round:
+    // PlayFlowView.onMount() reads PlaySession.load() from localStorage, so
+    // persist() before navigating.
+    _pickFromGrid(gameId) {
+      const g = this._games.find((x) => x.id === gameId);
+      if (!g) return;
+      const ps = window.store.get("activePlay") || new window.PlaySession();
+      ps.gameId = g.id;
+      ps.gameSnapshot = {
+        id: g.id,
+        name: g.name,
+        thumbnail_url: g.thumbnail_url,
+        rulebook_url: g.rulebook_url,
+        is_expansion: !!g.is_expansion,
+      };
+      ps.playMode = g.play_mode || ps.playMode || null;
+      ps.persist();
+      window.store.set("activePlay", ps);
+      // Warm the reference-guide cache in the background so the guide is
+      // instant once the host lands on the Play screen (or opens game detail).
+      window.Chapter.prefetchMyChapters(g.id);
+      // If a lobby is already open (e.g. the user came here mid-session to
+      // swap games), push the swap to the server so joiners see it. Otherwise
+      // start minting one now — see LogPlayView._host() for why the two cases
+      // must stay exclusive.
+      if (ps.code) {
+        window.PlaySession.updateLobby(ps.code, { gameId: g.id }).catch(() => {});
+      } else {
+        window.PlaySession.prefetchLobby({ gameId: g.id });
+      }
+      window.router.go("play-flow");
+    }
+  }
+
+  window.GameExplorerView = GameExplorerView;
+})();

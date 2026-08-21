@@ -3600,8 +3600,8 @@ main[data-view="session-viewer"].hidden {
 }
 .cascade-back-spacer { display: inline-block; width: 44px; height: 44px; }
 
-/* Top "back" row used on join-session (single-screen view with a back to
-   the chooser). Same visual weight as .cascade-screen__header — 44×44
+/* Top "back" row used on the game explorer (single-screen view with a back
+   to the Play tab). Same visual weight as .cascade-screen__header — 44×44
    reserved on each side for fingertip-friendly tap targets. */
 .cascade-back-row {
   display: grid;
@@ -3980,7 +3980,7 @@ main[data-view="session-viewer"].hidden {
   border-color: var(--polaroid-line);
 }
 
-/* ── Play chooser ────────────────────────────────────────────────────────── */
+/* ── Play tab, Host half — heading, resume banner, chooser cards ─────────── */
 .cascade-chooser__header { padding: 12px 4px 18px; text-align: center; }
 .cascade-chooser__header h1 {
   /* No lead paragraph under it any more, so the header's own 18px bottom
@@ -4078,7 +4078,7 @@ main[data-view="session-viewer"].hidden {
   overflow: hidden;
 }
 
-/* ── Join Session view ───────────────────────────────────────────────────── */
+/* ── Play tab, Join half — JoinPanel (code entry + active sessions) ──────── */
 .cascade-join__code-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -4951,20 +4951,26 @@ main[data-view="session-viewer"].hidden {
 .cascade-game-chip__details:hover { background: rgba(0, 0, 0, 0.06); color: var(--polaroid-ink); }
 .cascade-game-chip__details { color: var(--polaroid-ink); }
 
-/* ── "Find a Game that fits" section on the Host/Join landing ────────────── */
+/* ── Play tab split — divider + section titles ───────────────────────────── */
+/* The rule between the Host half (chooser cards) and the Join half, and the
+   heading that labels the lower section. Sized to match .cascade-chooser__header
+   h1 so the two halves read as siblings rather than a page plus a subsection. */
 .lp-divider {
   border: 0;
   height: 1px;
   background: var(--polaroid-line);
   margin: 24px 4px;
 }
-.lp-find-section { padding-bottom: 24px; }
+.lp-join-section { padding-bottom: 24px; }
 .lp-section-title {
   font-size: 28px;
   text-align: center;
   color: oklch(var(--bc));
   margin: 0 4px 14px;
 }
+
+/* ── Game Explorer screen ("find a game that fits") ──────────────────────── */
+.lp-find-section { padding-bottom: 24px; }
 .lp-filters {
   display: flex;
   flex-direction: column;

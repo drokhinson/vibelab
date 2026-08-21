@@ -72,7 +72,7 @@
     <main data-view="feed" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="log-play" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="play-flow" class="hidden flex-1 px-0 py-0"></main>
-    <main data-view="join-session" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="game-explorer" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="game-detail" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="reference-guide-add" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="profile-self" class="hidden flex-1 px-4 py-4"></main>
@@ -94,7 +94,7 @@
        action, but nothing breaks the bar's rectangle. data-nav is the
        destination on tap; data-nav-views (when present) is a comma-separated
        list of view names that keep this tab marked active — so the Play tab
-       stays lit throughout play-flow, the join chooser, and the joiner's
+       stays lit throughout play-flow, the game explorer, and the joiner's
        session-viewer mirror. -->
   <nav class="hidden bgb-nav" data-auth-only>
     <button class="bgb-nav__tab" data-nav="feed">
@@ -104,7 +104,7 @@
       <span class="bgb-nav__label">Feed</span>
     </button>
     <button class="bgb-nav__tab bgb-nav__tab--play" data-nav="log-play"
-            data-nav-views="play-flow,log-play,join-session,session-viewer">
+            data-nav-views="play-flow,log-play,game-explorer,session-viewer">
       <span class="bgb-nav__ico">
         <i data-lucide="dices" class="w-5 h-5"></i>
       </span>
@@ -158,6 +158,7 @@
   <script src="widgets/round-score-grid.js"></script>
   <script src="widgets/play-detail-popup.js"></script>
   <script src="widgets/game-finder.js"></script>
+  <script src="widgets/join-panel.js"></script>
   <script src="widgets/add-game-modal.js"></script>
   <script src="widgets/import-expansions-modal.js"></script>
 
@@ -167,7 +168,7 @@
   <script src="views/feed-view.js"></script>
   <script src="views/log-play-view.js"></script>
   <script src="views/play-flow-view.js"></script>
-  <script src="views/join-session-view.js"></script>
+  <script src="views/game-explorer-view.js"></script>
   <script src="views/game-detail-view.js"></script>
   <script src="views/reference-guide-add-view.js"></script>
   <script src="views/profile-self-view.js"></script>
