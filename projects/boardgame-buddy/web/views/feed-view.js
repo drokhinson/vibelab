@@ -14,7 +14,6 @@
       this._page = null;
       this._loading = false;
       this._error = null;
-      this._ptr = null;      // PullToRefresh instance, live only while mounted
     }
 
     async onMount() {
@@ -31,10 +30,6 @@
       this._statusMap = {};
       this._expansionCounts = {};
       this._refreshCollectionData();
-      // Before the first load, not after: with no page yet, a pull is a retry
-      // for a first fetch that failed, which is exactly when the user reaches
-      // for it.
-      this._installPullToRefresh();
       await this._load({ initial: true });
       this._installScrollObserver();
     }
@@ -83,100 +78,6 @@
 
     async onUnmount() {
       this._uninstallScrollObserver();
-      this._uninstallPullToRefresh();
-    }
-
-    // ── Pull to refresh ───────────────────────────────────────────────────
-    //
-    // Dragging down while the feed is already scrolled to the top asks the
-    // server for the first page again and splices whatever plays are new
-    // into the list on screen. Deliberately additive: the page the user is
-    // holding — including every cursor page they scrolled in, their read
-    // position, and the rails the backend interleaved — survives. The only
-    // thing that changes is that plays logged since the last fetch appear
-    // above the ones already there.
-
-    _installPullToRefresh() {
-      if (this._ptr || !window.BgbPullToRefresh) return;
-      this._ptr = window.BgbPullToRefresh.attach({
-        container: this.container,
-        onRefresh: () => this._pullRefresh(),
-      });
-    }
-
-    _uninstallPullToRefresh() {
-      if (!this._ptr) return;
-      this._ptr.detach();
-      this._ptr = null;
-    }
-
-    /** @returns {Promise<string>} the label the indicator flashes on release */
-    async _pullRefresh() {
-      let fresh;
-      try {
-        fresh = await window.Feed.refreshFirstPage();
-      } catch (_) {
-        return "Couldn't refresh";
-      }
-      const added = this._mergeLatest(fresh);
-      if (this._error) {
-        // A banner from an earlier failed load is stale the moment a pull
-        // comes back clean. _mergeLatest only repaints when it changed the
-        // list, so an empty refresh has to ask for the repaint itself.
-        this._error = null;
-        if (added === 0) this.render();
-      }
-      if (added === 0) return "You're up to date";
-      return added === 1 ? "1 new play" : `${added} new plays`;
-    }
-
-    /**
-     * Splice the play cards of a freshly-fetched first page into the page on
-     * screen, newest first, and repaint. Non-play cards in `fresh` (the Hot
-     * Games / Suggested Buddies / Time-to-revisit rails, which the backend
-     * rebuilds on every first-page request) are dropped — the list already
-     * carries a copy of each and a second one would just duplicate the rail.
-     *
-     * @param {{cards?: Array<object>}} fresh
-     * @returns {number} how many plays were added
-     */
-    _mergeLatest(fresh) {
-      const freshCards = (fresh && Array.isArray(fresh.cards)) ? fresh.cards : [];
-      if (!this._page || !Array.isArray(this._page.cards)) {
-        this._page = fresh;
-        window.store.set("feed", this._page);
-        return freshCards.filter((c) => c.kind === "play").length;
-      }
-      const incoming = freshCards.filter((c) => c.kind === "play");
-      const known = new Set(
-        this._page.cards.filter((c) => c.kind === "play").map((c) => c.play_id),
-      );
-      const added = incoming.filter((c) => !known.has(c.play_id));
-      if (added.length === 0) return 0;
-      // Every play on the fresh page is new, and we were holding plays of our
-      // own: whatever sits between the two sets never came back in this
-      // window, so prepending would leave a hole in the timeline. Start over
-      // from the fresh page instead — it's a full first page with its own
-      // cursor, so the tail reloads correctly as the user scrolls.
-      if (added.length === incoming.length && known.size > 0) {
-        this._page = fresh;
-      } else {
-        // Slot the new plays above the first play already on screen rather
-        // than at index 0, so a leading rail (Hot this week) stays the top
-        // card. groupCards() runs on the result, so a new play that belongs
-        // to a session already on screen folds into that session's card
-        // instead of opening a second one.
-        const cards = [...this._page.cards];
-        const firstPlayIdx = cards.findIndex((c) => c.kind === "play");
-        cards.splice(firstPlayIdx < 0 ? cards.length : firstPlayIdx, 0, ...added);
-        this._page = { ...this._page, cards };
-      }
-      // New object identity → this view's own listen("feed") subscriber
-      // repaints exactly once. Same contract as _onPlayChanged above; no
-      // explicit render() call, and the store stays authoritative for
-      // play-card.js's findCardById fallback.
-      window.store.set("feed", this._page);
-      return added.length;
     }
 
     _installScrollObserver() {
