@@ -84,6 +84,46 @@
       return !!(this.gameId || this.players.length || this.code);
     }
 
+    /**
+     * Build a fresh-draft seed from a play-history row (profile bundle
+     * `recent_plays[]`, or a row from GET /plays) so the same group can play
+     * the same game again. Mirrors PlayFlowView._nextRoundSeed(): the game
+     * and the roster carry over, the results do not, and no participant_id
+     * comes along — those belong to the finished lobby.
+     *
+     * The play row has no rulebook_url / is_expansion, so callers that can
+     * cheaply resolve the game (e.g. a warmed "game.bundle" cache entry) pass
+     * it as `gameExtras`; absent it the guide link just stays unset until the
+     * host flow loads the game itself.
+     */
+    static seedFromPlayRow(row, gameExtras = {}) {
+      if (!row || !row.game_id) return null;
+      const g = gameExtras || {};
+      return {
+        gameId: row.game_id,
+        gameSnapshot: {
+          id: row.game_id,
+          name: row.game_name || g.name || "",
+          thumbnail_url: row.game_thumbnail || g.thumbnail_url || null,
+          rulebook_url: g.rulebook_url || null,
+          is_expansion: !!g.is_expansion,
+        },
+        expansionIds: (row.expansions || [])
+          .map((e) => e.expansion_game_id)
+          .filter(Boolean),
+        playMode: row.play_mode || g.play_mode || null,
+        players: (row.players || []).map((p) => ({
+          name: p.name,
+          user_id: p.user_id || null,
+          avatar: p.avatar || null,
+          is_winner: false,
+          score: null,
+          team: "",
+          initials: null,
+        })),
+      };
+    }
+
     // Remote lobby helpers ──────────────────────────────────────────────────────
 
     static async openLobby({ gameId } = {}) {

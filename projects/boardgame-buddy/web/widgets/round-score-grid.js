@@ -30,6 +30,11 @@
 //                     player.roundScores.
 //   getPlayerTotal  — optional `(player) → number`. Same idea — play-flow
 //                     overlays live totals from realtime.
+//   headerNames     — start each column header on the player's name rather
+//                     than the colored bubble. The live play screens (host +
+//                     joiner mirror) pass true because names are what you
+//                     scan mid-game; the play-detail popup leaves it off.
+//                     Either way tapping a header flips that column.
 
 (function () {
   function renderRoundGrid(players, host, opts) {
@@ -37,6 +42,7 @@
     const editable = o.editable !== false;
     const mode = o.playMode || "competitive";
     const showSign = !!o.showSign;
+    const headerNames = !!o.headerNames;
     const getCell = o.getCellValue || defaultCellValue;
     const getTotal = o.getPlayerTotal || defaultPlayerTotal;
     const safePlayers = Array.isArray(players) ? players : [];
@@ -64,7 +70,7 @@
             <tr>
               <th></th>
               ${safePlayers.map((p) => `
-                <th class="scoring-head${colRead(p) ? " scoring-col--read" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
+                <th class="scoring-head${headerNames ? " is-named" : ""}${colRead(p) ? " scoring-col--read" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
               `).join("")}
             </tr>
           </thead>
@@ -188,9 +194,11 @@
   }
 
   // Wraps a column-header badge in a button that toggles the header cell
-  // between the colored bubble and the player's display name. Pure DOM toggle
-  // (no re-render, no host method) so it works identically in the host grid,
-  // the joiner grid, and the play-detail popup. Shared via window export.
+  // between the colored bubble and the player's display name. Both spans are
+  // always emitted; CSS shows one, and which side the cell starts on is the
+  // caller's `headerNames` choice (the `is-named` class on the th). Pure DOM
+  // toggle (no re-render, no host method) so it works identically in the host
+  // grid, the joiner grid, and the play-detail popup. Shared via window export.
   function renderScoringHead(badgeHtml, name) {
     return `<button type="button" class="scoring-head__toggle" title="${escapeAttr(name)}"
               onclick="this.closest('.scoring-head').classList.toggle('is-named')">

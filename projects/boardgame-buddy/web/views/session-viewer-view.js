@@ -654,6 +654,7 @@
       const grid = window.renderRoundGrid(players, "sessionViewerView", {
         editableColumnId: myId,
         roundCount: rounds,
+        headerNames: true,
         showSign: false,
         getCellValue: (p, r) => {
           const v = this._liveScores ? this._liveScores.getScore(p.user_id, r) : null;
