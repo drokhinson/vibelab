@@ -21,9 +21,17 @@
 // gesture, so :root gets `overscroll-behavior-y: contain` (via .bgb-ptr-lock)
 // for as long as a widget is attached. It's removed on detach so the views
 // that want the native gesture — see the cascade note in styles.css — keep it.
+//
+// The widget only ever owns a gesture while the finger is BELOW where it went
+// down. The moment it comes back to the origin the pull is handed back to the
+// browser for the rest of that gesture (_touchMove), because a captured
+// gesture is a gesture the page cannot scroll with — and at the top of the
+// feed, which is where every session starts, that reads as a feed that will
+// not scroll at all.
 
 (function () {
   const MAX_PULL = 96;        // hard stop for the drag, in px
+  const COMMIT = 8;           // downward travel that turns a touch into a pull
   const THRESHOLD = 64;       // release past this to trigger a refresh
   const RESTING = 52;         // where the container parks while refreshing
   const RESISTANCE = 0.5;     // finger travel → container travel
@@ -41,6 +49,7 @@
       this.onRefresh = onRefresh;
       this._startY = 0;
       this._startX = 0;
+      this._lastY = 0;          // previous move's Y — direction for THIS frame
       this._dist = 0;
       this._tracking = false;   // finger down at scrollTop 0, direction TBD
       this._pulling = false;    // committed to a vertical pull
@@ -93,6 +102,7 @@
       if (!this._atTop()) return;
       this._startY = e.touches[0].clientY;
       this._startX = e.touches[0].clientX;
+      this._lastY = this._startY;
       this._tracking = true;
       this._pulling = false;
       this._dist = 0;
@@ -101,16 +111,39 @@
     _touchMove(e) {
       if (!this._tracking || this._busy) return;
       if (!e.touches || e.touches.length !== 1) return this._reset();
-      const dy = e.touches[0].clientY - this._startY;
+      const y = e.touches[0].clientY;
+      const dy = y - this._startY;
       const dx = e.touches[0].clientX - this._startX;
+      // Whether THIS frame moved upward, as opposed to where the finger is
+      // relative to where it went down. The two disagree exactly when the
+      // user is on the way back, which is what both checks below turn on.
+      const rising = y < this._lastY;
+      this._lastY = y;
       if (!this._pulling) {
         // Undecided: an upward drag is a normal scroll, and a mostly-sideways
         // one belongs to a horizontal rail (.feed-rail__scroll and friends).
         // Bail out of both rather than fighting them.
         if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) return this._reset();
-        if (dy < 8) return;                                // below the noise floor
+        if (dy < COMMIT) return;                           // below the noise floor
+        // Past the noise floor but already travelling back up: this is the
+        // tail of a flick that began with a few px of downward roll, not a
+        // pull. Stay undecided for this frame rather than bailing out — a
+        // slow pull with one jittery frame commits on the next one, while a
+        // flick keeps rising until the dy <= 0 test above ends it.
+        if (rising) return;
         this._pulling = true;
         this._setTransition(null);
+      } else if (dy <= 0) {
+        // The finger has come back to where it went down. The user is
+        // scrolling, not pulling, so hand the gesture back to the browser:
+        // _reset() clears _tracking, which stops every remaining touchmove of
+        // this gesture at the guard above and so stops preventing default.
+        //
+        // Without this the pull stayed latched for the rest of the gesture and
+        // preventDefault ran on every move while the offset sat clamped at 0 —
+        // a dead zone that ate the whole flick. At the top of the feed, where
+        // every gesture starts, that is the feed refusing to scroll at all.
+        return this._reset();
       }
       // The page can scroll under a slow finger — give up if it does, so the
       // container doesn't hang translated over scrolled content.
