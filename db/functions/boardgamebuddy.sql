@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 044 (dead-object cleanup)
+-- Last updated: migration 045 (one visibility rule for play stats)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,10 @@
 -- bgb_dormant_collection(uid UUID, days_since INT DEFAULT 60, lim INT DEFAULT 5)
 --   → TABLE (game_id UUID, last_played_at DATE)
 --   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--               db/migrations/boardgamebuddy/045_participated_play_stats.sql
+--                 (was joining plays on p.user_id = uid only, so a game the
+--                  user played but a buddy logged read as "never played" and
+--                  got nudged at them; now counts participated plays)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Owned games this user hasn't played in N days; powers the
 --               "Featured from your collection" Feed card.
@@ -109,6 +113,11 @@
 --               (buddy + buddy-request blocks now emit `other_avatar` JSONB
 --               instead of `other_avatar_url` TEXT, following the
 --               avatar_url → avatar rename on boardgamebuddy_profiles)
+--               db/migrations/boardgamebuddy/045_participated_play_stats.sql
+--                 (played-shelf play_count reached play_players with a
+--                  LEFT JOIN then COUNT(*), so a play the user logged was
+--                  counted once per participant — a 4-player play read as
+--                  4 plays. Now EXISTS, matching bgb_play_stats.)
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)
 --   Purpose:    Single round-trip Profile Self / Profile Other payload.
@@ -284,9 +293,11 @@
 --   → JSONB [ { game_id, play_count, last_played_at } ... ]
 --   Defined in: db/migrations/boardgamebuddy/039_perf_rpcs_and_indexes.sql
 --   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
---               (_play_stats — GET /collection). GET /collection/shelf was
---               removed as uncalled; /collection/grid counts logged-only plays
---               through _own_play_stats instead, which is a narrower rule.
+--               (_play_stats — GET /collection AND GET /collection/grid, both
+--               shelves). Also services/game_service.py (recently_played —
+--               GET /games/recently-played + the /bootstrap seed).
+--               This is the reference implementation of the visibility rule;
+--               migration 045 aligned the last two surfaces onto it.
 --   Purpose:    Per-game play_count / last_played_at via SQL GROUP BY over
 --               the viewer's visible plays (own + participant). Replaced
 --               _plays_visible_to_user + _index_plays, which shipped every

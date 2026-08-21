@@ -88,10 +88,11 @@ async def get_collection(
             if row["status"] == CollectionStatus.OWNED.value:
                 owned_game_ids.add(row["game_id"])
 
-    # Derive a synthetic "played" row for every game the user has logged a play
-    # for and does NOT own. Played is no longer a user-selectable status —
-    # it's computed from play history. Wishlist-ed games with plays still get
-    # a derived played row (they'll show up in both tabs).
+    # Derive a synthetic "played" row for every game the user has a play for —
+    # logged by them or by someone who listed them as a player — and does NOT
+    # own. Played is no longer a user-selectable status; it's computed from
+    # play history. Wishlist-ed games with plays still get a derived played
+    # row (they'll show up in both tabs).
     if status is None or status == CollectionStatus.PLAYED:
         missing_ids = [gid for gid in last_played_by_game if gid not in owned_game_ids]
         if missing_ids:
@@ -122,16 +123,18 @@ def _play_stats(
     game_ids: Optional[list[str]] = None,
 ) -> tuple[dict[str, str], dict[str, int]]:
     """last_played-by-game and play-count-by-game maps for every play the
-    user has been part of (logged themselves, or appears as a participant —
-    the same visibility rule the play log uses, so a play that shows up in
-    History also drives the Played shelf in the Closet).
+    user has been part of — logged themselves, OR appearing as a participant
+    on someone else's play. This is the rule every play-derived surface uses
+    (bgb_user_stats, bgb_profile_bundle, bgb_game_detail_bundle's status pill,
+    the play log), so a play that shows up in History also drives the Played
+    shelf and the counts on every tile.
 
     One bgb_play_stats RPC (migration 039, SQL GROUP BY). The old path
     fetched EVERY visible play row across up to 3 round trips and counted
     them in Python — unbounded for BGG-synced users with thousands of plays.
 
-    `game_ids`, when provided, scopes the stats to those games — used by
-    /collection for owned/wishlist where we only need the shelf's own tiles.
+    `game_ids`, when provided, scopes the stats to those games — for callers
+    that only need the tiles already on the shelf.
     """
     if game_ids is not None and not game_ids:
         return {}, {}
@@ -143,41 +146,6 @@ def _play_stats(
     )
     last_played = {r["game_id"]: r["last_played_at"] for r in rows}
     counts = {r["game_id"]: int(r["play_count"] or 0) for r in rows}
-    return last_played, counts
-
-
-def _own_play_stats(
-    sb: Client,
-    user_id: str,
-    game_ids: Optional[list[str]] = None,
-) -> tuple[dict[str, str], dict[str, int]]:
-    """last_played-by-game and play-count-by-game over plays this user LOGGED.
-
-    Deliberately narrower than _play_stats, which counts plays the user merely
-    participated in as well. The two shelves disagree today: /collection
-    derives its Played rows from _play_stats, /collection/grid from this. See
-    the note on _play_stats.
-
-    `game_ids`, when given, scopes the read to that set.
-    """
-    query = (
-        sb.table("boardgamebuddy_plays")
-        .select("game_id, played_at")
-        .eq("user_id", user_id)
-    )
-    if game_ids is not None:
-        if not game_ids:
-            return {}, {}
-        query = query.in_("game_id", game_ids)
-
-    last_played: dict[str, str] = {}
-    counts: dict[str, int] = {}
-    for p in query.execute().data or []:
-        gid = p["game_id"]
-        played = p.get("played_at")
-        counts[gid] = counts.get(gid, 0) + 1
-        if played and (gid not in last_played or played > last_played[gid]):
-            last_played[gid] = played
     return last_played, counts
 
 
@@ -327,7 +295,8 @@ async def collection_grid(
         CollectionStatus.OWNED,
         description=(
             "Which shelf to return — owned (default), wishlist, or played "
-            "(games the user has plays for but does not currently own / wishlist)."
+            "(games the user has plays for — logged by them or by someone who "
+            "listed them as a player — but does not currently own / wishlist)."
         ),
     ),
     search: Optional[str] = Query(None, description="Case-insensitive game-name match"),
@@ -364,11 +333,12 @@ async def collection_grid(
     mode_value = play_mode.value if play_mode else None
 
     if status == CollectionStatus.PLAYED:
-        # Played-not-owned shelf: every game the user has logged a play for
-        # that doesn't currently sit on their owned OR wishlist shelf. Lets the
-        # Profile surface games-they-play-but-don't-have as a distinct row
-        # without duplicating anything from the other two shelves above it.
-        last_played, play_counts = _own_play_stats(sb, target_user_id)
+        # Played-not-owned shelf: every game the user has a play for — logged
+        # by them or by someone who listed them as a player — that doesn't
+        # currently sit on their owned OR wishlist shelf. Lets the Profile
+        # surface games-they-play-but-don't-have as a distinct row without
+        # duplicating anything from the other two shelves above it.
+        last_played, play_counts = _play_stats(sb, target_user_id)
         if not last_played:
             return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
 
@@ -473,7 +443,7 @@ async def collection_grid(
     # plays of the filtered game set. One query — keeps the endpoint at two
     # round-trips total.
     game_ids = [r["game_id"] for r in filtered]
-    last_played, play_counts = _own_play_stats(sb, target_user_id, game_ids)
+    last_played, play_counts = _play_stats(sb, target_user_id, game_ids)
 
     if sort == CollectionSort.ADDED_AT:
         ordered = sorted(filtered, key=lambda r: r.get("added_at") or "", reverse=True)
