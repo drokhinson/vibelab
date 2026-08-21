@@ -363,25 +363,45 @@
       el.innerHTML = "";
       return;
     }
-    const manual = !!(window.BgbNet && window.BgbNet.isManual());
+    const probing = !!(window.BgbNet && window.BgbNet.isProbing());
     el.innerHTML = `
       <i data-lucide="cloud-off" class="w-4 h-4 bgb-offline-banner__icon"></i>
       <span class="bgb-offline-banner__text">
-        ${manual
-          ? "Offline mode — plays save to this device."
-          : "No connection — plays save to this device."}
+        No connection — plays save to this device.
       </span>
-      ${manual ? `
-        <button class="bgb-offline-banner__action"
-                onclick="window.BgbNet.manual(false)">
-          Go online
-        </button>
-      ` : ""}
+      <button class="bgb-offline-banner__action" ${probing ? "disabled" : ""}
+              onclick="window.retryConnection()">
+        ${probing ? "Checking…" : "Try again"}
+      </button>
     `;
     el.classList.remove("hidden");
     if (window.lucide) window.lucide.createIcons({ root: el });
   }
   window.store.subscribe("offline", syncOfflineBanner);
+
+  /**
+   * The banner's "Try again". Everything else about offline detection is
+   * passive — it learns from requests the app was making anyway — so this is
+   * the one path that asks on purpose, for when the user can see they have
+   * signal and the app hasn't caught up (walked out of the dead zone, joined
+   * the wifi, came off airplane mode).
+   *
+   * On success the store flips and the banner removes itself; BgbNet's own
+   * offline→online edge drains the outbox, so nothing to do here. On failure
+   * the banner stays and says so, rather than silently doing nothing and
+   * leaving the user unsure whether the tap registered.
+   */
+  window.retryConnection = async function () {
+    if (!window.BgbNet || window.BgbNet.isProbing()) return;
+    syncOfflineBanner(true);            // paint "Checking…" in the tap frame
+    const back = await window.BgbNet.probe();
+    if (!back) {
+      syncOfflineBanner(true);          // restore the button
+      if (window.showToast) {
+        window.showToast("Still no connection — your plays are safe on this device.", "error");
+      }
+    }
+  };
 
   // Logout helper — referenced by ProfileSelfView.
   window.handleLogout = async function () {
