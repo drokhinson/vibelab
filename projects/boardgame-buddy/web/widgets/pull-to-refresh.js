@@ -17,17 +17,32 @@
 //     because a transformed ancestor would make `fixed` resolve against the
 //     container instead of the viewport.
 //
-// Native browser pull-to-refresh (Chrome Android) would fire on the same
-// gesture, so :root gets `overscroll-behavior-y: contain` (via .bgb-ptr-lock)
-// for as long as a widget is attached. It's removed on detach so the views
-// that want the native gesture — see the cascade note in styles.css — keep it.
+// The scroller is always the browser's. Every listener here is passive and
+// nothing calls preventDefault: the widget reads the gesture and draws on top
+// of it, it never takes it. That is the whole design, and it is what the feed
+// in any other app does — you scroll, and if you happen to be at the top and
+// keep dragging down, a refresh control appears under your finger.
 //
-// The widget only ever owns a gesture while the finger is BELOW where it went
-// down. The moment it comes back to the origin the pull is handed back to the
-// browser for the rest of that gesture (_touchMove), because a captured
-// gesture is a gesture the page cannot scroll with — and at the top of the
-// feed, which is where every session starts, that reads as a feed that will
-// not scroll at all.
+// It is also the fix for how this shipped. The first version claimed the
+// gesture (preventDefault on every touchmove) as soon as the finger travelled
+// a few px down at the top of the page, and never gave it back when the finger
+// turned around. A claimed gesture is one the browser will not scroll with, so
+// a flick up that began with the downward roll a thumb makes as it settles
+// moved nothing at all — and since the feed opens at the top, that was every
+// flick. The only part of the screen that still scrolled was the bottom nav,
+// which sits outside the container these listeners are on.
+//
+// What replaces preventDefault is `overscroll-behavior-y: none` on :root (via
+// .bgb-ptr-lock, applied only while a widget is attached). That is what stops
+// Chrome Android's own pull-to-refresh from firing on the same drag and stops
+// iOS bouncing the document out from under a pull that is already drawing the
+// same motion. Removed on detach, so the views that want the native gesture —
+// see the cascade note in styles.css — keep it.
+//
+// Because the page is never blocked, the pull is measured from wherever the
+// top was reached rather than from where the finger landed: _touchMove
+// re-baselines while the document is still scrolled, so flinging to the top
+// and continuing to drag raises the control, exactly as it would natively.
 
 (function () {
   const MAX_PULL = 96;        // hard stop for the drag, in px
@@ -47,12 +62,10 @@
     constructor({ container, onRefresh }) {
       this.container = container;
       this.onRefresh = onRefresh;
-      this._startY = 0;
-      this._startX = 0;
-      this._lastY = 0;          // previous move's Y — direction for THIS frame
+      this._startY = 0;         // where the pull is measured from — re-baselined
+      this._startX = 0;         //   while the document is still scrolled
       this._dist = 0;
-      this._tracking = false;   // finger down at scrollTop 0, direction TBD
-      this._pulling = false;    // committed to a vertical pull
+      this._tracking = false;   // a single finger is down and could still pull
       this._busy = false;
       this._dead = false;       // detached — late async work must not repaint
       this._indicator = null;
@@ -63,10 +76,12 @@
 
     attach() {
       this._dead = false;       // an instance may be re-attached after detach
-      // passive:false on touchmove only — that's the one handler that calls
-      // preventDefault (to suppress the rubber-band while pulling).
+      // Every one of these is passive, and passive is load-bearing rather than
+      // an optimisation: it is the promise that this widget cannot take a
+      // gesture away from the scroller. .bgb-ptr-lock does the job
+      // preventDefault used to.
       this.container.addEventListener("touchstart", this._onStart, { passive: true });
-      this.container.addEventListener("touchmove", this._onMove, { passive: false });
+      this.container.addEventListener("touchmove", this._onMove, { passive: true });
       this.container.addEventListener("touchend", this._onEnd, { passive: true });
       this.container.addEventListener("touchcancel", this._onEnd, { passive: true });
       document.documentElement.classList.add("bgb-ptr-lock");
@@ -99,68 +114,59 @@
     _touchStart(e) {
       if (this._busy) return;
       if (!e.touches || e.touches.length !== 1) return;   // pinch → not a pull
-      if (!this._atTop()) return;
+      // Deliberately armed wherever the finger lands, not only at the top: the
+      // page is free to scroll under it, and _touchMove re-baselines until the
+      // top actually arrives. That is what lets one gesture fling to the top
+      // and go straight on into a pull.
       this._startY = e.touches[0].clientY;
       this._startX = e.touches[0].clientX;
-      this._lastY = this._startY;
       this._tracking = true;
-      this._pulling = false;
       this._dist = 0;
+      // The offset has to track the finger frame-for-frame; easing belongs to
+      // the release, not the drag.
+      this._setTransition(null);
     }
 
     _touchMove(e) {
       if (!this._tracking || this._busy) return;
       if (!e.touches || e.touches.length !== 1) return this._reset();
       const y = e.touches[0].clientY;
+      // Still scrolled: there is no pull to draw, and the browser is busy
+      // scrolling. Keep the origin under the finger so the pull starts from 0
+      // at the instant the top arrives, mid-gesture or not.
+      if (!this._atTop()) {
+        this._startY = y;
+        this._startX = e.touches[0].clientX;
+        if (this._dist !== 0) this._show(0, "idle");
+        return;
+      }
       const dy = y - this._startY;
       const dx = e.touches[0].clientX - this._startX;
-      // Whether THIS frame moved upward, as opposed to where the finger is
-      // relative to where it went down. The two disagree exactly when the
-      // user is on the way back, which is what both checks below turn on.
-      const rising = y < this._lastY;
-      this._lastY = y;
-      if (!this._pulling) {
-        // Undecided: an upward drag is a normal scroll, and a mostly-sideways
-        // one belongs to a horizontal rail (.feed-rail__scroll and friends).
-        // Bail out of both rather than fighting them.
-        if (dy <= 0 || Math.abs(dx) > Math.abs(dy)) return this._reset();
-        if (dy < COMMIT) return;                           // below the noise floor
-        // Past the noise floor but already travelling back up: this is the
-        // tail of a flick that began with a few px of downward roll, not a
-        // pull. Stay undecided for this frame rather than bailing out — a
-        // slow pull with one jittery frame commits on the next one, while a
-        // flick keeps rising until the dy <= 0 test above ends it.
-        if (rising) return;
-        this._pulling = true;
-        this._setTransition(null);
-      } else if (dy <= 0) {
-        // The finger has come back to where it went down. The user is
-        // scrolling, not pulling, so hand the gesture back to the browser:
-        // _reset() clears _tracking, which stops every remaining touchmove of
-        // this gesture at the guard above and so stops preventing default.
-        //
-        // Without this the pull stayed latched for the rest of the gesture and
-        // preventDefault ran on every move while the offset sat clamped at 0 —
-        // a dead zone that ate the whole flick. At the top of the feed, where
-        // every gesture starts, that is the feed refusing to scroll at all.
-        return this._reset();
+      // A mostly-sideways drag belongs to a horizontal rail
+      // (.play-session__scroll and friends) — leave it alone.
+      if (Math.abs(dx) > Math.abs(dy)) return this._reset();
+      if (dy < COMMIT) {
+        // At, above, or barely below where the pull is measured from. Nothing
+        // to show — but stay armed rather than resetting, because the finger
+        // is still down at the top and may yet turn into a pull. Nothing is
+        // being held back from the scroller by staying here.
+        if (this._dist !== 0) this._show(0, "idle");
+        return;
       }
-      // The page can scroll under a slow finger — give up if it does, so the
-      // container doesn't hang translated over scrolled content.
-      if (!this._atTop()) return this._reset();
-      e.preventDefault();
-      // Clamped at both ends: dragging back above the start point pulls the
-      // offset to 0 rather than to a negative one, which would fling the
-      // indicator up off screen and hand CSS a negative opacity.
-      this._dist = Math.max(0, Math.min(MAX_PULL, dy * RESISTANCE));
-      this._paint(this._dist, this._dist >= THRESHOLD ? "ready" : "pull");
+      const dist = Math.min(MAX_PULL, dy * RESISTANCE);
+      this._show(dist, dist >= THRESHOLD ? "ready" : "pull");
+    }
+
+    /** Record and paint the pull offset. @param {number} dist px */
+    _show(dist, state) {
+      this._dist = dist;
+      this._paint(dist, state);
     }
 
     _touchEnd() {
       if (!this._tracking || this._busy) return;
-      const shouldRefresh = this._pulling && this._dist >= THRESHOLD;
+      const shouldRefresh = this._dist >= THRESHOLD;
       this._tracking = false;
-      this._pulling = false;
       if (!shouldRefresh) return this._reset();
       this._run();
     }
@@ -203,7 +209,6 @@
 
     _reset(immediate = false) {
       this._tracking = false;
-      this._pulling = false;
       this._dist = 0;
       this._setTransition(immediate ? null : SETTLE_MS);
       this._paint(0, "idle");
