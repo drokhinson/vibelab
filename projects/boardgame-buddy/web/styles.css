@@ -2671,6 +2671,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .status-tag--compact i { width: 0.85rem; height: 0.85rem; }
 .status-tag--compact .status-tag__label { display: none; }
+/* --compact zeroes the padding to make a real circle, but --add re-declares
+   `padding: 0.18rem 0.4rem` further down at the same specificity and wins on
+   source order. That left the "+" chip with 6.4px of horizontal padding
+   against 2.88px vertical inside a fixed 24px box, squeezing the icon's grid
+   track narrower than the icon and pushing it ~2.4px right of centre — the
+   only status chip that looked off-centre. Compact is a shape modifier, so
+   it has to beat every colour variant regardless of order. */
+.status-tag--compact.status-tag--add { padding: 0; }
 .status-tag__label { font-weight: 600; }
 
 /* Fully-opaque tag backgrounds so a tag overlaid on a photo / box art
