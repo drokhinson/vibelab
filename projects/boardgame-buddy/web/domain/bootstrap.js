@@ -99,8 +99,13 @@
     }
 
     static async _warmGameBundles() {
+      // This call is slow by construction (one bgb_game_detail_bundle per
+      // owned game), so a mutation can easily land while it's in the air —
+      // importing an expansion, for one. Stamp the start so the seed can skip
+      // any game whose bundle was rewritten after the payload was built.
+      const startedAt = Date.now();
       const payload = await window.api.get("/bootstrap/game-bundles");
-      Bootstrap._seedGameBundles(payload && payload.game_detail_bundles);
+      Bootstrap._seedGameBundles(payload && payload.game_detail_bundles, startedAt);
       return payload;
     }
 
@@ -214,11 +219,14 @@
      * the bootstrap payload and the deferred /bootstrap/game-bundles warm-up
      * so both write the same TTLs.
      */
-    static _seedGameBundles(bundles) {
+    static _seedGameBundles(bundles, fetchedAfter) {
       if (!window.bgbCache || !bundles) return;
       for (const gameId of Object.keys(bundles)) {
         const b = bundles[gameId];
         if (!b) continue;
+        // A bundle written after this payload was requested is newer than
+        // what we're holding — seeding over it would put the stale copy back.
+        if (fetchedAfter && window.bgbCache.storedAt("game.bundle", gameId) > fetchedAfter) continue;
         window.bgbCache.setWithTtls(
           "game.bundle",
           gameId,
