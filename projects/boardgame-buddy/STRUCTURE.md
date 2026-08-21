@@ -33,7 +33,9 @@ Game night under a warm lamp: espresso ground, amber glow, terracotta wins. Full
 ### Native app (`app/`)
 Rebuilt from scratch (2026-08) as one coherent design system — full feature parity with the web
 app except chapter *authoring* (reference guides are read-only on native: view + add/remove
-community pool chapters; writing chapters stays on web). Organized around the repo's
+community pool chapters; writing chapters stays on web). That exclusion covers the whole
+editor, so "Generate with AI" (`POST /games/{id}/chapters/generate`) is web-only too — it
+drafts into an editor form, and native has no form to draft into. Organized around the repo's
 one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md`):
 - **Design system** (`app/src/ui/` + `app/src/theme.js`): primitive kit — `Screen` (safe-area +
   keyboard handling + a `FooterBar` slot that always stays above the keyboard), `Text` (semantic
