@@ -53,7 +53,13 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
   expansions card on both Game Detail and Gather, which render for every base game since
   expansions are hidden from search).
 - **Offline + speed** (`app/src/offline/collectionStore.js`, `app/src/domain/gameSearch.js`):
-  the owned/wishlist collection persists to AsyncStorage and hydrates before any network call;
+  the owned/wishlist collection persists to AsyncStorage and hydrates before any network call.
+  Rows keep `GET /collection`'s shape verbatim — a nested `game` object, *not* the flat `game_*`
+  columns `boardgamebuddy_collections` denormalizes (that endpoint joins the games table and
+  never selects them). `collection_routes._TILE_GAME_FIELDS` is the exact column list that comes
+  back, and it carries `is_expansion` / `base_game_bgg_id` / `expansion_color` / `play_mode`
+  specifically so the offline shelf can tell an expansion from a base game and score a co-op
+  game correctly at an offline table;
   game search falls through **owned (instant, offline) → BGB `/search` → BGG import**. Screen
   data uses a 10-min-TTL serve-then-refresh cache (`app/src/store/cache.js`) with a visible
   RefreshHint while revalidating; `GET /bootstrap` seeds first paint and its `bootstrap_version`
@@ -83,10 +89,20 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
   `useSessionWatch` (Realtime phase + poll safety net, own-column score editing, winner splash).
 - **Realtime** (`app/src/realtime/`): `liveScores`, `sessionPhase` (Supabase channels);
   draft model in `app/src/models/playSession.js` (AsyncStorage-persisted).
-- **API client** (`app/src/api/client.js`): all ~80 endpoints incl. admin, 401 refresh-retry,
-  multipart photo upload; JSDoc response typedefs in `app/src/api/types.js`. The photo attaches
-  via `PATCH /plays/{id}/photo` and its upload runs *alongside* the create/finalize, so the
-  blocking save path is two round trips.
+- **API client** (`app/src/api/client.js`): 401 refresh-retry, multipart photo upload, and one
+  wrapper per endpoint the app actually calls — 66 of the backend's 75 routes, with no `raw`
+  escape hatch, so `grep` over this file is a complete inventory of what native can reach.
+  Response typedefs live in `app/src/api/types.js` and are kept field-for-field with
+  `shared-backend/routes/boardgame_buddy/models.py`. The photo attaches via
+  `PATCH /plays/{id}/photo` and its upload runs *alongside* the create/finalize, so the blocking
+  save path is two round trips. The Play-history filter sheet builds its own option lists
+  (`/games/recently-played` + `play_partners.recent`) rather than calling a filter-options
+  endpoint; `/plays` still takes `game_id` and `buddy_id`.
+- **Shared vocabularies:** `app/src/domain/playMode.js` holds the play-mode strings
+  (`competitive` / `coop` / `team`) mirrored from the `PlayMode` StrEnum and the
+  `boardgamebuddy_games.play_mode` CHECK constraint. Co-op is `coop` — compare through
+  `isCoop()`, and normalize anything inbound with `normalizePlayMode()`, since `PlayCreate`
+  422s an off-vocabulary value.
 - **Expansion labels** (`app/src/domain/expansionName.js`): `stripBaseGameName()` is the native
   twin of `web/helpers.js` and the backend's `_strip_base_prefix` — keep the three in sync. Applied
   where the base game is already the context (game page list, Gather chips, a play's chips); every
@@ -142,8 +158,15 @@ Linked to Supabase Auth `auth.users`.
 | game_id | UUID FK | → games |
 | status | TEXT | owned / wishlist. Migration 010 dropped `played` — played-ness is derived from `boardgamebuddy_plays` |
 | added_at | TIMESTAMPTZ | |
+| bgg_* | various | nullable; BGG-sync provenance (comment, acquisition, price, quantity, location) |
+| game_* | various | nullable; denormalized game fields (migration 020) so the shelf can filter without a join |
 | played_before_at | TIMESTAMPTZ | Migration 059. Non-null = the owner hand-marked this as played before joining, so it leaves the Shelf of Shame without a fabricated play. Read ONLY by the `shelf` block of `bgb_user_stats_detail` — never counted as a play |
 | UNIQUE(user_id, game_id) | | |
+
+The `game_*` denormalized columns are a **shelf-filtering** optimization, not
+the API shape. `GET /collection` ignores them and joins `boardgamebuddy_games`,
+returning a nested `game` object — see `_TILE_GAME_FIELDS` for the exact
+columns. Read the nested object, never `row.game_name`.
 
 ### boardgamebuddy_buddy_edges
 The mutual friendship graph (migration 008). One row per pair, stored
