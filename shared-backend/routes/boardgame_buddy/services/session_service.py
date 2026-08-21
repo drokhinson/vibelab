@@ -5,23 +5,22 @@ create_session(); other phones call join_session(code, ...). When the host
 hits Save, finalize_session() writes the canonical boardgamebuddy_plays row
 and marks the session 'finalized'.
 
-Every hot path — create / join / the 2s GET poll (migration 036) and now
-the Save (migration 042) — is a single Postgres RPC. Each previously
-fanned out 4-10 sequential PostgREST round trips, which made host/join
-taps and the wrap-up crawl at cross-region RTTs. The RPCs return
-SessionResponse- or PlayResponse-shaped JSONB, or {"error": "<code>"} for
-gate failures, which raise_for_rpc_error maps to the same HTTPExceptions
-the routes have always raised.
+Every path through this module is a single Postgres RPC: create / join /
+the 2s GET poll (migration 036), the Save (042), and the host's Gather-time
+writes — add and remove a participant, swap the game, move the phase cursor,
+abandon (046). Each previously fanned out 2-10 sequential PostgREST round
+trips, which made host/join taps, the Gather screen and the wrap-up crawl
+at cross-region RTTs. The RPCs return SessionResponse- or PlayResponse-shaped
+JSONB, or {"error": "<code>"} for gate failures, which raise_for_rpc_error
+maps to the same HTTPExceptions the routes have always raised.
 """
 
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import HTTPException
 
 from ..constants import (
     ALLOWED_PHASE_TRANSITIONS,
-    PlaySessionStatus,
     SessionPhase,
 )
 from ..models import (
@@ -32,19 +31,18 @@ from ..models import (
 from ._helpers import raise_for_rpc_error
 
 
+def _reject_non_host(data: Any, detail: str) -> None:
+    """Map migration 046's generic `host_only` envelope onto this endpoint's
+    own 403 wording — it surfaces to the user in a toast, so "can't add
+    participants" shouldn't become "can't update the session"."""
+    if isinstance(data, dict) and data.get("error") == "host_only":
+        raise HTTPException(status_code=403, detail=detail)
+
+
 def _bundle_to_response(data: Any) -> SessionResponse:
     """Parse a session-RPC JSONB payload, mapping error codes to HTTP."""
     raise_for_rpc_error(data, "Session")
     return SessionResponse.model_validate(data)
-
-
-def _build_response(sb, session_row: dict[str, Any]) -> SessionResponse:
-    data = (
-        sb.rpc("bgb_session_bundle", {"p_session_id": session_row["id"]})
-        .execute()
-        .data
-    )
-    return _bundle_to_response(data)
 
 
 def create_session(
@@ -70,33 +68,6 @@ def create_session(
         .data
     )
     return _bundle_to_response(data)
-
-
-_SESSION_SELECT = (
-    "id, code, host_user_id, game_id, status, phase, created_at, expires_at, "
-    "finalized_play_id, finalized_at"
-)
-
-
-def _fetch_open_session(sb, code: str) -> dict[str, Any]:
-    rows = (
-        sb.table("boardgamebuddy_play_sessions")
-        .select(_SESSION_SELECT)
-        .eq("code", code.upper())
-        .eq("status", PlaySessionStatus.OPEN.value)
-        .execute()
-    )
-    if not rows.data:
-        raise HTTPException(status_code=404, detail="Session not found")
-    session = rows.data[0]
-    expires_at = session["expires_at"]
-    expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00")) if isinstance(expires_at, str) else expires_at
-    if expires_dt < datetime.now(timezone.utc):
-        sb.table("boardgamebuddy_play_sessions").update(
-            {"status": PlaySessionStatus.ABANDONED.value}
-        ).eq("id", session["id"]).execute()
-        raise HTTPException(status_code=410, detail="Session expired")
-    return session
 
 
 def get_session(sb, code: str) -> SessionResponse:
@@ -150,47 +121,22 @@ def add_participant(
     types into the picker live only in the host's local draft, so other
     joiners never see them in their participants list.
 
-    Gather-only — once Play starts the roster is frozen.
+    Gather-only — once Play starts the roster is frozen. One RPC:
+    bgb_add_participant (migration 046) gates, dedups and seats in a single
+    round trip, where this used to cost four.
     """
-    session = _fetch_open_session(sb, code)
-    if session["host_user_id"] != viewer_id:
-        raise HTTPException(status_code=403, detail="Only the host can add participants")
-    if (session.get("phase") or SessionPhase.GATHER.value) != SessionPhase.GATHER.value:
-        raise HTTPException(status_code=409, detail="Roster is locked once Play starts")
-    name = (display_name or "").strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="display_name is required")
-
-    if user_id:
-        existing = (
-            sb.table("boardgamebuddy_play_session_participants")
-            .select("id")
-            .eq("session_id", session["id"])
-            .eq("user_id", user_id)
-            .execute()
-        )
-        if not existing.data:
-            sb.table("boardgamebuddy_play_session_participants").insert({
-                "session_id": session["id"],
-                "user_id": user_id,
-                "display_name": name,
-            }).execute()
-    else:
-        # Ghost dedup by case-insensitive display_name within the session.
-        existing = (
-            sb.table("boardgamebuddy_play_session_participants")
-            .select("id")
-            .eq("session_id", session["id"])
-            .ilike("display_name", name)
-            .execute()
-        )
-        if not existing.data:
-            sb.table("boardgamebuddy_play_session_participants").insert({
-                "session_id": session["id"],
-                "display_name": name,
-            }).execute()
-
-    return _build_response(sb, session)
+    data = (
+        sb.rpc("bgb_add_participant", {
+            "p_host": viewer_id,
+            "p_code": code,
+            "p_user": user_id,
+            "p_display_name": display_name,
+        })
+        .execute()
+        .data
+    )
+    _reject_non_host(data, "Only the host can add participants")
+    return _bundle_to_response(data)
 
 
 def remove_participant(
@@ -203,30 +149,19 @@ def remove_participant(
     """Host-only: remove a participant from the lobby roster. Gather-only.
 
     Refuses to remove the host themselves — abandon_session is the way to
-    end a session.
+    end a session. One RPC (bgb_remove_participant, migration 046).
     """
-    session = _fetch_open_session(sb, code)
-    if session["host_user_id"] != viewer_id:
-        raise HTTPException(status_code=403, detail="Only the host can remove participants")
-    if (session.get("phase") or SessionPhase.GATHER.value) != SessionPhase.GATHER.value:
-        raise HTTPException(status_code=409, detail="Roster is locked once Play starts")
-
-    row = (
-        sb.table("boardgamebuddy_play_session_participants")
-        .select("id, user_id")
-        .eq("id", participant_id)
-        .eq("session_id", session["id"])
+    data = (
+        sb.rpc("bgb_remove_participant", {
+            "p_host": viewer_id,
+            "p_code": code,
+            "p_participant": participant_id,
+        })
         .execute()
+        .data
     )
-    if not row.data:
-        raise HTTPException(status_code=404, detail="Participant not found")
-    if row.data[0].get("user_id") == session["host_user_id"]:
-        raise HTTPException(status_code=400, detail="Cannot remove the host")
-
-    sb.table("boardgamebuddy_play_session_participants").delete().eq(
-        "id", participant_id
-    ).eq("session_id", session["id"]).execute()
-    return _build_response(sb, session)
+    _reject_non_host(data, "Only the host can remove participants")
+    return _bundle_to_response(data)
 
 
 def update_session_game(
@@ -239,28 +174,31 @@ def update_session_game(
     """Host-only: change the game on an open lobby (or clear it).
 
     Lets joiners see the pick live via their poll loop — without this the
-    game_id on the row was frozen at create time. Idempotent: skip the write
-    when the value is unchanged.
+    game_id on the row was frozen at create time. Idempotent: the RPC skips
+    the write when the value is unchanged. Allowed in any open phase, not
+    just Gather — the host flow's picker relies on that.
     """
-    session = _fetch_open_session(sb, code)
-    if session["host_user_id"] != viewer_id:
-        raise HTTPException(status_code=403, detail="Only the host can update the session")
-    if session.get("game_id") != game_id:
-        sb.table("boardgamebuddy_play_sessions").update(
-            {"game_id": game_id}
-        ).eq("id", session["id"]).execute()
-        session["game_id"] = game_id
-    return _build_response(sb, session)
+    data = (
+        sb.rpc("bgb_update_session_game", {
+            "p_host": viewer_id,
+            "p_code": code,
+            "p_game": game_id,
+        })
+        .execute()
+        .data
+    )
+    return _bundle_to_response(data)
 
 
 def abandon_session(sb, viewer_id: str, code: str) -> None:
-    session = _fetch_open_session(sb, code)
-    if session["host_user_id"] != viewer_id:
-        raise HTTPException(status_code=403, detail="Only the host can abandon a session")
-    sb.table("boardgamebuddy_play_sessions").update({
-        "status": PlaySessionStatus.ABANDONED.value,
-        "phase": SessionPhase.ABANDONED.value,
-    }).eq("id", session["id"]).execute()
+    """Host-only: close an open lobby. One RPC (migration 046)."""
+    data = (
+        sb.rpc("bgb_abandon_session", {"p_host": viewer_id, "p_code": code})
+        .execute()
+        .data
+    )
+    _reject_non_host(data, "Only the host can abandon a session")
+    raise_for_rpc_error(data, "Session")
 
 
 def finalize_session(sb, *, host_user_id: str, code: str, payload: dict[str, Any]) -> PlayResponse:
@@ -287,6 +225,17 @@ def finalize_session(sb, *, host_user_id: str, code: str, payload: dict[str, Any
     return PlayResponse.model_validate(data)
 
 
+# ALLOWED_PHASE_TRANSITIONS, in the shape bgb_advance_phase wants. Passing the
+# table to the RPC rather than encoding it in SQL keeps constants.py the single
+# source of truth — 036/038's comments, still pointing at code constants that
+# no longer exist, are what the alternative looks like after a few migrations.
+def _transitions_payload() -> dict[str, list[str]]:
+    return {
+        phase.value: sorted(nxt.value for nxt in allowed)
+        for phase, allowed in ALLOWED_PHASE_TRANSITIONS.items()
+    }
+
+
 def update_phase(
     sb,
     *,
@@ -297,32 +246,29 @@ def update_phase(
     """Host-only: advance the session phase. Validates transitions against
     ALLOWED_PHASE_TRANSITIONS so a misbehaving client can't skip Play and
     jump straight from Gather to Settle, or resurrect a terminal session.
-    """
-    session = _fetch_open_session(sb, code)
-    if session["host_user_id"] != viewer_id:
-        raise HTTPException(status_code=403, detail="Only the host can update the phase")
 
-    current = SessionPhase(session.get("phase") or SessionPhase.GATHER.value)
-    if next_phase == current:
-        return _build_response(sb, session)
-    allowed = ALLOWED_PHASE_TRANSITIONS.get(current, frozenset())
-    if next_phase not in allowed:
+    One RPC (bgb_advance_phase, migration 046) — gate, transition check and
+    write together. Re-asserting the current phase is a no-op, as before.
+    """
+    data = (
+        sb.rpc("bgb_advance_phase", {
+            "p_host": viewer_id,
+            "p_code": code,
+            "p_phase": next_phase.value,
+            "p_transitions": _transitions_payload(),
+        })
+        .execute()
+        .data
+    )
+    _reject_non_host(data, "Only the host can update the phase")
+    # Composed here rather than in RPC_ERROR_STATUS because the message names
+    # both ends of the rejected move — same 400 body the route always sent.
+    if isinstance(data, dict) and data.get("error") == "invalid_transition":
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot transition from {current.value} to {next_phase.value}",
+            detail=f"Cannot transition from {data.get('from')} to {data.get('to')}",
         )
-
-    updates: dict[str, Any] = {"phase": next_phase.value}
-    # Keep `status` in sync for the abandoned shortcut (mirrors abandon_session)
-    # — finalized is set later by mark_finalized once the play row is written.
-    if next_phase == SessionPhase.ABANDONED:
-        updates["status"] = PlaySessionStatus.ABANDONED.value
-
-    sb.table("boardgamebuddy_play_sessions").update(updates).eq(
-        "id", session["id"]
-    ).execute()
-    session.update(updates)
-    return _build_response(sb, session)
+    return _bundle_to_response(data)
 
 
 def list_joinable(sb, viewer_id: str) -> list[JoinableSession]:

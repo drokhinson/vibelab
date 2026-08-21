@@ -1,6 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 044 (dead-object cleanup).
+-- Last updated: migration 046 (session write RPCs; drops the redundant
+--               (code, phase) index).
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: the legacy boardgamebuddy_buddies table is now strictly for free-text
@@ -389,7 +390,11 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user_play
   WHERE player_user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_play
   ON public.boardgamebuddy_play_players (play_id);
--- Play sessions (migration 011, phase added in 026).
+-- Play sessions (migration 011, phase added in 026). 026 also created
+-- idx_bgb_play_sessions_code_phase (code, phase); migration 046 drops it —
+-- every session lookup filters (code, status='open'), which the partial
+-- unique index below serves, so it was write amplification on a table each
+-- host tap writes to.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_play_sessions_open_code
   ON public.boardgamebuddy_play_sessions (code)
   WHERE status = 'open';

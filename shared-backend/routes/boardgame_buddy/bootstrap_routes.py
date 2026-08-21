@@ -10,7 +10,8 @@ cached identity to boot from. It returns:
     Hot Games / Suggested Buddies / Featured-From-Collection interspersing is
     not duplicated)
   - recently_played_games (host flow game-picker seed)
-  - play_partners (host flow player-picker seed: accounts + ghosts + recent)
+  - play_partners (host flow player-picker seed: accounts + ghosts + recent,
+    from one bgb_play_partners RPC)
   - bootstrap_version (int; FE wipes cache when this changes)
 
 GET /bootstrap/game-bundles is the deferred one — one bgb_game_detail_bundle
@@ -33,7 +34,7 @@ from db import get_supabase
 from . import router
 from .dependencies import CurrentUser, get_current_user
 from .models import GameBundlesResponse
-from .services import buddy_service, feed_service, game_service, played_with_service
+from .services import feed_service, game_service, played_with_service
 
 # Cap on how many owned games get a prebuilt detail bundle. Mirrors the RPC's
 # own default; the overflow is marked `truncated` and lazily fetched instead.
@@ -54,9 +55,12 @@ async def get_bootstrap(
     viewer = user.user_id
 
     # Every block below is independent, but the Supabase client is synchronous,
-    # so calling them inline would serialize ~17 round trips *and* block the
+    # so calling them inline would serialize the round trips *and* block the
     # event loop for every other in-flight request. to_thread + gather makes
-    # the wall time the slowest single block instead of the sum.
+    # the wall time the slowest single block instead of the sum — which is why
+    # the buddies / ghosts / played-with trio was worth folding into one RPC
+    # (migration 047): at five sequential queries it WAS the slowest block, so
+    # it alone set this endpoint's floor.
     #
     # max_game_bundles=0 tells bgb_bootstrap to skip the per-owned-game N+1;
     # /bootstrap/game-bundles below serves that separately.
@@ -64,8 +68,6 @@ async def get_bootstrap(
         rpc_result,
         feed_page,
         recent_games,
-        buddies,
-        ghosts,
         partners,
     ) = await asyncio.gather(
         asyncio.to_thread(
@@ -75,20 +77,14 @@ async def get_bootstrap(
         ),
         asyncio.to_thread(feed_service.build_feed_page, sb, viewer, cursor=None, limit=20),
         asyncio.to_thread(game_service.recently_played, sb, viewer, limit=6),
-        asyncio.to_thread(buddy_service.list_accepted_buddies, sb, viewer),
-        asyncio.to_thread(played_with_service.fetch_ghost_players, sb, viewer),
-        asyncio.to_thread(played_with_service.fetch_played_with, sb, viewer),
+        asyncio.to_thread(played_with_service.fetch_play_partners, sb, viewer),
     )
 
     payload: dict[str, Any] = dict(rpc_result.data or {})
     payload["feed_first_page"] = feed_page.model_dump(mode="json")
     payload["feed_cursor"] = feed_page.next_cursor
     payload["recently_played_games"] = [g.model_dump(mode="json") for g in recent_games]
-    payload["play_partners"] = {
-        "accounts": [b.model_dump(mode="json") for b in buddies],
-        "ghosts": [g.model_dump(mode="json") for g in ghosts],
-        "recent": [p.model_dump(mode="json") for p in partners],
-    }
+    payload["play_partners"] = partners.model_dump(mode="json")
     return payload
 
 

@@ -9,7 +9,7 @@ from db import get_supabase
 from jwt_auth import SupabaseUser, get_current_supabase_user
 
 from . import router
-from .dependencies import CurrentUser, get_current_user
+from .dependencies import CurrentUser, get_current_user, invalidate_current_user
 from .models import (
     AdminKeyBody,
     MessageResponse,
@@ -85,6 +85,10 @@ async def update_profile(
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found")
+    # display_name rides on CurrentUser (it becomes the host's participant row
+    # on the next hosted lobby), so drop the cached copy rather than let a
+    # rename take up to a minute to show up.
+    invalidate_current_user(user.user_id)
     return ProfileResponse(**result.data[0])
 
 
@@ -110,6 +114,10 @@ async def become_admin(
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found")
+    # get_current_admin re-reads is_admin anyway, so this is belt and braces —
+    # it keeps the cached display copy from lagging on the worker that served
+    # the promotion.
+    invalidate_current_user(su_user.sub)
     return ProfileResponse(**result.data[0])
 
 
@@ -219,4 +227,7 @@ async def delete_profile(
     # buddies, user_chapters, chapter_reports. Guide chapters the user authored
     # have created_by set to NULL (ON DELETE SET NULL).
     sb.table("boardgamebuddy_profiles").delete().eq("id", su_user.sub).execute()
+    # The row is gone; a cached CurrentUser for it would keep a deleted account
+    # authenticating for up to a TTL on this worker.
+    invalidate_current_user(su_user.sub)
     return MessageResponse(message="Account deleted")

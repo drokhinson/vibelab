@@ -6,11 +6,29 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
+import cache
 from api_logger import set_request_user
 from jwt_auth import SupabaseUser, get_current_supabase_user
 from db import get_supabase
 
 APP_NAME = "boardgame-buddy"
+
+# Profile lookup cache for get_current_user. The JWT is verified locally
+# against cached JWKS, so that one SELECT was the entire per-request DB cost of
+# authentication — paid by every call, including the host's 2s lobby poll and
+# each Gather-time write. In-process and per-worker (see cache.py): a rename on
+# one worker is invisible to another until the TTL lapses, which is why the
+# window is a minute rather than ten, and why nothing authorization-shaped is
+# served from here (see get_current_admin).
+_PROFILE_NS = "bgb.current_user"
+_PROFILE_TTL_SECONDS = 60
+cache.configure(_PROFILE_NS, max_entries=2048)
+
+
+def invalidate_current_user(user_id: str) -> None:
+    """Drop a cached profile after a write that changes it. Same-worker only —
+    correctness never depends on this landing, only freshness."""
+    cache.delete(_PROFILE_NS, user_id)
 
 _USERNAME_RE = re.compile(r"[^a-z0-9_]")
 
@@ -66,6 +84,17 @@ async def get_current_user(
 
     Auto-creates the profile row on first login.
     """
+    cached = cache.get(_PROFILE_NS, su_user.sub)
+    if cached is not None:
+        # set_request_user is request-scoped logging state, not part of what's
+        # cached — it has to run on every request, hit or miss.
+        await set_request_user(
+            user_id=cached.user_id,
+            user_label=cached.display_name or su_user.email,
+            app=APP_NAME,
+        )
+        return cached
+
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_profiles")
@@ -100,6 +129,11 @@ async def get_current_user(
             is_admin=False,
         )
 
+    # Only the found branch is cached. A miss is what auto-creates the profile,
+    # and caching that would hide the row the next request needs to read back.
+    if result.data:
+        cache.set(_PROFILE_NS, user.user_id, user, _PROFILE_TTL_SECONDS)
+
     await set_request_user(
         user_id=user.user_id,
         user_label=user.display_name or su_user.email,
@@ -111,8 +145,24 @@ async def get_current_user(
 async def get_current_admin(
     user: CurrentUser = Depends(get_current_user),
 ) -> CurrentUser:
-    """Same as get_current_user, but 403s if the profile isn't an admin."""
-    if not user.is_admin:
+    """Same as get_current_user, but 403s if the profile isn't an admin.
+
+    Deliberately re-reads is_admin rather than trusting the cached copy.
+    /profile/become-admin writes the flag without going through
+    get_current_user, and on a multi-worker deploy no local invalidation can
+    reach the other workers — so a cached `false` would lock a freshly
+    promoted admin out for a full TTL. Admin traffic is negligible; this one
+    extra SELECT is the right trade.
+    """
+    row = (
+        get_supabase()
+        .table("boardgamebuddy_profiles")
+        .select("is_admin")
+        .eq("id", user.user_id)
+        .execute()
+    )
+    is_admin = bool(row.data and row.data[0].get("is_admin"))
+    if not is_admin:
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return user
 

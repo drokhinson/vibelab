@@ -4,116 +4,44 @@
 with player_user_id set) the viewer has shared a play with. Ghost players are
 free-text nicknames the viewer logged without an account; the link endpoint
 promotes them by stamping player_user_id on every matching row.
-"""
 
-from typing import Any, Optional
+The three read paths — buddies, ghosts, played-with — are one RPC
+(bgb_play_partners, migration 047). They were twelve round trips across three
+endpoints, one of which pulled every play id the viewer touches into Python to
+count them in a dict.
+"""
 
 from fastapi import HTTPException
 
-from ..constants import BuddyEdgeStatus
-from ..models import GhostPlayer, PlayedWithUser
+from ..models import (
+    BuddyEdgeResponse,
+    GhostPlayer,
+    PlayedWithUser,
+    PlayPartnersResponse,
+)
 
 
-_NO_RELATION: dict[str, Any] = {
-    "is_buddy": False,
-    "has_pending_request": False,
-    "pending_request_direction": None,
-}
+def fetch_play_partners(sb, viewer_id: str) -> PlayPartnersResponse:
+    """Everything the Gather player picker needs, in ONE round trip.
 
-
-def _relations_for_viewer(sb, viewer_id: str) -> dict[str, dict[str, Any]]:
-    """Relationship flags for every user the viewer has an edge with, in ONE
-    query. Replaces a per-co-player relation_to() N+1 that ran inside every
-    /bootstrap (unbounded — one round trip per person ever played with)."""
-    edges = (
-        sb.table("boardgamebuddy_buddy_edges")
-        .select("user_a, user_b, status, requested_by")
-        .or_(f"user_a.eq.{viewer_id},user_b.eq.{viewer_id}")
-        .in_("status", [BuddyEdgeStatus.ACCEPTED.value, BuddyEdgeStatus.PENDING.value])
-        .execute()
+    bgb_play_partners (migration 047) does the buddy edges, the ghost roll-up
+    and the played-with counts as SQL aggregates. The three lists used to be
+    three endpoints and twelve round trips — including a pass that pulled every
+    play id the viewer touches into Python just to count them in a dict, which
+    is unbounded for a BGG-synced account.
+    """
+    data = sb.rpc("bgb_play_partners", {"p_viewer": viewer_id}).execute().data or {}
+    return PlayPartnersResponse(
+        accounts=[BuddyEdgeResponse.model_validate(x) for x in (data.get("accounts") or [])],
+        ghosts=[GhostPlayer.model_validate(x) for x in (data.get("ghosts") or [])],
+        recent=[PlayedWithUser.model_validate(x) for x in (data.get("recent") or [])],
     )
-    relations: dict[str, dict[str, Any]] = {}
-    for e in edges.data or []:
-        other = e["user_b"] if e["user_a"] == viewer_id else e["user_a"]
-        if e["status"] == BuddyEdgeStatus.ACCEPTED.value:
-            relations[other] = {
-                "is_buddy": True,
-                "has_pending_request": False,
-                "pending_request_direction": None,
-            }
-        else:  # pending
-            direction: Optional[str] = (
-                "outgoing" if e["requested_by"] == viewer_id else "incoming"
-            )
-            relations[other] = {
-                "is_buddy": False,
-                "has_pending_request": True,
-                "pending_request_direction": direction,
-            }
-    return relations
 
 
 def fetch_played_with(sb, viewer_id: str) -> list[PlayedWithUser]:
     """Real-account players who appear in plays the viewer is involved in
     (either logged it or appears as a participant), ranked by play count."""
-    own = (
-        sb.table("boardgamebuddy_plays")
-        .select("id")
-        .eq("user_id", viewer_id)
-        .execute()
-    )
-    own_ids = [r["id"] for r in own.data or []]
-    part = (
-        sb.table("boardgamebuddy_play_players")
-        .select("play_id")
-        .eq("player_user_id", viewer_id)
-        .execute()
-    )
-    part_ids = [r["play_id"] for r in part.data or []]
-    play_ids = list({*own_ids, *part_ids})
-    if not play_ids:
-        return []
-
-    parts = (
-        sb.table("boardgamebuddy_play_players")
-        .select("player_user_id")
-        .in_("play_id", play_ids)
-        .not_.is_("player_user_id", "null")
-        .execute()
-    )
-    counts: dict[str, int] = {}
-    for r in parts.data or []:
-        uid = r.get("player_user_id")
-        if uid and uid != viewer_id:
-            counts[uid] = counts.get(uid, 0) + 1
-    if not counts:
-        return []
-
-    profile_rows = (
-        sb.table("boardgamebuddy_profiles")
-        .select("id, display_name, avatar")
-        .in_("id", list(counts.keys()))
-        .execute()
-    )
-    profiles = {p["id"]: p for p in (profile_rows.data or [])}
-    relations = _relations_for_viewer(sb, viewer_id)
-    out: list[PlayedWithUser] = []
-    for uid, n in counts.items():
-        prof = profiles.get(uid)
-        if not prof:
-            continue
-        rel = relations.get(uid, _NO_RELATION)
-        out.append(PlayedWithUser(
-            user_id=uid,
-            display_name=prof["display_name"],
-            avatar=prof.get("avatar"),
-            play_count=n,
-            is_buddy=bool(rel["is_buddy"]),
-            has_pending_request=bool(rel["has_pending_request"]),
-            pending_request_direction=rel["pending_request_direction"],
-        ))
-    out.sort(key=lambda x: (-x.play_count, x.display_name.lower()))
-    return out
+    return fetch_play_partners(sb, viewer_id).recent
 
 
 def fetch_ghost_players(sb, viewer_id: str) -> list[GhostPlayer]:
@@ -122,46 +50,7 @@ def fetch_ghost_players(sb, viewer_id: str) -> list[GhostPlayer]:
     Grouped by case-sensitive display_name; carries play_count and the most
     recent played_at date so the user can recognize who they are.
     """
-    own = (
-        sb.table("boardgamebuddy_plays")
-        .select("id, played_at")
-        .eq("user_id", viewer_id)
-        .execute()
-    )
-    play_dates: dict[str, str] = {}
-    for r in own.data or []:
-        play_dates[r["id"]] = r.get("played_at")
-    if not play_dates:
-        return []
-
-    rows = (
-        sb.table("boardgamebuddy_play_players")
-        .select("play_id, player_display_name")
-        .in_("play_id", list(play_dates.keys()))
-        .is_("player_user_id", "null")
-        .execute()
-    )
-    grouped: dict[str, dict[str, Any]] = {}
-    for r in rows.data or []:
-        name = (r.get("player_display_name") or "").strip()
-        if not name:
-            continue
-        played = play_dates.get(r["play_id"])
-        agg = grouped.setdefault(name, {"count": 0, "last": None})
-        agg["count"] += 1
-        if played and (agg["last"] is None or played > agg["last"]):
-            agg["last"] = played
-
-    out = [
-        GhostPlayer(
-            display_name=name,
-            play_count=v["count"],
-            last_played_at=v["last"],
-        )
-        for name, v in grouped.items()
-    ]
-    out.sort(key=lambda x: (-x.play_count, x.display_name.lower()))
-    return out
+    return fetch_play_partners(sb, viewer_id).ghosts
 
 
 def link_ghost(

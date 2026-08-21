@@ -547,6 +547,18 @@ class GhostPlayer(BaseModel):
     last_played_at: Optional[date] = None
 
 
+class PlayPartnersResponse(BaseModel):
+    """Everything the Gather player picker needs, in one payload.
+
+    Mirrors the shape Buddy.allBuddies() caches on the FE and the
+    `play_partners` block of /bootstrap, so all three read the same thing.
+    """
+
+    accounts: list[BuddyEdgeResponse] = []
+    ghosts: list[GhostPlayer] = []
+    recent: list[PlayedWithUser] = []
+
+
 class GhostLinkRequest(BaseModel):
     """Promote a ghost nickname to a real account across the viewer's plays."""
 
